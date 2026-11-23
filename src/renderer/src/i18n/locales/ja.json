@@ -20357,6 +20357,9 @@
         "fileActions": "ファイル操作",
         "linkActions": "リンク操作"
       },
+      "imageGallery": {
+        "loadFailed": "{{name}} を読み込めませんでした"
+      },
       "hostPermission": {
         "checkAgain": "再確認",
         "launchRefused": "Orca は {{value0}} チャットを開始しませんでした",

@@ -20074,6 +20074,9 @@
         "fileActions": "Dateiaktionen",
         "linkActions": "Link-Aktionen"
       },
+      "imageGallery": {
+        "loadFailed": "{{name}} konnte nicht geladen werden"
+      },
       "goalControl": {
         "settingsRejected": "Codex konnte das ausgewählte Modell und den Denkaufwand nicht anwenden. Diese Zieländerung wurde nicht gesendet. Die Auswahl prüfen und erneut versuchen.",
         "settingsUnconfirmed": "Codex hat das ausgewählte Modell und den Denkaufwand nicht bestätigt. Diese Zieländerung wurde nicht gesendet. Den Chat prüfen und erneut versuchen.",

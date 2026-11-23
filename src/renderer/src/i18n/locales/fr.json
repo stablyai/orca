@@ -19181,6 +19181,9 @@
         "fileActions": "Actions sur le fichier",
         "linkActions": "Actions sur le lien"
       },
+      "imageGallery": {
+        "loadFailed": "Impossible de charger {{name}}"
+      },
       "install": {
         "checking": "Vérification que {{agent}} est prêt sur cet hôte…",
         "cliInstall": "Installer",
