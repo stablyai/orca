@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import { HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL } from '../shared/app-lifecycle/windows/hidden-window-frame-pump'
 import { installHiddenWindowFramePump } from './renderer/hidden-window-frame-pump'
 import type { PreloadApi } from './api-types'
@@ -223,6 +223,19 @@ if (process.contextIsolated) {
   }
 } else {
   window.api = api
+}
+
+// Flush Blink's decoded ScriptResource/image startup cache once initial hydration settles.
+if (typeof setTimeout === 'function') {
+  for (const delayMs of [8_000, 30_000]) {
+    setTimeout(() => {
+      try {
+        webFrame.clearCache()
+      } catch {
+        // Best-effort cache eviction.
+      }
+    }, delayMs)
+  }
 }
 
 installHiddenWindowFramePump(
