@@ -224,8 +224,8 @@ function QuietLine({
 
 /** A comment bubble's floor, so a short comment leaves its item's title room; never past its cap. */
 const COMMENT_MIN_WIDTH = 200
-/** A comment bubble's cap, as a share of the row, as on the desktop. */
-const COMMENT_MAX_SHARE = 0.8
+/** A comment bubble's cap, as a share of the row: every user bubble's (messageStyles.userBubble). */
+const COMMENT_MAX_SHARE = 0.88
 
 function CommentLine({
   line,
@@ -414,7 +414,6 @@ const styles = themedStyleSheet(() => ({
   },
   comment: {
     alignSelf: 'flex-end',
-    maxWidth: '80%', // COMMENT_MAX_SHARE
     gap: 6
   },
   // With the lines' gap, the 12 pt a note row (4) and a message row (8) leave between them.
