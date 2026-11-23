@@ -169,7 +169,7 @@ export function createClaudeJournalTranslator(
       finish(event.observedAt ?? Date.now(), event.failure?.kind === 'pluginInputRequired')
       return
     }
-    turn.observeStartedSend(event.type === 'message' ? (event.startedSend ?? null) : null)
+    turn.observeEvent(event)
     if (event.type === 'message') {
       context.observe(event.message, event.observedAt ?? Date.now())
       // Root init starts a cycle; replays after root work fold into it, while task frames do not mark cycle work.

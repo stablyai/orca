@@ -1,63 +1,71 @@
 import { expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import recovery from '../../__fixtures__/claude-plugin-recovery.json'
-import { claudeTaskNotificationWake } from '../journal/claude-internal-message-content'
-import { readClaudeMessageEnvelope } from '../journal/claude-structured-item-translation'
-import { ClaudeOpenTurn } from './claude-open-turn'
+import capture from '../../__fixtures__/claude-subagent-permission-frames.json'
+import { createClaudeJournalTranslator } from '../journal/claude-structured-journal-translation'
 
-// Claude resumes on its own when a background task finishes: the notification that wakes it names
-// the task, and the turn it opens records that name, so Orca can tell whose task woke the chat.
+// Claude resumes on its own when a background task finishes. In the SDK's own order the system
+// task_notification frame (naming the finished run by the call that started it) arrives between turns
+// and opens that turn; the turn records the run, so Orca can tell whose work woke the chat.
 
-/** The captured notification as the stream delivers it (stream frames carry `session_id`). */
-const frames: Record<string, unknown>[] = recovery
-const captured = frames[0]!
-const reply = frames[1]!
-const notification: Record<string, unknown> = {
-  ...captured,
-  session_id: captured.sessionId,
-  parent_tool_use_id: null
-}
-const assistant: Record<string, unknown> = {
-  ...reply,
-  session_id: reply.sessionId,
-  parent_tool_use_id: null
-}
+// The run: the Agent call that started the background subagent.
+const RUN = 'toolu_0113cofGsD2kJXoxmbapdZbE'
+const SESSION = 'capture-bg-allow'
+const frames = capture.scenarios['bg-allow'].flatMap((entry): Record<string, unknown>[] =>
+  entry.from === 'cli' ? [entry.frame] : []
+)
 
-function openTurn() {
-  const rows: AgentJournalItemBody[] = []
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: opening and ending a turn writes only through these members.
+function replay(insertAfter?: { index: number; frame: Record<string, unknown> }) {
+  const turns: Extract<AgentJournalItemBody, { kind: 'turn' }>[] = []
+  const record = (body: AgentJournalItemBody) => {
+    if (body.kind === 'turn') {
+      turns.push(body)
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the replay reads turn rows only; other writes are accepted and dropped.
   const sink = {
-    appendItem: (_identity: unknown, body: AgentJournalItemBody) => rows.push(body),
+    appendItem: (_identity, body) => record(body),
+    tryAppendItem: (_identity, body) => {
+      record(body)
+      return { accepted: true }
+    },
+    appendTombstone: () => {},
     publish: () => {},
     setActivity: () => {},
     setPromptSuggestion: () => {}
   } as Partial<StructuredAgentSessionEventSink> as StructuredAgentSessionEventSink
-  const turn = new ClaudeOpenTurn({ sink, turnSuperseded: () => {}, endOpenWork: () => {} })
-  const source = {
-    sessionId: String(assistant.session_id),
-    uuid: String(assistant.uuid),
-    assistant: true
-  }
-  return { turn, rows, open: (at: number) => turn.ensureOpen(assistant, source, at) }
+  const translator = createClaudeJournalTranslator({ sink })
+  const send = (message: Record<string, unknown>, at: number, opens = false) =>
+    translator.handle({
+      type: 'message',
+      sessionId: SESSION,
+      message,
+      observedAt: at,
+      ...(opens ? { startsTurn: true, clientMessageId: 'c1', requestedAt: at } : {})
+    })
+  frames.forEach((frame, index) => {
+    send(frame, index + 1, index === 1)
+    if (insertAfter?.index === index) {
+      send(insertAfter.frame, index + 1)
+    }
+  })
+  return turns
 }
 
-it('names the task whose notification opened a self-started turn on its row', () => {
-  const envelope = readClaudeMessageEnvelope(notification)!
-  const taskId = claudeTaskNotificationWake(notification, envelope)
-  expect(taskId).toBe('bobbnxies')
-
-  const { turn, rows, open } = openTurn()
-  turn.wakes.observe(taskId!, turn.isOpen)
-  open(100)
-  expect(rows.at(-1)).toMatchObject({ kind: 'turn', state: 'running', wokenBy: ['bobbnxies'] })
+it('names the task whose notification opened the turn, in the SDK frame order', () => {
+  const turns = replay()
+  expect(turns.filter((row) => row.wokenBy)).not.toHaveLength(0)
+  expect(turns.at(-1)).toMatchObject({ wokenBy: [RUN] })
+  expect(turns.filter((row) => !row.wokenBy).length).toBeGreaterThan(0)
 })
 
-it('names nothing on a turn a send opened, and nothing a notification into a running turn named', () => {
-  const { turn, rows, open } = openTurn()
-  turn.observeStartedSend({ clientMessageId: 'c1', requestedAt: 99 })
-  turn.wakes.observe('bobbnxies', turn.isOpen)
-  open(100)
-  turn.wakes.observe('later-task', turn.isOpen)
-  expect(rows.every((row) => !('wokenBy' in row))).toBe(true)
+it('names a task that finishes into the wake-up too', () => {
+  const other = {
+    ...frames[17],
+    task_id: 'private-job',
+    tool_use_id: 'toolu_private',
+    uuid: 'other-notification'
+  }
+  const turns = replay({ index: 18, frame: other })
+  expect(turns.at(-1)).toMatchObject({ wokenBy: [RUN, 'toolu_private'] })
 })

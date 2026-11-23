@@ -130,16 +130,13 @@ export class ExternalConversationSeam {
   }
 
   /** Whether the chat's running turn is its conversation's, so workers it starts report there too: a
-   *  turn the owner typed that the Slack mirror posted to the thread is the thread's ask as well, and
-   *  so, between turns, is a task one of its turns started. */
+   *  turn the owner typed that the Slack mirror posted to the thread is the thread's ask as well. */
   conversationTurn(chats: ConversationChatHost | undefined, sessionId: string): boolean {
     const linked = findLinkForSession(this.deps.store, sessionId)
-    const facts = this.turnFacts(chats)
     return Boolean(
       linked &&
-      (conversationOwnsTurn(linked.link, facts) ||
-        this.deps.slackMirror?.()?.turnPosted(sessionId) ||
-        facts.tasksRun(sessionId))
+      (conversationOwnsTurn(linked.link, this.turnFacts(chats)) ||
+        this.deps.slackMirror?.()?.turnPosted(sessionId))
     )
   }
 

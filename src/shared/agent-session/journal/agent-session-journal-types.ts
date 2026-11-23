@@ -249,7 +249,7 @@ export type AgentJournalTurnLifecycle = {
   /** On a turn a conversation command opened: the provider turn that carried out the command,
    *  once the provider opened one. Nothing else re-derives it after the command settles. */
   providerTurnId?: string
-  /** On a turn the provider opened itself: the provider task ids whose finish notifications woke it
+  /** On a turn the provider opened itself: the runs (by the call that started each) whose finish woke it
    *  (a background command, a Monitor event). Absent when nothing named the wake-up. */
   wokenBy?: string[]
 }

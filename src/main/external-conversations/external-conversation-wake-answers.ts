@@ -1,6 +1,7 @@
 // Where a chat's self-started turn (a background task's wake-up) answers: the conversation whose own
-// turn started every task the wake-up names, by provider task id, kept on the link so a restart still
-// knows. A wake-up that names nothing (a scheduled wake-up, an agent that gives no ids) stays in Orca.
+// turn started every run the wake-up names, by the run's id (the call that started it; a resumed task
+// gets a new one), kept on the link so a restart still knows. A wake-up that names nothing (a
+// scheduled wake-up, an agent that gives no ids) stays in Orca.
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { isSelfStartedTurnRow } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
@@ -13,16 +14,16 @@ import type { LinkedConversation } from './external-conversation-links'
 type WakeAnswers = ExternalConversationLink['wakeAnswers']
 type ChildWork = readonly Pick<
   AgentChildWorkView,
-  'providerId' | 'kind' | 'state' | 'operation' | 'firstObservedAt'
+  'invocation' | 'kind' | 'state' | 'operation' | 'firstObservedAt'
 >[]
 
 /** Kept per link; a chat with more running at once is unusual, and an id over the cap is no one's. */
-const MAX_WAKE_TASKS = 16
+const MAX_WAKE_RUNS = 16
 
 export type WakeAnswersDeps = {
   /** The chat's child work (tasks, subagents, Monitors), settled included; empty when unreadable. */
   childWork: (sessionId: string) => ChildWork
-  /** Keeps (or, with undefined, clears) the tasks whose wake-ups answer the link. */
+  /** Keeps (or, with undefined, clears) the runs whose wake-ups answer the link. */
   keepWakeAnswers: (linked: LinkedConversation, wakeAnswers: WakeAnswers) => void
 }
 
@@ -34,46 +35,45 @@ export function orcaSteered(
   return startedAt !== null && (link.orcaJoinedAt ?? 0) >= startedAt
 }
 
-/** At a turn's end: the provider ids of work its conversation's turns started that still runs. A
- *  turn that answered the conversation adds the work first seen during it (its end, read later, may
- *  see newer work); any other turn, or one someone in Orca steered into, adds none. */
+/** At a turn's end: the runs its conversation's turns started that still run. A turn that answered
+ *  the conversation adds the runs first seen during it (its end, read later, may see newer ones); any
+ *  other turn, or one someone in Orca steered into, adds none. A resumed task is a new run, so a
+ *  resume from Orca drops the thread's claim on it. */
 export function settleWake(
   deps: WakeAnswersDeps,
   linked: LinkedConversation,
   turn: { answered: boolean; startedAt: number | null; endedAt: number }
 ): void {
   const children = deps.childWork(linked.link.sessionId)
-  const live = new Set(children.filter(isLiveChildWork).flatMap((child) => child.providerId ?? []))
+  const live = children.filter(isLiveChildWork)
+  const liveRuns = new Set(live.map((child) => child.invocation.invocationId))
   const { startedAt, endedAt } = turn
   const started =
     turn.answered && startedAt !== null && !orcaSteered(linked.link, startedAt)
-      ? children.filter(
-          (child) =>
-            child.providerId &&
-            live.has(child.providerId) &&
-            child.firstObservedAt >= startedAt &&
-            child.firstObservedAt <= endedAt
+      ? live.filter(
+          (child) => child.firstObservedAt >= startedAt && child.firstObservedAt <= endedAt
         )
       : []
-  const ids = [
+  const kept = linked.link.wakeAnswers?.runs ?? []
+  const runs = [
     ...new Set([
-      ...(linked.link.wakeAnswers?.tasks ?? []).filter((id) => live.has(id)),
-      ...started.flatMap((child) => child.providerId ?? [])
+      ...kept.filter((id) => liveRuns.has(id)),
+      ...started.map((child) => child.invocation.invocationId)
     ])
-  ].slice(0, MAX_WAKE_TASKS)
-  const next = ids.length > 0 ? { tasks: ids } : undefined
-  if (next || linked.link.wakeAnswers) {
-    deps.keepWakeAnswers(linked, next)
+  ].slice(0, MAX_WAKE_RUNS)
+  if (runs.length === kept.length && runs.every((id, index) => id === kept[index])) {
+    return
   }
+  deps.keepWakeAnswers(linked, runs.length > 0 ? { runs } : undefined)
 }
 
-/** Every task the wake-up names is one its conversation's turns started. */
+/** Every run the wake-up names is one its conversation's turns started. */
 function namesOnlyConversationTasks(wakeAnswers: WakeAnswers, wokenBy: readonly string[]): boolean {
-  const recorded = new Set(wakeAnswers?.tasks ?? [])
+  const recorded = new Set(wakeAnswers?.runs ?? [])
   return wokenBy.length > 0 && wokenBy.every((id) => recorded.has(id))
 }
 
-/** The ended turn is the chat waking itself for tasks its conversation's turns started, with no one
+/** The ended turn is the chat waking itself for runs its conversation's turns started, with no one
  *  steering into it. */
 export function wokenTurn(
   turn: Pick<EndedChatTurn, 'wake'>,
@@ -99,20 +99,5 @@ export function wokenRunningTurn(
       link.wakeAnswers,
       readAgentJournalTurn(activeTurn.item.body)?.wokenBy ?? []
     )
-  )
-}
-
-/** Between turns, whether all that runs (subagents and Monitors too) is work its conversation's
- *  turns started, so a worker one of them starts reports there. Anything else running, or anything
- *  without an id, can't be told apart. */
-export function onlyConversationTasksRun(
-  link: Pick<ExternalConversationLink, 'wakeAnswers'>,
-  children: ChildWork
-): boolean {
-  const recorded = new Set(link.wakeAnswers?.tasks ?? [])
-  const live = children.filter(isLiveChildWork)
-  return (
-    live.length > 0 &&
-    live.every((child) => child.providerId !== undefined && recorded.has(child.providerId))
   )
 }

@@ -16,7 +16,7 @@ export type ClaudeCurrentTurn = {
   /** Anchor to the user echo, an unechoed started submission, or the provider-resumed lifecycle row. */
   userItemId: string
   command?: ClaudeCommandTurn
-  /** Provider task ids whose notifications opened this provider-resumed turn. */
+  /** Runs (by the call that started each) whose finish opened this provider-resumed turn, or finished into it. */
   wokenBy?: string[]
 }
 

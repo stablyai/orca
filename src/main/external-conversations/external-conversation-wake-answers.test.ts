@@ -13,11 +13,11 @@ import type { ConversationEvent } from './external-conversation-events'
 import { recordAdmittedTurn } from './external-conversation-last-turn'
 import { keepLinkFact } from './external-conversation-link-writes'
 import { readLinks, type ExternalConversationLinkStore } from './external-conversation-links'
-import { onlyConversationTasksRun, wokenRunningTurn } from './external-conversation-wake-answers'
+import { wokenRunningTurn } from './external-conversation-wake-answers'
 
 // A Slack thread's turn starts a background task and ends; the task finishing wakes the chat in a turn
-// that names it. That turn answers the thread. A wake-up naming anything the thread's own turns didn't
-// start (or naming nothing) stays in Orca, and so does one someone in Orca steered into.
+// that names its run. That turn answers the thread. A wake-up naming any run the thread's own turns
+// didn't start (or naming nothing) stays in Orca, and so does one someone in Orca steered into.
 
 const SESSION = 'chat-1'
 const PANE = chatPaneKey(SESSION)
@@ -26,7 +26,7 @@ const workspace = { worktreeId: folderWorkspaceKey(FOLDER), sshHostId: null }
 
 type Child = Pick<
   AgentChildWorkView,
-  'providerId' | 'kind' | 'state' | 'operation' | 'firstObservedAt'
+  'invocation' | 'kind' | 'state' | 'operation' | 'firstObservedAt'
 >
 
 /** A self-started turn's lifecycle row: its own item opened it, and it names what woke it. */
@@ -100,6 +100,8 @@ function harness() {
     stateStartedAt: leadStartedAt,
     prompt: ''
   })
+  let wakeWrites = 0
+  let audience = true
   const turns = () =>
     new ChatTurns({
       readHookRow: () => row(),
@@ -107,7 +109,10 @@ function harness() {
       emit: (event) => events.push(event),
       childWork: () => children,
       runningTurnWoken: () => wokenRunningTurn(link(), active),
-      keepWakeAnswers: (linked, wakeAnswers) => keepLinkFact(store, linked, { wakeAnswers }),
+      keepWakeAnswers: (linked, wakeAnswers) => {
+        wakeWrites += 1
+        keepLinkFact(store, linked, { wakeAnswers })
+      },
       chatTurnOrigin: () => {
         const origin = nextOrigin
         nextOrigin = 'local'
@@ -119,7 +124,7 @@ function harness() {
       runningTurnReported: () => false,
       workLinks: async () => [],
       workerActivities: async () => null,
-      promptsAudience: () => true,
+      promptsAudience: () => audience,
       pendingPrompt: () => pending,
       turnOpener: () => null,
       keepAdoptedTurn: () => {},
@@ -128,14 +133,28 @@ function harness() {
     })
   let chat = turns()
   const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
+  const run = (id: string) => ({ invocationId: id, generation: 1 })
   const start = (id: string, at: number) =>
-    children.push({ providerId: id, kind: 'command', state: 'working', firstObservedAt: at })
+    children.push({ invocation: run(id), kind: 'command', state: 'working', firstObservedAt: at })
   return {
     events,
     link,
     children,
+    wakeWrites: () => wakeWrites,
+    /** The connector service takes no Orca-raised turn's state. */
+    noAudience: () => (audience = false),
     restart: () => (chat = turns()),
-    /** A turn from `at` to `at + 5`. `woke`: the task ids a self-started turn names. `late`: work a
+    /** The task running as `id` resumed as a new run. */
+    resume(id: string, as: string) {
+      Object.assign(
+        children.find((child) => child.invocation.invocationId === id)!,
+        {
+          invocation: { invocationId: as, generation: 2 },
+          state: 'working'
+        }
+      )
+    },
+    /** A turn from `at` to `at + 5`. `woke`: the run ids a self-started turn names. `late`: work a
      *  next turn starts while this end's journal read is still pending. */
     async turn(
       at: number,
@@ -147,6 +166,8 @@ function harness() {
         steeredAt?: number
         late?: string[]
         prompt?: PendingPrompt
+        /** Someone in Orca steers in while the end's journal read is pending. */
+        steerDuringRead?: number
       }
     ) {
       leadStartedAt = at
@@ -178,14 +199,20 @@ function harness() {
         sessionId: SESSION,
         outcome: 'success',
         at: at + 5,
-        readTurn: async () => ({ ...wake, ...words })
+        readTurn: async () => {
+          if (opts.steerDuringRead !== undefined) {
+            vi.spyOn(Date, 'now').mockReturnValue(opts.steerDuringRead)
+            recordAdmittedTurn({ store }, orcaSteer)
+          }
+          return { ...wake, ...words }
+        }
       })
       opts.late?.forEach((id) => start(id, at + 7))
       await flush()
     },
     finish(id: string) {
       Object.assign(
-        children.find((child) => child.providerId === id)!,
+        children.find((child) => child.invocation.invocationId === id)!,
         { state: 'done' }
       )
     },
@@ -203,12 +230,9 @@ describe('a background task wake-up answers the conversation whose own turn star
     const t = harness()
     await t.turn(10, { started: ['private-build'] })
     await t.turn(20, { from: 'thread', started: ['worker-retry'], says: 'Retrying the worker.' })
-    // Between turns the private build still runs, so a worker-start can't be told to be the thread's.
-    expect(onlyConversationTasksRun(t.link(), t.children)).toBe(false)
     t.restart()
     t.finish('private-build')
     await t.turn(31, { woke: ['private-build'], says: 'Build finished.' })
-    expect(onlyConversationTasksRun(t.link(), t.children)).toBe(true)
     t.finish('worker-retry')
     await t.turn(41, {
       woke: ['worker-retry'],
@@ -223,14 +247,6 @@ describe('a background task wake-up answers the conversation whose own turn star
   it('keeps in Orca a wake-up naming nothing, though a thread task finished meanwhile', async () => {
     const t = harness()
     await t.turn(10, { from: 'thread', started: ['worker-retry'], says: 'Retrying.' })
-    // A private subagent runs too, so between turns nothing can be called the thread's.
-    t.children.push({
-      providerId: 'private-agent',
-      kind: 'agent',
-      state: 'working',
-      firstObservedAt: 16
-    })
-    expect(onlyConversationTasksRun(t.link(), t.children)).toBe(false)
     t.finish('worker-retry')
     await t.turn(21, { woke: [], says: 'Scheduled check-in.' })
     expect(t.said()).toEqual(['Retrying.'])
@@ -278,5 +294,45 @@ describe('a background task wake-up answers the conversation whose own turn star
       prompt: { raisedBy: 'conversation' }
     })
     expect(t.said()).toEqual(['Worker started after approval.'])
+  })
+
+  it('keeps in Orca the wake-up of a thread task that Orca resumed', async () => {
+    const t = harness()
+    await t.turn(10, { from: 'thread', started: ['agent-run-1'], says: 'Auditing.' })
+    t.finish('agent-run-1')
+    t.resume('agent-run-1', 'agent-run-2')
+    await t.turn(21, { says: 'Resumed it here.' })
+    expect(t.link().wakeAnswers).toBeUndefined()
+    t.finish('agent-run-2')
+    await t.turn(31, { woke: ['agent-run-2'], says: 'Audit done.' })
+    expect(t.said()).toEqual(['Auditing.'])
+  })
+
+  it('tells the thread nothing of an Orca-only wake-up someone in Orca steered into', async () => {
+    const t = harness()
+    t.noAudience()
+    await t.turn(10, { started: ['private-build'] })
+    t.finish('private-build')
+    await t.turn(21, { woke: ['private-build'], steeredAt: 23, says: 'Fixed the build.' })
+    expect(t.events).toEqual([])
+  })
+
+  it('saves the record only when it changes', async () => {
+    const t = harness()
+    await t.turn(10, { from: 'thread', started: ['worker-retry'], says: 'Retrying.' })
+    await t.turn(20, { says: 'Still here.' })
+    await t.turn(30, { says: 'Still here.' })
+    expect(t.wakeWrites()).toBe(1)
+  })
+
+  it('keeps a steer from Orca that lands while the end is read', async () => {
+    const t = harness()
+    await t.turn(10, {
+      from: 'thread',
+      started: ['steered-job'],
+      steerDuringRead: 14,
+      says: 'On it.'
+    })
+    expect(t.link().wakeAnswers).toBeUndefined()
   })
 })

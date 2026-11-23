@@ -274,17 +274,21 @@ export class ChatTurns {
       const opener = turn.opener ?? turn.latestOpener
       const reported =
         origin === 'local' && !shared && Boolean(opener && isConversationReport(opener.body))
-      const woken = origin === 'local' && !shared && wokenTurn(turn, linked.link)
-      // A wake-up someone in Orca steered into is theirs, though the thread saw it start.
+      // Read now: a steer from Orca while the end was read cleared or marked the link.
+      const current = this.deps.linkedFor(paneKey)
+      const link = current?.link ?? linked.link
+      const woken = origin === 'local' && !shared && wokenTurn(turn, link)
+      // A wake-up the thread saw start that someone in Orca steered into is theirs.
       const steeredWake =
+        heardSoFar &&
         origin === 'local' &&
         !reported &&
         turn.wake?.steered === true &&
-        orcaSteered(linked.link, ended.turnId)
+        orcaSteered(link, ended.turnId)
       const heard = heardSoFar && !steeredWake
-      if (!shared) {
+      if (!shared && current) {
         const answered = heard || reported || woken
-        settleWake(this.deps, linked, { answered, startedAt: ended.turnId, endedAt: news.at })
+        settleWake(this.deps, current, { answered, startedAt: ended.turnId, endedAt: news.at })
       }
       const reply = turnReply(linked.link, turn)
       const links = readOnce(() => this.toldLinks.next(paneKey, linked.link))

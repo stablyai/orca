@@ -37,7 +37,7 @@ export type EndedChatTurn = {
   turnItemId?: string
   stamps?: ConnectorReplyStamp[]
   turnProse?: string
-  /** On a turn the agent opened itself: the provider task ids that woke it (empty when nothing named
+  /** On a turn the agent opened itself: the runs (by the call that started each) that woke it (empty when nothing named
    *  the wake-up), and whether someone steered a message into it. */
   wake?: { wokenBy: string[]; steered: boolean }
 }
