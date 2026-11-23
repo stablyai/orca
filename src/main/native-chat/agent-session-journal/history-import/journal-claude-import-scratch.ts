@@ -16,7 +16,9 @@ function sweep(parent: string) {
   for (const entry of readdirSync(parent, { withFileTypes: true })) {
     if (!entry.isDirectory() || !entry.name.startsWith('operation-')) continue
     const path = join(parent, entry.name)
-    const pid = Number(readFileSync(join(path, 'owner'), 'utf8'))
+    let pid: number
+    try { pid = Number(readFileSync(join(path, 'owner'), 'utf8')) } catch { continue }
+    if (!Number.isSafeInteger(pid) || pid <= 0) continue
     try { process.kill(pid, 0) } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ESRCH') rmSync(path, { recursive: true, force: true })
     }
