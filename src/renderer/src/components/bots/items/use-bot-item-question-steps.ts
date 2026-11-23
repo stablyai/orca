@@ -164,17 +164,14 @@ export function useBotItemQuestionSteps(
     hold(next)
   }
   const answer = useLatestHandler((index: number, words: string) => settle(index, words))
-  // Every line of the text answers a question another waiting ask holds.
+  // A line of the text answers a question another waiting ask holds.
   const namesOtherAsk = (text: string): boolean => {
     const others = [...botItemQuestionPairing(item, events).questions]
       .filter(([id, entry]) => id !== askId && entry.waiting)
       .flatMap(([, entry]) =>
         entry.shape.decisions.map((d) => `${botItemQuestionLine(d.question)} →`)
       )
-    const lines = text.split('\n').filter((line) => line.trim())
-    return (
-      lines.length > 0 && lines.every((line) => others.some((head) => line.trim().startsWith(head)))
-    )
+    return text.split('\n').some((line) => others.some((head) => line.trim().startsWith(head)))
   }
   const fromBox = useLatestHandler(
     (
