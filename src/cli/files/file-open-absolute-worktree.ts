@@ -56,7 +56,7 @@ export async function resolveFileOpenTarget(
     return { worktree, relativePath }
   }
   if (explicitWorktree) {
-    throw outsideSelectedWorktree()
+    throw outsideSelectedWorktree(ctx.client.isRemote)
   }
   const listed = await ctx.client.call<{ worktrees: ListedWorktree[]; truncated?: boolean }>(
     'worktree.list',
@@ -74,14 +74,19 @@ export async function resolveFileOpenTarget(
   return pickContainingWorktree(ctx.cwd, path, listed.result.worktrees)
 }
 
-function outsideSelectedWorktree(): RuntimeClientError {
+function outsideSelectedWorktree(isRemote: boolean): RuntimeClientError {
   return new RuntimeClientError(
     'invalid_argument',
     'That absolute path is outside the selected worktree.',
     {
       nextSteps: [
         'Pass --worktree path:<workspace> for the registered workspace that contains the file (`orca worktree ps --json`).',
-        'Omit --worktree to open an absolute path that is inside another local registered worktree.'
+        // A remote call with no --worktree fails before path resolution, so that hint is local-only.
+        ...(isRemote
+          ? []
+          : [
+              'Omit --worktree to open an absolute path that is inside another local registered worktree.'
+            ])
       ]
     }
   )

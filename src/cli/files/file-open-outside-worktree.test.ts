@@ -54,7 +54,8 @@ afterEach(() => {
 
 function clientFor(
   worktrees: ListedWorktree[],
-  truncated = false
+  truncated = false,
+  isRemote = false
 ): {
   call: ReturnType<typeof vi.fn>
   client: RuntimeClient
@@ -85,7 +86,7 @@ function clientFor(
     throw new Error(`unexpected ${method}`)
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: file open only reads client.call and client.isRemote.
-  return { call, client: { call, isRemote: false } as unknown as RuntimeClient }
+  return { call, client: { call, isRemote } as unknown as RuntimeClient }
 }
 
 async function run(
@@ -191,6 +192,29 @@ describe('file open absolute paths outside the selected worktree', () => {
       message: 'That absolute path is outside the selected worktree.'
     })
     expect(call.mock.calls.map((entry) => entry[0])).toEqual(['worktree.show'])
+  })
+
+  it('does not tell a remote client to omit --worktree', async () => {
+    const paths = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
+    const argv = ['file', 'open', '/repos/feature/README.md', '--worktree', CURRENT, '--json']
+    const parsed = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(argv, paths, COMMAND_SPECS))
+    const { client } = clientFor(catalog, false, true)
+    const ctx: HandlerContext = {
+      flags: parsed.flags,
+      client,
+      cwd: '/repos/current',
+      json: true,
+      rawArgs: argv
+    }
+    await expect(FILE_HANDLERS['file open'](ctx)).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: 'That absolute path is outside the selected worktree.',
+      data: {
+        nextSteps: [
+          'Pass --worktree path:<workspace> for the registered workspace that contains the file (`orca worktree ps --json`).'
+        ]
+      }
+    })
   })
 
   it('asks for one selector when two local worktrees contain the path', async () => {
