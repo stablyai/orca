@@ -1,35 +1,49 @@
 import { describe, expect, it } from 'vitest'
 import { makeTestBotItem } from '../../shared/bots/bot-item.test-fixture'
-import { botActiveWorkSection } from './bot-active-work'
+import type { BotItemLinkView } from '../../shared/bots/bot-items'
+import { botActiveWorkSection, botIdleItemsNote } from './bot-active-work'
+
+const worker = (state: 'working' | 'unknown' | 'completed'): BotItemLinkView => ({
+  kind: 'dispatch',
+  ref: `ctx_${state}`,
+  latest: null,
+  title: 'Fix it',
+  state,
+  host: null,
+  startedAt: 0,
+  settledAt: null,
+  report: null,
+  pr: null
+})
 
 describe('an In progress item nothing runs for', () => {
-  it('gets a note until a worker or a wait is linked, said again only when its state changes', () => {
-    const idle = makeTestBotItem(7)
-    const waited = makeTestBotItem(8, {
-      links: [{ kind: 'automation', ref: 'a1', name: 'CI on #9', active: true }]
-    })
-    const first = botActiveWorkSection([idle, waited], [])
-    expect(first.text).toContain('Item 7 is In progress but nothing is running for it')
-    expect(first.text).not.toContain('Item 8 is')
-    expect(botActiveWorkSection([idle, waited], []).key).toBe(first.key)
-    const started = makeTestBotItem(7, {
-      links: [
-        {
-          kind: 'dispatch',
-          ref: 'ctx_1',
-          latest: null,
-          title: 'Fix it',
-          state: 'working',
-          host: null,
-          startedAt: 0,
-          settledAt: null,
-          report: null,
-          pr: null
-        }
-      ]
-    })
-    const next = botActiveWorkSection([started, waited], [])
-    expect(next.text).not.toContain('nothing is running')
-    expect(next.key).not.toBe(first.key)
+  it('is idle with no live worker and no active wait, and not with either', () => {
+    const items = [
+      makeTestBotItem(1),
+      makeTestBotItem(2, { links: [worker('completed')] }),
+      makeTestBotItem(3, {
+        links: [{ kind: 'automation', ref: 'a1', name: 'CI', active: false }]
+      }),
+      makeTestBotItem(4, { links: [worker('unknown')] }),
+      makeTestBotItem(5, { links: [{ kind: 'automation', ref: 'a2', name: 'CI', active: true }] })
+    ]
+    const section = botActiveWorkSection(items, [])
+    expect(section.idle?.map((item) => item.number)).toEqual([1, 2, 3])
+    expect(section.text).not.toContain('nothing is running')
+  })
+
+  it('is noted once per chat, again only when that item changes, whatever else changes', () => {
+    const memo = new Map<string, Map<number, string>>()
+    const idle7 = { number: 7, key: 'e10' }
+    expect(botIdleItemsNote(memo, 'chat', [idle7])).toContain('Item 7 is In progress')
+    expect(botIdleItemsNote(memo, 'chat', [idle7])).toBeNull()
+    const other = botActiveWorkSection([makeTestBotItem(7), makeTestBotItem(8)], [])
+    expect(other.idle).toEqual([
+      { number: 7, key: 'e10' },
+      { number: 8, key: 'e10' }
+    ])
+    expect(botIdleItemsNote(memo, 'chat', other.idle!)).toMatch(/^\[Orca: Item 8 /)
+    expect(botIdleItemsNote(memo, 'chat', [{ number: 7, key: 'e11' }])).toContain('Item 7')
+    expect(botIdleItemsNote(memo, 'other-chat', [idle7])).toContain('Item 7')
   })
 })

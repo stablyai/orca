@@ -1,17 +1,32 @@
 // `automations create --item <n>`: the bot's item shows what will wake it for that item, so the item
 // isn't taken for stalled.
 import { BOTS_ITEM_WAITING_CAPABILITY } from '../../shared/bot-runtime-capabilities'
+import { isOpenBotItemStatus, type BotItem } from '../../shared/bots/bot-items'
 import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getOptionalStringFlag } from '../arguments/flags'
 import type { HandlerContext } from '../dispatch/dispatch'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { callerChat } from './automation-caller-chat'
 
-/** `--item`, checked before anything is created: a host from before item-linked automations would
- *  store the link as a file path. */
+/** Why the automation can't be linked to this item, or null: it must be the bot's own open item. */
+export function automationItemRefusal(
+  item: Pick<BotItem, 'number' | 'status' | 'owner'>,
+  botId: string
+): string | null {
+  if (item.owner.botId !== botId) {
+    return `Item ${item.number} belongs to another bot; link the automation to one of yours.`
+  }
+  return isOpenBotItemStatus(item.status)
+    ? null
+    : `Item ${item.number} is closed; reopen it first or leave out --item.`
+}
+
+/** `--item`, checked before anything is created: the bot's own open item, on a host that links
+ *  automations (an older one would store the link as a file path). */
 export async function automationItemFlag(
   client: HandlerContext['client'],
-  flags: HandlerContext['flags']
+  flags: HandlerContext['flags'],
+  botId: string
 ): Promise<string | undefined> {
   const item = getOptionalStringFlag(flags, 'item')
   if (item === undefined) {
@@ -23,6 +38,16 @@ export async function automationItemFlag(
       'incompatible_runtime',
       'This Orca host cannot link automations to items. Update Orca on that host.'
     )
+  }
+  const shown = await client.call<{ item: BotItem }>('bots.items.show', {
+    ...callerChat(),
+    botId,
+    item,
+    limit: 1
+  })
+  const refusal = automationItemRefusal(shown.result.item, botId)
+  if (refusal) {
+    throw new RuntimeClientError('invalid_argument', refusal)
   }
   return item
 }

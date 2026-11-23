@@ -18,9 +18,9 @@ import { noteBotItemWrite } from '../../../bots/bot-item-chat-notes'
 import { notifyBotItemQuestion } from '../../../bots/bot-item-question-notice'
 import { runtimeBotOwnerNotice } from '../../../bots/bot-could-not-finish'
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
-import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
 import { itemsWriter, type BotItemWriter } from './bots-items-caller'
+import { botItemsForClient } from './bots-items-waiting-compat'
 
 export type BotItemWriteResult = {
   item: BotItem
@@ -68,17 +68,19 @@ export async function resolveItem(store: BotItemsRemote, ref: string): Promise<B
 /** What a write answers with: the item as it is now, and what the write did. The writer's chat shows
  *  the write as an item note; a write that asks the owner tells them. */
 export async function writeResult(
-  runtime: OrcaRuntimeService,
+  context: Pick<RpcContext, 'runtime' | 'clientKind' | 'clientCapabilities'>,
   outcome: BotItemWriteOutcome,
   writer: BotItemWriter
 ): Promise<BotItemWriteResult> {
+  const { runtime } = context
   const store = runtime.botItems.store()
   const record = await store.get(outcome.uid)
   if (!record) {
     throw new BotItemError('not_found', 'The item is gone.')
   }
   runtime.botItems.changed([record])
-  const [item] = await runtime.botItems.views([record])
+  const [view] = await runtime.botItems.views([record])
+  const [item] = botItemsForClient([view!], context)
   if (outcome.eventId !== null) {
     const write = await noteBotItemWrite(
       store,

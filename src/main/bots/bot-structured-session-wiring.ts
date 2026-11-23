@@ -54,7 +54,7 @@ export function botStructuredSessionWiring(deps: {
   /** What the bot's other chats did lately, as a turn of this chat may hear of it. */
   recentChats?: (botId: string, sessionId: string) => Promise<BotRecentChatsSection | null>
   /** The every-fifth-turn note on questions an owner chat left unanswered; null on other turns. */
-  unansweredQuestionNote?: (sessionId: string) => Promise<string | null>
+  unansweredQuestionNote?: (sessionId: string, botId: string) => Promise<string | null>
   /** A bot's chats on this host, each with whether it takes mail, as `sessionId` asks. */
   botChats?: (bot: Bot, sessionId: string) => Promise<readonly BotChatRow[]>
   /** The bots on these paired servers as last read, without waiting on the network. */

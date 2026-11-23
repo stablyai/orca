@@ -104,4 +104,16 @@ describe('Waiting items', () => {
     expect(store.get(mine)!.status).toBe('working')
     expect(waitText(store, bots)).toBe('Deploy of #9')
   })
+
+  it('tells the owner what to fix in plain words, with no command flags', () => {
+    const store = open()
+    const uid = addWorking(store)
+    const owner = { kind: 'owner' as const }
+    expect(() => store.ownerStatus({ uids: [uid], to: 'waiting', note: 'a\nb' }, owner)).toThrow(
+      /^Keep what it waits on to one line, up to 200 characters\.$/
+    )
+    expect(() => store.ownerStatus({ uids: [uid], to: 'waiting' }, owner)).toThrow(
+      /^Say what it waits on\.$/
+    )
+  })
 })

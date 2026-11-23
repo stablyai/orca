@@ -305,7 +305,7 @@ export async function createBotAutomation(
   if (refusal) {
     throw new RuntimeClientError('invalid_argument', refusal)
   }
-  const item = await automationItemFlag(client, flags)
+  const item = await automationItemFlag(client, flags, bot.id)
   const saved = await client.call<{ automation: Automation }>('automation.create', {
     name: getRequiredStringFlag(flags, 'name'),
     prompt: getRequiredStringFlag(flags, 'prompt'),

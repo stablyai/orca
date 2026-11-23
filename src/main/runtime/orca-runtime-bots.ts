@@ -275,7 +275,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
         requestTurnEnded: (sessionId, turnId, ended) =>
           this.botSessions.turnEnded(sessionId, turnId, ended),
         recentChats: (botId, sessionId) => this.botSessions.recentChats(botId, sessionId),
-        unansweredQuestionNote: (sessionId) => this.botSessions.unansweredQuestionNote(sessionId),
+        unansweredQuestionNote: (sessionId, botId) =>
+          this.botSessions.unansweredQuestionNote(sessionId, botId),
         botChats: (bot, sessionId) => this.botSessions.chatsOf(bot, sessionId),
         pairedBotRosters: this.pairedBotRosters.read,
         clientName: (installationId) => listeningClients(this, installationId)[0]?.name ?? null,

@@ -36,11 +36,7 @@ import type {
 } from './bot-items-schema'
 import type { BotWorkRuntime } from './bot-work-runtime'
 import type { BotsDbWorkerClient } from './db-worker/bots-db-worker-client'
-import {
-  moveItemsOnUsageLimits,
-  watchBotItemUsageLimits,
-  type BotUsageLimitCut
-} from './bot-item-usage-limit-wait'
+import { BotItemUsageLimitWaits } from './bot-item-usage-limit-wait'
 
 function eventView(event: BotItemEventRecord): BotItemEvent {
   return {
@@ -79,7 +75,7 @@ export class BotItemsHost {
   private readonly join: BotItemLinkJoin
   private readonly workerLinks: BotItemWorkerLinks
   private mailing: Promise<void> | null = null
-  private unwatchUsageLimits: (() => void) | null = null
+  private readonly usageLimitWaits: BotItemUsageLimitWaits
   private mailAgain = false
 
   constructor(private readonly deps: BotItemsHostDeps) {
@@ -95,6 +91,16 @@ export class BotItemsHost {
       changed: (store, uids) => this.changedItems(store, uids),
       warn
     })
+    this.usageLimitWaits = new BotItemUsageLimitWaits({
+      store: () => this.openedStore(),
+      join: this.join,
+      sessionOf: (dispatchId) => {
+        const session = db()?.getDispatchContextById(dispatchId)?.assignee_orca_session_id
+        return session ? deps.chatRoot(session) : null
+      },
+      root: deps.chatRoot,
+      changed: (items) => this.notifyChanged(items)
+    })
   }
 
   /** Per profile: a profile switch reads that profile's items. */
@@ -105,9 +111,7 @@ export class BotItemsHost {
       store = trackDispatchLinks((around) => this.deps.db.items(path, around))
       this.stores.set(path, store)
       // With items to move: workers stopping on a usage limit move theirs to Waiting.
-      this.unwatchUsageLimits ??= watchBotItemUsageLimits((cuts, changed) =>
-        this.usageLimitsChanged(cuts, changed)
-      )
+      this.usageLimitWaits.start()
     }
     return store.remote
   }
@@ -143,7 +147,7 @@ export class BotItemsHost {
   }
 
   dispose(): void {
-    this.unwatchUsageLimits?.()
+    this.usageLimitWaits.stop()
     this.stores.clear()
     this.deps.db.dispose()
   }
@@ -182,12 +186,25 @@ export class BotItemsHost {
     return { id, kind: source.kind, title: this.deps.chatTitle(id) ?? source.title, ...gone }
   }
 
-  /** These items changed: their bots' lists re-read just them. */
+  /** These items changed: their bots' lists re-read just them, and one that is now In progress with
+   *  a worker already stopped on its usage limit waits. */
   changed(items: readonly Pick<BotItemRecord, 'uid' | 'ownerBotId'>[]): void {
+    this.notifyChanged(items)
+    if (items.length > 0) {
+      this.usageLimitWaits.recheck()
+    }
+  }
+
+  private notifyChanged(items: readonly Pick<BotItemRecord, 'uid' | 'ownerBotId'>[]): void {
     const scope = botItemsChangeScope(items)
     if (scope) {
       this.deps.notify(scope)
     }
+  }
+
+  /** The scheduler's minute: a usage-limit stop whose time passed unannounced ends. */
+  usageLimitTick(now: number): void {
+    this.usageLimitWaits.tick(now)
   }
 
   /** Mail every change still owed. One pass at a time; a call during one makes it run again,
@@ -301,21 +318,12 @@ export class BotItemsHost {
     return (await this.store().eventsBefore(uid, beforeId, limit)).map(eventView)
   }
 
-  /** Workers' usage-limit stops changed in these workspaces: their items wait or go back. */
-  async usageLimitsChanged(
-    cuts: ReadonlyMap<string, BotUsageLimitCut>,
-    changed: ReadonlySet<string>
-  ): Promise<void> {
-    const store = this.openedStore()
-    if (store) {
-      await moveItemsOnUsageLimits(store, this.join, cuts, changed, (moved) => this.changed(moved))
-    }
-  }
-
   /** A Dispatch row changed: a start for an item is linked, and linked items re-read. */
   dispatchChanged(dispatchId: string | null): void {
     if (dispatchId !== null) {
       this.workerLinks.dispatchChanged(dispatchId)
+      // A worker that finished can leave only stopped ones on its item.
+      this.usageLimitWaits.recheck()
     }
   }
 

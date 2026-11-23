@@ -6356,7 +6356,10 @@
         "openInBrowser": "Open in browser",
         "copyLink": "Copy link",
         "copyPath": "Copy path",
-        "fileOutside": "{{path}} isn't in this bot's folder"
+        "fileOutside": "{{path}} isn't in this bot's folder",
+        "automation": "Automation",
+        "automationOn": "Will wake the agent for this item",
+        "automationEnded": "Ended"
       },
       "open": {
         "failed": "Couldn’t open this item.",

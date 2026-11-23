@@ -75,8 +75,10 @@ export function createBotTurnContext(
     botId: string,
     sessionId: string
   ) => Promise<BotRecentChatsSection | null> = async () => null,
-  /** Every fifth turn of an owner chat, whoever started it: questions the owner left unanswered. */
-  unansweredQuestionNote: (sessionId: string) => Promise<string | null> = async () => null,
+  /** Every fifth turn of an owner chat, whoever started it: questions the owner left unanswered; and
+   *  In progress items nothing runs for, each said once until it changes. */
+  unansweredQuestionNote: (sessionId: string, botId: string) => Promise<string | null> = async () =>
+    null,
   /** Current metadata, so a rename also reaches an already-running chat. */
   currentBotName: (botId: string) => string | null = () => null
 ): BotTurnContext {
@@ -142,7 +144,7 @@ export function createBotTurnContext(
         relinked(sessionId, stored),
         fs.readText(join(stored.folder, 'MEMORY.md')),
         readTopics(stored.folder),
-        unansweredQuestionNote(sessionId).catch(() => null)
+        unansweredQuestionNote(sessionId, stored.botId).catch(() => null)
       ])
       update(sessionId, {
         memoryAtStart: fingerprint(memory),
@@ -169,7 +171,7 @@ export function createBotTurnContext(
         workNote(sessionId, message).catch(() => null),
         readTopics(stored.folder),
         recentChats(stored.botId, sessionId).catch(() => null),
-        unansweredQuestionNote(sessionId).catch(() => null)
+        unansweredQuestionNote(sessionId, stored.botId).catch(() => null)
       ])
       const soul = fingerprint(files.soul)
       const memory = fingerprint(files.memory)

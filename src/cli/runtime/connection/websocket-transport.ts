@@ -26,7 +26,7 @@ import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph
 import { RuntimeClientError } from './types'
 
 // Paired CLI callers are not exempt from the host's agent.launch or chat rename gates like the local socket is.
-const CLI_CLIENT_CAPABILITIES = [
+export const CLI_CLIENT_CAPABILITIES = [
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   REPO_SEARCH_CANONICAL_REFS_RUNTIME_CAPABILITY,

@@ -2,6 +2,7 @@
 // progress (one written while the bot asks is the answer), and any status on any number of items, each
 // owing the item's chat a mail; and snoozes, which mail nobody. A comment or status move brings a snoozed item back.
 import {
+  BOT_ITEM_LIMITS,
   botItemEventId,
   isOpenBotItemStatus,
   type BotItemCommentImage,
@@ -161,7 +162,12 @@ export class BotItemsOwner extends BotItemsWrites {
       throw new BotItemError('invalid_argument', 'Canceling needs a reason.')
     }
     const wait =
-      input.to === 'waiting' ? botItemWaitText(input.note, 'Say what it waits on.') : null
+      input.to === 'waiting'
+        ? botItemWaitText(input.note, {
+            missing: 'Say what it waits on.',
+            tooLong: `Keep what it waits on to one line, up to ${BOT_ITEM_LIMITS.wait} characters.`
+          })
+        : null
     return this.transaction(() => ({
       items: input.uids.map((uid) => this.writeOwnerStatus(uid, input, wait, actor, now))
     }))

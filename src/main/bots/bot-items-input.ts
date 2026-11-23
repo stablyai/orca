@@ -84,18 +84,18 @@ export function assertBotItemText(
   }
 }
 
-/** What a Waiting item waits on: one line, refused when missing or longer. `missing` is the refusal's
- *  words for the caller. */
-export function botItemWaitText(note: string | undefined, missing: string): string {
+/** What a Waiting item waits on: one line, refused when missing or longer, in the caller's words (an
+ *  agent's name its CLI flags; the owner's don't). */
+export function botItemWaitText(
+  note: string | undefined,
+  words: { missing: string; tooLong: string }
+): string {
   const text = note?.trim() ?? ''
   if (!text) {
-    throw new BotItemError('invalid_argument', missing)
+    throw new BotItemError('invalid_argument', words.missing)
   }
   if (text.length > BOT_ITEM_LIMITS.wait || /[\r\n]/.test(text)) {
-    throw new BotItemError(
-      'invalid_argument',
-      `Keep the wait to one line (up to ${BOT_ITEM_LIMITS.wait} characters); put details in --comment.`
-    )
+    throw new BotItemError('invalid_argument', words.tooLong)
   }
   return text
 }

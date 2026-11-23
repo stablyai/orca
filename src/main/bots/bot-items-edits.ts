@@ -1,7 +1,7 @@
 // Making an item and changing its fields or status. A status move can carry a comment (Needs you
 // must: it is the question); any other status clears that question. A closed item reopens here.
 import { randomUUID } from 'node:crypto'
-import { isOpenBotItemStatus } from '../../shared/bots/bot-items'
+import { BOT_ITEM_LIMITS, isOpenBotItemStatus } from '../../shared/bots/bot-items'
 import { BotItemError } from './bot-item-error'
 import {
   assertBotItemAddable,
@@ -21,7 +21,10 @@ import type { BotItemRecord } from './bot-items-schema'
 
 type TextField = 'title' | 'description' | 'doneMeans'
 
-const WAIT_NOTE_MISSING = '--status waiting needs --note "<what it waits on>".'
+const WAIT_WORDS = {
+  missing: '--status waiting needs --note "<what it waits on>".',
+  tooLong: `Keep the wait to one line (up to ${BOT_ITEM_LIMITS.wait} characters); put details in --comment.`
+}
 
 export class BotItemsEdits extends BotItemsReads {
   add(input: BotItemAddInput, actor: BotItemBotActor, now = Date.now()): BotItemWriteOutcome {
@@ -95,7 +98,7 @@ export class BotItemsEdits extends BotItemsReads {
     const item = this.requireItem(uid)
     this.requireOwnerWrite(item, actor, changes.status)
     const waitNote =
-      changes.status === 'waiting' ? botItemWaitText(changes.note, WAIT_NOTE_MISSING) : undefined
+      changes.status === 'waiting' ? botItemWaitText(changes.note, WAIT_WORDS) : undefined
     // The owner's open question never hides behind a quieter status.
     if (waitNote !== undefined && item.status === 'needs_you') {
       throw new BotItemError(
@@ -195,7 +198,7 @@ export function assertBotItemSetInput(changes: BotItemSetInput): void {
     throw new BotItemError('invalid_argument', '--reason goes with --status canceled.')
   }
   if (changes.status === 'waiting') {
-    botItemWaitText(changes.note, WAIT_NOTE_MISSING)
+    botItemWaitText(changes.note, WAIT_WORDS)
   }
   if (changes.ask !== undefined && changes.status !== 'needs_you') {
     throw new BotItemError('invalid_argument', '--ask goes with --status needs-you.')
