@@ -80,7 +80,7 @@ export function SettingsSection({
         className={cn(
           'flex items-start justify-between gap-4 border-b border-border/60 pb-5',
           fullWidthDescriptionOnNarrow &&
-            '@max-lg/settings-section:grid @max-lg/settings-section:grid-cols-[minmax(0,1fr)_auto] @max-lg/settings-section:gap-2'
+            '@max-lg/settings-section:grid @max-lg/settings-section:grid-cols-[minmax(0,1fr)_auto] @max-lg/settings-section:gap-2 @max-xs/settings-section:gap-x-1'
         )}
       >
         <div

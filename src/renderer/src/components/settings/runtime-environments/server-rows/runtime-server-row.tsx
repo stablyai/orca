@@ -194,35 +194,23 @@ export function RuntimeServerRow({
     getRuntimeServerNewerThanAppText(remoteUpdate, t)
   ].filter((part): part is string => Boolean(part))
 
-  const meta = (
+  const meta = problemLine ? (
     <>
-      {problemLine ? (
-        <span className={cn('truncate', problemLine.destructive && 'text-destructive')}>
-          {problemLine.text}
-        </span>
-      ) : (
-        infoParts.map((part, index) => (
-          <span key={part} className="flex min-w-0 shrink items-center gap-1">
-            {index > 0 ? <span aria-hidden>·</span> : null}
-            <span className="truncate">{part}</span>
-          </span>
-        ))
-      )}
-      {!problemLine && availableText ? (
-        <span className="flex min-w-0 max-w-full shrink-0 items-center gap-1 text-status-warning">
-          <span aria-hidden className="text-muted-foreground">
-            ·
-          </span>
-          <span className="truncate">{availableText}</span>
-        </span>
-      ) : null}
-      {problemLine ? (
-        <>
-          <span aria-hidden>·</span>
-          <ServerRowDetailsToggle expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
-        </>
-      ) : null}
+      <span className={cn('truncate', problemLine.destructive && 'text-destructive')}>
+        {problemLine.text}
+      </span>
+      <span aria-hidden>·</span>
+      <ServerRowDetailsToggle expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
     </>
+  ) : (
+    <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2">
+      {infoParts.length > 0 ? (
+        <span className="max-w-full truncate">{infoParts.join(' · ')}</span>
+      ) : null}
+      {availableText ? (
+        <span className="max-w-full truncate text-status-warning">{availableText}</span>
+      ) : null}
+    </span>
   )
 
   const primaryAction =
