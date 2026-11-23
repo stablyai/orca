@@ -104,7 +104,7 @@ export function createBrowserScreencastLane(
     options,
     isBacklogged: () => options.isViewerBacklogged?.() === true,
     restartScreencast: () => void restartScreencast().catch(() => {}),
-    sendSharpFrame: () => void enqueue(() => snapshotCapture.emitSnapshotFrame(false))
+    sendSharpFrame: () => void enqueue(() => snapshotCapture.emitStillFrame())
   })
   const handleFrame = createBrowserScreencastFrameHandler({
     options,
