@@ -122,6 +122,7 @@ export type UiCommandEventApi = {
   onOpenNewWorkspace: (callback: () => void) => () => void
   onOpenWorkspaceBoard: (callback: () => void) => () => void
   onOpenTasks: (callback: () => void) => () => void
+  onTogglePage: (callback: (page: 'automations' | 'activity') => void) => () => void
   onToggleAgentDashboard: (callback: () => void) => () => void
   onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
   onJumpToTabIndex: (callback: (index: number) => void) => () => void

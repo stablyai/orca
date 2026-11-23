@@ -214,6 +214,8 @@ export function forwardGuestShortcutInput(
     renderer.send('ui:openWorkspaceBoard')
   } else if (action?.type === 'openTasks') {
     renderer.send('ui:openTasks')
+  } else if (action?.type === 'togglePage') {
+    renderer.send('ui:togglePage', action.page)
   } else if (action?.type === 'toggleAgentDashboard') {
     renderer.send('ui:toggleAgentDashboard')
   } else if (action?.type === 'openSettings') {

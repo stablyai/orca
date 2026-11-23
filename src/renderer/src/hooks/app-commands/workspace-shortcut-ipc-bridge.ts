@@ -8,6 +8,7 @@ import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
 import { useAppStore } from '../../store/index'
 import { showWorkspaceListThen } from '../../components/app-rail/app-rail-navigation'
+import { createPageToggleHandlers } from '../../lib/app-commands/page-toggle-handlers'
 import { toggleAgentDashboardFromShortcut } from './agent-dashboard-command'
 import { openNewWorkspaceFromShortcut } from './new-workspace-command'
 import { canNavigateWorktreeHistory } from '../../app-shell/chrome/titlebar-worktree-history-controls'
@@ -73,6 +74,25 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
         return
       }
       runBuiltInOrReplacement('view.tasks', () => store.openTaskPage())
+    })
+  )
+
+  unsubs.push(
+    window.api.ui.onTogglePage((page) => {
+      const store = useAppStore.getState()
+      if (store.activeView === 'settings') {
+        return
+      }
+      const actionId = page === 'automations' ? 'view.automations' : 'view.activity'
+      const toggle = createPageToggleHandlers(
+        store.activeView,
+        useAppStore.getState,
+        (_id, run) => {
+          run()
+          return true
+        }
+      ).find(([id]) => id === actionId)
+      toggle?.[1]()
     })
   )
 

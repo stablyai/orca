@@ -138,6 +138,12 @@ export const uiStateAndMenuCommandsApi = {
     ipcRenderer.on('ui:openTasks', listener)
     return () => ipcRenderer.removeListener('ui:openTasks', listener)
   },
+  onTogglePage: (callback: (page: 'automations' | 'activity') => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, page: 'automations' | 'activity') =>
+      callback(page)
+    ipcRenderer.on('ui:togglePage', listener)
+    return () => ipcRenderer.removeListener('ui:togglePage', listener)
+  },
   onToggleAgentDashboard: (callback: () => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => callback()
     ipcRenderer.on('ui:toggleAgentDashboard', listener)
