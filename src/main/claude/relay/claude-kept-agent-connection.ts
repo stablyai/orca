@@ -8,11 +8,16 @@ import {
 import { launchRelayedProviderProcess } from '../../provider-relay/app-provider-relays'
 import { CLAUDE_RELAY_WORK_MARKERS } from './claude-relay-markers'
 import { ClaudeKeptAgentResponder } from './claude-kept-agent-responder'
-import { claudeKeptAgentFinishingInput, type ClaudeKeptAgentInput } from './claude-kept-agent-input'
+import { ClaudeKeptAgentQuery } from './claude-kept-agent-query'
+import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
+import {
+  claudeUnwrittenUserMessageError,
+  createClaudeUserMessageQueue
+} from '../sdk-transport/claude-agent-sdk-user-message-queue'
 import { claudeStreamJsonExitError } from '../sdk-transport/claude-stream-json-exit-error'
 import { withLostProviderOutcome } from '../../provider-process/provider-process-exit-status'
 import { withObservedProviderExit } from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
-import { ClaudeControlRequestError } from '../sdk-transport/claude-agent-sdk-control-requests'
+import { createClaudeControlSurface } from '../sdk-transport/claude-agent-sdk-control-requests'
 import { relayedClaudeChildTree } from './claude-relayed-child-tree'
 
 /** Present on a connection to an agent that kept running while Orca was closed. */
@@ -77,27 +82,29 @@ export function claudeChatConnectionOpener(
 }
 
 /** Lines the SDK consumes itself and never yields as messages. */
-const TRANSPORT_TYPES = new Set(['control_response', 'keep_alive', 'transcript_mirror'])
+const TRANSPORT_TYPES = new Set(['keep_alive', 'transcript_mirror'])
 
 /**
- * The chat's Claude agent that kept running under the terminal daemon while Orca was closed, with
- * no SDK: its output since the last ack is replayed as messages, and the requests it holds are
- * answered by the chat's own handlers. Null when the chat has no kept agent.
+ * The chat's Claude agent that kept running under the terminal daemon while Orca was closed,
+ * driven without the SDK but in its wire format: output since the last ack is replayed as
+ * messages, held requests are answered by the chat's own handlers, and the chat's messages, Stop
+ * and setting changes go to the agent exactly as the SDK would write them. Null when the chat has
+ * no kept agent; once it ends, the next message cold-resumes as usual.
  */
 export async function openKeptClaudeAgentConnection(
   chatKey: string,
   launch: ClaudeStreamJsonLaunch,
-  handlers: ClaudeStreamJsonConnectionHandlers = {},
-  inputFor: (end: () => Promise<unknown>) => ClaudeKeptAgentInput = claudeKeptAgentFinishingInput
+  handlers: ClaudeStreamJsonConnectionHandlers = {}
 ): Promise<ClaudeKeptAgentConnection | null> {
+  let query: ClaudeKeptAgentQuery | null = null
   // Reattach only: nothing is spawned, so the command is never run.
   const kept = { command: launch.pathToClaudeCodeExecutable, args: [], cwd: launch.cwd }
   const relayed = await launchRelayedProviderProcess(kept, {
     only: 'reattach',
     chatKey,
     markers: CLAUDE_RELAY_WORK_MARKERS,
-    // Everything waits for the chat to publish the session, then flows in order.
-    passWhileHeld: () => false
+    // Answers to this app's own requests pass; everything else waits for the chat to open.
+    passWhileHeld: (line) => query?.answers(line) === true
   })
   if (!relayed) {
     return null
@@ -108,12 +115,34 @@ export async function openKeptClaudeAgentConnection(
   let terminalError: Error | null = null
   let closePromise: Promise<boolean> | null = null
   let readingBarrier: PromiseWithResolvers<void> | null = null
-  const write = (line: string): void => {
-    if (!child.stdin.destroyed && child.stdin.writable) {
-      child.stdin.write(line)
+  const write = (line: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      if (child.stdin.destroyed || !child.stdin.writable) {
+        reject(Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }))
+        return
+      }
+      child.stdin.write(line, (error) => (error ? reject(error) : resolve()))
+    })
+  const initialization = keptInitialization(child.initializeLine)
+  const keptQuery = new ClaudeKeptAgentQuery(write, initialization)
+  query = keptQuery
+  const responder = new ClaudeKeptAgentResponder(handlers, launch.options.hooks, (line) => {
+    void write(line).catch(() => {})
+  })
+  const inbox = createClaudeUserMessageQueue()
+  // Each message is written whole before the next, as the SDK's input stream does.
+  void (async () => {
+    try {
+      for await (const message of inbox.messages) {
+        await write(`${JSON.stringify(message)}\n`)
+      }
+    } catch (error) {
+      // A message the agent couldn't take stays visible as not sent; ending the agent makes the
+      // retry cold-resume with that same message.
+      inbox.fail(error instanceof Error ? error : new Error(String(error)))
+      void close()
     }
-  }
-  const responder = new ClaudeKeptAgentResponder(handlers, launch.options.hooks, write)
+  })()
 
   const lines: string[] = []
   let partial = ''
@@ -135,7 +164,7 @@ export async function openKeptClaudeAgentConnection(
     } catch {
       return
     }
-    if (!isRecord(message) || responder.observe(message)) {
+    if (!isRecord(message) || responder.observe(message) || keptQuery.observe(message)) {
       return
     }
     if (typeof message.type === 'string' && TRANSPORT_TYPES.has(message.type)) {
@@ -167,6 +196,9 @@ export async function openKeptClaudeAgentConnection(
       claudeStreamJsonExitError(managed.stderrTail(), managed.exitStatus),
       child
     )
+    keptQuery.close()
+    // Messages it never took are provably unwritten; the next send cold-resumes with a new agent.
+    inbox.fail(terminalError)
     if (!closing) {
       withObservedProviderExit(terminalError)
       handlers.onFault?.(terminalError)
@@ -193,10 +225,12 @@ export async function openKeptClaudeAgentConnection(
       closing = true
       readingBarrier?.resolve()
       readingBarrier = null
+      inbox.end()
       const result = await managed.closeWriter(
         relayedClaudeChildTree(() => managed.rootVerdict === 'exited'),
         options
       )
+      inbox.fail(new Error('claude stream-json connection closed'))
       if (result.root !== 'exited') {
         closePromise = null
         return false
@@ -205,33 +239,10 @@ export async function openKeptClaudeAgentConnection(
     })()
     return closePromise
   }
-  const input = inputFor(() => close())
-  const unavailable = <T>(subtype: string): Promise<T> => input.control<T>(subtype)
-  const initialization = keptInitialization(child.initializeLine)
 
   return {
+    ...createClaudeControlSurface(keptQuery),
     kept: { releaseOutput: () => child.releaseOutput() },
-    interrupt: () => input.interrupt(),
-    cancelAsyncMessage: () => Promise.resolve(false),
-    setModel: () => unavailable('set_model'),
-    setPermissionMode: () => unavailable('set_permission_mode'),
-    applyFlagSettings: () => unavailable('apply_flag_settings'),
-    stopTask: () => unavailable('stop_task'),
-    backgroundTask: () => unavailable('background_tasks'),
-    supportedModels: () =>
-      Promise.resolve(
-        isRecord(initialization) && Array.isArray(initialization.models)
-          ? initialization.models
-          : []
-      ),
-    mcpServerStatus: () => unavailable('mcp_status'),
-    initializationResult: () =>
-      terminalError
-        ? Promise.reject(new ClaudeControlRequestError('initialize', terminalError.message))
-        : Promise.resolve(initialization),
-    getSettings: () => unavailable('get_settings'),
-    getContextUsage: () => unavailable('get_context_usage'),
-    renameSession: () => unavailable('rename_session'),
     exited: exited.promise,
     spawned: Promise.resolve(),
     get pid() {
@@ -255,7 +266,17 @@ export async function openKeptClaudeAgentConnection(
       readingBarrier = null
       void pump()
     },
-    send: (message, beforeDispatch) => input.send(message, beforeDispatch),
+    send: (message, beforeDispatch) => {
+      if (closing || terminalError || managed.rootVerdict === 'exited') {
+        return Promise.reject(
+          claudeUnwrittenUserMessageError(
+            terminalError ?? new Error('claude stream-json connection is closed')
+          )
+        )
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: dispatch constructs the SDK user envelope after mapping every content block.
+      return inbox.push(message as unknown as SDKUserMessage, beforeDispatch)
+    },
     close
   }
 }
