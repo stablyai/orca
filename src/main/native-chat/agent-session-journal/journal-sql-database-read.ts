@@ -161,9 +161,9 @@ function read(
       return { kind: 'sessions', sessionIds: rows.map((row) => String(row.session_id)) }
     }
     case 'waiting-card-sessions': {
-      // The queue-order index's (session_id, epoch) prefix keeps each probe to one chat's cards.
+      // The cards' (session_id, epoch) key prefix keeps each probe to one chat's current cards.
       const waiting = db.prepare(`SELECT 1 FROM journal_chat_state AS head
-        JOIN journal_queue_cards AS card INDEXED BY journal_queue_order
+        JOIN journal_queue_cards AS card
           ON card.session_id=head.session_id AND card.epoch=head.epoch
         WHERE head.session_id=? AND card.state='waiting' LIMIT 1`)
       return {

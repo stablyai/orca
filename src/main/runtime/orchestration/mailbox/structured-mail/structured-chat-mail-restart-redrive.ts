@@ -25,7 +25,12 @@ export async function redriveWaitingChatMail(
   }
   await mapWithConcurrency(waiting.sessionIds, 4, async (sessionId) => {
     // Skipped when it can no longer be opened (ended, refused); nothing else would send its mail.
-    if (await host.conversation(sessionId).then(() => true, () => false)) {
+    if (
+      await host.conversation(sessionId).then(
+        () => true,
+        () => false
+      )
+    ) {
       redriveMail(sessionId)
       host.wakeQueuedMessages(sessionId)
     }
