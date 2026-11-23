@@ -72,16 +72,16 @@ function answersAskedQuestions(text: string, asked: ReadonlySet<string>): boolea
 
 type OpenAsk = { id: string; entry: BotItemQuestionAnswers }
 
-/** The open ask's lines a reply answers. A reply naming another ask (one this replaced) answers none. */
+/** The open ask's lines a reply answers. A reply naming any other event (an ask this replaced, even
+ *  one on an earlier page) answers none. */
 function answeredLines(
   open: OpenAsk,
   reply: BotItemEvent,
-  asked: ReadonlySet<string>,
-  questions: ReadonlyMap<string, BotItemQuestionAnswers>
+  asked: ReadonlySet<string>
 ): { lines: number[]; byOrder: boolean } {
   const none = { lines: [], byOrder: false }
   const names = typeof reply.data.answers === 'string' ? reply.data.answers : undefined
-  if (names !== undefined && names !== open.id && questions.has(names)) {
+  if (names !== undefined && names !== open.id) {
     return none
   }
   const { shape, answers, byOrder } = open.entry
@@ -171,7 +171,7 @@ export function botItemQuestionPairing(
       continue
     }
     const { shape, answers, byOrder } = open.entry
-    const { lines, byOrder: guessed } = answeredLines(open, event, asked, questions)
+    const { lines, byOrder: guessed } = answeredLines(open, event, asked)
     for (const line of lines) {
       const taken = answers[line]
       if (taken && byOrder[line]) {

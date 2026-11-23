@@ -127,6 +127,34 @@ it('replaces an earlier set of questions when a later set is asked', () => {
   expect(view().asks.get(botItemEventId(second))?.answers.every(Boolean)).toBe(true)
 })
 
+it('keeps a reply naming a replaced set off the later set, even with that set on an earlier page', () => {
+  const { store, uid, ask } = item()
+  const first = ask([HOSTS, GO])
+  const second = ask([MERGE])
+  // An older host's recorded answer to the first set, read with only the events after it loaded.
+  const loaded: BotItemEvent[] = store
+    .events(uid, first, 200)
+    .map(({ id, kind, actor, data, createdAt }) => ({
+      id: botItemEventId(id),
+      kind: BOT_ITEM_EVENT_KINDS.find((known) => known === kind) ?? 'edited',
+      actor,
+      data,
+      at: createdAt
+    }))
+  loaded.push({
+    id: botItemEventId(1_000_000),
+    kind: 'commented',
+    actor: OWNER,
+    data: { text: 'Yes', answers: botItemEventId(first), decisions: [{ pick: 0 }] },
+    at: NOW
+  })
+  const entry = botItemQuestionPairing({ status: 'needs_you' }, loaded).questions.get(
+    botItemEventId(second)
+  )
+  expect(entry).toMatchObject({ waiting: true })
+  expect(entry?.answers.map(Boolean)).toEqual([false])
+})
+
 it('holds the latest set until every question in it is answered', () => {
   const { store, uid, ask, comment, view } = item()
   ask([MERGE])
