@@ -19676,6 +19676,7 @@
         "close": "닫기",
         "listLabel": "에이전트",
         "untitled": "제목 없는 에이전트",
+        "botChat": "{{bot}} · {{chat}}",
         "willAsk": "Orca가 계속하도록 요청합니다. 대기 중인 메시지가 전송될 수 있습니다.",
         "asked": "Orca가 계속하도록 요청했습니다. 대기 중인 메시지가 전송될 수 있습니다.",
         "resumedAutomatically": "자동으로 재개했습니다.",

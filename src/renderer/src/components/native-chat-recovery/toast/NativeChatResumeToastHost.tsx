@@ -4,6 +4,10 @@ import { useAppStore } from '../../../store/index'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { structuredChatShownName } from '@/runtime/native-chat/naming/structured-chat-shown-name'
+import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import { useTranslate } from '@/i18n/use-translate'
+import { useBotsEnabled, useHostBots } from '@/lib/bot-catalog'
+import { findBotByWorkspace } from '../../bots/bot-workspace'
 import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from '../../settings/chat/native-chat-resume-setting-target'
 import {
   localNativeChatRestartStore,
@@ -15,6 +19,7 @@ import type { NativeChatRestartStore } from '../offers/native-chat-restart-runti
 import { useNativeChatRestartRuntimes } from '../offers/native-chat-restart-runtimes'
 import type { ResumeFailureAction } from '../failures/native-chat-resume-failure-guidance'
 import { resumeRunFailures } from '../runs/native-chat-resume-run-view'
+import type { ResumeCandidate } from '../tree/native-chat-resume-on-restart-grouping'
 import { resumeToastView } from './native-chat-resume-toast-view'
 import { NativeChatResumeToast } from './NativeChatResumeToast'
 import { useResumeToastAutoDismiss } from './use-resume-toast-auto-dismiss'
@@ -154,9 +159,22 @@ function ConnectedResumeToast({
     root
   )
 
+  const t = useTranslate()
+  const botsEnabled = useBotsEnabled()
+  const hostId = getRuntimeTargetHostId(store.target)
+  const hostBots = useHostBots(hostId)
   const feed = getStructuredAgentSessionStatusFeed(store.target)
-  const nameFor = (sessionId: string, fallback: string) =>
-    structuredChatShownName(feed, sessionId)?.trim() || fallback
+  const nameFor = (candidate: ResumeCandidate, fallback: string): string => {
+    const chat = structuredChatShownName(feed, candidate.sessionId)?.trim() || fallback
+    // Every bot's own chat is "Home", so a bot's rows lead with its name; scoped to this host's bots.
+    const bot = botsEnabled ? findBotByWorkspace(hostBots, candidate.workspaceId, hostId) : null
+    return bot
+      ? t('auto.components.NativeChatResumeToast.botChat', '{{bot}} · {{chat}}', {
+          bot: bot.name,
+          chat
+        })
+      : chat
+  }
 
   const onRowAction = (action: ResumeFailureAction, sessionId: string): void => {
     if (action === 'dismiss') {

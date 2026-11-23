@@ -18810,6 +18810,7 @@
         "close": "關閉",
         "listLabel": "聊天",
         "untitled": "無標題聊天",
+        "botChat": "{{bot}} · {{chat}}",
         "willAsk": "Orca 會要求聊天繼續。排隊中的訊息可能會被傳送。",
         "asked": "Orca 已要求聊天繼續。排隊中的訊息可能會被傳送。",
         "resumedAutomatically": "已自動恢復。",

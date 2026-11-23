@@ -12,7 +12,7 @@ const actions = {
   onRowAction: noop,
   onOpenSettings: noop,
   onClose: noop,
-  nameFor: (_sessionId: string, fallback: string) => fallback
+  nameFor: (_candidate: ResumeCandidate, fallback: string) => fallback
 }
 
 const PROMPTS = [
@@ -156,6 +156,25 @@ export const remoteServer = defineFixture({
       machineName="build-server-02"
       listedAt={NOW}
       {...actions}
+    />
+  )
+})
+
+/** A bot's chats lead with its name; its own chat is always "Home". */
+const BOT_CHATS: Record<string, string> = {
+  'chat-0': 'UX Designer · Home',
+  'chat-1': 'UX Designer · Review the onboarding flow'
+}
+
+export const botChatsResumed = defineFixture({
+  width: NARROW,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(finishedRun(twelve.slice(0, 3), 'launch'), [], new Map())}
+      listedAt={NOW}
+      defaultExpanded
+      {...actions}
+      nameFor={(candidate, fallback) => BOT_CHATS[candidate.sessionId] ?? fallback}
     />
   )
 })

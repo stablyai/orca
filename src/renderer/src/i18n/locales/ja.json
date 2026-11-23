@@ -19170,6 +19170,7 @@
         "close": "閉じる",
         "listLabel": "Agent",
         "untitled": "無題の Agent",
+        "botChat": "{{bot}} · {{chat}}",
         "willAsk": "Orca が続行を依頼します。待機中のメッセージは送信される場合があります。",
         "asked": "Orca が続行を依頼しました。待機中のメッセージは送信される場合があります。",
         "resumedAutomatically": "自動で再開しました。",

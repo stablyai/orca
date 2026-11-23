@@ -19717,6 +19717,7 @@
         "close": "关闭",
         "listLabel": "智能体",
         "untitled": "无标题智能体",
+        "botChat": "{{bot}} · {{chat}}",
         "willAsk": "Orca 会请求智能体继续。排队中的消息可能会被发送。",
         "asked": "Orca 已请求智能体继续。排队中的消息可能会被发送。",
         "resumedAutomatically": "已自动恢复。",

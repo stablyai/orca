@@ -19072,6 +19072,7 @@
         "close": "Schließen",
         "listLabel": "Agenten",
         "untitled": "Agent ohne Titel",
+        "botChat": "{{bot}} · {{chat}}",
         "willAsk": "Orca bittet die Agenten, fortzufahren. Wartende Nachrichten werden evtl. gesendet.",
         "asked": "Orca hat die Agenten gebeten, fortzufahren. Wartende Nachrichten werden evtl. gesendet.",
         "resumedAutomatically": "Automatisch fortgesetzt.",

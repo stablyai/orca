@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import type { ResumeFailureAction } from '../failures/native-chat-resume-failure-guidance'
+import type { ResumeCandidate } from '../tree/native-chat-resume-on-restart-grouping'
 import type { ResumeToastView } from './native-chat-resume-toast-view'
 import { NativeChatResumeToastRow } from './NativeChatResumeToastRow'
 
@@ -12,7 +13,7 @@ export type NativeChatResumeToastProps = {
   /** Set for a paired server; its chats are named with the machine. */
   machineName?: string
   listedAt: number
-  nameFor: (sessionId: string, fallback: string) => string
+  nameFor: (candidate: ResumeCandidate, fallback: string) => string
   defaultExpanded?: boolean
   onResume: (sessionIds: readonly string[]) => void
   onRowAction: (action: ResumeFailureAction, sessionId: string) => void
@@ -234,7 +235,7 @@ export function NativeChatResumeToast({
                 key={row.candidate.sessionId}
                 row={row}
                 name={nameFor(
-                  row.candidate.sessionId,
+                  row.candidate,
                   firstLine(row.candidate.latestPrompt) ||
                     t('auto.components.NativeChatResumeToast.untitled', 'Untitled agent')
                 )}

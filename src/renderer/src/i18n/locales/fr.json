@@ -19079,6 +19079,7 @@
         "close": "Fermer",
         "listLabel": "Agents",
         "untitled": "Agent sans titre",
+        "botChat": "{{bot}} · {{chat}}",
         "willAsk": "Orca demandera la reprise. Les messages en attente peuvent être envoyés.",
         "asked": "Orca a demandé la reprise. Les messages en attente peuvent être envoyés.",
         "resumedAutomatically": "Repris automatiquement.",

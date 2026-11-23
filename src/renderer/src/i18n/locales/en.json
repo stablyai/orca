@@ -20712,6 +20712,7 @@
         "close": "Close",
         "listLabel": "Agents",
         "untitled": "Untitled agent",
+        "botChat": "{{bot}} · {{chat}}",
         "willAsk": "Orca asks agents to continue. Queued messages may be sent.",
         "asked": "Orca asked agents to continue. Queued messages may be sent.",
         "resumedAutomatically": "Resumed automatically.",
