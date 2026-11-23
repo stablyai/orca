@@ -146,7 +146,8 @@ export class RuntimeBrowserCommands {
       targets,
       catalog,
       creation,
-      screencasts.guestSwaps
+      screencasts.guestSwaps,
+      close
     )
     const dialogs = new RuntimeBrowserDialogs(targets)
     const grab = new RuntimeBrowserGrab(targets, catalog)

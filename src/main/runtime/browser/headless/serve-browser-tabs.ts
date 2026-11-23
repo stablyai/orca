@@ -142,6 +142,23 @@ export class ServeBrowserTabs {
     return found ? this.restore(found) : false
   }
 
+  /** Saved web pages, started or not and active or not, whose tab names this profile. */
+  pagesInProfile(profileId: string): { worktreeId: string; pageId: string; tabId: string }[] {
+    if (!this.deps.backend()) {
+      return []
+    }
+    return [...new Set(this.deps.savedWorktreeIds())].flatMap((worktreeId) => {
+      const session = this.deps.session(worktreeId)
+      return (session?.browserTabsByWorktree?.[worktreeId] ?? [])
+        .filter((tab) => tab.sessionProfileId === profileId)
+        .flatMap((tab) =>
+          (session?.browserPagesByWorkspace?.[tab.id] ?? [])
+            .filter((page) => !page.docLocation && !page.remoteBrowserPageId)
+            .map((page) => ({ worktreeId, pageId: page.id, tabId: tab.id }))
+        )
+    })
+  }
+
   /** Whether the page's tab is saved, so a freed page can start again from it. */
   isSaved(page: { browserPageId: string; worktreeId: string }): boolean {
     return this.startableIn(page.worktreeId).some((saved) => saved.pageId === page.browserPageId)
