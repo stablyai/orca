@@ -81,7 +81,7 @@ export function ReviewIcon({
   variant = 'provider',
   showChecks = true
 }: {
-  review: Pick<WorktreeCardPrDisplay, 'state' | 'status' | 'checksSummary'> &
+  review: Pick<WorktreeCardPrDisplay, 'state' | 'status' | 'checksSummary' | 'mergeQueueEntry'> &
     Partial<Pick<WorktreeCardPrDisplay, 'provider'>>
   className?: string
   variant?: 'provider' | 'generic'

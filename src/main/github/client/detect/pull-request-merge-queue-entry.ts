@@ -1,11 +1,12 @@
-import type { PRState } from '../../../../shared/github/pull-request-types'
+import type { PRState } from '../../../../shared/github/pull-requests/pull-request-types'
 import {
   parseReviewMergeQueueEntry,
   type ReviewMergeQueueEntry
-} from '../../../../shared/review-merge-queue-entry'
-import { ghExecFileAsync } from '../../gh-utils'
-import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
-import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../rate-limit'
+} from '../../../../shared/github/pull-requests/merge/review-merge-queue-entry'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { githubHostExecOptions } from '../../repositories/github-repository-host'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../api/rate-limit'
 import type { GhExecOptions } from './../github-exec-scope'
 
 // Why: `gh pr view --json` exposes neither field, so queue membership needs its own GraphQL read.

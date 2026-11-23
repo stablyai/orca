@@ -31288,7 +31288,6 @@
       "unmergeable": "The merge queue reports this pull request cannot merge",
       "locked": "The merge queue has locked this pull request while it merges",
       "unknown": "This pull request is in the merge queue"
-    },
-    "stateBadge": "State: {{queueLabel}}"
+    }
   }
 }

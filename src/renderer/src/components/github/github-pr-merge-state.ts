@@ -225,7 +225,7 @@ export function presentGitHubPRMergeState(
 ): GitHubPRMergeStatePresentation {
   // A queued PR is past the review and check gates, and GitHub owns the merge, so offer no merge action.
   if (item.state === 'open' && item.mergeQueueEntry) {
-    const { label, tooltip, blocked } = presentReviewMergeQueueEntry(item.mergeQueueEntry, t)
+    const { label, tooltip, blocked } = presentReviewMergeQueueEntry(item.mergeQueueEntry)
     return {
       label,
       tone: blocked ? DANGER_TONE : WARNING_TONE,

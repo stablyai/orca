@@ -103,7 +103,8 @@ export default function HostedReviewActions({
       },
       t
     )
-    if (!githubPR?.stack || !stackMergeScope) {
+    // A queued PR keeps its queue position; the stack merge label would hide it.
+    if (!githubPR?.stack || !stackMergeScope || review.mergeQueueEntry) {
       return presentation
     }
     const stackBlocker = getGitHubPRStackMergeBlocker(stackMergeScope, t)
