@@ -16,7 +16,7 @@ import {
   type PhoneConnectorSources
 } from './connector-entry-rows'
 import type { ConnectorPage } from './connector-pages'
-import { usePhoneGoogleStatus } from './MobileBotGooglePage'
+import { usePhoneGoogleStatus } from './phone-google-accounts'
 import { useReadsAtMostEveryMinute } from './phone-connector-reads'
 import { botToolSignInNeed } from '../tools/bot-tool-words'
 import { useSharedBotTools } from '../tools/use-bot-tools-page'

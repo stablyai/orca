@@ -7988,7 +7988,6 @@
         "off": "Linear 即将推出",
         "replaced": "Linear 连接未完成，可能已被之后发起的 Linear 或 GitHub 连接取代。请重新开始",
         "wrongAccount": "此登录是从另一个 Orca 账户发起的。请从当前账户重新连接 Linear",
-        "alreadyLinked": "此 Orca 账户已关联到该工作区中的另一个 Linear 用户。请先在“设置 › Bots › Linear”中取消关联",
         "notAMember": "只有该 Linear 工作区的正式成员才能从中选择人员",
         "rateLimited": "尝试次数过多。请等待一分钟，然后重试",
         "unavailable": "Linear 未响应。请重试"
@@ -8042,7 +8041,6 @@
         "off": "GitHub 即将推出",
         "replaced": "GitHub 连接未完成，可能已被之后发起的 Linear 或 GitHub 连接取代。请重新开始",
         "wrongAccount": "此登录是从另一个 Orca 账户发起的。请从当前账户重新使用 GitHub 登录",
-        "alreadyLinked": "此 Orca 账户已关联到另一个 GitHub 用户。请先在“设置 › Bots › GitHub”中取消关联",
         "unavailable": "GitHub 未响应。请重试"
       },
       "setup": {
@@ -8159,8 +8157,7 @@
         "toFixOne": "快完成了：还有 1 个问题需要解决",
         "toFix": "快完成了：还有 {{count}} 个问题需要处理"
       },
-      "signInOnHost": "在 {{host}} 上重新登录 Google",
-      "moreOnHost": "请在 {{host}} 上的 Orca 中添加服务或共享配置"
+      "signInOnHost": "在 {{host}} 上重新登录 Google"
     },
     "saveFailed": "无法保存",
     "sheet": {
