@@ -1,7 +1,6 @@
 import { rateLimitSpentUntil } from '../../../../shared/agent-usage/rate-limits/rate-limit-spent-windows'
 import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
-  isNativeChatUsageLimitCutSchedulable,
   NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS,
   type NativeChatUsageLimitCut
 } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
@@ -22,8 +21,13 @@ import {
   sameAccountHome,
   UsageLimitRelaunchedCuts,
   usageLimitCutLaunch,
+  usageLimitAttributionBindingHolds,
   type UsageLimitAttributionBinding
 } from './structured-agent-session-usage-limit-relaunch'
+import {
+  isAccountHoldSchedulable,
+  withMovedCutReset
+} from './structured-agent-session-usage-limit-account-schedule'
 
 /** The polled usage of the account a chat continues on, as the host attributes it. */
 export type UsageLimitAccountUsage = {
@@ -181,24 +185,13 @@ export class UsageLimitAccountHolds {
     host: AttributionHost,
     binding: UsageLimitAttributionBinding | undefined
   ): boolean {
-    const record = host.store.getRecord(id)
-    const holds =
-      binding !== undefined &&
-      record !== null &&
-      liveWitness(host, record.provider) === binding.witness &&
-      record.lease.runtimeFence === binding.runtimeFence &&
-      record.launchedAccount?.fence === binding.launchFence
+    const holds = usageLimitAttributionBindingHolds(id, host, binding)
     if (!holds) {
       this.scopes.delete(id)
       this.bindings.delete(id)
       this.relaunched.forget(id)
     }
     return holds
-  }
-
-  /** Whether the chat has an attribution whose sources and launch still hold. */
-  attributionCurrent(id: string, host: AttributionHost): boolean {
-    return this.bindingHolds(id, host, this.bindings.get(id))
   }
 
   retain(shown: ReadonlySet<string>): void {
@@ -221,13 +214,8 @@ export class UsageLimitAccountHolds {
     this.beginPass()
   }
 
-  /** A cut with no known reset, once the chat continues on an account the cut never hit: the
-   *  switch stands in for its reset, so the new account's reading decides as for any other move. */
   withSwitchReset<T extends NativeChatUsageLimitCut>(id: string, cut: T): T & SwitchReset {
-    const moved = this.movedSince.get(id)
-    return cut.resetsAt === undefined && moved?.cut === switchFreeIdentity(cut)
-      ? { ...cut, resetsAt: moved.at, resetFromSwitch: true }
-      : cut
+    return withMovedCutReset(this.movedSince.get(id), cut)
   }
 
   verdict(
@@ -327,17 +315,12 @@ export class UsageLimitAccountHolds {
     }
   }
 
-  /** The day Orca may still continue a cut runs from the reset it actually waits for. */
   schedulable(
     id: string,
     cut: NativeChatUsageLimitCut & SwitchReset,
     now: number
   ): cut is NativeChatUsageLimitCut & { resetsAt: number; turnEndedAt: number } {
-    // At no time at all, this checks only that the reset is known and later than the turn's end.
-    return (
-      isNativeChatUsageLimitCutSchedulable(cut, Number.NEGATIVE_INFINITY) &&
-      isNativeChatUsageLimitCutSchedulable({ ...cut, ...this.verdict(id, cut, now) }, now)
-    )
+    return isAccountHoldSchedulable(cut, this.verdict(id, cut, now), now)
   }
 
   /** Whether the send may go now; a due send short of a fresh reading asks until the service

@@ -8,6 +8,8 @@ import {
   type AgentSessionLaunchedAccount
 } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
+import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
+import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 
 export function sameAccountHome(
   left: AgentSessionAccountHome,
@@ -41,6 +43,25 @@ export type UsageLimitAttributionBinding = {
   witness: string | undefined
   launchFence: number | undefined
   runtimeFence: number | undefined
+}
+
+type AttributionHost = Pick<StructuredAgentSessionHostDeps, 'usageLimitAutoContinue'> & {
+  store: Pick<AgentSessionRecordStore, 'getRecord'>
+}
+
+export function usageLimitAttributionBindingHolds(
+  id: string,
+  host: AttributionHost,
+  binding: UsageLimitAttributionBinding | undefined
+): boolean {
+  const record = host.store.getRecord(id)
+  return (
+    binding !== undefined &&
+    record !== null &&
+    host.usageLimitAutoContinue?.accountWitness?.(record.provider) === binding.witness &&
+    record.lease.runtimeFence === binding.runtimeFence &&
+    record.launchedAccount?.fence === binding.launchFence
+  )
 }
 
 type Relaunch = {

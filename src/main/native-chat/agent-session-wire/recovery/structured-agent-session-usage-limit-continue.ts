@@ -270,7 +270,7 @@ export class StructuredAgentSessionUsageLimitContinue {
 
   private async send(id: string, cut: Cut): Promise<void> {
     // Earlier sends take time; moved sources resolve again, once per new witness for every chat.
-    if (!this.holds.attributionCurrent(id, this.deps.host)) {
+    if (!this.holds.bindingHolds(id, this.deps.host, this.holds.attributionBinding(id))) {
       await this.holds.attribute(id, this.deps.host, cut, this.deps.now())
     }
     const record = this.deps.host.store.getRecord(id)
@@ -278,7 +278,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       return
     }
     // Still moving: yield without spending an attempt; a later pass resolves on settled sources.
-    if (!this.holds.attributionCurrent(id, this.deps.host)) {
+    if (!this.holds.bindingHolds(id, this.deps.host, this.holds.attributionBinding(id))) {
       await this.deferUnchangedCut(id, cut, this.deps.now())
       return
     }
