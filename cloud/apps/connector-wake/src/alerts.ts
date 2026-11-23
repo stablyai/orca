@@ -22,7 +22,8 @@ const DEFAULT_SCRIPT_NAME = 'orca-connector-wake'
 const STATE_KEY = 'firing'
 
 type Minute = { ago: number; counts: Counts }
-// Per firing rule: when it started and when it was last posted (epoch ms of the run's schedule).
+// Per firing rule: when it started and when it was last posted (epoch ms of the run's schedule;
+// 0 while its FIRING post has not been accepted yet).
 type Firing = Record<string, { since: number; notified: number }>
 
 async function minutes(env: WakeAlertsEnv, fromMin: number, atSec: number): Promise<Minute[]> {
@@ -139,25 +140,30 @@ export async function evaluate(env: WakeAlertsEnv, scheduledTime: number): Promi
       if (was) { next[rule.id] = was }
       continue
     }
-    let text: string | null = null
-    let entry = was
     const breaching = was && rule.holds ? rule.holds(now, limits) : rule.breach(now, limits, before)
+    // The entry to keep if the post is accepted, and if it is rejected.
+    let text: string | null = null
+    let accepted = was
+    let rejected = was
     if (!breaching) {
-      if (was) {
-        text = `RESOLVED ${rule.id}`
-        entry = undefined
-      }
-    } else if (!was) {
+      // A start that was never announced has nothing to resolve.
+      if (was?.notified) { text = `RESOLVED ${rule.id}` }
+      accepted = undefined
+      if (!was?.notified) { rejected = undefined }
+    } else if (!was?.notified) {
       text = `FIRING ${rule.id}: ${rule.describe(now, limits)}`
-      entry = { since: scheduledTime, notified: scheduledTime }
+      const since = was?.since ?? scheduledTime
+      accepted = { since, notified: scheduledTime }
+      // Pending: firing but unannounced, so holds() decides and the next run posts it again.
+      rejected = { since, notified: 0 }
     } else if (scheduledTime - was.notified >= REPEAT_MS) {
       text = `STILL FIRING ${rule.id}: ${rule.describe(now, limits)}`
-      entry = { since: was.since, notified: scheduledTime }
+      accepted = { since: was.since, notified: scheduledTime }
     }
+    let entry = accepted
     if (text) {
       fired.push(text)
-      // Rejected: the old state stands, so the next run posts it again.
-      if (!(await post(env, text))) { entry = was }
+      if (!(await post(env, text))) { entry = rejected }
     }
     if (entry) { next[rule.id] = entry }
   }
