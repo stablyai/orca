@@ -141,7 +141,11 @@ export async function prepareClaudeTranscriptCapacityRecovery(
         ...prepared.items,
         {
           identity: noticeIdentity,
-          body: continuedOutsideNotice(false, 'recent'),
+          // A passed-over record may be one of the newest turns, so the notice says newer turns are missing.
+          body: continuedOutsideNotice(
+            false,
+            prepared.sourceSkippedRecords ? 'unloaded' : 'recent'
+          ),
           ownerFence: 0,
           turnScope: { kind: 'thread' }
         }

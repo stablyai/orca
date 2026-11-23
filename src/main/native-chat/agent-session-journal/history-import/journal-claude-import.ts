@@ -42,6 +42,7 @@ export async function importClaudeTranscript(input: {
   sourceFrontier?: string
   sourceConsumedBytes: number
   sourceMtimeMs?: number
+  sourceSkippedRecords: number
 }> {
   const window = createClaudeImportWindow(input.retainedBytes, input.bounded === true)
   let conversation = false
@@ -80,6 +81,7 @@ export async function importClaudeTranscript(input: {
   let sourceConsumedBytes: number
   let sourceFrontier: string | undefined
   let sourceMtimeMs: number | undefined
+  let sourceSkippedRecords = 0
   const source =
     !input.bounded && input.source
       ? adoptedTranscriptSourceObserver({
@@ -105,6 +107,7 @@ export async function importClaudeTranscript(input: {
     })
     sourceConsumedBytes = read.consumedBytes
     sourceMtimeMs = read.sourceMtimeMs
+    sourceSkippedRecords = read.skippedRecords
   } else {
     let index = 0
     let rowsSinceYield = 0
@@ -190,6 +193,7 @@ export async function importClaudeTranscript(input: {
     forkTipItemIds: [],
     sourceConsumedBytes,
     sourceFrontier,
-    sourceMtimeMs
+    sourceMtimeMs,
+    sourceSkippedRecords
   }
 }

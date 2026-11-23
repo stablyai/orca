@@ -30,6 +30,7 @@ export type PreparedLegacyImport =
       sourceFrontier?: string
       sourceConsumedBytes?: number
       sourceMtimeMs?: number
+      sourceSkippedRecords?: number
     }
   // cause keeps a typed adoption refusal for the caller.
   | { ok: false; error: string; cause?: unknown }
@@ -81,6 +82,7 @@ async function decodeJsonlReplacementItems(input: {
   sourceFrontier?: string
   sourceConsumedBytes?: number
   sourceMtimeMs?: number
+  sourceSkippedRecords?: number
 }> {
   if (input.transcriptAgent === 'claude') {
     return importClaudeTranscript({

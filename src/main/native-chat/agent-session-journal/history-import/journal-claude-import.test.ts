@@ -223,3 +223,18 @@ it('reads and decodes a bounded recent window despite a large prefix', async () 
     message: { content: 'Newest answer' }
   })
 })
+
+it('counts a complete record over the per-record cap that the window passes over', async () => {
+  root = await mkdtemp(join(tmpdir(), 'orca-claude-window-'))
+  const filePath = join(root, 'session.jsonl')
+  const row = (uuid: string, text: string) =>
+    `{"type":"assistant","uuid":"${uuid}","parentUuid":null,"message":{"content":"${text}"}}\n`
+  const oversized = row('huge', 'x'.repeat(17 * 1024 * 1024))
+  await writeFile(
+    filePath,
+    row('older', 'Older answer') + oversized + row('newest', 'Newest answer')
+  )
+  const window = await readClaudeTranscriptWindow({ filePath, check: () => {} })
+  expect(window.skippedRecords).toBe(1)
+  expect(window.rows.map((r) => r.uuid)).toEqual(['older', 'newest'])
+})
