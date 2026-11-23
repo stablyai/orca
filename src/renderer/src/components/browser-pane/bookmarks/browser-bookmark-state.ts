@@ -15,6 +15,7 @@ import {
   type BrowserBookmarks,
   type BrowserBookmarkScope
 } from '../../../../../shared/browser/bookmarks/browser-bookmarks'
+import { useServerBrowserPageProfileId } from '../assemble-chrome/profile-routing/use-server-browser-page-profile-id'
 
 const useBookmarkState = create<{ bookmarks: BrowserBookmarks | null; failed: boolean }>(() => ({
   bookmarks: null,
@@ -78,7 +79,8 @@ export function useBrowserBookmarks(pageId: string) {
     )
     return route?.eligible ? toSshExecutionHostId(route.targetId) : null
   })
-  const profileId = workspace ? (workspace.sessionProfileId ?? 'default') : null
+  const handleProfileId = useServerBrowserPageProfileId(pageId)
+  const profileId = workspace ? (handleProfileId ?? workspace.sessionProfileId ?? 'default') : null
   const scope = useMemo<BrowserBookmarkScope | null>(
     () => (profileId === null ? null : [hostKey, profileId]),
     [hostKey, profileId]
