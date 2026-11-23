@@ -75,7 +75,7 @@ export class OrchestrationRequestEvidence {
       }
     }
     // A worker's own terminal or chat names itself, so the terminal it creates closes with it.
-    if (method === 'terminal.create' && !request.remote) {
+    if ((method === 'terminal.create' || method === 'terminal.split') && !request.remote) {
       return {
         orchestrationCompatibilityEvidence: this.orchestration.orchestrationCompatibilityEvidence
       }

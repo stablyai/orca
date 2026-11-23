@@ -252,7 +252,8 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       terminal: await getTerminalHandle(flags, cwd, client),
       direction: directionFlag,
       command: getOptionalStringFlag(flags, 'command'),
-      ...(retrySplit !== undefined ? { retrySplit } : {})
+      ...(retrySplit !== undefined ? { retrySplit } : {}),
+      ...(flags.has('keep-open') ? { keepOpen: true } : {})
     })
     printResult(result, json, formatTerminalSplit)
   }

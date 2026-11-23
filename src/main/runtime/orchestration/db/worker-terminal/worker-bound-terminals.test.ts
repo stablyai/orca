@@ -271,6 +271,7 @@ describe('terminals bound to a worker', () => {
     )
     expect(closed).toEqual([worker.setup.terminalHandle])
   })
+
   it('a terminal its agent opened closes with the worker, unless opened with --keep-open', async () => {
     const worker = startWorker(botChat)
     const { runtime, closed } = host(worker)
@@ -294,5 +295,21 @@ describe('terminals bound to a worker', () => {
 
     await closeWorkerBoundTerminals(runtime, db, worker.dispatchId)
     expect(closed).toEqual([worker.setup.terminalHandle, worker.tab.terminalHandle, 'term_opened'])
+  })
+
+  it('a worker whose shell outlived an Orca restart still owns what it opens', async () => {
+    const worker = startWorker(botChat)
+    const { runtime, closed, remint } = host(worker)
+    // The shell keeps its pre-restart handle; Orca knows the pane by a new one.
+    remint(worker.agentHandle, 'term_agent_after_restart')
+    const evidence = { terminalHandle: worker.agentHandle, paneKey: worker.agentPaneKey }
+    bindTerminalToCallingWorker(
+      runtime,
+      { caller: { kind: 'local-cli' }, orchestrationCompatibilityEvidence: evidence },
+      'term_opened',
+      false
+    )
+    await closeStoppedWorkerTerminals(runtime, db, worker.dispatchId)
+    expect(closed).toContain('term_opened')
   })
 })
