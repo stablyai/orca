@@ -127,7 +127,7 @@ export class UsageLimitAccountHolds {
     const binding = {
       witness: record ? liveWitness(host, record.provider) : undefined,
       launchFence: record?.launchedAccount?.fence,
-      runtimeFence: record?.lease.runtimeFence
+      runtimeFence: record?.lease?.runtimeFence
     }
     let scope: UsageLimitAccountScope | undefined
     let movedTo: AgentSessionAccountHome | null = null

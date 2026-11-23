@@ -59,7 +59,7 @@ export function usageLimitAttributionBindingHolds(
     binding !== undefined &&
     record !== null &&
     host.usageLimitAutoContinue?.accountWitness?.(record.provider) === binding.witness &&
-    record.lease.runtimeFence === binding.runtimeFence &&
+    record.lease?.runtimeFence === binding.runtimeFence &&
     record.launchedAccount?.fence === binding.launchFence
   )
 }
