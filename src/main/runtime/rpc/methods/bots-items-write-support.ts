@@ -51,14 +51,26 @@ export function writerOf(params: { callerSessionId?: string }, context: RpcConte
 }
 
 /** Whom the writer's running turn acts for, kept on a close so the journal says whose work it was;
- *  unknown, never the owner, when it can't be read. */
+ *  unknown, never the owner, when it can't be read. Only what names a person is kept, not where. */
 export async function closingTurnActsFor(
   context: RpcContext,
   writer: BotItemWriter
 ): Promise<BotRequestAsker[]> {
   try {
     const db = context.runtime.getOrchestrationDb()
-    return (await readBotTurn(context.runtime, db, writer.sessionId)).turn.askers
+    const { turn } = await readBotTurn(context.runtime, db, writer.sessionId)
+    return turn.askers.map((asker): BotRequestAsker =>
+      asker.kind === 'person'
+        ? {
+            kind: 'person',
+            source: asker.source,
+            userId: asker.userId,
+            ...(asker.name ? { name: asker.name } : {}),
+            workspaceId: null,
+            role: asker.role
+          }
+        : asker
+    )
   } catch (error) {
     console.warn('[bots] could not read whom a closing turn acts for', error)
     return [{ kind: 'unknown' }]

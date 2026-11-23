@@ -117,17 +117,18 @@ export class BotItemsReads extends BotItemsTables {
       }))
   }
 
-  /** Each item's newest close: who made it, and whom the closing turn acted for when it says. */
-  closes(uids: readonly string[]): Record<string, BotItemClose> {
+  /** The close each item's `closedAt` names: who made it, and whom its turn acted for when it says. */
+  closes(items: readonly { uid: string; closedAt: number }[]): Record<string, BotItemClose> {
     const closes: Record<string, BotItemClose> = {}
     for (const row of this.db
       .prepare(
         `SELECT * FROM item_events WHERE id IN (SELECT (SELECT id FROM item_events
-           WHERE item_uid = named.value AND kind = 'status'
+           WHERE item_uid = json_extract(named.value, '$.uid') AND kind = 'status'
+             AND created_at = json_extract(named.value, '$.closedAt')
              AND json_extract(data, '$.to') IN ('done', 'canceled')
            ORDER BY id DESC LIMIT 1) FROM json_each(?) AS named)`
       )
-      .all(JSON.stringify(uids))) {
+      .all(JSON.stringify(items))) {
       const event = eventRecordOf(row)
       const { actsFor } = event.data
       closes[event.itemUid] = {

@@ -91,7 +91,9 @@ export async function readClosedSince<
     cursor?: { at: number; number: number }
   }) => Promise<{ items: R[] }>,
   views: (records: R[]) => Promise<(Omit<JournalItem, 'closedAt'> | undefined)[]>,
-  closes: (uids: readonly string[]) => Promise<Record<string, BotItemClose>>,
+  closes: (
+    items: readonly { uid: string; closedAt: number }[]
+  ) => Promise<Record<string, BotItemClose>>,
   since: number
 ): Promise<JournalItem[]> {
   const records: R[] = []
@@ -113,7 +115,10 @@ export async function readClosedSince<
     return []
   }
   const shown = await views(records)
-  const closed = await closes(records.map(({ uid }) => uid))
+  // By its close time, so a reopen and another close since this read can't lend this close its asker.
+  const closed = await closes(
+    records.flatMap(({ uid, closedAt }) => (closedAt === null ? [] : [{ uid, closedAt }]))
+  )
   return records.flatMap((record, index) => {
     const view = shown[index]
     const closedFor = journalCloseLabel(closed[record.uid])
@@ -137,7 +142,7 @@ export function journaledItemsNotice(
       readClosedSince(
         (query) => runtime.botItems.store().list({ botId, ...query }),
         (records) => runtime.botItems.views(records),
-        (uids) => runtime.botItems.store().closes(uids),
+        (items) => runtime.botItems.store().closes(items),
         since
       ),
     folder: (bot) => botHomeFolder(bot),

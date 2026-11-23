@@ -68,7 +68,7 @@ describe("the journal's attribution of each close", () => {
           async (query) => store.list({ botId, ...query }),
           async (records) =>
             records.map(({ number, title, status }) => ({ number, title, status, links: [] })),
-          async (uids) => store.closes(uids),
+          async (items) => store.closes(items),
           since
         ),
       folder: () => '/home',
@@ -123,12 +123,19 @@ describe("the journal's attribution of each close", () => {
     )
   })
 
-  it('reads whom an item closed for from its close, not a later reopen', () => {
+  it('reads whom a close was for from that close, not one after a reopen', () => {
     const { store, add, now } = open()
     const uid = add('Ship it')
-    store.close(uid, 'done', undefined, { ...HOME, chatId: 'dana' }, [DANA], now())
+    const closedAt = now()
+    store.close(uid, 'done', undefined, { ...HOME, chatId: 'dana' }, [DANA], closedAt)
     store.ownerStatus({ uids: [uid], to: 'working' }, { kind: 'owner' }, now())
-    expect(store.closes([uid, 'none'])).toEqual({
+    store.ownerStatus({ uids: [uid], to: 'done' }, { kind: 'owner' }, now())
+    expect(
+      store.closes([
+        { uid, closedAt },
+        { uid: 'none', closedAt }
+      ])
+    ).toEqual({
       [uid]: { actor: { ...HOME, chatId: 'dana' }, actsFor: [DANA] }
     })
   })
