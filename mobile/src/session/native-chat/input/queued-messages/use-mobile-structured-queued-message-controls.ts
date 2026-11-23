@@ -263,12 +263,17 @@ export function useMobileStructuredQueuedMessageControls(args: {
     [mutate, resolved]
   )
   const pause = queuedMessagesQueuePause(cards, queuePause, waitingAgentMail.length > 0)
-  const agentMailEditable = useCallback(
-    (messageId: string): boolean =>
-      args.editCapable === true &&
-      editor === undefined &&
-      allCards.some((card) => card.messageId === messageId && !card.notEditable),
+  // A host without in-place edits still takes Edit: it copies the text to the composer first.
+  const editableIds = useMemo(
+    () =>
+      args.editCapable === null || (args.editCapable && editor !== undefined)
+        ? new Set<string>()
+        : new Set(allCards.filter((card) => !card.notEditable).map((card) => card.messageId)),
     [allCards, args.editCapable, editor]
+  )
+  const agentMailEditable = useCallback(
+    (messageId: string): boolean => editableIds.has(messageId),
+    [editableIds]
   )
   const holds = useCallback(
     (messageId: string): boolean => allCards.some((card) => card.messageId === messageId),

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { cn } from '@/lib/class-names'
 import { BotFirstScreen } from '../bots/BotFirstScreen'
+import { NativeChatWaitingAgentMailRows } from './queue/NativeChatWaitingAgentMailRows'
 import { nativeChatFirstScreenSignIn } from '../../../../shared/bots/bot-first-screen'
 import {
   NativeChatBotKickoffContext,
@@ -69,6 +70,12 @@ export function NativeChatBotHomeScope({
             {children}
           </div>
           {firstScreen ? <BotFirstScreen firstScreen={firstScreen} isVisible={isVisible} /> : null}
+          {/* The hidden transcript draws other agents' waiting mail; while setup covers it, it shows here. */}
+          {firstScreen ? (
+            <div className="absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-(--chat-content-max-width) flex-col gap-2 px-4 pb-2">
+              <NativeChatWaitingAgentMailRows />
+            </div>
+          ) : null}
         </div>
       ) : (
         children

@@ -1,4 +1,9 @@
-import { View } from 'react-native'
+import { Text, View } from 'react-native'
+import { Image as ImageIcon } from 'lucide-react-native'
+import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
+import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { colors } from '../../../../theme/mobile-theme'
+import { queuedMessageStyles } from '../../input/queued-messages/mobile-native-chat-queued-message-styles'
 import { MobileNativeChatAgentMessageCard } from './MobileNativeChatAgentMessageCard'
 import {
   MobileWaitingAgentMailContext,
@@ -27,12 +32,39 @@ export function MobileWaitingAgentMailRows({
                 message={message}
                 from={message.from}
                 fontScale={fontScale}
-                attachments={null}
+                attachments={<MobileQueuedImageCount message={message} />}
               />
             </View>
           </View>
         ) : null
       )}
     </MobileWaitingAgentMailContext.Provider>
+  )
+}
+
+/** The waiting message's images as its queued card counted them; they show in full once delivered. */
+function MobileQueuedImageCount({
+  message
+}: {
+  message: NativeChatMessage
+}): React.JSX.Element | null {
+  const t = useMobileTranslation()
+  const count = message.blocks.filter((block) => block.type === 'image-ref').length
+  if (count === 0) {
+    return null
+  }
+  return (
+    <View
+      style={queuedMessageStyles.metaLine}
+      accessible
+      accessibilityLabel={
+        count === 1
+          ? t('session.queuedMessageCardRow.images_one', '{{count}} image', { count })
+          : t('session.queuedMessageCardRow.images_other', '{{count}} images', { count })
+      }
+    >
+      <ImageIcon size={12} color={colors.textSecondary} strokeWidth={2} />
+      <Text style={queuedMessageStyles.metaText}>{count}</Text>
+    </View>
   )
 }

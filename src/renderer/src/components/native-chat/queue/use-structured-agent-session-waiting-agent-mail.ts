@@ -43,12 +43,17 @@ export function useStructuredAgentSessionWaitingAgentMail(args: {
     (messageId: string): boolean => allCards.some((card) => card.messageId === messageId),
     [allCards]
   )
-  const agentMailEditable = useCallback(
-    (messageId: string): boolean =>
-      editCapable &&
-      editingMessageId === undefined &&
-      allCards.some((card) => card.messageId === messageId && !card.notEditable),
+  // One pass per queue change, so each row's check is a lookup rather than a scan of the queue.
+  const editableIds = useMemo(
+    () =>
+      editCapable && editingMessageId === undefined
+        ? new Set(allCards.filter((card) => !card.notEditable).map((card) => card.messageId))
+        : new Set<string>(),
     [allCards, editCapable, editingMessageId]
+  )
+  const agentMailEditable = useCallback(
+    (messageId: string): boolean => editableIds.has(messageId),
+    [editableIds]
   )
   return { cards, agentMail, pause, holds, agentMailEditable }
 }
