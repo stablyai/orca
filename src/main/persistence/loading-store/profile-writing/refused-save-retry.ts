@@ -40,29 +40,48 @@ export function retryRefusedSave(
   error: unknown,
   delayMs = SAVE_RETRY_MS
 ): void {
-  if (
-    runtime.writeTimer ||
-    runtime.writesFrozen ||
-    runtime.quitFlushStarted ||
-    runtime.profileMaintenancePending ||
-    !savingCanResume(runtime, error)
-  ) {
+  if (retryBlocked(runtime) || !savingCanResume(runtime, error)) {
     return
   }
   const nextDelayMs = Math.min(delayMs * 2, MAX_SAVE_RETRY_MS)
   runtime.writeTimer = setTimeout(() => runScheduledSave(runtime, writes, nextDelayMs), delayMs)
 }
 
+/** A flush cancelled before its write ran cleared the save timer; put a save back so its changes are not stranded. */
+export function rescheduleCancelledSave(
+  runtime: SaveRetryRuntime,
+  writes: PrimaryStateWriteOperations
+): void {
+  if (retryBlocked(runtime) || savingStopped(runtime)) {
+    return
+  }
+  runtime.writeTimer = setTimeout(() => runScheduledSave(runtime, writes), SAVE_RETRY_MS)
+}
+
+function retryBlocked(runtime: SaveRetryRuntime): boolean {
+  return Boolean(
+    runtime.writeTimer ||
+    runtime.writesFrozen ||
+    runtime.quitFlushStarted ||
+    runtime.profileMaintenancePending
+  )
+}
+
 /** Only a save the writer refused, or a reopen it could not finish, can succeed later; a conflict or a writer stopped for good never will. */
 function savingCanResume(runtime: SaveRetryRuntime, error: unknown): boolean {
   const refusedByWriter =
     error instanceof ProfileStateWriterError ||
-    error instanceof ProfileStateDatabaseOpenError ||
+    // Another profile's database, or a bad profile id, will not open on a later try either.
+    (error instanceof ProfileStateDatabaseOpenError && error.code === 'unreadable') ||
     profileStateWriterFailureOutcome(error) === 'indeterminate'
   if (!refusedByWriter || isProfileStateRevisionConflict(error)) {
     return false
   }
+  return !savingStopped(runtime)
+}
+
+// A faulted writer fails assertWritable while it retires, yet the next save reopens it; only a real stop counts.
+function savingStopped(runtime: SaveRetryRuntime): boolean {
   const authority = runtime.profileStateAuthority
-  // A faulted writer fails assertWritable while it retires, yet the next save reopens it.
-  return !(authority && 'savingStopped' in authority && authority.savingStopped)
+  return Boolean(authority && 'savingStopped' in authority && authority.savingStopped)
 }

@@ -6,7 +6,7 @@ import {
 import type { StoreRuntimeState } from '../store-runtime-state'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
 import { enqueueWrite } from './primary-state-writes'
-import { retryRefusedSave } from './refused-save-retry'
+import { rescheduleCancelledSave, retryRefusedSave } from './refused-save-retry'
 import { drainProfileStateOperations, runProfileStateFlush } from './profile-state-flush-lifetime'
 import type { PendingProfileStateFlushOptions } from './profile-state-flush-lifetime'
 
@@ -178,8 +178,11 @@ export async function flushCurrentStateAsync(
         await enqueueWrite(writes, {
           fullCheckpoint,
           signal,
-          // This flush cancelled any pending retry; the save itself, not this cancellable wait, decides on a new one.
-          onSaveFailed: (error) => retryRefusedSave(runtime, writes, error)
+          // This flush cancelled any pending save; the save itself, not this cancellable wait, decides on a new one.
+          onSaveFailed: (error) =>
+            signal?.aborted
+              ? rescheduleCancelledSave(runtime, writes)
+              : retryRefusedSave(runtime, writes, error)
         })
       } finally {
         await (final

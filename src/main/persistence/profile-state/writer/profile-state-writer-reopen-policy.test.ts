@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ProfileStateSaveNotice } from '../../../../shared/orca-profiles/profile-state-save-notice'
+import { ProfileStateDatabaseOpenError } from '../database/profile-state-database-errors'
 import { ProfileStateIndeterminateWriteError } from '../database/profile-state-write-transaction'
 import { storageCapacityErrorCode } from '../../../../shared/errors/storage-capacity-error'
 import {
@@ -67,5 +68,15 @@ describe('profile save notice', () => {
     policy.writerDelayChanged(false, retired)
     await Promise.resolve()
     expect(notices).toEqual(['slow'])
+  })
+
+  it('gives up on a database that belongs to another profile but keeps retrying an unreadable one', () => {
+    const policy = new ProfileStateWriterReopenPolicy(() => ({}))
+    expect(
+      policy.recordFailure(new ProfileStateDatabaseOpenError('unreadable', 'locked'))
+    ).not.toBeNull()
+    expect(
+      policy.recordFailure(new ProfileStateDatabaseOpenError('identity-mismatch', 'other profile'))
+    ).toBeNull()
   })
 })
