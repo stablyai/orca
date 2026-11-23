@@ -285,10 +285,12 @@ export function MobileBotFirstScreen({
 /** Other agents' waiting mail under setup: outside the chat's list, so at most half the screen and
  *  scrolling on its own; its rows read their place from this scroller, not the list. */
 function SetupMail({ after }: { after: React.ReactNode }): React.JSX.Element | null {
+  return after ? <SetupMailScroller after={after} /> : null
+}
+
+/** Mounts with its scroller, so a scroller that empties and comes back starts its place afresh. */
+function SetupMailScroller({ after }: { after: React.ReactNode }): React.JSX.Element {
   const [viewport] = useState(() => createMobileNativeChatTailViewport(true))
-  if (!after) {
-    return null
-  }
   return (
     <MobileFooterRowsScrollerContext.Provider value={viewport}>
       <ScrollView
