@@ -4,11 +4,19 @@ import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/
 import { nativeChatHostOutageKind } from '@/components/native-chat/host-access/native-chat-host-outage-latch'
 import { botHostTarget } from '@/lib/bot-hosts'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { runtimeHostContactFromSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 
 export type BotHostOutage = { kind: 'reconnecting' | 'offline'; environmentId: string }
 
 const outageKind = (entry: RuntimeEnvironmentStatus | undefined): BotHostOutage['kind'] | null => {
+  // A host that refused this client won't come back by reconnecting: its failure keeps its own words.
+  if (
+    entry?.snapshot &&
+    runtimeHostContactFromSnapshot(entry.snapshot, entry.status).verdict === 'refused'
+  ) {
+    return null
+  }
   const kind = nativeChatHostOutageKind(runtimeHostConnectionStateForEntry(entry))
   return kind === null ? null : kind === 'reconnecting' ? 'reconnecting' : 'offline'
 }
