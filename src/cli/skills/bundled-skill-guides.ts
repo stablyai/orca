@@ -4986,7 +4986,7 @@ const ORCHESTRATION_WORKER_TEARDOWN_REFERENCE_MARKDOWN = [
   "",
   "## A short follow-up after a report",
   "",
-  "For a quick question to a worker on this Orca while its original terminal is still live, address its exact handle.",
+  "For a quick question to a worker on this Orca while its agent is running in the original terminal, address its exact handle.",
   "",
   "```text",
   "ORCA orchestration send --to <worker_terminal_handle> --type question --subject \"One detail\" --body \"Which browser did you use?\"",
@@ -4994,7 +4994,9 @@ const ORCHESTRATION_WORKER_TEARDOWN_REFERENCE_MARKDOWN = [
   "",
   "This sends ordinary mailbox mail without launching a new Task or injecting the assignment preamble. A send receipt records the message. The worker’s reply confirms it received the question. Closing the terminal can strand its unread mail.",
   "",
-  "When the local terminal has closed or you need another supervised result, send to `dispatch:<dispatch_id>`. A local settled Dispatch starts a follow-up Task and can reopen its saved session. Address a running worker on a paired server through its Dispatch ID. For a finished worker there, use `worker-start --on <server>` as described in [placement and remote execution](placement-and-remote.md).",
+  "If the agent exited, an open terminal can still accept mail. A delivery-hold warning means the message is queued. Check the terminal and worker state before sending it again.",
+  "",
+  "When the agent is gone, the terminal has closed, or you need another supervised result, send to the local settled Dispatch. The message types `status` (the default), `dispatch`, and `handoff` can start a follow-up Task and reopen the saved session. Put a question in the body of one of these messages if you need the worker to start again. A message of type `question` alone does not start a follow-up Task.",
   "",
 ].join('\n')
 
