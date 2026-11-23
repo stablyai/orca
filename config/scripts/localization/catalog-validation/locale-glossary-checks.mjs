@@ -10,9 +10,10 @@ import {
 
 const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
 
-// Why: placeholders, code, markup, URLs and CLI invocations (orca terminal, git commit) keep English on purpose.
+// Why: placeholders, code, markup, URLs and CLI invocations (orca terminal, git commit) keep English on purpose;
+// subcommands are singular, so "git repository" or "gh repos" is prose.
 const EXEMPT_SPAN_RE =
-  /\{\{[^}]*\}\}|\{[^}]*\}|`[^`]*`|<code>[\s\S]*?<\/code>|<[^>]*>|https?:\/\/\S+|\b(?:orca|git|gh|glab) [a-z][a-z-]*/g
+  /\{\{[^}]*\}\}|\{[^}]*\}|`[^`]*`|<code>[\s\S]*?<\/code>|<[^>]*>|https?:\/\/\S+|\b(?:orca|git|gh|glab) (?!repositor|(?:repo|commit|agent|terminal)s\b)[a-z][a-z-]*/g
 
 // Multi-word product names (Claude Agent Teams, Azure Repos) contain glossary terms but stay Latin.
 const PRODUCT_NAMES = [...NEVER_TRANSLATE_VALUES]
