@@ -184,7 +184,8 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     const webContentsId = this.pageWebContentsId(browserPageId)
     const guest = webContentsId === undefined ? undefined : webContents.fromId(webContentsId)
     if (!guest || guest.isDestroyed()) {
-      return {}
+      // A page freed for memory keeps its tab and the mute it wakes with.
+      return this.mutedOffscreenPageIds.has(browserPageId) ? { audioMuted: true } : {}
     }
     return {
       ...(guest.isCurrentlyAudible() ? { audible: true as const } : {}),

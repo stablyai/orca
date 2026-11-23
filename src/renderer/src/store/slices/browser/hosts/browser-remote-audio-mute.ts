@@ -8,7 +8,8 @@ import type { RemoteBrowserPageHandle } from '../browser-slice-contract'
 export async function setRemoteBrowserPageAudioMuted(
   worktreeId: string,
   handle: RemoteBrowserPageHandle,
-  muted: boolean
+  muted: boolean,
+  isCurrent: () => boolean
 ): Promise<boolean> {
   if (
     handle.staged ||
@@ -18,6 +19,10 @@ export async function setRemoteBrowserPageAudioMuted(
     ))
   ) {
     return false
+  }
+  // A newer toggle may have been sent while this one waited; the host must end on the newest.
+  if (!isCurrent()) {
+    return true
   }
   await callRuntimeRpc(
     { kind: 'environment', environmentId: handle.environmentId },

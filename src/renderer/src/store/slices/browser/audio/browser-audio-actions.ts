@@ -39,8 +39,9 @@ export function createBrowserAudioActions(
       const generation = (remoteMuteGenerationByTabId.get(tabId) ?? 0) + 1
       remoteMuteGenerationByTabId.set(tabId, generation)
       // A refusal puts the icon back, unless a newer toggle already superseded this one.
+      const isCurrent = (): boolean => remoteMuteGenerationByTabId.get(tabId) === generation
       const rollBack = (): void => {
-        if (remoteMuteGenerationByTabId.get(tabId) === generation) {
+        if (isCurrent()) {
           setMuted(!muted)
         }
       }
@@ -48,7 +49,7 @@ export function createBrowserAudioActions(
         const handle = state.remoteBrowserPageHandlesByPageId[page.id]
         if (handle && handle.placement?.kind !== 'client') {
           // The host's next row confirms the change.
-          void setRemoteBrowserPageAudioMuted(page.worktreeId, handle, muted)
+          void setRemoteBrowserPageAudioMuted(page.worktreeId, handle, muted, isCurrent)
             .then((applied) => {
               if (!applied) {
                 rollBack()
