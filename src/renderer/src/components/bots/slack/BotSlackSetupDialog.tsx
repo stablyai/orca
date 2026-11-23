@@ -25,7 +25,8 @@ import { SlackConfigTokenForm } from './SlackConfigTokenForm'
 import { SlackTeamName } from './SlackWorkspacesSettings'
 import { BotHostSignInButton } from '../BotHostSignInButton'
 import { ConnectorSetupDialog, useSetupStepAside } from '../connector-setup-surface'
-import { forgetOpenedSlackPages, useBotSlackSetup } from './use-bot-slack-setup'
+import { useBotSlackSetup } from './use-bot-slack-setup'
+import { forgetOpenedSlackPages } from './slack-opened-pages'
 import { useSlackHandOffOffer } from './use-slack-hand-off-offer'
 import { useBotHostOutage } from '../use-bot-host-outage'
 import {
@@ -70,7 +71,7 @@ function BotSlackSetupFlow({
   const offer = useSlackHandOffOffer(bot, step)
   const outage = useBotHostOutage(bot.hostId)
   const problem = slackSetupProblem(step, outage)
-  useResumeWhenHostReturns(step, outage, { retry, setUp, handOff })
+  useResumeWhenHostReturns(step, outage, retry)
   // Back from Slack's page in Orca's browser once the install ends, or needs the owner. Stepping aside
   // mounts this flow anew, which checks again before it waits again: that is not an end.
   const settled =

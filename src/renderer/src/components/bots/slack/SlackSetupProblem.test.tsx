@@ -139,79 +139,78 @@ describe('Connect Slack error states', () => {
 })
 
 describe('resuming Slack setup once the server is back', () => {
-  function Probe(props: { step: BotSlackSetupStep; outage: BotHostOutage | null; run: Run }) {
-    useResumeWhenHostReturns(props.step, props.outage, props.run)
+  function Probe(props: {
+    step: BotSlackSetupStep
+    outage: BotHostOutage | null
+    retry: (teamId?: string) => Promise<void>
+  }) {
+    useResumeWhenHostReturns(props.step, props.outage, props.retry)
     return null
   }
-  type Run = Parameters<typeof useResumeWhenHostReturns>[2]
   function harness() {
-    const run = {
-      retry: vi.fn(async () => {}),
-      setUp: vi.fn(async () => {}),
-      handOff: vi.fn(async () => {})
-    }
+    const retry = vi.fn(async (_teamId?: string) => {})
     const at = (step: BotSlackSetupStep, outage: BotHostOutage | null) =>
-      act(() => root.render(<Probe step={step} outage={outage} run={run} />))
-    return { run, at }
+      act(() => root.render(<Probe step={step} outage={outage} retry={retry} />))
+    return { retry, at }
   }
   const stopped: BotHostOutage = { ...offline, reconnectable: false }
   const failed: BotSlackSetupStep = { kind: 'failed', code: 'cloud_error', teamId: 'T1' }
 
-  it('repeats the failed step for its workspace once, after the server answers', () => {
-    const { run, at } = harness()
+  it('checks the failed workspace again once, after the server answers', () => {
+    const { retry, at } = harness()
     at(failed, reconnecting)
-    expect(run.setUp).not.toHaveBeenCalled()
+    expect(retry).not.toHaveBeenCalled()
     at(failed, null)
     at(failed, null)
-    expect(run.setUp).toHaveBeenCalledTimes(1)
-    expect(run.setUp).toHaveBeenCalledWith('T1')
-  })
-
-  it('repeats a failed hand-off as a hand-off', () => {
-    const { run, at } = harness()
-    at({ ...failed, handOff: true }, reconnecting)
-    at({ ...failed, handOff: true }, null)
-    expect(run.handOff).toHaveBeenCalledWith('T1')
-    expect(run.setUp).not.toHaveBeenCalled()
+    expect(retry).toHaveBeenCalledTimes(1)
+    expect(retry).toHaveBeenCalledWith('T1')
   })
 
   it('resumes a request the server dropped and answered again before it failed', () => {
-    const { run, at } = harness()
+    const { retry, at } = harness()
     at({ kind: 'setting-up' }, reconnecting)
     at({ kind: 'setting-up' }, null)
     at(failed, null)
-    expect(run.setUp).toHaveBeenCalledWith('T1')
+    expect(retry).toHaveBeenCalledWith('T1')
   })
 
   it('waits through an outage Reconnect cannot end, until the server answers', () => {
-    const { run, at } = harness()
+    const { retry, at } = harness()
     at(failed, reconnecting)
     at(failed, stopped)
-    expect(run.setUp).not.toHaveBeenCalled()
+    expect(retry).not.toHaveBeenCalled()
     at(failed, null)
-    expect(run.setUp).toHaveBeenCalledTimes(1)
+    expect(retry).toHaveBeenCalledTimes(1)
   })
 
   it('does not repeat a failure the outage did not cause', () => {
-    const { run, at } = harness()
+    const { retry, at } = harness()
     at({ kind: 'setting-up' }, reconnecting)
     at({ kind: 'setting-up' }, null)
     at({ kind: 'failed', code: 'rate_limited', teamId: 'T1' }, null)
-    at(
-      { kind: 'failed', code: 'signed_out', teamId: 'T1', handOff: true, local: true },
-      reconnecting
-    )
-    at({ kind: 'failed', code: 'signed_out', teamId: 'T1', handOff: true, local: true }, null)
-    expect(run.setUp).not.toHaveBeenCalled()
-    expect(run.handOff).not.toHaveBeenCalled()
+    const ownSignIn: BotSlackSetupStep = {
+      kind: 'failed',
+      code: 'signed_out',
+      teamId: 'T1',
+      local: true
+    }
+    at(ownSignIn, reconnecting)
+    at(ownSignIn, null)
+    expect(retry).not.toHaveBeenCalled()
   })
 
   it('arms nothing for an outage during an idle step', () => {
-    const { run, at } = harness()
+    const { retry, at } = harness()
     at({ kind: 'pick', teamIds: ['T1'] }, reconnecting)
     at({ kind: 'pick', teamIds: ['T1'] }, null)
     at(failed, null)
-    expect(run.setUp).not.toHaveBeenCalled()
-    expect(run.retry).not.toHaveBeenCalled()
+    expect(retry).not.toHaveBeenCalled()
+  })
+
+  it('never shows the waiting screen for a failure it will not resume', () => {
+    // Slack's own refusal while the server happens to be down keeps its own words.
+    expect(
+      slackSetupProblem({ kind: 'failed', code: 'rate_limited', teamId: 'T1' }, reconnecting)
+    ).toBeNull()
   })
 })

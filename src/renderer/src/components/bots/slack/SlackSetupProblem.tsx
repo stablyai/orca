@@ -39,7 +39,7 @@ export function slackSetupProblem(
       return { kind: step.kind, teamId: step.teamId }
     case 'failed':
       // This computer's own sign-in lapsing is answered in place, whatever the server is doing.
-      if (outage?.reconnectable && !step.local) {
+      if (outage?.reconnectable && failedForHost(step)) {
         return { kind: outage.kind, code: step.code, environmentId: outage.environmentId }
       }
       return step.code === TOKEN_REJECTED
@@ -63,36 +63,31 @@ export function slackSetupProblem(
 }
 
 /**
- * A failure while the server was away, or a request it dropped mid-way, runs again once the server is
- * back, as the waiting line says: the same step for the same workspace; only a failed first check
- * starts over. An outage during an idle step arms nothing.
+ * A failure while the server was away, or a request it dropped mid-way, starts again once the server
+ * is back, as the waiting line says: that workspace's Slack state is read again first, as Try again
+ * does, so an app the dropped request left half-made still asks before another is made. An outage
+ * during an idle step, or a failure of its own, arms nothing.
  */
 export function useResumeWhenHostReturns(
   step: BotSlackSetupStep,
   outage: BotHostOutage | null,
-  run: {
-    retry: () => Promise<void>
-    setUp: (teamId: string) => Promise<void>
-    handOff: (teamId: string) => Promise<void>
-  }
+  retry: (teamId?: string) => Promise<void>
 ): void {
   const waited = useRef(false)
   // Any outage, including one Reconnect can't end: the wait is over only when the server answers.
   const hostDown = outage !== null
-  const { retry, setUp, handOff } = run
   useEffect(() => {
     const pending = step.kind === 'checking' || step.kind === 'setting-up'
     if (hostDown && (pending || failedForHost(step))) {
       waited.current = true
     } else if (waited.current && step.kind === 'failed' && failedForHost(step)) {
       waited.current = false
-      const team = step.teamId
-      void (team ? (step.handOff ? handOff : setUp)(team) : retry())
+      void retry(step.teamId)
     } else if (!pending) {
       // Settled some other way, or failed for its own reason: not this outage's to repeat.
       waited.current = false
     }
-  }, [step, hostDown, retry, setUp, handOff])
+  }, [step, hostDown, retry])
 }
 
 function problemCode(problem: SlackSetupProblem): string {
