@@ -160,10 +160,12 @@ export class ConnectorTurnEvents {
       onDropped: (item, stamp, failure) => {
         this.trace.dropped(item, stamp)
         // A reply refused as invalid can't succeed as sent under this hello: it stays in flight
-        // until the next one (its row stays unsent). Any other refusal (a 503 outcome that doesn't
-        // stand yet) goes again later.
+        // until the next one (its row stays unsent). Any other refusal (a 413, or a 503 outcome
+        // that doesn't stand yet) goes again later.
         if (failure?.status === 400) {
-          this.setAside.push(item)
+          if (isReplyEvent(item)) {
+            this.setAside.push(item)
+          }
           return
         }
         this.replies.forget([item])

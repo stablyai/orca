@@ -28,11 +28,12 @@ const refusal = (status: number, error: string): ConnectorFailure => ({
   retryAfterMs: null
 })
 
-/** Whether the row goes again under the same hello, and under the next, after the cloud refused
- *  it with `failure`. */
+/** Whether the row goes again under the same hello, and how often it is posted under a next hello
+ *  that switched to the /replies route, after the cloud refused it with `failure`. */
 async function sentAgainAfter(
   failure: ConnectorFailure
-): Promise<{ sameHello: boolean; nextHello: boolean }> {
+): Promise<{ sameHello: boolean; postedNext: number }> {
+  let posted = 0
   const dir = mkdtempSync(join(tmpdir(), 'orca-reply-refused-'))
   dirs.push(dir)
   const events = new ConnectorTurnEvents(dir, 'ada', undefined, {
@@ -43,7 +44,10 @@ async function sentAgainAfter(
       sent: async () => {}
     }),
     onOwed: () => {},
-    post: async () => failure,
+    post: async () => {
+      posted += 1
+      return { ok: true, value: {} }
+    },
     hostName: () => 'laptop'
   })
   events.useCloudFeatures(new Set([CONNECTOR_REPLIES_OUTBOX_FEATURE]))
@@ -54,21 +58,21 @@ async function sentAgainAfter(
   events.refused(head!.stamp, failure)
   await events.drainReplies()
   const sameHello = events.next(1) !== null
-  // A new hello (the reply route may have changed) gives it another chance.
+  // A new hello, here one that switched replies to /replies, gives it another chance.
+  events.useCloudFeatures(new Set())
   events.resetLive()
   await events.drainReplies()
-  const nextHello = events.next(2)?.batch.some((event) => event.kind === 'reply') === true
   events.clear()
-  return { sameHello, nextHello }
+  return { sameHello, postedNext: posted }
 }
 
 it('holds a reply refused as invalid until the next hello, and keeps sending one that does not stand yet', async () => {
   expect(await sentAgainAfter(refusal(400, 'invalid_request'))).toEqual({
     sameHello: false,
-    nextHello: true
+    postedNext: 1
   })
   expect(await sentAgainAfter(refusal(503, 'reply_not_accepted'))).toEqual({
     sameHello: true,
-    nextHello: true
+    postedNext: 1
   })
 })
