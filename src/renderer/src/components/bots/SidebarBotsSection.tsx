@@ -198,7 +198,7 @@ export function SidebarBotsSection({
             '{{action}}, {{total}} bots, {{attention}} need you, {{unread}} unread, {{working}} working',
             {
               action: collapseLabel,
-              total: preview.total,
+              total: bots.length,
               attention: preview.attention,
               unread: preview.unread,
               working: preview.working
