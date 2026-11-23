@@ -147,11 +147,16 @@ function composerChat(expanded: boolean) {
       className="native-chat-appearance flex h-[calc(100vh-2rem)] flex-col bg-chat-canvas"
       style={nativeChatAppearanceStyle({})}
     >
-      <div className="min-h-0 flex-1 space-y-2 p-3">
+      <div className="scrollbar-sleek min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
         <p className="text-xs text-muted-foreground">Perf Issue · Home Chat</p>
         <p className="text-sm text-chat-foreground">
           Both fix workers are running in parallel; ORCA-20 needs your approval.
         </p>
+        {Array.from({ length: 8 }, (_, index) => (
+          <p key={index} className="text-sm text-chat-foreground">
+            Commented on worker update {index + 1}: keep this transcript visible around the card.
+          </p>
+        ))}
       </div>
       <NativeChatComposerField
         dock={dock(expanded, rows)}
@@ -258,6 +263,12 @@ export const composerDefault390 = defineFixture({
   width: 390,
   setup: forgetSavedPosition,
   render: () => composerChat(true)
+})
+
+export const composerFolded390 = defineFixture({
+  width: 390,
+  setup: forgetSavedPosition,
+  render: () => composerChat(false)
 })
 
 export const composerOverSend390 = defineFixture({

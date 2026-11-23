@@ -126,8 +126,11 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   )
   const agentLabel = structuredAgentLabel(props.agent)
   const hostSendGate = useNativeChatHostSendGate(props.target, props.agent, hostOutage)
-  const hostHeld = hostSendGate.sendBlockedReason !== null
-  const submits = useStructuredNativeChatSubmitReveal(controller, provisionalLaunch.retry, hostHeld)
+  const submits = useStructuredNativeChatSubmitReveal(
+    controller,
+    provisionalLaunch.retry,
+    hostSendGate.sendBlockedReason !== null
+  )
   const workerApprovalParty = nativeChatWorkerApprovalParty(props)
   const promptResponse = useStructuredPromptResponseHold(submits.respond)
   const needsFailureFacts =
@@ -341,7 +344,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               shown={!readFailure?.final}
               keepFloatingTerminalTriggerClear={props.isVisible}
             >
-              {subagents.dock}
+              {composerShown ? null : subagents.dock}
               {subagents.pairedAsks}
               {prompt || subagentOpen ? null : (
                 <NativeChatStructuredComposerTabStrips
@@ -373,7 +376,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                 chatWorktreeId={ownerWorktreeId ?? null}
                 agentName={agentLabel}
                 statedFailures={startFailures}
-                steerHeld={bot.stopControls.stopping || hostHeld}
+                steerHeld={bot.stopControls.stopping || hostSendGate.sendBlockedReason !== null}
                 focusComposer={focusComposer}
                 editAttachTo={{ terminalTabId: props.tabId, agent: props.agent, transport }}
               />
@@ -391,6 +394,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               {composerShown ? (
                 <NativeChatComposer
                   ref={composerRef}
+                  dock={subagents.dock}
                   terminalTabId={props.tabId}
                   paneKey={paneKey}
                   draftScopeKey={structuredAgentSessionDraftScopeKey(props.sessionId)}

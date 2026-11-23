@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode
+} from 'react'
 
 const GestureContext = createContext(false)
 export function useWorkerDockGestureHeld(): boolean {
@@ -8,6 +16,30 @@ export function useWorkerDockGestureHeld(): boolean {
 /** Defer structural dock updates through pointerup/click and a complete Enter/Space gesture. */
 export function NativeChatWorkerDockFrame({ children }: { children: ReactNode }) {
   const [held, setHeld] = useState(false)
+  const frame = useRef<HTMLDivElement>(null)
+  // The floating frame overlaps the transcript, so reserve exactly its visible height at the end.
+  useLayoutEffect(() => {
+    const element = frame.current
+    const root = element?.closest<HTMLElement>('[data-native-chat-root]')
+    if (
+      !element ||
+      !root ||
+      !element.closest('[data-native-chat-worker-dock-overlay]') ||
+      typeof ResizeObserver === 'undefined'
+    ) {
+      return
+    }
+    const measure = () => {
+      root.style.setProperty('--native-chat-worker-dock-height', `${element.offsetHeight}px`)
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    measure()
+    return () => {
+      observer.disconnect()
+      root.style.removeProperty('--native-chat-worker-dock-height')
+    }
+  }, [])
   useEffect(() => {
     if (!held) {
       return
@@ -38,6 +70,7 @@ export function NativeChatWorkerDockFrame({ children }: { children: ReactNode })
   return (
     <GestureContext.Provider value={held}>
       <div
+        ref={frame}
         data-native-chat-worker-dock=""
         className="mx-auto w-full max-w-(--chat-content-max-width) shrink-0 px-3 pt-2 sm:px-4 [&:not(:has([data-native-chat-background-tasks],[data-native-chat-worker-approvals]))]:hidden"
         onPointerDownCapture={(event) => {

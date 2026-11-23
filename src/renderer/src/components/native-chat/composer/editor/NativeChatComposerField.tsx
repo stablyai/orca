@@ -17,12 +17,14 @@ import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { NativeChatComposerFieldProps } from '../../native-chat-composer-field-props'
 import { imeComposedSegment } from '@/lib/text-input/ime/ime-composed-segment'
 import { acceptNativeChatPromptSuggestion } from './native-chat-prompt-suggestion-accept'
+import { useKeepFloatingTerminalTriggerClear } from '../../../floating-terminal/trigger/floating-terminal-trigger-keep-clear'
 
 function noop(): void {}
 
 export type { NativeChatComposerFieldProps } from '../../native-chat-composer-field-props'
 
 export function NativeChatComposerField({
+  dock,
   editSession,
   draftScopeKey,
   positionTarget,
@@ -186,12 +188,22 @@ export function NativeChatComposerField({
   // A launch prompt sits in a popover, so it takes the app's surface instead of the chat's.
   const launch = launchPrompt !== undefined
   const card = useRef<HTMLDivElement>(null)
+  // Only a visible structured chat passes its dock, so hidden chats register nothing.
+  useKeepFloatingTerminalTriggerClear(card, Boolean(dock) && !launch)
 
   return (
     <div
       data-composer-field={launch ? undefined : ''}
-      className={launch ? undefined : '@container/composer-field shrink-0 bg-chat-pane'}
+      className={launch ? undefined : '@container/composer-field relative shrink-0 bg-chat-pane'}
     >
+      {dock ? (
+        <div
+          data-native-chat-worker-dock-overlay=""
+          className="pointer-events-none absolute right-0 bottom-full left-0 z-10"
+        >
+          <div className="pointer-events-auto">{dock}</div>
+        </div>
+      ) : null}
       <div className={launch ? undefined : 'native-chat-composer-gutter pt-2 pb-4'}>
         <div
           className={cn('relative w-full', !launch && 'mx-auto max-w-(--chat-content-max-width)')}
