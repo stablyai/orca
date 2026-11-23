@@ -8,6 +8,9 @@ import type { WebhookCallText, WebhookCheckResult } from '../../shared/rpc-contr
 import { webhookCallView } from './webhook-call-file'
 import { webhookReadValue, type WebhookCloudCalls } from './webhook-cloud-routes'
 
+// The two reads these make.
+type CallReads = Pick<WebhookCloudCalls, 'calls' | 'envelope'>
+
 const CHECK_CALLS = 50
 const CHECK_FETCHES_AT_ONCE = 4
 
@@ -18,7 +21,7 @@ function ignoredCallText(reason: string | undefined): string {
 }
 
 export async function webhookCallText(
-  routes: WebhookCloudCalls,
+  routes: CallReads,
   hookId: string,
   callId: string
 ): Promise<WebhookCallText> {
@@ -34,7 +37,7 @@ export async function webhookCallText(
 }
 
 export async function checkWebhookCalls(
-  routes: WebhookCloudCalls,
+  routes: CallReads,
   hookId: string,
   filters: WebhookFilters
 ): Promise<WebhookCheckResult> {

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WebhookCallRow } from '../../shared/rpc-contract/webhooks-params'
 import { checkWebhookCalls, webhookCallText } from './webhook-call-inspection'
-import type { WebhookCloudCalls } from './webhook-cloud-routes'
 
 const NOT_FOUND = { ok: false, status: 404, error: 'not_found', retryAfterMs: null } as const
 const call = (callId: string, state: 'ignored' | 'queued' | 'started', reason?: string) =>
@@ -10,9 +9,9 @@ const call = (callId: string, state: 'ignored' | 'queued' | 'started', reason?: 
 // The cloud keeps a body only for a call it admitted; an ignored call is a row alone.
 function cloud(rows: WebhookCallRow[], bodies: Record<string, string>) {
   const fetched: string[] = []
-  const routes = {
+  const routes: Parameters<typeof checkWebhookCalls>[0] = {
     calls: async () => ({ ok: true, value: { calls: rows } }),
-    envelope: async (callId: string) => {
+    envelope: async (callId) => {
       fetched.push(callId)
       const event = bodies[callId]
       return event === undefined
@@ -28,7 +27,7 @@ function cloud(rows: WebhookCallRow[], bodies: Record<string, string>) {
             }
           }
     }
-  } as unknown as WebhookCloudCalls
+  }
   return { routes, fetched }
 }
 
