@@ -4486,13 +4486,8 @@
       "folder": "Klasör",
       "copyPath": "Yolu kopyala",
       "pathCopied": "Yol kopyalandı",
-      "off": "Kapalı",
-      "lastLooked": "son göz atma {{when}}",
       "tidyNightLine": "Her gece saat 3'ten sonra",
       "tidyWeekLine": "Haftada bir, saat 3'ten sonra",
-      "today": "bugün",
-      "yesterday": "dün",
-      "lastTidied": "son toparlama {{when}}",
       "withAccess": "{{service}}: erişimi olan {{people}}",
       "requests_one": "{{count}} istek",
       "requests_other": "{{count}} istek",
@@ -5165,6 +5160,13 @@
     },
     "share": {
       "signInOtherSite": "Bilgisayar başka bir site için oturum açma bağlantısı gönderdi, bu yüzden açılmadı."
+    },
+    "settingsPage": {
+      "off": "Kapalı",
+      "lastLooked": "son göz atma {{when}}",
+      "today": "bugün",
+      "yesterday": "dün",
+      "lastTidied": "son toparlama {{when}}"
     }
   },
   "sidebar": {

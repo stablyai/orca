@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY } from '../../../src/shared/bot-runtime-capabilities'
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
-import { lookAroundSupported, type BotLookAround } from '../../../src/shared/bots/bot-look-around'
-import type { BotTidyUp } from '../../../src/shared/bots/bot-tidy-up'
 import { UNSAVED_DRAFTS_REMOVAL_REFUSAL } from '../../../src/shared/worktree/removal/removal'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
@@ -10,13 +8,6 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { botAvatarUpload, botDelete, botUpdate } from './bot-sheet-operations'
 import { MobileBotSettingsOffline } from './MobileBotSettingsOffline'
-import {
-  MobileLookAroundPage,
-  MobileLookAroundSection,
-  type LookAroundPage
-} from './MobileBotLookAround'
-import { MobileTidyUpPage, MobileTidyUpSection, type TidyUpPage } from './MobileBotTidyUp'
-import { useMobileBotTidyUp } from './use-mobile-bot-tidy-up'
 import { phoneAccessHost } from './bot-access-request-copy'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import type { RouteBot } from './use-route-bot'
@@ -26,7 +17,9 @@ import { isHostNotConnectedError } from '../query/host-query-errors'
 import {
   MobileBotSettingsRoot,
   MobileBotStalePage,
-  type BotSettingsTarget
+  type BotSettingsTarget,
+  type SettingsFeature,
+  type SettingsRootPage
 } from './MobileBotSettingsRoot'
 import { MobileBotPermissionsPage } from './MobileBotPermissionsPage'
 import { MobileBotIdentityPage } from './MobileBotIdentityPage'
@@ -38,6 +31,12 @@ import { useMobileBotConnectorSettings } from './connectors/MobileBotConnectors'
 import { useBotSoulMemorySkills } from './use-bot-soul-memory-skills'
 import { useMobileBotSharingSettings } from './sharing/MobileBotSharing'
 import { botSaveErrorMessage } from './mobile-bot-sheet-copy'
+import { useBotScheduleSettings } from './MobileBotScheduleSettings'
+import { whoCanAskLine } from './bot-settings-lines'
+import { DrillRow } from '../host-screen/workspace-options/workspace-option-rows'
+
+/** Pages that claim Back themselves, for the pages they open. */
+const OWN_BACK: readonly SettingsRootPage[] = ['tools', 'look-around', 'tidy-up']
 
 /** The bot's Settings, as the desktop's: one list, and a page for each row that has more. */
 export function MobileBotSettingsTab(props: {
@@ -70,22 +69,16 @@ export function MobileBotSettingsTab(props: {
   const offlineBanner = <MobileBotSettingsOffline hostName={props.hostName} client={props.client} />
   const [deleting, setDeleting] = useState(false)
   const [page, setPage] = useState(typeof props.initialPage === 'string' ? props.initialPage : null)
-  // A page drilled into from Look around or Memory upkeep; its Back returns there.
-  const [lookPage, setLookPage] = useState<LookAroundPage | null>(null)
-  const [tidyPage, setTidyPage] = useState<TidyUpPage | null>(null)
   const closePage = () => setPage(null)
   useBackClaim(
-    // Tools claims Back itself, for the pages it opens.
-    page && page !== 'tools' && !lookPage && !tidyPage
+    page && !OWN_BACK.includes(page)
       ? () => {
           closePage()
           return true
         }
       : null
   )
-  const tidyUp = useMobileBotTidyUp(props.client, bot.id, props.routeBot.reads, props.showToast)
   const access = props.accessRequests
-  const lookAround = lookAroundSupported(bot.agent) ? props.upNext : null
   const sharing = useMobileBotSharingSettings(props, offlineBanner)
   const backToSettings = {
     label: t('bots.lookAround.back', 'Back to Settings'),
@@ -122,6 +115,44 @@ export function MobileBotSettingsTab(props: {
     initialPage: typeof props.initialPage === 'object' ? props.initialPage : undefined
   })
   const knows = useBotSoulMemorySkills(props, offlineBanner, page, setPage, save)
+  const schedule = useBotScheduleSettings(props, {
+    banner: offlineBanner,
+    locked,
+    page,
+    setPage,
+    save
+  })
+  const whoCanAsk: SettingsFeature = {
+    rows: [
+      {
+        key: 'who-can-ask',
+        group: 'access',
+        node: (
+          <DrillRow
+            label={t('bots.settings.whoCanAsk', 'Who can ask')}
+            value={whoCanAskLine(bot.members, access?.requests.length ?? 0)}
+            detail
+            onPress={() => setPage('who-can-ask')}
+          />
+        )
+      }
+    ],
+    page:
+      page === 'who-can-ask' ? (
+        <MobileBotWhoCanAskPage
+          {...props}
+          bot={accessBot}
+          access={access}
+          locked={locked}
+          banner={offlineBanner}
+          onBack={backToSettings}
+          save={save}
+          setSaving={setSaving}
+        />
+      ) : null
+  }
+  // In the desktop's order within each group: Access is Connectors, Who can ask, Tools, then Skills.
+  const features = [schedule, connectors, whoCanAsk, knows, sharing]
 
   const upload = async (png: string): Promise<boolean> => {
     if (!props.client) {
@@ -168,9 +199,9 @@ export function MobileBotSettingsTab(props: {
     }
   }
 
-  const hookPage = connectors.page ?? sharing.page ?? knows.page
-  if (hookPage) {
-    return hookPage
+  const featurePage = features.find((feature) => feature.page)?.page
+  if (featurePage) {
+    return featurePage
   }
 
   if (deleting) {
@@ -198,67 +229,6 @@ export function MobileBotSettingsTab(props: {
     )
   }
 
-  const saveLookAround = (lookAround: Partial<BotLookAround>) => void save({ lookAround })
-  const saveTidyUp = (change: Partial<BotTidyUp>) => void save({ tidyUp: change })
-  if (page === 'tidy-up' && tidyPage && lookAround) {
-    return (
-      <MobileTidyUpPage
-        page={tidyPage}
-        bot={bot}
-        view={tidyUp.view}
-        busy={tidyUp.busy}
-        disabled={!props.online}
-        banner={offlineBanner}
-        save={saveTidyUp}
-        onUndo={tidyUp.undo}
-        onBack={() => setTidyPage(null)}
-      />
-    )
-  }
-  if (page === 'look-around' && lookPage && lookAround) {
-    return (
-      <MobileLookAroundPage
-        page={lookPage}
-        bot={bot}
-        save={saveLookAround}
-        onBack={() => setLookPage(null)}
-        disabled={!props.online}
-        banner={offlineBanner}
-      />
-    )
-  }
-  if (page === 'look-around' && lookAround) {
-    return (
-      <>
-        <SheetHeader title={t('bots.lookAround.title', 'Look around')} onBack={backToSettings} />
-        {offlineBanner}
-        <MobileLookAroundSection
-          bot={bot}
-          upNext={props.routeBot.activity?.upNext}
-          disabled={locked || lookAround.busy}
-          save={saveLookAround}
-          onOpen={setLookPage}
-          onLookNow={lookAround.lookNow}
-        />
-      </>
-    )
-  }
-  if (page === 'tidy-up' && lookAround) {
-    return (
-      <>
-        <SheetHeader title={t('bots.tidyUp.title', 'Memory upkeep')} onBack={backToSettings} />
-        {offlineBanner}
-        <MobileTidyUpSection
-          bot={bot}
-          view={tidyUp.view}
-          disabled={locked || tidyUp.busy}
-          save={saveTidyUp}
-          onOpen={setTidyPage}
-          onTidyNow={tidyUp.tidyNow}
-        />
-      </>
-    )
-  }
   if (page === 'identity') {
     return (
       <MobileBotIdentityPage
@@ -322,21 +292,6 @@ export function MobileBotSettingsTab(props: {
       />
     )
   }
-  if (page === 'who-can-ask') {
-    return (
-      <MobileBotWhoCanAskPage
-        {...props}
-        bot={accessBot}
-        access={access}
-        locked={locked}
-        banner={offlineBanner}
-        onBack={backToSettings}
-        save={save}
-        setSaving={setSaving}
-      />
-    )
-  }
-
   if (page === 'permissions') {
     return (
       <MobileBotPermissionsPage
@@ -358,25 +313,13 @@ export function MobileBotSettingsTab(props: {
       hostName={props.hostName}
       online={props.online}
       locked={locked}
-      schedule={
-        lookAround
-          ? {
-              lastLookedAt: props.routeBot.activity?.upNext?.state.lastLookedAt,
-              tidyView: tidyUp.view
-            }
-          : null
-      }
-      accessRequests={access?.requests.length ?? 0}
-      memoryTopics={knows.memoryTopics}
       open={setPage}
       setActive={(active) => void save({ paused: !active })}
       setNotification={(key, on) =>
         void save({ notifications: { ...bot.notifications, [key]: on } })
       }
       onDelete={() => setDeleting(true)}
-      connectorsRow={connectors.row}
-      accessRows={knows.accessRows}
-      sharing={sharing.row}
+      rows={features.flatMap((feature) => feature.rows)}
       header={
         <>
           {props.onBack ? (

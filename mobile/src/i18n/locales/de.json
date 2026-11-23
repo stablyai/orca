@@ -4486,13 +4486,8 @@
       "folder": "Ordner",
       "copyPath": "Pfad kopieren",
       "pathCopied": "Pfad kopiert",
-      "off": "Aus",
-      "lastLooked": "zuletzt umgesehen {{when}}",
       "tidyNightLine": "Jede Nacht nach 3 Uhr",
       "tidyWeekLine": "Einmal pro Woche, nach 3 Uhr",
-      "today": "heute",
-      "yesterday": "gestern",
-      "lastTidied": "zuletzt aufgeräumt {{when}}",
       "withAccess": "{{service}}: {{people}} mit Zugriff",
       "requests_one": "{{count}} Anfrage",
       "requests_other": "{{count}} Anfragen",
@@ -5165,6 +5160,13 @@
     },
     "share": {
       "signInOtherSite": "Der Computer hat einen Anmeldelink für eine andere Website gesendet, daher wurde er nicht geöffnet."
+    },
+    "settingsPage": {
+      "off": "Aus",
+      "lastLooked": "zuletzt umgesehen {{when}}",
+      "today": "heute",
+      "yesterday": "gestern",
+      "lastTidied": "zuletzt aufgeräumt {{when}}"
     }
   },
   "sidebar": {

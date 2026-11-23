@@ -4480,13 +4480,8 @@
       "folder": "資料夾",
       "copyPath": "複製路徑",
       "pathCopied": "已複製路徑",
-      "off": "關閉",
-      "lastLooked": "上次檢視 {{when}}",
       "tidyNightLine": "每晚凌晨 3 點後",
       "tidyWeekLine": "每週一次，凌晨 3 點後",
-      "today": "今天",
-      "yesterday": "昨天",
-      "lastTidied": "上次整理 {{when}}",
       "withAccess": "{{service}}：{{people}} 有存取權限",
       "requests_one": "{{count}} 個請求",
       "requests_other": "{{count}} 個請求",
@@ -5159,6 +5154,13 @@
     },
     "share": {
       "signInOtherSite": "電腦傳來的是其他網站的登入連結，因此沒有開啟。"
+    },
+    "settingsPage": {
+      "off": "關閉",
+      "lastLooked": "上次檢視 {{when}}",
+      "today": "今天",
+      "yesterday": "昨天",
+      "lastTidied": "上次整理 {{when}}"
     }
   },
   "sidebar": {
