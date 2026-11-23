@@ -9,6 +9,7 @@ import { readClaudeStructuredSessionSettings } from '../launch/claude-structured
 import { openClaudeSession, readClaudeStartupFacts } from './claude-structured-session-startup'
 import { catchUpClaudeTranscript } from '../../transcripts/claude-transcript-catch-up'
 import { readyClaudePromptSuggestionPause } from '../claude-prompt-suggestion-pause'
+import { keptClaudeAgentRelay } from '../../relay/claude-kept-agent-connection'
 import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps
@@ -99,7 +100,9 @@ async function openStartingClaudeSession(
   const origin = usableJournalHistoryOrigin(
     (await events?.journalHistory?.()?.reads.historyOrigin()) ?? null
   )
-  if (resumesTranscript && (leafUuid || origin?.kind === 'native_copy') && events) {
+  // A kept agent's output since the last ack is replayed in order instead of transcript catch-up.
+  const kept = keptClaudeAgentRelay(session.connection)
+  if (!kept && resumesTranscript && (leafUuid || origin?.kind === 'native_copy') && events) {
     const catchUp = withStructuredHistoryInvocation(
       session,
       request.signal,
@@ -137,5 +140,6 @@ async function openStartingClaudeSession(
     current()
   }
   startup.open()
+  kept?.releaseOutput()
   return { ...result, link: session.link, newConversation: !resumesTranscript }
 }

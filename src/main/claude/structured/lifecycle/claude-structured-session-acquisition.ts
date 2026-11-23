@@ -1,5 +1,6 @@
 import type { AgentSessionAcquisition } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { openClaudeStreamJsonConnection } from '../../claude-stream-json-connection'
+import { openKeptClaudeAgentConnection } from '../../relay/claude-kept-agent-connection'
 import { claudeLaunchPermissions } from '../permissions/claude-structured-inbound-control'
 import * as replay from '../turns/claude-replay-turn-resolution'
 import { claudeFrameSendFacts } from '../turns/claude-command-lifecycle'
@@ -190,39 +191,49 @@ export async function acquireClaudeSession({
     naming?.launch(launch)
     attempt.launch = launch
     observedLeafUuid = launch.resumeLeafUuid
-    const connection = await withAgentSessionCreatePhase('spawn', input.recordPhase, () =>
-      (deps.openConnection ?? openClaudeStreamJsonConnection)(
-        {
-          pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
-          prefixArgs: launch.prefixArgs,
-          options: launch.options,
-          cwd: launch.cwd,
-          env: {
-            ...launch.env,
-            // The saved account directory must override a conflicting environment overlay.
-            ...claudeConfigDirEnvPatch(launch.claudeConfigDir, { env: launch.env })
-          },
-          ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {})
-        },
-        {
-          onMessage,
-          ...permissions.handlers,
-          onFault: childFailed,
-          onExit: permissions.closeThen((error, exit) => {
-            if (exit?.expected) {
-              naming?.failed()
-              callbacks.finishClose(sessionId, attempt)
-              return
-            }
-            childFailed(...startupExit.claudeStartupExit(error, attempt, input.events))
-            if (exits.get(sessionId)?.connection === attempt.connection) {
-              callbacks.finishClose(sessionId, attempt)
-            } else {
-              callbacks.handleExit(sessionId, attempt, error)
-            }
-          })
+    const connectionLaunch = {
+      pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
+      prefixArgs: launch.prefixArgs,
+      options: launch.options,
+      cwd: launch.cwd,
+      env: {
+        ...launch.env,
+        // The saved account directory must override a conflicting environment overlay.
+        ...claudeConfigDirEnvPatch(launch.claudeConfigDir, { env: launch.env })
+      },
+      ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {})
+    }
+    const connectionHandlers = {
+      onMessage,
+      ...permissions.handlers,
+      onFault: childFailed,
+      onExit: permissions.closeThen((error: Error, exit?: { expected: boolean }) => {
+        if (exit?.expected) {
+          naming?.failed()
+          callbacks.finishClose(sessionId, attempt)
+          return
         }
-      )
+        childFailed(...startupExit.claudeStartupExit(error, attempt, input.events))
+        if (exits.get(sessionId)?.connection === attempt.connection) {
+          callbacks.finishClose(sessionId, attempt)
+        } else {
+          callbacks.handleExit(sessionId, attempt, error)
+        }
+      })
+    }
+    const connection = await withAgentSessionCreatePhase(
+      'spawn',
+      input.recordPhase,
+      async () =>
+        // The agent that kept working while Orca was closed, else a new one (under the daemon where it can).
+        (await openKeptClaudeAgentConnection(sessionId, connectionLaunch, connectionHandlers)) ??
+        (deps.openConnection ?? openClaudeStreamJsonConnection)(
+          connectionLaunch,
+          connectionHandlers,
+          undefined,
+          undefined,
+          sessionId
+        )
     )
     attempt.connection = connection
     naming?.attach(connection)

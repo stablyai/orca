@@ -12,6 +12,7 @@ import {
   type ClaudeControlSurface
 } from './sdk-transport/claude-agent-sdk-control-requests'
 import { createClaudeChildTreeReaper } from './child-process/claude-agent-sdk-exit-proof'
+import { relayedClaudeChildTree } from './relay/claude-relayed-child-tree'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { claudeChildCloseProven } from './child-process/claude-child-exit-proof-ladder'
@@ -97,11 +98,19 @@ export async function openClaudeStreamJsonConnection(
   launch: ClaudeStreamJsonLaunch,
   handlers: ClaudeStreamJsonConnectionHandlers = {},
   spawnImpl: ProviderProcessSpawner = spawnProcess,
-  queryImpl?: typeof ClaudeAgentSdk.query
+  queryImpl?: typeof ClaudeAgentSdk.query,
+  /** The chat whose agent runs under the terminal daemon where it can, so it outlives a restart. */
+  relayChatKey?: string
 ): Promise<ClaudeStreamJsonConnection> {
   const { query } = await loadClaudeAgentSdk()
   const startup = claudeStartupAnswerObservation(handlers.onStdout)
-  const spawner = createClaudeCodeProcessSpawn(spawnImpl, process.platform, launch, startup.feed)
+  const spawner = createClaudeCodeProcessSpawn(
+    spawnImpl,
+    process.platform,
+    launch,
+    startup.feed,
+    relayChatKey
+  )
   // Always supply scrubbed env to prevent ambient auth leaks; only launch.env may pin CLAUDE_CONFIG_DIR.
   const env = await withoutRejectedClaudeApiKey(
     buildClaudeChildProcessEnv(launch.env, {
@@ -122,6 +131,12 @@ export async function openClaudeStreamJsonConnection(
       ...(handlers.onUserDialog ? { onUserDialog: handlers.onUserDialog } : {})
     }
   })
+  try {
+    await spawner.bound
+  } catch (error) {
+    session.close()
+    throw error
+  }
   const managed = spawner.managed
   const child = managed?.child
   if (!child || !managed) {
@@ -152,11 +167,13 @@ export async function openClaudeStreamJsonConnection(
   const waitUntilReadable = (): Promise<void> => readingBarrier ?? Promise.resolve()
   // Share descendant evidence across close retries and fault cleanup.
   const rootSettled = (): boolean => managed.rootVerdict === 'exited'
-  const tree = createClaudeChildTreeReaper(child, {
-    site: 'claude-structured-child-close',
-    exited: rootSettled,
-    supervised: managed.supervised
-  })
+  const tree = spawner.relayed
+    ? relayedClaudeChildTree(rootSettled)
+    : createClaudeChildTreeReaper(child, {
+        site: 'claude-structured-child-close',
+        exited: rootSettled,
+        supervised: managed.supervised
+      })
 
   // Observe descendants on first output to avoid startup scans while still catching natural-exit races.
   let outputObservationArmed = false

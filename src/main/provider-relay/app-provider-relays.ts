@@ -61,6 +61,10 @@ export type ProviderRelayLaunch = {
   markers: ProviderRelayWorkMarkers
   /** Reattach only: lines this lets through while the rest wait for `releaseOutput()`. */
   passWhileHeld?: (line: string) => boolean
+  /** The agent's whole environment, when its caller already scrubbed it (not merged over the app's). */
+  inheritedEnv?: Record<string, string>
+  /** Never reattach a kept agent; the caller only drives a fresh one. */
+  spawnOnly?: boolean
 }
 
 export type RelayedProviderProcess = {
@@ -86,6 +90,11 @@ let durableFor: ((chatKey: string, force: boolean) => Promise<boolean> | undefin
 
 export function installProviderRelayRoute(installed: ProviderRelayRoute | null): void {
   route = installed
+}
+
+/** False where chats always launch as before (Windows, serve mode). */
+export function providerRelayRouteInstalled(): boolean {
+  return route !== null
 }
 
 /** The session host's journal barrier; acks wait on it so replay after a crash loses nothing. */
@@ -126,7 +135,8 @@ async function connected(client: DaemonClient | null): Promise<DaemonClient | nu
 
 function spawnSpec(
   launch: ProviderProcessLaunch,
-  client: DaemonClient
+  client: DaemonClient,
+  inheritedEnv?: Record<string, string>
 ): ProviderRelaySpawnSpec | null {
   const identity = client.getDaemonIdentity()
   if (!route || !identity?.providerRelay || identity.appVersion !== route.appVersion) {
@@ -136,7 +146,10 @@ function spawnSpec(
     return null
   }
   const env: Record<string, string> = {}
-  const resolved = resolveProviderChildEnv(launch, processEnvWithoutAgentSession(process.platform))
+  const resolved = resolveProviderChildEnv(
+    launch,
+    inheritedEnv ?? processEnvWithoutAgentSession(process.platform)
+  )
   for (const [key, value] of Object.entries(resolved)) {
     if (value !== undefined) {
       env[key] = value
@@ -247,6 +260,17 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
   return null
 }
 
+/** Only the chat's kept agent, attached from its last acked line; null when it has none. */
+export async function reattachKeptProviderProcess(
+  relay: ProviderRelayLaunch
+): Promise<RelayedProviderProcess | null> {
+  if (!route) {
+    return null
+  }
+  await listProviderRelaysAtLaunch()
+  return reattachListed(relay)
+}
+
 /**
  * Starts the chat's agent under the daemon, or reattaches the one it kept running. Null means
  * relaying isn't available here (old or other-bundle daemon, unreadable folder, refused), and
@@ -260,12 +284,16 @@ export async function launchRelayedProviderProcess(
     return null
   }
   await listProviderRelaysAtLaunch()
-  const kept = await reattachListed(relay)
+  if (relay.spawnOnly && keptProviderRelay(relay.chatKey)) {
+    // Its caller reattaches kept agents itself; a row still here means that reattach didn't settle.
+    throw new KeptProviderRelayUnreachableError(relay.chatKey)
+  }
+  const kept = relay.spawnOnly ? null : await reattachListed(relay)
   if (kept) {
     return kept
   }
   const client = await connected(await route.current().catch(() => null))
-  const spec = client ? spawnSpec(launch, client) : null
+  const spec = client ? spawnSpec(launch, client, relay.inheritedEnv) : null
   if (!client || !spec || !(await daemonReadsFolder(client, spec.cwd))) {
     return null
   }
