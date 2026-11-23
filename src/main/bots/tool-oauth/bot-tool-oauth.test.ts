@@ -238,6 +238,9 @@ describe('Orca signing in to a bot’s app', () => {
       await expect(
         finishServedBotToolSignIn(key, `${redirect}?code=${code}&state=other&iss=${app.base}`)
       ).rejects.toThrow("That isn't the address this sign-in ends on")
+      await expect(
+        finishServedBotToolSignIn(key, `${redirect}?state=${state}&iss=${app.base}`)
+      ).rejects.toThrow("That isn't the address this sign-in ends on")
       expect(botToolSignInState(key)).toEqual({ state: 'signed-out' })
 
       await finishServedBotToolSignIn(

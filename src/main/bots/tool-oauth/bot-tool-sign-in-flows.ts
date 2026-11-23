@@ -247,6 +247,14 @@ export async function serveFlowSignIn(
       opened.resolve(attempt)
     }
   })
+  // A closed listener has nothing left to finish; drop the attempt so it can be collected.
+  void returned
+    .finally(() => {
+      if (flow.served?.attempt === attempt) {
+        flow.served = undefined
+      }
+    })
+    .catch(() => undefined)
   returned.catch((error: unknown) => {
     if (flow.progress.state !== 'done' && flow.progress.state !== 'failed') {
       flow.progress = { state: 'failed', code: failureOf(error) }
@@ -312,11 +320,13 @@ export async function finishServedBotToolSignIn(
   if (!flow || !served || flow.progress.state !== 'waiting' || flow.completing) {
     throw new BotFailureError('toolSignInEnded')
   }
-  const query = botToolSignInPastedQuery(address, served.attempt)
-  if (query === null) {
+  const pasted = botToolSignInPastedQuery(address, served.attempt)
+  const query = pasted === null ? null : new URLSearchParams(pasted)
+  // `owns` also refuses a return that lost its code, so a mangled paste spends nothing.
+  if (!query || !served.attempt.owns(query)) {
     throw new BotFailureError('toolSignInAddressWrong')
   }
-  const failure = await completeFlowSignIn(flow, served.attempt, new URLSearchParams(query))
+  const failure = await completeFlowSignIn(flow, served.attempt, query)
   served.stopListening()
   if (failure) {
     throw new BotToolSignInError(failure)

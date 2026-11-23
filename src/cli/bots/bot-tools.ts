@@ -232,8 +232,13 @@ export const BOT_TOOLS_HANDLERS: Record<string, CommandHandler> = {
       const bot = await target({ flags, client })
       if (await signsInItself(ctx, bot, name)) {
         if (finish) {
-          const selector = getOptionalStringFlag(flags, 'bot')
-          const again = `orca bot tools connect ${name}${selector ? ` --bot ${JSON.stringify(selector)}` : ''}`
+          const again = [
+            `orca bot tools connect ${name}`,
+            ...(['environment', 'bot'] as const).flatMap((flag) => {
+              const value = getOptionalStringFlag(flags, flag)
+              return value ? [`--${flag} ${JSON.stringify(value)}`] : []
+            })
+          ].join(' ')
           throw new RuntimeClientError(
             'invalid_argument',
             `Run \`${again}\` and paste the address when it asks.`
