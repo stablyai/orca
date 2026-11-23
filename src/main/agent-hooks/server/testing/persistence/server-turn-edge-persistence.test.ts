@@ -12,7 +12,7 @@ vi.mock('../../../../telemetry/cohort-classifier', () => ({
 }))
 
 // A restart that skips the quit flush (crash, relaunch) restores a reattached agent's turn from
-// these rows, so a turn edge must reach disk without waiting for the batched save.
+// these rows, so a turn edge must reach disk without waiting for the 3-minute batched save.
 describe('saved agent status between batched saves', () => {
   let userDataPath: string
   let server: AgentHookServer
@@ -35,15 +35,16 @@ describe('saved agent status between batched saves', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  it('saves a turn edge at once and leaves same-turn updates to the batched save', async () => {
+  it('saves a turn edge within a second and leaves same-turn updates to the batched save', async () => {
     report('working', 'turn one')
-    await vi.waitFor(() => expect(saved().state).toBe('working'))
+    await vi.waitFor(() => expect(saved().state).toBe('working'), { timeout: 3000 })
 
     report('done', 'turn one')
-    await vi.waitFor(() => expect(saved().state).toBe('done'))
+    await vi.waitFor(() => expect(saved().state).toBe('done'), { timeout: 3000 })
 
     report('done', 'same turn, newer text')
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    // Past the turn-edge window: only the batched save would write this.
+    await new Promise((resolve) => setTimeout(resolve, 1500))
     expect(saved()).toMatchObject({ state: 'done', prompt: 'turn one' })
   })
 })

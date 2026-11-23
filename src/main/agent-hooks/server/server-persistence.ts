@@ -4,6 +4,7 @@ import {
   LAST_STATUS_FILE_VERSION,
   STATUS_FLUSH_BUSY_TIMEOUT_MS,
   STATUS_PERSIST_MIN_INTERVAL_MS,
+  STATUS_TURN_EDGE_PERSIST_INTERVAL_MS,
   STATUS_PERSIST_RETRY_MAX_MS,
   STATUS_PERSIST_RETRY_MIN_MS
 } from './server-constants'
@@ -30,6 +31,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
 
   private readonly statusCacheExpiry = new KeyedDeadlines()
   private persistedExitRevision = -1
+  private persistedTurnRevision = -1
 
   protected buildStatusFile(keys?: readonly string[], includeExits = true): LastStatusFile {
     if (!keys) {
@@ -151,15 +153,18 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       return
     }
     const now = Date.now()
-    // Authority and lead-turn edges save at once: spool replay filtering and reattach restore read them after a crash.
-    const urgent = this.currentUrgentSaveFingerprint() !== this.lastPersistedUrgentSaveFingerprint
+    // Persist authority changes immediately to preserve spool replay filtering after a crash.
+    const urgent = this.currentAuthorityFingerprint() !== this.lastPersistedAuthorityFingerprint
+    // A restart that skips quit restores a reattached agent's turn from disk, so a turn edge
+    // saves within a second; coalescing keeps many agents' edges to one write.
+    const intervalMs =
+      this.restoredStateRevisions.turn !== this.persistedTurnRevision
+        ? STATUS_TURN_EDGE_PERSIST_INTERVAL_MS
+        : STATUS_PERSIST_MIN_INTERVAL_MS
     // A wall-clock rollback must not defer persistence indefinitely.
     const throttledAt = urgent
       ? now
-      : Math.min(
-          this.lastStatusPersistStartedAt + STATUS_PERSIST_MIN_INTERVAL_MS,
-          now + STATUS_PERSIST_MIN_INTERVAL_MS
-        )
+      : Math.min(this.lastStatusPersistStartedAt + intervalMs, now + intervalMs)
     // After a failed save every attempt, urgent or not, waits for the short retry backoff.
     const dueAt = this.statusPersistRetryAt > now ? this.statusPersistRetryAt : throttledAt
     if (this.statusPersistTimer) {
@@ -200,7 +205,8 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       return false
     }
     this.lastStatusPersistStartedAt = Date.now()
-    const fingerprint = this.currentUrgentSaveFingerprint()
+    const fingerprint = this.currentAuthorityFingerprint()
+    const turnRevision = this.restoredStateRevisions.turn
     try {
       const keys = new Set([
         ...this.statusPersistDirtyKeys,
@@ -252,7 +258,8 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       return false
     }
     // Only a committed save can stand in for the authority it carries.
-    this.lastPersistedUrgentSaveFingerprint = fingerprint
+    this.lastPersistedAuthorityFingerprint = fingerprint
+    this.persistedTurnRevision = turnRevision
     this.statusPersistFailing = false
     this.statusPersistRetryDelayMs = 0
     this.statusPersistRetryAt = 0
@@ -277,7 +284,8 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     this.statusCacheExpiry.clear()
     this.persistedExitRevision = -1
     this.lastStatusPersistStartedAt = Number.NEGATIVE_INFINITY
-    this.lastPersistedUrgentSaveFingerprint = null
+    this.lastPersistedAuthorityFingerprint = null
+    this.persistedTurnRevision = -1
     this.statusPersistFailing = false
     this.statusPersistRetryDelayMs = 0
     this.statusPersistRetryAt = 0
@@ -298,9 +306,9 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     return this.statusStore
   }
 
-  /** Revision counters (authority and lead-turn edges) avoid per-event hashing or serialization. */
-  protected currentUrgentSaveFingerprint(): string {
-    return `${this.hydratedLaunchTokenHashByPaneKey.revision}:${this.persistedAuthorityCommitmentsByPaneKey.revision}:${this.statusUrgentSaveRevision}`
+  /** Revision counters and live tokens avoid per-event hashing or serialization. */
+  protected currentAuthorityFingerprint(): string {
+    return `${this.hydratedLaunchTokenHashByPaneKey.revision}:${this.persistedAuthorityCommitmentsByPaneKey.revision}:${this.restoredStateRevisions.authority}`
   }
 
   private cancelStatusPersistTimer(): void {

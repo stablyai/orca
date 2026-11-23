@@ -4,11 +4,28 @@ import { hookLeadTurnState } from '../../../shared/agent-status/lifecycle/hook-l
 const leadTurn = (row: AgentHookEventPayload | undefined) =>
   row ? hookLeadTurnState(row.payload) : null
 
-/** A restart restores a pane's authority (launch token) and lead turn from its saved row, so a
- *  change to either is saved at once rather than with the batched save; a crash must not lose it. */
-export function changesRestoredState(
+/** Which part of a pane's saved row a restart restores changed: its authority (launch token) or
+ *  its lead turn. Either must survive a crash, so neither waits for the batched save. */
+function restoredStateEdge(
   before: AgentHookEventPayload | undefined,
   after: AgentHookEventPayload | undefined
-): boolean {
-  return before?.launchToken !== after?.launchToken || leadTurn(before) !== leadTurn(after)
+): 'authority' | 'turn' | null {
+  if (before?.launchToken !== after?.launchToken) {
+    return 'authority'
+  }
+  return leadTurn(before) !== leadTurn(after) ? 'turn' : null
+}
+
+export type RestoredStateRevisions = Record<'authority' | 'turn', number>
+
+/** Counts a row mutation's restored-state edge, which schedules its save ahead of the batch. */
+export function countRestoredStateEdge(
+  revisions: RestoredStateRevisions,
+  before: AgentHookEventPayload | undefined,
+  after: AgentHookEventPayload | undefined
+): void {
+  const edge = restoredStateEdge(before, after)
+  if (edge) {
+    revisions[edge]++
+  }
 }

@@ -42,7 +42,7 @@ import type {
   StatusRowMutationListener
 } from './server-types'
 import { RevisionedMap } from './revisioned-map'
-import { changesRestoredState } from './status-restored-state'
+import { countRestoredStateEdge } from './status-restored-state'
 import type { TerminalModelWait } from './server-model-wait'
 import { recordAgentExit, forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
 import { paneAgentIdentity, type PaneAgentIdentity } from './pane-agent-identity'
@@ -281,14 +281,12 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
           this.statusPersistRemovedKeys.add(key)
         }
       }
-      if (changesRestoredState(before, after)) {
-        this.statusUrgentSaveRevision++
-      }
+      countRestoredStateEdge(this.restoredStateRevisions, before, after)
     }
   })
   protected readonly statusPersistDirtyKeys = new Set<string>()
   protected readonly statusPersistRemovedKeys = new Set<string>()
-  protected statusUrgentSaveRevision = 0
+  protected readonly restoredStateRevisions = { authority: 0, turn: 0 }
   protected get legacyRowHooks(): Parameters<typeof createHookListenerState>[0] {
     return {}
   }
@@ -322,7 +320,7 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
   protected statusPersistTimer: ReturnType<typeof setTimeout> | null = null
   protected statusPersistDueAt = 0
   protected lastStatusPersistStartedAt = Number.NEGATIVE_INFINITY
-  protected lastPersistedUrgentSaveFingerprint: string | null = null
+  protected lastPersistedAuthorityFingerprint: string | null = null
   protected assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   protected promptSentDedupeByPaneKey = new Map<string, AgentPromptSentDedupeEntry>()
   protected activeHookTurnCompletedAtByPaneKey = new Map<string, number>()
