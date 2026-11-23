@@ -156,9 +156,6 @@ export class JournalLegacyRetirement {
     if ((!present || this.version !== null) && !this.ownsProfile()) {
       return this.launchReport.defer('not_owner', this.deletes)
     }
-    if (this.version === null) {
-      return this.launchReport.defer('no_version', this.deletes)
-    }
     this.admitted = true
     // No other Orca runs this profile while we hold its lock, so an absent original stays absent.
     if (!present) {
@@ -180,6 +177,9 @@ export class JournalLegacyRetirement {
       }
       this.done = true
       return this.outcome({ outcome: deletedBefore(retirement) ? 'deleted_before' : 'absent' })
+    }
+    if (this.version === null) {
+      return this.launchReport.defer('no_version', this.deletes)
     }
     this.startedAt ??= performance.now()
     const saved = await readRetirementState(this.writer)
