@@ -80,44 +80,39 @@ export async function replaySpoolFile(replay: SpoolReplay): Promise<SpoolReplayO
 
 type SpoolFileReplay = SpoolReplay & {
   /**
-   * What the file must hold whole. Fewer indexed records than it lists means some were cut or
-   * corrupted; rows a failed append left behind are not indexed, and their memory copies are sent.
+   * What the file must hold whole, read live, since acks remove entries as they land. Rows a
+   * failed append left behind are not indexed; their memory copies are sent instead.
    */
-  /** `ackedThrough` is read live: a row acked during the replay is accounted for without being sent. */
   index: Pick<SpoolFileIndex, 'has' | 'countAfter' | 'ackedThrough'>
 }
 
 /**
- * Replays the file part of a spool. 'lost' means it could not be read through, or held fewer
- * records than expected; `highest` is the last seq delivered, so a memory copy is not sent again.
+ * Replays the file part of a spool; `highest` is the last seq sent, so a memory copy is not sent
+ * again. 'lost' means a record the client still needs was not sent: the file was unreadable, cut
+ * short or corrupt there.
  */
 export async function replaySpoolFileRecords(
   replay: SpoolFileReplay
 ): Promise<{ outcome: 'done' | 'stale' | 'lost'; highest: number }> {
   let highest = replay.after
-  let delivered = 0
-  // Counted before any wait, so an ack during replay can't lower the bar.
-  const expected = replay.index.countAfter(replay.after)
+  const sent: number[] = []
   const outcome = await replaySpoolFile({
     ...replay,
     deliver: (record) => {
-      // Only rising, indexed seqs count, so a duplicated or out-of-order row can't stand in for a missing one.
-      if (record.seq <= highest) {
-        return
-      }
-      const ackedMeanwhile = record.seq <= replay.index.ackedThrough
-      if (!ackedMeanwhile && !replay.index.has(record.seq)) {
+      // Only rising seqs the index still lists are sent, so a duplicate or stray row can't stand in for a missing one.
+      if (record.seq <= highest || !replay.index.has(record.seq)) {
         return
       }
       highest = record.seq
-      delivered++
-      if (!ackedMeanwhile) {
-        replay.deliver(record)
-      }
+      sent.push(record.seq)
+      replay.deliver(record)
     }
   })
-  if (outcome === 'failed' || (outcome === 'done' && delivered < expected)) {
-    return { outcome: 'lost', highest }
+  if (outcome === 'stale') {
+    return { outcome, highest }
   }
-  return { outcome, highest }
+  // Judged once the replay ends, against what is still unacked, so an ack meanwhile is never a loss.
+  const owedAfter = Math.max(replay.after, replay.index.ackedThrough)
+  const sentOwed = sent.filter((seq) => seq > owedAfter).length
+  return { outcome: sentOwed < replay.index.countAfter(owedAfter) ? 'lost' : 'done', highest }
 }
