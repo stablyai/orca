@@ -160,11 +160,26 @@ export abstract class RuntimePtyExitWorkerObservation extends RuntimePtyExitSurf
     if (!ptyId) {
       return
     }
+    this.retireStatusAfterProvenAgentExit(ptyId)
     this.settleEndedAgentSession(ptyId, {
       error: "The worker's agent exited",
       gone: { reason: 'exited', cause: 'its agent exited; its terminal is still open' },
       startDecides: true
     })
+  }
+
+  /** A foreground read taken while the agent was still quitting restored the status its cleared
+   *  title had dropped; with the end proven, a title that reads as no agent drops it again. */
+  private retireStatusAfterProvenAgentExit(ptyId: string): void {
+    const pty = this.ptysById.get(ptyId)
+    const title = this.ptyTitleTrackersByPtyId.get(ptyId)?.lastTitle
+    if (!pty || !title || pty.lastAgentStatus === null) {
+      return
+    }
+    const raw = pty.titleDisplayClear?.title ?? title.raw
+    if (this.classifyPtyTitleStatus(ptyId, raw) === null) {
+      this.applyTrackedPtyTitle(ptyId, raw, title.normalized, undefined, { statusOnly: true })
+    }
   }
 
   /** Settles the one Dispatch the PTY's worker runs, here or at its Run home; the process
