@@ -48,6 +48,10 @@ export function worktreeSelectorRecovery(
   selector: string,
   errorData?: unknown
 ): WorktreeSelectorRecovery | undefined {
+  // Creation modes name no workspace, so selector forms would not help.
+  if (selector === 'new-child' || selector === 'new-top-level') {
+    return undefined
+  }
   // A worker-start refusal names its failing flag; older servers name none, so --worktree is assumed.
   if (
     errorData &&

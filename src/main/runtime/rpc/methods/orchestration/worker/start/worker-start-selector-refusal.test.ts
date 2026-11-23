@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { mapRuntimeError } from '../../../../responses/rpc-response'
+import { OrchestrationError } from '../../../../../orchestration/orchestration-error'
+import { isKnownRemoteStartFailure } from '../../../../../orchestration/legacy-remote-home/federated-worker-start-receipts'
 import { refuseUnmatchedWorkerSelector } from './worker-start-selector-refusal'
 
 const notFound = () => Promise.reject(new Error('selector_not_found'))
@@ -25,5 +27,16 @@ describe('refuseUnmatchedWorkerSelector', () => {
     await expect(
       refuseUnmatchedWorkerSelector({ flag: '--repo', value: 'r' }, () => Promise.reject(other))
     ).rejects.toBe(other)
+  })
+
+  it('ends a paired-server start as failed, not unknown, when the server refuses it', async () => {
+    const error = await refuseUnmatchedWorkerSelector(
+      { flag: '--repo', value: 'nope' },
+      notFound
+    ).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(OrchestrationError)
+    expect(isKnownRemoteStartFailure(error instanceof OrchestrationError ? error.code : '')).toBe(
+      true
+    )
   })
 })

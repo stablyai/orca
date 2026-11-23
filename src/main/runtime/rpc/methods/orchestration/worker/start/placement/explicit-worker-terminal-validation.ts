@@ -25,7 +25,10 @@ export async function assertExplicitWorkerTerminalUsable(args: {
   resolvedWorktreeId: string | undefined
 }): Promise<void> {
   const { runtime, terminal, from, coordinator, resolvedWorktreeId } = args
-  const explicitTerminal = await runtime.showTerminal(terminal)
+  const explicitTerminal = await refuseUnmatchedWorkerSelector(
+    { flag: '--terminal', value: terminal },
+    () => runtime.showTerminal(terminal)
+  )
   const targetPane = runtime.getTerminalPaneKey(terminal)
   const callerPane = coordinator?.paneKey ?? runtime.getTerminalPaneKey(from)
   // Structured coordinators may have no showable terminal; compare their handle/pane identity, or session address for handle-less callers.
@@ -35,7 +38,11 @@ export async function assertExplicitWorkerTerminalUsable(args: {
       ? coordinator.address
       : isStructuredWorkerHandle(from)
         ? from
-        : (await runtime.showTerminal(from)).handle
+        : (
+            await refuseUnmatchedWorkerSelector({ flag: '--from', value: from }, () =>
+              runtime.showTerminal(from)
+            )
+          ).handle
   if (
     explicitTerminal.handle === coordinatorHandle ||
     (targetPane !== null && targetPane === callerPane)

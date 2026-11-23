@@ -26,4 +26,11 @@ describe('worker-start refusal recovery', () => {
     const error = attachMutationRecovery(refusal(undefined), 'request-1')
     expect(formatCliError(error)).toContain('Orchestration mutation request ID: request-1.')
   })
+
+  it('offers no selector forms when --worktree named a creation mode', () => {
+    const error = refusal({ effectsApplied: false, flag: '--worktree', value: 'new-child' })
+    expect(formatCliError(error, { worktreeSelector: 'new-child' })).toBe(
+      'No repo matches --repo nope.'
+    )
+  })
 })
