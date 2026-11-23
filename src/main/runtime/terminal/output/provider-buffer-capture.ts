@@ -156,7 +156,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         opts.limit,
         providerSnapshot
       )
-      if (providerProjection.lines.length > 0) {
+      if (providerProjection && providerProjection.lines.length > 0) {
         return buildVisibleSnapshotReadFallback(
           read,
           providerProjection.lines,
@@ -219,8 +219,9 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     const projection = await this.readRenderedTerminalTailLines(ptyId, limit, providerSnapshot)
     const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
     const limited =
-      read.limited || Boolean(state?.recoveredHistoryCut && projection.lines.length < lineLimit)
-    return projection.lines.length > 0
+      read.limited ||
+      Boolean(state?.recoveredHistoryCut && (projection?.lines.length ?? 0) < lineLimit)
+    return projection
       ? buildVisibleSnapshotReadFallback(
           { ...read, limited },
           projection.lines,
@@ -229,7 +230,10 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
           projection.tailRows
         )
       : recovering || this.headlessTerminals.get(ptyId)?.gapReseed
-        ? buildVisibleSnapshotReadFallback({ ...read, limited: true }, [], limit)
+        ? {
+            ...buildVisibleSnapshotReadFallback({ ...read, limited: true }, [], limit),
+            source: 'screen-unavailable'
+          }
         : read
   }
 
@@ -237,7 +241,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     ptyId: string,
     limit: number | undefined,
     providerSnapshot: RuntimeProviderSnapshotReadOptions
-  ): Promise<RuntimeTerminalProjection> {
+  ): Promise<RuntimeTerminalProjection | null> {
     // Over-fetch a screen so blank rows below the prompt cannot consume the requested nonblank line count.
     const rowLimit =
       terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT) +
@@ -256,7 +260,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       this.readWholeScreenModel(ptyId) !== state ||
       this.getPtyLifecycleGeneration(ptyId) !== generation
     ) {
-      return { lines: [] }
+      return null
     }
     return providerSnapshot.visibleScreenOnly
       ? projectTerminalVisibleLines(state.emulator)
@@ -267,7 +271,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     ptyId: string,
     limit: number | undefined,
     snapshotOptions: RuntimeProviderSnapshotReadOptions = {}
-  ): Promise<RuntimeTerminalProjection> {
+  ): Promise<RuntimeTerminalProjection | null> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
     const snapshot = await this.serializeProviderTerminalBuffer(
@@ -278,7 +282,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       snapshotOptions
     )
     if (!snapshot) {
-      return { lines: [] }
+      return null
     }
     if (snapshotOptions.visibleScreenOnly) {
       const projection = snapshot.visibleProjection ?? (await this.parseVisibleSnapshot(snapshot))
@@ -286,11 +290,14 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       return this.ptyLifecycleGenerationById.get(ptyId) === generation &&
         this.getPtyOutputSequence(ptyId) <= snapshot.seq
         ? projection
-        : { lines: [] }
+        : null
     }
     const data = `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`
     if (data.length === 0) {
-      return { lines: [] }
+      return this.ptyLifecycleGenerationById.get(ptyId) === generation &&
+        this.getPtyOutputSequence(ptyId) <= snapshot.seq
+        ? { lines: [] }
+        : null
     }
     const emulator = new HeadlessEmulator({
       cols: snapshot.cols,
@@ -303,7 +310,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       return this.ptyLifecycleGenerationById.get(ptyId) === generation &&
         this.getPtyOutputSequence(ptyId) <= snapshot.seq
         ? projection
-        : { lines: [] }
+        : null
     } finally {
       emulator.dispose()
     }

@@ -165,3 +165,43 @@ it('previews a provider-owned screen from the provider frame while the kept mode
     await runtime.onPtyExit(PTY_ID, 0)
   }
 })
+
+it('keeps a caught-up synchronized frame stale until the frame closes', async () => {
+  let frameOpen = true
+  const pane = await createTranscriptPane({
+    paneTitle: 'Terminal',
+    foregroundProcess: null,
+    data: '',
+    serializeProviderBuffer: async () => ({
+      data: frameOpen ? '\x1b[H\x1b[2JHALF' : '\x1b[H\x1b[2JCOMPLETE',
+      cols: 80,
+      rows: 24,
+      source: 'headless' as const,
+      seq: pane.runtime.getPtyOutputSequence(PTY_ID),
+      synchronizedOutput: frameOpen
+    })
+  })
+  try {
+    pane.runtime.synchronizePtyOutputSequenceFromProvider(PTY_ID, { value: 0, generation: 'reset' })
+    pane.runtime.anchorProviderSequence(PTY_ID, 0, 0)
+    pane.runtime.onPtyData(PTY_ID, 'BEFORE\r\n', 1)
+    pane.runtime.notePtyDataGap(PTY_ID, 9)
+    await vi.waitFor(async () => {
+      const read = await pane.runtime.readTerminal(pane.handle, { screen: true })
+      expect(read.source).toBe('screen-stale')
+      expect(read.tail).toEqual(['BEFORE'])
+    })
+    frameOpen = false
+    pane.runtime.onPtyData(PTY_ID, '\x1b[H\x1b[2JCOMPLETE\x1b[?2026l', 2)
+    await vi.waitFor(
+      async () => {
+        const read = await pane.runtime.readTerminal(pane.handle, { screen: true })
+        expect(read.source).toBe('screen')
+        expect(read.tail).toEqual(['COMPLETE'])
+      },
+      { timeout: 5000 }
+    )
+  } finally {
+    await pane.runtime.onPtyExit(PTY_ID, 0)
+  }
+})

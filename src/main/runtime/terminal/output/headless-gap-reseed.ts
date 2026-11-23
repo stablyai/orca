@@ -23,14 +23,7 @@ import {
 } from './codex-notice-terminal-status'
 import { keepPreGapScreen, settleKeptGapScreen } from './gap-recovery-screen'
 
-const GAP_RESEED_MIN_INTERVAL_MS = 1_000
-const GAP_RESEED_BACKOFF_MAX_MS = 30_000
-const GAP_RESEED_WARN_AFTER_ATTEMPTS = 5
-// One attempt's wait; a capture still running past it is cancelled before its slot frees.
-const GAP_RESEED_CAPTURE_TIMEOUT_MS = 35_000
-// Why: a storm gaps every hidden PTY at once; the daemon serializing them is the one already behind.
-const GAP_RESEED_MAX_CONCURRENT_CAPTURES = 8
-const GAP_RESEED_CATCH_UP_POLL_MS = 50
+import { GAP_RECOVERY_POLICY } from './gap-recovery-policy'
 
 const ignore = (): void => {}
 const delay = (ms: number): Promise<void> =>
@@ -156,7 +149,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     recovery: GapRecovery
   ): Promise<void> {
     for (let attempt = 0; this.isGapRecovering(ptyId, state, recovery); attempt++) {
-      if (attempt === GAP_RESEED_WARN_AFTER_ATTEMPTS) {
+      if (attempt === GAP_RECOVERY_POLICY.warnAfterAttempts) {
         console.warn('[terminal] dropped-output recovery still waiting for a current snapshot', {
           ptyIdSuffix: ptyId.slice(-10),
           attempts: attempt
@@ -164,8 +157,9 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       }
       // Back off so a slow daemon or a sustained storm cannot loop captures; the screen stays untrusted meanwhile.
       const backoff =
-        attempt < 2 ? 0 : Math.min(500 * 2 ** (attempt - 2), GAP_RESEED_BACKOFF_MAX_MS)
-      const paced = (state.gapReseedLastCaptureAt ?? 0) + GAP_RESEED_MIN_INTERVAL_MS - Date.now()
+        attempt < 2 ? 0 : Math.min(500 * 2 ** (attempt - 2), GAP_RECOVERY_POLICY.backoffMaxMs)
+      const paced =
+        (state.gapReseedLastCaptureAt ?? 0) + GAP_RECOVERY_POLICY.minIntervalMs - Date.now()
       if (Math.max(backoff, paced) > 0) {
         await delay(Math.max(backoff, paced))
       }
@@ -211,7 +205,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       { scrollbackRows, signal: capture.signal, recovery: true },
       this.getPtyLifecycleGeneration(ptyId)
     )
-    const snapshot = await withTimeout(pending, GAP_RESEED_CAPTURE_TIMEOUT_MS, null)
+    const snapshot = await withTimeout(pending, GAP_RECOVERY_POLICY.captureTimeoutMs, null)
     if (!snapshot) {
       // The slot bounds live captures: cancel a timed-out one before giving the slot back.
       stopGapJournal(recovery)
@@ -219,7 +213,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       await pending
       return false
     }
-    const deadline = Date.now() + GAP_RESEED_CAPTURE_TIMEOUT_MS
+    const deadline = Date.now() + GAP_RECOVERY_POLICY.captureTimeoutMs
     for (;;) {
       const result = await this.rebuildScreenAfterGap(ptyId, state, recovery, snapshot, revision)
       if (result !== 'behind') {
@@ -229,7 +223,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       if (Date.now() > deadline) {
         return false
       }
-      await delay(GAP_RESEED_CATCH_UP_POLL_MS)
+      await delay(GAP_RECOVERY_POLICY.catchUpPollMs)
     }
   }
 
@@ -294,6 +288,10 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       if (!this.isGapRecovering(ptyId, state, recovery) || invalidated) {
         return 'failed'
       }
+      // Keep the last complete frame authoritative until a later capture includes the frame end.
+      if (state.emulator.isSynchronizedOutput) {
+        return 'failed'
+      }
       this.finishGapRecovery(ptyId, state, snapshot)
       return 'rebuilt'
     })
@@ -333,7 +331,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
   }
 
   private acquireGapCaptureSlot(ptyId: string): Promise<boolean> {
-    if (this.gapCapturesInFlight < GAP_RESEED_MAX_CONCURRENT_CAPTURES) {
+    if (this.gapCapturesInFlight < GAP_RECOVERY_POLICY.maxConcurrentCaptures) {
       this.gapCapturesInFlight++
       return Promise.resolve(true)
     }

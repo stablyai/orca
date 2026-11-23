@@ -446,6 +446,7 @@ it('seeds recovered ConPTY history with the live window and later output', async
       'p3'
     ])
     expect(result.limited).toBe(true)
+    expect(result.source).toBe('screen')
   } finally {
     await close()
   }
@@ -459,6 +460,26 @@ it('marks recovered ConPTY history limited even when the stream was not limited'
     expect((await read()).limited).toBe(true)
   } finally {
     await close()
+  }
+})
+
+it('labels an actual blank ConPTY grid as screen evidence', async () => {
+  const runtime = createRuntime()
+  const ptyId = 'pty-blank'
+  const { read } = historyReads(runtime, ptyId)
+  markNativeWindowsConptyPty(ptyId)
+  try {
+    runtime.synchronizePtyOutputSequenceFromProvider(ptyId, { value: 0, generation: 'reset' })
+    runtime.anchorProviderSequence(ptyId, 0, 0)
+    runtime.onPtyData(ptyId, '\x1b[2J\x1b[H', 1)
+    await vi.waitFor(async () => {
+      const result = await read()
+      expect(result.tail).toEqual([])
+      expect(result.source).toBe('screen')
+    })
+  } finally {
+    clearNativeWindowsConptyPty(ptyId)
+    await runtime.onPtyExit(ptyId, 0)
   }
 })
 
@@ -487,6 +508,7 @@ it('returns empty limited ConPTY history instead of the gapped stream during rec
     const result = await read()
     expect(result.tail).toEqual([])
     expect(result.limited).toBe(true)
+    expect(result.source).toBe('screen-unavailable')
   } finally {
     clearNativeWindowsConptyPty(ptyId)
     await runtime.onPtyExit(ptyId, 0)
@@ -531,6 +553,7 @@ it('returns empty limited ConPTY history when recovery finishes during the provi
     const result = await pendingRead
     expect(result.tail).toEqual([])
     expect(result.limited).toBe(true)
+    expect(result.source).toBe('screen-unavailable')
   } finally {
     clearNativeWindowsConptyPty(ptyId)
     await runtime.onPtyExit(ptyId, 0)
@@ -616,6 +639,7 @@ it('clamps recovery seed capture to 1000 scrollback rows with a configured 5000-
 
 it('never publishes Freebuff done from a half-drawn synchronized recovery frame', async () => {
   const published: string[] = []
+  let frameOpen = true
   const { runtime } = await createTranscriptPane(
     { paneTitle: 'Freebuff', foregroundProcess: 'freebuff', launchAgent: 'freebuff', data: '' },
     { onTerminalAgentStatus: ({ payload }) => published.push(payload.state) }
@@ -627,11 +651,13 @@ it('never publishes Freebuff done from a half-drawn synchronized recovery frame'
     getForegroundProcess: async () => 'freebuff',
     getSize: () => grid,
     serializeProviderBuffer: async () => ({
-      data: '\x1b[?1049h\x1b[H\x1b[2J1m left End session\r\n╭──╮\r\n│  │\r\n╰──╯\r\n/model to change Chat: example',
+      data: frameOpen
+        ? '\x1b[?1049h\x1b[H\x1b[2J1m left End session\r\n╭──╮\r\n│  │\r\n╰──╯\r\n/model to change Chat: example'
+        : '\x1b[?1049h\x1b[H\x1b[2Jworking...\r\n╭──╮\r\n│  │\r\n╰──╯\r\n/model to change Chat: example',
       ...grid,
       seq: runtime.getPtyOutputSequence(ptyId),
       source: 'headless',
-      synchronizedOutput: true
+      synchronizedOutput: frameOpen
     })
   })
   try {
@@ -643,10 +669,10 @@ it('never publishes Freebuff done from a half-drawn synchronized recovery frame'
     )
     await vi.waitFor(() => expect(published).toEqual(['working']))
     runtime.notePtyDataGap(ptyId, 9)
-    await vi.waitFor(() => assert(headlessOf(runtime).readWholeScreenModel(ptyId)))
     expect(published).toEqual(['working'])
+    frameOpen = false
     runtime.onPtyData(ptyId, '\x1b]0;Freebuff: second\x07\x1b[H\x1b[2Kworking...\x1b[?2026l', 2)
-    await vi.waitFor(() => expect(published).toEqual(['working', 'working']))
+    await vi.waitFor(() => expect(published).toEqual(['working', 'working']), { timeout: 5000 })
   } finally {
     await runtime.onPtyExit(ptyId, 0)
   }
