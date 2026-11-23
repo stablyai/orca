@@ -107,7 +107,7 @@ describe('readHostBotListing', () => {
     })
   })
 
-  it('hydrates cached worker detail without replacing fresher unavailable bot data', async () => {
+  it('does not restore cached worker detail or refusals after an unavailable refresh', async () => {
     const listing = await readWithUnavailableLineage('Fresh bot')
     expect(listing).not.toBeNull()
     const live = listing as Extract<HostBotListing, { kind: 'listed' }>
@@ -116,14 +116,16 @@ describe('readHostBotListing', () => {
       bots: [{ ...BOT, name: 'Saved bot' }],
       workerStatus: 'available',
       workspaceLineage: { folder: { childWorkspaceKey: 'child', parentWorkspaceKey: 'parent' } },
-      worktreeLineage: { child: { worktreeId: 'child', parentWorktreeId: 'parent' } }
+      worktreeLineage: { child: { worktreeId: 'child', parentWorktreeId: 'parent' } },
+      createRefusal: 'update'
     })
 
     expect(hydrated).toMatchObject({
       workerStatus: 'unavailable',
       bots: [{ id: 'bot-1', name: 'Fresh bot' }],
-      workspaceLineage: { folder: { childWorkspaceKey: 'child', parentWorkspaceKey: 'parent' } },
-      worktreeLineage: { child: { worktreeId: 'child', parentWorktreeId: 'parent' } }
+      workspaceLineage: {},
+      worktreeLineage: {},
+      createRefusal: undefined
     })
   })
 })

@@ -41,31 +41,12 @@ export function mergeHostBotListing(
   return [...previous.filter((entry) => entry.hostId !== listing.hostId), next]
 }
 
-/** Hydrates a late cached lineage into its newer, still-degraded server listing. */
+/** A live listing wins over a late device-cache read, even while its optional worker read is down. */
 export function mergeKeptServerBotListing(
   live: HostBotListing | undefined,
   kept: Extract<HostBotListing, { kind: 'listed' }>
 ): HostBotListing {
-  if (
-    live?.kind !== 'listed' ||
-    live.workerStatus !== 'unavailable' ||
-    live.installationId !== kept.installationId ||
-    Object.keys(live.workspaceLineage).length > 0 ||
-    Object.keys(live.worktreeLineage).length > 0
-  ) {
-    return live ?? kept
-  }
-  return {
-    ...kept,
-    ...live,
-    workspaceLineage: kept.workspaceLineage,
-    worktreeLineage: kept.worktreeLineage,
-    ...(kept.groups ? { groups: kept.groups } : {}),
-    ...(kept.links ? { links: kept.links } : {}),
-    ...(kept.ownChats ? { ownChats: kept.ownChats } : {}),
-    ...(kept.unseen ? { unseen: kept.unseen } : {}),
-    ...(kept.accessRequests ? { accessRequests: kept.accessRequests } : {})
-  }
+  return live ?? kept
 }
 
 /** Only retry the full listing for groups when the required lineage read also succeeded. */
