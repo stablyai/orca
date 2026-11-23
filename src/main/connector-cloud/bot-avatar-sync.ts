@@ -247,6 +247,10 @@ export class BotAvatarSync {
       console.error('Failed to send the bot’s picture to the cloud:', error)
     }
     this.sending.delete(bot.id)
+    // A drawing's bytes are held only while its send is out; whatever comes next reads them again.
+    if (carried) {
+      this.prepared.delete(bot.id)
+    }
     // A bot write or a new drawing came in while this one was on its way.
     const stepped = writes !== this.writes || icons !== this.icons.get(bot.id)
     if (sent && icons !== this.icons.get(bot.id)) {
@@ -271,7 +275,7 @@ export class BotAvatarSync {
     } else if (refused && carried) {
       // The cloud doesn't know this bot yet, and the picture is a drawing: its bytes wait for a real step
       // (the write that links the bot is one) rather than going again on the backoff timer.
-      this.owe(bot.id)
+      this.owed.add(bot.id)
     } else if (refused) {
       // The cloud doesn't know this bot: it is asked again less and less often, or after a write.
       const before = this.refused.get(bot.id)
@@ -289,19 +293,13 @@ export class BotAvatarSync {
       if (stepped) {
         this.resend(bot.id)
       } else if (carried) {
-        this.owe(bot.id)
+        this.owed.add(bot.id)
       } else {
         this.retryLater()
       }
     }
     this.changedWhileSending.delete(bot.id)
     this.pump()
-  }
-
-  // Owed until a real step, which reads the drawing again: its bytes aren't held while it waits.
-  private owe(botId: string): void {
-    this.owed.add(botId)
-    this.prepared.delete(botId)
   }
 
   // The drawn icon for the mascot's look now, named by its bytes as an upload is; null sends the plain
