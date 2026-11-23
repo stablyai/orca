@@ -113,6 +113,10 @@ export class AccountMoveHolds {
   }
 
   begin(sessionId: string): number {
+    // Listening from the first read, so a selection change made while it runs can overtake it.
+    if (!this.disposed) {
+      this.subscribe()
+    }
     const read = ++this.reads
     this.reading.set(sessionId, read)
     return read

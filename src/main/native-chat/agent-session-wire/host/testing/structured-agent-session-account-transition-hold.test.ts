@@ -318,6 +318,8 @@ it("continues a usage-limited worker past the person's held message, then sends 
     expect(chat.dispatchedTo('Continue where you left off')).toEqual([chat.accountA])
   )
   expect(chat.dispatchedTo('after the dispatch')).toEqual([])
+  const [continuation] = await chat.hostSends()
+  await rig!.settleAccepted(continuation!.clientMessageId, 'continued')
 
   chat.closeDispatch()
   await eventually(() => expect(chat.dispatchedTo('after the dispatch')).toHaveLength(1))

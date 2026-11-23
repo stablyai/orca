@@ -56,14 +56,13 @@ export async function chatOnAccountA() {
   rig = current
   let accountReads = 0
   let onAccountRead: { at: number; run: () => void } | undefined
-  let switchDuringRead: { at: number; path: string } | undefined
+  let switchDuringRead: string | undefined
   current.host.deps.launchAccountHome = async () => {
     accountReads++
     const seen = home
-    if (switchDuringRead?.at === accountReads) {
-      const { path } = switchDuringRead
+    if (switchDuringRead !== undefined) {
+      home = switchDuringRead
       switchDuringRead = undefined
-      home = path
       releases.forEach((wake) => wake({ kind: 'account' }))
       return { variable: 'CODEX_HOME', path: seen }
     }
@@ -138,7 +137,7 @@ export async function chatOnAccountA() {
     /** The person switches to `path` while the next account read is under way: that read still
      *  returns the selection it saw. */
     switchDuringNextAccountRead: (path: string) => {
-      switchDuringRead = { at: accountReads + 1, path }
+      switchDuringRead = path
     },
     dispatchReads: () => dispatchReads,
     /** Runs once, inside the handover's read of the account a start would use: the read after
