@@ -37,6 +37,8 @@ const SessionResponseSchema = z
   })
   .strict()
 
+type HandshakeStage = 'challenge' | 'session'
+
 export type PushSession = { token: string; expiresAt: number }
 export type PushSessionOutcome = { ok: true; session: PushSession } | PushGatewayFailure
 
@@ -58,6 +60,7 @@ export class PushGatewaySession {
   private negative: { at: number; ttlMs: number; failure: PushGatewayFailure } | null = null
   // One log line per distinct refusal, so a host stuck on it does not log every retry.
   private loggedRefusal: string | null = null
+  private readonly loggedTransportFailures = new Set<string>()
   private refusedClockSkewMs: number | null = null
 
   constructor(options: PushGatewaySessionOptions) {
@@ -94,7 +97,7 @@ export class PushGatewaySession {
 
   private async open(): Promise<PushSessionOutcome> {
     const challenge = await this.handshakePost(
-      '/v1/host/challenge',
+      'challenge',
       { v: 1, hostPublicKeyB64: this.keypair.publicKeyB64 },
       ChallengeResponseSchema
     )
@@ -124,7 +127,7 @@ export class PushGatewaySession {
         : this.remember({ ok: false, reason: 'rejected', clockSkewMs }, clockSkewCause(clockSkewMs))
     }
     const parsed = await this.handshakePost(
-      '/v1/host/session',
+      'session',
       { v: 1, challengeId: challenge.value.challengeId, proofB64 },
       SessionResponseSchema
     )
@@ -142,19 +145,25 @@ export class PushGatewaySession {
 
   private signedIn(session: PushSession): PushSessionOutcome {
     this.refusedClockSkewMs = null
-    if (this.loggedRefusal !== null) {
+    if (this.loggedRefusal !== null || this.loggedTransportFailures.size > 0) {
       this.loggedRefusal = null
+      this.loggedTransportFailures.clear()
       console.warn('[push] Signed in to the push service again')
     }
     return { ok: true, session }
   }
 
   private async handshakePost<TSchema extends z.ZodType>(
-    path: string,
+    stage: HandshakeStage,
     body: unknown,
     schema: TSchema
   ): Promise<{ ok: true; value: z.infer<TSchema> } | PushGatewayFailure> {
-    const response = await postPushGatewayJson(this.fetchImpl, `${this.origin}${path}`, body)
+    const response = await postPushGatewayJson(
+      this.fetchImpl,
+      `${this.origin}/v1/host/${stage}`,
+      body,
+      (description) => this.warnTransportFailure(stage, description)
+    )
     if (response.ok && response.response.status === 429) {
       await cancelUnreadResponseBody(response.response)
       // Rate limiting is temporary, not host rejection; retain register/send retry semantics.
@@ -163,6 +172,15 @@ export class PushGatewaySession {
       return failure
     }
     return await readPushGatewayJson(response, schema)
+  }
+
+  private warnTransportFailure(stage: HandshakeStage, description: string): void {
+    const key = `${stage}:${description}`
+    if (this.loggedTransportFailures.has(key)) {
+      return
+    }
+    this.loggedTransportFailures.add(key)
+    console.warn(`[push] Push service sign-in transport failed at ${stage} (${description})`)
   }
 
   // A clock set back (the usual fix for skew) ends the cache instead of stretching it by the skew.

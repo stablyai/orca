@@ -1,6 +1,7 @@
 // Classify handshake and authorized responses identically so retries and refusal reasons cannot diverge.
 import type { z } from 'zod'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
+import { describePushGatewayTransportFailure } from './push-gateway-transport-diagnostics'
 
 export const PUSH_REQUEST_DEADLINE_MS = 15_000
 
@@ -17,20 +18,28 @@ export type PushGatewayResponse = { ok: true; response: Response } | PushGateway
 export async function postPushGatewayJson(
   fetchImpl: typeof globalThis.fetch,
   url: string,
-  body: unknown
+  body: unknown,
+  onTransportFailure?: (description: string) => void
 ): Promise<PushGatewayResponse> {
+  let signal: AbortSignal | undefined
   try {
+    signal = AbortSignal.timeout(PUSH_REQUEST_DEADLINE_MS)
     const response = await fetchImpl(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       // A 307 would replay the proof, and later the phone's token, to whatever
       // origin the redirect named.
       redirect: 'error',
-      signal: AbortSignal.timeout(PUSH_REQUEST_DEADLINE_MS),
+      signal,
       body: JSON.stringify(body)
     })
     return { ok: true, response }
-  } catch {
+  } catch (error) {
+    try {
+      onTransportFailure?.(describePushGatewayTransportFailure(error, signal))
+    } catch {
+      // Logging must not change the failure exposed to registration or dispatch.
+    }
     return { ok: false, reason: 'unreachable' }
   }
 }
