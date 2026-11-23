@@ -25,7 +25,7 @@ import { BotWorktreeLineageController } from '../workspaces/lineage/runtime-bot-
 import { createRuntimeAgentProjections } from './runtime-agent-projections'
 import { RuntimeTerminalList } from '../terminal/query/runtime-terminal-list'
 import { RuntimeManagedWorktreeQueries } from '../workspaces/catalog/runtime-managed-worktree-queries'
-import { RuntimePtyForegroundAgent } from '../terminal/lifecycle/runtime-pty-foreground-agent'
+import type { RuntimePtyForegroundAgent } from '../terminal/lifecycle/runtime-pty-foreground-agent'
 import { OpenCodeRunLifetimeStatus } from '../terminal/output/opencode-run-lifetime-status'
 import { readLocalPtyForegroundCommandLine } from '../terminal/lifecycle/local-pty-foreground-command-line'
 import { isAgentStatusHooksEnabledForAgent } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
@@ -151,22 +151,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     listKnownHostIds: () => this.listKnownExecutionHostIds()
   })
 
-  protected abstract pendingMainDaemonAttach(ptyId: string): Promise<boolean> | undefined
-
-  protected readonly ptyForegroundAgent = new RuntimePtyForegroundAgent({
-    getController: () => this.ptyController,
-    getPty: (ptyId) => this.ptysById.get(ptyId) ?? null,
-    touchSnapshot: (ptyId) => this.touchMobileSessionSnapshotsForPty(ptyId),
-    pendingAttach: (ptyId) => this.pendingMainDaemonAttach(ptyId),
-    finishDelayedSnapshot: (ptyId, changed) => {
-      if (this.mobileSessionTabListeners.size > 0) {
-        this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
-      }
-      if (!changed) {
-        this.touchMobileSessionSnapshotsForPty(ptyId)
-      }
-    }
-  })
+  protected abstract readonly ptyForegroundAgent: RuntimePtyForegroundAgent
 
   protected readonly openCodeRunLifetime = new OpenCodeRunLifetimeStatus({
     isStopping: (ptyId) =>
