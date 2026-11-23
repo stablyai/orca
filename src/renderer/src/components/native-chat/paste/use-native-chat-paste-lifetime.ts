@@ -2,7 +2,11 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { basename } from '@/lib/path'
 import type { NativeChatAttachmentOwner } from '../attachments/uploads/native-chat-attachment-owner'
 import type { NativeChatReservedAttachment } from '../attachments/intake/native-chat-session-attachment-drop'
-import { hasNativeChatPendingAttachment } from '../attachments/chips/native-chat-pending-attachment-scopes'
+import {
+  hasNativeChatPendingAttachment,
+  holdNativeChatPendingImageSave,
+  releaseNativeChatPendingImageSave
+} from '../attachments/chips/native-chat-pending-attachment-scopes'
 import { useNativeChatPaneLifetimeEffect } from '../pane/ownership/native-chat-pane-lifetime'
 
 /** Composer owns preview URLs; the draft attachment cache owns pending uploads. */
@@ -85,6 +89,7 @@ export function useNativeChatPasteLifetime(args: {
             lifetime.uploads.get(id)?.kind !== 'runtime-session' &&
             !(attachmentScopeKey && hasNativeChatPendingAttachment(id))
           ) {
+            releaseNativeChatPendingImageSave(id)
             dropPendingRef.current(id)
           }
         }
@@ -167,8 +172,11 @@ export function useNativeChatPasteLifetime(args: {
         return chip.id ? [{ path, chipId: chip.id, reveal: chip.reveal }] : []
       })
       const reserved = chips.map(({ path, chipId }) => ({ path, chipId }))
+      // Held while the clipboard is read: it may still turn out to be the pasted image.
+      reserved.forEach(({ chipId }) => holdNativeChatPendingImageSave(chipId))
       const transfer = (): NativeChatReservedAttachment[] => {
         for (const { chipId } of reserved) {
+          releaseNativeChatPendingImageSave(chipId)
           lifetime.pending.delete(chipId)
           lifetime.uploads.delete(chipId)
         }
@@ -185,6 +193,7 @@ export function useNativeChatPasteLifetime(args: {
     (pendingId: string | null) => {
       if (pendingId) {
         lifetime.pending.delete(pendingId)
+        releaseNativeChatPendingImageSave(pendingId)
         dropPendingImageAttachment(pendingId)
       }
     },

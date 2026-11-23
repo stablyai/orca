@@ -1,7 +1,7 @@
 import { useNativeChatPasteDestination } from './native-chat-paste-destination'
 import { useCallback } from 'react'
 import { useNativeChatPasteLifetime } from './use-native-chat-paste-lifetime'
-import { nativeChatAttachmentOwnerUnchanged } from '../attachments/uploads/native-chat-resolved-path-ownership'
+import { useNativeChatImagePasteSave } from './use-native-chat-image-paste-save'
 import { assertClipboardTextWithinLimit } from '../../../../../shared/clipboard/clipboard-text'
 import { setNativeChatPasteFailure } from '../composer/controls/native-chat-composer-notice'
 import { NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES } from './native-chat-context-paste-limit'
@@ -18,11 +18,7 @@ import {
   nativeChatWorktreeNotReadyNotice
 } from '../attachments/intake/native-chat-attachment-notices'
 
-import type { NativeChatAttachmentOwner } from '../attachments/uploads/native-chat-attachment-owner'
-import {
-  ownerAcceptsClipboardImage,
-  saveNativeChatPastedClipboardImage
-} from './native-chat-clipboard-image-save'
+import { ownerAcceptsClipboardImage } from './native-chat-clipboard-image-save'
 
 import type { UseNativeChatComposerPasteArgs } from './native-chat-composer-paste-options'
 
@@ -68,60 +64,17 @@ export function useNativeChatComposerPaste({
       setNotice
     )
 
-  /** Settle the operation started at paste time, or attach directly if chips are unavailable. */
-  const settleImagePaste = useCallback(
-    (pendingId: string | null, path: string, originalOwner: NativeChatAttachmentOwner) => {
-      if (!nativeChatAttachmentOwnerUnchanged(originalOwner, resolveAttachmentOwner())) {
-        dropImagePaste(pendingId)
-        setNotice(nativeChatWorktreeNotReadyNotice())
-        return
-      }
-      if (pendingId) {
-        lifetime.pending.delete(pendingId)
-        resolvePendingImageAttachment(pendingId, path, null)
-      } else {
-        attachResolvedPaths([path], null)
-      }
-    },
-    [
-      attachResolvedPaths,
-      lifetime,
-      dropImagePaste,
-      resolveAttachmentOwner,
-      resolvePendingImageAttachment,
-      setNotice
-    ]
-  )
-
-  // Image failures do not decide whether text can be inserted. Resolves whether the image settled.
-  const saveClipboardImage = useCallback(
-    async (
-      owner: NativeChatAttachmentOwner,
-      pendingId: string | null,
-      besideText: boolean,
-      ready?: () => void,
-      eventImage?: Blob
-    ): Promise<boolean> => {
-      const saved = await saveNativeChatPastedClipboardImage(owner, {
-        pendingId,
-        besideText,
-        ready,
-        eventImage,
-        canNotify: canComplete,
-        setNotice
-      })
-      if (keepStoreUploadAfterUnmount(pendingId, saved)) {
-        return false
-      }
-      if (!canComplete() || saved.status !== 'saved') {
-        dropImagePaste(pendingId)
-        return false
-      }
-      settleImagePaste(pendingId, saved.tempPath, owner)
-      return true
-    },
-    [canComplete, dropImagePaste, keepStoreUploadAfterUnmount, setNotice, settleImagePaste]
-  )
+  const saveClipboardImage = useNativeChatImagePasteSave({
+    attachmentScopeKey,
+    lifetime,
+    canComplete,
+    dropImagePaste,
+    keepStoreUploadAfterUnmount,
+    resolveAttachmentOwner,
+    resolvePendingImageAttachment,
+    attachResolvedPaths,
+    setNotice
+  })
 
   const handlePaste = useCallback(
     (event: ClipboardEventLike) => {

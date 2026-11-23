@@ -22,7 +22,8 @@ import {
 import { resolveNativeChatComposerDraftOwner } from '../../drafts/native-chat-composer-draft-memory'
 import {
   chipScopes,
-  nativeChatPendingAttachmentScope
+  nativeChatPendingAttachmentScope,
+  savingImageChips
 } from './native-chat-pending-attachment-scopes'
 
 const EMPTY: readonly NativeChatComposerImageAttachment[] = Object.freeze([])
@@ -253,10 +254,23 @@ export function settleNativeChatPendingAttachmentReferences(
   return true
 }
 
-export function clearNativeChatPendingAttachments(scopeKey: string): void {
+/**
+ * `keepSaving`: a composer going unavailable keeps images main is still saving, so they reach the draft,
+ * and the finished images queued behind them, so they still land in paste order.
+ */
+export function clearNativeChatPendingAttachments(
+  scopeKey: string,
+  options?: { keepSaving?: boolean }
+): void {
   scopeKey = currentDraftScope(scopeKey)
-  if (pendingCache.has(scopeKey)) {
-    writePending(scopeKey, [])
+  const current = pendingCache.get(scopeKey)
+  if (current) {
+    writePending(
+      scopeKey,
+      options?.keepSaving
+        ? trimSettled(current.filter((chip) => !chip.pending || savingImageChips.has(chip.id)))
+        : []
+    )
   }
 }
 
