@@ -15,7 +15,11 @@ type VideoMetaMessage = {
 }
 
 type EmulatorVideoApi = {
-  startVideoStream?: (args: { deviceId: string; streamId: string }) => Promise<{ streamId: string }>
+  startVideoStream?: (args: {
+    deviceId: string
+    streamId: string
+    streamUrl?: string
+  }) => Promise<{ streamId: string }>
   stopVideoStream?: (args: { streamId: string }) => Promise<void>
   onVideoStreamMeta?: (cb: (msg: VideoMetaMessage) => void) => () => void
   onVideoStreamFrame?: (cb: (msg: VideoFrameMessage) => void) => () => void
@@ -47,7 +51,8 @@ export function useEmulatorVideoStream(
   streamKey: string | undefined,
   enabled: boolean,
   onSize?: (size: StreamSize) => void,
-  format: EmulatorVideoFormat = 'annex-b'
+  format: EmulatorVideoFormat = 'annex-b',
+  streamUrl?: string
 ): { canvasRef: React.RefObject<HTMLCanvasElement | null>; error: string | null } {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   // Key errors to their stream so a dead stream's error never reaches its replacement's first render.
@@ -139,7 +144,7 @@ export function useEmulatorVideoStream(
     const startStream = (): void => {
       const id = newVideoStreamId()
       streamId = id
-      void startVideoStream({ deviceId, streamId: id })
+      void startVideoStream({ deviceId, streamId: id, ...(streamUrl ? { streamUrl } : {}) })
         .then((started) => {
           if (disposed) {
             void api.stopVideoStream?.({ streamId: started.streamId })
@@ -293,7 +298,7 @@ export function useEmulatorVideoStream(
     return () => {
       cleanup()
     }
-  }, [deviceId, streamKey, enabled, format])
+  }, [deviceId, streamKey, enabled, format, streamUrl])
 
   if (enabled && deviceId && !hasWebCodecs()) {
     return {

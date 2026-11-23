@@ -22,7 +22,11 @@ type EnvironmentForwarding = {
 }
 
 const forwardingByEnvironment = new Map<string, EnvironmentForwarding>()
-const forwardedIosStreamUrlByDevice = new Map<string, string>()
+// Issued stream URL -> where it forwards; a renderer can only name a stream main handed out.
+const issuedStreamUrls = new Map<
+  string,
+  { forwards: EmulatorRuntimePortForwards; remotePort: number }
+>()
 
 function environmentForwarding(userDataPath: string, environmentId: string): EnvironmentForwarding {
   const existing = forwardingByEnvironment.get(environmentId)
@@ -59,15 +63,7 @@ function environmentForwarding(userDataPath: string, environmentId: string): Env
   )
   const forwarding: EnvironmentForwarding = {
     transport,
-    forwards: new EmulatorRuntimePortForwards(
-      (target) => transport.open(target),
-      () => {
-        if (forwardingByEnvironment.get(environmentId) === forwarding) {
-          forwardingByEnvironment.delete(environmentId)
-          transport.close()
-        }
-      }
-    )
+    forwards: new EmulatorRuntimePortForwards((target) => transport.open(target))
   }
   forwardingByEnvironment.set(environmentId, forwarding)
   return forwarding
@@ -84,27 +80,54 @@ async function forwardUrl(
   const forwarded = new URL(url)
   forwarded.hostname = '127.0.0.1'
   forwarded.port = String(await forwards.localPortFor(remotePort))
-  return forwarded.toString()
+  const issued = forwarded.toString()
+  issuedStreamUrls.set(issued, { forwards, remotePort })
+  return issued
 }
 
 /** Rewrites a paired runtime's simulator helper URLs to loopback ports here that tunnel to it. */
 export async function forwardEmulatorRuntimeSession(
   userDataPath: string,
-  args: { environmentId: string; deviceUdid?: string } & EmulatorRuntimeSessionUrls
+  args: { environmentId: string } & EmulatorRuntimeSessionUrls
 ): Promise<EmulatorRuntimeSessionUrls> {
   const { forwards } = environmentForwarding(userDataPath, args.environmentId)
   const [streamUrl, wsUrl] = await Promise.all([
     forwardUrl(forwards, args.streamUrl),
     forwardUrl(forwards, args.wsUrl)
   ])
-  if (args.deviceUdid && streamUrl) {
-    forwardedIosStreamUrlByDevice.set(args.deviceUdid, streamUrl)
-  }
   return { streamUrl, wsUrl }
 }
 
-/** AVCC URL for a forwarded runtime session, so renderers still name only a device. */
-export function getForwardedIosVideoStreamUrl(deviceUdid: string): string | null {
-  const streamUrl = forwardedIosStreamUrlByDevice.get(deviceUdid)
-  return streamUrl ? (deriveAvccUrlFromStreamUrl(streamUrl) ?? null) : null
+/**
+ * AVCC URL for a stream URL this process forwarded and still serves. Keyed by the issued URL, not
+ * the device, so same-UDID devices on two runtimes (or here) never share a stream.
+ */
+function forwardedIosVideoStreamUrl(streamUrl: string | undefined): string | null {
+  const issued = streamUrl ? issuedStreamUrls.get(streamUrl) : undefined
+  if (!streamUrl || !issued) {
+    return null
+  }
+  if (!issued.forwards.isLive(issued.remotePort, Number(new URL(streamUrl).port))) {
+    issuedStreamUrls.delete(streamUrl)
+    return null
+  }
+  return deriveAvccUrlFromStreamUrl(streamUrl) ?? null
+}
+
+/**
+ * The AVCC URL for a renderer's video stream: a forwarded runtime stream it was given, else this
+ * host's own session for the device, but only when the renderer named that session's stream.
+ */
+export function resolveIosVideoStreamUrl(
+  streamUrl: string | undefined,
+  localAvccUrl: string | null | undefined
+): string | null {
+  const forwarded = forwardedIosVideoStreamUrl(streamUrl)
+  if (forwarded) {
+    return forwarded
+  }
+  if (!localAvccUrl) {
+    return null
+  }
+  return !streamUrl || deriveAvccUrlFromStreamUrl(streamUrl) === localAvccUrl ? localAvccUrl : null
 }

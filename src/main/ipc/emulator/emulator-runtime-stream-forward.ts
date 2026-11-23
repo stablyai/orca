@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { isTrustedUIRenderer } from '../ui'
 import {
   forwardEmulatorRuntimeSession,
   type EmulatorRuntimeSessionUrls
@@ -11,7 +12,10 @@ function optionalString(value: unknown): string | undefined {
 export function registerEmulatorRuntimeStreamForwardHandler(getUserDataPath: () => string): void {
   ipcMain.handle(
     'emulator:forwardRuntimeSession',
-    async (_event, args: unknown): Promise<EmulatorRuntimeSessionUrls> => {
+    async (event, args: unknown): Promise<EmulatorRuntimeSessionUrls> => {
+      if (!isTrustedUIRenderer(event.sender)) {
+        throw new Error('Emulator stream forwarding must come from the Orca window.')
+      }
       const input: Record<string, unknown> =
         typeof args === 'object' && args !== null ? { ...args } : {}
       const environmentId = optionalString(input.environmentId)
@@ -20,7 +24,6 @@ export function registerEmulatorRuntimeStreamForwardHandler(getUserDataPath: () 
       }
       return forwardEmulatorRuntimeSession(getUserDataPath(), {
         environmentId,
-        deviceUdid: optionalString(input.deviceUdid),
         streamUrl: optionalString(input.streamUrl),
         wsUrl: optionalString(input.wsUrl)
       })

@@ -85,22 +85,23 @@ export function useEmulatorScreenKeyboard({
     heldInput.startSync()
     // A dead key the simulator took under the old layout no longer owns the Mac's next composition.
     physicalDeadKeyRef.current = false
-    void callRuntimeRpc<{ physicalKeys: boolean }>(
-      emulatorRuntimeTarget(worktreeId),
-      'emulator.syncKeyboardLayout',
-      {
-        worktree: worktreeId
+    const target = emulatorRuntimeTarget(worktreeId)
+    // The sync applies the server's keyboard layout, not this one; remote panes send text instead.
+    const physicalKeysSynced =
+      target.kind === 'local'
+        ? callRuntimeRpc<{ physicalKeys: boolean }>(target, 'emulator.syncKeyboardLayout', {
+            worktree: worktreeId
+          })
+            .then((result) => result.physicalKeys === true)
+            .catch(() => false)
+        : Promise.resolve(false)
+    void physicalKeysSynced.then((physicalKeys) => {
+      if (syncId !== layoutSyncIdRef.current) {
+        return
       }
-    )
-      .then((result) => result.physicalKeys === true)
-      .catch(() => false)
-      .then((physicalKeys) => {
-        if (syncId !== layoutSyncIdRef.current) {
-          return
-        }
-        physicalKeysRef.current = physicalKeys
-        heldInput.finishSync(simulatorSinks)
-      })
+      physicalKeysRef.current = physicalKeys
+      heldInput.finishSync(simulatorSinks)
+    })
   }, [heldInput, physicalDeadKeyRef, scrcpyKeyboard, simulatorSinks, worktreeId])
 
   const cancelActivePaste = useCallback((): void => {

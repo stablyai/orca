@@ -54,7 +54,16 @@ export class EmulatorRuntimeTunnelTransport {
     if (this.closed) {
       return Promise.reject(new Error('Emulator tunnel closed'))
     }
-    this.live ??= this.start()
+    if (!this.live) {
+      const live = this.start()
+      // A start can fail before this assignment; drop it so the next open retries.
+      this.live = live
+      live.client.catch(() => {
+        if (this.live === live) {
+          this.live = null
+        }
+      })
+    }
     return this.live.client
   }
 

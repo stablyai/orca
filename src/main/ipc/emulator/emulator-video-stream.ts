@@ -7,7 +7,7 @@ import { errorMessage } from '../../../shared/errors/error-message'
 import { abortWhenRendererGone } from '../renderer-requests/renderer-lifetime-abort'
 
 export function registerEmulatorVideoStreamHandlers(
-  resolveIosVideoStreamUrl: (deviceId: string) => string | null | undefined
+  resolveIosVideoStreamUrl: (deviceId: string, streamUrl?: string) => string | null | undefined
 ): void {
   type Subscription = {
     owner: WebContents
@@ -32,7 +32,7 @@ export function registerEmulatorVideoStreamHandlers(
 
   ipcMain.handle(
     'emulator:videoStreamStart',
-    (event, args: { deviceId: string; streamId?: string }) => {
+    (event, args: { deviceId: string; streamId?: string; streamUrl?: string }) => {
       const owner = event.sender
       if (!BrowserWindow.fromWebContents(owner)) {
         throw new Error('Emulator video stream must originate from a BrowserWindow.')
@@ -65,14 +65,20 @@ export function registerEmulatorVideoStreamHandlers(
         if (owner.isDestroyed() || subscriptions.get(streamId) !== pendingSubscription) {
           return
         }
-        const iosVideoStreamUrl = resolveIosVideoStreamUrl(args.deviceId)
-        if (iosVideoStreamUrl) {
-          const fail = (message: string): void => {
-            stopSubscription(streamId, owner)
-            if (!owner.isDestroyed()) {
-              owner.send('emulator:frameStreamError', { streamId, message })
-            }
+        const iosStreamUrl = typeof args.streamUrl === 'string' ? args.streamUrl : undefined
+        const iosVideoStreamUrl = resolveIosVideoStreamUrl(args.deviceId, iosStreamUrl)
+        const fail = (message: string): void => {
+          stopSubscription(streamId, owner)
+          if (!owner.isDestroyed()) {
+            owner.send('emulator:frameStreamError', { streamId, message })
           }
+        }
+        // An iOS stream nothing here serves would otherwise wait forever on the Android registry.
+        if (!iosVideoStreamUrl && iosStreamUrl) {
+          fail('The simulator video stream is no longer available.')
+          return
+        }
+        if (iosVideoStreamUrl) {
           const stream = new AvccFrameStream(iosVideoStreamUrl, {
             onFrame: (frame) => {
               if (!owner.isDestroyed()) {

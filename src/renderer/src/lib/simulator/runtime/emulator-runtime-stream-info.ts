@@ -23,7 +23,6 @@ async function forwardEmulatorStreamInfo<T extends EmulatorStreamInfo>(
   const forwarded = capabilities?.includes(EMULATOR_TUNNEL_CAPABILITY)
     ? await window.api.emulator.forwardRuntimeSession({
         environmentId: target.environmentId,
-        deviceUdid: info.deviceUdid,
         streamUrl: simulatorPreviewStreamUrl(info),
         wsUrl: info.wsUrl
       })
@@ -37,5 +36,14 @@ export async function attachEmulatorOnRuntime<TResult extends { info?: EmulatorS
   params: Record<string, unknown>
 ): Promise<TResult> {
   const result = await callRuntimeRpc<TResult>(target, 'emulator.attach', params)
-  return { ...result, info: await forwardEmulatorStreamInfo(target, result.info) }
+  try {
+    return { ...result, info: await forwardEmulatorStreamInfo(target, result.info) }
+  } catch (error) {
+    // The runtime already registered the session; without a stream no pane will own it.
+    await callRuntimeRpc(target, 'emulator.shutdown', {
+      ...(typeof params.worktree === 'string' ? { worktree: params.worktree } : {}),
+      managedOnly: true
+    }).catch(() => {})
+    throw error
+  }
 }
