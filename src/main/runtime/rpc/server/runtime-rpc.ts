@@ -33,11 +33,7 @@ export class OrcaRuntimeRpcServer extends RuntimeRpcMobilePairing {
     }
   }
 
-  /**
-   * An idle stop committed: refuse every later message undispatched, then close every socket. The
-   * idle-stop code promises nothing unanswered was dispatched, so it is used only while no counted
-   * request runs; otherwise sockets close as for any restart and clients recover as from a crash.
-   */
+  /** Refuses every later message undispatched; 4410 promises nothing unanswered ran, else 1012. */
   fenceForIdleStop(): void {
     this.idleStopFenced = true
     const clean = this.clientRequestsInFlight === 0

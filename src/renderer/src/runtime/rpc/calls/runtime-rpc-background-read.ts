@@ -17,3 +17,8 @@ export function isBackgroundRuntimeRead(params: unknown): boolean {
     !('userRefresh' in params && params.userRefresh === true)
   )
 }
+
+/** The window's transient user activation (a click or key in the last few seconds). */
+export function hasRecentUserGesture(): boolean {
+  return typeof navigator !== 'undefined' && navigator.userActivation?.isActive === true
+}

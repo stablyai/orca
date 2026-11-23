@@ -76,6 +76,7 @@ function toAuthenticatedDevice(device: DeviceEntry): E2EEAuthenticatedDevice {
 }
 
 export class MobileSocketWiring {
+  private closedWith: { code: number; reason: string } | null = null
   private readonly deviceRegistry: DeviceRegistry
   private readonly e2eeKeypair: E2EEKeypair
   private readonly onText: MobileSocketWiringOptions['onText']
@@ -173,8 +174,9 @@ export class MobileSocketWiring {
     )
   }
 
-  /** Closes every socket, direct and relayed, with one code. */
+  /** Closes every socket, direct and relayed, with one code, and every later one the same way. */
   closeAllConnections(code: number, reason: string): void {
+    this.closedWith = { code, reason }
     for (const ws of Array.from(this.connectionIds.keys())) {
       try {
         ws.close(code, reason)
@@ -198,6 +200,10 @@ export class MobileSocketWiring {
     message: MobileSocketPayload,
     metadata: MobileSocketTransportMetadata
   ): void {
+    if (this.closedWith) {
+      ws.close(this.closedWith.code, this.closedWith.reason)
+      return
+    }
     const socket = this.authenticatedSockets.get(ws)
     if (socket && !this.deviceRegistry.resolveAuthenticatedPrincipal(socket.device)) {
       ws.close(4001, 'Unauthorized')

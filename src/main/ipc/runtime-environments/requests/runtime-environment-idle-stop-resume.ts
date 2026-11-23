@@ -10,16 +10,13 @@ function isIdleStopRefusal(value: unknown): boolean {
   )
 }
 
-/**
- * A user's request that met its host's idle stop runs once more, and that run's preparation wakes
- * the host. Safe to resend: the host fenced admission before it stopped, so a request refused or
- * left unanswered by that stop was never dispatched (#46567). A poll is not resent; it stays parked.
- */
+/** A user's call that met an idle stop (never dispatched: the host fenced first) is sent once more,
+ *  and that run wakes the host (#46567). Nothing else is resent. */
 export async function resumeAfterIdleStop<T>(
   attempt: () => Promise<RuntimeRpcResponse<T>>,
-  background: boolean | undefined
+  wake: boolean
 ): Promise<RuntimeRpcResponse<T>> {
-  if (background) {
+  if (!wake) {
     return attempt()
   }
   try {

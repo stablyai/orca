@@ -1,5 +1,8 @@
 import { canCreateWslHostService } from './wsl-host-service-availability'
-import { withWslHostIdleStop } from '../../wsl/host-lifecycle/wsl-host-idle-stop'
+import {
+  isWslHostIdleStopped,
+  withWslHostIdleStop
+} from '../../wsl/host-lifecycle/wsl-host-idle-stop'
 import { WSL_HOST_HANDLER_CHANNELS } from './wsl-host-handler-channels'
 export { WSL_HOST_HANDLER_CHANNELS } from './wsl-host-handler-channels'
 import { ipcMain } from 'electron'
@@ -123,6 +126,14 @@ async function createService(args: WslHostHandlerArgs): Promise<WslHostService |
       statuses: () => created.getStatuses(),
       records: async () => await readWslHostRecordsQuietly(args.getUserDataPath()),
       connector,
+      // A phone may wake a host Orca itself stopped idle, never one the user stopped.
+      wakeIdleStopped: async (environmentId) => {
+        if (!isWslHostIdleStopped(environmentId)) {
+          return false
+        }
+        await created.ensureForRuntimeCall(environmentId, () => true, true)
+        return true
+      },
       ...runGate
     })
   )

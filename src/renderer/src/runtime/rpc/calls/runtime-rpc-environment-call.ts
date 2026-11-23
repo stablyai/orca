@@ -17,6 +17,8 @@ async function callRuntimeEnvironmentOnce(args: {
   expectedEnvironmentRuntimeId?: string
   /** A poll, not the user: no use of an idle WSL host, never a wake of one Orca stopped idle. */
   background?: boolean
+  /** The user asked for it: it may wake a WSL host Orca stopped idle. */
+  wake?: boolean
 }): Promise<unknown> {
   if (args.signal) {
     return callAbortableRuntimeEnvironment(
@@ -27,7 +29,8 @@ async function callRuntimeEnvironmentOnce(args: {
       args.signal,
       args.expectedEnvironmentPairingRevision,
       args.expectedEnvironmentRuntimeId,
-      args.background
+      args.background,
+      args.wake
     )
   }
   return window.api.runtimeEnvironments.call({
@@ -37,6 +40,7 @@ async function callRuntimeEnvironmentOnce(args: {
     timeoutMs: args.timeoutMs,
     expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision,
     expectedEnvironmentRuntimeId: args.expectedEnvironmentRuntimeId,
-    ...(args.background ? { background: true } : {})
+    ...(args.background ? { background: true } : {}),
+    ...(args.wake ? { wake: true } : {})
   })
 }

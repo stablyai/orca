@@ -158,21 +158,20 @@ async function startOrcadManagedIdleExit(
   })
 }
 
-/** Fence admission and tell clients this is an idle stop, then stop; never fence a stop that
- *  cannot start. */
+/** Stop, then fence admission in the same turn (cleanup starts a microtask later), only when
+ *  this idle stop owns the stop: a SIGTERM stop already under way is no idle stop. */
 function commitIdleStop(
   rpc: OrcadIdleExitRuntimePorts['rpc'],
   idleRecord: ReturnType<typeof createIdleStopRecordOwnership>
 ): void {
-  if (requestIdleShutdown) {
+  if (idleRecord.requestShutdown(requestIdleShutdown)) {
     rpc.fenceForIdleStop()
   }
-  idleRecord.requestShutdown(requestIdleShutdown)
 }
 
 /** Discard failed, overdue and externally superseded idle stops, including cleanup before request completion. */
 export function createIdleStopRecordOwnership(userDataPath: string): {
-  requestShutdown(request: OrcadShutdownTrigger | null): void
+  requestShutdown(request: OrcadShutdownTrigger | null): boolean
   onShutdown(): void
 } {
   let idleOwnsStop = false
@@ -189,6 +188,7 @@ export function createIdleStopRecordOwnership(userDataPath: string): {
         idleOwnsStop = false
         discard()
       }
+      return idleOwnsStop
     },
     onShutdown: () => {
       if (!idleOwnsStop) {

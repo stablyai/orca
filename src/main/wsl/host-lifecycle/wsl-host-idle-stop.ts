@@ -1,46 +1,88 @@
-/**
- * WSL hosts whose orcad told this desktop it stopped idle (#46567). Until the user needs the host
- * again, nothing relaunches it: liveness reports it idle, its control socket holds its reconnect,
- * and background calls are refused, so its distro may stop. A user's call wakes it, booting the
- * distro if it stopped; unlike a stop the user made, that never leaves the panes on Start.
- */
+/** WSL hosts whose orcad said it stopped idle (#46567): held down until a user's wake. */
 import { clearRuntimeEnvironmentContactLoss } from '../../ipc/runtime-environments/status/runtime-environment-contact-loss'
 import type { WslOrcadConnectionStatus } from '../orcad/wsl-orcad-connection-status'
 import type { WslOrcadConnection } from '../orcad/wsl-orcad-connection-types'
 import { defaultWslOrcadEnvironmentId } from '../orcad/wsl-orcad-environment-id'
 
-const idleStopped = new Set<string>()
+// orcad's shutdown deadline is 15 s; a wake waits this long at most for the old process to go.
+const OLD_ORCAD_EXIT_WAIT_MS = 16_000
+
+type IdleStop = {
+  /** Resolves once liveness saw the stopped orcad exit, so a wake cannot reach the dying one. */
+  exited: PromiseWithResolvers<void>
+  /** The one wake in flight, which every later user call joins. */
+  waking: Promise<void> | null
+}
+
+const idleStopped = new Map<string, IdleStop>()
+const clearedListeners = new Set<(environmentId: string) => void>()
 
 /** The host's own close said idle stop; that close was an answer, so it is no lost contact. */
 export function noteWslHostIdleStop(environmentId: string): void {
-  idleStopped.add(environmentId)
+  if (!idleStopped.has(environmentId)) {
+    idleStopped.set(environmentId, { exited: Promise.withResolvers<void>(), waking: null })
+  }
   clearRuntimeEnvironmentContactLoss(environmentId)
 }
 
+/** True from the idle-stop close until a woken server is ready, waking included. */
 export function isWslHostIdleStopped(environmentId: string): boolean {
   return idleStopped.has(environmentId)
 }
 
-/** A wake, or a server answering again: its next stop must again prove it was idle. */
-export function clearWslHostIdleStop(environmentId: string): void {
-  idleStopped.delete(environmentId)
+/** Hears every end of a hold, so held control sockets reopen and replay their streams. */
+export function onWslHostIdleStopCleared(listener: (environmentId: string) => void): () => void {
+  clearedListeners.add(listener)
+  return () => clearedListeners.delete(listener)
 }
 
-/**
- * What a connection change means for an idle-stopped host: any ready server (a user's Start, a
- * due automation, a wake) ends the idle stop, and the distro stopping after it is that idle stop's
- * doing, not a stop that parks the host and offers Start.
- */
+function clearWslHostIdleStop(environmentId: string): void {
+  if (idleStopped.delete(environmentId)) {
+    for (const listener of clearedListeners) {
+      listener(environmentId)
+    }
+  }
+}
+
+/** Single-flight: the first user call boots it once the old orcad is gone; later calls join. */
+export function wakeWslHostAfterIdleStop(
+  environmentId: string,
+  connect: () => Promise<void>
+): Promise<void> {
+  const stop = idleStopped.get(environmentId)
+  if (!stop) {
+    return connect()
+  }
+  stop.waking ??= (async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const waited = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, OLD_ORCAD_EXIT_WAIT_MS)
+    })
+    await Promise.race([stop.exited.promise, waited])
+    clearTimeout(timer)
+    await connect()
+    clearWslHostIdleStop(environmentId)
+  })().finally(() => {
+    stop.waking = null
+  })
+  return stop.waking
+}
+
+/** Liveness reports: ready ends the hold; idle (or the distro stopping) means the old orcad left. */
 export function withWslHostIdleStop(
   distro: string,
   connection: WslOrcadConnection | null,
   status: WslOrcadConnectionStatus
 ): WslOrcadConnectionStatus {
   const environmentId = connection?.environmentId ?? defaultWslOrcadEnvironmentId(distro)
+  const stop = idleStopped.get(environmentId)
   if (status.state === 'ready') {
     clearWslHostIdleStop(environmentId)
+  } else if (stop && (status.state === 'idle' || status.state === 'distro-stopped')) {
+    stop.exited.resolve()
   }
-  return status.state === 'distro-stopped' && isWslHostIdleStopped(environmentId)
+  // The distro stopping after an idle stop is that stop's doing, not one that offers Start.
+  return stop && status.state === 'distro-stopped'
     ? { state: 'idle', terminals: 'unverifiable' }
     : status
 }

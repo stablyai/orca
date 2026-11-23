@@ -13,9 +13,19 @@ import { STATUS_METHODS } from '../methods/host-management/status'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { installOrcadManagedIdleExit } from '../../../orcad/host-lifecycle/idle-exit/orcad-managed-idle-exit'
+import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
+import { desktopRuntimeClientCapabilities } from '../../../ipc/runtime-environments/connections/runtime-environment-shared-control-policy'
 
+let releaseSlow: () => void = () => {}
 const METHODS = [
   ...STATUS_METHODS,
+  defineMethod({
+    name: 'test.slow',
+    permission: 'workspace',
+    params: null,
+    handler: () =>
+      new Promise<{ done: true }>((resolve) => (releaseSlow = () => resolve({ done: true })))
+  }),
   defineMethod({
     name: 'test.work',
     permission: 'workspace',
@@ -78,7 +88,7 @@ async function startHostAndDesktop() {
   )
   cleanups.push(() => desktop.close())
   expect((await desktop.request('status.get', { probe: true }, 5_000)).ok).toBe(true)
-  return { server, desktop, isIdleStopped: () => idleStopped }
+  return { server, desktop, offer: offer.pairingUrl, isIdleStopped: () => idleStopped }
 }
 
 describe('a passive desktop control socket', () => {
@@ -119,6 +129,16 @@ describe('a passive desktop control socket', () => {
     // Held, not reconnecting: no retry timer was armed.
     expect(idle.desktop.getDiagnostics().state).toBe('closed')
 
+    // A counted request still running at the fence: it may have run, so no idle-stop promise.
+    const busy = await startHostAndDesktop()
+    const slow = busy.desktop.request('test.slow', null, 5_000)
+    await vi.waitFor(() => expect(busy.server.readClientActivity().requestsInFlight).toBe(1))
+    busy.server.fenceForIdleStop()
+    const failure: unknown = await slow.catch((error: unknown) => error)
+    expect(failure).toMatchObject({ code: 'remote_runtime_unavailable' })
+    expect(busy.isIdleStopped()).toBe(false)
+    releaseSlow()
+
     const crash = await startHostAndDesktop()
     await crash.server.stop()
     await vi.waitFor(() => expect(crash.desktop.getDiagnostics().state).toBe('reconnecting'))
@@ -126,11 +146,21 @@ describe('a passive desktop control socket', () => {
   })
 
   it('lets an open but untouched WSL workspace reach idle exit through all its traffic', async () => {
-    const { server, desktop } = await startHostAndDesktop()
+    const { server, desktop, offer } = await startHostAndDesktop()
     const watch = await desktop.subscribe('test.watch', null, 5_000, {
       onResponse: () => {},
       onError: () => {}
     })
+    // A stream on its own socket (turn completions, layout), opened as the desktop opens it.
+    const ownSocket = await subscribeRemoteRuntimeTransport(
+      pairedRuntimeConnectionFromOffer(parsePairingCode(offer)!),
+      'test.watch',
+      null,
+      5_000,
+      { onResponse: () => {}, onError: () => {}, onClose: () => {} },
+      { clientCapabilities: desktopRuntimeClientCapabilities('wsl:ubuntu') }
+    )
+    cleanups.push(() => ownSocket.close())
     let stopped = false
     const dispose = installOrcadManagedIdleExit({
       config: { timeoutMs: 400, activationRoot: tmpdir() },

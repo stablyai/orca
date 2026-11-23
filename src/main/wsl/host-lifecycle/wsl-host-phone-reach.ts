@@ -58,6 +58,8 @@ export class WslHostPhoneGate {
       connector: Pick<WslHostConnector, 'get' | 'reachability'>
       isEnabled: () => boolean
       hasServerFiles: () => boolean
+      /** Wakes the host if Orca stopped it idle; false when it did not. */
+      wakeIdleStopped?: (environmentId: string) => Promise<boolean>
     }
   ) {}
 
@@ -69,6 +71,10 @@ export class WslHostPhoneGate {
     if (wslHostRunRefusal(this.host) || !record || record.pendingStop) {
       this.confirmedStops.delete(environmentId)
       throw wslHostPhoneRefusal('hidden', record?.distro ?? environmentId)
+    }
+    if (await this.host.wakeIdleStopped?.(environmentId)) {
+      this.confirmedStops.delete(environmentId)
+      return
     }
     const before = this.statusOf(environmentId)
     // Why: no bridge in this process means nothing answers, so skip the running-list read.

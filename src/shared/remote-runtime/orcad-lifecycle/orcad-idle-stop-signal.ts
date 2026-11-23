@@ -1,8 +1,6 @@
-/** How an orcad tells its clients it stopped idle, not crashed: a desktop then leaves it down
- *  until the user needs it, instead of reconnecting or relaunching it. */
+// orcad stopped idle, not crashed: a desktop leaves it down until the user needs it (#46567).
 
-/** Every socket is closed with this once admission is fenced and no counted request is in flight,
- *  so a request still unanswered then was never dispatched and may be sent again after a wake. */
+/** Sent after admission is fenced with no counted request in flight: nothing unanswered ran. */
 export const ORCAD_IDLE_STOP_CLOSE_CODE = 4410
 export const ORCAD_IDLE_STOP_CLOSE_REASON = 'orcad stopped idle'
 

@@ -30,7 +30,7 @@ import {
 } from './runtime-environment-transport-generation'
 import { noteRuntimeEnvironmentSharedControlContact } from '../status/runtime-environment-contact-loss'
 import { declareWslHostClient } from '../../../wsl/host-lifecycle/wsl-host-client-declaration'
-import { clearWslHostIdleStop } from '../../../wsl/host-lifecycle/wsl-host-idle-stop'
+import { onWslHostIdleStopCleared } from '../../../wsl/host-lifecycle/wsl-host-idle-stop'
 import { declarePairedDesktopAccount } from './paired-desktop-account-declaration'
 
 type CachedRuntimeConnection = {
@@ -245,6 +245,9 @@ export function ensureRemoteRuntimeSharedControlConnection(
   }
 }
 
+// A woken host's held control socket reopens at once, replaying its streams (#46567).
+onWslHostIdleStopCleared(reconnectRemoteRuntimeSharedControlConnection)
+
 export function retryRemoteRuntimeSharedControlConnectionsNow(): void {
   for (const { connection } of sharedControlConnections.values()) {
     connection.retryNow()
@@ -273,8 +276,6 @@ function getSharedControlConnection(
         // R39: every ready socket, including after a reconnect, re-declares this installation, and
         // the Orca account it is signed in to.
         onReady: async () => {
-          // A server answering again is a new run: its stop must again prove it was idle.
-          clearWslHostIdleStop(environmentId)
           const request = (method: string, params: unknown, timeoutMs: number) =>
             connection.request(method, params, timeoutMs)
           declarePairedDesktopAccount(request)

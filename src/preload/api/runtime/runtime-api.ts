@@ -164,6 +164,8 @@ export type RuntimeApi = {
       expectedEnvironmentRuntimeId?: string
       /** A poll: no use of an idle WSL host, and never wakes one Orca stopped idle. */
       background?: boolean
+      /** The user asked for it: it may wake a WSL host Orca stopped idle. */
+      wake?: boolean
     }) => Promise<RuntimeRpcResponse<unknown>>
     subscribeCrewAttempt?: (
       args: CrewSubscriptionAttemptArgs,
@@ -180,6 +182,7 @@ export type RuntimeApi = {
         expectedEnvironmentPairingRevision?: number
         expectedEnvironmentRuntimeId?: string
         background?: boolean
+        wake?: boolean
       },
       callbacks: {
         onResponse: (response: RuntimeRpcResponse<unknown>) => void

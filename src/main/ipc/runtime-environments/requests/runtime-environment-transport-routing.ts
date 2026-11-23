@@ -46,8 +46,10 @@ export async function callRuntimeEnvironment(
     preparation?: ManagedRuntimeCallPreparation
     /** Support-routed reply budget once the host is reachable; timeoutMs still bounds connect and handshake. */
     responseTimeoutMs?: number
-    /** A poll, not the user: it is no use of an idle host and never wakes one Orca stopped idle. */
+    /** A poll, not the user: it is no use of an idle host. */
     background?: boolean
+    /** The user asked for it: it may wake a WSL host Orca stopped idle (#46567). */
+    wake?: boolean
   }
 ): Promise<Rpc.RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
@@ -88,8 +90,8 @@ export async function callRuntimeEnvironment(
             userDataPath,
             environment.id,
             method,
-            options?.background
-              ? { ...options.preparation, background: true }
+            options?.background || options?.wake
+              ? { ...options.preparation, background: options.background, wake: options.wake }
               : options?.preparation,
             {
               pairingRevision: expectedEnvironmentPairingRevision,
@@ -164,7 +166,7 @@ export async function callRuntimeEnvironment(
           )
           markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
           return response
-        }, options?.background),
+        }, options?.wake === true),
       options?.signal,
       params
     )

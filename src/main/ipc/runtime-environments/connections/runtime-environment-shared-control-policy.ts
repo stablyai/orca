@@ -31,8 +31,13 @@ export function sharedControlEnvironmentPolicy(
     clientCapabilities: desktopRuntimeClientCapabilities(environmentId),
     isManuallyDisconnected: () => isRuntimeEnvironmentManuallyDisconnected(environmentId),
     isCapabilityPaused: () => isRuntimeEnvironmentCapabilityPaused(environmentId),
-    isIdleStopped: () => isWslHostIdleStopped(environmentId),
-    onIdleStop: () => noteWslHostIdleStop(environmentId),
+    // Only a WSL host has a wake for its hold; any other server's idle-stop close is a plain close.
+    ...(isWslOrcadEnvironmentId(environmentId)
+      ? {
+          isIdleStopped: () => isWslHostIdleStopped(environmentId),
+          onIdleStop: () => noteWslHostIdleStop(environmentId)
+        }
+      : {}),
     prepareSleepCheck: () => prepareRecipeVmServerSleepCheck(environmentId),
     onAuthenticationRejected: () => handleSharedControlRefusal(environmentId),
     onSocketClosed: (record) => traceSharedControlSocketClose(environmentId, record)

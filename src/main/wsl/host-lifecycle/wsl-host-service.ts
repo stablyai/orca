@@ -205,7 +205,7 @@ export class WslHostService {
   async ensureForRuntimeCall(
     environmentId: string,
     isVisible: () => boolean = () => this.visible.has(environmentId),
-    background = false
+    wake = false
   ): Promise<void> {
     const record = await this.recordForEnvironment(environmentId)
     await ensureWslHostForRuntimeCall(environmentId, {
@@ -223,7 +223,7 @@ export class WslHostService {
       publishReady: (record, connection) =>
         this.setStatus(record, { state: 'ready', census: null }, connection),
       retry: () => this.ensureForRuntimeCall(environmentId),
-      background
+      wake
     })
   }
 
@@ -239,7 +239,8 @@ export class WslHostService {
     }
     this.parked.delete(record.environmentId)
     // The focused workspace's work is visible even before the window re-reports it.
-    this.ensureForRuntimeCall(record.environmentId, () => true).catch(() => {
+    // Switching to it is the user's intent, so it wakes a host Orca stopped idle (#46567).
+    this.ensureForRuntimeCall(record.environmentId, () => true, true).catch(() => {
       // Refused (stopped, settling, unconfirmed): the published status tells the panes.
     })
   }

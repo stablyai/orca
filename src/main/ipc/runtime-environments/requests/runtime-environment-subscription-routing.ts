@@ -141,10 +141,12 @@ export async function subscribeRuntimeEnvironment(
         effectiveTimeoutMs,
         callbacksWithMarkUsed,
         {
-          // Only a poll's socket is passive; a user's stream (a screencast) still holds the host.
-          clientCapabilities: preparation?.background
-            ? desktopRuntimeClientCapabilities(environment.id)
-            : ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+          // A stream's own socket is passive like the control socket (its unary calls still count);
+          // a screencast still holds the host, since no idle probe sees the page it shows.
+          clientCapabilities:
+            method === 'browser.screencast' && !preparation?.background
+              ? ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+              : desktopRuntimeClientCapabilities(environment.id),
           idlePassive: preparation?.background,
           signal
         }

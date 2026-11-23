@@ -15,7 +15,8 @@ export async function callAbortableRuntimeEnvironment(
   signal: AbortSignal,
   expectedEnvironmentPairingRevision?: number,
   expectedEnvironmentRuntimeId?: string,
-  background?: boolean
+  background?: boolean,
+  wake?: boolean
 ): Promise<RuntimeRpcResponse<unknown>> {
   if (signal.aborted) {
     throw createRuntimeRpcAbortError()
@@ -61,7 +62,8 @@ export async function callAbortableRuntimeEnvironment(
           timeoutMs,
           expectedEnvironmentPairingRevision,
           expectedEnvironmentRuntimeId,
-          ...(background ? { background: true } : {})
+          ...(background ? { background: true } : {}),
+          ...(wake ? { wake: true } : {})
         },
         {
           onResponse: (response) => finish(() => resolve(response)),

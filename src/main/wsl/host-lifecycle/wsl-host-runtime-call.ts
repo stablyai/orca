@@ -8,7 +8,7 @@ import { wslHostNotConnectedMessage } from './wsl-host-add-admission'
 import { wslHostStoppedMessage } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-stopped-message'
 import { admitConnectToPendingHost } from './wsl-host-removal'
 import type { WslOrcadConnection } from '../orcad/wsl-orcad-connection-types'
-import { clearWslHostIdleStop, isWslHostIdleStopped } from './wsl-host-idle-stop'
+import { isWslHostIdleStopped, wakeWslHostAfterIdleStop } from './wsl-host-idle-stop'
 import { RUNTIME_IDLE_STOPPED_MESSAGE } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-stop-signal'
 
 export type WslHostRuntimeCallPort = {
@@ -27,8 +27,8 @@ export type WslHostRuntimeCallPort = {
   publishReady: (record: WslHostDeploymentRecord, connection: WslOrcadConnection) => void
   /** The same call again, once the distro is confirmed running. */
   retry: () => Promise<void>
-  /** A poll or other background call: it never wakes a host Orca stopped idle. */
-  background?: boolean
+  /** The user asked for this call (a gesture, a focus, Start): only it wakes an idle-stopped host. */
+  wake?: boolean
 }
 
 /**
@@ -75,24 +75,21 @@ export async function ensureWslHostForRuntimeCall(
   await connector.connect(record.distro, { noBoot: true }).catch(rethrowRetryable(record.distro))
 }
 
-/**
- * Orca stopped this host idle (#46567): background calls stay refused so the distro may stop, and
- * the user's own call wakes it, booting the distro if needed, rather than leaving the panes on Start.
- */
+/** Orca stopped this host idle (#46567): only a user's call wakes it, booting the distro if needed. */
 async function wakeIdleStoppedHost(
   record: WslHostDeploymentRecord,
   port: WslHostRuntimeCallPort
 ): Promise<void> {
   const { environmentId, distro } = record
-  if (port.background) {
+  if (!port.wake) {
     throw wslHostRuntimeCallGuard(RUNTIME_IDLE_STOPPED_MESSAGE, 'idle')
   }
   assertWslHostRunAllowed(port.deps, port.removing, environmentId)
   await admitConnectToPendingHost(port.deps.userDataPath(), record, false)
-  // Cleared first: the woken server's control socket may reconnect once it is ready.
-  clearWslHostIdleStop(environmentId)
   port.parked.delete(environmentId)
-  await port.connector?.connect(distro).catch(rethrowRetryable(distro))
+  await wakeWslHostAfterIdleStop(environmentId, async () => {
+    await port.connector?.connect(distro).catch(rethrowRetryable(distro))
+  })
 }
 
 // verify-7: a keystroke met the stop before liveness did; parked silently, the pane died unexplained.

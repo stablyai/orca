@@ -192,6 +192,7 @@ function registerPassiveCallHandler(
         expectedEnvironmentPairingRevision?: number
         expectedEnvironmentRuntimeId?: string
         background?: boolean
+        wake?: boolean
       }
     ): Promise<RuntimeRpcResponse<unknown>> => {
       const environment = await resolveEnvironment(getUserDataPath(), args.selector)
@@ -236,7 +237,8 @@ function registerPassiveCallHandler(
           rendererOrchestrationEnvelope(args.method, accounts.params),
           {
             expectedEnvironmentRuntimeId: args.expectedEnvironmentRuntimeId,
-            background: args.background === true
+            background: args.background === true,
+            wake: args.wake === true
           }
         )
       } catch (error) {
