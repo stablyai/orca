@@ -2850,6 +2850,7 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "Çalışma ağacı silindi.",
+      "projectRemoved": "Proje Orca'dan kaldırıldı.",
       "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
     },
     "nativeChatView": {

@@ -199,10 +199,15 @@ function presentDesktopStructuredSession(
               'auto.lib.activateAiVaultStructuredSession.folderWorkspaceRemoved',
               'The folder workspace was removed.'
             )
-          : translate(
-              'auto.lib.activateAiVaultStructuredSession.worktreeDeleted',
-              'The worktree was deleted.'
-            )
+          : result.failure.workspaceKind === 'project'
+            ? translate(
+                'auto.lib.activateAiVaultStructuredSession.projectRemoved',
+                'The project was removed from Orca.'
+              )
+            : translate(
+                'auto.lib.activateAiVaultStructuredSession.worktreeDeleted',
+                'The worktree was deleted.'
+              )
       )
     } else if (result.failure.reason === 'gone') {
       if (result.failure.surface === 'terminal') {

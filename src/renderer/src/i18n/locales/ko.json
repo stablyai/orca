@@ -1900,6 +1900,7 @@
         "notLocatedNamed": "{{agent}}이(가) 실행 중인 위치를 찾을 수 없어 열 수 없습니다.",
         "notLocated": "이 에이전트가 실행 중인 위치를 찾을 수 없어 열 수 없습니다.",
         "worktreeDeleted": "워크트리가 삭제되었습니다.",
+        "projectRemoved": "프로젝트가 Orca에서 제거되었습니다.",
         "folderWorkspaceRemoved": "폴더 워크스페이스가 제거되었습니다."
       },
       "ephemeralVmWorktreeCreation": {

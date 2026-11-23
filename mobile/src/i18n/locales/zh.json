@@ -3779,6 +3779,7 @@
       "unreachable": "{{agent}} 的聊天暂不可用，请稍后重试",
       "paneUnavailable": "智能体的窗格已不可用",
       "worktreeDeleted": "工作树已删除。",
+      "projectRemoved": "项目已从 Orca 中移除。",
       "folderWorkspaceRemoved": "文件夹工作区已移除。"
     },
     "nativeChatView": {

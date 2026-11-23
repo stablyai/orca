@@ -2844,6 +2844,7 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "工作樹已刪除。",
+      "projectRemoved": "專案已從 Orca 移除。",
       "folderWorkspaceRemoved": "資料夾工作區已移除。"
     },
     "nativeChatView": {

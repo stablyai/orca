@@ -2924,6 +2924,7 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "El worktree se eliminó.",
+      "projectRemoved": "Se quitó el proyecto de Orca.",
       "folderWorkspaceRemoved": "Se quitó el espacio de trabajo de carpeta."
     },
     "nativeChatView": {
