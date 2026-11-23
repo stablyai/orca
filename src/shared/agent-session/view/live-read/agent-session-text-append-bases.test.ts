@@ -60,7 +60,7 @@ it('holds no base from a page whose turns have all ended', () => {
     throw new Error('fixture is a snapshot')
   }
   send({ ...snapshot, page: { ...snapshot.page, items: [reply('A finished reply', 1)] } })
-  expect(send.holdsBase('reply-turn-1')).toBe(false)
+  expect(send.holdsBase('reply-turn-1')).toBeNull()
   // A turn still running off the page keeps its reply's base.
   send({
     ...snapshot,
@@ -84,7 +84,7 @@ it('lets go of its bases once a turn ends, sending the next reply text whole', (
   for (const event of [snapshot, batch(4, [reply('Hel', 1)]), batch(5, [turnEnd])]) {
     read(send(event))
   }
-  expect(send.holdsBase('reply-turn-1')).toBe(false)
+  expect(send.holdsBase('reply-turn-1')).toBeNull()
   const next = send(batch(6, [reply('Hello', 2)]))
   expect(sentItems(next)).toEqual([reply('Hello', 2)])
   // The reader, which still holds its base, takes the whole row.
@@ -99,7 +99,7 @@ it("keeps a running reply's base when an older turn's row is revised", () => {
   send(batch(5, [turnRow('turn-1', 3)]))
   expect(send.holdsBase('reply-turn-2')).toBe(true)
   send(batch(6, [turnRow('turn-2', 2)]))
-  expect(send.holdsBase('reply-turn-2')).toBe(false)
+  expect(send.holdsBase('reply-turn-2')).toBeNull()
 })
 
 it('evicts as its reader does, so a row outliving many finished turns still reads', () => {

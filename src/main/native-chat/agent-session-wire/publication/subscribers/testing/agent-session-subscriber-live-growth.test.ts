@@ -37,7 +37,7 @@ const reply = (text: string): AgentJournalRenderItem => ({
   body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }
 })
 
-function stream(boundedFrames: boolean, holdsTextBase?: () => boolean) {
+function stream(boundedFrames: boolean, holdsTextBase?: () => boolean | null) {
   const events: AgentSessionSubscribeEvent[] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: live publication reads only these subscriber fields.
   const subscriber = {

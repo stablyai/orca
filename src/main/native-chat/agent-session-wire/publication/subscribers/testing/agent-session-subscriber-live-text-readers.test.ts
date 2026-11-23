@@ -4,6 +4,7 @@ import {
   liveTextRecipients,
   noteLiveRowsHeld,
   noteLiveTextReadersChanged,
+  sentRowsAfter,
   sessionLiveTextFanOut,
   sessionLiveTextReaders
 } from '../agent-session-subscriber-live-text-readers'
@@ -99,6 +100,22 @@ it('does not send a row whole again while it waits for its save to restore its a
   // A provider timeline's row (it saves only at block ends) still goes whole, as before.
   await publish([live('kept', 'aaaa'), live('evicted', 'bb')])
   expect(sent.at(-1)).toEqual(['kept', 'evicted'])
+})
+
+it('keeps a row awaiting its append base, and lets go of one whose turn ended', () => {
+  const bases = new Map<string, boolean | null>([
+    ['awaiting', false],
+    ['ended', null]
+  ])
+  const reader = subscriber({ holdsTextBase: (id) => (bases.has(id) ? bases.get(id)! : false) })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: carrying a row reads none of it.
+  const row = {} as never
+  const before = new Map([
+    ['awaiting', row],
+    ['ended', row]
+  ])
+  // Unbounded otherwise: every finished reply would ride along in each later publication.
+  expect([...sentRowsAfter(reader, before, []).keys()]).toEqual(['awaiting'])
 })
 
 it('splits one publication into frames that each stay within the budget', () => {

@@ -123,7 +123,8 @@ function textAppendStream(
   rules: TextAppendRules,
   mapItem: (base: string | undefined, item: AgentJournalRenderItem) => AgentJournalRenderItem | null
 ): ((event: AgentSessionSubscribeEvent) => AgentSessionSubscribeEvent | null) & {
-  holds: (itemId: string) => boolean
+  /** Null once its turn ended and the base was let go of: no live row awaits it. */
+  holds: (itemId: string) => boolean | null
   /** Lets go of every base, or only those of rows the given turns own. */
   release: (turnItemIds?: ReadonlySet<string>) => void
 } {
@@ -184,7 +185,10 @@ function textAppendStream(
     return changed ? { ...event, batch: { ...event.batch, items } } : event
   }
   return Object.assign(stream, {
-    holds: (itemId: string) => typeof bases.get(itemId) === 'string',
+    holds: (itemId: string) => {
+      const base = bases.get(itemId)
+      return base === null ? null : base !== undefined
+    },
     release: (turnItemIds?: ReadonlySet<string>) => {
       for (const itemId of bases.keys()) {
         const turn = turnOf.get(itemId)
@@ -202,7 +206,9 @@ function textAppendStream(
 export function sendingTextAppends<R>(
   emit: (event: AgentSessionSubscribeEvent) => R,
   rules: TextAppendRules
-): ((event: AgentSessionSubscribeEvent) => R) & { holdsBase: (itemId: string) => boolean } {
+): ((event: AgentSessionSubscribeEvent) => R) & {
+  holdsBase: (itemId: string) => boolean | null
+} {
   const send = textAppendStream(rules, (base, item) => {
     const text = growingText(item, rules)
     if (base === undefined || text === null || !textExtends(item, text, base)) {
