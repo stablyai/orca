@@ -127,7 +127,8 @@ export function externalChromiumCommandArguments(
       const args = splitAgentBrowserCommandLine(text('command'), { keepEmptyWords: true })
       assertAgentBrowserPassthroughStaysOnPage(args)
       return resolveCallerPassthroughPaths(args, {
-        cwd: typeof params.cwd === 'string' ? params.cwd : undefined
+        cwd: typeof params.cwd === 'string' ? params.cwd : undefined,
+        wslDistro: typeof params.wslDistro === 'string' ? params.wslDistro : undefined
       })
     }
     case 'browserSetViewport':

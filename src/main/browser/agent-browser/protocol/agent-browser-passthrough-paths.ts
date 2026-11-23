@@ -15,14 +15,22 @@ type PathOperands = {
   positional?: (operands: readonly string[]) => readonly number[]
 }
 
-// A lone `#photo.png` or `[src$=.png]` is still a selector.
-const IMAGE_FILE = /^(?![#[@]|\.[^./]).*\.(png|jpe?g|webp)$/i
+// agent-browser 0.43's own test for a lone `screenshot` operand: a path, or else a selector.
+function isLoneScreenshotPath(word: string): boolean {
+  if (word.startsWith('./') || word.startsWith('../')) {
+    return true
+  }
+  if (word.startsWith('.') || word.startsWith('#') || word.startsWith('@')) {
+    return false
+  }
+  return word.includes('/') || /\.(png|jpg|jpeg|webp)$/.test(word)
+}
 
 const PATH_OPERANDS: Record<string, PathOperands> = {
-  // `screenshot [selector] [path]`: a lone operand is a path only when it names an image.
+  // `screenshot [selector] [path]`: a lone operand may be either.
   screenshot: {
     valueOptions: ['--threshold'],
-    positional: (ops) => (ops.length >= 2 ? [1] : IMAGE_FILE.test(ops[0] ?? '') ? [0] : [])
+    positional: (ops) => (ops.length >= 2 ? [1] : isLoneScreenshotPath(ops[0] ?? '') ? [0] : [])
   },
   pdf: { positional: () => [0] },
   download: { positional: () => [1] },
@@ -40,7 +48,7 @@ const PATH_OPERANDS: Record<string, PathOperands> = {
     valueOptions: ['--content'],
     positional: (ops) => (ops[0] === 'har' && ops[1] === 'stop' ? [2] : [])
   },
-  wait: { pathOptions: ['--download'] },
+  wait: { pathOptions: ['--download', '-d'] },
   diff: { pathOptions: ['--baseline', '-b', '--output', '-o'] },
   cookies: { pathOptions: ['--curl'] }
 }
@@ -76,7 +84,7 @@ export function resolveAgentBrowserPassthroughPaths(
     const word = args[index]!
     if (grammar.pathOptions?.includes(word)) {
       const value = args[index + 1]
-      if (value !== undefined && !value.startsWith('-')) {
+      if (value !== undefined && !value.startsWith('--')) {
         resolved[index + 1] = resolveFileWord(value, resolvePath)
         index += 1
       }

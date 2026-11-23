@@ -19,6 +19,18 @@ describe('resolveAgentBrowserPassthroughPaths', () => {
       ['screenshot', '#photo.png']
     ],
     [
+      ['screenshot', 'img.PNG'],
+      ['screenshot', 'img.PNG']
+    ],
+    [
+      ['screenshot', './shot'],
+      ['screenshot', '/caller/./shot']
+    ],
+    [
+      ['wait', '-d', 'r.pdf'],
+      ['wait', '-d', '/caller/r.pdf']
+    ],
+    [
       ['screenshot', '../up.png'],
       ['screenshot', '/caller/../up.png']
     ],
