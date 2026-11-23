@@ -57,6 +57,8 @@ export type MobileStructuredQueuedMessageControls = {
   agentMailEditable: (messageId: string) => boolean
 }
 
+const NO_ITEMS: readonly AgentJournalRenderItem[] = []
+
 export function useMobileStructuredQueuedMessageControls(args: {
   sessionKey: string
   sessionId: string | null
@@ -99,14 +101,16 @@ export function useMobileStructuredQueuedMessageControls(args: {
   })
   const orderedMessages = composerActions.messages
   const agentWorking = args.agentWorking === true
+  // Only a returned card's caption reads the transcript, so streaming leaves the cards alone otherwise.
+  const failureItems = queuedMessages?.some((draft) => draft.state === 'returned')
+    ? (args.journalItems ?? NO_ITEMS)
+    : null
   const allCards = useMemo(() => {
     const visibleCards = mobileQueuedMessageCards(queuedMessages, submissions, {
       agentWorking,
       queuePaused: queuePause !== null,
       agentName: args.agentName,
-      statedFailures: queuedMessages?.some((draft) => draft.state === 'returned')
-        ? agentSessionVisibleFailureFacts(args.journalItems ?? [])
-        : []
+      statedFailures: failureItems ? agentSessionVisibleFailureFacts(failureItems) : []
     })
     // Preview changes display order; published membership and current handoff visibility stay intact.
     const visibleById = new Map(visibleCards.map((card) => [card.messageId, card]))
@@ -117,7 +121,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
   }, [
     agentWorking,
     args.agentName,
-    args.journalItems,
+    failureItems,
     orderedMessages,
     queuePause,
     queuedMessages,
