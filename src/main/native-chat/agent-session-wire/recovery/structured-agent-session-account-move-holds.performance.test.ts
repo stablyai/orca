@@ -1,6 +1,9 @@
-// Perf contract for #43145: a Dispatch end reaches only the chats held on it, so other ends cost
-// no visits or wakes at 10 or 100 held chats. Fails when the keyed index is reverted to a walk.
-import { afterEach, expect, it } from 'vitest'
+// Perf contracts for #43145: a Dispatch end reaches only the chats held on it, so other ends cost
+// no visits or wakes at 10 or 100 held chats; a hold's fallback check backs off while its work
+// lasts. Each fails when its fix is reverted (a walk of every hold; a fixed two-minute check).
+import { afterEach, expect, it, vi } from 'vitest'
+import { AccountMoveHolds } from './structured-agent-session-account-move-holds'
+import type { StructuredAgentSessionAccountTransition } from './structured-agent-session-outgrown-child'
 import {
   disposeHeldOnDispatch,
   heldOnDispatch
@@ -27,3 +30,39 @@ it.each([10, 100])(
     expect(chats.wake.mock.calls).toEqual([['chat-3']])
   }
 )
+
+it('checks a hold on long-lived child work or a Dispatch 4 times in an hour, and one waiting on a turn never', () => {
+  vi.useFakeTimers()
+  try {
+    const transitions: Record<string, StructuredAgentSessionAccountTransition> = {
+      'child-work': { cause: 'account', waitsFor: 'child-work', from: null, to: null },
+      dispatch: { cause: 'account', waitsFor: 'dispatch', from: null, to: null },
+      turn: { cause: 'account', waitsFor: 'turn', from: null, to: null }
+    }
+    const sessions = new Map(Object.keys(transitions).map((id) => [id, { child: { fence: 1 } }]))
+    const wakes = new Map<string, number>()
+    const holds: AccountMoveHolds = new AccountMoveHolds({
+      // Each check reads the chat again and finds the same work still owed.
+      wake: (id) => {
+        wakes.set(id, (wakes.get(id) ?? 0) + 1)
+        holds.observe(sessions.get(id), id, transitions[id]!, 'sweep')
+      },
+      wakes: () => undefined,
+      dispatchKey: (id) => `structured:${id}`,
+      dispatchOpen: () => true,
+      now: () => Date.now(),
+      sessions
+    })
+    for (const [id, transition] of Object.entries(transitions)) {
+      holds.observe(sessions.get(id), id, transition, 'sweep')
+    }
+
+    vi.advanceTimersByTime(60 * 60_000)
+
+    // Two, then four, eight and sixteen minutes later; a fixed two-minute check would make 30.
+    expect(Object.fromEntries(wakes)).toEqual({ 'child-work': 4, dispatch: 4 })
+    holds.dispose()
+  } finally {
+    vi.useRealTimers()
+  }
+})

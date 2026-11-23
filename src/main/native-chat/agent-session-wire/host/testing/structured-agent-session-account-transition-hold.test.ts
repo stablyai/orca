@@ -298,3 +298,37 @@ it('reads the account again when the selection changes with no edge, so a send n
   await eventually(() => expect(chat.dispatchedTo('after the prune')).toHaveLength(1))
   expect(chat.dispatchedTo('after the prune')).not.toEqual([chat.accountA])
 })
+
+it("continues a usage-limited worker past the person's held message, then sends that message once on the new account", async () => {
+  const chat = await chatOnAccountA()
+  chat.setOpenDispatch(true)
+  await chat.limited()
+  chat.switchTo('/homes/b')
+  await rig!.send('after the dispatch').result
+  await eventually(async () =>
+    expect(await rig!.drafts()).toEqual([expect.objectContaining({ state: 'waiting' })])
+  )
+  // Resuming the queue the failed turn paused makes the held message the queue's next card.
+  expect(await rig!.resume()).toMatchObject({ ok: true })
+  await chat.sweep(15_000)
+  await chat.sweep(15_000)
+  // Its Dispatch closes only after this continue, so a continue the held message refused would
+  // leave both waiting for good.
+  await eventually(() =>
+    expect(chat.dispatchedTo('Continue where you left off')).toEqual([chat.accountA])
+  )
+  expect(chat.dispatchedTo('after the dispatch')).toEqual([])
+
+  chat.closeDispatch()
+  await eventually(() => expect(chat.dispatchedTo('after the dispatch')).toHaveLength(1))
+  expect(chat.dispatchedTo('after the dispatch')).not.toEqual([chat.accountA])
+})
+
+it('sends on the old account when the person switches back while the move is still being read', async () => {
+  const chat = await chatOnAccountA()
+  chat.background([devServer()])
+  chat.switchTo('/homes/b')
+  chat.switchDuringNextAccountRead('/homes/a')
+  await rig!.send('back on a').result
+  await eventually(() => expect(chat.dispatchedTo('back on a')).toEqual([chat.accountA]))
+})

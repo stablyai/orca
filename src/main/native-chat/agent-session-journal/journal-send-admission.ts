@@ -13,6 +13,9 @@ export type JournalSendAdmission = {
   /** The running agent still owes work on an account the chat is leaving: a send not from another
    *  agent waits as a card until a start on the new account can take it. */
   awaitsAccountMove?: true
+  /** The person's cards wait for the move while this send goes ahead of them, so they don't
+   *  count as the chat having moved on. */
+  passesHeldCards?: true
 }
 
 export type JournalSendAdmissionResult =

@@ -13,10 +13,11 @@ type HeldSession = Pick<StructuredAgentSessionHostSession, 'awaitsAccountMove'> 
 import type { StructuredAgentSessionAccountTransition } from './structured-agent-session-outgrown-child'
 
 /** A turn, prompt, held send or owed wake-up ends with a write in the chat itself, so each drain
- *  reads that work again; child work and a Dispatch end on an edge, and a two-minute check
- *  catches a missed one. */
+ *  reads that work again; an owed wake-up is also read at its deadline. Child work and a Dispatch
+ *  end on an edge: a check two minutes on catches a missed one, backing off while the work lasts. */
 const SETTLES_IN_CHAT = new Set(['turn', 'prompt', 'held-send', 'wake-up'])
 const HOLD_CHECK_MS = 2 * 60_000
+const HOLD_CHECK_MAX_MS = 32 * 60_000
 
 /** Who waits on a hold: the person's queued cards, or a usage-limit continue that is due. */
 export type AccountMoveReader = 'person' | 'sweep'
@@ -26,7 +27,9 @@ type Hold = {
   fence: number
   /** `work`: read owed work again; `account`: read everything again. */
   stale: 'none' | 'work' | 'account'
-  timer: ReturnType<typeof setTimeout>
+  timer: ReturnType<typeof setTimeout> | undefined
+  /** How long after this read the hold is checked again, when no edge settles it first. */
+  checkMs: number
   readers: Set<AccountMoveReader>
   /** Set while it waits on the chat's own Dispatch: the key that Dispatch's end is reported by. */
   dispatchKey?: string
@@ -160,15 +163,21 @@ export class AccountMoveHolds {
     if (previous) {
       clearTimeout(previous.timer)
     }
-    const until = transition.wakeUpUntil ?? this.deps.now() + HOLD_CHECK_MS
-    const timer = setTimeout(
-      () => {
-        this.stale(sessionId, 'work')
-        this.wakeOrRelease(sessionId)
-      },
-      Math.max(0, until - this.deps.now()) + 1
-    )
-    timer.unref?.()
+    const checkMs = previous ? Math.min(previous.checkMs * 2, HOLD_CHECK_MAX_MS) : HOLD_CHECK_MS
+    const until =
+      transition.wakeUpUntil ??
+      (SETTLES_IN_CHAT.has(transition.waitsFor) ? undefined : this.deps.now() + checkMs)
+    const timer =
+      until === undefined
+        ? undefined
+        : setTimeout(
+            () => {
+              this.stale(sessionId, 'work')
+              this.wakeOrRelease(sessionId)
+            },
+            Math.max(0, until - this.deps.now()) + 1
+          )
+    timer?.unref?.()
     const readers = previous?.readers ?? new Set<AccountMoveReader>()
     readers.add(reader)
     this.leaveDispatch(sessionId)
@@ -179,6 +188,7 @@ export class AccountMoveHolds {
       fence: session.child.fence,
       stale: 'none',
       timer,
+      checkMs,
       readers,
       ...(dispatchKey === undefined ? {} : { dispatchKey })
     }
@@ -232,6 +242,8 @@ export class AccountMoveHolds {
   private edge(edge: StructuredAgentSessionAccountMoveEdge): void {
     if (edge.kind === 'account') {
       this.selection++
+      // A read begun before the change may have seen the old selection: none may install it.
+      this.reading.clear()
     }
     const ids =
       edge.kind === 'account'

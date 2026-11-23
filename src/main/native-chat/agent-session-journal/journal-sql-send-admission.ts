@@ -124,7 +124,8 @@ export function applyJournalSqlSendAdmission(
         now: savedAt,
         automatic: false,
         steer: false,
-        mail: facts.mail
+        mail: facts.mail,
+        ...(operation.passesHeldCards ? { awaitsAccountMove: true as const } : {})
       })
       if (next.kind === 'needs-custody') {
         return empty(next)

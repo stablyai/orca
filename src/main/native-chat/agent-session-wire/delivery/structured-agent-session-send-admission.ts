@@ -109,6 +109,7 @@ export async function admitStructuredAgentSessionSend(
         deliveryMode: params.delivery === 'queue-if-active' ? 'queue' : 'steer',
         ...(queueOnly ? { queueOnly: true } : {}),
         ...(transition ? { awaitsAccountMove: true } : {}),
+        ...(passes ? { passesHeldCards: true } : {}),
         ...(params.usageLimitContinuationOfTurnItemId !== undefined
           ? { continuationOfTurnItemId: params.usageLimitContinuationOfTurnItemId }
           : {})

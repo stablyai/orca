@@ -75,3 +75,34 @@ function undeliveredForMove() {
     }
   )
 }
+
+const KEEP_RETRY_MS = 5_000
+const KEEP_RETRY_MAX_MS = 5 * 60_000
+
+/** Retries of a keep that failed, per chat: nothing else wakes a send left pending, so each tries
+ *  again later than the last, never in a tight loop, until a keep settles. */
+export class AccountMoveKeepRetries {
+  private readonly retries = new Map<string, { timer: ReturnType<typeof setTimeout>; ms: number }>()
+
+  constructor(private readonly wake: (sessionId: string) => void) {}
+
+  failed(sessionId: string): void {
+    const previous = this.retries.get(sessionId)
+    const ms = previous ? Math.min(previous.ms * 2, KEEP_RETRY_MAX_MS) : KEEP_RETRY_MS
+    const timer = setTimeout(() => this.wake(sessionId), ms)
+    timer.unref?.()
+    this.retries.set(sessionId, { timer, ms })
+  }
+
+  settled(sessionId: string): void {
+    clearTimeout(this.retries.get(sessionId)?.timer)
+    this.retries.delete(sessionId)
+  }
+
+  dispose(): void {
+    for (const { timer } of this.retries.values()) {
+      clearTimeout(timer)
+    }
+    this.retries.clear()
+  }
+}

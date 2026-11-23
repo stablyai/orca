@@ -22,7 +22,10 @@ import {
   AccountMoveHolds,
   type AccountMoveReader
 } from './structured-agent-session-account-move-holds'
-import { keepStructuredAgentSessionSendForAccountMove } from './structured-agent-session-account-move-keep'
+import {
+  AccountMoveKeepRetries,
+  keepStructuredAgentSessionSendForAccountMove
+} from './structured-agent-session-account-move-keep'
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
 
 export type StructuredAgentSessionAccountTransitionRead = (
@@ -34,8 +37,6 @@ export type StructuredAgentSessionAccountTransitionRead = (
     reader?: AccountMoveReader
   }
 ) => Promise<StructuredAgentSessionAccountTransition | null>
-
-const KEEP_RETRY_MS = 5_000
 
 export function createStructuredAgentSessionOutgrownChildHost(input: {
   deps: StructuredAgentSessionHostDeps
@@ -71,6 +72,7 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
   // Personal Stop holds handover meanwhile; its next step decides.
   const unlessStopping = async (sessionId: string) =>
     (await clientDelivery.readStopping(sessionId)) ? undefined : sessions.get(sessionId)
+  const keepRetries = new AccountMoveKeepRetries((sessionId) => input.wake(sessionId))
   const holds = new AccountMoveHolds({
     wake: input.wake,
     wakes: () => deps.accountMoveWakes,
@@ -132,8 +134,9 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
         deps.logger
       )
       if (kept === 'failed') {
-        // Nothing else may wake a send left pending; try again shortly, never in a tight loop.
-        setTimeout(() => input.wake(sessionId), KEEP_RETRY_MS).unref?.()
+        keepRetries.failed(sessionId)
+      } else {
+        keepRetries.settled(sessionId)
       }
       if (kept === 'not-persons') {
         return outcome
@@ -184,6 +187,9 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
       holds.forget(sessions.get(sessionId), sessionId, reader)
       return null
     },
-    dispose: () => holds.dispose()
+    dispose: () => {
+      holds.dispose()
+      keepRetries.dispose()
+    }
   }
 }
