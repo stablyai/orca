@@ -137,15 +137,22 @@ describe('managedRuntimeInstallView while installing', () => {
     expect(view.action?.kind).toBe('cancel')
   })
 
-  it('names the agent only for screen readers while verifying', () => {
-    const view = viewOf(installing('verifying'))
-    expect(view.status).not.toContain('Antigravity')
-    expect(view.spokenStatus).toContain('Antigravity')
-  })
+  it.each(['extracting', 'verifying'] as const)(
+    'names the agent only for screen readers while %s',
+    (phase) => {
+      const view = viewOf(installing(phase))
+      expect(view.status).not.toContain('Antigravity')
+      expect(view.spokenStatus).toContain('Antigravity')
+    }
+  )
 
-  it('has no separate spoken status while unpacking, whose copy names no agent either way', () => {
-    expect(viewOf(installing('extracting')).spokenStatus).toBeNull()
-  })
+  it.each([100_000_000, null])(
+    'lets the downloaded amount wrap whole, with total %s',
+    (totalBytes) => {
+      expect(viewOf(installing('downloading', 40_000_000, totalBytes)).count).toBe(true)
+      expect(viewOf(installing('verifying')).count).toBe(false)
+    }
+  )
 })
 
 describe('managedRuntimeInstallView reasons', () => {

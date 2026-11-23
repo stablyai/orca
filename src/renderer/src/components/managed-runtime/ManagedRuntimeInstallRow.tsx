@@ -65,10 +65,10 @@ export function ManagedRuntimeInstallRow(props: {
     chosen.kind === 'cancel'
       ? cancelManagedRuntimeInstall(subject, chosen.operationId)
       : installManagedRuntime(subject)
-  // Status truncates to one line. A line with an error, a reason, a note or a download bar wraps
-  // instead: an error or reason is read whole, "Not installed" shouldn't truncate, and the bar
-  // moves under the download count with Cancel rather than squeezing it.
-  const wraps = Boolean(alert || view.reason || view.note || view.progress !== null)
+  // Status truncates to one line. A line with an error, a reason, a note or a download wraps
+  // instead: an error, reason or downloaded amount is read whole, "Not installed" shouldn't
+  // truncate, and the bar or Cancel moves under the download count rather than squeezing it.
+  const wraps = Boolean(alert || view.reason || view.note || view.count || view.progress !== null)
   const parts: {
     key: string
     node: React.ReactNode

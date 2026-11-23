@@ -23,6 +23,8 @@ export type ManagedRuntimeInstallView = {
   removing: boolean
   /** The status explains a problem (unavailable, damaged, outdated), so it wraps whole instead of truncating. */
   reason: boolean
+  /** The status reports how much has downloaded, so it wraps whole instead of truncating. */
+  count: boolean
   /** A step with no percent runs (unpacking, verifying, removing, a download of unknown size), so Settings shows a spinner. */
   busy: boolean
   note: string | null
@@ -41,6 +43,7 @@ const EMPTY: ManagedRuntimeInstallView = {
   removable: false,
   removing: false,
   reason: false,
+  count: false,
   busy: false,
   note: null
 }
@@ -60,12 +63,13 @@ function runningView(
     return null
   }
   const verifying = !cancelling && phase === 'verifying'
+  const extracting = !cancelling && phase === 'extracting'
   // Only a known, positive size gives a percent; without one the download spins like the other steps.
   const sized = phase === 'downloading' && total !== null && total > 0 ? total : null
   const status = cancelling
     ? t('components.managed-runtime.cancelling', 'Cancelling…')
-    : phase === 'extracting'
-      ? t('components.managed-runtime.extracting', 'Unpacking…')
+    : extracting
+      ? t('components.managed-runtime.extractingShort', 'Unpacking…')
       : verifying
         ? t('components.managed-runtime.verifying', 'Verifying…')
         : sized === null
@@ -83,7 +87,10 @@ function runningView(
     status,
     spokenStatus: verifying
       ? t('components.managed-runtime.verifyingAgent', 'Verifying {{agent}}…', { agent })
-      : null,
+      : extracting
+        ? t('components.managed-runtime.extracting', 'Unpacking {{agent}}…', { agent })
+        : null,
+    count: !cancelling && phase === 'downloading',
     progress: sized === null ? null : Math.min(100, (done / sized) * 100),
     busy: sized === null,
     action: { kind: 'cancel', label, operationId: operation.id }
@@ -126,11 +133,9 @@ function settledView(
   // Remove is, since the user asked for it from this row.
   if (state.source === 'external') {
     return {
-      ...view(t('components.managed-runtime.external', 'Uses your own copy'), null),
+      ...view(t('components.managed-runtime.externalShort', 'Uses your own copy'), null),
       error: operation?.kind === 'install' ? null : error,
-      spokenStatus: t('components.managed-runtime.externalAgent', 'Uses your own {{agent}}', {
-        agent
-      })
+      spokenStatus: t('components.managed-runtime.external', 'Uses your own {{agent}}', { agent })
     }
   }
   if (state.installedVersion !== null && state.updatesAutomatically) {
