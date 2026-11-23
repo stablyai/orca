@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { JournalConversionStorageError, JournalSqlConversions } from './journal-sql-conversions'
 import { JournalSqlBackgroundMaintenance } from './journal-sql-background-maintenance'
 import { JournalSqlActivity } from './journal-sql-activity'
-import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
+import type { JournalSqlConversionReader, JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalConversionStorage } from './journal-conversion-storage'
 
 const GB = 1024 ** 3
@@ -16,28 +16,33 @@ afterEach(() => {
 
 function conversion(storage: () => JournalConversionStorage, pages = 1, sessionIds = ['chat']) {
   const writes: string[] = []
-  const readers = {
-    database: async ({ kind, after }: { kind: string; after: string | null }) =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep reads only these three page kinds.
-      kind === 'retired-heads'
-        ? { kind, heads: [], through: null }
-        : { kind, sessionIds: kind === 'sessions' && after === null ? sessionIds : [] },
+  const readers: Pick<
+    JournalSqlReaderPool,
+    'database' | 'compareLegacyChat' | 'importState' | 'prepareConversion' | 'conversionStorage'
+  > = {
+    database: async (read) =>
+      read.kind === 'retired-heads'
+        ? { kind: 'retired-heads', heads: [], through: null }
+        : read.kind === 'forgotten-chats'
+          ? { kind: 'forgotten-chats', sessionIds: [] }
+          : {
+              kind: 'sessions',
+              sessionIds: read.kind === 'sessions' && !read.after ? sessionIds : []
+            },
     compareLegacyChat: async () => null,
-    importState: async () => ({ state: 'converting' as const, epoch: null }),
-    prepareConversion: async (sessionId: string) => {
+    importState: async () => ({ state: 'converting', epoch: null }),
+    prepareConversion: async (sessionId) => {
       let read = 0
-      return {
+      const reader = {
         header: { sessionId, workspaceId: 'workspace', epoch: 'epoch' },
         next: async () => (read++ < pages ? { kind: 'items' as const, rows: [] } : null),
         close: async () => {}
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: conversions use only header, next and close.
+      return reader as unknown as JournalSqlConversionReader
     },
     conversionStorage: async () => storage()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this focused fixture only reaches conversion calls.
-  } as unknown as Pick<
-    JournalSqlReaderPool,
-    'database' | 'compareLegacyChat' | 'importState' | 'prepareConversion' | 'conversionStorage'
-  >
+  }
   const writer = {
     maintain: async (operation: { kind: string }) => {
       writes.push(operation.kind)

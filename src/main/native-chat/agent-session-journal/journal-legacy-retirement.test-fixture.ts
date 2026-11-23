@@ -12,7 +12,7 @@ import { journalDatabasePath } from './database/journal-host-database'
 import { JournalSqlBatch } from './journal-sql-batch'
 import { applyJournalSqlMaintenance, type JournalSqlMaintenance } from './journal-sql-maintenance'
 import { readJournalLegacyProofPage } from './journal-legacy-source-proof'
-import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
+import type { JournalSqlConversionReader, JournalSqlReaderPool } from './journal-sql-reader-pool'
 import { journalDomainImportState } from './journal-domain-import-rows'
 import { prepareJournalDomainImport } from './journal-domain-import'
 import { journalLegacyConversionSource } from './database/journal-legacy-source'
@@ -171,17 +171,15 @@ export async function profile(
             return null
           }
           const { pages, ...header } = prepared
-          return {
+          const reader = {
             header: from === id ? header : { ...header, sessionId: id, sourceRevision: null },
             next: async () => pages.next().value ?? null,
             close: async () => {}
           }
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: conversions use only header, next and close.
+          return reader as unknown as JournalSqlConversionReader
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: conversions only call next and close on a prepared reader.
-      } as unknown as Pick<
-        JournalSqlReaderPool,
-        'importState' | 'conversionStorage' | 'database' | 'compareLegacyChat' | 'prepareConversion'
-      >,
+      },
       async () => {}
     )
   const conversions = {
