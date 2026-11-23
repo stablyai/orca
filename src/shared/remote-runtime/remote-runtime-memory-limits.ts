@@ -81,10 +81,13 @@ export function serializeRemoteRuntimeRpcRequest(args: {
   params: unknown
   envelope?: RuntimeOrchestrationEnvelope
   maxBytes?: number
+  /** Background traffic (a poll): a host whose control socket is passive doesn't count it as use. */
+  idlePassive?: boolean
 }): string {
   return serializeRemoteRuntimePayload(
     {
       id: args.requestId,
+      ...(args.idlePassive ? { idlePassive: true } : {}),
       deviceToken: args.deviceToken,
       method: args.method,
       params: args.params,

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { type Bot, botFolderName } from '../../shared/bot-types'
+import { templateBotFolderName } from '../../shared/bots/bot-template-view'
 import {
   assertBotOwnsHome,
   botsRootFolder,
@@ -114,6 +115,15 @@ describe('bot folder names', () => {
     ['LPT1', 'lpt1-bot']
   ])('%s → %s', (name, folder) => {
     expect(botFolderName(name)).toBe(folder)
+  })
+
+  it("files a template's bot under the template's English name while it keeps the proposed name", () => {
+    const folder = (botName: string) =>
+      templateBotFolderName(botName, { name: 'Pull request review' }, 'PR 리뷰')
+    expect(folder('PR 리뷰')).toBe('pull-request-review')
+    expect(folder('PR 리뷰 2')).toBe('pull-request-review-2')
+    expect(folder('우리 팀 PR 리뷰')).toBe('pr')
+    expect(folder('Straße')).toBe('stra-e')
   })
 
   it('caps long names without a trailing dash', () => {

@@ -141,16 +141,18 @@ export class StructuredAgentSessionBackgroundTaskChannel {
   /** Child records define the roster even after the provider releases the session. */
   read(sessionId: string): AgentSessionBackgroundTaskState | null {
     const session = this.sessions.get(sessionId)
+    const workerDock = this.deps.readWorkerDockPresence?.(sessionId)
     const views = structuredRunningChildWork((session && this.readChildWork(sessionId)) ?? [])
     // Untracked work still needs a visible Stop.
     const incomplete = this.childWorkIncomplete(sessionId)
-    if (!session || (views.length === 0 && !incomplete)) {
+    if (!session || (views.length === 0 && !incomplete && !workerDock)) {
       return null
     }
     const stops = this.deps.adapter.backgroundTaskStops?.(sessionId)
     const { tasks, settledTasks } = structuredChildWorkLegacyTasks(views, session.params.provider)
     return {
       state: 'monitoring',
+      ...(workerDock ? { workerDock } : {}),
       ...(tasks ? { tasks } : {}),
       ...(settledTasks ? { settledTasks } : {}),
       ...(stops?.supportsTaskStop ? { supportsTaskStop: true } : {}),

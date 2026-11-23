@@ -36,7 +36,8 @@ async function hostChatRoute(runtime: OrcaRuntimeService) {
     settings
   )
   // The settings the route answered for go with its answer, so the two never mix snapshots.
-  return { agy: input ? (await antigravityHostChatRoute(input)).agy : false, settings }
+  const route = input ? await antigravityHostChatRoute(input) : null
+  return { agy: route?.agy ?? false, orcaHome: route?.orcaHome === true, settings }
 }
 
 /** Which sign-in new Google-account chats use: agy whenever the route sends them there, signed in
@@ -65,6 +66,7 @@ export async function withAntigravityChatBackend(
   const route = await withTimeout(
     hostChatRoute(runtime).catch(() => ({
       agy: false as const,
+      orcaHome: false,
       settings: runtime.requireStore().getSettings()
     })),
     CHAT_BACKEND_WAIT_MS,
@@ -80,6 +82,7 @@ export async function withAntigravityChatBackend(
     ...state,
     chatUsesAgy: agy === 'signedIn',
     chatAgySignedOut: agy === 'signedOut',
+    ...(route.orcaHome ? { chatKeyOnAgy: true } : {}),
     ...(inUse ? { chatGoogleSignInInUse: inUse } : {}),
     ...(version ? { chatAgyVersion: version } : {})
   }

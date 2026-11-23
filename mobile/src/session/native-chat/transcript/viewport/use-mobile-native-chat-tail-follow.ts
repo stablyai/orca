@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Platform, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
+import { Platform } from 'react-native'
 import { forgetMobileNativeChatPlace } from './use-mobile-native-chat-place-keeper'
 
 const AT_TAIL_SLOP = 80
@@ -24,7 +24,10 @@ export type MobileScrollTailMetrics = {
   layoutMeasurement: { height: number }
 }
 
-function distanceFromTail(event: MobileScrollTailMetrics): number {
+/** A scroll event as the tail reads it. */
+type MobileScrollTailEvent = { nativeEvent: MobileScrollTailMetrics }
+
+export function distanceFromTail(event: MobileScrollTailMetrics): number {
   const { contentOffset, contentSize, layoutMeasurement } = event
   return contentSize.height - (contentOffset.y + layoutMeasurement.height)
 }
@@ -52,13 +55,14 @@ export type MobileNativeChatTailFollow = {
   pinToTail: () => void
   pinToTailAfterContentResize: (_width: number, height: number) => void
   jumpToTail: () => void
+  releaseFollow: () => void
   scrollRowToTop: (key: string) => void
   beginUserScroll: () => void
-  endUserDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
+  endUserDrag: (event: MobileScrollTailEvent) => void
   beginMomentum: () => void
-  endMomentum: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
+  endMomentum: (event: MobileScrollTailEvent) => void
   scrollMayLoadEarlier: () => boolean
-  recordScrollMetrics: (event: NativeScrollEvent) => void
+  recordScrollMetrics: (event: MobileScrollTailMetrics) => void
 }
 
 // Use one non-animated follower: competing animated endpoints drift backward during streaming.
@@ -124,7 +128,7 @@ export function useMobileNativeChatTailFollow(args: {
   }, [])
 
   const recordScrollMetrics = useCallback(
-    (event: NativeScrollEvent) => {
+    (event: MobileScrollTailMetrics) => {
       if (listReportsGestures()) {
         setAtTail(isAtTail(event))
       }
@@ -157,15 +161,20 @@ export function useMobileNativeChatTailFollow(args: {
     followTail()
   }, [followTail])
 
+  // Before Orca scrolls to a row the reader asked for, so new rows cannot pull it away.
+  const releaseFollow = useCallback(() => {
+    clearUserScrollSettle()
+    userScrollActiveRef.current = false
+    setFollowing(false)
+  }, [clearUserScrollSettle, setFollowing])
+
   // Release the follow first, as desktop's scrollMessageToTop does, so streaming cannot pull the row away.
   const scrollRowToTop = useCallback(
     (key: string) => {
-      clearUserScrollSettle()
-      userScrollActiveRef.current = false
-      setFollowing(false)
+      releaseFollow()
       listRef.current?.scrollRowToTop?.(key)
     },
-    [clearUserScrollSettle, setFollowing]
+    [releaseFollow]
   )
 
   const beginUserScroll = useCallback(() => {
@@ -191,7 +200,7 @@ export function useMobileNativeChatTailFollow(args: {
   )
 
   const endUserDrag = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    (event: MobileScrollTailEvent) => {
       if (!userScrollActiveRef.current) {
         return
       }
@@ -212,8 +221,7 @@ export function useMobileNativeChatTailFollow(args: {
   }, [clearUserScrollSettle])
 
   const endMomentum = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) =>
-      finishUserScroll(isAtTail(event.nativeEvent)),
+    (event: MobileScrollTailEvent) => finishUserScroll(isAtTail(event.nativeEvent)),
     [finishUserScroll]
   )
 
@@ -258,6 +266,7 @@ export function useMobileNativeChatTailFollow(args: {
     pinToTail,
     pinToTailAfterContentResize,
     jumpToTail,
+    releaseFollow,
     scrollRowToTop,
     beginUserScroll,
     endUserDrag,
