@@ -59,6 +59,22 @@ describe('provider relay spool', () => {
     expect(delivered).toEqual(['before', long, 'after'])
   })
 
+  it('keeps detached lines in memory when the spool file cannot be written, losing none', async () => {
+    const delivered: number[] = []
+    const spool = new ProviderRelaySpool({
+      path: join(dir, 'missing-folder', 'r.ndjson'),
+      deliver: (record) => delivered.push(record.seq),
+      onPressureChanged: () => {}
+    })
+    spool.append('a')
+    spool.append('b')
+    await spool.detach()
+    spool.append('c')
+    await spool.detach()
+    await spool.attach(0)
+    expect(delivered).toEqual([1, 2, 3])
+  })
+
   it('pauses the agent at the detached cap and resumes once a client attaches, never dropping a line', async () => {
     const pressure: boolean[] = []
     const delivered: number[] = []

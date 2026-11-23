@@ -1,11 +1,10 @@
-import { createReadStream } from 'node:fs'
 import { open, unlink, type FileHandle } from 'node:fs/promises'
 import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-protocol'
+import { replaySpoolFile } from './provider-relay-spool-replay'
 
 export const RELAY_SPOOL_MEMORY_CAP_BYTES = 1024 * 1024
 export const RELAY_SPOOL_FILE_CAP_BYTES = 16 * 1024 * 1024
 const DETACHED_FSYNC_INTERVAL_MS = 1_000
-const REPLAY_READ_CHUNK_BYTES = 64 * 1024
 /** Acked records are skipped by index and compacted in bulk, so per-line acks stay O(1). */
 const MEMORY_COMPACT_MIN = 1024
 
@@ -23,16 +22,7 @@ type SpoolOptions = {
 
 type SpoolMode = 'attached' | 'replaying' | 'detached'
 
-function isSpoolRecord(value: unknown): value is ProviderRelayRecord {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'seq' in value &&
-    Number.isSafeInteger(value.seq) &&
-    'line' in value &&
-    typeof value.line === 'string'
-  )
-}
+type SpoolWrite = { chunk: string; records: ProviderRelayRecord[]; bytes: number[] }
 
 /**
  * Seq-numbered stdout lines awaiting the client's ack. Attached, they live in memory; detached,
@@ -53,7 +43,9 @@ export class ProviderRelaySpool {
   private fileUnackedBytes = 0
   private fileLastSeq = 0
   /** The not-yet-started write, so appends coalesce without reordering around a removal. */
-  private queuedWrite: { chunk: string } | null = null
+  private queuedWrite: SpoolWrite | null = null
+  /** A failed write keeps every later record in memory, so a full or broken disk loses nothing. */
+  private fileFailed = false
   private attachGeneration = 0
   private io: Promise<void> = Promise.resolve()
   private fsyncTimer: ReturnType<typeof setTimeout> | null = null
@@ -86,7 +78,7 @@ export class ProviderRelaySpool {
 
   append(line: string): ProviderRelayRecord {
     const record = { seq: this.nextSeqValue++, line }
-    if (this.mode === 'detached') {
+    if (this.mode === 'detached' && !this.fileFailed) {
       this.writeToFile(record)
     } else {
       this.memory.push(record)
@@ -150,7 +142,16 @@ export class ProviderRelaySpool {
       generation === this.attachGeneration && this.mode === 'replaying' && !this.disposed
     await this.io
     const after = Math.max(fromSeq, this.acked)
-    if (this.fileLastSeq > 0 && !(await this.replayFile(after, current))) {
+    if (
+      this.fileLastSeq > 0 &&
+      !(await replaySpoolFile({
+        path: this.options.path,
+        after,
+        current,
+        deliver: this.options.deliver,
+        drained: this.options.drained
+      }))
+    ) {
       return this.nextSeqValue - 1
     }
     if (!current()) {
@@ -172,13 +173,15 @@ export class ProviderRelaySpool {
     }
     this.mode = 'detached'
     this.attachGeneration++
-    for (let index = this.memoryHead; index < this.memory.length; index++) {
-      this.writeToFile(this.memory[index])
+    if (!this.fileFailed) {
+      for (let index = this.memoryHead; index < this.memory.length; index++) {
+        this.writeToFile(this.memory[index])
+      }
+      this.memory = []
+      this.memoryHead = 0
+      this.ackedHeldBytes = 0
+      this.memoryBytes = 0
     }
-    this.memory = []
-    this.memoryHead = 0
-    this.ackedHeldBytes = 0
-    this.memoryBytes = 0
     this.updatePressure()
     this.io = this.io.then(() => this.file?.sync()).catch(() => {})
     return this.io
@@ -212,7 +215,7 @@ export class ProviderRelaySpool {
   private updatePressure(): void {
     const [held, cap] =
       this.mode === 'detached'
-        ? [this.fileUnackedBytes, this.fileCap]
+        ? [this.fileUnackedBytes + this.memoryBytes, this.fileCap]
         : [this.memoryBytes, this.memoryCap]
     const paused = !this.disposed && (this.paused ? held >= cap / 2 : held >= cap)
     if (paused !== this.paused) {
@@ -230,21 +233,30 @@ export class ProviderRelaySpool {
     this.fileUnackedBytes += bytes
     this.fileIndex.push(record.seq, bytes)
     this.fileLastSeq = record.seq
-    if (this.queuedWrite) {
-      this.queuedWrite.chunk += encoded
+    const queued = this.queuedWrite
+    if (queued) {
+      queued.chunk += encoded
+      queued.records.push(record)
+      queued.bytes.push(bytes)
     } else {
-      const write = { chunk: encoded }
+      const write: SpoolWrite = { chunk: encoded, records: [record], bytes: [bytes] }
       this.queuedWrite = write
       this.io = this.io
         .then(async () => {
           if (this.queuedWrite === write) {
             this.queuedWrite = null
           }
-          if (write.chunk.length === 0) {
+          if (write.chunk.length === 0 || this.fileFailed) {
+            this.keepInMemory(write)
             return
           }
-          this.file ??= await open(this.options.path, 'a', 0o600)
-          await this.file.write(write.chunk)
+          try {
+            this.file ??= await open(this.options.path, 'a', 0o600)
+            await this.file.write(write.chunk)
+          } catch {
+            this.fileFailed = true
+            this.keepInMemory(write)
+          }
         })
         .catch(() => {})
     }
@@ -257,59 +269,40 @@ export class ProviderRelaySpool {
     }
   }
 
+  /** Records a failed write didn't land go back to memory in seq order, still unacked. */
+  private keepInMemory(write: SpoolWrite): void {
+    if (write.chunk.length === 0 || this.disposed) {
+      return
+    }
+    const failed = new Set<number>()
+    write.records.forEach((record, index) => {
+      failed.add(record.seq)
+      this.fileUnackedBytes -= write.bytes[index]
+      if (record.seq > this.acked) {
+        this.memoryBytes += record.line.length
+      }
+    })
+    const index: number[] = []
+    for (let at = this.fileIndexHead; at < this.fileIndex.length; at += 2) {
+      if (!failed.has(this.fileIndex[at])) {
+        index.push(this.fileIndex[at], this.fileIndex[at + 1])
+      }
+    }
+    this.fileIndex = index
+    this.fileIndexHead = 0
+    const unacked = write.records.filter((record) => record.seq > this.acked)
+    this.memory = [...unacked, ...this.memory.slice(this.memoryHead)].sort(
+      (left, right) => left.seq - right.seq
+    )
+    this.memoryHead = 0
+    this.updatePressure()
+  }
+
   private stopFsyncTimer(): void {
     if (this.fsyncTimer) {
       clearTimeout(this.fsyncTimer)
       this.fsyncTimer = null
     }
-  }
-
-  /** Streams the file in chunks, yielding to the client's drain; false when the attach went stale. */
-  private async replayFile(after: number, current: () => boolean): Promise<boolean> {
-    // utf8 decoding keeps a character split across chunks whole.
-    const stream = createReadStream(this.options.path, {
-      encoding: 'utf8',
-      highWaterMark: REPLAY_READ_CHUNK_BYTES
-    })
-    // A record longer than a chunk collects its parts and is joined once, not re-scanned per chunk.
-    let parts: string[] = []
-    let partial = ''
-    try {
-      for await (const chunk of stream) {
-        if (!chunk.includes('\n')) {
-          parts.push(chunk)
-          continue
-        }
-        const lines = (partial + parts.join('') + chunk).split('\n')
-        parts = []
-        partial = lines.pop() ?? ''
-        for (const line of lines) {
-          this.replayLine(line, after)
-        }
-        await this.options.drained?.()
-        if (!current()) {
-          return false
-        }
-      }
-      this.replayLine(partial + parts.join(''), after)
-      return true
-    } catch {
-      return current()
-    } finally {
-      stream.destroy()
-    }
-  }
-
-  private replayLine(line: string, after: number): void {
-    if (line.length === 0) {
-      return
-    }
-    try {
-      const record: unknown = JSON.parse(line)
-      if (isSpoolRecord(record) && record.seq > after) {
-        this.options.deliver(record)
-      }
-    } catch {}
   }
 
   private removeFile(): void {

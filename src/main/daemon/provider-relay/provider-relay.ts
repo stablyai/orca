@@ -128,6 +128,7 @@ export class ProviderRelay {
     const pending = this.pending.records()
     for (const record of pending) {
       this.sendLine('relayPending', record)
+      await this.drained()
     }
     const replayThroughSeq = await this.spool.attach(fromSeq)
     if (this.attachment === attachment && this.exitAnnounced) {
