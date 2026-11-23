@@ -6,6 +6,8 @@ import type { GoogleService } from './google-scopes'
 export const GOOGLE_CONNECT_RUNTIME_CAPABILITY = 'google.connect.v1' as const
 /** The host checks Gmail and Calendar automation rules itself. */
 export const GOOGLE_TRIGGERS_RUNTIME_CAPABILITY = 'google.triggers.v1' as const
+/** Host serves google.bot.connected: a Connect card's sign-in reaches the bot as a hidden card answer. */
+export const GOOGLE_CONNECTED_ANSWER_RUNTIME_CAPABILITY = 'google.connectedAnswer.v1' as const
 /** A paired window that draws Google setup's Connect card, so a server posts it instead of a line. */
 export const GOOGLE_SETUP_CARDS_CLIENT_CAPABILITY = 'google.setupCards.v1' as const
 

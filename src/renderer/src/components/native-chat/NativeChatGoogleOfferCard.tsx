@@ -8,6 +8,7 @@ import { BotAppBrandLogo } from '../bots/apps/BotAppBrandLogo'
 import { BOT_CONNECTORS } from '../bots/bot-connectors'
 import { useConnectorSetup } from '../bots/ConnectorSetupDialogs'
 import { refreshGoogle, useGoogleHost } from '../bots/google/google-connect-client'
+import { googleConnectedAnswerIsHidden } from '../bots/google/google-connected-answer'
 import { googleSignInChoices } from '../bots/google/google-account-readiness'
 import { GoogleSignInWaiting } from '../bots/google/GoogleSignInWaiting'
 import { useGoogleSignIn } from '../bots/google/use-google-sign-in'
@@ -54,20 +55,34 @@ export function NativeChatGoogleOfferCard({
       added,
       defaultAccount: latest.status === 'ready' ? (latest.google.defaultAccount ?? null) : null
     })
-    // A hidden card answer: the Connected card already shows the account, and the bot reads a fact.
-    if (answer) {
-      answering.answer(
-        async () =>
-          (
-            await callBotRpc<{ sent: boolean }>(bot, 'google.bot.connected', {
-              botId: bot.id,
-              account: connected.email
-            })
-          ).sent,
-        [connected.email],
-        answer === 'again'
-      )
+    if (!answer) {
+      return
     }
+    const chosen = [connected.email]
+    // An older host's bot still reads the typed line.
+    if (!(await googleConnectedAnswerIsHidden(botTarget(bot)))) {
+      const text = t('components.native-chat.googleOffer.useAccount', 'Use {{email}} for Google.', {
+        email: connected.email
+      })
+      if (answer === 'again') {
+        answering.sendAgain(text, chosen)
+      } else {
+        answering.send(text, chosen)
+      }
+      return
+    }
+    // A hidden card answer: the Connected card already shows the account, and the bot reads a fact.
+    answering.answer(
+      async () =>
+        (
+          await callBotRpc<{ sent: boolean }>(bot, 'google.bot.connected', {
+            botId: bot.id,
+            account: connected.email
+          })
+        ).sent,
+      chosen,
+      answer === 'again'
+    )
   }
 
   const waiting = signIn.state.kind === 'waiting'
