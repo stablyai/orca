@@ -16,7 +16,7 @@ const DOUBLE_QUOTES = '"\u201C\u201D\u201E'
 type CommaWord = { start: number; end: number; bareComma: boolean; quoted: boolean }
 
 /** Splits the tail into PowerShell words (ASCII and smart quotes), noting commas and code outside quotes. */
-function readCommaWords(tail: string): { words: CommaWord[]; code: boolean } | null {
+function readPowerShellWords(tail: string): { words: CommaWord[]; code: boolean } | null {
   const words: CommaWord[] = []
   let code = false
   let quote: 'single' | 'double' | null = null
@@ -81,7 +81,7 @@ function readCommaWords(tail: string): { words: CommaWord[]; code: boolean } | n
 /** A quoted a,b is already one argument; quote a plain a,b word only on a line with no code outside quotes,
  * and leave any other bare comma to PowerShell. */
 function quoteCommaWords(tail: string): string | null {
-  const read = readCommaWords(tail)
+  const read = readPowerShellWords(tail)
   if (!read) {
     return null
   }
@@ -103,7 +103,14 @@ function quoteCommaWords(tail: string): string | null {
 
 /** A bare --% stops PowerShell parsing; a quoted '--%' is only data. */
 export function hasPowerShellStopParsing(command: string, launch: LaunchPosition): boolean {
-  return /(^|\s)--%(\s|$)/.test(command.slice(launch.end))
+  const tail = command.slice(launch.end)
+  if (!tail.includes('--%')) {
+    return false
+  }
+  const read = readPowerShellWords(tail)
+  return (
+    !read || read.words.some((word) => !word.quoted && tail.slice(word.start, word.end) === '--%')
+  )
 }
 
 export function powerShellNativeLaunch(

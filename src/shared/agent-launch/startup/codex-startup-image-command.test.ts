@@ -245,6 +245,7 @@ it('keeps PowerShell comma arguments whole through the native launch wrapper', (
     `“hello a,b world”`,
     `“It’s fine, (thanks)”`,
     `--settings 'a,b' --prefill '--%'`,
+    `--prefill 'hello, explain --% now'`,
     `--settings "{""A"":""x,y""}"`
   ]) {
     for (const agent of ['codex', 'claude']) {
