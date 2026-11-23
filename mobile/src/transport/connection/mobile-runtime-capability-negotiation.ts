@@ -67,13 +67,12 @@ const clientCapabilitiesUpdate = defineRpcOperation({
   barrier: 'on-settle'
 })
 
-/** A connected host hears at once when the page loaded for it changes what it can draw; a reconnect
- *  advertises the current list during authentication instead. */
+/** A connected host hears at once when the page loaded for it changes what it can draw; a change while
+ *  the socket is still coming up is sent once it connects, since authentication may have read the old list. */
 export function readvertiseOnPageChange(hostId: string, client: RpcClient): () => void {
-  return watchPageClientCapabilities(hostId, () => {
-    if (client.getState() !== 'connected') {
-      return
-    }
+  let unsent = false
+  const advertise = (): void => {
+    unsent = false
     void runRpcOperation(
       client,
       clientCapabilitiesUpdate,
@@ -82,5 +81,21 @@ export function readvertiseOnPageChange(hostId: string, client: RpcClient): () =
     ).catch((error: unknown) => {
       console.warn('[net] page capability update unsent', error)
     })
+  }
+  const stopPage = watchPageClientCapabilities(hostId, () => {
+    if (client.getState() === 'connected') {
+      advertise()
+    } else {
+      unsent = true
+    }
   })
+  const stopState = client.onStateChange((state) => {
+    if (state === 'connected' && unsent) {
+      advertise()
+    }
+  })
+  return () => {
+    stopPage()
+    stopState()
+  }
 }
