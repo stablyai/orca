@@ -86,12 +86,13 @@ export async function endedTurnAttribution(
   chat: ConversationChat,
   sessionId: string,
   turnId: string,
-  cursor?: AgentJournalCursor
+  cursor?: AgentJournalCursor,
+  stampsOnly?: true
 ): Promise<Pick<EndedChatTurn, 'opener' | 'stamps'>> {
   const read = cursor
     ? await chat
         .journalReads(sessionId)
-        .then((reads) => reads.turnAttribution(turnId, cursor.sequence))
+        .then((reads) => reads.turnAttribution(turnId, cursor.sequence, stampsOnly))
         .catch(() => null)
     : null
   if (
@@ -102,7 +103,7 @@ export async function endedTurnAttribution(
   ) {
     return {}
   }
-  return { opener: read.opener, stamps: read.stamps }
+  return stampsOnly ? { stamps: read.stamps } : { opener: read.opener, stamps: read.stamps }
 }
 
 /** How many turns merged into a completion's end, and the answering ones when the end names them
@@ -118,7 +119,8 @@ export function mergedTurnNews(
       ? {
           mergedAnswers: {
             turnIds,
-            read: (turnId: string) => endedTurnAttribution(chat, sessionId, turnId, journalCursor)
+            read: (turnId: string) =>
+              endedTurnAttribution(chat, sessionId, turnId, journalCursor, true)
           }
         }
       : {})

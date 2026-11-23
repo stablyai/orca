@@ -61,7 +61,11 @@ export type JournalSqlReads = AgentSessionJournalReads & {
   /** The rows and sends that place these anchors' turns, never the whole conversation. */
   operationWindow(anchors: JournalOperationWindowAnchors): Promise<JournalOperationWindow>
   /** Whom a turn acts for, by index over the turn's own rows (never the chat's send history). */
-  turnAttribution(turnId: string, through: number): Promise<JournalTurnAttribution>
+  turnAttribution(
+    turnId: string,
+    through: number,
+    stampsOnly?: true
+  ): Promise<JournalTurnAttribution>
   promptItem(end: 'first' | 'last'): Promise<AgentJournalRenderItem | null>
   /** The plan last written in the turn of the chat's newest tool call, or null. */
   latestTaskList(): Promise<NativeChatTaskList | null>
@@ -165,8 +169,15 @@ export function journalSqlReads(
     botMemorySources: async (after) => (await read({ kind: 'bot-memory-sources', after })).sources,
     automationResultNotes: async () => (await read({ kind: 'automation-result-notes' })).snapshot,
     operationWindow: async (anchors) => (await read({ kind: 'operation-window', anchors })).window,
-    turnAttribution: async (turnId, through) =>
-      (await read({ kind: 'turn-attribution', turnId, through })).attribution,
+    turnAttribution: async (turnId, through, stampsOnly) =>
+      (
+        await read({
+          kind: 'turn-attribution',
+          turnId,
+          through,
+          ...(stampsOnly ? { stampsOnly } : {})
+        })
+      ).attribution,
     promptItem: async (end) => (await read({ kind: 'prompt-item', end })).item,
     latestTaskList: async () => (await read({ kind: 'latest-task-list' })).list,
     runMentions: async (runId) => {

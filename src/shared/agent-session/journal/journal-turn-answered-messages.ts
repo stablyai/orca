@@ -13,12 +13,18 @@ export function journalTurnAnsweredMessages(
   opener: AgentJournalRenderItem | null | undefined,
   turnItemId: string
 ): AgentJournalRenderItem[] {
-  // Indexed once: a long turn can steer in hundreds of sends.
-  const byId = new Map<string, AgentJournalRenderItem>()
-  for (const item of journal.items) {
-    if (!byId.has(item.itemId)) {
-      byId.set(item.itemId, item)
+  // Indexed once, and only for a turn that steered sends in: a long turn can steer in hundreds.
+  let byId: Map<string, AgentJournalRenderItem> | undefined
+  const itemOf = (key: string) => {
+    if (!byId) {
+      byId = new Map()
+      for (const item of journal.items) {
+        if (!byId.has(item.itemId)) {
+          byId.set(item.itemId, item)
+        }
+      }
     }
+    return byId.get(key)
   }
   const messages = new Set(opener ? [opener] : [])
   for (const submission of journal.submissions) {
@@ -26,7 +32,7 @@ export function journalTurnAnsweredMessages(
       submission.answeredInTurn?.via === 'steer' &&
       submission.answeredInTurn.turnItemId === turnItemId
     ) {
-      const item = byId.get(agentJournalSubmissionKey(submission.clientMessageId))
+      const item = itemOf(agentJournalSubmissionKey(submission.clientMessageId))
       if (item) {
         messages.add(item)
       }

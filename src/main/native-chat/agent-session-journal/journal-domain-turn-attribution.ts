@@ -27,11 +27,12 @@ export type JournalTurnAttribution = {
 /** A turn's row, opener and steered sends, each found by index: work is the turn's own rows (every
  *  send steered into it, all needed to prove none was a delivery), never the chat's send history (an
  *  operation window scans every current send). `through`: the sequence its end was read at; a row
- *  written later is not the ended turn's. */
+ *  written later is not the ended turn's. `stampsOnly`: opener and messages stay null. */
 export function readJournalDomainTurnAttribution(
   scope: JournalSqlScope,
   turnId: string,
-  through: number
+  through: number,
+  stampsOnly?: true
 ): JournalTurnAttribution {
   const cursor = journalDomainContextHead(scope.db, scope)
   const ended = (item: AgentJournalRenderItem | null) =>
@@ -67,11 +68,16 @@ export function readJournalDomainTurnAttribution(
     const item = ended(journalVisibleItem(scope.db, scope.prefix, key))
     return item ? [item] : []
   })
+  const stamps = connectorReplyTurnStamps({ items, submissions }, opener, row.itemId)
+  // Its caller checks only whom the turn answered: the rows stay in the worker.
+  if (stampsOnly) {
+    return { cursor, turnItemId: row.itemId, opener: null, stamps, messages: null }
+  }
   return {
     cursor,
     turnItemId: row.itemId,
     opener,
-    stamps: connectorReplyTurnStamps({ items, submissions }, opener, row.itemId),
+    stamps,
     messages: journalTurnAnsweredMessages({ items, submissions }, opener, row.itemId)
   }
 }

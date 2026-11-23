@@ -257,52 +257,40 @@ function ownerDmAnswer(link: ExternalConversationLink, turn: EndedChatTurn): boo
 const COALESCED_QUIET_REPLY =
   'I replied but the message may not have reached you. Please ask again.'
 
-/** Only count metadata can turn a quiet completion into a constant; earlier text is never read.
- *  `mergedOutboxed`: every merged answer posts through the outbox (mergedAnswersOutboxed). */
+/** Only count metadata can turn a quiet completion into a constant; earlier text is never read. */
 export function botTurnReply(
   end: ChatTurnEnd,
   link: ExternalConversationLink,
   turn: EndedChatTurn,
-  requested: boolean,
-  mergedOutboxed = false
+  requested: boolean
 ): string | undefined {
-  const message = turn.lastAssistantMessage
-  if (!link.bot || !message || !isQuietBotResult(message)) {
-    return message
-  }
-  const quiet = mergedQuietReason(end, link, turn, requested)
-  if (!quiet) {
-    return undefined
-  }
-  const reason = quiet === 'coalesced-quiet' && mergedOutboxed ? 'merged-answers-outboxed' : quiet
-  const fallback = reason === 'coalesced-quiet'
-  // Text-free and id-free: only how many turns merged and what was decided.
-  console.info('[connector] merged quiet completion', {
-    source: link.source,
-    providerTurnCount: end.news.mergedTurnCount,
-    fallback,
-    reason
-  })
-  return fallback ? COALESCED_QUIET_REPLY : undefined
+  return quietEndReply(end, link, turn, quietEndOf(end, link, turn, requested), false)
 }
 
-/** Why a bot's merged quiet end posts nothing or the stand-in; undefined for any other end. */
-function mergedQuietReason(
+/** A bot end's text, classified once: words, quiet, or why a merged quiet end says what it does. */
+type QuietEnd =
+  | 'words'
+  | 'quiet'
+  | 'not-thread-request'
+  | 'thread-answered-quietly'
+  | 'coalesced-quiet'
+
+function quietEndOf(
   end: ChatTurnEnd,
   link: ExternalConversationLink,
   turn: EndedChatTurn,
   requested: boolean
-): 'not-thread-request' | 'thread-answered-quietly' | 'coalesced-quiet' | undefined {
+): QuietEnd {
   const message = turn.lastAssistantMessage
   if (!link.bot || !message || !isQuietBotResult(message)) {
-    return undefined
+    return 'words'
   }
   // Words to its owner's DM post themselves (outbox or legacy end): no reply was dropped.
   if (
     (end.news.mergedTurnCount ?? 1) <= 1 ||
     (ownerDmAnswer(link, turn) && addressedBotWords(message))
   ) {
-    return undefined
+    return 'quiet'
   }
   // Quiet to the thread's own message is its answer: the merged turns before it were not the reply.
   return !requested
@@ -312,9 +300,29 @@ function mergedQuietReason(
       : 'coalesced-quiet'
 }
 
-/** Whether every answering turn merged into this end answered this conversation through the reply
- *  outbox, whose rows post each turn's own words (recovery fills those no end announced). Read one
- *  at a time, stopping at the first that doesn't; false when unread, unnamed, or the account reset. */
+function quietEndReply(
+  end: ChatTurnEnd,
+  link: ExternalConversationLink,
+  turn: EndedChatTurn,
+  quiet: QuietEnd,
+  mergedOutboxed: boolean
+): string | undefined {
+  if (quiet === 'words' || quiet === 'quiet') {
+    return quiet === 'words' ? turn.lastAssistantMessage : undefined
+  }
+  const reason = quiet === 'coalesced-quiet' && mergedOutboxed ? 'merged-answers-outboxed' : quiet
+  // Text-free and id-free: only how many turns merged and what was decided.
+  console.info('[connector] merged quiet completion', {
+    source: link.source,
+    providerTurnCount: end.news.mergedTurnCount,
+    fallback: reason === 'coalesced-quiet',
+    reason
+  })
+  return reason === 'coalesced-quiet' ? COALESCED_QUIET_REPLY : undefined
+}
+
+/** Whether each merged answering turn answered this conversation through the outbox, whose rows post
+ *  its words (recovery fills unannounced ones). One read at a time; false at any doubt or reset. */
 async function mergedAnswersOutboxed(
   end: ChatTurnEnd,
   link: ExternalConversationLink
@@ -324,12 +332,11 @@ async function mergedAnswersOutboxed(
     return false
   }
   for (const turnId of merged.turnIds) {
-    if (!end.current()) {
-      return false
-    }
-    const attribution = await Promise.resolve(turnId)
-      .then(merged.read)
-      .catch(() => null)
+    const attribution = end.current()
+      ? await Promise.resolve(turnId)
+          .then(merged.read)
+          .catch(() => null)
+      : null
     if (!attribution || !stampsName(attribution, link)) {
       return false
     }
@@ -337,18 +344,16 @@ async function mergedAnswersOutboxed(
   return true
 }
 
-/** A replied turn's bot reply: botTurnReply, reading merged answers only when it would post the
- *  stand-in. */
+/** botTurnReply for a replied turn: merged answers are read only when it would post the stand-in. */
 export async function threadBotTurnReply(
   end: ChatTurnEnd,
   link: ExternalConversationLink,
   turn: EndedChatTurn,
   requested: boolean
 ): Promise<string | undefined> {
-  const outboxed =
-    mergedQuietReason(end, link, turn, requested) === 'coalesced-quiet' &&
-    (await mergedAnswersOutboxed(end, link))
-  return botTurnReply(end, link, turn, requested, outboxed)
+  const quiet = quietEndOf(end, link, turn, requested)
+  const outboxed = quiet === 'coalesced-quiet' && (await mergedAnswersOutboxed(end, link))
+  return quietEndReply(end, link, turn, quiet, outboxed)
 }
 
 function answersThread(link: ExternalConversationLink, turn: EndedChatTurn): boolean {
