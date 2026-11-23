@@ -139,7 +139,7 @@ export class JournalLegacyRetirement {
   }
 
   private async attempt(): Promise<void> {
-    if (this.done && !this.reporter.hasUnsent) {
+    if (this.done && !this.reporter.wouldResend) {
       return
     }
     if (this.launchReport.reported || this.stopped.signal.aborted) {

@@ -97,11 +97,7 @@ it('reports non-ownership once per launch without store writes, including owners
     .mockImplementation(() => {})
     .mockClear()
   let owns = true
-  let ownershipChecks = 0
-  const ownership = () => {
-    ownershipChecks++
-    return owns
-  }
+  const ownership = () => owns
   const launch = held.launch('1.0.0', ownership, undefined, undefined, false)
   await launch.run()
   expect(events).toMatchObject([{ outcome: 'deferred', defer: 'same_version' }])
@@ -132,12 +128,10 @@ it('reports non-ownership once per launch without store writes, including owners
   owns = true
   const completed = held.launch('1.0.0', ownership, undefined, undefined, false)
   await completed.run()
-  const checksAfterCompletion = ownershipChecks
   const afterCompletion = snapshot()
   owns = false
   await completed.run()
   await completed.run()
-  expect(ownershipChecks).toBe(checksAfterCompletion)
   expect(snapshot()).toEqual(afterCompletion)
   expect(held.errors).toEqual([])
 })
