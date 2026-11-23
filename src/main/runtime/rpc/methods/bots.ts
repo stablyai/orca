@@ -218,9 +218,7 @@ export const BOT_METHODS = [
     name: 'bots.avatar.slackIcon.wanted',
     permission: 'workspace',
     params: BotSlackIconWanted,
-    handler: async (params, { runtime }) => ({
-      wanted: await runtime.bots.slackIcons.wanted(params.botId, params.look)
-    })
+    handler: (params, { runtime }) => runtime.bots.slackIcons.wanted(params.botId, params.look)
   }),
   defineMethod({
     name: 'bots.avatar.slackIcon.upload',

@@ -5,6 +5,7 @@ import { useEffect } from 'react'
 import { botSlackIconWanted, uploadBotSlackIcon } from '@/lib/bot-catalog'
 import { botRefKey } from '@/lib/bot-hosts'
 import { botHostHas } from '@/lib/bot-host-status'
+import { readBotHostState } from '@/lib/bot-catalog-snapshot'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
 import { BOTS_SLACK_ICON_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
@@ -20,7 +21,13 @@ let queue: Promise<void> = Promise.resolve()
 async function publish(bot: Bot, look: string): Promise<void> {
   try {
     const parsed = parseBotAvatar(bot.avatar)
-    if (parsed?.kind !== 'mascot' || !(await botSlackIconWanted(bot, look))) {
+    const want = parsed?.kind === 'mascot' ? await botSlackIconWanted(bot, look) : null
+    if (!want?.current) {
+      // The host hasn't saved this look yet (a window's own edit): asked again on the next bots read.
+      forget(bot, look)
+      return
+    }
+    if (!want.wanted || parsed?.kind !== 'mascot') {
       return
     }
     const png = await drawBotSlackIcon(
@@ -54,7 +61,12 @@ function publishLooks(bots: readonly Bot[]): void {
       continue
     }
     const key = botRefKey(bot)
-    if (handled.get(key) === look || !botHostHas(bot.hostId, BOTS_SLACK_ICON_RUNTIME_CAPABILITY)) {
+    // An offline host's bots show from its last read: asked once it is back, so it never holds the queue.
+    if (
+      handled.get(key) === look ||
+      readBotHostState(bot.hostId) === 'offline' ||
+      !botHostHas(bot.hostId, BOTS_SLACK_ICON_RUNTIME_CAPABILITY)
+    ) {
       continue
     }
     handled.set(key, look)

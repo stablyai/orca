@@ -68,10 +68,24 @@ export class BotAvatarSync {
   iconStored(botId: string): void {
     this.icons.set(botId, (this.icons.get(botId) ?? 0) + 1)
     this.sent.delete(botId)
-    if (this.sending.has(botId)) {
-      this.changedWhileSending.add(botId)
+    // One in flight read no icon or an older one: it is sent again once it lands.
+    if (!this.sending.has(botId)) {
+      this.resend(botId)
     }
-    this.pass()
+  }
+
+  // Only this bot is queued again: one stored icon never rereads the whole roster's pictures.
+  private resend(botId: string): void {
+    if (!this.deps.bots.enabled()) {
+      this.staleWhileOff = true
+      this.retryLater()
+      return
+    }
+    const bot = this.deps.bots.list().find((entry) => entry.id === botId)
+    if (bot && (bot.slack || bot.github) && bot.avatar) {
+      this.queued.set(bot.id, bot)
+      this.pump()
+    }
   }
 
   private pass(): void {
@@ -191,7 +205,7 @@ export class BotAvatarSync {
       // An icon was kept after this send read none: it goes next.
       this.sent.delete(bot.id)
       this.changedWhileSending.delete(bot.id)
-      this.pass()
+      this.resend(bot.id)
     } else if (sent) {
       this.sent.set(bot.id, avatar)
       // The picture may have changed while this one was on its way: only then is the roster read again.

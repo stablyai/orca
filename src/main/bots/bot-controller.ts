@@ -106,7 +106,8 @@ export class BotController {
     this.slackIcons = new BotSlackIcons({
       filesystem: deps.filesystem,
       bot: (botId) => this.requireBot(this.requireStore(), botId),
-      home: (bot) => botHomeFolder(bot, deps.botsRoot())
+      home: (bot) => botHomeFolder(bot, deps.botsRoot()),
+      serialize: (work) => this.serialize(work)
     })
   }
 

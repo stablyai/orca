@@ -309,13 +309,13 @@ export async function readBotAvatarPng(bot: BotRef): Promise<string | null> {
   return png
 }
 
-/** Whether the host wants a drawing of the bot's mascot in `look` for its Slack icon. */
-export async function botSlackIconWanted(bot: BotRef, look: string): Promise<boolean> {
-  const { wanted } = await callBotRpc<{ wanted: boolean }>(bot, 'bots.avatar.slackIcon.wanted', {
-    botId: bot.id,
-    look
-  })
-  return wanted
+/** Whether the host wants a drawing of the bot's mascot in `look` for its Slack icon, and whether `look`
+ *  is the bot's look there yet. */
+export function botSlackIconWanted(
+  bot: BotRef,
+  look: string
+): Promise<{ wanted: boolean; current: boolean }> {
+  return callBotRpc(bot, 'bots.avatar.slackIcon.wanted', { botId: bot.id, look })
 }
 
 export async function uploadBotSlackIcon(bot: BotRef, look: string, png: string): Promise<void> {
