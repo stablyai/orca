@@ -1,11 +1,12 @@
 // Hermes runs every chat's tools in one gateway per profile. Orca's plugin there hands each tool the
 // environment Orca wrote for its session (Hermes' per-session env hook, 0.23.1+), read at each spawn.
 import { randomBytes } from 'node:crypto'
-import { access, mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { PublishSharedToolProcessSessionEnv } from '../runtime/agent-session/environment/shared-tool-process-session-env'
 import { resolveHermesActiveProfileHome } from './hermes-default-home'
 import { ensureHermesGatewayPluginCurrent } from './hermes-gateway-plugin-currency'
+import { getConfigEnablement, parseHermesConfig } from './hermes-config-yaml'
 import { compareAppVersions } from '../../shared/app-lifecycle/identity/app-version'
 import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { AgentCliInstallationError } from '../native-chat/agent-launch/agent-cli-installation-error'
@@ -30,21 +31,19 @@ export const publishHermesSessionToolEnv: PublishSharedToolProcessSessionEnv = a
   const pinned = env.HERMES_HOME?.trim()
   const home = pinned ? await resolveHermesActiveProfileHome(pinned) : null
   const pluginDir = home ? join(home, 'plugins', HERMES_PLUGIN_NAME) : null
-  // Without Orca's plugin in this profile nothing reads the file; its tools keep no identity.
-  const installed =
-    pluginDir !== null &&
-    (await access(join(pluginDir, '__init__.py')).then(
-      () => true,
-      () => false
-    ))
+  // Without Orca's plugin loaded in this profile nothing reads the file; its tools keep no identity.
+  const installed = home !== null && pluginDir !== null && (await pluginEnabled(home, pluginDir))
   if (mustReach) {
     assertBotToolsCanBeReached(installed, agentVersion)
   }
   if (!installed || !pluginDir || !home) {
     return async () => undefined
   }
-  // Every chat heals a gateway that predates this build's plugin; only a bot's refuses to run without it.
-  const gateway = await ensureHermesGatewayPluginCurrent(home)
+  // Every chat heals a gateway that predates this build's plugin; only a bot's refuses to run without
+  // it. A Hermes with no per-session env can't load it, so its chats never send a reload.
+  const sessionEnvSupported =
+    !agentVersion || compareAppVersions(agentVersion, BOT_MINIMUM_HERMES) >= 0
+  const gateway = sessionEnvSupported ? await ensureHermesGatewayPluginCurrent(home) : 'stale'
   if (mustReach && gateway !== 'current') {
     throw new AgentSessionAcquisitionRefusal(
       "Hermes' gateway runs an older Orca plugin and did not reload it.",
@@ -92,6 +91,20 @@ function assertBotToolsCanBeReached(installed: boolean, version: string | undefi
       minimumVersion: BOT_MINIMUM_HERMES
     })
   }
+}
+
+/** The plugin's files are there and the profile's config.yaml loads it (a disable unloads it). */
+async function pluginEnabled(home: string, pluginDir: string): Promise<boolean> {
+  const [files, config] = await Promise.all([
+    access(join(pluginDir, '__init__.py')).then(
+      () => true,
+      () => false
+    ),
+    readFile(join(home, 'config.yaml'), 'utf-8').catch(() => null)
+  ])
+  const parsed = parseHermesConfig(config)
+  const enablement = parsed.ok ? getConfigEnablement(parsed.config) : null
+  return files && enablement !== null && enablement.enabled && !enablement.disabled
 }
 
 /** The first Hermes that gives each session's tools their own environment. */

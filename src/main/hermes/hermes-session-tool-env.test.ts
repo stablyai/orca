@@ -28,6 +28,7 @@ beforeEach(async () => {
   home = await mkdtemp(join(tmpdir(), 'orca-hermes-session-env-'))
   await mkdir(join(home, 'plugins', 'orca-status'), { recursive: true })
   await writeFile(join(home, 'plugins', 'orca-status', '__init__.py'), '')
+  await writeFile(join(home, 'config.yaml'), 'plugins:\n  enabled: [orca-status]\n')
 })
 
 afterEach(async () => {
@@ -62,7 +63,12 @@ describe('publishHermesSessionToolEnv', () => {
     await expect(publish('bot', () => true, {})).rejects.toMatchObject({
       reason: 'botToolsGatewayOutdated'
     })
-    await rm(join(home, 'plugins', 'orca-status', '__init__.py'))
+    // `hermes plugins disable` unloads it while its files and current mark stay.
+    await markGateway(HERMES_PLUGIN_GENERATION)
+    await writeFile(
+      join(home, 'config.yaml'),
+      'plugins:\n  enabled: [orca-status]\n  disabled: [orca-status]\n'
+    )
     await expect(publish('bot', () => true, {})).rejects.toMatchObject({
       reason: 'botToolsNeedStatusHooks'
     })

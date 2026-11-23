@@ -13,14 +13,29 @@ import {
 } from './hermes-managed-plugin-source'
 
 const RELOAD_TIMEOUT_MS = 15_000
+const IDENTIFY_TIMEOUT_MS = 2_000
 const MAX_RESPONSE_BYTES = 512 * 1024
 
 export type HermesGatewayPluginState = 'current' | 'noGateway' | 'stale'
 
-/** Reloads the serving gateway's plugins once when it runs an older plugin than this build's. */
-export async function ensureHermesGatewayPluginCurrent(
-  home: string
-): Promise<HermesGatewayPluginState> {
+const checks = new Map<string, Promise<HermesGatewayPluginState>>()
+/** Gateways already sent a reload this run: one that can't mark itself (an older Hermes, a clashing
+ *  plugin) is never reloaded again, since every reload briefly drops every session's env. */
+const reloaded = new Set<number>()
+
+/** Reloads the serving gateway's plugins, once per gateway, when it runs an older plugin than this
+ *  build's. Concurrent checks of one home share an answer. */
+export function ensureHermesGatewayPluginCurrent(home: string): Promise<HermesGatewayPluginState> {
+  const pending = checks.get(home)
+  if (pending) {
+    return pending
+  }
+  const check = checkGateway(home).finally(() => checks.delete(home))
+  checks.set(home, check)
+  return check
+}
+
+async function checkGateway(home: string): Promise<HermesGatewayPluginState> {
   const pids = await gatewayPids(home)
   if (pids.length === 0) {
     return 'noGateway'
@@ -28,30 +43,50 @@ export async function ensureHermesGatewayPluginCurrent(
   if (await runsCurrentPlugin(home, pids)) {
     return 'current'
   }
+  if (pids.every((pid) => reloaded.has(pid))) {
+    return 'stale'
+  }
+  for (const pid of pids) {
+    reloaded.add(pid)
+  }
   await reloadGatewayPlugins(home)
   return (await runsCurrentPlugin(home, pids)) ? 'current' : 'stale'
 }
 
-/** A profile's own gateway, or the root's when it serves its profiles from there; live ones only. */
+/** A profile's own gateway, or the root's when it serves its profiles from there; live ones only.
+ *  Without a pid record (a service may unlink it), the gateway's own control socket names it. */
 async function gatewayPids(home: string): Promise<number[]> {
   const homes = [home, ...(rootOfProfile(home) ? [rootOfProfile(home)!] : [])]
-  const pids = await Promise.all(
+  const recorded = await Promise.all(
     homes.map(async (candidate) => {
       const record = await readFile(join(candidate, 'gateway.pid'), 'utf-8').catch(() => null)
       const pid = record ? parsePid(record) : null
       return pid !== null && isAlive(pid) ? pid : null
     })
   )
-  return pids.filter((pid): pid is number => pid !== null)
+  const live = recorded.filter((pid): pid is number => pid !== null)
+  if (live.length > 0) {
+    return live
+  }
+  for (const candidate of homes) {
+    const pid = (await queryGateway(candidate, 'identify', {}, IDENTIFY_TIMEOUT_MS))?.pid
+    if (typeof pid === 'number' && Number.isInteger(pid) && pid > 0) {
+      return [pid]
+    }
+  }
+  return []
 }
 
 function rootOfProfile(home: string): string | null {
   return basename(dirname(home)) === 'profiles' ? dirname(dirname(home)) : null
 }
 
+/** Hermes' JSON record, or the bare number older ones wrote. */
 function parsePid(record: string): number | null {
   try {
-    const pid: unknown = JSON.parse(record)?.pid
+    const parsed: unknown = JSON.parse(record)
+    const pid: unknown =
+      typeof parsed === 'object' && parsed !== null && 'pid' in parsed ? parsed.pid : parsed
     return typeof pid === 'number' && Number.isInteger(pid) && pid > 0 ? pid : null
   } catch {
     return null
@@ -101,7 +136,8 @@ async function reloadGatewayPlugins(home: string): Promise<void> {
 async function queryGateway(
   home: string,
   verb: string,
-  params: Record<string, string>
+  params: Record<string, string>,
+  timeoutMs = RELOAD_TIMEOUT_MS
 ): Promise<Record<string, unknown> | null> {
   const path = await controlSocketPath(home)
   if (!path) {
@@ -115,10 +151,12 @@ async function queryGateway(
       socket.destroy()
       done(result)
     }
-    const timer = setTimeout(() => finish(null), RELOAD_TIMEOUT_MS)
+    const timer = setTimeout(() => finish(null), timeoutMs)
     socket.setEncoding('utf-8')
     socket.on('connect', () => {
-      socket.write(`${JSON.stringify({ verb, id: 1, protocol: 1, params })}\n`)
+      socket.write(
+        `${JSON.stringify({ verb, id: 1, protocol: 1, ...(Object.keys(params).length > 0 ? { params } : {}) })}\n`
+      )
     })
     socket.on('data', (chunk: string) => {
       received += chunk
