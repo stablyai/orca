@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Linking, View } from 'react-native'
+import { Alert, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
 import { OrcaMobileWebShellView } from '../../modules/orca-mobile-web-shell/src/index'
@@ -24,10 +24,12 @@ import { useKeyboardOcclusion } from '../platform/keyboard/keyboard-occlusion'
 import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
 import { useNativePdfViewer } from '../platform/pdf-viewing/native-pdf-view'
 import { useNativeImageActions } from '../platform/image-actions/native-image-actions'
+import { useNativeLocalBrowser } from '../platform/native-local-browser'
 import { processDeviceStore } from '../device-store/device-store'
 import { serveDeviceStoreVerb } from './native-capabilities/device-store-verb-server'
 import { BRIDGE_STORE_VERB } from './bridge/native-capabilities/bridge-store-verb'
 import { useShellPageBack } from './routing/use-shell-page-back'
+import { openUrlForPage } from './routing/open-url-for-page'
 import { useShellStackPop } from './routing/use-shell-stack-pop'
 import { usePageLocationOnFold } from './page-geometry/page-location-on-fold'
 import { usePageOpenTarget } from './routing/page-open-target'
@@ -41,7 +43,7 @@ import { nativeSessionReturn, nativeStackReturn } from './routing/native-stack-r
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import {
   storageReadParamsSchema,
-  type BridgeNativeVerb
+  type ShellChainVerb
 } from './bridge/native-capabilities/bridge-native-verbs'
 import { SHELL_OPENING_LABEL, ShellPageCover } from './presentation/ShellWaitingFrame'
 import { ShellStateScreen } from './presentation/ShellStateScreen'
@@ -164,9 +166,10 @@ export function MobileWebShellScreen({
   // Create the media registry before the bridge; staged files belong to this page session.
   const serveDeviceVerb = useNativeDeviceVerbs(readySessionId)
   const servePdfView = useNativePdfViewer(hostId, readySessionId)
+  const localBrowser = useNativeLocalBrowser(hostId, readySessionId)
   const serveImageAction = useNativeImageActions(readySessionId)
   // Read the shell's storage for this host.
-  const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
+  const serveNativeVerb = (verb: ShellChainVerb, params: unknown): Promise<unknown> =>
     verb === 'native.storage.read'
       ? readWorkspaceKey(storageReadParamsSchema.parse(params).key).then((value) => ({ value }))
       : verb === 'native.pdf.view'
@@ -176,12 +179,6 @@ export function MobileWebShellScreen({
           : verb === BRIDGE_STORE_VERB
             ? serveDeviceStoreVerb(processDeviceStore(), hostId, params)
             : serveDeviceVerb(verb, params)
-  // Both externalLink and cancelled navigation use this filtered opener. Report device-handler failure without throwing from a native frame callback; neither path has a reply.
-  const openUrlForPage = (url: string) => {
-    void Linking.openURL(url).catch((error: unknown) => {
-      console.warn('[web-shell] could not open a URL for the page', { url, error })
-    })
-  }
 
   // Push so Back reveals the mounted page without downloading or handshaking again, unless the page replaced itself.
   const openPageRoute = (href: string, replace = false) => {
@@ -305,7 +302,7 @@ export function MobileWebShellScreen({
       })
     },
     onNavigate: openPageRoute,
-    serveNativeVerb,
+    serveNativeVerb: localBrowser.route(serveNativeVerb),
     onExternalLink: openUrlForPage,
     // Reuse the app’s platform haptics mapping; device failures are already swallowed there.
     onHaptic: playPageHaptic,
@@ -394,7 +391,7 @@ export function MobileWebShellScreen({
         ref={bridge.viewRef}
         // Overlays cannot cover the screen beneath; hide their opaque WebView until first paint.
         style={[styles.shellView, overlay && pageFrame !== 'painted' && styles.unpaintedOverlay]}
-        onLayout={pageFold.onShellLayout}
+        onLayout={localBrowser.withLayout(pageFold.onShellLayout)}
         generationDirectory={state.generationDirectory}
         sessionId={state.sessionId}
         bridgeEnabled={bridge.bridgeEnabled}
@@ -429,6 +426,7 @@ export function MobileWebShellScreen({
       {overlay ? null : (
         <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
       )}
+      {localBrowser.overlay}
       <ShellDevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
     </View>
   )

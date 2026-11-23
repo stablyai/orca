@@ -21,6 +21,12 @@ import {
   a11yAnnounceResultSchema,
   clipboardWriteResultSchema,
   pdfViewResultSchema,
+  browserLocalResultSchema,
+  browserViewResultSchema,
+  type BridgeBrowserLocalParams,
+  type BridgeBrowserViewResult,
+  type BridgeBrowserViewFrame,
+  type BridgeBrowserViewShowParams,
   type BridgeClipboardMime,
   type BridgeNativeVerb,
   type BridgePdfOpenParams
@@ -64,6 +70,15 @@ export type NativeVerbs = {
   canActOnImages: boolean
   stageImage: (offset: number, base64: string) => Promise<void>
   runImageAction: (params: BridgeImageRunParams) => Promise<void>
+  canOpenLocalBrowser: boolean
+  // Resolves once the shell shows the tab in its own web view.
+  openLocalBrowser: (params: BridgeBrowserLocalParams) => Promise<void>
+  canPlaceLocalBrowser: boolean
+  // Resolves when the placed view ends, with why.
+  placeLocalBrowser: (params: BridgeBrowserViewShowParams) => Promise<BridgeBrowserViewResult>
+  moveLocalBrowser: (id: string, frame: BridgeBrowserViewFrame) => Promise<void>
+  removeLocalBrowser: (id: string) => Promise<void>
+  adoptLocalBrowserUrl: (id: string, url: string) => Promise<void>
   // Without it dictation goes to the computer exactly as before.
   canRecognizeSpeech: boolean
   speechStatus: (locale: string) => Promise<BridgeSpeechStatusResult>
@@ -199,6 +214,22 @@ export function useNativeVerbs(): NativeVerbs {
       },
       runImageAction: async (params) => {
         await call('native.image.act', { action: 'run', ...params }, imageResultSchema)
+      },
+      canOpenLocalBrowser: has('native.browser.local'),
+      openLocalBrowser: async (params) => {
+        await call('native.browser.local', params, browserLocalResultSchema)
+      },
+      canPlaceLocalBrowser: has('native.browser.view'),
+      placeLocalBrowser: (params) =>
+        call('native.browser.view', { action: 'show', ...params }, browserViewResultSchema),
+      moveLocalBrowser: async (id, frame) => {
+        await call('native.browser.view', { action: 'move', id, frame }, browserViewResultSchema)
+      },
+      removeLocalBrowser: async (id) => {
+        await call('native.browser.view', { action: 'hide', id }, browserViewResultSchema)
+      },
+      adoptLocalBrowserUrl: async (id, url) => {
+        await call('native.browser.view', { action: 'adopt', id, url }, browserViewResultSchema)
       },
       canRecognizeSpeech: has(BRIDGE_SPEECH_VERB),
       speechStatus: (locale) =>

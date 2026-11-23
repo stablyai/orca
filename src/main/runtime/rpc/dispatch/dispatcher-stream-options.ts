@@ -28,6 +28,7 @@ export type RpcDispatchStreamingOptions = Pick<
   | 'sendBinary'
   | 'registerBinaryStreamHandler'
   | 'registerBinaryMessageHandler'
+  | 'registerBrowserTunnelFrameHandler'
 > & {
   /** What the transport proved the caller may do; absent means this host's owner. */
   callerScope?: RpcCallerScope
@@ -85,6 +86,7 @@ export function rpcContextFromTransport(
     sendBinary: options?.sendBinary,
     registerBinaryStreamHandler: options?.registerBinaryStreamHandler,
     registerBinaryMessageHandler: options?.registerBinaryMessageHandler,
+    registerBrowserTunnelFrameHandler: options?.registerBrowserTunnelFrameHandler,
     orchestrationCaller
   }
 }
