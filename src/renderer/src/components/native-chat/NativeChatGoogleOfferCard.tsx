@@ -2,7 +2,7 @@
 // sign in to another through Google's account chooser; once on, add another account.
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { botTarget } from '@/lib/bot-hosts'
+import { botTarget, callBotRpc } from '@/lib/bot-hosts'
 import { connectorDescription } from '../bots/AddConnectorDialog'
 import { BotAppBrandLogo } from '../bots/apps/BotAppBrandLogo'
 import { BOT_CONNECTORS } from '../bots/bot-connectors'
@@ -48,19 +48,22 @@ export function NativeChatGoogleOfferCard({
     if (!connected || (bot.google !== true && !(await turnOnGoogle(bot)))) {
       return
     }
-    const text = t('components.native-chat.googleOffer.useAccount', 'Use {{email}} for Google.', {
-      email: connected.email
-    })
     // The sign-in can take minutes; compare with the default as it is now, not at the click.
     const latest = await refreshGoogle(botTarget(bot))
     const answer = googleOfferSignedInAnswer(connected.email, {
       added,
       defaultAccount: latest.status === 'ready' ? (latest.google.defaultAccount ?? null) : null
     })
-    if (answer === 'again') {
-      answering.sendAgain(text, [connected.email])
-    } else if (answer === 'send') {
-      answering.send(text, [connected.email])
+    // A hidden card answer: the Connected card already shows the account, and the bot reads a fact.
+    if (answer) {
+      answering.answer(
+        async () => {
+          await callBotRpc(bot, 'google.bot.connected', { botId: bot.id, account: connected.email })
+          return true
+        },
+        [connected.email],
+        answer === 'again'
+      )
     }
   }
 

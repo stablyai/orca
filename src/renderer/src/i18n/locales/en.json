@@ -22738,7 +22738,6 @@
         "label": "Message box and prompts"
       },
       "googleOffer": {
-        "useAccount": "Use {{email}} for Google.",
         "useAnother": "Use another account",
         "reconnect": "Reconnect {{email}}",
         "use": "Use {{email}}",
