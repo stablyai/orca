@@ -65,6 +65,12 @@ export function requirePluginService(): PluginService {
   return pluginServiceForRpc
 }
 
+/** The reviewed manifest name that names a plugin's mail; null when it is not installed here. */
+export function pluginSenderName(pluginKey: string): string | null {
+  const name = pluginServiceForRpc?.findValidPlugin(pluginKey)?.manifest.name
+  return typeof name === 'string' && name.trim() ? name.trim() : null
+}
+
 function requireConsentWrite(): (request: PluginConsentRequest) => Promise<void> {
   if (!pluginConsentForRpc) {
     throw new Error('Plugin consent is not available on this runtime')

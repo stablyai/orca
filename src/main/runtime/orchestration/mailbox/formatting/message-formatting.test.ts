@@ -46,6 +46,16 @@ describe('the mail header', () => {
     expect(header(message())).toBe('──── From: TERM_ABC (term_abc) (handoff) ────')
   })
 
+  it('names a plugin sender by the manifest name the host approved, keeping its handle', () => {
+    const row = message({ from_handle: 'plugin:local.project-coordinator', type: 'status' })
+    expect(header(row, { senderName: 'Project Coordinator' })).toBe(
+      '──── From: Project Coordinator (plugin:local.project-coordinator) (status) ────'
+    )
+    expect(header(row)).toBe(
+      '──── From: PLUGIN:LOCAL.PROJECT-COORDINATOR (plugin:local.project-coordinator) (status) ────'
+    )
+  })
+
   it("names a paired computer's bot, or an agent there, never its raw address", () => {
     const fromBot = message({
       from_handle: PAIRED_LABEL,

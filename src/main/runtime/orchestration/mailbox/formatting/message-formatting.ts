@@ -17,6 +17,8 @@ import {
   formatBotItemReportHint,
   type BotItemReportFact
 } from '../../../../../shared/bots/bot-item-report-hint'
+import { printableAgentLabel } from '../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
+import { pluginSenderName } from '../../../rpc/methods/plugins/plugins'
 
 // The fields of this host's own bot-request record that name a paired sender, in every shape it
 // has saved them.
@@ -93,6 +95,8 @@ export type MessageFormattingOptions = {
   followUp?: ReportFollowUpAction
   /** The open item a finished worker was started for, read when the report is shown. */
   reportItem?: BotItemReportFact
+  /** A name the host already knows for the sender, used instead of its uppercased handle. */
+  senderName?: string
 }
 
 function resolveAuthority(
@@ -155,7 +159,10 @@ export function formatMessageBannerWithContent(
           ? ' [LEGACY READ-ONLY]'
           : ''
   const paired = pairedSenderOf(msg, options.peerMail)
-  const from = paired ?? `${msg.from_handle.toUpperCase()} (${msg.from_handle})`
+  const pluginKey = msg.from_handle.startsWith('plugin:') ? msg.from_handle.slice(7) : null
+  const knownName = options.senderName ?? (pluginKey ? pluginSenderName(pluginKey) : null)
+  const label = knownName ? printableAgentLabel(knownName) : msg.from_handle.toUpperCase()
+  const from = paired ?? `${label} (${msg.from_handle})`
 
   const header = `──── From: ${from}${priorityTag}${authorityTag} (${msg.type}) ────`
 
