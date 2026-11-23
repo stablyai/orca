@@ -5,6 +5,7 @@ import { BOT_ITEM_MAIL_SENDER } from '../../shared/bots/bot-item-note-runs'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import { readMessageSenderDispatch } from '../runtime/orchestration/db/messages/message-sender-dispatch'
 import type { BotGroupRuntime } from './bot-group-runtime'
+import { lineageAncestors } from './bot-item-dispatch-facts'
 
 /** The group request a message's turns serve: its own, or the human post it continues. */
 export const rootOf = (message: {
@@ -57,7 +58,15 @@ export function mailRoot(
     (mail.from_handle.startsWith('dispatch:')
       ? mail.from_handle.slice('dispatch:'.length)
       : db.getActiveDispatchForIdentity(mail.from_handle)?.id)
-  const operationId = dispatch ? groups.store.workerOperation(dispatch) : null
+  // A follow-up is a new Dispatch: it serves the operation its newest bound ancestor started for.
+  const operationId = dispatch
+    ? (lineageAncestors(db, dispatch)
+        .map((id) => groups.store.workerOperation(id))
+        .find((id) => id !== null) ?? null)
+    : null
+  if (!operationId) {
+    warnUnboundWorkerMail(mail.id, dispatch)
+  }
   const message = operationId ? groups.store.operationMessage(operationId) : null
   const owned = message?.turns.some(
     (turn) => turn.operationId === operationId && turn.sessionId === member.sessionId
@@ -70,6 +79,22 @@ export function mailRoot(
         targetSessionId: member.sessionId
       }
     : null
+}
+
+const warnedUnboundMail = new Set<string>()
+
+/** Held worker mail would otherwise wait silently; say so once per mail. */
+function warnUnboundWorkerMail(mailId: string, dispatchId: string | undefined): void {
+  if (warnedUnboundMail.has(mailId)) {
+    return
+  }
+  if (warnedUnboundMail.size >= 1000) {
+    warnedUnboundMail.clear()
+  }
+  warnedUnboundMail.add(mailId)
+  console.warn(
+    `[bot-groups] holding worker mail ${mailId}: Dispatch ${dispatchId ?? '(none)'} serves no room request`
+  )
 }
 
 /** Whether a mail line's turn ran, by what the line itself saved: its reply, or its retirement. */
