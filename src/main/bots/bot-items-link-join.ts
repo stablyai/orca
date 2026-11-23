@@ -88,7 +88,7 @@ export class BotItemLinkJoin {
       return reads
     }
     // Links to one worker (a Dispatch and its follow-ups) read its workspace and report once; every
-    // workspace here reads its repo's worktrees and probes each path once, not once per worker.
+    // workspace here reads its repo's worktrees and checks each path once, not once per worker.
     const worktreeReads = createBotWorkspaceReads()
     const prs = new Map<string, Promise<BotItemPullRequest | null>>()
     const reports = new Map<string, WorkerRead['report']>()

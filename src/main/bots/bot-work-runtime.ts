@@ -1,8 +1,14 @@
 // The work record as this runtime reads it: links from the conversation store, workers from
 // orchestration, workspaces from the runtime's worktrees.
+import { existsSync } from 'node:fs'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { getRepoRoutingConnectionId } from '../../shared/execution-host/execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoRoutingConnectionId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../shared/execution-host/execution-host'
 import { splitWorktreeId } from '../../shared/worktree/id'
+import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
 import {
   findLink,
   findLinkForSession,
@@ -28,7 +34,7 @@ import {
 } from './bot-work-record'
 import { BotWorkStore, botWorkStoreFile, type BotWorkHost } from './bot-work-store'
 import type { BotWorkWorkspaceShow } from './bot-work-workspace-show'
-import { localWorktreeState, type BotWorkspaceReads } from './bot-workspace-reads'
+import { existsOnce, type BotWorkspaceReads } from './bot-workspace-reads'
 import { isInBotHome } from './bot-home-membership'
 import { readRemoteGitHubRepo, readRemoteWorkspace } from './bot-work-remote-workspace'
 import { readServerOwnedWorker } from './bot-work-server-owned-worker'
@@ -126,7 +132,7 @@ export async function readWorkers(
   return workers
 }
 
-/** `reads`: one batch's repo reads and path probes, shared by every workspace it reads. */
+/** `reads`: one batch's repo reads and path checks, shared by every workspace it reads. */
 export async function readWorkspace(
   runtime: BotWorkRuntime,
   worker: BotWorkWorker,
@@ -153,16 +159,18 @@ async function readLocalWorkspace(
   if (!repo) {
     return null
   }
-  // An unverifiable path reads as nothing, never a catalog search for a checkout that may be gone.
-  const state = await localWorktreeState(repo, parsed.worktreePath, reads)
-  if (state !== 'present') {
-    return state === 'gone' ? 'gone' : null
+  // Only this machine's own disk proves a deletion, with the repository still there: an SSH host,
+  // a stopped WSL distro or an unmounted drive proves nothing.
+  if (
+    getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
+    !parseWslUncPath(parsed.worktreePath) &&
+    existsOnce(repo.path, existsSync, reads) &&
+    !existsOnce(parsed.worktreePath, existsSync, reads)
+  ) {
+    return 'gone'
   }
-  const worktree = await runtime.showManagedTerminalWorkspace(
-    `id:${worktreeId}`,
-    undefined,
-    reads?.worktrees
-  )
+  const scoped = reads?.worktrees
+  const worktree = await runtime.showManagedTerminalWorkspace(`id:${worktreeId}`, undefined, scoped)
   // The PR the workspace's row shows: the desktop's cached read, never a GitHub call of its own.
   const pr = readWorkspaceReviewPR(worktree, repo, store.getGitHubCache().pr)
   return {

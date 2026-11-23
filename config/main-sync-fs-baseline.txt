@@ -32,6 +32,7 @@
 1 src/main/bots/bot-tool-secret-scrub.ts
 1 src/main/bots/bot-tools-claude.ts
 1 src/main/bots/bot-tools-host.ts
+2 src/main/bots/bot-work-runtime.ts
 1 src/main/bots/bot-work-store.ts
 1 src/main/browser-passwords/browser-password-chromium-import.ts
 2 src/main/browser-passwords/browser-password-vault-file.ts

@@ -8,16 +8,15 @@ const LOCAL_WORKTREE_PATH_PROBE_CONCURRENCY = 2
 export const LOCAL_WORKTREE_PATH_PROBE_TIMEOUT_MS = 2_000
 const localWorktreePathProbeSemaphore = new PrioritySemaphore(LOCAL_WORKTREE_PATH_PROBE_CONCURRENCY)
 
-export type LocalWorktreePathPresence = 'directory' | 'other' | 'missing' | 'unknown'
+type LocalWorktreePathPresence = 'directory' | 'other' | 'missing' | 'unknown'
 
 async function probeLocalWorktreePath(
   pathValue: string,
-  signal: AbortSignal,
-  semaphore = localWorktreePathProbeSemaphore
+  signal: AbortSignal
 ): Promise<LocalWorktreePathPresence> {
   let release: () => void
   try {
-    release = await semaphore.acquire(0, signal)
+    release = await localWorktreePathProbeSemaphore.acquire(0, signal)
   } catch {
     return 'unknown'
   }
@@ -56,15 +55,13 @@ export function localWorktreePathExistsOrIsUnverifiable(
   return localWorktreePathPresence(pathValue, options).then((presence) => presence !== 'missing')
 }
 
-/** `semaphore`: a caller's own bound, so stalls in other callers' probes never hold its probes. */
 export function localWorktreePathPresence(
   pathValue: string,
-  options: { signal?: AbortSignal; semaphore?: PrioritySemaphore } = {}
+  options: { signal?: AbortSignal } = {}
 ): Promise<LocalWorktreePathPresence> {
   return probeLocalWorktreePath(
     pathValue,
-    abortSignalWithTimeout(options.signal, LOCAL_WORKTREE_PATH_PROBE_TIMEOUT_MS),
-    options.semaphore
+    abortSignalWithTimeout(options.signal, LOCAL_WORKTREE_PATH_PROBE_TIMEOUT_MS)
   )
 }
 
