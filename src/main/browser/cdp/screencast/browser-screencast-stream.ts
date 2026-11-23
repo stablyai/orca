@@ -1,4 +1,5 @@
 import type { WebContents } from 'electron'
+import type { BrowserScreencastFrameMetadata } from '../../../../shared/browser/screencast/browser-screencast-protocol'
 import { BrowserError } from '../../browser-error'
 import {
   acquireElectronDebugger,
@@ -6,12 +7,19 @@ import {
 } from '../debugger/electron-debugger-lease'
 import {
   browserScreencastDialogEvent,
-  createBrowserScreencastMessageHandler
+  createBrowserScreencastPageEventHandler
 } from './browser-screencast-cdp-events'
-import { sendDebuggerCommand } from './browser-screencast-debugger-command'
+import {
+  runDebuggerCommandWithTimeout,
+  sendDebuggerCommand
+} from './browser-screencast-debugger-command'
 import { createBrowserScreencastDeviceMetrics } from './browser-screencast-device-metrics'
-import { createBrowserScreencastFramePacer } from './browser-screencast-frame-pacer'
-import { createBrowserScreencastSnapshotCapture } from './browser-screencast-snapshot-capture'
+import {
+  createBrowserScreencastLane,
+  type BrowserScreencastLaneController
+} from './browser-screencast-lane'
+import { attachOrcaPageSession, releaseOrcaPageSession } from '../input/guest-frame-input-sessions'
+import { sendGuestCdpCommand } from '../debugger/guest-cdp-command'
 import {
   answerBrowserJavaScriptDialog,
   getBrowserJavaScriptDialog,
@@ -25,6 +33,7 @@ import {
 } from './browser-screencast-guest-view-limit'
 import type {
   BrowserScreencastFrameBudget,
+  BrowserScreencastLane,
   BrowserScreencastOptions,
   BrowserScreencastSession,
   BrowserScreencastViewport
@@ -62,6 +71,8 @@ export async function startBrowserScreencast(
   const isClosed = (): boolean => closed
   const isStopping = (): boolean => stopping
   const stopRequested = new AbortController()
+  // Each lane encodes the page at its own budget; the stream's own session serves one of them.
+  const lanes = new Set<BrowserScreencastLaneController>()
 
   // Preserve the client request so the viewport can grow back after the guest view limit shrinks it.
   const embedderSizedGuest = isEmbedderSizedScreencastGuest(webContents)
@@ -79,6 +90,9 @@ export async function startBrowserScreencast(
     const changed =
       next.viewportWidth !== options.viewportWidth || next.viewportHeight !== options.viewportHeight
     Object.assign(options, next)
+    for (const lane of lanes) {
+      lane.setViewport(next)
+    }
     if (changed) {
       emulationGeneration += 1
     }
@@ -86,93 +100,152 @@ export async function startBrowserScreencast(
   }
 
   const deviceMetrics = createBrowserScreencastDeviceMetrics(webContents, dbg, options)
-  const framePacer = createBrowserScreencastFramePacer({
-    dbg,
-    options,
-    isClosed,
-    isStopping,
-    readZoomFactor: () =>
-      webContents.isDestroyed() || deviceMetrics.emulatesMobile() ? 1 : webContents.getZoomFactor()
-  })
-  const snapshotCapture = createBrowserScreencastSnapshotCapture({
-    webContents,
-    dbg,
-    options,
-    isClosed,
-    isStopping,
-    stopSignal: stopRequested.signal,
-    getSeq: framePacer.getSeq,
-    queueFrame: framePacer.queueFrame,
-    applyDeviceMetricsOverride: () => {
-      const generation = emulationGeneration
-      const applied = deviceMetrics.apply()
-      // Advance even on failure so a rejected metrics write cannot suppress live frames forever.
-      const markApplied = (): void => {
-        appliedEmulationGeneration = Math.max(appliedEmulationGeneration, generation)
-      }
-      applied.then(markApplied, markApplied)
-      return applied
+  const readZoomFactor = (): number =>
+    webContents.isDestroyed() || deviceMetrics.emulatesMobile() ? 1 : webContents.getZoomFactor()
+  const applyDeviceMetricsOverride = (): Promise<void> => {
+    const generation = emulationGeneration
+    const applied = deviceMetrics.apply()
+    // Advance even on failure so a rejected metrics write cannot suppress live frames forever.
+    const markApplied = (): void => {
+      appliedEmulationGeneration = Math.max(appliedEmulationGeneration, generation)
     }
-  })
-  const handleMessage = createBrowserScreencastMessageHandler({
-    dbg,
-    options,
-    isClosed,
-    isStopping,
-    queueFrame: framePacer.queueFrame,
-    ackScreencastFrame: framePacer.ackFrame,
-    scheduleNavigationFrameCapture: snapshotCapture.scheduleNavigationFrameCapture,
-    clearNavigationCaptureTimer: snapshotCapture.clearNavigationCaptureTimer,
-    bumpSnapshotGeneration: snapshotCapture.bumpGeneration,
-    observeGuestViewSize: (metadata) => {
-      if (!embedderSizedGuest) {
-        return false
+    applied.then(markApplied, markApplied)
+    return applied
+  }
+  const observeGuestViewSize = (metadata: BrowserScreencastFrameMetadata): boolean => {
+    if (!embedderSizedGuest) {
+      return false
+    }
+    const size = readScreencastGuestViewSize(metadata)
+    if (size && (guestViewSize?.width !== size.width || guestViewSize.height !== size.height)) {
+      guestViewSize = size
+      if (applyEffectiveViewport()) {
+        void reemulate().catch(() => {})
       }
-      const size = readScreencastGuestViewSize(metadata)
-      if (size && (guestViewSize?.width !== size.width || guestViewSize.height !== size.height)) {
-        guestViewSize = size
-        if (applyEffectiveViewport()) {
-          void reemulate().catch(() => {})
-        }
-      }
-      // Reject old-layout crops until queued viewport metrics have landed.
-      return appliedEmulationGeneration < emulationGeneration
-    },
-    openDialog: () => getBrowserJavaScriptDialog(webContents.id)
-  })
-
-  const reemulate = (): Promise<void> => {
-    pendingUpdate = pendingUpdate
-      .catch(() => {})
-      .then(async () => {
-        if (closed || stopping) {
-          return
-        }
-        snapshotCapture.bumpGeneration()
-        snapshotCapture.clearNavigationCaptureTimer()
-        framePacer.clearPending(true)
-        // initialOnly would skip metrics updates once this stream has emitted a frame.
-        await snapshotCapture.emitSnapshotFrame(false)
-      })
+    }
+    // Reject old-layout crops until queued viewport metrics have landed.
+    return appliedEmulationGeneration < emulationGeneration
+  }
+  const enqueue = (work: () => Promise<void>): Promise<void> => {
+    pendingUpdate = pendingUpdate.catch(() => {}).then(work)
     return pendingUpdate
   }
 
-  const startScreencast = (): Promise<unknown> =>
-    sendDebuggerCommand(dbg, 'Page.startScreencast', {
-      format: options.format,
-      quality: options.quality,
-      maxWidth: options.maxWidth,
-      maxHeight: options.maxHeight,
-      everyNthFrame: options.everyNthFrame
+  const createLane = (
+    cdpSessionId: string | undefined,
+    budget: BrowserScreencastFrameBudget,
+    onFrame: BrowserScreencastOptions['onFrame']
+  ): BrowserScreencastLaneController => {
+    const lane = createBrowserScreencastLane({
+      webContents,
+      dbg,
+      cdpSessionId,
+      options: { ...options, ...budget, onFrame },
+      isStreamClosed: isClosed,
+      isStreamStopping: isStopping,
+      streamStopSignal: stopRequested.signal,
+      enqueue,
+      readZoomFactor,
+      applyDeviceMetricsOverride,
+      observeGuestViewSize,
+      onStopped: () => {
+        lanes.delete(lane)
+        if (cdpSessionId !== undefined) {
+          releaseOrcaPageSession(webContents, cdpSessionId)
+        }
+      }
     })
+    lanes.add(lane)
+    return lane
+  }
+  const rootLaneIsFree = (): boolean =>
+    !Array.from(lanes).some((lane) => lane.cdpSessionId === undefined)
+  const openLane = async (
+    budget: BrowserScreencastFrameBudget,
+    onFrame: BrowserScreencastOptions['onFrame']
+  ): Promise<BrowserScreencastLane> => {
+    let lane: BrowserScreencastLaneController | null = null
+    await enqueue(async () => {
+      if (closed || stopping) {
+        throw new BrowserError('browser_error', 'Browser stream ended.')
+      }
+      const cdpSessionId = rootLaneIsFree()
+        ? undefined
+        : await attachOrcaPageSession(webContents, (method, params, sessionId) =>
+            runDebuggerCommandWithTimeout(method, () =>
+              sendGuestCdpCommand(webContents, method, params, sessionId)
+            )
+          )
+      if (cdpSessionId !== undefined && (closed || stopping)) {
+        // Stop already ended the lanes it knew of; this session would outlive the stream.
+        await runDebuggerCommandWithTimeout('Target.detachFromTarget', () =>
+          dbg.sendCommand('Target.detachFromTarget', { sessionId: cdpSessionId })
+        ).catch(() => {})
+        releaseOrcaPageSession(webContents, cdpSessionId)
+        throw new BrowserError('browser_error', 'Browser stream ended.')
+      }
+      const opened = createLane(cdpSessionId, budget, onFrame)
+      lane = opened
+      try {
+        await opened.start()
+      } catch (error) {
+        opened.handle.stop()
+        throw error
+      }
+    })
+    return lane!.handle
+  }
+
+  const reemulate = (): Promise<void> =>
+    enqueue(async () => {
+      if (closed || stopping) {
+        return
+      }
+      await Promise.all(Array.from(lanes, (lane) => lane.reemulate()))
+    })
+
+  const firstLane = createLane(undefined, options, options.onFrame)
+  const handlePageEvent = createBrowserScreencastPageEventHandler({
+    options,
+    isClosed,
+    isStopping,
+    scheduleNavigationFrameCapture: () => {
+      for (const lane of lanes) {
+        lane.scheduleNavigationFrameCapture()
+      }
+    },
+    openDialog: () => getBrowserJavaScriptDialog(webContents.id)
+  })
+  const handleMessage = (
+    _event: unknown,
+    method: string,
+    params: unknown,
+    sessionId?: string
+  ): void => {
+    if (method === 'Page.screencastFrame') {
+      // Electron reports the stream's own session as an empty id.
+      const laneSessionId = sessionId || undefined
+      for (const lane of lanes) {
+        if (lane.cdpSessionId === laneSessionId) {
+          lane.handleFrame(params)
+          return
+        }
+      }
+      return
+    }
+    if (!sessionId) {
+      handlePageEvent(method, params)
+    }
+  }
 
   const finish = (): void => {
     if (closed) {
       return
     }
     closed = true
-    snapshotCapture.clearNavigationCaptureTimer()
-    framePacer.clearPending()
+    for (const lane of Array.from(lanes)) {
+      lane.close()
+    }
     dbg.removeListener('message', handleMessage as never)
     dbg.removeListener('detach', handleDetach as never)
     stopWatchingDialogs()
@@ -199,11 +272,10 @@ export async function startBrowserScreencast(
   try {
     await sendDebuggerCommand(dbg, 'Page.enable')
     await deviceMetrics.apply()
-    await startScreencast()
-    pendingUpdate = snapshotCapture.emitSnapshotFrame(true)
+    await firstLane.start()
     // Hidden embedders may stop compositing without producing a frame.
     const noFrameTimer = setTimeout(() => {
-      if (!closed && !stopping && framePacer.getSeq() === 0) {
+      if (!closed && !stopping && ![firstLane, ...lanes].some((lane) => lane.getSeq() > 0)) {
         options.onError?.(options.noFrameMessage?.() ?? 'Browser stream timed out.')
       }
     }, NO_FRAME_TIMEOUT_MS)
@@ -227,41 +299,24 @@ export async function startBrowserScreencast(
       }
       return reemulate()
     },
-    updateFrameBudget: (budget: BrowserScreencastFrameBudget) => {
-      pendingUpdate = pendingUpdate
-        .catch(() => {})
-        .then(async () => {
-          if (closed || stopping) {
-            return
-          }
-          Object.assign(options, budget)
-          // Chromium needs a restart for frame caps; the pacer reads its interval live.
-          await startScreencast()
-        })
-      return pendingUpdate
-    },
+    firstLane: firstLane.handle,
+    openLane,
     stop: () => {
       if (closed || stopping) {
         return
       }
       stopping = true
       stopRequested.abort()
-      snapshotCapture.bumpGeneration()
-      snapshotCapture.clearNavigationCaptureTimer()
-      framePacer.clearPending(true)
-      try {
-        void (async () => {
-          await pendingUpdate.catch(() => {})
-          // Dismiss before releasing this CDP session; a replacement may block while the dialog is open.
-          answerBrowserJavaScriptDialog(webContents.id, { accept: false, promptText: '' })
-          await sendDebuggerCommand(dbg, 'Page.stopScreencast').catch(() => {})
-          if (deviceMetrics.isOverridden()) {
-            await deviceMetrics.clear().catch(() => {})
-          }
-        })().finally(finish)
-      } catch {
-        finish()
+      for (const lane of Array.from(lanes)) {
+        lane.handle.stop()
       }
+      void enqueue(async () => {
+        // Dismiss before releasing this CDP session; a replacement may block while the dialog is open.
+        answerBrowserJavaScriptDialog(webContents.id, { accept: false, promptText: '' })
+        if (deviceMetrics.isOverridden()) {
+          await deviceMetrics.clear().catch(() => {})
+        }
+      }).finally(finish)
     },
     done
   }

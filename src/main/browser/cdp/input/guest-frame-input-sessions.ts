@@ -202,3 +202,32 @@ export async function sendFrameSessionInput(
   }
   return await send(method, params, sessionId)
 }
+
+/** A second CDP session on the page itself, hidden from the agent's client like frame sessions. */
+export async function attachOrcaPageSession(
+  webContents: WebContents,
+  send: GuestSessionCdpSender
+): Promise<string> {
+  const info = await send('Target.getTargetInfo', {})
+  const targetId = readString(readRecord(info, 'targetInfo'), 'targetId')
+  if (!targetId) {
+    throw new Error('The page has no CDP target.')
+  }
+  const attached = await send('Target.attachToTarget', { targetId, flatten: true })
+  const sessionId = readString(
+    attached !== null && typeof attached === 'object'
+      ? Object.fromEntries(Object.entries(attached))
+      : null,
+    'sessionId'
+  )
+  if (!sessionId) {
+    throw new Error('The page refused another CDP session.')
+  }
+  frameSessionsFor(webContents).ownedSessionIds.add(sessionId)
+  return sessionId
+}
+
+/** After its detach: Chromium reports the detach before answering it, so the event stayed hidden. */
+export function releaseOrcaPageSession(webContents: WebContents, sessionId: string): void {
+  frameSessionsByGuest.get(webContents)?.ownedSessionIds.delete(sessionId)
+}
