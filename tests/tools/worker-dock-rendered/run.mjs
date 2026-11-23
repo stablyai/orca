@@ -7,6 +7,7 @@ import path from 'node:path'
 
 const base = process.argv[2] ?? 'http://127.0.0.1:5600'
 const shots = process.argv[3]
+const filter = process.env.ORCA_WORKER_DOCK_TEST_FILTER
 const FIXTURE = 'native-chat/tools/tasks/dock/WorkerDockHarness'
 const results = []
 
@@ -16,27 +17,43 @@ const browser = await chromium.launch({
 })
 
 const pages = new Map()
+async function warmPage(touch) {
+  if (!pages.has(touch)) {
+    const context = await browser.newContext({ hasTouch: touch })
+    const page = await context.newPage()
+    page.setDefaultTimeout(8000)
+    const opened = { page, errors: [], revision: 0 }
+    page.on('pageerror', (error) => opened.errors.push(error.message))
+    page.on('framenavigated', (frame) => {
+      if (frame === page.mainFrame()) {
+        opened.revision++
+      }
+    })
+    await page.goto(`${base}/fixtures.html?worker=1`, {
+      waitUntil: 'commit',
+      timeout: 180_000
+    })
+    pages.set(touch, opened)
+  }
+  const opened = pages.get(touch)
+  try {
+    await opened.page.waitForFunction(() => Boolean(window.__orcaComponentFixtureHost), undefined, {
+      timeout: 60_000
+    })
+  } catch (error) {
+    const detail = opened.errors.join(', ') || error.message.split('\n')[0]
+    throw new Error(`Fixture host at ${base} did not start: ${detail}`, { cause: error })
+  }
+  return opened
+}
+
 async function open(
   scene,
   { width = 760, height = 900, theme = 'dark', touch = false, fixture = FIXTURE } = {}
 ) {
-  let opened = pages.get(touch)
-  if (!opened) {
-    const context = await browser.newContext({ hasTouch: touch })
-    const page = await context.newPage()
-    page.setDefaultTimeout(8000)
-    const errors = []
-    page.on('pageerror', (error) => errors.push(error.message))
-    await page.goto(`${base}/fixtures.html?worker=1`, { timeout: 180_000 })
-    await page.waitForFunction(() => Boolean(window.__orcaComponentFixtureHost), undefined, {
-      timeout: 180_000
-    })
-    opened = { page, errors }
-    pages.set(touch, opened)
-  }
+  const opened = await warmPage(touch)
   const { page, errors } = opened
   errors.length = 0
-  await page.waitForFunction(() => Boolean(window.__orcaComponentFixtureHost))
   await page.setViewportSize({ width, height })
   await page.evaluate(
     ([id, fixtureTheme]) => window.__orcaComponentFixtureHost.render(id, fixtureTheme),
@@ -69,7 +86,6 @@ const scrollState = (page) =>
   }))
 const events = (page) => page.evaluate(() => window.__workerDockHarness?.events ?? [])
 
-const filter = process.env.ORCA_WORKER_DOCK_TEST_FILTER
 async function check(name, run) {
   if (filter && !name.includes(filter)) {
     return
@@ -79,9 +95,8 @@ async function check(name, run) {
     results.push({ name, ok: true })
     console.log(`PASS  ${name}`)
   } catch (error) {
-    const reason = String(error?.message ?? error).split('\n')[0]
     results.push({ name, ok: false })
-    console.error('FAIL ', name, '->', reason)
+    console.error('FAIL ', name, '->', error.message)
   }
 }
 function assert(condition, message) {
@@ -90,9 +105,31 @@ function assert(condition, message) {
   }
 }
 async function scene(name, options, run) {
-  const opened = await open(name, options)
-  await run(opened.page)
-  assert(opened.errors.length === 0, `page errors: ${opened.errors.join('; ')}`)
+  const opened = await warmPage(options.touch ?? false)
+  const revision = opened.revision
+  try {
+    await open(name, options)
+    await run(opened.page)
+    assert(opened.revision === revision, 'fixture server reloaded during the case')
+    assert(opened.errors.length === 0, `page errors: ${opened.errors.join(', ')}`)
+  } catch (error) {
+    if (opened.revision === revision) {
+      throw error
+    }
+    // A source edit can reload the fixture document between browser actions.
+    const retry = await open(name, options)
+    const retryRevision = retry.revision
+    await run(retry.page)
+    assert(retry.revision === retryRevision, 'fixture server reloaded again during the case')
+    assert(retry.errors.length === 0, `page errors: ${retry.errors.join(', ')}`)
+  }
+}
+
+try {
+  await warmPage(filter === 'opens by touch tap' || filter === 'scrolls by touch drag')
+} catch (error) {
+  await browser.close()
+  throw error
 }
 
 await check('opens and folds from the header by click, Enter and Space', () =>
@@ -457,7 +494,7 @@ for (const chat of ['coordinator', 'bot']) {
   )
 }
 
-if (shots) {
+if (shots && !filter) {
   for (const theme of ['light', 'dark']) {
     for (const [width, sceneName] of [
       [760, 'twentyOpen720'],

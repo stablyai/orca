@@ -3,7 +3,7 @@ import { botPanelPage, fixtureCos } from '../../../../../component-fixtures/fixt
 import { stubBots } from '../../../../../component-fixtures/fixture-bots'
 import { makeStructuredChatTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { Button } from '@/components/ui/button'
-import { NativeChatStructuredSession } from '../../../NativeChatStructuredSession'
+import NativeChatView from '../../../NativeChatView'
 import {
   getOrCreateStructuredReadOwner,
   retireStructuredAgentSessionReadOwner,
@@ -16,6 +16,11 @@ import type {
 import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import { folderWorkspaceKey } from '../../../../../../../shared/workspace/identity/workspace-scope'
 import type { AgentJournalRenderItem } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { formatOrcaSessionAddress } from '../../../../../../../shared/agent-session/identity/orca-session-address'
+import type {
+  WorkerDockEntry,
+  WorkerDockSnapshot
+} from '../../../../../../../shared/orchestration/dock/worker-dock'
 
 const local = { kind: 'local' } as const
 const source = 'f34c616a-a277-4d31-9311-a083e140be11'
@@ -29,21 +34,19 @@ function completionFixture(isBot: boolean) {
   let finish: () => void
   return defineFixture({
     width: 720,
-    store: isBot
-      ? {
-          ...botPanelPage(false, null),
-          unifiedTabsByWorktree: {
-            [home]: [
-              makeStructuredChatTab({
-                id: tabId,
-                worktreeId: home,
-                entityId: sessionId,
-                agentSessionAgent: 'claude'
-              })
-            ]
-          }
-        }
-      : undefined,
+    store: {
+      ...botPanelPage(false, null),
+      unifiedTabsByWorktree: {
+        [home]: [
+          makeStructuredChatTab({
+            id: tabId,
+            worktreeId: home,
+            entityId: sessionId,
+            agentSessionAgent: 'claude'
+          })
+        ]
+      }
+    },
     setup: () => {
       stubBots(
         isBot ? [{ ...fixtureCos, name: 'Release assistant', chatSessionId: sessionId }] : []
@@ -56,7 +59,7 @@ function completionFixture(isBot: boolean) {
         observedAt: nonce + sequence,
         body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }
       })
-      const presence = { revision: `fixture-worker:${nonce}`, open: true }
+      const presence = { revision: `fixture-worker-${nonce}:1`, open: true }
       let snapshot: StructuredAgentSessionReadSnapshot = {
         state: {
           ...EMPTY_STRUCTURED_AGENT_SESSION,
@@ -91,37 +94,75 @@ function completionFixture(isBot: boolean) {
       retireStructuredAgentSessionReadOwner(sessionId, local)
       getOrCreateStructuredReadOwner(structuredReadOwnerKey(sessionId, local), () => owner)
 
-      const worker = {
+      const worker: WorkerDockEntry = {
         id: 'fixture-worker',
         dispatchId: 'ctx_fixture_completion',
+        source: formatOrcaSessionAddress(sessionId),
+        name: 'Release worker',
+        title: 'Verify the release notes',
         kind: 'worker',
+        model: null,
         state: 'running',
         changedAt: nonce,
+        startedAt: nonce,
+        reason: null,
         settlement: null,
+        resultId: null,
+        stoppable: true,
         ownerActionsAvailable: true
       }
-      const { subscribe } = window.api.runtime
-      const events = new Set<Parameters<typeof subscribe>[1]>()
-      window.api.runtime.subscribe = async (request, callback) => {
-        if (request.method !== 'orchestration.workerDockSubscribe') {
-          return subscribe(request, callback)
+      let dock: WorkerDockSnapshot = {
+        revision: 1,
+        expired: false,
+        identities: [{ ...worker, hasModel: false }],
+        rows: [worker],
+        anchor: worker.id
+      }
+      const runtime = window.api.runtime
+      const events = new Set<(result: WorkerDockSnapshot) => void>()
+      window.api.runtime = {
+        ...runtime,
+        subscribe: async (request, callback) => {
+          if (request.method !== 'orchestration.workerDockSubscribe') {
+            return runtime.subscribe(request, callback)
+          }
+          const send = (result: WorkerDockSnapshot) =>
+            callback({
+              id: `fixture-${result.revision}`,
+              ok: true,
+              result,
+              _meta: { runtimeId: 'fixture' }
+            })
+          events.add(send)
+          send(dock)
+          return { unsubscribe: () => events.delete(send) }
         }
-        events.add(callback)
-        callback({
-          id: 'fixture-1',
-          ok: true,
-          result: {
-            revision: 1,
-            expired: false,
-            identities: [worker],
-            rows: [],
-            anchor: worker.id
-          },
-          _meta: { runtimeId: 'fixture' }
-        })
-        return { unsubscribe: () => events.delete(callback) }
       }
       finish = () => {
+        if (dock.revision !== 1) {
+          return
+        }
+        // Older hosts return Finished references in the snapshot's extra `results` field.
+        const completed = {
+          revision: 2,
+          expired: false,
+          identities: [],
+          rows: [],
+          anchor: null,
+          results: [
+            {
+              id: 'fixture-result',
+              dispatchId: worker.dispatchId,
+              name: worker.name,
+              title: worker.title,
+              summary: report,
+              at: nonce + 2,
+              settlement: 'worker_report:fixture-result',
+              outcome: 'succeeded'
+            }
+          ]
+        }
+        dock = completed
         snapshot = {
           ...snapshot,
           state: { ...snapshot.state, items: [...snapshot.state.items, message(2, report)] }
@@ -130,29 +171,7 @@ function completionFixture(isBot: boolean) {
           listener()
         }
         for (const onEvent of events) {
-          onEvent({
-            id: 'fixture-2',
-            ok: true,
-            result: {
-              revision: 2,
-              expired: false,
-              identities: [],
-              rows: [],
-              anchor: null,
-              results: [
-                {
-                  id: 'fixture-result',
-                  dispatchId: worker.dispatchId,
-                  name: 'Release worker',
-                  summary: report,
-                  at: nonce + 2,
-                  settlement: 'worker_report:fixture-result',
-                  outcome: 'succeeded'
-                }
-              ]
-            },
-            _meta: { runtimeId: 'fixture' }
-          })
+          onEvent(dock)
         }
       }
     },
@@ -160,7 +179,8 @@ function completionFixture(isBot: boolean) {
       <>
         <Button onClick={() => finish()}>Complete fixture worker</Button>
         <div className="h-[640px]">
-          <NativeChatStructuredSession
+          <NativeChatView
+            mode="structured"
             agent="claude"
             tabId={tabId}
             sessionId={sessionId}

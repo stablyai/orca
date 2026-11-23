@@ -33,7 +33,10 @@ vi.mock('@/lib/window-activity/window-park-visibility', () => ({
   getWindowParkVisible: () => true,
   subscribeWindowParkVisibility: () => () => {}
 }))
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 it('filters settled workers from the roster returned by an older host', async () => {
   const presence = { revision: 'feed-legacy:1', open: true }
@@ -64,7 +67,8 @@ it("keeps an older host's recent failures, newest four, and drops the stale ones
   const hook = renderHook(() =>
     useWorkerDockFeed({ kind: 'local' }, '44444444-4444-4444-8444-444444444444', true, presence)
   )
-  const now = Date.now()
+  const now = Date.parse('2026-11-23T12:00:00Z')
+  vi.useFakeTimers({ now, toFake: ['Date'] })
   const failure = (id: string, minutesAgo: number) => ({
     id,
     dispatchId: id,
