@@ -10,27 +10,62 @@ import { readJournalDomainSubmissionAttempt } from '../journal-domain-submission
 
 type Target = { sessionId: string; epoch: string }
 
-/** In the transaction that just saved a send's rejection: its conversation rows are withdrawn when
- *  the chat's saved Stop is the person's Stop that took it back. */
+// The chat's unanswered connector rows, by the message that admitted them: one indexed read, so a
+// chat with none (every local chat) does no more work.
+function openReplyMessageIds(db: Database.Database, target: Target): Set<string> {
+  return new Set(
+    db
+      .prepare(`SELECT message_id FROM journal_connector_replies
+      WHERE session_id=? AND outcome IS NULL AND epoch=?`)
+      .all(target.sessionId, target.epoch)
+      .map((row) => String(row.message_id))
+  )
+}
+
+function savedStop(db: Database.Database, target: Target): JournalLatestStop | null {
+  const row = db
+    .prepare(`SELECT queue_latest_stop_json FROM journal_chat_state
+    WHERE session_id=? AND epoch=?`)
+    .get(target.sessionId, target.epoch)
+  return row?.queue_latest_stop_json == null ? null : JSON.parse(String(row.queue_latest_stop_json))
+}
+
+// A queued send's row may name its card rather than the send.
+const rowIdsOf = (send: AgentJournalSubmission) => [
+  send.clientMessageId,
+  ...(send.queuedMessageId ? [send.queuedMessageId] : [])
+]
+
+/** Withdraws the rows of each send the saved person's Stop took back; only sends with open rows are read. */
+function withdrawTakenBack(
+  db: Database.Database,
+  target: Target,
+  sends: readonly (() => AgentJournalSubmission | undefined)[],
+  savedAt: number
+): void {
+  const open = openReplyMessageIds(db, target)
+  if (open.size === 0) {
+    return
+  }
+  const stop = savedStop(db, target)?.event ?? null
+  for (const read of sends) {
+    const send = read()
+    const ids = send ? rowIdsOf(send).filter((id) => open.has(id)) : []
+    if (send && ids.length > 0 && personStopTookBack(send, stop)) {
+      withdrawJournalConnectorReplies(db, target, ids, savedAt)
+    }
+  }
+}
+
+/** In the transaction that just saved a send's rejection. */
 export function withdrawStopRejectedConnectorReplies(
   db: Database.Database,
   target: Target,
   send: AgentJournalSubmission,
   savedAt: number
 ): void {
-  if (send.dispatchState !== 'rejected' || !stopMayHaveRejected(send)) {
-    return
-  }
-  const row = db
-    .prepare(`SELECT queue_latest_stop_json FROM journal_chat_state
-    WHERE session_id=? AND epoch=?`)
-    .get(target.sessionId, target.epoch)
-  const latest: JournalLatestStop | null =
-    row?.queue_latest_stop_json == null ? null : JSON.parse(String(row.queue_latest_stop_json))
-  if (personStopTookBack(send, latest?.event ?? null)) {
-    // A queued send's row may name its card rather than the send.
-    const ids = [send.clientMessageId, ...(send.queuedMessageId ? [send.queuedMessageId] : [])]
-    withdrawJournalConnectorReplies(db, target, ids, savedAt)
+  if (send.dispatchState === 'rejected' && stopMayHaveRejected(send)) {
+    withdrawTakenBack(db, target, [() => send], savedAt)
   }
 }
 
@@ -41,10 +76,14 @@ export function withdrawStopTakenBackReplies(
   messageIds: readonly string[],
   savedAt: number
 ): void {
-  for (const messageId of messageIds) {
-    const send = readJournalDomainSubmissionAttempt(db, target, messageId, false)?.submission
-    if (send) {
-      withdrawStopRejectedConnectorReplies(db, target, send, savedAt)
-    }
+  if (messageIds.length > 0) {
+    withdrawTakenBack(
+      db,
+      target,
+      messageIds.map(
+        (id) => () => readJournalDomainSubmissionAttempt(db, target, id, false)?.submission
+      ),
+      savedAt
+    )
   }
 }
