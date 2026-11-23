@@ -15,6 +15,7 @@ import {
   checkAntigravityHostAcpCompatible
 } from './antigravity-host-acp'
 import { agyCredentialPresence } from './agy-credential-presence'
+import { agyServesOrcaHome } from './antigravity-agy-orca-home'
 
 export type AntigravityChatRoute = {
   /** New chats run on agy, with its sign-in as last checked (`unknown`: not asked or no answer),
@@ -22,9 +23,26 @@ export type AntigravityChatRoute = {
   agy: 'signedIn' | 'signedOut' | 'unknown' | 'notInstalled' | false
   /** What Install puts on this host: Orca's server, or Orca's copy of agy. */
   installs: 'server' | 'agy'
+  /** A Gemini API key or gcloud chat runs on agy, in a home Orca owns, with Orca's saved
+   *  credential (see antigravity-agy-orca-home). */
+  orcaHome?: true
 }
 
 const ON_SERVER: AntigravityChatRoute = { agy: false, installs: 'server' }
+const ON_AGY_ORCA_HOME: AntigravityChatRoute = { agy: false, installs: 'agy', orcaHome: true }
+
+/** The saved key or gcloud method, which agy can run on Orca's home; null for any other choice, a
+ *  malformed one or one still being saved. */
+function savedKeyOrGcloudMethod(value: unknown): 'gemini-api-key' | 'agent-platform' | null {
+  try {
+    assertAntigravityChatAuthPublished(value)
+  } catch {
+    return null
+  }
+  const parsed = AntigravityChatAuthConfigSchema.safeParse(value)
+  const method = parsed.success ? parsed.data.method : null
+  return method === 'gemini-api-key' || method === 'agent-platform' ? method : null
+}
 
 // The host's agy ignores Orca's account type, so any other saved choice, a malformed one, or one
 // still being saved keeps new chats on Orca's runtime, whose sign-in honors it.
@@ -88,6 +106,13 @@ async function computeAntigravityChatRoute(
   server: AcpLaunchSpec
 ): Promise<AntigravityChatRoute> {
   const { command, env, envToDelete, homePath } = input
+  // agy offers newer models than Orca's server, so where it is here (the person's own, or Orca's
+  // copy while that may run) key and gcloud chats run on it; otherwise on the server, as before.
+  if (savedKeyOrGcloudMethod(input.settings.antigravityChatAuth)) {
+    return isAbsolute(command) && (await agyServesOrcaHome(command, env))
+      ? ON_AGY_ORCA_HOME
+      : ON_SERVER
+  }
   // The host launch drops an API-key provider's key, so that agy can't serve chats.
   if (
     !savedChatAuthIsPersonal(input.settings.antigravityChatAuth) ||

@@ -16,6 +16,8 @@ export function AntigravityChatSignInRow(props: {
   googleSignIn?: AntigravityGoogleSignInState
   /** After the sign-in method saves; the host's answer about the route is read again. */
   onSaved?: () => void
+  /** Hide the server's account row: key and gcloud chats run on agy, which Orca doesn't sign in. */
+  noServerAccount?: boolean
 }): React.JSX.Element {
   const signIn = useAntigravityChatSignInControls({
     owner: props.owner,
@@ -38,7 +40,9 @@ export function AntigravityChatSignInRow(props: {
           </div>
         )}
       >
-        {(auth) => <AntigravityChatAccountRow signIn={signIn} auth={auth} />}
+        {(auth) =>
+          props.noServerAccount ? null : <AntigravityChatAccountRow signIn={signIn} auth={auth} />
+        }
       </AntigravityChatAuthForm>
       {props.runtime}
     </>

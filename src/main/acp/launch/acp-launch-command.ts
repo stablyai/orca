@@ -74,7 +74,8 @@ export function acpLaunchSpecForAccount(
   spec: AcpLaunchSpec,
   home: AgentSessionAccountHome
 ): AcpLaunchSpec {
-  return spec.hostBackend?.pins(home) ? spec.hostBackend.spec : spec
+  const backend = spec.hostBackend
+  return backend?.pins(home) ? (backend.specFor?.(home) ?? backend.spec) : spec
 }
 
 // Model catalogs reuse the answer as long as the host check itself does (RECHECK_MS).
