@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fixture } from './profile-state-delayed-authority-fixture'
+import { retryParkedSaves } from './refused-save-retry'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -61,5 +62,23 @@ describe('scheduled profile save', () => {
 
     await vi.advanceTimersByTimeAsync(5_000)
     expect(authority.commands).toBeGreaterThan(afterRefusal)
+  })
+
+  it('stops its timer after the 40 s retry and saves when the user comes back', async () => {
+    const { store, authority, readState } = await fixture()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    authority.failNextWrite(Number.POSITIVE_INFINITY)
+    store.updateSettings({ workspaceDir: '/saved-on-focus' })
+
+    // The scheduled save, then retries after 5, 10, 20 and 40 s.
+    await vi.advanceTimersByTimeAsync(1_000 + 5_000 + 10_000 + 20_000 + 40_000)
+    expect(authority.writeFailures).toBe(5)
+    await vi.advanceTimersByTimeAsync(60 * 60_000)
+    expect(authority.writeFailures).toBe(5)
+
+    authority.failNextWrite(0)
+    retryParkedSaves()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(readState().settings.workspaceDir).toBe('/saved-on-focus')
   })
 })

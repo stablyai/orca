@@ -55,9 +55,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     this.idleStop = new ProfileStateIdleWriterStop({
       delay: () => this.options.writerIdleStopMs,
       getWriter: () => this.writer,
-      // A writer refusing saves stays open, so a retry about once a minute doesn't reopen it each time.
-      shouldSchedule: () =>
-        Boolean(this.closing || this.inFlight > 0 || this.reopenPolicy.refusingSaves),
+      shouldSchedule: () => Boolean(this.closing || this.inFlight > 0),
       stop: (writer) => this.stopIdleWriter(writer)
     })
     this.writer = this.createWriter(initialization)

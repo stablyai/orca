@@ -102,11 +102,6 @@ export class ProfileStateWriterReopenPolicy {
     this.publishNotice()
   }
 
-  /** A failure streak is under way; the unsaved warning is up until a save lands. */
-  get refusingSaves(): boolean {
-    return this.recovering
-  }
-
   get savingStopped(): boolean {
     return this.stopReported
   }
