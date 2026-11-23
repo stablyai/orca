@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
@@ -176,6 +177,39 @@ function Answered(): React.JSX.Element {
 }
 
 export const answered = defineFixture({ width: 340, render: () => <Answered /> })
+
+const LONG_CONTEXT: BotItemAsk = {
+  ...MERGE,
+  context: [
+    'Ready to merge: the guide PR.',
+    '',
+    '- Adds 3 short lines to each guide; no code change.',
+    '- CI green (41 pass).',
+    '- Checked every guide page renders in light and dark.',
+    '- Links in the new lines all resolve.',
+    '- The wording matches the style guide.',
+    '- Nothing equivalent is already on main.',
+    '- Two reviewers approved.',
+    '- The release notes mention it.'
+  ].join('\n')
+}
+
+// Answered while the item is open: it stays whole until the item is opened again.
+function AnsweredWhileOpen(): React.JSX.Element {
+  const [waiting, setWaiting] = useState(true)
+  useEffect(() => setWaiting(false), [])
+  return (
+    <Feed>
+      <Card
+        event={ask('q1', LONG_CONTEXT)}
+        waiting={waiting}
+        answers={waiting ? undefined : [answer]}
+      />
+    </Feed>
+  )
+}
+
+export const answeredWhileOpen = defineFixture({ width: 340, render: () => <AnsweredWhileOpen /> })
 export const answeredWide = defineFixture({ width: 560, render: () => <Answered /> })
 
 // Two asking messages in one feed: each carries its own tag.

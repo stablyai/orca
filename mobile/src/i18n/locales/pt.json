@@ -5300,15 +5300,16 @@
         "next": "Próximo item",
         "subWhere": "Item {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "Agora não"
-      },
       "write": {
         "offline": "{{host}} está offline."
       },
       "thisComputer": "O computador",
       "readFailedClosedPage": "Não foi possível ler mais itens fechados.",
-      "skillLimit": "Mensagem não enviada. Selecione no máximo {{limit}} arquivos de habilidade e tente novamente."
+      "skillLimit": "Mensagem não enviada. Selecione no máximo {{limit}} arquivos de habilidade e tente novamente.",
+      "ask": {
+        "notSentYet": "ainda não enviado",
+        "replaced": "O agente fez uma nova pergunta. Leia e responda."
+      }
     },
     "needs": {
       "chat": "Seu chat com {{name}}",

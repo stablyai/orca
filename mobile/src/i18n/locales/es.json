@@ -4726,15 +4726,16 @@
         "next": "Elemento siguiente",
         "subWhere": "Elemento {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "Ahora no"
-      },
       "write": {
         "offline": "{{host}} está sin conexión."
       },
       "thisComputer": "El ordenador",
       "readFailedClosedPage": "No se pudieron leer más elementos cerrados.",
-      "skillLimit": "Mensaje no enviado. Selecciona como máximo {{limit}} archivos de habilidades e inténtalo de nuevo."
+      "skillLimit": "Mensaje no enviado. Selecciona como máximo {{limit}} archivos de habilidades e inténtalo de nuevo.",
+      "ask": {
+        "notSentYet": "aún no enviado",
+        "replaced": "El agente ha hecho una nueva pregunta. Léela y luego responde."
+      }
     },
     "needs": {
       "chat": "Tu chat con {{name}}",

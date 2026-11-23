@@ -878,14 +878,7 @@
         "handedTo": "已交给",
         "paused": "{{bot}} 已暂停",
         "botsOff": "Bots 已关闭",
-        "couldNotTake": "{{bot}} 无法接收此请求",
-        "answered": "✓ 已回答",
-        "done": "✓ 已完成",
-        "notAnswered": "未回答",
-        "waitingOnYou": "等待你处理",
-        "working": "工作中…",
-        "hasIt": "已接手",
-        "openChat": "打开其聊天"
+        "couldNotTake": "{{bot}} 无法接收此请求"
       },
       "offer": {
         "unknownAgent": "{{bot}} 使用的智能体此应用无法识别。请编辑并选择一个智能体",
@@ -922,7 +915,7 @@
         "heading": "新 bot"
       },
       "toolAdded": {
-        "heading": "已添加工具",
+        "added": "已添加",
         "removed": "已移除",
         "remove": "移除"
       },
@@ -6707,7 +6700,8 @@
         "replyTo": "回复 {{name}}…",
         "replyingTo": "回复：",
         "showLess": "收起",
-        "fileOnComputer": "请在电脑上打开 {{name}}"
+        "fileOnComputer": "请在电脑上打开 {{name}}",
+        "hideReplyingTo": "隐藏"
       },
       "link": {
         "notRead": "尚未读取",
@@ -6815,7 +6809,13 @@
       },
       "ask": {
         "recommended": "推荐",
-        "notNow": "暂不"
+        "heldCount_other": "{{count}} 条回答尚未发送，<send>仍然发送</send>",
+        "typeAnswer": "输入你的回答",
+        "notSentYet": "尚未发送",
+        "previous": "上一个问题",
+        "step": "第 {{n}} 个，共 {{total}} 个",
+        "next": "下一个问题",
+        "replaced": "智能体提出了新问题。请先阅读，再回复"
       },
       "write": {
         "unknown": "发送时连接中断，内容可能已经送达。重新连接后请先查看“活动”，再决定是否重新发送",

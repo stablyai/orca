@@ -845,8 +845,6 @@
       }
     },
     "agents": {
-      "installedRegion": "Yüklü ajanlar",
-      "availableRegion": "Yüklenebilecek ajanlar",
       "permissionsTitle": "İzinler",
       "permissionsChoiceExplanation": "Her ajanın izin istemeden yapabilecekleri. Aşağıda bir ajan için farklı bir ayar seçebilirsiniz.",
       "permissionEachOwn": "Her ajanın kendi ayarları",
@@ -20664,6 +20662,7 @@
           "selectionWithheldCount_other": "Seçili {{count}} çalışma alanı geçerli filtreler tarafından gizlendiği için seçimden çıkarıldı.",
           "selectionWithheldCount_one": "Seçili {{count}} çalışma alanı geçerli filtreler tarafından gizlendiği için seçimden çıkarıldı.",
           "selectAllSafetyChecked_other": "Güvenlik kontrolünden geçen {{count}} çalışma alanının tümünü seç",
+          "clearSelection": "Seçimi temizle",
           "selectAllSafetyChecked_one": "Güvenlik kontrolünden geçen {{count}} çalışma alanının tümünü seç",
           "lastActive": "Son etkinlik: {{value0}}"
         },

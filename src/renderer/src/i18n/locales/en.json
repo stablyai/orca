@@ -1137,8 +1137,6 @@
       }
     },
     "agents": {
-      "installedRegion": "Installed agents",
-      "availableRegion": "Agents available to install",
       "permissionsTitle": "Permissions",
       "permissionsChoiceExplanation": "What every agent may do without asking. You can set one agent differently below.",
       "permissionEachOwn": "Each agent's own settings",
@@ -1237,6 +1235,8 @@
       "chatUnavailableOnWindows": "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work.",
       "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host.",
       "agentActions": "{{agent}} actions",
+      "showDetails": "Show details",
+      "hideDetails": "Hide details",
       "defaultAutoBadge": "Default · Auto",
       "newAgentsTitle": "New agents",
       "defaultSurfaceServerDescription": "The default for agents {{host}} starts itself, such as from its CLI or orchestration workers. Agents you open from this computer follow This computer's choice."
@@ -1796,7 +1796,8 @@
       "soulEdit": "Edit",
       "soulStats": "{{lines}} lines · {{words}} words",
       "soulDoubleClickHint": "Double-click to edit",
-      "soulEmpty": "No instructions yet. Double-click or select Edit to write."
+      "soulEmpty": "No instructions yet. Double-click or select Edit to write.",
+      "teamDisabled": "Bots are turned off by your team."
     },
     "windowMaterial": {
       "description": "What shows behind translucent terminals. Requires restart.",
@@ -1831,7 +1832,8 @@
       "keywordSecurity": "security",
       "1b4d825e0e": "Update delay",
       "ab7e864374": "About update delay",
-      "ee1d96f74a": "Skip delay once"
+      "ee1d96f74a": "Skip delay once",
+      "teamManaged": "Set by your team"
     },
     "editorFormatOnSave": {
       "description": "Format text before manual saves and auto save. Configure a formatter command in Settings > Projects. Off by default.",
@@ -2009,6 +2011,15 @@
       },
       "signInFailed": "Couldn’t sign you in to the console",
       "signInFailedDetail": "Your browser opened it anyway. Sign in there to continue."
+    },
+    "mobile": {
+      "teamDisabledRelay": "Orca Relay is turned off by your team. Use LAN."
+    },
+    "computerUse": {
+      "teamDisabled": "Computer Use is turned off by your team."
+    },
+    "artifacts": {
+      "teamDisabled": "Artifact sharing is turned off by your team."
     }
   },
   "menu": {
@@ -13336,6 +13347,7 @@
           "placeholder": "Path to a plugin folder",
           "add": "Add path",
           "dialogTitle": "Development folders",
+          "teamDisabled": "Development folders are turned off by your team.",
           "reviewHelp": "Reviewed once. Later code edits run without asking."
         },
         "PluginInstallDialog": {
@@ -13699,6 +13711,11 @@
           "title": "Orca Account",
           "description": "Share work instantly and reach your desktop from Orca Mobile wherever you are.",
           "searchDescription": "Sign in or out of the account used by Artifacts and Orca Relay.",
+          "managed": "Your team manages some Orca settings.",
+          "deviceReportNamedViewers": "Owners and admins at {{teams}} can view reports from this device.",
+          "deviceReportViewers": "Team owners and admins can view reports from this device.",
+          "reportingDetails": "Device reporting details",
+          "reportingDisclosure": "The Devices view shows your Orca version, release channel, device name, platform, update status, required plugins Orca couldn’t install, and when the device last reported.",
           "benefitsTitle": "Included with your account",
           "artifactsTitle": "Artifact sharing",
           "artifactsDescription": "Publish HTML and Markdown files, then manage every shared link from Orca.",
@@ -14550,6 +14567,7 @@
           "customEditor": "Editor"
         },
         "PluginManagerRows": {
+          "requiredByTeam": "Required by your team",
           "reinstall": "Reinstall",
           "crashedCount": "Crashed {{value0}} times in a row",
           "crashed": "Crashed while starting",
@@ -22197,7 +22215,6 @@
       },
       "toolAdded": {
         "removed": "Removed",
-        "heading": "Added a tool",
         "remove": "Remove",
         "added": "Added"
       },
@@ -23042,7 +23059,8 @@
           "restoreFailed": "Could not stop ignoring {{value0}}",
           "ignoreTooltip": "Ignore: skip in bulk delete",
           "stopIgnoring": "Stop ignoring",
-          "stopIgnoringNamed": "Stop ignoring {{value0}}"
+          "stopIgnoringNamed": "Stop ignoring {{value0}}",
+          "clearSelection": "Clear selection"
         },
         "scan": {
           "progress": "Scanning workspaces ({{value0}}/{{value1}})",
@@ -25771,12 +25789,28 @@
       "rateLimitedInMinutes_one": "GitHub rate limit reached. Try again in about {{count}} minute.",
       "rateLimitedInMinutes_other": "GitHub rate limit reached. Try again in about {{count}} minutes.",
       "rateLimitedInMinutesSignedOut_one": "GitHub rate limit reached. Try again in about {{count}} minute, or run `gh auth login` so Orca can use your account's higher limit.",
-      "rateLimitedInMinutesSignedOut_other": "GitHub rate limit reached. Try again in about {{count}} minutes, or run `gh auth login` so Orca can use your account's higher limit."
+      "rateLimitedInMinutesSignedOut_other": "GitHub rate limit reached. Try again in about {{count}} minutes, or run `gh auth login` so Orca can use your account's higher limit.",
+      "teamUpdatePolicy": "Your team manages Orca updates."
     },
     "automatic": {
       "downloading": "Downloading Orca {{version}}…",
       "installing": "Installing Orca {{version}}…",
       "restarting": "Orca will restart automatically."
+    },
+    "emergencyRequired": {
+      "title": "Orca {{version}} is required",
+      "summary": "Orca {{version}} is required. Restart to update."
+    },
+    "teamRequired": {
+      "summary": "Your team requires Orca {{version}}. Restart to update.",
+      "title": "Your team requires Orca {{version}}",
+      "restartNow": "Restart now",
+      "countdown": "Orca will save your sessions and restart after the countdown. Active agents may delay the restart.",
+      "waiting": "Orca is waiting for active agents before restarting.",
+      "retry": "Orca will retry this update the next time it starts.",
+      "manual": "Automatic installation failed. Install this update manually.",
+      "deadline": "Restart by {{deadline}}. Orca saves your sessions before restarting.",
+      "download": "Open downloads"
     },
     "remoteUpdateBusy": "This server is already updating. Check again once it finishes."
   },
@@ -26833,6 +26867,7 @@
         "prompt": "The agent stopped at a prompt that needs your answer."
       },
       "botsOff": "Bots are turned off in Settings, so Orca skipped this run.",
+      "botsOffByTeam": "Bots are turned off by your team, so Orca skipped this run.",
       "botMissing": "The bot this automation runs as no longer exists.",
       "botFolderMissing": "The bot's folder is no longer available.",
       "botPaused": "{{bot}} is paused, so Orca skipped this run."
@@ -27446,7 +27481,6 @@
         "isIn": "{{name}} is in Slack",
         "ready": "Your Slack app is ready. Approve it in Slack to finish.",
         "approve": "Approve in Slack",
-        "otherBrowser": "Approving in another browser?",
         "approveAsYourself": "Approve in Slack as yourself. Approving in another browser?",
         "waitingAdmin": "If your workspace needs an admin to approve new apps, {{name}} joins once they do. If they decline, Install again reuses the same app.",
         "newLink": "Get a new link",
@@ -27526,7 +27560,14 @@
         "confirm": "Orca on this computer creates the Slack app with {{email}}’s token. {{host}} gets only this bot’s app.",
         "offerMac": "This Mac is signed in to Orca as {{email}}, which already has a token for {{workspace}}.",
         "offer": "This computer is signed in to Orca as {{email}}, which already has a token for {{workspace}}.",
-        "use": "Use it →"
+        "use": "Use it →",
+        "question": "Use your {{device}}’s Slack sign-in instead?",
+        "firstQuestion": "Your {{device}} is already signed in to Slack. Use that sign-in?",
+        "useDevice": "Use {{device}}’s sign-in",
+        "questionHere": "Use this computer’s Slack sign-in instead?",
+        "firstQuestionHere": "This computer is already signed in to Slack. Use that sign-in?",
+        "useHere": "Use this computer’s sign-in",
+        "anotherWay": "Set up another way"
       },
       "postAs": {
         "orcaUser": "Orca user",
@@ -27544,22 +27585,17 @@
       "mentionLine": "Mention <code>@{{name}}</code> in a channel or DM.",
       "reconnect": {
         "expiredTitle": "Slack token expired",
-        "useTitleMac": "Use your Mac’s token?",
-        "useTitle": "Use this computer’s token?",
         "whyMine": "Each computer keeps its own Slack token. Slack stopped accepting the one {{email}} uses.",
         "whyHost": "Each computer keeps its own Slack token. Slack stopped accepting the one {{host}} uses.",
         "why": "Slack stopped accepting this workspace’s saved token.",
         "submit": "Reconnect",
         "about": "About Slack tokens",
-        "useDetail": "Use it sets up this bot’s Slack app with {{email}}’s token. {{host}} only gets this bot’s app.",
-        "hostExpiredMac": "<host>{{host}}</host>’s token expired. This Mac’s works.",
-        "hostExpired": "<host>{{host}}</host>’s token expired. This computer’s works.",
-        "pasteInstead": "Paste a token instead",
-        "use": "Use it",
         "kept": "Orca Cloud keeps the new token encrypted, so your next bots here need one click.",
         "mineMac": "This Mac’s token expired. Paste a new one.",
         "mine": "This computer’s token expired. Paste a new one.",
-        "paste": "Paste a new token to reconnect."
+        "paste": "Paste a new token to reconnect.",
+        "expiredOnTitle": "Slack sign-in expired on {{host}}",
+        "signInAgain": "Sign in again"
       },
       "problem": {
         "reconnecting": "Waiting for {{host}} to reconnect…",
@@ -27568,14 +27604,24 @@
         "offlineNext": "Check that Orca is running on {{host}}, then reconnect. Slack setup starts again once {{host}} is back.",
         "otherUser": "A different Slack account approved the connection.",
         "otherUserNext": "Someone signed in to another Slack account approved the Slack link, so {{bot}} can’t act as you. Get a new link and approve it while signed in to your own Slack account.",
-        "expired": "The Slack link expired before the connection was approved.",
-        "expiredNext": "Get a new link and approve the connection in Slack.",
+        "expired": "Slack sign-in didn’t finish.",
+        "expiredNext": "The Slack link expired before anyone approved the connection.",
         "tokenRejected": "Slack rejected this workspace’s token.",
         "tokenRejectedNext": "This happens after the Slack app was removed or the token was revoked. Replace the token to set up {{bot}} again.",
         "reconnect": "Reconnect",
         "replaceToken": "Replace token",
         "details": "Details",
         "reconnectFailed": "Orca still can’t reach {{host}}."
+      },
+      "approve": {
+        "noteUntil": "Works once, until {{time}}. Sign in to Slack as yourself there; Orca Cloud passes the approval back to {{host}}.",
+        "note": "Works once. Sign in to Slack as yourself there; Orca Cloud passes the approval back to {{host}}.",
+        "noteUntilHere": "Works once, until {{time}}. Sign in to Slack as yourself there.",
+        "noteHere": "Works once. Sign in to Slack as yourself there.",
+        "openOn": "Open Slack on {{host}}",
+        "otherDevice": "Approve on another device",
+        "linkLabel": "Slack approval link",
+        "copied": "Copied"
       }
     },
     "whoCanAsk": {
@@ -30432,6 +30478,13 @@
     }
   },
   "plugins": {
+    "blockedByTeam": "Blocked by your team.",
+    "requiredFailures": {
+      "toast": "A required plugin could not be installed",
+      "open": "Open Plugins",
+      "label": "Required by your team",
+      "body": "Orca couldn’t install {{plugin}}."
+    },
     "frameSaveAs": {
       "title": "Save File",
       "allFiles": "All Files"
@@ -30455,6 +30508,11 @@
       "unknownProject": "an unknown project",
       "automationNewWorkspaces": "Automation {{id}}: a new workspace of {{project}} each run, on {{schedule}}.",
       "automationInWorkspace": "Automation {{id}}: in {{project}} / {{workspace}}, on {{schedule}}."
+    },
+    "catalog": {
+      "managedByTeam": "Managed by your team",
+      "managedByNamedTeams": "Managed by {{teams}}",
+      "teamPublisher": "Your team"
     },
     "displayText": {
       "tb0b38488": "GitHub Themes for Orca",

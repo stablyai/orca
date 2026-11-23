@@ -72,7 +72,7 @@ export function mobileBotCreateOfferSay(t: Translate): BotCreateOfferSay {
 }
 
 const TOOL_PIECES: Pieces<keyof typeof TOOL> = {
-  heading: (t) => t('chat.botCards.toolAdded.heading', TOOL.heading),
+  added: (t) => t('chat.botCards.toolAdded.added', TOOL.added),
   removed: (t) => t('chat.botCards.toolAdded.removed', TOOL.removed),
   remove: (t) => t('chat.botCards.toolAdded.remove', TOOL.remove)
 }

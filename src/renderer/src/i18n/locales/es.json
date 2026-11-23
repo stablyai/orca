@@ -331,8 +331,6 @@
       }
     },
     "agents": {
-      "installedRegion": "Agentes instalados",
-      "availableRegion": "Agentes disponibles para instalar",
       "codexTerminalServerIsolation": {
         "title": "Ejecutar cada terminal del Codex en su propio servidor",
         "description": "Mantiene el estado de Orca y las pestañas de cierre funcionando correctamente. Desactivar para utilizar el servidor compartido de Codex y la descripción general de sus agentes. Se aplica a terminales nuevos."
@@ -20303,6 +20301,7 @@
           "selectionWithheldCount_many": "{{count}} espacios de trabajo seleccionados están ocultos por los filtros actuales y se han deseleccionado.",
           "selectAllSafetyChecked_one": "Seleccionar {{count}} espacio de trabajo con seguridad comprobada",
           "selectAllSafetyChecked_other": "Seleccionar todos los {{count}} espacios de trabajo con seguridad comprobada",
+          "clearSelection": "Borrar selección",
           "selectAllSafetyChecked_many": "Seleccionar todos los {{count}} espacios de trabajo con seguridad comprobada",
           "lastActive": "Última actividad: {{value0}}"
         },
