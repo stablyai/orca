@@ -8,12 +8,8 @@ import {
 } from '../telemetry/browser-extensions-banner'
 import type { BrowserExtensionsBannerAssignmentReply } from '../../shared/browser/extensions/browser-extensions-banner'
 import { isTrustedBrowserRenderer } from './browser/browser-renderer-trust'
-import {
-  hasTrackedAgentDashboardActiveToday,
-  persistBannerAcknowledgeWithoutEmitting,
-  setOptIn,
-  track
-} from '../telemetry/client'
+import { hasTrackedAgentDashboardActiveToday } from '../telemetry/agent-dashboard-active-days'
+import { persistBannerAcknowledgeWithoutEmitting, setOptIn, track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { getOnboardingCohortAtEmit } from '../telemetry/onboarding-cohort-classifier'
 import { resolveConsent, type ConsentState } from '../telemetry/consent'

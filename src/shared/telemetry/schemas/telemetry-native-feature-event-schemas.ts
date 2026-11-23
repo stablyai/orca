@@ -42,6 +42,13 @@ export const mobileSessionOpenedSchema = z
 export const nativeChatPickerItemAcceptedSchema = z
   .object({ agent_kind: agentKindSchema, item_kind: z.enum(['command', 'skill']) })
   .strict()
+/** One UTC day's picker accepts per agent and kind; replaces per-accept rows, which are rolled up locally. */
+export const nativeChatPickerAcceptsDailySchema = nativeChatPickerItemAcceptedSchema
+  .extend({
+    accept_count: z.number().int().positive().max(1_000_000),
+    usage_day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+  })
+  .strict()
 
 export const telemetryOptedInSchema = z.object({ via: optInViaSchema }).strict()
 export const telemetryOptedOutSchema = z.object({ via: optInViaSchema }).strict()

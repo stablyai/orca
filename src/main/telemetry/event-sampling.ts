@@ -29,7 +29,6 @@ const utcDayNumber = (now: number): number => Math.floor(now / 86_400_000)
 // Unread or distribution-only events: a tenth keeps every split readable.
 const TENTH_SAMPLED_EVENTS: ReadonlySet<string> = new Set<EventName>([
   'profile_state_authority_selected',
-  'native_chat_picker_item_accepted',
   'wsl_usage_snapshot',
   'add_repo_nested_scan_result',
   'daemon_adopted',
