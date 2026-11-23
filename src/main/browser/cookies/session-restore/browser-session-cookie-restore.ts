@@ -248,7 +248,8 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
       console.warn('[browser-session-cookies] Save failed:', error)
     )
   }
-  if (!canSealSessionCookies()) {
+  // Quit or a retirement may have started during that removal: neither may wait on the lock below.
+  if (quitting || trackers.get(tracker.filePath) !== tracker || !canSealSessionCookies()) {
     return
   }
   const changedDuringSave = new Map<string, ScopeChange>()

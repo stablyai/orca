@@ -9,17 +9,9 @@ import { setSecretStore } from '../../../../shared/secure-storage/secret-store'
 import type { CdpCookie } from '../browser-cdp-cookie'
 import type * as ClearStore from '../browser-cookie-clear-store'
 import type * as Trackers from './browser-session-cookie-tracker'
-import { fakeSession, sessionCookie } from './testing/fake-cookie-session.test-fixture'
+import { fakeSession, sessionCookie, type FakeIo } from './testing/fake-cookie-session.test-fixture'
 
 const sessions = new Map<string, ReturnType<typeof fakeSession>>()
-type FakeIo = {
-  rmCalls: number
-  rmFailures: number
-  rmHold: Promise<void> | null
-  writes: number
-  cdpReads: number
-  cdpReply: unknown
-}
 const io = vi.hoisted((): FakeIo => ({
   rmCalls: 0,
   rmFailures: 0,
@@ -323,6 +315,13 @@ describe('session cookie snapshot that a launch could not read', () => {
     const { jar, target, clear, restore } = await savedButUnread()
     io.rmFailures = 1
     await expect(clear.clearBrowserCookieJar(target)).rejects.toThrow('EBUSY')
+    // An import holds the jar's cookie lock all the way through quit.
+    const { withCookieMutationLock } = await import('../mutation/cookie-mutation-lock')
+    let releaseLock = () => {}
+    const held = withCookieMutationLock(
+      target,
+      () => new Promise<void>((resolve) => (releaseLock = resolve))
+    )
     let releaseRemoval = () => {}
     io.rmHold = new Promise((resolve) => (releaseRemoval = resolve))
     io.rmFailures = 1
@@ -334,11 +333,13 @@ describe('session cookie snapshot that a launch could not read', () => {
     releaseRemoval()
 
     try {
-      // Settles with every jar read still held.
+      // Settles with every jar read and the cookie lock still held.
       await quit
       expect(existsSync(snapshotFile())).toBe(false)
     } finally {
       releaseReads()
+      releaseLock()
+      await held
     }
   })
 

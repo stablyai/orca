@@ -109,3 +109,13 @@ export function sessionCookie(name: string, domain: string): CdpCookie {
     session: true
   }
 }
+
+/** What a test's mocks count and inject: removals, sealed writes and CDP replies. */
+export type FakeIo = {
+  rmCalls: number
+  rmFailures: number
+  rmHold: Promise<void> | null
+  writes: number
+  cdpReads: number
+  cdpReply: unknown
+}
