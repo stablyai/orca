@@ -160,9 +160,13 @@ it('leaves a drawn icon the cloud failed to take for the next real step, not the
         schema: T
       ): Promise<ConnectorResult<z.infer<T>>> => {
         sent.push(body)
-        return up
-          ? { ok: true, value: schema.parse(undefined) }
-          : { ok: false, status: 503, error: null, retryAfterMs: null }
+        if (up) {
+          return { ok: true, value: schema.parse(undefined) }
+        }
+        // Down, or not knowing the bot yet: neither may resend the drawing on a timer.
+        return sent.length === 1
+          ? { ok: false, status: 503, error: null, retryAfterMs: null }
+          : { ok: false, status: 404, error: 'unknown_bot', retryAfterMs: null }
       }
     })
   })
@@ -174,10 +178,16 @@ it('leaves a drawn icon the cloud failed to take for the next real step, not the
   await vi.advanceTimersByTimeAsync(10 * 60_000)
   expect(sent).toHaveLength(1)
 
+  // A real step while the cloud doesn't know the bot: refused, and then not resent on its backoff.
+  sync.changed()
+  await vi.waitFor(() => expect(sent).toHaveLength(2))
+  await vi.advanceTimersByTimeAsync(2 * 60 * 60_000)
+  expect(sent).toHaveLength(2)
+
   // A real step (any bot write) sends it.
   up = true
   sync.changed()
-  await vi.waitFor(() => expect(sent).toHaveLength(2))
-  expect(sent[1]).toMatchObject({ kind: 'upload' })
+  await vi.waitFor(() => expect(sent).toHaveLength(3))
+  expect(sent[2]).toMatchObject({ kind: 'upload' })
   vi.useRealTimers()
 })

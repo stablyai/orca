@@ -260,6 +260,10 @@ export class BotAvatarSync {
           this.retryLater()
         }
       }
+    } else if (refused && writes === this.writes && carried) {
+      // The cloud doesn't know this bot yet, and the picture is a drawing: its bytes wait for a real step
+      // (the write that links the bot is one) rather than going again on the backoff timer.
+      this.owed.add(bot.id)
     } else if (refused && writes === this.writes) {
       // The cloud doesn't know this bot: it is asked again less and less often, or after a write.
       const before = this.refused.get(bot.id)
