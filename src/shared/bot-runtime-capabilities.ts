@@ -54,6 +54,9 @@ export const BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY = 'bots.item-comment-sk
 // update refuses the field, so clients offer the colors only where this is advertised.
 export const BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY = 'bots.avatar-color.v1' as const
 
+// Host stores what a picture wears (bots.update and bots.create `avatarOutfit`); offered only where advertised, as colors are.
+export const BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY = 'bots.avatar-outfit.v1' as const
+
 // Host takes chat image attachments on group room posts (bots.groups.send `images`, store `@path`s in text)
 // and delivers them as image blocks to addressed members; an older host takes text only.
 export const BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY = 'bots.group-attachments.v1' as const
@@ -79,5 +82,6 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY,
   BOTS_SESSION_LINKS_RUNTIME_CAPABILITY,
   BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
+  BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY,
   BOTS_HOME_PIN_RUNTIME_CAPABILITY
 ] as const

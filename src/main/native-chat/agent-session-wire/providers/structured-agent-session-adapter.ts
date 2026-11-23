@@ -96,6 +96,8 @@ export type AgentSessionDispatchOutcome =
   | ({
       state: 'accepted'
       providerIdentity: AgentJournalItemIdentity
+      /** The running turn it joined, which another send opened. */
+      answeredInTurn?: AgentJournalAnsweredTurnIdentity
     } & AgentSessionRanOptionsEvidence)
   /** Transport admission stays pending until provider acknowledgement; elapsed time never proves unknown delivery. */
   | ({ state: 'admitted' } & AgentSessionRanOptionsEvidence)

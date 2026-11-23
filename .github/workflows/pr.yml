@@ -820,17 +820,20 @@ jobs:
         with:
           build: 'false'
 
-      # A helper-cache miss rebuilds in this Ubuntu 20.04 image (~70s); building it now overlaps the fixture checks.
-      - name: Build Linux native toolchain image
-        id: native-toolchain-image
+      # A helper-cache miss rebuilds in this Ubuntu 20.04 image (~70s); running toolchain build +
+      # helper compilation in one background step overlaps the fixture checks and JS package builds.
+      - name: Build native components
+        id: linux-native
         background: true
         env:
           CACHE_HIT: ${{ steps.linux-native-restore.outputs.cache-hit }}
         run: |
-          if [ "$CACHE_HIT" = true ]; then exit 0; fi
-          node --input-type=module -e "import { spawnSync } from 'node:child_process';
-          import { linuxNativeToolchainImage } from './config/scripts/native-build/linux/build-wayland-clipboard.mjs';
-          linuxNativeToolchainImage(process.cwd(), (args) => { if (spawnSync('docker', args, { stdio: 'inherit' }).status !== 0) process.exit(1) })"
+          if [ "$CACHE_HIT" != true ]; then
+            node --input-type=module -e "import { spawnSync } from 'node:child_process';
+            import { linuxNativeToolchainImage } from './config/scripts/native-build/linux/build-wayland-clipboard.mjs';
+            linuxNativeToolchainImage(process.cwd(), (args) => { if (spawnSync('docker', args, { stdio: 'inherit' }).status !== 0) process.exit(1) })"
+          fi
+          bash .github/actions/prepare-wayland-clipboard/build-or-validate.sh
 
       # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
       # build resolves React Native and Expo from mobile/node_modules.
@@ -844,16 +847,6 @@ jobs:
           ORCA_BACKGROUND_LAUNCH: '1'
           ORCA_DAEMON_SHUTDOWN_FIXTURE_CACHE_IMAGE: ${{ steps.daemon-fixture-cache.outputs.image }}
         run: node config/scripts/runtime-verification/daemon-lifecycle/run-daemon-shutdown-descendants-docker.mjs
-
-      - wait: native-toolchain-image
-
-      # The isolated glibc-floor build writes only the Wayland helper, so JavaScript can overlap.
-      - name: Build native components
-        id: linux-native
-        background: true
-        env:
-          CACHE_HIT: ${{ steps.linux-native-restore.outputs.cache-hit }}
-        run: bash .github/actions/prepare-wayland-clipboard/build-or-validate.sh
 
       # Load independent fixtures during builds; keep native lifecycle probes serial.
       - uses: ./.github/actions/prepare-linux-package-fixture
@@ -902,15 +895,18 @@ jobs:
           ORCA_CI_MAIN_SOURCEMAPS: '0'
         run: |
           status=0
-          pnpm run build:cli || status=1
+          pnpm run build:packages || exit 1
 
-          # beforePack requires the real mobile page; it writes only out/mobile-web, so it overlaps the Vite targets.
-          scripts=(build:wsl-guest build:electron-vite:parallel build:mobile-web)
+          # CLI emission writes out/main entries that electron-vite replaces, so keep CLI before
+          # electron-vite while overlapping WSL guest and mobile-web builds. beforePack validates
+          # out/mobile-web (and mobile_web_app checks determinism), so skip the duplicate rebuild.
           pids=()
-          for script in "${scripts[@]}"; do
-            pnpm run "$script" &
-            pids+=("$!")
-          done
+          (node config/scripts/cli-build/build-cli.mjs && pnpm run prepare:cli-output && node config/scripts/development/launch/run-electron-vite-targets-in-parallel.mjs) &
+          pids+=("$!")
+          node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/remote-host-build/wsl-guest/build-wsl-guest.mjs &
+          pids+=("$!")
+          node config/scripts/build/mobile-web-app/build-mobile-web-app-bundle.mjs &
+          pids+=("$!")
 
           for pid in "${pids[@]}"; do
             wait "$pid" || status=1
@@ -1043,6 +1039,10 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      - name: Parallelize Windows checkout
+        shell: bash
+        run: git config --global checkout.workers 0
+
       - name: Checkout
         uses: actions/checkout@v6
         with:
@@ -1075,17 +1075,45 @@ jobs:
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
 
-      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
-      # build resolves React Native and Expo from mobile/node_modules.
-      - uses: ./.github/actions/install-mobile-dependencies
+      # Overlap mobile dependency install with Rust prep + host/CLI builds; only build-mobile-web needs mobile/node_modules.
+      - name: Install mobile dependencies
+        id: install-mobile-deps
+        background: true
+        shell: bash
+        working-directory: mobile
+        run: |
+          pnpm install --frozen-lockfile
+          if [ "$(git -C "$GITHUB_WORKSPACE" rev-parse --is-inside-work-tree 2>/dev/null)" = true ]; then
+            git -C "$GITHUB_WORKSPACE" diff --exit-code -- \
+              mobile/package.json mobile/pnpm-lock.yaml mobile/pnpm-workspace.yaml
+          fi
 
       - uses: ./.github/actions/prepare-windows-package-rust
 
-      # Use parallel Vite targets as already packaged/smoked on Linux; release behavior is otherwise identical.
-      - name: Build package inputs
+      - name: Build host and CLI package inputs
         env:
           ORCA_CI_MAIN_SOURCEMAPS: '0'
-        run: pnpm run build:release:parallel
+        run: pnpm run build:wsl-guest && pnpm run build:native && pnpm run verify:computer-native && pnpm run build:cli
+
+      - wait: install-mobile-deps
+
+      # Use parallel Vite targets as already packaged/smoked on Linux; beforePack validates out/mobile-web
+      # (and mobile_web_app checks determinism), so skip the duplicate rebuild in verify-mobile-web-app-bundle.mjs.
+      - name: Build app and mobile-web package inputs
+        shell: bash
+        env:
+          ORCA_CI_MAIN_SOURCEMAPS: '0'
+        run: |
+          status=0
+          pids=()
+          (pnpm run build:electron-vite:parallel && pnpm run verify:built-skills-cli && pnpm run build:web-from-renderer) &
+          pids+=("$!")
+          node config/scripts/build/mobile-web-app/build-mobile-web-app-bundle.mjs &
+          pids+=("$!")
+          for pid in "${pids[@]}"; do
+            wait "$pid" || status=1
+          done
+          exit "$status"
 
       - name: Prepare Electron native runtime
         uses: ./.github/actions/prepare-native-runtime
@@ -1099,10 +1127,14 @@ jobs:
         run: pnpm exec electron-builder --config config/electron-builder.config.cjs --dir
 
       - name: Smoke packaged Windows PTY native capability
+        id: win-pty-smoke
+        background: true
         run: pnpm run smoke:windows-pty-native-capability -- --exe=dist/win-unpacked/Orca.exe
 
       - name: Smoke packaged CLI
         run: node config/scripts/desktop-distribution/runtime-verification/smoke-packaged-cli.mjs --app-dir=dist/win-unpacked
+
+      - wait: win-pty-smoke
 
   e2e:
     name: e2e

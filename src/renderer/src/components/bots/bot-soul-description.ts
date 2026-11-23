@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { soulDescription } from '../../../../shared/bot-soul'
+import { botTemplateText } from '../../../../shared/bots/bot-template-text'
+import { useTranslate } from '@/i18n/use-translate'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { ORCA_EDITOR_FILE_SAVED_EVENT } from '@/components/editor/autosave/editor-autosave'
 import { editorSavedEventView } from '@/components/editor/save/commands/editor-saved-event-view'
@@ -63,6 +65,7 @@ function newestTicket(): {
  *  save made here (Settings' Soul field or SOUL.md's editor tab), reads again when Orca regains
  *  focus (the bot or another app may have changed it), and when the host comes back. */
 export function useBotSoulDescription(listedHome: BotHome | null): string | null {
+  const t = useTranslate()
   const [description, setDescription] = useState<string | null>(null)
   const home = useStableBotHome(listedHome)
   // A disconnected host can't be read; coming back reads again, so a read that failed while it was down recovers.
@@ -107,5 +110,6 @@ export function useBotSoulDescription(listedHome: BotHome | null): string | null
       window.removeEventListener('focus', read)
     }
   }, [home, offline])
-  return description
+  // Why: a template's purpose is saved in English; it reads in the UI language until the owner rewrites it.
+  return description === null ? null : botTemplateText(description, t)
 }

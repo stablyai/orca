@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BotToolProblem } from '../../../../src/shared/bot-tools'
 import { isBotAppTool } from '../../../../src/shared/bots/bot-connector-entries'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
   botToolProblemsCancel,
@@ -17,8 +18,6 @@ export type PhoneBotTools = {
   inherited: { name: string; plugin?: true }[]
 }
 
-const UNFINISHED = 'The native check did not finish. Check again to retry.'
-
 export function useBotToolsPage(
   client: RpcClient | null,
   botId: string,
@@ -26,6 +25,7 @@ export function useBotToolsPage(
   /** The route's reads: each later one reads the tools again (the host's notices), keeping the check. */
   again?: number
 ) {
+  const t = useMobileTranslation()
   const [tools, setTools] = useState<PhoneBotTools | null>(null)
   const [error, setError] = useState<string | null>(null)
   /** Null while the check runs. */
@@ -68,7 +68,16 @@ export function useBotToolsPage(
           Object.fromEntries(
             checked
               .filter((tool) => !tool.signIn)
-              .map((tool) => [tool.name, { kind: 'unconfirmed' as const, detail: UNFINISHED }])
+              .map((tool) => [
+                tool.name,
+                {
+                  kind: 'unconfirmed' as const,
+                  detail: t(
+                    'bots.tools.checkUnfinished',
+                    'The native check did not finish. Check again to retry.'
+                  )
+                }
+              ])
           )
         )
         .then((found) => {
@@ -78,36 +87,45 @@ export function useBotToolsPage(
           }
         })
     },
-    [client, botId, scope, stopCheck]
+    [client, botId, scope, stopCheck, t]
   )
 
   /** Reads the tools again; `recheck` also checks the servers again (a tool was added or edited). */
-  // Only the latest read lands; a recheck asked by one it replaced runs on the latest's answer.
-  const lists = useRef({ generation: 0, recheck: false })
+  // Only the latest read lands; a recheck asked by one it replaced runs on the latest's answer, and
+  // a replaced read settles with the latest, so a caller that navigates after it sees fresh tools.
+  const lists = useRef({ generation: 0, recheck: false, latest: Promise.resolve() })
   const reread = useCallback(
-    async (recheck = false) => {
+    (recheck = false): Promise<void> => {
       if (!client) {
-        return
+        return Promise.resolve()
       }
       const gen = (lists.current.generation += 1)
       lists.current.recheck ||= recheck
-      try {
-        const read = botToolsListRead.interpret(await botToolsListRead.request(client, { botId }))
-        if (!mounted.current || gen !== lists.current.generation) {
-          return
-        }
-        const next = { own: read.own ?? [], inherited: read.inherited ?? [] }
-        setTools(next)
-        setError(null)
-        if (lists.current.recheck) {
-          lists.current.recheck = false
-          runCheck(next.own)
-        }
-      } catch (caught) {
-        if (gen === lists.current.generation) {
+      const settled = (async (): Promise<void> => {
+        try {
+          const read = botToolsListRead.interpret(await botToolsListRead.request(client, { botId }))
+          if (gen !== lists.current.generation) {
+            return await lists.current.latest
+          }
+          if (!mounted.current) {
+            return
+          }
+          const next = { own: read.own ?? [], inherited: read.inherited ?? [] }
+          setTools(next)
+          setError(null)
+          if (lists.current.recheck) {
+            lists.current.recheck = false
+            runCheck(next.own)
+          }
+        } catch (caught) {
+          if (gen !== lists.current.generation) {
+            return lists.current.latest
+          }
           setError(caught instanceof Error ? caught.message : String(caught))
         }
-      }
+      })()
+      lists.current.latest = settled
+      return settled
     },
     [client, botId, runCheck]
   )

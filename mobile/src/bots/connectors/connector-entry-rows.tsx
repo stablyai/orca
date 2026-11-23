@@ -30,7 +30,7 @@ const ICON = 20
 
 type PhoneSignIn = NonNullable<MobileComposio['connections']>['connections'][number]
 
-type PhoneConnectorEntry = BotConnectorEntry<PhoneSignIn, PhoneOwnTool>
+export type PhoneConnectorEntry = BotConnectorEntry<PhoneSignIn, PhoneOwnTool>
 
 /** The services the bot's own record says it has, for the Settings row. */
 export function connectorNames(bot: PhoneBot, hasHooks: boolean, t: Translate): string[] {
@@ -74,8 +74,22 @@ export type ConnectorRowsInput = {
   t: Translate
 }
 
-/** The shared list from the phone's reads. */
-function phoneConnectorEntries(input: ConnectorRowsInput): PhoneConnectorEntry[] {
+/** The reads the shared list is made from. */
+export type PhoneConnectorSources = Pick<
+  ConnectorRowsInput,
+  | 'bot'
+  | 'slack'
+  | 'linear'
+  | 'githubState'
+  | 'googleEmails'
+  | 'composio'
+  | 'tools'
+  | 'hostName'
+  | 't'
+>
+
+/** The shared list from the phone's reads; Connectors draws it, Needs you lists what needs the owner. */
+export function phoneConnectorEntries(input: PhoneConnectorSources): PhoneConnectorEntry[] {
   const { bot, t } = input
   const linear = input.linear.status === 'ready' ? input.linear.value : null
   return botConnectorEntries(bot, {
