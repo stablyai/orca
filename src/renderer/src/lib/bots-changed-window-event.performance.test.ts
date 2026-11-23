@@ -1,7 +1,11 @@
 // @vitest-environment happy-dom
 import { afterEach, expect, it } from 'vitest'
 import { emitBotsChangedWindowEvent, onBotsChanged } from './bots-changed-window-event'
-import { botGroupRoomConcerned, type BotChangeScope } from '../../../shared/bots/bot-change-scope'
+import {
+  botGroupRoomConcerned,
+  readBotChangeScope,
+  type BotChangeScope
+} from '../../../shared/bots/bot-change-scope'
 
 // A room-scoped groups notice (#47523) reaches every bot view in the window. Guards that the notice is
 // read once and shared, not copied per listener, and that only the named rooms' views re-read.
@@ -35,4 +39,10 @@ it('reads a notice once for every listener and re-reads only the rooms it names'
   expect(dispatch(100, 1)).toEqual({ scopes: 1, heard: 100, reads: 1 })
   stops.splice(0).forEach((stop) => stop())
   expect(dispatch(1_000, 10)).toEqual({ scopes: 1, heard: 1_000, reads: 10 })
+})
+
+it('reads a notice without copying its room list, so a reader that wants no room never walks it', () => {
+  const groupIds = Array.from({ length: 1_000 }, (_, index) => `room-${index}`)
+  const scope = readBotChangeScope({ kinds: ['groups'], groupIds })
+  expect(scope?.receivedGroupIds).toBe(groupIds)
 })

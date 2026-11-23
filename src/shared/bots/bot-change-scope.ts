@@ -48,6 +48,9 @@ export type BotChangeScope = {
   /** A `groups` change's rooms, by group id: an open room re-reads only when its group is named. Absent
    *  (and an older host's notice): every room re-reads. */
   groupIds?: readonly string[]
+  /** `groupIds` as a peer's notice carried it, unread: only an open room reads it (botGroupRoomConcerned),
+   *  so a reader that wants no room never walks the list. */
+  receivedGroupIds?: readonly unknown[]
 }
 
 /** The notice of these changed items, by bot; null for none. */
@@ -236,16 +239,19 @@ export function botGroupRoomConcerned(scope: BotChangeScope | undefined, groupId
   if (kinds.length > 0 && !kinds.includes('groups')) {
     return false
   }
-  return scope?.groupIds ? namedRooms(scope.groupIds).has(groupId) : true
+  const listed = scope?.groupIds ?? scope?.receivedGroupIds
+  // A list with no room in it names none, so every room re-reads.
+  const rooms = listed ? namedRooms(listed) : null
+  return rooms && rooms.size > 0 ? rooms.has(groupId) : true
 }
 
 // Each notice's rooms as a set, built once however many open rooms ask.
-const roomSets = new WeakMap<readonly string[], ReadonlySet<string>>()
+const roomSets = new WeakMap<readonly unknown[], ReadonlySet<string>>()
 
-function namedRooms(groupIds: readonly string[]): ReadonlySet<string> {
+function namedRooms(groupIds: readonly unknown[]): ReadonlySet<string> {
   let rooms = roomSets.get(groupIds)
   if (!rooms) {
-    rooms = new Set(groupIds)
+    rooms = new Set(groupIds.filter((id): id is string => typeof id === 'string'))
     roomSets.set(groupIds, rooms)
   }
   return rooms
@@ -266,19 +272,16 @@ export function readBotChangeScope(event: unknown): BotChangeScope | undefined {
       : undefined
   const kindBots = 'kindBots' in event ? readStringLists(event.kindBots) : undefined
   const needsYou = 'needsYou' in event ? readBotNeedsYouCounts(event.needsYou) : undefined
-  // A list with no room in it names none, so every room re-reads.
-  const named =
-    'groupIds' in event && Array.isArray(event.groupIds)
-      ? event.groupIds.filter((id): id is string => typeof id === 'string')
-      : []
-  const groupIds = named.length > 0 ? named : undefined
+  // Kept as sent: only an open room walks it, once per notice.
+  const receivedGroupIds: readonly unknown[] | undefined =
+    'groupIds' in event && Array.isArray(event.groupIds) ? event.groupIds : undefined
   return botIds || kinds
     ? {
         ...(botIds ? { botIds } : {}),
         ...(kinds ? { kinds } : {}),
         ...(kindBots ? { kindBots } : {}),
         ...(needsYou ? { needsYou } : {}),
-        ...(groupIds ? { groupIds } : {})
+        ...(receivedGroupIds ? { receivedGroupIds } : {})
       }
     : undefined
 }
