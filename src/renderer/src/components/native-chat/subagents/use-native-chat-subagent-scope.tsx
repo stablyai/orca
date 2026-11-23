@@ -64,11 +64,8 @@ function asideText(aside: NativeChatSubagentAside, t: Translate): string {
 }
 
 /** What a transcript draws: the conversation in its turns, or one subagent's own rows with none. */
-function subagentOwnRows(
-  rows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>,
-  agentId: string
-): NativeChatMessage[] {
-  return (rows.get(agentId) ?? NO_SUBAGENT_ROWS).map(({ message }) => message)
+function subagentOwnRows(rows: readonly NativeChatSubagentRow[] | undefined): NativeChatMessage[] {
+  return (rows ?? NO_SUBAGENT_ROWS).map(({ message }) => message)
 }
 
 export function useNativeChatSubagentScope({
@@ -143,13 +140,16 @@ export function useNativeChatSubagentScope({
   )
   // A subagent's own rows, and the same rows as last saved. Its ending compares the reply with the
   // current text; both lists share the one ending row, which holds while the result is the same.
+  // Keyed on the shown subagent's own list, which holds while only other subagents stream.
+  const savedOwnRows = agentId === null ? undefined : subagentStructure.get(agentId)
+  const ownRows = agentId === null ? undefined : subagentRows.get(agentId)
   const savedOwn = useMemo(
-    () => (agentId === null ? NO_MESSAGES : subagentOwnRows(subagentStructure, agentId)),
-    [agentId, subagentStructure]
+    () => (agentId === null ? NO_MESSAGES : subagentOwnRows(savedOwnRows)),
+    [agentId, savedOwnRows]
   )
   const own = useMemo(
-    () => (agentId === null ? NO_MESSAGES : subagentOwnRows(subagentRows, agentId)),
-    [agentId, subagentRows]
+    () => (agentId === null ? NO_MESSAGES : subagentOwnRows(ownRows)),
+    [agentId, ownRows]
   )
   const endingKey = useMemo(
     () =>
