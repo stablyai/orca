@@ -98,6 +98,7 @@ export async function stopSingleWorker(
           alreadySettled: remote.alreadySettled,
           processAction: remote.processAction,
           close: remote.close,
+          ...(remote.reason ? { reason: remote.reason } : {}),
           ...remoteHelpers(remote, status, server.name)
         }
       }

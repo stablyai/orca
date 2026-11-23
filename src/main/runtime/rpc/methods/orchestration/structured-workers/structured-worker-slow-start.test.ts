@@ -64,14 +64,18 @@ describe('a structured worker whose agent is slow to start', () => {
   it('stops as stopped, with the plain reason, while its agent is still starting', async () => {
     const { current, release } = await workerWithHeldStart()
     expect(await sendBrief(current)).toBe('starting')
-    expect(await closeStructuredAgentSessionChild(SESSION)).toEqual({
+    let closed: Awaited<ReturnType<typeof closeStructuredAgentSessionChild>> | undefined
+    const closing = closeStructuredAgentSessionChild(SESSION).then((outcome) => (closed = outcome))
+    // The close has cut the start, but its acquire is still held: no exit is proven yet.
+    await eventually(() => expect(current.host.reads.agentStarting(SESSION)).toBe(false))
+    expect(closed).toBeUndefined()
+    release()
+    expect(await closing).toEqual({
       stopped: true,
       closeAttempted: true,
       reason: STARTING_AGENT_STOPPED_REASON
     })
-    release()
-    // The cancelled start settles once its held acquire returns, and never hands the brief over.
-    await eventually(() => expect(observeStructuredSession(SESSION).status).toBe('exited'))
+    expect(observeStructuredSession(SESSION).status).toBe('exited')
     expect(briefSends(current)).toBe(0)
   })
 

@@ -212,6 +212,8 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       const { runtimeState, sessions } = context()
       return runtimeState.startFlights.has(id) || sessions.get(id)?.child?.phase === 'starting'
     },
+    /** A cancelled start's provider work, including releasing what it acquired, has ended. */
+    startAttemptsEnded: (id: string) => context().runtimeState.startFlights.attemptsEnded(id),
     onSessionsHeld: (listener: () => void) => context().deps.store.onHeldChange(listener),
     prospectiveAccountHome: (id: string) => {
       const { deps, serialize } = context()

@@ -55,7 +55,6 @@ export async function closeStructuredAgentSessionChild(
       ? captureStructuredSessionSurface(host, sessionId, options.runtime)
       : options.surface
   const admitClose = options.admitClose
-  // Close aborts a start in flight; that start never reaches its agent, which no exit can prove.
   const wasStarting = host.reads.agentStarting(sessionId)
   let admitted = admitClose === undefined
   let closeFailure: string | undefined
@@ -78,12 +77,11 @@ export async function closeStructuredAgentSessionChild(
       options.afterClose?.()
     }
   }
-  const startCancelled =
-    wasStarting &&
-    closeFailure === undefined &&
-    !host.reads.agentStarting(sessionId) &&
-    observeStructuredSession(sessionId).status !== 'live'
-  if (!admitted || (!startCancelled && !structuredSessionCloseSettled(sessionId))) {
+  if (admitted && wasStarting && closeFailure === undefined) {
+    // Close aborts the start, but its acquire may still spawn: only its released lease proves exit.
+    await host.reads.startAttemptsEnded(sessionId)
+  }
+  if (!admitted || !structuredSessionCloseSettled(sessionId)) {
     return {
       stopped: false,
       closeAttempted: true,
@@ -97,9 +95,7 @@ export async function closeStructuredAgentSessionChild(
   return {
     stopped: true,
     closeAttempted: true,
-    ...(startCancelled && !structuredSessionCloseSettled(sessionId)
-      ? { reason: STARTING_AGENT_STOPPED_REASON }
-      : {})
+    ...(wasStarting ? { reason: STARTING_AGENT_STOPPED_REASON } : {})
   }
 }
 
