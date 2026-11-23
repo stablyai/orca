@@ -57,10 +57,7 @@ export function AutomationsPageFrame({
   const pageNotice = useContext(AutomationsPageNoticeContext)
   return (
     <>
-      <header
-        className="shrink-0 border-b border-border/60"
-        style={{ paddingRight: 'var(--window-controls-width, 0px)' }}
-      >
+      <header className="shrink-0 border-b border-border/60">
         <div
           ref={headerRef}
           className={cn(AUTOMATIONS_PAGE_CONTAINER_CLASS, 'flex min-h-12 items-center gap-3')}

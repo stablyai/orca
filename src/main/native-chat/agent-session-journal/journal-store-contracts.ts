@@ -89,7 +89,12 @@ export type ResolveDispatchInput = {
 } &
   /** Null identity means the provider accepted without echoing an item, e.g. an in-place command. */
   (
-    | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity | null }
+    | {
+        state: 'accepted'
+        providerIdentity: AgentJournalItemIdentity | null
+        /** The running turn it joined, which another send opened; absent when it opened its own. */
+        answeredInTurn?: AgentJournalAnsweredTurnIdentity
+      }
     /** Handover scope: live root turn, otherwise thread. */
     | {
         state: 'pending'

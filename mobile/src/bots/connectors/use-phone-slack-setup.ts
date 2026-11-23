@@ -237,6 +237,13 @@ export function usePhoneSlackSetup(props: {
     }
     return expired ? { kind: 'expired', teamId: step.teamId } : step
   })()
+  // Installed is final: the watch stops, and a later read can't take Try it away.
+  const installedTeam = shown.kind === 'installed' && step.kind === 'ready' ? shown.teamId : null
+  useEffect(() => {
+    if (installedTeam) {
+      setStep({ kind: 'installed', teamId: installedTeam })
+    }
+  }, [installedTeam])
 
   return {
     step: shown,
