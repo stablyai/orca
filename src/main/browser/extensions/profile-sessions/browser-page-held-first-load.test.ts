@@ -59,20 +59,40 @@ describe('a held first load', () => {
   })
 })
 
+const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+
+function fakeSession(): { sess: Electron.Session; extensions: EventEmitter } {
+  const extensions = Object.assign(new EventEmitter(), { getExtension: () => null })
+  return { sess: { extensions } as unknown as Electron.Session, extensions }
+}
+
 describe('extensions in the session', () => {
-  it('waits for every startup extension to load, or for its load to end', async () => {
-    const extensions = Object.assign(new EventEmitter(), { getExtension: () => null })
-    const sess = { extensions } as unknown as Electron.Session
-    const loadEnded = deferred()
+  it('waits for every startup extension to load', async () => {
+    const { sess, extensions } = fakeSession()
     let inSession = false
-    void whenBrowserExtensionsInSession(sess, ['one', 'two'], loadEnded.promise).then(
+    void whenBrowserExtensionsInSession(sess, ['one', 'two'], deferred().promise).then(
       () => (inSession = true)
     )
     extensions.emit('extension-loaded', {}, { id: 'one' })
-    await Promise.resolve()
+    await settle()
     expect(inSession).toBe(false)
     extensions.emit('extension-loaded', {}, { id: 'two' })
-    await new Promise((resolve) => setImmediate(resolve))
+    await settle()
+    expect(inSession).toBe(true)
+    expect(extensions.listenerCount('extension-loaded')).toBe(0)
+  })
+
+  it('ends when the startup load ends, though an extension never loaded', async () => {
+    const { sess, extensions } = fakeSession()
+    const loadEnded = deferred()
+    let inSession = false
+    void whenBrowserExtensionsInSession(sess, ['broken'], loadEnded.promise).then(
+      () => (inSession = true)
+    )
+    await settle()
+    expect(inSession).toBe(false)
+    loadEnded.resolve()
+    await settle()
     expect(inSession).toBe(true)
     expect(extensions.listenerCount('extension-loaded')).toBe(0)
   })
