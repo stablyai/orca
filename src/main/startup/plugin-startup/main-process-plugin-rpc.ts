@@ -5,6 +5,8 @@ import {
 } from '../../plugins/activation/plugin-enablement'
 import type { PluginService } from '../../plugins/plugin-service'
 import type { PluginCliCatalogs } from '../../plugins/cli/plugin-cli-catalog-candidates'
+import type { PluginMarketplaceService } from '../../plugins/catalog/plugin-marketplace-service'
+import { withInstalledMarketplaceEligibility } from '../../plugins/catalog/plugin-marketplace-install-eligibility'
 import { clearPluginFrameStorage } from '../../plugins/panels/guest-isolation/plugin-frame-guest-sessions'
 import { openPluginFrameGuestDevTools } from '../../plugins/panels/guest-isolation/plugin-frame-guest-diagnostics'
 import { setPluginServiceForRpc } from '../../runtime/rpc/methods/plugins/plugins'
@@ -14,8 +16,15 @@ import { setPluginInstallServicesForRpc } from '../../runtime/rpc/methods/plugin
 export function bindPluginRpcServices(
   store: Store,
   pluginService: PluginService,
-  catalogs: PluginCliCatalogs
+  catalogs: PluginCliCatalogs & { marketplace: PluginMarketplaceService }
 ): void {
+  pluginService.options.withMarketplaceApproval = (pluginKey, write) =>
+    withInstalledMarketplaceEligibility(
+      catalogs.marketplace,
+      pluginService.options.userDataPath,
+      pluginKey,
+      write
+    )
   setPluginServiceForRpc(pluginService, {
     applyConsent: (request) => applyPluginConsent({ store, pluginService, ...request }),
     applyEnablement: (pluginKey, enabled) =>

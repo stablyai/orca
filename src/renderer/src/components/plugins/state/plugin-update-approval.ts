@@ -6,6 +6,10 @@ import {
   type PluginManifest
 } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import { translate } from '@/i18n/i18n'
+import {
+  catalogInstallErrorMessage,
+  isPluginCatalogUpdating
+} from '../presentation/plugin-error-presentation'
 
 /** An update as the review and the toast show it: the preview and the installed manifest its
  *  lines are named from. Read together so "Approve & update" never precedes what it approves. */
@@ -48,11 +52,14 @@ export type UpdateToInstall = {
 
 /**
  * `approved`: landed, and a reviewed one is approved. `held`: landed, but its bytes differ from the
- * reviewed ones, so it waits for review on the plugin's page. `failed`: nothing changed.
+ * reviewed ones, so it waits for review on the plugin's page. `failed`: install or approval failed.
  */
 export type UpdateResult = 'approved' | 'held' | 'failed'
 
-async function installOne({ preview, reviewed }: UpdateToInstall): Promise<UpdateResult> {
+async function installOne({
+  preview,
+  reviewed
+}: UpdateToInstall): Promise<{ result: UpdateResult; error?: string; retryLater?: boolean }> {
   try {
     const result = await window.api.plugins.installMarketplacePlugin({
       marketplaceSourceId: preview.marketplaceSourceId,
@@ -61,24 +68,32 @@ async function installOne({ preview, reviewed }: UpdateToInstall): Promise<Updat
       resolvedCommit: preview.resolvedCommit
     })
     if (!result.ok) {
-      return 'failed'
+      return {
+        result: 'failed',
+        error: catalogInstallErrorMessage(result.error),
+        retryLater: isPluginCatalogUpdating(result.error)
+      }
     }
     if (!reviewed) {
-      return 'approved'
+      return { result: 'approved' }
     }
     // Why only on a match: other bytes than the reviewed ones must be reviewed again.
     if (result.consentFingerprint !== preview.consentFingerprint) {
-      return 'held'
+      return { result: 'held' }
     }
     await window.api.plugins.consent({
       pluginKey: preview.pluginKey,
       reviewedFingerprint: preview.consentFingerprint,
       decision: 'approve'
     })
-    return 'approved'
+    return { result: 'approved' }
   } catch (cause) {
     console.warn('[plugins] update failed:', cause)
-    return 'failed'
+    return {
+      result: 'failed',
+      error: catalogInstallErrorMessage(cause),
+      retryLater: isPluginCatalogUpdating(cause)
+    }
   }
 }
 
@@ -88,13 +103,21 @@ async function installOne({ preview, reviewed }: UpdateToInstall): Promise<Updat
  */
 export async function installUpdates(
   updates: readonly UpdateToInstall[]
-): Promise<Record<UpdateResult, UpdateToInstall[]>> {
+): Promise<Record<UpdateResult, UpdateToInstall[]> & { error?: string }> {
   const results: Record<UpdateResult, UpdateToInstall[]> = { approved: [], held: [], failed: [] }
-  for (const update of updates) {
-    results[await installOne(update)].push(update)
+  let error: string | undefined
+  for (const [index, update] of updates.entries()) {
+    const attempt = await installOne(update)
+    results[attempt.result].push(update)
+    error ??= attempt.error
+    if (attempt.retryLater) {
+      error = attempt.error
+      results.failed.push(...updates.slice(index + 1))
+      break
+    }
   }
   announceInstalled(results.approved, results.held)
-  return results
+  return { ...results, error }
 }
 
 function announceInstalled(

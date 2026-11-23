@@ -33,26 +33,39 @@ export async function applyPluginConsent(input: {
     // prove every declarative byte is still reviewable before enabling it.
     await verifyDeclarativePluginContent(plugin)
   }
-  if (input.teamRequirementStillApplies?.() === false) {
-    return
-  }
-  const settings = store.getSettings()
-  const disabled = new Set(normalizePluginIdList(settings.disabledPlugins))
-  const consents = normalizePluginConsents(settings.pluginConsents)
-  if (input.decision === 'approve') {
-    consents[pluginKey] = plugin.consentFingerprint
-    if (!input.teamRequirementStillApplies) {
-      disabled.delete(pluginKey)
+  const write = (): void => {
+    if (input.teamRequirementStillApplies?.() === false) {
+      return
     }
-  } else {
-    disabled.add(pluginKey)
+    if (
+      input.decision === 'approve' &&
+      pluginService.findValidPlugin(pluginKey)?.consentFingerprint !== input.reviewedFingerprint
+    ) {
+      throw new Error(`plugin ${pluginKey} changed since its permissions were reviewed`)
+    }
+    const settings = store.getSettings()
+    const disabled = new Set(normalizePluginIdList(settings.disabledPlugins))
+    const consents = normalizePluginConsents(settings.pluginConsents)
+    if (input.decision === 'approve') {
+      consents[pluginKey] = plugin.consentFingerprint
+      if (!input.teamRequirementStillApplies) {
+        disabled.delete(pluginKey)
+      }
+    } else {
+      disabled.add(pluginKey)
+    }
+    // Why every window, the clicking one too: its store never applied this write itself, and
+    // theme resolution reads `disabledPlugins` from it.
+    store.updateSettings(
+      { disabledPlugins: [...disabled], pluginConsents: consents },
+      { notifyListeners: true }
+    )
   }
-  // Why every window, the clicking one too: its store never applied this write itself, and
-  // theme resolution reads `disabledPlugins` from it.
-  store.updateSettings(
-    { disabledPlugins: [...disabled], pluginConsents: consents },
-    { notifyListeners: true }
-  )
+  await (input.decision === 'approve' &&
+  !plugin.isDev &&
+  pluginService.options.withMarketplaceApproval
+    ? pluginService.options.withMarketplaceApproval(pluginKey, write)
+    : write())
   await pluginService.reconcileActivationState()
 }
 

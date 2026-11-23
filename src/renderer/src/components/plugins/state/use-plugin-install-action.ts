@@ -6,7 +6,7 @@ import type {
 } from '../../../../../preload/api/plugins/plugin-host-api'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { translate } from '@/i18n/i18n'
-import { pluginInstallErrorMessage } from '../presentation/plugin-error-presentation'
+import { catalogInstallErrorMessage } from '../presentation/plugin-error-presentation'
 import { catalogInstallTrustPrompt } from '../presentation/plugin-install-trust'
 import { usePluginInstallTrust } from './use-plugin-install-trust'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
@@ -16,30 +16,6 @@ import type { PluginPagePreview } from './use-plugin-catalog'
 import { previewMatchesListing } from './use-plugin-page-model'
 
 export type PluginInstallPhase = { kind: 'installing' } | { kind: 'error'; message: string }
-
-// Why the `plugin` key prefix: install errors are security copy language packs may not rewrite.
-function catalogInstallErrorMessage(cause: unknown): string {
-  const detail = (cause instanceof Error ? cause.message : String(cause)).toLowerCase()
-  if (/(do not match|does not match|no longer matches)/.test(detail)) {
-    return translate(
-      'auto.components.settings.pluginInstallAction.mismatch',
-      'Download didn’t match the catalog. Nothing installed.'
-    )
-  }
-  if (detail.includes('marketplace changed')) {
-    return translate(
-      'auto.components.settings.pluginInstallAction.catalogChanged',
-      'The catalog changed. Refresh and try again.'
-    )
-  }
-  if (detail.includes('safety list')) {
-    return translate(
-      'auto.components.settings.pluginInstallAction.blocked',
-      'Orca’s safety list blocks this plugin.'
-    )
-  }
-  return pluginInstallErrorMessage(cause)
-}
 
 const downloadFailed = (): string =>
   translate(

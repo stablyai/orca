@@ -14794,6 +14794,7 @@
           "tryIt": "Try it",
           "mismatch": "Download didn’t match the catalog. Nothing installed.",
           "catalogChanged": "The catalog changed. Refresh and try again.",
+          "catalogUpdating": "The plugin catalog is still updating. Try again in a moment.",
           "blocked": "Orca’s safety list blocks this plugin.",
           "downloadFailed": "Couldn’t download. Check your connection."
         },

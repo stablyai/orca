@@ -17,6 +17,7 @@ export type PluginServiceOptions = {
   getRequiredPlugins?: () => readonly string[] | undefined
   getCatalogManagingTeams?: (source: { url: string; ref: string }) => string[] | undefined
   getPluginConsents: () => Record<string, string>
+  withMarketplaceApproval?: (pluginKey: string, write: () => void) => Promise<void>
   getDevPluginPaths: () => string[]
   getKeybindings?: () => KeybindingOverrides
   getPluginKillListEntry?: (pluginKey: string) => (PluginKillListEntry & PluginBlockNotice) | null

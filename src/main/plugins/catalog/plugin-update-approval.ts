@@ -15,6 +15,7 @@ import type {
 } from './plugin-marketplace-installer'
 import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import { enableIfDataPlugin } from './plugin-one-click-enable'
+import { MarketplaceReviewRequiredError } from './plugin-marketplace-install-eligibility'
 
 /** The installed plugin an update would replace, when it is running under a user approval. */
 export function readApprovedPredecessor(
@@ -80,6 +81,9 @@ async function carryPluginApprovalAcrossUpdate(input: {
     await input.approve(next.pluginKey, next.consentFingerprint)
     return true
   } catch (error) {
+    if (error instanceof MarketplaceReviewRequiredError) {
+      throw error
+    }
     // Why not thrown: the update installed; it simply waits for review like a first install.
     console.warn(`[plugins] kept ${next.pluginKey} for review after update:`, error)
     return false

@@ -149,6 +149,7 @@ export async function installStagedPluginTree(input: {
   blockedPluginReason?: (pluginKey: string) => string | null
   /** A refusal decided by the inspected manifest itself, e.g. full access being off. */
   manifestError?: (manifest: PluginManifest) => string | null
+  withPublication?: (publish: () => Promise<void>) => Promise<void>
 }): Promise<PluginInstallResult> {
   const sourceInspection = await inspectPluginInstallTree({
     rootDir: input.stagingDir,
@@ -288,7 +289,8 @@ export async function installStagedPluginTree(input: {
         ?.installedAt ?? Date.now()
   }
   try {
-    await publishPluginInstall({ pluginsDir: input.pluginsDir, pluginDir, entry })
+    const publish = () => publishPluginInstall({ pluginsDir: input.pluginsDir, pluginDir, entry })
+    await (input.withPublication ? input.withPublication(publish) : publish())
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
   }

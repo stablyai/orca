@@ -1,8 +1,42 @@
+// @protected-copy
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
 function errorText(cause: unknown): string {
   return (cause instanceof Error ? cause.message : String(cause)).toLowerCase()
+}
+
+export function isPluginCatalogUpdating(cause: unknown): boolean {
+  return errorText(cause).includes('catalog is still updating')
+}
+
+export function catalogInstallErrorMessage(cause: unknown): string {
+  const detail = errorText(cause)
+  if (isPluginCatalogUpdating(cause)) {
+    return translate(
+      'auto.components.settings.pluginInstallAction.catalogUpdating',
+      'The plugin catalog is still updating. Try again in a moment.'
+    )
+  }
+  if (/(do not match|does not match|no longer matches)/.test(detail)) {
+    return translate(
+      'auto.components.settings.pluginInstallAction.mismatch',
+      'Download didn’t match the catalog. Nothing installed.'
+    )
+  }
+  if (detail.includes('marketplace changed')) {
+    return translate(
+      'auto.components.settings.pluginInstallAction.catalogChanged',
+      'The catalog changed. Refresh and try again.'
+    )
+  }
+  if (detail.includes('safety list')) {
+    return translate(
+      'auto.components.settings.pluginInstallAction.blocked',
+      'Orca’s safety list blocks this plugin.'
+    )
+  }
+  return pluginInstallErrorMessage(cause)
 }
 
 export function pluginInstallErrorMessage(cause: unknown): string {

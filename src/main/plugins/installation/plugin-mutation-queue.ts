@@ -1,22 +1,22 @@
-/** Serializes install, rollback and removal per plugins directory so lock writes never interleave. */
+/** Serializes plugin writes per install directory or catalog snapshot. */
 const pluginMutationChains = new Map<string, Promise<void>>()
 
 export async function serializePluginMutation<T>(
-  pluginsDir: string,
+  resourcePath: string,
   operation: () => Promise<T>
 ): Promise<T> {
-  const previous = pluginMutationChains.get(pluginsDir) ?? Promise.resolve()
+  const previous = pluginMutationChains.get(resourcePath) ?? Promise.resolve()
   const run = previous.catch(() => undefined).then(operation)
   const settled = run.then(
     () => undefined,
     () => undefined
   )
-  pluginMutationChains.set(pluginsDir, settled)
+  pluginMutationChains.set(resourcePath, settled)
   try {
     return await run
   } finally {
-    if (pluginMutationChains.get(pluginsDir) === settled) {
-      pluginMutationChains.delete(pluginsDir)
+    if (pluginMutationChains.get(resourcePath) === settled) {
+      pluginMutationChains.delete(resourcePath)
     }
   }
 }

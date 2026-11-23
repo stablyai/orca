@@ -169,6 +169,7 @@ export async function installPluginFromMarketplace(input: {
   release?: PluginCatalogRelease
   blockedPluginReason?: (pluginKey: string) => string | null
   manifestError?: (manifest: PluginManifest) => string | null
+  withPublication?: (publish: () => Promise<void>) => Promise<void>
   /** Only replace an install from this marketplace; set by auto-update so Remove wins a race. */
   requireInstalled?: boolean
   requireMissing?: boolean
@@ -230,7 +231,8 @@ export async function installPluginFromMarketplace(input: {
         identity: { pluginKey: input.expectedPluginKey },
         ...(input.release ? { release: input.release } : {}),
         blockedPluginReason: input.blockedPluginReason,
-        manifestError: input.manifestError
+        manifestError: input.manifestError,
+        withPublication: input.withPublication
       })
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }

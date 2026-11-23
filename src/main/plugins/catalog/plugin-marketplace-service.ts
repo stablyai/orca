@@ -28,6 +28,7 @@ import type { OrcaCloudCapabilities } from '../../../shared/orca-profiles/orca-c
 import { PluginMarketplaceTeamPolicy } from './plugin-marketplace-team-policy'
 import { pluginMarketplaceErrorMessage } from './plugin-marketplace-error-message'
 import { sharedSourceRefresh } from './plugin-marketplace-shared-refresh'
+import { waitForMarketplaceSourceRefresh } from './plugin-marketplace-install-eligibility'
 import {
   pluginMarketplaceListing,
   pluginMarketplaceSourceState,
@@ -186,7 +187,11 @@ export class PluginMarketplaceService {
 
   /** Installation must settle the refresh a cached preview skipped, without fetching again. */
   async waitForSourceRefresh(sourceId: string): Promise<void> {
-    await this.refreshChains.get(sourceId)
+    await waitForMarketplaceSourceRefresh(this.refreshChains.get(sourceId))
+  }
+
+  withSourceSnapshot<T>(sourceId: string, write: () => T | Promise<T>): Promise<T> {
+    return this.store.withSnapshot(sourceId, write)
   }
 
   /** See sharedSourceRefresh: one update review's previews share one catalog fetch. */
@@ -304,14 +309,7 @@ export class PluginMarketplaceService {
         snapshot: await this.store.readSnapshot(source.id)
       }))
     )
-    return snapshots.filter(
-      (
-        candidate
-      ): candidate is {
-        source: PluginMarketplaceRegisteredSource
-        snapshot: PluginMarketplaceCachedSnapshot
-      } => candidate.snapshot !== null
-    )
+    return snapshots.flatMap(({ source, snapshot }) => (snapshot ? [{ source, snapshot }] : []))
   }
 
   private listingFromEntry(

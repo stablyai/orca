@@ -132,7 +132,7 @@ export function PluginUpdateAllDialog({
   const update = async (): Promise<void> => {
     setBusy(true)
     setFailure(null)
-    const { approved, held, failed } = await installUpdates(
+    const { approved, held, failed, error } = await installUpdates(
       chosen.flatMap(({ entry, preview }) =>
         preview
           ? [
@@ -156,10 +156,11 @@ export function PluginUpdateAllDialog({
       return
     }
     setFailure(
-      failureMessage(
-        failed.map(({ name }) => name),
-        updated.size + done.length
-      )
+      error ??
+        failureMessage(
+          failed.map(({ name }) => name),
+          updated.size + done.length
+        )
     )
   }
 

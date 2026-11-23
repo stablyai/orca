@@ -12,6 +12,7 @@ import {
   type PluginMarketplaceGitSource
 } from '../../../shared/plugins/catalog/plugin-marketplace'
 import { writePluginFileAtomically } from '../installation/plugin-atomic-file-write'
+import { serializePluginMutation } from '../installation/plugin-mutation-queue'
 
 export const PLUGIN_MARKETPLACE_SOURCE_LIMIT = 64
 export const PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN = /^[0-9a-f]{32}$/
@@ -112,18 +113,20 @@ export class PluginMarketplaceStore {
 
   async removeSource(sourceId: string): Promise<boolean> {
     const parsedId = sourceIdSchema.parse(sourceId)
-    let removed = false
-    await this.mutateSources((sources) => {
-      const next = sources.filter((source) => source.id !== parsedId)
-      removed = next.length !== sources.length
-      return next
+    return this.withSnapshot(parsedId, async () => {
+      let removed = false
+      await this.mutateSources((sources) => {
+        const next = sources.filter((source) => source.id !== parsedId)
+        removed = next.length !== sources.length
+        return next
+      })
+      if (removed) {
+        this.snapshots.delete(parsedId)
+        await rm(this.snapshotPath(parsedId), { force: true })
+        await rm(this.legacySnapshotPath(parsedId), { force: true })
+      }
+      return removed
     })
-    if (removed) {
-      this.snapshots.delete(parsedId)
-      await rm(this.snapshotPath(parsedId), { force: true })
-      await rm(this.legacySnapshotPath(parsedId), { force: true })
-    }
-    return removed
   }
 
   /** Whether Orca already added this default source once; a user's later removal must stick. */
@@ -169,9 +172,17 @@ export class PluginMarketplaceStore {
       fetchedAt: input.fetchedAt ?? Date.now(),
       marketplace: input.marketplace
     })
-    await writeAtomicJson(this.snapshotPath(input.source.id), snapshot)
-    this.snapshots.set(input.source.id, Promise.resolve(snapshot))
-    return snapshot
+    return this.withSnapshot(input.source.id, async () => {
+      await writeAtomicJson(this.snapshotPath(input.source.id), snapshot)
+      this.snapshots.set(input.source.id, Promise.resolve(snapshot))
+      return snapshot
+    })
+  }
+
+  withSnapshot<T>(sourceId: string, write: () => T | Promise<T>): Promise<T> {
+    return serializePluginMutation(this.snapshotPath(sourceIdSchema.parse(sourceId)), async () =>
+      write()
+    )
   }
 
   /** Parsed once per process; every write goes through this store, which keeps it current. */

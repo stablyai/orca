@@ -1,0 +1,91 @@
+import { getUserPluginsDir } from '../discovery/plugin-discovery'
+import { readPluginLockfile } from '../installation/plugin-install-lockfile-store'
+import { serializePluginMutation } from '../installation/plugin-mutation-queue'
+import { marketplaceSourceId } from './plugin-marketplace-store'
+import type { PluginMarketplaceService } from './plugin-marketplace-service'
+import type { PluginMarketplacePreviewIdentity } from './plugin-marketplace-installer'
+
+export const CATALOG_REFRESH_PENDING =
+  'The plugin catalog is still updating. Try again in a moment.'
+
+export function marketplaceInstallRefreshError(error: unknown): string {
+  return error instanceof Error && error.message === CATALOG_REFRESH_PENDING
+    ? error.message
+    : 'marketplace refresh failed; review the plugin again'
+}
+
+export class MarketplaceReviewRequiredError extends Error {
+  constructor() {
+    super('marketplace changed after preview; review the plugin again')
+  }
+}
+
+export async function waitForMarketplaceSourceRefresh(
+  pending: Promise<unknown> | undefined
+): Promise<void> {
+  if (!pending) {
+    return
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    await Promise.race([
+      pending,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(CATALOG_REFRESH_PENDING)), 10_000)
+      })
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** Keep catalog publication outside the final eligibility check and the guarded write. */
+export function withMarketplaceInstallEligibility<T>(
+  marketplace: PluginMarketplaceService,
+  preview: Pick<
+    PluginMarketplacePreviewIdentity,
+    'marketplaceSourceId' | 'pluginKey' | 'marketplaceCommit'
+  >,
+  write: () => T | Promise<T>
+): Promise<T> {
+  return marketplace.withSourceSnapshot(preview.marketplaceSourceId, async () => {
+    const listing = await marketplace.findPlugin(preview.marketplaceSourceId, preview.pluginKey)
+    if (!listing || listing.marketplaceCommit !== preview.marketplaceCommit) {
+      throw new MarketplaceReviewRequiredError()
+    }
+    return write()
+  })
+}
+
+/** Read installed provenance under the install lock; a later consent IPC must revalidate too. */
+export function withInstalledMarketplaceEligibility(
+  marketplace: PluginMarketplaceService,
+  userDataPath: string,
+  pluginKey: string,
+  write: () => void
+): Promise<void> {
+  const pluginsDir = getUserPluginsDir(userDataPath)
+  return serializePluginMutation(pluginsDir, async () => {
+    const entry = (await readPluginLockfile(pluginsDir)).plugins[pluginKey]
+    if (!entry) {
+      throw new MarketplaceReviewRequiredError()
+    }
+    if (entry.source.kind !== 'marketplace') {
+      return write()
+    }
+    const { marketplace: catalog } = entry.source
+    return withMarketplaceInstallEligibility(
+      marketplace,
+      {
+        marketplaceSourceId: marketplaceSourceId({
+          kind: 'git',
+          url: catalog.url,
+          ref: catalog.ref
+        }),
+        marketplaceCommit: catalog.resolvedCommit,
+        pluginKey
+      },
+      write
+    )
+  })
+}

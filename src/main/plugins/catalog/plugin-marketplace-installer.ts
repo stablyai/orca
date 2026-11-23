@@ -20,15 +20,15 @@ import {
   type PluginInstallResult
 } from '../installation/plugin-install'
 import { inspectPluginInstallTree } from '../installation/plugin-install-staging'
+import {
+  marketplaceInstallRefreshError,
+  withMarketplaceInstallEligibility
+} from './plugin-marketplace-install-eligibility'
 import type {
   PluginMarketplaceListing,
   PluginMarketplaceService
 } from './plugin-marketplace-service'
-import {
-  marketplaceInstallMoved,
-  marketplaceInstallOf,
-  type MarketplaceInstall
-} from './plugin-marketplace-install-origin'
+import { marketplaceInstallMoved, marketplaceInstallOf } from './plugin-marketplace-install-origin'
 import type {
   PluginLockEntry,
   PluginLockfile
@@ -170,8 +170,8 @@ export class PluginMarketplaceInstaller {
     const sourceId = preview.marketplaceSourceId
     try {
       await this.marketplace.waitForSourceRefresh(sourceId)
-    } catch {
-      return { ok: false, error: 'marketplace refresh failed; review the plugin again' }
+    } catch (error) {
+      return { ok: false, error: marketplaceInstallRefreshError(error) }
     }
     const listing = await this.marketplace.findPlugin(sourceId, preview.pluginKey)
     if (!listing || listing.marketplaceCommit !== preview.marketplaceCommit) {
@@ -200,8 +200,6 @@ export class PluginMarketplaceInstaller {
     // Why read first: the install rewrites the lock entry this comparison needs.
     const priorEntry = await this.readLockEntry(preview.pluginKey)
     const repositoryMoved = marketplaceInstallMoved(priorEntry, listing.source)
-    // Why revoke before publishing: a content-only fingerprint does not name its repository.
-    await (repositoryMoved ? this.revokeConsent(preview.pluginKey) : undefined)
     const result = await installPluginFromMarketplace({
       pluginsDir: getUserPluginsDir(this.userDataPath),
       hostVersion: this.hostVersion,
@@ -218,6 +216,11 @@ export class PluginMarketplaceInstaller {
         ...(listing.source.path ? { path: listing.source.path } : {})
       },
       ...(listing.release ? { release: listing.release } : {}),
+      withPublication: (publish) =>
+        withMarketplaceInstallEligibility(this.marketplace, preview, async () => {
+          await (repositoryMoved ? this.revokeConsent(preview.pluginKey) : undefined)
+          await publish()
+        }),
       blockedPluginReason: (key) => {
         if (
           options.stillAllowed?.() === false ||
@@ -254,18 +257,8 @@ export class PluginMarketplaceInstaller {
     return (await this.readInstallLockfile()).plugins[pluginKey] ?? null
   }
 
-  /** The catalog an installed plugin came from, or null when it was not a marketplace install. */
-  private async readMarketplaceInstall(
-    pluginKey: string,
-    lock?: PluginLockfile
-  ): Promise<MarketplaceInstall | null> {
-    return marketplaceInstallOf(
-      lock ? (lock.plugins[pluginKey] ?? null) : await this.readLockEntry(pluginKey)
-    )
-  }
-
   async previewInstalledUpdate(pluginKey: string): Promise<PluginMarketplaceInstallPreview> {
-    const installed = await this.readMarketplaceInstall(pluginKey)
+    const installed = marketplaceInstallOf(await this.readLockEntry(pluginKey))
     if (!installed) {
       throw new Error(`plugin ${pluginKey} was not installed from a marketplace`)
     }
@@ -280,7 +273,9 @@ export class PluginMarketplaceInstaller {
     listing: PluginMarketplaceListing
     officialCatalog: boolean
   } | null> {
-    const installed = await this.readMarketplaceInstall(pluginKey, lock)
+    const installed = marketplaceInstallOf(
+      lock ? (lock.plugins[pluginKey] ?? null) : await this.readLockEntry(pluginKey)
+    )
     const listing = installed
       ? await this.marketplace.findPlugin(installed.sourceId, pluginKey)
       : null
