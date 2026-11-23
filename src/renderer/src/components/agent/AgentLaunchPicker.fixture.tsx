@@ -192,6 +192,29 @@ export const dropdownModelsFailed = defineFixture({
   }
 })
 
+// Hand off from a conversation saved in a workspace sub-folder: no agent starts a chat there.
+function chatInSubfolder(
+  agent: TuiAgent,
+  label: string,
+  models: AgentSessionModelOption[]
+): AgentPickerEntry {
+  const base = entry(agent, label, ['terminal'], models)
+  return { ...base, rows: [...base.rows, { kind: 'chat-unavailable', agent, reason: 'subfolder' }] }
+}
+
+export const dropdownChatInSubfolder = defineFixture({
+  width: 460,
+  render: () => (
+    <HandOffField
+      entries={[
+        chatInSubfolder('claude', 'Claude', claudeModels),
+        chatInSubfolder('codex', 'Codex', codexModels)
+      ]}
+    />
+  ),
+  interact: openDropdown
+})
+
 export const dropdownSearch = defineFixture({
   width: 460,
   render: () => <HandOffField />,

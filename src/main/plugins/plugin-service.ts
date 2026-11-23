@@ -181,7 +181,8 @@ export class PluginService {
       ? await discoverPlugins({
           pluginsDir: getUserPluginsDir(this.options.userDataPath),
           devPluginPaths: devPaths,
-          hostVersion: this.options.hostVersion
+          hostVersion: this.options.hostVersion,
+          requiredPluginKeys: consentLists.requiredPlugins
         })
       : []
     if (this.disposed) {

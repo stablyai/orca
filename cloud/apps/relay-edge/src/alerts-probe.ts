@@ -8,8 +8,12 @@
 export const PROBE_TIMEOUT_MS = 5_000
 
 // null when the edge answered 401 in time; otherwise what went wrong.
-export async function probeEdge(baseUrl: string, now: () => number = Date.now): Promise<string | null> {
-  const url = `${baseUrl.replace(/\/+$/, '')}/v1/host/control`
+export function probeEdge(baseUrl: string, now: () => number = Date.now): Promise<string | null> {
+  return probeUnauthenticatedUpgrade(`${baseUrl.replace(/\/+$/, '')}/v1/host/control`, 'control', now)
+}
+
+// Shared with the connector wake alerts (its own upgrade path); `what` names the upgrade in messages.
+export async function probeUnauthenticatedUpgrade(url: string, what: string, now: () => number = Date.now): Promise<string | null> {
   const started = now()
   const abort = new AbortController()
   const timer = setTimeout(() => abort.abort(new DOMException('probe timed out', 'TimeoutError')), PROBE_TIMEOUT_MS)
@@ -30,14 +34,14 @@ export async function probeEdge(baseUrl: string, now: () => number = Date.now): 
       socket.accept()
       socket.close(1000, 'probe')
     }
-    if (response.status !== 401) { return `unauthenticated control upgrade got ${response.status}, expected 401` }
-    if (elapsed > PROBE_TIMEOUT_MS) { return `unauthenticated control upgrade took ${elapsed} ms` }
+    if (response.status !== 401) { return `unauthenticated ${what} upgrade got ${response.status}, expected 401` }
+    if (elapsed > PROBE_TIMEOUT_MS) { return `unauthenticated ${what} upgrade took ${elapsed} ms` }
     return null
   } catch (error) {
     const name = (error as Error).name
     return name === 'TimeoutError' || name === 'AbortError'
-      ? `unauthenticated control upgrade timed out after ${PROBE_TIMEOUT_MS} ms`
-      : `unauthenticated control upgrade failed: ${(error as Error).message}`
+      ? `unauthenticated ${what} upgrade timed out after ${PROBE_TIMEOUT_MS} ms`
+      : `unauthenticated ${what} upgrade failed: ${(error as Error).message}`
   } finally {
     clearTimeout(timer)
   }

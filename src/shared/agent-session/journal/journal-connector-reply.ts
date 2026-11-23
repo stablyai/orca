@@ -46,6 +46,8 @@ export type JournalConnectorReplyFill = JournalConnectorReplyKey & {
   links?: ConnectorWorkLink[]
   /** How long the answered turn ran, on the machine's own clock. */
   tookMs?: number
+  /** The answering turn's turn-started `at`, as its conversation was told; absent when unknown. */
+  turnStartedAt?: number
 }
 
 /** An outbox row not yet accepted by the cloud. */

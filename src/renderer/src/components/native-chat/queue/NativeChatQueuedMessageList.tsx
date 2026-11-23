@@ -212,7 +212,13 @@ export function NativeChatQueuedMessageList({
             <ul
               ref={listRef}
               id={listId}
-              onFocus={() => setListFocused(true)}
+              // On touch, keep a control's hold while a row tap reveals its tools.
+              onFocus={(event) => {
+                const rowText = event.target instanceof HTMLLIElement
+                if (!rowText || !window.matchMedia('(hover: none)').matches) {
+                  setListFocused(!rowText)
+                }
+              }}
               onBlur={leaveList}
               // Hidden, not unmounted: an open edit keeps its typing while the list is collapsed.
               hidden={!expanded}

@@ -130,6 +130,18 @@ export function resolveRevParsePath(repoPath: string, value: string): string {
     : posix.resolve(repoPath, value)
 }
 
+/** Prefer the backlink spelling `git worktree list` keys rows by, only when it differs from --show-toplevel by case. */
+export function resolveRegisteredWorktreePath(
+  backlinkFile: string,
+  gitDir: string,
+  topLevel: string
+): string {
+  const backlink = backlinkFile.trimEnd().replace(/\/\.git$/, '')
+  // Skip fs.realpath: it would restore the on-disk case; the case-only check below rejects any other divergence from Git.
+  const candidate = win32.isAbsolute(backlink) ? backlink : posix.normalize(`${gitDir}/${backlink}`)
+  return candidate.toLowerCase() === topLevel.toLowerCase() ? candidate : topLevel
+}
+
 export function translateWorktreePath(
   worktreePath: string,
   repoPath: string,

@@ -1,3 +1,4 @@
+import type { PluginBlockNotice } from './catalog/plugin-kill-list'
 import type { PluginCatalogType } from './catalog/plugin-catalog-types'
 import type { PluginExecutionProfile } from './contributions/plugin-execution-profile'
 import type { PluginHostImages } from './images/plugin-image-url'
@@ -65,6 +66,7 @@ export type PluginHostListEntry = {
   name: string
   version: string
   publisher: string
+  managedByTeams?: string[]
   description?: string
   /** The verified execution profile from the installed manifest; absent for invalid entries and
    *  on hosts that predate it. Never infer it from the plugin's contents. */
@@ -79,6 +81,7 @@ export type PluginHostListEntry = {
   repository?: string
   status: PluginHostStatus
   needsReconsent: boolean
+  requiredByTeam?: true
   error?: string
   isDev: boolean
   /** Dev folders: file changes the host had seen when it last loaded the folder, so a client can
@@ -124,7 +127,7 @@ export type PluginHostListEntry = {
     }[]
   }[]
   restarts: number
-  blockedByKillList?: { reason: string; advisoryUrl?: string }
+  blockedByKillList?: PluginBlockNotice
   source?: {
     kind: 'local-path' | 'git' | 'marketplace' | 'bundled'
     reference: string

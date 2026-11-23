@@ -35,7 +35,7 @@ import { isWslMoveUnderwayOnHost } from '../../persistence/moving-wsl-projects/o
 import { readLocalFullVersion } from '../../managed-server/install/remote-versioned-install'
 import { createWslDistroHolder } from '../discovery/wsl-distro-holder'
 
-import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
+import { defaultWslOrcadEnvironmentId } from './wsl-orcad-environment-id'
 import { readWslDistroRegistryIdShared } from '../discovery/wsl-distro-registry-id'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
@@ -62,9 +62,7 @@ import { withOwnBuildLaunchEnv } from './wsl-orcad-own-build-launch-env'
 import { WSL_NODE_RUNTIME_DOWNLOAD_BUDGET } from '../execution/wsl-node-runtime-download-budget'
 
 /** Until the persisted deployment record (C7) assigns one, the environment is keyed per distro. */
-export function defaultWslOrcadEnvironmentId(distro: string): string {
-  return `wsl:${wslDistroHolderKey(distro)}`
-}
+export { defaultWslOrcadEnvironmentId }
 
 export async function deployAndLaunchWslOrcad(
   distro: string,
@@ -265,7 +263,7 @@ async function launchOverTransport(
       await wakeAlreadyActiveOrcad(slot)
       return probe()
     })
-    // Started without the WSL host marker (#43632): restart it as one when no terminal runs.
+    // Started without the WSL host marker (#43632): restart it as one when no terminal or chat runs.
     if (launch.mode === 'other') {
       const relaunch = await relaunchAsWslHost({
         environmentId: target.id,

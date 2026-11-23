@@ -2,11 +2,11 @@ import { useState, type ReactNode } from 'react'
 import {
   botLookAround,
   LOOK_AROUND_EVERY_CHOICES,
-  LOOK_AROUND_EVERY_LABELS,
   LOOK_AROUND_FOCUS_MAX_LENGTH,
   type BotLookAround,
   type BotUpNext
 } from '../../../src/shared/bots/bot-look-around'
+import { lookAroundEveryLabel } from '../../../src/shared/bots/bot-look-around-every-label'
 import { ListRow } from '../components/list/ListGroup'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { TextField } from '../components/composer-input/TextField'
@@ -61,7 +61,7 @@ export function MobileLookAroundSection(props: {
             <DrillRow
               key="every"
               label={t('bots.lookAround.every', 'How often')}
-              value={LOOK_AROUND_EVERY_LABELS[setting.every]}
+              value={lookAroundEveryLabel(setting.every, t)}
               detail
               disabled={props.disabled}
               onPress={() => props.onOpen('every')}
@@ -194,7 +194,7 @@ export function MobileLookAroundPage(props: {
         <ChoiceRows
           choices={LOOK_AROUND_EVERY_CHOICES.map((id) => ({
             id,
-            label: LOOK_AROUND_EVERY_LABELS[id]
+            label: lookAroundEveryLabel(id, t)
           }))}
           selected={setting.every}
           disabled={props.disabled}
