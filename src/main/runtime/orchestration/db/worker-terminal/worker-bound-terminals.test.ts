@@ -256,6 +256,24 @@ describe('terminals bound to a worker', () => {
     expect(closed).toEqual([worker.tab.terminalHandle])
   })
 
+  it('a cleanup that fails partway never rejects, and the next call closes what is left', async () => {
+    const worker = startWorker(botChat)
+    const { runtime, closed } = host(worker)
+    const failing = {
+      ...runtime,
+      getTerminalPaneKey: (handle: string) => {
+        if (handle === worker.tab.terminalHandle) {
+          throw new Error('lookup failed')
+        }
+        return runtime.getTerminalPaneKey(handle)
+      }
+    }
+    await expect(closeWorkerBoundTerminals(failing, db, worker.dispatchId)).resolves.toBeUndefined()
+    expect(closed).toEqual([worker.setup.terminalHandle])
+    await closeStoppedWorkerTerminals(runtime, db, worker.dispatchId)
+    expect(closed).toEqual([worker.setup.terminalHandle, worker.tab.terminalHandle])
+  })
+
   it('never closes a handle that now names another pane', async () => {
     const worker = startWorker(botChat)
     const { runtime, closed } = host(worker)
