@@ -27744,7 +27744,6 @@
       "runningCount": "{{count}} 个运行中",
       "showMoreCount": "再显示 {{count}} 个",
       "workers": "工作者",
-      "waitingCount": "{{count}} 个等待中",
       "loading": "正在加载聊天…",
       "readFailed": "无法读取此 bot 的聊天",
       "delete": "删除聊天",

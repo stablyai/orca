@@ -6216,8 +6216,8 @@
       "moreMatches_one": "{{count}} more match. Search for more of a name to narrow it.",
       "moreMatches_other": "{{count}} more matches. Search for more of a name to narrow it.",
       "readFailedTitle": "Couldn’t load chats",
-      "waitingCount": "{{count}} waiting",
-      "runningCount": "{{count}} running"
+      "runningCount": "{{count}} running",
+      "needsYouCount": "{{count}} needs you"
     },
     "row": {
       "replyingIn": "Replying in {{place}}",
@@ -6333,7 +6333,8 @@
         "retry": "Retry",
         "discard": "Discard",
         "mayHaveArrived": "May have arrived.",
-        "replyingTo": "Replying to: {{question}}. Go to the question"
+        "replyingTo": "Replying to: {{question}}. Go to the question",
+        "waitingOn": "Waiting on"
       },
       "comment": {
         "offline": "{{host}} is offline. Your comment is kept; Comment works again when it’s back.",
@@ -6422,6 +6423,14 @@
         "placeholder": "Reason",
         "confirmOne": "Cancel item",
         "offline": "{{host}} is offline. Your reason is kept; {{action}} works again when it’s back."
+      },
+      "wait": {
+        "titleOne": "What is {{title}} waiting on?",
+        "titleMany": "What are {{count}} items waiting on?",
+        "placeholder": "Waiting on",
+        "keep": "Cancel",
+        "confirm": "Set Waiting",
+        "offline": "{{host}} is offline. What you typed is kept; Set Waiting works again when it’s back."
       },
       "strip": {
         "view": "View"

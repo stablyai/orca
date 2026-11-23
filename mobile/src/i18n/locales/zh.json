@@ -8225,7 +8225,6 @@
       "moreMatches_one": "还有 {{count}} 个匹配结果。输入更完整的名称以缩小范围",
       "moreMatches_other": "还有 {{count}} 个匹配项。输入更完整的名称以缩小范围",
       "readFailedTitle": "无法加载聊天",
-      "waitingCount": "{{count}} 个等待中",
       "runningCount": "{{count}} 个运行中"
     },
     "row": {

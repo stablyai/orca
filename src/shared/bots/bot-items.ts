@@ -20,10 +20,10 @@ export const BOT_ITEM_OPEN_STATUSES: readonly BotItemStatus[] = [
   'needs_you'
 ]
 
-/** What the owner's status pickers offer: not Waiting, whose wait text they don't ask for. */
-export const BOT_ITEM_PICKER_STATUSES: readonly BotItemStatus[] = BOT_ITEM_STATUSES.filter(
-  (status) => status !== 'waiting'
-)
+/** What the owner's status pickers offer: Waiting only where the item's host has it. */
+export function botItemPickerStatuses(waiting: boolean): readonly BotItemStatus[] {
+  return waiting ? BOT_ITEM_STATUSES : BOT_ITEM_STATUSES.filter((status) => status !== 'waiting')
+}
 
 export function isOpenBotItemStatus(status: BotItemStatus): boolean {
   return BOT_ITEM_OPEN_STATUSES.includes(status)
