@@ -1,5 +1,5 @@
 import { isIP } from 'node:net'
-import { networkInterfaces } from 'node:os'
+import { networkInterfaces, type NetworkInterfaceInfo } from 'node:os'
 import {
   isVirtualBridgeInterface,
   selectAutoAdvertisedPairingAddress
@@ -15,6 +15,49 @@ export type NetworkInterface = {
 }
 
 export type DefaultRouteInterfaceLookup = () => Promise<ReadonlySet<string> | null>
+
+// One route lookup per adapter snapshot: the PowerShell spawn costs ~0.5 s on Windows. The TTL bounds
+// staleness when a tunnel changes the default route without adding an adapter.
+const ROUTE_NAMES_TTL_MS = 60_000
+let cachedRouteNames: { snapshot: string; names: ReadonlySet<string>; at: number } | null = null
+
+/** A failed lookup stays uncached so the next pairing screen retries it. */
+async function defaultRouteNamesFor(
+  snapshot: string,
+  lookup: DefaultRouteInterfaceLookup
+): Promise<ReadonlySet<string> | null> {
+  if (
+    cachedRouteNames?.snapshot === snapshot &&
+    Date.now() - cachedRouteNames.at < ROUTE_NAMES_TTL_MS
+  ) {
+    return cachedRouteNames.names
+  }
+  const names = await lookup()
+  if (names) {
+    cachedRouteNames = { snapshot, names, at: Date.now() }
+  }
+  return names
+}
+
+/** The route bonus only decides anything when the best non-Tailscale candidates rank equal. */
+function hasRankTie(interfaces: readonly NetworkInterface[]): boolean {
+  // A Tailscale address wins every tie at rank 0, so the bonus cannot change the advertised one.
+  if (interfaces.some((iface) => isTailnetIPv4Address(iface.address))) {
+    return false
+  }
+  let best = Number.POSITIVE_INFINITY
+  let bestCount = 0
+  for (const iface of interfaces) {
+    const rank = rankInterface(iface)
+    if (rank < best) {
+      best = rank
+      bestCount = 1
+    } else if (rank === best) {
+      bestCount += 1
+    }
+  }
+  return bestCount > 1
+}
 
 // 0.0.0.0 cannot accept IPv6; only an IPv6 bind can offer both families (#31161).
 function listenerServesFamily(listenerHost: string, family: 'IPv4' | 'IPv6'): boolean {
@@ -52,17 +95,14 @@ export async function getPairingNetworkInterfaces(
       if (!listenerServesFamily(listenerHost, addr.family)) {
         continue
       }
-      result.push({
-        name,
-        address: addr.address
-      })
+      result.push({ name, address: addr.address })
     }
   }
-  // A tie between candidates needs the default-route tie-break; unknown route cannot attest vEthernet reachability.
+  // Ask only when the answer can change the ranking: vEthernet reachability, or a tie the bonus breaks.
   const defaultRouteInterfaceNames =
-    hasHyperVInterface || result.length > 1
-      ? await getDefaultRouteInterfaceNames()
-      : new Set<string>()
+    hasHyperVInterface || hasRankTie(result)
+      ? await defaultRouteNamesFor(snapshotOf(interfaces), getDefaultRouteInterfaceNames)
+      : null
   const normalizedDefaultRouteInterfaceNames =
     defaultRouteInterfaceNames === null
       ? null
@@ -75,6 +115,11 @@ export async function getPairingNetworkInterfaces(
         : iface
     )
     .sort((a, b) => rankInterface(a) - rankInterface(b))
+}
+
+/** The adapter list itself: route names are only reused while the machine's set of adapters is unchanged. */
+function snapshotOf(interfaces: NodeJS.Dict<NetworkInterfaceInfo[]>): string {
+  return Object.keys(interfaces).sort().join('\n')
 }
 
 function rankInterface({ name, address, hasDefaultRoute }: NetworkInterface): number {
