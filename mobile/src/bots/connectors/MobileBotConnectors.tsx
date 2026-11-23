@@ -33,6 +33,7 @@ import { usePhoneGitHubAccount, usePhoneLinearAccount } from './use-phone-connec
 import { connectorNames, connectorRows } from './connector-entry-rows'
 import { MobileBotSlackPage } from './MobileBotSlackPage'
 import { MobileBotSlackSetup } from './MobileBotSlackSetup'
+import { otherSlackTeams } from '../../../../src/shared/bots/bot-slack-setup-teams'
 import { usePhoneBotSlack } from './use-phone-bot-slack'
 import { MobileBotConnectorToolPages } from './MobileBotConnectorToolPages'
 import { useBotToolsPage } from '../tools/use-bot-tools-page'
@@ -158,10 +159,9 @@ function ConnectorsPage(
         avatar={mobileBotAvatarSource(bot)}
         teamId={page.teamId}
         inSlack={slackApps.length > 0}
-        // The workspace a later bot reuses: one another bot on this host is in.
-        knownTeam={
-          hostBots.find((other) => other.id !== bot.id && other.slack)?.slack?.teamId ?? null
-        }
+        // The workspaces a later bot reuses: those other bots on this host are in.
+        knownTeams={otherSlackTeams(hostBots, bot)}
+        hostBots={hostBots}
         slack={slack}
         hostName={props.hostName}
         online={props.online}
