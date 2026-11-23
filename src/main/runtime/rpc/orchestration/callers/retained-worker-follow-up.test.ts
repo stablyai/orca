@@ -149,6 +149,7 @@ describe('follow-up custody for a closed retained worker chat', () => {
     }
     Object.assign(hostRef.current!, { captureAgentStartDestination: () => null }, surfaces)
     vi.spyOn(h.runtime, 'showManagedTerminalWorkspace').mockResolvedValue(worktree)
+    vi.spyOn(h.runtime, 'validateOrchestrationAgentLauncher').mockReturnValue()
     vi.spyOn(h.runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
       supported: true
     })
