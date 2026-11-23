@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
+import { useLayoutEffect, useRef, type RefObject } from 'react'
 import { NATIVE_CHAT_ROOT_SELECTOR } from '@/components/native-chat/paste/native-chat-paste-request'
 import { replacesComposerMidDraft } from './native-chat-prompt-card-draft-handoff'
 
@@ -80,7 +80,8 @@ export function useNativeChatPromptCardFocus(
   step?: number
 ): void {
   const previousStepRef = useRef(step)
-  useEffect(() => {
+  // Before the focus effect below, so the guard is in place when focus lands on a button.
+  useLayoutEffect(() => {
     const card = cardRef.current
     return card ? ignoreHeldKeysOnButtons(card) : undefined
   }, [cardRef])
