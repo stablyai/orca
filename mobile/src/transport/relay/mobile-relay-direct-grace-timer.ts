@@ -46,7 +46,7 @@ export class MobileRelayDirectGraceTimer {
   // Race only unauthenticated direct progress; healthy LAN and already-failed direct recovery need no extra relay socket.
   arm(): void {
     const state = this.logical.getState()
-    if (this.timer || (state !== 'connecting' && state !== 'handshaking')) {
+    if (this.timer || !['reconnecting', 'connecting', 'handshaking'].includes(state)) {
       return
     }
     this.timer = this.dependencies.setTimer(

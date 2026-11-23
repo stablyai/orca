@@ -5,6 +5,8 @@ import {
   type MobileRelayEndpoint
 } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { NODE_PLATFORM_NAMES } from '../transport/connection/mobile-runtime-host-platform'
+import { MobileTailnetEndpointSchema } from '../../../src/shared/remote-runtime/pairing/mobile-tailnet-endpoint'
+import { MobileLanEndpointSchema } from '../../../src/shared/remote-runtime/pairing/mobile-lan-endpoint'
 import { salvagedOptional } from '../../../src/shared/validation/zod-salvage'
 import type { HostMachine } from '../../../src/shared/execution-host/host-machine-line'
 import { HostMachineSchema } from '../transport/hosts/host-status-reply-schema'
@@ -20,6 +22,8 @@ export type HostProfile = {
   lastKnownHostPlatform?: NodeJS.Platform
   lastKnownHostMachine?: HostMachine
   endpoint: string
+  tailnetEndpoint?: string
+  lanEndpoint?: string
   deviceToken: string
   publicKeyB64: string
   lastConnected: number
@@ -51,6 +55,8 @@ export const HostProfileSchema = z.object({
   name: z.string().min(1),
   ...hostNameIdentityFields,
   endpoint: z.string().min(1),
+  tailnetEndpoint: MobileTailnetEndpointSchema.optional().catch(undefined),
+  lanEndpoint: MobileLanEndpointSchema.optional().catch(undefined),
   deviceToken: z.string().min(1),
   publicKeyB64: z.string().min(1),
   lastConnected: z.number().finite(),
@@ -63,6 +69,8 @@ export const StoredHostProfileSchema = z.object({
   name: z.string().min(1),
   ...hostNameIdentityFields,
   endpoint: z.string().min(1),
+  tailnetEndpoint: MobileTailnetEndpointSchema.optional().catch(undefined),
+  lanEndpoint: MobileLanEndpointSchema.optional().catch(undefined),
   publicKeyB64: z.string().min(1),
   lastConnected: z.number().finite()
 })

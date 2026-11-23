@@ -45,6 +45,10 @@ export class MobileEndpointHysteresis {
     )
   }
 
+  resetDirectObservation(): void {
+    this.resetProgress()
+  }
+
   recordDirectFailure(now: number): void {
     this.arrived = false
     this.resetProgress()

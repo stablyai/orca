@@ -19,8 +19,10 @@ import {
 } from './host-path-memory'
 import { upgradeDirectMobileRelay } from '../relay/mobile-relay-direct-upgrade'
 import { directPathForEndpoint } from '../relay/mobile-direct-endpoint-probe'
+import { isSameDirectEndpoint } from './direct-endpoint-comparison'
 import { directProbeTimeoutMsForEndpoint } from '../relay/mobile-direct-return-probe'
 import { MobileRelayDirectUpgradeController } from '../relay/mobile-relay-direct-upgrade-controller'
+import { MobileDirectTailnetFallback } from './mobile-direct-tailnet-fallback'
 import { defaultCancelTimer, defaultScheduleTimer } from '../../platform/timer-scheduler'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import { skipsDirectEndpoint } from './undialable-direct-endpoint'
@@ -29,9 +31,11 @@ type EndpointLifecycle = {
   setForeground(foreground: boolean): void
   nudge(reason: ForegroundNudgeReason): void
   stop(): void
+  learnTailnetEndpoint(endpoint: string): void
+  learnLanEndpoint(endpoint: string): void
 }
 
-type EndpointOwner = EndpointLifecycle & {
+type EndpointOwner = Pick<EndpointLifecycle, 'setForeground' | 'nudge' | 'stop'> & {
   start(): Promise<void>
 }
 
@@ -43,22 +47,104 @@ export function startMobileEndpointLifecycle(
   let stopped = false
   let foreground = true
   let owner: EndpointOwner
+  let tailnetFallback: MobileDirectTailnetFallback | null = null
+  let currentTailnetEndpoint: string | undefined
+  let currentLanEndpoint: string | undefined
+  let relayActive = initialHost.relay !== undefined
+  let relaySupervisor: MobileEndpointSupervisor | null = null
+  const primaryPath = directPathForEndpoint(initialHost.endpoint)
+
+  const refreshDirectFallback = (): void => {
+    if (relayActive) {
+      return
+    }
+    tailnetFallback?.stop()
+    const lan = currentLanEndpoint ?? (primaryPath === 'lan' ? initialHost.endpoint : undefined)
+    const tailnet =
+      currentTailnetEndpoint ?? (primaryPath === 'tailscale' ? initialHost.endpoint : undefined)
+    if (!lan || !tailnet) {
+      tailnetFallback = null
+      return
+    }
+    tailnetFallback = new MobileDirectTailnetFallback(
+      logical,
+      (path) =>
+        connect(path === 'lan' ? lan : tailnet, initialHost.deviceToken, initialHost.publicKeyB64, {
+          onLog
+        }),
+      true
+    )
+    tailnetFallback.start()
+    tailnetFallback.setForeground(foreground)
+  }
+
+  const installTailnetFallback = (endpoint: string): void => {
+    if (stopped || primaryPath === 'tailscale' || currentTailnetEndpoint === endpoint) {
+      return
+    }
+    currentTailnetEndpoint = endpoint
+    if (relaySupervisor) {
+      relaySupervisor.learnEndpoint('tailscale', endpoint)
+    } else {
+      refreshDirectFallback()
+    }
+  }
+
+  const installLanFallback = (endpoint: string): void => {
+    if (
+      stopped ||
+      isSameDirectEndpoint(endpoint, initialHost.endpoint) ||
+      currentLanEndpoint === endpoint
+    ) {
+      return
+    }
+    currentLanEndpoint = endpoint
+    if (relaySupervisor) {
+      relaySupervisor.learnEndpoint('lan', endpoint)
+    } else {
+      refreshDirectFallback()
+    }
+  }
 
   const startSupervisor = async (relay: MobileRelayEndpoint): Promise<void> => {
     if (stopped) {
       return
     }
     const supervisor = createSupervisor(logical, initialHost, relay, onLog)
+    relayActive = true
+    tailnetFallback?.stop()
+    tailnetFallback = null
     owner.stop()
     owner = supervisor
+    relaySupervisor = supervisor
     supervisor.setForeground(foreground)
+    if (currentTailnetEndpoint) {
+      supervisor.learnEndpoint('tailscale', currentTailnetEndpoint)
+    }
+    if (currentLanEndpoint) {
+      supervisor.learnEndpoint('lan', currentLanEndpoint)
+    }
     await supervisor.start()
   }
 
   if (initialHost.relay) {
-    owner = createSupervisor(logical, initialHost, initialHost.relay, onLog)
+    const supervisor = createSupervisor(logical, initialHost, initialHost.relay, onLog)
+    owner = supervisor
+    relaySupervisor = supervisor
+    if (initialHost.tailnetEndpoint) {
+      installTailnetFallback(initialHost.tailnetEndpoint)
+    }
+    if (initialHost.lanEndpoint) {
+      installLanFallback(initialHost.lanEndpoint)
+    }
     void owner.start()
   } else {
+    if (initialHost.tailnetEndpoint) {
+      installTailnetFallback(initialHost.tailnetEndpoint)
+    }
+    if (initialHost.lanEndpoint) {
+      installLanFallback(initialHost.lanEndpoint)
+    }
     owner = new MobileRelayDirectUpgradeController(logical, initialHost, {
       upgrade: (client, host) =>
         upgradeDirectMobileRelay({
@@ -75,19 +161,25 @@ export function startMobileEndpointLifecycle(
     setForeground(next) {
       foreground = next
       owner.setForeground(next)
+      tailnetFallback?.setForeground(next)
     },
     nudge(reason) {
       // Why: a focus nudge can precede the AppState listener; keep the closure in
       // sync or a later supervisor swap would start with a stale background flag.
-      if (reason !== 'network-change') {
+      if (reason !== 'network-change' && !foreground) {
         foreground = true
+        tailnetFallback?.setForeground(true)
       }
       owner.nudge(reason)
+      tailnetFallback?.nudge(reason)
     },
     stop() {
       stopped = true
       owner.stop()
-    }
+      tailnetFallback?.stop()
+    },
+    learnTailnetEndpoint: installTailnetFallback,
+    learnLanEndpoint: installLanFallback
   }
 }
 
@@ -99,6 +191,8 @@ function createSupervisor(
 ): MobileEndpointSupervisor {
   return new MobileEndpointSupervisor(logical, host.id, relay, {
     openDirect: () => connect(host.endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
+    openDirectEndpoint: (endpoint) =>
+      connect(endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
     directPath: directPathForEndpoint(host.endpoint),
     directProbeTimeoutMs: directProbeTimeoutMsForEndpoint(host.endpoint),
     directUnavailable: skipsDirectEndpoint(host),
