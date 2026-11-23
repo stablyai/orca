@@ -10,8 +10,7 @@ import { openClaudeSession, readClaudeStartupFacts } from './claude-structured-s
 import { catchUpClaudeTranscript } from '../../transcripts/claude-transcript-catch-up'
 import { readyClaudePromptSuggestionPause } from '../claude-prompt-suggestion-pause'
 import {
-  claimClaudeFullAccessRefusalNotice,
-  journalClaudeFullAccessRefusal,
+  journalClaudeSessionPermissionNotice,
   readClaudeEarlierRefusalNotice
 } from '../permissions/claude-full-access-refusal-notice'
 import type {
@@ -150,14 +149,6 @@ async function openStartingClaudeSession(
   }
   current()
   startup.open()
-  if (events) {
-    journalClaudeFullAccessRefusal(
-      {
-        sink: events,
-        fullAccessRefusalNotice: () => claimClaudeFullAccessRefusalNotice(session)
-      },
-      { kind: 'thread' }
-    )
-  }
+  journalClaudeSessionPermissionNotice(session, { kind: 'thread' })
   return { ...result, link: session.link, newConversation: !resumesTranscript }
 }

@@ -10,6 +10,7 @@ import {
 import {
   claimClaudePermissionModeRequest,
   ClaudePermissionModeUnsettled,
+  recordClaudeBuildPermissionMode,
   setClaudeAllowedPermissionMode
 } from '../permissions/claude-permission-mode-ladder'
 import { claudeStartedUnechoedSend } from '../turns/claude-command-lifecycle'
@@ -100,7 +101,7 @@ export async function applyClaudeMessageOptions(
             )
       session.appliedInputOptions.set('interactionMode', options.interactionMode)
       if (mode !== null) {
-        session.appliedInputOptions.set('buildPermissionMode', mode)
+        recordClaudeBuildPermissionMode(session, mode)
       }
     }
   } else {
@@ -173,7 +174,7 @@ async function applyClaudePermissionFallback(
     signal
   )
   if (mode !== null) {
-    session.appliedInputOptions.set('buildPermissionMode', mode)
+    recordClaudeBuildPermissionMode(session, mode)
   }
 }
 

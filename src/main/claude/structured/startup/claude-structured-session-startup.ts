@@ -41,7 +41,7 @@ import {
   readClaudeSettingsAutoDisabled,
   readClaudeSettingsBypassDisabled
 } from '../permissions/claude-full-access-refusal'
-import { observeClaudeRootInit } from '../permissions/claude-permission-mode-ladder'
+import { journalClaudeSessionPermissionNotice } from '../permissions/claude-full-access-refusal-notice'
 import type {
   ClaudeAuthDiagnostic,
   ClaudeStructuredSessionEvent
@@ -140,9 +140,7 @@ function applyClaudeInitializeFacts(session: ClaudeSession, facts: ClaudeInitial
   }
   const { init, initialization } = facts
   const opened = readClaudeOpenedPermissionMode(initialization)
-  if (session.launchIntent?.permissionMode === 'auto') {
-    observeClaudeRootInit(session, session.firstRootInit)
-  } else if (opened) {
+  if (session.launchIntent?.permissionMode !== 'auto' && opened) {
     session.firstRootInit ??= { permissionMode: opened }
   }
   // Preserve a running model already reported by a turn's init frame.
@@ -270,10 +268,15 @@ async function settleClaudeStartupSettings(
       session.bypassDisabled,
       readClaudeSettingsBypassDisabled(settings)
     )
-    session.autoDisabled = settledClaudeRefusalFact(
+    const autoDisabled = settledClaudeRefusalFact(
       session.autoDisabled,
       readClaudeSettingsAutoDisabled(settings)
     )
+    const autoNewlyDisabled = autoDisabled === true && session.autoDisabled !== true
+    session.autoDisabled = autoDisabled
+    if (autoNewlyDisabled && session.launchIntent?.permissionMode === 'auto') {
+      journalClaudeSessionPermissionNotice(session)
+    }
   }
   if (!input.isCurrent() || token.pending || session.settingsObservation !== token) {
     return

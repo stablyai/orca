@@ -126,10 +126,14 @@ function claimClaudePermissionRestored(
   session: ClaudeBypassFacts & ClaudeNoticeState
 ): ClaudeFullAccessRefusalNotice | null {
   const intent = session.launchIntent?.permissionMode
+  const lastNotice = session.fullAccessRefusalNoticeId
+  const applied = session.appliedInputOptions?.get('buildPermissionMode')
   if (
-    session.fullAccessRefusalNoticeId !== EARLIER_PROCESS_WARNING ||
     (intent !== 'auto' && intent !== 'bypassPermissions') ||
-    session.firstRootInit?.permissionMode !== intent ||
+    (lastNotice !== EARLIER_PROCESS_WARNING &&
+      !(intent === 'auto' && lastNotice?.startsWith('auto-'))) ||
+    (applied !== intent &&
+      (applied !== undefined || session.firstRootInit?.permissionMode !== intent)) ||
     claudeBypassRefused(session) ||
     claudeAutoFallbackReason(session) !== null
   ) {
@@ -252,4 +256,19 @@ export function journalClaudeFullAccessRefusal(
     { turnScope }
   )
   deps.sink.publish()
+}
+
+export function journalClaudeSessionPermissionNotice(
+  session: ClaudeSession,
+  turnScope: AgentJournalTurnScope = session.translator?.currentTurnScope() ?? { kind: 'thread' }
+): void {
+  if (session.events) {
+    journalClaudeFullAccessRefusal(
+      {
+        sink: session.events,
+        fullAccessRefusalNotice: () => claimClaudeFullAccessRefusalNotice(session)
+      },
+      turnScope
+    )
+  }
 }

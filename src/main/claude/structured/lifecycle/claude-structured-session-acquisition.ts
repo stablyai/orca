@@ -29,7 +29,7 @@ import { isRootClaudeFrame } from '../turns/claude-turn-opening'
 import * as outcome from '../startup/claude-structured-startup-outcome'
 import { claudeStartupResultError } from '../../sdk-transport/claude-stream-json-exit-error'
 import * as ui from './claude-structured-plugin-ui-recovery'
-import { observeClaudeRootInit } from '../permissions/claude-permission-mode-ladder'
+import * as modeLadder from '../permissions/claude-permission-mode-ladder'
 
 export async function acquireClaudeSession({
   input,
@@ -99,7 +99,7 @@ export async function acquireClaudeSession({
       firstRootInit ??= {
         permissionMode: proof.readClaudeFrameString(message, 'permissionMode')
       }
-      observeClaudeRootInit(liveSession, firstRootInit)
+      modeLadder.observeClaudeRootInit(liveSession, firstRootInit)
     }
     const permissionChanged = proof.observeClaudeReportedPermissionMode(observedOptions, message)
     const modelReport = observeClaudeFrameModels(liveSession, message, init?.model)
@@ -274,12 +274,12 @@ export async function acquireClaudeSession({
     })
     session.reportedOptions = observedOptions
     liveSession = session
-    session.firstRootInit = firstRootInit
     session.orderedPermissionMode = permissions.orderedMode
     adoptClaudeStructuredSpawnOptions(session, {
       ...launch.savedOptions,
       sdkOptions: launch.options
     })
+    const observeLaunchRootInit = modeLadder.adoptClaudeLaunchRootInit(session, firstRootInit)
     acquisitions.deleteIfCurrent(sessionId, attempt)
     await publishClaudeSessionAttempt({
       sessionId,
@@ -291,6 +291,7 @@ export async function acquireClaudeSession({
       recordPhase: input.recordPhase,
       ...(input.events?.snapshotCurrent ? { snapshotCurrent: input.events.snapshotCurrent } : {})
     })
+    observeLaunchRootInit()
     return acquisition
   } catch (error) {
     attempt.delivery.dispose()

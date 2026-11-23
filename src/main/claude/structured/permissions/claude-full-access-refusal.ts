@@ -109,8 +109,11 @@ export function claudeAllowedPermissionMode(
   session: ClaudeBypassFacts,
   mode: PermissionMode
 ): PermissionMode {
-  if (mode === 'auto' && claudeAutoFallbackReason(session) !== null) {
-    return 'default'
+  if (mode === 'auto') {
+    const reason = claudeAutoFallbackReason(session)
+    return reason === null || (reason === 'for-now' && claudeAutoRetryDue(session))
+      ? 'auto'
+      : 'default'
   }
   if (mode !== 'bypassPermissions' || !claudeBypassRefused(session)) {
     return mode
@@ -161,7 +164,11 @@ export function claudeOwesPermissionFallback(
   }
   const build = session.appliedInputOptions.get('buildPermissionMode')
   if (intent === 'auto') {
-    return build !== 'default' && claudeAutoFallbackReason(session) !== null
+    const reason = claudeAutoFallbackReason(session)
+    return (
+      reason !== null &&
+      (build !== 'default' || (reason === 'for-now' && claudeAutoRetryDue(session)))
+    )
   }
   if (!claudeBypassRefused(session)) {
     return claudeBypassUnknown(session) && build === undefined

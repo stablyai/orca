@@ -19,6 +19,7 @@ import {
   claudeOwesPermissionFallback,
   type ClaudeBypassFacts
 } from './claude-full-access-refusal'
+import { journalClaudeSessionPermissionNotice } from './claude-full-access-refusal-notice'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -184,11 +185,11 @@ export async function setClaudeAllowedPermissionMode(
     const fallbackAuto = step === 'auto' && mode === 'bypassPermissions'
     // An answer Orca doesn't know refuses the fallback's auto for now; no answer leaves the mode
     // unknown, so the caller records no fallback and auto is asked again shortly.
-    const unanswered = claudeLeftUnanswered(write.reason)
-    const refusal: ClaudeRefusal | null = unanswered
-      ? null
-      : (claudeRefusal(write.reason) ??
-        (fallbackAuto ? { kind: 'auto-for-now', code: undefined } : null))
+    const refusal: ClaudeRefusal | null =
+      claudeRefusal(write.reason) ??
+      (fallbackAuto && !claudeLeftUnanswered(write.reason)
+        ? { kind: 'auto-for-now', code: undefined }
+        : null)
     if (refusal === null || (refusal.kind === 'bypass') !== (step === 'bypassPermissions')) {
       unexpected = { error: write.reason, index }
       if (fallbackAuto) {
@@ -240,31 +241,49 @@ export async function setClaudeAllowedPermissionMode(
   return setClaudeAllowedPermissionMode(session, mode, options, refused)
 }
 
-/** Records Claude's first root init on the live session. A turn that shows a Full access chat
- *  running outside Full access with no fallback settled switches to it now, so its tools run in
- *  the fallback rather than in Ask. */
+export function recordClaudeBuildPermissionMode(
+  session: ClaudeSession,
+  mode: PermissionMode
+): void {
+  session.appliedInputOptions.set('buildPermissionMode', mode)
+  if (session.launchIntent?.permissionMode === 'auto' || mode === 'bypassPermissions') {
+    journalClaudeSessionPermissionNotice(session)
+  }
+}
+
 export function observeClaudeRootInit(
-  session:
-    | (Parameters<typeof setClaudeAllowedPermissionMode>[0] &
-        Parameters<typeof claudeOwesPermissionFallback>[0])
-    | null
-    | undefined,
+  session: ClaudeSession | null,
   firstRootInit: ClaudeSession['firstRootInit']
 ): void {
   if (!session) {
     return
   }
+  const previous = session.firstRootInit
   session.firstRootInit ??= firstRootInit
   if (session.launchIntent?.permissionMode === 'auto') {
-    const opened = session.firstRootInit?.permissionMode
+    const opened = firstRootInit?.permissionMode
     if (
+      !previous &&
       typeof opened === 'string' &&
       opened !== 'auto' &&
       opened !== 'plan' &&
       claudeAutoFallbackReason(session) !== null &&
       !session.appliedInputOptions.has('buildPermissionMode')
     ) {
-      session.appliedInputOptions.set('buildPermissionMode', 'default')
+      if (opened === 'default') {
+        session.appliedInputOptions.set('buildPermissionMode', 'default')
+        return
+      }
+      const write = setClaudeAllowedPermissionMode(session, 'default')
+      const request = session.permissionModeRequests
+      void write.then(
+        (mode) => {
+          if (session.permissionModeRequests === request) {
+            recordClaudeBuildPermissionMode(session, mode)
+          }
+        },
+        () => {}
+      )
     }
     return
   }
@@ -279,4 +298,16 @@ export function observeClaudeRootInit(
       session.appliedInputOptions.delete('buildPermissionMode')
     }
   )
+}
+
+/** Auto launches read the first init only once the session is published. */
+export function adoptClaudeLaunchRootInit(
+  session: ClaudeSession,
+  firstRootInit: ClaudeSession['firstRootInit']
+): () => void {
+  if (session.launchIntent?.permissionMode === 'auto') {
+    return () => observeClaudeRootInit(session, firstRootInit)
+  }
+  session.firstRootInit = firstRootInit
+  return () => {}
 }

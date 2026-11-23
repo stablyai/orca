@@ -8,6 +8,7 @@ import {
 } from './claude-full-access-refusal'
 import {
   ClaudePermissionModeUnsettled,
+  recordClaudeBuildPermissionMode,
   setClaudeAllowedPermissionMode
 } from './claude-permission-mode-ladder'
 
@@ -65,13 +66,7 @@ function logPlanExitFailure(error: unknown): void {
  *  before the allow and never awaited, so its failure cannot hold or reject the approval.
  *  Full access reads the mode in wire order: its presentation report can lag behind the plan. */
 export function leaveClaudePlanModeOnApproval(
-  session: Pick<
-    ClaudeSession,
-    'launchIntent' | 'firstRootInit' | 'reportedOptions' | 'orderedPermissionMode'
-  > &
-    ClaudeBypassFacts & {
-      connection: Pick<ClaudeSession['connection'], 'setPermissionMode'>
-    },
+  session: ClaudeSession,
   prompt: Pick<ClaudePendingPrompt, 'toolName'>,
   reply: PermissionResult
 ): void {
@@ -84,15 +79,15 @@ export function leaveClaudePlanModeOnApproval(
   try {
     setClaudeAllowedPermissionMode(session, claudePlanApprovalMode(session)).then(
       (restored) => {
-        session.appliedInputOptions?.set('interactionMode', 'default')
-        session.appliedInputOptions?.set('buildPermissionMode', restored)
+        session.appliedInputOptions.set('interactionMode', 'default')
+        recordClaudeBuildPermissionMode(session, restored)
       },
       (error: unknown) => {
         // Claude accepted a step out of Plan before a later one went unanswered: the chat has
         // left Plan, and its fallback is owed again.
         if (error instanceof ClaudePermissionModeUnsettled) {
-          session.appliedInputOptions?.set('interactionMode', 'default')
-          session.appliedInputOptions?.delete('buildPermissionMode')
+          session.appliedInputOptions.set('interactionMode', 'default')
+          session.appliedInputOptions.delete('buildPermissionMode')
         }
         logPlanExitFailure(error)
       }
