@@ -239,14 +239,9 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
   }, [selectedIndex, mention.files, drilled, chats?.drill.activeIndex])
 
   // A bot's chats are read once its row has been highlighted or hovered a moment.
-  const members = room
-    ? [
-        ...room.mentions,
-        ...(room.agents ?? []),
-        ...(room.hostChats ?? []),
-        ...(room.hostTerminals ?? [])
-      ]
-    : []
+  const members = [room?.mentions, room?.agents, room?.host?.chats, room?.host?.terminals].flatMap(
+    (group) => group ?? []
+  )
   const memberOf = (value: string) =>
     members.find((mention) => nativeChatMentionValue(mention) === value)
   const matchOf = (value: string) => room?.matches?.find((match) => match.value === value)
@@ -302,13 +297,11 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
             ? null
             : nativeChatMentionEmptyText(botRoom, room?.query)
   // The room's bots lead, then this chat's crew agents, the host's chats and terminals, then files.
-  const { bots, agentCount, chatCount, terminalCount, listed } = groupNativeChatMentionValues(
-    files,
-    room?.mentions,
-    room?.agents,
-    room?.hostChats,
-    room?.hostTerminals
-  )
+  const { bots, groups, listed } = groupNativeChatMentionValues(files, room?.mentions, {
+    agents: room?.agents,
+    chats: room?.host?.chats,
+    terminals: room?.host?.terminals
+  })
   const recent = Math.min(room?.recentCount ?? 0, bots)
   const fileCount = files.length - listed
   const grouped = room?.withFiles === true && bots + room.unavailable.length > 0
@@ -379,22 +372,14 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
         {files.slice(recent, bots).map((path, index) => option(path, index + recent))}
       </div>
       {grouped ? <NativeChatUnavailableMentions room={room} /> : null}
-      {(
-        [
-          ['agents', bots, agentCount],
-          ['chats', bots + agentCount, chatCount],
-          ['terminals', bots + agentCount + chatCount, terminalCount]
-        ] as const
-      ).map(([kind, from, count]) =>
-        count > 0 ? (
-          <Fragment key={kind}>
-            <PickerGroupHeading kind={kind} />
-            <div className="flex flex-col gap-0.5">
-              {files.slice(from, from + count).map((path, index) => option(path, index + from))}
-            </div>
-          </Fragment>
-        ) : null
-      )}
+      {groups.map(({ kind, from, to }) => (
+        <Fragment key={kind}>
+          <PickerGroupHeading kind={kind} />
+          <div className="flex flex-col gap-0.5">
+            {files.slice(from, to).map((path, index) => option(path, index + from))}
+          </div>
+        </Fragment>
+      ))}
       {headed && files.length > listed ? <PickerGroupHeading kind="files" /> : null}
       <div className="flex flex-col gap-0.5">
         {files.slice(listed).map((path, index) => option(path, index + listed))}

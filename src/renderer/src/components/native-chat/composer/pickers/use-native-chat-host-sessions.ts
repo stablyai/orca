@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
@@ -8,18 +8,33 @@ import { findBotByWorkspace } from '@/components/bots/bot-workspace'
 import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../../../lib/agent-session/tab-identity/structured-chat-tab-index'
 import type { AgentListResult } from '../../../../../../shared/agent-conversations/agent-conversation-contracts'
 import type { RuntimeTerminalListResult } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
-import type { HostSessionLists } from './native-chat-host-session-mentions'
+import {
+  rankNativeChatCrewMentions,
+  type CrewAgentMentions
+} from '../../../orchestration-crew/native-chat-crew-mentions'
+import {
+  hostSessionMentions,
+  NO_HOST_SESSION_MENTIONS,
+  type HostSessionLists,
+  type HostSessionSelf
+} from './native-chat-host-session-mentions'
 
 const LIST_TIMEOUT_MS = 5_000
+const NO_VALUES: readonly string[] = []
 
-/** The chats and terminals of the composer's host, read once each time `@` opens; null while
- *  closed or not read yet. A list that fails leaves out its kind only. */
-export function useNativeChatHostSessionLists(args: {
-  open: boolean
-  terminalTabId: string
-  structuredWorktreeId: string | undefined
-}): HostSessionLists | null {
-  const { open, terminalTabId, structuredWorktreeId } = args
+/** The host's other chats and terminals for `@` (`query` non-null while open), read once each
+ *  time it opens; without `self`, none. `references` also holds the crew agents', so one lookup
+ *  finds any picked chip. */
+export function useNativeChatHostSessions(
+  query: string | null,
+  self: HostSessionSelf | undefined,
+  crew: CrewAgentMentions,
+  { terminalTabId, structuredWorktreeId }: { terminalTabId: string; structuredWorktreeId?: string }
+) {
+  const paneKey = self?.paneKey
+  const sessionId = self?.sessionId
+  const ptyId = self?.ptyId ?? null
+  const open = query !== null && paneKey !== undefined
   const [lists, setLists] = useState<HostSessionLists | null>(null)
   useEffect(() => {
     setLists(null)
@@ -61,5 +76,25 @@ export function useNativeChatHostSessionLists(args: {
       live = false
     }
   }, [open, structuredWorktreeId, terminalTabId])
-  return lists
+  const mentions = useMemo(() => {
+    const listed = new Set([...crew.references.values()].map((agent) => agent.address))
+    return lists && paneKey !== undefined
+      ? hostSessionMentions(lists, { paneKey, sessionId, ptyId }, listed)
+      : NO_HOST_SESSION_MENTIONS
+  }, [lists, paneKey, sessionId, ptyId, crew])
+  return useMemo(
+    () => ({
+      chats: mentions.chats,
+      terminals: mentions.terminals,
+      references: new Map([...crew.references, ...mentions.references]),
+      values:
+        query === null
+          ? NO_VALUES
+          : [
+              ...rankNativeChatCrewMentions(mentions.chats, query),
+              ...rankNativeChatCrewMentions(mentions.terminals, query)
+            ]
+    }),
+    [mentions, crew, query]
+  )
 }

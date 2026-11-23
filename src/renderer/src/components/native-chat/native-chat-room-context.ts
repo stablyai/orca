@@ -14,8 +14,10 @@ export const NativeChatRoomContext = createContext<{
   /** This chat's crew agents, listed above the bots; their values lead the `@` list. */
   agents?: NativeChatComposerRoom['mentions']
   /** The host's other chats and terminals, listed after the crew agents. */
-  hostChats?: NativeChatComposerRoom['mentions']
-  hostTerminals?: NativeChatComposerRoom['mentions']
+  host?: {
+    chats: NativeChatComposerRoom['mentions']
+    terminals: NativeChatComposerRoom['mentions']
+  }
   /** A bot's chats one level under its row; absent where none can be picked. */
   chats?: { picker: NativeChatBotChatPicker; drill: NativeChatMentionChatDrill }
   /** How each listed member matched the query, for bolding its hits. */

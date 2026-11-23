@@ -258,22 +258,25 @@ export function nativeChatMentionAnnouncement(
     : (statusText ?? '')
 }
 
+type MentionGroup = readonly NativeChatRoomMention[] | undefined
+
+/** The leading rows of each kind: the bots, then each group after them, in order. */
 export function groupNativeChatMentionValues(
   files: readonly string[],
-  mentions: readonly NativeChatRoomMention[] | undefined,
-  agents: readonly NativeChatRoomMention[] | undefined,
-  chats?: readonly NativeChatRoomMention[],
-  terminals?: readonly NativeChatRoomMention[]
+  mentions: MentionGroup,
+  after: Record<'agents' | 'chats' | 'terminals', MentionGroup>
 ) {
-  const leading = (from: number, group: readonly NativeChatRoomMention[] | undefined) => {
+  const leading = (from: number, group: MentionGroup) => {
     const values = new Set(group?.map(nativeChatMentionValue))
     const end = files.findIndex((value, index) => index >= from && !values.has(value))
-    return (end === -1 ? files.length : end) - from
+    return end === -1 ? files.length : end
   }
   const bots = leading(0, mentions)
-  const agentCount = leading(bots, agents)
-  const chatCount = leading(bots + agentCount, chats)
-  const terminalCount = leading(bots + agentCount + chatCount, terminals)
-  const listed = bots + agentCount + chatCount + terminalCount
-  return { bots, agentCount, chatCount, terminalCount, listed }
+  let listed = bots
+  const groups = Object.entries(after).flatMap(([kind, group]) => {
+    const from = listed
+    listed = leading(from, group)
+    return listed > from ? [{ kind: kind as keyof typeof after, from, to: listed }] : []
+  })
+  return { bots, groups, listed }
 }

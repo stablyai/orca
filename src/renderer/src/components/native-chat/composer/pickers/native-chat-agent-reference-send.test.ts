@@ -10,7 +10,7 @@ const chip = (label: string, address: string, kind?: string) => ({
 describe('serializeNativeChatAgentReferences', () => {
   it('tells the agent how to read and reach each picked chat, terminal and crew agent', () => {
     const picked = [
-      chip('Fix login', 'orca_session_id:s2', 'chat'),
+      chip('Fix login', 'orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595', 'chat'),
       chip('dev server', 'term_dev', 'terminal'),
       chip('auth-tests', 'term_w1')
     ]
@@ -33,7 +33,7 @@ describe('serializeNativeChatAgentReferences', () => {
       [
         'ask @Fix login and @dev server and @auth-tests',
         '',
-        '[Orca chat "Fix login": orca_session_id:s2 — read it with orca agent read orca_session_id:s2, and message it with orca orchestration send --to orca_session_id:s2 --subject "<topic>" --body "<message>"]',
+        '[Orca chat "Fix login": orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 — read it with orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595, and message it with orca orchestration send --to orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --subject "<topic>" --body "<message>"]',
         '[Orca terminal "dev server": term_dev — read it with orca terminal read --terminal term_dev, and type into it with orca terminal send --terminal term_dev --text "<text>" --enter]',
         '[Orca agent "auth-tests": term_w1 — message it with orca orchestration send --to term_w1 --subject "<topic>" --body "<message>"]'
       ].join('\n')

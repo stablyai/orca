@@ -11,7 +11,7 @@ const chat = (
   orcaSessionId,
   kind: 'chat',
   agent: 'claude',
-  state: 'idle',
+  state: 'done',
   worktreeId,
   workspace: 'app',
   paneKey,

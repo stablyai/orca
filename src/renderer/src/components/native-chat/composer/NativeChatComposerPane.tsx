@@ -1,7 +1,7 @@
 import { useNativeChatComposerEditSession } from '../queue/editing/use-native-chat-composer-edit-session'
 import { useNativeChatComposerNotice } from './controls/use-native-chat-composer-notice'
 import { useNativeChatMobileHoldNotice } from '../host-access/use-native-chat-mobile-hold-notice'
-import { forwardRef, useCallback, useMemo, useState, useRef } from 'react'
+import { forwardRef, useCallback, useState, useRef } from 'react'
 import { useNativeChatComposerInterrupt } from './submit/use-native-chat-composer-interrupt'
 import { useNativeChatContextUsageSummary } from '../usage/use-native-chat-context-usage-summary'
 import { useNativeChatDraft } from '../drafts/use-native-chat-draft'
@@ -128,17 +128,11 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     })
     const { classifySend, clearSkillOrigin, completeItem, dismiss, handleDraftOrCaretChange } =
       picker
-    const sessionId = structuredTransport?.sessionId
-    const ownPtyId = structuredTransport ? null : targetPtyId
-    const self = useMemo(
-      () => ({ paneKey, sessionId, ptyId: ownPtyId }),
-      [paneKey, sessionId, ownPtyId]
-    )
     const mentions = useNativeChatComposerMentions(room, draft, picker, {
       terminalTabId,
       structuredWorktreeId: structuredTransport?.worktreeId,
       caret,
-      self,
+      self: { paneKey, sessionId: structuredTransport?.sessionId, ptyId: targetPtyId },
       notices
     })
     const { autocomplete } = mentions
