@@ -45,7 +45,9 @@ function chat(
   turns: number,
   linkedAt: (index: number) => boolean = () => true,
   /** This send is handed over and never answered: no dispatch, no turn. */
-  unansweredAt?: number
+  unansweredAt?: number,
+  /** Sends before this index were recovered in doubt after a crash: unknown, never unanswered. */
+  recoveredBelow = 0
 ): Database {
   const directory = mkdtempSync(join(tmpdir(), 'orca-operation-window-'))
   directories.push(directory)
@@ -99,18 +101,21 @@ function chat(
         target,
         {
           kind: 'dispatch',
-          input: {
-            clientMessageId: id,
-            fence: 1,
-            state: 'accepted',
-            providerIdentity: {
-              provider: 'codex',
-              threadId: 'thread',
-              turnId: 'echo',
-              ordinal: index
-            },
-            ...(linked ? { answeredInTurn: { turn, via: 'start' as const } } : {})
-          }
+          input:
+            index < recoveredBelow
+              ? { clientMessageId: id, fence: 1, state: 'unknown', recovered: true }
+              : {
+                  clientMessageId: id,
+                  fence: 1,
+                  state: 'accepted',
+                  providerIdentity: {
+                    provider: 'codex',
+                    threadId: 'thread',
+                    turnId: 'echo',
+                    ordinal: index
+                  },
+                  ...(linked ? { answeredInTurn: { turn, via: 'start' as const } } : {})
+                }
         },
         now++
       )
@@ -200,8 +205,8 @@ it('keeps every anchored turn when one send names its turn and another is placed
 // Whom a bot's newest turn acts for is read from a window of its newest turns, on every bot request,
 // Slack post and item add. Guards that read: its work stays fixed however long the chat ran before.
 it('reads the newest turns with the same work however many turns came before them', () => {
-  const read = (turns: number) => {
-    const db = chat(turns)
+  const read = (turns: number, recovered = 0) => {
+    const db = chat(turns, () => true, undefined, recovered)
     const scope = new JournalSqlScope(db, 'chat', 'epoch')
     const { snapshot } = readJournalDomainOperationWindow(scope, {
       latestTurns: 8,
@@ -219,12 +224,17 @@ it('reads the newest turns with the same work however many turns came before the
   expect(long.examined).toBe(short.examined)
   expect(long.sends).toEqual(Array.from({ length: 9 }, (_, index) => `m${491 + index}`))
   expect(long.turns).toEqual(Array.from({ length: 9 }, (_, index) => `turn-${491 + index}`))
-  // A send still unanswered anywhere is the turn still to be attributed: kept, as the whole read does.
-  const db = chat(50, () => true, 0)
-  const { snapshot } = readJournalDomainOperationWindow(new JournalSqlScope(db, 'chat', 'epoch'), {
-    latestTurns: 8,
-    turnShape: true
-  })
+  // Sends recovered in doubt long ago are settled for attribution: they add no work as they pile up.
+  expect(read(500, 491).examined).toBe(read(50, 41).examined)
+  // A send still unanswered anywhere is the turn still to be attributed: kept, as the whole read does,
+  // and with the window pinned back to it the read costs no more than that whole read.
+  const db = chat(500, () => true, 0)
+  const pinned = new JournalSqlScope(db, 'chat', 'epoch')
+  const { snapshot } = readJournalDomainOperationWindow(pinned, { latestTurns: 8, turnShape: true })
+  const whole = new JournalSqlScope(db, 'chat', 'epoch')
+  readJournalDomainOperationWindow(whole, { latestTurns: 8, turnShape: true, afterSequence: -1 })
   db.close()
   expect(snapshot.submissions.map((send) => send.clientMessageId)).toContain('m0')
+  // Plus the unanswered send's own read (it and its queued card), which found it.
+  expect(pinned.work.rows).toBeLessThanOrEqual(whole.work.rows + 2)
 })

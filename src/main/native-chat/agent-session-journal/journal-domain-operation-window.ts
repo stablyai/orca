@@ -12,10 +12,9 @@ import { marginAfter } from './journal-operation-window-end'
 import {
   type Send,
   newestTurnsOnly,
-  operationSends,
   readSend,
+  seedSends,
   sendHeads,
-  unsettledSends,
   windowSends,
   withSends
 } from './journal-operation-window-sends'
@@ -88,17 +87,14 @@ export function readJournalDomainOperationWindow(
   // A window of the newest turns alone reads the sends placed in it and the unsettled ones, each by
   // index, so reading whom the newest turn acts for costs the same however long the chat ran before.
   const recent = !bounded && newestTurnsOnly(anchors)
-  const indexed = bounded || recent
-  let sends = bounded
-    ? operationSends(scope, anchors)
-    : recent
-      ? unsettledSends(scope)
-      : sendHeads(scope)
+  let indexed = bounded || recent
+  let sends = seedSends(scope, anchors, recent)
   const operations = resolveOperations(scope, sends, anchors)
   // Where each anchored send's own turn may reach: past the first turn after it when it names its
   // turn (a turn row naming it, or its answeredInTurn), past the second when it doesn't (an older
   // import, placed by position, whose own turn may be that first one).
   const reaches: { last: number; placed: boolean }[] = []
+  const anchorAt = anchorPositions(scope, anchors)
   const anchored = [
     ...sends.flatMap((send) => {
       if (operations.has(send.messageId)) {
@@ -115,9 +111,15 @@ export function readJournalDomainOperationWindow(
       }
       return unanswered(send) && !anchors.anchorsOnly ? send.positions : []
     }),
-    ...anchorPositions(scope, anchors)
+    ...anchorAt
   ]
   const earliest = anchored.length > 0 ? Math.min(...anchored) : null
+  // An unanswered send older than the newest turns pins the window to it: the whole read is cheaper
+  // than reading that long stretch's sends by index, and it was the read before.
+  if (recent && earliest !== null && earliest < Math.min(...anchorAt)) {
+    indexed = false
+    sends = sendHeads(scope)
+  }
   let start =
     earliest === null ? null : anchors.withoutTurnAhead ? earliest : marginBefore(scope, earliest)
   const end = earliest !== null && bounded ? windowEnd(scope, reaches) : null

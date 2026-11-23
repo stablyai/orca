@@ -183,16 +183,30 @@ export function newestTurnsOnly(anchors: JournalOperationWindowAnchors): boolean
   )
 }
 
-/** Every send still handed over and unanswered, wherever it sits, found by its own index. */
-export function unsettledSends(scope: JournalSqlScope): Send[] {
+/** The sends a window starts from: the anchored operations' through anchored turns, the unsettled
+ *  ones for the newest turns alone, else every send. */
+export function seedSends(
+  scope: JournalSqlScope,
+  anchors: JournalOperationWindowAnchors,
+  recent: boolean
+): Send[] {
+  if (anchors.throughAnchoredTurns === true) {
+    return operationSends(scope, anchors)
+  }
+  return recent ? unsettledSends(scope) : sendHeads(scope)
+}
+
+/** Every send still handed over and unanswered (pending, or unknown and not recovered), wherever it
+ *  sits, by the index that keeps exactly those: a recovered one is read only when the window holds it. */
+function unsettledSends(scope: JournalSqlScope): Send[] {
   return withSends(
     scope,
     [],
     sendHeads(
       scope,
-      "AND dispatch_state IN ('pending','unknown')",
+      "AND (dispatch_state='pending' OR (dispatch_state='unknown' AND recovered=0))",
       [],
-      'journal_submission_unsettled'
+      'journal_submission_recovery'
     )
   )
 }
