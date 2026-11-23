@@ -95,3 +95,30 @@ export function nativeChatSubagentEndingMessage(
       return { ...base, role: 'system', blocks: [{ type: 'text', text: asideText }] }
   }
 }
+
+const ASIDES = [
+  'no-steps',
+  'cleared',
+  'stopped',
+  'no-reply'
+] as const satisfies readonly NativeChatSubagentAside[]
+
+/** An ending as a string, so a view can keep one ending row while the result is the same. */
+export function nativeChatSubagentEndingKey(ending: NativeChatSubagentEnding): string {
+  return ending === null
+    ? ''
+    : ending.kind === 'aside'
+      ? `aside\n${ending.aside}`
+      : `${ending.kind}\n${ending.text}`
+}
+
+export function nativeChatSubagentEndingFromKey(key: string): NativeChatSubagentEnding {
+  const at = key.indexOf('\n')
+  const kind = key.slice(0, at)
+  const rest = key.slice(at + 1)
+  if (kind === 'reply' || kind === 'error') {
+    return { kind, text: rest }
+  }
+  const aside = ASIDES.find((candidate) => candidate === rest)
+  return kind === 'aside' && aside ? { kind, aside } : null
+}

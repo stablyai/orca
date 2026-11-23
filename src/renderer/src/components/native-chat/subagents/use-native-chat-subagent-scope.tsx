@@ -27,6 +27,8 @@ import {
 } from './native-chat-subagent-scope'
 import {
   nativeChatSubagentEnding,
+  nativeChatSubagentEndingFromKey,
+  nativeChatSubagentEndingKey,
   nativeChatSubagentEndingMessage,
   type NativeChatSubagentAside
 } from './native-chat-subagent-ending'
@@ -139,17 +141,28 @@ export function useNativeChatSubagentScope({
           }),
     [agentId, savedConversation, savedJournal, roster, subagentStructure]
   )
-  // A subagent's own rows, and the same rows as last saved; its ending reads the saved rows, so
-  // both lists share one ending row and the saved list holds while the subagent streams.
+  // A subagent's own rows, and the same rows as last saved. Its ending compares the reply with the
+  // current text; both lists share the one ending row, which holds while the result is the same.
   const savedOwn = useMemo(
     () => (agentId === null ? NO_MESSAGES : subagentOwnRows(subagentStructure, agentId)),
     [agentId, subagentStructure]
+  )
+  const own = useMemo(
+    () => (agentId === null ? NO_MESSAGES : subagentOwnRows(subagentRows, agentId)),
+    [agentId, subagentRows]
+  )
+  const endingKey = useMemo(
+    () =>
+      nativeChatSubagentEndingKey(
+        agentId === null ? null : nativeChatSubagentEnding({ entry, handoff, rows: own, history })
+      ),
+    [agentId, entry, handoff, history, own]
   )
   const endingRow = useMemo(() => {
     if (agentId === null) {
       return null
     }
-    const ending = nativeChatSubagentEnding({ entry, handoff, rows: savedOwn, history })
+    const ending = nativeChatSubagentEndingFromKey(endingKey)
     return ending === null
       ? null
       : nativeChatSubagentEndingMessage(
@@ -158,7 +171,7 @@ export function useNativeChatSubagentScope({
           ending.kind === 'aside' ? asideText(ending.aside, t) : '',
           entry?.settledAt
         )
-  }, [agentId, entry, handoff, history, savedOwn, t])
+  }, [agentId, endingKey, entry?.settledAt, t])
   const savedMessages = useMemo(
     () =>
       agentId === null
@@ -172,9 +185,8 @@ export function useNativeChatSubagentScope({
     if (agentId === null) {
       return conversation
     }
-    const own = subagentOwnRows(subagentRows, agentId)
     return endingRow === null ? own : [...own, endingRow]
-  }, [agentId, conversation, endingRow, subagentRows])
+  }, [agentId, conversation, endingRow, own])
   const heads = useMemo(
     () => nativeChatSubagentHeads(savedMessages, subagentStructure, entries, agentId),
     [agentId, entries, savedMessages, subagentStructure]
