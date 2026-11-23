@@ -4,7 +4,6 @@ import { replaySpoolFile } from './provider-relay-spool-replay'
 
 export const RELAY_SPOOL_MEMORY_CAP_BYTES = 1024 * 1024
 export const RELAY_SPOOL_FILE_CAP_BYTES = 16 * 1024 * 1024
-const DETACHED_FSYNC_INTERVAL_MS = 1_000
 /** Acked records are skipped by index and compacted in bulk, so per-line acks stay O(1). */
 const MEMORY_COMPACT_MIN = 1024
 
@@ -48,7 +47,6 @@ export class ProviderRelaySpool {
   private fileFailed = false
   private attachGeneration = 0
   private io: Promise<void> = Promise.resolve()
-  private fsyncTimer: ReturnType<typeof setTimeout> | null = null
   private paused = false
   private disposed = false
   private readonly memoryCap: number
@@ -136,7 +134,6 @@ export class ProviderRelaySpool {
   async attach(fromSeq: number): Promise<number> {
     const generation = ++this.attachGeneration
     this.mode = 'replaying'
-    this.stopFsyncTimer()
     this.updatePressure()
     const current = (): boolean =>
       generation === this.attachGeneration && this.mode === 'replaying' && !this.disposed
@@ -183,13 +180,11 @@ export class ProviderRelaySpool {
       this.memoryBytes = 0
     }
     this.updatePressure()
-    this.io = this.io.then(() => this.file?.sync()).catch(() => {})
     return this.io
   }
 
   async dispose(): Promise<void> {
     this.disposed = true
-    this.stopFsyncTimer()
     this.memory = []
     this.memoryHead = 0
     this.ackedHeldBytes = 0
@@ -260,13 +255,6 @@ export class ProviderRelaySpool {
         })
         .catch(() => {})
     }
-    if (this.mode === 'detached' && !this.fsyncTimer) {
-      this.fsyncTimer = setTimeout(() => {
-        this.fsyncTimer = null
-        this.io = this.io.then(() => this.file?.sync()).catch(() => {})
-      }, DETACHED_FSYNC_INTERVAL_MS)
-      this.fsyncTimer.unref?.()
-    }
   }
 
   /** Records a failed write didn't land go back to memory in seq order, still unacked. */
@@ -296,13 +284,6 @@ export class ProviderRelaySpool {
     )
     this.memoryHead = 0
     this.updatePressure()
-  }
-
-  private stopFsyncTimer(): void {
-    if (this.fsyncTimer) {
-      clearTimeout(this.fsyncTimer)
-      this.fsyncTimer = null
-    }
   }
 
   private removeFile(): void {
