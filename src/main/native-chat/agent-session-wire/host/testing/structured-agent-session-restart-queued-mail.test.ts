@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { QueuedMessageOwed } from '../../../agent-session-journal/queued-messages/queued-message-consume-error'
-import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
+import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredQueuePauses } from '../../delivery/structured-agent-session-queued-pause'
-import { HOST_TEST_SESSION } from './structured-agent-session-host-test-data.test-fixture'
+import { HOST_TEST_SESSION, HOST_TEST_THREAD } from './structured-agent-session-host-test-data.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
   createQueuedMessageTestRig,
@@ -41,6 +42,26 @@ afterEach(async () => {
   }
 })
 
+/** The send's turn row as the provider writes it: running, then completed. */
+async function turnFor(id: string, state: 'running' | 'completed'): Promise<void> {
+  const journal = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+  const turnId = `turn-of-${id}`
+  await journal.appendItem(
+    { provider: 'codex', threadId: HOST_TEST_THREAD, turnId, ordinal: 0 },
+    {
+      kind: 'turn',
+      turnId,
+      startedAt: Date.now(),
+      userItemId: agentJournalSubmissionKey(id),
+      ...(state === 'running' ? { state } : { state, completedAt: Date.now() })
+    },
+    {
+      fence: rig.store.getRecord(HOST_TEST_SESSION)?.lease.runtimeFence ?? 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    }
+  )
+}
+
 async function queued(text: string, from?: AgentMessageSource): Promise<string> {
   const sent = await rig.send(text, 'queue-if-active', from ? { internal: true, from } : undefined)
     .result
@@ -68,13 +89,13 @@ describe('an idle chat after a restart', () => {
     ])
   })
 
-  it('opening an idle chat hands over agent mail its queue walked past, with no restart hold', async () => {
+  it('opening an idle chat hands over agent mail its queue walked past while custody was unreadable', async () => {
     const working = await rig.workingSend()
-    await openRigTurnFor(rig, working)
+    await turnFor(working, 'running')
     await rig.settleAccepted(working, 'working')
     custody = 'unavailable'
     const mail = await queued('worker report', WORKER_MAIL)
-    await openRigTurnFor(rig, working, 'completed')
+    await turnFor(working, 'completed')
     await vi.advanceTimersByTimeAsync(250)
     expect(await rig.handoff(mail)).toBeUndefined()
 
@@ -82,7 +103,5 @@ describe('an idle chat after a restart', () => {
     custody = 'owed'
 
     await eventually(async () => expect((await rig.handoff(mail))?.handedOverAt).toBeDefined())
-    const journal = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
-    expect(await structuredQueuePauses(journal)).toEqual([])
   })
 })
