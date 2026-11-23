@@ -45,37 +45,6 @@ export const Scroll = ExpectUrlBrowserTarget.extend({
     .optional()
 })
 
-export const Screencast = BrowserTarget.extend({
-  format: z
-    .unknown()
-    .optional()
-    .transform((v) => (v === 'png' ? 'png' : 'jpeg'))
-    .pipe(z.enum(['png', 'jpeg'])),
-  quality: OptionalFiniteNumber,
-  maxWidth: OptionalFiniteNumber,
-  maxHeight: OptionalFiniteNumber,
-  viewportWidth: OptionalFiniteNumber,
-  viewportHeight: OptionalFiniteNumber,
-  deviceScaleFactor: OptionalFiniteNumber,
-  mobile: OptionalBoolean,
-  everyNthFrame: OptionalFiniteNumber,
-  minFrameIntervalMs: OptionalFiniteNumber,
-  // Ask for frame credit; the host echoes `frameAck: true` in `ready`. Old hosts strip it.
-  frameAck: z.literal(1).optional(),
-  // Ask for the page's cursor and hovered link: `ready.pointer`, then `pointer` events. Old hosts strip it.
-  pointerEvents: z.literal(1).optional(),
-  // Ask the page's permission, sign-in and open-app prompts as `pagePrompt` events. Old hosts strip it.
-  pagePrompts: z.literal(1).optional(),
-  // Open the pickers this viewer's own input opens on the viewer, as `fileChooser` events. Old hosts strip it.
-  fileChoosers: z.literal(1).optional(),
-  // Send right presses to the page and receive the menus they open as `contextMenu` events. Old hosts strip it.
-  contextMenus: z.literal(1).optional(),
-  // Ask where an agent points and presses on the page as `agentCursor` events. Old hosts strip it.
-  agentCursor: z.literal(1).optional(),
-  // Ask who drives the page (a phone or nobody) as `driver` events, from `ready` on. Old hosts strip it.
-  driverEvents: z.literal(1).optional()
-})
-
 export const FullScreenshot = BrowserTarget.extend({
   format: z
     .unknown()

@@ -72,6 +72,8 @@ export const EXECUTION_HOST_METHODS = [
   'browser.screencast',
   'browser.screencast.ack',
   'browser.screencast.unsubscribe',
+  // Gated on browser.mobile-stop.v1; older hosts refuse it here.
+  'browser.stop',
   'browser.tabCreate',
   'browser.viewport',
   // Pasted images must land on the host whose terminal reads the path.

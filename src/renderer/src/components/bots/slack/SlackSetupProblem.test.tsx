@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BotHostOutage } from '../use-bot-host-outage'
-import type { BotSlackSetupStep } from './use-bot-slack-setup'
+import type { BotSlackSetupStep } from './slack-setup-step'
 import {
   SlackSetupProblemStep,
   slackSetupProblem,
@@ -32,13 +32,14 @@ const reconnecting: BotHostOutage = {
 }
 const offline: BotHostOutage = { kind: 'offline', environmentId: 'build-box', reconnectable: true }
 
-function show(step: BotSlackSetupStep, outage: BotHostOutage | null = null) {
+function show(step: BotSlackSetupStep, outage: BotHostOutage | null = null, paired = false) {
   const problem = slackSetupProblem(step, outage)
   if (!problem) {
     throw new Error(`no problem for ${JSON.stringify(step)}`)
   }
   const onNewLink = vi.fn()
   const onReplaceToken = vi.fn()
+  const onOpenNewLink = vi.fn()
   act(() =>
     root.render(
       <SlackSetupProblemStep
@@ -47,6 +48,7 @@ function show(step: BotSlackSetupStep, outage: BotHostOutage | null = null) {
         hostName="build-box"
         onClose={() => {}}
         onNewLink={onNewLink}
+        onOpenNewLink={paired ? onOpenNewLink : undefined}
         onReplaceToken={onReplaceToken}
       />
     )
@@ -67,6 +69,7 @@ function show(step: BotSlackSetupStep, outage: BotHostOutage | null = null) {
     panel,
     click,
     onNewLink,
+    onOpenNewLink,
     onReplaceToken
   }
 }
@@ -93,11 +96,22 @@ describe('Connect Slack error states', () => {
     expect(view.panel?.textContent).toContain('code: other_user')
   })
 
-  it('says the link expired and gets a new one', () => {
+  it('says Slack sign-in didn’t finish and gets a new link', () => {
     const view = show({ kind: 'expired', teamId: 'T1' })
-    expect(view.text).toContain('The Slack link expired before the connection was approved.')
+    expect(view.text).toContain('Slack sign-in didn’t finish.')
+    expect(view.text).toContain('The Slack link expired before anyone approved the connection.')
+    expect(view.text).not.toMatch(/callback/)
+    expect(view.details?.getAttribute('aria-expanded')).toBe('false')
     view.click('Get a new link')
     expect(view.onNewLink).toHaveBeenCalledWith('T1')
+  })
+
+  it('opens a new link on the bot’s computer from the expired step', () => {
+    const view = show({ kind: 'expired', teamId: 'T1' }, null, true)
+    expect(view.buttons).toEqual(['Details', 'Close', 'Get a new link', 'Open Slack on build-box'])
+    view.click('Open Slack on build-box')
+    expect(view.onOpenNewLink).toHaveBeenCalledWith('T1')
+    expect(view.onNewLink).not.toHaveBeenCalled()
   })
 
   it('sends a rejected token to the token step for its workspace, not Try again', () => {
@@ -218,6 +232,17 @@ describe('resuming Slack setup once the server is back', () => {
     at(during, reconnecting)
     at(during, null)
     expect(retry).toHaveBeenCalledTimes(1)
+  })
+
+  it('settles when the shown step is rebuilt on every render', () => {
+    // The setup hook derives installed, other-user and expired afresh each render.
+    function Rebuilt(props: { kind: 'installed' | 'other-user' | 'expired' }) {
+      useResumeWhenHostReturns({ kind: props.kind, teamId: 'T1' }, null, async () => {})
+      return null
+    }
+    for (const kind of ['installed', 'other-user', 'expired'] as const) {
+      expect(() => act(() => root.render(<Rebuilt kind={kind} />))).not.toThrow()
+    }
   })
 
   it('arms nothing for an outage during an idle step', () => {

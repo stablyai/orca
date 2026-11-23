@@ -475,8 +475,6 @@
       }
     },
     "agents": {
-      "installedRegion": "已安装的智能体",
-      "availableRegion": "可安装的智能体",
       "permissionsTitle": "权限",
       "permissionsChoiceExplanation": "每个智能体无需询问即可执行的操作。你可以在下方为单个智能体单独设置",
       "permissionEachOwn": "各智能体自己的设置",
@@ -6257,7 +6255,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "另一个安装仍在运行",
-          "edited": "技能已在 Orca 外部编辑",
           "install": "安装",
           "installFor": "为 {{value0}} 安装",
           "installed": "已安装",
@@ -6418,7 +6415,6 @@
           "74fc00776f": "错误详情",
           "ca3b225195": "分支自动命名失败",
           "couldNotGenerateBranchName": "Orca 无法根据智能体的第一条消息为 <name>{{name}}</name> 生成分支名称",
-          "dismiss": "清除",
           "tryAgain": "重试",
           "namingBranch": "正在命名分支…",
           "errorDetailsAt": "错误详情 · {{time}}",
@@ -6435,8 +6431,7 @@
           "reasonFirstMessageUnavailable": "Orca 找不到此工作区的第一条消息",
           "reasonAlreadyNamed": "此工作区已被重命名",
           "reasonUnavailable": "Orca 无法再为此分支命名",
-          "branchNameKept": "已保留分支名称",
-          "dismissing": "正在清除…"
+          "branchNameKept": "已保留分支名称"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "选择父文件夹...",
@@ -13622,7 +13617,6 @@
           "attentionUnwritable": "需要处理 · Orca 无法写入 {{folder}}",
           "attentionBusy": "需要处理 · 此处的另一个技能安装仍未完成",
           "attentionUnreadable": "需要处理 · Orca 无法读取此副本中的所有文件",
-          "attentionEdited": "需要处理 · 你编辑过此副本",
           "attentionOther": "需要处理 · 另一个技能已使用此名称",
           "attentionSharedNotCurrent": "需要处理 · 此文件夹使用的共享副本不是 Orca 的副本",
           "resultUpdateSkippedPlaces": "{{result}} · 已跳过 {{places}} 个位置的更新：{{reason}}",
@@ -21583,7 +21577,6 @@
       },
       "toolAdded": {
         "removed": "已移除",
-        "heading": "已添加工具",
         "remove": "移除",
         "added": "已添加"
       }
@@ -21805,6 +21798,7 @@
           "selectionVanishedCount_other": "所选的 {{count}} 个工作区已不存在",
           "selectionWithheldCount_other": "所选的 {{count}} 个工作区被当前筛选条件隐藏，已取消选择",
           "selectAllSafetyChecked_other": "选择全部 {{count}} 个已通过安全检查的工作区",
+          "clearSelection": "清除选择",
           "lastActive": "最后活跃：{{value0}}",
           "projectNamed": "项目：{{value0}}",
           "moreFlags": "显示其余 {{value0}} 个标记",
@@ -22828,8 +22822,7 @@
         "finished": "临时编排工作代理已完成 · {{countdown}}后关闭",
         "keepOpen": "保持打开",
         "bannerRunning": "编排工作代理 · 完成后 2 分钟关闭",
-        "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭",
-        "temporaryBadge": "临时"
+        "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭"
       }
     },
     "wslHostMark": {
@@ -24717,6 +24710,11 @@
       "dialogTitle": "为何这里的 claude 不使用所选账户",
       "dialogDescription": "Orca 现在将每个 Claude 账户保存在各自的文件夹中，新终端中的 claude 会遵循您选择的账户",
       "dialogCause": "在此更新之前打开的终端不会如此，因此这里的 claude 使用系统默认的登录信息登录，请打开新终端以使用所选账户"
+    },
+    "fileDrop": {
+      "copyUploadedPaths": "复制路径",
+      "copyUploadedPathsFailed": "无法复制已上传文件的路径。",
+      "uploadedWithoutPaste": "上传完成，但无法将路径粘贴到终端。"
     },
     "newerDaemonBanner": {
       "failedTitle": "无法重新打开此终端",
@@ -29039,7 +29037,8 @@
         "removeConfirm": "移除",
         "finishSetup": "完成设置",
         "orgDescription": "{{repos}} · 已以 @{{login}} 身份登录",
-        "addAccount": "添加另一个 GitHub 账户"
+        "addAccount": "添加另一个 GitHub 账户",
+        "refresh": "刷新"
       },
       "setup": {
         "install": "安装 Orca 应用",
@@ -29588,7 +29587,6 @@
         "isIn": "{{name}} 已加入 Slack",
         "ready": "你的 Slack 应用已准备就绪。请在 Slack 中批准以完成设置",
         "approve": "在 Slack 中批准",
-        "otherBrowser": "要在其他浏览器中批准？",
         "approveAsYourself": "请以你本人的身份在 Slack 中批准。要在其他浏览器中批准？",
         "waitingAdmin": "如果你的工作区需要管理员批准新应用，{{name}} 会在管理员批准后加入。如果管理员拒绝，点击“重新安装”会复用同一个应用",
         "newLink": "获取新链接",
@@ -29616,8 +29614,8 @@
         "offlineNext": "请确认 {{host}} 上的 Orca 正在运行，然后重新连接。{{host}} 恢复后，Slack 设置会重新开始",
         "otherUser": "另一个 Slack 账号批准了此连接",
         "otherUserNext": "登录了另一个 Slack 账号的人批准了 Slack 链接，因此 {{bot}} 无法以你的身份操作。请获取新链接，并在登录你自己的 Slack 账号后批准",
-        "expired": "Slack 链接在连接获得批准前已过期",
-        "expiredNext": "请获取新链接，并在 Slack 中批准此连接",
+        "expired": "Slack 登录未完成。",
+        "expiredNext": "Slack 链接在有人批准连接前已过期。",
         "tokenRejected": "Slack 拒绝了此工作区的令牌",
         "tokenRejectedNext": "这通常发生在 Slack 应用被移除或令牌被撤销之后。请更换令牌，重新设置 {{bot}}",
         "reconnect": "重新连接",
@@ -29684,7 +29682,14 @@
         "confirm": "此电脑上的 Orca 会使用 {{email}} 的令牌创建 Slack 应用。{{host}} 只会获得此 bot 的应用",
         "offerMac": "此 Mac 已以 {{email}} 身份登录 Orca，该账户已有 {{workspace}} 的令牌",
         "offer": "此电脑已以 {{email}} 身份登录 Orca，该账户已有 {{workspace}} 的令牌",
-        "use": "使用它 →"
+        "use": "使用它 →",
+        "question": "改用你的 {{device}} 上的 Slack 登录？",
+        "firstQuestion": "你的 {{device}} 已登录 Slack。使用该登录？",
+        "useDevice": "使用 {{device}} 的登录",
+        "questionHere": "改用这台电脑的 Slack 登录？",
+        "firstQuestionHere": "这台电脑已登录 Slack。使用该登录？",
+        "useHere": "使用这台电脑的登录",
+        "anotherWay": "用其他方式设置"
       },
       "postAs": {
         "orcaUser": "Orca 用户",
@@ -29702,22 +29707,27 @@
       "mentionLine": "在频道或私信中提及 <code>@{{name}}</code>",
       "reconnect": {
         "expiredTitle": "Slack 令牌已过期",
-        "useTitleMac": "使用你的 Mac 上的令牌？",
-        "useTitle": "使用这台电脑上的令牌？",
         "whyMine": "每台电脑各自保存 Slack 令牌。Slack 已不再接受 {{email}} 使用的令牌",
         "whyHost": "每台电脑各自保存 Slack 令牌。Slack 已不再接受 {{host}} 使用的令牌",
         "why": "Slack 已不再接受此工作区保存的令牌",
         "submit": "重新连接",
         "about": "关于 Slack 令牌",
-        "useDetail": "“使用”会用 {{email}} 的令牌设置此 bot 的 Slack 应用。{{host}} 只会获得此 bot 的应用",
-        "hostExpiredMac": "<host>{{host}}</host> 的令牌已过期。这台 Mac 上的令牌可用",
-        "hostExpired": "<host>{{host}}</host> 的令牌已过期。这台电脑上的令牌可用",
-        "pasteInstead": "改为粘贴令牌",
-        "use": "使用",
         "kept": "Orca Cloud 会加密保存新令牌，以后在这里创建 bots 只需点击一下",
         "mineMac": "这台 Mac 上的令牌已过期。请粘贴新令牌",
         "mine": "这台电脑上的令牌已过期。请粘贴新令牌",
-        "paste": "粘贴新令牌以重新连接"
+        "paste": "粘贴新令牌以重新连接",
+        "expiredOnTitle": "{{host}} 上的 Slack 登录已过期",
+        "signInAgain": "重新登录"
+      },
+      "approve": {
+        "noteUntil": "仅可使用一次，有效期至 {{time}}。请在那里以你自己的身份登录 Slack；Orca Cloud 会把批准结果传回 {{host}}。",
+        "note": "仅可使用一次。请在那里以你自己的身份登录 Slack；Orca Cloud 会把批准结果传回 {{host}}。",
+        "noteUntilHere": "仅可使用一次，有效期至 {{time}}。请在那里以你自己的身份登录 Slack。",
+        "noteHere": "仅可使用一次。请在那里以你自己的身份登录 Slack。",
+        "openOn": "在 {{host}} 上打开 Slack",
+        "otherDevice": "在其他设备上批准",
+        "linkLabel": "Slack 批准链接",
+        "copied": "已复制"
       }
     },
     "page": {
@@ -29772,6 +29782,7 @@
       "toolClaudePrepareFailed": "无法在 Claude Code 中准备 {{name}}。请检查工具配置。",
       "toolNameTaken": "这个机器人已经有名为 {{name}} 的工具。",
       "toolNameTakenByAgent": "你的 {{agent}} 已经有名为 {{name}} 的工具，这个机器人也会获得它。请用 --name 换一个名称。",
+      "toolNameTakenByCodexStdio": "你的 Codex 已经有名为 {{name}} 的本地工具，所以这个机器人的 {{name}} 无法运行。请重命名这个机器人的工具。",
       "toolNotUpdated": "工具没有更新。",
       "toolSignInAddressIncomplete": "请粘贴登录页面最后停留的完整地址。",
       "toolSignInAddressWrong": "这不是本次登录结束时的地址。请用“连接”重新开始，登录后粘贴浏览器显示的地址。",

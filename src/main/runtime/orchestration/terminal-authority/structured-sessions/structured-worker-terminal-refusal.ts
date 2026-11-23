@@ -14,9 +14,10 @@ export function structuredWorkerTerminalRefusal(
 ): Error {
   if (resolveStructuredWorkerAuthority(handle, db)) {
     return agentSessionRefusal(
-      `${handle} is an agent session, not a terminal, so terminal commands cannot address it. ` +
-        'Read its output with `orca terminal read` or `orca orchestration worker-read --source transcript`, ' +
-        'send it work with `orca orchestration send`, and open it from its chat tab.'
+      `${handle} is a chat worker, not a terminal, so it takes no typed input. ` +
+        `Send it work with \`orca orchestration send --to ${handle} --subject "<topic>" --body "<message>"\`, ` +
+        'read its recent output with `orca orchestration worker-read --dispatch <dispatch_id>` (or `orca terminal read`), ' +
+        'and open it from its chat tab.'
     )
   }
   // A chat address never names a terminal, live or not.

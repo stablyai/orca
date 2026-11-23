@@ -1,4 +1,5 @@
 import { sessionWorkerBackgroundWait } from './session-worker-background-wait'
+import { sessionWorkerState } from './session-worker-state'
 import type {
   FleetDurableWorker,
   OrchestrationFleetWorker
@@ -9,7 +10,6 @@ import {
   ORCHESTRATION_SESSION_WORKERS_METHOD,
   type OrchestrationSessionWorker,
   type OrchestrationSessionWorkerActivity,
-  type OrchestrationSessionWorkerState,
   type OrchestrationSessionWorkersResult
 } from '../../../../../../shared/orchestration-session-workers'
 import { workerTaskTitle } from '../../../../orchestration/workers/identity/worker-identity'
@@ -304,26 +304,6 @@ export function workerResultSummary(result: string): string | null {
   }
   const clipped = text.trim().slice(0, ORCHESTRATION_SESSION_WORKER_SUMMARY_MAX)
   return clipped || null
-}
-
-/** A recorded stop or end outranks liveness; contact loss reads as unverifiable, never as an exit. */
-export function sessionWorkerState(
-  worker: Pick<OrchestrationFleetWorker, 'outcome' | 'liveness'>,
-  durable: Pick<FleetDurableWorker, 'workerState'>
-): OrchestrationSessionWorkerState {
-  if (durable.workerState === 'stopped' || durable.workerState === 'abandoned') {
-    return 'stopped'
-  }
-  if (worker.outcome === 'succeeded') {
-    return 'completed'
-  }
-  if (worker.outcome === 'failed') {
-    return 'failed'
-  }
-  if (worker.liveness.verdict === 'exited') {
-    return 'stopped'
-  }
-  return worker.liveness.verdict === 'unverifiable' ? 'unverifiable' : 'working'
 }
 
 function epochMs(timestamp: string | null): number | null {

@@ -35,6 +35,8 @@ const FLOW_ERRORS = {
 } as const
 
 type LoginKey = ReturnType<typeof createConnectLoginKey>
+/** GitHub: the trip adds access, for the org or user login named if any. */
+export type ConnectAddAccess = { workspace?: string }
 // Saves the person's own login a trip handed this computer (Linear), with whom it linked.
 export type KeepConnectLogin = (
   login: ConnectLogin,
@@ -127,6 +129,7 @@ export async function connectConnector(
     openExternal: (url: string) => Promise<void>
     // Also ask for the person's own login, sealed to a key this trip alone holds.
     keepLogin?: KeepConnectLogin
+    addAccess?: ConnectAddAccess
   }
 ): Promise<BotSlackResult<ConnectorConnectRedeem | null>> {
   running.get(source)?.abort()
@@ -141,7 +144,8 @@ export async function connectConnector(
     const started = await client.startConnect(source, {
       loopback,
       switchAccount: options.switchAccount,
-      ...(loginKey ? { loginKey: loginKey.publicKey } : {})
+      ...(loginKey ? { loginKey: loginKey.publicKey } : {}),
+      ...(options.addAccess ? { addAccess: options.addAccess } : {})
     })
     if (!started.ok) {
       throw new Error(started.error)

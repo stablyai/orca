@@ -145,3 +145,17 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
 export const overflowing = defineFixture({ width: 860, render: () => <AgentLists /> })
 export const fitting = defineFixture({ width: 860, render: () => <AgentLists short /> })
 export const narrow = defineFixture({ width: 440, render: () => <AgentLists /> })
+
+const expandSecondRow = (frame: HTMLElement): void => {
+  frame.querySelectorAll<HTMLElement>('button[aria-controls][aria-label]')[1]?.click()
+}
+export const expanded = defineFixture({
+  width: 860,
+  render: () => <AgentLists />,
+  interact: expandSecondRow
+})
+export const narrowExpanded = defineFixture({
+  width: 440,
+  render: () => <AgentLists />,
+  interact: expandSecondRow
+})

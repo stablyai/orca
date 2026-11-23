@@ -25,6 +25,8 @@ export type BotChatTreeWorker = {
   host?: 'local' | 'remote'
   agent?: string
   summary?: string
+  /** Its start failed before an agent ran, so there is no worker to open. Absent from older hosts. */
+  neverStarted?: true
   /** A terminal-only automation run, opened as a run rather than a pane. */
   run?: { automationId: string; runId: string }
 }

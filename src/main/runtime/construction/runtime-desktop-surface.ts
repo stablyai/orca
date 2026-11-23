@@ -33,6 +33,8 @@ export type RuntimeDesktopSurface = {
   requestRenderer<T extends RendererReply>(windowId: number, request: RendererRequest): Promise<T>
   /** Keeps the window's renderer publishing while hidden until the returned release runs. */
   holdRendererPublication?(windowId: number): () => void
+  /** Keeps this machine's display on until the returned release runs, as Chromium does while a page is captured. */
+  holdDisplayAwake?(): () => void
   /** The window's renderer id, which browser page retention records as a page's creator. */
   rendererIdOfWindow?(windowId: number): number | null
   /** Whether the window holding this renderer is shown; absent on Node hosts, which have no resource view. */

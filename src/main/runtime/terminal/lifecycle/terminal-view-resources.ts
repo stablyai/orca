@@ -1,3 +1,4 @@
+import { RuntimePtyForegroundAgent } from './runtime-pty-foreground-agent'
 import type {
   TerminalIdentityRawInputs,
   TerminalIdentityReadContext
@@ -221,6 +222,21 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     hasMainTerminalState: (ptyId) =>
       this.headlessTerminals.has(ptyId) || this.providerSnapshotPreferredPtys.has(ptyId),
     attachProvider: (ptyId) => this.ptyController?.attach?.(ptyId) ?? null
+  })
+
+  protected readonly ptyForegroundAgent = new RuntimePtyForegroundAgent({
+    getController: () => this.ptyController,
+    getPty: (ptyId) => this.ptysById.get(ptyId) ?? null,
+    touchSnapshot: (ptyId) => this.touchMobileSessionSnapshotsForPty(ptyId),
+    pendingAttach: (ptyId) => this.mainDaemonAttachments.pending(ptyId),
+    finishDelayedSnapshot: (ptyId, changed) => {
+      if (this.mobileSessionTabListeners.size > 0) {
+        this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
+      }
+      if (!changed) {
+        this.touchMobileSessionSnapshotsForPty(ptyId)
+      }
+    }
   })
 
   // Remote xterms own query replies; ref-count streams and retain suppression through mobile soft-leave grace (terminal-query-authority.md).

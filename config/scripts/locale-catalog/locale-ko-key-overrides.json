@@ -5581,5 +5581,17 @@
   },
   "rendererRecovery.quit": {
     "ko": "종료"
+  },
+  "auto.components.skills.install.rowNew": {
+    "ko": "새 스킬"
+  },
+  "auto.components.right.sidebar.FileExplorerRow.a06551beee": {
+    "ko": "Enter"
+  },
+  "browser.history.enterKey": {
+    "ko": "Enter"
+  },
+  "components.native-chat.subagents.state.idle": {
+    "ko": "유휴"
   }
 }

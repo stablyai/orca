@@ -1,13 +1,47 @@
+import { EventEmitter } from 'node:events'
 import { browserDownloadDestinationReservations } from '../../../downloads/browser-download-destination'
 import type {
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent,
   BrowserDownloadRequestedEvent
 } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
+import type { BrowserScreencastDownloadResult } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { ActiveDownload } from './browser-active-download'
 import { BrowserManagerDownloadCreation } from './browser-manager-download-creation'
 
+function downloadRequestedEvent(
+  download: ActiveDownload,
+  browserPageId: string
+): BrowserDownloadRequestedEvent {
+  return {
+    browserPageId,
+    downloadId: download.downloadId,
+    origin: download.origin,
+    filename: download.filename,
+    totalBytes: download.totalBytes,
+    mimeType: download.mimeType,
+    savePath: download.savePath,
+    status: 'downloading'
+  }
+}
+
 export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDownloadCreation {
+  // Keyed by browser page id; heard whether or not a window shows the page.
+  private readonly downloadViewers = new EventEmitter().setMaxListeners(0)
+
+  /** A page's download events, for the devices streaming a page no window here shows. */
+  watchDownloads(
+    browserPageId: string,
+    listener: (event: BrowserScreencastDownloadResult) => void
+  ): () => void {
+    this.downloadViewers.on(browserPageId, listener)
+    return () => this.downloadViewers.off(browserPageId, listener)
+  }
+
+  private tellDownloadViewers(browserPageId: string, event: BrowserScreencastDownloadResult): void {
+    this.downloadViewers.emit(browserPageId, event)
+  }
+
   protected bindDownloadToTab(downloadId: string, browserTabId: string): void {
     const download = this.downloadsById.get(downloadId)
     if (!download) {
@@ -19,6 +53,10 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
       kind: 'download',
       filename: download.filename,
       origin: download.origin
+    })
+    this.tellDownloadViewers(browserTabId, {
+      type: 'downloadRequested',
+      download: downloadRequestedEvent(download, browserTabId)
     })
   }
 
@@ -74,16 +112,10 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     if (!renderer) {
       return
     }
-    renderer.send('browser:download-requested', {
-      browserPageId: download.browserTabId,
-      downloadId: download.downloadId,
-      origin: download.origin,
-      filename: download.filename,
-      totalBytes: download.totalBytes,
-      mimeType: download.mimeType,
-      savePath: download.savePath,
-      status: 'downloading'
-    } satisfies BrowserDownloadRequestedEvent)
+    renderer.send(
+      'browser:download-requested',
+      downloadRequestedEvent(download, download.browserTabId)
+    )
     download.startedSent = true
   }
 
@@ -108,6 +140,7 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     if (!browserTabId) {
       return
     }
+    this.tellDownloadViewers(browserTabId, { type: 'downloadFinished', download: payload })
     const renderer = this.resolveRendererForBrowserTab(browserTabId)
     if (!renderer) {
       return

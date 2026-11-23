@@ -1,6 +1,7 @@
 // @protected-copy: drawn inside the security-surface setup dialog
 // The Connect Slack dialog's known failures: what happened, one way forward, and the codes under Details.
 import React, { useEffect, useRef, useState } from 'react'
+import { ExternalLink } from 'lucide-react'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
@@ -11,7 +12,7 @@ import { connectRuntimeEnvironmentAndRecordStatus } from '@/components/status-ba
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { BotHostOutage } from '../use-bot-host-outage'
-import type { BotSlackSetupStep } from './use-bot-slack-setup'
+import type { BotSlackSetupStep } from './slack-setup-step'
 
 /** Slack refused the saved token itself; `slack_refused` is any refusal, so it keeps its own words. */
 const TOKEN_REJECTED = 'grant_expired'
@@ -77,12 +78,13 @@ export function useResumeWhenHostReturns(
   const waited = useRef(false)
   // Any outage, including one Reconnect can't end: the wait is over only when the server answers.
   const hostDown = outage !== null
-  // The step shown while the server last answered; a new failure is a new step object.
-  const [stepWhileUp, setStepWhileUp] = useState<BotSlackSetupStep | null>(hostDown ? null : step)
-  if (!hostDown && stepWhileUp !== step) {
-    setStepWhileUp(step)
+  // The failure shown while the server last answered. Only failed steps are kept objects; derived
+  // ones (installed, other-user, expired) are rebuilt every render, so comparing them would loop.
+  const [failedWhileUp, setFailedWhileUp] = useState<BotSlackSetupStep | null>(null)
+  if (!hostDown && step.kind === 'failed' && failedWhileUp !== step) {
+    setFailedWhileUp(step)
   }
-  const failedBefore = hostDown && step.kind === 'failed' && step === stepWhileUp
+  const failedBefore = hostDown && step === failedWhileUp
   useEffect(() => {
     const pending = step.kind === 'checking' || step.kind === 'setting-up'
     if (hostDown && (pending || (failedForHost(step) && !failedBefore))) {
@@ -169,13 +171,10 @@ function problemWords(
       }
     case 'expired':
       return {
-        headline: t(
-          'bots.slack.problem.expired',
-          'The Slack link expired before the connection was approved.'
-        ),
+        headline: t('bots.slack.problem.expired', 'Slack sign-in didn’t finish.'),
         next: t(
           'bots.slack.problem.expiredNext',
-          'Get a new link and approve the connection in Slack.'
+          'The Slack link expired before anyone approved the connection.'
         )
       }
     case 'token-rejected':
@@ -196,6 +195,7 @@ export function SlackSetupProblemStep({
   hostName,
   onClose,
   onNewLink,
+  onOpenNewLink,
   onReplaceToken
 }: {
   problem: SlackSetupProblem
@@ -203,6 +203,8 @@ export function SlackSetupProblemStep({
   hostName: string | null
   onClose: () => void
   onNewLink: (teamId: string) => void
+  /** A paired computer's bot: a new link, opened on that computer at once. */
+  onOpenNewLink?: (teamId: string) => void
   onReplaceToken: (teamId: string | undefined, mine: boolean) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -242,8 +244,32 @@ export function SlackSetupProblemStep({
             {t('bots.slack.problem.reconnect', 'Reconnect')}
           </Button>
         )
-      case 'other-user':
       case 'expired':
+        if (onOpenNewLink && hostName) {
+          return (
+            <>
+              <Button variant="outline" onClick={() => onNewLink(problem.teamId)}>
+                {t('bots.slack.setup.newLink', 'Get a new link')}
+              </Button>
+              <Button
+                autoFocus
+                className="min-w-0 shrink"
+                onClick={() => onOpenNewLink(problem.teamId)}
+              >
+                <ExternalLink />
+                <span className="truncate">
+                  {t('bots.slack.approve.openOn', 'Open Slack on {{host}}', { host: hostName })}
+                </span>
+              </Button>
+            </>
+          )
+        }
+        return (
+          <Button autoFocus onClick={() => onNewLink(problem.teamId)}>
+            {t('bots.slack.setup.newLink', 'Get a new link')}
+          </Button>
+        )
+      case 'other-user':
         return (
           <Button autoFocus onClick={() => onNewLink(problem.teamId)}>
             {t('bots.slack.setup.newLink', 'Get a new link')}
@@ -263,6 +289,11 @@ export function SlackSetupProblemStep({
         {problem.kind === 'reconnecting' ? (
           <p role="status" className="flex items-center gap-2 text-sm">
             <LoadingSpinner className="size-4" />
+            {headline}
+          </p>
+        ) : problem.kind === 'expired' ? (
+          // Nothing broke: the link ran out before anyone used it.
+          <p role="alert" className="text-sm">
             {headline}
           </p>
         ) : (

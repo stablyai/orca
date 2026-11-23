@@ -331,8 +331,6 @@
       }
     },
     "agents": {
-      "installedRegion": "Agentes instalados",
-      "availableRegion": "Agentes disponibles para instalar",
       "codexTerminalServerIsolation": {
         "title": "Ejecutar cada terminal del Codex en su propio servidor",
         "description": "Mantiene el estado de Orca y las pestañas de cierre funcionando correctamente. Desactivar para utilizar el servidor compartido de Codex y la descripción general de sus agentes. Se aplica a terminales nuevos."
@@ -5484,7 +5482,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Otra instalación sigue en curso",
-          "edited": "Skill modificada fuera de Orca",
           "install": "Instalar",
           "installFor": "Instalar para {{value0}}",
           "installed": "Instalada",
@@ -12754,7 +12751,6 @@
           "attentionUnwritable": "Requiere atención · Orca no puede escribir en {{folder}}",
           "attentionBusy": "Requiere atención · Otra instalación de habilidades aún está terminando aquí",
           "attentionUnreadable": "Requiere atención · Orca no puede leer todos los archivos de esta copia",
-          "attentionEdited": "Requiere atención · Editaste esta copia",
           "attentionOther": "Requiere atención · Otra habilidad ya usa este nombre",
           "attentionSharedNotCurrent": "Requiere atención · La copia compartida que usa esta carpeta no es de Orca",
           "resultUpdateSkippedPlaces": "{{result}} · Actualización omitida en {{places}} ubicaciones: {{reason}}",
@@ -20312,6 +20308,7 @@
           "selectionWithheldCount_many": "{{count}} espacios de trabajo seleccionados están ocultos por los filtros actuales y se han deseleccionado.",
           "selectAllSafetyChecked_one": "Seleccionar {{count}} espacio de trabajo con seguridad comprobada",
           "selectAllSafetyChecked_other": "Seleccionar todos los {{count}} espacios de trabajo con seguridad comprobada",
+          "clearSelection": "Borrar selección",
           "selectAllSafetyChecked_many": "Seleccionar todos los {{count}} espacios de trabajo con seguridad comprobada",
           "lastActive": "Última actividad: {{value0}}"
         },
@@ -20885,8 +20882,7 @@
         "finished": "Trabajador temporal de orquestación finalizado · Se cierra en {{countdown}}",
         "keepOpen": "Mantener abierto",
         "bannerRunning": "Trabajador de orquestación · Se cierra 2 minutos después de terminar",
-        "bannerFinished": "Trabajador de orquestación finalizado · Se cierra en {{countdown}}",
-        "temporaryBadge": "Temporal"
+        "bannerFinished": "Trabajador de orquestación finalizado · Se cierra en {{countdown}}"
       }
     },
     "wslHostMark": {
@@ -22192,6 +22188,11 @@
       "dialogTitle": "Por qué claude aquí no usa la cuenta seleccionada",
       "dialogDescription": "Ahora Orca guarda cada cuenta de Claude en su propia carpeta, y claude en una terminal nueva sigue la cuenta que selecciones.",
       "dialogCause": "Las terminales abiertas antes de esta actualización no lo hacen, así que claude aquí inicia sesión con el inicio de sesión de Predeterminado del sistema. Abre una terminal nueva para usar la cuenta seleccionada."
+    },
+    "fileDrop": {
+      "copyUploadedPaths": "Copiar rutas",
+      "copyUploadedPathsFailed": "No se pudieron copiar las rutas de los archivos subidos.",
+      "uploadedWithoutPaste": "Subida completada, pero no se pudieron pegar las rutas en el terminal."
     },
     "newerDaemonBanner": {
       "failedTitle": "No se pudo volver a abrir esta terminal",
@@ -24903,6 +24904,7 @@
       "toolClaudePrepareFailed": "No se pudo preparar {{name}} en Claude Code. Revisa la configuración de la herramienta.",
       "toolNameTaken": "Este bot ya tiene una herramienta llamada {{name}}.",
       "toolNameTakenByAgent": "Tu {{agent}} ya tiene una herramienta llamada {{name}}, que este bot también recibe. Elige otro nombre con --name.",
+      "toolNameTakenByCodexStdio": "Tu Codex ya tiene una herramienta local llamada {{name}}, así que {{name}} de este bot no puede ejecutarse. Cambia el nombre de la herramienta de este bot.",
       "toolNotUpdated": "La herramienta no se actualizó.",
       "toolSignInAddressIncomplete": "Pega la dirección completa en la que terminó la página de inicio de sesión.",
       "toolSignInAddressWrong": "Esa no es la dirección en la que termina este inicio de sesión. Vuelve a empezar con Conectar, inicia sesión y pega la dirección que muestra tu navegador.",

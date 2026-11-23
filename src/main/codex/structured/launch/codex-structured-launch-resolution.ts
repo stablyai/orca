@@ -1,4 +1,4 @@
-import { codexBotToolsThreadConfig } from '../../../bots/bot-tools-codex'
+import { codexBotToolsThreadConfig, readCodexStdioToolNames } from '../../../bots/bot-tools-codex'
 import { withBotLaunchToolsEnv } from '../../../bots/bot-launch-tools'
 import { pathEnvRelativeTo } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
@@ -171,10 +171,11 @@ export function codexStructuredLaunchPart(
       linkedSkillsSection(linkedSkills.projects, [])
     )
     const tools = await basis.toolServers()
+    const codexHome = accountHome.path || environment?.CODEX_HOME || getSystemCodexHomePath()
     const threadConfig = basis.readOnly
       ? codexReadOnlyThreadConfig(basis.readOnly)
       : tools.servers.length > 0
-        ? codexBotToolsThreadConfig(tools)
+        ? codexBotToolsThreadConfig(tools, await readCodexStdioToolNames(codexHome))
         : null
     // Codex saves a thread at its first turn; one that exchanged a turn lost its history, not nothing.
     // Turns written since this thread's creation fence ran on it, even before Codex echoed the send.
@@ -194,14 +195,7 @@ export function codexStructuredLaunchPart(
         // A custom command may be a wrapper that depends on its folder; it never shares a server.
         ...(configuredProgram ? { customCommand: true } : {}),
         // Before the user's args: a later -c table replaces this one, so their hooks.state wins.
-        args: [
-          ...prefixArgs,
-          ...codexOrcaHooksOffArgs(
-            accountHome.path || environment?.CODEX_HOME || getSystemCodexHomePath()
-          ),
-          ...args,
-          'app-server'
-        ],
+        args: [...prefixArgs, ...codexOrcaHooksOffArgs(codexHome), ...args, 'app-server'],
         codexHome: accountHome.path,
         resumeThreadId,
         ...(supersedeIfUnsaved ? { supersedeIfUnsaved } : {}),

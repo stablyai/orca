@@ -37,6 +37,12 @@ export type BotItemActivityEntry =
     }
   | { kind: 'worker'; key: string; at: number; phase: 'started' | 'finished'; link: DispatchLink }
 
+/** Why a worker stopped without a report, worded as the chat's worker strip words it. */
+export function botItemWorkerStopReason(link: DispatchLink): string | null {
+  const stopped = link.state === 'failed' || link.state === 'stopped'
+  return stopped && !link.report && link.reason?.trim() ? link.reason.trim() : null
+}
+
 /** The question an owner's comment answers (`answers`), or null for any other event. */
 function answeredQuestion(event: BotItemEvent): string | null {
   return event.kind === 'commented' &&
@@ -126,7 +132,7 @@ function replyQuote(
 }
 
 function eventEntries(
-  item: Pick<BotItem, 'question' | 'status'>,
+  item: Pick<BotItem, 'question' | 'status' | 'waitingAsk'>,
   events: readonly BotItemEvent[]
 ): BotItemActivityEntry[] {
   const entries: BotItemActivityEntry[] = []
@@ -137,6 +143,10 @@ function eventEntries(
     }
   }
   const pairing = botItemQuestionPairing(item, events)
+  // An ask waits, read or still on an earlier page.
+  const askWaiting =
+    [...pairing.questions.values()].some(({ waiting }) => waiting) ||
+    (item.waitingAsk !== undefined && !pairing.questions.has(item.waitingAsk))
   const kept = events.filter((event) => !isSnoozeMark(event))
   const place = new Map(kept.map((event, index) => [event, index]))
   const prev = (event: BotItemEvent): BotItemEvent | undefined => {
@@ -169,10 +179,10 @@ function eventEntries(
       key: event.id,
       at: event.at,
       event,
-      // A question asked in prose waits while it is the item's question.
+      // A question asked in prose waits while it is the item's question and no ask waits before it.
       waiting: asked
         ? asked.waiting
-        : event.id === item.question?.eventId && event.actor.kind !== 'owner',
+        : event.id === item.question?.eventId && event.actor.kind !== 'owner' && !askWaiting,
       ...(asked ? { answers: asked.answers, byOrder: asked.byOrder } : {}),
       ...(replyTo ? { replyTo } : {}),
       ...(readsOnAsk(event, pairing) ? { onAsk: true as const } : {})
@@ -182,7 +192,7 @@ function eventEntries(
 }
 
 export function botItemActivity(
-  item: Pick<BotItem, 'links' | 'question' | 'status'>,
+  item: Pick<BotItem, 'links' | 'question' | 'status' | 'waitingAsk'>,
   events: readonly BotItemEvent[]
 ): BotItemActivityEntry[] {
   const entries = eventEntries(item, events)

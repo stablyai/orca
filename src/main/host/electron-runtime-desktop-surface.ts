@@ -8,6 +8,7 @@ import { translateMain } from '../i18n/main-i18n'
 import { encodeRepoIconPng } from './electron-repo-icon-png'
 import { fetchWithElectronManualRedirects } from './electron-manual-redirect-fetch'
 import { electronBrowserTabFaviconFetch } from './electron-browser-tab-favicon-fetch'
+import { holdPowerSaveBlocker } from '../power/power-save-blocker-hold'
 
 export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
   translateNotification: translateMain,
@@ -32,6 +33,7 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
     }
   },
   ...electronRendererWindows,
+  holdDisplayAwake: () => holdPowerSaveBlocker('prevent-display-sleep'),
   isResourceViewVisible: (rendererId) => {
     const renderer = webContents.fromId(rendererId)
     return isResourceWindowVisible(renderer ? BrowserWindow.fromWebContents(renderer) : null)
