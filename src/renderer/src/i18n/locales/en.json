@@ -22666,6 +22666,13 @@
       },
       "dock": {
         "label": "Message box and prompts"
+      },
+      "googleOffer": {
+        "useAccount": "Use {{email}} for Google.",
+        "useAnother": "Use another account",
+        "reconnect": "Reconnect {{email}}",
+        "use": "Use {{email}}",
+        "staysDefault": "{{email}} stays the default"
       }
     },
     "tab": {
@@ -28319,10 +28326,14 @@
         "signedOut": "Not connected on this computer",
         "remove": "Remove Google…",
         "removeNoteOnHost": "{{name}} can no longer use your Gmail, Calendar and Drive. Google stays connected on {{host}}.",
-        "signedOutOnHost": "Not connected on {{host}}"
+        "signedOutOnHost": "Not connected on {{host}}",
+        "account": "Account",
+        "hostDefault": "{{host}}’s default",
+        "computerDefault": "This computer’s default",
+        "changeInSettings": "Change in Settings",
+        "alsoConnected": "Also connected"
       },
       "copied": "Copied. Send it to your Google admin.",
-      "checksAgain": "Orca checks again on its own.",
       "share": {
         "saved": "Saved. Send the file to your teammates.",
         "failed": "Couldn’t save the file. Try again."
@@ -28337,11 +28348,11 @@
         "removeNote": "Bots stop using this account here. Bot settings stay, so Connect Google turns it back on.",
         "confirm": "Disconnect",
         "remove": "Remove from this computer",
-        "revoke": "Remove and revoke at Google"
+        "revoke": "Remove and revoke at Google",
+        "promotes": "{{email}} becomes the default.",
+        "removeOneNote": "Bots stop using this account here."
       },
-      "account": "Google · {{email}}",
       "reconnect": "Reconnect",
-      "addService": "Add a service",
       "thisComputer": "this computer",
       "thisServer": "this server",
       "title": "Google",
@@ -28397,14 +28408,7 @@
         "copyForAdmin": "Copy for your admin",
         "checkAgain": "Check again"
       },
-      "headline": {
-        "ended": "Google access ended. Reconnect.",
-        "connected": "Google is connected",
-        "toFix_one": "Almost there: 1 thing to fix",
-        "toFix_other": "Almost there: {{count}} things to fix"
-      },
       "adminRequest": "Please mark this Google app as Trusted in the Admin console (Security › API controls › Manage third-party app access): {{clientId}}",
-      "disconnectMenu": "Disconnect",
       "shareButton": "Share setup",
       "setUpTime": "About 10 minutes",
       "haveSetupFile": "Have a setup file from your team?",
@@ -28466,6 +28470,20 @@
         }
       },
       "pasteHint": "After you click Allow, the page won’t load. Paste its address here.",
+      "addAccount": "Add another Google account",
+      "defaultBadge": "Default",
+      "row": {
+        "signedOut": "Signed out by Google",
+        "notAllowed": "{{service}} not allowed",
+        "apiOff": "{{service}} turned off in Google Cloud",
+        "adminBlocked": "{{service}} blocked by your admin",
+        "error": "{{service}} couldn’t be checked"
+      },
+      "setDefault": "Set as default",
+      "accountActions": "{{email}} actions",
+      "addServiceMenu": "Add a service…",
+      "updateToAdd": "Update Orca on {{host}} to add another Google account.",
+      "account": "Google · {{email}}",
       "signInRun": {
         "cancelled": "The Google sign-in was cancelled.",
         "failed": "The Google sign-in failed. Try again.",

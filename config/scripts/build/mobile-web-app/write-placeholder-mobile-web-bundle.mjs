@@ -38,6 +38,6 @@ export async function writePlaceholderMobileWebBundle(outDir = MOBILE_WEB_BUNDLE
   return result
 }
 
-if (isDirectInvocation(import.meta.url)) {
+if (isDirectInvocation(import.meta.url, process.argv[1])) {
   await writePlaceholderMobileWebBundle()
 }
