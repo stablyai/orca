@@ -145,12 +145,12 @@ function detachFocusListenerWhenIdle(): void {
   globalThis.removeEventListener('focus', handleWindowFocus)
 }
 
-/** Share one unsettled-capability backoff per host owner; return unregister, stopping when the final consumer leaves. */
 /** A mounted local consumer's re-probe already owns this host's freshness. */
 export function isWindowsTerminalCapabilityReprobeActive(ownerKey: string): boolean {
   return (runnersByOwnerKey.get(ownerKey)?.consumers ?? 0) > 0
 }
 
+/** Share one unsettled-capability backoff per host owner; return unregister, stopping when the final consumer leaves. */
 export function startWindowsTerminalCapabilityReprobe(options: {
   ownerKey: string
   probe: () => Promise<WindowsTerminalCapabilities>

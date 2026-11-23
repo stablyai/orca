@@ -121,6 +121,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
   })
   useTabStripScrollMemory(
     groupId,
+    worktreeId,
     tabStripNavigation.tabStripRef,
     itemProjection.activeVisibleTabId
   )

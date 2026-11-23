@@ -173,6 +173,9 @@ export function loadWindowsTerminalCapabilities(
   return nextPendingCapabilities
 }
 
+/** Matches the re-probe ceiling, so a reused answer is never older than an unsettled re-probe would allow. */
+const REMOUNT_CAPABILITY_REUSE_MS = 5 * 60_000
+
 export function selectWindowsTerminalCapabilitiesForOwner(
   state: WindowsTerminalCapabilityHookState,
   enabled: boolean,
@@ -233,11 +236,15 @@ export function useWindowsTerminalCapabilities(
     subscribersByOwnerKey.set(resolvedOwnerKey, subscribers)
     const reprobe: { stop: (() => void) | null } = { stop: null }
     const isLocalOwner = resolvedTarget.kind === 'local' && !sshConnectionIdKey
-    // A remounting tab strip reads the answer the live re-probe keeps fresh instead of probing the host again.
+    // A remounting tab strip reuses a recent answer while a mounted consumer's re-probe owns the host; a settled
+    // re-probe stops probing, so past its ceiling the mount refreshes as before.
+    const cacheAgeMs =
+      Date.now() -
+      (cachedCapabilitiesByOwnerKey.get(resolvedOwnerKey)?.loadedAt ?? Number.NEGATIVE_INFINITY)
     const ownedByLiveReprobe =
       !forceRefreshOnMount &&
       isLocalOwner &&
-      hasOwnerCache &&
+      cacheAgeMs < REMOUNT_CAPABILITY_REUSE_MS &&
       isWindowsTerminalCapabilityReprobeActive(resolvedOwnerKey)
     const mountLoad = ownedByLiveReprobe
       ? Promise.resolve(cached)

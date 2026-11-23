@@ -47,18 +47,20 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
   const needsBrowserGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
   // Allowlist: only views drawn outside the layout (terminals restore from parking snapshots, chats stay mounted).
-  const { tabs, groups } = useAppStore(
+  // Keyed on membership, not the tab array: title updates replace the array but never a tab's content type.
+  const { tabCount, groups } = useAppStore(
     useShallow((state) => ({
-      tabs: state.unifiedTabsByWorktree[worktreeId],
+      tabCount: state.unifiedTabsByWorktree[worktreeId]?.length ?? 0,
       groups: state.groupsByWorktree[worktreeId]
     }))
   )
   const releaseGateOpen =
     shouldColdParkTerminalPanes && !isForceParked && browserPageIds.length === 0
   const surfaceReleased = useMemo(() => {
-    if (!releaseGateOpen || !tabs) {
+    if (!releaseGateOpen || tabCount === 0) {
       return false
     }
+    const tabs = useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []
     const tabById = new Map<string, (typeof tabs)[number]>()
     for (const tab of tabs) {
       if (tab.contentType === 'simulator') {
@@ -76,7 +78,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
           isStructuredTab(active))
       )
     })
-  }, [releaseGateOpen, tabs, groups])
+  }, [releaseGateOpen, tabCount, groups, worktreeId])
   const shouldKeepPaintable = shouldKeepHiddenWorktreeSurfacePaintable({
     // A mount-stage prewarm stays display:none so its style/layout cost lands in a later task.
     shouldMeasureHiddenWorktree: shouldMeasureHiddenWorktree && prewarmStage !== 'mount',

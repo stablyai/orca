@@ -3,35 +3,31 @@ import { useAppStore } from '@/store/index'
 
 /** A parked workspace unmounts its tab strips; each group's offset survives so returning shows the same tabs. */
 const offsetByStripKey = new Map<string, { scrollLeft: number; tabId: string | null }>()
-const PRUNE_FLOOR = 64
-let pruneAtSize = PRUNE_FLOOR
+// Live groups only (closed ones are dropped at unmount); the cap just bounds groups closed while their strip was released.
+const MAX_REMEMBERED_STRIPS = 8192
 
-// Entries live as long as their group; closed groups are swept once the map doubles, so the cost stays amortized O(1).
-function pruneClosedGroupOffsets(): void {
-  const openGroupIds = new Set<string>()
-  for (const groups of Object.values(useAppStore.getState().groupsByWorktree)) {
-    for (const group of groups) {
-      openGroupIds.add(group.id)
-    }
+function rememberTabStripScroll(
+  key: string,
+  worktreeId: string,
+  scrollLeft: number,
+  tabId: string | null
+): void {
+  offsetByStripKey.delete(key)
+  const groupOpen = useAppStore.getState().groupsByWorktree[worktreeId]?.some((g) => g.id === key)
+  if (!groupOpen) {
+    return
   }
-  for (const key of offsetByStripKey.keys()) {
-    if (!openGroupIds.has(key)) {
-      offsetByStripKey.delete(key)
-    }
-  }
-  pruneAtSize = Math.max(PRUNE_FLOOR, offsetByStripKey.size * 2)
-}
-
-function rememberTabStripScroll(key: string, scrollLeft: number, tabId: string | null): void {
   offsetByStripKey.set(key, { scrollLeft, tabId })
-  if (offsetByStripKey.size > pruneAtSize) {
-    pruneClosedGroupOffsets()
+  const oldest = offsetByStripKey.keys().next()
+  if (offsetByStripKey.size > MAX_REMEMBERED_STRIPS && !oldest.done) {
+    offsetByStripKey.delete(oldest.value)
   }
 }
 
 /** Call after the strip navigation hook so this restore lands after its mount-time reveal. */
 export function useTabStripScrollMemory(
   key: string | undefined,
+  worktreeId: string,
   tabStripRef: RefObject<HTMLElement | null>,
   activeTabId: string | null
 ): void {
@@ -77,8 +73,8 @@ export function useTabStripScrollMemory(
       strip.removeEventListener('scroll', onScroll)
       // An offset never applied stays saved for the next mount.
       if (!pending) {
-        rememberTabStripScroll(key, scrollLeft, activeTabIdRef.current)
+        rememberTabStripScroll(key, worktreeId, scrollLeft, activeTabIdRef.current)
       }
     }
-  }, [key, tabStripRef])
+  }, [key, worktreeId, tabStripRef])
 }
