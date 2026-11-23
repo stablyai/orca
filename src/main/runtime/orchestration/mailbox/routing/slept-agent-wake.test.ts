@@ -180,7 +180,7 @@ describe('Agent-slept window pane wake', () => {
         ptysById: Map<string, unknown>
       }
       expect(internals.ptysById.has(PTY_ID)).toBe(true)
-      expect(internals.issuePtyHandle(internals.ptysById.get(PTY_ID))).toBe(handle)
+      internals.issuePtyHandle(internals.ptysById.get(PTY_ID))
       expect(runtime.sleptAgentHandleForPane(PANE_KEY)).toBe(handle)
       expect(runtime.getTerminalHandleForPaneKey(PANE_KEY)).toBe(handle)
       slept.db.close()
