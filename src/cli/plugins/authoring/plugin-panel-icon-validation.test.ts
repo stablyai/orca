@@ -159,7 +159,7 @@ it('keeps manifest text in icon warnings on one line', async () => {
 })
 
 it('requires the path icon release in engines.orca', async () => {
-  await writeManifest({ path: 'M4 4h16v16H4z' }, { engines: { orca: '>=1.4.246' } })
+  await writeManifest({ path: 'M4 4h16v16H4z' }, { engines: { orca: '>=1.4.272' } })
   const report = await validatePluginTarget(dir)
   expect(report.valid).toBe(false)
   expect(report.errors.join('\n')).toContain(
