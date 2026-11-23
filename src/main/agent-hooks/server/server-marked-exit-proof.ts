@@ -90,11 +90,15 @@ export abstract class AgentHookServerMarkedExitProof extends AgentHookServerTabC
   }
 
   private async recordMarkedExitIfGone(resolved: string, marked: MarkedAgent): Promise<void> {
+    // Held while probing, so a mark landing meanwhile asks again.
+    this.aliveAfterMark.set(resolved, marked)
     const verdict = await probeAgentProcessPresence(marked.process).catch(() => null)
     const retained = this.aliveAfterMark.get(resolved)
-    if (retained && isSameAgentProcess(retained.process, marked.process)) {
-      this.aliveAfterMark.delete(resolved)
+    // Another probe of this mark already answered, or a newer agent's mark replaced it.
+    if (!retained || !isSameAgentProcess(retained.process, marked.process)) {
+      return
     }
+    this.aliveAfterMark.delete(resolved)
     // A newer live agent owns the pane, even one that reported no process: this end is not its news.
     const now = this.state.lastStatusByPaneKey.get(resolved)?.agentPresence
     if (now && !now.ended && !(now.process && isSameAgentProcess(now.process, marked.process))) {

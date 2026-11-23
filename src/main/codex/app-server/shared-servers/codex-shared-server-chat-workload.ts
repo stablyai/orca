@@ -1,4 +1,3 @@
-import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import {
   forEachWithConcurrency,
   mapSettledWithConcurrency
@@ -12,7 +11,6 @@ import {
 } from '../../structured/background-work/codex-background-terminals'
 import { CODEX_SHARED_LEASE_ENV } from './codex-shared-server-lease-requests'
 
-const SWEEP_SETTLE_MS = 1_000
 /** Requests one close keeps in flight on the shared pipe. */
 const CLOSE_RPC_CONCURRENCY = 8
 
@@ -31,26 +29,29 @@ export async function stopCodexSharedChatWorkload(input: {
   serverPid: number | undefined
   watcherPid?: number
   timeoutMs: number
-  /** Stops and checks this lease's processes under the server; true only when none is left.
-   *  null on Windows: no process can be tied to a chat, so only what Codex tracks is judged. */
-  sweep?: CodexSharedServerProcessSweep | null | undefined
+  /** Stops and checks this lease's processes under the server; true only when none is left. */
+  sweep?: CodexSharedServerProcessSweep
 }): Promise<boolean> {
   const terminalsGone = await stopListedTerminals(input)
   if (input.serverPid === undefined) {
     return false
   }
-  if (input.sweep === null) {
-    // Stop means Codex stopped everything it tracks: the turn, and a re-list showing none of the
-    // chat's terminals left. The server's job ends most of what a finished command left running.
-    return terminalsGone === true
-  }
   // Codex's own list misses a command that detached from it, and older Codex can't list at all.
-  const leftovers = await (input.sweep ?? stopCodexLeaseTaggedProcesses)(
+  const leftovers = await (input.sweep ?? codexLeaseProcessesGone)(
     input.serverPid,
     input.leaseId,
     input.watcherPid
   )
-  return terminalsGone !== false && leftovers
+  // macOS and Windows have no process proof, so there only a confirmed terminal stop counts.
+  return (
+    (attributesProcesses(process.platform) ? terminalsGone !== false : terminalsGone === true) &&
+    leftovers
+  )
+}
+
+/** Only Linux can tie a process to a chat (by its environment). */
+function attributesProcesses(platform: NodeJS.Platform): boolean {
+  return platform !== 'darwin' && platform !== 'win32'
 }
 
 /** Lets the server drop these threads; true when Codex confirmed each (or can't unsubscribe). */
@@ -111,77 +112,35 @@ async function stopListedTerminals(input: {
   }
 }
 
-/** Stops every process carrying this lease's tag, wherever it was reparented, then proves none
- *  is left. Any own process whose environment couldn't be read, or a target seen alive and later
- *  unreadable, leaves it unproven. */
-export async function stopCodexLeaseTaggedProcesses(
+/** Proves none of this lease's processes is left; signals nothing, since a pid that isn't ours to
+ *  reap can be reused before any signal lands. On Linux any tagged survivor, or an own process
+ *  whose environment couldn't be read, leaves it unproven (the server then drains and its exit
+ *  reaps the tree). macOS and Windows can't attribute a process to a chat, so there, as Codex's
+ *  own clients do, the interrupted turns and the confirmed stop of the listed terminals are the
+ *  proof; on Windows the server's job ends most of what a finished command left running. */
+export async function codexLeaseProcessesGone(
   serverPid: number,
   leaseId: string,
   watcherPid?: number,
   platform: NodeJS.Platform = process.platform
 ): Promise<boolean> {
+  if (!attributesProcesses(platform)) {
+    return true
+  }
   try {
-    const first = await scanCodexLeaseProcesses(
+    const scan = await scanCodexLeaseProcesses(
       CODEX_SHARED_LEASE_ENV,
       serverPid,
       platform,
       watcherPid
     )
-    if (!first) {
-      return false
-    }
-    const targets = first.tagged(leaseId)
-    if (targets.length > 0) {
-      // Signalled only if a second reading still shows the tag, so a reused pid is never hit.
-      const confirm = await scanCodexLeaseProcesses(
-        CODEX_SHARED_LEASE_ENV,
-        serverPid,
-        platform,
-        watcherPid
-      )
-      const still = new Set(confirm?.tagged(leaseId) ?? [])
-      for (const pid of targets) {
-        if (still.has(pid)) {
-          try {
-            process.kill(pid, 'SIGKILL')
-          } catch {
-            // Already gone.
-          }
-        }
-      }
-      await new Promise((resolve) => setTimeout(resolve, SWEEP_SETTLE_MS))
-    }
-    if (!first.bounded) {
-      return false
-    }
-    // Always a reading taken after the first finished: a process forked while the first was
-    // being read, or reparented when its parent exited mid-read, shows up in this one.
-    const after = await scanCodexLeaseProcesses(
-      CODEX_SHARED_LEASE_ENV,
-      serverPid,
-      platform,
-      watcherPid
+    return (
+      scan !== null &&
+      scan.bounded &&
+      scan.unreadable.length === 0 &&
+      scan.tagged(leaseId).length === 0
     )
-    if (
-      !after ||
-      !after.bounded ||
-      after.unreadable.length > 0 ||
-      after.tagged(leaseId).length > 0
-    ) {
-      return false
-    }
-    // A target the last reading didn't list must really be gone, not merely unreadable now.
-    return targets.every((pid) => !isAlive(pid))
   } catch {
     return false
-  }
-}
-
-function isAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    return errnoCodeOrUnknown(error) === 'EPERM'
   }
 }

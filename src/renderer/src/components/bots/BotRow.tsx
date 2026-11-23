@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useId } from 'react'
 import { openBotSettings } from './bot-settings-open'
 import { ChevronDown, Copy, Pause, Play, Server, Settings, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -9,6 +9,7 @@ import { openBotHome, updateBot } from '@/lib/bot-catalog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useBotUpNextUnseen } from '@/lib/bot-up-next-unseen'
 import { cn } from '@/lib/class-names'
+import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
 import type { Bot } from '../../../../shared/bot-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { botErrorMessage } from './bot-presentation'
@@ -128,7 +129,15 @@ export function BotRow({
           />
         ) : null
       }
-      trailing={fold ? <BotRowFoldToggle botName={bot.name} fold={fold} /> : null}
+      trailing={
+        fold ? (
+          <BotRowFoldToggle
+            botName={bot.name}
+            fold={fold}
+            working={!offline && status === 'working'}
+          />
+        ) : null
+      }
       hoverDetails={() => (
         <BotHoverDetails
           bot={bot}
@@ -207,14 +216,20 @@ function BotRowHostIcon({ label }: { label: string }): React.JSX.Element {
 
 function BotRowFoldToggle({
   botName,
-  fold
+  fold,
+  working
 }: {
   botName: string
   fold: BotRowFold
+  /** The bot itself is working: the row's working mark sits here, on the strip. */
+  working: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const statusId = useId()
   const { folded, counts } = fold
-  const live = botFoldLiveStatus(counts)
+  const live = folded ? botFoldLiveStatus(counts) : null
+  // One mark: a folded workspace's ask outranks the bot's own work, which outranks the rest.
+  const mark = live === 'permission' ? live : working ? 'working' : live
   const label = folded
     ? t('bots.chats.unfold', 'Unfold {{name}}', { name: botName })
     : t('bots.chats.fold', 'Fold {{name}}', { name: botName })
@@ -235,6 +250,7 @@ function BotRowFoldToggle({
         'can-hover:pointer-fine:@max-[15rem]/bot-row:min-w-6 can-hover:pointer-fine:@max-[15rem]/bot-row:px-1'
       )}
       aria-label={label}
+      aria-describedby={mark === 'working' ? statusId : undefined}
       aria-expanded={!folded}
       onClick={(event) => {
         event.stopPropagation()
@@ -243,10 +259,15 @@ function BotRowFoldToggle({
       onKeyDown={(event) => event.stopPropagation()}
     >
       {/* Folded, only its most urgent live workspace's status: a bare count of every workspace it
-          ever made said nothing at a glance. */}
-      {folded && live ? (
+          ever made said nothing at a glance. Folded or not, the bot's own work shows here too. */}
+      {mark === 'working' ? (
+        <span id={statusId} className="sr-only">
+          {getWorktreeStatusLabel(mark)}
+        </span>
+      ) : null}
+      {mark ? (
         <span className="flex items-center">
-          <StatusIndicator status={live} showTooltip={false} />
+          <StatusIndicator status={mark} showTooltip={false} />
         </span>
       ) : null}
       <span className="flex size-4 items-center justify-center">

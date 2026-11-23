@@ -18,11 +18,14 @@ import { ensureAgentSessionAttachmentClaimTables } from '../native-chat/agent-se
 import {
   cutJournalConnectorReplies,
   fillJournalConnectorReplies,
-  readJournalConnectorReplies,
   recutJournalConnectorReplies,
   releaseJournalConnectorClaim,
   sentJournalConnectorReplies
 } from '../native-chat/agent-session-journal/connector-replies/journal-connector-replies'
+import {
+  readJournalConnectorReplies,
+  readOwedJournalConnectorReplies
+} from '../native-chat/agent-session-journal/connector-replies/journal-connector-replies-read'
 import { readJournalDomainDispatchItem } from '../native-chat/agent-session-journal/journal-domain-dispatch-placement'
 import { migrateJournalDomainSchema } from '../native-chat/agent-session-journal/journal-domain-schema'
 import { applyJournalDomainSubmission } from '../native-chat/agent-session-journal/journal-domain-submission-admission'
@@ -33,6 +36,8 @@ import { readJournalDomainSubmissionBody } from '../native-chat/agent-session-jo
 import { applyJournalDomainQueueCommand } from '../native-chat/agent-session-journal/journal-domain-queue-command'
 import { usageLimitReplyPause } from './external-conversation-reply-pause'
 import { ConnectorReplyRecovery } from './external-conversation-reply-recovery'
+import { connectorReplyTurnStamps } from '../../shared/agent-session/journal/journal-connector-reply-turn'
+import { replyEventsOf } from '../connector-cloud/connector-reply-outbox'
 
 // Phase 1 restart matrix, desktop side: a real journal file reopened on every "restart", the real
 // admission writer, recovery and fill, a fake clock. Each case asserts the rows' durable outcome.
@@ -84,6 +89,8 @@ function openJournal() {
       readJournalConnectorReplies(db).filter(
         (row) => sessionId === undefined || row.sessionId === sessionId
       ),
+    readOwed: async (account, after, limit) =>
+      readOwedJournalConnectorReplies(db, account, after, limit),
     fillOutcomes: async (fills) => fillJournalConnectorReplies(db, fills, NOW) > 0,
     sent: async (keys) => sentJournalConnectorReplies(db, keys, NOW),
     cut: async (rows) => cutJournalConnectorReplies(db, rows) > 0,
@@ -298,6 +305,7 @@ function start(
     outcomes,
     publish,
     limited,
+    fillTurn: fill,
     items: () => items
   }
 }
@@ -752,6 +760,57 @@ describe('no positional "answered together" across a restart', () => {
     )
     await p.recovery.boot()
     expect(p.outcomes()).toEqual({ d1: { outcome: null } })
+  })
+})
+
+describe('the reply names the turn that answered it', () => {
+  const TURN_AT = NOW - 30_000
+  const owedEvents = async (journal: ConnectorReplyCutJournal) =>
+    replyEventsOf(
+      (await journal.readOwed('account-a', '', 50)).flatMap((row) =>
+        row.fill ? [{ ...row, fill: row.fill }] : []
+      )
+    )
+
+  it('a send steered into a turn goes out with the turn its live end knew', async () => {
+    const p = start()
+    admit(p.db, 'm1', asked('d1'))
+    admit(p.db, 'm2', asked('d2'))
+    const submissions = [
+      submissionOf('m1', { answeredInTurn: { turnItemId: 'item:t1', via: 'start' } }),
+      submissionOf('m2', { answeredInTurn: { turnItemId: 'item:t1', via: 'steer' } })
+    ]
+    const items = [p.message('m1'), p.message('m2'), ...p.turn('item:t1', 'm1', 'completed')]
+    const opener = p.message('m1')
+    await p.fillTurn({
+      sessionId: 'chat-1',
+      turnItemId: 'item:t1',
+      stamps: connectorReplyTurnStamps({ items, submissions }, opener, 'item:t1'),
+      openerItemId: opener.itemId,
+      outcome: 'success',
+      prose: 'Both.',
+      bot: false,
+      links: [],
+      turnStartedAt: TURN_AT
+    })
+    // Read back after a reopen: the turn is the row's, not the live process's.
+    p.db.close()
+    const after = start()
+    expect(await owedEvents(after.journal)).toEqual([
+      expect.objectContaining({ deliveryIds: ['d1', 'd2'], outcome: 'answered', turnId: TURN_AT })
+    ])
+  })
+
+  it('a turn recovery filled at boot names none, so the cloud keeps its own reading', async () => {
+    const before = start()
+    admit(before.db, 'm1', asked('d1'))
+    before.db.close()
+    const p = start({ continuationsSettled: Promise.resolve() })
+    p.show([p.message('m1'), ...p.turn('item:t1', 'm1', 'completed', 'Done.')])
+    await p.recovery.boot()
+    const [event] = await owedEvents(p.journal)
+    expect(event).toMatchObject({ deliveryIds: ['d1'], outcome: 'answered' })
+    expect(event).not.toHaveProperty('turnId')
   })
 })
 

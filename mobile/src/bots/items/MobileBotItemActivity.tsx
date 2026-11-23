@@ -1,8 +1,9 @@
 // An item's Activity on the phone, in the desktop's order and words: comments as cards (an agent's
 // question with its question footer and quick replies), and one muted line per other event; comments
-// sent from the box that the host's read doesn't show yet come last, as sent.
-import { useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+// sent from the box that the host's read doesn't show yet come last, as sent. A reply's quote shows its
+// question: scrolled to the middle and briefly lit, as the desktop's comment box does (a tap has no focus ring).
+import { useCallback, useRef, useState } from 'react'
+import { Pressable, Text, View, type HostInstance } from 'react-native'
 import {
   AlarmClock,
   AlarmClockOff,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react-native'
 import {
   botItemActivity,
+  botItemWaitEntryKey,
   type BotItemActivityEntry
 } from '../../../../src/shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-name'
@@ -26,6 +28,7 @@ import {
   type BotItemEvent
 } from '../../../../src/shared/bots/bot-items'
 import type { BotItemPendingComments } from '../../../../src/shared/bots/bot-item-pending-comments'
+import type { BotItemQuickReplyActions } from '../../../../src/shared/bots/use-bot-item-question-steps'
 import {
   mobileBotItemCommentWords,
   type MobileBotItemAttachmentSource
@@ -36,8 +39,10 @@ import type { Translate } from '../../i18n/mobile-i18n'
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { MobileBotItemCommentCard } from './MobileBotItemCommentCard'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
+import { MobileBotItemWaitCard } from './MobileBotItemWaitCard'
 import { useMobileMessageTime } from '../../session/native-chat/transcript/messages/use-mobile-message-time'
 
 const ICON = 13
@@ -244,30 +249,79 @@ export function MobileBotItemActivity({
   item,
   events,
   attachments,
-  pending
+  pending,
+  onReveal,
+  itemScope,
+  quickReplies,
+  repliesDisabled
 }: {
   item: BotItem
   events: readonly BotItemEvent[]
   /** Comments sent from the box that the item's read doesn't show yet: last, as sent. */
   pending: Pick<BotItemPendingComments, 'shown' | 'retry' | 'discard'>
   attachments: MobileBotItemAttachmentSource
+  /** Scrolls the page to a span measured in the window. */
+  onReveal: (y: number, height: number, animated: boolean) => void
+  /** The item on its host, which an ask's held answers are kept under. */
+  itemScope: string
+  /** What the waiting question's quick replies do. */
+  quickReplies: BotItemQuickReplyActions
+  /** The host can't take a comment now (offline). */
+  repliesDisabled: boolean
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const time = useMobileMessageTime()
+  const still = useReducedMotionEnabled() === true
+  const cards = useRef(new Map<string, HostInstance>())
+  const [flash, setFlash] = useState<{ id: string; at: number } | null>(null)
+  const endFlash = useCallback(() => setFlash(null), [])
   const entries = botItemActivity(item, events)
+  // Its move shows last, as its card, while the item waits.
+  const waitKey = botItemWaitEntryKey(item, entries)
+  const comments = new Set(
+    entries.flatMap((entry) => (entry.kind === 'comment' ? [entry.key] : []))
+  )
+  // Null while the question isn't in the Activity read so far.
+  const showQuestion = (id: string | undefined): (() => void) | null =>
+    id && comments.has(id)
+      ? () => {
+          // Measured now: on the web, layout events miss a card moved by Show more or Show earlier.
+          cards.current.get(id)?.measureInWindow((_x, y, _width, height) => {
+            onReveal(y, height, !still)
+            setFlash({ id, at: Date.now() })
+          })
+        }
+      : null
   // A reply already sent answers the question, before the host's read says so.
   const answered = pending.shown.some(({ failed }) => !failed)
   return (
     <View>
       {entries.map((entry) =>
-        entry.kind === 'comment' ? (
-          <MobileBotItemCommentCard
-            key={entry.key}
-            item={item}
-            entry={answered ? { ...entry, waiting: false } : entry}
-            attachments={attachments}
-          />
+        // Its wait shows last, as its card; an answer reads on its question's lines.
+        entry.key === waitKey ? null : entry.kind === 'comment' ? (
+          entry.onAsk ? null : (
+            <MobileBotItemCommentCard
+              key={entry.key}
+              item={item}
+              entry={answered ? { ...entry, waiting: false } : entry}
+              attachments={attachments}
+              ref={(node) => {
+                if (node) {
+                  cards.current.set(entry.key, node)
+                } else {
+                  cards.current.delete(entry.key)
+                }
+              }}
+              onShowQuestion={showQuestion(entry.replyTo?.eventId)}
+              itemScope={itemScope}
+              quickReplies={quickReplies}
+              repliesDisabled={repliesDisabled}
+              {...(flash?.id === entry.key
+                ? { flash: { at: flash.at, still, end: endFlash } }
+                : {})}
+            />
+          )
         ) : (
           <View key={entry.key} style={styles.event}>
             <View style={styles.eventIcon}>
@@ -286,22 +340,28 @@ export function MobileBotItemActivity({
           </View>
         )
       )}
-      {pending.shown.map(({ event, failed, mayHaveArrived }) => (
-        <MobileBotItemCommentCard
-          key={event.id}
-          item={item}
-          entry={{ event, waiting: false }}
-          attachments={attachments}
-          failed={
-            failed
-              ? {
-                  retry: mayHaveArrived ? null : () => pending.retry(event.id),
-                  discard: () => pending.discard(event.id)
-                }
-              : undefined
-          }
-        />
-      ))}
+      {item.status === 'waiting' && item.wait ? (
+        <MobileBotItemWaitCard text={item.wait.text} at={item.wait.at} />
+      ) : null}
+      {pending.shown.map(({ event, failed, mayHaveArrived }) =>
+        // Answers posted as one comment show on their lines already.
+        !failed && event.data.text === quickReplies.sent?.text ? null : (
+          <MobileBotItemCommentCard
+            key={event.id}
+            item={item}
+            entry={{ event, waiting: false }}
+            attachments={attachments}
+            failed={
+              failed
+                ? {
+                    retry: mayHaveArrived ? null : () => pending.retry(event.id),
+                    discard: () => pending.discard(event.id)
+                  }
+                : undefined
+            }
+          />
+        )
+      )}
       {entries.some((entry) => entry.kind === 'comment') || pending.shown.length > 0 ? null : (
         <Text style={[styles.line, styles.none]}>
           {t('bots.items.activity.noComments', 'No comments yet.')}

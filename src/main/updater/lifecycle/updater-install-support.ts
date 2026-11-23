@@ -119,6 +119,7 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
           state: 'error',
           version,
           retryAction: 'install',
+          ...(this.canInstallOnNormalQuit(version) ? { installOnQuit: true } : {}),
           ...updaterCodedMessage('automaticInstallCheckpointFailed')
         })
         return false

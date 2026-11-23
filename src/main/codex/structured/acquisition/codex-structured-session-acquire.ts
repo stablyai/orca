@@ -18,7 +18,6 @@ import { CodexSubagentExecutions } from '../background-work/codex-subagent-execu
 import { createCodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
 import { createCodexSessionJournalTranslator } from '../session-lifecycle/codex-structured-session-journal'
 import { codexConnectionOpener, opensSharedCodexServer } from './codex-structured-connection-opener'
-import { readProcessStartTimeMs } from '../../../runtime/agent-session/ownership/agent-session-process-identity-probe'
 import { codexSpawnedProcessIdentity } from './codex-structured-owner-identity'
 import {
   closeCodexPublishedSession,
@@ -38,6 +37,7 @@ import type { CodexStructuredNotificationRetry } from '../session-lifecycle/code
 import type { deliverCodexServerRequest } from '../session-lifecycle/codex-structured-provider-events'
 import { codexAcquisitionNotificationHandler } from './codex-structured-acquisition-notification'
 import { codexStartFailure } from '../../app-server/codex-startup-outcome'
+import { codexAcceptedSend } from '../journal/codex-structured-journal-translation-turns'
 
 export async function acquireCodexStructuredSession(input: {
   input: StructuredAgentSessionAcquireInput
@@ -73,7 +73,11 @@ export async function acquireCodexStructuredSession(input: {
   const dispatchEchoes = createCodexDispatchEchoes(
     () => deps.onHeldSendsChanged?.({ sessionId }),
     (clientMessageId, providerIdentity) =>
-      deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity })
+      deps.onDispatchSettledLate?.({
+        sessionId,
+        clientMessageId,
+        ...codexAcceptedSend(sessionId, providerIdentity, dispatchEchoes.sentVia(clientMessageId))
+      })
   )
   let account: AgentSessionAccountKind | undefined
   // Frame row identities include this generation.
@@ -84,6 +88,9 @@ export async function acquireCodexStructuredSession(input: {
   const translator = createCodexSessionJournalTranslator({
     sink: acquireInput.events,
     account: () => account,
+    localClock:
+      acquireInput.launch?.location.executionHostId === 'local' &&
+      acquireInput.launch.location.wslDistro === null,
     sessionId,
     acquisitionId: acquisitionGeneration,
     deps,
@@ -93,10 +100,7 @@ export async function acquireCodexStructuredSession(input: {
     prompts: acquisition.prompts
   })
   let sharedServer = false
-  // Without a start time the owner is never proven alive, so recovery never signals it.
-  const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, async (pid) =>
-    sharedServer ? null : (deps.readProcessStartTime ?? readProcessStartTimeMs)(pid)
-  )
+  const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps, () => sharedServer)
   try {
     await stopSupersededCodexAcquisition({
       sessionId,

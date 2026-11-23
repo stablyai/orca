@@ -126,6 +126,8 @@ export type QuestionRow = {
   created_at: string
   answered_at: string | null
   closed_at: string | null
+  /** How it ended with no answer: its asker was told it went unanswered, or no one read it. */
+  told: 'unanswered' | 'dropped' | null
 }
 
 export type MutationState = 'pending' | 'completed'
@@ -323,6 +325,8 @@ export type DispatchContextRow = {
    *  answers (`worker-start --for`); retries inherit both. */
   origin_ref: string | null
   for_message_id: string | null
+  /** 1 when this worker, and every worker it starts, starts as a chat wherever one can run. */
+  chat_lineage: 1 | null
 }
 
 export type DecisionGateRow = {

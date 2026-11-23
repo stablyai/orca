@@ -9,6 +9,8 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { OrcaProfileSignOutConfirmDialog } from '../../../orca-profiles/OrcaProfileSignOutConfirmDialog'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../orca-profiles/OrcaSignInProgress'
+import { isOrcaCloudConsoleAvailable } from '../../../../../../shared/orca-cloud-console'
+import { OrcaConsoleRow } from './OrcaConsoleRow'
 
 export function accountStatusCopy(
   state: 'local' | 'unconfigured' | 'connected' | 'reconnect-required' | undefined,
@@ -148,6 +150,8 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
           )}
           {connected ? null : <OrcaSignInWaitNotice className="basis-full" />}
         </OrcaAccountHeader>
+
+        {isOrcaCloudConsoleAvailable(authStatus) ? <OrcaConsoleRow /> : null}
 
         <div className="space-y-4 border-t border-border/60 pt-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">

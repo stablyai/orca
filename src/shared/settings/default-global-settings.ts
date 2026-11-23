@@ -203,6 +203,7 @@ export function buildDefaultSettings(args: {
     floatingTerminalEnabled: true,
     browserClientHostedRemoteEnabled: true,
     antigravityManagedAgyEnabled: true,
+    antigravityServerAutoUpdateEnabled: true,
     floatingTerminalDefaultedForAllUsers: true,
     floatingTerminalCwd: '~',
     floatingTerminalTrustedCwds: [],

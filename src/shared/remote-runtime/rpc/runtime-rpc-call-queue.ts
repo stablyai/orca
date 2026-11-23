@@ -80,7 +80,8 @@ function isBulkReadRuntimeMethod(method: string): boolean {
   return (
     method === 'files.readChunk' ||
     method === 'files.readDocPreviewChunk' ||
-    method === 'files.readTerminalArtifactChunk'
+    method === 'files.readTerminalArtifactChunk' ||
+    method === 'agentSessionAttachment.readTextChunk'
   )
 }
 

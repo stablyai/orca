@@ -61,11 +61,11 @@ function OpenHomeNewBotSheet(props: {
       pairedClientFor={pairedClientFor}
       onClose={props.onClose}
       onAfterClose={props.onAfterClose}
-      onOpenBot={(bot, computer) => {
+      onOpenBot={(bot, computer, homeDraft) => {
         props.onClose()
         const place = byId.get(computer.id)
         if (place) {
-          openBotHome(place, bot)
+          openBotHome(place, bot, homeDraft)
         }
       }}
       onCreated={(bot, computer) => {

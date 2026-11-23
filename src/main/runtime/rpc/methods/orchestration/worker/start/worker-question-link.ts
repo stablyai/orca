@@ -11,6 +11,9 @@ import {
   sessionMailTaker,
   stampQuestionTakes
 } from '../../../../../orchestration/db/messages/mail-taker'
+import { botRequestRecord } from '../../messaging/bot-request-record'
+import { getRemoteOwnedQuestion } from '../../../../../orchestration/db/remote-owned/remote-dispatch-records'
+import { botRequestSenderName } from '../../../../../../bots/bot-request-view'
 
 export type WorkerQuestionLink =
   | {
@@ -20,6 +23,14 @@ export type WorkerQuestionLink =
       take?: (started: boolean) => WorkerQuestionLink
     }
   | { question: string; linked: false; why: string }
+
+// A structured worker reads chat cards as its session and checks mail as its terminal.
+function ownTakerKeys(caller: OrchestrationCallerIdentity): string[] {
+  return [
+    callerMailTaker(caller),
+    ...(caller.orcaSessionId ? [sessionMailTaker(caller.orcaSessionId)] : [])
+  ].map(mailTakerKey)
+}
 
 export function linkWorkerToQuestion(
   db: OrchestrationDb,
@@ -38,14 +49,14 @@ export function linkWorkerToQuestion(
   const asked =
     message?.type === 'question' &&
     (db.getBotRequest(question)?.purpose === 'question' ||
-      db.getQuestionRaw(question) !== undefined)
+      db.getQuestionRaw(question) !== undefined ||
+      getRemoteOwnedQuestion(db, question) !== undefined)
   if (!message || !asked) {
     return unlinked(`${question} is not a question this Orca holds`)
   }
   const taker = callerMailTaker(caller)
-  // A structured worker reads chat cards as its session and checks mail as its terminal.
-  const own = [taker, ...(caller.orcaSessionId ? [sessionMailTaker(caller.orcaSessionId)] : [])]
-  const takenByCaller = (takenBy: string) => own.some((mine) => mailTakerKey(mine) === takenBy)
+  const own = ownTakerKeys(caller)
+  const takenByCaller = (takenBy: string) => own.includes(takenBy)
   const takenBy = getQuestionTaker(db, question)
   if (takenBy !== null) {
     return takenByCaller(takenBy)
@@ -95,4 +106,47 @@ export function withQuestionLink<T>(link: WorkerQuestionLink | undefined, starte
     ? link
     : (link.take?.(workerStarted) ?? { question: link.question, linked: true })
   return { ...started, forQuestion }
+}
+
+/** For a start without `--for`: the newest question the caller took and hasn't answered, so it can
+ *  link the worker to it. A caller with no open question gets nothing. */
+export function openQuestionReminder(
+  db: OrchestrationDb,
+  caller: OrchestrationCallerIdentity | null
+): string | undefined {
+  const own = caller ? ownTakerKeys(caller) : []
+  if (own.length === 0) {
+    return undefined
+  }
+  const takers = own.map(() => '?').join(',')
+  const id = db.db
+    .prepare(
+      `SELECT id FROM messages WHERE id IN (
+         SELECT message_id FROM bot_requests WHERE awaiting = 1 AND taken_by IN (${takers})
+         UNION SELECT message_id FROM question_threads WHERE awaiting = 1 AND taken_by IN (${takers})
+         UNION SELECT message_id FROM remote_owned_questions
+         WHERE awaiting = 1 AND taken_by IN (${takers})
+       ) ORDER BY sequence DESC LIMIT 1`
+    )
+    .get(...own, ...own, ...own)?.id
+  if (typeof id !== 'string') {
+    return undefined
+  }
+  const record = botRequestRecord(db, id)
+  const worker = record
+    ? undefined
+    : (db.getQuestionRaw(id)?.dispatch_id ?? getRemoteOwnedQuestion(db, id)?.dispatch_id)
+  const asker = record
+    ? botRequestSenderName(record)
+    : worker
+      ? `your worker on Dispatch ${worker}`
+      : 'another agent'
+  return `You have an open question from ${asker} (${id}). If this worker is for it, add --for ${id}.`
+}
+
+/** The start receipt with the caller's open-question reminder, when it has one. */
+export function withOpenQuestion<T>(reminder: string | undefined, started: T): T {
+  return reminder && started && typeof started === 'object'
+    ? { ...started, openQuestion: reminder }
+    : started
 }

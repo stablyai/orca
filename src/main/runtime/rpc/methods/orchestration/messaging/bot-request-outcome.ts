@@ -17,9 +17,17 @@ import { awaitsAnswer } from '../../../../../bots/bot-request-policy'
 import { readBotTurn } from './bot-recipient'
 import { botRequestRecord } from './bot-request-record'
 import { ensureSenderRecords, tellSender } from './bot-request-sender-notice'
+import { noteBotQuestionFailure } from './bot-question-notices'
+import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
+import {
+  stampQuestionTakes,
+  type MailTaker
+} from '../../../../orchestration/db/messages/mail-taker'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { TurnEndedVerdict } from '../../../../../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { StructuredAgentSessionRequestFailure } from '../../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
+import { requireStructuredHost } from '../../../../../bots/bot-chat-session'
+import { botRequestsTurnAnswered } from '../../../../../bots/bot-turn-answered-requests'
 import { readChatRequestError } from '../../../../orchestration/workers/turn-stops/chat-request-error-read'
 import { redactFailure } from '../../../../orchestration/workers/turn-stops/worker-turn-stop-wording'
 
@@ -129,10 +137,11 @@ export async function noteBotRequestPost(
 export async function settleBotRequestTurn(
   runtime: OrcaRuntimeService,
   sessionId: string,
+  turnId: string,
   ended?: TurnEndedVerdict
 ): Promise<void> {
   if (ended?.outcome !== 'failure') {
-    await settleBotRequests(runtime, sessionId, 'ended')
+    await settleBotRequests(runtime, sessionId, turnId, { why: 'ended' })
   }
 }
 
@@ -147,27 +156,41 @@ export async function settleBotRequestFailure(
   const error = await readChatRequestError(failure)
   const why = (await continuesAfterUsageLimit(failure.sessionId)) ? 'failed-continues' : 'failed'
   // The reason is mailed to other agents and paired computers, so redact it as worker escalations do.
-  await settleBotRequests(
-    runtime,
-    failure.sessionId,
+  const reason = error ? redactFailure(error.text) : undefined
+  noteBotQuestionFailure(failure.sessionId, { requestId: failure.id, why, reason })
+  // A refused send settles only itself: other agents' mail refused says nothing of earlier requests.
+  await settleBotRequests(runtime, failure.sessionId, failure.id, {
     why,
-    error ? redactFailure(error.text) : undefined
-  )
+    reason,
+    refusedSend: failure.kind === 'refused-send'
+  })
 }
 
 async function settleBotRequests(
   runtime: OrcaRuntimeService,
   sessionId: string,
-  why: 'ended' | 'failed' | 'failed-continues',
-  reason?: string
+  turnId: string,
+  {
+    why,
+    reason,
+    refusedSend = false
+  }: { why: 'ended' | 'failed' | 'failed-continues'; reason?: string; refusedSend?: boolean }
 ): Promise<void> {
   // Every chat's turn ends here; only a bot's can be on a request.
   if (!botOfSession(runtime.bots, sessionId)) {
     return
   }
   const db = runtime.getOrchestrationDb()
-  const { turn } = await readBotTurn(runtime, db, sessionId)
-  const open = turn.requestIds.filter((id) => db.getBotRequestOutcome(id) === null)
+  const requestIds = await botRequestsTurnAnswered(
+    await (await requireStructuredHost(runtime)).journalReads(sessionId),
+    turnId,
+    (messageId) => db.getBotRequest(messageId) !== undefined,
+    { reportFallback: !refusedSend }
+  )
+  // Questions are decided by the question reconciler (mailbox/questions), from who took them.
+  const open = requestIds.filter(
+    (id) => db.getBotRequest(id)?.purpose === 'handoff' && db.getBotRequestOutcome(id) === null
+  )
   if (open.length === 0) {
     return
   }
@@ -201,10 +224,27 @@ export async function dropUnreadBotRequests(
 ): Promise<void> {
   try {
     const db = runtime.getOrchestrationDb()
-    const dropped = db
+    const unread = db
       .listUnreadBotRequests(botId)
+      .filter(({ message }) => !onlyTo || message.to_handle.endsWith(onlyTo))
+    // A question is dropped as a take: the reconciler tells its asker, and retries an asker it
+    // can't verify yet. One being handed to the chat now is taken unread; a handover that still
+    // reaches the chat reads it, and a later answer still lands.
+    for (const { request, message } of unread) {
+      if (request.purpose === 'question') {
+        runLifecycleWriteTransaction(db.db, 'drop_bot_question', () => {
+          const dropped: MailTaker = { kind: 'dropped', why }
+          if (db.getStructuredMailSendsForMessages([message.id]).length === 0) {
+            db.markAsRead([message.id], dropped)
+          } else {
+            stampQuestionTakes(db, [message.id], dropped)
+          }
+        })
+      }
+    }
+    const dropped = unread
+      .filter(({ request }) => request.purpose !== 'question')
       .map(({ message }) => message)
-      .filter((message) => !onlyTo || message.to_handle.endsWith(onlyTo))
     await ensureSenderRecords(runtime, dropped)
     for (const message of dropped) {
       // Read in the same write as its outcome and notice, so the drop is never half done.
@@ -216,4 +256,6 @@ export async function dropUnreadBotRequests(
     // The change itself stands; only the senders go untold.
     console.warn('[bots] could not tell senders of dropped bot requests', error)
   }
+  // A paused or deleted bot's chat no longer takes mail: a question it read waits on nothing now.
+  runtime.questionReconciler?.decideAll()
 }

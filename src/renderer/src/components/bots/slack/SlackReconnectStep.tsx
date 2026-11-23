@@ -1,22 +1,19 @@
 // @protected-copy: drawn inside the security-surface setup dialog
-// The expired-token step: this desktop's own working token first when it has one, else a short paste.
-import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+// The expired-token step: this desktop's own working sign-in first when it has one, else a short paste.
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { Trans } from 'react-i18next'
-import { ChevronRight, Info } from 'lucide-react'
+import { Info } from 'lucide-react'
 import { isMac } from '@/app-shell/chrome/app-window-chrome'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { i18n } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { cn } from '@/lib/class-names'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import type { Bot } from '../../../../../shared/bot-types'
 import { BotHowToAsk } from '../BotHowToAsk'
 import { SlackConfigTokenForm } from './SlackConfigTokenForm'
+import { useDeviceSignInLabel } from './slack-hand-off-parts'
 import type { SlackHandOffOffer } from './use-slack-hand-off-offer'
-import { useSnugEllipsis } from './use-snug-ellipsis'
 
 /** This desktop's own Orca account, offered for the one workspace whose token lapsed on the host. */
 export type SlackReconnectOffer = { email: string; teamId: string }
@@ -46,14 +43,13 @@ export function SlackOneLineIntro({ text }: { text: string }): React.JSX.Element
   )
 }
 
-/** The dialog's title on this step: the question when this desktop's token is offered. */
-export function slackReconnectTitle(t: Translate, offered: boolean): string {
-  if (!offered) {
-    return t('bots.slack.reconnect.expiredTitle', 'Slack token expired')
-  }
-  return isMac
-    ? t('bots.slack.reconnect.useTitleMac', 'Use your Mac’s token?')
-    : t('bots.slack.reconnect.useTitle', 'Use this computer’s token?')
+/** The dialog's title on this step: what lapsed, and where, when this desktop's sign-in is offered. */
+export function slackReconnectTitle(t: Translate, offeredOn: string | null): string {
+  return offeredOn
+    ? t('bots.slack.reconnect.expiredOnTitle', 'Slack sign-in expired on {{host}}', {
+        host: offeredOn
+      })
+    : t('bots.slack.reconnect.expiredTitle', 'Slack token expired')
 }
 
 export function SlackReconnectStep({
@@ -98,10 +94,10 @@ export function SlackReconnectStep({
           )
         : t('bots.slack.reconnect.why', 'Slack stopped accepting this workspace’s saved token.')
   const pasteRef = useRef<HTMLDivElement>(null)
-  const pasteId = useId()
   const offered = offer !== null && hostName !== null
+  const device = useDeviceSignInLabel()
   // An offer arriving never hides the paste form someone is in: a token in the field, or focus
-  // anywhere in the form, opens the disclosure on it, unless they closed it themselves and have not
+  // anywhere in the form, keeps the form open, unless they cancelled it themselves and have not
   // gone back to the form since.
   const [hasToken, setHasToken] = useState(false)
   const [inPasteForm, setInPasteForm] = useState(false)
@@ -114,10 +110,10 @@ export function SlackReconnectStep({
     }
   }
   // An offer arriving or going removes controls. Focus that was in this step, on one of them, goes
-  // to where the step now asks for input: the field, or the disclosure while the field is behind
+  // to where the step now asks for input: the field, or Sign in again while the field is behind
   // it. Focus on a control that stays (the ⓘ, the field), or outside the step, is left alone.
   const stepRef = useRef<HTMLDivElement>(null)
-  const pasteToggleRef = useRef<HTMLButtonElement>(null)
+  const signInAgainRef = useRef<HTMLButtonElement>(null)
   const focusInStep = useRef(false)
   const focusedFor = useRef(offered)
   // Set while this step moves focus itself, so that is not taken for the user going back to the form.
@@ -162,7 +158,7 @@ export function SlackReconnectStep({
       (stepRef.current?.contains(active) === true && active.closest('[hidden]') !== null)
     if (focusInStep.current && lost) {
       const target =
-        offered && !pasting ? pasteToggleRef.current : pasteRef.current?.querySelector('input')
+        offered && !pasting ? signInAgainRef.current : pasteRef.current?.querySelector('input')
       movingFocus.current = true
       target?.focus()
       movingFocus.current = false
@@ -177,41 +173,8 @@ export function SlackReconnectStep({
   // step is open only changes its props, so a token typed into it is kept.
   return (
     <div ref={stepRef} className="space-y-4">
-      {offered ? (
-        <LineWithWhy
-          label={t('bots.slack.reconnect.about', 'About Slack tokens')}
-          truncating={hostName}
-          why={[
-            why,
-            t(
-              'bots.slack.reconnect.useDetail',
-              'Use it sets up this bot’s Slack app with {{email}}’s token. {{host}} only gets this bot’s app.',
-              { email: offer.email, host: hostName }
-            )
-          ]}
-        >
-          <Trans
-            i18n={i18n}
-            defaults={
-              isMac
-                ? t(
-                    'bots.slack.reconnect.hostExpiredMac',
-                    '<host>{{host}}</host>’s token expired. This Mac’s works.'
-                  )
-                : t(
-                    'bots.slack.reconnect.hostExpired',
-                    '<host>{{host}}</host>’s token expired. This computer’s works.'
-                  )
-            }
-            values={{ host: hostName }}
-            components={{
-              host: (
-                // The name gives way first, so the rest of the line stays whole.
-                <span className="min-w-0 truncate" title={hostName} data-snug-ellipsis="" />
-              )
-            }}
-          />
-        </LineWithWhy>
+      {offered && !pasting ? (
+        <p className="text-sm">{device.question}</p>
       ) : (
         <LineWithWhy
           label={t('bots.slack.reconnect.about', 'About Slack tokens')}
@@ -225,31 +188,8 @@ export function SlackReconnectStep({
         </LineWithWhy>
       )}
       <div>
-        {offered ? (
-          <Button
-            ref={pasteToggleRef}
-            type="button"
-            variant="link-muted"
-            size="inline"
-            aria-expanded={pasting}
-            aria-controls={pasteId}
-            onClick={() => {
-              const open = !pasting
-              setClosedByUser(!open)
-              // Opening it is asking to paste: the field takes focus once it shows.
-              flushSync(() => setPasting(open))
-              if (open) {
-                pasteRef.current?.querySelector('input')?.focus()
-              }
-            }}
-          >
-            {t('bots.slack.reconnect.pasteInstead', 'Paste a token instead')}
-            <ChevronRight className={cn('transition-transform', pasting && 'rotate-90')} />
-          </Button>
-        ) : null}
         {/* Hidden, not unmounted, while closed: a token typed before closing it is still there. */}
         <div
-          id={pasteId}
           onFocus={() => {
             setInPasteForm(true)
             // Back in the form: an earlier close no longer keeps it shut.
@@ -266,7 +206,6 @@ export function SlackReconnectStep({
           }}
           ref={pasteRef}
           hidden={offered && !pasting}
-          className={offered ? 'pt-3' : undefined}
         >
           <SlackConfigTokenForm
             compact
@@ -286,18 +225,43 @@ export function SlackReconnectStep({
             // A refused paste comes back open, with focus on the field and its error; the
             // paste-only step focuses the field.
             autoFocusField={offered ? error !== null : true}
-            {...(offered ? { inlineSubmit: true } : { onCancel })}
+            // Cancel from Sign in again goes back to the offer.
+            onCancel={
+              offered
+                ? () => {
+                    setClosedByUser(true)
+                    // The focused Cancel goes with the form: Sign in again takes focus.
+                    flushSync(() => setPasting(false))
+                    signInAgainRef.current?.focus()
+                  }
+                : onCancel
+            }
           />
         </div>
       </div>
-      {offered ? (
+      {offered && !pasting ? (
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onCancel}>
-            {t('bots.slack.setup.cancel', 'Cancel')}
+          <Button
+            ref={signInAgainRef}
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setClosedByUser(false)
+              // Signing in again is pasting a new token: the field takes focus once it shows.
+              flushSync(() => setPasting(true))
+              pasteRef.current?.querySelector('input')?.focus()
+            }}
+          >
+            {t('bots.slack.reconnect.signInAgain', 'Sign in again')}
           </Button>
-          {/* Not focused first: a stray Enter would spend this computer's token. */}
-          <Button type="button" onClick={() => onUse(offer.teamId)}>
-            {t('bots.slack.reconnect.use', 'Use it')}
+          {/* Not focused first: a stray Enter would spend this computer's sign-in. */}
+          <Button
+            type="button"
+            className="min-w-0 shrink"
+            title={device.use}
+            onClick={() => onUse(offer.teamId)}
+          >
+            <span className="truncate">{device.use}</span>
           </Button>
         </DialogFooter>
       ) : null}
@@ -309,20 +273,14 @@ export function SlackReconnectStep({
 function LineWithWhy({
   label,
   why,
-  truncating = null,
   children
 }: {
   label: string
   why: (string | null)[]
-  /** The name in the line that ends in an ellipsis when long; the next words sit right after it. */
-  truncating?: string | null
   children: React.ReactNode
 }): React.JSX.Element {
-  const rowRef = useRef<HTMLDivElement>(null)
-  useSnugEllipsis(rowRef, truncating)
   return (
-    // The ⓘ stays compact so a short computer name still fits whole at the narrowest width.
-    <div ref={rowRef} className="flex min-w-0 items-center gap-0.5">
+    <div className="flex min-w-0 items-center gap-0.5">
       <p className="flex min-w-0 overflow-hidden text-sm whitespace-pre">{children}</p>
       <Tooltip>
         <TooltipTrigger asChild>

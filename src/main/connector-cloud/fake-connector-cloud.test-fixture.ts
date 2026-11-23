@@ -42,6 +42,14 @@ export class FakeConnectorCloud {
   private lastRev = 0
   /** What each hello answer lists beyond the contract version; an older cloud lists nothing. */
   features: string[] | undefined
+  /** The wake offer each hello answer carries; undefined offers none, as today's cloud. */
+  wakeOffer: unknown
+  /** The auth service mints a wake token beside each connector token. */
+  mintsWakeTokens = false
+  /** How long a minted wake token lasts; the connector token's own TTL when unset. */
+  wakeTokenTtlMs: number | null = null
+  /** Every wake token minted, in order. */
+  readonly wakeTokens: string[] = []
   /** Hooks of this machine deleted while it was away, as the hello answer lists them. */
   webhookTombstones: string[] | undefined
   /** The bot ids the cloud holds for this machine, as its last hello listing bots replaced them. */
@@ -112,7 +120,15 @@ export class FakeConnectorCloud {
       const expiresAt = Date.now() + TOKEN_TTL_MS
       this.tokens.set(connectorToken, { account, expiresAt })
       this.minted.push({ account, token: connectorToken })
-      return { ok: true, value: { connectorToken, expiresAt } }
+      if (!this.mintsWakeTokens) {
+        return { ok: true, value: { connectorToken, expiresAt } }
+      }
+      const wakeToken = {
+        token: `wake-${this.wakeTokens.length}`,
+        expiresAt: this.wakeTokenTtlMs === null ? expiresAt : Date.now() + this.wakeTokenTtlMs
+      }
+      this.wakeTokens.push(wakeToken.token)
+      return { ok: true, value: { connectorToken, expiresAt, wakeToken } }
     }
   }
 
@@ -262,7 +278,8 @@ export class FakeConnectorCloud {
         body: {
           helloRev: this.hello.rev,
           features: this.features,
-          webhookTombstones: this.webhookTombstones
+          webhookTombstones: this.webhookTombstones,
+          wake: this.wakeOffer
         }
       }
     }

@@ -18,6 +18,7 @@ import { CodexSharedServerBacklog } from './codex-shared-server-backlog'
 import { CodexSharedServerTurns } from './codex-shared-server-turns'
 import { stopCodexLeaseWriter } from './codex-shared-server-writer-stop'
 import { CodexSharedServerRouter } from './codex-shared-server-router'
+import { retiringHungCodexServers } from './codex-shared-server-hang-watch'
 import type { CodexSharedServerWindowsJob } from './codex-shared-server-windows-job'
 
 const RELEASE_REQUEST_TIMEOUT_MS = 5_000
@@ -51,7 +52,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     /** Windows only: holds the server's whole tree, so its close ends what chats left running. */
     private readonly windowsJob?: CodexSharedServerWindowsJob
   ) {
-    this.ready = this.start(connect)
+    this.ready = this.start(retiringHungCodexServers(connect))
   }
 
   private async start(connect: typeof spawnCodexAppServerConnection): Promise<void> {
@@ -84,20 +85,24 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
       // A server its Windows job can't hold couldn't end what chats leave running.
       await this.windowsJob?.requireHolds(connection.pid, () => this.hasExited)
     } catch (error) {
-      // A server that never initialized serves nobody; the next chat gets a fresh one. Its waiting
-      // chats leave silently (their open rejects, and a Windows fallback reuses their handlers); the
-      // pool stops it, retrying until its exit is proven.
-      this.leases.clear()
+      // A server that never initialized serves nobody; the next chat gets a fresh one.
       this.draining = true
-      this.onEnded(this)
+      if (this.windowsJob) {
+        // Its waiting chats leave silently: their open rejects and a fallback reuses their handlers.
+        this.leases.clear()
+      }
+      void this.closeProcess()
       throw error
     }
   }
 
-  /** Every close of the process: the tree kill, then the Windows job ends what it missed. */
-  private closeProcess(): Promise<boolean> {
-    const closing = this.physical?.close().catch(() => false) ?? Promise.resolve(true)
-    return closing.finally(() => this.windowsJob?.terminate())
+  /** Every close of the process: the tree kill, then the Windows job ends anything it missed. */
+  private async closeProcess(): Promise<boolean> {
+    try {
+      return this.physical ? await this.physical.close() : true
+    } finally {
+      this.windowsJob?.terminate()
+    }
   }
 
   get pid(): number | undefined {
@@ -144,7 +149,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
       () =>
         this.hasExited ||
         this.leases.size < others ||
-        running().some((turnId) => !seen.has(turnId)) ||
+        running().some((turnId) => !seen.has(turnId) && !lease.refusedInterrupts.has(turnId)) ||
         (lease.pendingOpens.size === 0 &&
           !this.turns.anyStartPending(threads()) &&
           !this.hasRunningTurn(threads())),
@@ -250,7 +255,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
       rpc: physical,
       threads: [...owned, ...lease.abandonedThreads],
       leaseId: lease.id,
-      sweep: this.windowsJob ? null : this.sweep,
+      ...(this.sweep ? { sweep: this.sweep } : {}),
       serverPid: this.pid,
       ...(physical.watcherPid !== undefined ? { watcherPid: physical.watcherPid } : {}),
       timeoutMs: RELEASE_REQUEST_TIMEOUT_MS
@@ -350,7 +355,10 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     this.turns.endAll()
     this.backlogs.dispose()
     // Root exit says nothing of the commands it ran; reap and judge the tree for every chat.
-    this.reaping = this.closeProcess().then(() => {})
+    this.reaping = this.closeProcess().then(
+      () => {},
+      () => {}
+    )
     // Every chat on it sees its own unexpected exit and reopens its thread on its next send.
     for (const lease of this.leases) {
       lease.fail(error, false)

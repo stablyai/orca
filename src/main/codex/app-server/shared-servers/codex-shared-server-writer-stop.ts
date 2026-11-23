@@ -19,7 +19,8 @@ export async function stopCodexLeaseWriter(
     () => lease.pendingOpens.size === 0 && !turns.anyStartPending([...lease.threads]),
     requestTimeoutMs
   )
-  const interrupted = new Set<string>()
+  // Shared with earlier attempts, so a retry never interrupts the same turn twice.
+  const interrupted = lease.interruptedTurns
   for (let pass = 0; pass < 2; pass += 1) {
     const running = [...lease.threads, ...lease.abandonedThreads].flatMap((threadId) => {
       const turnId = turns.runningOn(threadId)
@@ -28,12 +29,18 @@ export async function stopCodexLeaseWriter(
     await Promise.all(
       running.map(async ({ threadId, turnId }) => {
         interrupted.add(turnId)
-        lease.interruptedTurns.add(turnId)
         const ended = turns.waitUntil(
           () => turns.runningOn(threadId) !== turnId,
           requestTimeoutMs + TURN_STOP_PROOF_MS
         )
-        await physical.request('turn/interrupt', { threadId, turnId }, options).catch(() => {})
+        // Unsent or refused: the next Stop sends it again.
+        await physical.request('turn/interrupt', { threadId, turnId }, options).then(
+          () => lease.refusedInterrupts.delete(turnId),
+          () => {
+            interrupted.delete(turnId)
+            lease.refusedInterrupts.add(turnId)
+          }
+        )
         await ended
       })
     )

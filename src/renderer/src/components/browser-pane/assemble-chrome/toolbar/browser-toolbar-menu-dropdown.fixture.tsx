@@ -44,7 +44,7 @@ const DETECTED_BROWSERS = [
 
 function Toolbar(): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [open, setOpen] = useState(false)
   return (
     <div className="h-[560px]">
       <BrowserChromeToolbar
@@ -81,8 +81,8 @@ function Toolbar(): React.JSX.Element {
           <BrowserToolbarMenuDropdown
             extensionDiscoveryTarget={false}
             browserPageId="fixture-page"
-            menuOpen={menuOpen}
-            onMenuOpenChange={setMenuOpen}
+            menuOpen={open}
+            onMenuOpenChange={setOpen}
             profile={{
               browserPageId: 'fixture-page',
               allProfiles: PROFILES,
@@ -96,6 +96,7 @@ function Toolbar(): React.JSX.Element {
               detectedBrowsers: DETECTED_BROWSERS,
               onFetchDetectedBrowsers: noop,
               browserSessionImportState: null,
+              pageRoute: { kind: 'local' },
               onImportFromBrowser: noop,
               onImportFromFile: noop
             }}
@@ -171,4 +172,10 @@ export const narrowImportCookiesSubOpen = defineFixture({
   width: 320,
   render: () => <Toolbar />,
   interact: (frame) => openSub(frame, 'Import Cookies')
+})
+
+export const narrowProfileSubOpen = defineFixture({
+  width: 320,
+  render: () => <Toolbar />,
+  interact: (frame) => openSub(frame, 'Profile')
 })

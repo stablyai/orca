@@ -223,7 +223,7 @@ export function ExperimentalPane({
             )}
             description={t(
               'auto.components.settings.ExperimentalPane.sharedCodexServers.description',
-              'Codex chats share a few background processes, up to 20 chats each, instead of starting one per chat.'
+              'Codex chats with the same setup share one background process instead of starting one per chat.'
             )}
             keywords={getExperimentalSearchEntry().sharedCodexServers.keywords}
             className="space-y-3 py-3"

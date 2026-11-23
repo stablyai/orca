@@ -87,7 +87,7 @@ export async function callRuntimeRpcResponse<TResult>(
         })
   const envelope = response as RuntimeRpcResponse<TResult>
   if (!envelope.ok) {
-    throw new RuntimeRpcCallError(envelope)
+    throw new RuntimeRpcCallError(envelope, target)
   }
   return envelope
 }

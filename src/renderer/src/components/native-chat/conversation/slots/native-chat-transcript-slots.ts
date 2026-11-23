@@ -33,6 +33,7 @@ import {
 } from '../../../../../../shared/native-chat/transcript/folding/native-chat-trailing-run'
 import { nativeChatTranscriptWorkRuns } from '../../tools/runs/native-chat-transcript-work-runs'
 import { nativeChatBotItemNoteClusters } from '../../bot-items/native-chat-bot-item-note-clusters'
+import { markNativeChatActivityJoins } from './native-chat-activity-row-joins'
 import {
   nativeChatAgentRowHasImages,
   nativeChatAgentRowWords
@@ -107,8 +108,8 @@ export type NativeChatMessageSlot = {
   workRun?: readonly NativeChatMessage[]
   /** Consecutive quiet item notes drawn close together, with message as the first. */
   itemNotes?: readonly NativeChatMessage[]
-  /** Carries on the run of notes in the slot before: drawn 4 px below it, not a row gap below. */
-  followsNotes?: boolean
+  /** Opens on an activity row right below the slot before's: drawn 4 px below it, not a row gap below. */
+  followsActivity?: boolean
 }
 
 const NO_SUBAGENT_HEADS: readonly NativeChatSubagentHead[] = []
@@ -332,6 +333,7 @@ export function buildNativeChatTranscript(
     }
   }
   markNativeChatResponseActionsHang(drawn, typography)
+  markNativeChatActivityJoins(drawn, typography)
   return {
     slots: drawn,
     quietTurnKeys: leaving.turns.size ? new Set([...quiet.turns, ...leaving.turns]) : quiet.turns,
