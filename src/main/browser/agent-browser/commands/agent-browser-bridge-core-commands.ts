@@ -21,6 +21,7 @@ import { assertRemoteCliPageAccess } from '../../routing/input-ownership/remote-
 import { agentBrowserSnapshotArgs } from '../protocol/agent-browser-snapshot-arguments'
 import { getBrowserPasskeyRequest } from '../../webauthn/browser-passkey-requests'
 import { whenBrowserExtensionsReadyForPage } from '../../extensions/profile-sessions/browser-extension-page-start'
+import { claimBrowserPageFirstLoad } from '../../guest-lifecycle/browser-page-memory'
 
 export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQueue {
   async snapshot(
@@ -88,7 +89,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     url: string,
     worktreeId?: string,
     browserPageId?: string,
-    options: { reportEffects?: boolean } = {}
+    { awaitFirstLoad, ...options }: { reportEffects?: boolean; awaitFirstLoad?: boolean } = {}
   ): Promise<BrowserGotoResult> {
     return this.enqueueInertAction(
       worktreeId,
@@ -98,6 +99,14 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
         const navigationUrl = normalizeBrowserNavigationUrl(url)
         if (!navigationUrl) {
           throw new BrowserError('invalid_argument', `Unsupported browser URL: ${url}`)
+        }
+        // A tab opened at this URL is already loading it; loading again would resend the request.
+        const firstLoad = awaitFirstLoad
+          ? claimBrowserPageFirstLoad(target.browserPageId, navigationUrl)
+          : null
+        if (firstLoad && firstLoad.guest === wc) {
+          await firstLoad.load
+          return { url: wc.getURL(), title: wc.getTitle() }
         }
         // A new tab's profile may still be starting its extensions; its first page waits for them.
         await whenBrowserExtensionsReadyForPage(wc)
