@@ -12,22 +12,19 @@ import {
 } from '../../../push/notifications/terminal-agent-turn-news'
 import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { redactWorkerTerminalView } from '../../terminal-authority/views/worker-terminal-redaction'
-import {
-  workerTurnStopDispatchId,
-  type WorkerRequestError,
-  type WorkerTurnStopReportDeps
-} from './worker-turn-stop-report'
+import { workerTurnStopDispatchId, type WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 import { observeWorker, type WorkerRest } from './worker-presence-report'
 import { firstWithin } from '../approvals/first-within'
 import { showsClaudeDialog } from '../../../terminal/wait/claude-open-dialog-hold'
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
-import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
-import { claudeStopFailureFact } from '../../../../claude/structured/journal/claude-usage-limits'
-import { failureRequestError } from './chat-worker-error-words'
-import { redactFailure } from './worker-turn-stop-wording'
-import { agentBackgroundWait } from '../../../../../shared/agent-status/lifecycle/agent-background-wait'
-import { WorkerBackgroundWaits } from './worker-background-waits'
+import {
+  agentBackgroundWait,
+  agentLeadTurnFailedUnderChildWork
+} from '../../../../../shared/agent-status/lifecycle/agent-background-wait'
+import { failedLeadTurnFence, WorkerBackgroundWaits } from './worker-background-waits'
+import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
 import { resolveTerminalWorkerDispatch } from './terminal-worker-dispatch'
+import { terminalRequestError } from './terminal-request-error'
 export { resolveTerminalWorkerDispatch }
 
 export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
@@ -82,8 +79,12 @@ export class TerminalWorkerTurnStops {
         ? change.to === 'working'
         : change.kind === 'seeded' && change.phase === 'working'
     const row = working ? this.deps.readHookRow(change.paneKey) : null
-    // A turn held open only by its background tasks is a rest, which those waits record.
-    if (working && !row?.structuredHost && !(row && agentBackgroundWait(row))) {
+    // A turn held open only by its background tasks, or failed under them, is a rest those waits record.
+    if (
+      working &&
+      !row?.structuredHost &&
+      !(row && (agentBackgroundWait(row) || agentLeadTurnFailedUnderChildWork(row)))
+    ) {
       const resolved = this.resolve(change.paneKey)
       if (resolved) {
         observeWorker(resolved.db, resolved.target, { presence: 'working' }, this.deps)
@@ -95,6 +96,9 @@ export class TerminalWorkerTurnStops {
    *  its user stopped, or a session boundary, is no news here either, as it is live. */
   reportRestingPane(paneKey: string): Promise<void> {
     const row = this.deps.readHookRow(paneKey)
+    if (this.backgroundWaits.reportFailedLeadTurn(paneKey, row)) {
+      return Promise.resolve()
+    }
     const news = row && hookRowTransition('working', hookRowAgentPhase(row), row) !== null
     const resolved = news ? this.resolve(paneKey) : null
     if (!row || !resolved) {
@@ -151,13 +155,26 @@ export class TerminalWorkerTurnStops {
     ) {
       return
     }
+    // A failed turn already reported while its children ran is the same failure once they settle.
+    const failedLead =
+      reason === 'errored' && stop.row.mainAgent
+        ? failedLeadTurnFence(stop.row.mainAgent.stateStartedAt)
+        : null
+    const reportedFence =
+      failedLead &&
+      readWorkerPresence(resolved.db, workerTurnStopDispatchId(resolved.target))?.fence ===
+        failedLead
+        ? failedLead
+        : null
     const sent = observeWorker(
       resolved.db,
       resolved.target,
       {
         presence: 'at-rest',
         // An approval seen on a prompt already reported is news of its own.
-        fence: `${incarnation}:${stop.row.stateStartedAt}${approval ? `:approval:${approval.approvalId}` : ''}`,
+        fence:
+          reportedFence ??
+          `${incarnation}:${stop.row.stateStartedAt}${approval ? `:approval:${approval.approvalId}` : ''}`,
         legacyStopKey: `${stop.paneKey}:${stop.row.stateStartedAt}`,
         rest: {
           from: resolved.handle,
@@ -207,39 +224,5 @@ export class TerminalWorkerTurnStops {
 
   private resolve(paneKey: string) {
     return resolveTerminalWorkerDispatch(this.deps, paneKey)
-  }
-}
-
-/** The typed failure a terminal agent's turn ended on; null when it named none Orca words. */
-function terminalRequestError(row: AgentStatusIpcPayload): WorkerRequestError | null {
-  // A time-only reset is read against when the turn stopped: a pane restored later keeps that day.
-  const fact =
-    row.agentType === 'claude'
-      ? claudeStopFailureFact(row.mainAgent?.failure, row.mainAgent?.stateStartedAt ?? Date.now())
-      : null
-  if (!fact) {
-    return null
-  }
-  const words = agentSessionFailureWords(fact, {
-    agentName: 'Claude',
-    provider: 'claude',
-    surface: 'row'
-  })
-  const error = failureRequestError(words.text, fact)
-  const text = redactFailure(error.text)
-  const detail = error.detail && redactFailure(error.detail)
-  return {
-    text,
-    ...(detail ? { detail } : {}),
-    kind: fact.kind,
-    heldByWaits: true,
-    facts: {
-      stopReason: 'errored',
-      agent: 'claude',
-      turnOutcome: 'failure',
-      failureKind: fact.kind,
-      error: text,
-      ...(detail ? { detail } : {})
-    }
   }
 }

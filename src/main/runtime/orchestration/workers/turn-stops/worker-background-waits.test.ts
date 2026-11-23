@@ -229,4 +229,42 @@ describe('a worker waiting on its own background task', () => {
     advanceTo(TURN_END + 60 * MINUTE)
     expect(notices()).toHaveLength(1)
   })
+  it('reports a lead turn that failed under its background task once, across a restart', () => {
+    const errors = () =>
+      db.db
+        .prepare(`SELECT body FROM messages
+            WHERE subject = 'Worker stopped on an error without reporting' ORDER BY rowid`)
+        .all()
+        .map((message) => String(message.body))
+    const orca = startOrca()
+    row = heldRow(TURN_END)
+    orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 0 })
+    const failedAt = TURN_END + 10 * MINUTE
+    // The task's notification woke the lead and its request failed; another task keeps the pane working.
+    row = {
+      ...heldRow(failedAt),
+      lastAssistantMessage: 'API Error: 503 All accounts are temporarily unavailable.',
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: failedAt }
+    }
+    orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 1 })
+    expect(errors()).toHaveLength(1)
+    expect(errors()[0]).toContain(`Worker ${HANDLE} ended its turn on an error without sending`)
+    expect(errors()[0]).toContain('API Error: 503')
+
+    orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 2 })
+    // A restart remints the process id and its sweep reads the same restored row.
+    const restarted = startOrca('incarnation_after_restart')
+    restarted.observe({
+      kind: 'seeded',
+      paneKey: PANE,
+      workspace: { worktreeId: 'repo::/w', sshHostId: null },
+      phase: 'working',
+      at: 3
+    })
+    expect(restarted.reportFailedLeadTurn(PANE)).toBe(true)
+    // The failure replaced the wait, so no background-wait notice follows it either.
+    advanceTo(TURN_END + 120 * MINUTE)
+    expect(errors()).toHaveLength(1)
+    expect(notices()).toEqual([])
+  })
 })

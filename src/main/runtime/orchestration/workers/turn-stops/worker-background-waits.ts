@@ -1,6 +1,9 @@
 import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent-transition-detector'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { agentBackgroundWait } from '../../../../../shared/agent-status/lifecycle/agent-background-wait'
+import {
+  agentBackgroundWait,
+  agentLeadTurnFailedUnderChildWork
+} from '../../../../../shared/agent-status/lifecycle/agent-background-wait'
 import { structuredAgentSessionIdOfTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { AGENT_DONE_QUIET_MS } from '../../../../../shared/agent-status/lifecycle/agent-transitions'
 import { rowsShowWait } from './worker-background-wait-rows'
@@ -13,6 +16,7 @@ import { chatWorkerDispatches } from './chat-worker-error-escalation'
 import { resolveTerminalWorkerDispatch } from './terminal-worker-dispatch'
 import { observeWorker, reconsiderWorkerRest } from './worker-presence-report'
 import { workerBackgroundWaitDueAt } from './worker-background-wait-notice'
+import { terminalRequestError } from './terminal-request-error'
 import {
   workerTurnStopDispatchId,
   type WorkerTurnStop,
@@ -28,6 +32,11 @@ export type WorkerBackgroundWaitsDeps = WorkerTurnStopReportDeps & {
 }
 
 const SEND_RETRIES = 3
+
+/** Names a failed lead turn by its end: a restart that remints the process id is the same failure. */
+export function failedLeadTurnFence(since: number): string {
+  return `failed-lead:${since}`
+}
 const SEND_RETRY_MS = 60_000
 
 type PaneWorker = {
@@ -42,6 +51,8 @@ type PaneWorker = {
 export class WorkerBackgroundWaits {
   /** Panes last seen waiting, by the turn end they wait from: a repeat hook post is no new fact. */
   private readonly waitingSince = new Map<string, number>()
+  /** Panes last seen with a failed lead turn under live children, by that turn's end. */
+  private readonly failedSince = new Map<string, number>()
   private readonly timers = new Map<string, { dueAt: number; cancel: () => void }>()
 
   constructor(private readonly deps: WorkerBackgroundWaitsDeps) {}
@@ -99,8 +110,56 @@ export class WorkerBackgroundWaits {
     this.timers.set(dispatchId, { dueAt: Date.now() + SEND_RETRY_MS, cancel: timer.cancel })
   }
 
+  /** A terminal worker's lead turn failed while its children keep the pane working: no all-clear will
+   *  come for it, so it is reported now, once per failed turn. True when the row shows such a turn. */
+  reportFailedLeadTurn(
+    paneKey: string,
+    row: AgentStatusIpcPayload | null = this.deps.readHookRow(paneKey)
+  ): boolean {
+    const failed = row && !row.structuredHost ? agentLeadTurnFailedUnderChildWork(row) : null
+    if (!row || !failed) {
+      return false
+    }
+    if (this.failedSince.get(paneKey) === failed.since) {
+      return true
+    }
+    // The failure ends any wait this pane held: its rest is the failure now.
+    this.waitingSince.delete(paneKey)
+    const workers = this.workersOf(paneKey, row)
+    if (workers.length > 0) {
+      this.failedSince.set(paneKey, failed.since)
+    }
+    const fence = failedLeadTurnFence(failed.since)
+    const requestError = terminalRequestError(row)
+    for (const worker of workers) {
+      this.cancelNotice(workerTurnStopDispatchId(worker.target))
+      observeWorker(
+        worker.db,
+        worker.target,
+        {
+          presence: 'at-rest',
+          fence,
+          legacyStopKey: `${paneKey}:${fence}`,
+          rest: {
+            from: worker.from,
+            reason: 'errored',
+            turnStartedAt: row.turnStartedAt,
+            lastOutput: requestError ? undefined : row.lastAssistantMessage,
+            ...(requestError ? { requestError } : {})
+          }
+        },
+        this.deps
+      )
+    }
+    return true
+  }
+
   private observePane(paneKey: string): void {
     const row = this.deps.readHookRow(paneKey)
+    if (this.reportFailedLeadTurn(paneKey, row)) {
+      return
+    }
+    this.failedSince.delete(paneKey)
     const wait = row ? agentBackgroundWait(row) : null
     if (wait) {
       if (this.waitingSince.get(paneKey) === wait.since) {
