@@ -4,11 +4,31 @@ import {
 } from '../../shell/launch/powershell-native-argument'
 import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../shell/command-resolution/command-token-scanner'
 import { readLaunchArguments, readLaunchPosition, type LaunchPosition } from './launch-position'
+import { tokenizeStartupCommand } from './tui-agent-startup-shell'
 
 const SCRIPT_HEAD = /& \{ (\$orcaProgram = |param\(\$orcaProgram\); )/
 const SCRIPT_END = ' } --'
 const INVOCATION = '& $orcaProgram @orcaNativeArgs'
 const ESCAPE_FUNCTION = getPowerShellEscapeNativeArgsFunction({ inline: true })
+const NOT_PLAIN_WORD = /['"`$@\u2018-\u201E]/
+
+/** A native program gets a bare a,b as one argument but a script block gets an array: quote plain words. */
+function quoteBareCommaWords(tail: string): string {
+  const parsed = tokenizeStartupCommand(tail, 'powershell', true)
+  if (!parsed.ok) {
+    return tail
+  }
+  let out = ''
+  let end = 0
+  for (const span of parsed.spans) {
+    const word = tail.slice(span.start, span.end)
+    if (word.includes(',') && !NOT_PLAIN_WORD.test(word)) {
+      out += tail.slice(end, span.start) + quotePowerShellLiteral(word)
+      end = span.end
+    }
+  }
+  return out + tail.slice(end)
+}
 
 export function powerShellNativeLaunch(
   command: string,
@@ -21,11 +41,8 @@ export function powerShellNativeLaunch(
   if (command.includes('--%', launch.end) && (args?.includes('--%') ?? true)) {
     return command
   }
-  // A native program gets a bare a,b as one argument, but a script block gets an array: quote literal argv.
-  const suffix =
-    args && command.includes(',', launch.end)
-      ? args.map((arg) => ` ${quotePowerShellLiteral(arg)}`).join('')
-      : command.slice(launch.end)
+  const tail = command.slice(launch.end)
+  const suffix = args && tail.includes(',') ? quoteBareCommaWords(tail) : tail
   const escape = `if (-not (Test-Path Function:__OrcaEscapeNativeArgs)) { ${ESCAPE_FUNCTION} }; $orcaNativeArgs = @(__OrcaEscapeNativeArgs $orcaProgram (${prependArgs}@($args))); `
   // PowerShell consumes the first -- for a script block, preserving later -- and leaving flags unbound.
   const program = quotePowerShellLiteral(launch.executable)
