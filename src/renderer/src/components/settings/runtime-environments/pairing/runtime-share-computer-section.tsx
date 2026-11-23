@@ -17,6 +17,7 @@ import {
 import { MachineNameField } from '../../../machine-identity/MachineNameField'
 import { RuntimePairingUrlGenerator } from './RuntimePairingUrlGenerator'
 import { usePublishedMachineName } from '../../../machine-identity/use-published-machine-name'
+import { runtimePairingLinkCache } from './runtime-pairing-link-state'
 
 /** Desktop only: the block under the server list that lets other devices pair with this computer. */
 export function RuntimeShareComputerSection(): React.JSX.Element {
@@ -31,8 +32,23 @@ export function RuntimeShareComputerSection(): React.JSX.Element {
 
   const loadRuntimeAccessGrants = useCallback(async () => {
     const request = ++accessGrantRequest.current
+    const { runtimePairingDeviceId } = runtimePairingLinkCache
     const result = await window.api.mobile.listRuntimeAccessGrants().catch(() => null)
     if (mountedRef.current && request === accessGrantRequest.current) {
+      if (
+        result &&
+        runtimePairingDeviceId !== null &&
+        runtimePairingDeviceId === runtimePairingLinkCache.runtimePairingDeviceId
+      ) {
+        const generatedGrant = result.grants.find(
+          (grant) => grant.deviceId === runtimePairingDeviceId
+        )
+        runtimePairingLinkCache.grantStatus = !generatedGrant
+          ? 'removed'
+          : generatedGrant.lastSeenAt === null
+            ? 'unused'
+            : 'used'
+      }
       setRuntimeAccessGrants(result?.grants ?? null)
     }
   }, [mountedRef])

@@ -220,7 +220,7 @@ export function RuntimePairingUrlGenerator({
         return
       }
       onAccessGrantRevoked(grant.deviceId)
-      if (runtimePairingDeviceId === grant.deviceId) {
+      if (runtimePairingLinkCache.runtimePairingDeviceId === grant.deviceId) {
         clearGeneratedUrls()
       }
       if (mountedRef.current) {
@@ -249,10 +249,13 @@ export function RuntimePairingUrlGenerator({
     }
   }
 
+  const grantStatus =
+    runtimePairingDeviceId === runtimePairingLinkCache.runtimePairingDeviceId
+      ? runtimePairingLinkCache.grantStatus
+      : 'unknown'
   const linkExpiry = useRuntimePairingLinkExpiry({
     expiresAt,
-    grantId: runtimePairingDeviceId,
-    grants: runtimeAccessGrants,
+    used: grantStatus === 'used',
     onExpired: () => void loadRuntimeAccessGrants()
   })
 
@@ -317,6 +320,7 @@ export function RuntimePairingUrlGenerator({
           runtimePairingUrl={runtimePairingUrl}
           copiedTarget={copiedTarget}
           generatedAddress={generatedAddress}
+          grantRemoved={grantStatus === 'removed'}
           linkExpiry={linkExpiry}
           onIntentChange={updateIntent}
           onSelectedAddressChange={updateSelectedAddress}
