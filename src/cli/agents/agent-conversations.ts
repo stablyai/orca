@@ -6,6 +6,7 @@ import {
 } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
+import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 import type { RuntimeClient } from '../runtime/client'
 import { getOptionalWorktreeSelector } from '../workspace-selection/workspace-selector'
 import {
@@ -70,11 +71,22 @@ export const AGENT_CONVERSATION_HANDLERS: Record<string, CommandHandler> = {
         `--limit can be at most ${AGENT_READ_MAX_LIMIT}.`
       )
     }
+    const cursor = getOptionalStringFlag(flags, 'cursor')
     const result = await callAgentMethod<AgentReadResult>(client, 'agent.read', {
       id: getRequiredStringFlag(flags, 'id'),
-      ...(limit !== undefined ? { limit } : {})
+      ...(limit !== undefined ? { limit } : {}),
+      ...(cursor !== undefined ? { cursor } : {})
     })
-    printResult(result, json, formatAgentRead)
+    // An older host ignores the cursor and would answer with the newest page.
+    if (cursor !== undefined && result.result.nextCursor === undefined) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'Update Orca on that host to page agent reads.'
+      )
+    }
+    printResult(result, json, (read) =>
+      formatAgentRead(read, { limit, cursorRead: cursor !== undefined })
+    )
   }
 }
 
@@ -153,21 +165,52 @@ function formatTool(tool: AgentReadTool): string {
   return `[tool ${tool.name}${tool.state ? `: ${tool.state}` : ''}]`
 }
 
-function formatAgentRead(result: AgentReadResult): string {
+function formatAgentRead(
+  result: AgentReadResult,
+  call: { limit: number | undefined; cursorRead: boolean }
+): string {
   const lines = result.entries.map((entry) =>
     entry.shortened
       ? `${formatEntry(entry)}\n[shortened to fit; open it in Orca to see it whole]`
       : formatEntry(entry)
   )
-  if (result.limited) {
-    lines.push('[Some conversation content was omitted or shortened; open it in Orca to see more.]')
-  } else if (lines.length === 0) {
-    lines.push('Nothing new.')
+  const { nextCursor } = result
+  if (nextCursor === undefined) {
+    // A host that can't page: its `limited` is the only sign that older entries exist.
+    if (result.limited) {
+      lines.push(
+        '[Some conversation content was omitted or shortened; open it in Orca to see more.]'
+      )
+    } else if (lines.length === 0) {
+      lines.push('Nothing new.')
+    }
+  } else {
+    if (lines.length === 0) {
+      lines.push(call.cursorRead || nextCursor ? 'No entries in this part.' : 'Nothing new.')
+    }
+    if (nextCursor) {
+      lines.push(`Older: ${olderPageCommand(result.orcaSessionId, nextCursor, call.limit)}`)
+    }
   }
   if (result.state) {
     lines.unshift(`state: ${result.state}`)
   }
   return lines.join('\n')
+}
+
+/** The command that reads the next older page, with the caller's page size. */
+function olderPageCommand(orcaSessionId: string, cursor: string, limit: number | undefined) {
+  return [
+    'orca',
+    'agent',
+    'read',
+    `${ORCA_SESSION_ADDRESS_PREFIX}${orcaSessionId}`,
+    '--cursor',
+    cursor,
+    ...(limit !== undefined ? ['--limit', String(limit)] : [])
+  ]
+    .map(quoteCliCommandArgument)
+    .join(' ')
 }
 
 function formatEntry(entry: AgentReadEntry): string {

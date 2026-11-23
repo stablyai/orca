@@ -1,22 +1,15 @@
 import {
   AGENT_CONVERSATION_REFUSAL_CODES as CODES,
   AGENT_READ_DEFAULT_LIMIT,
-  type AgentReadEntry,
   type AgentReadResult
 } from '../../../shared/agent-conversations/agent-conversation-contracts'
-import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
-import type { AgentStatusState } from '../../../shared/agent-status/contracts/agent-status-types'
-import type { NativeChatTurnEvidence } from '../../native-chat/transcript-decoding/transcript-turn-evidence'
 import type { RpcContext } from '../rpc/core'
 import {
   requireInstalledStructuredHost,
   requireStructuredAgentAudience
 } from '../rpc/methods/structured-sessions/creation/structured-agent-session-gate'
 import { resolveLineageRunningSession } from '../orchestration/addressing/session-lineage/structured-session-lineage'
-import {
-  canReadWorkerTranscript,
-  readWorkerTranscript
-} from '../orchestration/workers/transcripts/worker-transcript-read'
+import { canReadWorkerTranscript } from '../orchestration/workers/transcripts/worker-transcript-read'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { TerminalAgentTranscriptSource } from '../../agent-hooks/server/server-agent-identities'
 import { sameProviderKey } from '../../agent-hooks/identity/agent-provider-key'
@@ -28,8 +21,10 @@ import {
 } from '../../agent-hooks/identity/agent-identity-worker-protocol'
 import type { ResolvedAgentConversation } from './agent-conversation-address'
 import { AgentConversationRefusal } from './agent-conversation-refusal'
+import { invalidAgentReadCursor } from './agent-read-cursor'
+import { readTerminalAgentPage } from './terminal-agent-read-page'
 
-type ReadRequest = { limit?: number }
+type ReadRequest = { limit?: number; cursor?: string }
 
 /** One page of what an agent said, by its conversation, never by a pane: a chat's own history,
  *  or a terminal agent's transcript. Reading needs no running agent and never starts one.
@@ -44,9 +39,14 @@ export async function readAgentConversation(
   request: ReadRequest
 ): Promise<AgentReadResult> {
   const limit = request.limit ?? AGENT_READ_DEFAULT_LIMIT
-  return resolved.kind === 'chat'
-    ? readChat(ctx, resolved, limit)
-    : readTerminalTranscript(ctx, resolved.orcaSessionId, limit)
+  if (resolved.kind === 'chat') {
+    // Chats don't page yet, so no cursor was ever issued for one.
+    if (request.cursor !== undefined) {
+      throw invalidAgentReadCursor(resolved.orcaSessionId)
+    }
+    return readChat(ctx, resolved, limit)
+  }
+  return readTerminalTranscript(ctx, resolved.orcaSessionId, limit, request.cursor)
 }
 
 async function readChat(
@@ -87,7 +87,8 @@ async function readChat(
 async function readTerminalTranscript(
   ctx: RpcContext,
   orcaSessionId: string,
-  limit: number
+  limit: number,
+  cursor: string | undefined
 ): Promise<AgentReadResult> {
   const locate = (
     known?: TerminalAgentTranscriptSource
@@ -130,20 +131,16 @@ async function readTerminalTranscript(
       `Orca can't read ${tuiAgentDisplayName(key.agent) ?? key.agent} agent ${orcaSessionId}'s transcript because its saved location doesn't identify which WSL distro holds it. Run \`orca agent show ${orcaSessionId}\` to find any open terminal for this agent and view it there.`
     )
   }
-  const transcript = await readWorkerTranscript({
+  const page = await readTerminalAgentPage({
+    orcaSessionId,
     agent: key.agent,
     sessionId: providerSession.id,
     transcriptPath: providerSession.transcriptPath,
     // The key's own distro keeps a WSL agent's guest path on that guest.
     ...(key.wslDistro ? { wslDistro: key.wslDistro } : {}),
-    limit
+    limit,
+    ...(cursor !== undefined ? { cursor } : {})
   })
-  if (!transcript.ok) {
-    throw new AgentConversationRefusal(
-      CODES.noTranscript,
-      `Orca couldn't read agent ${orcaSessionId}'s transcript (${transcript.reason.replaceAll('_', ' ')}).`
-    )
-  }
   // What vouched for the file may have ended, or the conversation moved to another file, meanwhile.
   const after = await locate(source)
   if (
@@ -158,66 +155,14 @@ async function readTerminalTranscript(
       `Agent ${orcaSessionId}'s transcript changed while Orca was reading it. Read it again.`
     )
   }
-  const entries = transcriptEntries(transcript.messages)
-  const state = transcriptTurnState(transcript.turn, transcript.messages, entries)
   return {
     orcaSessionId,
     kind: 'terminal',
     agent: key.agent,
     source: 'transcript',
-    entries,
-    limited: transcript.limited,
-    ...(state ? { state } : {})
+    entries: page.entries,
+    limited: page.limited,
+    nextCursor: page.nextCursor,
+    ...(page.state ? { state: page.state } : {})
   }
-}
-
-/** The newest turn marker in the bytes read: a prompt with no end after it is `working`; `done`
- *  needs an explicit end whose reply is the newest entry here. Anything else is unknown. */
-function transcriptTurnState(
-  turn: NativeChatTurnEvidence | undefined,
-  messages: readonly NativeChatMessage[],
-  entries: readonly AgentReadEntry[]
-): AgentStatusState | undefined {
-  if (turn?.state === 'working') {
-    return 'working'
-  }
-  const reply = entries.at(-1)
-  const newest = messages.findLastIndex((message) => transcriptEntries([message]).length > 0)
-  return turn?.state === 'completed' &&
-    turn.replyIndex === newest &&
-    reply?.kind === 'message' &&
-    reply.role === 'assistant' &&
-    reply.text.trim().length > 0
-    ? 'done'
-    : undefined
-}
-
-/** One entry per transcript message, its tool calls folded in, so `limit` messages are at most
- *  `limit` entries. */
-function transcriptEntries(messages: readonly NativeChatMessage[]): AgentReadEntry[] {
-  const entries: AgentReadEntry[] = []
-  for (const message of messages) {
-    if (message.role === 'reasoning' || message.role === 'tool') {
-      continue
-    }
-    const text = message.blocks
-      .map((block) => (block.type === 'text' ? block.text : ''))
-      .filter((part) => part.length > 0)
-      .join('\n')
-      .trim()
-    const tools = message.blocks.flatMap((block) =>
-      block.type === 'tool-call'
-        ? [{ name: block.name, ...(block.state ? { state: block.state } : {}) }]
-        : []
-    )
-    if (text.length > 0 || tools.length > 0) {
-      entries.push({
-        kind: 'message',
-        role: message.role,
-        text,
-        ...(tools.length > 0 ? { tools } : {})
-      })
-    }
-  }
-  return entries
 }

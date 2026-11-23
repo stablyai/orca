@@ -68,7 +68,8 @@ export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecyc
 ): Promise<{
   messages: NativeChatMessage[]
   lifecycle?: L
-  messageOffsets?: number[]
+  /** Each returned message's record start, in the same order. */
+  messageOffsets: number[]
   consumedTo: number
   hasMore: boolean
   beforeOffset: number
@@ -83,7 +84,7 @@ export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecyc
   )
   signal?.throwIfAborted()
   if (end === 0) {
-    return { messages: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
+    return { messages: [], messageOffsets: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
   }
   const handle = await openTranscriptFile(filePath, 'exact', signal)
   const lineParts: Buffer[] = []
@@ -99,12 +100,12 @@ export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecyc
       ? end
       : await findLastCompleteLineEnd(handle, filePath, end, signal)
     if (consumedTo === 0) {
-      return { messages: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
+      return { messages: [], messageOffsets: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
     }
     const newestFirst: { message: NativeChatMessage; offset: number }[] = []
     const finalByte = await readTranscriptByteAt(handle, filePath, consumedTo - 1, signal)
     if (finalByte === null) {
-      return { messages: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
+      return { messages: [], messageOffsets: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
     }
     ignoreNextMalformedRecord = finalByte !== 0x0a
     let cursor = consumedTo - (finalByte === 0x0a ? 1 : 0)
@@ -170,7 +171,7 @@ export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecyc
     const selected = limit > 0 ? chronological.slice(Math.max(0, chronological.length - limit)) : []
     return {
       messages: selected.map((entry) => entry.message),
-      ...(onDecodedLine ? { messageOffsets: selected.map((entry) => entry.offset) } : {}),
+      messageOffsets: selected.map((entry) => entry.offset),
       ...(lifecycle ? { lifecycle } : {}),
       consumedTo,
       hasMore: limit > 0 && chronological.length > limit,

@@ -60,8 +60,12 @@ export type AgentReadResult = {
    *  `working`; check `orca agent show`. */
   state?: AgentStatusState
   entries: AgentReadEntry[]
-  /** Conversation content was omitted or an entry was shortened. */
+  /** Conversation content was omitted or an entry was shortened. Kept for older CLIs; use
+   *  `nextCursor` and each entry's `shortened`. */
   limited: boolean
+  /** Reads the next older page ("next" means older) when passed back as `cursor`; null when no
+   *  older page can be read. Absent only from hosts that can't page. */
+  nextCursor?: string | null
 }
 
 export const AGENT_READ_DEFAULT_LIMIT = 20
@@ -74,5 +78,9 @@ export const AGENT_CONVERSATION_REFUSAL_CODES = {
   terminalHandle: 'agent_terminal_handle',
   invalidId: 'agent_invalid_id',
   unavailable: 'agent_unavailable',
-  noTranscript: 'agent_no_transcript'
+  noTranscript: 'agent_no_transcript',
+  /** The cursor was valid but no longer fits the agent's history: read again without it. */
+  cursorStale: 'agent_cursor_stale',
+  /** The cursor was never valid for this agent: malformed, unknown version, or another agent's. */
+  cursorInvalid: 'agent_cursor_invalid'
 } as const

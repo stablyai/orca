@@ -2,19 +2,14 @@ import { open } from 'node:fs/promises'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import {
   MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
-  readNativeChatTranscriptTailFile,
   type NativeChatLineDecoder
 } from '../../../../native-chat/transcript-tail-reader'
 import { TAIL_CHUNK_BYTES } from '../../../../native-chat/transcript-watching/transcript-tail-boundary'
-import type {
-  nativeChatTurnEvidenceObserverForAgent,
-  NativeChatTurnEvidence
-} from '../../../../native-chat/transcript-decoding/transcript-turn-evidence'
+import type { NativeChatTurnEvidence } from '../../../../native-chat/transcript-decoding/transcript-turn-evidence'
 import { transcriptFallbackId } from '../../../../native-chat/transcript-streaming/transcript-fallback-id'
 import {
   localTranscriptOffsetStartsInsideRecord,
   readLocalTranscriptHandleBoundaryCheckpoint,
-  readLocalTranscriptPathBoundaryCheckpoint,
   readLocalTranscriptSourceIdentity
 } from './worker-transcript-local-checkpoint'
 import {
@@ -37,65 +32,18 @@ type LocalTranscriptReadSuccess = {
   warnings: string[]
   /** An initial page's newest turn marker, from the bytes it decoded. */
   turn?: NativeChatTurnEvidence
+  /** A tail page's backward boundary: where the next older page ends, or null at the file start. */
+  older?: WorkerTranscriptOlderBoundary | null
 }
+
+/** The start of the oldest message a tail page kept, and the hash of the bytes before it. */
+export type WorkerTranscriptOlderBoundary = { offset: number; boundaryCheckpoint: string }
 
 type LocalTranscriptPage = Omit<LocalTranscriptReadSuccess, 'boundaryCheckpoint'>
 
-type LocalTranscriptReadResult =
+export type LocalTranscriptReadResult =
   | { ok: false; reason: 'source_changed' | 'transcript_unreadable'; warnings: string[] }
   | LocalTranscriptReadSuccess
-
-export async function readInitialLocalWorkerTranscriptPage(
-  filePath: string,
-  limit: number,
-  decode: NativeChatLineDecoder,
-  turnObserver: ReturnType<typeof nativeChatTurnEvidenceObserverForAgent>
-): Promise<LocalTranscriptReadResult> {
-  const before = await readLocalTranscriptSourceIdentity(filePath)
-  if (!before) {
-    return { ok: false, reason: 'transcript_unreadable', warnings: [] }
-  }
-  const page = await readNativeChatTranscriptTailFile(
-    filePath,
-    limit,
-    decode,
-    false,
-    undefined,
-    null,
-    undefined,
-    undefined,
-    false,
-    turnObserver?.observe
-  )
-  const after = await readLocalTranscriptSourceIdentity(filePath)
-  if (workerTranscriptSourceChanged(before, after, page.consumedTo)) {
-    return sourceChanged()
-  }
-  const boundaryCheckpoint = await readLocalTranscriptPathBoundaryCheckpoint(
-    filePath,
-    before,
-    page.consumedTo
-  )
-  if (!boundaryCheckpoint) {
-    return sourceChanged()
-  }
-  const turn =
-    page.malformedRecordCount || page.oversizedRecordCount
-      ? undefined
-      : turnObserver?.result(page.messageOffsets ?? [])
-  return {
-    ok: true,
-    filePath,
-    sourceFingerprint: before.fingerprint,
-    boundaryCheckpoint,
-    messages: page.messages,
-    nextOffset: page.consumedTo,
-    limited: page.hasMore,
-    clipping: [],
-    warnings: recordWarnings(page.malformedRecordCount, page.oversizedRecordCount),
-    ...(turn ? { turn } : {})
-  }
-}
 
 export async function readForwardLocalWorkerTranscriptPage(
   filePath: string,
@@ -297,11 +245,11 @@ function emptyPage(
   }
 }
 
-function sourceChanged(): Extract<LocalTranscriptReadResult, { ok: false }> {
+export function sourceChanged(): Extract<LocalTranscriptReadResult, { ok: false }> {
   return { ok: false, reason: 'source_changed', warnings: [] }
 }
 
-function recordWarnings(malformed = 0, oversized = 0, scanLimited = false): string[] {
+export function recordWarnings(malformed = 0, oversized = 0, scanLimited = false): string[] {
   const warnings: string[] = []
   if (malformed > 0) {
     warnings.push(`${malformed} malformed transcript record(s) were skipped.`)

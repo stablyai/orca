@@ -32,18 +32,20 @@ export const AGENT_CONVERSATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['agent', 'read'],
     summary: 'Read what an agent said, by its Orca session ID',
-    usage: 'orca agent read <id> [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'limit'],
+    usage: 'orca agent read <id> [--limit <n>] [--cursor <cursor>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id', 'limit', 'cursor'],
     positionalArgs: ['id'],
     notes: [
       "Reads the conversation, not a terminal screen: a chat's history, or a terminal agent's own transcript. The agent need not be running, and reading never starts it.",
-      '--limit is the number of newest entries (default 20, at most 100).',
+      '--limit is the number of entries per page (default 20, at most 100).',
+      'Pages go from newest to older. When older entries exist, the output ends with an `Older:` command that reads the next page; repeat it until none is printed to read everything. `--json` carries it as `nextCursor`.',
       'The output can start with a state for the latest turn this history records: `working` means it shows an unfinished turn, so its reply may not be there yet. A terminal agent that exited mid-turn may keep reading `working`; check `orca agent show`. No state means unknown, never done. `orca agent list` and `show` report the last state known to Orca, which may differ.',
       'A terminal agent can be read while Orca knows where its transcript is: while it is open, or asleep in a workspace. On Windows, a sleeping agent that ran in WSL can be read once its tab is reopened.'
     ],
     examples: [
       'orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --limit 10',
-      'orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --json'
+      'orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --json',
+      'orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --cursor <cursor from the Older: line>'
     ]
   }
 ]

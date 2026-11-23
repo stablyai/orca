@@ -16,13 +16,15 @@ const MAX_WORKER_TRANSCRIPT_INPUT_ITEMS = 20
 const MAX_WORKER_TRANSCRIPT_INPUT_NODES = 100
 // Bound all metadata independently of roster limits so roster tuning cannot silently widen other fields.
 const MAX_WORKER_TRANSCRIPT_METADATA_CHARS = 512
-const MAX_WORKER_TRANSCRIPT_RESPONSE_BYTES = 512 * 1024
+export const MAX_WORKER_TRANSCRIPT_RESPONSE_BYTES = 512 * 1024
 const TRUNCATION_MARKER = '\n… (truncated)'
-const WIRE_SIZE_CLIPPED_WARNING = 'Transcript response was clipped to the wire-size limit.'
+export const WIRE_SIZE_CLIPPED_WARNING = 'Transcript response was clipped to the wire-size limit.'
 
-type TranscriptBoundState = {
+export type TranscriptBoundState = {
   warnings: Set<string>
   clipped: boolean
+  /** The message being bounded lost a block or text a reader would show. */
+  shownContentCut?: boolean
 }
 
 export function clampWorkerTranscriptLimit(limit: number | undefined): number {
@@ -78,52 +80,7 @@ export function pageWorkerTranscriptMessages(args: {
   }
 }
 
-/** Apply message bounds newest-first for archives; forward-page head bounds would lose the worker's final answer. */
-export function boundWorkerTranscriptTail(
-  messages: readonly NativeChatMessage[],
-  maxBytes: number
-): { messages: NativeChatMessage[]; limited: boolean; warnings: string[] } {
-  const tail = boundNewestFirst(messages, maxBytes, undefined)
-  return { messages: tail.messages, limited: tail.cut, warnings: tail.warnings }
-}
-
-/** A first page is the transcript's newest messages, so the byte budget drops its oldest, never the latest work. */
-export function boundWorkerTranscriptNewest(
-  messages: readonly NativeChatMessage[],
-  transcriptPath: string
-): { messages: NativeChatMessage[]; limited: boolean; warnings: string[] } {
-  const tail = boundNewestFirst(messages, MAX_WORKER_TRANSCRIPT_RESPONSE_BYTES, transcriptPath)
-  return {
-    messages: tail.messages,
-    limited: tail.cut || tail.clipped,
-    warnings: tail.cut ? [...new Set([...tail.warnings, WIRE_SIZE_CLIPPED_WARNING])] : tail.warnings
-  }
-}
-
-function boundNewestFirst(
-  messages: readonly NativeChatMessage[],
-  maxBytes: number,
-  transcriptPath: string | undefined
-): { messages: NativeChatMessage[]; cut: boolean; clipped: boolean; warnings: string[] } {
-  const state: TranscriptBoundState = { warnings: new Set<string>(), clipped: false }
-  const keptReversed: NativeChatMessage[] = []
-  let bytes = 2
-  let cut = false
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const next = boundMessage(messages[index]!, transcriptPath, state)
-    const serializedBytes = Buffer.byteLength(JSON.stringify(next), 'utf8') + 1
-    if (keptReversed.length > 0 && bytes + serializedBytes > maxBytes) {
-      cut = true
-      break
-    }
-    keptReversed.push(next)
-    bytes += serializedBytes
-  }
-  keptReversed.reverse()
-  return { messages: keptReversed, cut, clipped: state.clipped, warnings: [...state.warnings] }
-}
-
-function boundMessage(
+export function boundMessage(
   message: NativeChatMessage,
   transcriptPath: string | undefined,
   state: TranscriptBoundState
@@ -131,6 +88,7 @@ function boundMessage(
   const blocks = message.blocks.slice(0, MAX_WORKER_TRANSCRIPT_BLOCKS)
   if (blocks.length < message.blocks.length) {
     markClipped(state, 'Some transcript blocks were omitted from oversized messages.')
+    state.shownContentCut = true
   }
   // The journal position only orders a live list; a worker read is already in order.
   const { journalPosition: _journalPosition, ...served } = message
@@ -147,7 +105,9 @@ function boundMessage(
 
 function boundBlock(block: NativeChatBlock, state: TranscriptBoundState): NativeChatBlock {
   if (block.type === 'text') {
-    return { ...block, text: clipText(block.text, state) }
+    const text = clipText(block.text, state)
+    state.shownContentCut ||= text.length > MAX_WORKER_TRANSCRIPT_BLOCK_CHARS
+    return { ...block, text }
   }
   if (block.type === 'tool-result') {
     return { ...block, output: clipText(block.output, state) }
