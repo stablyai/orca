@@ -33,4 +33,15 @@ describe('scheduled profile save', () => {
     await vi.advanceTimersByTimeAsync(10 * 60_000)
     expect(authority.writeFailures).toBe(attempts)
   })
+
+  it('retries a refused flush of already-saved state through the writer', async () => {
+    const { store, authority } = await fixture()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    authority.failNextWrite()
+    await expect(store.flushPendingOrThrowAsync()).rejects.toThrow()
+    const afterRefusal = authority.commands
+
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(authority.commands).toBeGreaterThan(afterRefusal)
+  })
 })

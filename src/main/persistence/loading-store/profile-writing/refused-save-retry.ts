@@ -27,11 +27,13 @@ type SaveRetryRuntime = Pick<
 export function runScheduledSave(
   runtime: SaveRetryRuntime,
   writes: PrimaryStateWriteOperations,
-  retryDelayMs = SAVE_RETRY_MS
+  retryDelayMs = SAVE_RETRY_MS,
+  retrying = false
 ): void {
   runtime.writeTimer = null
   runtime.firstPendingSaveAt = null
-  void enqueueWrite(writes, { skipIfClean: true }).catch((error: unknown) =>
+  // A retry must reach the writer even with nothing dirty (a refused flush of clean state); its acknowledgement clears the warning.
+  void enqueueWrite(writes, { skipIfClean: !retrying }).catch((error: unknown) =>
     retryRefusedSave(runtime, writes, error, retryDelayMs)
   )
 }
@@ -47,7 +49,10 @@ export function retryRefusedSave(
     return
   }
   const nextDelayMs = Math.min(delayMs * 2, MAX_SAVE_RETRY_MS)
-  runtime.writeTimer = setTimeout(() => runScheduledSave(runtime, writes, nextDelayMs), delayMs)
+  runtime.writeTimer = setTimeout(
+    () => runScheduledSave(runtime, writes, nextDelayMs, true),
+    delayMs
+  )
 }
 
 /** A flush cancelled before its write ran cleared the save timer; put a save back so its changes are not stranded. */

@@ -34,6 +34,7 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
   readonly captures: ProfileStateDomainReplacement[][] = []
   private failuresLeft = 0
   writeFailures = 0
+  commands = 0
   savingStopped = false
   readonly close = vi.fn(async () => {
     this.inner.close()
@@ -117,6 +118,7 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
     return this.inner.quarantineDatabase(root, reason)
   }
   private async dispatch(operation: () => void, write = false) {
+    this.commands += 1
     const gate = this.next
     this.next = undefined
     gate?.started.resolve()

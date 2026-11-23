@@ -3,6 +3,7 @@ import { profileStateWriterFailureOutcome } from './profile-state-writer-errors'
 import { ProfileStateWriteWorkerClient } from './profile-state-writer-worker-client'
 import type { ProfileStateWorkerAuthorityOptions } from '../profile-state-worker-authority'
 import {
+  isPermanentProfileStateOpenFailure,
   isProfileStateRevisionConflict,
   type ProfileStateWriterReopenPolicy
 } from './profile-state-writer-reopen-policy'
@@ -31,8 +32,8 @@ export function createProfileStateWriter(
       if (!isProfileStateSaveCommand(command)) {
         return
       }
-      // Another process moved the profile on, so no retry can save these changes.
-      if (isProfileStateRevisionConflict(error)) {
+      // Another process moved the profile on, or the database can never open again, so no retry can save these changes.
+      if (isProfileStateRevisionConflict(error) || isPermanentProfileStateOpenFailure(error)) {
         policy.reportStopped(error)
       } else {
         policy.recordSaveRefused(error)
