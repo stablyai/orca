@@ -9,7 +9,8 @@ const PHRASE = /stop listening to this thread/i
 const CLAIM =
   /\b(?:i've (?:muted|stopped|unfollowed|turned off|gone quiet)|i (?:have )?muted|i'm (?:now )?(?:muted|no longer|going quiet|staying quiet|not going to (?:reply|respond))|i'll (?:stop|no longer|stay quiet|go quiet|be quiet|keep quiet)|i won't (?:reply|respond|chime)|going quiet|staying quiet|(?:done|ok|okay)[,!.]? (?:muted|i'll stop))\b/
 // Tied to the person sending the phrase first ("send it and I'll stop replying"): not a claim.
-const CONDITIONAL = /\b(?:once|after|when|if|until|then|and i'll|and i will|that will|that'll)\b/
+const CONDITIONAL =
+  /\b(?:once you|after (?:that|you|it)|when you send|if you send|and i'll|and i will|that will|that'll|then i)\b/
 
 /** What reached the thread: the final message and any `bot reply` text. */
 function texts(outcome: EvalOutcome): string[] {
