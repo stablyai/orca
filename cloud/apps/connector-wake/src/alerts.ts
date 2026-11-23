@@ -61,14 +61,21 @@ async function readFiring(env: WakeAlertsEnv): Promise<Firing | null> {
   return ((await env.ALERT_STATE.get(STATE_KEY, 'json')) as Firing | null) ?? {}
 }
 
-async function post(env: WakeAlertsEnv, text: string): Promise<void> {
-  const response = await fetch(env.ALERT_WEBHOOK_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ text: `[connector-wake ${env.ENVIRONMENT}] ${text}` })
-  })
-  // Stateless, so a rejected post is not retried; the Worker's logs keep it.
-  if (!response.ok) { console.error(`connector-wake alerts: webhook answered ${response.status}: ${text}`) }
+// Whether the webhook took it. A rule's FIRING, STILL FIRING or RESOLVED is only recorded when it
+// did, so a rejected one is posted again next run; probe and read-failure posts are not retried.
+async function post(env: WakeAlertsEnv, text: string): Promise<boolean> {
+  try {
+    const response = await fetch(env.ALERT_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: `[connector-wake ${env.ENVIRONMENT}] ${text}` })
+    })
+    if (response.ok) { return true }
+    console.error(`connector-wake alerts: webhook answered ${response.status}: ${text}`)
+  } catch (error) {
+    console.error(`connector-wake alerts: webhook failed (${(error as Error).message}): ${text}`)
+  }
+  return false
 }
 
 async function probes(env: WakeAlertsEnv): Promise<string[]> {
@@ -78,19 +85,19 @@ async function probes(env: WakeAlertsEnv): Promise<string[]> {
   return [...(edge ? [`FIRING edge-probe: ${edge}`] : []), ...(object ? [`FIRING object-probe: ${object}`] : [])]
 }
 
-// Cloudflare's counts merged into both windows, anchored to the run's schedule like the SQL; an
-// unreadable API skips the rule and says so hourly.
-async function withCloudflare(env: WakeAlertsEnv, now: Counts, before: Counts, atMs: number, hourly: boolean): Promise<string | null> {
+// Cloudflare's counts merged into both windows, anchored to the run's schedule like the SQL.
+// Unreadable (or no token): false, so cloudflare-errors is skipped and keeps its state; a failed
+// read also says so hourly.
+async function withCloudflare(env: WakeAlertsEnv, now: Counts, before: Counts, atMs: number, hourly: boolean): Promise<{ read: boolean; warning: string | null }> {
   try {
     // Never the edge's script, which is the shared module's default.
     const counts = await cloudflareErrors({ ...env, CF_SCRIPT_NAME: env.CF_SCRIPT_NAME || DEFAULT_SCRIPT_NAME }, WINDOW_MIN, LAG_MIN, atMs)
-    if (counts) {
-      Object.assign(now, counts[0])
-      Object.assign(before, counts[1])
-    }
-    return null
+    if (!counts) { return { read: false, warning: null } }
+    Object.assign(now, counts[0])
+    Object.assign(before, counts[1])
+    return { read: true, warning: null }
   } catch (error) {
-    return hourly ? `alerts cannot read Cloudflare analytics: ${(error as Error).message}` : null
+    return { read: false, warning: hourly ? `alerts cannot read Cloudflare analytics: ${(error as Error).message}` : null }
   }
 }
 
@@ -115,30 +122,44 @@ export async function evaluate(env: WakeAlertsEnv, scheduledTime: number): Promi
   const before = window(rows, 2 * WINDOW_MIN + LAG_MIN, WINDOW_MIN + LAG_MIN)
   const rules = rulesOn(env)
   const hourly = new Date(scheduledTime).getUTCMinutes() < 5
-  const unreadable = rules.some((rule) => rule.id === 'cloudflare-errors')
+  const cloudflare = rules.some((rule) => rule.id === 'cloudflare-errors')
     ? await withCloudflare(env, now, before, scheduledTime, hourly)
-    : null
-  const fired: string[] = unreadable ? [unreadable] : []
+    : { read: false, warning: null }
+  const fired: string[] = []
+  if (cloudflare.warning) {
+    fired.push(cloudflare.warning)
+    await post(env, cloudflare.warning)
+  }
   const firing = await readFiring(env)
   const next: Firing = {}
   for (const rule of rules) {
     const was = firing?.[rule.id]
-    if (!rule.breach(now, limits, before)) {
-      if (was) { fired.push(`RESOLVED ${rule.id}`) }
+    // No counts to judge it by: it stays as it was.
+    if (rule.id === 'cloudflare-errors' && !cloudflare.read) {
+      if (was) { next[rule.id] = was }
       continue
     }
-    if (!was) {
-      fired.push(`FIRING ${rule.id}: ${rule.describe(now, limits)}`)
-      next[rule.id] = { since: scheduledTime, notified: scheduledTime }
+    let text: string | null = null
+    let entry = was
+    if (!rule.breach(now, limits, before)) {
+      if (was) {
+        text = `RESOLVED ${rule.id}`
+        entry = undefined
+      }
+    } else if (!was) {
+      text = `FIRING ${rule.id}: ${rule.describe(now, limits)}`
+      entry = { since: scheduledTime, notified: scheduledTime }
     } else if (scheduledTime - was.notified >= REPEAT_MS) {
-      fired.push(`STILL FIRING ${rule.id}: ${rule.describe(now, limits)}`)
-      next[rule.id] = { since: was.since, notified: scheduledTime }
-    } else {
-      next[rule.id] = was
+      text = `STILL FIRING ${rule.id}: ${rule.describe(now, limits)}`
+      entry = { since: was.since, notified: scheduledTime }
     }
+    if (text) {
+      fired.push(text)
+      // Rejected: the old state stands, so the next run posts it again.
+      if (!(await post(env, text))) { entry = was }
+    }
+    if (entry) { next[rule.id] = entry }
   }
-  for (const text of fired) { await post(env, text) }
-  // After the posts: a failed write repeats a post next run rather than losing one.
   if (env.ALERT_STATE && JSON.stringify(next) !== JSON.stringify(firing)) {
     await env.ALERT_STATE.put(STATE_KEY, JSON.stringify(next))
   }

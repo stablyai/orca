@@ -39,14 +39,14 @@ function memoryKv(): KVNamespace & { puts: number } {
 const at = (hour: number, minute: number) => Date.UTC(2026, 10, 22, hour, minute)
 
 type Run = { fired: string[]; posts: string[]; graphqlScript?: string; graphqlVars?: Record<string, string>; sql?: string }
-type Opts = { at?: number; env?: Partial<WakeAlertsEnv>; minutes?: Minutes; kv?: KVNamespace; sqlStatus?: number }
+type Opts = { at?: number; env?: Partial<WakeAlertsEnv>; minutes?: Minutes; kv?: KVNamespace; sqlStatus?: number; cfErrors?: number | 'fail'; hookStatus?: number }
 async function run(now: Partial<Row>, before: Partial<Row> = {}, opts: Opts = {}): Promise<Run> {
   const result: Run = { fired: [], posts: [] }
   vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
     const url = String(input)
     if (url === env.ALERT_WEBHOOK_URL) {
       result.posts.push(JSON.parse(String(init?.body)).text)
-      return new Response('ok')
+      return new Response('ok', { status: opts.hookStatus ?? 200 })
     }
     if (url === 'https://wake.test/v1/connector/wake') { return new Response(null, { status: 401 }) }
     if (url === 'https://wake.test/__health/object') { return Response.json({ ok: true }) }
@@ -54,7 +54,9 @@ async function run(now: Partial<Row>, before: Partial<Row> = {}, opts: Opts = {}
       const body = JSON.parse(String(init?.body))
       result.graphqlScript = body.variables.script
       result.graphqlVars = body.variables
-      return Response.json({ data: { viewer: { accounts: [{ w0: [], w1: [] }] } } })
+      if (opts.cfErrors === 'fail') { return new Response('no', { status: 500 }) }
+      const w0 = opts.cfErrors ? [{ sum: { requests: 1000 - opts.cfErrors }, dimensions: { status: 'success' } }, { sum: { requests: opts.cfErrors }, dimensions: { status: 'scriptThrewException' } }] : []
+      return Response.json({ data: { viewer: { accounts: [{ w0, w1: [] }] } } })
     }
     result.sql = String(init?.body)
     if (opts.sqlStatus) { return new Response('no', { status: opts.sqlStatus }) }
@@ -193,6 +195,26 @@ describe('wake alerts', () => {
   it('reads an empty result as zero counts, so silent still fires on a window with no rows', async () => {
     expect((await run({}, {}, { minutes: {} })).fired).toEqual([])
     expect((await run({}, {}, { minutes: { 20: healthy } })).fired).toEqual(['FIRING silent: no wake events in 15 min'])
+  })
+
+  it('keeps cloudflare-errors firing while Cloudflare analytics cannot be read, and resolves on a readable zero', async () => {
+    const kv = memoryKv()
+    expect((await run({}, {}, { kv, at: at(10, 17), cfErrors: 100 })).fired[0]).toMatch(/^FIRING cloudflare-errors/)
+    expect((await run({}, {}, { kv, at: at(10, 22), cfErrors: 'fail' })).fired).toEqual([])
+    expect((await run({}, {}, { kv, at: at(11, 2), cfErrors: 'fail' })).fired).toEqual(['alerts cannot read Cloudflare analytics: cloudflare analytics query failed: 500'])
+    expect((await run({}, {}, { kv, at: at(11, 7), cfErrors: 0 })).fired).toEqual(['RESOLVED cloudflare-errors'])
+  })
+
+  it('posts a FIRING or RESOLVED again next run when the webhook rejected it', async () => {
+    const kv = memoryKv()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect((await run({ wake_error: 3 }, {}, { kv, at: at(10, 17), hookStatus: 500 })).fired[0]).toMatch(/^FIRING wake-errors/)
+    expect((await run({ wake_error: 3 }, { wake_error: 3 }, { kv, at: at(10, 22) })).fired[0]).toMatch(/^FIRING wake-errors/)
+    expect((await run({ wake_error: 3 }, { wake_error: 3 }, { kv, at: at(10, 27) })).fired).toEqual([])
+    expect((await run({}, { wake_error: 3 }, { kv, at: at(10, 32), hookStatus: 500 })).fired).toEqual(['RESOLVED wake-errors'])
+    expect((await run({}, { wake_error: 3 }, { kv, at: at(10, 37) })).fired).toEqual(['RESOLVED wake-errors'])
+    expect((await run({}, {}, { kv, at: at(10, 42) })).fired).toEqual([])
+    vi.restoreAllMocks()
   })
 
   it('posts on every breaching run when no ALERT_STATE is bound', async () => {
