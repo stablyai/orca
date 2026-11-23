@@ -12,6 +12,8 @@ import { chatAwaitsResume } from './external-conversation-resume'
 
 // Resume from a thread continues a chat only while its newest turn is the failed one: a stale or
 // repeated press, after the chat was resumed in Orca or ran again, must not send a second continue.
+// This host owns its chats outright, as the other host rigs set it, on every platform.
+const OWNED = { probeOwner: async () => ({ outcome: 'pid-absent' as const }) }
 let rig: QueuedMessageTestRig | null = null
 afterEach(async () => {
   await rig?.dispose()
@@ -31,12 +33,21 @@ async function failedTurn(chat: QueuedMessageTestRig): Promise<void> {
     )
   chat.providerEvents().publish()
   // The failure reaches the journal after the provider event; wait for the chat to show it.
-  await eventually(async () => expect(await chatAwaitsResume(chat.host, SESSION)).toBe(true))
+  await eventually(async () => {
+    const work = chat.host.publishedWork(SESSION)
+    const page = await chat.host.history({ sessionId: SESSION, direction: 'tail' })
+    const seen = {
+      working: work?.working,
+      pause: await chat.queuePause(),
+      kinds: page.ok ? page.page.items.map((item) => item.body.kind) : page
+    }
+    expect(await chatAwaitsResume(chat.host, SESSION), JSON.stringify(seen)).toBe(true)
+  })
 }
 
 describe('chatAwaitsResume', () => {
   it('holds after a failed turn and lets go once Orca resumes the chat', async () => {
-    rig = await createQueuedMessageTestRig()
+    rig = await createQueuedMessageTestRig(OWNED)
     expect(await chatAwaitsResume(rig.host, SESSION)).toBe(false)
     await failedTurn(rig)
     expect(await chatAwaitsResume(rig.host, SESSION)).toBe(true)
@@ -46,7 +57,7 @@ describe('chatAwaitsResume', () => {
 
   // A person's send (a thread's Resume is one) runs at once rather than waiting behind the pause.
   it('lets go once someone sends in the chat after the failure', async () => {
-    rig = await createQueuedMessageTestRig()
+    rig = await createQueuedMessageTestRig(OWNED)
     await failedTurn(rig)
     expect(await chatAwaitsResume(rig.host, SESSION)).toBe(true)
     await rig.send('try it this way').result
