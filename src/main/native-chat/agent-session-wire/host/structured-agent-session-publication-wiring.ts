@@ -25,8 +25,8 @@ export function createStructuredAgentSessionPublicationWiring(input: {
       observeNativeChatPromptSubmissions(journal, rows)
     },
     forget: (id) => input.client().requestFailures.forget(id),
-    deliver: (id, journal, inputChanged) => {
-      input.client().subscribers.deliverFrames(id, journal, undefined, inputChanged)
+    deliver: (id, journal, inputChanged, writtenOnly) => {
+      input.client().subscribers.deliverFrames(id, journal, undefined, inputChanged, writtenOnly)
       input.client().publishJournal(id, journal, true, inputChanged)
       if (inputChanged) {
         input.delivery().afterCommit(id, journal)

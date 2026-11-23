@@ -31,6 +31,8 @@ export type JournalWriterPublication = {
   acceptedInputs?: JournalSqlAcceptedInputs
   editDeadline?: number | null
   referencedUploads?: string[]
+  /** Only a send's written stamp changed; readers that predate the stamp need no wake for it. */
+  writtenOnly?: true
 }
 
 export type JournalWriterCommit = {

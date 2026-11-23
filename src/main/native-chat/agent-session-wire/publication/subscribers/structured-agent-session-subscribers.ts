@@ -174,7 +174,9 @@ export class AgentSessionSubscribers {
     sessionId: string,
     journal: AgentSessionJournal,
     activity?: AgentSessionTurnActivity | null,
-    queueChanged = true
+    queueChanged = true,
+    /** Readers without queued-image cards predate the written stamp, so a stamp-only commit skips them. */
+    writtenOnly = false
   ): void {
     const hostNow = this.now()
     const port = this.deliveryPort(sessionId, journal, queueChanged)
@@ -182,7 +184,8 @@ export class AgentSessionSubscribers {
     // Subscribers whose waiting catch-up still owes a queue read share one port for it.
     const queuePort = () =>
       queueChanged ? port : (owedQueue ??= this.deliveryPort(sessionId, journal, true))
-    for (const subscriber of this.subscribers(sessionId)) {
+    const skipsStamp = (subscriber: Subscriber) => writtenOnly && subscriber.readQueueSourceIds
+    for (const subscriber of this.subscribers(sessionId).filter((one) => !skipsStamp(one))) {
       this.lanes.of(subscriber).catchUp({
         journal,
         port,

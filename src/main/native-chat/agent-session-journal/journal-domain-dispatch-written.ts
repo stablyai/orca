@@ -67,5 +67,6 @@ export function applyJournalDomainDispatchWritten(
     { fence: operation.fence, observedAt: savedAt }
   )
   result.cursor = { epoch: target.epoch, sequence }
+  result.writtenOnly = true
   return result
 }

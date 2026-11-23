@@ -42,7 +42,12 @@ export class StructuredAgentSessionConversations extends Map<
         commit?: JournalWriterCommit
       ) => void
       forget?: (sessionId: string) => void
-      deliver: (sessionId: string, journal: AgentSessionJournal, inputChanged?: boolean) => void
+      deliver: (
+        sessionId: string,
+        journal: AgentSessionJournal,
+        inputChanged?: boolean,
+        writtenOnly?: boolean
+      ) => void
       /** Settle edges write no row and renew no activity clock. */
       deliverSettleEdge?: (sessionId: string, journal: AgentSessionJournal) => void
       logger: StructuredAgentSessionLogger
@@ -74,6 +79,7 @@ export class StructuredAgentSessionConversations extends Map<
     this.attachments.get(sessionId)?.release()
     let queued = false
     let inputChanged = false
+    let writtenOnly = true
     const source = {
       journal,
       release: () => {
@@ -100,6 +106,7 @@ export class StructuredAgentSessionConversations extends Map<
         })
       }
       inputChanged ||= commit.inputChanged
+      writtenOnly &&= commit.publication?.writtenOnly === true
       if (queued) {
         return
       }
@@ -107,12 +114,14 @@ export class StructuredAgentSessionConversations extends Map<
       queueMicrotask(() => {
         queued = false
         const affectsInput = inputChanged
+        const onlyStamps = writtenOnly
         inputChanged = false
+        writtenOnly = true
         if (!current()) {
           return
         }
         try {
-          this.delivery.deliver(sessionId, journal, affectsInput)
+          this.delivery.deliver(sessionId, journal, affectsInput, onlyStamps)
         } catch (error) {
           this.delivery.logger.warn('delivering a journal commit failed', {
             scope: 'journal-delivery',
