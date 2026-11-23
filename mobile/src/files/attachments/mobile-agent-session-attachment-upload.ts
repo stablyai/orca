@@ -4,6 +4,7 @@ import {
   base64DecodedByteLength,
   type AgentSessionAttachmentUploadCommitResult
 } from '../../../../src/shared/agent-session/agent-session-attachments'
+import { agentSessionAttachmentByteAppends } from './mobile-attachment-byte-appends'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 
@@ -55,21 +56,47 @@ const attachmentUploadAbort = bindDeferredRpcOperation(
   })
 )
 
+type AttachmentAppend = { offset: number; contentBase64: string }
+
 type MobileAgentSessionAttachmentRpcSender = Parameters<typeof attachmentUploadStart.request>[0]
 
 export async function uploadMobileAgentSessionAttachment(
   client: MobileAgentSessionAttachmentRpcSender,
   args: { sessionId: string; name: string; base64: string }
 ): Promise<AgentSessionAttachmentUploadCommitResult> {
-  const { uploadId } = attachmentUploadStart.interpret(
-    await attachmentUploadStart.request(client, {
+  return uploadAppends(
+    client,
+    {
       sessionId: args.sessionId,
       name: args.name,
       byteLength: base64DecodedByteLength(args.base64)
-    })
+    },
+    agentSessionAttachmentAppends(args.base64)
+  )
+}
+
+/** Streams a picked file from its source, so the phone never holds more than one append of it. */
+export async function uploadMobileAgentSessionAttachmentBytes(
+  client: MobileAgentSessionAttachmentRpcSender,
+  args: { sessionId: string; name: string; byteLength: number; bytes: AsyncIterable<Uint8Array> }
+): Promise<AgentSessionAttachmentUploadCommitResult> {
+  return uploadAppends(
+    client,
+    { sessionId: args.sessionId, name: args.name, byteLength: args.byteLength },
+    agentSessionAttachmentByteAppends(args.bytes)
+  )
+}
+
+async function uploadAppends(
+  client: MobileAgentSessionAttachmentRpcSender,
+  start: { sessionId: string; name: string; byteLength: number },
+  appends: Iterable<AttachmentAppend> | AsyncIterable<AttachmentAppend>
+): Promise<AgentSessionAttachmentUploadCommitResult> {
+  const { uploadId } = attachmentUploadStart.interpret(
+    await attachmentUploadStart.request(client, start)
   )
   try {
-    for (const chunk of agentSessionAttachmentAppends(args.base64)) {
+    for await (const chunk of appends) {
       attachmentUploadAppend.interpret(
         await attachmentUploadAppend.request(client, { uploadId, ...chunk })
       )

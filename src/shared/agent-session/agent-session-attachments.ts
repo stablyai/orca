@@ -7,6 +7,9 @@ export const AGENT_SESSION_ATTACHMENTS_DIR_NAME = 'agent-session-attachments'
 
 export const AGENT_SESSION_ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024
 
+/** Chunked uploads append to a file on the host, so this bounds disk, not memory; phone videos need the room. */
+export const AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES = 150 * 1024 * 1024
+
 // Agents shrink images before their APIs see them, so these bound host memory, not API limits.
 export const AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT = 20
 export const AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES = 64 * 1024 * 1024

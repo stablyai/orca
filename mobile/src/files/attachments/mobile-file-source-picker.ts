@@ -6,12 +6,12 @@ import {
 } from '../../platform/media-picking/media-picker-contract'
 import {
   defaultMobileImageFileFactory,
-  readUriAsBase64,
   type MobileImageFileFactory
 } from './mobile-image-source-picker'
-import { base64DecodedByteLength } from '../../../../src/shared/agent-session/agent-session-attachments'
+import { AGENT_SESSION_ATTACHMENT_CHUNK_BYTES } from '../../../../src/shared/agent-session/agent-session-attachments'
 
 const UNKNOWN_FILE_MIME = 'application/octet-stream'
+const FILE_READ_CHUNK_BYTES = AGENT_SESSION_ATTACHMENT_CHUNK_BYTES
 
 type MobileFilePickerDeps = {
   readonly launch?: typeof DocumentPicker.getDocumentAsync
@@ -33,16 +33,47 @@ export async function* pickMobileFiles(
       continue
     }
     const name = asset.name.trim() || 'attachment'
-    const base64 = await readUriAsBase64(asset.uri, asset.size, createFile, (byteLength) => {
-      if (!Number.isFinite(byteLength) || byteLength > MOBILE_PICKED_FILE_MAX_BYTES) {
-        throw new MobileFileTooLargeError(name)
-      }
-    })
+    const file = createFile(asset.uri)
+    const byteLength = file.size
+    if (
+      (typeof asset.size === 'number' && asset.size > MOBILE_PICKED_FILE_MAX_BYTES) ||
+      !Number.isFinite(byteLength) ||
+      byteLength > MOBILE_PICKED_FILE_MAX_BYTES
+    ) {
+      throw new MobileFileTooLargeError(name)
+    }
     yield {
       name,
       mime: asset.mimeType ?? UNKNOWN_FILE_MIME,
-      byteLength: base64DecodedByteLength(base64),
-      base64
+      byteLength,
+      readBytes: () => readFileBytes(file, byteLength)
     }
+  }
+}
+
+// A file that changes size mid-read would commit something other than what was weighed, so refuse it.
+async function* readFileBytes(
+  file: ReturnType<MobileImageFileFactory>,
+  byteLength: number
+): AsyncGenerator<Uint8Array> {
+  const handle = file.open()
+  try {
+    let read = 0
+    for (;;) {
+      const bytes = handle.readBytesSync(FILE_READ_CHUNK_BYTES)
+      if (bytes.byteLength === 0) {
+        break
+      }
+      read += bytes.byteLength
+      if (read > byteLength) {
+        throw new Error('The file grew while it was being attached')
+      }
+      yield bytes
+    }
+    if (read !== byteLength) {
+      throw new Error('The file shrank while it was being attached')
+    }
+  } finally {
+    handle.close()
   }
 }

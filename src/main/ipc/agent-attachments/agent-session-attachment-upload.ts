@@ -5,7 +5,7 @@ import { lstat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import {
   AGENT_SESSION_ATTACHMENT_CHUNK_BYTES,
-  AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+  AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES,
   agentSessionPastedImageName,
   type AgentSessionAttachmentClipboardTarget,
   type AgentSessionAttachmentPathUploadResult,
@@ -195,12 +195,12 @@ export async function uploadExternalPathsToAgentSessionAttachments(
       result.skipped.push({ sourcePath, reason: 'unsupported' })
       continue
     }
-    if (entry.byteLength > AGENT_SESSION_ATTACHMENT_MAX_BYTES) {
+    if (entry.byteLength > AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES) {
       result.failed.push({
         sourcePath,
         reason:
           `'${basename(sourcePath)}' is ${formatByteCeiling(entry.byteLength)}, over the ` +
-          `${formatByteCeiling(AGENT_SESSION_ATTACHMENT_MAX_BYTES)} chat attachment limit`
+          `${formatByteCeiling(AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES)} chat attachment limit`
       })
       continue
     }
@@ -215,7 +215,7 @@ export async function uploadExternalPathsToAgentSessionAttachments(
             entryRelativePath: '',
             expected: entry,
             signal: context.signal,
-            maxFileBytes: AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+            maxFileBytes: AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES,
             limitLabel: 'chat attachment limit',
             writeSlice: appendSlice
           })

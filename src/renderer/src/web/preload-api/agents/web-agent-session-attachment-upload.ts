@@ -1,6 +1,6 @@
 import {
   AGENT_SESSION_ATTACHMENT_CHUNK_BYTES,
-  AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+  AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES,
   agentSessionAttachmentAppends,
   agentSessionPastedImageName,
   base64DecodedByteLength,
@@ -100,7 +100,7 @@ async function* browserFileAppends(file: Blob): AsyncGenerator<AttachmentAppend>
   } while (offset < file.size)
 }
 
-const MAX_MEGABYTES = AGENT_SESSION_ATTACHMENT_MAX_BYTES / (1024 * 1024)
+const MAX_MEGABYTES = AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES / (1024 * 1024)
 
 /** Upload picked/dropped file tokens to the paired chat store in input order, matching desktop path uploads. */
 export async function uploadBrowserFilesToWebAgentSessionAttachments(
@@ -114,7 +114,7 @@ export async function uploadBrowserFilesToWebAgentSessionAttachments(
       result.failed.push({ sourcePath, reason: 'Attach the file again.' })
       continue
     }
-    if (file.size > AGENT_SESSION_ATTACHMENT_MAX_BYTES) {
+    if (file.size > AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES) {
       result.failed.push({
         sourcePath,
         reason: `'${file.name}' is over the ${MAX_MEGABYTES} MB chat attachment limit`

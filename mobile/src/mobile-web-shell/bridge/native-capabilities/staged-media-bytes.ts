@@ -13,20 +13,24 @@ function decodeBase64(value: string): Uint8Array {
   return bytes
 }
 
-// Join decoded bytes, then encode once; concatenated base64 chunks can put padding inside the file. Ask within the shell’s own chunk cap.
-export async function readStagedMediaItem(
+/** Decoded bytes of a staged item in the shell's own read size; checks the total against the declared length. */
+export async function* readStagedMediaBytes(
   verbs: NativeVerbs,
   item: BridgeMediaItem
-): Promise<string> {
-  const accumulator = new MobileImageBase64Accumulator()
+): AsyncGenerator<Uint8Array> {
   let offset = 0
   for (;;) {
     // Even empty items need one read to learn eof; the schema refuses zero-length requests.
     const length = Math.max(1, Math.min(BRIDGE_MEDIA_READ_MAX_BYTES, item.byteLength - offset))
     const chunk = await verbs.readMedia(item.handle, offset, length)
     const bytes = decodeBase64(chunk.base64)
-    accumulator.append(bytes)
     offset += bytes.byteLength
+    if (offset > item.byteLength) {
+      throw new Error(
+        `the shell answered more than the ${item.byteLength} bytes it declared for ${item.handle}`
+      )
+    }
+    yield bytes
     if (chunk.eof) {
       break
     }
@@ -39,6 +43,17 @@ export async function readStagedMediaItem(
     throw new Error(
       `the shell answered ${offset} bytes for an item it declared as ${item.byteLength}`
     )
+  }
+}
+
+// Join decoded bytes, then encode once; concatenated base64 chunks can put padding inside the file.
+export async function readStagedMediaItem(
+  verbs: NativeVerbs,
+  item: BridgeMediaItem
+): Promise<string> {
+  const accumulator = new MobileImageBase64Accumulator()
+  for await (const bytes of readStagedMediaBytes(verbs, item)) {
+    accumulator.append(bytes)
   }
   return accumulator.finish()
 }

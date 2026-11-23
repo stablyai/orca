@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { MAX_FILE_RANGE_READ_BYTES } from '../../file-content/file-range-read'
 import {
   AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS,
-  AGENT_SESSION_ATTACHMENT_MAX_BYTES
+  AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES
 } from '../../agent-session/agent-session-attachments'
 import { isValidBase64 } from '../clipboard/clipboard-params'
 import { Identifier, SessionId } from './structured-agent-session-identifiers'
@@ -17,7 +17,7 @@ export const AttachmentUploadStartParams = z
       .number()
       .int()
       .nonnegative()
-      .max(AGENT_SESSION_ATTACHMENT_MAX_BYTES, 'Attachment is too large')
+      .max(AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES, 'Attachment is too large')
   })
   .strict()
 
