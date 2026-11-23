@@ -17,7 +17,3 @@ export function installSessionSearchPolicySource(
 export function sessionSearchPolicy(): AiVaultSearchSettings {
   return readSettings?.() ?? DEFAULT_AI_VAULT_SEARCH_SETTINGS
 }
-
-export function resetSessionSearchPolicyForTests(): void {
-  readSettings = null
-}

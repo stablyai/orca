@@ -36,6 +36,7 @@ import { nativeChatPickerCommands } from '../../../../../../shared/native-chat/i
 import { useNativeChatSkills } from './use-native-chat-skills'
 import { useNativeChatPreferredSuggestion } from './use-native-chat-preferred-suggestion'
 import { useNativeChatPickerDismissal } from './use-native-chat-picker-dismissal'
+import { nativeChatFileMentionToken } from './native-chat-file-mention-token'
 import {
   emitNativeChatPickerItemAccepted,
   emitNativeChatPickerOpened,
@@ -242,11 +243,18 @@ export function useNativeChatPickerState(args: {
     (path: string, token?: Parameters<typeof applyMention>[4], from?: number) => {
       if (!disabledRef.current && (from !== undefined || autocomplete.mode === 'mention')) {
         commitCompletion(
-          applyMention(textareaRef.current, ...liveDraft(), path, token, from, mentionNameMatches)
+          applyMention(
+            textareaRef.current,
+            ...liveDraft(),
+            path,
+            token ?? nativeChatFileMentionToken(terminalTabId, path),
+            from,
+            mentionNameMatches
+          )
         )
       }
     },
-    [autocomplete, commitCompletion, liveDraft, mentionNameMatches, textareaRef]
+    [autocomplete, commitCompletion, liveDraft, mentionNameMatches, terminalTabId, textareaRef]
   )
 
   const handleDraftOrCaretChange = useCallback(

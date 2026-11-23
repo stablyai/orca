@@ -112,7 +112,10 @@ function boundPromptQuestion(question: AgentJournalQuestion): AgentJournalQuesti
     ...(question.freeTextQuestionId
       ? { freeTextQuestionId: boundPromptIdentifier(question.freeTextQuestionId) }
       : {}),
-    ...(question.freeTextInput ? { freeTextInput: boundFreeTextInput(question.freeTextInput) } : {})
+    ...(question.freeTextInput
+      ? { freeTextInput: boundFreeTextInput(question.freeTextInput) }
+      : {}),
+    ...(question.skippable ? { skippable: true as const } : {})
   }
 }
 

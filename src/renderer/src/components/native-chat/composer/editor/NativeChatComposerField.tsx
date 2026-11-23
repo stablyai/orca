@@ -17,12 +17,14 @@ import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { NativeChatComposerFieldProps } from '../../native-chat-composer-field-props'
 import { imeComposedSegment } from '@/lib/text-input/ime/ime-composed-segment'
 import { acceptNativeChatPromptSuggestion } from './native-chat-prompt-suggestion-accept'
+import { useKeepFloatingTerminalTriggerClear } from '../../../floating-terminal/trigger/floating-terminal-trigger-keep-clear'
 
 function noop(): void {}
 
 export type { NativeChatComposerFieldProps } from '../../native-chat-composer-field-props'
 
 export function NativeChatComposerField({
+  dock,
   editSession,
   draftScopeKey,
   positionTarget,
@@ -184,6 +186,9 @@ export function NativeChatComposerField({
   const focusComposer = useCallback(() => textareaRef.current?.focus(), [textareaRef])
   // A launch prompt sits in a popover, so it takes the app's surface instead of the chat's.
   const launch = launchPrompt !== undefined
+  const card = useRef<HTMLDivElement>(null)
+  // Only a visible structured chat passes its dock, so hidden chats register nothing.
+  useKeepFloatingTerminalTriggerClear(card, Boolean(dock) && !launch)
 
   return (
     <div
@@ -220,6 +225,8 @@ export function NativeChatComposerField({
             className="mb-1.5"
           />
           <div
+            ref={card}
+            data-native-chat-dock-pinned={launch ? undefined : ''}
             className={cn(
               // Use a constant container border so focus changes cannot flash it.
               'group/composer rounded-xl border p-1.5 shadow-xs',
@@ -232,6 +239,7 @@ export function NativeChatComposerField({
               glowing && 'native-chat-composer-glow'
             )}
           >
+            {dock}
             {imageAttachments.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-2 px-1 pt-1.5">
                 {imageAttachments.map((attachment, index) => (
@@ -289,7 +297,7 @@ export function NativeChatComposerField({
                 'w-full bg-transparent px-2 py-1 text-sm outline-none',
                 launch
                   ? 'min-h-7 max-h-[calc(6lh+0.5rem)] text-foreground placeholder:text-muted-foreground [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:mr-[-100%]'
-                  : 'min-h-12 max-h-[calc(8lh+0.5rem)] text-chat-foreground-strong placeholder:text-chat-foreground-faint pointer-coarse:min-h-14',
+                  : 'min-h-12 max-h-[calc(8lh+0.5rem)] text-chat-foreground-strong placeholder:text-chat-foreground-faint pointer-coarse:min-h-14 [[data-native-chat-dock-fit~=composer]_[data-native-chat-dock]:has([data-native-chat-question-card])_&]:max-h-[calc(3lh+0.5rem)]',
                 'overflow-y-auto scrollbar-sleek',
                 // Why: the editor is a contenteditable, which `:disabled` never matches.
                 '[&[contenteditable=false]]:cursor-not-allowed [&[contenteditable=false]]:opacity-50'

@@ -124,14 +124,3 @@ export function usePrefetchAvatarCapability(): void {
     }
   }, [])
 }
-
-/** As if the check had already answered `next` before anything opened. */
-export function seedAvatarCapabilityForTest(next: readonly AvatarImageAgentStatus[]): void {
-  publish(next)
-}
-
-export function resetAvatarCapabilityForTest(): void {
-  agents = null
-  checking = null
-  listeners.clear()
-}

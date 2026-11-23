@@ -285,6 +285,7 @@ export function MobileBotItemPage({
             events={view.events}
             attachments={{ client, onOpenFile }}
             pending={pending}
+            onReveal={jump.center}
           />
         </ScrollView>
         {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}
@@ -337,7 +338,13 @@ function useJumpToEnd() {
       metrics.current = { ...metrics.current, ...next }
       setShown(!isAtTail(metrics.current))
     },
-    toEnd: () => ref.current?.scrollToEnd({ animated: true })
+    toEnd: () => ref.current?.scrollToEnd({ animated: true }),
+    /** A span measured in the window to the middle of the view, as the desktop centres a question. */
+    center: (y: number, height: number, animated: boolean) =>
+      ref.current?.measureInWindow((_x, top, _width, view) => {
+        const at = metrics.current.contentOffset.y + y - top - (view - height) / 2
+        ref.current?.scrollTo({ y: Math.max(0, at), animated })
+      })
   }
 }
 

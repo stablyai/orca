@@ -1,8 +1,9 @@
 // An ask of several questions, one line at a time: a quick reply or the box's Enter answers the line
-// it is on, and the step moves to the first open line. Answers are held on this device (the comment
-// box's draft store, so a reload keeps them) and post as one comment when the last line is answered,
-// so the agent wakes once. Any comment sent sooner (an answer with files, a comment of its own) posts
-// the held answers with it, so none is left only on this device.
+// it is on, and the step moves to the first open line. Answers, picked or typed, are held on this
+// device (the comment box's draft store, so a reload keeps them) and post as one comment when the last
+// line is answered, so the agent wakes once, or when the owner sends them sooner. An answer with files
+// or skills, and any other comment sent sooner, posts the held answers with it, so none is left only
+// on this device.
 import { useCallback, useMemo, useState } from 'react'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { botRefKey } from '@/lib/bot-hosts'
@@ -60,7 +61,12 @@ export type BotItemQuestionSteps = {
   /** The lines to step through: those no comment answered yet, or only by order while held here. */
   lines: readonly number[]
   go: (index: number) => void
-  answer: (index: number, words: string, paths?: readonly string[]) => void
+  /** A quick reply: held until the last line is answered. */
+  answer: (index: number, words: string) => void
+  /** How many open lines hold an answer here, not sent yet. */
+  heldCount: number
+  /** "send anyway": the held answers post as one comment; the other lines stay open. */
+  sendHeld: () => void
 }
 
 export type BotItemQuickReplyActions = {
@@ -138,23 +144,26 @@ export function useBotItemQuestionSteps(
     setSent({ askId, text, answers })
     send(text, paths, askId, undefined, skills)
   }
-  const answer = useLatestHandler(
-    (
-      index: number,
-      words: string,
-      paths: readonly string[] = [],
-      skills: readonly BotItemCommentSkill[] = []
-    ) => {
-      const next = kept.map((held_, at) => (at === index ? words : held_))
-      setChosen(null)
-      // Files and skills are not held on this device: an answer with them posts the answers so far at once.
-      if (paths.length > 0 || skills.length > 0 || lines.every((at) => next[at])) {
-        post(next, botItemAnswersText(shape, next), paths, skills)
-        return
-      }
-      hold(next)
+  // Typed words wait like a quick reply; files and skills aren't held here, so they post the answers so far.
+  const settle = (
+    index: number,
+    words: string,
+    fromBoxPaths?: readonly string[],
+    skills?: readonly BotItemCommentSkill[]
+  ): void => {
+    const next = kept.map((held_, at) => (at === index ? words : held_))
+    setChosen(null)
+    if (
+      (fromBoxPaths?.length ?? 0) > 0 ||
+      (skills?.length ?? 0) > 0 ||
+      lines.every((at) => next[at])
+    ) {
+      post(next, botItemAnswersText(shape, next), fromBoxPaths ?? [], skills)
+      return
     }
-  )
+    hold(next)
+  }
+  const answer = useLatestHandler((index: number, words: string) => settle(index, words))
   const fromBox = useLatestHandler(
     (
       text: string,
@@ -165,7 +174,7 @@ export function useBotItemQuestionSteps(
       if (!waiting) {
         send(text, paths, undefined, oneLine !== null && replyingTo === null, skills)
       } else if (replyingTo === `${askId}:${current}`) {
-        answer(current, text, paths, skills)
+        settle(current, text, paths, skills)
       } else {
         // Held answers name their lines; the comment rides along answering none.
         const answered = botItemAnswersText(shape, kept)
@@ -178,8 +187,18 @@ export function useBotItemQuestionSteps(
     }
   )
   const go = useLatestHandler((index: number) => setChosen({ askId, index }))
+  const heldCount = kept.filter(Boolean).length
+  const sendHeld = useLatestHandler(() => {
+    const answered = botItemAnswersText(shape, kept)
+    if (answered) {
+      setChosen(null)
+      post(kept, answered, [])
+    }
+  })
   // Read fresh each render, as the waiting ask is.
-  const steps = waiting ? { askId, shape, held, current, lines, go, answer } : null
+  const steps = waiting
+    ? { askId, shape, held, current, lines, go, answer, heldCount, sendHeld }
+    : null
   const quick = useLatestHandler((text: string) => {
     if (asked) {
       const { shape: own } = asked

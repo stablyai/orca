@@ -26,6 +26,7 @@ type CodexPromptRegistryEntryBounds = {
   optionAnswers: ReadonlyMap<string, { questionId: string; answer: string }>
   answers: ReadonlyMap<string, string>
   offeredDecisions?: readonly string[]
+  formBytes?: number
 }
 
 export function codexPromptRegistryEntryBytes(prompt: CodexPromptRegistryEntryBounds): number {
@@ -47,7 +48,7 @@ export function codexPromptRegistryEntryBytes(prompt: CodexPromptRegistryEntryBo
   for (const decision of prompt.offeredDecisions ?? []) {
     bytes += Buffer.byteLength(decision, 'utf8')
   }
-  return bytes
+  return bytes + (prompt.formBytes ?? 0)
 }
 
 export function codexPromptTurnIdentity(turnId: string): {

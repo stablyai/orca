@@ -10,11 +10,6 @@ export function resetMobileWebBundleReadAdmissionForTests(): void {
   activeReads.clear()
 }
 
-/** Expose bucket count only for tests proving no per-socket token retention. */
-export function mobileWebBundleReadBucketCountForTests(): number {
-  return activeReads.size
-}
-
 /** Prefer E2EE connectionId, then device token for plain-WebSocket phones; in-process callers have neither. */
 export function mobileWebBundleReadBucket(ctx: RpcContext): string {
   return ctx.connectionId ?? ctx.clientId ?? 'local'

@@ -112,10 +112,13 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected providerModeSnapshotScansByPtyId = new Map<
     string,
-    Set<TerminalKittyKeyboardModeTracker>
+    { tracker: TerminalKittyKeyboardModeTracker; pendingCaptures: number }
   >()
 
-  protected providerBufferAcquisitionsByPtyId = new Map<string, ProviderBufferAcquisition>()
+  protected providerBufferAcquisitionsByPtyId = new Map<
+    string,
+    { ansi?: ProviderBufferAcquisition; visible?: ProviderBufferAcquisition }
+  >()
 
   protected providerVisibleStateByPtyId = new Map<string, RuntimeVisibleTerminalState>()
 
