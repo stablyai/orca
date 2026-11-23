@@ -20,7 +20,9 @@ import {
   getAgentPromptHeldSubmitBudgetMs,
   getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs,
-  resolveAgentPromptSubmitDelayForAgent
+  getWindowsInputRecordPasteBurstMs,
+  resolveAgentPromptSubmitDelayForAgent,
+  resolveWindowsAgentEnterWaitMs
 } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 
 import {
@@ -105,6 +107,12 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     let enteredAt = 0
     let renderWait: RuntimeTerminalPromptSubmit['renderWait']
     let withheldFor: RuntimeTerminalPromptSubmitHold | null = null
+    // Windows Codex reads a paste a key at a time and keeps an Enter that lands mid-read as a newline.
+    const keyEventAgent = this.getPtyAgent(ptyId)
+    const keyEventEnterWaitMs =
+      getWindowsInputRecordPasteBurstMs(writeHostPlatform, keyEventAgent, pastePayload) > 0
+        ? resolveWindowsAgentEnterWaitMs(writeHostPlatform, keyEventAgent, pastePayload)
+        : null
     try {
       await beforeWrite(admissionSignal)
       assertWritable(admissionSignal)
@@ -152,6 +160,9 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
               )
             : getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength)
           await waitForAgentPromptDelay(submitDelayMs, deliverySignal)
+        }
+        if (keyEventEnterWaitMs !== null) {
+          await waitForAgentPromptDelay(pastedAt + keyEventEnterWaitMs - Date.now(), deliverySignal)
         }
         const lastWrite = (): Promise<void> =>
           beforeWrite(deliverySignal).catch((error: unknown) => {
@@ -203,7 +214,8 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
               heldBudgetMs: getAgentPromptHeldSubmitBudgetMs(
                 writeHostPlatform,
                 this.getPtyAgent(ptyId),
-                pastePayload
+                pastePayload,
+                keyEventEnterWaitMs !== null ? enteredAt - pastedAt : 0
               )
             }
           ))

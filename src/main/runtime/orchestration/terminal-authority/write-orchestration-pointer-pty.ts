@@ -2,10 +2,7 @@ import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness } from '../../terminal/lifecycle/floating-session-liveness'
 import { writeOrchestrationPointerWithSettlement } from '../mailbox/terminal-pointer/mailbox-pointer-pty-write'
-import {
-  getWindowsInputRecordPasteBurstMs,
-  resolveAgentPromptSubmitDelayForAgent
-} from '../../../../shared/agent-launch/startup/agent-prompt-injection'
+import { resolveWindowsAgentEnterWaitMs } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import type { OrchestrationPointerPty } from '../mailbox/terminal-pointer/mailbox-pointer-delivery-contract'
 import type { RuntimeLeafRecord } from '../../terminal/records/runtime-terminal-state-records'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -35,23 +32,14 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
     return {
       writePty: (ptyId, data) =>
         writeOrchestrationPointerWithSettlement({ ptyId, data, controller: this.ptyController }),
+      // Windows Codex reads a pointer a key at a time and keeps an early Enter as a newline.
       getWindowsPointerEnterDelayMs: (ptyId, pointer) =>
-        this.getWindowsPointerEnterDelayMs(ptyId, pointer)
+        resolveWindowsAgentEnterWaitMs(
+          this.getPtyWriteHostPlatform(ptyId),
+          this.getPtyAgent(ptyId),
+          pointer
+        )
     }
-  }
-
-  /** On a Windows host, a pointer's Enter waits as a sent prompt's does: an input-record TUI such as
-   *  Codex reads the text a key at a time and keeps an early Enter as a newline. */
-  private getWindowsPointerEnterDelayMs(ptyId: string, pointer: string): number | null {
-    const platform = this.getPtyWriteHostPlatform(ptyId)
-    if (platform !== 'win32') {
-      return null
-    }
-    const agent = this.getPtyAgent(ptyId)
-    return (
-      resolveAgentPromptSubmitDelayForAgent(platform, pointer, agent) +
-      getWindowsInputRecordPasteBurstMs(platform, agent, pointer)
-    )
   }
 
   /** The terminal a staged pointer's Enter goes to, re-read so a replaced process gets none. */

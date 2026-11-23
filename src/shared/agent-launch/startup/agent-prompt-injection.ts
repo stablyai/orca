@@ -73,11 +73,41 @@ export function getWindowsInputRecordPasteBurstMs(
     : 0
 }
 
-/** How long a held prompt may still need Enter: an input-record TUI's paste burst, or a composer not yet submit-ready. */
+// Why 20 s: a phone's terminal.send times out at 30 s and a lost reply is unknown delivery, so the
+// held Enter leaves room for the launch-composer wait and relay latency.
+const MAX_WINDOWS_ENTER_WAIT_MS = 20_000
+
+/** How long Enter waits after `text` on a Windows host: ingest and settle, plus the time an
+ *  input-record TUI such as Codex takes to read it as key events, since an Enter that arrives
+ *  mid-read stays in its composer as a newline. Null off Windows, where each caller keeps its own wait. */
+export function resolveWindowsAgentEnterWaitMs(
+  platform: NodeJS.Platform,
+  agent: TerminalAgent | null | undefined,
+  text: string
+): number | null {
+  if (platform !== 'win32') {
+    return null
+  }
+  const submitDelayMs = resolveAgentPromptSubmitDelayForAgent(platform, text, agent)
+  return Math.max(
+    submitDelayMs,
+    Math.min(
+      submitDelayMs + getWindowsInputRecordPasteBurstMs(platform, agent, text),
+      MAX_WINDOWS_ENTER_WAIT_MS
+    )
+  )
+}
+
+// Why: two Codex rechecks, so a key-event read slower than its estimate still gets an Enter.
+const HELD_PROMPT_MIN_WINDOW_AFTER_ENTER_WAIT_MS = 3000
+
+/** How long a held prompt may still need Enter: an input-record TUI's paste burst, or a composer
+ *  not yet submit-ready. `waitedBeforeEnterMs` is how much of the burst the first Enter already waited out. */
 export function getAgentPromptHeldSubmitBudgetMs(
   platform: NodeJS.Platform,
   agent: TerminalAgent | null | undefined,
-  pastePayload: string
+  pastePayload: string,
+  waitedBeforeEnterMs = 0
 ): number {
   if (!isTuiAgent(agent)) {
     return 0
@@ -90,7 +120,13 @@ export function getAgentPromptHeldSubmitBudgetMs(
   const capMs =
     AGENT_PROMPT_EFFECT_TIMEOUT_MS -
     2 * getTerminalPasteIngestMs(platform, Buffer.byteLength(pastePayload, 'utf8'))
-  return Math.max(0, Math.min(Math.max(startupMs, pasteBurstMs), capMs))
+  const budgetMs = Math.max(0, Math.min(Math.max(startupMs, pasteBurstMs), capMs))
+  return waitedBeforeEnterMs > 0
+    ? Math.max(
+        budgetMs - waitedBeforeEnterMs,
+        Math.min(budgetMs, HELD_PROMPT_MIN_WINDOW_AFTER_ENTER_WAIT_MS)
+      )
+    : budgetMs
 }
 
 // Codex dedupes a repeated placeholder label as `[Pasted Content N chars] #2`.
