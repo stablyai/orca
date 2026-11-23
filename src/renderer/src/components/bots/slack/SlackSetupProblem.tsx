@@ -51,7 +51,9 @@ function problemCode(problem: SlackSetupProblem): string {
       return 'other_user'
     case 'expired':
       return 'link_expired'
-    default:
+    case 'reconnecting':
+    case 'offline':
+    case 'token-rejected':
       return problem.code || 'unknown'
   }
 }

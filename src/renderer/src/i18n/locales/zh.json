@@ -29536,8 +29536,6 @@
         "otherBrowser": "要在其他浏览器中批准？",
         "approveAsYourself": "请以你本人的身份在 Slack 中批准。要在其他浏览器中批准？",
         "waitingAdmin": "如果你的工作区需要管理员批准新应用，{{name}} 会在管理员批准后加入。如果管理员拒绝，点击“重新安装”会复用同一个应用",
-        "expired": "安装链接已过期",
-        "otherUser": "批准它的是另一个 Slack 账户。请获取新链接，并以你本人的身份批准",
         "newLink": "获取新链接",
         "linkCopied": "链接已复制",
         "copyLink": "复制链接",

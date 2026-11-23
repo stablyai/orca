@@ -1,5 +1,5 @@
 // @protected-copy: drawn inside the security-surface setup dialog
-import React, { useEffect, useId, useState } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { SlackIcon } from '@/components/icons/SlackIcon'
 import { Button } from '@/components/ui/button'
@@ -68,16 +68,16 @@ function BotSlackSetupFlow({
   const problem = slackSetupProblem(step, outage)
   // A failure while the server was away starts again once it is back, as the waiting line says.
   const waitingForHost = problem?.kind === 'reconnecting' || problem?.kind === 'offline'
-  const [retryOnReturn, setRetryOnReturn] = useState(false)
-  if (waitingForHost && !retryOnReturn) {
-    setRetryOnReturn(true)
-  }
+  const waitedForHost = useRef(false)
+  const hostDown = outage !== null
   useEffect(() => {
-    if (retryOnReturn && step.kind === 'failed' && outage === null) {
-      setRetryOnReturn(false)
+    if (waitingForHost) {
+      waitedForHost.current = true
+    } else if (waitedForHost.current && step.kind === 'failed' && !hostDown) {
+      waitedForHost.current = false
       void retry()
     }
-  }, [retryOnReturn, step.kind, outage, retry])
+  }, [waitingForHost, step.kind, hostDown, retry])
   // Back from Slack's page in Orca's browser once the install ends, or needs the owner. Stepping aside
   // mounts this flow anew, which checks again before it waits again: that is not an end.
   const settled =
