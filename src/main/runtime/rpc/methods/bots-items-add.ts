@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto'
 import type { BotItemsAddParams } from '../../../../shared/rpc-contract/bots-items-params'
 import { BotItemError } from '../../../bots/bot-item-error'
+import { BOT_ITEM_LIMITS } from '../../../../shared/bots/bot-items'
 import { botItemRequestMail } from '../../../bots/bot-items-mail-text'
 import {
   assertBotItemAddable,
@@ -109,7 +110,9 @@ function withOrigin(typed: BotItemLinkInput[], url: string): BotItemLinkInput[] 
   const origin = parseItemLink(url)
   const key = (link: BotItemLinkInput) =>
     `${link.kind}:${link.kind === 'url' ? link.ref.split(/[?#]/)[0] : link.ref}`
-  return typed.some((link) => key(link) === key(origin)) ? typed : [...typed, origin]
+  // An add already at the link limit keeps its own links: the origin is guidance, never a refusal.
+  const full = typed.length >= BOT_ITEM_LIMITS.links
+  return full || typed.some((link) => key(link) === key(origin)) ? typed : [...typed, origin]
 }
 
 /** Sends as the verified calling chat, through the path `orchestration send --to bot:` takes, so the
