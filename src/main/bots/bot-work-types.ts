@@ -51,7 +51,7 @@ export type BotWorkRecordDeps = {
   /** A workspace reader for one batch of rows, sharing its repo reads. Each read is 'gone' only with
    *  proof; null when it can't be told (an offline host, a remote server). */
   workspaces: () => (worker: BotWorkWorker) => Promise<BotWorkWorkspace | 'gone' | null>
-  /** What the conversation is called, from the message that started it. */
+  /** What the conversation is called, from the message that started it; a chat, by its name. */
   conversationTitle: (address: BotWorkAddress) => string | null
   /** The conversation the message a bot session's turn was handed names; null for the owner's
    *  own words. */

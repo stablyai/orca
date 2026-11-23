@@ -8,8 +8,14 @@ import { hardenSqliteDatabaseFiles } from '../sqlite/harden-database-files'
 import type { ConnectorSource } from '../../shared/connectors/external-conversation-link'
 import { ADDED_COLUMNS, BOT_WORK_SCHEMA, rowOf, type BotWorkCloseReason } from './bot-work-rows'
 
-/** The conversation the work came from: a Slack thread, a Linear issue, a GitHub thread. */
-export type BotWorkAddress = { source: ConnectorSource; externalId: string }
+/** A connector conversation the work came from: a Slack thread, a Linear issue, a GitHub thread. */
+export type BotConversationAddress = { source: ConnectorSource; externalId: string }
+
+/** One of the bot's own chats in Orca, by its session id: it has no reply address. */
+export type BotChatAddress = { source: 'chat'; externalId: string }
+
+/** Where the work came from: a connector conversation, or one of the bot's chats. */
+export type BotWorkAddress = BotConversationAddress | BotChatAddress
 
 /** A row as it was read; a close or flag names its generation so a later row is never touched. */
 export type BotWorkRef = { rowId: string; generation: number }

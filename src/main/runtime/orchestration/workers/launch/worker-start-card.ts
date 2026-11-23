@@ -13,7 +13,8 @@ import {
   sessionCallerOf,
   type OrchestrationEntryCaller
 } from '../../addressing/orchestration-caller-identity'
-import { botWorkHostOf, prepareBotWorkerStart } from '../../../../bots/bot-work-runtime'
+import { botWorkHostOf } from '../../../../bots/bot-work-runtime'
+import { prepareBotWorkerStart } from '../../../../bots/bot-work-start'
 
 export type AgentCreationCard = AgentJournalAgentStartItem | AgentJournalAgentHandoffItem
 
