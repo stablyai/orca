@@ -8,27 +8,27 @@ import { resolveGitCommonDir, resolveGitDir } from '../resolve-git-dir'
 export type WorktreeDiffStamp = {
   /** Opaque; compare for equality only. */
   value: string
-  /** Newest mtime any component reported, or -Infinity when every one was absent. */
-  newestMtimeMs: number
+  /** Newest file timestamp any component reported, or -Infinity when every one was absent. */
+  newestTimestampMs: number
   capturedAtMs: number
 }
 
-// Wait beyond FAT/exFAT's 2s mtime bucket so another write cannot share a recent timestamp.
+// Wait beyond FAT/exFAT's 2s timestamp bucket so another write cannot share a recent timestamp.
 export const DIFF_STAMP_RACY_WRITE_MARGIN_MS = 2_000
 
 const MISSING = '-'
-const ABSENT: StampComponent = { text: MISSING, mtimeMs: Number.NEGATIVE_INFINITY }
+const ABSENT: StampComponent = { text: MISSING, timestampMs: Number.NEGATIVE_INFINITY }
 
-type StampComponent = { text: string; mtimeMs: number }
+type StampComponent = { text: string; timestampMs: number }
 
-/** Refuse stamps within the mtime bucket; separately count future mtimes to expose host/guest clock skew. */
+/** Refuse stamps within the timestamp bucket; separately count future timestamps to expose host/guest clock skew. */
 export function canProveUnchangedByStamp(stamp: WorktreeDiffStamp): boolean {
-  return stamp.capturedAtMs - stamp.newestMtimeMs >= DIFF_STAMP_RACY_WRITE_MARGIN_MS
+  return stamp.capturedAtMs - stamp.newestTimestampMs >= DIFF_STAMP_RACY_WRITE_MARGIN_MS
 }
 
-/** Future component mtimes cannot satisfy the cache's freshness margin. */
+/** Future component timestamps cannot satisfy the cache's freshness margin. */
 export function isDiffStampClockSkewed(stamp: WorktreeDiffStamp): boolean {
-  return Number.isFinite(stamp.newestMtimeMs) && stamp.newestMtimeMs > stamp.capturedAtMs
+  return Number.isFinite(stamp.newestTimestampMs) && stamp.newestTimestampMs > stamp.capturedAtMs
 }
 
 /** Staged diffs compare HEAD/index only; omit working-tree inputs for those reads. */
@@ -60,9 +60,9 @@ export async function readHostFilesStamp(
     const components = await Promise.all(filePaths.map(readWorkingTreeComponent))
     return {
       value: JSON.stringify([filePaths, ...components.map((component) => component.text)]),
-      newestMtimeMs: Math.max(
+      newestTimestampMs: Math.max(
         Number.NEGATIVE_INFINITY,
-        ...components.map((component) => component.mtimeMs)
+        ...components.map((component) => component.timestampMs)
       ),
       capturedAtMs
     }
@@ -110,7 +110,7 @@ async function readStamp(
         readIdentity,
         ...components.map((component) => component.text)
       ]),
-      newestMtimeMs: Math.max(...components.map((component) => component.mtimeMs)),
+      newestTimestampMs: Math.max(...components.map((component) => component.timestampMs)),
       capturedAtMs
     }
   } catch {
@@ -130,7 +130,7 @@ async function readHeadComponent(gitDir: string): Promise<StampComponent | null>
   const refName = head.match(/^ref:\s*(.+?)\s*$/)?.[1]
   if (!refName || !isSafeRefName(refName)) {
     // Detached HEAD already holds the object id; an unrecognized HEAD is covered by its own text.
-    return { text: head, mtimeMs: Number.NEGATIVE_INFINITY }
+    return { text: head, timestampMs: Number.NEGATIVE_INFINITY }
   }
   // Per-worktree refs (`refs/bisect`, `refs/worktree`) live beside the checkout; branches are shared.
   const [perWorktreeTip, sharedTip] = await Promise.all([
@@ -142,7 +142,7 @@ async function readHeadComponent(gitDir: string): Promise<StampComponent | null>
     // A loose ref shadows any packed entry, so its bytes settle the tip on their own.
     return {
       text: JSON.stringify([head, 'loose', perWorktreeTip ? 'worktree' : 'common', looseTip]),
-      mtimeMs: Number.NEGATIVE_INFINITY
+      timestampMs: Number.NEGATIVE_INFINITY
     }
   }
   const [packedRefs, reftable] = await Promise.all([
@@ -151,7 +151,7 @@ async function readHeadComponent(gitDir: string): Promise<StampComponent | null>
   ])
   return {
     text: JSON.stringify([head, 'packed', packedRefs.text, reftable.text]),
-    mtimeMs: Math.max(packedRefs.mtimeMs, reftable.mtimeMs)
+    timestampMs: Math.max(packedRefs.timestampMs, reftable.timestampMs)
   }
 }
 
@@ -181,7 +181,10 @@ async function readTrimmedFile(filePath: string): Promise<string | null> {
 export async function readFileStampComponent(filePath: string): Promise<StampComponent> {
   try {
     const stats = await stat(filePath)
-    return { text: `${requireMtimeMs(stats.mtimeMs)}:${stats.size}`, mtimeMs: stats.mtimeMs }
+    return {
+      text: `${requireTimestampMs(stats.mtimeMs)}:${stats.size}`,
+      timestampMs: stats.mtimeMs
+    }
   } catch (error) {
     if (isMissingEntryError(error)) {
       return ABSENT
@@ -195,9 +198,12 @@ async function readWorkingTreeComponent(filePath: string): Promise<StampComponen
     const stats = await stat(filePath)
     // Inodes detect atomic replacement, but zero/unstable network-redirector values cannot improve the stamp.
     const inode = isUsableInode(stats.ino) ? String(stats.ino) : MISSING
+    const mtimeMs = requireTimestampMs(stats.mtimeMs)
+    // An in-place rewrite can preserve mtime, size and inode while changing ctime.
+    const ctimeMs = requireTimestampMs(stats.ctimeMs)
     return {
-      text: `${requireMtimeMs(stats.mtimeMs)}:${stats.size}:${inode}`,
-      mtimeMs: stats.mtimeMs
+      text: `${mtimeMs}:${ctimeMs}:${stats.size}:${inode}`,
+      timestampMs: Math.max(mtimeMs, ctimeMs)
     }
   } catch (error) {
     if (isMissingEntryError(error)) {
@@ -211,12 +217,12 @@ function isUsableInode(ino: unknown): boolean {
   return typeof ino === 'number' && Number.isFinite(ino) && ino !== 0
 }
 
-/** A filesystem (or a stub) that reports no usable mtime cannot prove anything unchanged. */
-function requireMtimeMs(mtimeMs: unknown): number {
-  if (typeof mtimeMs !== 'number' || !Number.isFinite(mtimeMs)) {
-    throw new Error('stat reported no usable mtime')
+/** A filesystem (or a stub) that reports no usable timestamp cannot prove anything unchanged. */
+function requireTimestampMs(timestampMs: unknown): number {
+  if (typeof timestampMs !== 'number' || !Number.isFinite(timestampMs)) {
+    throw new Error('stat reported no usable timestamp')
   }
-  return mtimeMs
+  return timestampMs
 }
 
 function isMissingEntryError(error: unknown): boolean {

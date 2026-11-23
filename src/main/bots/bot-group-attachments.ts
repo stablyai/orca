@@ -1,6 +1,7 @@
 // A group post's chat attachments, admitted on the group's host as chat and item comments admit
 // theirs: images live in this host's attachment store under chat's limits, and every referenced
 // upload is claimed for each current room member so it outlives individual turns and sweeps with the room.
+import { botFailure, BotFailureError, type BotFailure } from '../../shared/bots/bot-failure-copy'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { BotGroupMessage, BotGroupMessageImage } from '../../shared/bots/bot-group'
 import { stripSentImagePromptMarkers } from '../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
@@ -15,9 +16,9 @@ import {
 } from './bot-attachment-images'
 
 const GROUP_IMAGE_LABELS = {
-  plural: 'Group messages',
-  singular: 'A group message',
-  surface: 'in a group message'
+  tooMany: 'groupImagesTooMany',
+  tooLarge: 'groupImagesTooLarge',
+  notStored: 'groupImageNotStored'
 } as const
 
 export type BotGroupAttachmentDeps = {
@@ -38,9 +39,7 @@ export async function admitBotGroupMessageAttachments(
   const { store } = deps
   if (!store) {
     if (paths.length > 0 || hasAttachmentStoreReference(text)) {
-      throw refused(
-        "This computer can't take attachments right now. Try sending again in a moment."
-      )
+      throw refused(botFailure('groupAttachmentsUnavailable'))
     }
     return []
   }
@@ -67,11 +66,11 @@ export async function admitBotGroupMessageAttachments(
     return images
   }
   if (!deps.claim || deps.memberSessionIds.length === 0) {
-    throw refused("Couldn't attach the files. Try sending again in a moment.")
+    throw refused(botFailure('groupAttachFailed'))
   }
   await claimAttachmentBody(deps.claim, deps.memberSessionIds, body, {
     logPrefix: '[bot-groups] claiming group message attachments failed',
-    retryMessage: "Couldn't attach the files. Try sending again in a moment.",
+    retry: botFailure('groupAttachFailed'),
     refused
   })
   return images
@@ -90,6 +89,6 @@ export function botGroupMessageSummary(message: Pick<BotGroupMessage, 'text' | '
   return images.length > 1 ? `${images.length} images` : ''
 }
 
-function refused(message: string): Error {
-  return new Error(message)
+function refused(failure: BotFailure): Error {
+  return new BotFailureError(failure.code, failure.params)
 }

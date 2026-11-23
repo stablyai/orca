@@ -47,7 +47,6 @@
 2 src/main/browser/cookies/chromium/chromium-cookie-path.ts
 4 src/main/browser/cookies/chromium/chromium-cookie-snapshot.ts
 1 src/main/browser/cookies/chromium/import-cookies.ts
-3 src/main/browser/cookies/client-route/client-route-cookie-import-source-store.ts
 2 src/main/browser/cookies/sources/browser-cookie-detection.ts
 8 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
 2 src/main/browser/cookies/sources/browser-cookie-key.ts
@@ -126,7 +125,7 @@
 23 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-sync.ts
 2 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-wsl-core.ts
 2 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-auth-migration.ts
-19 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
+18 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
 1 src/main/codex-accounts/runtime-home/routing/runtime-home-service-managed-home.ts
 14 src/main/codex-accounts/runtime-home/runtime-home-service-paths.ts
 1 src/main/codex-accounts/runtime-home/runtime-home-service-sync.ts

@@ -1,4 +1,5 @@
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
+import { ORCHESTRATION_SEND_FLAGS } from './orchestration-send-flags'
 import type { CommandSpec } from '../discovery/command-spec'
 import { ORCHESTRATION_GATE_COMMAND_SPECS } from './orchestration-gate-specs'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
@@ -52,32 +53,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'send'],
     summary: 'Send an inter-agent message',
     usage:
-      'orca orchestration send --subject <text> [--to <run:id|dispatch:id|bot:name|legacy_handle>] [--chat <id|new> | --item <n> [--file <path>]...] [--on <server>] [--run <run_id>] [--from <handle>] [--body <text> | --body-file <path|->] [--type <type>] [--priority <level>] [--thread-id <id>] [--payload <json>] [--task-id <id>] [--dispatch-id <id>] [--outcome <succeeded|failed>] [--files-modified <csv>] [--report-path <path>] [--phase <text>] [--retry-request <id>] [--json]',
-    allowedFlags: [
-      ...GLOBAL_FLAGS,
-      'to',
-      'chat',
-      'item',
-      'file',
-      'on',
-      'run',
-      'from',
-      'subject',
-      'body',
-      'body-file',
-      'type',
-      'priority',
-      'thread-id',
-      'payload',
-      'task-id',
-      'dispatch-id',
-      'dispatch-capability',
-      'retry-request',
-      'outcome',
-      'files-modified',
-      'report-path',
-      'phase'
-    ],
+      'orca orchestration send --subject <text> [--to <run:id|dispatch:id|bot:name|legacy_handle>] [--chat <id|new> | --item <n> [--file <path>]...] [--on <server> | --on-client <computer>] [--run <run_id>] [--from <handle>] [--body <text> | --body-file <path|->] [--type <type>] [--priority <level>] [--thread-id <id>] [--payload <json>] [--task-id <id>] [--dispatch-id <id>] [--outcome <succeeded|failed>] [--files-modified <csv>] [--report-path <path>] [--phase <text>] [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, ...ORCHESTRATION_SEND_FLAGS],
     identityFlagRoles: { from: 'caller' },
     repeatableFlags: ['file'],
     notes: [
@@ -94,7 +71,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'A worker_done with the active task/dispatch IDs completes that task only from the dispatched pane. When stable pane identity is unavailable, the sender handle must exactly match the dispatch assignee; injected preambles include the correct --from value.',
       'Prefer --task-id/--dispatch-id/etc. over raw --payload JSON in worker commands; PowerShell strips JSON quotes easily.',
       'For a long or multi-line body, write it to a file and pass --body-file <path> (or - for stdin); the CLI reads it on this computer, so no shell quoting applies.',
-      '--on <server> mails a terminal or chat agent on a paired server (--to term_… or orca_session_id:…). Your own Orca carries it, and replies come back to your own check. From an agent, --environment runs the command on that server and delivers no mail.'
+      '--on <server> mails a terminal or chat agent on a paired server (--to term_… or orca_session_id:…). Your own Orca carries it, and replies come back to your own check. From an agent, --environment runs the command on that server and delivers no mail.',
+      '--on-client <computer> mails an agent on a computer paired to this Orca (--to bot:<id>), as its mention in your chat names it. A person on that computer approves it once, and its reply comes back to your own check; it fails at once when that computer is not connected, or comes back declined.'
     ]
   },
   {

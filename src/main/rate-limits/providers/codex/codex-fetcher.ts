@@ -184,9 +184,9 @@ async function fetchBackendUsage(
     if (options?.signal?.aborted) {
       return abortedCodexRateLimitResult()
     }
-    return result
+    return result?.status === 'ok'
       ? await supplementCodexRateLimitResetCredits(result, requestCodexBackend, options)
-      : null
+      : result
   } catch {
     return options?.signal?.aborted ? abortedCodexRateLimitResult() : null
   }
@@ -223,23 +223,27 @@ async function readCodexRateLimits(
   }
 
   const isWslHome = Boolean(options?.codexHomePath && parseWslUncPath(options.codexHomePath))
-  if (isWslHome) {
-    const backendResult = await fetchBackendUsage(options)
-    if (backendResult) {
-      return options?.signal?.aborted ? abortedCodexRateLimitResult() : backendResult
-    }
+  const wslBackendResult = isWslHome ? await fetchBackendUsage(options) : null
+  if (options?.signal?.aborted) {
+    return abortedCodexRateLimitResult()
+  }
+  if (wslBackendResult?.status === 'ok') {
+    return wslBackendResult
   }
 
   // The pending check reads state.sqlite over UNC after the auth probe and HTTP read.
   const homeRefusal =
     isWslHome && options?.codexHomePath ? await stoppedWslHomeRefusal(options.codexHomePath) : null
+  if (options?.signal?.aborted) {
+    return abortedCodexRateLimitResult()
+  }
   if (homeRefusal) {
-    return homeRefusal
+    return wslBackendResult ?? homeRefusal
   }
   if (options?.codexHomePath && isCodexStateDbBackfillPending(options.codexHomePath)) {
     void startCodexStateDbBackfillRecoveryInBackground(options.codexHomePath)
     // HTTP usage never opens the state DB, so it cannot contend with the backfill (#15741).
-    const backendResult = isWslHome ? null : await fetchBackendUsage(options)
+    const backendResult = isWslHome ? wslBackendResult : await fetchBackendUsage(options)
     if (options?.signal?.aborted) {
       return abortedCodexRateLimitResult()
     }
@@ -264,11 +268,20 @@ async function readCodexRateLimits(
       return abortedCodexRateLimitResult()
     }
     if (rpcResult.status === 'ok' || rpcResult.status === 'unavailable') {
+      if (rpcResult.status === 'unavailable' && wslBackendResult) {
+        return wslBackendResult
+      }
       const supplemented = await supplementBackendMetadata(rpcResult, options)
       return options?.signal?.aborted ? abortedCodexRateLimitResult() : supplemented
     }
     if (isCodexAuthError(rpcResult.error)) {
-      return await classifyCodexApiKeyUsageRejection(rpcResult, options)
+      const rejection = await classifyCodexApiKeyUsageRejection(rpcResult, options)
+      if (options?.signal?.aborted) {
+        return abortedCodexRateLimitResult()
+      }
+      return rejection.usageMetadata?.failureKind === 'usage-unavailable'
+        ? rejection
+        : (wslBackendResult ?? rejection)
     }
     rpcFailure = rpcResult
   } catch {
@@ -278,11 +291,8 @@ async function readCodexRateLimits(
     rpcFailure = codexUnavailable('RPC failed', 'error')
   }
 
-  if (isWslHome) {
-    return rpcFailure
-  }
   // Interactive Codex keystrokes can accept startup dialogs, including updates; read HTTP usage instead (#17415).
-  const backendResult = await fetchBackendUsage(options)
+  const backendResult = isWslHome ? wslBackendResult : await fetchBackendUsage(options)
   if (options?.signal?.aborted) {
     return abortedCodexRateLimitResult()
   }

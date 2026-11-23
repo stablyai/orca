@@ -29,6 +29,7 @@ export const AUTOMATION_EVENT_KINDS = {
     'assigned',
     'ci_failed',
     'ci_passed',
+    'ci_finished',
     'pr_conflicted',
     'pr_closed',
     'pr_ready',
@@ -175,6 +176,14 @@ export function automationWebhookTrigger(
   automation: Pick<Automation, 'on'>
 ): AutomationWebhookTrigger | undefined {
   return automation.on?.find(isWebhookTrigger)
+}
+
+/** The hook that starts the automation, if one does. */
+export function automationHookId(automation: {
+  on?: readonly { id: string; source: string }[]
+}): string | null {
+  const rule = automation.on?.find((trigger) => trigger.source === 'webhook')
+  return rule ? hookIdOfRule(rule.id) : null
 }
 
 /** What Orca alone knows about a webhook call, shown outside the quote. */

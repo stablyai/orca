@@ -41,7 +41,7 @@ export function claudePaneHoldEvidence(
       claudeRosterHasWorkingSubagent(state.claudeSubagentRosterByPaneKey.get(paneKey)) ||
       claudeTasksAwaitAgents(launched),
     runningNonAgent:
-      state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
+      state.claudeRunningNonAgentTasksByPaneKey.has(paneKey) ||
       state.claudeActiveSessionCronPaneKeys.has(paneKey),
     owedAgent: owed.agent,
     owedShell: owed.shell

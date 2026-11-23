@@ -14,7 +14,12 @@ import { SettingsSubsectionHeader } from '@/components/settings/form-controls/Se
 import { useBots, useHostBots } from '@/lib/bot-catalog'
 import { botSlackCalls } from '@/lib/bot-connector-host-calls'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import { slackTeamState, useBotSlack } from '@/lib/bot-slack-state'
+import {
+  slackTeamState,
+  useBotSlack,
+  useBotSlackSnapshot,
+  type BotSlackView
+} from '@/lib/bot-slack-state'
 import { botSlackApps, type Bot } from '../../../../../shared/bot-types'
 import { botSlackErrorMessage } from './bot-slack-copy'
 import { SlackConfigTokenForm } from './SlackConfigTokenForm'
@@ -35,11 +40,35 @@ function useSlackTeam(
   bot: Bot | undefined,
   teamId: string
 ): { name: string; installerName: string | null } {
-  const view = useBotSlack(bot ?? null)
+  return slackTeamIn(useBotSlack(bot ?? null), teamId)
+}
+
+function slackTeamIn(
+  view: BotSlackView,
+  teamId: string
+): { name: string; installerName: string | null } {
   const team = view.status === 'ready' ? slackTeamState(view.slack, teamId) : null
   return team?.state === 'installed'
     ? { name: team.teamName ?? teamId, installerName: team.installerName ?? null }
     : { name: teamId, installerName: null }
+}
+
+// One bot per workspace, built once per host bot list however many names read it.
+const firstBotByTeam = new WeakMap<readonly Bot[], Map<string, Bot>>()
+function firstBotInTeam(bots: readonly Bot[], teamId: string): Bot | undefined {
+  let byTeam = firstBotByTeam.get(bots)
+  if (!byTeam) {
+    byTeam = new Map()
+    for (const bot of bots) {
+      for (const app of botSlackApps(bot)) {
+        if (!byTeam.has(app.teamId)) {
+          byTeam.set(app.teamId, bot)
+        }
+      }
+    }
+    firstBotByTeam.set(bots, byTeam)
+  }
+  return byTeam.get(teamId)
 }
 
 /** The workspace's name as one of the host's bots' Slack state reports it; its id until then, or if none. */
@@ -55,9 +84,9 @@ export function SlackTeamName({
 
 /** The workspace's name as one of the host's bots there reads it; its id until known. */
 export function useSlackTeamName(hostId: ExecutionHostId, teamId: string): string {
-  const bot = slackWorkspaces(useHostBots(hostId)).find((workspace) => workspace.teamId === teamId)
-    ?.bots[0]
-  return useSlackTeam(bot, teamId).name
+  // A name only: never follows that bot's own pending install.
+  const bot = firstBotInTeam(useHostBots(hostId), teamId)
+  return slackTeamIn(useBotSlackSnapshot(bot ?? null), teamId).name
 }
 
 function SlackTeamLabel({

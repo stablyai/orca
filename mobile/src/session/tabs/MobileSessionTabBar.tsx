@@ -25,6 +25,7 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import {
   buildMobileSessionTabSummary,
+  countMobileSessionDesktopTabs,
   isForkedChatTab,
   type MobileSessionTabSummary
 } from './mobile-session-tab-rows'
@@ -68,11 +69,14 @@ function ArrivingTabBarDot({ state }: { state: AgentDotState | undefined }) {
 export function MobileSessionTabBar({
   controller,
   inTopBar,
-  actionsCollapsed = false
+  actionsCollapsed = false,
+  homeChatId = null
 }: {
   controller: MobileSessionController
   inTopBar: boolean
   actionsCollapsed?: boolean
+  /** The route bot's main chat, whose recorded name "Home" reads in the phone's language. */
+  homeChatId?: string | null
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -92,13 +96,20 @@ export function MobileSessionTabBar({
   const rows = useMemo(
     () =>
       visibleTabs.map((tab) => {
-        const summary = buildMobileSessionTabSummary(tab, terminals, now)
+        const built = buildMobileSessionTabSummary(tab, terminals, now)
+        const summary =
+          homeChatId !== null &&
+          tab.type === 'agent-session' &&
+          tab.sessionId === homeChatId &&
+          built.title === 'Home'
+            ? { ...built, title: t('bots.tabs.homeTitle', 'Home') }
+            : built
         // The tab on screen is being read (useMarkViewedAgentRead), so it never rings.
         return summary.unread && tab.id === activeSessionTabId
           ? { ...summary, unread: false }
           : summary
       }),
-    [visibleTabs, terminals, now, activeSessionTabId]
+    [visibleTabs, terminals, now, activeSessionTabId, homeChatId, t]
   )
   const activeIndex = rows.findIndex((row) => row.tab.id === activeSessionTabId)
   const active: MobileSessionTabSummary | undefined = rows[activeIndex]
@@ -170,10 +181,11 @@ export function MobileSessionTabBar({
   )
 
   const status = active?.dotState && active.dotState !== 'idle' ? active.dotState : undefined
+  const tabCount = countMobileSessionDesktopTabs(rows)
   const countLabel =
-    rows.length === 1
+    tabCount === 1
       ? t('session.tabBar.oneTab', '1 tab')
-      : t('session.tabBar.tabCount', '{{count}} tabs', { count: rows.length })
+      : t('session.tabBar.tabCount', '{{count}} tabs', { count: tabCount })
   const tabLabel = [
     active && isForkedChatTab(active.tab) ? mobileForkAccessibleName(active.title) : active?.title,
     status ? agentStateLabel(status) : null
@@ -267,10 +279,10 @@ export function MobileSessionTabBar({
         accessibilityHint={t('session.tabBar.hint', 'Shows all tabs')}
       >
         <View style={styles.countBox}>
-          <Text style={styles.countText}>{rows.length}</Text>
+          <Text style={styles.countText}>{tabCount}</Text>
+          {othersNeedYou ? <View style={styles.alert} /> : null}
         </View>
         {anyUnread ? <Bell size={12} color={colors.statusAmber} fill={colors.statusAmber} /> : null}
-        {othersNeedYou ? <View style={styles.alert} /> : null}
       </Pressable>
       {/* A collapsed bar's + lives in the header's ⋯ menu. */}
       {!actionsCollapsed ? (
@@ -349,6 +361,8 @@ const styles = themedStyleSheet(() => ({
   },
   sideCell: {
     width: 46,
+    flexDirection: 'row',
+    gap: 2,
     alignItems: 'center',
     justifyContent: 'center',
     borderRightWidth: 1,
@@ -377,8 +391,8 @@ const styles = themedStyleSheet(() => ({
   // Another tab needs you: a red dot on the count's corner, ringed in the bar's colour.
   alert: {
     position: 'absolute',
-    top: 8,
-    right: 9,
+    top: -6,
+    right: -7,
     width: 9,
     height: 9,
     borderRadius: radii.pill,

@@ -45,6 +45,11 @@ const itemPost = line({
   text: `Scout read a change to its items: ${EVENT_TEXT}`,
   fromItems: true
 })
+const reportPost = line({
+  author: { kind: 'bot', id: 'bot-0', name: 'Scout' },
+  text: `Scout followed up: ${EVENT_TEXT}`,
+  fromReports: true
+})
 const handoff = line({
   id: 'handoff-1',
   sequence: 2,
@@ -92,6 +97,7 @@ describe("a room turn on an event's or an item's words never reads as the owner'
   it.each([
     ['a hand-off of an automation run', turnOn(handoff, runPost)],
     ['a hand-off of an item update', turnOn(handoff, itemPost)],
+    ["a hand-off of a worker's report after a Stop", turnOn(handoff, reportPost)],
     ['a replay of an automation run after a crash', turnOn(runPost, runPost)]
   ])('%s', (_name, body) => {
     expect(body.blocks[0]).toMatchObject({ text: expect.stringContaining(EVENT_TEXT) })

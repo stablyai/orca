@@ -2,6 +2,8 @@
 // filters cost new GPU programs at each size drawn, which a carousel scaling 20 of them pays on first open.
 import type React from 'react'
 import { cn } from '@/lib/class-names'
+import { OutfitArt } from './BotAvatar'
+import type { BotOutfitArt } from './bot-mascot-look'
 import type { BotMascotId } from '../../../../shared/bot-avatar'
 import {
   DEFAULT_BOT_AVATAR_COLOR,
@@ -21,10 +23,16 @@ function bitmap(name: string): string | undefined {
 export function BotMascotBitmapTile({
   id,
   color,
+  face,
+  outfit,
   className
 }: {
   id: BotMascotId
   color: string | null | undefined
+  /** The mascot an outfit redraws (the eyes looking down), baked like the bitmaps here. */
+  face?: string | null
+  /** Drawn over the mascot, apart from the tile so a new color never redraws it. */
+  outfit?: BotOutfitArt | null
   className?: string
 }): React.JSX.Element {
   const tile = color ?? DEFAULT_BOT_AVATAR_COLOR
@@ -38,7 +46,13 @@ export function BotMascotBitmapTile({
       {rim ? (
         <img src={rim} alt="" draggable={false} className="absolute inset-0 size-full" />
       ) : null}
-      <img src={bitmap(id)} alt="" draggable={false} className="absolute inset-0 size-full" />
+      <img
+        src={face ?? bitmap(id)}
+        alt=""
+        draggable={false}
+        className="absolute inset-0 size-full"
+      />
+      {outfit ? <OutfitArt art={outfit} /> : null}
     </span>
   )
 }

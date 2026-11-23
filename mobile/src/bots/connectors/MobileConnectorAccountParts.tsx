@@ -1,22 +1,23 @@
 // What the Slack, Linear and GitHub pages share: Who can ask on one workspace (its waiting requests and
-// people), the hand-off while a sign-in finishes on the computer, and the default bot picker.
+// people), the hand-off while a sign-in finishes on the computer or in its tab here, and the default bot picker.
 import { useEffect, useState, type ReactNode } from 'react'
 import { ActivityIndicator, AppState, Text, View } from 'react-native'
-import { Laptop } from 'lucide-react-native'
+import { ArrowUpRight, Laptop } from 'lucide-react-native'
 import type { BotMember } from '../../../../src/shared/bot-types'
 import { accessRequestPerson } from '../../../../src/shared/bots/bot-access-request'
-import { BOT_ACCESS_COPY } from '../../../../src/shared/bots/bot-access-copy'
 import type { ConnectorAccessRequest } from '../../../../src/shared/connector-bot-access-contract'
 import { MobileStateButton, MobileStateView } from '../../components/feedback/MobileStateView'
 import { ListRow } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
+import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { accessRequestGrant, accessRequestLine } from '../bot-access-request-copy'
+import { mobileBotAccessCopy } from '../mobile-bot-access-copy'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotAccessDecisionContent } from '../MobileBotAccessDecision'
 import { optionStyles } from '../mobile-bot-option-styles'
@@ -75,18 +76,18 @@ export function useConnectorPeople(props: {
   const section = (
     <>
       {props.requests.length > 0 && access ? (
-        <SettingsSection title={BOT_ACCESS_COPY.heading}>
+        <SettingsSection title={mobileBotAccessCopy(t, 'heading')}>
           {props.requests.map((request) => {
             const person = accessRequestPerson(request)
             return (
               <ListRow
                 key={request.requestId}
                 title={person}
-                subtitle={accessRequestLine(request)}
+                subtitle={accessRequestLine(request, t)}
                 accessory={
                   <View style={optionStyles.rowActions}>
                     <MobileBotTextButton
-                      label={BOT_ACCESS_COPY.decline}
+                      label={mobileBotAccessCopy(t, 'decline')}
                       accessibilityLabel={t('bots.settings.declineName', 'Decline {{name}}', {
                         name: person
                       })}
@@ -94,7 +95,7 @@ export function useConnectorPeople(props: {
                       onPress={() => void access.decide(request, 'declined')}
                     />
                     <MobileBotTextButton
-                      label={BOT_ACCESS_COPY.review}
+                      label={mobileBotAccessCopy(t, 'review')}
                       accessibilityLabel={t('bots.settings.reviewName', 'Review {{name}}', {
                         name: person
                       })}
@@ -181,6 +182,8 @@ export function ConnectorHandoff(props: {
   waiting: string
   /** Said once the wait has run long, e.g. Linear's likely error page. */
   stuck?: string | null
+  /** Shows the sign-in on this phone; null where the host can't stream it here. */
+  onOpenPage: (() => void) | null
   onCancel: () => void
 }) {
   const t = useMobileTranslation()
@@ -191,6 +194,13 @@ export function ConnectorHandoff(props: {
         title={t('bots.connect.continueOn', 'Continue on {{host}}', { host: props.hostName })}
         message={props.message}
       >
+        {props.onOpenPage ? (
+          <SheetPrimaryButton
+            label={t('bots.connect.openSignInPage', 'Open sign-in page')}
+            icon={ArrowUpRight}
+            onPress={props.onOpenPage}
+          />
+        ) : null}
         <View style={styles.waiting}>
           <ActivityIndicator size="small" color={colors.textSecondary} />
           <Text style={styles.waitingText}>{props.waiting}</Text>

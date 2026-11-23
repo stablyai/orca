@@ -7,10 +7,9 @@ import { ScrollView, View, type ScrollViewInstance } from 'react-native'
 import {
   BOT_ITEM_NO_FILTER,
   botItemStaleDays,
-  botItemsNeedingOwner,
   type BotItemFilter
 } from '../../../src/shared/bots/bot-item-groups'
-import { usePhoneNeedsYouAsks } from './items/phone-needs-you-asks'
+import { usePhonePanelNeedsYouAsks } from './items/phone-needs-you-asks'
 import type { BotItem } from '../../../src/shared/bots/bot-items'
 import type { BotChatTreeWorker } from '../../../src/shared/bots/bot-chat-tree'
 import { BottomDrawer, OptionPager, useOptionPager } from '../components/bottom-drawer/BottomDrawer'
@@ -24,7 +23,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { MobileBotActivityTab } from './MobileBotActivityTab'
-import { MobileBotSettingsTab, type BotSettingsHome } from './MobileBotSettingsTab'
+import { MobileBotSettingsTab } from './MobileBotSettingsTab'
 import type { BotSettingsTarget } from './MobileBotSettingsRoot'
 import { SheetPageScrollContext } from '../components/nav-bar/sheet-page-scroll'
 import { MobileBotUpNext } from './MobileBotUpNext'
@@ -50,6 +49,7 @@ import { usePhoneBotItemWalk } from './items/use-phone-bot-item-walk'
 import { openBotItemWorker } from './items/bot-item-worker-open'
 import { useBotAccessDecisionSheet } from './MobileBotAccessDecision'
 import { useBotPanelAutomations } from './use-bot-panel-automations'
+import { useMobileBotChatDelete } from './MobileBotChatDelete'
 
 type PanelPage = 'settings' | `item:${string}` | `automation:${string}`
 
@@ -89,7 +89,7 @@ export function MobileBotPanel(props: {
   onOpenItemChat: (item: BotItem) => void
   /** Opens a file an item links; a path outside the bot's folder is refused with a toast. */
   onOpenFile: (path: string, showToast: (message: string) => void) => void
-  home: BotSettingsHome
+  home: Parameters<typeof MobileBotSettingsTab>[0]['home']
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -111,6 +111,10 @@ export function MobileBotPanel(props: {
   }))
   const openSettings = (at: BotSettingsTarget | undefined) =>
     setSettings((current) => ({ at, opens: current.opens + 1 }))
+  const showSettings = (at: BotSettingsTarget | undefined) => {
+    openSettings(at)
+    pager.open('settings')
+  }
   const settingsScroll = useRef<ScrollViewInstance>(null)
   const now = useNow(60_000, visible)
 
@@ -164,18 +168,14 @@ export function MobileBotPanel(props: {
     reads: props.routeBot.reads
   })
   const { review, sheet: accessSheet } = useBotAccessDecisionSheet(props, bot, showToast)
-  const { asks, count: needsYou } = usePhoneNeedsYouAsks({
-    client: visible ? props.client : null,
-    access: props.accessRequests,
+  const deleteChat = useMobileBotChatDelete(props, automations.present, showToast)
+  const { asks, count: needsYou } = usePhonePanelNeedsYouAsks({
+    client: visible && pager.page !== 'settings' ? props.client : null,
+    panel: props,
     chats: tree.kind === 'tree' ? tree.chats : null,
-    workers: props.routeBot.activity?.workers,
-    items: items.read?.items,
-    // A first read that failed counts no items, as nothing was read; the bot list's count stands in until one lands.
-    itemCount: items.read
-      ? botItemsNeedingOwner(items.read.items, staleDays, now)
-      : items.error !== null
-        ? 0
-        : props.listNeedsYou
+    items,
+    staleDays,
+    now
   })
 
   const seenAtOpen = useBotItemsSeenAtOpen(visible, items.read, props.client, bot.id)
@@ -241,7 +241,7 @@ export function MobileBotPanel(props: {
         showsVerticalScrollIndicator={false}
       >
         <MobileBotItemsTab
-          botName={bot.name}
+          bot={bot}
           items={items}
           filter={filter}
           filterLabel={filterLabel}
@@ -257,7 +257,13 @@ export function MobileBotPanel(props: {
           setSheet={setSheet}
           after={after}
           asks={asks}
-          askOpeners={{ chat: props.treeActions.openChat, worker: openWorker, access: review }}
+          askOpeners={{
+            chat: props.treeActions.openChat,
+            worker: openWorker,
+            access: review,
+            connector: (need) => showSettings(need.page),
+            stopped: props.onViewRuns ?? ((id) => pager.open(`automation:${id}`))
+          }}
           client={props.client}
           showToast={showToast}
         />
@@ -275,7 +281,7 @@ export function MobileBotPanel(props: {
           hostKey={props.hostKey}
           activity={props.routeBot.activity}
           tree={tree}
-          treeActions={props.treeActions}
+          treeActions={deleteChat ? { ...props.treeActions, deleteChat } : props.treeActions}
           upNextActions={upNext}
           loading={props.routeBot.activityLoading}
           error={props.routeBot.activityError ?? null}
@@ -311,10 +317,7 @@ export function MobileBotPanel(props: {
         needsYou={needsYou}
         filterActive={filterLabel !== null}
         onFilter={() => setFiltering(true)}
-        onSettings={() => {
-          openSettings(undefined)
-          pager.open('settings')
-        }}
+        onSettings={() => showSettings(undefined)}
       />
       {body}
       {tab === 'items' && selectedItems.length > 0 ? (

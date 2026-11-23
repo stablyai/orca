@@ -9,20 +9,49 @@ import {
   driveToLiveIdle,
   insertDirectRunMessage,
   pointerCount,
-  temporaryDirectories
+  PTY_ID,
+  temporaryDirectories,
+  TERMINAL_HANDLE
 } from './orchestration-mailbox-notification-test-harness'
 import { checkBoundMailbox } from './orchestration-mailbox-check.test-fixture'
 
 import { OrchestrationDb } from '../../db/orchestration-db'
+import { agentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
 import '../../db/contract-constants'
 import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { MAILBOX_POINTER_ENTER_ATTEMPTED } from '../../db/messages/mailbox-pointer-enter-state'
 
+vi.mock('electron', () => ({
+  app: { getPath: vi.fn(() => tmpdir()), isPackaged: false },
+  BrowserWindow: { fromId: vi.fn(() => null) },
+  ipcMain: { on: vi.fn(), removeListener: vi.fn() },
+  webContents: { fromId: vi.fn(() => null) }
+}))
+
+const CLAUDE_COMPOSER = '\x1b[?2031h\x1b[?2004h│ ❯  │\x1b[?25h'
+
+async function reattachedIdleClaude() {
+  vi.useFakeTimers()
+  const db = new OrchestrationDb(':memory:')
+  const harness = await createRuntime(db, { launchAgent: 'claude', foregroundProcess: 'claude' })
+  const { runtime } = harness
+  await runtime.listTerminals()
+  // A restart reattached this idle process: its composer was drawn before Orca started, and its
+  // status comes back from its last hook report.
+  vi.spyOn(agentHookServer, 'readRestoredAgentStatus').mockResolvedValue({ state: 'done' })
+  runtime.startReattachedOutputClock(PTY_ID)
+  runtime.restoreReattachedAgentStatus(PTY_ID)
+  await vi.advanceTimersByTimeAsync(0)
+  await runtime.serializeMainTerminalBuffer(PTY_ID)
+  return { db, ...harness }
+}
+
 describe('orchestration mailbox crash recovery', () => {
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
     for (const directory of temporaryDirectories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }
@@ -73,5 +102,30 @@ describe('orchestration mailbox crash recovery', () => {
     expect(restarted.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(0)
     expect(checked.messages).toEqual([expect.objectContaining({ id: message.id })])
     restartedDb.close()
+  })
+
+  it('asks again on the next recheck when no host was asked, then delivers on the paint', async () => {
+    const { db, runtime, write, requestRepaint } = await reattachedIdleClaude()
+    // A phone owned the grid (or the host could not be reached) at the first ask.
+    requestRepaint.mockResolvedValueOnce(false)
+    const run = createBoundRun(db, 'Reattached Run')
+    const message = insertDirectRunMessage(db, run.id, 'After restart')
+
+    runtime.deliverPendingMessagesForHandle(TERMINAL_HANDLE)
+    expect(requestRepaint).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(requestRepaint).toHaveBeenCalledTimes(2)
+    expect(pointerCount(write)).toBe(0)
+
+    // The second ask reached the host: later rechecks ask nothing more.
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(requestRepaint).toHaveBeenCalledTimes(2)
+
+    runtime.onPtyData(PTY_ID, CLAUDE_COMPOSER, 2)
+    await runtime.serializeMainTerminalBuffer(PTY_ID)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(pointerCount(write)).toBe(1)
+    expect(db.getMessageById(message.id)?.delivered_at).toEqual(expect.any(String))
+    db.close()
   })
 })
