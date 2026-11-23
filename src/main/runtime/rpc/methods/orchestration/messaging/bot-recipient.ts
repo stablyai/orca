@@ -272,12 +272,14 @@ export async function readActingSender(
 }
 
 /** What a bot's chat is doing now: who its running turn is for, and the conversation it answers.
- *  With `opening`, the turn that message is about to open, read from it alone, not the journal. */
+ *  With `opening`, the turn that message is about to open, read from it alone, not the journal.
+ *  `askersOnly` skips where an automation's run was woken, which its askers never depend on. */
 export async function readBotTurn(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   sessionId: string,
-  opening?: AgentJournalMessageItem
+  opening?: AgentJournalMessageItem,
+  askersOnly = false
 ): Promise<{
   turn: BotActingTurn
   conversation: BotRequestConversation | null
@@ -309,7 +311,7 @@ export async function readBotTurn(
     isBotRequest: (messageId: string) => db.getBotRequest(messageId) !== undefined,
     botRequestActsFor: (messageId: string) => botRequestActsFor(db, messageId),
     conversationActsFor: actsFor,
-    automationPlace: () => automationPlace(runtime, sessionId),
+    ...(askersOnly ? {} : { automationPlace: () => automationPlace(runtime, sessionId) }),
     conversationWorkspaceId: workspaceId
   }
   const turn = opening

@@ -58,7 +58,7 @@ export async function closingTurnActsFor(
 ): Promise<BotRequestAsker[]> {
   try {
     const db = context.runtime.getOrchestrationDb()
-    const { turn } = await readBotTurn(context.runtime, db, writer.sessionId)
+    const { turn } = await readBotTurn(context.runtime, db, writer.sessionId, undefined, true)
     return turn.askers.map((asker): BotRequestAsker =>
       asker.kind === 'person'
         ? {

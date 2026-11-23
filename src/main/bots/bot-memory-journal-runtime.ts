@@ -21,8 +21,12 @@ const CLOSED_READ = 100
 
 export function createBotMemoryJournal(deps: {
   bots: () => readonly Bot[]
-  /** The bot's items closed at or after `since`, every one of them. */
-  closedItems: (botId: string, since: number) => Promise<JournalItem[]>
+  /** The bot's items closed at or after `since`, every one of them but those `written` at `since`. */
+  closedItems: (
+    botId: string,
+    since: number,
+    written: ReadonlySet<number>
+  ) => Promise<JournalItem[]>
   folder: (bot: Bot) => string
   /** Runs `step` on the bot's memory queue. */
   serialize: (botId: string, step: () => Promise<void>) => Promise<void>
@@ -30,12 +34,17 @@ export function createBotMemoryJournal(deps: {
   now: () => number
 }): { itemsChanged: (botIds: readonly string[]) => void; settled: () => Promise<void> } {
   const since = new Map<string, number>()
+  /** The items closed at each bot's `since`, journaled already, so a later pass reads them no more. */
+  const atSince = new Map<string, ReadonlySet<number>>()
   const running = new Map<string, Promise<void>>()
   const again = new Set<string>()
 
   const pass = async (bot: Bot): Promise<void> => {
     const from = since.get(bot.id) ?? deps.now() - FIRST_LOOKBACK_MS
-    const closed = (await deps.closedItems(bot.id, from)).filter((item) => item.closedAt >= from)
+    const written = atSince.get(bot.id) ?? new Set<number>()
+    const closed = (await deps.closedItems(bot.id, from, written)).filter(
+      (item) => item.closedAt > from || (item.closedAt === from && !written.has(item.number))
+    )
     const lines = closed.toSorted((a, b) => a.closedAt - b.closedAt).flatMap(journalLines)
     if (lines.length > 0) {
       await deps.serialize(bot.id, async () => {
@@ -43,7 +52,10 @@ export function createBotMemoryJournal(deps: {
       })
     }
     // Only after the lines are written: a failed write leaves them for the next pass.
-    since.set(bot.id, Math.max(from, ...closed.map((item) => item.closedAt)))
+    const mark = Math.max(from, ...closed.map((item) => item.closedAt))
+    const atMark = closed.flatMap((item) => (item.closedAt === mark ? [item.number] : []))
+    atSince.set(bot.id, new Set([...(mark === from ? written : []), ...atMark]))
+    since.set(bot.id, mark)
   }
 
   const run = (bot: Bot): void => {
@@ -94,7 +106,8 @@ export async function readClosedSince<
   closes: (
     items: readonly { uid: string; closedAt: number }[]
   ) => Promise<Record<string, BotItemClose>>,
-  since: number
+  since: number,
+  written: ReadonlySet<number> = new Set()
 ): Promise<JournalItem[]> {
   const records: R[] = []
   let cursor: { at: number; number: number } | undefined
@@ -104,7 +117,12 @@ export async function readClosedSince<
       limit: CLOSED_READ,
       ...(cursor ? { cursor } : {})
     })
-    records.push(...page.filter(({ closedAt }) => closedAt !== null && closedAt >= since))
+    records.push(
+      ...page.filter(
+        ({ closedAt, number }) =>
+          closedAt !== null && (closedAt > since || (closedAt === since && !written.has(number)))
+      )
+    )
     const last = page.at(-1)
     if (!last || page.length < CLOSED_READ || last.lastActivityAt < since) {
       break
@@ -138,12 +156,13 @@ export function journaledItemsNotice(
 ): ((scope: BotChangeScope) => void) & { catchUp: () => void } {
   const journal = createBotMemoryJournal({
     bots: () => runtime.bots.list(),
-    closedItems: (botId, since) =>
+    closedItems: (botId, since, written) =>
       readClosedSince(
         (query) => runtime.botItems.store().list({ botId, ...query }),
         (records) => runtime.botItems.views(records),
         (items) => runtime.botItems.store().closes(items),
-        since
+        since,
+        written
       ),
     folder: (bot) => botHomeFolder(bot),
     serialize: (botId, step) =>

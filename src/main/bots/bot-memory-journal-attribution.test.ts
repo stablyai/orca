@@ -59,26 +59,31 @@ describe("the journal's attribution of each close", () => {
     return { store, add, now: () => at++ }
   }
 
-  async function journalOf(store: BotItemsStore): Promise<string | undefined> {
+  function journalOf(store: BotItemsStore) {
     const fs = memoryFs()
+    const read = { closes: 0 }
     const journal = createBotMemoryJournal({
       bots: () => [makeTestBot({ id: 'b1' })],
-      closedItems: (botId, since) =>
+      closedItems: (botId, since, written) =>
         readClosedSince(
           async (query) => store.list({ botId, ...query }),
           async (records) =>
             records.map(({ number, title, status }) => ({ number, title, status, links: [] })),
-          async (items) => store.closes(items),
-          since
+          async (items) => (read.closes++, store.closes(items)),
+          since,
+          written
         ),
       folder: () => '/home',
       serialize: async (_botId, step) => step(),
       fs,
       now: () => CLOSED + 60_000
     })
-    journal.itemsChanged(['b1'])
-    await journal.settled()
-    return fs.files.get(FILE)
+    const pass = async () => {
+      journal.itemsChanged(['b1'])
+      await journal.settled()
+      return fs.files.get(FILE)
+    }
+    return { pass, read }
   }
 
   it('labels a close made for anyone but the owner, and keeps the owner’s lines as they were', async () => {
@@ -108,19 +113,22 @@ describe("the journal's attribution of each close", () => {
     // A close that kept no askers says it can't tell.
     store.set(add('Unattributed'), { status: 'done' }, HOME, now())
     store.set(add('Set by teammate'), { status: 'done', closedFor: [DANA] }, HOME, now())
-    expect(await journalOf(store)).toBe(
-      [
-        '# Journal 2026-11',
-        '- 2026-11-21 | item #1 | done | Owner typed',
-        '- 2026-11-21 | item #2 | done | Owner via Slack',
-        '- 2026-11-21 | item #3 | done | Teammate chat | for Dana via Slack, not your owner',
-        '- 2026-11-21 | item #4 | done | Relayed request | for Eve / done via Slack, not your owner',
-        '- 2026-11-21 | item #5 | done | Owner closed',
-        '- 2026-11-21 | item #6 | done | Unattributed | asker unknown, not known to be your owner',
-        '- 2026-11-21 | item #7 | done | Set by teammate | for Dana via Slack, not your owner',
-        ''
-      ].join('\n')
-    )
+    const { pass, read } = journalOf(store)
+    const journal = [
+      '# Journal 2026-11',
+      '- 2026-11-21 | item #1 | done | Owner typed',
+      '- 2026-11-21 | item #2 | done | Owner via Slack',
+      '- 2026-11-21 | item #3 | done | Teammate chat | for Dana via Slack, not your owner',
+      '- 2026-11-21 | item #4 | done | Relayed request | for Eve / done via Slack, not your owner',
+      '- 2026-11-21 | item #5 | done | Owner closed',
+      '- 2026-11-21 | item #6 | done | Unattributed | asker unknown, not known to be your owner',
+      '- 2026-11-21 | item #7 | done | Set by teammate | for Dana via Slack, not your owner',
+      ''
+    ].join('\n')
+    expect(await pass()).toBe(journal)
+    // A later pass with no new close reads no close again.
+    expect(await pass()).toBe(journal)
+    expect(read.closes).toBe(1)
   })
 
   it('reads whom a close was for from that close, not one after a reopen', () => {
