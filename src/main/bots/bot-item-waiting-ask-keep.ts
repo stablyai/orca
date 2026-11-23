@@ -9,21 +9,25 @@ import { eventRecordOf, eventViewOf, optionalInteger } from './bot-items-rows'
 /** An ask (0: none) as pairing the item's events up to `at` found it. */
 export type PairedWaitingAsk = { ask: number | null; at: number }
 
-/** What one event can do to a kept ask: an ask by anyone but the owner can make one wait; any other
- *  comment or move can only answer or end one, so a kept "none" still holds after it. */
+/** What one event can do to a kept ask, as pairing reads it: a question by anyone but the owner can make
+ *  one wait; an owner comment, an answer's move or a move off Needs you can only answer or end one, so a
+ *  kept "none" still holds after it; anything else (a bot comment that asks nothing, a move onto Needs you
+ *  that answers nothing) pairs nothing. */
 export function waitingAskChange(
   kind: string,
   actor: BotItemActor,
   data: Record<string, unknown>
 ): 'asks' | 'answers' | null {
-  if (
-    kind === 'commented' &&
-    actor.kind !== 'owner' &&
-    botItemQuestionShape(data).decisions.length > 0
-  ) {
-    return 'asks'
+  if (kind === 'commented') {
+    if (actor.kind === 'owner') {
+      return 'answers'
+    }
+    return botItemQuestionShape(data).decisions.length > 0 ? 'asks' : null
   }
-  return kind === 'commented' || kind === 'status' ? 'answers' : null
+  if (kind === 'status') {
+    return data.to === 'needs_you' && data.cause !== 'answer' ? null : 'answers'
+  }
+  return null
 }
 
 /** Makes the table on a file this build may write; false when the disk refuses. */
@@ -125,18 +129,31 @@ function quietly(db: SyncDatabase, keep: () => void): void {
   }
 }
 
-/** After a write, in constant time: carry a kept ask that held before it to its newest event when the write
- *  can't have changed it. Otherwise the kept ask goes stale and the next open pairs the events once. */
-export function keepAfterWrite(db: SyncDatabase, uid: string, item: TouchedItem): void {
-  if (item.change === 'asks') {
+/** After a write, in one transaction of constant-time updates: carry each kept ask that held before it to
+ *  the item's newest event when the write can't have changed it. Any other kept ask goes stale and the next
+ *  open pairs the events once. */
+export function keepAfterWrite(db: SyncDatabase, touched: ReadonlyMap<string, TouchedItem>): void {
+  const carried = [...touched].filter(([, item]) => item.change !== 'asks')
+  if (carried.length === 0) {
     return
   }
   quietly(db, () => {
-    db.prepare(
-      `UPDATE item_waiting_asks SET at = ?
-        WHERE item_uid = ? AND at = ? AND (? OR ask = 0)
-          AND (SELECT last_event_id FROM items WHERE uid = ?) = ?`
-    ).run(item.last, uid, item.before, Number(item.change === null), uid, item.last)
+    // Outside the try: a BEGIN that fails leaves no transaction of ours to roll back.
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      const carry = db.prepare(
+        `UPDATE item_waiting_asks SET at = ?
+          WHERE item_uid = ? AND at = ? AND (? OR ask = 0)
+            AND (SELECT last_event_id FROM items WHERE uid = ?) = ?`
+      )
+      for (const [uid, item] of carried) {
+        carry.run(item.last, uid, item.before, Number(item.change === null), uid, item.last)
+      }
+      db.exec('COMMIT')
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
   })
 }
 

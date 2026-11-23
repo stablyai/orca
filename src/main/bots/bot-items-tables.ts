@@ -61,7 +61,7 @@ export class BotItemsTables {
       this.touched = null
     }
     // After the commit and on its own, so keeping an ask can never fail or slow the write it follows.
-    touched.forEach((item, uid) => keepAfterWrite(this.db, uid, item))
+    keepAfterWrite(this.db, touched)
     return result
   }
 
@@ -143,7 +143,7 @@ export class BotItemsTables {
       if (this.touched) {
         this.touched.set(uid, item)
       } else {
-        keepAfterWrite(this.db, uid, item)
+        keepAfterWrite(this.db, new Map([[uid, item]]))
       }
     }
     return id
