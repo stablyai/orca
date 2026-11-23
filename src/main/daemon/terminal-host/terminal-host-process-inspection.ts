@@ -24,6 +24,8 @@ import {
 import { steadyPollJudgesByJobMembership } from '../../providers/pty/process-inspection'
 
 const WINDOWS_FOREGROUND_REFRESH_SETTLE_MS = 1_000
+/** Longer than a cached census can lag: its 500 ms reuse window plus a slow scan. */
+const WINDOWS_IDLE_PROOF_QUIET_MS = 5_000
 
 export type TerminalHostProcessInspection = {
   foregroundObservation?: TerminalForegroundObservation
@@ -145,6 +147,8 @@ export async function inspectTerminalHostProcess(args: {
   if (!incarnationMatches) {
     evidence = unverifiableEvidence(args, session, 'incarnation_mismatch')
   } else if (process.platform === 'win32') {
+    const activity = paneActivity(session)
+    const readStartedAt = Date.now()
     if (windowsDecision || session.processNameIsSpawnFile) {
       foregroundProcess = await session.confirmForegroundProcess(
         windowsDecision ? { decision: true } : undefined
@@ -162,10 +166,13 @@ export async function inspectTerminalHostProcess(args: {
       steadyPollJudgesByJobMembership(args, foregroundProcess)
     )
     // A full census (escaped children included) is the only Windows proof; wsl.exe cannot prove its guest idle.
+    // A cached census may predate recent input or output, so prove only a pane quiet since before it could start.
     idleShellProven =
       childProcessEvidence === 'no-children' &&
       foregroundProcess !== null &&
-      isShellProcess(foregroundProcess)
+      isShellProcess(foregroundProcess) &&
+      paneActivity(session) === activity &&
+      readStartedAt - session.lastActivityAt > WINDOWS_IDLE_PROOF_QUIET_MS
     // Windows cannot provide this POSIX evidence; avoid spawning an MSYS ps.exe console.
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {

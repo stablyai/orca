@@ -36,6 +36,7 @@ export class ForegroundExitWatches {
   private readonly current = new Map<string, { name: string; pid: number }>()
   /** One re-read notice per cached pid a stale read disagreed with, so a lagging cache cannot loop. */
   private readonly mismatchedPids = new Map<string, number>()
+  private disposed = false
 
   constructor(
     private readonly onAgentChange?: (ptyId: string) => void,
@@ -57,14 +58,15 @@ export class ForegroundExitWatches {
     /** False when a full capture was attempted and failed: a same-name replacement may hold the foreground. */
     foregroundUnchanged = true
   ): boolean {
-    if (!source?.isAlive) {
+    // Without a listener an exit notice reaches no pane, and after dispose nothing would release a new watch.
+    if (!source?.isAlive || !this.onAgentChange || this.disposed) {
       this.forget(ptyId)
       return false
     }
     this.noticeLookup(ptyId, source)
-    // An unverifiable read proves nothing; keep what is watched.
+    // An unverifiable read proves nothing; keep what is watched, but vouch only for the last proven agent.
     if (foreground === null) {
-      return this.isWatching(ptyId)
+      return this.watchesCurrent(ptyId)
     }
     const recognized = recognizeAgentProcess(foreground)
     if (!recognized) {
@@ -90,8 +92,7 @@ export class ForegroundExitWatches {
       if (!foregroundUnchanged) {
         return false
       }
-      const current = this.current.get(ptyId)
-      return current?.name === foreground && this.watches.get(ptyId)?.has(current.pid) === true
+      return this.current.get(ptyId)?.name === foreground && this.watchesCurrent(ptyId)
     }
     this.current.set(ptyId, { name: foreground, pid })
     if (this.reportedPids.get(ptyId) === pid) {
@@ -181,6 +182,11 @@ export class ForegroundExitWatches {
     })
   }
 
+  private watchesCurrent(ptyId: string): boolean {
+    const current = this.current.get(ptyId)
+    return current !== undefined && this.watches.get(ptyId)?.has(current.pid) === true
+  }
+
   private isWatching(ptyId: string): boolean {
     return (this.watches.get(ptyId)?.size ?? 0) > 0
   }
@@ -207,6 +213,7 @@ export class ForegroundExitWatches {
   }
 
   dispose(): void {
+    this.disposed = true
     for (const ptyId of this.watches.keys()) {
       this.forget(ptyId)
     }

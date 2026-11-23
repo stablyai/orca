@@ -142,8 +142,7 @@ export function createPtyForegroundProcessTracker(args: {
         ? { anchorProcessId: anchor.pid, anchorProcessName: anchor.processName }
         : {})
     })
-      .then<string | void>((resolution) => {
-        const { processName, available, anchorPidForeign } = resolution
+      .then<string | void>(({ processName, available, anchorPidForeign, ...found }) => {
         if (args.isDead() || !available) {
           return
         }
@@ -187,7 +186,10 @@ export function createPtyForegroundProcessTracker(args: {
           retireStaleForegroundIdentity()
           return
         }
-        cacheAgentForeground(processName, resolution, now)
+        // A confirmation that landed during this lookup is newer; its pid is the one to watch.
+        if (cachedAgentForeground === anchor) {
+          cacheAgentForeground(processName, found, now)
+        }
         return processName
       })
       .catch(() => {

@@ -270,6 +270,11 @@ export function createAgentCompletionProcessMonitor({
         recordActivityUntil(now, now)
         return
       }
+      // A detached client misses the host's exit notice, so a tracked agent is read again on reattach.
+      if (state.lastForegroundAgent !== null) {
+        noteForegroundEvent()
+        return
+      }
       scheduleNextPoll()
     },
     recordActivity: () => {
