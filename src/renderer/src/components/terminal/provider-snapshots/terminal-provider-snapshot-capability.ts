@@ -32,6 +32,10 @@ function refreshEarliestUnknownCapabilityRetry(): void {
 
 // Unknown routes decay to slow re-asks, never permanent lifetime eviction exemptions.
 function backOffUnknownCapability(ptyId: string, nowMs: number): void {
+  // A revived re-ask may have answered while this request was out; an answered id must not wait on a deadline.
+  if (authoritativeSnapshotByPtyId.has(ptyId)) {
+    return
+  }
   const attempts = Math.min(
     (unknownCapabilityAttemptsByPtyId.get(ptyId) ?? 0) + 1,
     UNKNOWN_CAPABILITY_MAX_ATTEMPTS
@@ -104,7 +108,7 @@ export async function synchronizeTerminalProviderSnapshotCapabilities(
   }
   pruneTerminalProviderGoneSessions(live)
   for (const pendingId of unknownCapabilityRetryAtByPtyId.keys()) {
-    if (!live.has(pendingId)) {
+    if (!live.has(pendingId) || authoritativeSnapshotByPtyId.has(pendingId)) {
       unknownCapabilityRetryAtByPtyId.delete(pendingId)
       unknownCapabilityAttemptsByPtyId.delete(pendingId)
     }

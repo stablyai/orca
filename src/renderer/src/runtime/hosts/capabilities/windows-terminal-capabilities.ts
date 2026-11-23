@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { startWindowsTerminalCapabilityReprobe } from './windows-terminal-capability-reprobe'
+import {
+  isWindowsTerminalCapabilityReprobeActive,
+  startWindowsTerminalCapabilityReprobe
+} from './windows-terminal-capability-reprobe'
 import { readWindowsTerminalCapabilities } from './windows-terminal-capability-read'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
@@ -229,18 +232,28 @@ export function useWindowsTerminalCapabilities(
     subscribers.add(setCapabilities)
     subscribersByOwnerKey.set(resolvedOwnerKey, subscribers)
     const reprobe: { stop: (() => void) | null } = { stop: null }
-    void loadWindowsTerminalCapabilities({
-      force: forceRefreshOnMount,
-      ownerKey: resolvedOwnerKey,
-      target: resolvedTarget,
-      sshConnectionId: sshConnectionIdKey
-    }).then((nextCapabilities) => {
+    const isLocalOwner = resolvedTarget.kind === 'local' && !sshConnectionIdKey
+    // A remounting tab strip reads the answer the live re-probe keeps fresh instead of probing the host again.
+    const ownedByLiveReprobe =
+      !forceRefreshOnMount &&
+      isLocalOwner &&
+      hasOwnerCache &&
+      isWindowsTerminalCapabilityReprobeActive(resolvedOwnerKey)
+    const mountLoad = ownedByLiveReprobe
+      ? Promise.resolve(cached)
+      : loadWindowsTerminalCapabilities({
+          force: forceRefreshOnMount,
+          ownerKey: resolvedOwnerKey,
+          target: resolvedTarget,
+          sshConnectionId: sshConnectionIdKey
+        })
+    void mountLoad.then((nextCapabilities) => {
       if (cancelled) {
         return
       }
       setState({ ownerKey: resolvedOwnerKey, capabilities: nextCapabilities })
       // Why: each re-probe spawns wsl.exe/pwsh.exe, so local consumers share a bounded backoff.
-      if (resolvedTarget.kind === 'local' && !sshConnectionIdKey) {
+      if (isLocalOwner) {
         reprobe.stop = startWindowsTerminalCapabilityReprobe({
           ownerKey: resolvedOwnerKey,
           readCached: () => getCachedWindowsTerminalCapabilities(resolvedOwnerKey),
