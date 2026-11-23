@@ -56,7 +56,7 @@ export type MobileSessionTab =
           | 'launchAgent'
           | 'launchDraft'
           | 'launchDraftCreatedAt'
-          | 'launchSessionOptions'
+          | 'appliedSessionOptions'
           | 'terminalTheme'
           | 'unread'
         >

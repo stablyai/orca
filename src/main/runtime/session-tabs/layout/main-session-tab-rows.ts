@@ -84,8 +84,8 @@ function withWindowFacts(
       ...(windowRow.launchDraftCreatedAt !== undefined
         ? { launchDraftCreatedAt: windowRow.launchDraftCreatedAt }
         : {}),
-      ...(windowRow.launchSessionOptions
-        ? { launchSessionOptions: windowRow.launchSessionOptions }
+      ...(windowRow.appliedSessionOptions
+        ? { appliedSessionOptions: windowRow.appliedSessionOptions }
         : {})
     }
   }

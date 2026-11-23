@@ -85,6 +85,19 @@ export function createNativeChatPtySessionOptions(
     record = createNativeChatSessionOptionRecord(args.agent)
   }
 
+  // A seed can land after this surface was built; adopt it before a report or pick overwrites it.
+  const adoptCachedSeedIfEmpty = (): boolean => {
+    if (record.model) {
+      return false
+    }
+    const cached = readNativeChatSessionOptionCache(args.scopeKey, args.fallbackScopeKey)
+    if (cached?.agent !== args.agent || !cached.model) {
+      return false
+    }
+    record = cached
+    return true
+  }
+
   const activeModels = (): CatalogModel[] => withTrackedNativeChatModel(catalog, models, record)
   let snapshot = buildNativeChatSessionOptionSnapshot({
     catalog,
@@ -171,7 +184,12 @@ export function createNativeChatPtySessionOptions(
 
   return {
     getSnapshot: () => snapshot,
-    setOption: appliers.setOption,
+    setOption: (id, value) => {
+      if (adoptCachedSeedIfEmpty()) {
+        publish()
+      }
+      return appliers.setOption(id, value)
+    },
     invokeAction: appliers.invokeAction,
     subscribe: (listener) => {
       listeners.add(listener)
@@ -193,10 +211,11 @@ export function createNativeChatPtySessionOptions(
       }
     },
     reportSessionOptions: (values, forNewModel) => {
+      const adopted = adoptCachedSeedIfEmpty()
       const targetModel = typeof values.model === 'string' ? values.model : record.model?.value
       const reported = { ...carriedValues(record, values, forNewModel), ...values }
       const offered = offeredValues(activeModels(), targetModel, reported)
-      if (applyNativeChatReportedSessionOptions(record, offered)) {
+      if (applyNativeChatReportedSessionOptions(record, offered) || adopted) {
         publish()
       }
     },

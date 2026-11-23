@@ -3,11 +3,11 @@ import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-syn
 import { getTerminalTabOwnerWorktreeId } from '../../ownership/terminal-tab-owner-index'
 import type { TerminalSlice, TerminalStoreSet } from '../../terminal-state'
 
-export function createTerminalTabLaunchSessionOptionsActions(
+export function createTerminalTabAppliedSessionOptionsActions(
   set: TerminalStoreSet
-): Pick<TerminalSlice, 'setTabLaunchSessionOptions'> {
+): Pick<TerminalSlice, 'setTabAppliedSessionOptions'> {
   return {
-    setTabLaunchSessionOptions: (tabId, launchSessionOptions) => {
+    setTabAppliedSessionOptions: (tabId, appliedSessionOptions) => {
       set((s) => {
         const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
         const tabs = ownerWorktreeId ? s.tabsByWorktree[ownerWorktreeId] : undefined
@@ -19,7 +19,7 @@ export function createTerminalTabLaunchSessionOptionsActions(
           tabsByWorktree: replaceTabBuckets(s.tabsByWorktree, [
             [
               ownerWorktreeId,
-              tabs.map((tab) => (tab.id === tabId ? { ...tab, launchSessionOptions } : tab))
+              tabs.map((tab) => (tab.id === tabId ? { ...tab, appliedSessionOptions } : tab))
             ]
           ])
         }

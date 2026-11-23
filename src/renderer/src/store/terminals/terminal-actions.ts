@@ -156,10 +156,10 @@ export type TerminalActions = {
     launchPane: TerminalTab['agentLaunchPane'],
     options?: { remount?: boolean }
   ) => void
-  /** Session-only options Orca launched the tab's agent with; phones read them from the published row. */
-  setTabLaunchSessionOptions: (
+  /** Session-only options Orca applied to the tab's agent: at launch, or by a desktop chip pick since. */
+  setTabAppliedSessionOptions: (
     tabId: string,
-    launchSessionOptions: TerminalTab['launchSessionOptions']
+    appliedSessionOptions: TerminalTab['appliedSessionOptions']
   ) => void
   /** Binds only live tabs and migrates replacement identity state before publishing ownership. */
   updateTabPtyId: (tabId: string, ptyId: string, replacedPtyId?: string) => void

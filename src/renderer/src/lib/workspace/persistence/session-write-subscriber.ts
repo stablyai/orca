@@ -21,7 +21,7 @@ const TERMINAL_TAB_LIVE_TITLE_KEYS = new Set<keyof TerminalTab>(['title'])
 const TERMINAL_TAB_TRANSIENT_SESSION_KEYS = new Set<keyof TerminalTab>([
   'pendingActivationSpawn',
   'recovery',
-  'launchSessionOptions'
+  'appliedSessionOptions'
 ])
 
 function terminalTabChangedForSession(prev: TerminalTab, next: TerminalTab): boolean {

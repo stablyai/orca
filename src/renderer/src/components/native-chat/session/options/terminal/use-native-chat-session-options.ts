@@ -1,4 +1,6 @@
 import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
+import { useAppStore } from '@/store/index'
+import { getTerminalTab } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import { getAgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog'
@@ -7,6 +9,7 @@ import {
   type NativeChatStatusReportMemory
 } from '../../../../../../../shared/native-chat/input/session-options/native-chat-status-session-options'
 import type { SessionOptionDescriptor } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
+import { nextAppliedSessionOptionsAfterPick } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-cache'
 import { sayNativeChatSessionOptionTranslated } from '../controls/native-chat-session-option-labels-text'
 import {
   createNativeChatPtySessionOptions,
@@ -68,7 +71,7 @@ export function useNativeChatSessionOptions(args: {
     const discoveredModels = discoveryContext
       ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
       : null
-    return createNativeChatPtySessionOptions({
+    const created = createNativeChatPtySessionOptions({
       agent,
       scopeKey,
       ...(targetPtyId ? { fallbackScopeKey: terminalTabId } : {}),
@@ -87,6 +90,25 @@ export function useNativeChatSessionOptions(args: {
           picks: [{ modelId, optionId, value, adoptModelAsLaunchDefault }]
         })
     })
+    if (!created) {
+      return null
+    }
+    return {
+      ...created,
+      // A committed pick keeps the tab field phones seed from current.
+      setOption: async (id, value) => {
+        const result = await created.setOption(id, value)
+        const state = useAppStore.getState()
+        const applied = getTerminalTab(state.tabsByWorktree, terminalTabId)?.appliedSessionOptions
+        if (applied?.agent === agent) {
+          state.setTabAppliedSessionOptions(terminalTabId, {
+            agent: applied.agent,
+            values: nextAppliedSessionOptionsAfterPick(applied.values, id, value)
+          })
+        }
+        return result
+      }
+    }
   }, [
     agent,
     canSwitchOmpModel,

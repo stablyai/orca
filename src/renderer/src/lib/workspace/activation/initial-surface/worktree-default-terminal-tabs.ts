@@ -6,7 +6,7 @@ import { agentKindToTuiAgent } from '../../../../../../shared/agent-status/ident
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { useAppStore } from '@/store/index'
 import { recordLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'
-import { recordAgentTabLaunchSessionOptions } from '@/lib/agent-session/launch/record-agent-tab-launch-session-options'
+import { recordAgentTabAppliedSessionOptions } from '@/lib/agent-session/launch/record-agent-tab-applied-session-options'
 import type {
   InitialTerminalOptions,
   WorktreeActivationStore
@@ -65,7 +65,7 @@ export function applyDefaultTerminalTabs(
       firstTabId = tab.id
     }
     if (isStartupTab && launchAgent) {
-      recordAgentTabLaunchSessionOptions(tab.id, launchAgent, startup.sessionOptions)
+      recordAgentTabAppliedSessionOptions(tab.id, launchAgent, startup.sessionOptions)
     }
     if (template.title) {
       store.setTabCustomTitle(tab.id, template.title, { recordInteraction: false })

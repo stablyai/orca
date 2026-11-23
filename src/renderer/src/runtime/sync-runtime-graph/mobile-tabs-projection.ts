@@ -21,7 +21,7 @@ function tabsProjectionEntry(
       generatedTitle: tab.generatedTitle,
       customTitle: tab.customTitle,
       launchAgent: tab.launchAgent,
-      launchSessionOptions: tab.launchSessionOptions
+      appliedSessionOptions: tab.appliedSessionOptions
     }))
   )
   return { worktreeId, tabs, projection }

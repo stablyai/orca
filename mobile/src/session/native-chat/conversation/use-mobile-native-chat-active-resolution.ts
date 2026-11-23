@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../../../src/shared/native-chat/transcript/messages/native-chat-transcript-retention'
 import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
-import { useMobileNativeChatLaunchSessionOptionSeed } from '../input/session-options/use-mobile-native-chat-launch-session-option-seed'
+import { useMobileNativeChatAppliedSessionOptionSeed } from '../input/session-options/use-mobile-native-chat-applied-session-option-seed'
 import {
   useMobileSessionViewMode,
   type MobileSessionViewModeController
@@ -68,12 +68,12 @@ export function useMobileNativeChatActiveResolution(args: {
   const activeChatStructured =
     activeChatResolution != null && activeSessionTab?.type === 'agent-session'
   // Before the option surface reads its cache, so the phone shows the effort Orca launched with.
-  useMobileNativeChatLaunchSessionOptionSeed({
+  useMobileNativeChatAppliedSessionOptionSeed({
     activeChatStructured,
     agent: activeChatResolution?.agent ?? null,
     scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
     launchAgent: activeSessionTab?.launchAgent,
-    launchSessionOptions: activeSessionTab?.launchSessionOptions
+    appliedSessionOptions: activeSessionTab?.appliedSessionOptions
   })
   const activeTabStatus = activeSessionTab?.agentStatus
   const nativeChatStatus = activeChatResolution && !activeChatStructured ? activeTabStatus : null

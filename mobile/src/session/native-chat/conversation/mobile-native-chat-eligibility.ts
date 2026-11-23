@@ -32,7 +32,7 @@ export type MobileNativeChatTab = {
   nativeChatIdentity?: MobileNativeChatIdentity
   launchDraft?: string
   launchDraftCreatedAt?: number
-  launchSessionOptions?: Record<string, SessionOptionValue>
+  appliedSessionOptions?: Record<string, SessionOptionValue>
   sessionId?: string | null
   agent?: string | null
 }

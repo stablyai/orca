@@ -23,7 +23,7 @@ const WINDOW_TERMINAL_TAB_FIELDS = [
   'recovery',
   'restoredFromSession',
   'agentLaunchPane',
-  'launchSessionOptions'
+  'appliedSessionOptions'
 ] as const satisfies readonly (keyof TerminalTab)[]
 
 type KeyedSlice =

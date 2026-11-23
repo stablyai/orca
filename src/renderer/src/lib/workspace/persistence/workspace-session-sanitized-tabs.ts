@@ -20,13 +20,13 @@ function sanitizeTabs(tabs: WorkspaceSessionSnapshot['tabsByWorktree'][string]):
       pendingActivationSpawn: _unused,
       recovery: _recovery,
       restoredFromSession: _restored,
-      launchSessionOptions: _launchSessionOptions,
+      appliedSessionOptions: _appliedSessionOptions,
       ...rest
     } = tab
     void _unused
     void _recovery
     void _restored
-    void _launchSessionOptions
+    void _appliedSessionOptions
     return rest.agentLaunchPane
       ? { ...rest, agentLaunchPane: pendingAgentLaunchPane(rest.agentLaunchPane) }
       : rest

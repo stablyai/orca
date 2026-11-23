@@ -131,7 +131,7 @@ const ROW = {
   // Drop transient legacy pendingActivationSpawn writes. agentLaunchPane may survive a window reload while pending, but restart treats the pane as ordinary.
   agentLaunchPane: 'unwritten',
   pendingActivationSpawn: 'unwritten',
-  launchSessionOptions: 'unwritten',
+  appliedSessionOptions: 'unwritten',
   recovery: 'unwritten',
   restoredFromSession: 'unwritten',
   sessionTitleFromHost: 'unwritten'

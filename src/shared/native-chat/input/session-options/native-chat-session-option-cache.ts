@@ -50,8 +50,8 @@ export function seedNativeChatAppliedSessionOptions(
   writeNativeChatSessionOptionCache(scopeKey, record)
 }
 
-/** A launch seed fills only an empty or other-agent scope; a live report or phone pick already owns the rest. */
-export function seedNativeChatLaunchSessionOptionsIfUnseen(
+/** An applied-options seed fills only an empty or other-agent scope; a live report or phone pick already owns the rest. */
+export function seedNativeChatAppliedSessionOptionsIfUnseen(
   scopeKey: string,
   agent: AgentType,
   values: Record<string, SessionOptionValue> | null | undefined
@@ -61,4 +61,13 @@ export function seedNativeChatLaunchSessionOptionsIfUnseen(
     return
   }
   seedNativeChatAppliedSessionOptions(scopeKey, agent, values)
+}
+
+/** A picked model drops the old model's other values; any other pick only replaces its own option. */
+export function nextAppliedSessionOptionsAfterPick(
+  values: Record<string, SessionOptionValue>,
+  optionId: string,
+  value: SessionOptionValue
+): Record<string, SessionOptionValue> {
+  return optionId === 'model' ? { model: value } : { ...values, [optionId]: value }
 }
