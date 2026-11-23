@@ -1,11 +1,14 @@
 import { attachPushRegistration } from '../../notifications/push-registration'
 import { recordHostDescriptorFromStatus } from '../../host-descriptors/host-descriptor-recorder'
 import { startRuntimeStatusProbe } from './runtime-status-probe'
+import { directPathForEndpoint } from '../relay/mobile-direct-endpoint-probe'
 import {
   connectionLogStore,
   recordConnectionClientSessionStart
 } from '../../diagnostics/connection/persisted-connection-log-store'
 import { loadHosts } from '../../host-catalog/host-store'
+import { createTailnetEndpointPersister } from '../../host-catalog/host-tailnet-endpoint-persister'
+import { recordHostTailnetEndpoint } from '../../host-catalog/host-tailnet-endpoint-store'
 import { openHostLogicalClient } from './host-logical-client'
 import type { HostClientOpenRegistry } from './host-client-open-registry'
 import type { HostOpenRetryScheduler } from './host-open-retry-scheduler'
@@ -128,11 +131,29 @@ export async function openHostClientEntry(
     }
     // Probe descriptors per connection, with cutover retry, so every host surface shares the same read without screen-owned requests.
     let stopDescriptorProbe: (() => void) | null = null
+    const recordTailnetEndpoint = createTailnetEndpointPersister(
+      host.tailnetEndpoint,
+      async (endpoint) => {
+        await recordHostTailnetEndpoint(hostId, host.endpoint, endpoint)
+        const primed = state.primedHosts.get(hostId)
+        if (primed && primed.endpoint === host.endpoint) {
+          state.primedHosts.set(hostId, { ...primed, tailnetEndpoint: endpoint })
+        }
+      }
+    )
     const syncDescriptorProbe = (next: ConnectionState): void => {
       if (next === 'connected') {
         stopDescriptorProbe ??= startRuntimeStatusProbe(client, (status) => {
           if (status) {
             recordHostDescriptorFromStatus(hostId, status)
+            if (
+              status.tailnetEndpoint &&
+              !host.relay &&
+              directPathForEndpoint(host.endpoint) !== 'tailscale'
+            ) {
+              client.learnTailnetEndpoint?.(status.tailnetEndpoint)
+              recordTailnetEndpoint(status.tailnetEndpoint)
+            }
           }
         })
       } else {

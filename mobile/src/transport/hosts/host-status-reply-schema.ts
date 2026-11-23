@@ -1,6 +1,7 @@
 import * as z from 'zod'
 import { salvagedOptional } from '../../../../src/shared/validation/zod-salvage'
 import { NODE_PLATFORM_NAMES } from '../connection/mobile-runtime-host-platform'
+import { MobileTailnetEndpointSchema } from '../../../../src/shared/remote-runtime/pairing/mobile-tailnet-endpoint'
 import { HOST_MACHINE_KINDS } from '../../../../src/shared/execution-host/host-machine-line'
 
 // An unknown future kind drops the whole field, so the row shows the OS alone; a bad model only loses the model.
@@ -20,6 +21,7 @@ export const hostStatusSchema = z.looseObject({
   capabilities: salvagedOptional('capabilities', z.array(z.string())),
   hostPlatform: salvagedOptional('hostPlatform', z.enum(NODE_PLATFORM_NAMES)),
   machineName: salvagedOptional('machineName', z.string()),
+  tailnetEndpoint: salvagedOptional('tailnetEndpoint', MobileTailnetEndpointSchema),
   hostMachine: salvagedOptional('hostMachine', HostMachineSchema),
   // Strings, not enums: a future install mode or reason still shows the generic update steps.
   remoteUpdateSupport: salvagedOptional(
