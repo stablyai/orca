@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
 import {
   PLUGIN_MANIFEST_V2_SINCE,
+  PLUGIN_THEME_CHAT_OPACITY_SINCE,
   PLUGIN_THEME_VIDEO_BACKGROUND_SINCE,
   pluginFieldDoc,
   pluginPathFieldDoc
@@ -11,6 +12,10 @@ import { PLUGIN_THEME_VIDEO_RULE_TEXT } from '../media/plugin-theme-video-rules'
 import { parsePluginImageUrl } from '../images/plugin-image-url'
 
 const NEXT = PLUGIN_MANIFEST_V2_SINCE
+
+/** Chat canvas opacity over the image: the default, and the floor that keeps chat text readable. */
+export const PLUGIN_THEME_CHAT_OPACITY_DEFAULT = 0.8
+export const PLUGIN_THEME_CHAT_OPACITY_MIN = 0.5
 
 const backgroundStyleFields = {
   opacity: z
@@ -32,7 +37,19 @@ const backgroundStyleFields = {
   position: z
     .enum(['center', 'top', 'bottom', 'left', 'right'])
     .optional()
-    .meta(pluginFieldDoc('Which edge the image anchors to. Defaults to `center`.', NEXT))
+    .meta(pluginFieldDoc('Which edge the image anchors to. Defaults to `center`.', NEXT)),
+  chatOpacity: z
+    .number()
+    .min(PLUGIN_THEME_CHAT_OPACITY_MIN)
+    .max(1)
+    .optional()
+    .meta(
+      pluginFieldDoc(
+        `Least opacity of the agent chat canvas over the image, ${PLUGIN_THEME_CHAT_OPACITY_MIN} to 1; chats follow Background Opacity above it. Message bubbles, code, cards and the composer stay opaque. Defaults to ${PLUGIN_THEME_CHAT_OPACITY_DEFAULT}.`,
+        PLUGIN_THEME_CHAT_OPACITY_SINCE,
+        [0.6]
+      )
+    )
 }
 
 const backgroundFields = {
@@ -71,7 +88,13 @@ const tolerantBackgroundSchema = z.object({
   videoPath: backgroundFields.videoPath.catch(undefined),
   opacity: backgroundStyleFields.opacity.catch(undefined),
   size: backgroundStyleFields.size.catch(undefined),
-  position: backgroundStyleFields.position.catch(undefined)
+  position: backgroundStyleFields.position.catch(undefined),
+  // Why clamp, not drop: a too-low value still means "more see-through", so it gets the readable floor.
+  chatOpacity: z
+    .number()
+    .transform((value) => Math.min(1, Math.max(PLUGIN_THEME_CHAT_OPACITY_MIN, value)))
+    .optional()
+    .catch(undefined)
 })
 
 /** Runtime keeps a theme whose background is malformed or newer; at worst it paints no image. */

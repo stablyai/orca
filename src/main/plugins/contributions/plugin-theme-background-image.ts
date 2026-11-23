@@ -27,7 +27,8 @@ export function resolvePluginThemeBackground(
     ...(background.videoPath ? { videoUrl: url(`theme-${themeIndex}-video`) } : {}),
     opacity: background.opacity,
     size: background.size,
-    position: background.position
+    position: background.position,
+    chatOpacity: background.chatOpacity
   }
 }
 
