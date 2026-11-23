@@ -26,10 +26,15 @@ afterEach(() => {
 it('counts only blocks this user may write, and reads no chat below the floor', async () => {
   const unread = new Database(':memory:')
   statfs.mockResolvedValue({ bsize: 4096, blocks: 1000, bfree: 300, bavail: 100 })
-  await expect(measureJournalConversionStorage('/journal', undefined, unread)).resolves.toEqual({
+  await expect(
+    measureJournalConversionStorage('/data/journal', undefined, unread, 'chat')
+  ).resolves.toEqual({
     freeBytes: 100 * 4096,
-    totalBytes: 1000 * 4096
+    totalBytes: 1000 * 4096,
+    remainingBytes: 0
   })
+  // The folder is measured, so a missing original still measures its volume and converts nothing.
+  expect(statfs).toHaveBeenLastCalledWith('/data')
   // 5% free is the floor: the chat defers whatever its size, so its rows (no table here) aren't read.
   statfs.mockResolvedValue({ bsize: 4096, blocks: 1000, bfree: 300, bavail: 49 })
   await expect(

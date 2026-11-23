@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { statfs } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import type Database from '../../sqlite/sync-database'
 import { isDiskAlmostFull } from '../../../shared/diagnostics/perf-notice-signals'
 import { journalLegacyConversionSource } from './database/journal-legacy-source'
@@ -27,7 +28,8 @@ export async function measureJournalConversionStorage(
   sessionId?: string,
   sizedAt?: string
 ): Promise<JournalConversionStorage | null> {
-  const volume = await statfs(filename).catch(() => null)
+  // The folder, so a missing original still measures its volume and converts nothing as before.
+  const volume = await statfs(dirname(filename)).catch(() => null)
   if (!volume) {
     return null
   }

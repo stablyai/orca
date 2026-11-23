@@ -215,10 +215,14 @@ export class JournalSqlConversions {
     }
     // Measured only for a chat that still converts, so ready chats never read their rows.
     const start = await this.room(promotion, sessionId)
-    if (start.low) {
+    if (start.full) {
       throw new JournalConversionStorageError()
     }
-    if (start.freeBytes < (this.stopped.get(sessionId) ?? 0)) {
+    // Too big for the room left, or less room than when it stopped partway: this chat waits on
+    // its own, and later chats go on.
+    const stopped = this.stopped.get(sessionId) ?? 0
+    if (start.low || start.freeBytes < stopped) {
+      this.stopped.set(sessionId, stopped)
       throw new JournalConversionStorageError(false)
     }
     await this.boundary(promotion)
@@ -232,8 +236,8 @@ export class JournalSqlConversions {
         await this.boundary(promotion)
         const now = await this.room(promotion)
         if (now.low) {
-          // A retry needs the room this attempt used on top of the room it started with.
-          this.stopped.set(sessionId, 2 * start.freeBytes - now.freeBytes)
+          // A retry waits until there is at least the room this attempt started with.
+          this.stopped.set(sessionId, start.freeBytes)
           throw new JournalConversionStorageError()
         }
         const page = await reader.next()
@@ -260,8 +264,8 @@ export class JournalSqlConversions {
   private async room(
     promotion: AbortSignal,
     sessionId?: string
-  ): Promise<{ freeBytes: number; low: boolean }> {
-    const open = { freeBytes: Infinity, low: false }
+  ): Promise<{ freeBytes: number; low: boolean; full: boolean }> {
+    const open = { freeBytes: Infinity, low: false, full: false }
     if (promotion.aborted) {
       return open
     }
@@ -283,7 +287,7 @@ export class JournalSqlConversions {
     }
     const needed = sessionId === undefined ? 0 : bytes * CONVERSION_EXPANSION
     const low = isDiskAlmostFull({ ...storage, freeBytes: storage.freeBytes - needed })
-    return { freeBytes: storage.freeBytes, low }
+    return { freeBytes: storage.freeBytes, low, full: isDiskAlmostFull(storage) }
   }
 
   /** Only a failed space measure defers; a damaged or missing original keeps its own failure. */

@@ -79,7 +79,7 @@ function conversion(
 const deferred = expect.any(JournalConversionStorageError)
 
 describe('JournalSqlConversions storage guard', () => {
-  it('the idle sweep defers below the floor and resumes where it stopped once space frees', async () => {
+  it('the idle sweep skips a chat too big for the room left, converts the rest, and retries it alone once space frees', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
     let low = true
     const { conversions, writes, readers, writer, listedAfter } = conversion(
@@ -96,16 +96,17 @@ describe('JournalSqlConversions storage guard', () => {
       (error) => errors.push(error)
     )
     await maintenance.start()
-    expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(1)
+    expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(2)
+    expect(conversions.waiting()).toEqual(['b'])
     expect(errors).toEqual([deferred])
     low = false
     listedAfter.length = 0
-    // The periodic tick after the backoff resumes the sweep after the last chat it finished.
+    // The periodic tick after the backoff retries it without walking the chats again.
     await vi.advanceTimersByTimeAsync(60_000)
     await maintenance.settled()
     maintenance.stop()
     vi.useRealTimers()
-    expect(listedAfter[0]).toBe('a')
+    expect(listedAfter).toEqual([])
     expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(3)
     expect(errors).toEqual([deferred])
   })
@@ -122,7 +123,7 @@ describe('JournalSqlConversions storage guard', () => {
   })
 
   it.each([
-    ['low space', () => LOW],
+    ['a full disk', () => ({ freeBytes: 4 * GB, totalBytes: 100 * GB })],
     ['a failed measure', () => null]
   ])('after %s, the retry measures again and resumes once space frees', async (_, first) => {
     let now = 1_000
@@ -131,9 +132,9 @@ describe('JournalSqlConversions storage guard', () => {
     const { conversions, writes } = conversion(() => measure())
     await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
     measure = () => ROOM
-    // Inside the backoff nothing is attempted.
+    // Inside the backoff nothing converts.
     await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
-    expect(writes).toEqual(['import-discard'])
+    expect(writes).not.toContain('import-page')
     now += 60_000
     await expect(conversions.ensure('chat', false)).resolves.toBe('epoch')
     expect(writes).toContain('import-finish')
@@ -168,12 +169,12 @@ describe('JournalSqlConversions storage guard', () => {
     expect(conversions.deferred()).toBe(false)
   })
 
-  it('a chat that stopped partway waits for the room it used on top of what it had, without holding back others', async () => {
+  it('a chat that stopped partway waits for the room it started with, without holding back others', async () => {
     let now = 1_000
     vi.spyOn(performance, 'now').mockImplementation(() => now)
     let free = 60 * GB
     let checks = 0
-    // Its third space check (the second batch) finds 4 GB left: the attempt used 56 GB.
+    // Its third space check (the second batch) finds 4 GB left.
     const { conversions, writes } = conversion(
       () =>
         ++checks === 3 ? { freeBytes: 4 * GB, totalBytes: 100 * GB } : { ...ROOM, freeBytes: free },
@@ -182,12 +183,12 @@ describe('JournalSqlConversions storage guard', () => {
     await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
     now += 60_000
     writes.length = 0
-    // A little more room than before would rebuild the same prefix and stop again.
-    free = 61 * GB
+    // Less room than it started with would stop again sooner.
+    free = 59 * GB
     await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
     expect(writes).not.toContain('import-page')
     expect(conversions.deferred()).toBe(false)
-    free = 116 * GB
+    free = 60 * GB
     await expect(conversions.ensure('chat', false)).resolves.toBe('epoch')
   })
 
@@ -238,6 +239,7 @@ describe('JournalSqlConversions storage guard', () => {
     )
     // 'a' stops at its second batch; the backoff ends before 'b', which then converts.
     await maintenance.start()
+    free = 59 * GB
     await vi.advanceTimersByTimeAsync(60_000)
     await maintenance.settled()
     expect(conversions.waiting()).toEqual(['a'])
