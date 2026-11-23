@@ -40,6 +40,7 @@ struct OrcaSessionWidget: Widget {
       } minimal: {
         Image(systemName: symbol(context)).accessibilityLabel(label(context))
       }
+      .contentMargins(.bottom, 16, for: .expanded)
       .widgetURL(link(context))
     }
   }
@@ -71,7 +72,8 @@ struct OrcaSessionWidget: Widget {
         .font(.caption).monospacedDigit().lineLimit(1)
     } else if context.state.state == "working" || context.state.state == "attention" {
       Text(Date(timeIntervalSince1970: context.state.stateStartedAt), style: .timer)
-        .font(.caption).monospacedDigit().frame(maxWidth: 64)
+        .font(.caption).monospacedDigit().multilineTextAlignment(.trailing)
+        .frame(maxWidth: 64, alignment: .trailing)
     } else {
       Text(Date(timeIntervalSince1970: context.state.updatedAt), style: .time)
         .font(.caption).monospacedDigit()
