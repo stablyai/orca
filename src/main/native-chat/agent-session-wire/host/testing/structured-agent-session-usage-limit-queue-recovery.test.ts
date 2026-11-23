@@ -232,6 +232,13 @@ it('holds a retry when the account is exhausted without waking an idle reading',
   expect(await pass(45_000, reading(100, NOW + 45_000))).toEqual([])
 })
 
+it('continues a known-reset relaunched cut after its normal reading wait', async () => {
+  const { pass, requested } = await relaunchedChat()
+  expect(await pass(75_000, null)).toEqual([])
+  expect(requested).toContainEqual({})
+  expect(await pass(195_000, null)).toHaveLength(1)
+})
+
 it('requires fresh room before a resetless relaunched cut continues', async () => {
   const { pass } = await relaunchedChat(null)
   expect(await pass(5_000, null)).toEqual([])

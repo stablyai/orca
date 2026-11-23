@@ -201,14 +201,11 @@ export class UsageLimitAccountHolds {
     const cut = movedCut ? { ...limited, resetsAt: Math.min(limited.resetsAt, moved.at) } : limited
     const scope = this.scopes.get(id)
     let hold = this.holds.get(id)
-    const relaunched = this.relaunched.at(id, switchFreeIdentity(limited)) !== undefined
+    const awaitingRoom =
+      limited.resetFromSwitch === true &&
+      this.relaunched.at(id, switchFreeIdentity(limited)) !== undefined
     if (!hold && !scope) {
-      return {
-        resetsAt: cut.resetsAt,
-        unknownReset: false,
-        awaitingReading: false,
-        awaitingRoom: relaunched
-      }
+      return { resetsAt: cut.resetsAt, unknownReset: false, awaitingReading: false, awaitingRoom }
     }
     const account = scope?.account
     if (
@@ -289,7 +286,7 @@ export class UsageLimitAccountHolds {
         (account ? !fresh(resetsAt) : scope?.bootstrap !== undefined) &&
         now >= waitFrom &&
         now < waitFrom + READING_WAIT_MS,
-      awaitingRoom: relaunched && room === undefined
+      awaitingRoom: awaitingRoom && room === undefined
     }
   }
 
