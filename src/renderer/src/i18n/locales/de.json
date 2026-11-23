@@ -12999,6 +12999,7 @@
           "defaultHostHelp": "Bestehende Projekte bleiben an ihrem bisherigen Speicherort.",
           "defaultHostWebHelp": "Dieser Browser öffnet neue Projekte auf dem ausgewählten Server.",
           "updateAll": "Alle aktualisieren",
+          "updatesCount": "{{count}} Aktualisierungen verfügbar",
           "addServer": "Server hinzufügen",
           "moreWaysToAdd": "Weitere Möglichkeiten zum Hinzufügen eines Servers",
           "pasteAccessLink": "Zugriffslink einfügen",

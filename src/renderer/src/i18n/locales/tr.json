@@ -13092,6 +13092,7 @@
           "defaultHostHelp": "Mevcut projeler bulundukları yerde kalır.",
           "defaultHostWebHelp": "Bu tarayıcı yeni projeleri seçilen sunucuda açar.",
           "updateAll": "Tümünü güncelle",
+          "updatesCount": "{{count}} güncelleme mevcut",
           "addServer": "Sunucu ekle",
           "moreWaysToAdd": "Sunucu eklemenin diğer yolları",
           "pasteAccessLink": "Erişim bağlantısını yapıştır",

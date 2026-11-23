@@ -30,13 +30,9 @@ export function RuntimeShareComputerSection(): React.JSX.Element {
 
   const loadActiveLinkCount = useCallback(async () => {
     const request = ++linkCountRequest.current
-    try {
-      const result = await window.api.mobile.listRuntimeAccessGrants()
-      if (mountedRef.current && request === linkCountRequest.current) {
-        setActiveLinkCount(result.grants.length)
-      }
-    } catch {
-      // Counts are hints; the dialog reports actionable load failures.
+    const result = await window.api.mobile.listRuntimeAccessGrants().catch(() => null)
+    if (mountedRef.current && request === linkCountRequest.current) {
+      setActiveLinkCount(result?.grants.length ?? null)
     }
   }, [mountedRef])
   useEffect(() => {

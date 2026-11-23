@@ -14314,8 +14314,7 @@
           "manageShare": "Manage",
           "share": "Share",
           "serversCaption": "Servers",
-          "updatesCount": "{{count}} updates",
-          "showUpdateProgress": "Show update progress"
+          "updatesCount": "{{count}} updates"
         },
         "sshBulkRemove": {
           "removedCount": "{{count}} removed",

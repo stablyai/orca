@@ -23,18 +23,22 @@ export function RuntimeServerListHeader(): React.JSX.Element {
       data-settings-section="remote-server-updates"
       className="flex min-h-6 scroll-mt-8 items-center justify-between gap-2"
     >
-      <span className="text-xs font-medium text-muted-foreground">
+      <span className="shrink-0 text-xs font-medium text-muted-foreground">
         {t('auto.components.settings.serverList.serversCaption', 'Servers')}
       </span>
-      <div aria-live="polite" className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div
+        aria-live="polite"
+        className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"
+      >
         {running ? (
           <Button
             type="button"
             variant="link-muted"
             size="inlineText"
+            aria-haspopup="dialog"
             aria-label={t(
-              'auto.components.settings.serverList.showUpdateProgress',
-              'Show update progress'
+              'auto.components.status.bar.RemoteServerUpdateStatusSegment.updatingTooltip',
+              'Remote Orca Server updates are in progress'
             )}
             onClick={() => setRemoteServerUpdateDialogOpen(true)}
           >
@@ -44,7 +48,7 @@ export function RuntimeServerListHeader(): React.JSX.Element {
         ) : availableCount >= 2 ? (
           // One update already takes one click on its own row.
           <>
-            <span>
+            <span className="truncate">
               {t('auto.components.settings.serverList.updatesCount', '{{count}} updates', {
                 count: availableCount
               })}

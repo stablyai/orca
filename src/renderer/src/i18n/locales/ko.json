@@ -13416,6 +13416,7 @@
           "defaultHostHelp": "기존 프로젝트는 그대로 유지됩니다.",
           "defaultHostWebHelp": "이 브라우저는 선택한 서버에서 새 프로젝트를 엽니다.",
           "updateAll": "모두 업데이트",
+          "updatesCount": "업데이트 {{count}}개 사용 가능",
           "addServer": "서버 추가",
           "moreWaysToAdd": "서버를 추가하는 다른 방법",
           "pasteAccessLink": "액세스 링크 붙여 넣기",

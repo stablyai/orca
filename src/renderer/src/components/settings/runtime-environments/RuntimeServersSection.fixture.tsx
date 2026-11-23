@@ -84,7 +84,10 @@ function stubActiveLinks(count: number | null): () => void {
     let activeCount = count
     window.api.mobile.onDevicesChanged = (callback) => {
       const listener = (event: Event): void => {
-        if (event instanceof CustomEvent && typeof event.detail === 'number') {
+        if (
+          event instanceof CustomEvent &&
+          (typeof event.detail === 'number' || event.detail === null)
+        ) {
           activeCount = event.detail
           callback()
         }

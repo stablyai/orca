@@ -9631,6 +9631,7 @@
           "defaultHostHelp": "Os projetos existentes permanecem onde estão.",
           "defaultHostWebHelp": "Este navegador abre novos projetos no servidor escolhido.",
           "updateAll": "Atualizar todos",
+          "updatesCount": "{{count}} atualizações disponíveis",
           "addServer": "Adicionar servidor",
           "moreWaysToAdd": "Mais formas de adicionar um servidor",
           "pasteAccessLink": "Colar link de acesso",
