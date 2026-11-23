@@ -18,7 +18,7 @@ export function answerShutdownIfIdle(
     options.connections.size === 1 &&
     options.admission.inFlight === 0 &&
     options.host.listSessions().length === 0 &&
-    options.relays.recordCount === 0 &&
+    options.relays.liveCount === 0 &&
     options.connections.hasOnlyTransportsFor(client)
   if (retiring) {
     options.lifecycle.retireAfterIdleReply(clientId, requestId, client.controlSocket)

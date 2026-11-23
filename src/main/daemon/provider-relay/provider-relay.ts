@@ -20,15 +20,18 @@ type RelayOptions = {
   managed: ManagedProviderProcess
   spoolPath: string
   onExit: () => void
+  /** No client is attached anymore; an ended relay may now expire. */
+  onDetached: () => void
 }
 
 /** The client's event stream; its close detaches the relay, as a closing stream detaches a PTY. */
 export type ProviderRelayStream = {
   socket: {
     write(chunk: string | Uint8Array): unknown
-    once(event: 'close', listener: () => void): unknown
-    off(event: 'close', listener: () => void): unknown
+    once(event: 'close' | 'drain', listener: () => void): unknown
+    off(event: 'close' | 'drain', listener: () => void): unknown
     readonly destroyed: boolean
+    readonly writableNeedDrain?: boolean
   }
   framing?: DaemonStreamFraming
 }
@@ -55,7 +58,8 @@ export class ProviderRelay {
     this.spool = new ProviderRelaySpool({
       path: options.spoolPath,
       deliver: (record) => this.deliver(record),
-      onPressureChanged: (paused) => (paused ? stdout.pause() : stdout.resume())
+      onPressureChanged: (paused) => (paused ? stdout.pause() : stdout.resume()),
+      drained: () => this.drained()
     })
     stdout.on('data', (chunk: Buffer) => this.readStdout(chunk))
     stdout.once('end', () => {
@@ -73,6 +77,9 @@ export class ProviderRelay {
         this.stdoutEnded = true
       }
       this.announceExitIfDone()
+      if (!this.attachment) {
+        this.spool.closeHandle()
+      }
       options.onExit()
     })
   }
@@ -122,7 +129,12 @@ export class ProviderRelay {
       return Promise.resolve()
     }
     this.release()
-    return this.spool.detach()
+    const detached = this.spool.detach()
+    if (!this.live) {
+      this.spool.closeHandle()
+    }
+    this.options.onDetached()
+    return detached
   }
 
   write(data: string): void {
@@ -198,6 +210,22 @@ export class ProviderRelay {
   private release(): void {
     this.attachment?.socket.off('close', this.attachment.onClose)
     this.attachment = null
+  }
+
+  private drained(): Promise<void> {
+    const socket = this.attachment?.socket
+    if (!socket?.writableNeedDrain || socket.destroyed) {
+      return Promise.resolve()
+    }
+    return new Promise((resolve) => {
+      const done = (): void => {
+        socket.off('drain', done)
+        socket.off('close', done)
+        resolve()
+      }
+      socket.once('drain', done)
+      socket.once('close', done)
+    })
   }
 
   private send(event: unknown): void {

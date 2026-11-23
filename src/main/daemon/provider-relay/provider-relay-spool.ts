@@ -1,9 +1,13 @@
-import { open, readFile, unlink, type FileHandle } from 'node:fs/promises'
+import { createReadStream } from 'node:fs'
+import { open, unlink, type FileHandle } from 'node:fs/promises'
 import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-protocol'
 
 export const RELAY_SPOOL_MEMORY_CAP_BYTES = 1024 * 1024
 export const RELAY_SPOOL_FILE_CAP_BYTES = 16 * 1024 * 1024
 const DETACHED_FSYNC_INTERVAL_MS = 1_000
+const REPLAY_READ_CHUNK_BYTES = 64 * 1024
+/** Acked records are skipped by index and compacted in bulk, so per-line acks stay O(1). */
+const MEMORY_COMPACT_MIN = 1024
 
 type SpoolOptions = {
   path: string
@@ -11,6 +15,8 @@ type SpoolOptions = {
   deliver: (record: ProviderRelayRecord) => void
   /** True asks the owner to stop reading the agent's stdout; the agent is never ended for size. */
   onPressureChanged: (paused: boolean) => void
+  /** Resolves once the client's stream can take more, so a replay never floods its socket. */
+  drained?: () => Promise<void>
   memoryCapBytes?: number
   fileCapBytes?: number
 }
@@ -36,6 +42,7 @@ export class ProviderRelaySpool {
   private nextSeqValue = 1
   private acked = 0
   private memory: ProviderRelayRecord[] = []
+  private memoryHead = 0
   private memoryBytes = 0
   private mode: SpoolMode = 'detached'
   private file: FileHandle | null = null
@@ -93,13 +100,13 @@ export class ProviderRelaySpool {
       return
     }
     this.acked = Math.min(seq, this.nextSeqValue - 1)
-    let drop = 0
-    while (drop < this.memory.length && this.memory[drop].seq <= this.acked) {
-      this.memoryBytes -= this.memory[drop].line.length
-      drop++
+    while (this.memoryHead < this.memory.length && this.memory[this.memoryHead].seq <= this.acked) {
+      this.memoryBytes -= this.memory[this.memoryHead].line.length
+      this.memoryHead++
     }
-    if (drop > 0) {
-      this.memory = this.memory.slice(drop)
+    if (this.memoryHead >= MEMORY_COMPACT_MIN && this.memoryHead * 2 >= this.memory.length) {
+      this.memory = this.memory.slice(this.memoryHead)
+      this.memoryHead = 0
     }
     if (this.fileLastSeq > 0 && this.acked >= this.fileLastSeq) {
       this.removeFile()
@@ -113,20 +120,19 @@ export class ProviderRelaySpool {
     this.mode = 'replaying'
     this.stopFsyncTimer()
     this.updatePressure()
+    const current = (): boolean =>
+      generation === this.attachGeneration && this.mode === 'replaying' && !this.disposed
     await this.io
-    const fileRecords = this.fileLastSeq > 0 ? await this.readFileRecords() : []
-    if (generation !== this.attachGeneration || this.mode !== 'replaying' || this.disposed) {
+    const after = Math.max(fromSeq, this.acked)
+    if (this.fileLastSeq > 0 && !(await this.replayFile(after, current))) {
       return this.nextSeqValue - 1
     }
-    const after = Math.max(fromSeq, this.acked)
-    for (const record of fileRecords) {
-      if (record.seq > after) {
-        this.options.deliver(record)
-      }
+    if (!current()) {
+      return this.nextSeqValue - 1
     }
-    for (const record of this.memory) {
-      if (record.seq > after) {
-        this.options.deliver(record)
+    for (let index = this.memoryHead; index < this.memory.length; index++) {
+      if (this.memory[index].seq > after) {
+        this.options.deliver(this.memory[index])
       }
     }
     this.mode = 'attached'
@@ -140,10 +146,11 @@ export class ProviderRelaySpool {
     }
     this.mode = 'detached'
     this.attachGeneration++
-    for (const record of this.memory) {
-      this.writeToFile(record)
+    for (let index = this.memoryHead; index < this.memory.length; index++) {
+      this.writeToFile(this.memory[index])
     }
     this.memory = []
+    this.memoryHead = 0
     this.memoryBytes = 0
     this.updatePressure()
     this.io = this.io.then(() => this.file?.sync()).catch(() => {})
@@ -154,9 +161,23 @@ export class ProviderRelaySpool {
     this.disposed = true
     this.stopFsyncTimer()
     this.memory = []
+    this.memoryHead = 0
     this.memoryBytes = 0
     this.removeFile()
     await this.io
+  }
+
+  /** An ended, detached relay writes nothing more; its fd closes and the file waits for a reader. */
+  closeHandle(): void {
+    this.io = this.io
+      .then(async () => {
+        if (this.mode === 'detached' && !this.queuedWrite) {
+          const file = this.file
+          this.file = null
+          await file?.close()
+        }
+      })
+      .catch(() => {})
   }
 
   /** Pause at the cap, resume below half of it, so acks near the cap don't flap the agent's stdout. */
@@ -211,26 +232,45 @@ export class ProviderRelaySpool {
     }
   }
 
-  private async readFileRecords(): Promise<ProviderRelayRecord[]> {
-    let text: string
+  /** Streams the file in chunks, yielding to the client's drain; false when the attach went stale. */
+  private async replayFile(after: number, current: () => boolean): Promise<boolean> {
+    // utf8 decoding keeps a character split across chunks whole.
+    const stream = createReadStream(this.options.path, {
+      encoding: 'utf8',
+      highWaterMark: REPLAY_READ_CHUNK_BYTES
+    })
+    let partial = ''
     try {
-      text = await readFile(this.options.path, 'utf8')
-    } catch {
-      return []
-    }
-    const records: ProviderRelayRecord[] = []
-    for (const line of text.split('\n')) {
-      if (line.length === 0) {
-        continue
-      }
-      try {
-        const record: unknown = JSON.parse(line)
-        if (isSpoolRecord(record)) {
-          records.push(record)
+      for await (const chunk of stream) {
+        const lines = (partial + chunk).split('\n')
+        partial = lines.pop() ?? ''
+        for (const line of lines) {
+          this.replayLine(line, after)
         }
-      } catch {}
+        await this.options.drained?.()
+        if (!current()) {
+          return false
+        }
+      }
+      this.replayLine(partial, after)
+      return true
+    } catch {
+      return current()
+    } finally {
+      stream.destroy()
     }
-    return records
+  }
+
+  private replayLine(line: string, after: number): void {
+    if (line.length === 0) {
+      return
+    }
+    try {
+      const record: unknown = JSON.parse(line)
+      if (isSpoolRecord(record) && record.seq > after) {
+        this.options.deliver(record)
+      }
+    } catch {}
   }
 
   private removeFile(): void {

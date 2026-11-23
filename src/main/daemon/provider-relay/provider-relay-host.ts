@@ -14,6 +14,8 @@ type SpawnManaged = typeof spawnManagedProviderProcess
 
 const PROVIDER_OWNER_EXECUTABLE = 'orca-provider-exec'
 const MAX_CHAT_KEY_CHARS = 1024
+/** An ended relay nobody collects is dropped after this, so it never holds the daemon or its spool forever. */
+const ENDED_RELAY_RETENTION_MS = 24 * 60 * 60 * 1000
 const RELAY_SPOOL_NAME = /^r-(\d+)-[0-9a-f-]{36}\.ndjson$/
 
 type RelayHostOptions = {
@@ -86,10 +88,6 @@ export class ProviderRelayHost {
     return live
   }
 
-  get recordCount(): number {
-    return this.relays.size
-  }
-
   async spawn(
     spec: ProviderRelaySpawnSpec | undefined,
     chatKey: unknown
@@ -129,8 +127,10 @@ export class ProviderRelayHost {
       spoolPath: join(directory, `${relayId}.ndjson`),
       onExit: () => {
         this.removeIfFinished(relay)
+        this.expireWhenAbandoned(relay)
         this.options.onLiveCountChanged()
-      }
+      },
+      onDetached: () => this.expireWhenAbandoned(relay)
     })
     this.relays.set(relayId, relay)
     await managed.child.ready?.catch(() => {})
@@ -173,8 +173,13 @@ export class ProviderRelayHost {
     this.removeIfFinished(relay)
   }
 
+  /** A closed chat wants nothing more from its agent, so the ended relay goes with its spool. */
   async close(relayId: unknown, grace: unknown): Promise<void> {
-    await this.require(relayId).close(grace === 'brief' ? 'brief' : undefined)
+    const relay = this.require(relayId)
+    await relay.close(grace === 'brief' ? 'brief' : undefined)
+    if (!relay.live) {
+      this.remove(relay)
+    }
   }
 
   async detach(clientId: string, relayId: unknown): Promise<void> {
@@ -217,10 +222,28 @@ export class ProviderRelayHost {
   }
 
   private removeIfFinished(relay: ProviderRelay): void {
-    if (relay.finished && this.relays.get(relay.relayId) === relay) {
+    if (relay.finished) {
+      this.remove(relay)
+    }
+  }
+
+  private remove(relay: ProviderRelay): void {
+    if (this.relays.get(relay.relayId) === relay) {
       this.relays.delete(relay.relayId)
       void relay.dispose()
     }
+  }
+
+  private expireWhenAbandoned(relay: ProviderRelay): void {
+    if (relay.live || relay.attachedClientId !== null) {
+      return
+    }
+    const timer = setTimeout(() => {
+      if (!relay.live && relay.attachedClientId === null) {
+        this.remove(relay)
+      }
+    }, ENDED_RELAY_RETENTION_MS)
+    timer.unref?.()
   }
 
   private prepare(): Promise<{ directory: string; spawn: SpawnManaged }> {

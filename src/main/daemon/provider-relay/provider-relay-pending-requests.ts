@@ -21,6 +21,12 @@ function rpcId(value: unknown): string | null {
     : null
 }
 
+/** Bounds an agent that never answers or floods requests; the oldest unanswered goes first. */
+const MAX_PENDING_REQUESTS = 256
+const MAX_PENDING_CHARS = 8 * 1024 * 1024
+/** An initialize answer comes first; past this many agent lines nothing more is parsed for it. */
+const INITIALIZE_WINDOW_LINES = 256
+
 function controlId(value: unknown): string | null {
   return typeof value === 'string' ? `c:${value}` : null
 }
@@ -32,7 +38,9 @@ function controlId(value: unknown): string | null {
  */
 export class ProviderRelayPendingRequests {
   private readonly pending = new Map<string, ProviderRelayRecord>()
+  private pendingChars = 0
   private initializeKey: string | null = null
+  private initializeLinesLeft = INITIALIZE_WINDOW_LINES
   private clientLinePartial = ''
   maxClientRequestId: number | null = null
   initializeResult: string | null = null
@@ -41,19 +49,45 @@ export class ProviderRelayPendingRequests {
     return this.pending.size
   }
 
+  /** Insertion order is seq order: a re-sent id is removed before it is added again. */
   records(): ProviderRelayRecord[] {
-    return [...this.pending.values()].sort((left, right) => left.seq - right.seq)
+    return [...this.pending.values()]
   }
 
   clear(): void {
     this.pending.clear()
+    this.pendingChars = 0
+  }
+
+  private hold(key: string, record: ProviderRelayRecord): void {
+    this.release(key)
+    this.pending.set(key, record)
+    this.pendingChars += record.line.length
+    for (const [oldest, held] of this.pending) {
+      if (this.pending.size <= MAX_PENDING_REQUESTS && this.pendingChars <= MAX_PENDING_CHARS) {
+        break
+      }
+      this.pending.delete(oldest)
+      this.pendingChars -= held.line.length
+    }
+  }
+
+  private release(key: string): void {
+    const held = this.pending.get(key)
+    if (held) {
+      this.pending.delete(key)
+      this.pendingChars -= held.line.length
+    }
   }
 
   observeAgentLine(record: ProviderRelayRecord): void {
     const { line } = record
     const maybeRpcRequest = line.includes('"method"') && line.includes('"id"')
     const maybeControl = line.includes('control_')
-    const awaitingInitialize = this.initializeKey !== null && this.initializeResult === null
+    const awaitingInitialize =
+      this.initializeKey !== null &&
+      this.initializeResult === null &&
+      this.initializeLinesLeft-- > 0
     if (!maybeRpcRequest && !maybeControl && !awaitingInitialize) {
       return
     }
@@ -64,21 +98,21 @@ export class ProviderRelayPendingRequests {
     if (typeof message.method === 'string') {
       const key = rpcId(message.id)
       if (key) {
-        this.pending.set(key, record)
+        this.hold(key, record)
       }
       return
     }
     if (message.type === 'control_request') {
       const key = controlId(message.request_id)
       if (key) {
-        this.pending.set(key, record)
+        this.hold(key, record)
       }
       return
     }
     if (message.type === 'control_cancel_request') {
       const key = controlId(message.request_id)
       if (key) {
-        this.pending.delete(key)
+        this.release(key)
       }
       return
     }
@@ -126,7 +160,7 @@ export class ProviderRelayPendingRequests {
     }
     const key = this.responseKey(message)
     if (key) {
-      this.pending.delete(key)
+      this.release(key)
     }
   }
 

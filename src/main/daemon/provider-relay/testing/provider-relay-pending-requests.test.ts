@@ -41,7 +41,8 @@ describe('provider relay pending requests', () => {
       chatKey: 'chat',
       managed,
       spoolPath: join(dir, 'r-1.ndjson'),
-      onExit: () => {}
+      onExit: () => {},
+      onDetached: () => {}
     })
     const stream = { socket: new PassThrough() }
     await relay.attach('app-1', stream, 0)
