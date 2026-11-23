@@ -205,26 +205,43 @@ export async function refreshTerminalProviderSnapshotCapabilities(
   return synchronizeTerminalProviderSnapshotCapabilities(livePtyIds, resolveCapabilities)
 }
 
-/** Drops a cached "no" or "unknown" for a live inventory id so its revived session can be asked again. */
+export function startTerminalProviderSnapshotCapabilitySynchronization(
+  livePtyIds: readonly string[]
+): () => void {
+  let disposed = false
+  let retryTimer: ReturnType<typeof setTimeout> | undefined
+  const synchronize = async (): Promise<void> => {
+    const retryDelayMs = await synchronizeTerminalProviderSnapshotCapabilities(livePtyIds)
+    if (!disposed && retryDelayMs !== null) {
+      retryTimer = setTimeout(() => void synchronize(), Math.max(1, retryDelayMs))
+    }
+  }
+  void synchronize()
+  return () => {
+    disposed = true
+    clearTimeout(retryTimer)
+  }
+}
+
+/** Drops a cached "no" for a live inventory id so its revived session can be asked again. */
 export function forgetNegativeCapabilityForLivePty(ptyId: string): boolean {
-  const cached = authoritativeSnapshotByPtyId.get(ptyId)
-  const answeredUnknown = cached === undefined && unknownCapabilityAttemptsByPtyId.has(ptyId)
-  if ((cached !== false && !answeredUnknown) || !lastSynchronizedLivePtyIdSet.has(ptyId)) {
+  if (
+    authoritativeSnapshotByPtyId.get(ptyId) !== false ||
+    !lastSynchronizedLivePtyIdSet.has(ptyId)
+  ) {
     return false
   }
   authoritativeSnapshotByPtyId.delete(ptyId)
   return true
 }
 
-/** Revived ids still unknown after their grace keep the inventory's slow re-ask, picked up by its next pass. */
-export function deferRevivedCapabilityToInventory(ptyIds: Iterable<string>, nowMs: number): void {
+/** Revived ids still unknown after their grace go back to main's settled "no": mounted, no timer, re-asked on the next attach. */
+export function settleUnansweredRevivedCapability(ptyIds: Iterable<string>): void {
   for (const id of ptyIds) {
     if (capabilityStillAwaited(id)) {
-      unknownCapabilityAttemptsByPtyId.set(id, UNKNOWN_CAPABILITY_MAX_ATTEMPTS)
-      unknownCapabilityRetryAtByPtyId.set(id, nowMs + SETTLED_UNKNOWN_REASK_MS)
+      authoritativeSnapshotByPtyId.set(id, false)
     }
   }
-  refreshEarliestUnknownCapabilityRetry()
 }
 
 export function capabilityStillAwaited(ptyId: string): boolean {

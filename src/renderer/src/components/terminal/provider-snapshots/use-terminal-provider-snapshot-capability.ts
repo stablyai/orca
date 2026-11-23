@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { createTerminalProviderSnapshotBoundPtyIdsSelector } from './terminal-provider-snapshot-bound-pty-ids'
-import { startTerminalProviderSnapshotCapabilitySynchronization } from './terminal-provider-snapshot-capability-loop'
+import { startTerminalProviderSnapshotCapabilitySynchronization } from './terminal-provider-snapshot-capability'
 import {
   getTerminalProviderSnapshotCapabilityRevision,
   subscribeTerminalProviderSnapshotCapability

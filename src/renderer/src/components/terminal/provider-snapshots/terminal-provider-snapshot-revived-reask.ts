@@ -4,13 +4,12 @@ import {
   UNKNOWN_CAPABILITY_MAX_RETRY_MS,
   UNKNOWN_CAPABILITY_RETRY_MS,
   capabilityStillAwaited,
-  deferRevivedCapabilityToInventory,
   forgetNegativeCapabilityForLivePty,
   getTerminalProviderCapabilityEpoch,
   recordRevivedCapabilityAnswers,
-  resolveSnapshotCapabilityBatch
+  resolveSnapshotCapabilityBatch,
+  settleUnansweredRevivedCapability
 } from './terminal-provider-snapshot-capability'
-import { resumeTerminalProviderSnapshotCapabilitySynchronization } from './terminal-provider-snapshot-capability-loop'
 
 const revivedUnansweredPtyIds = new Set<string>()
 let revivedReaskTimer: ReturnType<typeof setTimeout> | undefined
@@ -72,11 +71,10 @@ async function reaskRevivedCapabilities(): Promise<void> {
   }
   revivedReaskAttempts += 1
   if (revivedReaskAttempts >= UNKNOWN_CAPABILITY_MAX_ATTEMPTS) {
-    // Still unknown: the panes stay mounted and the inventory loop takes over its slow re-ask, as for any unknown id.
-    deferRevivedCapabilityToInventory(revivedUnansweredPtyIds, Date.now())
+    // Still unknown: back to the settled "no" it had before the revive, so idle stays quiet; a later attach asks again.
+    settleUnansweredRevivedCapability(revivedUnansweredPtyIds)
     revivedUnansweredPtyIds.clear()
     revivedReaskAttempts = 0
-    resumeTerminalProviderSnapshotCapabilitySynchronization()
     return
   }
   scheduleRevivedCapabilityReask(
