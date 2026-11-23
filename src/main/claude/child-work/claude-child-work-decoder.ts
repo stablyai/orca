@@ -16,6 +16,8 @@ import {
 } from '../background-tasks/claude-background-task-frames'
 import { claudeStartedTaskKind } from '../subagents/claude-subagent-task-frames'
 import { ClaudeAgentWaitCalls } from './claude-agent-wait-calls'
+import { ClaudeChildWakeLease, childWorkEndedEvidence } from './claude-child-wake-lease'
+import { ClaudeChildOwnerIndex } from './claude-child-owner-index'
 import {
   claudeChildWorkOutcome,
   claudeChildWorkObservation,
@@ -34,10 +36,11 @@ export class ClaudeChildWorkDecoder {
   readonly live = new Map<string, DecodedClaudeTask>()
   /** Retain ended runs for the session to distinguish wakes from late starts. */
   private readonly ended = new Map<string, EndedClaudeTask>()
-  private readonly childrenByOwner = new Map<string, Set<string>>()
+  private readonly childrenByOwner = new ClaudeChildOwnerIndex()
   private waiting: ReadonlySet<string> = new Set()
   private pending: PendingEdge[] = []
   private readonly agentWaits = new ClaudeAgentWaitCalls()
+  private readonly wakeLease = new ClaudeChildWakeLease()
   /** `ownerOf` names the subagent that made a child tool call; an ending task wakes it. */
   constructor(readonly taskInvocations = new ClaudeTaskInvocations()) {}
 
@@ -50,6 +53,9 @@ export class ClaudeChildWorkDecoder {
     if (message.type !== 'system') {
       return
     }
+    // Any frame naming this owner proves the provider runs it, so the guess is no longer needed.
+    this.wakeLease.release(taskId(message))
+    this.wakeLease.release(taskAliasId(message.tool_use_id))
     if (message.subtype === 'background_tasks_changed') {
       if (Array.isArray(message.tasks)) {
         for (const entry of message.tasks) {
@@ -116,11 +122,19 @@ export class ClaudeChildWorkDecoder {
     this.ended.clear()
     this.childrenByOwner.clear()
     this.agentWaits.clear()
+    this.wakeLease.clear()
     this.waiting = new Set()
     this.pending.push((observedAt) => ({ type: 'session-ended', observedAt }))
   }
 
+  /** When a held wake stops guessing; the host restates the row then, as no frame need arrive again. */
+  wakeExpiryAt(): number | undefined {
+    return this.wakeLease.earliestExpiry()
+  }
+
   drain(observedAt: number): AgentChildWorkEvidence[] {
+    // A wake that outlived its lease restores the ending it guessed past, before this drain reads it.
+    this.wakeLease.settleExpired(observedAt)
     const pending = this.pending
     this.pending = []
     return pending.map((edge) => edge(observedAt))
@@ -175,7 +189,24 @@ export class ClaudeChildWorkDecoder {
     const owner = ownerId ? this.ended.get(ownerId) : undefined
     if (ownerId && owner?.outcome === 'succeeded' && owner.task?.kind === 'agent') {
       this.upsert(ownerId, { ...owner.task, running: true }, {}, true)
+      // Why: Claude does not resume an owner whose remaining descendants end later (or one whose
+      // worktree is gone), so the guess must expire or the row stays working until the chat closes.
+      this.wakeLease.hold(ownerId, owner, (restored) => this.settleWake(ownerId, restored))
     }
+  }
+
+  /** Put the owner back to the ending the wake guessed past, unless a real frame replaced it. */
+  private settleWake(ownerId: string, restored: EndedClaudeTask): void {
+    // Only the running wake itself is ours to undo; a stop or a restart leaves a different record.
+    if (this.live.get(ownerId)?.running !== true) {
+      return
+    }
+    this.childrenByOwner.remove(ownerId, this.live.get(ownerId))
+    this.live.delete(ownerId)
+    this.ended.set(ownerId, restored)
+    this.pending.push((observedAt) =>
+      childWorkEndedEvidence(ownerId, restored.run, restored.outcome, observedAt)
+    )
   }
 
   private progressed(id: string, message: Record<string, unknown>): void {
@@ -244,35 +275,20 @@ export class ClaudeChildWorkDecoder {
     }
     const ownerBecameLive = !this.live.has(id) || restart
     this.ended.delete(id)
-    this.removeOwnerIndex(id)
+    this.childrenByOwner.remove(id, this.live.get(id))
     this.live.set(id, task)
-    if (task.parentTaskId) {
-      const children = this.childrenByOwner.get(task.parentTaskId) ?? new Set<string>()
-      children.add(id)
-      this.childrenByOwner.set(task.parentTaskId, children)
-    }
+    const children = this.childrenByOwner
+    children.add(id, task)
     this.report(id, task, facts, restart)
     // Admission can resolve a child's raw owner only after that owner's live edge.
     if (!ownerBecameLive) {
       return
     }
-    for (const childId of this.childrenByOwner.get(id) ?? []) {
+    for (const childId of children.children(id)) {
       const child = this.live.get(childId)
       if (child && childId !== id) {
         this.report(childId, child, {})
       }
-    }
-  }
-
-  private removeOwnerIndex(id: string): void {
-    const parent = this.live.get(id)?.parentTaskId
-    if (parent === undefined) {
-      return
-    }
-    const children = this.childrenByOwner.get(parent)
-    children?.delete(id)
-    if (children?.size === 0) {
-      this.childrenByOwner.delete(parent)
     }
   }
 
@@ -298,7 +314,7 @@ export class ClaudeChildWorkDecoder {
   ): void {
     const task = this.live.get(id)
     this.taskInvocations.settle(id, status, reported.runId ?? task?.toolUseId)
-    this.removeOwnerIndex(id)
+    this.childrenByOwner.remove(id, this.live.get(id))
     this.live.delete(id)
     const outcome = claudeChildWorkOutcome(status)
     this.ended.set(id, {
@@ -311,17 +327,8 @@ export class ClaudeChildWorkDecoder {
     if (outcome !== 'cancelled') {
       this.wakeOwner(reported.runId ?? task?.toolUseId, ownerOf, task?.parentTaskId)
     }
-    this.pending.push((observedAt) => ({
-      type: 'ended',
-      observedAt,
-      handle: {
-        idKind: 'task_id',
-        id,
-        ...(reported.runId !== undefined ? { runId: reported.runId } : {})
-      },
-      outcome,
-      ...(reported.lastMessage ? { lastMessage: reported.lastMessage } : {}),
-      ...(reported.totalTokens !== undefined ? { totalTokens: reported.totalTokens } : {})
-    }))
+    this.pending.push((observedAt) =>
+      childWorkEndedEvidence(id, reported.runId, outcome, observedAt, reported)
+    )
   }
 }
