@@ -120,6 +120,10 @@ export class BotAvatarSync {
     const present = new Set<string>()
     for (const bot of this.deps.bots.list()) {
       present.add(bot.id)
+      // A bot that no longer needs its drawn icon (unlinked, or another kind of picture) lets its bytes go.
+      if (!(bot.slack || bot.github) || !bot.avatar || !botSlackIconLook(bot)) {
+        this.prepared.delete(bot.id)
+      }
       if (!(bot.slack || bot.github) || !bot.avatar) {
         this.queued.delete(bot.id)
         continue
@@ -143,20 +147,18 @@ export class BotAvatarSync {
       }
       this.queued.set(bot.id, bot)
     }
-    // A bot deleted while it waited for a slot is not sent, and keeps no icon count.
+    // A bot deleted while it waited for a slot is not sent.
     for (const id of this.queued.keys()) {
       if (!present.has(id)) {
         this.queued.delete(id)
       }
     }
-    for (const id of this.icons.keys()) {
-      if (!present.has(id)) {
-        this.icons.delete(id)
-      }
-    }
-    for (const id of this.prepared.keys()) {
-      if (!present.has(id)) {
-        this.prepared.delete(id)
+    // A deleted bot keeps nothing here.
+    for (const kept of [this.icons, this.prepared, this.sent, this.refused]) {
+      for (const id of kept.keys()) {
+        if (!present.has(id)) {
+          kept.delete(id)
+        }
       }
     }
     if (waiting) {

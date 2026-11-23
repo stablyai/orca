@@ -19,8 +19,15 @@ import { drawBotSlackIcon } from './bot-slack-icon-raster'
 const handled = new Map<string, { look: string; attempt: number }>()
 // Each attempt's number, so a late failure of an older one never lets a newer one go.
 let attempts = 0
-// Per host, one drawing at a time, so a stalled host never holds up another's.
-const queues = new Map<string, Promise<void>>()
+// Per host, one drawing at a time, so a stalled host never holds up another's; waiting, only each bot's
+// latest attempt, so a stalled drawing never piles up more than one per bot behind it.
+type Attempt = { bot: Bot; look: string; attempt: number }
+const pending = new Map<string, Map<string, Attempt>>()
+const running = new Set<string>()
+// Per bot, failed attempts at its look: a failure is tried again on the next notices, at most this many times,
+// until its record changes, its host comes back, or bots are turned back on.
+const MAX_TRIES = 3
+const failures = new Map<string, { look: string; count: number }>()
 // What the last run saw, so a notice that changed neither the bots nor which hosts are live (a Needs You
 // count) costs nothing, and a bot record it already looked at is skipped.
 let seenBots: readonly Bot[] | null = null
@@ -52,12 +59,38 @@ async function uploadBotSlackIcon(bot: BotRef, look: string, png: string): Promi
 
 // Lets a failed or outdated attempt go; the next bots notice, of any kind, looks at the bot again.
 function forget(bot: Bot, attempt: number): void {
-  if (handled.get(botRefKey(bot))?.attempt === attempt) {
-    handled.delete(botRefKey(bot))
+  const key = botRefKey(bot)
+  const entry = handled.get(key)
+  if (entry?.attempt !== attempt) {
+    return
+  }
+  handled.delete(key)
+  const before = failures.get(key)
+  const count = before?.look === entry.look ? before.count + 1 : 1
+  failures.set(key, { look: entry.look, count })
+  if (count < MAX_TRIES) {
     // By id: the record that failed may be a save's reply, not the listed one the next run sees.
-    retry.add(botRefKey(bot))
+    retry.add(key)
     seenBots = null
   }
+}
+
+function pump(hostId: string): void {
+  const jobs = pending.get(hostId)
+  const next = running.has(hostId) ? undefined : jobs?.entries().next().value
+  if (!next) {
+    if (jobs?.size === 0) {
+      pending.delete(hostId)
+    }
+    return
+  }
+  const [key, job] = next
+  jobs?.delete(key)
+  running.add(hostId)
+  void publish(job.bot, job.look, job.attempt).finally(() => {
+    running.delete(hostId)
+    pump(hostId)
+  })
 }
 
 async function publish(bot: Bot, look: string, attempt: number): Promise<void> {
@@ -83,6 +116,7 @@ async function publish(bot: Bot, look: string, attempt: number): Promise<void> {
       return
     }
     if (!want.wanted || parsed?.kind !== 'mascot') {
+      failures.delete(botRefKey(bot))
       return
     }
     const png = await drawBotSlackIcon(
@@ -94,7 +128,9 @@ async function publish(bot: Bot, look: string, attempt: number): Promise<void> {
       forget(bot, attempt)
       return
     }
-    if (!(await uploadBotSlackIcon(bot, look, png))) {
+    if (await uploadBotSlackIcon(bot, look, png)) {
+      failures.delete(botRefKey(bot))
+    } else {
       // The look changed on the host meanwhile: picking it again asks again.
       forget(bot, attempt)
     }
@@ -123,15 +159,10 @@ export function publishBotSlackIcon(bot: Bot): void {
   attempts += 1
   const attempt = attempts
   handled.set(key, { look, attempt })
-  const queued: Promise<void> = (queues.get(bot.hostId) ?? Promise.resolve())
-    .then(() => publish(bot, look, attempt))
-    .finally(() => {
-      // A settled queue is let go, so an unpaired host keeps nothing here.
-      if (queues.get(bot.hostId) === queued) {
-        queues.delete(bot.hostId)
-      }
-    })
-  queues.set(bot.hostId, queued)
+  const jobs = pending.get(bot.hostId) ?? new Map<string, Attempt>()
+  jobs.set(key, { bot, look, attempt })
+  pending.set(bot.hostId, jobs)
+  pump(bot.hostId)
 }
 
 /** `save`, then the saved bot's icon published, for a window's own picture edits. */
@@ -145,6 +176,7 @@ export function withSlackIconPublish<T>(
       // Saved here, the look is asked about again: another window may have replaced its icon since.
       const bot = { ...saved, hostId }
       handled.delete(botRefKey(bot))
+      failures.delete(botRefKey(bot))
       publishBotSlackIcon(bot)
     }
     return saved
@@ -169,13 +201,14 @@ function publishLooks(): void {
       // one's icon), so its host is asked again: one check per changed bot, never the whole roster.
       if (!seen.has(bot)) {
         handled.delete(botRefKey(bot))
+        failures.delete(botRefKey(bot))
       }
       seen.add(bot)
       publishBotSlackIcon(bot)
     }
   }
   // A deleted bot, or one on an unpaired host, keeps nothing here.
-  if (handled.size + retry.size > bots.length || bots.length < listedCount) {
+  if (handled.size + retry.size + failures.size > bots.length || bots.length < listedCount) {
     const listed = new Set(bots.map(botRefKey))
     for (const key of handled.keys()) {
       if (!listed.has(key)) {
@@ -185,6 +218,18 @@ function publishLooks(): void {
     for (const key of retry) {
       if (!listed.has(key)) {
         retry.delete(key)
+      }
+    }
+    for (const key of failures.keys()) {
+      if (!listed.has(key)) {
+        failures.delete(key)
+      }
+    }
+    for (const jobs of pending.values()) {
+      for (const key of jobs.keys()) {
+        if (!listed.has(key)) {
+          jobs.delete(key)
+        }
       }
     }
   }
@@ -197,6 +242,7 @@ function hostCameBack(hostId: ExecutionHostId): void {
   for (const key of handled.keys()) {
     if (key.startsWith(prefix)) {
       handled.delete(key)
+      failures.delete(key)
     }
   }
   seenBots = null
@@ -214,6 +260,7 @@ export function useBotSlackIcons(): void {
     }
     // Another client may have replaced icons while bots were off here: every look is asked about again.
     handled.clear()
+    failures.clear()
     seenBots = null
     seenLive = null
     publishLooks()
