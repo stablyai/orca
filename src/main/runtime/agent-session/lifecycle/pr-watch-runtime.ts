@@ -9,10 +9,10 @@ import type { AgentSessionJournal } from '../../../native-chat/agent-session-jou
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
-  hasPersistedStructuredAgentSessionDatabaseFile,
   openAgentSessionRecordStoreOnce,
   peekOpenedAgentSessionRecordStore
 } from '../records/agent-session-record-store-slot'
+import { hasPersistedStructuredAgentSessionDatabaseFile } from '../records/persisted-agent-session-database-file'
 import { isHostShuttingDown } from '../../../startup/quit/host-shutdown-state'
 
 export type PRWatchRuntimeDeps = {

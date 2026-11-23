@@ -4,7 +4,7 @@ import {
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
-import { hasPersistedStructuredAgentSessionDatabaseFile } from '../records/agent-session-record-store-slot'
+import { hasPersistedStructuredAgentSessionDatabaseFile } from '../records/persisted-agent-session-database-file'
 
 let installRefusal: AgentSessionRefusalError | null = null
 
