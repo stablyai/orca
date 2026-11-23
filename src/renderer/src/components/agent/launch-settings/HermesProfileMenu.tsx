@@ -39,10 +39,14 @@ export function HermesProfileMenu({
   const t = useTranslate()
   // The card knows the surface it launches: a chat has no command line to carry the flag.
   const terminal = entry.surfaces.includes('terminal')
+  // The row already resolved this workspace's host; the draft target covers pickers without rows.
+  const executionHostId =
+    entry.rows.find((row) => row.kind === 'cli')?.executionHostId ??
+    entry.draftTarget?.executionHostId
   const profiles = useHermesLaunchProfiles(
     entry.agent === 'hermes' && terminal,
-    entry.draftTarget?.executionHostId,
-    entry.worktreeId
+    executionHostId,
+    entry.worktreeId ?? entry.draftTarget?.worktreeId
   )
   // An absent or empty list leaves the card as it was: no named profiles, nothing to pick.
   if (

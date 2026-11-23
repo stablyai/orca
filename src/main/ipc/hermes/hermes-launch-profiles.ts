@@ -1,7 +1,10 @@
 import { ipcMain } from 'electron'
 import { readdirSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { hermesProfileNames, hermesActiveProfileName } from '../../hermes/hermes-launch-profile-names'
+import {
+  hermesProfileNames,
+  hermesActiveProfileName
+} from '../../hermes/hermes-launch-profile-names'
 import { getHermesHome, resolveHermesActiveProfileHome } from '../../hermes/hermes-default-home'
 import { hermesProfileRoot } from '../../../shared/agent-launch/startup/hermes-profile'
 import type {
@@ -15,7 +18,10 @@ import { readSshHomeTextFile } from '../../ssh/filesystem/ssh-remote-home-file-r
 import { parseExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { wslHomeUnlessStopped } from '../../wsl/discovery/wsl-home-unless-stopped'
-import { wslGatedReaddir, wslGatedReadFile } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import {
+  wslGatedReaddir,
+  wslGatedReadFile
+} from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 
 /**
  * The named profiles a `hermes -p <id>` launch can pick, plus the one the current environment
@@ -86,13 +92,23 @@ async function listSshHermesLaunchProfiles(targetId: string): Promise<HermesLaun
     return null
   }
   const browse = await browseSshDirectory(connectionManager, targetId, '~/.hermes/profiles').catch(
-    () => null
+    (error: unknown) => {
+      console.warn('[hermes] could not list profiles over SSH', targetId, error)
+      return null
+    }
   )
   // An absent store means the host runs only the default profile: the plain row stays right.
   if (!browse) {
     return { profiles: [], active: null }
   }
-  const active = await readSshHomeTextFile(connectionManager, targetId, '.hermes/active_profile')
+  const active = await readSshHomeTextFile(
+    connectionManager,
+    targetId,
+    '.hermes/active_profile'
+  ).catch((error: unknown) => {
+    console.warn('[hermes] could not read active_profile over SSH', targetId, error)
+    return null
+  })
   return {
     profiles: hermesProfileNames(
       browse.entries.filter((entry) => entry.isDirectory).map((entry) => entry.name)

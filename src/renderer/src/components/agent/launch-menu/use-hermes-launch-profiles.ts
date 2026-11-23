@@ -29,15 +29,22 @@ function fetchHermesLaunchProfiles(
     return Promise.resolve(null)
   }
   // Failures stay uncached: a connecting SSH host answers on the next menu open.
-  return window.api.hermes.launchProfiles({ executionHostId, worktreeId }).then((profiles) => {
-    if (profiles && profiles.profiles.length > 0) {
-      if (cacheByHost.size >= CACHE_LIMIT) {
-        cacheByHost.clear()
+  return window.api.hermes
+    .launchProfiles({ executionHostId, worktreeId })
+    .then((profiles) => {
+      if (profiles && profiles.profiles.length > 0) {
+        if (cacheByHost.size >= CACHE_LIMIT) {
+          cacheByHost.clear()
+        }
+        cacheByHost.set(cacheKey(executionHostId, worktreeId), profiles)
       }
-      cacheByHost.set(cacheKey(executionHostId, worktreeId), profiles)
-    }
-    return profiles
-  })
+      return profiles
+    })
+    .catch((error: unknown) => {
+      // A refused host answers again on the next menu open; say why instead of hiding silently.
+      console.warn('[hermes] launchProfiles request failed', { executionHostId, worktreeId }, error)
+      return null
+    })
 }
 
 /** Profiles for the Hermes launch submenu, fetched once per pane host; null until known. */
