@@ -6,6 +6,7 @@ import type { JournalOperationWindowAnchors } from './journal-domain-operation-w
 import type { JournalSqlScope } from './journal-sql-scope'
 import {
   SEND_ANSWERED_TURN_SQL,
+  SEND_PLACE_ROW_SQL,
   SEND_QUEUED_CARD_SQL
 } from './database/journal-submission-window-indexes'
 
@@ -55,26 +56,34 @@ export function operationSends(
   )
 }
 
+/** The ids of the rows in `[start, end)` a send can sit on, by the index that holds only those, so a
+ *  turn's tool calls are never listed. Takes the session, epoch, start and end. */
+export function windowPlaceRows(column: string): string {
+  return `(SELECT ${column} FROM journal_items INDEXED BY journal_items_send_place
+      WHERE session_id=? AND epoch=? AND ${SEND_PLACE_ROW_SQL} AND sequence>=? AND sequence<?)`
+}
+
 /** The sends whose opener row, provider row or answering turn row, or the head they were sent at,
  *  sits in `[start, end)`. */
 export function windowSends(scope: JournalSqlScope, start: number, end: number): Send[] {
-  const rows = (
-    column: string
-  ) => `(SELECT ${column} FROM journal_items INDEXED BY journal_items_visible_position
-      WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? AND sequence<?)`
   const range = [...scope.prefix, start, end]
   return [
-    ...sendHeads(scope, `AND item_id IN ${rows('item_id')}`, range, 'journal_submission_item'),
     ...sendHeads(
       scope,
-      `AND provider_item_id IN ${rows('item_id')}`,
+      `AND item_id IN ${windowPlaceRows('item_id')}`,
+      range,
+      'journal_submission_item'
+    ),
+    ...sendHeads(
+      scope,
+      `AND provider_item_id IN ${windowPlaceRows('item_id')}`,
       range,
       'journal_submission_provider_item'
     ),
     ...sendHeads(
       scope,
       // `+item_id` drops the column's TEXT affinity, so the comparison keys on the indexed expression.
-      `AND ${SEND_ANSWERED_TURN_SQL} IN ${rows('+item_id')}`,
+      `AND ${SEND_ANSWERED_TURN_SQL} IN ${windowPlaceRows('+item_id')}`,
       range,
       'journal_submission_answered_turn'
     ),

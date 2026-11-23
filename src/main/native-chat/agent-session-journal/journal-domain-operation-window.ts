@@ -114,9 +114,10 @@ export function readJournalDomainOperationWindow(
     ...anchorAt
   ]
   const earliest = anchored.length > 0 ? Math.min(...anchored) : null
-  // An unanswered send older than the newest turns pins the window to it: the whole read is cheaper
-  // than reading that long stretch's sends by index, and it was the read before.
-  if (recent && earliest !== null && earliest < Math.min(...anchorAt)) {
+  // An unanswered send older than the newest turns (by its rows, or the head it was sent at) pins
+  // the window to it: the whole read is cheaper than reading that long stretch's sends by index.
+  const sentAt = sends.flatMap((send) => send.submittedSequence ?? [])
+  if (recent && Math.min(earliest ?? Infinity, ...sentAt) < Math.min(...anchorAt)) {
     indexed = false
     sends = sendHeads(scope)
   }

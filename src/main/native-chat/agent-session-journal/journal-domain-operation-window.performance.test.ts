@@ -10,6 +10,7 @@ import { applyJournalDomainDispatch } from './journal-domain-dispatch'
 import { applyJournalDomainItem } from './journal-domain-item'
 import { readJournalDomainOperationWindow } from './journal-domain-operation-window'
 import { JournalSqlScope } from './journal-sql-scope'
+import { windowPlaceRows } from './journal-operation-window-sends'
 import { codexTurnLifecycleIdentity } from '../../codex/structured/journal/codex-structured-journal-translation-turns'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
@@ -47,7 +48,9 @@ function chat(
   /** This send is handed over and never answered: no dispatch, no turn. */
   unansweredAt?: number,
   /** Sends before this index were recovered in doubt after a crash: unknown, never unanswered. */
-  recoveredBelow = 0
+  recoveredBelow = 0,
+  /** Tool calls the last turn ran, as a long agent turn does. */
+  lastTurnTools = 0
 ): Database {
   const directory = mkdtempSync(join(tmpdir(), 'orca-operation-window-'))
   directories.push(directory)
@@ -140,6 +143,25 @@ function chat(
       )
     )
   }
+  for (let call = 0; call < lastTurnTools; call += 1) {
+    applyJournalDomainItem(
+      db,
+      target,
+      {
+        kind: 'item',
+        identity: { provider: 'orca', clientMessageId: `call-${call}` },
+        body: {
+          kind: 'tool-call',
+          name: 'shell',
+          callId: `call-${call}`,
+          input: {},
+          state: 'completed'
+        },
+        options: { turnScope: { kind: 'thread' }, fence: 1 }
+      },
+      now++
+    )
+  }
   db.exec('COMMIT')
   return db
 }
@@ -224,6 +246,23 @@ it('reads the newest turns with the same work however many turns came before the
   expect(long.examined).toBe(short.examined)
   expect(long.sends).toEqual(Array.from({ length: 9 }, (_, index) => `m${491 + index}`))
   expect(long.turns).toEqual(Array.from({ length: 9 }, (_, index) => `turn-${491 + index}`))
+  // A long agent turn's tool calls are never listed to find its sends, and change nothing it reads.
+  const listed = (tools: number) => {
+    const db = chat(50, () => true, undefined, 0, tools)
+    const ids = db
+      .prepare(`SELECT COUNT(*) AS n FROM ${windowPlaceRows('item_id')}`)
+      .get('chat', 'epoch', 0, Number.MAX_SAFE_INTEGER)?.n
+    const { snapshot } = readJournalDomainOperationWindow(
+      new JournalSqlScope(db, 'chat', 'epoch'),
+      {
+        latestTurns: 8,
+        turnShape: true
+      }
+    )
+    db.close()
+    return { ids, sends: snapshot.submissions.map((send) => send.clientMessageId) }
+  }
+  expect(listed(1000)).toEqual(listed(0))
   // Sends recovered in doubt long ago are settled for attribution: they add no work as they pile up.
   expect(read(500, 491).examined).toBe(read(50, 41).examined)
   // A send still unanswered anywhere is the turn still to be attributed: kept, as the whole read does,
