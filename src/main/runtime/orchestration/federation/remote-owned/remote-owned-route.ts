@@ -32,6 +32,11 @@ import { latestRunLink, repairedListError } from './re-paired-run-list'
 import { explainRemoteServerFailure } from './remote-server-unreachable'
 import { serverOwnsPlacedWorkers, startRemoteOwnedWorker } from './remote-owned-start'
 import { settleUnansweredAbandon, stopRemoteWorker } from './remote-owned-stop'
+import {
+  assertBotWorkTargetPairingRevision,
+  resolveWorkerStartWorkTargetValues
+} from '../../../../bots/bot-turn-work-target'
+import type { ResolvedBotWorkTargetPlacement } from '../../../../../shared/agent-session/work-target/agent-session-work-target'
 
 type Routed = { handled: false } | { handled: true; result: unknown }
 
@@ -72,8 +77,18 @@ export async function routeRemoteOwnedCall(
   const subject =
     request.method === 'orchestration.workerStart' ? undefined : remoteSubject(db, access, values)
   if (!subject) {
-    const on = access.server && stringField(values, access.server)
-    return on === undefined ? LOCAL : routeServerCall(runtime, request, access, values, ctx, on)
+    const target =
+      request.method === 'orchestration.workerStart'
+        ? resolveWorkerStartWorkTargetValues(
+            values,
+            runtime.botWorkTargets,
+            ctx.orchestrationCaller
+          )
+        : { values }
+    const on = access.server && stringField(target.values, access.server)
+    return on === undefined
+      ? LOCAL
+      : routeServerCall(runtime, request, access, target.values, ctx, on, target.workTarget)
   }
   checkDeclaredOrchestrationAccess(access, params, ctx)
   const record = subject.dispatchId ? getRemoteDispatch(db, subject.dispatchId) : undefined
@@ -124,7 +139,8 @@ async function routeServerCall(
   access: OrchestrationMethodAccessDeclaration,
   values: Values,
   ctx: RpcContext,
-  on: string
+  on: string,
+  workTarget?: ResolvedBotWorkTargetPlacement
 ): Promise<Routed> {
   // A chat named by its session ID is refused by the ordinary start before any server is asked.
   if (!SERVER_CALLS.has(request.method) || isSessionAddress(values.terminal)) {
@@ -134,22 +150,22 @@ async function routeServerCall(
   const server = await runtime.resolveOrchestrationWorkerServer(on)
   const db = runtime.getOrchestrationDb()
   if (request.method === 'orchestration.workerStart') {
+    assertBotWorkTargetPairingRevision(server, workTarget)
     if (
       holdsLocalReceipt(db, ctx, request.orchestrationRequestId) ||
       !(await serverOwnsPlacedWorkers(runtime, server))
     ) {
-      // An older server: today's remote attachment, the one legacy branch for new work.
       return LOCAL
     }
-    return {
-      handled: true,
-      result: await startRemoteOwnedWorker(
-        runtime,
-        WorkerStartParams.parse(values),
-        ctx,
-        request.orchestrationRequestId
-      )
-    }
+    const parsed = WorkerStartParams.parse(values)
+    const result = await startRemoteOwnedWorker(
+      runtime,
+      parsed,
+      ctx,
+      request.orchestrationRequestId,
+      workTarget
+    )
+    return { handled: true, result }
   }
   if (request.method === 'orchestration.workerList') {
     const runId = stringField(values, 'run')
@@ -300,26 +316,18 @@ function seedNamedDispatches(db: OrchestrationDb, link: RemoteRunLinkRow, answer
 }
 
 /** A retry of a start this Orca already took on today's path stays there, whatever the server runs now. */
-function holdsLocalReceipt(
-  db: OrchestrationDb,
-  ctx: RpcContext,
-  requestId: string | undefined
-): boolean {
-  const caller =
-    ctx.authenticatedCallerFingerprint ?? db.getOrCreateLocalMutationCallerFingerprint()
-  return requestId !== undefined && db.getMutationReceipt(caller, requestId) !== undefined
-}
+const holdsLocalReceipt = (db: OrchestrationDb, ctx: RpcContext, requestId: string | undefined) =>
+  requestId !== undefined &&
+  db.getMutationReceipt(
+    ctx.authenticatedCallerFingerprint ?? db.getOrCreateLocalMutationCallerFingerprint(),
+    requestId
+  ) !== undefined
 
-function isSessionAddress(value: unknown): boolean {
-  return typeof value === 'string' && value.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
-}
+const isSessionAddress = (value: unknown): boolean =>
+  typeof value === 'string' && value.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
 
-function stringField(values: Values, field: string): string | undefined {
-  const value = values[field]
-  return typeof value === 'string' && value !== '' ? value : undefined
-}
+const stringField = (values: Values, field: string): string | undefined =>
+  typeof values[field] === 'string' && values[field] !== '' ? values[field] : undefined
 
-function numberField(values: Values, field: string): number | undefined {
-  const value = values[field]
-  return typeof value === 'number' ? value : undefined
-}
+const numberField = (values: Values, field: string): number | undefined =>
+  typeof values[field] === 'number' ? values[field] : undefined

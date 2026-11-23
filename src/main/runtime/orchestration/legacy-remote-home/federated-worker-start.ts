@@ -1,17 +1,12 @@
-import type { FederatedWorkerStartRequest } from './federated-worker-start-request'
+import {
+  resolveFederatedServerProtocolVersion,
+  type FederatedWorkerStartRequest
+} from './federated-worker-start-request'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import {
-  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
-  ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION,
-  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
-  ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
-} from '../../../../shared/orchestration/orchestration-runtime-capabilities'
-import { orchestrationMigrationData } from '../../../../shared/orchestration/orchestration-rpc-contract'
+import { ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrchestrationError } from '../orchestration-error'
+import { assertBotWorkTargetPairingRevision } from '../../../bots/bot-turn-work-target'
 import {
   assertWorkerLaunchPreferencesRuntimeSupported,
   assertWorkerLaunchPreferencesCreateTerminal,
@@ -74,7 +69,11 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
     effort: params.effort
   })
   const server = await runtime.resolveOrchestrationWorkerServer(params.on as string)
-  const pairingFence = { expectedEnvironmentPairingRevision: server.pairingRevision }
+  assertBotWorkTargetPairingRevision(server, args.workTarget)
+  const pairingFence = {
+    expectedEnvironmentPairingRevision:
+      args.workTarget?.onExpectedPairingRevision ?? server.pairingRevision
+  }
   const budgets = resolveFederatedWorkerStartBudgets(params.timeoutMs)
   const status = (await runtime.callOrchestrationWorkerServer(
     server.environmentId,
@@ -84,45 +83,24 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
     undefined,
     pairingFence
   )) as RuntimeStatus
-  if (!status.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
-    throw new OrchestrationError(
-      'orchestration_migration_required',
-      `Connected server ${server.name} does not support the current orchestration contract. No effects were applied.`,
-      orchestrationMigrationData('runtime_capability_missing')
-    )
-  }
-  if (!status.capabilities?.includes(ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY)) {
-    throw new OrchestrationError(
-      'capability_unsupported',
-      `Connected server ${server.name} does not support orchestration federation.`
-    )
-  }
+  const federationProtocolVersion = resolveFederatedServerProtocolVersion(status, server.name)
   assertWorkerLaunchPreferencesRuntimeSupported({
     model: params.model,
     effort: params.effort,
     capabilities: status.capabilities,
     serverName: server.name
   })
-  const childParent = createMode
-    ? await resolveFederatedChildParent({
-        runtime,
-        worktree: createMode,
-        from: params.from,
-        callerSession: args.callerSession,
-        serverCapabilities: status.capabilities,
-        serverName: server.name
-      })
-    : undefined
-  const supportsControlMail = status.capabilities?.includes(
-    ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
-  )
-  const federationProtocolVersion =
-    supportsControlMail &&
-    status.capabilities?.includes(ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY)
-      ? ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
-      : supportsControlMail
-        ? ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
-        : 1
+  const childParent =
+    createMode && !(createMode === 'new-top-level' && args.workTarget?.mode === 'new-top-level')
+      ? await resolveFederatedChildParent({
+          runtime,
+          worktree: createMode,
+          from: params.from,
+          callerSession: args.callerSession,
+          serverCapabilities: status.capabilities,
+          serverName: server.name
+        })
+      : undefined
 
   const setupDecision = createsWorktree ? (params.setup ?? 'inherit') : 'not_applicable'
   const runId = args.bindRunId()
@@ -169,8 +147,8 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
   const taskForRemote = task ?? createdTask
   // An unknown outcome may yet be a running worker: a bot records it, with no card.
   const recordStarted = (ready: boolean) => {
-    const agent = workerLaunchAgent(launch) ?? workerLaunchAgent(requestedLaunch)
     if (!params.terminal) {
+      const agent = workerLaunchAgent(launch) ?? workerLaunchAgent(requestedLaunch)
       recordStart(dispatchWorkerStarted(ready, started.dispatch.id, taskForRemote, agent))
     }
   }
@@ -237,6 +215,13 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       const reportsTurnStops = status.capabilities?.includes(
         ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
       )
+      const nextHint = reportsTurnStops
+        ? undefined
+        : {
+            name: server.name,
+            dispatchId: started.dispatch.id,
+            cli: params.from ? runtime.getTerminalOrchestrationCliCommand(params.from) : 'orca'
+          }
       readyResult = withWorkerStartNext(
         {
           runId,
@@ -252,13 +237,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           residualResources: remote.residualResources ?? [],
           ...(childParent && 'warning' in childParent ? { warning: childParent.warning } : {})
         },
-        reportsTurnStops
-          ? undefined
-          : {
-              name: server.name,
-              dispatchId: started.dispatch.id,
-              cli: params.from ? runtime.getTerminalOrchestrationCliCommand(params.from) : 'orca'
-            }
+        nextHint
       )
     } else if (remote.state === 'outcome_unknown') {
       const worker = db.markWorkerStartUnknown(

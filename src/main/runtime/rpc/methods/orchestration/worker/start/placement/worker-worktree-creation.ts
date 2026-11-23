@@ -13,18 +13,25 @@ import {
   folderWorkspaceKey,
   parseWorkspaceKey
 } from '../../../../../../../../shared/workspace/identity/workspace-scope'
+import type { ExecutionHostId } from '../../../../../../../../shared/execution-host/execution-host'
+import {
+  hostQualifiedRepoSelector,
+  type RuntimeRepoSelector
+} from '../../../../../../workspaces/catalog/runtime-repo-selector'
 import type { WorkerEffect, WorkerSetupReceipt } from './worker-placement-topology'
 import type { CrossStoreParentRef } from '../../../../../../../../shared/worktree/lineage-types'
 import { bindWorkerTerminal } from '../../../../../../orchestration/db/worker-terminal/worker-bound-terminals'
 
 /** The repo a new worker worktree is created in, and its parent for `new-child`. */
 export type WorkerWorktreeCreationTarget = {
-  repoSelector: string
+  repoSelector: RuntimeRepoSelector
   parentWorktreeId?: string
   /** Set instead of `parentWorktreeId` when the caller is a folder workspace (a bot's home, say). */
   parentFolderWorkspace?: WorkspaceKey
   /** The paired coordinator's own workspace, on its machine. */
   crossStoreParent?: CrossStoreParentRef
+  /** Targeted project launches nest under the selected project rather than bot home. */
+  suppressBotHomeParent?: true
 }
 
 export async function resolveWorkerWorktreeCreationTarget(args: {
@@ -33,36 +40,40 @@ export async function resolveWorkerWorktreeCreationTarget(args: {
   repo: string | undefined
   callerWorktreeId: string
   crossStoreParent?: CrossStoreParentRef
+  targetHostId?: ExecutionHostId
+  suppressBotHomeParent?: true
 }): Promise<WorkerWorktreeCreationTarget> {
   const { requestedWorktree, repo } = args
+  const scopedRepo = repo ? hostQualifiedRepoSelector(repo, args.targetHostId) : undefined
+  const suppress = args.suppressBotHomeParent ? { suppressBotHomeParent: true as const } : {}
   // An explicit repo is all a top-level worktree needs, so callers outside a worktree can use it.
-  if (requestedWorktree === 'new-top-level' && repo) {
-    return { repoSelector: repo }
+  if (requestedWorktree === 'new-top-level' && scopedRepo) {
+    return { repoSelector: scopedRepo, ...suppress }
   }
   // Its parent is on another machine, so the destination repo here is explicit.
   if (requestedWorktree === 'new-child' && args.crossStoreParent) {
-    if (!repo) {
+    if (!scopedRepo) {
       throw new OrchestrationError(
         'invalid_argument',
         '--worktree new-child on a paired server needs --repo <selector> naming the repo there.'
       )
     }
-    return { repoSelector: repo, crossStoreParent: args.crossStoreParent }
+    return { repoSelector: scopedRepo, crossStoreParent: args.crossStoreParent }
   }
   const caller = parseWorkspaceKey(args.callerWorktreeId)
   if (caller?.type === 'folder') {
     // A folder has no repo of its own, so it must name the one to create in.
-    if (!repo) {
+    if (!scopedRepo) {
       throw new OrchestrationError(
         'invalid_argument',
         'A worker started from a folder workspace needs --repo to create a worktree.'
       )
     }
     return {
-      repoSelector: repo,
+      repoSelector: scopedRepo,
       ...(requestedWorktree === 'new-child'
         ? { parentFolderWorkspace: folderWorkspaceKey(caller.folderWorkspaceId) }
-        : {})
+        : suppress)
     }
   }
   const callerWorktree = await args.runtime
@@ -77,8 +88,8 @@ export async function resolveWorkerWorktreeCreationTarget(args: {
       throw error
     })
   return {
-    repoSelector: repo ?? callerWorktree.repoId,
-    ...(requestedWorktree === 'new-child' ? { parentWorktreeId: callerWorktree.id } : {})
+    repoSelector: scopedRepo ?? callerWorktree.repoId,
+    ...(requestedWorktree === 'new-child' ? { parentWorktreeId: callerWorktree.id } : suppress)
   }
 }
 
@@ -89,12 +100,12 @@ export async function resolveWorkerWorktreeName(
       repoSelector: undefined,
       limit: number
     ): Promise<{ worktrees: readonly { path: string }[] }>
-    listRetiredWorktreeNames(repoSelector: string): Promise<{
+    listRetiredWorktreeNames(repoSelector: RuntimeRepoSelector): Promise<{
       retiredNamesByRepo: Record<string, readonly string[]>
       retiredNameTiersByRepo: Record<string, number>
     }>
   },
-  repoSelector: string,
+  repoSelector: RuntimeRepoSelector,
   name: string | undefined
 ): Promise<{ name: string; nameWasGenerated?: true }> {
   if (name) {
@@ -190,6 +201,7 @@ export async function createWorkerWorktree(args: {
             ? { parentWorkspace: target.parentFolderWorkspace }
             : {}),
           noParent: requestedWorktree === 'new-top-level',
+          ...(target.suppressBotHomeParent ? { suppressBotHomeParent: true as const } : {}),
           callerTerminalHandle: params.from,
           orchestrationContext: args.orchestrationContext
         }

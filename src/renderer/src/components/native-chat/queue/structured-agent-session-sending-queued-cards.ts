@@ -19,6 +19,7 @@ export function sendingQueuedMessageCards(
     position: Number.MAX_SAFE_INTEGER - entries.length + index,
     text: queuedMessageCardText(entry.body),
     ...queuedMessageCardImages(entry.body),
+    ...(entry.body.workTarget ? { workTarget: entry.body.workTarget } : {}),
     state: 'waiting',
     hold: 'sending'
   }))

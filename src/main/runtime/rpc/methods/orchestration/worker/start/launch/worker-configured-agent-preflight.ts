@@ -1,9 +1,10 @@
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
+import type { RuntimeRepoSelector } from '../../../../../../workspaces/catalog/runtime-repo-selector'
 import { isTuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 import { prepareFederationAttachmentWorkerStart } from './worker-start-validation'
 
-type WorkerAgentTarget = { repo?: string; worktree?: string }
+type WorkerAgentTarget = { repo?: RuntimeRepoSelector; worktree?: string }
 
 export async function resolveWorkerConfiguredAgentParams<T extends { agent?: string }>(
   runtime: OrcaRuntimeService,

@@ -32,9 +32,12 @@ export type RuntimeBotSessionHostOwner = {
     selector: string,
     requiredHostId?: ExecutionHostId
   ) => Promise<BotWorkTargetWorkspaceSummary>
-  resolveOrchestrationWorkerServer: (
-    selector: string
-  ) => Promise<{ environmentId: string; name: string; pairingRevision?: number }>
+  resolveOrchestrationWorkerServer: (selector: string) => Promise<{
+    environmentId: string
+    name: string
+    pairingRevision?: number
+    peerFingerprint?: string
+  }>
   callOrchestrationWorkerServer: (
     environmentId: string,
     method: string,

@@ -23,7 +23,7 @@ import {
 import { buildOrchestrationTaskDisplayMetadata } from '../../../../../../shared/orchestration/orchestration-task-display'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './start/admission/worker-start-prompt-budget'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
-import { applyBotTurnWorkTargetForCaller } from '../../../../../bots/bot-turn-work-target'
+import { resolveBotTurnWorkTargetForCaller } from '../../../../../bots/bot-turn-work-target'
 import { checkedWorkerOrigin } from '../../bots-items-worker-origin'
 import { decideStartMode, noteTerminalFallbackOnItem } from './start/worker-chat-lineage'
 import { withKeepOpenDefault } from './start/worker-keep-open-default'
@@ -86,8 +86,17 @@ export async function startWorker(
     ctx,
     startFollowUp
   )
-  const { params, followUp, coordinator, bindRun, helperCreator, taskDeps, existingTask, withRun } =
-    prepared
+  const {
+    params,
+    workTarget,
+    followUp,
+    coordinator,
+    bindRun,
+    helperCreator,
+    taskDeps,
+    existingTask,
+    withRun
+  } = prepared
   const db = runtime.getOrchestrationDb()
   const questionLink =
     params.forQuestion !== undefined
@@ -110,7 +119,8 @@ export async function startWorker(
       task: existingTask,
       taskDeps,
       orchestrationMutation,
-      callerSession: orchestrationCaller
+      callerSession: orchestrationCaller,
+      ...(workTarget ? { workTarget } : {})
     })
     await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
     const placed = receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt
@@ -132,7 +142,8 @@ export async function startWorker(
     mode,
     chatLineage,
     helperCreator,
-    followUp
+    followUp,
+    ...(workTarget ? { workTarget } : {})
   })
   await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
   const note = { itemUid: checked?.itemUid, chatLineage, terminal: params.terminal }
@@ -160,12 +171,14 @@ export async function prepareWorkerStart(
       '--timeout-ms is too large for worker-start transport grace; the derived timeout must fit within the timer limit.'
     )
   }
-  params = applyBotTurnWorkTargetForCaller(
+  const resolvedWorkTarget = resolveBotTurnWorkTargetForCaller(
     params,
     runtime.botWorkTargets,
     orchestrationCaller,
     Boolean(followUp)
   )
+  params = resolvedWorkTarget.params
+  const workTarget = resolvedWorkTarget.enforcement
   assertWorkerStartPlacementBoundaries(params, orchestrationCaller, followUp)
   const db = runtime.getOrchestrationDb()
   const coordinator = resolveOrchestrationCaller(runtime, {
@@ -265,6 +278,7 @@ export async function prepareWorkerStart(
   }
   return {
     params,
+    workTarget,
     followUp,
     coordinator,
     bindRun,

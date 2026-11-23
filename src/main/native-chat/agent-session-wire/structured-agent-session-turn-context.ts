@@ -59,6 +59,8 @@ export type StructuredAgentSessionTurnContext = {
     | { ok: true; text: string; placement: ResolvedBotWorkTargetPlacement }
     | { ok: false; refusal: AgentSessionWireRefusal }
   >
+  /** Clears an active-turn work-target binding if handover fails before the turn runs. */
+  clearWorkTarget?: (sessionId: string) => void
   /** A person's message started a turn, whether or not it carries the plan (attachments don't). */
   handedOver?: (sessionId: string, message: AgentJournalMessageItem) => void
   /** A turn in this conversation ended, whoever started it; `readItems` reads its journal. */

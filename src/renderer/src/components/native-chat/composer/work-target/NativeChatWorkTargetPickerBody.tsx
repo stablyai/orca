@@ -13,7 +13,11 @@ import {
   sameAgentJournalWorkTarget,
   type AgentJournalWorkTarget
 } from '../../../../../../shared/agent-session/work-target/agent-session-work-target'
-import { filterBotWorkTargetTree, type BotWorkTargetTreeRow } from './bot-work-target-tree'
+import {
+  filterBotWorkTargetTree,
+  rowMatchesBotWorkTargetQuery,
+  type BotWorkTargetTreeRow
+} from './bot-work-target-tree'
 import { useBotWorkTargetCatalog } from './use-bot-work-target-catalog'
 
 function getNextSelectableIndex(
@@ -35,8 +39,17 @@ function getNextSelectableIndex(
 
 function firstSelectableIndex(
   rows: readonly BotWorkTargetTreeRow[],
-  selectedTarget: AgentJournalWorkTarget | null
+  selectedTarget: AgentJournalWorkTarget | null,
+  query: string
 ): number {
+  if (query.trim()) {
+    const directMatch = rows.findIndex(
+      (row) => !row.unavailableReason && rowMatchesBotWorkTargetQuery(row, query)
+    )
+    if (directMatch !== -1) {
+      return directMatch
+    }
+  }
   if (selectedTarget) {
     const selectedIndex = rows.findIndex(
       (row) => !row.unavailableReason && sameAgentJournalWorkTarget(row.target, selectedTarget)
@@ -104,8 +117,8 @@ export function NativeChatWorkTargetPickerBody({
         return matched
       }
     }
-    return firstSelectableIndex(filteredRows, selectedTarget)
-  }, [filteredRows, highlightedRowId, selectedTarget])
+    return firstSelectableIndex(filteredRows, selectedTarget, query)
+  }, [filteredRows, highlightedRowId, query, selectedTarget])
 
   useEffect(() => {
     if (activeIndex < 0) {
@@ -259,7 +272,16 @@ export function NativeChatWorkTargetPickerBody({
             const unavailableText =
               row.unavailableReason === 'offline'
                 ? t('components.native-chat.workTarget.offline', 'Offline')
-                : t('components.native-chat.workTarget.otherHost', 'Other host')
+                : row.unavailableReason === 'ssh-project-unsupported'
+                  ? t('components.native-chat.workTarget.existingOnly', 'Pick a workspace')
+                  : t('components.native-chat.workTarget.otherHost', 'Other host')
+            const unavailableTitle =
+              row.unavailableReason === 'ssh-project-unsupported'
+                ? t(
+                    'components.native-chat.workTarget.sshProjectUnsupportedTitle',
+                    'New workspaces cannot be created on SSH Git projects. Select an existing workspace below.'
+                  )
+                : undefined
             return (
               <div
                 key={row.id}
@@ -269,6 +291,7 @@ export function NativeChatWorkTargetPickerBody({
                 data-work-target-row-id={row.id}
                 aria-selected={isSelected}
                 aria-disabled={isUnavailable || undefined}
+                title={unavailableTitle}
                 onMouseEnter={() => {
                   if (!isUnavailable) {
                     setHighlightedRowId(row.id)

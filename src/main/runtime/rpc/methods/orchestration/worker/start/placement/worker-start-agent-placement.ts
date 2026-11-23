@@ -1,3 +1,4 @@
+import type { FolderWorkspace } from '../../../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { RuntimeTerminalCreate } from '../../../../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 /** Use the shared executor for new workers; structured worktrees omit startup agent, then resolve host support before chat creation.
  * Keep worker lineage/effects and background presentation in factories; caller passes the pre-decided mode.
@@ -60,6 +61,10 @@ type WorkerAgentPlacementArgs = {
   orchestrationRunId: string
   /** The already-resolved placement, present only when this start does not create one. */
   resolvedWorktree: PlacedWorktree | undefined
+  /** Optional host/instance-scoped selector (`identity:...`) preserved through terminal/chat launch. */
+  existingWorktreeSelector?: string
+  /** Optional host-scoped folder workspace record so launch never falls back to another host. */
+  resolvedFolder?: FolderWorkspace
   /** Decided before the dispatch record; for an existing worktree, already settled on its host. */
   mode: WorkerStartModeReceipt
   agent: TuiAgent | undefined
@@ -156,9 +161,18 @@ async function launchWorkerAgent(
         args.onStage(stage === 'worktree_create' ? 'worktree_create' : 'terminal_create'),
       workspaces: {
         createRecoveryShell: async (worktreeId) => {
-          const shell = await args.runtime.createTerminal(`id:${worktreeId}`, {
-            surfaceOwner: false
-          })
+          const isTarget = Boolean(existing && worktreeId === existing.id)
+          const selector =
+            isTarget && args.existingWorktreeSelector
+              ? args.existingWorktreeSelector
+              : `id:${worktreeId}`
+          const shell = await args.runtime.createTerminal(
+            selector,
+            { surfaceOwner: false },
+            undefined,
+            undefined,
+            isTarget ? args.resolvedFolder : undefined
+          )
           args.effects.push({
             kind: 'terminal',
             role: 'recovery_shell',
@@ -257,9 +271,14 @@ function workerSurfaceFactory(
   return {
     createStructuredSession: async ({ worktreeId }) => {
       recordSurfaceStage(worktreeId)
+      const scopedSelector =
+        args.resolvedWorktree && worktreeId === args.resolvedWorktree.id
+          ? args.existingWorktreeSelector
+          : undefined
       const session = await createStructuredWorkerSessionForWorktree({
         runtime: args.runtime,
         worktreeId,
+        ...(scopedSelector ? { worktreeSelector: scopedSelector } : {}),
         agent,
         dispatchId: args.dispatchId,
         ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
@@ -274,9 +293,16 @@ function workerSurfaceFactory(
     },
     createTerminalAgent: async ({ worktreeId }) => {
       recordSurfaceStage(worktreeId)
+      const isResolvedExisting = args.resolvedWorktree && worktreeId === args.resolvedWorktree.id
       const terminal = await createExistingWorktreeWorkerTerminal({
         runtime: args.runtime,
         worktreeId,
+        ...(isResolvedExisting && args.existingWorktreeSelector
+          ? { worktreeSelector: args.existingWorktreeSelector }
+          : {}),
+        ...(isResolvedExisting && args.resolvedFolder
+          ? { resolvedFolder: args.resolvedFolder }
+          : {}),
         agent,
         ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
         taskId: args.taskId,

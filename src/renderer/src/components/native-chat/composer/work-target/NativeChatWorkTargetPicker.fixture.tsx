@@ -161,6 +161,54 @@ const SYNTHETIC_ROWS: readonly BotWorkTargetTreeRow[] = [
     target: SYNTHETIC_FOLDER_WORKSPACE
   },
   {
+    id: 'project:ssh:build-box:repo-ssh-service',
+    parentRowId: null,
+    depth: 0,
+    kind: 'project',
+    repoKind: 'git',
+    displayName: 'edge-gateway',
+    hostId: 'ssh:build-box',
+    hostLabel: 'Build SSH',
+    ambiguousName: false,
+    unavailableReason: 'ssh-project-unsupported',
+    searchText: 'edge-gateway build ssh git',
+    target: {
+      kind: 'project',
+      hostId: 'ssh:build-box',
+      repoId: 'repo-ssh-service',
+      repoKind: 'git',
+      displayName: 'edge-gateway',
+      hostLabel: 'Build SSH'
+    }
+  },
+  {
+    id: 'workspace:ssh:build-box:wt-ssh-main',
+    parentRowId: 'project:ssh:build-box:repo-ssh-service',
+    depth: 1,
+    kind: 'workspace',
+    repoKind: 'git',
+    workspaceKind: 'git-worktree',
+    isMainWorktree: true,
+    displayName: 'main',
+    detail: 'Main',
+    hostId: 'ssh:build-box',
+    hostLabel: 'Build SSH',
+    ambiguousName: false,
+    searchText: 'main edge-gateway build ssh',
+    target: {
+      kind: 'workspace',
+      hostId: 'ssh:build-box',
+      repoId: 'repo-ssh-service',
+      repoKind: 'git',
+      workspaceId: 'wt-ssh-main',
+      workspaceInstanceId: 'inst-ssh-main',
+      workspaceKind: 'git-worktree',
+      displayName: 'main',
+      projectName: 'edge-gateway',
+      hostLabel: 'Build SSH'
+    }
+  },
+  {
     id: 'project:ssh:staging-box:repo-staging-api',
     parentRowId: null,
     depth: 0,

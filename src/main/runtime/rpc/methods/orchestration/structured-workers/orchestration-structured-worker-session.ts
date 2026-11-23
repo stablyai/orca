@@ -128,6 +128,8 @@ async function seedListedAntigravityFamily(
 export async function createStructuredWorkerSession(args: {
   runtime: OrcaRuntimeService
   worktreeId: string
+  /** Optional host/instance-scoped selector (`identity:...`) when launching into a validated target. */
+  worktreeSelector?: string
   agent: TuiAgent
   dispatchId: string
   /** The dispatch's own `--model`/`--effort`, already narrowed to the seedable string subset. */
@@ -168,7 +170,7 @@ export async function createStructuredWorkerSession(args: {
         // prepare supplies the host attach fingerprint; this in-process id has no replayed RPC create intent.
         payloadFingerprint: ''
       },
-      worktree: `id:${args.worktreeId}`,
+      worktree: args.worktreeSelector ?? `id:${args.worktreeId}`,
       agent: args.agent,
       // Absent, the host seeds the user's saved selection — the same fallback a chat gets.
       ...(args.options ? { options: args.options } : {}),

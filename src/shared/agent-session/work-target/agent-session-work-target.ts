@@ -1,5 +1,9 @@
 import * as z from 'zod'
-import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../execution-host/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../execution-host/execution-host'
 
 const MAX_WORK_TARGET_ID_LENGTH = 512
 const MAX_WORK_TARGET_LABEL_LENGTH = 160
@@ -33,6 +37,8 @@ export type AgentJournalWorkTarget = {
   repoKind?: 'git' | 'folder'
   /** Git worktree ID, managed folder-repo worktree ID, or `folder:<folderWorkspaceId>`. */
   workspaceId?: string
+  /** Durable occupant ID of a Git worktree so delete/recreate at the same path cannot match. */
+  workspaceInstanceId?: string
   workspaceKind?: 'git-worktree' | 'folder'
   displayName: string
   projectName?: string
@@ -59,6 +65,7 @@ export const SendWorkTarget = z
     repoId: SafeWorkTargetId.optional(),
     repoKind: z.enum(['git', 'folder']).optional(),
     workspaceId: SafeWorkTargetId.optional(),
+    workspaceInstanceId: SafeWorkTargetId.optional(),
     workspaceKind: z.enum(['git-worktree', 'folder']).optional(),
     displayName: WorkTargetLabel,
     projectName: WorkTargetLabel.optional(),
@@ -81,6 +88,7 @@ export const JournalWorkTargetSchema = z.object({
   repoId: z.string().min(1).optional(),
   repoKind: z.enum(['git', 'folder']).optional(),
   workspaceId: z.string().min(1).optional(),
+  workspaceInstanceId: z.string().min(1).optional(),
   workspaceKind: z.enum(['git-worktree', 'folder']).optional(),
   displayName: z.string().min(1),
   projectName: z.string().min(1).optional(),
@@ -109,18 +117,27 @@ export function sameAgentJournalWorkTarget(
     left.repoId === right.repoId &&
     left.repoKind === right.repoKind &&
     left.workspaceId === right.workspaceId &&
+    left.workspaceInstanceId === right.workspaceInstanceId &&
     left.workspaceKind === right.workspaceKind
   )
 }
 
 /** Host-validated, authoritative placement resolved from live catalog state. */
 export type ResolvedBotWorkTargetPlacement = {
-  /** `new-child` creates a worktree under a Git project; `existing` places into a live workspace. */
-  mode: 'new-child' | 'existing'
+  /** `new-top-level` creates a workspace under the selected Git project; `existing` places into a live workspace. */
+  mode: 'new-top-level' | 'existing'
   repoSelector?: string
   worktreeSelector?: string
+  /** Execution host scope on this runtime's store (`local` or `ssh:<id>`), preserved through launch. */
+  targetHostId?: ExecutionHostId
+  /** Durable checkout occupant ID verified before launch so path reuse cannot silently match. */
+  expectedWorkspaceInstanceId?: string
   /** Paired server environment ID when executing via `--on`; absent for host-local/SSH targets. */
   onEnvironmentId?: string
+  /** Pairing revision verified during admission/handover; changed pairing refuses launch. */
+  onExpectedPairingRevision?: number
+  /** Peer fingerprint verified during admission/handover; changed peer refuses launch. */
+  onExpectedPeerFingerprint?: string
   canonicalTarget: AgentJournalWorkTarget
 }
 
@@ -165,15 +182,15 @@ export function formatBotWorkTargetContext(
   if (placement.onEnvironmentId) {
     args.push('--on', shellQuoteSelector(placement.onEnvironmentId))
   }
-  if (placement.mode === 'new-child' && placement.repoSelector) {
-    args.push('--repo', shellQuoteSelector(placement.repoSelector), '--worktree', 'new-child')
+  if (placement.mode === 'new-top-level' && placement.repoSelector) {
+    args.push('--repo', shellQuoteSelector(placement.repoSelector), '--worktree', 'new-top-level')
   } else if (placement.worktreeSelector) {
     args.push('--worktree', shellQuoteSelector(placement.worktreeSelector))
   }
   const command = `${cliCommand} ${args.join(' ')}`
   const placementRule =
-    placement.mode === 'new-child'
-      ? `When starting a worker for this request, target this exact project with \`${command}\` (creates a child worktree in that project).`
+    placement.mode === 'new-top-level'
+      ? `When starting a worker for this request, target this exact project with \`${command}\` (creates a new workspace under that project, not under bot home).`
       : `When starting a worker for this request, target this exact existing workspace with \`${command}\` (do not create a new worktree or run in another project or bot home).`
 
   return [

@@ -22835,7 +22835,9 @@
         "otherHost": "Other host",
         "footerHint": "Applies to the next message only",
         "clearAction": "Clear",
-        "trigger": "Target project or workspace"
+        "trigger": "Target project or workspace",
+        "existingOnly": "Pick a workspace",
+        "sshProjectUnsupportedTitle": "New workspaces cannot be created on SSH Git projects. Select an existing workspace below."
       }
     },
     "tab": {

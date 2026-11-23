@@ -89,6 +89,14 @@ export async function beginSubmissionHandover(
   )
   const attempt = ctx.acquireAborts?.begin(ctx.sessionId, true, false, isBound)
   const queued = submission.queuedMessageId !== undefined
+  const clearWorkTarget = () =>
+    void (body.workTarget && ctx.turnContext?.clearWorkTarget?.(ctx.sessionId))
+  const abortPrep = () => {
+    attempt?.end()
+    release?.()
+    released()
+    clearWorkTarget()
+  }
   try {
     carried = await ctx.journal.prepareHandover({
       clientMessageId,
@@ -98,15 +106,9 @@ export async function beginSubmissionHandover(
     })
     await rideAlong.claim(ctx.fence, turnScope)
   } catch (error) {
-    attempt?.end()
-    release?.()
-    released()
+    abortPrep()
     if (error instanceof StructuredAgentSessionInputNotAdmitted && error.outcome) {
-      await ctx.journal.resolveDispatch({
-        clientMessageId,
-        fence: ctx.fence,
-        ...error.outcome
-      })
+      await ctx.journal.resolveDispatch({ clientMessageId, fence: ctx.fence, ...error.outcome })
       return null
     }
     throw error
@@ -127,9 +129,7 @@ export async function beginSubmissionHandover(
   try {
     requestedAt = await structuredAgentSessionHandoverOrigin(ctx.journal, submission)
   } catch (error) {
-    attempt?.end()
-    release?.()
-    released()
+    abortPrep()
     throw error
   }
   return {
@@ -233,6 +233,8 @@ export async function beginSubmissionHandover(
               executed: outcome.ranOptions
             })
             await rideAlong.taken(ctx.fence)
+          } else {
+            clearWorkTarget()
           }
         })
       } finally {

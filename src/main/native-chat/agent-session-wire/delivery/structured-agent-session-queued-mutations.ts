@@ -27,6 +27,7 @@ import {
 import type { CommandReceiptResult } from '../../agent-session-journal/writing/command-receipt-schema'
 import {
   canSteerStructuredQueuedMessage,
+  refuseQueuedSendWhileWorking,
   structuredQueueHold
 } from './structured-agent-session-queued-gate'
 import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
@@ -138,9 +139,10 @@ export function sendQueuedStructuredAgentMessage(
           ? { ok: true, value: { clientMessageId: submission.clientMessageId, submission } }
           : invalid('This queued message was already sent.')
       }
-      // Commands cannot steer; enforce idle-only Send even for older clients.
-      if (row.body.command && work.working()) {
-        return invalid("A command can't be sent while the agent is working.")
+      // Commands and targeted messages open a new turn; enforce idle-only Send even for older clients.
+      const workingRefusal = refuseQueuedSendWhileWorking(work, row.body)
+      if (workingRefusal) {
+        return { ok: false, refusal: workingRefusal }
       }
       // Work that can't take input yet (starting, stopping, a different Codex choice) gets the card
       // as a steer: the queue hands it over once it can, or as the next message after this turn.

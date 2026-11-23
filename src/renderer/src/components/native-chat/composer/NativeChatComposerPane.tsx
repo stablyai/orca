@@ -274,6 +274,13 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       setCaret
     })
 
+    const { onOpenWorkTargetPicker, workTargetPicker } = useNativeChatComposerWorkTargetPicker(
+      draftScopeKey,
+      !editSession && !launchPrompt ? structuredTransport?.workTargetSupport : undefined,
+      disabled,
+      setNotice
+    )
+
     const { sendHeld, ...sendButton } = nativeChatComposerSendState({
       agent,
       draft,
@@ -287,7 +294,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       canStop: hasPty && onStop !== undefined,
       orcaCommand: !pending && !launchPrompt && orcaCommands.matchesDraft(draft),
       goalMode: goalMode.active,
-      mentionHold: mentions.sendHeld
+      mentionHold: mentions.sendHeld,
+      hasWorkTarget: Boolean(workTargetPicker?.selectedTarget)
     })
 
     const { send, chooseEditItem, fieldOverrides, dispatchPickerCommand } =
@@ -315,13 +323,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       onStop,
       resolveTarget
     })
-
-    const { onOpenWorkTargetPicker, workTargetPicker } = useNativeChatComposerWorkTargetPicker(
-      draftScopeKey,
-      !editSession && !launchPrompt ? structuredTransport?.workTargetSupport : undefined,
-      disabled,
-      setNotice
-    )
 
     const handleKeyDown = useNativeChatComposerKeyDown({
       autocomplete: autocomplete,

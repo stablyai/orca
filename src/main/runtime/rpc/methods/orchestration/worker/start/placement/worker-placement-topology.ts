@@ -1,3 +1,4 @@
+import type { FolderWorkspace } from '../../../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { RuntimeTerminalCreate } from '../../../../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { narrowStructuredLaunchSeedOptions } from '../../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
@@ -62,21 +63,27 @@ export function requireWorkerAuthority(runtime: OrcaRuntimeService, terminalHand
 export async function createExistingWorktreeWorkerTerminal(args: {
   runtime: OrcaRuntimeService
   worktreeId: string
+  worktreeSelector?: string
+  resolvedFolder?: FolderWorkspace
   agent: TuiAgent
   launchPreferences?: AgentLaunchPreferences
   taskId: string
   effects: WorkerEffect[]
 }): Promise<RuntimeTerminalCreate> {
-  const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
+  const selector = args.worktreeSelector ?? `id:${args.worktreeId}`
+  const opts = {
     // Resolve ids through agent config; cursor alone opens the desktop app, its CLI is cursor-agent.
     startupAgent: args.agent,
-    launchSource: 'orchestration',
+    launchSource: 'orchestration' as const,
     suppressStartupUpdatePrompt: true,
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
     title: `worker-${args.taskId}`,
     // Worker creation is background work and must not pull the sidebar away.
-    surfaceOwner: false
-  })
+    surfaceOwner: false as const
+  }
+  const terminal = args.resolvedFolder
+    ? await args.runtime.createTerminal(selector, opts, undefined, undefined, args.resolvedFolder)
+    : await args.runtime.createTerminal(selector, opts)
   args.effects.push({
     kind: 'terminal',
     role: 'agent',
@@ -92,6 +99,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
 export async function createStructuredWorkerSessionForWorktree(args: {
   runtime: OrcaRuntimeService
   worktreeId: string
+  worktreeSelector?: string
   agent: TuiAgent
   dispatchId: string
   /** `--model`/`--effort`, laid over the saved selection; a leveled Antigravity `--model` replaces it. */
@@ -102,6 +110,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   const created = await createStructuredWorkerSession({
     runtime: args.runtime,
     worktreeId: args.worktreeId,
+    ...(args.worktreeSelector ? { worktreeSelector: args.worktreeSelector } : {}),
     agent: args.agent,
     dispatchId: args.dispatchId,
     ...(options ? { options } : {})

@@ -107,7 +107,7 @@ export function nextJournalDomainQueueCard(
       }
       const mail = orchestrationMailNotice(card.body.from)
       const joins = card.deliveryMode === 'steer' || (mail && selection.mailJoinsTurn !== false)
-      if (steer && (card.body.command || !joins)) {
+      if (steer && (card.body.command || card.body.workTarget || !joins)) {
         continue
       }
       if (selection.mailOnly && !mail) {

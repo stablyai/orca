@@ -150,6 +150,12 @@ export function applyJournalSqlSendAdmission(
       }
       queue = next.card !== null
     }
+  } else if (
+    input.body.workTarget !== undefined &&
+    (eligibility.work.working() || !!eligibility.pending)
+  ) {
+    // Targeted messages open a new turn and must never steer into an active turn.
+    queue = true
   }
   if (
     operation.continuationOfTurnItemId !== undefined &&
@@ -183,7 +189,7 @@ export function applyJournalSqlSendAdmission(
           messageId: id,
           body: input.body,
           options: input.options,
-          deliveryMode: operation.deliveryMode,
+          deliveryMode: input.body.workTarget !== undefined ? 'queue' : operation.deliveryMode,
           unattended: !operation.fromPerson,
           ...(input.origin === 'client' ? { requireAttachments: true as const } : {})
         }

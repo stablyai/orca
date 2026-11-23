@@ -11,7 +11,10 @@ import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { AgentJournalWorkTarget } from '../../../../../../shared/agent-session/work-target/agent-session-work-target'
 
-export type BotWorkTargetHostUnavailableReason = 'offline' | 'other-host'
+export type BotWorkTargetHostUnavailableReason =
+  | 'offline'
+  | 'other-host'
+  | 'ssh-project-unsupported'
 
 export type BotWorkTargetTreeRow = {
   /** Stable compound identity distinguishing same-name targets across hosts. */
@@ -77,7 +80,7 @@ export function resolveHostUnavailableReason(
   }
   if (parsed.kind === 'ssh') {
     const state = sshConnectionStates.get(parsed.targetId)
-    return state && state.status !== 'connected' ? 'offline' : undefined
+    return state?.status === 'connected' ? undefined : 'offline'
   }
   return isRuntimeEnvironmentOffline(runtimeStatusByEnvironmentId.get(parsed.environmentId))
     ? 'offline'
@@ -150,6 +153,7 @@ export function buildWorktreeSubtreeRows(
         repoId: repo.id,
         repoKind: isFolderRepo(repo) ? 'folder' : 'git',
         workspaceId: worktree.id,
+        ...(worktree.instanceId ? { workspaceInstanceId: worktree.instanceId } : {}),
         workspaceKind: isFolderRepo(repo) ? 'folder' : 'git-worktree',
         displayName: label,
         projectName: repo.displayName,
@@ -180,6 +184,15 @@ export function buildWorktreeSubtreeRows(
   }
   visit(null, 1)
   return rows
+}
+
+/** True when every whitespace-delimited query token matches the row's search text. */
+export function rowMatchesBotWorkTargetQuery(
+  row: Pick<BotWorkTargetTreeRow, 'searchText'>,
+  rawQuery: string
+): boolean {
+  const tokens = rawQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  return tokens.every((token) => row.searchText.includes(token))
 }
 
 /** Filter tree rows by multi-token query while retaining parent/child tree context. */

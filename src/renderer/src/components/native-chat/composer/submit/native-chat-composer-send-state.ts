@@ -55,6 +55,8 @@ export function nativeChatComposerSendState(
     goalMode?: boolean
     /** A picked bot chat that can't take the message, or isn't checked yet: Send waits. */
     mentionHold?: boolean
+    /** A selected project/workspace target opens a new turn and never steers a running turn. */
+    hasWorkTarget?: boolean
   },
   t?: Translate
 ): NativeChatComposerSendState {
@@ -94,7 +96,7 @@ export function nativeChatComposerSendState(
   // The send's own resolver, so the hint withdraws wherever Cmd/Ctrl+Enter would send no differently.
   const followUp = transport?.sendFollowUp
   const alternateSend: NativeChatFollowUpBehavior | undefined =
-    input.messageDelivery && !input.editSession && followUp?.offersChoice
+    input.messageDelivery && !input.editSession && !input.hasWorkTarget && followUp?.offersChoice
       ? followUp.action === 'queue'
         ? 'steer'
         : 'queue'
@@ -113,6 +115,7 @@ export function nativeChatComposerSendState(
     chordSteersHead:
       input.messageDelivery &&
       !input.editSession &&
+      !input.hasWorkTarget &&
       (alternateSend === 'steer' || !input.isWorking),
     promptSuggestion:
       input.draft === '' &&

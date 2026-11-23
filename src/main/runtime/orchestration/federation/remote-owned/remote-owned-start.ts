@@ -15,6 +15,8 @@ import type { RpcContext } from '../../../rpc/core'
 import { prepareWorkerStart } from '../../../rpc/methods/orchestration/worker/worker-start-method'
 import { resolveFederatedWorkerStartBudgets } from '../../../rpc/methods/orchestration/worker/start/launch/worker-start-budgets'
 import { OrchestrationError } from '../../orchestration-error'
+import { assertBotWorkTargetPairingRevision } from '../../../../bots/bot-turn-work-target'
+import type { ResolvedBotWorkTargetPlacement } from '../../../../../shared/agent-session/work-target/agent-session-work-target'
 import { prepareWorkerStartCard } from '../../workers/launch/worker-start-card'
 import { workerLaunchAgent } from '../../workers/launch/worker-launch-observation'
 import { getOrchestrationPeerCapabilityCache } from '../orchestration-peer-capability-cache'
@@ -129,7 +131,8 @@ export async function startRemoteOwnedWorker(
   runtime: OrcaRuntimeService,
   params: StartParams,
   ctx: StartContext,
-  callerRequestId: string | undefined
+  callerRequestId: string | undefined,
+  workTarget?: ResolvedBotWorkTargetPlacement
 ): Promise<unknown> {
   if (params.terminal) {
     throw new OrchestrationError(
@@ -138,10 +141,21 @@ export async function startRemoteOwnedWorker(
       { effectsApplied: false }
     )
   }
-  const { coordinator, bindRun, helperCreator, taskDeps, existingTask, withRun } =
-    await prepareWorkerStart(params, ctx)
+  const {
+    params: effectiveParams,
+    workTarget: preparedWorkTarget,
+    coordinator,
+    bindRun,
+    helperCreator,
+    taskDeps,
+    existingTask,
+    withRun
+  } = await prepareWorkerStart(params, ctx)
+  params = effectiveParams
+  const enforcedWorkTarget = workTarget ?? preparedWorkTarget
   const db = runtime.getOrchestrationDb()
   const server = await runtime.resolveOrchestrationWorkerServer(params.on!)
+  assertBotWorkTargetPairingRevision(server, enforcedWorkTarget)
   // This caller's workspace is here, so a server's new-child nests under it across machines.
   const crossStoreParent =
     params.worktree === 'new-child'

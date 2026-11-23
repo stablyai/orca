@@ -1,4 +1,5 @@
 import { heldLaunchConfig } from '../launch/launch-evidence'
+import type { RuntimeRepoSelector } from '../../workspaces/catalog/runtime-repo-selector'
 import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import { OrcaRuntimeWithAdoptTerminalOrphansFromInventory } from '../adoption/adopt-terminal-orphans-from-inventory'
@@ -233,7 +234,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
 
   async resolveOrchestrationAgentLauncherForTarget(
     selector: string,
-    target: { repo?: string; worktree?: string }
+    target: { repo?: RuntimeRepoSelector; worktree?: string }
   ): Promise<TuiAgent | undefined> {
     if (isTuiAgent(selector)) {
       return selector

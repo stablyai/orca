@@ -1,12 +1,8 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host/execution-host'
 import {
-  refuse,
-  type AgentSessionWireRefusal
-} from '../../shared/agent-session/failures/agent-session-wire-refusals'
-import type {
-  AgentJournalWorkTarget,
-  ResolvedBotWorkTargetPlacement
-} from '../../shared/agent-session/work-target/agent-session-work-target'
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../shared/execution-host/execution-host'
+import type { AgentJournalWorkTarget } from '../../shared/agent-session/work-target/agent-session-work-target'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import { indexHiddenProjects } from '../../shared/project/catalog/hidden-projects'
 import { isFolderRepo } from '../../shared/repository/repo-kind'
@@ -16,15 +12,23 @@ import {
   parseWorkspaceKey
 } from '../../shared/workspace/identity/workspace-scope'
 import type { Worktree } from '../../shared/worktree/types'
+import { resolveWorktreeCreateRoute } from '../workspaces/creation/worktree-create-execution-host-route'
+import {
+  refuseWorkTargetHostUnavailable,
+  refuseWorkTargetUnavailable,
+  resolveWorktreeIdentitySelector,
+  type BotWorkTargetValidationResult
+} from './bot-work-target-refusals'
 
-export type BotWorkTargetValidationResult =
-  | { ok: true; placement: ResolvedBotWorkTargetPlacement }
-  | { ok: false; refusal: AgentSessionWireRefusal }
+export type { BotWorkTargetValidationResult } from './bot-work-target-refusals'
 
 export type PairedServerWorkTargetValidationDeps = {
-  resolveOrchestrationWorkerServer?: (
-    selector: string
-  ) => Promise<{ environmentId: string; name: string; pairingRevision?: number }>
+  resolveOrchestrationWorkerServer?: (selector: string) => Promise<{
+    environmentId: string
+    name: string
+    pairingRevision?: number
+    peerFingerprint?: string
+  }>
   callOrchestrationWorkerServer?: (
     environmentId: string,
     method: string,
@@ -61,23 +65,8 @@ function readTypedArray<T>(reply: unknown, key: string, guard: (item: unknown) =
   return Array.isArray(list) ? list.filter(guard) : []
 }
 
-function refuseUnavailable(message: string): BotWorkTargetValidationResult {
-  return {
-    ok: false,
-    refusal: refuse('agent_session_operation_invalid', { reason: 'workTargetUnavailable' }, message)
-  }
-}
-
-function refuseHostUnavailable(message: string): BotWorkTargetValidationResult {
-  return {
-    ok: false,
-    refusal: refuse(
-      'agent_session_operation_invalid',
-      { reason: 'workTargetHostUnavailable' },
-      message
-    )
-  }
-}
+const refuseUnavailable = refuseWorkTargetUnavailable
+const refuseHostUnavailable = refuseWorkTargetHostUnavailable
 
 /** Validate a paired-server project or workspace target against live remote catalog RPCs. */
 export async function validatePairedServerWorkTarget(
@@ -90,7 +79,12 @@ export async function validatePairedServerWorkTarget(
       'Remote server targeting is not supported by this Orca host configuration.'
     )
   }
-  let server: { environmentId: string; name: string; pairingRevision?: number }
+  let server: {
+    environmentId: string
+    name: string
+    pairingRevision?: number
+    peerFingerprint?: string
+  }
   try {
     server = await deps.resolveOrchestrationWorkerServer(environmentId)
   } catch {
@@ -100,6 +94,12 @@ export async function validatePairedServerWorkTarget(
     server.pairingRevision !== undefined
       ? { expectedEnvironmentPairingRevision: server.pairingRevision }
       : undefined
+  const pairingPin = {
+    ...(server.pairingRevision !== undefined
+      ? { onExpectedPairingRevision: server.pairingRevision }
+      : {}),
+    ...(server.peerFingerprint ? { onExpectedPeerFingerprint: server.peerFingerprint } : {})
+  }
   const callRemote = (method: string, params?: unknown) =>
     deps.callOrchestrationWorkerServer!(
       server.environmentId,
@@ -109,16 +109,27 @@ export async function validatePairedServerWorkTarget(
       undefined,
       fence
     )
+  const remoteWorktreeSelector = (worktree: Worktree): string =>
+    resolveWorktreeIdentitySelector(worktree, LOCAL_EXECUTION_HOST_ID)
 
   try {
     if (target.kind === 'project') {
       const remoteRepos = readTypedArray(await callRemote('repo.list', {}), 'repos', isRemoteRepo)
       const remoteHidden = indexHiddenProjects(remoteRepos, LOCAL_EXECUTION_HOST_ID)
-      const repo = remoteRepos.find(
-        (entry) =>
-          (target.repoId && entry.id === target.repoId) ||
-          (target.projectId && entry.id === target.projectId)
-      )
+      // Never replace an explicit stale repoId via projectId fallback.
+      const repo = target.repoId
+        ? remoteRepos.find(
+            (entry) =>
+              entry.id === target.repoId &&
+              getRepoExecutionHostId(entry) === LOCAL_EXECUTION_HOST_ID
+          )
+        : target.projectId
+          ? remoteRepos.find(
+              (entry) =>
+                entry.id === target.projectId &&
+                getRepoExecutionHostId(entry) === LOCAL_EXECUTION_HOST_ID
+            )
+          : undefined
       if (!repo || remoteHidden.isRowHidden({ repoId: repo.id, hostId: LOCAL_EXECUTION_HOST_ID })) {
         return refuseUnavailable('The selected remote project is no longer available.')
       }
@@ -128,7 +139,12 @@ export async function validatePairedServerWorkTarget(
           'worktrees',
           isRemoteWorktree
         )
-        const folderWorktree = listed.find((entry) => entry.repoId === repo.id && !entry.isArchived)
+        const folderWorktree = listed.find(
+          (entry) =>
+            entry.repoId === repo.id &&
+            !entry.isArchived &&
+            (!target.workspaceInstanceId || entry.instanceId === target.workspaceInstanceId)
+        )
         if (!folderWorktree) {
           return refuseUnavailable('The selected remote folder project is no longer available.')
         }
@@ -136,8 +152,12 @@ export async function validatePairedServerWorkTarget(
           ok: true,
           placement: {
             mode: 'existing',
-            worktreeSelector: `id:${folderWorktree.id}`,
+            worktreeSelector: remoteWorktreeSelector(folderWorktree),
+            ...(folderWorktree.instanceId
+              ? { expectedWorkspaceInstanceId: folderWorktree.instanceId }
+              : {}),
             onEnvironmentId: server.environmentId,
+            ...pairingPin,
             canonicalTarget: {
               kind: 'project',
               hostId: `runtime:${server.environmentId}`,
@@ -145,6 +165,9 @@ export async function validatePairedServerWorkTarget(
               repoId: repo.id,
               repoKind: 'folder',
               workspaceId: folderWorktree.id,
+              ...(folderWorktree.instanceId
+                ? { workspaceInstanceId: folderWorktree.instanceId }
+                : {}),
               workspaceKind: 'folder',
               displayName: repo.displayName,
               hostLabel: server.name
@@ -152,12 +175,18 @@ export async function validatePairedServerWorkTarget(
           }
         }
       }
+      if (resolveWorktreeCreateRoute(repo).kind !== 'local') {
+        return refuseUnavailable(
+          'Creating a new workspace under that remote project is not supported; select an existing workspace instead.'
+        )
+      }
       return {
         ok: true,
         placement: {
-          mode: 'new-child',
+          mode: 'new-top-level',
           repoSelector: `id:${repo.id}`,
           onEnvironmentId: server.environmentId,
+          ...pairingPin,
           canonicalTarget: {
             kind: 'project',
             hostId: `runtime:${server.environmentId}`,
@@ -194,6 +223,7 @@ export async function validatePairedServerWorkTarget(
           mode: 'existing',
           worktreeSelector: `id:${folderWorkspaceKey(folder.id)}`,
           onEnvironmentId: server.environmentId,
+          ...pairingPin,
           canonicalTarget: {
             kind: 'workspace',
             hostId: `runtime:${server.environmentId}`,
@@ -214,12 +244,23 @@ export async function validatePairedServerWorkTarget(
     const remoteRepos = readTypedArray(repoReply, 'repos', isRemoteRepo)
     const remoteWorktrees = readTypedArray(worktreeReply, 'worktrees', isRemoteWorktree)
     const remoteHidden = indexHiddenProjects(remoteRepos, LOCAL_EXECUTION_HOST_ID)
-    const worktree = remoteWorktrees.find((entry) => entry.id === workspaceId && !entry.isArchived)
-    const repo = worktree && remoteRepos.find((entry) => entry.id === worktree.repoId)
+    const worktree = remoteWorktrees.find(
+      (entry) =>
+        entry.id === workspaceId &&
+        !entry.isArchived &&
+        (!target.repoId || entry.repoId === target.repoId) &&
+        (!target.workspaceInstanceId || entry.instanceId === target.workspaceInstanceId)
+    )
+    const worktreeHostId = worktree?.hostId ?? LOCAL_EXECUTION_HOST_ID
+    const repo =
+      worktree &&
+      remoteRepos.find(
+        (entry) => entry.id === worktree.repoId && getRepoExecutionHostId(entry) === worktreeHostId
+      )
     if (
       !worktree ||
       !repo ||
-      remoteHidden.isRowHidden({ repoId: repo.id, hostId: LOCAL_EXECUTION_HOST_ID })
+      remoteHidden.isRowHidden({ repoId: repo.id, hostId: worktreeHostId })
     ) {
       return refuseUnavailable('The selected remote workspace is no longer available.')
     }
@@ -228,8 +269,10 @@ export async function validatePairedServerWorkTarget(
       ok: true,
       placement: {
         mode: 'existing',
-        worktreeSelector: `id:${worktree.id}`,
+        worktreeSelector: remoteWorktreeSelector(worktree),
+        ...(worktree.instanceId ? { expectedWorkspaceInstanceId: worktree.instanceId } : {}),
         onEnvironmentId: server.environmentId,
+        ...pairingPin,
         canonicalTarget: {
           kind: 'workspace',
           hostId: `runtime:${server.environmentId}`,
@@ -237,6 +280,7 @@ export async function validatePairedServerWorkTarget(
           repoId: repo.id,
           repoKind: isFolder ? 'folder' : 'git',
           workspaceId: worktree.id,
+          ...(worktree.instanceId ? { workspaceInstanceId: worktree.instanceId } : {}),
           workspaceKind: isFolder ? 'folder' : 'git-worktree',
           displayName: worktree.displayName || worktree.branch || repo.displayName,
           projectName: repo.displayName,

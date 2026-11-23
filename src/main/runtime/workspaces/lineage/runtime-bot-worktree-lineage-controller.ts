@@ -38,6 +38,9 @@ export class BotWorktreeLineageController extends RuntimeWorktreeLineageControll
     input?: WorktreeLineageInput,
     childHostId?: ExecutionHostId
   ): Promise<WorktreeLineageResolution> {
+    if (input?.suppressBotHomeParent) {
+      return super.resolveCreate(input, childHostId)
+    }
     const botHome = await resolveBotHomeCaller(input, {
       deps: this.botDeps,
       resolveParent: (selector) => this.resolveParent(selector),

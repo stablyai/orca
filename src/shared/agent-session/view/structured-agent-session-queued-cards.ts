@@ -163,11 +163,10 @@ export function projectQueuedMessageCards(
       hold,
       ...(resumeEligible ? { resumeEligible: true as const } : {}),
       ...(queuedMessageEditableText(message.body) === null ? { notEditable: true as const } : {}),
-      ...(message.body.command !== undefined
-        ? {
-            command: true as const,
-            ...(session.agentWorking ? { waitsForAgent: true as const } : {})
-          }
+      ...(message.body.command !== undefined ? { command: true as const } : {}),
+      ...((message.body.command !== undefined || message.body.workTarget !== undefined) &&
+      session.agentWorking
+        ? { waitsForAgent: true as const }
         : {}),
       ...(message.pausedReason !== undefined ? { pausedReason: message.pausedReason } : {}),
       ...(message.returnedReason !== undefined ? { returnedReason: message.returnedReason } : {}),
@@ -233,9 +232,9 @@ export function queuedMessagesQueuePause(
   return cards.some((card) => card.resumeEligible) ? queuePause : null
 }
 
-/** Steer moves turn-waiting cards mid-turn, even during queue pause; returned/individually held cards use Send, commands never steer. */
+/** Steer moves turn-waiting cards mid-turn, even during queue pause; returned/individually held cards use Send, commands and targeted messages never steer. */
 export function queuedMessageCardSteers(card: QueuedMessageCard): boolean {
-  return card.hold !== 'paused' && card.hold !== 'returned' && !card.command
+  return card.hold !== 'paused' && card.hold !== 'returned' && !card.command && !card.workTarget
 }
 
 /** The card Cmd/Ctrl+Shift+Enter steers: the head only, never one behind it. */

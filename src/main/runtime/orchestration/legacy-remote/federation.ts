@@ -113,7 +113,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         state: createsWorktree ? 'not_configured' : 'not_applicable'
       }
       try {
-        const launchAgent = (existing?: { id: string }) =>
+        const launchAgent = (existing?: { id: string; identity?: { key: string } }) =>
           launchFederatedWorkerAgent({
             runtime,
             db,

@@ -288,6 +288,9 @@ export function botStructuredSessionWiring(deps: {
                 placement: validated.placement,
                 text: formatBotWorkTargetContext(validated.placement, BOT_ORCA_CLI)
               }
+            },
+            clearWorkTarget: (sessionId) => {
+              deps.workTargets?.clearForTurn(sessionId)
             }
           }
         : {}),

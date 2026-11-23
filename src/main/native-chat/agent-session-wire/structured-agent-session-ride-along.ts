@@ -25,6 +25,7 @@ import {
 import { StructuredAgentSessionInputNotAdmitted } from './delivery/structured-agent-session-input-admission'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 
 export type StructuredAgentSessionRideAlong = {
   /** Claims what rides, after the pending write. A fresh agent started for this send reads the host's
@@ -74,8 +75,24 @@ export function structuredAgentSessionRideAlong(
       const record = ctx.record?.()
       context = record ? agentSessionInstructionsContext(record) : null
       held = record ? (record.instructionsKey ?? null) : undefined
-      // Re-validate any selected project/workspace target at handover so queued messages never fall back.
-      if (body.workTarget && scope.kind === 'thread') {
+      // Targeted messages open a new turn only; fail closed on active turns and re-validate live state.
+      if (body.workTarget) {
+        if (scope.kind !== 'thread') {
+          throw new StructuredAgentSessionInputNotAdmitted({
+            state: 'rejected',
+            ...agentSessionFailureWords(
+              agentSessionFailureFact('notDelivered', {
+                refusal: refuse(
+                  'agent_session_operation_invalid',
+                  { reason: 'turnActive' },
+                  'A targeted message opens a new turn and cannot join a running turn.'
+                ),
+                neverReachedAgent: true
+              }),
+              { surface: 'rejection' }
+            )
+          })
+        }
         const resolved = ctx.turnContext?.resolveWorkTarget
           ? await ctx.turnContext.resolveWorkTarget(ctx.sessionId, body.workTarget)
           : null

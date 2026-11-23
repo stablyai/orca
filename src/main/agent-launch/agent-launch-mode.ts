@@ -217,7 +217,11 @@ async function readStructuredCreateSupport(
   }
   try {
     // These launches have no chat tab to offer the install, so they keep the agent's own CLI.
-    return await runtime.getStructuredAgentSessionCreateSupport(`id:${worktreeId}`, agent, {
+    const selector =
+      worktreeId.startsWith('identity:') || worktreeId.startsWith('id:')
+        ? worktreeId
+        : `id:${worktreeId}`
+    return await runtime.getStructuredAgentSessionCreateSupport(selector, agent, {
       requireInstalledChatProgram: true
     })
   } catch {

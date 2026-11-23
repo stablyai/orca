@@ -1,26 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { BotSchema, type Bot } from '../../shared/bot-types'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
 import type { Repo } from '../../shared/repository/repo-types'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
-import type {
-  AgentJournalMessageItem,
-  AgentJournalSubmission
-} from '../../shared/agent-session/journal/agent-session-journal-types'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalWorkTarget } from '../../shared/agent-session/work-target/agent-session-work-target'
-import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
-import type { AgentSessionHandoverContext } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
-import { StructuredAgentSessionInputNotAdmitted } from '../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
-import { structuredAgentSessionRideAlong } from '../native-chat/agent-session-wire/structured-agent-session-ride-along'
-import { createBotMemoryRecord } from './bot-memory-record'
-import { botStructuredSessionWiring } from './bot-structured-session-wiring'
-import type { BotChatJournal } from './bot-turn-rows'
-import {
-  applyBotTurnWorkTargetToWorkerStart,
-  BotTurnWorkTargetRegistry
-} from './bot-turn-work-target'
+import { createWorktreeIdentity } from '../../shared/worktree/identity'
+import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import {
   validateBotWorkTarget,
   type BotWorkTargetValidationDeps,
@@ -89,7 +74,7 @@ function makeBot(id: string, folderWorkspaceId: string): Bot {
     slack: null,
     linear: null,
     github: null,
-    chatSessionId: 'sess-bot-1',
+    chatSessionId: SESSION,
     createdAt: 1,
     updatedAt: 1
   })
@@ -109,8 +94,28 @@ function makeSessionLocation(
   }
 }
 
-function blockText(block: NativeChatBlock | undefined): string {
-  return block?.type === 'text' ? block.text : ''
+function makeWorkspace(
+  overrides: Partial<BotWorkTargetWorkspaceSummary> &
+    Pick<BotWorkTargetWorkspaceSummary, 'id' | 'repoId' | 'displayName' | 'path'>
+): BotWorkTargetWorkspaceSummary {
+  const hostId = overrides.hostId ?? 'local'
+  const instanceId = overrides.instanceId
+  return {
+    branch: overrides.displayName,
+    isArchived: false,
+    hostId,
+    ...(instanceId
+      ? {
+          instanceId,
+          identity: createWorktreeIdentity({
+            worktreeId: overrides.id,
+            executionHostId: hostId,
+            instanceId
+          })
+        }
+      : {}),
+    ...overrides
+  }
 }
 
 function makeDeps(
@@ -126,7 +131,21 @@ function makeDeps(
     id: 'repo-acme-ssh',
     displayName: 'acme-api',
     path: '/srv/ssh/acme-api',
-    executionHostId: 'ssh:box-build'
+    executionHostId: 'ssh:box-build',
+    connectionId: 'box-build'
+  })
+  const twinLocalRepo = makeRepo({
+    id: 'repo-twin',
+    displayName: 'shared-svc',
+    path: '/synth/local/shared-svc',
+    executionHostId: 'local'
+  })
+  const twinSshRepo = makeRepo({
+    id: 'repo-twin',
+    displayName: 'shared-svc',
+    path: '/srv/ssh/shared-svc',
+    executionHostId: 'ssh:box-build',
+    connectionId: 'box-build'
   })
   const hiddenRepo = makeRepo({
     id: 'repo-secret',
@@ -142,6 +161,14 @@ function makeDeps(
     kind: 'folder',
     executionHostId: 'local'
   })
+  const sshFolderProjectRepo = makeRepo({
+    id: 'repo-ssh-notes',
+    displayName: 'remote-notes',
+    path: '/srv/ssh/remote-notes',
+    kind: 'folder',
+    executionHostId: 'ssh:box-build',
+    connectionId: 'box-build'
+  })
   const botHome = makeFolderWorkspace({
     id: 'fw-bot-home',
     name: 'HelperBot',
@@ -152,6 +179,14 @@ function makeDeps(
     id: 'fw-runbooks',
     name: 'runbooks',
     folderPath: '/synth/local/runbooks',
+    projectGroupId: 'grp-ops'
+  })
+  const sshFolder = makeFolderWorkspace({
+    id: 'fw-ssh-ops',
+    name: 'ssh-ops',
+    folderPath: '/srv/ssh/ops',
+    executionHostId: 'ssh:box-build',
+    connectionId: 'box-build',
     projectGroupId: 'grp-ops'
   })
   const archivedFolder = makeFolderWorkspace({
@@ -165,50 +200,110 @@ function makeDeps(
     name: 'Bots',
     parentPath: '/synth/bots'
   })
-  const workspaces = new Map<string, BotWorkTargetWorkspaceSummary>([
+  const workspacesByHost = new Map<string, BotWorkTargetWorkspaceSummary>([
     [
-      'id:wt-auth',
-      {
+      'local\0id:wt-auth',
+      makeWorkspace({
         id: 'wt-auth',
         repoId: 'repo-acme-local',
+        hostId: 'local',
+        instanceId: 'inst-auth-1',
         displayName: 'feat/auth-fix',
         branch: 'feat/auth-fix',
-        path: '/synth/local/acme-api-auth',
-        isArchived: false
-      }
+        path: '/synth/local/acme-api-auth'
+      })
     ],
     [
-      'id:wt-archived',
-      {
+      'ssh:box-build\0id:wt-ssh-main',
+      makeWorkspace({
+        id: 'wt-ssh-main',
+        repoId: 'repo-acme-ssh',
+        hostId: 'ssh:box-build',
+        instanceId: 'inst-ssh-main',
+        displayName: 'main',
+        branch: 'main',
+        path: '/srv/ssh/acme-api'
+      })
+    ],
+    [
+      'local\0id:repo-twin::/shared/wt',
+      makeWorkspace({
+        id: 'repo-twin::/shared/wt',
+        repoId: 'repo-twin',
+        hostId: 'local',
+        instanceId: 'inst-twin-local',
+        displayName: 'twin-local',
+        path: '/shared/wt'
+      })
+    ],
+    [
+      'ssh:box-build\0id:repo-twin::/shared/wt',
+      makeWorkspace({
+        id: 'repo-twin::/shared/wt',
+        repoId: 'repo-twin',
+        hostId: 'ssh:box-build',
+        instanceId: 'inst-twin-ssh',
+        displayName: 'twin-ssh',
+        path: '/shared/wt'
+      })
+    ],
+    [
+      'local\0id:wt-archived',
+      makeWorkspace({
         id: 'wt-archived',
         repoId: 'repo-acme-local',
+        hostId: 'local',
+        instanceId: 'inst-archived',
         displayName: 'old-branch',
-        branch: 'old-branch',
         path: '/synth/local/acme-api-old',
         isArchived: true
-      }
+      })
     ],
     [
-      'id:repo-notes::/synth/local/design-notes',
-      {
+      'local\0id:repo-notes::/synth/local/design-notes',
+      makeWorkspace({
         id: 'repo-notes::/synth/local/design-notes',
         repoId: 'repo-notes',
+        hostId: 'local',
+        instanceId: 'inst-notes-1',
         displayName: 'design-notes',
         branch: '',
-        path: '/synth/local/design-notes',
-        isArchived: false
-      }
+        path: '/synth/local/design-notes'
+      })
     ],
     [
-      'id:folder:fw-runbooks',
-      {
+      'ssh:box-build\0id:repo-ssh-notes::/srv/ssh/remote-notes',
+      makeWorkspace({
+        id: 'repo-ssh-notes::/srv/ssh/remote-notes',
+        repoId: 'repo-ssh-notes',
+        hostId: 'ssh:box-build',
+        instanceId: 'inst-ssh-notes-1',
+        displayName: 'remote-notes',
+        branch: '',
+        path: '/srv/ssh/remote-notes'
+      })
+    ],
+    [
+      'local\0id:folder:fw-runbooks',
+      makeWorkspace({
         id: 'folder:fw-runbooks',
         repoId: '',
+        hostId: 'local',
         displayName: 'runbooks',
         branch: '',
-        path: '/synth/local/runbooks',
-        isArchived: false
-      }
+        path: '/synth/local/runbooks'
+      })
+    ],
+    [
+      'ssh:box-build\0id:folder:fw-ssh-ops',
+      makeWorkspace({
+        id: 'folder:fw-ssh-ops',
+        repoId: '',
+        hostId: 'ssh:box-build',
+        displayName: 'ssh-ops',
+        branch: '',
+        path: '/srv/ssh/ops'
+      })
     ]
   ])
   return {
@@ -218,12 +313,35 @@ function makeDeps(
     getSshConnectionStatus: (targetId) => (targetId === 'box-build' ? 'connected' : 'disconnected'),
     store: () => ({
       getBots: () => [makeBot('bot-1', 'fw-bot-home')],
-      getRepos: () => [localGitRepo, sshGitRepo, hiddenRepo, folderProjectRepo],
-      getFolderWorkspaces: () => [botHome, userFolder, archivedFolder],
+      getRepos: () => [
+        localGitRepo,
+        sshGitRepo,
+        twinLocalRepo,
+        twinSshRepo,
+        hiddenRepo,
+        folderProjectRepo,
+        sshFolderProjectRepo
+      ],
+      getProjectHostSetups: () => [
+        {
+          id: 'setup-1',
+          projectId: 'proj-acme',
+          hostId: 'local',
+          repoId: 'repo-acme-local',
+          displayName: 'acme-api',
+          path: '/synth/local/acme-api',
+          setupState: 'ready',
+          setupMethod: 'imported-existing-folder',
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      getFolderWorkspaces: () => [botHome, userFolder, sshFolder, archivedFolder],
       getProjectGroups: () => [botGroup]
     }),
-    showManagedTerminalWorkspace: async (selector) => {
-      const found = workspaces.get(selector)
+    showManagedTerminalWorkspace: async (selector, requiredHostId) => {
+      const key = `${requiredHostId ?? 'local'}\0${selector}`
+      const found = workspacesByHost.get(key)
       if (!found) {
         throw new Error('selector_not_found')
       }
@@ -233,123 +351,132 @@ function makeDeps(
   }
 }
 
-describe('validateBotWorkTarget host policy and live placement resolution', () => {
+describe('validateBotWorkTarget host policy, SSH launch boundaries, and exact identity', () => {
   const botRecord = makeSessionLocation('folder:fw-bot-home', 'folder')
 
-  it('refuses non-bot chats, hidden/deleted/archived/bot-home targets, and offline or unreachable hosts', async () => {
+  it('refuses non-bot chats, hidden/archived/bot-home targets, offline/unregistered SSH, connected SSH Git projects, stale explicit repoId, and recreated worktree occupants', async () => {
     const deps = makeDeps()
 
-    const nonBot = await validateBotWorkTarget(
-      deps,
-      makeSessionLocation('wt-auth', 'git-worktree'),
-      {
+    expect(
+      await validateBotWorkTarget(deps, makeSessionLocation('wt-auth', 'git-worktree'), {
         kind: 'project',
         hostId: 'local',
         repoId: 'repo-acme-local',
         displayName: 'acme-api'
-      }
-    )
-    expect(nonBot).toMatchObject({
-      ok: false,
-      refusal: { details: { reason: 'workTargetUnsupportedChat' } }
-    })
+      })
+    ).toMatchObject({ ok: false, refusal: { details: { reason: 'workTargetUnsupportedChat' } } })
 
-    const hidden = await validateBotWorkTarget(deps, botRecord, {
-      kind: 'project',
-      hostId: 'local',
-      repoId: 'repo-secret',
-      displayName: 'hidden-repo'
-    })
-    expect(hidden).toMatchObject({
-      ok: false,
-      refusal: { details: { reason: 'workTargetUnavailable' } }
-    })
+    expect(
+      await validateBotWorkTarget(deps, botRecord, {
+        kind: 'project',
+        hostId: 'local',
+        repoId: 'repo-secret',
+        displayName: 'hidden-repo'
+      })
+    ).toMatchObject({ ok: false, refusal: { details: { reason: 'workTargetUnavailable' } } })
 
-    const archivedWt = await validateBotWorkTarget(deps, botRecord, {
-      kind: 'workspace',
-      hostId: 'local',
-      repoId: 'repo-acme-local',
-      workspaceId: 'wt-archived',
-      displayName: 'old-branch'
-    })
-    expect(archivedWt).toMatchObject({
-      ok: false,
-      refusal: { details: { reason: 'workTargetUnavailable' } }
-    })
+    expect(
+      await validateBotWorkTarget(deps, botRecord, {
+        kind: 'workspace',
+        hostId: 'local',
+        repoId: 'repo-acme-local',
+        workspaceId: 'wt-archived',
+        displayName: 'old-branch'
+      })
+    ).toMatchObject({ ok: false, refusal: { details: { reason: 'workTargetUnavailable' } } })
 
-    const botHomeTarget = await validateBotWorkTarget(deps, botRecord, {
-      kind: 'workspace',
-      hostId: 'local',
-      workspaceId: 'folder:fw-bot-home',
-      workspaceKind: 'folder',
-      displayName: 'HelperBot'
-    })
-    expect(botHomeTarget).toMatchObject({
-      ok: false,
-      refusal: { details: { reason: 'workTargetUnavailable' } }
-    })
+    expect(
+      await validateBotWorkTarget(deps, botRecord, {
+        kind: 'workspace',
+        hostId: 'local',
+        workspaceId: 'folder:fw-bot-home',
+        workspaceKind: 'folder',
+        displayName: 'HelperBot'
+      })
+    ).toMatchObject({ ok: false, refusal: { details: { reason: 'workTargetUnavailable' } } })
 
-    const archivedFolder = await validateBotWorkTarget(deps, botRecord, {
-      kind: 'workspace',
-      hostId: 'local',
-      workspaceId: 'folder:fw-old',
-      workspaceKind: 'folder',
-      displayName: 'old-notes'
-    })
-    expect(archivedFolder).toMatchObject({
-      ok: false,
-      refusal: { details: { reason: 'workTargetUnavailable' } }
-    })
+    expect(
+      await validateBotWorkTarget(deps, botRecord, {
+        kind: 'workspace',
+        hostId: 'local',
+        workspaceId: 'folder:fw-old',
+        workspaceKind: 'folder',
+        displayName: 'old-notes'
+      })
+    ).toMatchObject({ ok: false, refusal: { details: { reason: 'workTargetUnavailable' } } })
 
-    const crossHostMismatch = await validateBotWorkTarget(deps, botRecord, {
-      kind: 'project',
-      hostId: 'local',
-      repoId: 'repo-acme-ssh',
-      displayName: 'acme-api'
-    })
-    expect(crossHostMismatch).toMatchObject({
-      ok: false,
-      refusal: { details: { reason: 'workTargetUnavailable' } }
-    })
-
-    const offlineSsh = await validateBotWorkTarget(
-      makeDeps({ getSshConnectionStatus: () => 'disconnected' }),
-      botRecord,
-      {
+    // Connected SSH Git project is rejected at admission because runtime createManagedWorktree throws SshHostNotServedError.
+    expect(
+      await validateBotWorkTarget(deps, botRecord, {
         kind: 'project',
         hostId: 'ssh:box-build',
         repoId: 'repo-acme-ssh',
-        displayName: 'acme-api'
-      }
-    )
-    expect(offlineSsh).toMatchObject({
-      ok: false,
-      refusal: { details: { reason: 'workTargetHostUnavailable' } }
-    })
+        displayName: 'acme-api',
+        hostLabel: 'Build SSH'
+      })
+    ).toMatchObject({ ok: false, refusal: { details: { reason: 'workTargetUnavailable' } } })
 
-    const remoteBotTargetingLocal = await validateBotWorkTarget(
-      makeDeps({ hostId: 'runtime:env-remote' }),
-      botRecord,
-      {
+    // Unregistered/disconnected SSH host is refused as host-unavailable.
+    expect(
+      await validateBotWorkTarget(
+        makeDeps({ getSshConnectionStatus: () => undefined }),
+        botRecord,
+        {
+          kind: 'workspace',
+          hostId: 'ssh:box-build',
+          repoId: 'repo-acme-ssh',
+          workspaceId: 'wt-ssh-main',
+          displayName: 'main'
+        }
+      )
+    ).toMatchObject({ ok: false, refusal: { details: { reason: 'workTargetHostUnavailable' } } })
+
+    // Stale explicit repoId must never fall back via projectId to another repo on the same host.
+    expect(
+      await validateBotWorkTarget(deps, botRecord, {
+        kind: 'project',
+        hostId: 'local',
+        projectId: 'proj-acme',
+        repoId: 'repo-deleted-explicit',
+        displayName: 'acme-api'
+      })
+    ).toMatchObject({ ok: false, refusal: { details: { reason: 'workTargetUnavailable' } } })
+
+    // Delete + recreate at the exact same worktree path (new instanceId) must fail closed.
+    expect(
+      await validateBotWorkTarget(deps, botRecord, {
+        kind: 'workspace',
+        hostId: 'local',
+        repoId: 'repo-acme-local',
+        workspaceId: 'wt-auth',
+        workspaceInstanceId: 'inst-auth-deleted',
+        workspaceKind: 'git-worktree',
+        displayName: 'feat/auth-fix'
+      })
+    ).toMatchObject({ ok: false, refusal: { details: { reason: 'workTargetUnavailable' } } })
+
+    expect(
+      await validateBotWorkTarget(makeDeps({ hostId: 'runtime:env-remote' }), botRecord, {
         kind: 'project',
         hostId: 'local',
         repoId: 'repo-acme-local',
         displayName: 'acme-api'
-      }
-    )
-    expect(remoteBotTargetingLocal).toMatchObject({
-      ok: false,
-      refusal: { details: { reason: 'workTargetHostUnavailable' } }
-    })
+      })
+    ).toMatchObject({ ok: false, refusal: { details: { reason: 'workTargetHostUnavailable' } } })
   })
 
-  it('resolves Git project, Folder project, existing Git worktree, existing Folder workspace, and paired server targets', async () => {
+  it('admits local Git project as new-top-level, preserves connected SSH existing workspaces & host-twins with identity selectors, and pins paired-server pairing revision', async () => {
     const deps = makeDeps({
       resolveOrchestrationWorkerServer: async (selector) => {
         if (selector !== 'env-build') {
           throw new Error('offline')
         }
-        return { environmentId: 'env-build', name: 'Build Server', pairingRevision: 7 }
+        return {
+          environmentId: 'env-build',
+          name: 'Build Server',
+          pairingRevision: 7,
+          peerFingerprint: 'fp-build-v7'
+        }
       },
       callOrchestrationWorkerServer: async (_envId, method) => {
         if (method === 'repo.list') {
@@ -357,10 +484,25 @@ describe('validateBotWorkTarget host policy and live placement resolution', () =
             repos: [
               makeRepo({ id: 'remote-acme', displayName: 'acme-api', path: '/srv/acme-api' }),
               makeRepo({
-                id: 'remote-hidden',
-                displayName: 'secret',
-                path: '/srv/secret',
-                hiddenAt: 100
+                id: 'remote-ssh',
+                displayName: 'nested-ssh',
+                path: '/srv/nested',
+                executionHostId: 'ssh:nested',
+                connectionId: 'nested'
+              })
+            ]
+          }
+        }
+        if (method === 'worktree.list') {
+          return {
+            worktrees: [
+              makeWorkspace({
+                id: 'remote-acme::/srv/acme-auth',
+                repoId: 'remote-acme',
+                hostId: 'local',
+                instanceId: 'inst-remote-auth',
+                displayName: 'feat/remote-auth',
+                path: '/srv/acme-auth'
               })
             ]
           }
@@ -369,17 +511,20 @@ describe('validateBotWorkTarget host policy and live placement resolution', () =
       }
     })
 
-    const gitProject = await validateBotWorkTarget(deps, botRecord, {
-      kind: 'project',
-      hostId: 'local',
-      repoId: 'repo-acme-local',
-      displayName: 'acme-api'
-    })
-    expect(gitProject).toEqual({
+    // Local Git project uses new-top-level with host scoping.
+    expect(
+      await validateBotWorkTarget(deps, botRecord, {
+        kind: 'project',
+        hostId: 'local',
+        repoId: 'repo-acme-local',
+        displayName: 'acme-api'
+      })
+    ).toEqual({
       ok: true,
       placement: {
-        mode: 'new-child',
+        mode: 'new-top-level',
         repoSelector: 'id:repo-acme-local',
+        targetHostId: 'local',
         canonicalTarget: {
           kind: 'project',
           hostId: 'local',
@@ -390,106 +535,98 @@ describe('validateBotWorkTarget host policy and live placement resolution', () =
       }
     })
 
-    const sshSameNameProject = await validateBotWorkTarget(deps, botRecord, {
-      kind: 'project',
-      hostId: 'ssh:box-build',
-      repoId: 'repo-acme-ssh',
-      displayName: 'acme-api',
-      hostLabel: 'Build SSH'
-    })
-    expect(sshSameNameProject).toMatchObject({
-      ok: true,
-      placement: {
-        mode: 'new-child',
-        repoSelector: 'id:repo-acme-ssh',
-        canonicalTarget: { hostId: 'ssh:box-build', repoId: 'repo-acme-ssh' }
-      }
-    })
-
-    const folderProject = await validateBotWorkTarget(deps, botRecord, {
-      kind: 'project',
-      hostId: 'local',
-      repoId: 'repo-notes',
-      repoKind: 'folder',
-      displayName: 'design-notes'
-    })
-    expect(folderProject).toEqual({
+    // Connected SSH existing Git worktree, SSH folder project, and SSH folder workspace stay supported.
+    expect(
+      await validateBotWorkTarget(deps, botRecord, {
+        kind: 'workspace',
+        hostId: 'ssh:box-build',
+        repoId: 'repo-acme-ssh',
+        workspaceId: 'wt-ssh-main',
+        workspaceInstanceId: 'inst-ssh-main',
+        workspaceKind: 'git-worktree',
+        displayName: 'main',
+        hostLabel: 'Build SSH'
+      })
+    ).toMatchObject({
       ok: true,
       placement: {
         mode: 'existing',
-        worktreeSelector: 'id:repo-notes::/synth/local/design-notes',
-        canonicalTarget: {
-          kind: 'project',
-          hostId: 'local',
-          repoId: 'repo-notes',
-          repoKind: 'folder',
-          workspaceId: 'repo-notes::/synth/local/design-notes',
-          workspaceKind: 'folder',
-          displayName: 'design-notes'
-        }
+        targetHostId: 'ssh:box-build',
+        expectedWorkspaceInstanceId: 'inst-ssh-main',
+        worktreeSelector: 'identity:wt2:ssh%3Abox-build:inst-ssh-main'
       }
     })
 
-    const gitWorktree = await validateBotWorkTarget(deps, botRecord, {
-      kind: 'workspace',
-      hostId: 'local',
-      repoId: 'repo-acme-local',
-      workspaceId: 'wt-auth',
-      workspaceKind: 'git-worktree',
-      displayName: 'feat/auth-fix'
-    })
-    expect(gitWorktree).toEqual({
+    expect(
+      await validateBotWorkTarget(deps, botRecord, {
+        kind: 'project',
+        hostId: 'ssh:box-build',
+        repoId: 'repo-ssh-notes',
+        repoKind: 'folder',
+        displayName: 'remote-notes'
+      })
+    ).toMatchObject({
       ok: true,
       placement: {
         mode: 'existing',
-        worktreeSelector: 'id:wt-auth',
-        canonicalTarget: {
-          kind: 'workspace',
-          hostId: 'local',
-          repoId: 'repo-acme-local',
-          repoKind: 'git',
-          workspaceId: 'wt-auth',
-          workspaceKind: 'git-worktree',
-          displayName: 'feat/auth-fix',
-          projectName: 'acme-api'
-        }
+        targetHostId: 'ssh:box-build',
+        worktreeSelector: 'identity:wt2:ssh%3Abox-build:inst-ssh-notes-1'
       }
     })
 
-    const folderWorkspace = await validateBotWorkTarget(deps, botRecord, {
-      kind: 'workspace',
-      hostId: 'local',
-      workspaceId: 'folder:fw-runbooks',
-      workspaceKind: 'folder',
-      displayName: 'runbooks'
-    })
-    expect(folderWorkspace).toEqual({
+    expect(
+      await validateBotWorkTarget(deps, botRecord, {
+        kind: 'workspace',
+        hostId: 'ssh:box-build',
+        workspaceId: 'folder:fw-ssh-ops',
+        workspaceKind: 'folder',
+        displayName: 'ssh-ops'
+      })
+    ).toMatchObject({
       ok: true,
       placement: {
         mode: 'existing',
-        worktreeSelector: 'id:folder:fw-runbooks',
-        canonicalTarget: {
-          kind: 'workspace',
-          hostId: 'local',
-          workspaceId: 'folder:fw-runbooks',
-          workspaceKind: 'folder',
-          displayName: 'runbooks'
-        }
+        targetHostId: 'ssh:box-build',
+        worktreeSelector: 'id:folder:fw-ssh-ops'
       }
     })
 
-    const pairedProject = await validateBotWorkTarget(deps, botRecord, {
-      kind: 'project',
-      hostId: 'runtime:env-build',
-      repoId: 'remote-acme',
-      displayName: 'acme-api'
-    })
-    expect(pairedProject).toEqual({
+    // Host-twin workspaces sharing the exact same repoId and worktreeId resolve strictly to their chosen host.
+    expect(
+      await validateBotWorkTarget(deps, botRecord, {
+        kind: 'workspace',
+        hostId: 'ssh:box-build',
+        repoId: 'repo-twin',
+        workspaceId: 'repo-twin::/shared/wt',
+        workspaceInstanceId: 'inst-twin-ssh',
+        workspaceKind: 'git-worktree',
+        displayName: 'twin-ssh'
+      })
+    ).toMatchObject({
       ok: true,
       placement: {
-        mode: 'new-child',
+        targetHostId: 'ssh:box-build',
+        expectedWorkspaceInstanceId: 'inst-twin-ssh',
+        worktreeSelector: 'identity:wt2:ssh%3Abox-build:inst-twin-ssh'
+      }
+    })
+
+    // Paired server Git project retains pairingRevision + peerFingerprint and rejects stale explicit repoId.
+    expect(
+      await validateBotWorkTarget(deps, botRecord, {
+        kind: 'project',
+        hostId: 'runtime:env-build',
+        repoId: 'remote-acme',
+        displayName: 'acme-api'
+      })
+    ).toEqual({
+      ok: true,
+      placement: {
+        mode: 'new-top-level',
         repoSelector: 'id:remote-acme',
         onEnvironmentId: 'env-build',
+        onExpectedPairingRevision: 7,
+        onExpectedPeerFingerprint: 'fp-build-v7',
         canonicalTarget: {
           kind: 'project',
           hostId: 'runtime:env-build',
@@ -501,230 +638,36 @@ describe('validateBotWorkTarget host policy and live placement resolution', () =
       }
     })
 
-    const pairedHidden = await validateBotWorkTarget(deps, botRecord, {
-      kind: 'project',
-      hostId: 'runtime:env-build',
-      repoId: 'remote-hidden',
-      displayName: 'secret'
-    })
-    expect(pairedHidden).toMatchObject({
-      ok: false,
-      refusal: { details: { reason: 'workTargetUnavailable' } }
-    })
-  })
-})
-
-describe('bot handover re-validation, single-turn scope, and worker-start placement', () => {
-  function makeWiring(options: {
-    targetStillValid: () => boolean
-    workTargets: BotTurnWorkTargetRegistry
-  }) {
-    const turnNote = vi.fn(async () => 'Previous worker note that would conflict')
-    const handedOver = vi.fn()
-    const turnEnded = vi.fn()
-    const deps = makeDeps({
-      showManagedTerminalWorkspace: async (selector) => {
-        if (!options.targetStillValid()) {
-          throw new Error('selector_not_found')
-        }
-        return makeDeps().showManagedTerminalWorkspace(selector)
-      }
-    })
-    const memory = createBotMemoryRecord({
-      readText: async () => null,
-      replaceText: async () => true,
-      writeText: async () => true
-    })
-    const chats: BotChatJournal = {
-      sourcesAfter: async () => ({ owner: false, labels: [], places: [], urls: [] }),
-      turnRanSince: async () => false
-    }
-    const wiring = botStructuredSessionWiring({
-      store: () => ({
-        getBots: () => [makeBot('bot-1', 'fw-bot-home')],
-        getRepos: () => deps.store()!.getRepos()
-      }),
-      bots: {
-        endFirstRun: async () => undefined,
-        memory
-      },
-      chats,
-      work: { turnNote, handedOver, turnEnded },
-      lookAround: {
-        botOfLook: () => null,
-        botOfTidyUp: () => null,
-        lookTurnIsQuiet: () => false
-      },
-      workTargets: options.workTargets,
-      validateWorkTarget: (record, target) => validateBotWorkTarget(deps, record, target),
-      sessionRecord: (sessionId) =>
-        sessionId === 'sess-bot-1' ? makeSessionLocation('folder:fw-bot-home', 'folder') : null
-    })
-    return { wiring, turnNote, handedOver, turnEnded }
-  }
-
-  function makeJournalStub(): AgentSessionHandoverContext['journal'] {
-    const stub = {
-      reads: {
-        automationResultNotes: async () => ({ items: [], submissions: [] })
-      },
-      appendItem: async () => ({
-        itemId: 'item-1',
-        sequence: 1,
-        cursor: { epoch: 'e', sequence: 1 }
+    expect(
+      await validateBotWorkTarget(deps, botRecord, {
+        kind: 'project',
+        hostId: 'runtime:env-build',
+        projectId: 'remote-acme',
+        repoId: 'remote-deleted-explicit',
+        displayName: 'acme-api'
       })
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ride-along only calls reads.automationResultNotes and appendItem.
-    return stub as unknown as AgentSessionHandoverContext['journal']
-  }
+    ).toMatchObject({ ok: false, refusal: { details: { reason: 'workTargetUnavailable' } } })
 
-  const submission: AgentJournalSubmission = {
-    clientMessageId: 'msg-1',
-    fence: 1,
-    payloadFingerprint: 'fp-1',
-    dispatchState: 'pending',
-    providerItemId: null,
-    reason: null,
-    submittedAt: 1,
-    resolvedAt: null
-  }
-
-  it('rejects a queued message at handover without fallback when its target disappeared', async () => {
-    let valid = true
-    const workTargets = new BotTurnWorkTargetRegistry()
-    const { wiring } = makeWiring({ targetStillValid: () => valid, workTargets })
-
-    // Target disappears between enqueue and handover.
-    valid = false
-    const body: AgentJournalMessageItem = {
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text: 'Run tests in feat/auth-fix' }],
-      workTarget: {
+    expect(
+      await validateBotWorkTarget(deps, botRecord, {
         kind: 'workspace',
-        hostId: 'local',
-        repoId: 'repo-acme-local',
-        workspaceId: 'wt-auth',
+        hostId: 'runtime:env-build',
+        repoId: 'remote-acme',
+        workspaceId: 'remote-acme::/srv/acme-auth',
+        workspaceInstanceId: 'inst-remote-auth',
         workspaceKind: 'git-worktree',
-        displayName: 'feat/auth-fix'
+        displayName: 'feat/remote-auth'
+      })
+    ).toMatchObject({
+      ok: true,
+      placement: {
+        mode: 'existing',
+        worktreeSelector: 'identity:wt2:local:inst-remote-auth',
+        expectedWorkspaceInstanceId: 'inst-remote-auth',
+        onEnvironmentId: 'env-build',
+        onExpectedPairingRevision: 7,
+        onExpectedPeerFingerprint: 'fp-build-v7'
       }
-    }
-    const rideAlong = structuredAgentSessionRideAlong(
-      { sessionId: 'sess-bot-1', journal: makeJournalStub(), turnContext: wiring.turnContext },
-      submission,
-      body
-    )
-
-    await expect(rideAlong.claim(1, AGENT_JOURNAL_THREAD_SCOPE)).rejects.toBeInstanceOf(
-      StructuredAgentSessionInputNotAdmitted
-    )
-    expect(workTargets.getForTurn('sess-bot-1')).toBeUndefined()
-  })
-
-  it('binds exact existing workspace and project targets to worker-start for one turn only, preserves leading /skills, and clears afterwards', async () => {
-    const workTargets = new BotTurnWorkTargetRegistry()
-    const { wiring, turnNote } = makeWiring({ targetStillValid: () => true, workTargets })
-
-    const existingTarget: AgentJournalWorkTarget = {
-      kind: 'workspace',
-      hostId: 'local',
-      repoId: 'repo-acme-local',
-      workspaceId: 'wt-auth',
-      workspaceKind: 'git-worktree',
-      displayName: 'feat/auth-fix',
-      projectName: 'acme-api'
-    }
-    const body: AgentJournalMessageItem = {
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text: 'Fix failing login test' }],
-      workTarget: existingTarget
-    }
-    const rideAlong = structuredAgentSessionRideAlong(
-      { sessionId: 'sess-bot-1', journal: makeJournalStub(), turnContext: wiring.turnContext },
-      submission,
-      body
-    )
-    await rideAlong.claim(1, AGENT_JOURNAL_THREAD_SCOPE)
-    const outgoing = rideAlong.outgoing(body)
-
-    // Conflicting prior-worker note was suppressed and <orca_context> points at the exact worktree ID.
-    expect(turnNote).not.toHaveBeenCalled()
-    expect(blockText(outgoing.blocks[0])).toContain('--worktree id:wt-auth')
-    expect(blockText(outgoing.blocks[0])).toContain('Fix failing login test')
-
-    // Default worker-start during this turn routes to the exact existing workspace instead of bot home.
-    const placed = applyBotTurnWorkTargetToWorkerStart(
-      { worktree: 'current', spec: 'Fix failing login test' },
-      workTargets.getForTurn('sess-bot-1'),
-      false
-    )
-    expect(placed).toEqual({
-      worktree: 'id:wt-auth',
-      spec: 'Fix failing login test'
     })
-
-    // Explicit terminal or follow-up calls are respected without clobbering.
-    const followUp = applyBotTurnWorkTargetToWorkerStart(
-      { worktree: 'current', terminal: 'term-existing' },
-      workTargets.getForTurn('sess-bot-1'),
-      false
-    )
-    expect(followUp).toEqual({ worktree: 'current', terminal: 'term-existing' })
-
-    // Turn end clears active placement so the next message never leaks the previous target.
-    wiring.turnContext.turnEnded?.(
-      'sess-bot-1',
-      'turn-1',
-      async () => ({ items: [], submissions: [], openerIds: new Map() }),
-      async () => undefined
-    )
-    expect(workTargets.getForTurn('sess-bot-1')).toBeUndefined()
-
-    // Leading slash skill message keeps /skill at block 0 and appends <orca_context> after it.
-    const projectTarget: AgentJournalWorkTarget = {
-      kind: 'project',
-      hostId: 'local',
-      repoId: 'repo-acme-local',
-      repoKind: 'git',
-      displayName: 'acme-api'
-    }
-    const skillBody: AgentJournalMessageItem = {
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text: '/review check login flow' }],
-      workTarget: projectTarget
-    }
-    const skillRideAlong = structuredAgentSessionRideAlong(
-      { sessionId: 'sess-bot-1', journal: makeJournalStub(), turnContext: wiring.turnContext },
-      submission,
-      skillBody
-    )
-    await skillRideAlong.claim(2, AGENT_JOURNAL_THREAD_SCOPE)
-    const skillOutgoing = skillRideAlong.outgoing(skillBody)
-    expect(skillOutgoing.blocks[0]).toEqual({ type: 'text', text: '/review check login flow' })
-    expect(blockText(skillOutgoing.blocks[1])).toContain(
-      '--repo id:repo-acme-local --worktree new-child'
-    )
-
-    // Project target places worker-start into --repo id:<repoId> --worktree new-child.
-    const placedProject = applyBotTurnWorkTargetToWorkerStart(
-      { worktree: 'current', spec: 'Review login flow' },
-      workTargets.getForTurn('sess-bot-1'),
-      false
-    )
-    expect(placedProject).toEqual({
-      repo: 'id:repo-acme-local',
-      worktree: 'new-child',
-      spec: 'Review login flow'
-    })
-
-    // Next untargeted message handover clears any lingering turn binding.
-    wiring.turnContext.handedOver?.('sess-bot-1', {
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text: 'Regular question' }]
-    })
-    expect(workTargets.getForTurn('sess-bot-1')).toBeUndefined()
   })
 })

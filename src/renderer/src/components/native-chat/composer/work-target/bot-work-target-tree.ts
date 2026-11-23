@@ -2,6 +2,7 @@ import type { Bot } from '../../../../../../shared/bot-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
@@ -12,6 +13,7 @@ import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { RuntimeEnvironmentStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
+import { getRepoMainWorktreeId } from '../../../../../../shared/worktree/id'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { AgentJournalWorkTarget } from '../../../../../../shared/agent-session/work-target/agent-session-work-target'
@@ -25,6 +27,7 @@ import {
 
 export {
   filterBotWorkTargetTree,
+  rowMatchesBotWorkTargetQuery,
   type BotWorkTargetHostUnavailableReason,
   type BotWorkTargetTreeRow
 } from './bot-work-target-tree-rows'
@@ -57,6 +60,7 @@ function folderWorkspaceHostId(workspace: FolderWorkspace): ExecutionHostId {
 
 /** Build the registered project & workspace tree for the bot chat target picker. */
 export function buildBotWorkTargetTree(input: BuildBotWorkTargetTreeInput): BotWorkTargetTreeRow[] {
+  const { worktreesByRepo, folderWorkspaces } = input
   const hidden = indexHiddenProjects(input.repos, LOCAL_EXECUTION_HOST_ID)
   const runtimeEnvNames = new Map(
     input.runtimeEnvironments
@@ -72,7 +76,7 @@ export function buildBotWorkTargetTree(input: BuildBotWorkTargetTreeInput): BotW
   const groupById = new Map(input.projectGroups.map((group) => [group.id, group]))
   // Exclude bot home groups identified by containing bot home workspaces.
   const botGroupIds = new Set<string>()
-  for (const folder of input.folderWorkspaces) {
+  for (const folder of folderWorkspaces) {
     if (botHomeIds.has(folder.id) && folder.projectGroupId) {
       botGroupIds.add(folder.projectGroupId)
     }
@@ -115,7 +119,7 @@ export function buildBotWorkTargetTree(input: BuildBotWorkTargetTreeInput): BotW
   for (const repo of sortedRepos) {
     const hostId = getRepoExecutionHostId(repo)
     const hostLabel = resolveHostLabel(hostId, runtimeEnvNames, input.sshTargetLabels)
-    const unavailableReason = resolveHostUnavailableReason(
+    const hostUnavailableReason = resolveHostUnavailableReason(
       input.botHostId,
       hostId,
       input.runtimeStatusByEnvironmentId,
@@ -123,7 +127,13 @@ export function buildBotWorkTargetTree(input: BuildBotWorkTargetTreeInput): BotW
     )
     const projectId = projectIdByHostAndRepo.get(`${hostId}\0${repo.id}`)
     const folder = isFolderRepo(repo)
-    const repoWorktrees = input.worktreesByRepo[repo.id] ?? []
+    // Runtime worktree creation rejects SSH Git repos; keep child existing SSH worktrees selectable.
+    const projectUnavailableReason =
+      hostUnavailableReason ??
+      (!folder && parseExecutionHostId(hostId)?.kind === 'ssh'
+        ? ('ssh-project-unsupported' as const)
+        : undefined)
+    const repoWorktrees = worktreesByRepo[repo.id] ?? []
     const folderWorktree = folder
       ? (repoWorktrees.find((worktree) => !worktree.isArchived) ?? undefined)
       : undefined
@@ -137,7 +147,10 @@ export function buildBotWorkTargetTree(input: BuildBotWorkTargetTreeInput): BotW
       repoKind: folder ? 'folder' : 'git',
       ...(folder
         ? {
-            workspaceId: folderWorktree?.id ?? `${repo.id}::${repo.path}`,
+            workspaceId: folderWorktree?.id ?? getRepoMainWorktreeId(repo),
+            ...(folderWorktree?.instanceId
+              ? { workspaceInstanceId: folderWorktree.instanceId }
+              : {}),
             workspaceKind: 'folder' as const
           }
         : {}),
@@ -156,7 +169,7 @@ export function buildBotWorkTargetTree(input: BuildBotWorkTargetTreeInput): BotW
       hostId,
       hostLabel,
       ambiguousName,
-      ...(unavailableReason ? { unavailableReason } : {}),
+      ...(projectUnavailableReason ? { unavailableReason: projectUnavailableReason } : {}),
       searchText: [repo.displayName, hostLabel, repo.path, folder ? 'folder' : 'git']
         .filter(Boolean)
         .join(' ')
@@ -173,13 +186,13 @@ export function buildBotWorkTargetTree(input: BuildBotWorkTargetTreeInput): BotW
           projectId,
           hostId,
           hostLabel,
-          unavailableReason
+          hostUnavailableReason
         )
       )
     }
   }
 
-  const visibleFolders = input.folderWorkspaces.filter(
+  const visibleFolders = folderWorkspaces.filter(
     (folder) =>
       !folder.isArchived &&
       !botHomeIds.has(folder.id) &&
