@@ -203,7 +203,7 @@ export const ZH_VALUE_OVERRIDES = {
   'Proxy Command': '代理命令',
   "Give agents direct access to Orca's browser so they can test pages, capture screenshots, and act on what they see.":
     '让智能体直接访问 Orca 的浏览器，以便测试页面、捕获屏幕截图并根据所见内容执行操作',
-  'X finishes, send it the review task.”': 'X 完成后，把评审任务发给它。”',
+  'X finishes, send it the review task.”': 'X 中的智能体完成后，把评审任务发给它"',
   'Branch naming, base refs, and Git AI Author.': '分支命名、基础引用和 Git AI Author',
   'You have unsaved Git AI Author changes. Leaving will discard them.':
     '您有未保存的 Git AI Author 更改。离开将丢弃它们',
