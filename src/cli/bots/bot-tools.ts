@@ -1,5 +1,7 @@
 // `orca bot tools`: a bot's own tools (MCP servers) beside the ones it gets from its owner's agent.
 import { createInterface } from 'node:readline'
+import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
+import { describeRemoteServerSelection } from '../hosts/remote-server-selection'
 import { BOTS_TOOLS_OWNED_SIGN_IN_RUNTIME_CAPABILITY } from '../../shared/bot-runtime-capabilities'
 import type { BotOwnTool, BotToolProblem, BotTools } from '../../shared/bot-tools'
 import {
@@ -232,13 +234,14 @@ export const BOT_TOOLS_HANDLERS: Record<string, CommandHandler> = {
       const bot = await target({ flags, client })
       if (await signsInItself(ctx, bot, name)) {
         if (finish) {
+          const selector = getOptionalStringFlag(flags, 'bot')
           const again = [
-            `orca bot tools connect ${name}`,
-            ...(['environment', 'bot'] as const).flatMap((flag) => {
-              const value = getOptionalStringFlag(flags, flag)
-              return value ? [`--${flag} ${JSON.stringify(value)}`] : []
-            })
-          ].join(' ')
+            `orca bot tools connect ${quoteCliCommandArgument(name)}`,
+            describeRemoteServerSelection(flags)?.flag,
+            selector && `--bot ${quoteCliCommandArgument(selector)}`
+          ]
+            .filter(Boolean)
+            .join(' ')
           throw new RuntimeClientError(
             'invalid_argument',
             `Run \`${again}\` and paste the address when it asks.`

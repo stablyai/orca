@@ -256,7 +256,8 @@ export async function serveFlowSignIn(
     })
     .catch(() => undefined)
   returned.catch((error: unknown) => {
-    if (flow.progress.state !== 'done' && flow.progress.state !== 'failed') {
+    // A pasted return being exchanged reports its own outcome, even past the listener's deadline.
+    if (!flow.completing && flow.progress.state !== 'done' && flow.progress.state !== 'failed') {
       flow.progress = { state: 'failed', code: failureOf(error) }
     }
   })
