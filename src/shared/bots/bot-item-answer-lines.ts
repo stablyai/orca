@@ -39,10 +39,39 @@ export function botItemNamedAnswers(shape: BotItemQuestionShape, text: string): 
   return answers
 }
 
+function answerLines(
+  shape: BotItemQuestionShape,
+  answers: readonly (string | null)[],
+  keepsPlace: (index: number) => boolean
+): string {
+  return shape.decisions
+    .flatMap((decision, index) => {
+      const words = answers[index]?.replace(/\s+/g, ' ').trim()
+      if (!words) {
+        return keepsPlace(index) ? [`${botItemQuestionLine(decision.question)} →`] : []
+      }
+      const reply = decision.replies.find((option) => option.label === words)
+      return [
+        reply
+          ? botItemQuickReplyText(shape, decision, reply)
+          : `${botItemQuestionLine(decision.question)} → ${words}`
+      ]
+    })
+    .join('\n')
+}
+
 /** One comment for a set of answers: a line per answered question, in the ask's order; a picked quick
- *  reply writes exactly what its chip posts on its own. An open line whose first line a later answered
- *  question shares keeps a bare "Question →", so that answer reads back on its own line. */
+ *  reply writes exactly what its chip posts on its own. */
 export function botItemAnswersText(
+  shape: BotItemQuestionShape,
+  answers: readonly (string | null)[]
+): string {
+  return answerLines(shape, answers, () => false)
+}
+
+/** Answers held on this device as their draft stores them: an open line whose first line another
+ *  question shares keeps a bare "Question →", so the answers after it read back on their own lines. */
+export function botItemHeldAnswersText(
   shape: BotItemQuestionShape,
   answers: readonly (string | null)[]
 ): string {
@@ -50,18 +79,9 @@ export function botItemAnswersText(
     return ''
   }
   const leads = shape.decisions.map((decision) => botItemQuestionLine(decision.question))
-  return shape.decisions
-    .flatMap((decision, index) => {
-      const words = answers[index]?.replace(/\s+/g, ' ').trim()
-      if (!words) {
-        return leads.some((lead, at) => at > index && lead === leads[index] && answers[at]?.trim())
-          ? [`${leads[index]} →`]
-          : []
-      }
-      const reply = decision.replies.find((option) => option.label === words)
-      return [reply ? botItemQuickReplyText(shape, decision, reply) : `${leads[index]} → ${words}`]
-    })
-    .join('\n')
+  return answerLines(shape, answers, (index) =>
+    leads.some((lead, at) => at !== index && lead === leads[index])
+  )
 }
 
 /** What an owner's comment answered on one question line, for its "Question → answer" look: the quick
