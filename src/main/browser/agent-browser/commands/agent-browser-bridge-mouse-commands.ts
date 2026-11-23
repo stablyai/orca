@@ -74,7 +74,7 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
           })
           if (!point.handled) {
             if (cdpButton === 'right') {
-              noteInjectedRightPress(wc)
+              noteInjectedRightPress(wc, 'mousePressed')
             }
             await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', {
               type: 'mousePressed',
@@ -85,6 +85,9 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
               modifiers: cdpModifiers,
               clickCount: 1
             })
+            if (cdpButton === 'right') {
+              noteInjectedRightPress(wc, 'mouseReleased')
+            }
             await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', {
               type: 'mouseReleased',
               x: point.x,
@@ -94,9 +97,6 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
               modifiers: cdpModifiers,
               clickCount: 1
             })
-            if (cdpButton === 'right') {
-              noteInjectedRightPress(wc)
-            }
           }
           return {
             clicked: {

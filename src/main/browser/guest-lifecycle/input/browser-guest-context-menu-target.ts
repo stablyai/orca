@@ -8,19 +8,34 @@ import type { BrowserContextMenuTarget } from '../../../../shared/browser/guest-
 import { readContextMenuSpelling } from '../../../window/editing/editable-context-menu'
 import { readGuestNavigationState } from '../navigation/browser-guest-navigation-state'
 
-// Chromium opens the menu on the press (or the release on Windows) and reports it after the dispatch.
+// The menu event follows the dispatch that opened it; a menu this much later is someone else's.
 const INJECTED_RIGHT_PRESS_MENU_WINDOW_MS = 1_000
 
 const injectedRightPressAt = new WeakMap<WebContents, number>()
 
-/** Records a right press an agent or a remote viewer sent, whose menu is not this desktop's. */
-export function noteInjectedRightPress(guest: WebContents): void {
-  injectedRightPressAt.set(guest, Date.now())
+/** Records an agent's or a remote viewer's right press, whose menu is not this desktop's. */
+export function noteInjectedRightPress(
+  guest: WebContents,
+  phase: 'mousePressed' | 'mouseReleased'
+): void {
+  // Chromium opens the page menu on the press, or on the release on Windows.
+  if (phase === (process.platform === 'win32' ? 'mouseReleased' : 'mousePressed')) {
+    injectedRightPressAt.set(guest, Date.now())
+  }
 }
 
 export function isContextMenuFromInjectedPress(guest: WebContents): boolean {
   const at = injectedRightPressAt.get(guest)
-  return at !== undefined && Date.now() - at <= INJECTED_RIGHT_PRESS_MENU_WINDOW_MS
+  if (at === undefined || Date.now() - at > INJECTED_RIGHT_PRESS_MENU_WINDOW_MS) {
+    return false
+  }
+  // One press opens one menu; every listener of this event reads it before the mark goes.
+  setImmediate(() => {
+    if (injectedRightPressAt.get(guest) === at) {
+      injectedRightPressAt.delete(guest)
+    }
+  })
+  return true
 }
 
 export function readGuestContextMenuTarget(

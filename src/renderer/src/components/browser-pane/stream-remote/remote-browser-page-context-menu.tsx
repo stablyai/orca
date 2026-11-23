@@ -98,8 +98,9 @@ export function useRemoteBrowserPageContextMenu({
       event.preventDefault()
       return
     }
-    // The forwarded press opens the page's own menu, if any, which the host then reports.
-    if (hostContextMenus.supported) {
+    // The forwarded press opens the page's own menu, if any, which the host then reports. A menu
+    // key sends no press, so it keeps the probed menu.
+    if (hostContextMenus.supported && hostContextMenus.hasPendingPress) {
       event.preventDefault()
       return
     }

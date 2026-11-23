@@ -68,14 +68,13 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
         releaseFocusGuard = await this.focusPageForPress(wc, target.webContentsId)
       }
       assertExpectedPageUrlForStep()
-      const rightPress = params.button === 'right' && params.type !== 'mouseMoved'
-      if (rightPress) {
-        noteInjectedRightPress(wc)
+      if (
+        params.button === 'right' &&
+        (params.type === 'mousePressed' || params.type === 'mouseReleased')
+      ) {
+        noteInjectedRightPress(wc, params.type)
       }
       await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', params)
-      if (rightPress) {
-        noteInjectedRightPress(wc)
-      }
       return result
     } catch (error) {
       Object.assign(state, preDispatch)

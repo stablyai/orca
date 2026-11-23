@@ -4,6 +4,7 @@ import type {
 } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import type { RuntimeBrowserTabQueries } from '../tabs/browser-tab-queries'
+import type { RuntimeBrowserCommands } from './browser-commands'
 import { BROWSER_COMMANDS_WITHOUT_PAGE_ADMISSION } from './browser-commands-without-page-admission'
 
 type BrowserPageCommand = (
@@ -16,7 +17,7 @@ function isBrowserPageCommand(value: unknown): value is BrowserPageCommand {
 
 /** Wraps each page command so it runs once its page is admitted (or directly on a page this host renders). */
 export function admitBrowserPageCommands(
-  commands: object,
+  commands: RuntimeBrowserCommands,
   {
     host,
     targets,

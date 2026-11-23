@@ -42,6 +42,8 @@ export async function readGuestImageContent(
       bytes: Buffer.from(await response.arrayBuffer())
     }
   }
+  // The resource tree lists cached resources without their fragment.
+  const resourceUrl = url.split('#')[0]
   const { release } = acquireElectronDebugger(guest)
   try {
     await sendGuestCdpCommand(guest, 'Page.enable')
@@ -49,7 +51,7 @@ export async function readGuestImageContent(
     const { frameTree } = (await sendGuestCdpCommand(guest, 'Page.getResourceTree')) as {
       frameTree: CdpFrameResourceTree
     }
-    const resource = findImageResource(frameTree, url)
+    const resource = findImageResource(frameTree, resourceUrl)
     if (!resource) {
       throw new BrowserError('browser_error', 'The image is no longer loaded in the page.')
     }
@@ -57,7 +59,7 @@ export async function readGuestImageContent(
     const { content, base64Encoded } = (await sendGuestCdpCommand(
       guest,
       'Page.getResourceContent',
-      { frameId: resource.frameId, url }
+      { frameId: resource.frameId, url: resourceUrl }
     )) as { content: string; base64Encoded: boolean }
     return {
       mimeType: resource.mimeType,

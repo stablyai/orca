@@ -151,6 +151,9 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
           { ...params, x: point.x, y: point.y },
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
+        if (pageMenuPress) {
+          hostContextMenus.markPressSent()
+        }
         await callRuntimeRpc(
           target,
           'browser.mouseDown',
@@ -193,6 +196,7 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     if (!target || !pageId || !operationToken || !point || !button) {
       return
     }
+    const pageMenuRelease = button === 'right' && !pagePointerOwned
     if (button === 'right') {
       rightPressForwardedRef.current = false
     }
@@ -211,6 +215,10 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
           { ...params, x: point.x, y: point.y },
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
+        // Windows hosts open the page menu on the release.
+        if (pageMenuRelease) {
+          hostContextMenus.markPressSent()
+        }
         await callRuntimeRpc(
           target,
           'browser.mouseUp',
