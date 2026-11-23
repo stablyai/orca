@@ -3,12 +3,7 @@
 // workers started for an item linked from orchestration's record. Changes owed to an item's chat go out
 // as orchestration mail; startup sends any a crash left owed.
 import type { Bot } from '../../shared/bot-types'
-import {
-  BOT_ITEM_EVENT_KINDS,
-  botItemEventId,
-  type BotItem,
-  type BotItemEvent
-} from '../../shared/bots/bot-items'
+import { botItemEventId, type BotItem, type BotItemEvent } from '../../shared/bots/bot-items'
 import { botItemsNeedingOwnerByBot } from '../../shared/bots/bot-item-groups'
 import { botItemQuestionView } from '../../shared/bots/bot-item-ask'
 import {
@@ -29,24 +24,10 @@ import { dispatchStarter, dispatchStarterBotId } from './bot-item-dispatch-facts
 import { botItemsStoreFile } from './bot-items-input'
 import { BotItemLinkJoin, type BotItemGitHubCache } from './bot-items-link-join'
 import type { BotItemsRemote } from './bot-items-ops'
-import type {
-  BotItemEventRecord,
-  BotItemMail,
-  BotItemRecord,
-  BotItemSource
-} from './bot-items-schema'
+import { eventViewOf } from './bot-items-rows'
+import type { BotItemMail, BotItemRecord, BotItemSource } from './bot-items-schema'
 import type { BotWorkRuntime } from './bot-work-runtime'
 import { BotsDbWorkerClient } from './db-worker/bots-db-worker-client'
-
-function eventView(event: BotItemEventRecord): BotItemEvent {
-  return {
-    id: botItemEventId(event.id),
-    kind: BOT_ITEM_EVENT_KINDS.find((kind) => kind === event.kind) ?? 'edited',
-    actor: event.actor,
-    data: event.data,
-    at: event.createdAt
-  }
-}
 
 export type BotItemsHostDeps = {
   workRuntime: BotWorkRuntime
@@ -279,12 +260,12 @@ export class BotItemsHost {
   }
 
   async events(uid: string, afterId: number, limit: number): Promise<BotItemEvent[]> {
-    return (await this.store().events(uid, afterId, limit)).map(eventView)
+    return (await this.store().events(uid, afterId, limit)).map(eventViewOf)
   }
 
   /** The newest `limit` events before `beforeId` (0: the newest of all), oldest first. */
   async eventsBefore(uid: string, beforeId: number, limit: number): Promise<BotItemEvent[]> {
-    return (await this.store().eventsBefore(uid, beforeId, limit)).map(eventView)
+    return (await this.store().eventsBefore(uid, beforeId, limit)).map(eventViewOf)
   }
 
   /** A Dispatch row changed: a start for an item is linked, and linked items re-read. */

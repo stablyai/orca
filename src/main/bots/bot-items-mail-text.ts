@@ -93,10 +93,14 @@ export function botItemChangeMail(
   const tos = lines.flatMap(({ event, item }) =>
     event.kind === 'status' && !movedByReply(event, item) ? [statusOf(event.data.to)] : []
   )
-  const answered = lines.some(({ event }) => isAnswer(event))
+  const answered = lines.some(({ event }) => isAnswer(event) && openQuestions(event).length === 0)
+  const stillOpen = lines.flatMap(({ event }) => openQuestions(event))
   const next = [
     answered
-      ? "Your owner answered your question, and the item is In progress again: carry on with that answer. If your question still stands, set it to Needs you again with only what's left."
+      ? 'Your owner answered your question, and the item is In progress again: carry on with that answer.'
+      : null,
+    stillOpen.length > 0
+      ? `Your owner answered part of your question; act on that answer now if it stands on its own. The item stays Needs you until these are answered too, so don't ask them again: ${stillOpen.map((line) => `"${inlineUntrusted(line)}"`).join(', ')}.`
       : null,
     replied
       ? "Your owner replied to your question, so the item moved to In progress. If your question still stands, set it to Needs you again with only what's left."
@@ -201,6 +205,12 @@ export function botItemRequestMail(item: {
 /** The owner's comment naming the question it replies to: written while the bot asked. */
 function isAnswer(event: BotItemEventRecord): boolean {
   return event.kind === 'commented' && typeof event.data.answers === 'string'
+}
+
+/** The ask's lines still open after this answer: the host keeps the item Needs you for them. */
+function openQuestions(event: BotItemEventRecord): string[] {
+  const open = event.kind === 'commented' ? event.data.openQuestions : undefined
+  return Array.isArray(open) ? open.filter((line): line is string => typeof line === 'string') : []
 }
 
 function str(value: unknown): string | null {

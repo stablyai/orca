@@ -3,9 +3,13 @@
 // open item, and Orca linking a worker started for an item.
 import {
   isOpenBotItemStatus,
+  parseBotItemEventId,
   type BotItemActor,
-  type BotItemCommentImage
+  type BotItemCommentImage,
+  type BotItemEvent
 } from '../../shared/bots/bot-items'
+import { botItemQuestionLine } from '../../shared/bots/bot-item-ask'
+import { botItemQuestionPairing } from '../../shared/bots/bot-item-question-answers'
 import { BotItemError } from './bot-item-error'
 import { BotItemsEdits } from './bot-items-edits'
 import { assertBotItemAttach } from './bot-items-tables'
@@ -18,6 +22,8 @@ import {
   type BotItemLinkInput,
   type BotItemWriteOutcome
 } from './bot-items-input'
+import { eventRecordOf, eventViewOf } from './bot-items-rows'
+import type { BotItemRecord } from './bot-items-schema'
 
 export class BotItemsWrites extends BotItemsEdits {
   /** `images` were admitted and claimed on the host first; attachments alone make a comment. */
@@ -98,7 +104,7 @@ export class BotItemsWrites extends BotItemsEdits {
   }
 
   /** A worker started for an item (`worker-start --item`): linked once, and when the item's own agent
-   *  started it, Planned or Needs you moves to In progress; anyone else's worker never moves it. A
+   *  started it, Planned, or Needs you with no question line open, moves to In progress; anyone else's worker never moves it. A
    *  closed item takes no link (a retry keeps its first start's item). `starter`: the starting agent and chat, whose write it is, as
    *  `item link` would be; Orca's own catch-up when that chat is unknown. */
   linkStartedWorker(
@@ -123,12 +129,40 @@ export class BotItemsWrites extends BotItemsEdits {
       const links = { links: [`dispatch:${dispatchId}`] }
       let eventId = this.appendEvent(uid, 'linked', actor, links, mail, now)
       this.insertLinks(uid, [{ kind: 'dispatch', ref: dispatchId }], eventId)
-      if (botId === item.ownerBotId && (item.status === 'planned' || item.status === 'needs_you')) {
+      const asking = item.status === 'needs_you' && this.openAsks(item).asks.length > 0
+      if (
+        botId === item.ownerBotId &&
+        (item.status === 'planned' || item.status === 'needs_you') &&
+        !asking
+      ) {
         this.writeStatus(uid, 'working', null, actor, now)
         const moved = { from: item.status, to: 'working' }
         eventId = this.appendEvent(uid, 'status', actor, moved, mail, now)
       }
       return eventId
     })
+  }
+
+  /** The item's asks still waiting on a line, oldest first, with those lines, read as clients pair
+   *  them with `reply` read last; `answered`: `reply` answered a line. */
+  protected openAsks(
+    item: BotItemRecord,
+    reply?: BotItemEvent
+  ): { asks: { id: number; lines: string[] }[]; answered: boolean } {
+    const events = this.db
+      .prepare('SELECT * FROM item_events WHERE item_uid = ? ORDER BY id')
+      .all(item.uid)
+      .map((row) => eventViewOf(eventRecordOf(row)))
+    const { questions } = botItemQuestionPairing(item, [...events, ...(reply ? [reply] : [])])
+    const entries = [...questions].filter(([, entry]) => entry.waiting)
+    return {
+      asks: entries.map(([id, { shape, answers }]) => ({
+        id: parseBotItemEventId(id) ?? 0,
+        lines: shape.decisions.flatMap((decision, index) =>
+          answers[index] ? [] : [botItemQuestionLine(decision.question)]
+        )
+      })),
+      answered: [...questions.values()].some(({ answers }) => answers.some((a) => a === reply))
+    }
   }
 }

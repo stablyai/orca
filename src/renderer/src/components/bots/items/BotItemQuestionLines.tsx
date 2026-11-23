@@ -143,7 +143,7 @@ export function BotItemQuestionLines({
                         if (event.altKey || event.shiftKey) {
                           actions.edit(text)
                         } else {
-                          actions.send(text)
+                          actions.send(text, askId)
                         }
                       }}
                     >

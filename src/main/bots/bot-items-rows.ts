@@ -2,9 +2,12 @@
 // falls back instead of throwing.
 import type { SqliteRow } from '../sqlite/sqlite-statement'
 import {
+  BOT_ITEM_EVENT_KINDS,
   BOT_ITEM_LINK_KINDS,
   BOT_ITEM_STATUSES,
+  botItemEventId,
   type BotItemActor,
+  type BotItemEvent,
   type BotItemChatKind,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
@@ -132,5 +135,16 @@ export function eventRecordOf(row: SqliteRow): BotItemEventRecord {
     actor: actorOf(json(row, 'actor')),
     data: record(json(row, 'data')) ?? {},
     createdAt: integer(row, 'created_at')
+  }
+}
+
+/** An event as clients read it. */
+export function eventViewOf(event: BotItemEventRecord): BotItemEvent {
+  return {
+    id: botItemEventId(event.id),
+    kind: BOT_ITEM_EVENT_KINDS.find((kind) => kind === event.kind) ?? 'edited',
+    actor: event.actor,
+    data: event.data,
+    at: event.createdAt
   }
 }

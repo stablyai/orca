@@ -23,6 +23,7 @@ import {
   botItemNamedAnswers
 } from '../../../../../shared/bots/bot-item-answer-lines'
 import {
+  botItemQuestionPairing,
   botItemWaitingAsk,
   botItemWaitingLine,
   type BotItemWaitingLine
@@ -70,7 +71,8 @@ export type BotItemQuestionSteps = {
 }
 
 export type BotItemQuickReplyActions = {
-  send: (text: string) => void
+  /** `askId`: the ask whose quick reply it is. */
+  send: (text: string, askId: string) => void
   edit: (text: string) => void
   /** Into the box as a comment of its own, answering no line: answers held for an earlier ask. */
   recover: (text: string) => void
@@ -103,7 +105,7 @@ export function useBotItemQuestionSteps(
   steps: BotItemQuestionSteps | null
   sent: BotItemSentAnswers | null
   /** A quick reply of one question, posted at once as it always has. */
-  quick: (text: string) => void
+  quick: (text: string, askId: string) => void
   /** The comment box's send: it answers only the question its "Replying to" names; with none named
    *  (its × closed), the comment answers nothing. */
   fromBox: (
@@ -195,13 +197,13 @@ export function useBotItemQuestionSteps(
   const steps = waiting
     ? { askId, shape, held, current, lines, go, answer, heldCount, sendHeld }
     : null
-  const quick = useLatestHandler((text: string) => {
-    if (asked) {
-      const { shape: own } = asked
+  const quick = useLatestHandler((text: string, quickAskId: string) => {
+    const own = botItemQuestionPairing(item, events).questions.get(quickAskId)?.shape
+    if (own) {
       const answers = own.decisions.map((_, index) => botItemAnswerWords(own, index, { text }))
-      setSent({ askId: asked.askId, text, answers })
+      setSent({ askId: quickAskId, text, answers })
     }
-    send(text, [], asked?.askId)
+    send(text, [], quickAskId)
   })
   const stepLine = steps?.shape.decisions[steps.current]
   return {

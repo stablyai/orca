@@ -17,7 +17,7 @@ import {
   type BotItemWriteOutcome
 } from './bot-items-input'
 import { eventRecordOf } from './bot-items-rows'
-import type { BotItemEventRecord, BotItemMail, BotItemRecord } from './bot-items-schema'
+import type { BotItemEventRecord, BotItemMail } from './bot-items-schema'
 
 const OWED_MAIL_PAGE = 50
 
@@ -68,33 +68,57 @@ export class BotItemsOwner extends BotItemsWrites {
         item.status === 'needs_you' && item.questionEvent !== null
           ? this.botQuestion(item.questionEvent)
           : null
-      if (question && questionEventId !== undefined && question.id !== questionEventId) {
+      // Asks a later question left waiting are answered too, oldest first.
+      const waiting = question ? this.openAsks(item).asks : []
+      if (
+        question &&
+        questionEventId !== undefined &&
+        question.id !== questionEventId &&
+        !waiting.some(({ id }) => id === questionEventId)
+      ) {
         throw new BotItemError(
           'item_changed',
           `Item ${item.number} has a new question. Read it, then reply.`
         )
       }
-      // While the bot asks, a comment not sent as plain is the answer: it names the question, and the
-      // move it makes says so. A plain one leaves the item waiting on its question.
-      const answering = question && !plain ? question : null
+      // While the bot asks, a comment not sent as plain is the answer: it names the question (a quick
+      // reply's own, else the oldest still waiting), and the move it makes says so. A plain one leaves
+      // the item waiting on its question.
+      const answeringId =
+        question && !plain ? (questionEventId ?? waiting[0]?.id ?? question.id) : null
+      const answering =
+        answeringId === null
+          ? null
+          : answeringId === question?.id
+            ? question
+            : this.botQuestion(answeringId)
       const answers = answering ? botItemEventId(answering.id) : undefined
       // A question a conversation's turn asked is answered there too (bots-items-mail.ts reads it).
       const askedIn = answering?.data.askedInConversation
-      const eventId = this.writeOwnerComment(
-        item,
-        commentText,
+      const data = {
+        text: commentText,
+        ...(images.length > 0 ? { images } : {}),
+        ...(requestId === undefined ? {} : { requestId }),
+        ...(answers === undefined ? {} : { answers }),
+        ...(plain ? { plain: true } : {}),
+        ...(skills.length > 0 ? { skills } : {}),
+        ...(typeof askedIn === 'string' ? { askedInConversation: askedIn } : {})
+      }
+      // An answer to some of the ask's lines keeps the item asking the rest; its mail names them.
+      const reply = { id: '', kind: 'commented' as const, actor, data, at: now }
+      const left = answering ? this.openAsks(item, reply) : null
+      const open = left?.answered ? left.asks.flatMap(({ lines }) => lines) : []
+      const eventId = this.appendEvent(
+        uid,
+        'commented',
         actor,
-        now,
-        images,
-        requestId,
-        answers,
-        plain,
-        skills,
-        typeof askedIn === 'string' ? askedIn : undefined
+        open.length > 0 ? { ...data, openQuestions: open } : data,
+        true,
+        now
       )
       this.endSnooze(uid, actor, now)
       // A reply hands the item back to the bot.
-      if (item.status === 'needs_you' && !(question && plain)) {
+      if (item.status === 'needs_you' && !(question && plain) && open.length === 0) {
         this.writeStatus(uid, 'working', null, actor, now)
         const moved = { from: item.status, to: 'working', ...(answers ? { cause: 'answer' } : {}) }
         this.appendEvent(uid, 'status', actor, moved, true, now)
@@ -122,30 +146,6 @@ export class BotItemsOwner extends BotItemsWrites {
       : null
   }
 
-  private writeOwnerComment(
-    item: BotItemRecord,
-    commentText: string,
-    actor: BotItemOwnerActor,
-    now: number,
-    images: readonly BotItemCommentImage[] = [],
-    requestId?: string,
-    answers?: string,
-    plain = false,
-    skills: readonly BotItemCommentSkill[] = [],
-    askedInConversation?: string
-  ): number {
-    const data = {
-      text: commentText,
-      ...(images.length > 0 ? { images } : {}),
-      ...(requestId === undefined ? {} : { requestId }),
-      ...(answers === undefined ? {} : { answers }),
-      ...(plain ? { plain: true } : {}),
-      ...(skills.length > 0 ? { skills } : {}),
-      ...(askedInConversation === undefined ? {} : { askedInConversation })
-    }
-    return this.appendEvent(item.uid, 'commented', actor, data, true, now)
-  }
-
   /** One status for every item named, each its own event, in one transaction. */
   ownerStatus(
     input: BotItemOwnerStatusInput,
@@ -170,7 +170,7 @@ export class BotItemsOwner extends BotItemsWrites {
   ): BotItemOwnerOutcome {
     const item = this.requireItem(uid)
     const comment = input.comment?.trim()
-      ? this.writeOwnerComment(item, input.comment, actor, now)
+      ? this.appendEvent(item.uid, 'commented', actor, { text: input.comment }, true, now)
       : null
     if (item.status === input.to) {
       if (comment !== null) {
