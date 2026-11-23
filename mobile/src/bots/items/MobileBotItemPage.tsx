@@ -2,7 +2,7 @@
 // (three lines, Show more), the close note, Status (and Snoozed while it is) and Chat, Done means, Links, Activity, and the comment
 // box docked at the bottom. The agent's question is answered in its comment, as on the desktop: quick
 // replies there, your own words in the box. Back returns to the list; up and down step through it, "4 of 6".
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native'
 import { House, MessageSquare } from 'lucide-react-native'
 import { BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
@@ -122,18 +122,6 @@ export function MobileBotItemPage({
     steps,
     sent
   }
-  // The waiting question's comment is read even when it is older than the loaded page: earlier pages
-  // load until it shows.
-  const questionId = view.item?.waitingAsk ?? view.item?.question?.eventId
-  const questionUnread =
-    questionId !== undefined && !view.events.some((event) => event.id === questionId)
-  const { hasEarlier, loadEarlier } = view
-  const earliest = view.events[0]?.id
-  useEffect(() => {
-    if (questionUnread && hasEarlier) {
-      loadEarlier()
-    }
-  }, [questionUnread, hasEarlier, earliest, loadEarlier])
   const back = <MobileBotItemPageHeader stepper={stepper} online={online} onBack={onBack} />
   const item = view.item
   if (!item) {
