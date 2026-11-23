@@ -55,7 +55,7 @@ export function buildRemoteSettingsSections(
       id: 'servers',
       title: t('auto.hooks.useSettingsNavigationMetadata.de0c2907a1', 'Remote Orca Servers'),
       description: isWebClient
-        ? 'Connect this browser to a saved Orca server.'
+        ? 'Connect to a saved Orca server.'
         : 'Work on another machine from here.',
       icon: Server,
       searchEntries: [runtimeEnvironmentsSearchEntry],

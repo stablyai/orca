@@ -209,11 +209,11 @@ export function RuntimeServerRow({
         ))
       )}
       {!problemLine && availableText ? (
-        <span className="flex shrink-0 items-center gap-1 text-status-warning">
+        <span className="flex min-w-0 max-w-full shrink-0 items-center gap-1 text-status-warning">
           <span aria-hidden className="text-muted-foreground">
             ·
           </span>
-          {availableText}
+          <span className="truncate">{availableText}</span>
         </span>
       ) : null}
       {problemLine ? (

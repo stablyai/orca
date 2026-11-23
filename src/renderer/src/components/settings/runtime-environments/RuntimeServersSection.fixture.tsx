@@ -26,9 +26,9 @@ function environment(id: string, name: string, address: string): PublicKnownRunt
 }
 
 const servers = [
-  environment('dev-box', 'dev-box', 'ws://10.0.0.12:6768'),
-  environment('gpu-runner', 'gpu-runner', 'ws://10.0.0.13:6768'),
-  environment('home-desktop', 'home-desktop', 'ws://10.0.0.14:6768')
+  environment('dev-box', 'dev-box', 'ws://192.0.2.12:6768'),
+  environment('gpu-runner', 'gpu-runner', 'ws://192.0.2.13:6768'),
+  environment('home-desktop', 'home-desktop', 'ws://192.0.2.14:6768')
 ]
 
 function update(
@@ -92,11 +92,13 @@ function stubActiveLinks(count: number): () => void {
 function Section({
   environments,
   remoteServerUpdates,
-  running = false
+  running = false,
+  web = false
 }: {
   environments: PublicKnownRuntimeEnvironment[]
   remoteServerUpdates: Map<string, RemoteServerUpdateEntry>
   running?: boolean
+  web?: boolean
 }): React.JSX.Element {
   return (
     <RuntimeServersPageProvider>
@@ -104,8 +106,9 @@ function Section({
         id="servers"
         forceVisible
         title="Remote Orca servers"
-        description="Work on another machine from here."
+        description={web ? 'Connect to a saved Orca server.' : 'Work on another machine from here.'}
         headerAction={<RuntimeServersHeaderActions />}
+        fullWidthDescriptionOnNarrow
       >
         <div className="space-y-6">
           <div className="space-y-2">
@@ -136,7 +139,7 @@ function Section({
               onPasteAccessLink={() => {}}
             />
           </div>
-          <RuntimeShareComputerSection />
+          {web ? null : <RuntimeShareComputerSection />}
         </div>
       </SettingsSection>
     </RuntimeServersPageProvider>
@@ -148,13 +151,15 @@ function sectionFixture({
   phases = ['available', 'available', 'current'],
   running = false,
   links = 0,
-  width = 720
+  width = 720,
+  web = false
 }: {
   environments?: PublicKnownRuntimeEnvironment[]
   phases?: RemoteServerUpdateEntry['phase'][]
   running?: boolean
   links?: number
   width?: number
+  web?: boolean
 }): ReturnType<typeof defineFixture> {
   const remoteServerUpdates = updates(environments, phases)
   return defineFixture({
@@ -166,6 +171,7 @@ function sectionFixture({
         environments={environments}
         remoteServerUpdates={remoteServerUpdates}
         running={running}
+        web={web}
       />
     )
   })
@@ -180,11 +186,16 @@ export const oneUpdate = sectionFixture({ phases: ['available', 'current', 'curr
 export const noUpdates = sectionFixture({ phases: ['current', 'current', 'current'] })
 export const noServers = sectionFixture({ environments: [] })
 export const twoActiveLinks = sectionFixture({ links: 2 })
-export const longServerName = sectionFixture({
-  environments: [environment('long', LONG_NAME, 'ws://10.0.0.15:6768'), ...servers.slice(1)]
-})
-/** The settings column at Orca's 600px window minimum, less the 280px sidebar and page padding. */
-export const narrowest = sectionFixture({ width: 248 })
+const longNameServers = [
+  environment('long', LONG_NAME, 'ws://192.0.2.15:6768'),
+  ...servers.slice(1)
+]
+export const longServerName = sectionFixture({ environments: longNameServers })
+// The 600px window has a 280px sidebar, 64px of gutters and up to 12px for the scrollbar.
+// The fixture frame adds 32px of padding around the resulting 244px settings column.
+export const settingsMinimum = sectionFixture({ width: 276, links: 2 })
+export const webSettingsMinimum = sectionFixture({ width: 276, web: true })
+export const narrowest = sectionFixture({ width: 248, environments: longNameServers })
 export const narrow = sectionFixture({ width: 440 })
 export const addServerMenu = defineFixture({
   ...sectionFixture({}),

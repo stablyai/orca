@@ -49,7 +49,7 @@ export function RuntimeServersHeaderActions(): React.JSX.Element {
   return (
     <ButtonGroup>
       <Button type="button" variant="outline" size="sm" onClick={() => setDialog('add')}>
-        <Plus />
+        <Plus className="@max-xs/settings-section:hidden" />
         {t('auto.components.settings.serverList.addServer', 'Add server')}
       </Button>
       <DropdownMenu modal={false}>
