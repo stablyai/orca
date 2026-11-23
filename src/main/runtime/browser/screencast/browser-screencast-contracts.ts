@@ -35,6 +35,8 @@ export type BrowserScreencastParams = {
   contextMenus?: 1
   // The viewer draws where an agent points and presses on the page: `agentCursor` events.
   agentCursor?: 1
+  // The viewer locks its input while a phone drives the page: `driver` events.
+  driverEvents?: 1
 } & BrowserCommandTargetParams
 
 export type BrowserScreencastStartResult = {

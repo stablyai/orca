@@ -322,6 +322,7 @@ import {
   FileChooserAnswer,
   PagePromptAnswer,
   ScreencastAck,
+  ScreencastReclaimForDesktop,
   ScreencastUnsubscribe
 } from './browser/browser-screencast-params'
 import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser/browser-tab-create-params'
@@ -1447,6 +1448,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.saveImage': PageMenuImage,
   'browser.screencast': Screencast,
   'browser.screencast.ack': ScreencastAck,
+  'browser.screencast.reclaimForDesktop': ScreencastReclaimForDesktop,
   'browser.screencast.unsubscribe': ScreencastUnsubscribe,
   'browser.screenshot': Screenshot,
   'browser.scroll': Scroll,
