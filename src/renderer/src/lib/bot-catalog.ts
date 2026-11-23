@@ -194,10 +194,24 @@ export function readBotsEnabled(): boolean {
 }
 
 /** Makes the bot on `hostId`; it answers stamped with that host, so calls about it go there. */
-export async function createBot(hostId: ExecutionHostId, params: BotCreateParams): Promise<Bot> {
-  const { bot } = await callRuntimeRpc<{ bot: Bot }>(botHostTarget(hostId), 'bots.create', params)
+export type BotCreateResult = { bot: Bot; kickoff?: 'starting' | 'failed' }
+
+/** Makes the bot on `hostId` and reports whether its first setup message was admitted. */
+export async function createBotWithKickoff(
+  hostId: ExecutionHostId,
+  params: BotCreateParams
+): Promise<BotCreateResult> {
+  const result = await callRuntimeRpc<{ bot: Bot; kickoff?: 'starting' | 'failed' }>(
+    botHostTarget(hostId),
+    'bots.create',
+    params
+  )
   await refreshBotHost(hostId)
-  return stampBotHost(hostId, bot)
+  return { ...result, bot: stampBotHost(hostId, result.bot) }
+}
+
+export async function createBot(hostId: ExecutionHostId, params: BotCreateParams): Promise<Bot> {
+  return (await createBotWithKickoff(hostId, params)).bot
 }
 
 /** Shown at once, so a second change made before the first lands builds on it. */

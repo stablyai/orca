@@ -20,10 +20,11 @@ import {
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { createBot, useHostBots } from '@/lib/bot-catalog'
+import { createBotWithKickoff, useHostBots } from '@/lib/bot-catalog'
 import { handleScreenFormSubmitKey } from '@/lib/keyboard/screen-submit-shortcut'
 import { BOT_NAME_MAX_LENGTH, type Bot, type BotAgent } from '../../../../shared/bot-types'
 import { botErrorMessage } from './bot-presentation'
+import { showBotKickoffFailure } from './bot-kickoff-failure-toast'
 import { BotRunsOnPicker } from './BotRunsOnPicker'
 import { BotImportNudge } from './BotImportNudge'
 import { openCreatedBot } from './bot-create-open'
@@ -212,7 +213,7 @@ export function NewBotDialog({
       } else {
         const made = editedProposal(proposal, draft, trimmedName, t)
         const offerHere = hostId === (offerHostId ?? LOCAL_EXECUTION_HOST_ID)
-        bot = await createBot(hostId, {
+        const created = await createBotWithKickoff(hostId, {
           ...(made
             ? proposalCreateParams(
                 offerHere ? made : { ...made, worktrees: undefined },
@@ -230,6 +231,11 @@ export function NewBotDialog({
           avatarOutfit: picture.avatarOutfit,
           ...(takingOver ? { takingOver } : {})
         })
+        const createdBot = created.bot
+        bot = createdBot
+        if (created.kickoff === 'failed') {
+          showBotKickoffFailure(createdBot, t)
+        }
         bot = await picture.saveUpload(bot)
       }
     } catch (error) {
