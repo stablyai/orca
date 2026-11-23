@@ -67,12 +67,18 @@ async function worktreePathForms(pathValue: string): Promise<string[]> {
 }
 
 const CWD_PROBE_TIMEOUT_MS = 2_000
+// All probes share this budget so a slow mount cannot hold the scan worker past its no-progress deadline.
+const CWD_PROBE_BUDGET_MS = 10_000
 
 /** Null when the path did not answer in time, so the caller re-reads conservatively. */
-async function resolvedCwdForms(cwd: string): Promise<string[] | null> {
+async function resolvedCwdForms(cwd: string, deadline: number): Promise<string[] | null> {
+  const waitMs = Math.min(CWD_PROBE_TIMEOUT_MS, deadline - Date.now())
+  if (waitMs <= 0) {
+    return null
+  }
   let timer: ReturnType<typeof setTimeout> | undefined
   const timedOut = new Promise<null>((resolve) => {
-    timer = setTimeout(() => resolve(null), CWD_PROBE_TIMEOUT_MS)
+    timer = setTimeout(() => resolve(null), waitMs)
   })
   const resolved = realpath(cwd).then(
     (real) => spelledForms([real]),
@@ -183,6 +189,7 @@ export async function reattributeUsageSourcesForWorktrees<T>(
     return verdict
   }
   // Probe a cwd only for providers whose attribution resolves it, and never wait on a dead mount.
+  const probeDeadline = Date.now() + CWD_PROBE_BUDGET_MS
   const cwdVerdicts = new Map<string, Promise<boolean>>()
   const cwdAffected = (cwd: string): Promise<boolean> => {
     let verdict = cwdVerdicts.get(cwd)
@@ -193,7 +200,7 @@ export async function reattributeUsageSourcesForWorktrees<T>(
       verdict =
         literal || !options.attributionResolvesCwd
           ? Promise.resolve(literal)
-          : resolvedCwdForms(cwd).then((forms) => forms === null || inside(forms))
+          : resolvedCwdForms(cwd, probeDeadline).then((forms) => forms === null || inside(forms))
       cwdVerdicts.set(cwd, verdict)
     }
     return verdict
