@@ -3,7 +3,8 @@
 import React from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmation-dialog'
-import { publishBots } from '@/lib/bot-catalog-snapshot'
+import { publishBots, setBotHostListing, stampBotHost } from '@/lib/bot-catalog-snapshot'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { refreshAccessRequests } from '@/lib/bot-access-requests'
 import type { Bot } from '../../../../../shared/bot-types'
 import { BotConnectorsSection } from '../../settings/bots/BotConnectorsSection'
@@ -189,17 +190,22 @@ const installedSlack: Extract<ConnectorBotSlackState, { state: 'installed' }> = 
   postAs: 'person',
   computerName: 'm4 air'
 }
-const iconFailed = (width: number) =>
+// The bot on a paired computer that is away: the note says when it goes, with no Try again.
+const away: Bot = stampBotHost(toRuntimeExecutionHostId('studio'), dressed)
+const iconFailed = (width: number, bot: Bot = dressed) =>
   defineFixture({
     width: width + 40,
     setup: () => {
-      host(dressed)
-      slackIconFailures.set(botRefKey(dressed), { look: botSlackIconLook(dressed) ?? '', count: 1 })
+      host(bot)
+      if (bot === away) {
+        setBotHostListing({ hosts: [{ hostId: away.hostId, state: 'offline' }], updateNeeded: [] })
+      }
+      slackIconFailures.set(botRefKey(bot), { look: botSlackIconLook(bot) ?? '', count: 1 })
     },
     render: () => (
       <ConfirmationDialogProvider>
         <div style={{ width }} className="bg-sidebar px-2 py-3 text-sidebar-foreground">
-          <BotSlackSection bot={dressed} slack={installedSlack} />
+          <BotSlackSection bot={bot} slack={installedSlack} />
         </div>
       </ConfirmationDialogProvider>
     ),
@@ -210,3 +216,4 @@ const iconFailed = (width: number) =>
 
 export const panel350IconFailed = iconFailed(350)
 export const panel280IconFailed = iconFailed(280)
+export const panel350IconFailedAway = iconFailed(350, away)

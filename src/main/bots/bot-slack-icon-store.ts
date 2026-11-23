@@ -197,6 +197,17 @@ export class BotSlackIcons {
     return stored !== 'refused'
   }
 
+  /** A window's Try again for an icon already kept: the cloud is sent it again. False when none is kept. */
+  async resend(botId: string): Promise<boolean> {
+    if (!this.deps.enabled() || !(await this.read(botId))) {
+      return false
+    }
+    for (const listener of this.listeners) {
+      listener(botId)
+    }
+    return true
+  }
+
   read(botId: string): Promise<{ look: string; png: Buffer } | null> {
     return readBotSlackIcon(this.deps.filesystem, this.deps.root(), this.deps.bot(botId))
   }

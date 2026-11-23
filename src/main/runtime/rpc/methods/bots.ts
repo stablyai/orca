@@ -233,6 +233,14 @@ export const BOT_METHODS = [
     })
   }),
   defineMethod({
+    name: 'bots.avatar.slackIcon.resend',
+    permission: 'workspace',
+    params: BotAvatarRead,
+    handler: async (params, { runtime }) => ({
+      resent: await runtime.bots.slackIcons.resend(params.botId)
+    })
+  }),
+  defineMethod({
     name: 'bots.activity',
     permission: 'workspace',
     params: BotActivityRead,

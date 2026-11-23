@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useBotSlackIconFailed } from '../bot-slack-icon-failures'
 import { retryBotSlackIcon } from '../use-bot-slack-icons'
+import { useBotHostOffline } from '@/lib/bot-host-views'
+import { useBotHostLabel } from '../use-bot-host-label'
 
 export function BotSlackSection({
   bot,
@@ -31,6 +33,9 @@ export function BotSlackSection({
   const paged = useBotConnectorPaged()
   // This window's last try at sending the bot's colored or dressed picture to Slack failed.
   const iconFailed = useBotSlackIconFailed(bot)
+  // Its host away, Try again could do nothing: the note says when it goes instead.
+  const hostOffline = useBotHostOffline(bot.hostId)
+  const hostName = useBotHostLabel(bot.hostId)
   return (
     <div>
       <BotConnectorSection title={paged ? t('bots.connector.howToAsk', 'How to ask') : undefined}>
@@ -57,15 +62,26 @@ export function BotSlackSection({
             )}
           >
             <span>
-              {t(
-                'bots.slack.iconFailed',
-                "Slack didn't get {{name}}'s latest picture. It still shows the plain mascot.",
-                { name: bot.name }
-              )}
+              {hostOffline
+                ? t(
+                    'bots.slack.iconFailedOffline',
+                    "Slack didn't get {{name}}'s latest picture. Orca tries again when {{host}} is back.",
+                    {
+                      name: bot.name,
+                      host: hostName ?? t('bots.slack.iconHostFallback', "the bot's computer")
+                    }
+                  )
+                : t(
+                    'bots.slack.iconFailed',
+                    "Slack didn't get {{name}}'s latest picture, so it may still show an older one.",
+                    { name: bot.name }
+                  )}
             </span>
-            <Button size="xs" variant="outline" onClick={() => retryBotSlackIcon(bot)}>
-              {t('bots.slack.iconRetry', 'Try again')}
-            </Button>
+            {hostOffline ? null : (
+              <Button size="xs" variant="outline" onClick={() => retryBotSlackIcon(bot)}>
+                {t('bots.slack.iconRetry', 'Try again')}
+              </Button>
+            )}
           </div>
         </BotConnectorSection>
       ) : null}

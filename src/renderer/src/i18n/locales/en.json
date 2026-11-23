@@ -27555,8 +27555,10 @@
         "linkLabel": "Slack approval link",
         "copied": "Copied"
       },
-      "iconFailed": "Slack didn't get {{name}}'s latest picture. It still shows the plain mascot.",
-      "iconRetry": "Try again"
+      "iconFailed": "Slack didn't get {{name}}'s latest picture, so it may still show an older one.",
+      "iconRetry": "Try again",
+      "iconFailedOffline": "Slack didn't get {{name}}'s latest picture. Orca tries again when {{host}} is back.",
+      "iconHostFallback": "the bot's computer"
     },
     "whoCanAsk": {
       "searching": "Searching…",

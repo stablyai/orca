@@ -6,6 +6,9 @@ import { slackIconFailures } from './bot-slack-icon-failures'
 import { publishBotSlackIcon, retryBotSlackIcon } from './use-bot-slack-icons'
 
 const upload = vi.fn<() => Promise<boolean>>()
+const resend = vi.fn<() => Promise<boolean>>()
+let hostState = 'live'
+let wanted = true
 
 vi.mock('@/lib/bot-catalog', () => ({
   readBots: () => [],
@@ -14,15 +17,16 @@ vi.mock('@/lib/bot-catalog', () => ({
   useBotsEnabled: () => true
 }))
 vi.mock('@/lib/bot-catalog-snapshot', () => ({
-  readBotHostState: () => 'live',
+  readBotHostState: () => hostState,
   readLiveBotHostIds: () => ['local']
 }))
 vi.mock('@/lib/bot-host-status', () => ({ botHostHas: () => true }))
 vi.mock('@/lib/bot-host-link-read', () => ({ onBotHostCameBack: () => () => {} }))
 vi.mock('./bot-slack-icon-raster', () => ({ drawBotSlackIcon: async () => 'cG5n' }))
 vi.mock('./bot-slack-icon-rpc', () => ({
-  botSlackIconWanted: async () => ({ wanted: true, current: true }),
-  uploadBotSlackIcon: () => upload()
+  botSlackIconWanted: async () => ({ wanted, current: true }),
+  uploadBotSlackIcon: () => upload(),
+  resendBotSlackIcon: () => resend()
 }))
 
 const fields = {
@@ -52,4 +56,27 @@ it('keeps a failed icon as failed with no timer, and sends it on the next step',
   await vi.waitFor(() => expect(slackIconFailures.size).toBe(0))
   expect(vi.getTimerCount()).toBe(0)
   vi.useRealTimers()
+})
+
+it('keeps the note while the host is away, and resends an icon the host already keeps', async () => {
+  upload.mockReset()
+  upload.mockRejectedValueOnce(new Error('host timed out'))
+  publishBotSlackIcon({ ...bot, id: 'bot-2' })
+  const failed = { ...bot, id: 'bot-2' }
+  await vi.waitFor(() => expect(slackIconFailures.size).toBe(1))
+
+  // Away: Try again does nothing and the note stays.
+  hostState = 'offline'
+  retryBotSlackIcon(failed)
+  expect(slackIconFailures.size).toBe(1)
+  expect(upload).toHaveBeenCalledTimes(1)
+
+  // Back, with the drawing already kept: Try again asks the host to send it on.
+  hostState = 'live'
+  wanted = false
+  resend.mockResolvedValueOnce(true)
+  retryBotSlackIcon(failed)
+  await vi.waitFor(() => expect(resend).toHaveBeenCalledTimes(1))
+  await vi.waitFor(() => expect(slackIconFailures.size).toBe(0))
+  expect(upload).toHaveBeenCalledTimes(1)
 })
