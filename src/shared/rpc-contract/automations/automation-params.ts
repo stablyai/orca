@@ -7,6 +7,8 @@ import {
   AutomationOnceParam
 } from '../automation-bot-params'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
+import { TaskProviderParam } from '../client-ui/client-settings-params'
+import { AzureDevOpsTaskProviderIdentityParam } from './azure-devops-task-provider-identity-param'
 import {
   OptionalBoolean,
   OptionalPlainString,
@@ -105,7 +107,8 @@ export const TaskProviderIdentity = z
         siteUrl: z.string().nullable().optional(),
         projectKey: z.string().nullable().optional()
       })
-      .passthrough()
+      .passthrough(),
+    AzureDevOpsTaskProviderIdentityParam
   ])
   .optional()
   .nullable()
@@ -113,7 +116,7 @@ export const TaskProviderIdentity = z
 export const TaskSourceContext = z
   .object({
     kind: z.literal('task-source'),
-    provider: z.enum(['github', 'gitlab', 'linear', 'jira']),
+    provider: TaskProviderParam,
     projectId: requiredString('Missing source project id'),
     hostId: ExecutionHostId,
     projectHostSetupId: OptionalNullablePlainString,

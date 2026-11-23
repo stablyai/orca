@@ -10,6 +10,7 @@ import type {
 } from '@/components/task-page/task-page-localized-options'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
+import type { AzureDevOpsWorkItem } from '../../../../shared/azure-devops/boards-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TaskPageRepoCacheRowInput } from './task-page-cache-selectors'
@@ -97,6 +98,17 @@ export function getTaskPageGitHubRepoArgs(
       hostUnreachable: Boolean(sourceContext && unreachableHostIds.has(sourceContext.hostId))
     }
   })
+}
+export function getAzureDevOpsWorkItemWorkspaceSeed(item: AzureDevOpsWorkItem): string {
+  return (
+    getLinkedWorkItemWorkspaceName({
+      type: 'issue',
+      provider: 'azure-devops',
+      number: item.id,
+      title: item.title,
+      azureDevOpsIdentifier: String(item.id)
+    })?.seedName ?? getLinkedWorkItemSuggestedName(item)
+  )
 }
 export function getTaskSourceHostAvailabilityForHost(
   host: ExecutionHostRegistryEntry | null | undefined,
