@@ -106,7 +106,9 @@ export class JournalCheckpointOwner {
       return
     }
     this.measure()
-    if (this.log - this.checkpointed >= CHECKPOINT_FRAMES) {
+    // A WAL at the ceiling may be past its size limit, where even a few new frames must reach disk.
+    const behind = this.log - this.checkpointed
+    if (behind >= CHECKPOINT_FRAMES || (behind > 0 && this.log >= JOURNAL_WAL_BACKPRESSURE_FRAMES)) {
       this.ask(false)
     }
     this.syncWriterCheckpoints()
@@ -279,8 +281,9 @@ export class JournalCheckpointOwner {
       if (message?.type !== 'checked' || this.worker !== worker) {
         return
       }
+      // An answering worker checkpoints for the writer again.
+      this.checkpointFailed = false
       if (message.ran === true) {
-        this.checkpointFailed = false
         this.restartDelayMs = this.options.restartDelayMs ?? RESTART_DELAY_MS
       }
       if (message.id === this.requestId && this.asking) {
