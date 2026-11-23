@@ -1,20 +1,11 @@
 import { useMemo } from 'react'
-import {
-  Activity,
-  Plug,
-  Files,
-  GitBranch,
-  ListChecks,
-  ListTodo,
-  MessagesSquare,
-  Workflow
-} from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
 import { getPluginPanelActivityItems } from '../plugin-panels/plugin-panel-activity-items'
+import { getDefaultRightSidebarActivityItems } from './right-sidebar-default-activity-items'
 import {
   getPortsPanelOwnerKey,
   portsPanelHostForOwnerKey,
@@ -29,7 +20,6 @@ import {
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { AgentSessionHistoryIcon } from './agent-session-history-icon'
 import type { ActivityBarItem } from './activity-bar-buttons'
 import { useBotForWorkspace, useBotGroupForWorkspace } from '../../bots/bot-workspace'
 import { useFocusedChatWorkers } from '@/lib/focused-chat-workers'
@@ -83,12 +73,12 @@ export function useRightSidebarActivityItems({
   const groupMembers = useGroupMembers(group)
   const now = useBotNow(bot)
   const { needs } = now
-  // A bot's first tab is Items: its badge counts Orca's asks and items in Needs you. A group's counts
+  // A bot's first tab is Home: its badge counts Orca's asks and items in Needs you. A group's counts
   // its members' as their own tabs do, published by its open panel.
   const botNeedsYou = useBotNeedsYouCount(bot, now)
   const groupNeedsYou = usePublishedBotsNeedsYou(groupMembers)
   const needsYou = isGroupHome ? groupNeedsYou : botNeedsYou
-  const itemsPage = isBot || isGroupHome
+  const showsHomeTab = isBot || isGroupHome
   // The same read as Activity's count, so connector reads aren't repeated for the tab.
   const connectorsNeedingOwner = needs.filter((need) => need.kind === 'connector').length
   const hasChatWorkers = useFocusedChatWorkers(rightSidebarOpen && !isBot).workers.length > 0
@@ -113,102 +103,20 @@ export function useRightSidebarActivityItems({
     [installedPlugins]
   )
 
-  // A bot's page labels every tab (labeledTab): Items, Connectors, Chats, Files.
+  // A bot's page labels every tab (labeledTab): Home, Connectors, Chats, Files.
   const activityItems = useMemo<ActivityBarItem[]>(
     () => [
-      {
-        id: 'explorer',
-        icon: Files,
-        title: isBot
-          ? t('bots.files.tab', 'Files')
-          : t('auto.components.right.sidebar.index.8bc2bbc3a0', 'Explorer'),
-        shortcut: explorerShortcut === 'Unassigned' ? '' : explorerShortcut,
-        onBotPage: true,
-        labeledTab: isBot
-      },
-      {
-        id: 'bot-activity',
-        icon: itemsPage ? ListTodo : Activity,
-        title: itemsPage ? t('bots.items.tab', 'Items') : t('bots.activity.title', 'Activity'),
-        shortcut: '',
-        botOnly: true,
-        labeledTab: itemsPage,
-        ...(needsYou > 0
-          ? {
-              count: needsYou,
-              countLabel: t('bots.connectors.needYou', '{{count}} need you', {
-                count: needsYou,
-                defaultValue_one: '{{count}} needs you'
-              })
-            }
-          : {})
-      },
-      {
-        id: 'bot-connectors',
-        icon: Plug,
-        title: t('bots.connectors.tab', 'Connectors'),
-        shortcut: '',
-        botPageOnly: true,
-        labeledTab: isBot,
-        ...(connectorsNeedingOwner > 0
-          ? {
-              count: connectorsNeedingOwner,
-              countLabel: t('bots.connectors.needYou', '{{count}} need you', {
-                count: connectorsNeedingOwner,
-                defaultValue_one: '{{count}} needs you'
-              })
-            }
-          : {})
-      },
-      {
-        id: 'bot-chats',
-        icon: MessagesSquare,
-        title: t('bots.chats.title', 'Chats'),
-        shortcut: '',
-        botPageOnly: true,
-        labeledTab: isBot
-      },
-      {
-        id: 'vault',
-        icon: AgentSessionHistoryIcon,
-        title: t('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
-        shortcut: ''
-      },
-      {
-        id: 'workspaces',
-        icon: Workflow,
-        title: t('auto.components.right.sidebar.index.folderWorkspaces', 'Attached worktrees'),
-        shortcut: '',
-        folderOnly: true
-      },
-      {
-        id: 'pr-checks',
-        icon: ListChecks,
-        title: t('auto.components.right.sidebar.index.parentPrChecks', 'PR Checks'),
-        shortcut: '',
-        folderOnly: true
-      },
-      {
-        id: 'source-control',
-        icon: GitBranch,
-        title: t('auto.components.right.sidebar.index.0314901467', 'Source Control'),
-        shortcut: sourceControlShortcut === 'Unassigned' ? '' : sourceControlShortcut,
-        gitOnly: true
-      },
-      {
-        id: 'checks',
-        icon: ListChecks,
-        title: t('auto.components.right.sidebar.index.83a10e3c44', 'Checks'),
-        shortcut: checksShortcut === 'Unassigned' ? '' : checksShortcut,
-        gitOnly: true
-      },
-      {
-        id: 'ports',
-        icon: Plug,
-        title: t('auto.components.right.sidebar.index.441733b630', 'Ports'),
-        shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
-        sshOnly: true
-      },
+      ...getDefaultRightSidebarActivityItems({
+        t,
+        explorerShortcut,
+        sourceControlShortcut,
+        checksShortcut,
+        portsShortcut,
+        isBot,
+        showsHomeTab,
+        needsYou,
+        connectorsNeedingOwner
+      }),
       // Append plugin tabs to preserve built-in navigation positions.
       ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors).map((item) => ({
         ...item,
@@ -224,7 +132,7 @@ export function useRightSidebarActivityItems({
       portsShortcut,
       sourceControlShortcut,
       isBot,
-      itemsPage,
+      showsHomeTab,
       needsYou,
       connectorsNeedingOwner,
       languageRevision,

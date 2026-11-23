@@ -12,6 +12,7 @@ import {
   isDroidIdleNotification,
   isDroidPermissionNotification
 } from './droid-tool-fields'
+import { droidVerdictFields } from './droid-turn-outcome'
 
 export function normalizeDroidEvent(
   state: HookListenerState,
@@ -29,6 +30,7 @@ export function normalizeDroidEvent(
   const notificationMessage = readString(hookPayload, 'message')
   const droidToolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
   let stateName: 'working' | 'waiting' | 'done' | null = null
+  let stoppedByUser = false
   if (
     eventName === 'PreToolUse' &&
     (isDroidAskUserTool(droidToolName) || isDroidHighRiskToolUse(hookPayload))
@@ -48,6 +50,8 @@ export function normalizeDroidEvent(
   } else if (eventName === 'Notification' && isDroidIdleNotification(notificationMessage)) {
     // Why: Droid emits no Stop on user-interrupt, only an idle notification when ready again.
     stateName = 'done'
+    // Droid sends idle_prompt only when the user stops a turn.
+    stoppedByUser = readString(hookPayload, 'notification_type') === 'idle_prompt'
   }
   if (!stateName) {
     return null
@@ -73,6 +77,7 @@ export function normalizeDroidEvent(
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
-    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
+    ...(stoppedByUser ? droidVerdictFields('cancellation', Date.now()) : {})
   })
 }

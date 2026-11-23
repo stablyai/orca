@@ -4,6 +4,14 @@ import type { BotToolProblem } from '../../shared/bot-tools'
 import { claudeLaunchServers } from './bot-tools-claude'
 import type { BotToolsCli } from './bot-tools-host'
 import type { BotLaunchTools } from './bot-launch-tools'
+import {
+  CLAUDE_MCP_CONFIG_FLAG,
+  claudeManagedSettingsRefuse
+} from '../claude/cli-capabilities/claude-cli-flag-support'
+
+/** Why the bot's tools are off when its owner's organization refuses --mcp-config. */
+const REFUSED_BY_MANAGED_SETTINGS =
+  "Off: your organization's Claude Code managed settings refuse MCP servers."
 
 export async function claudeBotToolProblems(
   cli: BotToolsCli,
@@ -49,9 +57,18 @@ export async function claudeBotToolProblems(
       }
       await delay(100, undefined, { signal })
     } while (Date.now() < deadline)
-  } catch {
+  } catch (error) {
     signal?.throwIfAborted()
-    throw new Error('Claude Code could not check the tools. Check its setup and try again.')
+    if (!claudeManagedSettingsRefuse(error, CLAUDE_MCP_CONFIG_FLAG.option)) {
+      throw new Error('Claude Code could not check the tools. Check its setup and try again.')
+    }
+    // Chats start without these tools then, so each row says why instead of a failed check.
+    problems = new Map(
+      servers.map((server) => [
+        server.name,
+        { kind: 'failed', detail: REFUSED_BY_MANAGED_SETTINGS }
+      ])
+    )
   } finally {
     signal?.removeEventListener('abort', closeOnAbort)
     closed = await connection.close()

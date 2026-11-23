@@ -63,7 +63,6 @@ export function NativeChatResolvedView({
   terminalTabId,
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
-  readTerminalScreen,
   readTerminalDraft,
   contextMenuActions
 }: NativeChatResolvedViewProps): React.JSX.Element {
@@ -358,7 +357,6 @@ export function NativeChatResolvedView({
           answerCommandLocally={answerLocally}
           contextMessages={sessionAfterCommandBoundaries.messages}
           onSwitchToTerminal={onSwitchToTerminal}
-          readTerminalScreen={readTerminalScreen}
           launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft, readTerminalDraft }}
           recallSource={{ messages: sessionWithPending.messages, commands: commandMarkers }}
         />

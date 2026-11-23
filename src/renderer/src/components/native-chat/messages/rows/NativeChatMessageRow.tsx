@@ -1,4 +1,5 @@
 import { memo, useRef } from 'react'
+import type { AgentSessionAccountKind } from '../../../../../../shared/agent-session/failures/agent-session-availability'
 import type { NativeChatRewindSurface } from '../actions/use-native-chat-rewind-host'
 import type { NativeChatForkRowAction } from '../actions/use-native-chat-fork'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
@@ -18,6 +19,7 @@ import { NativeChatWaitEndedRow, NativeChatWaitRow } from '../../automation-run/
 import { NativeChatAutomationSavedRow } from '../../automation-run/NativeChatAutomationSavedRow'
 import { NativeChatBotItemNoteRow } from '../../bot-items/NativeChatBotItemNoteRow'
 import { NativeChatAutomationRunRow } from '../../automation-run/NativeChatAutomationRunRow'
+import { mergedRunFailures } from '../../../../../../shared/native-chat/transcript/events/native-chat-event-plan'
 import { NativeChatNoticeRow } from '../notices/NativeChatNoticeRow'
 import { NativeChatBotCreatedRow, NativeChatTookOverRow } from '../../NativeChatBotCreatedRow'
 import { nativeChatNoticeBlock } from '../../../../../../shared/native-chat/transcript/notices/native-chat-notice'
@@ -39,12 +41,15 @@ export type NativeChatDeliveryNotice =
       onSend?: never
       detail?: never
       failureKind?: never
+      signIn?: never
     }
   | {
       sending?: never
       text: string
       detail?: string
       failureKind?: string
+      /** A not-signed-in rejection, for the line's Sign in. */
+      signIn?: { agentName: string; account?: AgentSessionAccountKind }
       onDismiss?: () => void
       onEdit?: () => void
       onSend?: () => void
@@ -157,6 +162,8 @@ export const MessageRow = memo(function MessageRow(
           text={notStarted.text}
           timestamp={message.timestamp}
           error={notStarted.error}
+          refusal={notStarted.refusal}
+          earlierFailures={mergedRunFailures(message)}
           resend={notStarted.sentAgain ? 'sent' : 'offer'}
           onRefolded={returnToView}
         />
@@ -173,6 +180,7 @@ export const MessageRow = memo(function MessageRow(
           state={message.queued ? 'queued' : 'ran'}
           text={markdown}
           timestamp={message.timestamp}
+          earlierFailures={mergedRunFailures(message)}
           onRefolded={returnToView}
         />
       </div>

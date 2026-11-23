@@ -1,4 +1,4 @@
-import { useContext, useId, useLayoutEffect, useRef, useState, type Ref } from 'react'
+import { Children, useContext, useId, useLayoutEffect, useRef, useState, type Ref } from 'react'
 import { ChevronRight, X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -12,12 +12,11 @@ import { NativeChatToolRunWindowContext } from '../../tools/runs/native-chat-too
 
 /** Hidden until the row is hovered or holds keyboard focus; kept on touch, where nothing hovers.
  *  Same reveal as a message's time and copy, so nothing shifts when it shows. */
-export const NATIVE_CHAT_EVENT_ROW_REVEAL =
-  'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/event-row:pointer-events-auto group-hover/event-row:opacity-100 group-has-[:focus-visible]/event-row:pointer-events-auto group-has-[:focus-visible]/event-row:opacity-100'
-
-/** The reveal's fade alone, for marks the row button must keep receiving clicks under. */
-const NATIVE_CHAT_EVENT_ROW_FADE =
+const REVEAL_OPACITY =
   'transition-opacity can-hover:opacity-0 group-hover/event-row:opacity-100 group-has-[:focus-visible]/event-row:opacity-100'
+const REVEAL_POINTER =
+  'can-hover:pointer-events-none group-hover/event-row:pointer-events-auto group-has-[:focus-visible]/event-row:pointer-events-auto'
+export const NATIVE_CHAT_EVENT_ROW_REVEAL = `${REVEAL_OPACITY} ${REVEAL_POINTER}`
 
 export type NativeChatEventBadge = 'running' | 'failed'
 
@@ -48,16 +47,19 @@ export function NativeChatEventIcon({
 }
 
 /** Details cut at about four lines, with Show more, in the quiet fill comments use. */
-function EventDetails({
+export function NativeChatEventDetails({
   id,
   clamp,
   findActive,
+  rows,
   children
 }: {
   id: string
   clamp: boolean
   /** Find reads drawn text, so a search shows the details whole. */
   findActive: boolean
+  /** Details that are rows themselves: indented without the fill, whose color would show behind their controls. */
+  rows: boolean
   children: React.ReactNode
 }) {
   const t = useTranslate()
@@ -67,7 +69,7 @@ function EventDetails({
   const full = chosenFull || findActive
   useLayoutEffect(() => {
     const node = body.current
-    if (!node || full) {
+    if (!node || full || rows) {
       return
     }
     const measure = () => setCut(node.scrollHeight > node.clientHeight + 1)
@@ -79,7 +81,14 @@ function EventDetails({
       observer.observe(child)
     }
     return () => observer.disconnect()
-  }, [children, full])
+  }, [children, full, rows])
+  if (rows) {
+    return (
+      <div id={id} className="mt-1 ml-5">
+        {children}
+      </div>
+    )
+  }
   return (
     <div
       id={id}
@@ -111,6 +120,29 @@ function EventDetails({
   )
 }
 
+/** The row's words as pieces of its one line: a bare text run becomes its own piece, which cuts
+ *  short with an ellipsis and shows whole on hover (a flex row can't shrink bare text). */
+function rowParts(children: React.ReactNode): React.ReactNode[] {
+  const seen = new Map<string, number>()
+  return Children.toArray(children).flatMap((child): React.ReactNode[] => {
+    if (typeof child !== 'string' && typeof child !== 'number') {
+      return [child]
+    }
+    const text = String(child).trim()
+    if (!text) {
+      return []
+    }
+    // Keyed by its words, so a row whose parts change keeps each text piece its own.
+    const repeat = seen.get(text) ?? 0
+    seen.set(text, repeat + 1)
+    return [
+      <span key={`text:${text}:${repeat}`} className="min-w-0 truncate" title={text}>
+        {text}
+      </span>
+    ]
+  })
+}
+
 /**
  * One status line in the transcript: icon · text, then on hover or keyboard focus its action, a chevron
  * and the time. With details the whole row is the button that opens them; links, chips and the action
@@ -119,6 +151,7 @@ function EventDetails({
  */
 export function NativeChatEventRow({
   icon,
+  badge,
   children,
   label,
   action,
@@ -130,9 +163,12 @@ export function NativeChatEventRow({
   onOpenChange,
   buttonRef,
   clampDetails = true,
+  detailsAreRows = false,
   className
 }: {
   icon: React.ReactNode
+  /** Its state on the mark; screen readers hear it with the row's words. */
+  badge?: NativeChatEventBadge | null
   /** The row's words; may hold links and chips. */
   children: React.ReactNode
   /** The words as plain text: the row button's name, with the time. */
@@ -150,26 +186,37 @@ export function NativeChatEventRow({
   buttonRef?: Ref<HTMLButtonElement>
   /** Reports cut at about four lines; a short list of links shows whole. */
   clampDetails?: boolean
+  detailsAreRows?: boolean
   className?: string
 }): React.JSX.Element {
   const disclosure = useNativeChatDisclosure(disclosureKey, defaultOpen)
   const { findActive } = useContext(NativeChatToolRunWindowContext)
+  const t = useTranslate()
   const time = useNativeChatMessageTimeLabel(timestamp)
+  const state =
+    badge === 'running'
+      ? t('components.native-chat.eventRow.running', 'Running')
+      : badge === 'failed'
+        ? t('components.native-chat.eventRow.failed', 'Failed')
+        : null
   const detailsId = useId()
   const toggles = details !== undefined && details !== null && details !== false
   const open = openProp ?? disclosure.open
+  const hasTime = timestamp !== undefined && timestamp !== null
   // Find searches drawn text: while it has a query, folded details are drawn so it can reach them.
   const shown = open || findActive
   return (
     <div className={className}>
-      <div className="group/event-row relative flex min-h-6 items-start gap-1.5 font-sans text-sm leading-relaxed text-chat-foreground-faint">
+      <div className="group/event-row @container/event-row relative flex min-h-6 items-start gap-1.5 font-sans text-sm leading-relaxed text-chat-foreground-faint">
         {toggles ? (
           <button
             type="button"
             ref={buttonRef}
             aria-expanded={shown}
             aria-controls={shown ? detailsId : undefined}
-            aria-label={[label, time].filter(Boolean).join(', ') || undefined}
+            aria-label={[label, state, time].filter(Boolean).join(', ') || undefined}
+            // The words take no pointer, so a name cut short shows whole here.
+            title={label}
             className="absolute -inset-x-1 -inset-y-0.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => {
               if (openProp === undefined) {
@@ -186,43 +233,71 @@ export function NativeChatEventRow({
               'pointer-events-none [&_a]:pointer-events-auto [&_button]:pointer-events-auto'
           )}
         >
-          {icon}
+          <NativeChatEventIcon badge={badge}>{icon}</NativeChatEventIcon>
         </span>
+        {/* Always one line: its parts sit side by side and the ones that can shrink (chips, names)
+            cut short with an ellipsis; clipping only sideways keeps chip focus rings whole. */}
         <span
           className={cn(
-            'relative min-w-0 line-clamp-2',
+            'relative flex min-w-0 items-center gap-x-1 overflow-x-clip whitespace-nowrap [&>*]:min-w-0 [&>*]:overflow-x-clip [&>*]:text-ellipsis',
             toggles &&
               'pointer-events-none [&_a]:pointer-events-auto [&_button]:pointer-events-auto'
           )}
         >
-          {children}
+          {/* A row with no button says its state in its own text. */}
+          {state && !toggles ? <span className="sr-only">{state}, </span> : null}
+          {rowParts(children)}
         </span>
-        {/* Beside the words, not in them, so a clamped line never cuts it off. */}
-        {action ? (
-          <span className={cn('relative mt-1 flex shrink-0', NATIVE_CHAT_EVENT_ROW_REVEAL)}>
-            {action}
-          </span>
-        ) : null}
-        <span className="min-w-2 flex-1" />
-        {toggles ? (
-          <ChevronRight
-            aria-hidden
+        {/* With a pointer the controls lie over the row's end and take no width until shown; touch keeps them in line.
+            Over a row button, clicks on the chevron and time fall through to it; only the action takes them. */}
+        {action || toggles || hasTime ? (
+          <span
             className={cn(
-              'pointer-events-none relative mt-[3px] size-3.5 shrink-0 transition-[transform,opacity]',
-              shown ? 'rotate-90' : NATIVE_CHAT_EVENT_ROW_FADE
+              'relative ml-auto flex h-6 shrink-0 items-center gap-1.5 pl-2',
+              "can-hover:absolute can-hover:top-0 can-hover:right-0 can-hover:bg-chat-pane can-hover:before:pointer-events-none can-hover:before:absolute can-hover:before:inset-y-0 can-hover:before:right-full can-hover:before:w-4 can-hover:before:bg-linear-to-r can-hover:before:from-transparent can-hover:before:to-chat-pane can-hover:before:content-['']",
+              toggles
+                ? cn('pointer-events-none', !shown && REVEAL_OPACITY)
+                : !shown && NATIVE_CHAT_EVENT_ROW_REVEAL
             )}
-          />
-        ) : null}
-        {timestamp !== undefined && timestamp !== null ? (
-          <span className={cn('relative mt-[3px] shrink-0', NATIVE_CHAT_EVENT_ROW_REVEAL)}>
-            <NativeChatMessageTimestamp timestamp={timestamp} />
+          >
+            {action ? (
+              <span
+                className={cn(
+                  'flex',
+                  toggles && 'pointer-events-auto',
+                  toggles && !shown && REVEAL_POINTER
+                )}
+              >
+                {action}
+              </span>
+            ) : null}
+            {toggles ? (
+              <ChevronRight
+                aria-hidden
+                className={cn(
+                  'pointer-events-none size-3.5 shrink-0 transition-transform',
+                  shown && 'rotate-90'
+                )}
+              />
+            ) : null}
+            {hasTime ? (
+              // A narrow pane drops the time; the row button still names it.
+              <span className="hidden @sm/event-row:block">
+                <NativeChatMessageTimestamp timestamp={timestamp} />
+              </span>
+            ) : null}
           </span>
         ) : null}
       </div>
       {toggles && shown ? (
-        <EventDetails id={detailsId} clamp={clampDetails} findActive={findActive}>
+        <NativeChatEventDetails
+          id={detailsId}
+          clamp={clampDetails}
+          findActive={findActive}
+          rows={detailsAreRows}
+        >
           {details}
-        </EventDetails>
+        </NativeChatEventDetails>
       ) : null}
     </div>
   )

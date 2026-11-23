@@ -1,3 +1,4 @@
+import { MobileBotFirstScreen, useMobileBotFirstScreen } from './MobileBotFirstScreen'
 import { MobileBotCardSendContext } from './transcript/bot-cards/mobile-bot-card-host'
 import { mobileNativeChatOtherBotCard } from './transcript/bot-cards/mobile-native-chat-bot-cards'
 import { MobileMarkdownBotCardContext } from '../../components/markdown/blocks/mobile-markdown-bot-card-context'
@@ -5,7 +6,8 @@ import type { NativeChatDirectiveBotCard } from '../../../../src/shared/native-c
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
 import { useMobileNativeChatItemNavigation } from './transcript/viewport/use-mobile-native-chat-item-navigation'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useContext, useMemo } from 'react'
+import { MobileNativeChatBotIdentityContext } from './mobile-native-chat-bot-identity'
 import { nativeChatTaskListPredecessors } from '../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-history'
 import {
   MobileNativeChatDisclosureContext,
@@ -35,6 +37,7 @@ import { MobileNativeChatAwaitingInputRow } from './transcript/messages/MobileNa
 import { MobileNativeChatFloatingControls } from './lower-region/MobileNativeChatFloatingControls'
 import { MobileNativeChatDraftComposer } from './composer/MobileNativeChatDraftComposer'
 import { MobileNativeChatPromptCard } from './input/prompts/MobileNativeChatPromptCard'
+import { useMobileNativeChatWorkerApprovalSlot } from './input/prompts/MobileNativeChatWorkerApproval'
 import type { MobileNativeChatMicProps } from './composer/dictation/MobileNativeChatComposerMic'
 import { useMobileNativeChatPromptInputOwner } from './input/prompts/use-mobile-native-chat-prompt-input-owner'
 import {
@@ -74,6 +77,7 @@ export function MobileNativeChatView({
   workingStartedAt,
   settledTurns,
   turnJournal = null,
+  transcriptLoading = false,
   receipts = null,
   actionablePromptIds,
   onStop,
@@ -109,6 +113,7 @@ export function MobileNativeChatView({
   onDismissSendError,
   filePaths,
   onNeedFiles,
+  fileReference,
   skillDiscovery,
   onNeedSkills,
   sessionOptions,
@@ -130,6 +135,7 @@ export function MobileNativeChatView({
   question,
   onAnswerQuestion,
   permission,
+  workerApprovals,
   promptKey,
   onRespondPermission,
   composerTray: { content: trayContent, composerInputRef: inputRef, steerHead } = NO_COMPOSER_TRAY,
@@ -203,6 +209,12 @@ export function MobileNativeChatView({
     [loadEarlierNearTop, scrollMayLoadEarlier, recordScrollMetrics]
   )
 
+  const turnBot = useContext(MobileNativeChatBotIdentityContext)
+  const firstScreen = useMobileBotFirstScreen(
+    messages,
+    transcriptLoading ? null : turnJournal,
+    agentWorking === true
+  )
   const turns = useMobileNativeChatTurnDisclosure({
     messages: data,
     enabled: true,
@@ -215,7 +227,8 @@ export function MobileNativeChatView({
     stopping: turnIndicator?.stopping === true,
     lineYields: ask != null || permission != null || question != null,
     receipts,
-    scopeKey: sendSurfaceId
+    scopeKey: sendSurfaceId,
+    showsTurnDiffs: turnBot === null
   })
 
   const rowKeys = useMobileNativeChatRowKeys(folded, messages, sendSurfaceId, turns.presentation)
@@ -268,8 +281,19 @@ export function MobileNativeChatView({
   )
   // A collapsed structured question still holds the input: the agent waits on that answer alone.
   const promptHeld = promptShown || collapsedPrompt?.holdsInput === true
+  const workerApproval = useMobileNativeChatWorkerApprovalSlot(
+    workerApprovals,
+    (ask ?? permission ?? question ?? collapsedPrompt) != null
+  )
   const promptOwnsInput = useMobileNativeChatPromptInputOwner(
-    { promptShown: promptHeld, ask, askRequiresTerminal, permission, micActive, micProcessing },
+    {
+      promptShown: promptHeld || workerApproval.card !== null,
+      ask,
+      askRequiresTerminal,
+      permission,
+      micActive,
+      micProcessing
+    },
     inputRef
   )
   const emptyStateView = emptyState ? <MobileNativeChatEmptyStateView copy={emptyState} /> : null
@@ -277,7 +301,7 @@ export function MobileNativeChatView({
   // The queue sits above a shown prompt card in a closed box, rather than tucking into the composer.
   const lowerContent = (
     <>
-      <MobileNativeChatPromptStrip prompt={collapsedPrompt} />
+      <MobileNativeChatPromptStrip prompt={collapsedPrompt ?? workerApproval.strip} />
       <MobileNativeChatInputLockStatus
         lockReason={offlineQueue.lockReason}
         waitingText={composerPlaceholder}
@@ -288,6 +312,7 @@ export function MobileNativeChatView({
         {trayContent}
         <MobileNativeChatOfflineQueue queue={offlineQueue} />
       </MobileNativeChatQueueAbovePromptContext>
+      {workerApproval.card}
       <MobileNativeChatPromptCard
         key={promptKey ?? undefined}
         answering={promptOwnsInput && keyboardInset > 0}
@@ -321,7 +346,7 @@ export function MobileNativeChatView({
           {...offlineQueue.composerLock}
           sendDisabled={expandedPromptOwnsSend}
           placeholder={composerPlaceholder}
-          {...{ filePaths, onNeedFiles, skillDiscovery, onNeedSkills }}
+          {...{ filePaths, onNeedFiles, fileReference, skillDiscovery, onNeedSkills }}
           stop={canStop ? { onStop, held: turnIndicator?.stopRequestInFlight === true } : null}
         />
       </View>
@@ -340,6 +365,8 @@ export function MobileNativeChatView({
             loading
             title={t('session.nativeChatView.loading', 'Loading conversation…')}
           />
+        ) : firstScreen ? (
+          <MobileBotFirstScreen firstScreen={firstScreen} />
         ) : (
           <GestureHandlerRootView style={styles.listWrap}>
             <MobileNativeChatDisclosureContext.Provider value={disclosures}>

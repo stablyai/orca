@@ -12,8 +12,10 @@ import {
 } from './browser-extension-support'
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import { detachBrowserExtensionsFromAllProfileSessions } from './profile-sessions/browser-extension-session-loader'
+import { forgetAllBrowserExtensionSessions } from './profile-sessions/browser-extension-idle-resume'
 import { notifyBrowserExtensionActionsChanged } from './actions/browser-extension-action-registry'
 import { registerBrowserExtensionNamespaces } from './register-browser-extension-namespaces'
+import { setBrowserExtensionProfilePresence } from './profile-sessions/browser-extension-profile-presence'
 import { observeBrowserExtensionTabLifecycle } from './tabs-and-windows/browser-extension-tab-lifecycle'
 import { observeBrowserExtensionWebNavigation } from './api/web-navigation'
 import { observeBrowserExtensionCommands } from './api/commands'
@@ -83,6 +85,7 @@ export function switchBrowserExtensionSupport(enabled: boolean): Promise<void> {
         }
       } else {
         await detachBrowserExtensionsFromAllProfileSessions()
+        forgetAllBrowserExtensionSessions()
       }
       notifyBrowserExtensionListChanged()
       for (const profile of browserSessionRegistry.listProfiles()) {
@@ -103,6 +106,9 @@ function installBrowserExtensionSupport(): void {
   initialized = true
   setSavedBrowserTabsSource(savedBrowserTabs, (profileId) =>
     browserSessionRegistry.resolveKnownPartition(profileId)
+  )
+  setBrowserExtensionProfilePresence(
+    (profileId) => browserSessionRegistry.getProfile(profileId) !== null
   )
   registerBrowserExtensionNamespaces()
   installBrowserExtensionApiHost()

@@ -11,6 +11,7 @@ import {
 } from '../../../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { ompModelSelector } from '../../../../../../src/shared/agent-session/options/model-catalog/omp-model-list-probe'
+import type { AgentStatusEntry } from '../../../../../../src/shared/agent-status/contracts/agent-status-types'
 import type {
   NativeChatSessionOptionSettingsMutation,
   SessionOptionDescriptor,
@@ -38,9 +39,9 @@ export function useMobileNativeChatSessionOptionController(args: {
   hostId: string
   isTabChatView: (tabId: string) => boolean
   isWorking: boolean
-  reportedModel: string | null
+  /** The terminal agent's status row: its model, live effort and session, as desktop reads them. */
+  reportedStatus?: Pick<AgentStatusEntry, 'model' | 'modelSwitchCommand' | 'providerSession'> | null
   messages: readonly NativeChatMessage[]
-  modelSwitchCommand?: string
   structured: {
     contextUsage: NativeChatContextUsageSummary | null
     optionSurface?: SessionOptionsSurface
@@ -69,7 +70,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     hostId,
     isTabChatView,
     isWorking,
-    reportedModel,
+    reportedStatus,
     structured,
     toggleTabChatView,
     worktreeId
@@ -110,10 +111,12 @@ export function useMobileNativeChatSessionOptionController(args: {
   )
   const sessionOptions = useMobileNativeChatSessionOptions({
     discoveredModels,
-    modelSwitchCommand: args.modelSwitchCommand,
+    modelSwitchCommand: reportedStatus?.modelSwitchCommand,
     agent: activeChatStructured ? null : agent,
     scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
-    reportedModel,
+    reportedModel: reportedStatus?.model ?? null,
+    reportedEffort: reportedStatus?.providerSession?.effort,
+    reportingSessionId: reportedStatus?.providerSession?.id,
     dispatchCommand,
     onAgentPicker: handleAgentPicker,
     writeSettings

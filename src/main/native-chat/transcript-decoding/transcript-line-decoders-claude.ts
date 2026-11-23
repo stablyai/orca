@@ -26,6 +26,7 @@ import {
   isClaudeTaskNotificationTurnStart
 } from '../../claude/structured/journal/claude-internal-message-content'
 import { NATIVE_CHAT_PROVIDER_TURN_START_PRESENTATION } from '../../../shared/native-chat/transcript/turns/native-chat-provider-turn-start'
+import { claudeLocalCommandReplyText } from '../../claude/transcripts/claude-local-command-reply'
 
 const MAX_EDIT_PATCH_HUNKS = 40
 const MAX_EDIT_PATCH_HUNK_LINES = 400
@@ -104,14 +105,25 @@ export function decodeClaudeTranscriptLine(
     return null
   }
   const role = record.type
-  if (role !== 'user' && role !== 'assistant') {
-    return null
-  }
   const timestamp = parseTimestamp(record.timestamp)
   const recordMessageId = extractString(record.uuid) ?? fallbackId
   // parentUuid pairs local command output with its command row.
   const parentUuid = extractString(record.parentUuid)
   const parent = parentUuid ? { parentId: parentUuid } : {}
+  const commandReply = claudeLocalCommandReplyText(record)
+  if (commandReply) {
+    return {
+      id: recordMessageId,
+      role: 'system',
+      blocks: [{ type: 'text', text: commandReply, presentation: 'command-output' }],
+      timestamp,
+      source: 'transcript',
+      ...parent
+    }
+  }
+  if (role !== 'user' && role !== 'assistant') {
+    return null
+  }
   if (claudeInterruptedMessageId(record)) {
     // Render injected interruption text as quiet status rather than a user bubble.
     return {

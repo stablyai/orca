@@ -15,10 +15,11 @@ import { spawnInAdmittedPane, withdrawRuntimePane } from './runtime-pane-admissi
 import { UNMEASURED_PTY_SIZE } from '../../../ipc/pty/delivery/pty-first-size'
 import { resolveLaunchCommandPaneAgent } from './runtime-agent-launch-resolution'
 import { recordFreshLaunch } from './launch-evidence'
+import type { TerminalCreateOptions } from './terminal-create-options'
 // Rejected splits need only a quick teardown verdict before fallback kill; unreachable hosts must not stall rejection.
 const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
 
-export type TerminalSplitOptions = {
+export type TerminalSplitOptions = Pick<TerminalCreateOptions, 'terminalImageViewerSupported'> & {
   direction?: 'horizontal' | 'vertical'
   command?: string
   env?: Record<string, string>
@@ -30,6 +31,8 @@ export type TerminalSplitOptions = {
   telemetrySource?: TerminalPaneSplitSource
   /** The user's own act (a CLI or window split); without it a stopped WSL distro holds the start. */
   wslUserAct?: true
+  /** The new terminal's handle, drawn by a caller that must know it before the process starts. */
+  preAllocatedHandle?: string
 }
 
 export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitTerminal {
@@ -68,7 +71,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
     const sourceIncarnationId =
       sourceAuthority.liveIncarnationId ?? sourceAuthority.persistedIncarnationId
     const leafId = randomUUID()
-    const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
+    const preAllocatedHandle = opts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
     const paneKey = makePaneKey(parentTabId, leafId)
     const splitArgs: Parameters<typeof spawnInAdmittedPane>[2] = {
       // Why unmeasured: a new split pane has no size of its own until the window lays it out.

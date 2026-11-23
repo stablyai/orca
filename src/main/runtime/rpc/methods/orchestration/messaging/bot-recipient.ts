@@ -12,12 +12,11 @@ import { readBotConversationActsFor } from '../../../../../bots/bot-conversation
 import {
   firstMessageActsFor,
   readBotActingTurn,
-  readBotActingTurnWithin,
-  type BotActingTurnLookups,
   type BotActingTurn,
   type BotRequestConversation,
   type BotWakingPlace
 } from '../../../../../bots/bot-request-asker'
+import { readNewestBotActingTurn } from '../../../../../bots/bot-acting-turn-read'
 import type {
   AutomationTriggeredBy,
   BotRequestAsker
@@ -39,7 +38,6 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { currentRunCoordinatorOrcaSessionId } from '../../../../orchestration/db/runs/run-coordinator-orca-session'
 import { readAgentSessionRecordStore } from '../../../../orchestration/addressing/session-lineage/structured-session-lineage'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { JournalSqlReads } from '../../../../../native-chat/agent-session-journal/journal-sql-reads'
 import { mayNameSession, readSessionRecipient } from './session-recipient'
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import {
@@ -89,15 +87,18 @@ export function botAddressReach(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   to: string,
-  sender: OrchestrationCallerIdentity
+  sender: OrchestrationCallerIdentity,
+  { fromPairedComputer = false }: { fromPairedComputer?: boolean } = {}
 ): AddressReach {
   const name = parseBotAddress(to)
   const bots = runtime.bots.list()
   if (name !== null) {
     const bot = botOfAddress(bots, name)
+    // Mail another computer sent here with --on: it chose this computer, and our --on names mean nothing there.
+    const paired = fromPairedComputer ? undefined : runtime.pairedBotRosters.lastRead()
     return bot
       ? { kind: 'bot', receiving: { bot, via: 'alias', chat: null } }
-      : refuse(botNotFound(name, bots))
+      : refuse(botNotFound(name, bots, paired))
   }
   if (bots.length === 0) {
     return { kind: 'none' }
@@ -313,34 +314,10 @@ export async function readBotTurn(
   }
   const turn = opening
     ? readBotActingTurn([openingItem(opening)], lookups, [])
-    : await readNewestActingTurn(await host.journalReads(sessionId), lookups)
+    : await readNewestBotActingTurn(await host.journalReads(sessionId), lookups)
   // The prompt that opened the turn names its event; a conversation an automation or request started keeps it.
   const triggeredBy = turn.triggeredBy ?? recorded?.triggeredBy ?? null
   return { turn, conversation, actsFor, triggeredBy }
-}
-
-/** The acting turn from the newest turns back, widening the read until one decides it or the read
- *  holds the whole chat: a turn woken only by a worker's report reads the one before it. */
-async function readNewestActingTurn(
-  reads: Pick<JournalSqlReads, 'operationWindow'>,
-  lookups: BotActingTurnLookups
-): Promise<BotActingTurn> {
-  for (let newestTurns = 8; ; newestTurns *= 4) {
-    const { snapshot, complete } = await reads.operationWindow({
-      latestTurns: newestTurns,
-      // Who a turn acted for is in its messages and turn rows; its tool calls would only fill memory.
-      turnShape: true
-    })
-    const turn = readBotActingTurnWithin(
-      snapshot.items,
-      lookups,
-      snapshot.submissions,
-      complete ? null : newestTurns
-    )
-    if (turn) {
-      return turn
-    }
-  }
 }
 
 /** A message not yet in the journal, as the one row of the turn it opens. */

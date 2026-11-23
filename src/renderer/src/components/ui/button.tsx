@@ -11,15 +11,17 @@ const disabledOnAccentButtonClasses =
   'disabled:bg-accent disabled:text-muted-foreground disabled:opacity-100 disabled:hover:bg-accent disabled:hover:text-muted-foreground'
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md cursor-pointer text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md cursor-pointer text-sm font-medium whitespace-nowrap transition-[color,background-color,opacity] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         default: 'bg-primary text-primary-foreground hover:bg-primary/90',
         destructive:
-          'bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40',
+          'bg-destructive text-white hover:bg-destructive/90 focus-visible:border-destructive focus-visible:ring-destructive/40 dark:bg-destructive/60 dark:focus-visible:ring-destructive/50',
         outline: outlineButtonClasses,
         'orchestration-tab': `${outlineButtonClasses} border-(--crew-border) bg-(--crew-surface) text-card-foreground shadow-floating dark:border-(--crew-border) dark:bg-(--crew-surface) dark:hover:bg-accent dark:hover:text-accent-foreground`,
+        // An outline that must read as a control on a card: its border reaches 3:1 in both themes.
+        'outline-strong': `${outlineButtonClasses} border-muted-foreground/75 hover:border-muted-foreground dark:border-muted-foreground/60 dark:hover:border-muted-foreground`,
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         // A row action over its hovered row's accent fill, where ghost's accent hover would not show.
@@ -28,6 +30,8 @@ const buttonVariants = cva(
         'outline-on-accent': `${outlineButtonClasses} hover:bg-foreground/5 ${disabledOnAccentButtonClasses} disabled:border-border disabled:shadow-none disabled:hover:border-border dark:disabled:border-border dark:disabled:bg-accent dark:disabled:hover:bg-accent`,
         disclosure:
           'text-xs focus-visible:ring-inset hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+        'ghost-inset':
+          'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
         // Keep icon states visible on muted fields, which share accent's light-theme fill.
         'muted-field-icon':
           'text-muted-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-visible:bg-foreground/[0.08] focus-visible:text-foreground aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground data-[state=open]:bg-foreground/[0.08] data-[state=open]:text-foreground',
@@ -35,6 +39,10 @@ const buttonVariants = cva(
         'queued-head-steer':
           'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:bg-primary [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:text-primary-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
+        // A link in muted prose that must read as clickable at rest, such as a held ask's "send anyway":
+        // foreground, always underlined, at the sentence's weight.
+        'link-underlined':
+          'font-normal text-foreground underline underline-offset-2 focus-visible:ring-2',
         // A quiet secondary link, such as a dialog footer's "Manual steps".
         'link-muted':
           'text-muted-foreground underline-offset-4 hover:text-foreground hover:underline',
@@ -61,10 +69,15 @@ const buttonVariants = cva(
         // A `link` inside a sentence: no box of its own, so it wraps with the text and lines up with its edge.
         inlineText:
           "h-auto gap-1 rounded-sm p-0 align-baseline text-xs [&_svg:not([class*='size-'])]:size-3",
+        // `inlineText` at the surrounding sentence's own size and line height, for prose not set in text-xs.
+        inlineInherit:
+          "h-auto gap-1 rounded-sm p-0 align-baseline text-[length:inherit] leading-[inherit] [&_svg:not([class*='size-'])]:size-3",
         inline: 'h-6 gap-1 px-0 has-[>svg]:px-0',
         // A ghost name inside a row label: `inline`'s height, padded so its hover fill clears the text.
         inlineChip: 'h-6 gap-1 px-1.5',
         sm: 'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5',
+        'responsive-sm':
+          'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5 @max-xs:gap-1 @max-xs:px-1.5 @max-xs:text-xs @max-xs:has-[>svg]:px-1.5',
         menu: 'h-8 gap-2 px-2 py-1.5 text-xs leading-5',
         // A launch-menu row's label segment, matching DropdownMenuItem's `launch` rows.
         'menu-launch': 'h-9 gap-2 px-2 text-[13px] leading-4',

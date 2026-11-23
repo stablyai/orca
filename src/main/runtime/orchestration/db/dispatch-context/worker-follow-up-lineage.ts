@@ -13,6 +13,7 @@ import {
 import type { ExactWorkerProviderSession } from '../../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
+import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { isLocalHookConnectionId } from '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { DispatchContextRow } from '../orchestration-records'
 import type { WorkerTerminalResourceRow } from '../../terminal-authority/release/worker-terminal-ownership'
@@ -144,7 +145,8 @@ export function recordWorkerResumeSession(
   const connectionId = isLocalHookConnectionId(session.connectionId)
     ? null
     : (session.connectionId ?? null)
-  const { launchConfig } = session
+  const launchConfig =
+    session.launchConfig ?? recordedLaunchConfigOf(db, resourceId, session, connectionId)
   const value = JSON.stringify({
     agent: session.agent,
     providerSession: session.providerSession,
@@ -157,6 +159,23 @@ export function recordWorkerResumeSession(
       'UPDATE worker_terminal_resources SET resume_session = ? WHERE id = ? AND resume_session IS NOT ?'
     )
     .run(value, resourceId, value)
+}
+
+/** The recipe this row already holds for the same conversation: a capture after the agent exited no
+ *  longer reads its launch, but the conversation it reports is still the one that launch started. */
+function recordedLaunchConfigOf(
+  db: OrchestrationDb,
+  resourceId: string,
+  session: ExactWorkerProviderSession,
+  connectionId: string | null
+): SleepingAgentLaunchConfig | undefined {
+  const stored = readWorkerResumeSession(db.getWorkerTerminalResource(resourceId))
+  return stored &&
+    stored.agent === session.agent &&
+    stored.captureHostId === getConnectionExecutionHostId(connectionId) &&
+    agentProviderSessionsEqual(session.agent, stored.providerSession, session.providerSession)
+    ? stored.launchConfig
+    : undefined
 }
 
 /** A reopened worker keeps its conversation until its own pane reports one. */

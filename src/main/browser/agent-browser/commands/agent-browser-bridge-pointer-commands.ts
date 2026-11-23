@@ -1,7 +1,11 @@
 import { BrowserWindow } from 'electron'
 import type { ResolvedBrowserCommandTarget } from '../session-routing/agent-browser-command-target'
 import { BrowserError } from '../../browser-error'
-import { normalizeCdpPointerButton } from '../../cdp/input/cdp-pointer-targets'
+import {
+  cdpMouseModifierMask,
+  normalizeCdpPointerButton,
+  type BrowserMouseModifier
+} from '../../cdp/input/cdp-pointer-targets'
 import {
   assertFinitePointerValues,
   cdpPointerStateFor,
@@ -17,6 +21,7 @@ import { AgentBrowserBridgeInputCommands } from './agent-browser-bridge-input-co
 import { isEmbeddedGuest } from '../../cdp/input/guest-direct-key-input'
 import { enablePageFocusEmulation } from '../../cdp/input/agent-input-focus-guard'
 import { waitForGuestFirstPaint } from '../../cdp/debugger/guest-first-paint'
+import { noteInjectedRightPress } from '../../guest-lifecycle/input/browser-guest-context-menu-target'
 
 type CdpPointerEventParams = {
   type: 'mouseMoved' | 'mousePressed' | 'mouseReleased' | 'mouseWheel'
@@ -25,6 +30,7 @@ type CdpPointerEventParams = {
   button?: string
   buttons?: number
   clickCount?: number
+  modifiers?: number
   deltaX?: number
   deltaY?: number
 }
@@ -62,6 +68,12 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
         releaseFocusGuard = await this.focusPageForPress(wc, target.webContentsId)
       }
       assertExpectedPageUrlForStep()
+      if (
+        params.button === 'right' &&
+        (params.type === 'mousePressed' || params.type === 'mouseReleased')
+      ) {
+        noteInjectedRightPress(wc, params.type)
+      }
       await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', params)
       return result
     } catch (error) {
@@ -138,7 +150,12 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
     )
   }
 
-  async mouseDown(button?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
+  async mouseDown(
+    button?: string,
+    worktreeId?: string,
+    browserPageId?: string,
+    modifiers?: BrowserMouseModifier[]
+  ): Promise<unknown> {
     return this.enqueuePageAction(
       worktreeId,
       browserPageId,
@@ -154,7 +171,8 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
               y: state.y,
               button: cdpButton,
               buttons: state.buttons,
-              clickCount: state.clickCount
+              clickCount: state.clickCount,
+              modifiers: cdpMouseModifierMask(modifiers)
             },
             result: { pressed: true }
           }
@@ -163,7 +181,12 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
     )
   }
 
-  async mouseUp(button?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
+  async mouseUp(
+    button?: string,
+    worktreeId?: string,
+    browserPageId?: string,
+    modifiers?: BrowserMouseModifier[]
+  ): Promise<unknown> {
     return this.enqueuePageAction(
       worktreeId,
       browserPageId,
@@ -180,7 +203,8 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
               y: state.y,
               button: cdpButton,
               buttons: state.buttons,
-              clickCount: state.clickCount
+              clickCount: state.clickCount,
+              modifiers: cdpMouseModifierMask(modifiers)
             },
             result: { released: true }
           }

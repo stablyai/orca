@@ -9,6 +9,11 @@ import type { MainHttpClient } from '../network/http-client'
 import { isRetryableDownloadError, type HttpStatusError } from '../network/transient-download-error'
 import type { PinnedRuntimeArchive, PinnedRuntimeExecutable } from './pinned-runtime-materializer'
 
+/** Hex digest of a download; npm publishes only a sha512 (its `dist.integrity`). */
+export type ArchiveDigest = { archiveSha256: string } | { archiveSha512: string }
+
+export type VerifiedArchive = Omit<PinnedRuntimeArchive, 'archiveSha256'> & ArchiveDigest
+
 const MAX_RUNTIME_ARCHIVE_BYTES = 200 * 1024 * 1024
 export const RUNTIME_ARCHIVE_RETRY_DELAYS_MS = [1_000, 3_000, 9_000]
 
@@ -61,7 +66,7 @@ export function downloadFailureMessage(label: string, error: unknown): string {
 }
 
 export async function downloadVerifiedArchive(
-  archive: PinnedRuntimeArchive,
+  archive: VerifiedArchive,
   destination: string,
   fetcher: MainHttpClient['fetch'],
   signal?: AbortSignal,
@@ -98,14 +103,18 @@ export async function downloadVerifiedArchive(
 }
 
 async function downloadVerifiedArchiveOnce(
-  archive: PinnedRuntimeArchive,
+  archive: VerifiedArchive,
   destination: string,
   fetcher: MainHttpClient['fetch'],
   signal?: AbortSignal,
   onBytes?: (bytes: number) => void,
   connectTimeoutMs?: number
 ): Promise<void> {
-  const { label, url, archiveSha256: expectedSha256 } = archive
+  const { label, url } = archive
+  const [algorithm, expected] =
+    'archiveSha512' in archive
+      ? ['sha512', archive.archiveSha512]
+      : ['sha256', archive.archiveSha256]
   const maxBytes = archive.maxArchiveBytes ?? MAX_RUNTIME_ARCHIVE_BYTES
   const stall = new AbortController()
   const downloadSignal = signal ? AbortSignal.any([signal, stall.signal]) : stall.signal
@@ -149,7 +158,7 @@ async function downloadVerifiedArchiveOnce(
       throw error
     })
     const reader = response.body.getReader()
-    const hash = createHash('sha256')
+    const hash = createHash(algorithm)
     let total = 0
     try {
       for (;;) {
@@ -176,9 +185,9 @@ async function downloadVerifiedArchiveOnce(
       await handle.close()
     }
     const actual = hash.digest('hex')
-    if (actual !== expectedSha256) {
+    if (actual !== expected) {
       throw new ReleaseMismatchError(
-        `${label} archive checksum mismatch: expected ${expectedSha256}, got ${actual}`
+        `${label} archive checksum mismatch: expected ${expected}, got ${actual}`
       )
     }
   } catch (error) {

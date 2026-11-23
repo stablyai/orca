@@ -1,5 +1,8 @@
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
-import type { AgentCliUpdateAgent } from '../../agent-launch/installation/agent-cli-update'
+import type {
+  AgentCliModelRequirement,
+  AgentCliUpdateAgent
+} from '../../agent-launch/installation/agent-cli-update'
 
 export type SessionOptionValue = string | boolean
 
@@ -39,6 +42,10 @@ export type SessionOptionDescriptor = {
         choices: SessionOptionSelectChoice[]
         /** Presentation when no value is known; never an input selection. */
         placeholder?: string
+        /** What the running agent reports when currentValue delegates to it; presentation only. */
+        reportedValue?: string
+        /** The agent whose own settings an Own permission choice follows; presentation only. */
+        settingsAgent?: string
       }
     /** Switches require values or unset renders false against the catalog default; confirmation remains valueSource’s responsibility. */
     | {
@@ -52,6 +59,8 @@ export type SessionOptionDescriptor = {
   disabledReason?: SessionOptionDisabledReason
   /** Active value when a saved selection intentionally waits for a later input. */
   activeValue?: string
+  /** Model-pill display only: a provider fallback runs in place of currentValue, which stays the selection. */
+  fallbackModel?: string
   /** Picker-only/flip-only PTY commands need action rows rather than invented absolute control states. */
   action?: { type: 'agent-picker' | 'toggle-command' }
 }
@@ -117,9 +126,13 @@ export type NativeChatSessionOptionSettingsMutation =
     }
   | { type: 'clear-model-if-missing'; agent: AgentType; availableModelIds: readonly string[] }
 
-/** The chat host's own CLI is behind its latest release, which may list models this one lacks. */
+/** The user's own CLI on the chat's host, too old for models on Orca's list. */
 export type SessionOptionsCliUpdate = {
   agent: AgentCliUpdateAgent
+  /** Newest first. */
+  models: readonly AgentCliModelRequirement[]
+  /** False when the user runs the update themselves; the rows then only say why. */
+  runnable: boolean
   phase: 'idle' | 'running' | 'failed'
   start: () => void
   /** Opens the failed run's output; its Try again runs `start`. */
@@ -128,7 +141,7 @@ export type SessionOptionsCliUpdate = {
 
 export type SessionOptionsSurface = {
   demandModelCatalog?: () => void
-  /** Absent while the user's own CLI is current, and for Orca's own copy. */
+  /** Absent for Orca's own CLI copy and a Command override, and while no listed model needs an update. */
   cliUpdate?: SessionOptionsCliUpdate
   /** Live local admission for a structured action, before consuming its composer trigger. */
   admits?: (id: string, value: SessionOptionValue) => boolean

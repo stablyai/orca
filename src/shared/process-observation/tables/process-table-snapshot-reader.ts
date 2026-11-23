@@ -1,10 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { monotonicNow } from '../../concurrency/deadline-settle-notifier'
 import { PS_TIMEOUT_MS, assertWholeCapture, captureProcessTable } from './process-table-ps-capture'
-import {
-  captureDarwinProcessTable,
-  resetDarwinProcessTableCaptureForTests
-} from '../darwin/darwin-process-table-capture'
+import { captureDarwinProcessTable } from '../darwin/darwin-process-table-capture'
 import {
   PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS,
   PS_ARGS,
@@ -33,6 +30,8 @@ export function createProcessTableSnapshotReader<T = string>(
   getSnapshot: () => Promise<T>
   getSnapshotWithAge: () => Promise<{ value: T; capturedAgeMs: number }>
   getFreshSnapshot: () => Promise<T>
+  /** The cached or in-flight capture, without starting one. */
+  peekSnapshot: () => Promise<T> | null
   reset: () => void
 } {
   const ttlMs = deps.ttlMs ?? PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
@@ -118,10 +117,18 @@ export function createProcessTableSnapshotReader<T = string>(
     return entry.promise
   }
 
+  function peekSnapshot(): Promise<T> | null {
+    if (cached && deps.now() - cached.completedAtMs < ttlMs) {
+      return Promise.resolve(cached.value)
+    }
+    return inFlight ?? freshQueued?.promise ?? null
+  }
+
   return {
     getSnapshot,
     getSnapshotWithAge,
     getFreshSnapshot,
+    peekSnapshot,
     reset: () => {
       cached = null
       inFlight = null
@@ -307,16 +314,15 @@ export async function withEvidenceBudget<T>(pending: Promise<T>): Promise<T> {
   }
 }
 
+/** Rows of a full capture already cached or under way, so cheaper readers can use it instead of reading again. */
+export function peekStrictProcessTableSnapshot(): Promise<ProcessTableRow[]> | null {
+  return processTableReader.peekSnapshot()?.then((capture) => capture.strict()) ?? null
+}
+
 export async function getStrictProcessTableSnapshotWithAge(): Promise<{
   rows: ProcessTableRow[]
   capturedAgeMs: number
 }> {
   const snapshot = await withEvidenceBudget(processTableReader.getSnapshotWithAge())
   return { rows: snapshot.value.strict(), capturedAgeMs: snapshot.capturedAgeMs }
-}
-
-export function resetProcessTableSnapshotForTests(): void {
-  processTableReader.reset()
-  shellForegroundReader.reset()
-  resetDarwinProcessTableCaptureForTests()
 }

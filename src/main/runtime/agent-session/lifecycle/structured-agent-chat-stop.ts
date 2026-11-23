@@ -15,3 +15,9 @@ export async function stopStructuredAgentChats(agent: string, label: string): Pr
     throw new Error(`Not every ${label} chat on this host could be stopped. Try again.`)
   }
 }
+
+/** How many chats of `agent` hold a running child that a stop would end. */
+export function countStructuredAgentChats(agent: string): number {
+  const host = getStructuredAgentSessionHost()
+  return host ? host.loadedSessionIds().filter((id) => host.sessionAgent(id) === agent).length : 0
+}

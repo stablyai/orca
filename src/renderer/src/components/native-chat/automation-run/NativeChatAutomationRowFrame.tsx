@@ -1,6 +1,10 @@
 import type { ReactNode, Ref } from 'react'
 import type { AutomationRowMark } from '../../../../../shared/automations/automation-chat-row'
-import { NativeChatEventIcon, NativeChatEventRow } from '../messages/events/NativeChatEventRow'
+import { NativeChatEventRow } from '../messages/events/NativeChatEventRow'
+import {
+  NATIVE_CHAT_INLINE_NAME,
+  NATIVE_CHAT_ROW_SHARE
+} from '../messages/events/native-chat-inline-chip'
 import { NativeChatAutomationMark } from './NativeChatAutomationMark'
 
 /** An opened row's section heading, and its muted lines. */
@@ -46,11 +50,8 @@ export function NativeChatAutomationRowFrame({
     : [lead, name, ...after].join(' · ')
   return (
     <NativeChatEventRow
-      icon={
-        <NativeChatEventIcon badge={failed ? 'failed' : null}>
-          <NativeChatAutomationMark mark={mark} />
-        </NativeChatEventIcon>
-      }
+      icon={<NativeChatAutomationMark mark={mark} />}
+      badge={failed ? 'failed' : null}
       label={label}
       action={action}
       timestamp={timestamp}
@@ -60,14 +61,17 @@ export function NativeChatAutomationRowFrame({
       clampDetails={clampDetails}
       details={children}
     >
-      {/* The status keeps its own line when the name needs the width, so neither is cut short. */}
-      <span className="flex flex-wrap gap-x-1">
-        <span className="line-clamp-2 min-w-0 [overflow-wrap:anywhere]">
+      <span className="flex min-w-0 items-center">
+        <span className="shrink-0 whitespace-pre">
           {lead}
           {leadIsVerb ? ' ' : ' · '}
-          <span className="text-chat-foreground">{name}</span>
         </span>
-        {status ? <span className="max-w-full truncate">· {status}</span> : null}
+        <span className={NATIVE_CHAT_INLINE_NAME} title={name}>
+          {name}
+        </span>
+        {status ? (
+          <span className={`${NATIVE_CHAT_ROW_SHARE} whitespace-pre`}>{` · ${status}`}</span>
+        ) : null}
       </span>
     </NativeChatEventRow>
   )

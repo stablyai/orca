@@ -1,4 +1,5 @@
 import { readFile, readdir, readlink } from 'node:fs/promises'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { LSOF_NONBLOCKING_ARGS } from '../../shared/process-observation/lsof-nonblocking-args'
 import { getProcessOutputFields } from '../../shared/process-observation/process-output-field-scanner'
 import { readWindowsProcessTable } from '../windows/windows-process-table'
@@ -145,7 +146,11 @@ async function scanDarwinLsofPorts(
 async function scanWindowsNetstatPorts(
   options: WorkspacePortScanOptions
 ): Promise<PlatformListeningPortScan> {
-  const { stdout, spawnMs } = await runPortScanCommand('netstat', ['-ano', '-p', 'tcp'])
+  const { stdout, spawnMs } = await runPortScanCommand(windowsSystem32Binary('netstat.exe'), [
+    '-ano',
+    '-p',
+    'tcp'
+  ])
   const ports = parseNetstatListeningOutput(stdout)
   if (shouldSkipMetadataCommands(spawnMs, options)) {
     return { ports, metadataAvailable: false }

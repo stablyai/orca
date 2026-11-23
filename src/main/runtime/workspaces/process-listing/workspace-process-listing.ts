@@ -1,3 +1,4 @@
+import { crewChatStatusChange } from '../../orchestration/crew/crew-changes'
 import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from '../catalog/worktree-launch-host-repo'
@@ -60,7 +61,8 @@ import { WorkerAutoReleaseActivity } from '../../orchestration/terminal-authorit
 import { nativeChatIdleStopMs } from '../../../../shared/native-chat/settings/native-chat-idle-stop'
 import { prWatchWorkspaceSources } from '../../agent-session/lifecycle/pr-watch-workspace-sources'
 import { startPRWatchRuntime } from '../../agent-session/lifecycle/pr-watch-runtime'
-const DEFAULT_WORKTREE_PS_LIMIT = 200
+import { workerDockFailureSink } from '../../orchestration/dock/worker-dock-provider-failures'
+import { workerDockSourceOfSession } from '../../orchestration/dock/worker-dock-source'
 
 export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEvents {
   protected readonly workerAutoReleaseActivity = new WorkerAutoReleaseActivity(
@@ -68,12 +70,10 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
   )
 
   /** The task each pane was dispatched, by pane key, as `worktree.ps` rows title it. */
-  listAgentTasksByPaneKey() {
-    return this.agentOrchestrationProjection.buildByPaneKey() ?? {}
-  }
+  listAgentTasksByPaneKey = () => this.agentOrchestrationProjection.buildByPaneKey() ?? {}
 
   async getWorktreePs(
-    limit = DEFAULT_WORKTREE_PS_LIMIT,
+    limit = 200,
     sourceDefaultsSupported = true,
     includeAgentWait = false,
     worktreeId?: string
@@ -117,7 +117,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       getLivenessVerdict: (ptyId) => this.getPtyLivenessVerdict(ptyId),
       getSummary
     })
-    const { mirroredWorktreeIdByTabId, connectedPtyEvidence } =
+    const { mirroredWorktreeIdByTabId, connectedPtyEvidence, savedAgentRecords } =
       applyRuntimeWorktreePsSessionActivity({
         store: this.store,
         summaries,
@@ -131,7 +131,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
     const rowSources = collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId,
       connectedPtyEvidence,
-      hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? [],
+      hookSnapshots: this.paneAgentStatuses(undefined, savedAgentRecords),
       readStructuredSummary: getStructuredAgentSessionHost()?.readStatusSummary
     })
     attachRuntimeWorktreeAgentRows({
@@ -279,9 +279,11 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
         this.prepareStructuredAgentLaunchAccountHome(record, launchDirectory),
       onRequestFailure: (failure) => this.onStructuredRequestFailureForErrorMail(failure),
       onIdleProviderDeath: (death) => this.onStructuredIdleProviderDeathForMail(death),
+      readWorkerDockPresence: (sessionId) =>
+        this._orchestrationDb?.workerDockSources.read(workerDockSourceOfSession(sessionId)),
       // Structured chat has no CLI hooks; this projection drives first-work renaming.
       onSessionStatusChanged: (summary, options) => {
-        this.crewChanges.notify(new Set(['status', 'names']))
+        this.crewChanges.notify(crewChatStatusChange(summary.sessionId))
         this.onStructuredSessionStatusForMail(summary)
         this.workerAutoReleaseActivity.observeChat(summary)
         nameChat(summary, options)
@@ -291,7 +293,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
           firstWorkRenameDeps(this.requireStore(), this)
         )
       },
-      ...(this.structuredAgentStatusSinkFn ? { statusSink: this.structuredAgentStatusSinkFn } : {}),
+      statusSink: workerDockFailureSink(this.structuredAgentStatusSinkFn, this),
       conversationNaming: nameChat,
       onSessionTabHidden: (sessionId) => this.onStructuredSessionTabHidden(sessionId),
       queuedAgentMessageOwed: (sessionId, from) => this.structuredChatMailOwed(sessionId, from),

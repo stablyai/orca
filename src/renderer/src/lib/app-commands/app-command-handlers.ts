@@ -16,6 +16,7 @@ import {
 } from '../../components/sidebar/workspace-card/identity/child-workspaces-toggle-target'
 import { requestTerminalTabRename } from '../../components/tab-bar/terminal-tabs/terminal-tab-rename-request'
 import { useAppStore } from '../../store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { openPluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
@@ -173,7 +174,7 @@ export function createAppCommandHandlers(
         }
         const groupKey = resolveChildWorkspacesToggleGroupKey(
           store,
-          getRenderedLineageChipKeys(store)
+          getRenderedLineageChipKeys(store, readRuntimeStatuses())
         )
         if (!groupKey) {
           return false

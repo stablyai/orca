@@ -1,3 +1,4 @@
+import * as z from 'zod'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { translate } from '../../../i18n/mobile-i18n'
 import {
@@ -7,6 +8,12 @@ import {
 import { newWorkspaceRepoHookSettingsWrite } from './new-workspace-operations'
 import type { MobileWorkspaceRepo } from '../forms/new-worktree-modal-types'
 import { listHostRepos } from '../../../worktree/repositories/server-repos'
+
+const startupPolicyReplySchema = z.looseObject({
+  repo: z.looseObject({
+    hookSettings: z.looseObject({ setupAgentStartupPolicy: z.string() })
+  })
+})
 
 /** As desktop: the host reads the repo's saved policy, so a flipped "Wait for setup" is saved before create. */
 export async function saveStartupPolicy(
@@ -20,7 +27,20 @@ export async function saveStartupPolicy(
   }
   const policy = waitForSetup ? 'wait-for-setup' : 'start-immediately'
   try {
-    // repo.update replaces hookSettings whole, so build on the host's current row, not the form's snapshot.
+    // The host changes only the policy on its saved row, so a setup script saved meanwhile stays.
+    const saved = startupPolicyReplySchema.safeParse(
+      newWorkspaceRepoHookSettingsWrite.interpret(
+        await newWorkspaceRepoHookSettingsWrite.request(
+          client,
+          { repo: `id:${repo.id}`, updates: { setupAgentStartupPolicy: policy } },
+          { timeoutMs: 15_000 }
+        )
+      )
+    )
+    if (saved.success && saved.data.repo.hookSettings.setupAgentStartupPolicy === policy) {
+      return true
+    }
+    // An older host ignored that: it only replaces hookSettings whole, so build on its current row.
     const current = (await listHostRepos<MobileWorkspaceRepo>(client))?.find(
       (row) => row.id === repo.id
     )

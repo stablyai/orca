@@ -1,7 +1,10 @@
-import { ArrowLeft, ArrowRight, MoreHorizontal, PanelLeft } from 'lucide-react'
+import { useCallback, useRef } from 'react'
+import { ArrowLeft, ArrowRight, MoreHorizontal } from 'lucide-react'
+import { SidebarToggleIcon } from '@/components/icons/SidebarToggleIcon'
 import logo from '../../../../../resources/logo.svg'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { keepPaneFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -17,6 +20,10 @@ import { useShortcutLabel } from '../../lib/keyboard/useShortcutLabel'
 import { useAppStore } from '../../store/index'
 import { hasCustomTitleBar, hasMacTrafficLights } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
+import {
+  registerTitlebarSidebarToggle,
+  unregisterTitlebarSidebarToggle
+} from './titlebar-sidebar-toggle-ref'
 
 /** Reuse left chrome across full-width and sidebar-width headers so controls/popovers stay consistent. */
 export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
@@ -28,6 +35,17 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
   const leftSidebarShortcutLabel = useShortcutLabel('sidebar.left.toggle')
   const historyBackShortcutLabel = useShortcutLabel('worktree.history.back')
   const historyForwardShortcutLabel = useShortcutLabel('worktree.history.forward')
+  // Owned reference for focus fallbacks (the app rail), instead of a shared CSS-class query.
+  const registeredToggleRef = useRef<HTMLButtonElement | null>(null)
+  const sidebarToggleRef = useCallback((node: HTMLButtonElement | null) => {
+    if (node) {
+      registeredToggleRef.current = node
+      registerTitlebarSidebarToggle(node)
+    } else if (registeredToggleRef.current) {
+      unregisterTitlebarSidebarToggle(registeredToggleRef.current)
+      registeredToggleRef.current = null
+    }
+  }, [])
 
   return (
     // Measure the whole row for tab-strip spacing. w-max prevents the collapsed w-0 wrapper shrinking Windows text to one glyph.
@@ -50,6 +68,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
                   className="titlebar-icon-button"
                   aria-label={t('auto.App.8b0b8eb54f', 'Application menu')}
                   onClick={() => window.api.ui.popupMenu()}
+                  {...keepPaneFocusPressProps}
                 >
                   <MoreHorizontal size={14} />
                 </button>
@@ -84,11 +103,13 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
           <Tooltip>
             <TooltipTrigger asChild>
               <button
+                ref={sidebarToggleRef}
                 className="sidebar-toggle"
                 onClick={toggleSidebar}
+                {...keepPaneFocusPressProps}
                 aria-label={t('auto.App.e4b9e7dff7', 'Toggle sidebar')}
               >
-                <PanelLeft size={16} />
+                <SidebarToggleIcon side="left" size={16} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>

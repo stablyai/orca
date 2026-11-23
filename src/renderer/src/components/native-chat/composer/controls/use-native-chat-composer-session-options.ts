@@ -20,7 +20,6 @@ type ComposerSessionOptionsArgs = Pick<
   | 'onSlashCommand'
   | 'onSubmitted'
   | 'onSwitchToTerminal'
-  | 'readTerminalScreen'
   | 'structuredTransport'
   | 'contextMessages'
 > &
@@ -39,7 +38,6 @@ export function useNativeChatComposerSessionOptions({
   terminalTabId,
   targetPtyId,
   onSwitchToTerminal,
-  readTerminalScreen,
   paneKey,
   structuredTransport,
   contextMessages
@@ -69,7 +67,6 @@ export function useNativeChatComposerSessionOptions({
     targetPtyId,
     dispatchCommand: dispatch,
     onAgentPicker: onSwitchToTerminal,
-    readTerminalScreen,
     paneKey
   })
   const contextUsage = useNativeChatContextUsageSummary(structuredTransport, {

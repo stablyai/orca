@@ -230,18 +230,20 @@ export function agentLaunchSetupCatalogState(
                   agent: entry.label
                 })
               : null
-  const catalogMessage = unsupported
-    ? t(
-        'agentPicker.catalogUnsupportedLaunch',
-        '{{agent}} models are unavailable on this host. Your current choices still apply.',
-        { agent: entry.label }
-      )
-    : (missing ??
-      (settled && !hasModels
-        ? t('agentPicker.catalogEmpty', '{{agent}} has no available models.', {
-            agent: entry.label
-          })
-        : null))
+  const catalogMessage = catalogPending
+    ? t('agentPicker.catalogLoading', 'Loading models…')
+    : unsupported
+      ? t(
+          'agentPicker.catalogUnsupportedLaunch',
+          '{{agent}} models are unavailable on this host. Your current choices still apply.',
+          { agent: entry.label }
+        )
+      : (missing ??
+        (settled && !hasModels
+          ? t('agentPicker.catalogEmpty', '{{agent}} has no available models.', {
+              agent: entry.label
+            })
+          : null))
   // Retry reads the models again in place; an empty or unsupported answer would just repeat.
   const catalogRetryable = missing !== null
   return { hasModels, catalogPending, catalogMessage, catalogRetryable }

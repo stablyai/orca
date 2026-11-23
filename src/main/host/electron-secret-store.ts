@@ -1,5 +1,4 @@
 import { safeStorage } from 'electron'
-import { usesMockKeychain } from '../startup/chromium-policy/configure-dev-keychain'
 import { guardedSafeStorage, safeStorageWithheldReason } from './safe-storage-availability'
 import type { SecretSealing, SecretStore } from '../../shared/secure-storage/secret-store'
 
@@ -42,12 +41,6 @@ export function assessSecretProtection(): SecretProtectionAssessment {
     return {
       level: 'unavailable',
       gap: `The OS keychain is unavailable for this run (${withheld}), so secrets are stored unencrypted. Start orca serve from a logged-in desktop session, or unlock the login keychain, to seal them.`
-    }
-  }
-  if (usesMockKeychain()) {
-    return {
-      level: 'obfuscated',
-      gap: 'Secrets use a built-in test key instead of the OS keychain. Restart with ORCA_DEV_USE_KEYCHAIN=1 to protect credentials with the macOS Keychain.'
     }
   }
   // Availability probes the keyring; backend reads below do not.

@@ -1,8 +1,9 @@
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
 
-/** Group tab orders are authoritative; unlisted rows retain order afterwards. Return the same session when already ordered. */
+/** Group tab orders are authoritative; unlisted rows retain order afterwards. Return the same session when already ordered. `reordered` collects the workspaces it reordered. */
 export function orderTerminalRowsByTabGroups(
-  session: WorkspaceSessionState
+  session: WorkspaceSessionState,
+  reordered?: Set<string>
 ): WorkspaceSessionState {
   let tabsByWorktree: WorkspaceSessionState['tabsByWorktree'] | null = null
   for (const [worktreeId, rows] of Object.entries(session.tabsByWorktree ?? {})) {
@@ -33,6 +34,7 @@ export function orderTerminalRowsByTabGroups(
     }
     tabsByWorktree ??= { ...session.tabsByWorktree }
     tabsByWorktree[worktreeId] = ordered
+    reordered?.add(worktreeId)
   }
   return tabsByWorktree ? { ...session, tabsByWorktree } : session
 }

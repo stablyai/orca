@@ -3,6 +3,9 @@
 // once, since Slack, Linear and GitHub belong to an account rather than a computer.
 import { useSyncExternalStore } from 'react'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
+import { translateLocalExecutionHostLabel } from '@/runtime/hosts/display/execution-host-label'
+import { useTranslate } from '@/i18n/use-translate'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import {
   readBotHostIds,
@@ -45,9 +48,10 @@ export type BotSettingsAccount = {
 
 /** Every computer with bots here: this one first, then paired servers in sidebar order. */
 export function useBotSettingsComputers(): BotSettingsComputer[] {
+  const t = useTranslate()
   const listed = useSyncExternalStore(subscribeToBotChanges, readBotHostIds)
   const tooOld = useSyncExternalStore(subscribeToBotChanges, readUpdateNeededBotHosts)
-  const runtimeStatusByEnvironmentId = useAppStore((state) => state.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const names = useAppStore((state) =>
     [...listed, ...tooOld]
       .map((hostId) => selectExecutionHostDisplayLabel(state, hostId))
@@ -63,9 +67,7 @@ export function useBotSettingsComputers(): BotSettingsComputer[] {
             local: false,
             state:
               index >= listed.length ||
-              !botHostHas(hostId, BOTS_CONNECTORS_RUNTIME_CAPABILITY, {
-                runtimeStatusByEnvironmentId
-              })
+              !botHostHas(hostId, BOTS_CONNECTORS_RUNTIME_CAPABILITY, runtimeStatusByEnvironmentId)
                 ? 'update-needed'
                 : readBotHostState(hostId) === 'offline'
                   ? 'offline'
@@ -76,7 +78,7 @@ export function useBotSettingsComputers(): BotSettingsComputer[] {
   return [
     {
       hostId: LOCAL_EXECUTION_HOST_ID,
-      name: getLocalExecutionHostLabel(),
+      name: translateLocalExecutionHostLabel(getLocalExecutionHostLabel(), t),
       local: true,
       state: 'live'
     },

@@ -1,10 +1,13 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { stubBots } from '../../component-fixtures/fixture-bots'
 import type { Bot } from '../../../../shared/bot-types'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import type {
+  AvatarGenerationApi,
+  AvatarGenerationCapability
+} from '../../../../shared/avatar-generation/avatar-generation-contract'
 import { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
-import { BotAvatar } from './BotAvatar'
-import { BOT_PICTURE_DROP_OUTLINE, BotPicturePicker } from './BotPicturePicker'
+import { BotPictureButton } from './BotPictureButton'
+import { refreshAvatarCapability } from './avatar-generation-capability-store'
 import { NewBotDialog } from './NewBotDialog'
 
 const perf: Bot = {
@@ -58,8 +61,17 @@ async function artPng(size = 512): Promise<File> {
   return new File([blob], 'cat.png', { type: 'image/png' })
 }
 
-/** Answers uploads without a runtime. */
-function stubUpload(): void {
+const NO_IMAGE_AGENTS: AvatarGenerationApi = {
+  capability: async () => ({ agents: [] }),
+  generate: async () => ({ ok: false, error: 'unavailable' }),
+  cancel: async () => {}
+}
+
+/** Answers uploads without a runtime, with these image agents; the capability cache outlives a
+ *  fixture, so it is read again from them. */
+function stubUpload(generation: AvatarGenerationApi = NO_IMAGE_AGENTS): void {
+  Reflect.set(window.api, 'avatarGeneration', generation)
+  refreshAvatarCapability()
   stubBots([perf])
   const runtime = window.api.runtime
   const call = runtime.call
@@ -116,27 +128,7 @@ function Settings(): React.JSX.Element {
   const picture = useBotPictureSetting(perf, async () => perf)
   return (
     <div className="flex h-[380px] items-start gap-4 p-6">
-      <Popover>
-        <PopoverTrigger asChild>
-          <button type="button" className="shrink-0 rounded-lg" aria-label="Edit bot picture">
-            <BotAvatar bot={perf} className="size-12 rounded-lg text-xl" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-80">
-          <div className={BOT_PICTURE_DROP_OUTLINE}>
-            <BotPicturePicker
-              value={picture.value}
-              custom={picture.custom}
-              onChange={picture.pick}
-              onUpload={picture.upload}
-              onUndo={picture.undo}
-            />
-            <p className="text-center text-xs text-muted-foreground">
-              Changes your bot&apos;s picture in Slack too.
-            </p>
-          </div>
-        </PopoverContent>
-      </Popover>
+      <BotPictureButton bot={perf} picture={picture} avatarClassName="size-12 rounded-lg text-xl" />
       <div className="pt-3 text-lg font-semibold">{perf.name}</div>
     </div>
   )
@@ -160,6 +152,39 @@ export const newIdle = defineFixture({
     await settle(600)
   }
 })
+
+export const newColor = defineFixture({
+  width: 560,
+  setup: stubUpload,
+  render: () => <NewBot />,
+  interact: async () => {
+    document
+      .querySelector<HTMLButtonElement>('[role="dialog"] button[aria-label="Graphite"]')
+      ?.click()
+    await settle(600)
+  }
+})
+
+function wearOutfit(name: string): () => Promise<void> {
+  return async () => {
+    document.querySelector<HTMLButtonElement>('button[aria-label="Change picture"]')?.click()
+    await settle(300)
+    document.querySelector<HTMLButtonElement>('button[aria-label="Pink"]')?.click()
+    document.querySelector<HTMLButtonElement>('button[aria-label="Outfit"]')?.click()
+    await settle(300)
+    document.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`)?.click()
+    await settle(600)
+  }
+}
+
+export const newOutfit = defineFixture({
+  width: 560,
+  setup: stubUpload,
+  render: () => <NewBot />,
+  interact: wearOutfit('Detective')
+})
+
+export const newReviewer = defineFixture({ ...newOutfit, interact: wearOutfit('Reviewer') })
 
 export const newDrag = defineFixture({
   width: 560,
@@ -229,5 +254,174 @@ export const settingsError = defineFixture({
   interact: async (frame) => {
     await openPicture(frame)
     await paste(await artPng(64))
+  }
+})
+
+async function artBase64(): Promise<string> {
+  const bytes = new Uint8Array(await (await artPng()).arrayBuffer())
+  let binary = ''
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte)
+  }
+  return btoa(binary)
+}
+
+/** A local image agent that answers as `result` says, or never (still running). */
+function stubGeneration(
+  capability: AvatarGenerationCapability,
+  result: 'image' | 'running' | 'usage-limit'
+): () => void {
+  return () => {
+    const api: AvatarGenerationApi = {
+      capability: async () => capability,
+      generate: async () => {
+        if (result === 'running') {
+          return new Promise(() => {})
+        }
+        if (result === 'usage-limit') {
+          return { ok: false, error: 'usage-limit', agent: 'codex' }
+        }
+        return {
+          ok: true,
+          agent: 'codex',
+          image: { mimeType: 'image/png', base64: await artBase64() }
+        }
+      },
+      cancel: async () => {}
+    }
+    stubUpload(api)
+  }
+}
+
+function carousel(): HTMLElement {
+  return document.querySelector<HTMLElement>('[aria-roledescription="carousel"]')!
+}
+
+async function step(key: 'ArrowLeft' | 'ArrowRight'): Promise<void> {
+  carousel().dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+  await settle(80)
+}
+
+/** The description field, once Generate is the current face and the field has folded open. */
+function shownField(): HTMLTextAreaElement | null {
+  const box = document.querySelector<HTMLTextAreaElement>('textarea')
+  return box && !box.closest('[aria-hidden="true"]') ? box : null
+}
+
+// The Generate face sits just before mascot 1: step left until its description field shows.
+async function openGenerate(frame: HTMLElement, description?: string): Promise<void> {
+  await openPicture(frame)
+  for (let tries = 0; tries < 25 && !shownField(); tries += 1) {
+    await step('ArrowLeft')
+  }
+  // The rows cross-fade over 300 ms.
+  await settle(400)
+  if (description === undefined) {
+    return
+  }
+  const box = shownField()!
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+    box,
+    description
+  )
+  box.dispatchEvent(new Event('input', { bubbles: true }))
+  await settle(100)
+  document.querySelector<HTMLButtonElement>('button[aria-label="Generate"]')?.click()
+  await settle(600)
+}
+
+const READY: AvatarGenerationCapability = {
+  agents: [
+    { agent: 'codex', status: 'ready' },
+    { agent: 'grok', status: 'ready' },
+    { agent: 'antigravity', status: 'ready' }
+  ]
+}
+
+export const generateIdle = defineFixture({
+  width: 420,
+  setup: stubGeneration(READY, 'image'),
+  render: () => <Settings />,
+  interact: (frame) => openGenerate(frame)
+})
+
+export const generateRunning = defineFixture({
+  width: 420,
+  setup: stubGeneration(READY, 'running'),
+  render: () => <Settings />,
+  interact: (frame) => openGenerate(frame, 'a friendly orange fox astronaut')
+})
+
+export const generateResult = defineFixture({
+  width: 420,
+  setup: stubGeneration(READY, 'image'),
+  render: () => <Settings />,
+  interact: (frame) => openGenerate(frame, 'a friendly orange fox astronaut')
+})
+
+export const generateUsageLimit = defineFixture({
+  width: 420,
+  setup: stubGeneration(READY, 'usage-limit'),
+  render: () => <Settings />,
+  interact: (frame) => openGenerate(frame, 'a friendly orange fox astronaut')
+})
+
+export const generateRealPerson = defineFixture({
+  width: 420,
+  setup: stubGeneration(READY, 'image'),
+  render: () => <Settings />,
+  interact: (frame) => openGenerate(frame, 'me as a superhero')
+})
+
+export const generateSignedOut = defineFixture({
+  width: 420,
+  setup: stubGeneration({ agents: [{ agent: 'codex', status: 'signed-out' }] }, 'image'),
+  render: () => <Settings />,
+  interact: (frame) => openGenerate(frame)
+})
+
+export const generateAgentPicker = defineFixture({
+  width: 420,
+  setup: stubGeneration(READY, 'image'),
+  render: () => <Settings />,
+  interact: async (frame) => {
+    await openGenerate(frame, 'a friendly orange fox astronaut')
+    await openGenerateAgainBox()
+    const trigger = document.querySelector<HTMLButtonElement>('button[aria-label^="Generate with"]')
+    trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    await settle()
+  }
+})
+
+async function openGenerateAgainBox(): Promise<void> {
+  document.querySelector<HTMLButtonElement>('button[aria-label="Edit description"]')?.click()
+  await settle(400)
+}
+
+export const generateEditing = defineFixture({
+  width: 420,
+  setup: stubGeneration(READY, 'image'),
+  render: () => <Settings />,
+  interact: async (frame) => {
+    await openGenerate(frame, 'a friendly orange fox astronaut')
+    await openGenerateAgainBox()
+  }
+})
+
+export const generateOneAgent = defineFixture({
+  width: 420,
+  setup: stubGeneration({ agents: [{ agent: 'codex', status: 'ready' }] }, 'image'),
+  render: () => <Settings />,
+  interact: (frame) => openGenerate(frame, 'a friendly orange fox astronaut')
+})
+
+export const generateBackToMascot = defineFixture({
+  width: 420,
+  setup: stubGeneration(READY, 'image'),
+  render: () => <Settings />,
+  interact: async (frame) => {
+    await openGenerate(frame, 'a friendly orange fox astronaut')
+    await step('ArrowRight')
+    await settle(400)
   }
 })

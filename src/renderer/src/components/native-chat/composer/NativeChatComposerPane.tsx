@@ -7,8 +7,9 @@ import { useNativeChatDraft } from '../drafts/use-native-chat-draft'
 import { useNativeChatDraftEvents } from './editor/use-native-chat-draft-events'
 import { useNativeChatComposerRecall } from '../drafts/use-native-chat-composer-recall'
 import { useNativeChatLaunchDraftAdoption } from '../drafts/use-native-chat-launch-draft-adoption'
-import { NativeChatRoomContext, useNativeChatComposerMentions } from '../native-chat-composer-room'
-import { NativeChatBotChatChooserContext } from '../native-chat-room-context'
+import { useNativeChatComposerMentions } from '../native-chat-composer-room'
+import { useNativeChatRoomSend } from '../native-chat-room-send'
+import { NativeChatComposerRoomProvider } from '../NativeChatComposerRoomProvider'
 import { NativeChatComposerWorkspace } from './controls/NativeChatComposerWorkspace'
 import { NativeChatComposerField } from './editor/NativeChatComposerField'
 import { useNativeChatComposerAttachments } from '../attachments/chips/use-native-chat-composer-attachments'
@@ -19,7 +20,10 @@ import { useNativeChatFileDrops } from '../attachments/intake/use-native-chat-fi
 import { useNativeChatComposerKeyDown } from './editor/use-native-chat-composer-keydown'
 import { useNativeChatSendLifecycle } from '../session/terminal/send/use-native-chat-send-lifecycle'
 import { useNativeChatComposerSessionOptions } from './controls/use-native-chat-composer-session-options'
-import { useNativeChatDictation } from './editor/use-native-chat-dictation'
+import {
+  useNativeChatDictation,
+  nativeChatDictationFieldProps
+} from './editor/use-native-chat-dictation'
 import { useNativeChatPtyComposerSend } from './submit/use-native-chat-pty-composer-send'
 import { useNativeChatStructuredComposerSend } from './submit/use-native-chat-structured-composer-send'
 import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
@@ -34,6 +38,7 @@ type ComposerHandle = C.NativeChatComposerHandle
 export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatComposerProps>(
   function NativeChatComposerPane(
     {
+      dock,
       terminalTabId,
       room,
       editSession,
@@ -55,7 +60,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       onSubmitted,
       answerCommandLocally,
       onSwitchToTerminal,
-      readTerminalScreen,
       launchSeed,
       structuredTransport,
       contextMessages,
@@ -118,6 +122,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       recalledFromHistory: recall.active,
       disabled,
       isComposing: imeEnterGesture.isComposing,
+      room,
       structuredTransport,
       editor: { textareaRef, setDraft, setCaret, setActiveSuggestion },
       setNotice
@@ -216,22 +221,23 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       terminalTabId,
       targetPtyId,
       onSwitchToTerminal,
-      readTerminalScreen,
       paneKey,
       structuredTransport,
       contextMessages
     })
 
-    const sendStructured = useNativeChatStructuredComposerSend({
-      agent,
-      draftScopeKey,
-      imageAttachments,
-      structuredTransport,
-      isComposing: imeEnterGesture.isComposing,
-      clearSkillOrigin,
-      setDraft,
-      setCaret
-    })
+    const sendStructured = useNativeChatRoomSend(
+      useNativeChatStructuredComposerSend({
+        agent,
+        draftScopeKey,
+        imageAttachments,
+        structuredTransport,
+        isComposing: imeEnterGesture.isComposing,
+        clearSkillOrigin,
+        setDraft,
+        setCaret
+      })
+    )
 
     const ptyCommandRouting = {
       ...ptyCommandTarget,
@@ -359,62 +365,56 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       editSession || launchPrompt ? undefined : <NativeChatComposerWorkspace {...workspace} />
     return (
       <div ref={root} data-native-chat-composer-scope={draftScopeKey}>
-        <NativeChatRoomContext.Provider value={mentions.roomContext}>
-          <NativeChatBotChatChooserContext.Provider value={mentions.chooser}>
-            <NativeChatComposerField
-              draftScopeKey={draftScopeKey}
-              positionTarget={editSession ? undefined : terminalTabId}
-              textareaRef={textareaRef}
-              draft={draft}
-              disabled={disabled}
-              hasPty={hasPty}
-              canSend={canSend}
-              placeholderHint={unavailableHint}
-              idleHint={afterStop ? undefined : mentions.hint}
-              autocomplete={autocomplete}
-              mentionFiles={mentions.listed}
-              activeSuggestion={mentions.activeIndex ?? activeSuggestion}
-              notices={mentions.notices}
-              imageAttachments={imageAttachments}
-              numberImages={Boolean(structuredTransport)}
-              attachmentEnvironmentId={structuredTransport?.runtimeEnvironmentId ?? undefined}
-              {...sendButton}
-              isWorking={isWorking}
-              isStopping={isStopping}
-              afterStop={afterStop}
-              attachDisabled={attachDisabled}
-              dictationDisabled={dictation.dictationDisabled}
-              isDictating={dictation.isDictating}
-              isDictationHoldMode={dictation.isDictationHoldMode}
-              imeEnterGesture={imeEnterGesture}
-              {...draftEvents}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePasteEvent}
-              pickerListboxId={picker.listboxId}
-              onChoosePickerItem={goalMode.interceptPick(orcaCommands.interceptPick(completeItem))}
-              goalMode={goalMode}
-              onRetrySkills={picker.retrySkills}
-              onChooseMentionFile={mentions.chooseMention}
-              onRemoveImageAttachment={attachments.removeImageAttachment}
-              onAttach={fileDrops.pickAttachments}
-              onDictationToggle={dictation.toggleDictation}
-              onDictationHoldStart={dictation.startHoldDictation}
-              onDictationHoldEnd={dictation.stopHoldDictation}
-              onSend={send}
-              steerPreview={steerChord.preview}
-              onSteerPreview={steerChord.runPreview}
-              onStop={interrupt}
-              sessionOptionsSurface={sessionOptions.surface}
-              sessionOptionsSnapshot={sessionOptions.snapshot}
-              contextUsage={sessionOptions.contextUsage}
-              sessionOptionsPickerRequest={structuredTransport?.optionPickerRequest ?? null}
-              agent={agent}
-              launchPrompt={launchPrompt}
-              workspaceFooter={workspaceFooter}
-              {...fieldOverrides}
-            />
-          </NativeChatBotChatChooserContext.Provider>
-        </NativeChatRoomContext.Provider>
+        <NativeChatComposerRoomProvider mentions={mentions}>
+          <NativeChatComposerField
+            dock={dock}
+            draftScopeKey={draftScopeKey}
+            positionTarget={editSession ? undefined : terminalTabId}
+            textareaRef={textareaRef}
+            draft={draft}
+            disabled={disabled}
+            hasPty={hasPty}
+            canSend={canSend}
+            placeholderHint={unavailableHint}
+            idleHint={afterStop ? undefined : mentions.hint}
+            autocomplete={autocomplete}
+            mentionFiles={mentions.listed}
+            activeSuggestion={mentions.activeIndex ?? activeSuggestion}
+            notices={mentions.notices}
+            imageAttachments={imageAttachments}
+            numberImages={Boolean(structuredTransport)}
+            attachmentEnvironmentId={structuredTransport?.runtimeEnvironmentId ?? undefined}
+            {...sendButton}
+            isWorking={isWorking}
+            isStopping={isStopping}
+            afterStop={afterStop}
+            attachDisabled={attachDisabled}
+            {...nativeChatDictationFieldProps(dictation)}
+            imeEnterGesture={imeEnterGesture}
+            {...draftEvents}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePasteEvent}
+            pickerListboxId={picker.listboxId}
+            onChoosePickerItem={goalMode.interceptPick(orcaCommands.interceptPick(completeItem))}
+            goalMode={goalMode}
+            onRetrySkills={picker.retrySkills}
+            onChooseMentionFile={mentions.chooseMention}
+            onRemoveImageAttachment={attachments.removeImageAttachment}
+            onAttach={fileDrops.pickAttachments}
+            onSend={send}
+            steerPreview={steerChord.preview}
+            onSteerPreview={steerChord.runPreview}
+            onStop={interrupt}
+            sessionOptionsSurface={sessionOptions.surface}
+            sessionOptionsSnapshot={sessionOptions.snapshot}
+            contextUsage={sessionOptions.contextUsage}
+            sessionOptionsPickerRequest={structuredTransport?.optionPickerRequest ?? null}
+            agent={agent}
+            launchPrompt={launchPrompt}
+            workspaceFooter={workspaceFooter}
+            {...fieldOverrides}
+          />
+        </NativeChatComposerRoomProvider>
       </div>
     )
   }

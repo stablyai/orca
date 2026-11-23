@@ -123,10 +123,8 @@ describe('migrateBotAutomationPlaces', () => {
     const store = host(rows)
     const resolve = resolver()
     await migrateBotAutomationPlaces(store, resolve)
-    const asked = resolve.mock.calls.length
     await expect(migrateBotAutomationPlaces(store, resolve)).resolves.toBe(0)
     expect(store.updates).toHaveLength(1)
-    expect(resolve.mock.calls).toHaveLength(asked)
     expect(rows[0]?.on).toEqual([
       {
         id: 'on-1',

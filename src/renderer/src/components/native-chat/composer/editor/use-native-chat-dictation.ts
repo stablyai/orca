@@ -53,3 +53,16 @@ export function useNativeChatDictation(
     stopHoldDictation
   }
 }
+
+export function nativeChatDictationFieldProps(
+  dictation: ReturnType<typeof useNativeChatDictation>
+) {
+  return {
+    dictationDisabled: dictation.dictationDisabled,
+    isDictating: dictation.isDictating,
+    isDictationHoldMode: dictation.isDictationHoldMode,
+    onDictationToggle: dictation.toggleDictation,
+    onDictationHoldStart: dictation.startHoldDictation,
+    onDictationHoldEnd: dictation.stopHoldDictation
+  }
+}

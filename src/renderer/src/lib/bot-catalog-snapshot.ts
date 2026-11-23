@@ -8,14 +8,10 @@ import {
 import { keepBotHostList, readKeptBotHostList } from './bot-host-kept-lists'
 import { reuseEqualJson } from '../../../shared/reuse-equal-json'
 import type { BotNeedsYouCounts } from '../../../shared/bots/bot-change-scope'
+import type { ConnectorCloudStatus } from '../../../shared/bots/connector-cloud-status'
 
-/** What a host's bots.list says of its link to Orca Cloud (the host's ConnectorCloudStatus). */
-export type BotHostConnectorStatus =
-  | 'signed-out'
-  | 'needs-sign-in'
-  | 'unreachable'
-  | 'refused'
-  | 'ok'
+/** What a host's bots.list says of its link to Orca Cloud. */
+export type BotHostConnectorStatus = ConnectorCloudStatus
 
 /** A listed host is read while connected; a disconnected one keeps its last read, shown dimmed. */
 export type BotHostState = 'live' | 'offline'
@@ -367,9 +363,11 @@ export function readBots(): readonly Bot[] {
   return flattened
 }
 
-/** One host's bots as last read. */
+const NO_HOST_BOTS: readonly Bot[] = []
+
+/** One host's bots as last read; none, the same list every time, for a host that isn't listed. */
 export function readHostBots(hostId: ExecutionHostId): readonly Bot[] {
-  return entryOf(hostId)?.bots ?? []
+  return entryOf(hostId)?.bots ?? NO_HOST_BOTS
 }
 
 /** The bot's Needs you items that aren't stale, as its host's last list read counted them; null before

@@ -155,6 +155,8 @@ export type GithubPullRequestApi = {
       prNumber: number
       method?: 'merge' | 'squash' | 'rebase'
       prRepo?: GitHubOwnerRepo | null
+      /** The PR head the user reviewed; the merge is refused if GitHub's head moved past it. */
+      expectedHeadSha?: string | null
     }
   ) => Promise<{ ok: true } | { ok: false; error: string }>
   setPRAutoMerge: (
