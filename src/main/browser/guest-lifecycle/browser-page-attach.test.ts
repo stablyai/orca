@@ -24,11 +24,11 @@ function openTab(pageId: string, url: string, racesExtensions = false, fails = f
     isDestroyed: () => false,
     loadURL: (loaded: string) => {
       loads.push(loaded)
-      setTimeout(() =>
+      const settle = (): boolean =>
         fails
           ? guest.emit('did-fail-load', {}, -102, 'ERR_CONNECTION_REFUSED', loaded, true)
           : guest.emit('did-finish-load')
-      , 1)
+      setTimeout(settle, 1)
       return Promise.resolve()
     }
   }) as unknown as Electron.WebContents
