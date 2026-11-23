@@ -20,7 +20,14 @@ const startupWarning =
 const temporaryWarning =
   "Approve for me isn't available right now, so Claude uses Ask for approval instead."
 
-it.each(['auto_mode_model', 'auto_mode_fast_mode', 'auto_mode_circuit_breaker'])(
+const approveForMeTemporaryRefusalCodes = [
+  'auto_mode_model',
+  'auto_mode_fast_mode',
+  'auto_mode_circuit_breaker',
+  'auto_mode_unavailable'
+]
+
+it.each(approveForMeTemporaryRefusalCodes)(
   'keeps Ask for the process after Claude replies %s',
   async (code) => {
     let autoAttempts = 0

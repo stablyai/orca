@@ -32,6 +32,7 @@ export type ClaudeFullAccessRefusalNotice = { id: string; body: AgentJournalStat
 const CLAUDE_REFUSAL_NOTICE_PREFIX = 'full-access-refused:claude:'
 const CLAUDE_REFUSAL_NOTICE_TIMED = 't'
 const EARLIER_PROCESS_WARNING = 'earlier-process'
+export const CLAUDE_AUTO_RESTORED_NOTICE_ID = 'restored:auto'
 
 /** The chat's permission mode for the fallback Claude accepted. */
 function claudeFallbackChoice(applied: string): string {
@@ -158,7 +159,7 @@ function claimClaudePermissionRestored(
   }
   const choice = intent === 'auto' ? 'auto' : 'full-access'
   return claimClaudePermissionNotice(session, {
-    id: `restored:${intent}`,
+    id: intent === 'auto' ? CLAUDE_AUTO_RESTORED_NOTICE_ID : 'restored:bypassPermissions',
     body: claudePermissionNoticeRow(
       'notice',
       `Claude uses ${agentChatPermissionModeCopy('claude', choice).label} again.`
@@ -208,13 +209,16 @@ export async function readClaudeEarlierRefusalNotice(
     notices.after = Math.max(notices.after ?? 0, after)
   }
   const newest = parts(itemId)
-  const id = newest[newest[0]?.startsWith(CLAUDE_REFUSAL_NOTICE_TIMED) ? 3 : 2]
+  const notice = newest.slice(newest[0]?.startsWith(CLAUDE_REFUSAL_NOTICE_TIMED) ? 3 : 2)
+  const [id] = notice
   const warning =
     intent === 'auto'
       ? id?.startsWith('auto-')
       : /^(settings|restricted|not-launched|started-outside|running)$/.test(id ?? '')
   if (warning) {
     session.fullAccessRefusalNoticeId ??= EARLIER_PROCESS_WARNING
+  } else if (intent === 'auto' && notice.join(':') === CLAUDE_AUTO_RESTORED_NOTICE_ID) {
+    session.fullAccessRefusalNoticeId ??= CLAUDE_AUTO_RESTORED_NOTICE_ID
   }
 }
 

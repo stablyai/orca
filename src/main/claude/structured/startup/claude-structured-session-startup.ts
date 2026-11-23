@@ -141,6 +141,9 @@ function applyClaudeInitializeFacts(session: ClaudeSession, facts: ClaudeInitial
   }
   const { init, initialization } = facts
   const opened = readClaudeOpenedPermissionMode(initialization)
+  if (opened && session.startupPermissionMode === undefined) {
+    session.startupPermissionMode = opened
+  }
   if (opened && !session.firstRootInit) {
     session.firstRootInit =
       session.launchIntent?.permissionMode === 'auto'

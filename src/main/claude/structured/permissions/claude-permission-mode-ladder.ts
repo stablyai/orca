@@ -15,7 +15,10 @@ import {
   type ClaudeAutoUnsettled,
   type ClaudeBypassFacts
 } from './claude-full-access-refusal'
-import { journalClaudeSessionPermissionNotice } from './claude-full-access-refusal-notice'
+import {
+  CLAUDE_AUTO_RESTORED_NOTICE_ID,
+  journalClaudeSessionPermissionNotice
+} from './claude-full-access-refusal-notice'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -47,7 +50,8 @@ const CLAUDE_AUTO_SETTINGS_REFUSAL = /auto mode disabled by settings/
 const CLAUDE_AUTO_FOR_NOW_CODES = new Set([
   'auto_mode_model',
   'auto_mode_fast_mode',
-  'auto_mode_circuit_breaker'
+  'auto_mode_circuit_breaker',
+  'auto_mode_unavailable'
 ])
 
 type ClaudeRefusal =
@@ -284,7 +288,13 @@ export function recordClaudeBuildPermissionMode(
     session.autoUnansweredAskRequest !== undefined &&
     session.autoUnansweredAskRequest === session.permissionModeRequests
   ) {
-    return
+    if (
+      mode !== 'default' ||
+      session.fullAccessRefusalNoticeId !== CLAUDE_AUTO_RESTORED_NOTICE_ID
+    ) {
+      return
+    }
+    session.autoRefusedForNow = true
   }
   session.acknowledgedBuildPermissionMode = mode
   session.appliedInputOptions.set('buildPermissionMode', mode)

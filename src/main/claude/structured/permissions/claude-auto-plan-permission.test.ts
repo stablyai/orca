@@ -2,6 +2,7 @@ import { setImmediate } from 'node:timers/promises'
 import { expect, it } from 'vitest'
 import { ClaudeControlRequestTimeoutError } from '../../sdk-transport/claude-agent-sdk-control-requests'
 import { applyClaudeMessageOptions } from '../launch/claude-structured-message-options'
+import { claudeModelTransitionRestart } from '../launch/claude-structured-options'
 import {
   finishPermissionCatchUp,
   openPermissionTestSession,
@@ -13,6 +14,21 @@ import { leaveClaudePlanModeOnApproval } from './claude-plan-approval-mode'
 
 const startupWarning =
   "Claude didn't start this chat in Approve for me, so Claude uses Ask for approval instead."
+
+it('keeps Claude running on a model change after the first prompt uses Plan', async () => {
+  const { session, writes, frame } = permissionTestSession('auto')
+  await openPermissionTestSession(session, 'auto')
+  finishPermissionCatchUp(session)
+
+  await applyClaudeMessageOptions(session, { interactionMode: 'plan' }, undefined)
+  expect(writes).toEqual(['plan'])
+  frame('init', 'plan')
+
+  const restart = claudeModelTransitionRestart(new Map([['session', session]]))
+  expect(
+    restart({ sessionId: 'session', fence: 1, executionOptions: { model: 'next-model' } })
+  ).toBe(false)
+})
 
 it('writes Ask on the next Build send after an Accept edits root init', async () => {
   const askStarted = Promise.withResolvers<void>()

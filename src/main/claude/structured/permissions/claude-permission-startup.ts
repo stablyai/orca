@@ -28,6 +28,9 @@ export function adoptClaudeLaunchRootInit(
       ? { permissionMode: init.permissionMode, source: 'unanswered-auto-ask' }
       : init
   session.actualFirstRootInit = root
+  if (session.permissionModeRequests === undefined && session.startupPermissionMode === undefined) {
+    session.startupPermissionMode = root.permissionMode
+  }
   if (!session.firstRootInit || session.firstRootInit.source === 'initialize') {
     session.firstRootInit = root
   }

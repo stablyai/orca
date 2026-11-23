@@ -157,6 +157,7 @@ export type ClaudeSession = {
   appliedInputOptions: Map<string, string>
   /** What Orca put on this process's command line, and the mode it opened in; this process only. */
   launchIntent?: { permissionMode?: string; model?: string }
+  startupPermissionMode?: string | null
   firstRootInit?: { permissionMode: string | null; source?: 'initialize' | 'unanswered-auto-ask' }
   actualFirstRootInit?: { permissionMode: string | null; source?: 'unanswered-auto-ask' }
   /** Claude's own effective settings turn bypass off for this process (startup `get_settings`). */
@@ -165,7 +166,7 @@ export type ClaudeSession = {
   bypassAccepted?: boolean
   /** Why Claude refused a bypass switch, where one told; a settings read or start says settings. */
   bypassRefusal?: ClaudeBypassRefusal
-  /** The permission notice this process last wrote, or an earlier process's unanswered warning. */
+  /** The latest permission notice, including a warning or Auto recovery from an earlier process. */
   fullAccessRefusalNoticeId?: string
   fullAccessRefusalNotices?: { process: string; count: number; after?: number }
   /** Counts permission mode requests, so a fallback written after Claude answers never lands

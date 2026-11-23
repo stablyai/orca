@@ -35,7 +35,7 @@ export function claudeModelTransitionRestart(
   return (input) => {
     const session = sessions.get(input.sessionId)
     const model = input.executionOptions?.model
-    const opened = session?.firstRootInit?.permissionMode
+    const opened = session?.startupPermissionMode
     const requested = session?.launchIntent?.permissionMode
     return Boolean(
       session?.fence === input.fence &&
@@ -44,7 +44,6 @@ export function claudeModelTransitionRestart(
       requested !== undefined &&
       opened !== undefined &&
       opened !== null &&
-      session.firstRootInit?.source !== 'unanswered-auto-ask' &&
       opened !== requested
     )
   }
