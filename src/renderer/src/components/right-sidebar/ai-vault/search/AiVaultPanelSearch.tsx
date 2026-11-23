@@ -66,10 +66,12 @@ function describeSkippedHosts(
 export function AiVaultPanelSearch({
   search,
   noAgents,
+  listed,
   children
 }: {
   search: ReturnType<typeof useAiVaultPanelSearch>
   noAgents: boolean
+  listed: boolean
   children: ReactNode
 }) {
   const t = useTranslate()
@@ -157,7 +159,13 @@ export function AiVaultPanelSearch({
       )
     }
   }
-  if (response?.kind === 'results' && search.hits.length === 0 && !message) {
+  if (!message && listed && search.hits.length === 0 && search.replyEmpty) {
+    // Listed rows without hits are local title matches; the notice holds while the next query is pending.
+    message = t(
+      'sessionSearch.panel.titleMatchesOnly',
+      'No full-text matches. Showing sessions whose title or details match.'
+    )
+  } else if (!message && !listed && response?.kind === 'results') {
     message = t('sessionSearch.panel.noMatchesToShow', 'No matching sessions to show.')
   }
   const skippedHosts =

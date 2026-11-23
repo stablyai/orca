@@ -66,9 +66,12 @@ export function useNativeChatRootInputRouting(
 
   const onPointerDownCapture = useCallback(
     (event: ReactPointerEvent) => {
+      // Portaled popovers bubble through React too; focusing the root would close them.
       if (
         !event.defaultPrevented &&
         event.button === 0 &&
+        event.target instanceof Node &&
+        rootRef.current?.contains(event.target) &&
         shouldFocusNativeChatPaneFromPointerTarget(event.target)
       ) {
         rootRef.current?.focus({ preventScroll: true })

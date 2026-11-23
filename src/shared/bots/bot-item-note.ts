@@ -26,9 +26,9 @@ export type BotItemNoteEntry = BotItemNoteItem & BotItemNoteChange
 /** The bot's chat that made a change another chat's note shows; `title` as it was then. */
 export type BotItemNoteChat = { kind: 'chat'; chatId: string; title: string | null; home?: true }
 
-/** Who made the changes: this chat's bot, the owner, or another of the bot's chats (`'other-chat'`:
- *  one gone by then, or a note written before notes named it). */
-export type BotItemNoteBy = 'bot' | 'owner' | 'other-chat' | BotItemNoteChat
+/** Who made the changes: this chat's bot, the owner, another of the bot's chats (`'other-chat'`:
+ *  one gone by then, or a note written before notes named it), or another agent. */
+export type BotItemNoteBy = 'bot' | 'owner' | 'other-chat' | 'other-agent' | BotItemNoteChat
 
 /** Display-only journal card. `noteId` names it once, so a retried write draws it once. */
 export type AgentJournalBotItemNoteItem = {

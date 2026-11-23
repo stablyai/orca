@@ -1,21 +1,13 @@
 import { useMemo } from 'react'
-import {
-  Activity,
-  Plug,
-  Files,
-  GitBranch,
-  House,
-  LayoutDashboard,
-  ListChecks,
-  MessagesSquare,
-  Workflow
-} from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
 import { getPluginPanelActivityItems } from '../plugin-panels/plugin-panel-activity-items'
+import { getDefaultRightSidebarActivityItems } from './right-sidebar-default-activity-items'
+import { LayoutDashboard } from 'lucide-react'
+import { isAgentDashboardInRightSidebar } from '../../dashboard/settings/agent-dashboard-open-mode'
 import {
   getPortsPanelOwnerKey,
   portsPanelHostForOwnerKey,
@@ -30,7 +22,6 @@ import {
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { AgentSessionHistoryIcon } from './agent-session-history-icon'
 import type { ActivityBarItem } from './activity-bar-buttons'
 import { useBotForWorkspace, useBotGroupForWorkspace } from '../../bots/bot-workspace'
 import { useFocusedChatWorkers } from '@/lib/focused-chat-workers'
@@ -40,7 +31,6 @@ import { useBots } from '@/lib/bot-catalog'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotGroup } from '../../../../../shared/bots/bot-group'
 import { botGroupMemberBots } from '../../../../../shared/bots/bot-sidebar-entries'
-import { isAgentDashboardInRightSidebar } from '../../dashboard/settings/agent-dashboard-open-mode'
 
 const NO_BOTS: readonly Bot[] = []
 
@@ -119,64 +109,17 @@ export function useRightSidebarActivityItems({
   // A bot's page labels every tab (labeledTab): Home, Connectors, Chats, Files.
   const activityItems = useMemo<ActivityBarItem[]>(
     () => [
-      {
-        id: 'explorer',
-        icon: Files,
-        title: isBot
-          ? t('bots.files.tab', 'Files')
-          : t('auto.components.right.sidebar.index.8bc2bbc3a0', 'Explorer'),
-        shortcut: explorerShortcut === 'Unassigned' ? '' : explorerShortcut,
-        onBotPage: true,
-        labeledTab: isBot
-      },
-      {
-        id: 'bot-activity',
-        icon: showsHomeTab ? House : Activity,
-        title: showsHomeTab ? t('bots.items.tab', 'Home') : t('bots.activity.title', 'Activity'),
-        shortcut: '',
-        botOnly: true,
-        labeledTab: showsHomeTab,
-        ...(needsYou > 0
-          ? {
-              count: needsYou,
-              countLabel: t('bots.connectors.needYou', '{{count}} need you', {
-                count: needsYou,
-                defaultValue_one: '{{count}} needs you'
-              })
-            }
-          : {})
-      },
-      {
-        id: 'bot-connectors',
-        icon: Plug,
-        title: t('bots.connectors.tab', 'Connectors'),
-        shortcut: '',
-        botPageOnly: true,
-        labeledTab: isBot,
-        ...(connectorsNeedingOwner > 0
-          ? {
-              count: connectorsNeedingOwner,
-              countLabel: t('bots.connectors.needYou', '{{count}} need you', {
-                count: connectorsNeedingOwner,
-                defaultValue_one: '{{count}} needs you'
-              })
-            }
-          : {})
-      },
-      {
-        id: 'bot-chats',
-        icon: MessagesSquare,
-        title: t('bots.chats.title', 'Chats'),
-        shortcut: '',
-        botPageOnly: true,
-        labeledTab: isBot
-      },
-      {
-        id: 'vault',
-        icon: AgentSessionHistoryIcon,
-        title: t('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
-        shortcut: ''
-      },
+      ...getDefaultRightSidebarActivityItems({
+        t,
+        explorerShortcut,
+        sourceControlShortcut,
+        checksShortcut,
+        portsShortcut,
+        isBot,
+        showsHomeTab,
+        needsYou,
+        connectorsNeedingOwner
+      }),
       ...(agentDashboardDocked
         ? [
             {
@@ -189,41 +132,6 @@ export function useRightSidebarActivityItems({
             }
           ]
         : []),
-      {
-        id: 'workspaces',
-        icon: Workflow,
-        title: t('auto.components.right.sidebar.index.folderWorkspaces', 'Attached worktrees'),
-        shortcut: '',
-        folderOnly: true
-      },
-      {
-        id: 'pr-checks',
-        icon: ListChecks,
-        title: t('auto.components.right.sidebar.index.parentPrChecks', 'PR Checks'),
-        shortcut: '',
-        folderOnly: true
-      },
-      {
-        id: 'source-control',
-        icon: GitBranch,
-        title: t('auto.components.right.sidebar.index.0314901467', 'Source Control'),
-        shortcut: sourceControlShortcut === 'Unassigned' ? '' : sourceControlShortcut,
-        gitOnly: true
-      },
-      {
-        id: 'checks',
-        icon: ListChecks,
-        title: t('auto.components.right.sidebar.index.83a10e3c44', 'Checks'),
-        shortcut: checksShortcut === 'Unassigned' ? '' : checksShortcut,
-        gitOnly: true
-      },
-      {
-        id: 'ports',
-        icon: Plug,
-        title: t('auto.components.right.sidebar.index.441733b630', 'Ports'),
-        shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
-        sshOnly: true
-      },
       // Append plugin tabs to preserve built-in navigation positions.
       ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors).map((item) => ({
         ...item,

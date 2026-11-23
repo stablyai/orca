@@ -8,7 +8,7 @@ import {
 } from '../../shared/connector-bot-slack-contract'
 import type { ConnectorConnectSource } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorConnectRedeem } from '../../../cloud/packages/connector-contract/src/connect-messages'
-import { connectConnector, type KeepConnectLogin } from './connector-connect'
+import { type ConnectAddAccess, connectConnector, type KeepConnectLogin } from './connector-connect'
 
 /** A trip's end: the linked account, or null when it ends at "Open Orca" and its deep link redeems. */
 export type ConnectorTripResult = BotSlackResult<ConnectorConnectRedeem | null>
@@ -29,12 +29,13 @@ const WAIT_SLICE_MS = 45_000
 // The newest trip per source, as connectConnector keeps one; older ids answer "expired".
 const trips = new Map<string, Trip>()
 
-/** Starts a trip and answers its page once the host listens, or the trip's failure. */
+/** Starts a trip and answers its page once the host listens, or the trip's failure; `addAccess`
+ *  says the trip added access as asked, which an older host never says. */
 export async function startConnectorTrip(
   source: ConnectorConnectSource,
   client: Parameters<typeof connectConnector>[1],
-  options: { switchAccount: boolean; keepLogin?: KeepConnectLogin }
-): Promise<BotSlackResult<{ tripId: string; authorizeUrl: string }>> {
+  options: { switchAccount: boolean; keepLogin?: KeepConnectLogin; addAccess?: ConnectAddAccess }
+): Promise<BotSlackResult<{ tripId: string; authorizeUrl: string; addAccess?: true }>> {
   let opened: (url: string) => void = () => {}
   const page = new Promise<string>((resolve) => {
     opened = resolve
@@ -59,7 +60,14 @@ export async function startConnectorTrip(
     outcome.then((result) => ({ result }))
   ])
   if ('authorizeUrl' in first) {
-    return { ok: true, value: { tripId, authorizeUrl: first.authorizeUrl } }
+    return {
+      ok: true,
+      value: {
+        tripId,
+        authorizeUrl: first.authorizeUrl,
+        ...(options.addAccess ? { addAccess: true as const } : {})
+      }
+    }
   }
   trips.delete(tripId)
   return first.result.ok ? { ok: false, error: BOT_SLACK_DESKTOP_ERRORS.failed } : first.result

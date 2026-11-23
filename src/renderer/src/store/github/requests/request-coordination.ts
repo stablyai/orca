@@ -24,6 +24,8 @@ export type InflightPR = {
   generation: number
   lookupHintKey: string
   reason?: GitHubPRRefreshReason
+  /** A poll's flight, refused by an idle-stopped WSL host: a counted read must not join it. */
+  background?: boolean
   superseded?: boolean
   outcome?: PRSnapshotReply
 }

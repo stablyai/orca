@@ -84,6 +84,8 @@ export function proposalSeed({
 export type ProposalCreateTarget = {
   templatePackages: boolean
   skills?: readonly string[]
+  /** The template's name as this client shows it, when it proposed the bot's name in that language. */
+  templateNameShown?: string
   /** From a bot's card: that card. */
   fromOffer?: BotCreateParams['fromOffer']
 }
@@ -109,6 +111,9 @@ export function proposalCreateParams(
     seed,
     ...(template && target.templatePackages
       ? { fromTemplate: { id: template.id, skills: [...(target.skills ?? template.skills)] } }
+      : {}),
+    ...(template && target.templateNameShown
+      ? { templateNameShown: target.templateNameShown }
       : {}),
     ...(target.fromOffer ? { fromOffer: target.fromOffer } : {})
   }

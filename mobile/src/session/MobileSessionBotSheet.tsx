@@ -2,7 +2,9 @@ import { appendReturnedDraftText } from '../../../src/shared/native-chat/input/d
 import { openBotChatTab } from './bot-chat-tab-open'
 import { setMobileNativeChatDraftText } from './native-chat/composer/drafts/mobile-native-chat-draft-store'
 import { mobileNativeChatScopeKey } from './native-chat/conversation/mobile-native-chat-scope-key'
-import { useContext, useMemo } from 'react'
+import { useContext, useEffect, useEffectEvent, useMemo, useRef } from 'react'
+import { useSessionRouteRequest } from './use-session-route-request'
+import { loadMobileNativeChatDrafts } from './native-chat/composer/drafts/mobile-native-chat-draft-persistence'
 import { MobileBotPanel } from '../bots/MobileBotPanel'
 import { MobileDictationLiveContext } from '../dictation/mobile-dictation-live-context'
 import { useMobileDictationLive } from '../dictation/use-mobile-dictation-live'
@@ -27,9 +29,6 @@ import type { BotChatTreeActions } from '../bots/MobileBotChatTree'
 import { openBotItemWorker } from '../bots/items/bot-item-worker-open'
 import type { BotChatTreeWorker } from '../../../src/shared/bots/bot-chat-tree'
 import { useOpenMobileAutomations } from '../automations/use-open-mobile-automations'
-
-// The desktop's "New automation" drafts this into the bot's chat, where automations are made.
-const NEW_AUTOMATION_DRAFT = 'Set up an automation that '
 
 export function MobileSessionBotSheet({ controller }: { controller: MobileSessionController }) {
   const {
@@ -88,13 +87,53 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
     visible: botPanel !== null,
     showToast
   })
-  if (!routeBot || !itemsOnPhone || !hostId) {
-    return null
-  }
-  const homeChatId = routeBot.bot.chatSessionId
+  const homeChatId = routeBot?.bot.chatSessionId
   const homeTab = homeChatId
     ? sessionTabs.find((tab) => tab.type === 'agent-session' && tab.sessionId === homeChatId)
     : undefined
+  const closePanel = () => setBotPanel(null)
+  const startSuggestion =
+    homeTab && hostId
+      ? (ask: string) => {
+          closePanel()
+          // The Home Chat's own draft, as the desktop does, whichever chat is showing.
+          const scope = mobileNativeChatScopeKey(hostId, worktreeId, homeTab.id)
+          if (scope) {
+            setMobileNativeChatDraftText(scope, (current) => appendReturnedDraftText(current, ask))
+          }
+          if (activeSessionTabId !== homeTab.id) {
+            switchSessionTab(homeTab)
+          }
+        }
+      : null
+  // An opener's draft (Update from Import) waits for the Home Chat's tab and its saved draft, then is spent.
+  const homeDraft = useSessionRouteRequest('homeDraft')
+  const appliedHomeDraft = useRef<typeof homeDraft>(null)
+  const askHomeDraft = useEffectEvent((request: NonNullable<typeof homeDraft>) => {
+    if (appliedHomeDraft.current !== request) {
+      appliedHomeDraft.current = request
+      startSuggestion?.(request.value)
+    }
+  })
+  const homeTabId = homeTab?.id
+  useEffect(() => {
+    if (!homeDraft?.value || !homeTabId || !hostId || appliedHomeDraft.current === homeDraft) {
+      return
+    }
+    let live = true
+    // A write before the saved draft is in outranks it, losing what the owner typed; theirs wins.
+    void loadMobileNativeChatDrafts(hostId, worktreeId).then((loaded) => {
+      if (live && loaded) {
+        askHomeDraft(homeDraft)
+      }
+    })
+    return () => {
+      live = false
+    }
+  }, [homeDraft, homeTabId, hostId, worktreeId])
+  if (!routeBot || !itemsOnPhone || !hostId) {
+    return null
+  }
   const chatTabScope = {
     homeChatId,
     sessionTabs,
@@ -121,7 +160,6 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
       ...(host && host !== LOCAL_EXECUTION_HOST_ID ? { executionHost: host } : {})
     })
   }
-  const closePanel = () => setBotPanel(null)
   const treeActions: BotChatTreeActions = {
     openChat: (chat) => {
       closePanel()
@@ -144,24 +182,12 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
     hostRouter.replace(hostStackHostRoute(hostId))
   }
   const home = { folderPath: controller.worktreePath, onDeleted: leaveDeletedBot }
-  const startSuggestion = homeTab
-    ? (ask: string) => {
-        closePanel()
-        // The Home Chat's own draft, as the desktop does, whichever chat is showing.
-        const scope = mobileNativeChatScopeKey(hostId, worktreeId, homeTab.id)
-        if (scope) {
-          setMobileNativeChatDraftText(scope, (current) => appendReturnedDraftText(current, ask))
-        }
-        if (activeSessionTabId !== homeTab.id) {
-          switchSessionTab(homeTab)
-        }
-      }
-    : null
   const newAutomation = nativeChatController.showNativeChat
     ? () => {
         closePanel()
+        // The desktop's "New automation" draft, into the bot's chat where automations are made.
         nativeChatController.setChatComposerText((current) =>
-          current.trim() ? current : NEW_AUTOMATION_DRAFT
+          current.trim() ? current : t('bots.automations.newDraft', 'Set up an automation that ')
         )
       }
     : null
