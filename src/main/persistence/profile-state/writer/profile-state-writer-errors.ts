@@ -65,14 +65,15 @@ export function encodeProfileStateWriterError(
     return { code: error.code, message: error.message, outcome, domain: error.domain }
   }
   if (error instanceof ProfileStateDatabaseOpenError) {
-    const cause = encodeOpenErrorCause(error.cause)
+    const cause = encodeErrorCause(error.cause)
     return { code: error.code, message: error.message, outcome, ...(cause ? { cause } : {}) }
   }
-  if (
-    error instanceof ProfileStateWriterError ||
-    error instanceof ProfileStateIndeterminateWriteError ||
-    error instanceof ProfileStateReadRollbackError
-  ) {
+  if (error instanceof ProfileStateIndeterminateWriteError) {
+    // Keep a full-disk cause so the notice can still say the disk is full.
+    const cause = encodeErrorCause(error.cause)
+    return { code: error.code, message: error.message, outcome, ...(cause ? { cause } : {}) }
+  }
+  if (error instanceof ProfileStateWriterError || error instanceof ProfileStateReadRollbackError) {
     return { code: error.code, message: error.message, outcome }
   }
   return {
@@ -106,11 +107,16 @@ export function decodeProfileStateWriterError(data: ProfileStateWriterErrorData)
       )
     }
   }
-  return new ProfileStateWriterError(data.code, data.message, data.outcome)
+  return new ProfileStateWriterError(
+    data.code,
+    data.message,
+    data.outcome,
+    data.cause ? { cause: Object.assign(new Error(data.cause.message), data.cause) } : undefined
+  )
 }
 
 // Preserve SQLite causes to distinguish lock races from damage (#27333); these messages exclude user data.
-function encodeOpenErrorCause(cause: unknown): ProfileStateWriterErrorData['cause'] {
+function encodeErrorCause(cause: unknown): ProfileStateWriterErrorData['cause'] {
   if (!(cause instanceof Error)) {
     return undefined
   }

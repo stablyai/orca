@@ -159,6 +159,11 @@ export class ProfileStateWriterReopenPolicy {
       `[persistence] Could not reopen the profile writer; retrying in ${retryInMs} ms:`,
       error
     )
+    // The save that asked for this reopen is refused, so say so instead of failing silently.
+    this.raiseUnsaved(
+      'Could not reopen the profile writer',
+      error instanceof Error ? error : new Error(String(error))
+    )
     return { retryInMs }
   }
 }

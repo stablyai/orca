@@ -4,6 +4,7 @@ import {
   ProfileStateWriterError,
   profileStateWriterFailureOutcome
 } from '../../profile-state/writer/profile-state-writer-errors'
+import { ProfileStateDatabaseOpenError } from '../../profile-state/database/profile-state-database-errors'
 import { isProfileStateRevisionConflict } from '../../profile-state/writer/profile-state-writer-reopen-policy'
 
 const SAVE_RETRY_MS = 5_000
@@ -52,10 +53,11 @@ export function retryRefusedSave(
   runtime.writeTimer = setTimeout(() => runScheduledSave(runtime, writes, nextDelayMs), delayMs)
 }
 
-/** Only a save the writer refused can succeed later; a conflict or a writer stopped for good never will. */
+/** Only a save the writer refused, or a reopen it could not finish, can succeed later; a conflict or a writer stopped for good never will. */
 function savingCanResume(runtime: SaveRetryRuntime, error: unknown): boolean {
   const refusedByWriter =
     error instanceof ProfileStateWriterError ||
+    error instanceof ProfileStateDatabaseOpenError ||
     profileStateWriterFailureOutcome(error) === 'indeterminate'
   if (!refusedByWriter || isProfileStateRevisionConflict(error)) {
     return false

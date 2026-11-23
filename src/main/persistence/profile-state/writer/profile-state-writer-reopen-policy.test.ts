@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { ProfileStateSaveNotice } from '../../../../shared/orca-profiles/profile-state-save-notice'
+import { ProfileStateIndeterminateWriteError } from '../database/profile-state-write-transaction'
+import { storageCapacityErrorCode } from '../../../../shared/errors/storage-capacity-error'
+import {
+  decodeProfileStateWriterError,
+  encodeProfileStateWriterError
+} from './profile-state-writer-errors'
 import { ProfileStateWriterReopenPolicy } from './profile-state-writer-reopen-policy'
 
 describe('profile save notice', () => {
@@ -27,5 +33,24 @@ describe('profile save notice', () => {
     policy.recordSaved()
     policy.reportStopped(conflict)
     expect(failures).toHaveLength(2)
+  })
+
+  it('warns when the writer cannot reopen, so a refused save is not silent', () => {
+    const notices: ProfileStateSaveNotice[] = []
+    const policy = new ProfileStateWriterReopenPolicy(() => ({
+      onSaveDelayChanged: (notice) => notices.push(notice)
+    }))
+    policy.recordFailure(new Error('database is locked'))
+    expect(notices).toEqual(['failing'])
+  })
+
+  it('keeps a full-disk cause across the worker boundary for an interrupted write', () => {
+    const full = Object.assign(new Error('database or disk is full'), {
+      code: 'ERR_SQLITE_ERROR',
+      errcode: 13
+    })
+    const interrupted = new ProfileStateIndeterminateWriteError(full, new Error('rollback failed'))
+    const decoded = decodeProfileStateWriterError(encodeProfileStateWriterError(interrupted))
+    expect(storageCapacityErrorCode(decoded)).toBe('SQLITE_FULL')
   })
 })
