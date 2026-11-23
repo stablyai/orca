@@ -74,17 +74,18 @@ export function printForBrowserViewer(
       if (!viewer) {
         return
       }
-      // A save underway keeps its print; the oldest unread beyond a few is dropped to bound memory.
-      const waiting = [...heldPrints].filter(
-        ([, held]) =>
-          !held.reading &&
-          held.guestWebContentsId === guestWebContentsId &&
-          held.pairedDeviceId === pairedDeviceId
+      // At most a few prints wait per device and page: the oldest unread goes first, and a save
+      // underway is never dropped, so with every slot saving the new print is declined.
+      const held = [...heldPrints].filter(
+        ([, print]) =>
+          print.guestWebContentsId === guestWebContentsId && print.pairedDeviceId === pairedDeviceId
       )
-      for (const [printId] of waiting.slice(
-        0,
-        Math.max(0, waiting.length - MAX_WAITING_PRINTS + 1)
-      )) {
+      const unread = held.filter(([, print]) => !print.reading)
+      const excess = held.length - MAX_WAITING_PRINTS + 1
+      if (excess > unread.length) {
+        return
+      }
+      for (const [printId] of unread.slice(0, Math.max(0, excess))) {
         forgetHeldPrint(printId)
       }
       const printId = randomUUID()
