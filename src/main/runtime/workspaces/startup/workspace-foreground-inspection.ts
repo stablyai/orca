@@ -6,6 +6,7 @@ import {
   readAdoptedRootAgentForeground,
   readExactAgentForeground,
   readLaunchedAgentForeground,
+  type ExactAgentForeground,
   type ExactAgentName,
   type LaunchedAgentForeground,
   type LaunchedAgentHost
@@ -71,7 +72,7 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
     pty: RuntimePtyWorktreeRecord | undefined,
     ptyId: string,
     agent: TuiAgent
-  ): Promise<LaunchedAgentForeground> {
+  ): Promise<ExactAgentForeground> {
     if (!pty || pty.connectionId || this.ptyController?.supportsForegroundObservation?.(ptyId)) {
       return readExactAgentForeground(this, this.ptyController, ptyId, agent)
     }

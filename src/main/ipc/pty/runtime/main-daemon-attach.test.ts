@@ -21,7 +21,8 @@ type RuntimeInternals = {
     pty: unknown,
     incarnationId: string,
     identity: { incarnationId: string; launchAgent: string },
-    reattach: { launchNote: null }
+    reattach: { launchNote: null },
+    trustUnread: boolean
   ) => Promise<void> | undefined
 }
 
@@ -67,11 +68,12 @@ function foregroundIs(
   runtime: OrcaRuntimeService,
   foreground: 'agent' | 'shell' | 'unknown',
   name: string | null,
-  answered: Promise<void> = Promise.resolve()
+  answered: Promise<void> = Promise.resolve(),
+  observable = true
 ) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exact read asks the owner only for a fresh foreground name.
   runtime.setPtyController({
-    supportsForegroundObservation: () => true,
+    supportsForegroundObservation: () => observable,
     confirmForegroundProcess: async () => (name === '2.1.330' ? 'claude' : name),
     setLaunchNote
   } as unknown as RuntimePtyController)
@@ -97,6 +99,25 @@ const FOREGROUNDS = [
   ['an unreadable Windows foreground', 'unknown', null, null],
   ['a shell', 'shell', 'zsh', null]
 ] as const
+
+const TAB = '10000000-0000-4000-8000-000000000001'
+const LEAF = '10000000-0000-4000-8000-000000000002'
+
+/** A pane mounting the surviving session, as its reattach registers it. */
+async function paneReattach(
+  runtime: OrcaRuntimeService,
+  launchNote: PtySpawnResult['launchNote'] | undefined
+): Promise<void> {
+  runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+    tabId: TAB,
+    leafId: LEAF,
+    incarnationId: INCARNATION_ID,
+    providerReattachLaunchIdentity: { incarnationId: INCARNATION_ID, launchAgent: 'claude' },
+    ...(launchNote === undefined ? {} : { reattach: { launchNote } })
+  })
+  await vi.waitFor(() => expect(runtime.readLaunchedAgentForeground).toHaveBeenCalled())
+  await new Promise<void>((resolve) => queueMicrotask(resolve))
+}
 
 describe('main attach of a surviving daemon session', () => {
   // After an app or server restart, a background worker terminal that no pane mounts is attached by
@@ -147,7 +168,8 @@ describe('main attach of a surviving daemon session', () => {
       internals.ptysById.get(PTY_ID),
       INCARNATION_ID,
       { incarnationId: INCARNATION_ID, launchAgent: 'claude' },
-      { launchNote: null }
+      { launchNote: null },
+      true
     )
     expect(runtime.getPaneTerminalAgent(PTY_ID)).toBeNull()
   })
@@ -165,9 +187,49 @@ describe('main attach of a surviving daemon session', () => {
       internals.ptysById.get(PTY_ID),
       INCARNATION_ID,
       { incarnationId: INCARNATION_ID, launchAgent: 'claude' },
-      { launchNote: null }
+      { launchNote: null },
+      true
     )
     expect(read).toHaveBeenCalled()
+    expect(runtime.getPaneTerminalAgent(PTY_ID)).toBe('claude')
+  })
+
+  it('restores nothing on an old local owner without a terminal-scoped read', async () => {
+    const runtime = survivingSession()
+    const read = foregroundIs(runtime, 'agent', 'claude', undefined, false)
+    await attachWith(runtime, null)
+    expect(read).not.toHaveBeenCalled()
+    expect(runtime.getPaneTerminalAgent(PTY_ID)).toBeNull()
+  })
+})
+
+describe('pane reattach of a surviving daemon session', () => {
+  it.each([
+    ['claude by name', 'agent', 'claude', 'claude'],
+    ['vim', 'agent', 'vim', null],
+    ['a shell', 'shell', 'zsh', null],
+    // Where no read can tell, the daemon's name restores the agent, as a pane reattach always did.
+    ['an unreadable Windows foreground', 'unknown', null, 'claude']
+  ] as const)('with %s in front', async (_case, foreground, name, expected) => {
+    const runtime = new OrcaRuntimeService()
+    foregroundIs(runtime, foreground, name)
+    setLaunchNote.mockClear()
+    await paneReattach(runtime, NOTE)
+    await vi.waitFor(() => expect(runtime.getPaneTerminalAgent(PTY_ID)).toBe(expected))
+    // An unreadable foreground proves no launch, so its note is neither held nor retired.
+    expect(setLaunchNote).toHaveBeenCalledTimes(foreground === 'shell' ? 1 : 0)
+  })
+
+  it('restores the daemon-named agent on an old local owner without a terminal-scoped read', () => {
+    const runtime = new OrcaRuntimeService()
+    const read = foregroundIs(runtime, 'agent', 'vim', undefined, false)
+    runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+      tabId: TAB,
+      leafId: LEAF,
+      incarnationId: INCARNATION_ID,
+      providerReattachLaunchIdentity: { incarnationId: INCARNATION_ID, launchAgent: 'claude' }
+    })
+    expect(read).not.toHaveBeenCalled()
     expect(runtime.getPaneTerminalAgent(PTY_ID)).toBe('claude')
   })
 })

@@ -16,8 +16,12 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execu
 /** agent permits writing; shell drops readiness; unknown proves neither. */
 export type LaunchedAgentForeground = 'agent' | 'shell' | 'unknown'
 
-/** Set when the read's own fresh, fenced observation named exactly the agent asked about. */
-export type ExactAgentName = { named: boolean }
+/** `named`: the read's own fresh, fenced observation named exactly the agent asked about. `other`: a
+ *  fresh name it read is neither that agent nor a shell. */
+export type ExactAgentName = { named: boolean; other?: boolean }
+
+/** An exact read: `other` when another program is seen in front, `unknown` only when none can be read. */
+export type ExactAgentForeground = LaunchedAgentForeground | 'other'
 
 export type LaunchedAgentHost = {
   remote: boolean
@@ -50,12 +54,19 @@ const EVIDENCE_MAX_AGE_MS = 2 * PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
 
 function judgeFreshForeground(
   processName: string | null,
-  agent: TuiAgent
+  agent: TuiAgent,
+  exact?: ExactAgentName
 ): LaunchedAgentForeground {
   if (processName && isLaunchedAgent(processName, agent)) {
     return 'agent'
   }
-  return processName && isLaunchShell(processName) ? 'shell' : 'unknown'
+  if (processName && isLaunchShell(processName)) {
+    return 'shell'
+  }
+  if (exact && processName) {
+    exact.other = true
+  }
+  return 'unknown'
 }
 
 function isLaunchShell(processName: string): boolean {
@@ -118,7 +129,7 @@ export async function readLaunchedAgentForeground(
         if (!host.remote) {
           return observation.foregroundKind === 'shell' ? 'shell' : 'agent'
         }
-        return judgeFreshForeground(observation.processName, agent)
+        return judgeFreshForeground(observation.processName, agent, exact)
       }
     }
     if (!host.remote) {
@@ -156,7 +167,7 @@ export async function readLaunchedAgentForeground(
       }
       // Up to two TTLs the agent may have exited since: a foreground read now decides.
       if (evidence.capturedAgeMs <= EVIDENCE_MAX_AGE_MS && controller.confirmForegroundProcess) {
-        return judgeFreshForeground(await controller.confirmForegroundProcess(ptyId), agent)
+        return judgeFreshForeground(await controller.confirmForegroundProcess(ptyId), agent, exact)
       }
     }
     // Only evidence that saw an agent row it could not fence alone lets a name complete it.
@@ -209,9 +220,12 @@ export async function readExactAgentForeground(
   controller: Pick<RuntimePtyController, 'confirmForegroundProcess'> | null | undefined,
   ptyId: string,
   agent: TuiAgent
-): Promise<LaunchedAgentForeground> {
+): Promise<ExactAgentForeground> {
   const exact: ExactAgentName = { named: false }
   const foreground = await runtime.readLaunchedAgentForeground(ptyId, agent, exact)
+  if (foreground === 'unknown' && exact.other) {
+    return 'other'
+  }
   if (foreground !== 'agent' || exact.named) {
     return foreground
   }
@@ -225,7 +239,7 @@ export async function readAdoptedRootAgentForeground(
   rootPid: number,
   ptyId: string,
   agent: TuiAgent
-): Promise<LaunchedAgentForeground> {
+): Promise<ExactAgentForeground> {
   try {
     const rows = await readTerminalProcessRows(rootPid)
     const foreground = rows ? judgeTerminalForeground(rows, rootPid, agent) : 'unknown'
@@ -241,7 +255,10 @@ async function confirmAgentNameAtOwner(
   controller: Pick<RuntimePtyController, 'confirmForegroundProcess'> | null | undefined,
   ptyId: string,
   agent: TuiAgent
-): Promise<LaunchedAgentForeground> {
+): Promise<ExactAgentForeground> {
   const name = (await controller?.confirmForegroundProcess?.(ptyId)) ?? null
-  return recognizeAgentProcess(name)?.agent === agent ? 'agent' : 'unknown'
+  if (!name) {
+    return 'unknown'
+  }
+  return recognizeAgentProcess(name)?.agent === agent ? 'agent' : 'other'
 }

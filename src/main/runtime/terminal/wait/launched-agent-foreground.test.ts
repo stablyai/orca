@@ -5,6 +5,7 @@ import type * as TerminalForegroundGroup from '../../../pty/process-retirement/t
 
 import {
   readAdoptedRootAgentForeground,
+  readExactAgentForeground,
   readLaunchedAgentForeground
 } from './launched-agent-foreground'
 
@@ -100,6 +101,56 @@ describe('the relay’s foreground group as proof of a launched agent', () => {
   })
 })
 
+// A reattach restores the daemon-named agent where nothing can be read, never where another program is seen.
+describe('an exact read tells another program in front from an unreadable foreground', () => {
+  function ownerSeeing(processName: string, confirmed: string | null) {
+    return {
+      supportsForegroundObservation: () => true,
+      inspectProcess: async () => ({
+        foregroundProcess: processName,
+        hasChildProcesses: true,
+        foregroundObservation: {
+          ptyId: 'pty-1',
+          ptyIncarnationId: 'inc',
+          authorityGeneration: 'owner',
+          observationEpoch: 1,
+          capturedAgeMs: 0,
+          verdict: 'observed' as const,
+          source: 'posix-process-table' as const,
+          foregroundKind: 'non-shell' as const,
+          processName
+        }
+      }),
+      getForegroundProcess: async () => processName,
+      confirmForegroundProcess: async () => confirmed,
+      confirmShellForeground: async () => false
+    }
+  }
+
+  it.each([
+    ['local vim', { remote: false, windows: false }, ownerSeeing('vim', 'vim'), 'other'],
+    [
+      'local, no fresh name',
+      { remote: false, windows: false },
+      ownerSeeing('vim', null),
+      'unknown'
+    ],
+    ['SSH vim', POSIX_SSH, ownerSeeing('vim', 'vim'), 'other'],
+    ['Windows', { remote: false, windows: true }, ownerSeeing('vim', 'vim'), 'unknown']
+  ] as const)('%s', async (_case, host, controller, expected) => {
+    const runtime = {
+      readLaunchedAgentForeground: (
+        ptyId: string,
+        agent: 'claude',
+        exact?: { named: boolean; other?: boolean }
+      ) => readLaunchedAgentForeground(controller, host, ptyId, agent, undefined, exact)
+    }
+    await expect(readExactAgentForeground(runtime, controller, 'pty-1', 'claude')).resolves.toBe(
+      expected
+    )
+  })
+})
+
 // Guarded pastes must use terminal-local probes instead of slow whole-machine scans.
 
 describe('owner-held recipient observations', () => {
@@ -181,6 +232,6 @@ describe('an old owner’s rest-title read from the root PID discovery listed', 
         'pty-1',
         'claude'
       )
-    ).resolves.toBe('unknown')
+    ).resolves.toBe('other')
   })
 })

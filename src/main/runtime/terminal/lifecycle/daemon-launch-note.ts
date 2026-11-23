@@ -107,17 +107,27 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     ) {
       return undefined
     }
-    return this.restoreReattachedLaunch(pty, attach.incarnationId, attach.identity, attach.reattach)
+    // Main's attach never restored an agent it can't see in front; an unreadable foreground keeps that.
+    return this.restoreReattachedLaunch(
+      pty,
+      attach.incarnationId,
+      attach.identity,
+      attach.reattach,
+      false
+    )
   }
 
   /** Daemon metadata names the agent launched in a surviving process, fenced to its incarnation; the
    *  note main armed re-holds that launch. Neither alone proves the agent still runs: the terminal
-   *  may since run vim, ssh or another agent. `reattach` is absent when the host noted nothing. */
+   *  may since run vim, ssh or another agent. `reattach` is absent when the host noted nothing.
+   *  `trustUnread`: where the foreground can't be read, take the daemon's name, as a pane reattach
+   *  always has. */
   protected restoreReattachedLaunch(
     pty: RuntimePtyWorktreeRecord,
     incarnationId: PtyIncarnationId | undefined,
     identity: ReattachedLaunchIdentity | null,
-    reattach: { launchNote?: DaemonLaunchNote | null } | undefined
+    reattach: { launchNote?: DaemonLaunchNote | null } | undefined,
+    trustUnread: boolean
   ): Promise<void> | undefined {
     const fenced =
       identity && pty.incarnationId === identity.incarnationId && isTuiAgent(identity.launchAgent)
@@ -128,27 +138,37 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     if (reattach && (pty.incarnationId ?? undefined) === incarnationId) {
       pending = recordReattachedLaunch(pty, incarnationId, reattach.launchNote)
     }
-    // An older local owner can only list every session per read: with no cheap proof, restore nothing.
-    if (
-      !fenced ||
-      pty.launchToken ||
-      (!pty.connectionId && !this.ptyController?.supportsForegroundObservation?.(pty.ptyId))
-    ) {
+    if (!fenced || pty.launchToken) {
+      return undefined
+    }
+    // An older local owner can only list every session per read, so its foreground counts as unread.
+    if (!pty.connectionId && !this.ptyController?.supportsForegroundObservation?.(pty.ptyId)) {
+      if (trustUnread) {
+        this.restoreLaunchAgent(pty, fenced.launchAgent)
+      }
       return undefined
     }
     const note = pending ? (reattach?.launchNote ?? null) : null
-    return this.confirmReattachedLaunch(pty, fenced, pty.launchEvidence, note)
+    return this.confirmReattachedLaunch(pty, fenced, pty.launchEvidence, note, trustUnread)
   }
 
-  /** Only the launched agent's own process in front restores it (and re-holds a noted launch). With
-   *  no such proof (vim, ssh, another agent, an unreadable Windows/WSL/SSH foreground) the pane gets
-   *  no launch agent, and its foreground name decides. Only a shell in front undoes an earlier proof,
-   *  and retires the note. */
+  private restoreLaunchAgent(pty: RuntimePtyWorktreeRecord, agent: TuiAgent): void {
+    if (!pty.launchAgent) {
+      pty.launchAgent = agent
+      this.touchMobileSessionSnapshotsForPty(pty.ptyId)
+    }
+  }
+
+  /** The launched agent's own process in front restores it and re-holds a noted launch; another
+   *  program in front (vim, ssh, another agent) restores nothing, so its foreground name decides. An
+   *  unreadable foreground (Windows, WSL, older SSH relays) proves neither: `trustUnread` restores the
+   *  agent without holding the note. Only a shell in front undoes an earlier restore, and retires the note. */
   private async confirmReattachedLaunch(
     pty: RuntimePtyWorktreeRecord,
     identity: ReattachedLaunchIdentity,
     evidence: LaunchEvidence | undefined,
-    note: DaemonLaunchNote | null
+    note: DaemonLaunchNote | null,
+    trustUnread: boolean
   ): Promise<void> {
     const agent = identity.launchAgent
     const foreground = await readExactAgentForeground(
@@ -165,11 +185,12 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     ) {
       return
     }
+    if (foreground === 'unknown' && trustUnread) {
+      this.restoreLaunchAgent(pty, agent)
+      return
+    }
     if (foreground === 'agent') {
-      if (!pty.launchAgent) {
-        pty.launchAgent = agent
-        this.touchMobileSessionSnapshotsForPty(pty.ptyId)
-      }
+      this.restoreLaunchAgent(pty, agent)
       if (note && pty.launchAgent === agent) {
         holdLaunch(pty, identity.incarnationId, {
           agent,

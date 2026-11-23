@@ -44,7 +44,7 @@ describe('reading that the agent itself is in front', () => {
     ).resolves.toBe('agent')
     await expect(
       readExactAgentForeground(readAgent, named('less'), 'pty-1', 'claude')
-    ).resolves.toBe('unknown')
+    ).resolves.toBe('other')
   })
 })
 

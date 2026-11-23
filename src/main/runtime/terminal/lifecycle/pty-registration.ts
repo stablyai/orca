@@ -184,7 +184,8 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLa
         this.paneOfPty(pty).paneKey === paneKey
         ? identity
         : null,
-      binding?.reattach
+      binding?.reattach,
+      true
     )
     const pendingIncarnation = this.pendingPtyRegistrationIncarnations.get(ptyId)?.incarnationId
     if (
