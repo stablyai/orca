@@ -126,7 +126,7 @@ export class ConnectorTurnEvents {
   // Whether the current hello's answer listed replies.outbox; undefined before one.
   private repliesOutbox: boolean | undefined
   // Delivery ids of replies refused as invalid under the current hello, held until the next one.
-  private setAside: string[] = []
+  private readonly setAside = new Set<string>()
 
   constructor(
     userDataPath: string,
@@ -164,10 +164,11 @@ export class ConnectorTurnEvents {
         // until the next one (its row stays unsent). Any other refusal (a 413, or a 503 outcome
         // that doesn't stand yet) goes again later.
         if (failure?.status === 400) {
-          this.setAside.push(...replyDeliveryIds([item]))
+          replyDeliveryIds([item]).forEach((id) => this.setAside.add(id))
           return
         }
-        this.replies.forget(replyDeliveryIds([item]))
+        // A sibling of a held reply (one answer split across events) leaves the held ids held.
+        this.replies.forget(replyDeliveryIds([item]).filter((id) => !this.setAside.has(id)))
         this.replies.retryLater()
       }
     })
@@ -286,7 +287,7 @@ export class ConnectorTurnEvents {
       return kept
     })
     this.replies.forget([...this.setAside, ...replyDeliveryIds(released)])
-    this.setAside = []
+    this.setAside.clear()
   }
 
   /** True until the next snapshot once the caps dropped an event. */
@@ -344,7 +345,7 @@ export class ConnectorTurnEvents {
   clear(): void {
     this.stored.clear()
     this.replies.retire()
-    this.setAside = []
+    this.setAside.clear()
     this.outbox.restart([], () => false)
     this.trace.flush()
   }
