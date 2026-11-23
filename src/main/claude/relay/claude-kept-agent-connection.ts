@@ -130,20 +130,6 @@ export async function openKeptClaudeAgentConnection(
     void write(line).catch(() => {})
   })
   const inbox = createClaudeUserMessageQueue()
-  // Each message is written whole before the next, as the SDK's input stream does.
-  void (async () => {
-    try {
-      for await (const message of inbox.messages) {
-        await write(`${JSON.stringify(message)}\n`)
-      }
-    } catch (error) {
-      // A message the agent couldn't take stays visible as not sent; ending the agent makes the
-      // retry cold-resume with that same message.
-      inbox.fail(error instanceof Error ? error : new Error(String(error)))
-      void close()
-    }
-  })()
-
   const lines: string[] = []
   let partial = ''
   let draining: Promise<void> = Promise.resolve()
@@ -239,6 +225,20 @@ export async function openKeptClaudeAgentConnection(
     })()
     return closePromise
   }
+
+  // Each message is written whole before the next, as the SDK's input stream does.
+  void (async () => {
+    try {
+      for await (const message of inbox.messages) {
+        await write(`${JSON.stringify(message)}\n`)
+      }
+    } catch (error) {
+      // A message the agent couldn't take stays visible as not sent; ending the agent makes the
+      // retry cold-resume with that same message.
+      inbox.fail(error instanceof Error ? error : new Error(String(error)))
+      void close()
+    }
+  })()
 
   return {
     ...createClaudeControlSurface(keptQuery),
