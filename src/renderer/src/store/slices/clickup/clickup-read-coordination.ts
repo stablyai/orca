@@ -80,17 +80,22 @@ export function clickupOwnerContextKey(owner: RuntimeClientTarget): string {
 
 type ClickUpScopeState = Pick<AppState, 'clickupStatus' | 'clickupStatusContextKey'>
 
+/** The Workspace a source context binds itself to; null when it has none and reads the status slot's. */
+export function clickupSourceContextWorkspaceId(sourceContext: TaskSourceContext): string | null {
+  const identity = sourceContext.providerIdentity
+  return (identity?.provider === 'clickup' ? identity.workspaceId : null) ?? null
+}
+
 export function getClickUpReadScope(
   state: ClickUpScopeState,
   sourceContext: TaskSourceContext
 ): ClickUpReadScope {
-  const identity = sourceContext.providerIdentity
   const target = taskSourceRuntimeTarget(sourceContext)
   const runtimeContextKey = clickupOwnerContextKey(target)
   // The status slot holds one runtime's Workspace; another runtime's reads must not borrow it.
   const slotDescribesRuntime = state.clickupStatusContextKey === runtimeContextKey
   const workspaceId =
-    (identity?.provider === 'clickup' ? identity.workspaceId : null) ??
+    clickupSourceContextWorkspaceId(sourceContext) ??
     (slotDescribesRuntime ? state.clickupStatus.selectedWorkspaceId : null)
   // Encoded and tagged, so no id (even one holding `::` or spelling a sentinel) can equal another key.
   const workspaceKey =

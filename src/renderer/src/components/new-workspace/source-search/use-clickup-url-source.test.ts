@@ -89,20 +89,27 @@ afterEach(() => {
 })
 
 describe('useClickUpUrlSource', () => {
-  it('looks the URL up again when the selected Workspace changes under an unbound context', async () => {
-    const unbound = context(null)
-    const { rerender } = renderHook(() =>
-      useClickUpUrlSource({ value: TASK_URL, enabled: true, sourceContext: unbound, connection })
-    )
-    await settleLookup()
-    expect(store.fetchClickUpTask).toHaveBeenCalledTimes(1)
+  it.each([
+    ['no identity', null],
+    ['a ClickUp identity with a null workspaceId', { provider: 'clickup', workspaceId: null }],
+    ['a ClickUp identity without a workspaceId', { provider: 'clickup' }]
+  ] satisfies [string, TaskSourceContext['providerIdentity']][])(
+    'looks the URL up again when the selected Workspace changes under %s',
+    async (_label, identity) => {
+      const unbound = context(identity)
+      const { rerender } = renderHook(() =>
+        useClickUpUrlSource({ value: TASK_URL, enabled: true, sourceContext: unbound, connection })
+      )
+      await settleLookup()
+      expect(store.fetchClickUpTask).toHaveBeenCalledTimes(1)
 
-    store.clickupStatus.selectedWorkspaceId = 'W2'
-    rerender()
-    await settleLookup()
+      store.clickupStatus.selectedWorkspaceId = 'W2'
+      rerender()
+      await settleLookup()
 
-    expect(store.fetchClickUpTask).toHaveBeenCalledTimes(2)
-  })
+      expect(store.fetchClickUpTask).toHaveBeenCalledTimes(2)
+    }
+  )
 
   it('keeps one lookup for a context bound to a Workspace', async () => {
     const bound = context({ provider: 'clickup', workspaceId: 'W1' })

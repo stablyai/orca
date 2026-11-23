@@ -332,6 +332,43 @@ describe('ClickUp status writes', () => {
     expect(cachedStatuses(store, writer)[1]).toBe('Done')
   })
 
+  it('applies the written status to a page first cached with the old one while the write was out', async () => {
+    const store = createTestStore()
+    const writer = { sourceContext: sourceContext('p1') }
+    api.getTask.mockResolvedValue(task('Done'))
+    const writing = deferred<{ ok: true }>()
+    api.updateTask.mockReturnValue(writing.promise)
+
+    const update = store
+      .getState()
+      .updateClickUpTaskStatus(task('Open'), statusOption('Done'), writer)
+    api.listTasks.mockResolvedValueOnce({ tasks: [task('Open')], nextPage: null })
+    await store.getState().listClickUpTasks({ filter: ALL, page: 0 }, writer)
+    expect(cachedStatuses(store, writer)[1]).toBe('Open')
+    writing.resolve({ ok: true })
+    await update
+
+    expect(cachedStatuses(store, writer)[1]).toBe('Done')
+  })
+
+  it('keeps a different status that a page first cached during the write already holds', async () => {
+    const store = createTestStore()
+    const writer = { sourceContext: sourceContext('p1') }
+    api.getTask.mockResolvedValue(task('Done'))
+    const writing = deferred<{ ok: true }>()
+    api.updateTask.mockReturnValue(writing.promise)
+
+    const update = store
+      .getState()
+      .updateClickUpTaskStatus(task('Open'), statusOption('Done'), writer)
+    api.listTasks.mockResolvedValueOnce({ tasks: [task('Review')], nextPage: null })
+    await store.getState().listClickUpTasks({ filter: ALL, page: 0 }, writer)
+    writing.resolve({ ok: true })
+    await update
+
+    expect(cachedStatuses(store, writer)[1]).toBe('Review')
+  })
+
   it('leaves a copy that got a different newer status while the write was out', async () => {
     const store = createTestStore()
     const writer = { sourceContext: sourceContext('p1') }

@@ -98,11 +98,13 @@ export function createClickUpWriteActions(
         }
       }
       if (result.ok) {
-        // A read that stored the pre-write status while the write was out must not outlive it. Copies holding any
-        // other status keep it: it may be another client's later change, which this write must not overwrite.
+        // A read that stored the pre-write status while the write was out must not outlive it. That is a copy still
+        // holding the status it had before: its own recorded one, or the written task's for a copy cached only
+        // during the write. Copies holding any other status keep it: it may be another client's later change.
         noteClickUpStatusWrite(prefix)
         rewriteCachedClickUpTask(set, prefix, task.id, (cached, copy) =>
-          cached.status !== status && cached.status.name === priorStatuses.get(copy)?.name
+          cached.status !== status &&
+          cached.status.name === (priorStatuses.get(copy) ?? task.status).name
             ? { ...cached, status }
             : cached
         )

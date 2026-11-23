@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CacheEntry } from '@/store/github/cache/cache-model'
 import { clickupListCacheKey } from '@/store/slices/clickup/clickup-read-coordination'
 import type {
@@ -73,13 +73,24 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
+const NOW = 1_800_000_000_000
+
 function cachePage(page: number, result: ClickUpTaskPage): ClickUpTaskPage {
   store.clickupListCache[clickupListCacheKey(store, sourceContext, { filter: ALL, page })] = {
     data: result,
-    fetchedAt: Date.now()
+    fetchedAt: NOW
   }
   return result
 }
+
+beforeEach(() => {
+  // Cache freshness reads the clock; a fixed instant keeps seeded pages fresh on any machine.
+  vi.spyOn(Date, 'now').mockReturnValue(NOW)
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('useClickUpTaskList', () => {
   it('drops a load-more page that was requested before a refresh', async () => {

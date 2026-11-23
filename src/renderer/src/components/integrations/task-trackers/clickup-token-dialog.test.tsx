@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { StrictMode } from 'react'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClickUpMutationResult } from '../../../../../shared/clickup/clickup-types'
@@ -89,5 +90,70 @@ describe('ClickUpTokenDialog', () => {
     expect(onConnected).not.toHaveBeenCalled()
     expect(tokenInput().value).toBe('')
     expect(tokenInput().disabled).toBe(false)
+  })
+
+  it('ignores a connect from before the owner changed away and back', async () => {
+    let settle!: (result: ClickUpMutationResult) => void
+    store.connectClickUp.mockReturnValue(
+      new Promise<ClickUpMutationResult>((resolve) => {
+        settle = resolve
+      })
+    )
+    const onOpenChange = vi.fn()
+    const onConnected = vi.fn()
+    const dialog = (owner: RuntimeClientTarget): React.JSX.Element => (
+      <ClickUpTokenDialog
+        owner={owner}
+        open
+        onOpenChange={onOpenChange}
+        onConnected={onConnected}
+      />
+    )
+    const { rerender } = render(dialog(local))
+    fireEvent.change(tokenInput(), { target: { value: 'pk_first_local' } })
+    submitForm()
+
+    rerender(dialog(remote))
+    rerender(dialog(local))
+    fireEvent.change(tokenInput(), { target: { value: 'pk_typed_after_return' } })
+    await act(async () => {
+      settle({ ok: true })
+    })
+
+    expect(onOpenChange).not.toHaveBeenCalled()
+    expect(onConnected).not.toHaveBeenCalled()
+    expect(tokenInput().value).toBe('pk_typed_after_return')
+  })
+
+  it('applies the outcome of a connect when the owner is replaced by an equal one', async () => {
+    let settle!: (result: ClickUpMutationResult) => void
+    store.connectClickUp.mockReturnValue(
+      new Promise<ClickUpMutationResult>((resolve) => {
+        settle = resolve
+      })
+    )
+    const onOpenChange = vi.fn()
+    const onConnected = vi.fn()
+    const dialog = (owner: RuntimeClientTarget): React.JSX.Element => (
+      <StrictMode>
+        <ClickUpTokenDialog
+          owner={owner}
+          open
+          onOpenChange={onOpenChange}
+          onConnected={onConnected}
+        />
+      </StrictMode>
+    )
+    const { rerender } = render(dialog(remote))
+    fireEvent.change(tokenInput(), { target: { value: 'pk_for_remote' } })
+    submitForm()
+
+    rerender(dialog({ kind: 'environment', environmentId: 'env-1' }))
+    await act(async () => {
+      settle({ ok: true })
+    })
+
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(onConnected).toHaveBeenCalledTimes(1)
   })
 })

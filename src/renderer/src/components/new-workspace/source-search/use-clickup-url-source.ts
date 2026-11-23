@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getClickUpReadScope } from '@/store/slices/clickup/clickup-read-coordination'
+import {
+  clickupSourceContextWorkspaceId,
+  getClickUpReadScope
+} from '@/store/slices/clickup/clickup-read-coordination'
 import {
   isClickUpTaskUrl,
   parseClickUpTaskReference,
@@ -52,7 +55,7 @@ export function useClickUpUrlSource(args: {
   const [retryGeneration, setRetryGeneration] = useState(0)
   // A context without its own Workspace reads the status slot's, so a Workspace switch must start a new lookup.
   const slotWorkspaceKey = useAppStore((state) =>
-    sourceContext && sourceContext.providerIdentity?.provider !== 'clickup'
+    sourceContext && clickupSourceContextWorkspaceId(sourceContext) === null
       ? getClickUpReadScope(state, sourceContext).workspaceKey
       : null
   )

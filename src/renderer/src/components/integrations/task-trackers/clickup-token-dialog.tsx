@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { ExternalLink, LoaderCircle, Lock } from 'lucide-react'
 import {
   taskProviderErrorMessage,
@@ -58,9 +58,11 @@ export function ClickUpTokenDialog({
   const tokenErrorId = useId()
   // The host, not its session generation: a reconnect of the same host keeps what was typed for it.
   const ownerKey = getEnvironmentRuntimeIdentityKey(runtimeTargetEnvironmentId(owner))
-  const ownerKeyRef = useRef(ownerKey)
-  useEffect(() => {
-    ownerKeyRef.current = ownerKey
+  // Counts owner changes, so a connect from before A to B and back to A is not mistaken for one of this A.
+  const ownerGenerationRef = useRef(0)
+  // A layout effect, so a connect that settles right after the owner-change commit is already stale.
+  useLayoutEffect(() => {
+    ownerGenerationRef.current += 1
   }, [ownerKey])
   const [dialogState, setDialogState] = useState(() => closedClickUpTokenDialogState(ownerKey))
   const resolvedDialogState = resolveClickUpTokenDialogState(dialogState, open, ownerKey)
@@ -85,7 +87,9 @@ export function ClickUpTokenDialog({
     }
     setDialogState((current) => ({ ...current, connectState: 'connecting', connectError: null }))
     // The dialog may have moved to another owner by the time the request settles; its outcome is not theirs.
-    const isStale = (): boolean => !mountedRef.current || ownerKeyRef.current !== ownerKey
+    const ownerGeneration = ownerGenerationRef.current
+    const isStale = (): boolean =>
+      !mountedRef.current || ownerGenerationRef.current !== ownerGeneration
     try {
       const result = await connectClickUp(owner, token)
       if (isStale()) {
