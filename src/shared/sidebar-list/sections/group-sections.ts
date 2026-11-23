@@ -1,7 +1,10 @@
 import type { Repo } from '../../repository/repo-types'
 import type { WorktreeOccurrencePlan } from '../lineage/worktree-occurrence-plan'
 import type { WorkspaceStatusDefinition, Worktree } from '../../worktree/types'
-import type { ExecutionHostId } from '../../execution-host/execution-host'
+import {
+  getRepoExecutionHostIdOrDefault,
+  type ExecutionHostId
+} from '../../execution-host/execution-host'
 import { getWorkspaceStatusFromGroupKey } from '../../workspace/status/workspace-statuses'
 import type { PRGroupKey } from '../../workspace-view/workspace-pr-groups'
 import type { NoticeHostContext } from '../hosts/host-labels'
@@ -78,6 +81,17 @@ function getProjectHeaderHostScope(
       : undefined,
     hostWorktreeIds
   }
+}
+
+/** Every host a project section draws on, for headers that summarize collapsed projects. */
+export function getProjectSectionHostIds(
+  ctx: SectionAppendContext,
+  group: WorktreeGroupEntry
+): ExecutionHostId[] {
+  const { hostRepos } = getProjectHeaderHostScope(ctx, group)
+  return hostRepos
+    ? [...hostRepos.keys()]
+    : [getRepoExecutionHostIdOrDefault(group.repo, ctx.defaultHostId)]
 }
 
 export function appendOrderedGroups(
