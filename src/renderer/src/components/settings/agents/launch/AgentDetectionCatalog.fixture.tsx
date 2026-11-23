@@ -16,6 +16,8 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
   )
   const [command, setCommand] = useState<string>()
   const [deferSave, setDeferSave] = useState(false)
+  const [cliMissing, setCliMissing] = useState(false)
+  const [firstEnabled, setFirstEnabled] = useState(true)
   const complete = useRef<(() => void) | null>(null)
   const shown = short ? catalog.slice(0, 2) : catalog
   const moving = shown[0]
@@ -27,7 +29,7 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
     defaultArgs: '',
     defaultEnv: {},
     isDetected: agent === moving ? false : detected,
-    isEnabled: true,
+    isEnabled: agent === moving ? firstEnabled : true,
     defaultMark: null,
     isSavedDefault: false,
     cmdOverride: agent === moving ? command : undefined,
@@ -35,7 +37,9 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
     envOverride: {},
     opensAs:
       agent === moving
-        ? { value: 'chat' as const, cliMissing: false, onChange: () => {} }
+        ? cliMissing
+          ? { value: 'cli' as const, cliMissing: true, onChange: () => {} }
+          : { value: 'chat' as const, cliMissing: false, onChange: () => {} }
         : undefined,
     permissionChoice:
       agent === moving
@@ -64,26 +68,34 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
     onSaveArgs: () => {},
     onSaveEnv: () => {}
   })
+  const toggleInstalled = (): void =>
+    setInstalled((previous) => {
+      const next = new Set(previous)
+      if (!next.delete(moving.id)) {
+        next.add(moving.id)
+      }
+      return next
+    })
   return (
     <StrictMode>
       <div className="settings-view-shell space-y-4">
         <div className="flex flex-wrap gap-2" data-fixture-controls="">
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={() =>
-              setTimeout(() => {
-                setInstalled((previous) => {
-                  const next = new Set(previous)
-                  if (!next.delete(moving.id)) {
-                    next.add(moving.id)
-                  }
-                  return next
-                })
-              }, 0)
-            }
-          >
-            Move first agent
+          {[0, 1500].map((delay) => (
+            <Button
+              key={delay}
+              variant="outline"
+              size="xs"
+              // The delayed move leaves time to focus a field in the row, as when detection finishes.
+              onClick={() => setTimeout(toggleInstalled, delay)}
+            >
+              {delay ? 'Move first agent in 1.5s' : 'Move first agent'}
+            </Button>
+          ))}
+          <Button variant="outline" size="xs" onClick={() => setCliMissing(!cliMissing)}>
+            CLI missing: {String(cliMissing)}
+          </Button>
+          <Button variant="outline" size="xs" onClick={() => setFirstEnabled(!firstEnabled)}>
+            First agent enabled: {String(firstEnabled)}
           </Button>
           <Button variant="outline" size="xs" onClick={() => setDeferSave(!deferSave)}>
             Defer saves: {String(deferSave)}

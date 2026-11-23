@@ -33,6 +33,39 @@ export function revealInSettingsList(target: HTMLElement): void {
   }
 }
 
+/**
+ * How far to scroll so a section's top sits at its scroll margin and the target is fully shown, with
+ * the edge padding below the target when that still leaves the section's top on screen.
+ * Positions are relative to the scroller's top edge.
+ */
+export function settingsSectionRevealDelta({
+  sectionTop,
+  sectionMarginTop,
+  targetBottom,
+  viewHeight
+}: {
+  sectionTop: number
+  sectionMarginTop: number
+  targetBottom: number | null
+  viewHeight: number
+}): number {
+  const delta = sectionTop - sectionMarginTop
+  if (targetBottom === null) {
+    return delta
+  }
+  // Where the target's bottom lands once the section sits at its margin.
+  const bottom = targetBottom - delta
+  const padded = bottom - (viewHeight - SETTINGS_REVEAL_EDGE_PADDING)
+  if (padded <= 0) {
+    return delta
+  }
+  // The padding is preferred room, not worth losing the heading: stop once the section reaches the top,
+  // unless the target itself would still be cut off there.
+  const keepsHeading = sectionMarginTop
+  const showsTarget = bottom - viewHeight
+  return delta + (showsTarget <= keepsHeading ? Math.min(padded, keepsHeading) : padded)
+}
+
 // Brings a section's top into view, then scrolls further only if the target would still be hidden,
 // so the section heading stays on screen whenever both fit.
 export function scrollSettingsSectionToTarget(
@@ -45,17 +78,12 @@ export function scrollSettingsSectionToTarget(
     return
   }
   const viewTop = scroller.getBoundingClientRect().top
-  let delta =
-    section.getBoundingClientRect().top -
-    viewTop -
-    Number.parseFloat(getComputedStyle(section).scrollMarginTop)
-  if (target) {
-    const targetBottom = target.getBoundingClientRect().bottom - viewTop - delta
-    const limit = scroller.clientHeight - SETTINGS_REVEAL_EDGE_PADDING
-    if (targetBottom > limit) {
-      delta += targetBottom - limit
-    }
-  }
+  const delta = settingsSectionRevealDelta({
+    sectionTop: section.getBoundingClientRect().top - viewTop,
+    sectionMarginTop: Number.parseFloat(getComputedStyle(section).scrollMarginTop) || 0,
+    targetBottom: target ? target.getBoundingClientRect().bottom - viewTop : null,
+    viewHeight: scroller.clientHeight
+  })
   scroller.scrollTo({ top: scroller.scrollTop + delta, behavior })
 }
 
