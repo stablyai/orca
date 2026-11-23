@@ -1,4 +1,5 @@
 import type { ConnectorCloudFeature } from '../../shared/connectors/connector-cloud-contract'
+import { botSlackApps } from '../../shared/bot-types'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-runtime-host'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
@@ -208,7 +209,13 @@ function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore)
   const unsaved = new Set<string>()
   return {
     waiting: new Map(),
-    read: (key) => readThreadMute(store, key),
+    // A thread whose save failed reads as muted, as its disk may still say, so the resent command or
+    // mention that changed it decides again and saves.
+    read: (key) => {
+      const thread = readThreadMute(store, key)
+      const unsavedHere = unsaved.has(JSON.stringify([key.source, key.externalId]))
+      return thread && thread !== 'not_bot' && unsavedHere ? { ...thread, muted: true } : thread
+    },
     write: async (key, muted) => {
       const id = JSON.stringify([key.source, key.externalId])
       // Already so and saved: nothing to do. One whose save failed is saved again.
@@ -224,10 +231,17 @@ function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore)
       }
     },
     queued: (key) => runtime.getExternalConversationSeam()?.queued(key) ?? Promise.resolve(),
-    otherBotNames: (botId) =>
-      (store.getBots?.() ?? []).flatMap((entry) =>
-        entry.id === botId ? [] : [entry.name, entry.folder]
-      ),
+    // Only bots behind the same Slack app share its mention.
+    otherBotNames: (botId) => {
+      const bots = store.getBots?.() ?? []
+      const own = bots.find((entry) => entry.id === botId)
+      const apps = new Set(own ? botSlackApps(own).map((app) => app.appId) : [])
+      return bots.flatMap((entry) =>
+        entry.id !== botId && botSlackApps(entry).some((app) => apps.has(app.appId))
+          ? [entry.name, entry.folder]
+          : []
+      )
+    },
     botNames: (botId) => {
       const bot = store.getBots?.().find((entry) => entry.id === botId)
       return bot ? [bot.name, bot.folder] : []
