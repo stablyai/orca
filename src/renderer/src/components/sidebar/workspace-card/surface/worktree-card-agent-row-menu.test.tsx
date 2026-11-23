@@ -27,11 +27,7 @@ afterEach(() => {
 it.each(['compact', 'full'] as const)(
   'keeps Delete and its shortcut on the card header after opening the menu from a %s agent row',
   (mode) => {
-    const worktree = makeWorktree({
-      id: `${TEST_REPO.id}::/sample`,
-      repoId: TEST_REPO.id,
-      displayName: 'Sample workspace'
-    })
+    const worktree = makeWorktree({ id: `${TEST_REPO.id}::/sample`, repoId: TEST_REPO.id })
     const tab: Tab = {
       id: 'agent-tab',
       entityId: '11111111-1111-4111-8111-111111111111',
@@ -73,7 +69,7 @@ it.each(['compact', 'full'] as const)(
         ]
       ])
     })
-    render(
+    const { container } = render(
       <ConfirmationDialogContext.Provider value={declineConfirmation}>
         <TooltipProvider>
           <WorktreeCard worktree={worktree} repo={TEST_REPO} isActive nativeDragEnabled={false} />
@@ -81,7 +77,9 @@ it.each(['compact', 'full'] as const)(
       </ConfirmationDialogContext.Provider>
     )
 
-    fireEvent.contextMenu(screen.getByText('Draft a checklist'))
+    const agentRowChild = container.querySelector('.agent-disclosure-row span')
+    expect(agentRowChild).not.toBeNull()
+    fireEvent.contextMenu(agentRowChild!)
     const rowMenu = within(screen.getByRole('menu'))
     expect(
       rowMenu.queryByRole('menuitem', { name: /^(Delet|Remove (Workspace|Project))/ })
@@ -89,11 +87,13 @@ it.each(['compact', 'full'] as const)(
     const rowSeparators = rowMenu.getAllByRole('separator').length
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
 
-    fireEvent.contextMenu(screen.getByText('Sample workspace'))
+    const title = container.querySelector('[data-worktree-title-inline-rename]')
+    expect(title).not.toBeNull()
+    fireEvent.contextMenu(title!)
     const headerMenu = within(screen.getByRole('menu'))
     const deleteItem = headerMenu.getByRole('menuitem', { name: /^Delete/ })
     expect(deleteItem.querySelector('[data-slot="dropdown-menu-shortcut"]')?.textContent).toMatch(
-      /^(⌘⇧⌫|Ctrl\+Shift\+Backspace)$/
+      /^(⌘⇧⌫|Ctrl\+⇧\+Backspace)$/
     )
     expect(headerMenu.getAllByRole('separator')).toHaveLength(rowSeparators + 1)
   }
