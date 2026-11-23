@@ -36,8 +36,12 @@ afterEach(async () => {
 it('sends a drawn icon only for the look the bot has now, else the plain mascot', async () => {
   home = await mkdtemp(join(tmpdir(), 'bot-slack-icon-'))
   const folder = home
-  const bot: Pick<Bot, 'id' | 'avatar' | 'avatarColor' | 'avatarOutfit' | 'slack' | 'github'> = {
+  const bot: Pick<
+    Bot,
+    'id' | 'folderWorkspaceId' | 'avatar' | 'avatarColor' | 'avatarOutfit' | 'slack' | 'github'
+  > = {
     id: 'bot-1',
+    folderWorkspaceId: 'home-1',
     avatar: 'mascot:A1',
     avatarColor: '#1f2126',
     avatarOutfit: null,
@@ -69,7 +73,7 @@ it('sends a drawn icon only for the look the bot has now, else the plain mascot'
   expect(sent[0]).toEqual({ v: 1, kind: 'mascot', id: 'A1' })
 
   const drawn = squarePng(512)
-  await writeBotSlackIcon(localBotHomeFilesystem, folder, botSlackIconLook(bot)!, drawn)
+  await writeBotSlackIcon(localBotHomeFilesystem, folder, bot.id, botSlackIconLook(bot)!, drawn)
   sync.iconStored(bot.id)
   await vi.waitFor(() => expect(sent).toHaveLength(2))
   expect(sent[1]).toMatchObject({ v: 1, kind: 'upload', png: drawn.toString('base64') })
@@ -83,10 +87,16 @@ it('sends a drawn icon only for the look the bot has now, else the plain mascot'
 
 it('reads an icon cut short by a crash as none, so it is drawn again', async () => {
   home = await mkdtemp(join(tmpdir(), 'bot-slack-icon-'))
-  const bot = { avatar: 'mascot:A1', avatarColor: '#1f2126', avatarOutfit: null }
+  const bot = { id: 'bot-1', avatar: 'mascot:A1', avatarColor: '#1f2126', avatarOutfit: null }
   const look = botSlackIconLook(bot)!
-  await writeBotSlackIcon(localBotHomeFilesystem, home, look, squarePng(512).subarray(0, 40))
+  await writeBotSlackIcon(
+    localBotHomeFilesystem,
+    home,
+    bot.id,
+    look,
+    squarePng(512).subarray(0, 40)
+  )
   expect(await readBotSlackIcon(localBotHomeFilesystem, home, bot)).toBeNull()
-  await writeBotSlackIcon(localBotHomeFilesystem, home, look, squarePng(512))
+  await writeBotSlackIcon(localBotHomeFilesystem, home, bot.id, look, squarePng(512))
   expect(await readBotSlackIcon(localBotHomeFilesystem, home, bot)).not.toBeNull()
 })

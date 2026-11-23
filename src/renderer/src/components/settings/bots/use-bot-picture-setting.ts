@@ -19,6 +19,7 @@ import {
   parseBotAvatar,
   PICKABLE_BOT_MASCOT_IDS
 } from '../../../../../shared/bot-avatar'
+import { withSlackIconPublish } from '../../bots/use-bot-slack-icons'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import { wornBotOutfit, type BotAvatarOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
@@ -87,7 +88,7 @@ type SaveLoop = {
 
 export function useBotPictureSetting(
   bot: Bot,
-  update: (updates: BotUpdateParams['updates']) => Promise<Bot | null>
+  save: (updates: BotUpdateParams['updates']) => Promise<Bot | null>
 ): {
   value: BotPictureValue
   custom: BotPictureCustom | null
@@ -102,6 +103,8 @@ export function useBotPictureSetting(
   outfit: BotAvatarOutfit | null
   pickOutfit: (outfit: BotAvatarOutfit | null) => void
 } {
+  // A saved look is drawn for Slack at once, without waiting for the Bots sidebar.
+  const update = withSlackIconPublish(save, bot.hostId)
   const t = useTranslate()
   const [kept, setKeptState] = useState(() => keptFrom(bot.avatar, 0, -1))
   const [shown, setShown] = useState(() => savedChoice(bot.avatar))

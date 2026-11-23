@@ -1,5 +1,5 @@
 // A mascot with a tile color or an outfit reaches Slack as a 512 px PNG a window draws, kept in the bot's
-// home (`.orca/slack-icon/`) under a name that says which look it shows, so a stale one is never sent for a newer look.
+// host's app data under a name that says which look it shows, so a stale one is never sent for a newer look.
 import { parseBotAvatar } from '../bot-avatar'
 import type { Bot } from '../bot-types'
 import { BotAvatarColorSchema, DEFAULT_BOT_AVATAR_COLOR } from './bot-avatar-color'
@@ -27,9 +27,6 @@ export function botSlackIconLook(bot: LookedBot): string | null {
   }
   return [SLACK_ICON_ART_VERSION, parsed.id, tile ?? 'plain', outfit ?? 'none'].join('-')
 }
-
-/** Where in the bot's home the drawn icons are kept, apart from the owner's files. */
-export const BOT_SLACK_ICON_FOLDER = ['.orca', 'slack-icon'] as const
 
 export function botSlackIconFile(look: string): string {
   return `${look}.png`

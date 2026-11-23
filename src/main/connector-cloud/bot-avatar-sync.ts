@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto'
 import { parseBotAvatar } from '../../shared/bot-avatar'
 import { botSlackIconLook } from '../../shared/bots/bot-slack-icon'
+import { type BotLookupIndex, createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
 import type { Bot } from '../../shared/bot-types'
 import type { ConnectorBotAvatarRequest } from '../../shared/connector-bot-slack-contract'
 import type { BotController } from '../bots/bot-controller'
@@ -12,7 +13,10 @@ import type { BotSlackIcons } from '../bots/bot-slack-icon-store'
 import { botsCloudClient } from './bots-cloud-client'
 import type { ConnectorCloud } from './connector-cloud'
 
-type SyncedBot = Pick<Bot, 'id' | 'avatar' | 'avatarColor' | 'avatarOutfit' | 'slack' | 'github'>
+type SyncedBot = Pick<
+  Bot,
+  'id' | 'folderWorkspaceId' | 'avatar' | 'avatarColor' | 'avatarOutfit' | 'slack' | 'github'
+>
 
 // A failed send tries again after this, unless a bot write retries it first.
 const RETRY_MS = 60_000
@@ -45,6 +49,7 @@ export class BotAvatarSync {
   // Per bot, drawn icons kept so far, so a send that read none before one was kept is sent again.
   private readonly icons = new Map<string, number>()
   private retry: ReturnType<typeof setTimeout> | null = null
+  private readonly lookup: BotLookupIndex<SyncedBot>
 
   constructor(
     private readonly deps: {
@@ -54,7 +59,9 @@ export class BotAvatarSync {
       }
       cloud: () => Pick<ConnectorCloud, 'call'> | null
     }
-  ) {}
+  ) {
+    this.lookup = createBotLookupIndex(() => this.deps.bots.list())
+  }
 
   /** After any bot write, and once at start for changes made while signed out or offline. */
   changed(): void {
@@ -81,7 +88,7 @@ export class BotAvatarSync {
       this.retryLater()
       return
     }
-    const bot = this.deps.bots.list().find((entry) => entry.id === botId)
+    const bot = this.lookup.byId(botId)
     if (bot && (bot.slack || bot.github) && bot.avatar) {
       this.queued.set(bot.id, bot)
       this.pump()

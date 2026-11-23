@@ -1,16 +1,17 @@
-// The drawn Slack icon kept in a bot's home: one file per look, the older looks' files let go.
+// The drawn Slack icons, kept in an app-owned folder (never the bot's home, which its owner controls): one
+// folder per bot, one file per look, the older looks' files let go.
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { isBotAvatarImage } from '../../shared/bot-avatar'
 import type { Bot } from '../../shared/bot-types'
 import {
-  BOT_SLACK_ICON_FOLDER,
   botSlackIconFile,
   botSlackIconLook,
   isBotSlackIconFile
 } from '../../shared/bots/bot-slack-icon'
-import { assertBotOwnsHome, type BotHomeFilesystem } from './bot-home'
+import type { BotHomeFilesystem } from './bot-home'
 
-type LookedBot = Pick<Bot, 'avatar' | 'avatarColor' | 'avatarOutfit'>
+type LookedBot = Pick<Bot, 'id' | 'avatar' | 'avatarColor' | 'avatarOutfit'>
 
 const PNG_END = Buffer.from([0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82])
 
@@ -19,18 +20,20 @@ function isWholeIcon(png: Uint8Array): boolean {
   return isBotAvatarImage(png) && Buffer.from(png.subarray(-PNG_END.length)).equals(PNG_END)
 }
 
-function iconFolder(home: string): string {
-  return join(home, ...BOT_SLACK_ICON_FOLDER)
+// Named by a hash of the id, so no id can name a path outside the root.
+function botFolder(root: string, botId: string): string {
+  return join(root, createHash('sha256').update(botId).digest('hex').slice(0, 32))
 }
 
 /** The kept icon for the bot's look now; null when its look needs none or none is drawn whole yet. */
 export async function readBotSlackIcon(
   filesystem: BotHomeFilesystem,
-  home: string,
+  root: string,
   bot: LookedBot
 ): Promise<{ look: string; png: Buffer } | null> {
   const look = botSlackIconLook(bot)
-  const png = look && (await filesystem.readBytes(join(iconFolder(home), botSlackIconFile(look))))
+  const png =
+    look && (await filesystem.readBytes(join(botFolder(root, bot.id), botSlackIconFile(look))))
   return look && png && isWholeIcon(png) ? { look, png } : null
 }
 
@@ -40,18 +43,24 @@ export type BotSlackIconWant = { wanted: boolean; current: boolean }
 
 export async function writeBotSlackIcon(
   filesystem: BotHomeFilesystem,
-  home: string,
+  root: string,
+  botId: string,
   look: string,
   png: Uint8Array
 ): Promise<void> {
-  const folder = iconFolder(home)
+  const folder = botFolder(root, botId)
   const kept = botSlackIconFile(look)
   await filesystem.makeDirectory(folder)
   await filesystem.writeBytes(join(folder, kept), png)
-  for (const name of await filesystem.listNames(folder)) {
-    if (name !== kept && isBotSlackIconFile(name)) {
-      await filesystem.removeTree(join(folder, name))
+  // Best effort: a leftover older look is never read, since the look names the file.
+  try {
+    for (const name of await filesystem.listNames(folder)) {
+      if (name !== kept && isBotSlackIconFile(name)) {
+        await filesystem.removeTree(join(folder, name))
+      }
     }
+  } catch (error) {
+    console.warn('[bots] could not remove an older Slack icon', error)
   }
 }
 
@@ -62,9 +71,9 @@ export class BotSlackIcons {
   constructor(
     private readonly deps: {
       filesystem: BotHomeFilesystem
+      root: () => string
       /** Throws for an unknown bot. */
       bot: (botId: string) => Bot
-      home: (bot: Bot) => string
       /** The bots' write queue, so a look check and its write never interleave with an edit. */
       serialize: <T>(work: () => Promise<T>) => Promise<T>
     }
@@ -75,7 +84,7 @@ export class BotSlackIcons {
     if (botSlackIconLook(bot) !== look) {
       return { wanted: false, current: false }
     }
-    const kept = await readBotSlackIcon(this.deps.filesystem, this.deps.home(bot), bot)
+    const kept = await readBotSlackIcon(this.deps.filesystem, this.deps.root(), bot)
     return { wanted: kept === null, current: true }
   }
 
@@ -89,9 +98,7 @@ export class BotSlackIcons {
       if (botSlackIconLook(bot) !== look) {
         return false
       }
-      const home = this.deps.home(bot)
-      await assertBotOwnsHome(this.deps.filesystem, home, botId)
-      await writeBotSlackIcon(this.deps.filesystem, home, look, png)
+      await writeBotSlackIcon(this.deps.filesystem, this.deps.root(), botId, look, png)
       return true
     })
     if (stored) {
@@ -103,8 +110,12 @@ export class BotSlackIcons {
   }
 
   read(botId: string): Promise<{ look: string; png: Buffer } | null> {
-    const bot = this.deps.bot(botId)
-    return readBotSlackIcon(this.deps.filesystem, this.deps.home(bot), bot)
+    return readBotSlackIcon(this.deps.filesystem, this.deps.root(), this.deps.bot(botId))
+  }
+
+  /** A deleted bot's icons go with it. */
+  forget(botId: string): Promise<void> {
+    return this.deps.filesystem.removeTree(botFolder(this.deps.root(), botId))
   }
 
   onStored(listener: (botId: string) => void): () => void {

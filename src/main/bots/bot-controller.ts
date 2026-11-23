@@ -23,6 +23,7 @@ import { proposalSoul } from '../../shared/bots/bot-proposal'
 import { botOfferCreation } from './bot-offer-creation'
 import { assertBotOwnsHome, type BotHomeFilesystem, botHomeFolder, writeBotHome } from './bot-home'
 import { BotSlackIcons } from './bot-slack-icon-store'
+import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
 import { type BotMemoryRecord, hostBotMemoryRecord } from './bot-memory-record'
 import { stampBotLinkOwners } from '../../shared/bot-link-owners'
 import { makeBotsHome } from './bot-home-workspace'
@@ -85,6 +86,8 @@ export type BotControllerDependencies = {
   /** Takes the bot out of every group room, as removing it from each would. */
   leaveBotGroups?: (botId: string) => Promise<void>
   botsRoot: () => string
+  /** App-owned folder for the bots' drawn Slack icons, outside their homes. */
+  slackIconsRoot: () => string
   filesystem: BotHomeFilesystem
   /** The Orca account signed in now, recorded on the links a bot gets. */
   accountUserId?: () => string | null
@@ -103,10 +106,17 @@ export class BotController {
 
   constructor(private readonly deps: BotControllerDependencies) {
     this.memory = hostBotMemoryRecord(deps.filesystem)
+    const lookup = createBotLookupIndex(() => this.list())
     this.slackIcons = new BotSlackIcons({
       filesystem: deps.filesystem,
-      bot: (botId) => this.requireBot(this.requireStore(), botId),
-      home: (bot) => botHomeFolder(bot, deps.botsRoot()),
+      root: deps.slackIconsRoot,
+      bot: (botId) => {
+        const bot = lookup.byId(botId)
+        if (!bot) {
+          throw new Error('bot_not_found')
+        }
+        return bot
+      },
       serialize: (work) => this.serialize(work)
     })
   }
