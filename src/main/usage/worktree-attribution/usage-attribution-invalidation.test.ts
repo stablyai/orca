@@ -66,4 +66,14 @@ describe('reattributeUsageSourcesForWorktrees', () => {
     expect(await reattributeUsageSourcesForWorktrees(sources, 'not json', current)).toEqual([])
     expect(await reattributeUsageSourcesForWorktrees(sources, current, current)).toHaveLength(6)
   })
+
+  it('treats a removed macOS /private/tmp alias as the same worktree path', async () => {
+    const alias = [source('aliased', 'cwd:/private/tmp/orca-removed-wt/src')]
+    const added = fingerprint([
+      main,
+      { worktreeId: 'repo::/tmp/orca-removed-wt', path: '/tmp/orca-removed-wt', displayName: 'x' }
+    ])
+    const retained = await reattributeUsageSourcesForWorktrees(alias, fingerprint([main]), added)
+    expect(retained[0]).toMatchObject({ mtimeMs: process.platform === 'darwin' ? -1 : undefined })
+  })
 })

@@ -2,6 +2,7 @@ import { realpath } from 'node:fs/promises'
 import { z } from 'zod'
 import type { UsageScanWorktreeRef } from '../provider-lifecycle/usage-provider-contract'
 import { normalizeComparablePath, normalizeFsPath } from './usage-path-comparison'
+import { canonicalWorktreePath } from '../../git/worktrees/catalog/worktree-path-comparison'
 
 const worktreeRowSchema = z.object({
   repoId: z.string(),
@@ -44,12 +45,18 @@ function contains(parent: string, child: string): boolean {
   return child === parent || child.startsWith(`${parent}/`)
 }
 
+// Same equivalences as attribution (macOS /private/tmp, Windows and WSL case), even for removed paths.
 async function comparableForms(pathValue: string): Promise<string[]> {
-  const forms = new Set([comparable(pathValue), comparable(normalizeFsPath(pathValue))])
+  const spellings = [pathValue, normalizeFsPath(pathValue)]
   try {
-    forms.add(comparable(await realpath(pathValue)))
+    spellings.push(await realpath(pathValue))
   } catch {
-    // Missing paths keep their literal forms.
+    // Removed paths keep their literal and canonical forms.
+  }
+  const forms = new Set<string>()
+  for (const spelling of spellings) {
+    forms.add(comparable(spelling))
+    forms.add(comparable(canonicalWorktreePath(spelling)))
   }
   return [...forms]
 }
