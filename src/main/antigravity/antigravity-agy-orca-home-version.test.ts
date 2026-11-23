@@ -33,3 +33,21 @@ it("keeps chats on the server when agy's version can't be read", async () => {
   expect(await agyServesOrcaHome(agy('silent'), {}, unreadable)).toBe(false)
   expect(await agyServesOrcaHome(join(root, 'missing'), {}, unreadable)).toBe(false)
 })
+
+it('asks a version that timed out again after a minute, not for the whole session', async () => {
+  const path = agy('slow')
+  let now = 1_000
+  const read = vi
+    .fn<(input: { program: string }) => Promise<{ version: string | null }>>()
+    .mockRejectedValueOnce(new Error('timed out'))
+    .mockResolvedValue({ version: '1.5.13' })
+  expect(await agyServesOrcaHome(path, {}, read, () => now)).toBe(false)
+  now += 30_000
+  expect(await agyServesOrcaHome(path, {}, read, () => now)).toBe(false)
+  expect(read).toHaveBeenCalledTimes(1)
+  now += 31_000
+  expect(await agyServesOrcaHome(path, {}, read, () => now)).toBe(true)
+  now += 3_600_000
+  expect(await agyServesOrcaHome(path, {}, read, () => now)).toBe(true)
+  expect(read).toHaveBeenCalledTimes(2)
+})

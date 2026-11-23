@@ -1,12 +1,45 @@
-import { lstat, mkdir, readlink, rmdir, stat, symlink, unlink } from 'node:fs/promises'
+import {
+  copyFile,
+  lstat,
+  mkdir,
+  readlink,
+  rm,
+  rmdir,
+  stat,
+  symlink,
+  unlink
+} from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
+
+type SkillFolder = readonly [link: readonly string[], target: readonly string[]]
 
 // The server reads user-wide skills from these folders under GEMINI_HOME.
-const SKILL_FOLDERS = [
-  ['config', 'skills'],
-  ['antigravity-cli', 'skills']
-] as const
+const SERVER_SKILL_FOLDERS: readonly SkillFolder[] = [
+  [
+    ['config', 'skills'],
+    ['config', 'skills']
+  ],
+  [
+    ['antigravity-cli', 'skills'],
+    ['antigravity-cli', 'skills']
+  ]
+]
+
+/** agy on a home it is given reads skills from `config/skills`, `skills` and its app data folder's
+ *  `skills` (`antigravity-acp` there, `antigravity-cli` in `~/.gemini`). */
+export const AGY_HOME_SKILL_FOLDERS: readonly SkillFolder[] = [
+  [
+    ['config', 'skills'],
+    ['config', 'skills']
+  ],
+  [['skills'], ['skills']],
+  [
+    [ANTIGRAVITY_ACP_HOME, 'skills'],
+    ['antigravity-cli', 'skills']
+  ]
+]
 
 /** The home the server's Python `expanduser` resolves, where `~/.gemini` lives. */
 export function antigravityUserHome(
@@ -30,10 +63,11 @@ const linking = new Map<string, Promise<void>>()
 export function linkAntigravityUserSkills(
   chatHome: string,
   userHome: string,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  folders: readonly SkillFolder[] = SERVER_SKILL_FOLDERS
 ): Promise<void> {
   const run = (linking.get(chatHome) ?? Promise.resolve()).then(() =>
-    linkSkillFolders(chatHome, userHome, platform)
+    linkSkillFolders(chatHome, userHome, platform, folders)
   )
   linking.set(chatHome, run)
   void run.then(() => {
@@ -47,11 +81,12 @@ export function linkAntigravityUserSkills(
 async function linkSkillFolders(
   chatHome: string,
   userHome: string,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  folders: readonly SkillFolder[]
 ): Promise<void> {
-  for (const segments of SKILL_FOLDERS) {
-    const link = join(chatHome, ...segments)
-    const target = join(userHome, '.gemini', ...segments)
+  for (const [linkSegments, targetSegments] of folders) {
+    const link = join(chatHome, ...linkSegments)
+    const target = join(userHome, '.gemini', ...targetSegments)
     await linkSkillFolder(link, target, platform).catch((error: unknown) => {
       console.warn('[antigravity] user skills not linked into the chat home:', link, error)
     })
@@ -116,4 +151,20 @@ function ignoreMissing(error: unknown): undefined {
     return undefined
   }
   throw error
+}
+
+/** agy reads user-wide rules from its home's GEMINI.md; a copy (Windows can't link a file without
+ *  privileges) brings `~/.gemini/GEMINI.md` to chats on a home Orca owns. Never fails the launch. */
+export async function copyAntigravityUserRules(chatHome: string, userHome: string): Promise<void> {
+  const rules = join(chatHome, 'GEMINI.md')
+  const copied = await copyFile(join(userHome, '.gemini', 'GEMINI.md'), rules).then(
+    () => true,
+    () => false
+  )
+  // Rules removed from `~/.gemini` stop applying here too.
+  if (!copied) {
+    await rm(rules, { force: true }).catch((error: unknown) => {
+      console.warn('[antigravity] stale user rules kept in the chat home:', error)
+    })
+  }
 }

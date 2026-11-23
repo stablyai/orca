@@ -16,6 +16,7 @@ import {
 } from './antigravity-host-acp'
 import { agyCredentialPresence } from './agy-credential-presence'
 import { agyServesOrcaHome } from './antigravity-agy-orca-home'
+import { agyOrcaHomeCredentialPresent } from './antigravity-agy-orca-home-credential'
 
 export type AntigravityChatRoute = {
   /** New chats run on agy, with its sign-in as last checked (`unknown`: not asked or no answer),
@@ -29,7 +30,9 @@ export type AntigravityChatRoute = {
 }
 
 const ON_SERVER: AntigravityChatRoute = { agy: false, installs: 'server' }
-const ON_AGY_ORCA_HOME: AntigravityChatRoute = { agy: false, installs: 'agy', orcaHome: true }
+// agy is already here, so Install has nothing to add for these chats; reporting the server keeps
+// the method, key and project form for clients that predate this route, which hide it for agy.
+const ON_AGY_ORCA_HOME: AntigravityChatRoute = { agy: false, installs: 'server', orcaHome: true }
 
 /** The saved key or gcloud method, which agy can run on Orca's home; null for any other choice, a
  *  malformed one or one still being saved. */
@@ -94,6 +97,27 @@ export async function antigravityChatRoute(
 }
 
 let lastRoute: AntigravityChatRoute | null = null
+let lastOnAgyOrcaHome: boolean | null = null
+let agyOrcaHomeRevision = 0
+
+// A credential added or removed outside Orca (an ADC login) moves key and gcloud chats; the next
+// answer that sees it makes catalogs ask again, so the picker lists where chats now run.
+function noteAgyOrcaHomeRoute(onAgy: boolean): void {
+  if (lastOnAgyOrcaHome !== null && lastOnAgyOrcaHome !== onAgy) {
+    agyOrcaHomeRevision += 1
+  }
+  lastOnAgyOrcaHome = onAgy
+}
+
+/** Changes whenever key and gcloud chats move between agy and Orca's server, or a saved key changes. */
+export function antigravityAgyOrcaHomeRevision(): number {
+  return agyOrcaHomeRevision
+}
+
+/** A saved Gemini API key was added or removed, which can move key chats. */
+export function onAntigravityChatApiKeyChanged(): void {
+  agyOrcaHomeRevision += 1
+}
 
 /** Whether new chats here run on an agy that is definitely signed out, as the latest route answer
  *  (a chat start, an install surface, Accounts) found; null before any. Reads only that answer. */
@@ -108,10 +132,15 @@ async function computeAntigravityChatRoute(
   const { command, env, envToDelete, homePath } = input
   // agy offers newer models than Orca's server, so where it is here (the person's own, or Orca's
   // copy while that may run) key and gcloud chats run on it; otherwise on the server, as before.
-  if (savedKeyOrGcloudMethod(input.settings.antigravityChatAuth)) {
-    return isAbsolute(command) && (await agyServesOrcaHome(command, env))
-      ? ON_AGY_ORCA_HOME
-      : ON_SERVER
+  // Only with the credential here: agy would otherwise sign in with its own saved login.
+  const keyOrGcloud = savedKeyOrGcloudMethod(input.settings.antigravityChatAuth)
+  if (keyOrGcloud) {
+    const onAgy =
+      isAbsolute(command) &&
+      (await agyServesOrcaHome(command, env)) &&
+      (await agyOrcaHomeCredentialPresent(keyOrGcloud, env))
+    noteAgyOrcaHomeRoute(onAgy)
+    return onAgy ? ON_AGY_ORCA_HOME : ON_SERVER
   }
   // The host launch drops an API-key provider's key, so that agy can't serve chats.
   if (

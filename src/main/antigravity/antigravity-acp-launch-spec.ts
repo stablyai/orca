@@ -3,7 +3,7 @@
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { AcpHostBackendInput, AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
-import { antigravityChatRoute } from './antigravity-chat-route'
+import { antigravityAgyOrcaHomeRevision, antigravityChatRoute } from './antigravity-chat-route'
 import { ORCA_ACP_CLIENT_INFO } from '../acp/launch/acp-client-info'
 import { windowsLocalAppDataBinDirectories } from '../acp/launch/acp-windows-install-directories'
 import type { Implementation } from '../acp/generated/acp-protocol.generated'
@@ -220,7 +220,8 @@ function scrubAgyOrcaHomeEnvironment(
   for (const key of shadowing) {
     delete env[key]
   }
-  // Keeps only the saved method's key or gcloud project, as for Orca's server.
+  // Keeps only the saved method's key or gcloud project, as for Orca's server. agy's own variables
+  // other than AGY_ACP_* (its gateway, AGY_ADC_AUTH, AGY_ACCOUNT) pass through, as for the host's agy.
   return [...shadowing, ...scrubAntigravityAcpEnvironment(env, inherited, auth)]
 }
 
@@ -273,8 +274,12 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
     },
     installsManagedRuntime: async (input) =>
       (await antigravityHostChatRoute(input)).installs === 'server',
-    // Installing Orca's agy, a new agy login or a changed agy answer changes the route.
-    selectionRevision: () => managedRuntimeReleasesRevision() + antigravityHostAcpChecksRevision(),
+    // Installing Orca's agy, a new agy login, a changed agy answer or a key or gcloud credential
+    // coming or going changes the route.
+    selectionRevision: () =>
+      managedRuntimeReleasesRevision() +
+      antigravityHostAcpChecksRevision() +
+      antigravityAgyOrcaHomeRevision(),
     onSelectionChanged: onAntigravityHostAcpAnswersChanged
   }
 } satisfies AcpLaunchSpec

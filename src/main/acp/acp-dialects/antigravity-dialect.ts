@@ -234,8 +234,9 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   familyEfforts
 }
 
-// agy answers "Authentication required" alone; on Orca's home for a key or gcloud chat that is a
-// key it rejects or a gcloud login it can't use, so the notice names each fix.
+// agy answers "Authentication required" alone; on Orca's home that is a key it rejects or a gcloud
+// login it can't use, so the notice names each fix. Only key and gcloud chats run there: the home
+// refuses any other method at start, and changing the method stops every Antigravity chat.
 const ORCA_HOME_SIGN_IN =
   "agy couldn't sign in with this chat's sign-in method. With gcloud, run `gcloud auth application-default login` (and check its project in Settings → Accounts → Antigravity); with a Gemini API key, check the key there."
 

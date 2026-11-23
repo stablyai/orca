@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -9,7 +17,7 @@ import {
   type AntigravityChatAuthConfig
 } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 
-const agy = vi.hoisted(() => ({ serves: true }))
+const agy = vi.hoisted(() => ({ serves: true, credential: true }))
 // agy is installed and signed in to the person's own Google account.
 vi.mock('./agy-credential-presence', () => ({ agyCredentialPresence: async () => 'present' }))
 vi.mock('./antigravity-host-acp', async (importOriginal) => ({
@@ -17,6 +25,12 @@ vi.mock('./antigravity-host-acp', async (importOriginal) => ({
   agyUsesApiKey: async () => false,
   checkAntigravityHostAcp: async () => 'ready',
   checkAntigravityHostAcpCompatible: async () => 'ready'
+}))
+// No key is saved in Orca's store.
+vi.mock('./antigravity-chat-api-key-store', () => ({ hasAntigravityChatApiKey: async () => false }))
+// Whether the saved method's key or ADC is here (antigravity-agy-orca-home-credential.test.ts).
+vi.mock('./antigravity-agy-orca-home-credential', () => ({
+  agyOrcaHomeCredentialPresent: async () => agy.credential
 }))
 vi.mock('./antigravity-agy-orca-home', async (importOriginal) => ({
   ...(await importOriginal<typeof OrcaHome>()),
@@ -26,11 +40,13 @@ vi.mock('./antigravity-agy-orca-home', async (importOriginal) => ({
 const { ANTIGRAVITY_LAUNCH_SPEC } = await import('./antigravity-acp-launch-spec')
 const { acpLaunchSpecForAccount } = await import('../acp/launch/acp-launch-command')
 const { antigravityAgyOrcaAccount } = await import('./antigravity-agy-orca-home')
+const { AcpListingRefused } = await import('../acp/discovery/acp-listing-account')
 
 const folders: string[] = []
 afterEach(() => {
   folders.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true }))
   agy.serves = true
+  agy.credential = true
 })
 
 function folder(): string {
@@ -88,6 +104,12 @@ it("keeps key and gcloud chats on Orca's server where agy is missing or too old"
   expect((await select({ method: 'agent-platform', gcpProject: 'p' })).home).toBeNull()
 })
 
+it("keeps key and gcloud chats on Orca's server, as before, while their credential isn't here", async () => {
+  agy.credential = false
+  expect((await select({ method: 'gemini-api-key' })).home).toBeNull()
+  expect((await select({ method: 'agent-platform', gcpProject: 'p' })).home).toBeNull()
+})
+
 it('leaves Google-account and Enterprise routing as it was', async () => {
   const personal = await select({ method: 'oauth-personal' })
   expect(personal.home).toEqual({
@@ -108,13 +130,28 @@ it("launches chats already on the server or agy's own home as before", () => {
   expect(own.args({ fullAccess: false, pluginDirs: [] })).toEqual(['acp'])
 })
 
-it('writes the saved method for agy, and refuses a key chat with no key, never a listing', async () => {
+it("writes the saved method for agy; without its credential a chat is refused and a listing isn't run", async () => {
   const home = folder()
   const env = { GEMINI_HOME: home, HOME: folder() }
+  agy.credential = false
   await expect(
     antigravityAgyOrcaAccount.prepare(env, { method: 'gemini-api-key' })
-  ).rejects.toMatchObject({ reason: 'notSignedIn', account: 'managed' })
-  await antigravityAgyOrcaAccount.prepare(env, { method: 'gemini-api-key' }, undefined, 'listing')
+  ).rejects.toMatchObject({
+    reason: 'notSignedIn',
+    account: 'managed',
+    message: expect.stringContaining('No Gemini API key is saved')
+  })
+  await expect(
+    antigravityAgyOrcaAccount.prepare(env, { method: 'agent-platform', gcpProject: 'p' })
+  ).rejects.toMatchObject({
+    reason: 'notSignedIn',
+    message: expect.stringContaining('gcloud auth application-default login')
+  })
+  await expect(
+    antigravityAgyOrcaAccount.prepare(env, { method: 'gemini-api-key' }, undefined, 'listing')
+  ).rejects.toBeInstanceOf(AcpListingRefused)
+  expect(existsSync(join(home, 'antigravity-acp', 'settings.json'))).toBe(false)
+  agy.credential = true
   await antigravityAgyOrcaAccount.prepare(
     { ...env, GEMINI_API_KEY: 'k' },
     { method: 'gemini-api-key' }
@@ -122,7 +159,6 @@ it('writes the saved method for agy, and refuses a key chat with no key, never a
   expect(readFileSync(join(home, 'antigravity-acp', 'settings.json'), 'utf8')).toBe(
     '{"auth":{"type":"gemini-api-key"}}'
   )
-  // gcloud is left to agy, whose ADC lookup only it can answer.
   await antigravityAgyOrcaAccount.prepare(env, {
     method: 'agent-platform',
     gcpProject: 'p',
@@ -131,6 +167,68 @@ it('writes the saved method for agy, and refuses a key chat with no key, never a
   expect(readFileSync(join(home, 'antigravity-acp', 'settings.json'), 'utf8')).toBe(
     '{"auth":{"type":"agent-platform"},"gcp":{"project":"p","location":"global"}}'
   )
+})
+
+it.each([
+  ['a Google account', { method: 'oauth-personal' }],
+  ['Gemini Enterprise', { method: 'oauth-business', gcpProject: 'p', gcpLocation: 'l' }]
+])(
+  "refuses a chat pinned here once the method is %s, and never writes it for agy's own login",
+  async (_case, auth) => {
+    const home = folder()
+    const env = { GEMINI_HOME: home, HOME: folder(), GEMINI_API_KEY: 'k' }
+    await antigravityAgyOrcaAccount.prepare(env, { method: 'gemini-api-key' })
+    const config = parsed(auth)
+    await expect(antigravityAgyOrcaAccount.prepare(env, config)).rejects.toMatchObject({
+      reason: 'notSignedIn',
+      message: expect.stringContaining('Start a new chat, or switch the sign-in method back')
+    })
+    await expect(
+      antigravityAgyOrcaAccount.prepare(env, config, undefined, 'listing')
+    ).rejects.toBeInstanceOf(AcpListingRefused)
+    expect(readFileSync(join(home, 'antigravity-acp', 'settings.json'), 'utf8')).toBe(
+      '{"auth":{"type":"gemini-api-key"}}'
+    )
+  }
+)
+
+it("brings the user's ~/.gemini rules and skills to agy's layout in the home", async () => {
+  const home = folder()
+  const user = folder()
+  for (const skills of [['config', 'skills'], ['skills'], ['antigravity-cli', 'skills']]) {
+    mkdirSync(join(user, '.gemini', ...skills, 'mine'), { recursive: true })
+  }
+  writeFileSync(join(user, '.gemini', 'GEMINI.md'), 'be brief')
+  const env = { GEMINI_HOME: home, HOME: user, GEMINI_API_KEY: 'k' }
+  await antigravityAgyOrcaAccount.prepare(env, { method: 'gemini-api-key' })
+  expect(readFileSync(join(home, 'GEMINI.md'), 'utf8')).toBe('be brief')
+  expect(realpathSync(join(home, 'config', 'skills'))).toBe(
+    realpathSync(join(user, '.gemini', 'config', 'skills'))
+  )
+  expect(realpathSync(join(home, 'skills'))).toBe(realpathSync(join(user, '.gemini', 'skills')))
+  // agy's app data folder here is antigravity-acp, where ~/.gemini's is antigravity-cli.
+  expect(realpathSync(join(home, 'antigravity-acp', 'skills'))).toBe(
+    realpathSync(join(user, '.gemini', 'antigravity-cli', 'skills'))
+  )
+  rmSync(join(user, '.gemini', 'GEMINI.md'))
+  await antigravityAgyOrcaAccount.prepare(env, { method: 'gemini-api-key' })
+  expect(existsSync(join(home, 'GEMINI.md'))).toBe(false)
+})
+
+it("reports Orca's server as what Install adds, so older clients keep the method form", async () => {
+  const homePath = folder()
+  const command = join(homePath, 'agy')
+  writeFileSync(command, '')
+  const input = {
+    command,
+    env: { PATH: '' },
+    envToDelete: [],
+    homePath,
+    stateDirectory: folder(),
+    settings: { antigravityChatAuth: parsed({ method: 'gemini-api-key' }) },
+    startsProgram: true
+  }
+  expect(await ANTIGRAVITY_LAUNCH_SPEC.hostBackend.installsManagedRuntime(input)).toBe(true)
 })
 
 it("removes only a model listing's own session, and only in the home Orca owns", async () => {
