@@ -1,4 +1,5 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
+import { textExtends } from '../../../shared/agent-session/view/live-read/agent-session-text-append'
 import {
   providerTimelineLiveText,
   type ProviderTimelineStream
@@ -26,4 +27,15 @@ it('reads the same live row while its text is unchanged, and a new one once it g
   expect(grown).not.toBe(first)
   expect(grown).toMatchObject({ body: { blocks: [{ text }] } })
   expect(read()).toBe(grown)
+
+  // Its growth was noted once, so each reader's check that it extends what that reader holds
+  // scans no text.
+  const held = first?.body.kind === 'message' ? first.body.blocks[0] : undefined
+  const startsWith = vi.spyOn(String.prototype, 'startsWith')
+  try {
+    expect(held?.type === 'text' && textExtends(grown!, text, held.text)).toBe(true)
+    expect(startsWith).not.toHaveBeenCalled()
+  } finally {
+    startsWith.mockRestore()
+  }
 })
