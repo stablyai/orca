@@ -1,4 +1,5 @@
 import type { WebContents } from 'electron'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 
 // Orca owns these frame-input sessions; hide their traffic from the agent's CDP client.
 
@@ -203,34 +204,57 @@ export async function sendFrameSessionInput(
   return await send(method, params, sessionId)
 }
 
+// Bounds the caller's wait; Electron cannot cancel the attach itself.
+const PAGE_SESSION_ATTACH_TIMEOUT_MS = 8_000
+const ATTACH_TIMED_OUT = Symbol('attach-timed-out')
+
 /** A second CDP session on the page itself, hidden from the agent's client like frame sessions. */
 export async function attachOrcaPageSession(
   webContents: WebContents,
   send: GuestSessionCdpSender
 ): Promise<string> {
-  const info = await send('Target.getTargetInfo', {})
+  const info = await withTimeout(
+    send('Target.getTargetInfo', {}),
+    PAGE_SESSION_ATTACH_TIMEOUT_MS,
+    null
+  )
   const targetId = readString(readRecord(info, 'targetInfo'), 'targetId')
   if (!targetId) {
     throw new Error('The page has no CDP target.')
   }
   const sessions = frameSessionsFor(webContents)
-  // Chromium emits attachedToTarget before answering, so the pending attach hides it.
-  const attach = send('Target.attachToTarget', { targetId, flatten: true }).then((attached) =>
-    readString(
-      attached !== null && typeof attached === 'object'
-        ? Object.fromEntries(Object.entries(attached))
-        : null,
-      'sessionId'
+  const attach = send('Target.attachToTarget', { targetId, flatten: true })
+    .then((attached) =>
+      readString(
+        attached !== null && typeof attached === 'object'
+          ? Object.fromEntries(Object.entries(attached))
+          : null,
+        'sessionId'
+      )
     )
-  )
+    .catch(() => null)
+  // Chromium emits attachedToTarget before answering, so the pending attach hides it until then.
   sessions.attachByTargetId.set(targetId, attach)
-  let sessionId: string | null
-  try {
-    sessionId = await attach
-  } finally {
+  void attach.finally(() => {
     if (sessions.attachByTargetId.get(targetId) === attach) {
       sessions.attachByTargetId.delete(targetId)
     }
+  })
+  const sessionId = await withTimeout<string | null | typeof ATTACH_TIMED_OUT>(
+    attach,
+    PAGE_SESSION_ATTACH_TIMEOUT_MS,
+    ATTACH_TIMED_OUT
+  )
+  if (sessionId === ATTACH_TIMED_OUT) {
+    // Nobody will own a session that answers late; end it, still hidden, when it does.
+    void attach.then(async (late) => {
+      if (late) {
+        sessions.ownedSessionIds.add(late)
+        await send('Target.detachFromTarget', { sessionId: late }).catch(() => {})
+        sessions.ownedSessionIds.delete(late)
+      }
+    })
+    throw new Error('Timed out opening another CDP session for the page.')
   }
   if (!sessionId) {
     throw new Error('The page refused another CDP session.')

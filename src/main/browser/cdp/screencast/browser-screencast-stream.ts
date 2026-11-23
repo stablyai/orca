@@ -146,7 +146,9 @@ export async function startBrowserScreencast(
       }
       const cdpSessionId = rootLaneIsFree()
         ? undefined
-        : await attachOrcaPageSession(webContents, sendPageCommand)
+        : await attachOrcaPageSession(webContents, (method, params, sessionId) =>
+            sendGuestCdpCommand(webContents, method, params, sessionId)
+          )
       if (cdpSessionId !== undefined && (closed || stopping)) {
         // Stop already ended the lanes it knew of; this session would outlive the stream.
         await detachOrcaPageSession(webContents, sendPageCommand, cdpSessionId)
@@ -160,6 +162,10 @@ export async function startBrowserScreencast(
         opened.handle.stop()
         throw error
       }
+      // A stop during start already queued this lane's teardown.
+      if (closed || stopping) {
+        throw new BrowserError('browser_error', 'Browser stream ended.')
+      }
     })
     return lane!.handle
   }
@@ -169,7 +175,13 @@ export async function startBrowserScreencast(
       if (closed || stopping) {
         return
       }
-      await Promise.all(Array.from(lanes, (lane) => lane.reemulate()))
+      // The first capture writes the new metrics; the other lanes' frames follow without holding the update.
+      const [first, ...rest] = Array.from(lanes)
+      const firstFrame = first?.reemulate()
+      for (const lane of rest) {
+        void lane.reemulate().catch(() => {})
+      }
+      await firstFrame
     })
 
   const firstLane = createLane(undefined, options, options.onFrame)
