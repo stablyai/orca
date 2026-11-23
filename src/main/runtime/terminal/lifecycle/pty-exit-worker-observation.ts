@@ -172,13 +172,19 @@ export abstract class RuntimePtyExitWorkerObservation extends RuntimePtyExitSurf
    *  title had dropped; with the end proven, a title that reads as no agent drops it again. */
   private retireStatusAfterProvenAgentExit(ptyId: string): void {
     const pty = this.ptysById.get(ptyId)
-    const title = this.ptyTitleTrackersByPtyId.get(ptyId)?.lastTitle
-    if (!pty || !title || pty.lastAgentStatus === null) {
+    const entry = this.ptyTitleTrackersByPtyId.get(ptyId)
+    const title = entry?.lastTitle
+    if (!pty || !entry || !title || pty.lastAgentStatus === null) {
       return
     }
     const raw = pty.titleDisplayClear?.title ?? title.raw
-    if (this.classifyPtyTitleStatus(ptyId, raw) === null) {
-      this.applyTrackedPtyTitle(ptyId, raw, title.normalized, undefined, { statusOnly: true })
+    if (this.classifyPtyTitleStatus(ptyId, raw) !== null) {
+      return
+    }
+    entry.tracker.forgetAgentStatus()
+    if (this.applyTrackedPtyTitle(ptyId, raw, title.normalized, undefined, { statusOnly: true })) {
+      this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
+      this.touchMobileSessionSnapshotsForPty(ptyId)
     }
   }
 

@@ -34,13 +34,12 @@ describe('mail after an agent exit the hook server proved', () => {
     vi.useFakeTimers()
     const db = new OrchestrationDb(':memory:')
     const { runtime } = await createRuntime(db, { launchAgent: 'opencode' })
-    let foreground = 'opencode'
     const write = vi.fn(() => true)
     runtime.setPtyController({
       write,
       writeWithSettlement: settledWriteStub(write),
       kill: vi.fn(),
-      getForegroundProcess: async () => foreground,
+      getForegroundProcess: async () => 'opencode',
       requestRepaint: vi.fn(async () => true)
     })
     await runtime.listTerminals()
@@ -52,7 +51,6 @@ describe('mail after an agent exit the hook server proved', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(runtime.readTerminalMailHold(TERMINAL_HANDLE)).toBeNull()
 
-    foreground = 'zsh'
     runtime.observeWorkerAgentExit(PANE_KEY)
     insertDirectRunMessage(db, createBoundRun(db, 'After exit').id, 'After exit')
     runtime.deliverPendingMessagesForHandle(TERMINAL_HANDLE)
