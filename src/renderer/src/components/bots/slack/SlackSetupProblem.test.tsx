@@ -199,6 +199,19 @@ describe('resuming Slack setup once the server is back', () => {
     expect(retry).not.toHaveBeenCalled()
   })
 
+  it('leaves a failure shown before the outage alone, but resumes one that arrives during it', () => {
+    const { retry, at } = harness()
+    const earlier: BotSlackSetupStep = { kind: 'failed', code: 'cloud_error', teamId: 'T1' }
+    at(earlier, null)
+    at(earlier, reconnecting)
+    at(earlier, null)
+    expect(retry).not.toHaveBeenCalled()
+    const during: BotSlackSetupStep = { kind: 'failed', code: 'cloud_error', teamId: 'T1' }
+    at(during, reconnecting)
+    at(during, null)
+    expect(retry).toHaveBeenCalledTimes(1)
+  })
+
   it('arms nothing for an outage during an idle step', () => {
     const { retry, at } = harness()
     at({ kind: 'pick', teamIds: ['T1'] }, reconnecting)

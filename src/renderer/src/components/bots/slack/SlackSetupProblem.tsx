@@ -66,19 +66,26 @@ export function slackSetupProblem(
  * A failure while the server was away, or a request it dropped mid-way, starts again once the server
  * is back, as the waiting line says: that workspace's Slack state is read again first, as Try again
  * does, so an app the dropped request left half-made still asks before another is made. An outage
- * during an idle step, or a failure of its own, arms nothing.
+ * during an idle step, a failure of its own, or one already shown before the outage arms nothing.
+ * Returns the outage the dialog shows: none over a failure from before it.
  */
 export function useResumeWhenHostReturns(
   step: BotSlackSetupStep,
   outage: BotHostOutage | null,
   retry: (teamId?: string) => Promise<void>
-): void {
+): BotHostOutage | null {
   const waited = useRef(false)
   // Any outage, including one Reconnect can't end: the wait is over only when the server answers.
   const hostDown = outage !== null
+  // The step shown while the server last answered; a new failure is a new step object.
+  const [stepWhileUp, setStepWhileUp] = useState<BotSlackSetupStep | null>(hostDown ? null : step)
+  if (!hostDown && stepWhileUp !== step) {
+    setStepWhileUp(step)
+  }
+  const failedBefore = hostDown && step.kind === 'failed' && step === stepWhileUp
   useEffect(() => {
     const pending = step.kind === 'checking' || step.kind === 'setting-up'
-    if (hostDown && (pending || failedForHost(step))) {
+    if (hostDown && (pending || (failedForHost(step) && !failedBefore))) {
       waited.current = true
     } else if (waited.current && step.kind === 'failed' && failedForHost(step)) {
       waited.current = false
@@ -87,7 +94,8 @@ export function useResumeWhenHostReturns(
       // Settled some other way, or failed for its own reason: not this outage's to repeat.
       waited.current = false
     }
-  }, [step, hostDown, retry])
+  }, [step, hostDown, failedBefore, retry])
+  return failedBefore ? null : outage
 }
 
 function problemCode(problem: SlackSetupProblem): string {
