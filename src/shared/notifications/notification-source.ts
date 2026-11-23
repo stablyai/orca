@@ -28,7 +28,10 @@ export function notificationWorkspaceExecutionHostForOwner(
 
 type NotificationSourceCatalog = {
   sshTargetLabels?: ReadonlyMap<string, string>
-  runtimeEnvironments?: readonly Pick<PublicKnownRuntimeEnvironment, 'id' | 'source'>[]
+  runtimeEnvironments?: readonly Pick<
+    PublicKnownRuntimeEnvironment,
+    'id' | 'source' | 'orcadDeployment'
+  >[]
 }
 
 function ownerRuntimeEnvironmentId(owner: NotificationWorkspaceOwner): string | null {

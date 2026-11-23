@@ -11,7 +11,10 @@ import {
   type ExecutionHostId
 } from './execution-host'
 import type { SshConnectionState } from '../remote-runtime/ssh/ssh-types'
-import type { RuntimeEnvironmentSource } from '../remote-runtime/host-catalog/runtime-environments'
+import {
+  isEphemeralVmRuntimeEnvironment,
+  type RuntimeEnvironmentSource
+} from '../remote-runtime/host-catalog/runtime-environments'
 import type { GlobalSettings } from '../settings/global-settings-types'
 import type { Repo } from '../repository/repo-types'
 import { annotateManagedOrcadExecutionHosts } from './managed-orcad-execution-host'
@@ -137,7 +140,8 @@ export function buildExecutionHostRegistry(args: {
       hosts,
       environmentId,
       normalizeHostPart(environment.name) ?? environmentId,
-      environment.source,
+      // Why: a recipe VM's managed server is saved without a source; pickers must still hide it.
+      isEphemeralVmRuntimeEnvironment(environment) ? 'ephemeral-vm' : environment.source,
       args.runtimeStatusByEnvironmentId
     )
   }
