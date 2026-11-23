@@ -13,6 +13,7 @@ export const ORCA_CLOUD_TEAM_POLICY_FLAGS = {
   mobileRelay: 'relay.use',
   bots: 'desktop.bots',
   computerUse: 'desktop.computerUse',
+  artifactSharing: 'artifacts.share',
   plugins: 'desktop.plugins',
   officialPlugins: 'plugins.official',
   communityPlugins: 'plugins.community',

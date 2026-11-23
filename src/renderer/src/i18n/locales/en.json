@@ -1980,6 +1980,9 @@
     },
     "computerUse": {
       "teamDisabled": "Computer Use is turned off by your team."
+    },
+    "artifacts": {
+      "teamDisabled": "Artifact sharing is turned off by your team."
     }
   },
   "menu": {
