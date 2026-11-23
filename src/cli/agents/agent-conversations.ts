@@ -171,10 +171,12 @@ function formatAgentRead(
   result: AgentReadResult,
   call: { limit: number | undefined; connection: readonly string[] | null; cursorRead: boolean }
 ): string {
+  // Continuation lines are indented, so a line starting with `Older:` is only ever Orca's own.
   const lines = result.entries.map((entry) =>
-    entry.shortened
+    (entry.shortened
       ? `${formatEntry(entry)}\n[shortened to fit; open it in Orca to see it whole]`
       : formatEntry(entry)
+    ).replace(/\r\n|\r|\n/g, '\n  ')
   )
   const { nextCursor } = result
   if (nextCursor === undefined) {

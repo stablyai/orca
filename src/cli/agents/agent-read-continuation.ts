@@ -3,10 +3,12 @@ import { ORCA_SESSION_ADDRESS_PREFIX } from '../../shared/agent-session/identity
 import { quoteCliCommandArgumentForEveryShell } from '../arguments/shell-command-quote'
 import { resolveEnvironmentIdForStore } from '../hosts/execution-host-flag'
 import { isLocalEnvironmentSelector } from '../hosts/local-environment-selector'
+import { orchestrationCliName } from '../orchestration/agent-view'
 
 /** The connection this call chose on its own command line, so the next page comes from the same
- *  host; an ambient ORCA_ENVIRONMENT is inherited, so it isn't printed. Null when a saved server
- *  has no canonical id to print in place of the typed name. */
+ *  host; an ambient ORCA_ENVIRONMENT is inherited, so it isn't printed. Null when it can't be
+ *  printed: a saved server with no canonical id to show instead of the typed name, or a pairing
+ *  code, which is a credential. */
 export async function agentReadConnectionArgs(
   flags: Map<string, string | boolean>
 ): Promise<string[] | null> {
@@ -19,8 +21,8 @@ export async function agentReadConnectionArgs(
     const id = await resolveEnvironmentIdForStore(environment)
     return id ? ['--environment', id] : null
   }
-  const pairingCode = flags.get('pairing-code')
-  return typeof pairingCode === 'string' ? ['--pairing-code', pairingCode] : []
+  // Never echo a pairing code into output an agent may log.
+  return typeof flags.get('pairing-code') === 'string' ? null : []
 }
 
 /** The line that reads the next older page, or says why none can be read; null when the page
@@ -37,7 +39,6 @@ export function agentReadClosingLine(
       : null
   }
   const args = [
-    'orca',
     'agent',
     'read',
     `${ORCA_SESSION_ADDRESS_PREFIX}${result.orcaSessionId}`,
@@ -48,6 +49,6 @@ export function agentReadClosingLine(
   ].map(quoteCliCommandArgumentForEveryShell)
   // A value no quoting keeps inert in every shell: print the cursor alone, never a command.
   return call.connection && args.every((arg) => arg !== null)
-    ? `${lead} ${args.join(' ')}`
+    ? `${lead} ${orchestrationCliName()} ${args.join(' ')}`
     : `${lead} --cursor ${nextCursor} (repeat your last command with this --cursor)`
 }
