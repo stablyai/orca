@@ -188,7 +188,6 @@ export class ProviderRelaySpool {
     }
     this.mode = 'attached'
     this.updatePressure()
-    // The last seq this attach really sent; a lost file's records are not claimed.
     return after
   }
 

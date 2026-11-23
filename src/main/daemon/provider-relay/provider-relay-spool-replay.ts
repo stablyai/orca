@@ -83,7 +83,8 @@ type SpoolFileReplay = SpoolReplay & {
    * What the file must hold whole. Fewer indexed records than it lists means some were cut or
    * corrupted; rows a failed append left behind are not indexed, and their memory copies are sent.
    */
-  index: Pick<SpoolFileIndex, 'has' | 'countAfter'>
+  /** `ackedThrough` is read live: a row acked during the replay is accounted for without being sent. */
+  index: Pick<SpoolFileIndex, 'has' | 'countAfter' | 'ackedThrough'>
 }
 
 /**
@@ -101,12 +102,18 @@ export async function replaySpoolFileRecords(
     ...replay,
     deliver: (record) => {
       // Only rising, indexed seqs count, so a duplicated or out-of-order row can't stand in for a missing one.
-      if (record.seq <= highest || !replay.index.has(record.seq)) {
+      if (record.seq <= highest) {
         return
       }
-      highest = Math.max(highest, record.seq)
+      const ackedMeanwhile = record.seq <= replay.index.ackedThrough
+      if (!ackedMeanwhile && !replay.index.has(record.seq)) {
+        return
+      }
+      highest = record.seq
       delivered++
-      replay.deliver(record)
+      if (!ackedMeanwhile) {
+        replay.deliver(record)
+      }
     }
   })
   if (outcome === 'failed' || (outcome === 'done' && delivered < expected)) {

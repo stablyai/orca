@@ -8,6 +8,8 @@ export class SpoolFileIndex {
   unackedBytes = 0
   /** Highest seq written to the file; 0 when there is no file. */
   lastSeq = 0
+  /** The client's ack as last applied; a replay treats rows at or below it as accounted for. */
+  ackedThrough = 0
 
   add(seq: number, bytes: number): void {
     this.entries.push(seq, bytes)
@@ -16,6 +18,7 @@ export class SpoolFileIndex {
   }
 
   ackThrough(seq: number): void {
+    this.ackedThrough = Math.max(this.ackedThrough, seq)
     while (this.head < this.entries.length && this.entries[this.head] <= seq) {
       this.unackedBytes -= this.entries[this.head + 1]
       this.head += 2
