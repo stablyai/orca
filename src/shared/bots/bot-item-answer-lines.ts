@@ -1,6 +1,8 @@
 // The owner's answers to an ask of several questions, as one comment: one line per question, each
 // written as a quick reply of several questions writes it ("Question → answer"). Older clients post
 // each line as its own comment; both read the same way.
+// Hosts keep the waiting ask that pairing works out from what this file reads, writes or limits: any change
+// to it bumps WAITING_ASK_RULES (src/main/bots/bot-item-waiting-ask-keep.ts).
 import {
   botItemPickedReplies,
   botItemQuestionLine,
@@ -10,8 +12,6 @@ import {
 import { botItemCommentImages } from './bot-items'
 import { stripSentImagePromptMarkers } from '../native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 
-// Hosts keep the waiting ask pairing works out with this: a change to what it reads bumps WAITING_ASK_RULES
-// (src/main/bots/bot-item-waiting-ask-keep.ts).
 /** Per question line, the answer a comment names for it ("Question → answer"), else null. A line
  *  belongs to the question with the longest matching lead, as one question's words may lead another's. */
 export function botItemNamedAnswers(shape: BotItemQuestionShape, text: string): (string | null)[] {

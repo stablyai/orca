@@ -1,6 +1,8 @@
 // An agent's Needs you question: one normal comment with its body (`--comment`), its question lines
 // (`--ask`, once per decision) and each one's quick replies (`--option`, `--recommended`). The owner
 // answers with a quick reply or in their own words, as a plain comment.
+// Hosts keep the waiting ask that pairing works out from what this file reads, writes or limits: any change
+// to it bumps WAITING_ASK_RULES (src/main/bots/bot-item-waiting-ask-keep.ts).
 import * as z from 'zod'
 import { BOT_ITEM_LIMITS, type BotItem } from './bot-items'
 
@@ -57,8 +59,6 @@ export const BotItemAskSchema = z.object({
 
 export type BotItemAsk = z.infer<typeof BotItemAskSchema>
 
-// Hosts keep the waiting ask pairing works out with this: a change to what it reads bumps WAITING_ASK_RULES
-// (src/main/bots/bot-item-waiting-ask-keep.ts).
 /** A question's first line as plain words, for a one-line row: no `**`, `#`, list marks, code ticks
  *  or link syntax, so a question the agent wrote in Markdown reads cleanly there. */
 export function botItemQuestionLine(text: string): string {
@@ -103,8 +103,6 @@ export type BotItemDecision = { question: string; replies: BotItemQuickReply[]; 
  *  quick replies (`--option`). A comment with no ask is all body. */
 export type BotItemQuestionShape = { body: string; decisions: BotItemDecision[] }
 
-// Hosts keep the waiting ask pairing works out with this: a change to what it reads bumps WAITING_ASK_RULES
-// (src/main/bots/bot-item-waiting-ask-keep.ts).
 export function botItemQuestionShape(data: Record<string, unknown>): BotItemQuestionShape {
   const ask = botItemAskOf(data)
   if (!ask) {
@@ -124,8 +122,6 @@ export function botItemQuestionShape(data: Record<string, unknown>): BotItemQues
   }
 }
 
-// Hosts keep the waiting ask pairing works out with this: a change to what it reads bumps WAITING_ASK_RULES
-// (src/main/bots/bot-item-waiting-ask-keep.ts).
 /** What a quick reply posts: its label, or with several questions, which one it answers too. */
 export function botItemQuickReplyText(
   shape: BotItemQuestionShape,
