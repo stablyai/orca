@@ -6005,6 +6005,8 @@
       "runsOnHost": "在 {{host}} 上运行",
       "shuffle": "换一张头像",
       "namePlaceholder": "为你的 bot 命名",
+      "purposeLabel": "身份",
+      "purposePlaceholder": "它是谁，负责做什么",
       "create": "创建",
       "fromTemplate": "使用模板",
       "takesOverList": "接管 {{names}}。其中的智能体会继续运行",

@@ -5618,6 +5618,8 @@
       "runsOnHost": "Runs on {{host}}.",
       "shuffle": "Another picture",
       "namePlaceholder": "Name your bot",
+      "purposeLabel": "Identity",
+      "purposePlaceholder": "Who it is and what it does",
       "create": "Create",
       "fromTemplate": "Use template",
       "takesOverList": "Takes over {{names}}. Their agents keep running.",
