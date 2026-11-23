@@ -214,6 +214,10 @@ function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore)
       }
     },
     queued: (key) => runtime.getExternalConversationSeam()?.queued(key) ?? Promise.resolve(),
+    otherBotNames: (botId) =>
+      (store.getBots?.() ?? []).flatMap((entry) =>
+        entry.id === botId ? [] : [entry.name, entry.folder]
+      ),
     botNames: (botId) => {
       const bot = store.getBots?.().find((entry) => entry.id === botId)
       return bot ? [bot.name, bot.folder] : []

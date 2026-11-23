@@ -48,7 +48,12 @@ const COMMANDS = new Map<string, ThreadMuteCommand>([
 
 /** How people address the thread's bot: its Slack user (`<@U…>`; a shared app's bots share one,
  *  told apart by the name after it) and its names (`@reviewer`). */
-export type ThreadBot = { userId: string | null; names: readonly string[] }
+export type ThreadBot = {
+  userId: string | null
+  names: readonly string[]
+  /** Other bots' names: after a shared app's mention, one of these addresses that bot instead. */
+  others?: readonly string[]
+}
 
 function normalized(text: string): string {
   return text
@@ -144,6 +149,25 @@ function mentionsBot(text: string, bot: ThreadBot): boolean {
   )
 }
 
+/** Whether the message leads with the shared Slack user's mention and then another bot's name
+ *  (longest first), so it is that bot's, not this one's. */
+function addressesOtherBot(text: string, bot: ThreadBot): boolean {
+  const userId = bot.userId?.toLowerCase()
+  const rest = normalized(text)
+  const prefix = `<@${userId}>`
+  if (!userId || !bot.others?.length || !rest.startsWith(prefix)) {
+    return false
+  }
+  const after = rest.slice(prefix.length).trimStart()
+  const named = [
+    ...bot.names.map((name) => ({ name: normalized(name), other: false })),
+    ...bot.others.map((name) => ({ name: normalized(name), other: true }))
+  ]
+    .filter(({ name }) => name !== '' && (after === name || after.startsWith(`${name} `)))
+    .sort((a, b) => b.name.length - a.name.length)
+  return named[0]?.other === true
+}
+
 /** What a send to a bot's thread does: a command is handled here and never reaches the agent; a
  *  muted thread silences any send that doesn't mention the bot; a mention unmutes and goes on. */
 export type ThreadMuteStep = 'mute' | 'unmute' | 'silence' | 'unmute_and_send' | 'send'
@@ -165,8 +189,8 @@ export function threadMuteStep(
   if (!muted) {
     return 'send'
   }
-  // A command for someone else (another bot behind the same Slack app) leaves this one muted.
-  if (mayBeThreadMuteCommand(delivery.text)) {
+  // Another bot behind the same Slack app, named after its mention, leaves this one muted.
+  if (addressesOtherBot(delivery.text, bot)) {
     return 'silence'
   }
   // `mentioned` comes only from a newer connector service; until then the bot's own mention in the
@@ -193,6 +217,8 @@ export type ThreadMuteDeps = {
   write: (key: ConnectorConversation, muted: boolean) => Promise<void>
   /** The names people @mention the bot by. */
   botNames: (botId: string) => string[]
+  /** The names of this machine's other bots, which may share its Slack app. */
+  otherBotNames: (botId: string) => string[]
   /** Settles after the thread's queued deliveries, as a start in the same poll writes its link. */
   queued: (key: ConnectorConversation) => Promise<unknown>
   /** Each thread's newest reply still deciding (its link being written, its mute being saved). */
@@ -212,13 +238,19 @@ export type RecordHandled = (
   handled: () => Promise<typeof ACCEPTED>
 ) => Promise<ConnectorDeliveryResult>
 
-/** Settles a send this step handled (accepted, no turn); null when it goes on to the agent now,
- *  'send' when it goes on once its thread is linked. */
+/** A send this step holds: its result (accepted with no turn), or 'send' when it goes on once
+ *  decided. `withBatch`: it goes on with its batch's follow-ups, which wait for it as one turn. */
+export type ThreadMuteOutcome = {
+  decided: Promise<ConnectorDeliveryResult | 'send'>
+  withBatch?: true
+}
+
+/** The send's outcome when this step holds it; null when it goes on to the agent now. */
 export function handleThreadMute(
   deps: ThreadMuteDeps,
   delivery: SendDelivery,
   record: RecordHandled
-): Promise<ConnectorDeliveryResult | 'send'> | null {
+): ThreadMuteOutcome | null {
   const key = delivery.conversation
   const userId = key.source === 'slack' ? slackThreadBotUser(key.externalId) : null
   if (!userId) {
@@ -229,11 +261,14 @@ export function handleThreadMute(
   // waits its turn, so it is decided on what that one left and never overtakes it.
   const ahead = deps.waiting.get(id)
   if (ahead) {
-    return hold(
-      deps,
-      id,
-      ahead.catch(() => undefined).then(() => decideNow(deps, delivery, record, userId))
-    )
+    const after = ahead.catch(() => undefined)
+    return {
+      decided: hold(
+        deps,
+        id,
+        after.then(() => decideNow(deps, delivery, record, userId))
+      )
+    }
   }
   const thread = deps.read(key)
   if (thread === 'not_bot') {
@@ -245,18 +280,21 @@ export function handleThreadMute(
       thread.muted || mayBeThreadMuteCommand(delivery.text)
         ? applyStep(deps, delivery, record, userId, thread)
         : null
-    return applied && hold(deps, id, applied)
+    return applied && { ...applied, decided: hold(deps, id, applied.decided) }
   }
   // No link yet: a start in the same poll is still writing it. A likely command waits for it and
   // is then decided as any other; the rest go on now, batched as ever.
   if (!mayBeThreadMuteCommand(delivery.text)) {
     return null
   }
-  return hold(
-    deps,
-    id,
-    deps.queued(key).then(() => decideNow(deps, delivery, record, userId))
-  )
+  const linkedAt = deps.queued(key)
+  return {
+    decided: hold(
+      deps,
+      id,
+      linkedAt.then(() => decideNow(deps, delivery, record, userId))
+    )
+  }
 }
 
 async function decideNow(
@@ -268,7 +306,7 @@ async function decideNow(
   const linked = deps.read(delivery.conversation)
   const applied =
     linked && linked !== 'not_bot' && applyStep(deps, delivery, record, userId, linked)
-  return applied ? await applied : 'send'
+  return applied ? await applied.decided : 'send'
 }
 
 /** Keeps the thread's newest deciding reply until it settles, for the replies behind it. */
@@ -294,13 +332,14 @@ function applyStep(
   record: RecordHandled,
   userId: string,
   thread: { botId: string; muted: boolean }
-): Promise<ConnectorDeliveryResult | 'send'> | null {
+): ThreadMuteOutcome | null {
   const key = delivery.conversation
   // A reply with no mention and nothing like a command needs no names: most of a muted thread's.
   const plain = !delivery.text.includes('@') && !mayBeThreadMuteCommand(delivery.text)
   const step = threadMuteStep(thread.muted, delivery, {
     userId,
-    names: plain ? [] : deps.botNames(thread.botId)
+    names: plain ? [] : deps.botNames(thread.botId),
+    others: plain ? [] : deps.otherBotNames(thread.botId)
   })
   if (step === 'send') {
     return null
@@ -308,20 +347,21 @@ function applyStep(
   if (step === 'silence') {
     // One carrying automations keeps no receipt: a resend's replay would count them as run in a
     // turn that never was, so it is decided again instead and the cloud runs them itself.
-    return delivery.automations?.length ? Promise.resolve(ACCEPTED) : record(async () => ACCEPTED)
+    return {
+      decided: delivery.automations?.length
+        ? Promise.resolve(ACCEPTED)
+        : record(async () => ACCEPTED)
+    }
   }
   if (step === 'unmute_and_send') {
-    // Sent on at once so it keeps its batch's follow-ups as one turn; its save starts first and is
-    // usually on disk well before that turn is admitted and receipted.
-    void deps
-      .write(key, false)
-      .catch((error: unknown) => console.warn('[connectors] could not save a thread unmute', error))
-    return null
+    // Saved before it goes on, so its turn's receipt never stands for an unmute a crash lost; its
+    // batch's follow-ups wait with it and still go as one turn.
+    return { decided: deps.write(key, false).then(() => 'send' as const), withBatch: true }
   }
   const ref = delivery.asker?.messageRef
   // Saved before its receipt, so a crash between leaves the resend to decide it again; a save that
   // fails is refused and sent again. The emoji shows only a mute (or unmute) already on disk.
-  return deps.write(key, step === 'mute').then(() =>
+  const decided = deps.write(key, step === 'mute').then(() =>
     record(async () => {
       if (ref) {
         // The emoji is the only answer: a failed one leaves the thread muted (or not) all the same.
@@ -334,4 +374,5 @@ function applyStep(
       return ACCEPTED
     })
   )
+  return { decided }
 }

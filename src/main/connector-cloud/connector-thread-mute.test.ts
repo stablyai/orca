@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import { dispatchDelivery } from './connector-deliveries'
+import { dispatchBatch } from './connector-delivery-batches'
 import { handleThreadMute, threadMuteCommand } from './connector-thread-mute'
 
 const conversation = { source: 'slack', externalId: 'T1:C1:1800000000.000100:U0BOT' }
@@ -75,6 +76,7 @@ describe('a muted thread', () => {
               muted = next
             },
             botNames: () => ['reviewer'],
+            otherBotNames: () => ['reviewer-2'],
             queued: async () => {},
             waiting: new Map(),
             react: async (_bot, _key, _ref, emoji) => {
@@ -122,13 +124,14 @@ describe('a reply in the same poll as its thread’s start', () => {
   const replyAfterStart = async (text: string, waiting = new Map<string, Promise<unknown>>()) => {
     let linked = false
     let muted = false
-    const result = await handleThreadMute(
+    const outcome = handleThreadMute(
       {
         read: () => (linked ? { botId: 'bot1', muted } : null),
         write: async (_key, next) => {
           muted = next
         },
         botNames: () => [],
+        otherBotNames: () => [],
         queued: async () => {
           linked = true
         },
@@ -138,6 +141,7 @@ describe('a reply in the same poll as its thread’s start', () => {
       send(text) as Parameters<typeof handleThreadMute>[1],
       (handled) => handled()
     )
+    const result = outcome ? await outcome.decided : null
     return { result, muted }
   }
 
@@ -179,6 +183,7 @@ describe('a resent delivery', () => {
               muted = next
             },
             botNames: () => [],
+            otherBotNames: () => [],
             queued: async () => {},
             waiting: new Map(),
             react: async () => {}
@@ -197,5 +202,66 @@ describe('a resent delivery', () => {
     await resent?.done
     expect(muted).toBe(true)
     expect(reached).toEqual(['<@U0BOT> look'])
+  })
+})
+
+describe('a mention that unmutes, with follow-ups in its poll', () => {
+  // The unmute is saved before the mention goes on, and its follow-ups still go with it as one turn.
+  it('reaches the chat once, carrying them', async () => {
+    let muted = true
+    const turns: { text: string; later: number }[] = []
+    const seam = {
+      send: async (
+        _host: unknown,
+        _key: unknown,
+        _id: string,
+        message: { text: string; later?: unknown[] }
+      ) => {
+        turns.push({ text: message.text, later: message.later?.length ?? 0 })
+        return { outcome: 'accepted' }
+      },
+      receipts: {
+        run: (_k: unknown, _d: unknown, _m: unknown, _t: unknown, run: () => unknown) => run(),
+        known: () => false,
+        carried: async (_k: unknown, _d: unknown, _t: unknown, done: Promise<unknown>) => done
+      }
+    } as unknown as ExternalConversationSeam
+    const machine = {
+      runTrigger: async () => false,
+      threadMute: (
+        delivery: Parameters<typeof handleThreadMute>[1],
+        record: Parameters<typeof handleThreadMute>[2]
+      ) =>
+        handleThreadMute(
+          {
+            read: () => ({ botId: 'bot1', muted }),
+            write: async (_key, next) => {
+              muted = next
+            },
+            botNames: () => ['reviewer'],
+            otherBotNames: () => [],
+            queued: async () => {},
+            waiting: new Map(),
+            react: async () => {}
+          },
+          delivery,
+          record
+        )
+    }
+    const batch = [
+      send('<@U0BOT> ok unmute', { mentioned: true }),
+      send('a'),
+      send('b')
+    ] as unknown as Parameters<typeof dispatchBatch>[3]
+    const dispatched = dispatchBatch(
+      seam,
+      {} as ExternalConversationHost,
+      machine,
+      batch,
+      () => 60_000
+    )
+    await Promise.all(dispatched.map((entry) => entry.done))
+    expect(turns).toEqual([{ text: '<@U0BOT> ok unmute', later: 2 }])
+    expect(muted).toBe(false)
   })
 })

@@ -105,23 +105,27 @@ export function dispatchBatch(
   if (!first) {
     return late.map((delivery) => refuse(delivery.deliveryId, { outcome: 'expired' }))
   }
-  // Refused before the seam (expired, unsupported): the later ones go on their own.
-  const carried = first.received
-    ? later.map((delivery): DispatchedDelivery => ({
-        deliveryId: delivery.deliveryId,
-        received: true,
-        ...(first.viaOutbox ? { viaOutbox: true as const } : {}),
-        done: seam.receipts.carried(
-          delivery.conversation,
-          delivery.deliveryId,
-          delivery.text,
-          first.done
-        )
-      }))
-    : later.flatMap((delivery) => {
-        const own = dispatchDelivery(seam, host, machine, delivery, msLeft, [], outboxAccount)
-        return own ? [own] : []
-      })
+  // Refused before the seam (expired, unsupported), or held by a thread's mute: the later ones go
+  // on their own, unless the held one carries them.
+  const carried =
+    first.received || first.carriesLater
+      ? later.map((delivery): DispatchedDelivery => ({
+          deliveryId: delivery.deliveryId,
+          received: true,
+          ...(first.viaOutbox || (first.carriesLater && outboxAccount)
+            ? { viaOutbox: true as const }
+            : {}),
+          done: seam.receipts.carried(
+            delivery.conversation,
+            delivery.deliveryId,
+            delivery.text,
+            first.done
+          )
+        }))
+      : later.flatMap((delivery) => {
+          const own = dispatchDelivery(seam, host, machine, delivery, msLeft, [], outboxAccount)
+          return own ? [own] : []
+        })
   return [
     first,
     ...carried,

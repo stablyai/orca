@@ -23,6 +23,8 @@ export type DispatchedDelivery = {
   done: Promise<ConnectorDeliveryResult>
   /** Admitted through the reply outbox: `received` follows its admission. */
   viaOutbox?: true
+  /** Held, then sent with its batch's later sends as one turn: they settle with it. */
+  carriesLater?: true
 }
 
 /** A thrown seam call (e.g. a conversation that no longer exists) is a refusal, not a lost delivery. */
@@ -200,17 +202,24 @@ export function dispatchDelivery(
       )
     )
     if (muted) {
-      // A thread its start is still linking decides only once linked; one going on is sent alone.
+      // Held until decided; one that then goes on is sent as it would have been, its batch's
+      // follow-ups with it when they waited for it.
       const alone = { ...machine, threadMute: undefined }
+      const carried = muted.withBatch ? later : []
       const done = settle(async (): Promise<ConnectorDeliveryResult> => {
-        const result = await muted
+        const result = await muted.decided
         if (result !== 'send') {
           return result
         }
-        const sent = dispatchDelivery(seam, host, alone, delivery, msLeft, [], outboxAccount)
+        const sent = dispatchDelivery(seam, host, alone, delivery, msLeft, carried, outboxAccount)
         return sent ? await sent.done : { outcome: 'unsupported' }
       })
-      return { deliveryId, received: false, done }
+      return {
+        deliveryId,
+        received: false,
+        done,
+        ...(muted.withBatch ? { carriesLater: true as const } : {})
+      }
     }
   }
   // Every other kind belongs to a thread.

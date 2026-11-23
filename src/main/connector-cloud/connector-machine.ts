@@ -2,12 +2,11 @@ import type { ConnectorTurnEvents } from './connector-turn-events'
 import type {
   ConnectorBot,
   ConnectorDelivery,
-  ConnectorDeliveryResult,
   ConnectorTrigger
 } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorTurnAutomation } from '../../shared/connector-trigger-event-contract'
 import type { TurnAutomations } from './connector-turn-automations'
-import type { RecordHandled } from './connector-thread-mute'
+import type { RecordHandled, ThreadMuteOutcome } from './connector-thread-mute'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import type { ConnectorAccountTransport } from './connector-transport'
@@ -37,7 +36,7 @@ export type ConnectorMachine = {
   threadMute?: (
     delivery: Extract<ConnectorDelivery, { kind: 'send' }>,
     record: RecordHandled
-  ) => Promise<ConnectorDeliveryResult | 'send'> | null
+  ) => ThreadMuteOutcome | null
   /** Tells the bot's owner about one of its hooks; false when the hook isn't this machine's. */
   webhookNotice?: (
     delivery: Extract<ConnectorDelivery, { kind: 'webhook_notice' }>
