@@ -100,20 +100,18 @@ export class StructuredAgentSessionIdleSweep {
     this.running = true
     try {
       const agentIdleMs = this.idleWindow()
-      for (const [sessionId, session] of this.deps.sessions) {
-        if (session.child?.phase === 'ready') {
-          this.deps.adapter().recheckProviderUpdate?.(sessionId)
-        }
-      }
       await Promise.allSettled(
         [...this.deps.sessions.keys()].map((sessionId) =>
-          this.sweepSession(sessionId, agentIdleMs).catch((error: unknown) =>
-            this.deps.logger.warn('an idle sweep step failed', {
-              scope: 'idle-sweep',
-              sessionId,
-              error
-            })
-          )
+          this.sweepSession(sessionId, agentIdleMs)
+            // After the stop decision, so a stopped agent isn't asked and a throw stays this chat's.
+            .then(() => this.recheckProviderUpdate(sessionId))
+            .catch((error: unknown) =>
+              this.deps.logger.warn('an idle sweep step failed', {
+                scope: 'idle-sweep',
+                sessionId,
+                error
+              })
+            )
         )
       )
     } finally {
@@ -134,6 +132,12 @@ export class StructuredAgentSessionIdleSweep {
     }
     // A send meanwhile may already hold a new child; only the one asked about counts.
     return this.deps.sessions.get(sessionId)?.child === running ? 'busy' : 'stopped'
+  }
+
+  private recheckProviderUpdate(sessionId: string): void {
+    if (this.deps.sessions.get(sessionId)?.child?.phase === 'ready') {
+      this.deps.adapter().recheckProviderUpdate?.(sessionId)
+    }
   }
 
   private idleWindow(): number | null {

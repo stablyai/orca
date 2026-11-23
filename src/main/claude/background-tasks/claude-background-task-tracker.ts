@@ -41,12 +41,12 @@ export class ClaudeBackgroundTaskTracker {
 
   constructor(private readonly now: () => number = () => Date.now()) {}
 
-  /** Claude wakes for finished background work with a turn of its own; until it starts, the
-   *  process is not idle. Undefined leaves an idle stop to the host's own checks. */
+  /** Claude wakes for finished background work with a turn of its own; until it starts, idle is
+   *  unconfirmed. `unknown` keeps the agent without renewing its idle window, as `busy` would. */
   wakeTurnHold(): Promise<AgentSessionIdleConfirmation> | undefined {
     const ended = this.backgroundEndedAt
     return ended !== null && this.now() - ended < CLAUDE_WAKE_TURN_MS
-      ? Promise.resolve('busy')
+      ? Promise.resolve('unknown')
       : undefined
   }
 
