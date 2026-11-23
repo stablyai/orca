@@ -2,6 +2,7 @@ import type { CommandHandler } from '../dispatch/dispatch'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
+  getPresentStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
@@ -71,7 +72,8 @@ export const AGENT_CONVERSATION_HANDLERS: Record<string, CommandHandler> = {
         `--limit can be at most ${AGENT_READ_MAX_LIMIT}.`
       )
     }
-    const cursor = getOptionalStringFlag(flags, 'cursor')
+    // An empty value (an unset variable) must not silently read the newest page instead.
+    const cursor = getPresentStringFlag(flags, 'cursor')
     const result = await callAgentMethod<AgentReadResult>(client, 'agent.read', {
       id: getRequiredStringFlag(flags, 'id'),
       ...(limit !== undefined ? { limit } : {}),
