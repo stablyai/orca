@@ -2,7 +2,6 @@ import type {
   RuntimeMobileSessionTerminalTab,
   RuntimeMobileTerminalTheme
 } from '../../../../../src/shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
-import type { SessionOptionValue } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import type { AgentStatusEntry } from '../../../../../src/shared/agent-status/contracts/agent-status-types'
 import { browserLoadErrorsEqual } from '../../../../../src/shared/browser/navigation/browser-load-failure'
 import { translate } from '../../../i18n/mobile-i18n'
@@ -39,7 +38,7 @@ export type MobileTerminalSessionTab = Partial<
   /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string
   launchDraftCreatedAt?: number
-  appliedSessionOptions?: Record<string, SessionOptionValue>
+  appliedSessionOptions?: RuntimeMobileSessionTerminalTab['appliedSessionOptions']
   terminalTheme?: RuntimeMobileTerminalTheme
   unread?: true
   isActive: boolean
