@@ -326,7 +326,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             className={
               hasTargetList
                 ? 'scrollbar-sleek flex h-48 max-h-[50vh] min-w-0 flex-col gap-3 overflow-y-auto *:shrink-0'
-                : 'scrollbar-sleek flex h-5 min-w-0 flex-col empty:hidden has-[button[aria-expanded=true]]:h-auto has-[button[aria-expanded=true]]:max-h-[50vh] has-[button[aria-expanded=true]]:overflow-y-auto'
+                : 'flex min-w-0 flex-col empty:hidden'
             }
           >
             {isBatchDelete ? (
@@ -349,7 +349,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
                 dirtyChanges={dirtyChanges}
                 unsavedFiles={unsavedFiles}
                 atRiskLocalFilesByIdentity={atRiskLocalFilesByIdentity}
-                showRoutineCheckStatus={hasTargetList}
               />
             ) : null}
 

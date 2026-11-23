@@ -1,5 +1,6 @@
 // Writes a tidy-up's draft or ops: checked against the MEMORY.md the run read, then written onto the
 // files as they are now, memory/ first, so a line MEMORY.md loses is always kept somewhere.
+import { botFailure, botFailureEnglish } from '../../shared/bots/bot-failure-copy'
 import type { BotMemoryChange, BotMemoryLine } from '../../shared/bot-memory-lines'
 import { redactSecretLike } from '../../shared/crash-reporting/crash-report-redaction'
 import type { BotHomeFilesystem } from './bot-home'
@@ -66,12 +67,13 @@ export async function applyTidyUpOps(
   const failed = !checked
     ? TIDY_UP_FAILURES.noOps
     : asked?.added.length === 0 && asked.removed.length === 0 && realSkips.length > 0
-      ? `${TIDY_UP_FAILURES.allSkipped} (${realSkips[0]})`
+      ? botFailureEnglish(botFailure('tidyUpAllSkipped', { detail: realSkips[0] }))
       : null
   if (failed && !run.migration) {
     return { error: failed, alerted: false }
   }
-  const opsFailed = failed && `${TIDY_UP_FAILURES.movedOnly} (${realSkips[0] ?? failed})`
+  const opsFailed =
+    failed && botFailureEnglish(botFailure('tidyUpMovedOnly', { detail: realSkips[0] ?? failed }))
   const plan = joinedPlans(run.migration, failed ? null : (checked?.plan ?? null))
   const applied = await applyTidyUpPlan(deps, run, plan, run.migration)
   return 'error' in applied

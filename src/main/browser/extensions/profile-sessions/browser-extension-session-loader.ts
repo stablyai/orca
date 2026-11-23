@@ -74,7 +74,7 @@ const reattachRequestedProfileIds = new Set<string>()
 const PRELOAD_FILE_NAME = 'browser-extension-preload.js'
 const PRELOAD_ID = 'orca-browser-extension-frame'
 
-// Workers load Orca's API shim through the background wrapper instead.
+// Workers load Orca's API shim from their own script instead.
 function registerExtensionPreload(sess: Electron.Session): void {
   if (!registerBrowserSessionFramePreload(sess, PRELOAD_ID, PRELOAD_FILE_NAME)) {
     console.warn(

@@ -48,6 +48,7 @@ export type NativeChatComposerRoom = {
 
 export type NativeChatComposerProps = {
   room?: NativeChatComposerRoom
+  dock?: React.ReactNode
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
   terminalTabId: string
   /** Input-only edit session: every submit saves, Escape cancels, and send-only actions are absent. */
@@ -89,8 +90,6 @@ export type NativeChatComposerProps = {
   onSubmitted?: () => void
   /** Picker-only agent commands continue in the hosted TUI after dispatch. */
   onSwitchToTerminal?: () => void
-  /** Reads the hosted TUI's current rendered screen when chat is entered. */
-  readTerminalScreen?: () => string | null
   /** The tab's launch seed as this pane sees it. */
   launchSeed?: NativeChatLaunchSeed
   /** Structured journal transport; absent keeps the existing PTY path unchanged. */

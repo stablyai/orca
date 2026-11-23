@@ -22,10 +22,6 @@ import { MobileSourceCopyButton } from '../../../../components/code-presentation
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { colors, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
-import {
-  MobileNativeChatActivityJoinContext,
-  mobileNativeChatActivityJoinMargins
-} from '../messages/mobile-native-chat-activity-join'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import {
   MobileAgentMessageOpenContext,
@@ -80,11 +76,6 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
   status
 }: AgentMessageCardProps) {
   const t = useMobileTranslation()
-  // Inside its message row's padding (sm).
-  const join = mobileNativeChatActivityJoinMargins(
-    useContext(MobileNativeChatActivityJoinContext),
-    spacing.sm
-  )
   const prose = useNativeChatProseText(fontScale)
   const text = mobileNativeChatDisplayCopyText(message)
   const sender = agentMessagePrimarySender(from)
@@ -104,114 +95,112 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
     merged.length > 0 ||
     message.blocks.some((block) => block.type === 'image-ref')
   return (
-    <View style={join}>
-      <MobileNativeChatEventRow
-        testID="agent-message-card"
-        icon={<SenderMark agentType={view.agentType} />}
-        // The live state never marks a row failed: a restarted worker would un-fail it.
-        badge={view.dot === 'working' ? 'running' : null}
-        label={`${words} ${sender ? senderName : unnamed}${more > 0 ? ` +${more}` : ''}${
-          items.length > 0
-            ? ` ${t('chat.agentMessage.row.forItems', 'for')} ${items.map((item) => item.title).join(', ')}`
-            : ''
-        }`}
-        action={
-          sender && !several ? <OpenSender from={from} sender={sender} unnamed={unnamed} /> : null
-        }
-        timestamp={message.timestamp}
-        disclosureKey={`agent-message:${message.id}`}
-        fontScale={fontScale}
-        onLongPress={onLongPress}
-        details={
-          expandable ? (
-            <>
-              {several ? (
-                <View style={styles.senders}>
-                  {shown.map((each) => (
-                    <OpenSender
-                      key={each.party.address}
-                      from={from}
-                      sender={each}
-                      unnamed={unnamed}
-                      named
-                    />
-                  ))}
-                </View>
-              ) : null}
-              {attachments}
-              <MobileNativeChatMarkdown
-                content={text}
-                rangeSelectable
-                {...prose}
-                onLongPress={onLongPress}
-              />
-              {status}
-              {merged.map((earlier) => {
-                const earlierWords = earlier.from
-                  ? lead(agentMessageHeading(earlier.from, earlier), t)
-                  : null
-                const earlierText = mobileNativeChatDisplayCopyText(earlier)
-                return (
-                  <View key={earlier.id} style={styles.mergedEntry}>
-                    <View style={styles.mergedMeta}>
-                      {earlierWords && earlierWords !== words ? (
-                        <Text style={styles.mergedWords}>{earlierWords}</Text>
-                      ) : null}
-                      {earlier.agentStartItems?.length ? (
-                        <Text style={styles.mergedWords}>
-                          {`${t('chat.agentMessage.row.forItems', 'for')} ${earlier.agentStartItems
-                            .map((item) => item.title)
-                            .join(', ')}`}
-                        </Text>
-                      ) : null}
-                      <MobileNativeChatMessageTime
-                        timestamp={earlier.timestamp}
-                        fontScale={fontScale}
-                      />
-                    </View>
-                    {earlierText.trim() ? (
-                      <MobileNativeChatMarkdown
-                        content={earlierText}
-                        rangeSelectable
-                        {...prose}
-                        onLongPress={onLongPress}
-                      />
-                    ) : null}
-                  </View>
-                )
-              })}
-              {canCopy ? (
-                <View style={styles.copy}>
-                  <MobileSourceCopyButton
-                    text={text}
-                    accessibilityLabel={t('chat.message.copyMessage', 'Copy message')}
-                  />
-                </View>
-              ) : null}
-            </>
-          ) : null
-        }
-      >
-        {words}{' '}
-        {shown.length === 0
-          ? unnamed
-          : shown.map((shownSender, index) => (
-              <Fragment key={shownSender.party.address}>
-                {index > 0 ? ', ' : null}
-                <SenderName sender={shownSender} unnamed={unnamed} />
-              </Fragment>
-            ))}
-        {more > 0 ? ` +${more}` : null}
-        {items.length > 0 ? (
+    <MobileNativeChatEventRow
+      testID="agent-message-card"
+      icon={<SenderMark agentType={view.agentType} />}
+      // The live state never marks a row failed: a restarted worker would un-fail it.
+      badge={view.dot === 'working' ? 'running' : null}
+      label={`${words} ${sender ? senderName : unnamed}${more > 0 ? ` +${more}` : ''}${
+        items.length > 0
+          ? ` ${t('chat.agentMessage.row.forItems', 'for')} ${items.map((item) => item.title).join(', ')}`
+          : ''
+      }`}
+      action={
+        sender && !several ? <OpenSender from={from} sender={sender} unnamed={unnamed} /> : null
+      }
+      timestamp={message.timestamp}
+      disclosureKey={`agent-message:${message.id}`}
+      fontScale={fontScale}
+      onLongPress={onLongPress}
+      details={
+        expandable ? (
           <>
-            {` ${t('chat.agentMessage.row.forItems', 'for')} `}
-            <MobileNativeChatEventName>
-              {items.map((item) => item.title).join(', ')}
-            </MobileNativeChatEventName>
+            {several ? (
+              <View style={styles.senders}>
+                {shown.map((each) => (
+                  <OpenSender
+                    key={each.party.address}
+                    from={from}
+                    sender={each}
+                    unnamed={unnamed}
+                    named
+                  />
+                ))}
+              </View>
+            ) : null}
+            {attachments}
+            <MobileNativeChatMarkdown
+              content={text}
+              rangeSelectable
+              {...prose}
+              onLongPress={onLongPress}
+            />
+            {status}
+            {merged.map((earlier) => {
+              const earlierWords = earlier.from
+                ? lead(agentMessageHeading(earlier.from, earlier), t)
+                : null
+              const earlierText = mobileNativeChatDisplayCopyText(earlier)
+              return (
+                <View key={earlier.id} style={styles.mergedEntry}>
+                  <View style={styles.mergedMeta}>
+                    {earlierWords && earlierWords !== words ? (
+                      <Text style={styles.mergedWords}>{earlierWords}</Text>
+                    ) : null}
+                    {earlier.agentStartItems?.length ? (
+                      <Text style={styles.mergedWords}>
+                        {`${t('chat.agentMessage.row.forItems', 'for')} ${earlier.agentStartItems
+                          .map((item) => item.title)
+                          .join(', ')}`}
+                      </Text>
+                    ) : null}
+                    <MobileNativeChatMessageTime
+                      timestamp={earlier.timestamp}
+                      fontScale={fontScale}
+                    />
+                  </View>
+                  {earlierText.trim() ? (
+                    <MobileNativeChatMarkdown
+                      content={earlierText}
+                      rangeSelectable
+                      {...prose}
+                      onLongPress={onLongPress}
+                    />
+                  ) : null}
+                </View>
+              )
+            })}
+            {canCopy ? (
+              <View style={styles.copy}>
+                <MobileSourceCopyButton
+                  text={text}
+                  accessibilityLabel={t('chat.message.copyMessage', 'Copy message')}
+                />
+              </View>
+            ) : null}
           </>
-        ) : null}
-      </MobileNativeChatEventRow>
-    </View>
+        ) : null
+      }
+    >
+      {words}{' '}
+      {shown.length === 0
+        ? unnamed
+        : shown.map((shownSender, index) => (
+            <Fragment key={shownSender.party.address}>
+              {index > 0 ? ', ' : null}
+              <SenderName sender={shownSender} unnamed={unnamed} />
+            </Fragment>
+          ))}
+      {more > 0 ? ` +${more}` : null}
+      {items.length > 0 ? (
+        <>
+          {` ${t('chat.agentMessage.row.forItems', 'for')} `}
+          <MobileNativeChatEventName>
+            {items.map((item) => item.title).join(', ')}
+          </MobileNativeChatEventName>
+        </>
+      ) : null}
+    </MobileNativeChatEventRow>
   )
 })
 

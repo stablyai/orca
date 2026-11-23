@@ -4,7 +4,8 @@ import {
   onboardingLanguageChangedSchema,
   onboardingLanguageRequestedSchema
 } from './schemas/telemetry-onboarding-language-schemas'
-import { agentTokenUsageSchema } from './schemas/telemetry-agent-token-usage-schema'
+import { agentTokenUsageDailySchema } from './schemas/telemetry-agent-token-usage-schema'
+import { legacyJournalRetirementSchema } from './schemas/telemetry-legacy-journal-retirement-schema'
 import {
   agentDashboardActiveSchema,
   agentDashboardEnabledSchema,
@@ -160,7 +161,7 @@ export const eventSchemas = {
   setup_script_prompt_shown: setupScriptPromptShownSchema,
   setup_script_prompt_action: setupScriptPromptActionSchema,
 
-  agent_token_usage: agentTokenUsageSchema,
+  agent_token_usage_daily: agentTokenUsageDailySchema,
   agent_started: agentStartedSchema,
   agent_prompt_sent: agentPromptSentSchema,
   agent_error: agentErrorSchema,
@@ -266,6 +267,8 @@ export const eventSchemas = {
   wsl_move_undo: wslMoveUndoSchema,
 
   wsl_usage_snapshot: wslUsageSnapshotSchema,
+
+  legacy_journal_retirement: legacyJournalRetirementSchema,
 
   plugin_installed: pluginInstalledSchema,
 

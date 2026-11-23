@@ -123,10 +123,3 @@ export function selectTerminalPaneHostState(
   cachedByWorktreeId.set(worktreeId, result)
   return result
 }
-
-export function resetTerminalPaneHostStateMemoForTests(): void {
-  cachedState = null
-  cachedStatuses = null
-  cachedByWorktreeId = new Map()
-  previousByWorktreeId = new Map()
-}

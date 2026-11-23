@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AutomationGoogleTrigger } from '../../shared/automation-google-triggers'
 import type { NewMail } from './google-gmail-changes'
-import { gmailRuleMatches } from './google-trigger-match'
+import { gmailRuleMatches, googleRuleTargets } from './google-trigger-match'
 
 type GmailRule = Extract<AutomationGoogleTrigger, { source: 'gmail' }>
 
@@ -88,5 +88,34 @@ describe('Gmail to= rules match real recipient addresses', () => {
   it('ignores addresses in display names and keeps every real one', () => {
     expect(toOps('"ops@acme.com" <ada@acme.dev>')).toBe(false)
     expect(toOps('"Lee, Kim" <lk@x.com>, Ops <OPS@acme.com>')).toBe(true)
+  })
+})
+
+describe('a rule without an account listens on the default', () => {
+  const automation = (account?: string): Parameters<typeof googleRuleTargets>[0][number] => ({
+    id: 'a1',
+    enabled: true,
+    bot: { botId: 'b1', runsIn: 'new', resultsTo: 'chat' },
+    on: [{ ...rule([]), ...(account ? { account } : {}) }]
+  })
+  const listens = (
+    account: string | undefined,
+    connected: string[],
+    defaultAccount: string | null
+  ) =>
+    googleRuleTargets(
+      [automation(account)],
+      [{ id: 'b1', google: true }],
+      connected,
+      defaultAccount
+    ).map((target) => target.account)
+
+  it('uses the default among several, and a named account over it', () => {
+    expect(listens(undefined, ['a@x.com', 'b@x.com'], 'b@x.com')).toEqual(['b@x.com'])
+    expect(listens('a@x.com', ['a@x.com', 'b@x.com'], 'b@x.com')).toEqual(['a@x.com'])
+  })
+
+  it('listens nowhere while the default is signed out, rather than on another account', () => {
+    expect(listens(undefined, ['a@x.com'], 'b@x.com')).toEqual([])
   })
 })
