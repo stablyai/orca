@@ -178,6 +178,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
         try {
           await this.writer.ready
           this.assertWritable()
+          this.reopenPolicy.recordSuccess()
         } catch (error) {
           await this.close({ refreshLegacyDocuments: false })
           throw error
@@ -264,8 +265,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     if (this.writer !== writer) {
       return
     }
-    const retry = this.reopenPolicy.recordFailure(error)
-    if (!retry) {
+    if (!this.reopenPolicy.recordFailure(error)) {
       reportTerminalReopenFailure(this.options.onFailure, this.reopenPolicy.terminalFailure(error))
       return
     }
