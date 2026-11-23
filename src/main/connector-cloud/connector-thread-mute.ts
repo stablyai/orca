@@ -344,14 +344,13 @@ function applyStep(
   if (step === 'send') {
     return null
   }
+  // One carrying automations keeps no receipt: a resend's replay would count them as run in a turn
+  // that never was, so it is decided again instead and the cloud runs them itself.
+  const settle: RecordHandled = delivery.automations?.length
+    ? async (handled) => await handled()
+    : record
   if (step === 'silence') {
-    // One carrying automations keeps no receipt: a resend's replay would count them as run in a
-    // turn that never was, so it is decided again instead and the cloud runs them itself.
-    return {
-      decided: delivery.automations?.length
-        ? Promise.resolve(ACCEPTED)
-        : record(async () => ACCEPTED)
-    }
+    return { decided: settle(async () => ACCEPTED) }
   }
   if (step === 'unmute_and_send') {
     // Saved before it goes on, so its turn's receipt never stands for an unmute a crash lost; its
@@ -362,7 +361,7 @@ function applyStep(
   // Saved before its receipt, so a crash between leaves the resend to decide it again; a save that
   // fails is refused and sent again. The emoji shows only a mute (or unmute) already on disk.
   const decided = deps.write(key, step === 'mute').then(() =>
-    record(async () => {
+    settle(async () => {
       if (ref) {
         // The emoji is the only answer: a failed one leaves the thread muted (or not) all the same.
         void deps

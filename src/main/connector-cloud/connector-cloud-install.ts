@@ -204,13 +204,23 @@ export function createConnectorCloud({
 
 /** A bot thread's mute as its link keeps it, and its emoji posted as the bot. */
 function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore): ThreadMuteDeps {
+  // Threads whose mute is in memory but whose save failed, so a resend saves it again.
+  const unsaved = new Set<string>()
   return {
     waiting: new Map(),
     read: (key) => readThreadMute(store, key),
     write: async (key, muted) => {
-      // Already so: nothing to save.
-      if (writeLinkFact(store, key, { muted: muted ? true : undefined })) {
+      const id = JSON.stringify([key.source, key.externalId])
+      // Already so and saved: nothing to do. One whose save failed is saved again.
+      if (!writeLinkFact(store, key, { muted: muted ? true : undefined }) && !unsaved.has(id)) {
+        return
+      }
+      try {
         await store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
+        unsaved.delete(id)
+      } catch (error) {
+        unsaved.add(id)
+        throw error
       }
     },
     queued: (key) => runtime.getExternalConversationSeam()?.queued(key) ?? Promise.resolve(),
