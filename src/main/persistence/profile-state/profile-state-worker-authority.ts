@@ -148,7 +148,6 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
 
   close(options: { refreshLegacyDocuments?: boolean } = {}): Promise<void> {
     this.idleStop.cancel()
-    this.reopenPolicy.recordSaved()
     this.writer?.stopAdmission()
     this.closing ??= this.finishClose(options.refreshLegacyDocuments !== false)
     return this.closing

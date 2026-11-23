@@ -85,7 +85,7 @@ export class ProfileStateWriterReopenPolicy {
     queueMicrotask(() => this.publishNotice())
   }
 
-  /** Storage acknowledged a command, or the authority is closing: recovery is over either way. */
+  /** Storage acknowledged a command, so saving works again. */
   recordSaved(): void {
     if (this.recovering) {
       this.recovering = false
