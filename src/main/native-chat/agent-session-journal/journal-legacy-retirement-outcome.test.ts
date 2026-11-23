@@ -64,18 +64,21 @@ it('a build that keeps the file proves once and keeps it; a build that deletes p
   }
 })
 
-it('reports a store that never had the file as absent, with counts unknown rather than zero', async () => {
-  const events = recordEvents()
-  const none = await profile()
-  for (const name of companions(none.filename)) {
-    rmSync(name)
+it.each(['1.0.1', null])(
+  'reports a store that never had the file as absent, with counts unknown rather than zero (version %s)',
+  async (version) => {
+    const events = recordEvents()
+    const none = await profile()
+    for (const name of companions(none.filename)) {
+      rmSync(name)
+    }
+    await none.launch(version, true).run()
+    expect(events).toMatchObject([
+      { outcome: 'absent', chats_bucket: 'unknown', drafts_bucket: 'unknown', artifact: 'unknown' }
+    ])
+    expect(legacyJournalRetirementSchema.safeParse(events[0]).success).toBe(true)
   }
-  await none.launch().run()
-  expect(events).toMatchObject([
-    { outcome: 'absent', chats_bucket: 'unknown', drafts_bucket: 'unknown', artifact: 'unknown' }
-  ])
-  expect(legacyJournalRetirementSchema.safeParse(events[0]).success).toBe(true)
-})
+)
 
 it.each([
   { version: '1.0.1', owns: false, defer: 'not_owner' },

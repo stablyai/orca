@@ -76,7 +76,7 @@ export function openAgentSessionRecordStoreOnce(
       (opened) => {
         if (opened.journalDatabase.readOnly) {
           location.logger.warn(
-            'old chat journal: not checked (store opened read-only by a newer Orca)',
+            'old chat journal: not checked (store uses a newer schema; opened read-only)',
             {
               scope: 'old-chat-history-cleanup-open'
             }

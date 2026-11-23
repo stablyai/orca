@@ -62,7 +62,6 @@ export class JournalLegacyRetirement {
   private retryAt = 0
   private retryDelay = 60_000
   private done = false
-  private admitted = false
   private readonly launchReport = new LegacyJournalRetirementLaunchReport()
   private readonly reporter: LegacyJournalRetirementReporter
   private activeMs = 0
@@ -110,17 +109,16 @@ export class JournalLegacyRetirement {
   }
 
   async run(): Promise<void> {
-    this.admitted = false
     try {
       await this.attempt()
     } catch (error) {
       // Unsupported storage or file identity doesn't change while this process runs.
-      if (this.admitted && error instanceof JournalLegacyIneligibleError && !this.done) {
+      if (error instanceof JournalLegacyIneligibleError && !this.done) {
         this.done = true
         await this.outcome({ outcome: 'deferred', defer: 'unsupported_storage' }).catch(() => {})
-      } else if (this.admitted && this.leftovers) {
+      } else if (this.leftovers) {
         await this.outcome({ outcome: 'deferred', defer: 'leftover_files' }).catch(() => {})
-      } else if (this.admitted) {
+      } else {
         const failed = legacyProofFailureOutcome(
           error,
           walkedFor(this.finishedWalk, this.observed) ?? this.proof.walked,
@@ -156,7 +154,6 @@ export class JournalLegacyRetirement {
     if ((!present || this.version !== null) && !this.ownsProfile()) {
       return this.launchReport.defer('not_owner', this.deletes)
     }
-    this.admitted = true
     // No other Orca runs this profile while we hold its lock, so an absent original stays absent.
     if (!present) {
       const { reported, retirement } = await readRetirementState(this.writer)

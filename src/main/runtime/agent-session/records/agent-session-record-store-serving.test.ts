@@ -43,8 +43,6 @@ afterEach(async () => {
 
 it('reaches old-history retirement at serving on empty profiles through both hosts, unless shutting down', async () => {
   vi.stubEnv('ORCA_APP_VERSION', '1.0.1')
-  vi.stubEnv('ORCA_BACKGROUND_LAUNCH', '1')
-  vi.stubEnv('ORCA_JOURNAL_NATIVE_LOCK_TEST', '0')
   const location = startupOpen.localAgentSessionRecordStoreLocation
   vi.spyOn(startupOpen, 'localAgentSessionRecordStoreLocation').mockImplementation((ids) => ({
     ...location(ids),
