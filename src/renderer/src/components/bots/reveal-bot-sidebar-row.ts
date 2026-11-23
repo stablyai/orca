@@ -2,6 +2,8 @@ import { useAppStore } from '@/store'
 import { BOTS_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
 import { readBotsEnabled } from '@/lib/bot-catalog'
 import { botSidebarVirtualScrollers } from './bot-sidebar-virtual-scroll'
+import { botGroupFoldToOpen } from './bot-group-folders'
+import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
 
 const READY_DEADLINE_MS = 500
 
@@ -65,7 +67,12 @@ export function revealBotSidebarRow({
   if (store.collapsedGroups.has(BOTS_GROUP_KEY)) {
     store.toggleCollapsedGroup(BOTS_GROUP_KEY)
   }
-  let retries = defer ? 1 : 0
+  // A bot in folded groups shows once one of them unfolds, a frame later.
+  const groupFold = botGroupFoldToOpen(sidebarKey, readBotGroups(), store.collapsedGroups)
+  if (groupFold) {
+    store.toggleCollapsedGroup(groupFold)
+  }
+  let retries = defer || groupFold ? 1 : 0
   let seekDeadline: number | null = null
   const step = (): void => {
     frame = null
