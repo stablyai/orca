@@ -234,6 +234,7 @@ export class ProviderRelayHost {
     if (this.relays.get(relay.relayId) === relay) {
       this.relays.delete(relay.relayId)
       void relay.dispose()
+      this.options.onLiveCountChanged()
     }
   }
 

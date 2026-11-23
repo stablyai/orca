@@ -124,21 +124,23 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
 
   // Manage Sessions needs details omitted from the generic listProcesses contract.
   async listSessions(): Promise<SessionInfo[]> {
+    return (await this.listSessionsAndRelays()).sessions
+  }
+
+  /** Live sessions plus the chat relays a restart would also end (zero on daemons before them). */
+  async listSessionsAndRelays(): Promise<{ sessions: SessionInfo[]; liveRelays: number }> {
     await this.ensureConnected()
     const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
-    return result.sessions
+    const sessions = result.sessions
       .filter((s) => s.isAlive)
       .map((session) => ({
         ...session,
         ...this.validatedAgentSessionOwners(session.agentSessionOwners)
       }))
-  }
-
-  /** Chat relays this daemon would end with a restart; zero on daemons that predate them. */
-  async countLiveRelays(): Promise<number> {
-    await this.ensureConnected()
-    const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
-    return countLiveDaemonSessions({ sessions: [], liveRelays: result.liveRelays })
+    return {
+      sessions,
+      liveRelays: countLiveDaemonSessions({ sessions: [], liveRelays: result.liveRelays })
+    }
   }
 
   getActiveSessionIds(): string[] {
