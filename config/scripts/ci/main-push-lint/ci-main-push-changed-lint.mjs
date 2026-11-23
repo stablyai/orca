@@ -77,6 +77,28 @@ function describeLocation(diagnostic) {
   return diagnostic.file ? `${diagnostic.file}:${diagnostic.line}` : '(no file)'
 }
 
+// Splits oxlint batches into parsed errors and failures that produced no parsed error.
+export function collectBatchResults(batches) {
+  const diagnostics = []
+  const unexplained = []
+  for (const batch of batches) {
+    const errors = parseGithubDiagnostics(batch.output).filter(
+      (diagnostic) => diagnostic.severity === 'error'
+    )
+    diagnostics.push(...errors)
+    if (batch.failed && errors.length === 0) {
+      unexplained.push(batch.output)
+    }
+  }
+  return { diagnostics, unexplained }
+}
+
+export function renderUnexplainedFailures(unexplained) {
+  return unexplained
+    .map((output) => `### oxlint failed without diagnostics\n\n\`\`\`\n${output.trim()}\n\`\`\`\n`)
+    .join('\n')
+}
+
 export function pullNumberFromSubject(subject) {
   const match = /\(#(\d+)\)\s*$/.exec(subject ?? '')
   return match ? Number(match[1]) : null
@@ -183,10 +205,10 @@ async function changedFiles(base, head) {
   return output.split('\0').filter(Boolean)
 }
 
+// Each batch keeps its own output, so a failure oxlint did not explain is never hidden by another batch's errors.
 async function runOxlint(files, root) {
   const { command, prefixArgs } = resolveOxlintInvocation(root)
-  let output = ''
-  let failed = false
+  const batches = []
   for (let start = 0; start < files.length; start += FILES_PER_OXLINT_RUN) {
     const args = [
       ...prefixArgs,
@@ -198,16 +220,16 @@ async function runOxlint(files, root) {
     ]
     try {
       const result = await execFileAsync(command, args, { cwd: root, maxBuffer: MAX_BUFFER_BYTES })
-      output += result.stdout
+      batches.push({ failed: false, output: result.stdout })
     } catch (error) {
-      failed = true
-      output += `${error.stdout ?? ''}${error.stderr ?? ''}`
-      if (error.stdout === undefined) {
-        output += `${error.message}\n`
-      }
+      const output = `${error.stdout ?? ''}${error.stderr ?? ''}`
+      batches.push({
+        failed: true,
+        output: error.stdout === undefined ? `${output}${error.message}\n` : output
+      })
     }
   }
-  return { failed, output }
+  return batches
 }
 
 async function githubApi(path, env, deadline) {
@@ -317,19 +339,19 @@ export async function main({ env = process.env, root = process.cwd() } = {}) {
   process.stdout.write(
     `Linting ${files.length} changed file(s) in ${base.slice(0, 10)}..${head.slice(0, 10)}.\n`
   )
-  const { failed, output } =
-    files.length > 0 ? await runOxlint(files, root) : { failed: false, output: '' }
-  const diagnostics = parseGithubDiagnostics(output).filter(
-    (diagnostic) => diagnostic.severity === 'error'
+  const { diagnostics, unexplained } = collectBatchResults(
+    files.length > 0 ? await runOxlint(files, root) : []
   )
-  if (failed && diagnostics.length === 0) {
+  for (const output of unexplained) {
     process.stdout.write(
       `::error title=Main-push lint::oxlint failed without diagnostics%0A${escapeAnnotationData(output)}\n`
     )
+  }
+  if (unexplained.length > 0 && diagnostics.length === 0) {
     if (env.GITHUB_STEP_SUMMARY) {
       appendFileSync(
         env.GITHUB_STEP_SUMMARY,
-        `### Main-push lint failed\n\noxlint exited without diagnostics:\n\n\`\`\`\n${output}\n\`\`\`\n`
+        `### Main-push lint failed\n\n${renderUnexplainedFailures(unexplained)}`
       )
     }
     return 1
@@ -356,12 +378,17 @@ export async function main({ env = process.env, root = process.cwd() } = {}) {
     const text = `${diagnostic.message} Introduced by ${describeIntroducers(introducers.get(diagnostic.file))}.`
     process.stdout.write(`::error ${location},${title}::${escapeAnnotationData(text)}\n`)
   }
-  const summary = renderSummary({ base, head, files, diagnostics, introducers })
+  const summary = [
+    renderSummary({ base, head, files, diagnostics, introducers }),
+    renderUnexplainedFailures(unexplained)
+  ]
+    .filter(Boolean)
+    .join('\n')
   process.stdout.write(summary)
   if (env.GITHUB_STEP_SUMMARY) {
     appendFileSync(env.GITHUB_STEP_SUMMARY, summary)
   }
-  return diagnostics.length > 0 ? 1 : 0
+  return diagnostics.length > 0 || unexplained.length > 0 ? 1 : 0
 }
 
 if (isDirectInvocation(import.meta.url, process.argv[1])) {

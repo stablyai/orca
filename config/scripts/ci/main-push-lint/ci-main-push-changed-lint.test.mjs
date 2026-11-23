@@ -1,13 +1,15 @@
 // Pin how the main-push lint reads oxlint output and names the PR behind a failure.
 import { describe, expect, it } from 'vitest'
 import {
+  collectBatchResults,
   describeIntroducer,
   describeIntroducers,
   isMissingSha,
   lintableFiles,
   parseGithubDiagnostics,
   pullNumberFromSubject,
-  renderSummary
+  renderSummary,
+  renderUnexplainedFailures
 } from './ci-main-push-changed-lint.mjs'
 
 const PANE = 'src/renderer/src/components/browser-pane/stream-remote/remote-browser-page-pane.tsx'
@@ -97,6 +99,20 @@ describe('main-push changed-file lint', () => {
       introducers: new Map()
     })
     expect(summary).toContain('| `(no file)` | `oxlint` | Bad config. | n/a |')
+  })
+
+  it('keeps a failed batch without diagnostics even when another batch has errors', () => {
+    const parsed = `::error file=${PANE},line=425,endLine=425,col=2,endColumn=2,title=eslint(max-lines)::${PANE}:425:2: File has too many lines (402).`
+    const result = collectBatchResults([
+      { failed: true, output: `${parsed}\nFound 0 warnings and 1 error.\n` },
+      { failed: false, output: '' },
+      { failed: true, output: 'thread panicked: out of memory\n' }
+    ])
+    expect(result.diagnostics.map((diagnostic) => diagnostic.rule)).toEqual(['eslint(max-lines)'])
+    expect(result.unexplained).toEqual(['thread panicked: out of memory\n'])
+    expect(renderUnexplainedFailures(result.unexplained)).toBe(
+      '### oxlint failed without diagnostics\n\n```\nthread panicked: out of memory\n```\n'
+    )
   })
 
   it('reads the squash-merge PR number from a commit subject', () => {
