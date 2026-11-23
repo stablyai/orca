@@ -61,7 +61,6 @@ async function failedTurn(chat: QueuedMessageTestRig): Promise<void> {
   chat.providerEvents().publish()
   // The queue's failure read is the journal database's: let the turn's write land there first.
   await chat.providerEvents().written?.()
-  await chat.host.flushAllStreamedEvents()
   await eventually(async () => expect(await resume(chat), await seen(chat)).toBeNull())
 }
 
