@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "重新登入",
-      "usageSignInMessage": "所選 Claude 帳戶需要您重新登入。請開啟設定 > AI 供應商帳戶，或選擇系統預設。"
+      "usageSignInMessage": "此帳戶需要您重新登入。"
     }
   },
   "agentHistory": {
@@ -4434,6 +4434,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "向左捲動 · 隱藏 {{amount}} 個",
+      "scrollRight": "向右捲動 · 隱藏 {{amount}} 個"
+    },
     "link": {
       "pairTitle": "配對電腦",
       "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",
@@ -4615,7 +4619,8 @@
       "skillLimit": "訊息未傳送。請最多選擇 {{limit}} 個技能檔案後再試一次。",
       "ask": {
         "notSentYet": "尚未傳送",
-        "replaced": "代理程式提出了新問題。請先閱讀，再回覆。"
+        "replaced": "代理程式提出了新問題。請先閱讀，再回覆。",
+        "replacedByNewer": "已由較新的問題取代"
       }
     },
     "needs": {

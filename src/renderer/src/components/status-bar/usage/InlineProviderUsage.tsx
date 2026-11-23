@@ -158,12 +158,15 @@ export function InlineUsageSignInAction({
   isSigningIn,
   disabled,
   accountLabel,
-  onSignIn
+  onSignIn,
+  showBusyLabel = false
 }: {
   isSigningIn: boolean
   disabled: boolean
   accountLabel: string
   onSignIn: () => void
+  /** Say "Signing in…" while busy instead of keeping the "Sign in" label beside the spinner. */
+  showBusyLabel?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -185,7 +188,9 @@ export function InlineUsageSignInAction({
         {isSigningIn ? (
           <Loader2 className="size-3 animate-spin motion-reduce:animate-none" />
         ) : null}
-        {t('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}
+        {isSigningIn && showBusyLabel
+          ? t('auto.components.OrcaSignInProgress.signingIn', 'Signing in…')
+          : t('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}
       </Button>
     </DropdownMenuItem>
   )

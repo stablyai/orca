@@ -3,7 +3,7 @@
 // an answer a v1.4.265 host recorded answers every line it holds. The host links only the first reply
 // to its question (that reply moves the item to In progress), so the pairing is read from the order of
 // events: the owner's comments after each ask, until its lines are answered, the item closes, or the
-// item leaves Needs you without an answer. A later question leaves an earlier ask's open lines open.
+// item leaves Needs you without an answer. A later ask replaces an earlier one's open lines.
 import { botItemNamedAnswers } from './bot-item-answer-lines'
 import {
   botItemQuestionLine,
@@ -24,6 +24,8 @@ export type BotItemQuestionAnswers = {
   byOrder: boolean[]
   /** Lines still open, and the agent still waiting on them. */
   waiting: boolean
+  /** A later ask came while a line was still open: its open lines take no answer. */
+  replaced: boolean
 }
 
 export type BotItemQuestionPairing = {
@@ -38,8 +40,7 @@ function isClose(event: BotItemEvent): boolean {
 }
 
 /** A move that no answer made, to anything but Needs you (a close, or the owner's or agent's own
- *  move), ends every ask's wait; an answer's move does not, so an ask asked before another keeps its
- *  open lines. */
+ *  move), ends the ask's wait; an answer's move does not, so the ask keeps its other open lines. */
 function endsAsks(event: BotItemEvent): boolean {
   return (
     isClose(event) ||
@@ -71,84 +72,74 @@ function answersAskedQuestions(text: string, asked: ReadonlySet<string>): boolea
 
 type OpenAsk = { id: string; entry: BotItemQuestionAnswers }
 
-/** The open asks' lines a reply answers: a recorded answer, a quick reply's words or a comment naming no
- *  line go to the ask it names (the one waiting when it was sent), or the oldest open one when it names
- *  none open; "Question → answer" lines go to the first ask asking that question, the named one first. */
+/** The open ask's lines a reply answers. A reply naming any other event (an ask this replaced, even
+ *  one on an earlier page) answers none. */
 function answeredLines(
-  open: readonly OpenAsk[],
+  open: OpenAsk,
   reply: BotItemEvent,
   asked: ReadonlySet<string>
-): { ask: OpenAsk; lines: number[]; byOrder: boolean }[] {
-  const named = open.find(({ id }) => id === reply.data.answers)
-  const asks = named ? [named, ...open.filter((ask) => ask !== named)] : open
-  // Words that name no question answer only the ask the reply names, else the oldest open one.
-  const own = named ? [named] : open
-  const recorded = named && recordedLines(reply.data, named.entry.shape.decisions.length)
-  if (named && recorded) {
-    return [{ ask: named, lines: recorded, byOrder: false }]
+): { lines: number[]; byOrder: boolean } {
+  const none = { lines: [], byOrder: false }
+  const names = typeof reply.data.answers === 'string' ? reply.data.answers : undefined
+  if (names !== undefined && names !== open.id) {
+    return none
+  }
+  const { shape, answers, byOrder } = open.entry
+  const recorded = names === open.id && recordedLines(reply.data, shape.decisions.length)
+  if (recorded) {
+    return { lines: recorded, byOrder: false }
   }
   // Sent as a comment of its own, with no question named in the box.
   if (reply.data.plain === true) {
-    return []
+    return none
   }
   const text = typeof reply.data.text === 'string' ? reply.data.text.trim() : ''
   // A line read by order is open to a comment that names it.
-  const isOpen = ({ answers, byOrder }: BotItemQuestionAnswers, index: number): boolean =>
-    !answers[index] || byOrder[index] === true
-  for (const ask of own) {
-    const { shape } = ask.entry
-    const picked = shape.decisions.findIndex(
-      (decision, index) =>
-        isOpen(ask.entry, index) &&
-        decision.replies.some((option) => botItemQuickReplyText(shape, decision, option) === text)
-    )
-    if (picked !== -1) {
-      return [{ ask, lines: [picked], byOrder: false }]
-    }
+  const isOpen = (index: number): boolean => !answers[index] || byOrder[index] === true
+  const picked = shape.decisions.findIndex(
+    (decision, index) =>
+      isOpen(index) &&
+      decision.replies.some((option) => botItemQuickReplyText(shape, decision, option) === text)
+  )
+  if (picked !== -1) {
+    return { lines: [picked], byOrder: false }
   }
   // Several questions answered in one comment, a line each; or a quick reply edited before sending.
-  // They belong to one ask: the one it names first, so a question asked again in a later ask keeps
-  // its own line open.
-  for (const ask of asks) {
-    const lines = botItemNamedAnswers(ask.entry.shape, text).flatMap((words, index) =>
-      words !== null && isOpen(ask.entry, index) ? [index] : []
-    )
-    if (lines.length > 0) {
-      return [{ ask, lines, byOrder: false }]
-    }
+  const named = botItemNamedAnswers(shape, text).flatMap((words, index) =>
+    words !== null && isOpen(index) ? [index] : []
+  )
+  if (named.length > 0) {
+    return { lines: named, byOrder: false }
   }
   if (answersAskedQuestions(text, asked)) {
-    return []
+    return none
   }
-  for (const ask of own) {
-    const next = ask.entry.answers.indexOf(null)
-    if (next !== -1) {
-      return [{ ask, lines: [next], byOrder: true }]
-    }
-  }
-  return []
+  const next = answers.indexOf(null)
+  return next === -1 ? none : { lines: [next], byOrder: true }
 }
 
 // Hosts keep the waiting ask this pairs: a change to what it pairs bumps WAITING_ASK_RULES
 // (src/main/bots/bot-item-waiting-ask-keep.ts), and one to what events can't change it updates waitingAskChange there.
 export function botItemQuestionPairing(
-  item: Pick<BotItem, 'status' | 'waitingAsk'>,
+  item: Pick<BotItem, 'status'>,
   events: readonly BotItemEvent[]
 ): BotItemQuestionPairing {
   const questions = new Map<string, BotItemQuestionAnswers>()
   const replies = new Map<string, { questionId: string; decision: BotItemDecision }>()
-  // Asks with lines still open, oldest first: a later question leaves an earlier one open.
-  let open: OpenAsk[] = []
+  // The latest ask, while a line of it is still open.
+  let open: OpenAsk | null = null
   // Every question line asked on the item so far.
   const asked = new Set<string>()
   for (const event of events) {
     if (endsAsks(event)) {
-      open = []
+      open = null
       continue
     }
     if (event.kind === 'status' && event.data.cause === 'answer') {
       // An answer moved the item on: an ask it left with no open line takes no later reply.
-      open = open.filter(({ entry }) => entry.answers.includes(null))
+      if (open && !open.entry.answers.includes(null)) {
+        open = null
+      }
       continue
     }
     if (event.kind !== 'commented') {
@@ -161,41 +152,45 @@ export function botItemQuestionPairing(
           shape,
           answers: shape.decisions.map(() => null),
           byOrder: shape.decisions.map(() => false),
-          waiting: false
+          waiting: false,
+          replaced: false
         }
         questions.set(event.id, entry)
         for (const decision of shape.decisions) {
           asked.add(botItemQuestionLine(decision.question))
         }
-        open.push({ id: event.id, entry })
+        if (open?.entry.answers.includes(null)) {
+          // A new ask replaces the earlier one's open lines; its answers so far stand.
+          open.entry.replaced = true
+        }
+        open = { id: event.id, entry }
       }
       continue
     }
-    for (const { ask, lines, byOrder: guessed } of answeredLines(open, event, asked)) {
-      const { shape, answers, byOrder } = ask.entry
-      for (const line of lines) {
-        const taken = answers[line]
-        if (taken && byOrder[line]) {
-          // Named now: the comment read by order is a comment of its own again.
-          replies.delete(taken.id)
-        } else if (taken) {
-          continue
-        }
-        answers[line] = event
-        byOrder[line] = guessed
+    if (!open) {
+      continue
+    }
+    const { shape, answers, byOrder } = open.entry
+    const { lines, byOrder: guessed } = answeredLines(open, event, asked)
+    for (const line of lines) {
+      const taken = answers[line]
+      if (taken && byOrder[line]) {
+        // Named now: the comment read by order is a comment of its own again.
+        replies.delete(taken.id)
+      } else if (taken) {
+        continue
       }
-      const quoted = quotedLine(shape, event, lines)
-      if (quoted !== undefined) {
-        replies.set(event.id, { questionId: ask.id, decision: shape.decisions[quoted]! })
-      }
+      answers[line] = event
+      byOrder[line] = guessed
+    }
+    const quoted = quotedLine(shape, event, lines)
+    if (quoted !== undefined) {
+      replies.set(event.id, { questionId: open.id, decision: shape.decisions[quoted]! })
     }
   }
-  // One ask waits at a time, the oldest with a line open, so each answer has one question to go to.
-  // The host names it; while it is still on an earlier page, none waits.
-  const waiting = open.find(({ entry }) => entry.answers.includes(null))
-  const unread = item.waitingAsk !== undefined && !questions.has(item.waitingAsk)
-  if (waiting && !unread && item.status !== 'done' && item.status !== 'canceled') {
-    waiting.entry.waiting = true
+  // Only the latest ask waits, so each answer has one question to go to.
+  if (open?.entry.answers.includes(null) && item.status !== 'done' && item.status !== 'canceled') {
+    open.entry.waiting = true
   }
   return { questions, replies }
 }
@@ -216,7 +211,7 @@ function quotedLine(
 
 /** The ask the agent waits on, by its event id, with its lines' answers so far. */
 export function botItemWaitingAsk(
-  item: Pick<BotItem, 'status' | 'waitingAsk'>,
+  item: Pick<BotItem, 'status'>,
   events: readonly BotItemEvent[]
 ): ({ askId: string } & BotItemQuestionAnswers) | null {
   for (const [askId, entry] of botItemQuestionPairing(item, events).questions) {

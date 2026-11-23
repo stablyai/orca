@@ -6,7 +6,7 @@ import {
   clearBrowserSessionPartitionPolicies,
   installBrowserSessionPartitionPolicies
 } from '../../sessions/partition-policies/browser-session-partition-policies'
-import { restoreBrowserRoutePartitionSessionCookies } from '../../cookies/session-restore/browser-session-cookie-restore'
+import { restoreBrowserRoutePartitionSessionCookies } from '../../cookies/session-restore/browser-session-cookie-route-restore'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 
 // Same bound as launch: a slow restore must not hold the page.

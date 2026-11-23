@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "다시 로그인",
-      "usageSignInMessage": "선택한 Claude 계정에 다시 로그인해야 합니다. 설정 > AI 제공자 계정을 열거나 시스템 기본값을 선택하세요."
+      "usageSignInMessage": "이 계정에 다시 로그인해야 합니다."
     }
   },
   "agentHistory": {
@@ -4436,6 +4436,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "왼쪽으로 스크롤 · 숨겨진 봇 {{amount}}개",
+      "scrollRight": "오른쪽으로 스크롤 · 숨겨진 봇 {{amount}}개"
+    },
     "link": {
       "pairTitle": "컴퓨터 페어링",
       "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",
@@ -5008,7 +5012,8 @@
       "skillLimit": "메시지를 보내지 않았습니다. 선택한 스킬 파일을 {{limit}}개 이하로 줄인 뒤 다시 시도하세요.",
       "ask": {
         "notSentYet": "아직 보내지 않음",
-        "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요."
+        "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요.",
+        "replacedByNewer": "새 질문으로 대체됨"
       }
     },
     "needs": {

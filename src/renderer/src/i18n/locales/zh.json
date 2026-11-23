@@ -24587,7 +24587,7 @@
       "signInRequired": "请重新登录以使用此账户",
       "signInAgain": "重新登录",
       "usageSignInLabel": "重新登录",
-      "usageSignInMessage": "所选 Claude 账户需要您重新登录，请打开设置 > AI 提供商账户，或选择系统默认",
+      "usageSignInMessage": "此账户需要您重新登录。",
       "signIn": "登录",
       "moreSignInOptions": "更多登录选项",
       "copySignInLink": "改为复制登录链接",
@@ -27992,7 +27992,8 @@
         "recommended": "推荐",
         "step": "第 {{n}} 个，共 {{total}} 个",
         "typeAnswer": "输入你的回答",
-        "replaced": "智能体提出了新问题。请先阅读，再回复"
+        "replaced": "智能体提出了新问题。请先阅读，再回复",
+        "replacedByNewer": "已由较新的问题取代"
       },
       "readMoreClosedFailed": "无法读取更多已关闭的条目"
     },

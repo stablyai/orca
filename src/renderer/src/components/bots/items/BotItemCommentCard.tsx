@@ -81,7 +81,7 @@ function Avatar({
 
 type CommentEntry = Pick<
   Extract<BotItemActivityEntry, { kind: 'comment' }>,
-  'event' | 'replyTo' | 'answers' | 'byOrder'
+  'event' | 'replyTo' | 'answers' | 'byOrder' | 'replaced'
 > & { waiting?: boolean }
 
 export function BotItemCommentCard({
@@ -202,6 +202,7 @@ export function BotItemCommentCard({
               waiting={waiting}
               answers={entry.answers}
               byOrder={entry.byOrder}
+              replaced={entry.replaced === true}
               actions={quickReplies}
               // Ruled off only below something: a question with no body stays under the name.
               className={waiting && shape.body.trim() ? QUESTION_RULE : undefined}

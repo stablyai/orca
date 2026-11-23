@@ -23117,7 +23117,7 @@
       "signInRequired": "Entre novamente para usar esta conta",
       "signInAgain": "Entrar novamente",
       "usageSignInLabel": "Entrar novamente",
-      "usageSignInMessage": "A conta do Claude selecionada precisa de um novo login. Abra Configurações > Contas de provedores de IA ou escolha Padrão do sistema.",
+      "usageSignInMessage": "Esta conta precisa de um novo login.",
       "signIn": "Entrar",
       "moreSignInOptions": "Mais opções de login",
       "copySignInLink": "Copiar link de login",
@@ -25222,7 +25222,8 @@
       },
       "ask": {
         "notSentYet": "ainda não enviado",
-        "replaced": "O agente fez uma nova pergunta. Leia e responda."
+        "replaced": "O agente fez uma nova pergunta. Leia e responda.",
+        "replacedByNewer": "Substituída por uma pergunta mais recente"
       },
       "chat": {
         "moreItems": "+{{count}} a mais"

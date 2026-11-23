@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "もう一度サインイン",
-      "usageSignInMessage": "選択した Claude アカウントは再度サインインが必要です。設定 > AI プロバイダーアカウントを開くか、システムのデフォルトを選択してください。"
+      "usageSignInMessage": "このアカウントは再度サインインが必要です。"
     }
   },
   "agentHistory": {
@@ -4521,6 +4521,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "左にスクロール · 非表示 {{amount}} 件",
+      "scrollRight": "右にスクロール · 非表示 {{amount}} 件"
+    },
     "link": {
       "pairTitle": "コンピュータをペアリング",
       "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",
@@ -4702,7 +4706,8 @@
       "skillLimit": "メッセージは送信されませんでした。選択するスキルファイルを {{limit}} 個以内にして、もう一度お試しください。",
       "ask": {
         "notSentYet": "まだ送信されていません",
-        "replaced": "Agent が新たな質問をしました。確認してから返信してください。"
+        "replaced": "Agent が新たな質問をしました。確認してから返信してください。",
+        "replacedByNewer": "新しい質問に置き換えられました"
       }
     },
     "needs": {

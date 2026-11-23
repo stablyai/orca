@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "Yeniden oturum aç",
-      "usageSignInMessage": "Seçili Claude hesabında yeniden oturum açmanız gerekiyor. Ayarlar > Yapay Zeka Sağlayıcı Hesapları bölümünü açın veya Sistem varsayılanı seçeneğini seçin."
+      "usageSignInMessage": "Bu hesapta yeniden oturum açmanız gerekiyor."
     }
   },
   "agentHistory": {
@@ -4440,6 +4440,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "Sola kaydır · {{amount}} gizli",
+      "scrollRight": "Sağa kaydır · {{amount}} gizli"
+    },
     "link": {
       "pairTitle": "Bilgisayar eşleyin",
       "pairRequired": "Bu bağlantıyı açmak için bu telefonu bir bilgisayarla eşleyin, ardından bağlantıyı yeniden açın.",
@@ -4621,7 +4625,8 @@
       "skillLimit": "Mesaj gönderilmedi. En fazla {{limit}} beceri dosyası seçip yeniden deneyin.",
       "ask": {
         "notSentYet": "henüz gönderilmedi",
-        "replaced": "Ajan yeni bir soru sordu. Okuyup yanıtlayın."
+        "replaced": "Ajan yeni bir soru sordu. Okuyup yanıtlayın.",
+        "replacedByNewer": "Daha yeni bir soruyla değiştirildi"
       }
     },
     "needs": {

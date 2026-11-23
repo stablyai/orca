@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "Se reconnecter",
-      "usageSignInMessage": "Le compte Claude sélectionné nécessite une nouvelle connexion. Ouvrez Paramètres > Comptes de fournisseurs d'IA, ou choisissez Système par défaut."
+      "usageSignInMessage": "Ce compte nécessite une nouvelle connexion."
     }
   },
   "agentHistory": {
@@ -4544,6 +4544,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "Défiler vers la gauche · {{amount}} masqués",
+      "scrollRight": "Défiler vers la droite · {{amount}} masqués"
+    },
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",
@@ -4731,7 +4735,8 @@
       "skillLimit": "Message non envoyé. Sélectionnez au plus {{limit}} fichiers de compétences et réessayez.",
       "ask": {
         "notSentYet": "pas encore envoyée",
-        "replaced": "L’agent a posé une nouvelle question. Lisez-la, puis répondez."
+        "replaced": "L’agent a posé une nouvelle question. Lisez-la, puis répondez.",
+        "replacedByNewer": "Remplacée par une question plus récente"
       }
     },
     "needs": {
