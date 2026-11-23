@@ -24,17 +24,24 @@ export function createProfileStateWriter(
   return writer
 }
 
+/** Retires the faulted writer for a reopen, or reports saving stopped when recovery is not possible. */
 export function closeIndeterminateProfileStateWriter(
   writer: ProfileStateWriteWorkerClient,
   canClose: () => boolean,
-  onClosed: (revision: number) => void
+  retire: (revision: number) => boolean,
+  reportStopped: () => void
 ): Promise<void> | undefined {
   if (!canClose()) {
+    reportStopped()
     return undefined
   }
   const revision = writer.lastAcknowledgedRevision
   return writer
     .close()
     .catch(() => {})
-    .then(() => onClosed(revision))
+    .then(() => {
+      if (!retire(revision)) {
+        reportStopped()
+      }
+    })
 }

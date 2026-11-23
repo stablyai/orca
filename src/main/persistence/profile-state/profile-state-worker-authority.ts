@@ -290,20 +290,18 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       writer,
       () => this.writer === writer && !this.stopping && !this.closing && !this.stoppedFailure,
       (revision) => {
-        if (this.writer === writer && !this.closing) {
-          this.writer = null
-          this.stoppedRevision = revision
+        if (this.writer !== writer || this.closing) {
+          return false
         }
-      }
+        this.writer = null
+        this.stoppedRevision = revision
+        return true
+      },
+      () => reportTerminalReopenFailure(this.options.onFailure, error)
     )
-    if (!stopping) {
-      // Not recovering (closing, aborted, or mid idle-stop): saving has stopped, so say so.
-      reportTerminalReopenFailure(this.options.onFailure, error)
-      return
+    if (stopping) {
+      this.stopping = stopping.finally(() => (this.stopping = undefined))
     }
-    this.stopping = stopping.finally(() => {
-      this.stopping = undefined
-    })
   }
 
   private stopIdleWriter(writer: ProfileStateWriteWorkerClient): void {
