@@ -1,13 +1,23 @@
+const startingBySession = new WeakMap<Electron.Session, readonly string[]>()
+
+/** A profile session's attach: the extensions it starts. */
+export function noteBrowserExtensionsStarting(
+  sess: Electron.Session,
+  extensionIds: readonly string[]
+): void {
+  startingBySession.set(sess, extensionIds)
+}
+
 /**
- * Once each of these extensions is in the session, or `loadEnded` settles. Loading one that
+ * Once each extension the session's last attach started is in it, or `loadEnded` settles. Loading one that
  * intercepts requests resets the session's URL loader factories, and Electron drops a request in
  * flight across that, so a page's first load must not start before this.
  */
 export function whenBrowserExtensionsInSession(
   sess: Electron.Session,
-  extensionIds: readonly string[],
   loadEnded: Promise<unknown>
 ): Promise<void> {
+  const extensionIds = startingBySession.get(sess) ?? []
   return Promise.all(extensionIds.map((id) => whenInSession(sess, id, loadEnded))).then(
     () => undefined
   )

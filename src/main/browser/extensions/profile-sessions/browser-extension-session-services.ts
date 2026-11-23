@@ -29,6 +29,7 @@ import {
   installBrowserExtensionIdleResume,
   settleBrowserExtensionResume
 } from './browser-extension-idle-resume'
+import { noteBrowserExtensionsStarting } from './browser-extension-session-presence'
 import { closeBrowserExtensionSidePanelsForExtension } from '../side-panel/browser-extension-side-panel-host'
 import {
   installBrowserExtensionWebRequestForwarding,
@@ -67,6 +68,7 @@ export function installBrowserExtensionSessionServices(): void {
   browserManager.setUnownedDownloadOwnerResolver(resolveExtensionDownloadOwner)
   setBrowserExtensionSessionHooks({
     attached: (sess, profileId, enabledExtensionIds) => {
+      noteBrowserExtensionsStarting(sess, enabledExtensionIds)
       observeBrowserExtensionCookieChanges(sess)
       observeBrowserExtensionWebRequests(sess)
       // Why at attach: chrome.action calls create state before any toolbar asks for it.

@@ -7,7 +7,6 @@ import {
   whenBrowserExtensionProfileUnloaded
 } from './browser-extension-session-loader'
 import { whenBrowserExtensionsInSession } from './browser-extension-session-presence'
-import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { loadPageWhenReady, startHeldLoad } from './browser-page-held-first-load'
 
 // Why bounded: slow restore hooks must not keep the page from loading.
@@ -48,11 +47,7 @@ function whileExtensionsStart(profileId: string): Promise<void> | null {
     whenBrowserExtensionProfileUnloaded(profileId).then(() => {
       const sess = getBrowserExtensionSessionForProfile(profileId)
       return sess
-        ? whenBrowserExtensionsInSession(
-            sess,
-            browserSessionRegistry.getEnabledExtensionIds(profileId),
-            whenBrowserExtensionProfileLoaded(profileId)
-          )
+        ? whenBrowserExtensionsInSession(sess, whenBrowserExtensionProfileLoaded(profileId))
         : undefined
     }),
     Promise.race([

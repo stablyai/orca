@@ -1,6 +1,9 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it } from 'vitest'
-import { whenBrowserExtensionsInSession } from './browser-extension-session-presence'
+import {
+  noteBrowserExtensionsStarting,
+  whenBrowserExtensionsInSession
+} from './browser-extension-session-presence'
 import { loadPageWhenReady } from './browser-page-held-first-load'
 
 class FakePage extends EventEmitter {
@@ -70,9 +73,8 @@ describe('extensions in the session', () => {
   it('waits for every startup extension to load', async () => {
     const { sess, extensions } = fakeSession()
     let inSession = false
-    void whenBrowserExtensionsInSession(sess, ['one', 'two'], deferred().promise).then(
-      () => (inSession = true)
-    )
+    noteBrowserExtensionsStarting(sess, ['one', 'two'])
+    void whenBrowserExtensionsInSession(sess, deferred().promise).then(() => (inSession = true))
     extensions.emit('extension-loaded', {}, { id: 'one' })
     await settle()
     expect(inSession).toBe(false)
@@ -86,9 +88,8 @@ describe('extensions in the session', () => {
     const { sess, extensions } = fakeSession()
     const loadEnded = deferred()
     let inSession = false
-    void whenBrowserExtensionsInSession(sess, ['broken'], loadEnded.promise).then(
-      () => (inSession = true)
-    )
+    noteBrowserExtensionsStarting(sess, ['broken'])
+    void whenBrowserExtensionsInSession(sess, loadEnded.promise).then(() => (inSession = true))
     await settle()
     expect(inSession).toBe(false)
     loadEnded.resolve()
