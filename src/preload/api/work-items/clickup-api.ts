@@ -18,7 +18,14 @@ export type ClickUpApi = {
   status: () => Promise<ClickUpConnectionStatus>
   testConnection: () => Promise<ClickUpConnectResult>
   listTasks: (args?: { filter?: ClickUpTaskListFilter; page?: number }) => Promise<ClickUpTaskPage>
-  searchTasks: (args: { query: string; filter?: ClickUpTaskListFilter }) => Promise<ClickUpTask[]>
+  searchTasks: (args: {
+    query: string
+    filter?: ClickUpTaskListFilter
+    requestId?: string
+    /** Skips the host's scanned-page cache so a forced refresh reads current tasks. */
+    fresh?: boolean
+  }) => Promise<ClickUpTask[]>
+  cancelSearchTasks: (args: { requestId: string }) => Promise<void>
   getTask: (args: { id: string }) => Promise<ClickUpTask | null>
   taskComments: (args: { id: string }) => Promise<ClickUpComment[]>
   addTaskComment: (args: { id: string; body: string }) => Promise<ClickUpCommentResult>

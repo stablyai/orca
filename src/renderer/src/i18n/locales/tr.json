@@ -23361,7 +23361,7 @@
         "noWorkspaces": "Bu ClickUp hesabında hiç çalışma alanı yok.",
         "taskIdRequired": "Geçerli bir ClickUp görev kimliği gerekli.",
         "commentBodyRequired": "Yorum metni gerekli.",
-        "updatesRequired": "Bir durum veya bir ad gerekli.",
+        "updatesRequired": "Bir durum gerekli.",
         "updateFailed": "Görev güncellenemedi.",
         "commentFailed": "Yorum eklenemedi."
       },
@@ -23463,7 +23463,9 @@
       "commentTooLarge": "Yorum güvenli bir şekilde gönderilemeyecek kadar büyük.",
       "switchWorkspaceFailed": "ClickUp çalışma alanı değiştirilemedi.",
       "linkSourceUnavailable": "Bu ClickUp görevi bağlanamadı. ClickUp'ı yeniden bağlayın, ardından tekrar deneyin.",
-      "connectionSuperseded": "ClickUp bağlantısının yerini daha yeni bir istek aldı."
+      "connectionSuperseded": "ClickUp bağlantısının yerini daha yeni bir istek aldı.",
+      "runtimeUpdateTitle": "ClickUp için daha yeni bir uzak runtime gerekiyor",
+      "runtimeUpdateBody": "ClickUp'ı bağlamak için uzak runtime'ı güncelleyin."
     },
     "jira": {
       "connectionFailed": "Bağlantı kurulamadı",

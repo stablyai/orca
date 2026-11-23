@@ -8,6 +8,7 @@ import type {
 import { clickupRequest } from './authenticated-request'
 import { isClickUpAuthError } from './clickup-api-error'
 import { withClickUpContext } from './client'
+import { clearScannedClickUpPages } from './clickup-task-scan-cache'
 import { taskEndpoint } from './clickup-task-queries'
 
 type MutationFailure = ReturnType<typeof taskProviderFailure>
@@ -37,7 +38,8 @@ export async function addTaskComment(input: string, body: string): Promise<Click
       }
       const created = await clickupRequest<{ id?: unknown }>(context.token, endpoint, {
         method: 'POST',
-        body: JSON.stringify({ comment_text: text, notify_all: false })
+        body: JSON.stringify({ comment_text: text, notify_all: false }),
+        signal: context.signal
       })
       return typeof created?.id === 'string' || typeof created?.id === 'number'
         ? ({ ok: true, id: String(created.id) } as const)
@@ -63,9 +65,8 @@ export async function updateTask(
     return taskIdRequired()
   }
   const status = updates.status?.trim()
-  const name = updates.name?.trim()
-  if (!status && !name) {
-    return taskProviderFailure('clickup.updatesRequired', 'A status or a name is required.')
+  if (!status) {
+    return taskProviderFailure('clickup.updatesRequired', 'A status is required.')
   }
   try {
     const result = await withClickUpContext(async (context) => {
@@ -75,8 +76,10 @@ export async function updateTask(
       }
       await clickupRequest<unknown>(context.token, endpoint, {
         method: 'PUT',
-        body: JSON.stringify({ ...(status ? { status } : {}), ...(name ? { name } : {}) })
+        body: JSON.stringify({ status }),
+        signal: context.signal
       })
+      clearScannedClickUpPages()
       return { ok: true } as const
     })
     return result ?? notConnected()

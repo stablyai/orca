@@ -49,9 +49,10 @@ export class RuntimeClickUpCommands {
 
   async clickupSearchTasks(
     query: string,
-    filter: ClickUpTaskListFilter
+    filter: ClickUpTaskListFilter,
+    fresh: boolean
   ): ReturnType<typeof searchTasks> {
-    return searchTasks(query, filter)
+    return searchTasks(query, filter, undefined, fresh)
   }
 
   async clickupGetTask(id: string): ReturnType<typeof getTask> {

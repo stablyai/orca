@@ -25943,7 +25943,7 @@
         "noWorkspaces": "此 ClickUp 账号没有工作区",
         "taskIdRequired": "需要有效的 ClickUp 任务 ID",
         "commentBodyRequired": "需要评论内容",
-        "updatesRequired": "需要状态或名称",
+        "updatesRequired": "需要状态",
         "updateFailed": "更新任务失败",
         "commentFailed": "添加评论失败"
       },
@@ -26045,7 +26045,9 @@
       "commentTooLarge": "评论过大，无法安全提交",
       "switchWorkspaceFailed": "切换 ClickUp 工作区失败",
       "linkSourceUnavailable": "无法关联此 ClickUp 任务，请重新连接 ClickUp 后再试",
-      "connectionSuperseded": "ClickUp 连接已被更新的请求取代"
+      "connectionSuperseded": "ClickUp 连接已被更新的请求取代",
+      "runtimeUpdateTitle": "ClickUp 需要更新的远程运行时",
+      "runtimeUpdateBody": "请更新远程运行时以连接 ClickUp。"
     }
   },
   "editorConflicts": {

@@ -3,7 +3,8 @@ import { prStateColor } from '../../worktree/row-presentation/WorktreeMetaGlyphs
 import { prStateIcon } from '../../source-control/review/status/pr-state-token'
 import { colors } from '../../theme/mobile-theme'
 import type { TaskItem } from '../mobile-tasks-project-workspace-types'
-import { safeClickUpColor } from '../providers/clickup/mobile-clickup-filters'
+import { safeClickUpColor } from '../../../../src/shared/clickup/clickup-color'
+import { isClickUpStatusClosed } from '../../../../src/shared/clickup/clickup-task-filter'
 
 export type TaskItemStateGlyph = { icon: LucideIcon; color: string }
 
@@ -46,11 +47,10 @@ export function taskItemStateGlyph(item: TaskItem): TaskItemStateGlyph {
         : { icon: Circle, color: colors.textSecondary }
     }
     case 'clickup': {
-      const { type } = item.source.status
-      if (type === 'done' || type === 'closed') {
+      if (isClickUpStatusClosed(item.source.status)) {
         return { icon: CircleCheck, color: colors.statusGreen }
       }
-      return type === 'open'
+      return item.source.status.type === 'open'
         ? { icon: Circle, color: colors.textSecondary }
         : {
             icon: CircleDot,

@@ -1,12 +1,16 @@
 import { z } from 'zod'
 import {
-  normalizeClickUpPage,
+  CLICKUP_PAGE_RANGE_MESSAGE,
+  isClickUpPageIndex,
   normalizeClickUpTaskListFilter
 } from '../../clickup/clickup-task-filter'
 import { OptionalString, requiredString } from '../rpc-param-primitives'
 
 const ClickUpTaskListFilterParam = z.unknown().transform(normalizeClickUpTaskListFilter).optional()
-const ClickUpPageParam = z.unknown().transform(normalizeClickUpPage).optional()
+const ClickUpPageParam = z
+  .number()
+  .refine(isClickUpPageIndex, { message: CLICKUP_PAGE_RANGE_MESSAGE })
+  .nullish()
 
 export const ClickUpConnectParams = z.object({
   token: requiredString('API token is required')
@@ -25,7 +29,8 @@ export const ClickUpListTasksParams = z
 
 export const ClickUpSearchTasksParams = z.object({
   query: requiredString('Missing search query'),
-  filter: ClickUpTaskListFilterParam
+  filter: ClickUpTaskListFilterParam,
+  fresh: z.boolean().optional()
 })
 
 export const ClickUpTaskIdParams = z.object({
@@ -44,7 +49,6 @@ export const ClickUpListStatusesParams = z.object({
 export const ClickUpUpdateTaskParams = z.object({
   id: requiredString('Task id is required'),
   updates: z.object({
-    status: OptionalString,
-    name: OptionalString
+    status: OptionalString
   })
 })

@@ -7,9 +7,11 @@ import {
   reconcileJiraConnection
 } from '../providers/jira/jira-mobile-connection'
 import {
+  clickUpHostUpdateRequiredConnection,
   readClickUpConnection,
   reconcileClickUpConnection
 } from '../providers/clickup/clickup-mobile-connection'
+import { CLICKUP_RUNTIME_CAPABILITY } from '../../../../src/shared/clickup/clickup-runtime-capability'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
   PER_REPO_FETCH_LIMIT,
@@ -44,7 +46,10 @@ import {
 } from './mobile-task-list-operations'
 import { githubWorkItemSearchRead } from '../providers/mobile-task-source-search-operations'
 import { linearAccountClient } from './linear-account-host'
-import { taskSettingsWrite } from '../screen-state/mobile-task-runtime-operations'
+import {
+  taskRuntimeStatusRead,
+  taskSettingsWrite
+} from '../screen-state/mobile-task-runtime-operations'
 
 export type ProviderLoadActionsInput = Pick<
   RuntimeHydrationModel,
@@ -110,7 +115,12 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       return
     }
     const requestId = ++clickupStatusRequestIdRef.current
-    const next = await readClickUpConnection(client)
+    const runtimeStatus = taskRuntimeStatusRead.interpret(
+      await taskRuntimeStatusRead.request(client)
+    )
+    const next = runtimeStatus.capabilities?.includes(CLICKUP_RUNTIME_CAPABILITY)
+      ? await readClickUpConnection(client)
+      : clickUpHostUpdateRequiredConnection()
     if (clientRef.current === client && clickupStatusRequestIdRef.current === requestId) {
       // Unchanged keeps its identity, so the list read it feeds is not restarted.
       setClickUpConnection((current) =>

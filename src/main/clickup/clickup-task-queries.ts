@@ -11,7 +11,7 @@ import type {
 } from '../../shared/clickup/clickup-types'
 import { clickupRequest } from './authenticated-request'
 import { isClickUpTaskUnavailableError } from './clickup-api-error'
-import { withClickUpContext, type ClickUpContext } from './client'
+import { withClickUpContext, type ClickUpContext, type ClickUpOperationContext } from './client'
 import {
   mapClickUpComments,
   mapClickUpListStatuses,
@@ -19,6 +19,12 @@ import {
   mapClickUpTaskPage
 } from './clickup-response-mapping'
 import { clickUpTaskMatchesText, parseClickUpSearchIntent } from './clickup-task-search-query'
+import {
+  clickUpScanPageKey,
+  readScannedClickUpPage,
+  scannedClickUpPagesEpoch,
+  writeScannedClickUpPage
+} from './clickup-task-scan-cache'
 
 const SEARCH_PAGE_LIMIT = 5
 const COMMENT_PAGE_SIZE = 25
@@ -64,19 +70,33 @@ function listQuery(filter: ClickUpTaskListFilter, viewerId: string | null, page:
   return query
 }
 
+function scanKeyFor(
+  context: ClickUpOperationContext,
+  workspaceId: string,
+  filter: ClickUpTaskListFilter,
+  page: number
+): string {
+  return clickUpScanPageKey({ workspaceId, viewerId: context.viewer?.id ?? null }, filter, page)
+}
+
+// Every fetched page refreshes the scan cache, so a plain list reload or a forced search also freshens later searches.
 async function fetchTaskPage(
-  context: ClickUpContext,
+  context: ClickUpOperationContext,
   filter: ClickUpTaskListFilter,
   page: number
 ): Promise<ClickUpTaskPage> {
   if (!context.workspaceId) {
     return EMPTY_PAGE
   }
+  const epoch = scannedClickUpPagesEpoch()
   const payload = await clickupRequest<unknown>(
     context.token,
-    `/team/${encodeURIComponent(context.workspaceId)}/task?${listQuery(filter, context.viewer?.id ?? null, page)}`
+    `/team/${encodeURIComponent(context.workspaceId)}/task?${listQuery(filter, context.viewer?.id ?? null, page)}`,
+    { signal: context.signal }
   )
-  return mapClickUpTaskPage(payload, context.workspaceId, page, filter.includeClosed)
+  const result = mapClickUpTaskPage(payload, context.workspaceId, page, filter.includeClosed)
+  writeScannedClickUpPage(scanKeyFor(context, context.workspaceId, filter, page), result, epoch)
+  return result
 }
 
 export async function listTasks(
@@ -87,7 +107,7 @@ export async function listTasks(
 }
 
 async function fetchTask(
-  context: ClickUpContext,
+  context: ClickUpOperationContext,
   reference: ClickUpTaskReference
 ): Promise<ClickUpTask | null> {
   const endpoint = taskEndpoint(
@@ -101,7 +121,7 @@ async function fetchTask(
   }
   try {
     return mapClickUpTask(
-      await clickupRequest<unknown>(context.token, endpoint),
+      await clickupRequest<unknown>(context.token, endpoint, { signal: context.signal }),
       context.workspaceId ?? ''
     )
   } catch (error) {
@@ -121,25 +141,55 @@ export async function getTask(input: string): Promise<ClickUpTask | null> {
   return (await withClickUpContext((context) => fetchTask(context, reference))) ?? null
 }
 
+// A page seen moments ago is reused, so a query refined keystroke by keystroke filters locally instead of rescanning.
+async function scanTaskPage(
+  context: ClickUpOperationContext,
+  workspaceId: string,
+  filter: ClickUpTaskListFilter,
+  page: number,
+  fresh: boolean
+): Promise<ClickUpTaskPage> {
+  const cached = fresh
+    ? null
+    : readScannedClickUpPage(scanKeyFor(context, workspaceId, filter, page))
+  return cached ?? fetchTaskPage(context, filter, page)
+}
+
 // ClickUp has no text search, so matching covers the most recently updated tasks only.
 async function searchByText(
-  context: ClickUpContext,
+  context: ClickUpOperationContext,
   text: string,
-  filter: ClickUpTaskListFilter
+  filter: ClickUpTaskListFilter,
+  fresh: boolean
 ): Promise<ClickUpTask[]> {
+  if (!context.workspaceId) {
+    return []
+  }
   const matches: ClickUpTask[] = []
   let page: number | null = 0
   for (let fetched = 0; page !== null && fetched < SEARCH_PAGE_LIMIT; fetched++) {
-    const result: ClickUpTaskPage = await fetchTaskPage(context, filter, page)
+    const result: ClickUpTaskPage = await scanTaskPage(
+      context,
+      context.workspaceId,
+      filter,
+      page,
+      fresh
+    )
     matches.push(...result.tasks.filter((task) => clickUpTaskMatchesText(task, text)))
     page = result.nextPage
   }
   return matches
 }
 
+/**
+ * `signal` cancels a superseded search, which otherwise keeps scanning pages for a query nobody reads.
+ * `fresh` skips the scanned-page cache for a forced refresh; the pages it fetches still repopulate it.
+ */
 export async function searchTasks(
   query: string,
-  filter: ClickUpTaskListFilter
+  filter: ClickUpTaskListFilter,
+  signal?: AbortSignal,
+  fresh = false
 ): Promise<ClickUpTask[]> {
   const intent = parseClickUpSearchIntent(query)
   const tasks = await withClickUpContext(async (context) => {
@@ -153,13 +203,13 @@ export async function searchTasks(
         return []
       }
     }
-    return searchByText(context, query.trim(), filter)
-  })
+    return searchByText(context, query.trim(), filter, fresh)
+  }, signal)
   return tasks ?? []
 }
 
 async function fetchCommentPages(
-  context: ClickUpContext,
+  context: ClickUpOperationContext,
   reference: ClickUpTaskReference
 ): Promise<ClickUpComment[]> {
   const comments = new Map<string, ClickUpComment>()
@@ -174,7 +224,9 @@ async function fetchCommentPages(
     if (!endpoint) {
       break
     }
-    const payload = await clickupRequest<unknown>(context.token, endpoint)
+    const payload = await clickupRequest<unknown>(context.token, endpoint, {
+      signal: context.signal
+    })
     const page = mapClickUpComments(payload)
     const before = comments.size
     for (const comment of page) {
@@ -205,7 +257,9 @@ export async function getTaskComments(input: string): Promise<ClickUpComment[]> 
 export async function listStatuses(listId: string): Promise<ClickUpStatusOption[]> {
   const statuses = await withClickUpContext(async (context) =>
     mapClickUpListStatuses(
-      await clickupRequest<unknown>(context.token, `/list/${encodeURIComponent(listId)}`)
+      await clickupRequest<unknown>(context.token, `/list/${encodeURIComponent(listId)}`, {
+        signal: context.signal
+      })
     )
   )
   return statuses ?? []

@@ -12,7 +12,7 @@ import {
   JIRA_IMAGE_MAX_PENDING_READS,
   isJiraImageMimeType
 } from '../../../shared/jira/jira-attachment-image'
-import { withJiraDeadline } from '../jira-read-failure'
+import { withRequestDeadline } from '../../network/request-deadline'
 import { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
 import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 
@@ -55,7 +55,7 @@ export async function readAttachmentImageBytes(
             if (!url) {
               return null
             }
-            const binary = await withJiraDeadline(owned.controller.signal, 30_000, (deadline) =>
+            const binary = await withRequestDeadline(owned.controller.signal, 30_000, (deadline) =>
               waitForPromiseWithSignal(
                 jiraRequestBinary(client, url.toString(), {
                   maxBytes: JIRA_IMAGE_MAX_BYTES,

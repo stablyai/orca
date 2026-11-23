@@ -154,7 +154,7 @@ const COPY: Record<TaskProviderErrorCode, () => string> = {
   'clickup.commentBodyRequired': () =>
     translate('taskProviders.errors.clickup.commentBodyRequired', 'Comment body is required.'),
   'clickup.updatesRequired': () =>
-    translate('taskProviders.errors.clickup.updatesRequired', 'A status or a name is required.'),
+    translate('taskProviders.errors.clickup.updatesRequired', 'A status is required.'),
   'clickup.updateFailed': () =>
     translate('taskProviders.errors.clickup.updateFailed', 'Failed to update task.'),
   'clickup.commentFailed': () =>

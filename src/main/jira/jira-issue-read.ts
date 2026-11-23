@@ -22,9 +22,9 @@ import {
   getErrorStatus,
   requireStrictJiraSite,
   settleJiraSummaryRead,
-  shouldSurfaceSiteFailure,
-  withJiraDeadline
+  shouldSurfaceSiteFailure
 } from './jira-read-failure'
+import { withRequestDeadline } from '../network/request-deadline'
 
 const ISSUE_SUMMARY_TIMEOUT_MS = 30_000
 
@@ -111,7 +111,7 @@ export async function getIssueSummary(
     throw new JiraSummaryLookupError('disconnected')
   }
 
-  return withJiraDeadline(signal, ISSUE_SUMMARY_TIMEOUT_MS, async (requestSignal) => {
+  return withRequestDeadline(signal, ISSUE_SUMMARY_TIMEOUT_MS, async (requestSignal) => {
     await acquire(requestSignal)
     try {
       const params = new URLSearchParams({ fields: ISSUE_SUMMARY_FIELDS.join(',') })

@@ -24573,7 +24573,7 @@
         "noWorkspaces": "この ClickUp アカウントにはワークスペースがありません。",
         "taskIdRequired": "有効な ClickUp タスク ID が必要です。",
         "commentBodyRequired": "コメント本文が必要です。",
-        "updatesRequired": "ステータスまたは名前が必要です。",
+        "updatesRequired": "ステータスが必要です。",
         "updateFailed": "タスクの更新に失敗しました。",
         "commentFailed": "コメントの追加に失敗しました。"
       },
@@ -24675,7 +24675,9 @@
       "commentTooLarge": "コメントが大きすぎるため、安全に送信できません。",
       "switchWorkspaceFailed": "ClickUp ワークスペースの切り替えに失敗しました。",
       "linkSourceUnavailable": "この ClickUp タスクをリンクできませんでした。ClickUp に再接続してから、もう一度お試しください。",
-      "connectionSuperseded": "ClickUp の接続は、より新しいリクエストに置き換えられました。"
+      "connectionSuperseded": "ClickUp の接続は、より新しいリクエストに置き換えられました。",
+      "runtimeUpdateTitle": "ClickUp には新しいリモートランタイムが必要です",
+      "runtimeUpdateBody": "ClickUp を接続するには、リモートランタイムを更新してください。"
     }
   },
   "editorConflicts": {

@@ -79,10 +79,10 @@ function detailRows(item: ActionableTaskItem, payload: DetailPayload): DetailRow
         value: payload.priorityName
       })
     }
-    rows.push({
-      label: translate('tasks.itemDetailContent.list', 'List'),
-      value: [payload.folderName, payload.listName].filter(Boolean).join(' / ')
-    })
+    const listPath = [payload.folderName, payload.listName].filter(Boolean).join(' / ')
+    if (listPath) {
+      rows.push({ label: translate('tasks.itemDetailContent.list', 'List'), value: listPath })
+    }
     const due = commentDate(payload.dueAt)
     if (due) {
       rows.push({ label: translate('tasks.itemDetailContent.dueDate', 'Due date'), value: due })

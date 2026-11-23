@@ -1,5 +1,8 @@
 import { isRecord } from '../../shared/agent-status/child-work/agent-status-child-work-value-guards'
-import { isClickUpStatusClosed } from '../../shared/clickup/clickup-task-filter'
+import {
+  isClickUpStatusClosed,
+  MAX_CLICKUP_PAGE_INDEX
+} from '../../shared/clickup/clickup-task-filter'
 import type {
   ClickUpComment,
   ClickUpPriority,
@@ -128,6 +131,25 @@ function mapNamedEntity(value: unknown): { id: string; name: string } | null {
   return { id, name: typeof raw.name === 'string' ? raw.name : '' }
 }
 
+const CLICKUP_HOST = 'clickup.com'
+
+/** The API's own link when it is an https ClickUp URL; the payload is untrusted and the link is opened externally. */
+function clickUpTaskUrl(value: unknown, id: string): string {
+  const fallback = `https://app.clickup.com/t/${encodeURIComponent(id)}`
+  const raw = nonEmptyString(value)
+  if (!raw) {
+    return fallback
+  }
+  try {
+    const url = new URL(raw)
+    const onClickUp = url.hostname === CLICKUP_HOST || url.hostname.endsWith(`.${CLICKUP_HOST}`)
+    const plain = url.protocol === 'https:' && !url.username && !url.password
+    return plain && onClickUp ? url.href : fallback
+  } catch {
+    return fallback
+  }
+}
+
 /** Maps one task; returns null when the payload has no usable id. */
 export function mapClickUpTask(value: unknown, fallbackWorkspaceId: string): ClickUpTask | null {
   const raw = asRecord(value)
@@ -157,7 +179,7 @@ export function mapClickUpTask(value: unknown, fallbackWorkspaceId: string): Cli
     assignees: asArray(raw.assignees).flatMap((assignee) => mapClickUpUser(assignee) ?? []),
     creator: mapClickUpUser(raw.creator),
     tags: asArray(raw.tags).flatMap((tag) => nonEmptyString(asRecord(tag)?.name) ?? []),
-    url: nonEmptyString(raw.url) ?? `https://app.clickup.com/t/${encodeURIComponent(id)}`,
+    url: clickUpTaskUrl(raw.url, id),
     createdAt,
     updatedAt: millisecondsToIso(raw.date_updated) ?? createdAt,
     dueAt: millisecondsToIso(raw.due_date),
@@ -192,7 +214,7 @@ export function mapClickUpTaskPage(
     raw && 'last_page' in raw ? raw.last_page === true : fetched.length < TASKS_PER_PAGE
   return {
     tasks: includeClosed ? fetched : fetched.filter((task) => !isClickUpStatusClosed(task.status)),
-    nextPage: lastPage || fetched.length === 0 ? null : page + 1
+    nextPage: lastPage || fetched.length === 0 || page >= MAX_CLICKUP_PAGE_INDEX ? null : page + 1
   }
 }
 

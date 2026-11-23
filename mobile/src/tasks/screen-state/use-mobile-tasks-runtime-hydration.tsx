@@ -14,6 +14,8 @@ import {
   type TaskHydration
 } from './task-queries'
 import { MOBILE_TASKS_CAPABILITY } from './mobile-tasks-capability'
+import { CLICKUP_RUNTIME_CAPABILITY } from '../../../../src/shared/clickup/clickup-runtime-capability'
+import { clickUpHostUpdateRequiredConnection } from '../providers/clickup/clickup-mobile-connection'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   filterAvailableTaskProviders,
@@ -265,17 +267,15 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
     const kept = readKeptTaskHydration(queryClient, hostId)
     const landed = connectionHostStatus(client)
     let applied: TaskHydration | undefined
-    if (
-      kept.hydration &&
-      !kept.stored &&
-      landed &&
-      taskRuntimeStatusRead.interpret(landed.reply).capabilities?.includes(MOBILE_TASKS_CAPABILITY)
-    ) {
+    const landedCapabilities = landed
+      ? taskRuntimeStatusRead.interpret(landed.reply).capabilities
+      : undefined
+    if (kept.hydration && !kept.stored && landedCapabilities?.includes(MOBILE_TASKS_CAPABILITY)) {
       setTasksSupportState({ kind: 'supported', client })
       if (kept.jira) {
         setJiraConnection(kept.jira)
       }
-      if (kept.clickup) {
+      if (kept.clickup && landedCapabilities.includes(CLICKUP_RUNTIME_CAPABILITY)) {
         setClickUpConnection(kept.clickup)
       }
       applyHydration(kept.hydration)
@@ -345,13 +345,20 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
         })
         .catch(() => {})
       const clickupRequestId = ++clickupStatusRequestIdRef.current
-      void readTaskClickUpStatus(queryClient, hostId, client)
-        .then((connection) => {
-          if (!stale && clickupStatusRequestIdRef.current === clickupRequestId) {
-            setClickUpConnection((current) => replaceEqualDeep(current, connection))
-          }
-        })
-        .catch(() => {})
+      if (status.capabilities?.includes(CLICKUP_RUNTIME_CAPABILITY)) {
+        void readTaskClickUpStatus(queryClient, hostId, client)
+          .then((connection) => {
+            if (!stale && clickupStatusRequestIdRef.current === clickupRequestId) {
+              setClickUpConnection((current) => replaceEqualDeep(current, connection))
+            }
+          })
+          .catch(() => {})
+      } else {
+        // An older host has no clickup.* methods, so ask for an update instead of probing it.
+        setClickUpConnection((current) =>
+          replaceEqualDeep(current, clickUpHostUpdateRequiredConnection())
+        )
+      }
       const writes = taskHydrationWrites(queryClient, hostId)
       const fresh = await readTaskHydration(queryClient, hostId, client)
       if (stale) {

@@ -38,22 +38,22 @@ export function useClickUpTaskSearch(args: {
       setState({ tasks: [], loading: false, error: null })
       return
     }
-    let stale = false
+    const controller = new AbortController()
     setState((current) => ({ ...current, loading: true, error: null }))
     const trimmed = query.trim()
     const request = trimmed
-      ? searchClickUpTasks(trimmed, SEARCH_FILTER, { sourceContext })
+      ? searchClickUpTasks(trimmed, SEARCH_FILTER, { sourceContext, signal: controller.signal })
       : listClickUpTasks({ filter: ASSIGNED_FILTER, page: 0 }, { sourceContext }).then(
           (page) => page.tasks
         )
     request.then(
       (tasks) => {
-        if (!stale) {
+        if (!controller.signal.aborted) {
           setState({ tasks: tasks.slice(0, RESULT_LIMIT), loading: false, error: null })
         }
       },
       (error: unknown) => {
-        if (!stale) {
+        if (!controller.signal.aborted) {
           setState({
             tasks: [],
             loading: false,
@@ -62,9 +62,7 @@ export function useClickUpTaskSearch(args: {
         }
       }
     )
-    return () => {
-      stale = true
-    }
+    return () => controller.abort()
   }, [enabled, listClickUpTasks, query, searchClickUpTasks, sourceContext])
 
   return state

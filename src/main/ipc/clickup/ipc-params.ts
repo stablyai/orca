@@ -9,6 +9,5 @@ export function normalizeClickUpString(value: unknown): string {
 export function normalizeClickUpTaskUpdate(value: unknown): ClickUpTaskUpdate {
   const raw = isRecord(value) ? value : {}
   const status = normalizeClickUpString(raw.status)
-  const name = normalizeClickUpString(raw.name)
-  return { ...(status ? { status } : {}), ...(name ? { name } : {}) }
+  return status ? { status } : {}
 }

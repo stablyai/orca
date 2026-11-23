@@ -6,7 +6,7 @@ import type { JiraMediaFormat } from '../../../shared/jira/jira-attachment-image
 import { connect, disconnect, getStatus, selectSite, testConnection } from '../../jira/client'
 import { listFavouriteFilters } from '../../jira/favourite-filters'
 import { _resetPreflightCache } from '../../preflight/agent-detection'
-import { JiraCancellableRequests } from './cancellable-requests'
+import { CancellableRequests } from '../cancellable-requests'
 import { registerJiraUserSearchHandlers } from './user-search'
 import { registerJiraProjectMetadataHandlers } from './project-metadata'
 import {
@@ -30,8 +30,8 @@ import type {
 } from '../../../shared/jira/jira-types'
 
 const VALID_FILTERS = new Set<JiraIssueFilter>(['assigned', 'reported', 'all', 'done'])
-const issueSummaryRequests = new JiraCancellableRequests()
-const searchRequests = new JiraCancellableRequests()
+const issueSummaryRequests = new CancellableRequests()
+const searchRequests = new CancellableRequests()
 
 export function registerJiraHandlers(): void {
   ipcMain.handle('jira:connect', async (_event, args: JiraConnectArgs) => {

@@ -1,3 +1,4 @@
+import { clickupGitReferenceLabel } from '../clickup/clickup-task-reference'
 import { getWorkspaceReferenceIdentity } from './workspace-reference-identity'
 import {
   WORKSPACE_ATTACHMENT_NUMBER_SLOTS,
@@ -61,7 +62,7 @@ export function workspaceAttachmentReferenceLabel(
   }
   if (item.provider === 'clickup') {
     const id = item.identifier ?? item.clickupIdentifier
-    return id ? `CU-${id}` : `#${item.number}`
+    return id ? clickupGitReferenceLabel(id) : `#${item.number}`
   }
   return formats[item.type](item.number)
 }

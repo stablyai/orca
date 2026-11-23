@@ -22906,7 +22906,7 @@
         "noWorkspaces": "此 ClickUp 帳號沒有工作區。",
         "taskIdRequired": "需要有效的 ClickUp 任務 ID。",
         "commentBodyRequired": "需要留言內容。",
-        "updatesRequired": "需要狀態或名稱。",
+        "updatesRequired": "需要狀態。",
         "updateFailed": "更新任務失敗。",
         "commentFailed": "新增留言失敗。"
       },
@@ -23008,7 +23008,9 @@
       "commentTooLarge": "留言過大，無法安全提交。",
       "switchWorkspaceFailed": "切換 ClickUp 工作區失敗。",
       "linkSourceUnavailable": "無法連結此 ClickUp 任務。請重新連線 ClickUp 後再試一次。",
-      "connectionSuperseded": "ClickUp 連線已被較新的請求取代。"
+      "connectionSuperseded": "ClickUp 連線已被較新的請求取代。",
+      "runtimeUpdateTitle": "ClickUp 需要較新的遠端執行環境",
+      "runtimeUpdateBody": "請更新遠端執行環境以連線 ClickUp。"
     },
     "jira": {
       "connectionFailed": "連線失敗",

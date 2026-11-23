@@ -5,6 +5,7 @@ import {
 import { escapeRegex } from '../../text/regex-escaping'
 import type { JiraIssueKeyCasing } from '../../ui-chrome/ui-chrome-types'
 import { JIRA_ISSUE_KEY_PATTERN } from '../../jira/jira-issue-url'
+import { clickupGitReferenceLabel } from '../../clickup/clickup-task-reference'
 
 function normalizeApostrophes(input: string): string {
   return input.replace(/[\u2018\u2019]/g, "'")
@@ -156,12 +157,12 @@ function compactWords(input: string, maxWords = 4): string {
   return words.map(titleCaseWord).join(' ')
 }
 
-// ClickUp's own Git integration links branches that carry the CU- prefix.
+// ClickUp's own Git integration links branches that carry the CU- prefix on raw ids.
 function workItemTrackerIdentifier(item: WorkspaceIntentWorkItem): string | undefined {
   return (
     item.linearIdentifier ??
     item.jiraIdentifier ??
-    (item.clickupIdentifier ? `CU-${item.clickupIdentifier}` : undefined)
+    (item.clickupIdentifier ? clickupGitReferenceLabel(item.clickupIdentifier) : undefined)
   )
 }
 
@@ -192,7 +193,7 @@ function workItemIdentity(item: WorkspaceIntentWorkItem): string {
     return item.jiraIdentifier.toUpperCase()
   }
   if (item.clickupIdentifier) {
-    return `CU-${item.clickupIdentifier}`
+    return clickupGitReferenceLabel(item.clickupIdentifier)
   }
   if (item.type === 'pr') {
     return `PR ${item.number}`

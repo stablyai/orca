@@ -8,7 +8,8 @@ import { styles } from '../../mobile-tasks-legacy-styles'
 import type { ConnectionPresentationModel } from '../../screen-state/use-mobile-tasks-connection-presentation'
 import { TASK_SECONDARY_DRAWER_Z_INDEX } from '../../task-list/mobile-tasks-options'
 import { clickUpWorkspaceLabel, extractClickUpConnection } from './clickup-mobile-connection'
-import { CLICKUP_SCOPE_OPTIONS, safeClickUpColor } from './mobile-clickup-filters'
+import { safeClickUpColor } from '../../../../../src/shared/clickup/clickup-color'
+import { CLICKUP_SCOPE_OPTIONS } from './mobile-clickup-filters'
 import { clickUpWorkspaceSelect } from './mobile-clickup-operations'
 
 export function renderMobileTasksClickUpScopePicker(model: ConnectionPresentationModel) {

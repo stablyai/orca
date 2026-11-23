@@ -23991,7 +23991,7 @@
         "noWorkspaces": "В этом аккаунте ClickUp нет рабочих пространств.",
         "taskIdRequired": "Требуется действительный ID задачи ClickUp.",
         "commentBodyRequired": "Требуется текст комментария.",
-        "updatesRequired": "Требуется статус или название.",
+        "updatesRequired": "Требуется статус.",
         "updateFailed": "Не удалось обновить задачу.",
         "commentFailed": "Не удалось добавить комментарий."
       },
@@ -24093,7 +24093,9 @@
       "commentTooLarge": "Комментарий слишком большой, чтобы безопасно его отправить.",
       "switchWorkspaceFailed": "Не удалось переключить рабочее пространство ClickUp.",
       "linkSourceUnavailable": "Не удалось связать эту задачу ClickUp. Переподключите ClickUp и повторите попытку.",
-      "connectionSuperseded": "Подключение к ClickUp заменено более новым запросом."
+      "connectionSuperseded": "Подключение к ClickUp заменено более новым запросом.",
+      "runtimeUpdateTitle": "ClickUp требуется более новая удалённая среда выполнения",
+      "runtimeUpdateBody": "Обновите удалённую среду выполнения, чтобы подключить ClickUp."
     },
     "jira": {
       "connectionFailed": "Не удалось подключиться",

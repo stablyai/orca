@@ -19,6 +19,8 @@ export type ClickUpReadOptions = {
   /** The task-source owner of the read; it names the host the read goes to. */
   sourceContext: TaskSourceContext
   force?: boolean
+  /** Cancels a search the caller no longer needs; cached results are still served without a request. */
+  signal?: AbortSignal
 }
 
 export type ClickUpSlice = {
@@ -28,6 +30,8 @@ export type ClickUpSlice = {
   clickupStatusContextKey: string | null
   /** The host revoked the saved token while ClickUp was connected, so the user must reconnect. */
   clickupConnectionLost: boolean
+  /** The remote runtime that owns the status slot predates ClickUp, so it cannot hold a token. */
+  clickupRuntimeUpdateRequired: boolean
   clickupTaskCache: Record<string, CacheEntry<ClickUpTask>>
   clickupListCache: Record<string, CacheEntry<ClickUpTaskPage>>
   clickupCommentCache: Record<string, CacheEntry<ClickUpComment[]>>

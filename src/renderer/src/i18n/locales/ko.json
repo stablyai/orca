@@ -26005,7 +26005,7 @@
         "noWorkspaces": "이 ClickUp 계정에는 워크스페이스가 없습니다.",
         "taskIdRequired": "올바른 ClickUp 작업 ID가 필요합니다.",
         "commentBodyRequired": "댓글 내용이 필요합니다.",
-        "updatesRequired": "상태 또는 이름이 필요합니다.",
+        "updatesRequired": "상태가 필요합니다.",
         "updateFailed": "작업을 업데이트하지 못했습니다.",
         "commentFailed": "댓글을 추가하지 못했습니다."
       },
@@ -26107,7 +26107,9 @@
       "commentTooLarge": "댓글이 너무 커서 안전하게 제출할 수 없습니다.",
       "switchWorkspaceFailed": "ClickUp 워크스페이스를 전환하지 못했습니다.",
       "linkSourceUnavailable": "이 ClickUp 작업을 연결하지 못했습니다. ClickUp을 다시 연결한 뒤 다시 시도하세요.",
-      "connectionSuperseded": "더 최근 요청으로 인해 ClickUp 연결이 대체되었습니다."
+      "connectionSuperseded": "더 최근 요청으로 인해 ClickUp 연결이 대체되었습니다.",
+      "runtimeUpdateTitle": "ClickUp에는 더 최신의 원격 런타임이 필요합니다",
+      "runtimeUpdateBody": "ClickUp을 연결하려면 원격 런타임을 업데이트하세요."
     }
   },
   "editorConflicts": {

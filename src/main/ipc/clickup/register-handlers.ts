@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { CancellableRequests } from '../cancellable-requests'
 import {
   normalizeClickUpPage,
   normalizeClickUpTaskListFilter
@@ -23,6 +24,8 @@ import { _resetPreflightCache } from '../../preflight/agent-detection'
 import { normalizeClickUpString, normalizeClickUpTaskUpdate } from './ipc-params'
 
 type TaskIdArgs = { id?: unknown }
+
+const searchRequests = new CancellableRequests()
 
 export function registerClickUpHandlers(): void {
   ipcMain.handle('clickup:connect', async (_event, args?: { token?: unknown }) => {
@@ -55,9 +58,25 @@ export function registerClickUpHandlers(): void {
     listTasks(normalizeClickUpTaskListFilter(args?.filter), normalizeClickUpPage(args?.page))
   )
 
-  ipcMain.handle('clickup:searchTasks', (_event, args?: { query?: unknown; filter?: unknown }) => {
-    const query = normalizeClickUpString(args?.query)
-    return query ? searchTasks(query, normalizeClickUpTaskListFilter(args?.filter)) : []
+  ipcMain.handle(
+    'clickup:searchTasks',
+    (
+      _event,
+      args?: { query?: unknown; filter?: unknown; requestId?: unknown; fresh?: unknown }
+    ) => {
+      const query = normalizeClickUpString(args?.query)
+      if (!query) {
+        return []
+      }
+      const filter = normalizeClickUpTaskListFilter(args?.filter)
+      return searchRequests.run(args?.requestId, (signal) =>
+        searchTasks(query, filter, signal, args?.fresh === true)
+      )
+    }
+  )
+
+  ipcMain.handle('clickup:cancelSearchTasks', (_event, args?: { requestId?: unknown }) => {
+    searchRequests.cancel(args?.requestId)
   })
 
   ipcMain.handle('clickup:getTask', (_event, args?: TaskIdArgs) =>

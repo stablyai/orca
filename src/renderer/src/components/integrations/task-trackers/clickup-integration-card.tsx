@@ -37,7 +37,11 @@ export function ClickUpIntegrationCard({
   const t = useTranslate()
   const clickupStatus = useAppStore((s) => s.clickupStatus)
   const clickupStatusChecked = useAppStore((s) => s.clickupStatusChecked)
-  const clickupStatusContextKey = useAppStore((s) => s.clickupStatusContextKey)
+  // Matched inside the selector so the live runtime key is never read during render.
+  const contextMatches = useAppStore(
+    (s) => s.clickupStatusContextKey === clickupOwnerContextKey(owner)
+  )
+  const runtimeUpdateRequired = useAppStore((s) => s.clickupRuntimeUpdateRequired) && contextMatches
   const clickupConnectionLost = useAppStore((s) => s.clickupConnectionLost)
   const checkClickUpConnection = useAppStore((s) => s.checkClickUpConnection)
   const disconnectClickUp = useAppStore((s) => s.disconnectClickUp)
@@ -49,7 +53,6 @@ export function ClickUpIntegrationCard({
   const [testResult, setTestResult] = useState<VerificationResult | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  const contextMatches = clickupStatusContextKey === clickupOwnerContextKey(owner)
   const checking = !contextMatches || !clickupStatusChecked
   const connected = contextMatches && clickupStatus.connected
   const accountScope = providerAccountScopeForTarget(owner, t)
@@ -119,15 +122,20 @@ export function ClickUpIntegrationCard({
                 'taskProviders.clickup.checking',
                 'Checking ClickUp access before showing setup actions.'
               )
-            : clickupConnectionLost
+            : runtimeUpdateRequired
               ? t(
-                  'taskProviders.clickup.connectionLost',
-                  'ClickUp rejected the saved token. Connect again with a new personal API token.'
+                  'taskProviders.clickup.runtimeUpdateBody',
+                  'Update the remote runtime to connect ClickUp.'
                 )
-              : t(
-                  'taskProviders.clickup.description',
-                  'Browse ClickUp tasks, update their status, and start work from them.'
-                )
+              : clickupConnectionLost
+                ? t(
+                    'taskProviders.clickup.connectionLost',
+                    'ClickUp rejected the saved token. Connect again with a new personal API token.'
+                  )
+                : t(
+                    'taskProviders.clickup.description',
+                    'Browse ClickUp tasks, update their status, and start work from them.'
+                  )
       }
       checking={checking}
       statusTone={connected ? 'connected' : 'attention'}
@@ -137,7 +145,7 @@ export function ClickUpIntegrationCard({
           : t('taskProviders.clickup.statusNotConnected', 'Not connected')
       }
       actions={
-        !checking ? (
+        !checking && !runtimeUpdateRequired ? (
           <Button
             variant={connected ? 'outline' : 'default'}
             size="sm"
@@ -261,7 +269,7 @@ export function ClickUpIntegrationCard({
               )}
             </p>
           </div>
-        ) : !checking ? (
+        ) : !checking && !runtimeUpdateRequired ? (
           <>
             <p className="text-xs text-muted-foreground">{credentialCopy}</p>
             <Button variant="ghost" size="sm" onClick={() => void checkClickUpConnection(owner)}>

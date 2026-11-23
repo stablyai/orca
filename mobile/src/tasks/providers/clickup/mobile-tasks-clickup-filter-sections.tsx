@@ -2,11 +2,11 @@ import { View } from 'react-native'
 import { ListGroup, ListRow, SectionHeader } from '../../../components/list/ListGroup'
 import { translate as t } from '../../../i18n/mobile-i18n'
 import { colors } from '../../../theme/mobile-theme'
+import { safeClickUpColor } from '../../../../../src/shared/clickup/clickup-color'
 import { styles } from '../../mobile-tasks-legacy-styles'
 import type { ConnectionPresentationModel } from '../../screen-state/use-mobile-tasks-connection-presentation'
 import {
   offeredClickUpStatuses,
-  safeClickUpColor,
   toggleClickUpIncludeClosed,
   toggleClickUpStatus,
   withClickUpStatuses

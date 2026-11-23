@@ -5,6 +5,10 @@ import type {
   ClickUpTaskListFilter,
   ClickUpTaskPage
 } from '../../shared/clickup/clickup-types'
+import {
+  CLICKUP_PAGE_RANGE_MESSAGE,
+  isClickUpPageIndex
+} from '../../shared/clickup/clickup-task-filter'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import {
   getOptionalNonNegativeIntegerFlag,
@@ -59,6 +63,9 @@ export const CLICKUP_HANDLERS: Record<string, CommandHandler> = {
   'clickup list': async (context) => {
     const filter = listFilter(context, context.flags.has('all') ? 'all' : 'assigned')
     const page = getOptionalNonNegativeIntegerFlag(context.flags, 'page')
+    if (page !== undefined && !isClickUpPageIndex(page)) {
+      throw new RuntimeClientError('invalid_argument', `--page: ${CLICKUP_PAGE_RANGE_MESSAGE}`)
+    }
     await requireClickUpConnection(context)
     const response = await context.client.call<ClickUpTaskPage>('clickup.listTasks', {
       filter,

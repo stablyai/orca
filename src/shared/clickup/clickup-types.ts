@@ -75,7 +75,6 @@ export type ClickUpComment = {
 
 export type ClickUpTaskUpdate = {
   status?: string
-  name?: string
 }
 
 export type ClickUpTaskScope = 'assigned' | 'all'

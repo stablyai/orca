@@ -68,21 +68,26 @@ export function clickupOwnerContextKey(owner: RuntimeClientTarget): string {
   return getEnvironmentRuntimeContextKey(runtimeTargetEnvironmentId(owner))
 }
 
+type ClickUpScopeState = Pick<AppState, 'clickupStatus' | 'clickupStatusContextKey'>
+
 export function getClickUpReadScope(
-  state: Pick<AppState, 'clickupStatus'>,
+  state: ClickUpScopeState,
   sourceContext: TaskSourceContext
 ): ClickUpReadScope {
   const identity = sourceContext.providerIdentity
   const target = taskSourceRuntimeTarget(sourceContext)
   const runtimeContextKey = clickupOwnerContextKey(target)
+  // The status slot holds one runtime's Workspace; another runtime's reads must not borrow it.
+  const slotWorkspaceId =
+    state.clickupStatusContextKey === runtimeContextKey
+      ? (state.clickupStatus.selectedWorkspaceId ?? 'none')
+      : 'unknown-workspace'
   return {
     contextKey: `${runtimeContextKey}::${getTaskSourceCacheScope(sourceContext)}`,
     runtimeContextKey,
     target,
     workspaceKey:
-      (identity?.provider === 'clickup' ? identity.workspaceId : null) ??
-      state.clickupStatus.selectedWorkspaceId ??
-      'none'
+      (identity?.provider === 'clickup' ? identity.workspaceId : null) ?? slotWorkspaceId
   }
 }
 
@@ -95,7 +100,7 @@ function filterCacheKey(filter: ClickUpTaskListFilter): string {
 }
 
 export function clickupListCacheKey(
-  state: Pick<AppState, 'clickupStatus'>,
+  state: ClickUpScopeState,
   sourceContext: TaskSourceContext,
   args: { filter: ClickUpTaskListFilter; page: number }
 ): string {
@@ -106,7 +111,7 @@ export function clickupListCacheKey(
 }
 
 export function clickupSearchCacheKey(
-  state: Pick<AppState, 'clickupStatus'>,
+  state: ClickUpScopeState,
   sourceContext: TaskSourceContext,
   args: { query: string; filter: ClickUpTaskListFilter }
 ): string {
@@ -117,7 +122,7 @@ export function clickupSearchCacheKey(
 }
 
 export function clickupTaskCacheKey(
-  state: Pick<AppState, 'clickupStatus'>,
+  state: ClickUpScopeState,
   sourceContext: TaskSourceContext,
   id: string
 ): string {
@@ -155,6 +160,8 @@ type CachedReadArgs<T> = {
   key: string
   scope: ClickUpReadScope
   force?: boolean
+  /** A cancellable read is never shared: one caller aborting must not fail another that joined it. */
+  signal?: AbortSignal
   peek: () => CacheEntry<T> | undefined
   store: (entry: CacheEntry<T>) => void
   load: () => Promise<T>
@@ -162,7 +169,7 @@ type CachedReadArgs<T> = {
 }
 
 /**
- * Serves a fresh cache hit, joins an identical in-flight read, or loads and caches the result.
+ * Serves a fresh cache hit, joins an identical in-flight read, or loads and caches the shared result.
  * A connection change while the read is out discards its result instead of caching it.
  */
 export async function cachedClickUpRead<T>(args: CachedReadArgs<T>): Promise<T> {
@@ -172,22 +179,27 @@ export async function cachedClickUpRead<T>(args: CachedReadArgs<T>): Promise<T> 
     return cached.data
   }
   const generation = connectionGeneration
+  const shared = args.signal === undefined
   const inflight = inflightReads.get(key)
-  if (!args.force && inflight && inflight.generation === generation) {
+  if (shared && !args.force && inflight && inflight.generation === generation) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: inflightReads is keyed by the cache key, and each key family always loads the same result type.
     return inflight.promise as Promise<T>
   }
   const promise: Promise<T> = args
     .load()
     .then((data) => {
-      if (inflightReads.get(key)?.promise === promise && canWriteRead(generation)) {
+      if ((!shared || inflightReads.get(key)?.promise === promise) && canWriteRead(generation)) {
         args.store({ data, fetchedAt: Date.now() })
       }
       return data
     })
     .catch((error: unknown) => {
       // A failed read may mean the host just revoked the token; the status read decides.
-      if (generation === connectionGeneration && describesStatusSlot(scope, get())) {
+      if (
+        !args.signal?.aborted &&
+        generation === connectionGeneration &&
+        describesStatusSlot(scope, get())
+      ) {
         void get().checkClickUpConnection(scope.target)
       }
       throw error
@@ -197,7 +209,9 @@ export async function cachedClickUpRead<T>(args: CachedReadArgs<T>): Promise<T> 
         inflightReads.delete(key)
       }
     })
-  inflightReads.set(key, { promise, generation })
+  if (shared) {
+    inflightReads.set(key, { promise, generation })
+  }
   return promise
 }
 
@@ -225,6 +239,7 @@ export function clickupStatusUpdate(
     clickupStatus: status,
     clickupStatusChecked: true,
     clickupStatusContextKey: contextKey,
+    clickupRuntimeUpdateRequired: false,
     ...extra
   }
 }

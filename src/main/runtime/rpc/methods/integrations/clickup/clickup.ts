@@ -60,7 +60,8 @@ export const CLICKUP_METHODS = [
     handler: async (params, { runtime }) =>
       runtime.clickupSearchTasks(
         params.query.trim(),
-        params.filter ?? normalizeClickUpTaskListFilter(undefined)
+        params.filter ?? normalizeClickUpTaskListFilter(undefined),
+        params.fresh === true
       )
   }),
   defineMethod({

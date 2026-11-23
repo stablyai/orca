@@ -9,7 +9,7 @@ import { shouldSuppressEnterSubmit } from '@/lib/workspace/creation/new-workspac
 import { isClickUpStatusClosed } from '../../../../../shared/clickup/clickup-task-filter'
 import type { ClickUpTaskScope } from '../../../../../shared/clickup/clickup-types'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { safeClickUpColor } from './listing/clickup-task-presentation'
+import { safeClickUpColor } from '../../../../../shared/clickup/clickup-color'
 
 const CHIP_CLASS = 'rounded-md border px-2 py-1 text-xs transition'
 const CHIP_ACTIVE = 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'

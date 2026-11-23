@@ -11,6 +11,7 @@ export const createClickUpSlice: StateCreator<AppState, [], [], ClickUpSlice> = 
   clickupStatusChecked: false,
   clickupStatusContextKey: null,
   clickupConnectionLost: false,
+  clickupRuntimeUpdateRequired: false,
   clickupTaskCache: {},
   clickupListCache: {},
   clickupCommentCache: {},

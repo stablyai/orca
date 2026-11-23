@@ -56,3 +56,8 @@ export function parseClickUpTaskReference(input: string): ClickUpTaskReference |
     ? referenceFromUrl(trimmed)
     : referenceFromToken(trimmed, null)
 }
+
+/** ClickUp's Git integration links `CU-<id>` for raw task ids; custom ids such as ENG-7 (and an already prefixed id) carry a hyphen and are linked bare. */
+export function clickupGitReferenceLabel(identifier: string): string {
+  return identifier.includes('-') ? identifier : `CU-${identifier}`
+}

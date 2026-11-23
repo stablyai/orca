@@ -23399,7 +23399,7 @@
         "noWorkspaces": "Dieses ClickUp-Konto hat keine Arbeitsbereiche.",
         "taskIdRequired": "Eine gültige ClickUp-Aufgaben-ID ist erforderlich.",
         "commentBodyRequired": "Der Kommentartext ist erforderlich.",
-        "updatesRequired": "Ein Status oder ein Name ist erforderlich.",
+        "updatesRequired": "Ein Status ist erforderlich.",
         "updateFailed": "Die Aufgabe konnte nicht aktualisiert werden.",
         "commentFailed": "Der Kommentar konnte nicht hinzugefügt werden."
       },
@@ -23501,7 +23501,9 @@
       "commentTooLarge": "Der Kommentar ist zu groß, um ihn sicher zu senden.",
       "switchWorkspaceFailed": "Der ClickUp-Arbeitsbereich konnte nicht gewechselt werden.",
       "linkSourceUnavailable": "Diese ClickUp-Aufgabe konnte nicht verknüpft werden. ClickUp erneut verbinden und es noch einmal versuchen.",
-      "connectionSuperseded": "Die ClickUp-Verbindung wurde durch eine neuere Anfrage ersetzt."
+      "connectionSuperseded": "Die ClickUp-Verbindung wurde durch eine neuere Anfrage ersetzt.",
+      "runtimeUpdateTitle": "ClickUp benötigt eine neuere entfernte Laufzeitumgebung",
+      "runtimeUpdateBody": "Die entfernte Laufzeitumgebung aktualisieren, um ClickUp zu verbinden."
     },
     "jira": {
       "connectionFailed": "Verbindung fehlgeschlagen",

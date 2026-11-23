@@ -27,16 +27,21 @@ export const DISCONNECTED_CLICKUP_CONNECTION: MobileClickUpConnection = {
   lostConnection: false
 }
 
+/** The paired host lacks ClickUp, so no clickup.* method is sent to it and the screen asks for an update. */
+export function clickUpHostUpdateRequiredConnection(): MobileClickUpConnection {
+  return {
+    ...DISCONNECTED_CLICKUP_CONNECTION,
+    unavailableReason: translate(
+      'tasks.clickUpConnection.updateHost',
+      'Update Orca on this host to browse ClickUp on mobile.'
+    )
+  }
+}
+
 export function extractClickUpConnection(result: unknown): MobileClickUpConnection {
   const decoded = clickUpConnectionStatusSchema.safeParse(result)
   if (!decoded.success) {
-    return {
-      ...DISCONNECTED_CLICKUP_CONNECTION,
-      unavailableReason: translate(
-        'tasks.clickUpConnection.updateHost',
-        'Update Orca on this host to browse ClickUp on mobile.'
-      )
-    }
+    return clickUpHostUpdateRequiredConnection()
   }
   const status = decoded.data
   const credentialError = status.credentialError?.trim() || null

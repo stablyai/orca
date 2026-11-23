@@ -1,4 +1,7 @@
-import { clickupApiForTarget } from '@/runtime/clickup/runtime-clickup-client'
+import {
+  clickupApiForTarget,
+  clickupSearchTasksForTarget
+} from '@/runtime/clickup/runtime-clickup-client'
 import type { ClickUpApi } from '../../../../../preload/api/work-items/clickup-api'
 import type { ClickUpSlice, ClickUpSliceGet, ClickUpSliceSet } from './clickup-slice-contract'
 import {
@@ -58,6 +61,7 @@ export function createClickUpReadActions(
         scope,
         get,
         force: options.force,
+        signal: options.signal,
         peek: () => get().clickupListCache[key],
         store: (entry) =>
           set((state) => ({
@@ -67,7 +71,11 @@ export function createClickUpReadActions(
             })
           })),
         load: async () => ({
-          tasks: await apiFor(scope).searchTasks({ query, filter }),
+          tasks: await clickupSearchTasksForTarget(
+            scope.target,
+            { query, filter, fresh: options.force },
+            options.signal
+          ),
           nextPage: null
         })
       })

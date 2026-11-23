@@ -108,34 +108,32 @@ export function useClickUpTaskList({ enabled, sourceContext, filter, query }: Cl
     if (!enabled || !sourceContext) {
       return
     }
-    let cancelled = false
+    const controller = new AbortController()
     const force = forceNextLoadRef.current
     forceNextLoadRef.current = false
     setLoading(true)
     setFailure(null)
     const request = query
-      ? searchClickUpTasks(query, filter, { sourceContext, force })
+      ? searchClickUpTasks(query, filter, { sourceContext, force, signal: controller.signal })
       : listClickUpTasks({ filter, page: 0 }, { sourceContext, force }).then((page) => page.tasks)
     request
       .then((loadedTasks) => {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setLoaded({ key: listKey, pages: 1 })
           rememberStatuses(loadedTasks)
         }
       })
       .catch((error: unknown) => {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setFailure({ key: listKey, message: errorText(error) })
         }
       })
       .finally(() => {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setLoading(false)
         }
       })
-    return () => {
-      cancelled = true
-    }
+    return () => controller.abort()
   }, [
     enabled,
     filter,

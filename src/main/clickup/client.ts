@@ -7,8 +7,10 @@ import type {
   ClickUpWorkspace
 } from '../../shared/clickup/clickup-types'
 import { clickupRequest } from './authenticated-request'
-import { ClickUpApiError, isClickUpAuthError } from './clickup-api-error'
+import { withRequestDeadline } from '../network/request-deadline'
+import { ClickUpApiError, isClickUpAuthError, toClickUpDeadlineError } from './clickup-api-error'
 import { mapClickUpViewer, mapClickUpWorkspaces } from './clickup-response-mapping'
+import { clearScannedClickUpPages } from './clickup-task-scan-cache'
 import {
   deleteToken,
   getAccountState,
@@ -26,21 +28,37 @@ export type ClickUpContext = {
   workspaceId: string | null
 }
 
+// Below the renderer's 30s RPC timeout, so a multi-request operation fails here with a clear error first.
+const OPERATION_DEADLINE_MS = 25_000
+
+/** The stored credential plus the signal that bounds the operation using it. */
+export type ClickUpOperationContext = ClickUpContext & { signal: AbortSignal }
+
 type VerifiedAccount = { viewer: ClickUpViewer; workspaces: ClickUpWorkspace[] }
 
-/** Confirms a token against the API and lists the Workspaces it can reach. */
+/** Confirms a token against the API and lists the Workspaces it can reach, both requests under one deadline. */
 async function verifyToken(token: string): Promise<VerifiedAccount> {
-  const viewer = mapClickUpViewer(await clickupRequest<unknown>(token, '/user'))
-  if (!viewer) {
-    throw new ClickUpApiError('ClickUp returned an unexpected account response.')
+  try {
+    return await withRequestDeadline(undefined, OPERATION_DEADLINE_MS, async (signal) => {
+      const viewer = mapClickUpViewer(await clickupRequest<unknown>(token, '/user', { signal }))
+      if (!viewer) {
+        throw new ClickUpApiError('ClickUp returned an unexpected account response.')
+      }
+      const workspaces = mapClickUpWorkspaces(
+        await clickupRequest<unknown>(token, '/team', { signal })
+      )
+      // A verification that finished as the deadline fired must not lead to a save the renderer already gave up on.
+      signal.throwIfAborted()
+      return { viewer, workspaces }
+    })
+  } catch (error) {
+    throw toClickUpDeadlineError(error)
   }
-  const workspaces = mapClickUpWorkspaces(await clickupRequest<unknown>(token, '/team'))
-  return { viewer, workspaces }
 }
 
 function describeVerificationFailure(error: unknown): string {
   if (error instanceof ClickUpApiError) {
-    if (error.status === 401) {
+    if (isClickUpAuthError(error)) {
       return 'ClickUp rejected the token. Check that it is a personal API token and has not been revoked.'
     }
     return error.message
@@ -108,6 +126,7 @@ export async function connect(rawToken: string): Promise<ClickUpConnectResult> {
         previous.selectedWorkspaceId
       )
     })
+    clearScannedClickUpPages()
   })
   return { ok: true, viewer: account.viewer }
 }
@@ -116,6 +135,7 @@ export async function disconnect(): Promise<void> {
   await inAccountOrder(async () => {
     await deleteToken()
     await writeAccountState({ version: 1, viewer: null, workspaces: [], selectedWorkspaceId: null })
+    clearScannedClickUpPages()
   })
 }
 
@@ -124,6 +144,7 @@ export async function selectWorkspace(workspaceId: string): Promise<ClickUpConne
     const state = await getAccountState()
     if (state.workspaces.some((workspace) => workspace.id === workspaceId)) {
       await writeAccountState({ ...state, selectedWorkspaceId: workspaceId })
+      clearScannedClickUpPages()
     }
   })
   return getStatus()
@@ -146,24 +167,31 @@ async function clearToken(failedToken: string): Promise<void> {
     }
     await deleteToken()
     await writeAccountState({ version: 1, viewer: null, workspaces: [], selectedWorkspaceId: null })
+    clearScannedClickUpPages()
   })
 }
 
-/** Runs a read or write with the stored token; a 401 clears the credential so status reports disconnected. */
+/**
+ * Runs a read or write with the stored token under a deadline and the caller's cancellation;
+ * a 401 that means the token is revoked clears the credential so status reports disconnected.
+ */
 export async function withClickUpContext<T>(
-  run: (context: ClickUpContext) => Promise<T>
+  run: (context: ClickUpOperationContext) => Promise<T>,
+  signal?: AbortSignal
 ): Promise<T | null> {
   const context = await getContext()
   if (!context) {
     return null
   }
   try {
-    return await run(context)
+    return await withRequestDeadline(signal, OPERATION_DEADLINE_MS, (deadlineSignal) =>
+      run({ ...context, signal: deadlineSignal })
+    )
   } catch (error) {
     if (isClickUpAuthError(error)) {
       await clearToken(context.token)
     }
-    throw error
+    throw toClickUpDeadlineError(error, signal)
   }
 }
 
@@ -193,6 +221,7 @@ export async function testConnection(): Promise<ClickUpConnectResult> {
           state.selectedWorkspaceId
         )
       })
+      clearScannedClickUpPages()
     })
     return { ok: true, viewer: account.viewer }
   } catch (error) {

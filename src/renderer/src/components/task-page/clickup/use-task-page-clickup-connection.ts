@@ -9,10 +9,12 @@ export function useTaskPageClickUpConnection(model: TaskPageRuntimeHostsModel) {
   const clickupStatusChecked = useAppStore((s) => s.clickupStatusChecked)
   const clickupStatusContextKey = useAppStore((s) => s.clickupStatusContextKey)
   const clickupConnectionLost = useAppStore((s) => s.clickupConnectionLost)
+  const clickupRuntimeUpdateSlot = useAppStore((s) => s.clickupRuntimeUpdateRequired)
   const checkClickUpConnection = useAppStore((s) => s.checkClickUpConnection)
   const clickupStatusCurrent = clickupStatusContextKey === providerRuntimeContextKey
   const clickupStatusReady = clickupStatusCurrent && clickupStatusChecked
   const clickupConnected = clickupStatusCurrent && clickupStatus.connected
+  const clickupRuntimeUpdateRequired = clickupStatusCurrent && clickupRuntimeUpdateSlot
   const clickupWorkspaces = clickupStatus.workspaces
   const selectedClickUpWorkspace = useMemo(
     () =>
@@ -26,6 +28,7 @@ export function useTaskPageClickUpConnection(model: TaskPageRuntimeHostsModel) {
     clickupStatusReady,
     clickupConnected,
     clickupConnectionLost,
+    clickupRuntimeUpdateRequired,
     clickupWorkspaces,
     selectedClickUpWorkspace,
     checkClickUpConnection

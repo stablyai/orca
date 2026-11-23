@@ -9,6 +9,7 @@ export const clickupApi = {
   testConnection: () => ipcRenderer.invoke('clickup:testConnection'),
   listTasks: (args) => ipcRenderer.invoke('clickup:listTasks', args),
   searchTasks: (args) => ipcRenderer.invoke('clickup:searchTasks', args),
+  cancelSearchTasks: (args) => ipcRenderer.invoke('clickup:cancelSearchTasks', args),
   getTask: (args) => ipcRenderer.invoke('clickup:getTask', args),
   taskComments: (args) => ipcRenderer.invoke('clickup:taskComments', args),
   addTaskComment: (args) => ipcRenderer.invoke('clickup:addTaskComment', args),

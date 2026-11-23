@@ -26757,7 +26757,7 @@
         "noWorkspaces": "This ClickUp account has no Workspaces.",
         "taskIdRequired": "A valid ClickUp task id is required.",
         "commentBodyRequired": "Comment body is required.",
-        "updatesRequired": "A status or a name is required.",
+        "updatesRequired": "A status is required.",
         "updateFailed": "Failed to update task.",
         "commentFailed": "Failed to add comment."
       }
@@ -26843,7 +26843,9 @@
       "commentTooLarge": "Comment is too large to submit safely.",
       "switchWorkspaceFailed": "Failed to switch ClickUp Workspace.",
       "linkSourceUnavailable": "Couldn’t link this ClickUp task. Reconnect ClickUp, then try again.",
-      "connectionSuperseded": "ClickUp connection was superseded by a newer request."
+      "connectionSuperseded": "ClickUp connection was superseded by a newer request.",
+      "runtimeUpdateTitle": "ClickUp needs a newer remote runtime",
+      "runtimeUpdateBody": "Update the remote runtime to connect ClickUp."
     }
   },
   "editorConflicts": {

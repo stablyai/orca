@@ -1,4 +1,5 @@
 import { clickupApiForTarget } from '@/runtime/clickup/runtime-clickup-client'
+import { clickupRuntimeSupported } from '@/runtime/clickup/runtime-clickup-capability'
 import { DISCONNECTED_CLICKUP_STATUS } from '@/runtime/clickup/runtime-clickup-connection-status'
 import { translate } from '@/i18n/i18n'
 import type { ClickUpConnectResult } from '../../../../../shared/clickup/clickup-types'
@@ -45,8 +46,12 @@ export function createClickUpConnectionActions(
         !isCurrentClickUpConnectionChange(connectionGeneration)
       let status
       let statusReadFailed = false
+      let runtimeUpdateRequired = false
       try {
-        status = await clickupApiForTarget(owner).status()
+        runtimeUpdateRequired = !(await clickupRuntimeSupported(owner))
+        status = runtimeUpdateRequired
+          ? DISCONNECTED_CLICKUP_STATUS
+          : await clickupApiForTarget(owner).status()
       } catch {
         status = DISCONNECTED_CLICKUP_STATUS
         statusReadFailed = true
@@ -56,13 +61,24 @@ export function createClickUpConnectionActions(
       }
       const previous = get().clickupStatus
       const sameContext = get().clickupStatusContextKey === contextKey
-      // An unreachable host says nothing about the token, so only a successful read that shows disconnected counts as lost.
-      const lostConnection =
-        !statusReadFailed && sameContext && previous.connected && !status.connected
-      if (!sameContext || lostConnection || hasClickUpStatusChanged(previous, status)) {
+      if (statusReadFailed && owner.kind === 'environment' && sameContext && previous.connected) {
+        // An unreachable remote host says nothing about the token, so only a successful read that shows disconnected counts as lost.
+        if (!get().clickupStatusChecked) {
+          set({ clickupStatusChecked: true })
+        }
+        return
+      }
+      const lostConnection = sameContext && previous.connected && !status.connected
+      if (
+        !sameContext ||
+        lostConnection ||
+        runtimeUpdateRequired !== get().clickupRuntimeUpdateRequired ||
+        hasClickUpStatusChanged(previous, status)
+      ) {
         set(
           clickupStatusUpdate(contextKey, status, {
             clickupConnectionLost: lostConnection || (sameContext && get().clickupConnectionLost),
+            clickupRuntimeUpdateRequired: runtimeUpdateRequired,
             ...(lostConnection ? EMPTY_CLICKUP_READ_CACHES : {})
           })
         )
@@ -76,6 +92,15 @@ export function createClickUpConnectionActions(
       const contextKey = clickupOwnerContextKey(owner)
       const api = clickupApiForTarget(owner)
       try {
+        if (!(await clickupRuntimeSupported(owner))) {
+          return {
+            ok: false,
+            error: translate(
+              'taskProviders.clickup.runtimeUpdateBody',
+              'Update the remote runtime to connect ClickUp.'
+            )
+          }
+        }
         const result = await api.connect({ token })
         if (!result.ok) {
           return result
@@ -90,14 +115,19 @@ export function createClickUpConnectionActions(
           }
         }
         // The connect reply carries only the viewer; the status read supplies the Workspace list.
-        const status = await api.status()
+        // The token is saved by now, so a failed read leaves the viewer-only status for a re-check to complete.
+        const status = await api.status().catch(() => null)
         if (isCurrentClickUpConnectionChange(generation)) {
           set(
-            clickupStatusUpdate(contextKey, status, {
-              clickupConnectionLost: false,
-              ...EMPTY_CLICKUP_READ_CACHES
-            })
+            clickupStatusUpdate(
+              contextKey,
+              status ?? { ...DISCONNECTED_CLICKUP_STATUS, connected: true, viewer: result.viewer },
+              { clickupConnectionLost: false, ...EMPTY_CLICKUP_READ_CACHES }
+            )
           )
+          if (status === null) {
+            void get().checkClickUpConnection(owner)
+          }
         }
         return result
       } catch (error) {

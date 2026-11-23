@@ -17,6 +17,7 @@ export function TaskPageClickUpContent({
     clickupStatusReady,
     clickupConnected,
     clickupConnectionLost,
+    clickupRuntimeUpdateRequired,
     setClickUpConnectOpen,
     hideTaskSource,
     clickupTasks,
@@ -39,6 +40,27 @@ export function TaskPageClickUpContent({
     return (
       <div className="mt-4 flex items-center justify-center py-14">
         <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+  if (clickupRuntimeUpdateRequired) {
+    return (
+      <div className="mt-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">
+        <ClickUpIcon className="mb-4 size-8 text-muted-foreground/60" />
+        <p className="text-base font-medium text-foreground">
+          {t('taskProviders.clickup.runtimeUpdateTitle', 'ClickUp needs a newer remote runtime')}
+        </p>
+        <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+          {t(
+            'taskProviders.clickup.runtimeUpdateBody',
+            'Update the remote runtime to connect ClickUp.'
+          )}
+        </p>
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          <Button variant="outline" onClick={() => hideTaskSource('clickup', 'ClickUp')}>
+            {t('taskProviders.clickup.hide', 'Hide ClickUp')}
+          </Button>
+        </div>
       </div>
     )
   }

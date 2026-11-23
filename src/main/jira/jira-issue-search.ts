@@ -13,11 +13,11 @@ import { ISSUE_LIST_FIELDS, mapJiraIssue, type JiraAgileFieldIds } from './jira-
 import { agileFieldIdList, getAgileFieldIds } from './jira-agile-fields'
 import type { JiraSearchResponse } from './jira-record-pages'
 import { readProjectsForClient } from './jira-project-queries'
+import { withRequestDeadline } from '../network/request-deadline'
 import {
   requireStrictJiraSite,
   shouldSurfaceSiteFailure,
   toIssueSearchFailureError,
-  withJiraDeadline,
   type JiraIssueSearchFailure
 } from './jira-read-failure'
 
@@ -163,7 +163,7 @@ async function runIssueSearch(
   const safeLimit = clampLimit(limit)
   const failures: (JiraIssueSearchFailure | undefined)[] = Array.from({ length: entries.length })
   const surfaceSiteFailure = shouldSurfaceSiteFailure(siteId, entries.length)
-  const results = await withJiraDeadline(signal, ISSUE_SEARCH_TIMEOUT_MS, (requestSignal) =>
+  const results = await withRequestDeadline(signal, ISSUE_SEARCH_TIMEOUT_MS, (requestSignal) =>
     Promise.all(
       entries.map(async (entry, index) => {
         // Discovery owns a slot, so finish it before acquiring the search slot.

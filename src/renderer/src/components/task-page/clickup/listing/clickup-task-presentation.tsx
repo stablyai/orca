@@ -8,13 +8,7 @@ import type {
   ClickUpStatusOption,
   ClickUpUser
 } from '../../../../../../shared/clickup/clickup-types'
-
-const HEX_COLOR = /^#[0-9a-f]{3,8}$/i
-
-/** ClickUp colors are external text; only a plain hex value may reach a style attribute. */
-export function safeClickUpColor(color: string | undefined): string | undefined {
-  return color && HEX_COLOR.test(color) ? color : undefined
-}
+import { safeClickUpColor } from '../../../../../../shared/clickup/clickup-color'
 
 export function ClickUpStatusPill({
   status,

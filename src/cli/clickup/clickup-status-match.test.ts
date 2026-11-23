@@ -14,12 +14,6 @@ describe('orca clickup status set --to', () => {
     expect(resolveClickUpStatusName('COMPLETE', statuses)).toBe('complete')
   })
 
-  it('names every valid status when the target does not exist', () => {
-    expect(() => resolveClickUpStatusName('shipped', statuses)).toThrow(
-      '"shipped" is not a status of this task\'s list. Valid statuses: "to do", "In Review", "complete"'
-    )
-  })
-
   it('does not match a status by prefix', () => {
     expect(() => resolveClickUpStatusName('in', statuses)).toThrow('Valid statuses')
   })

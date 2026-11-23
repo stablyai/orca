@@ -13,6 +13,7 @@ import {
 } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import { openExternalLink } from '../../platform/external-links/external-link'
+import { isClickUpOpenableUrl } from '../../../../src/shared/clickup/clickup-links'
 import { styles } from '../mobile-tasks-legacy-styles'
 import {
   taskExternalOpenLabel,
@@ -193,6 +194,7 @@ export function renderMobileTasksItemActions(
       <NavBarButton
         icon={ExternalLink}
         accessibilityLabel={taskExternalOpenLabel(actionItem)}
+        disabled={actionItem.provider === 'clickup' && !isClickUpOpenableUrl(actionItem.source.url)}
         onPress={() => openExternalLink(actionItem.source.url)}
       />
       <NavBarButton

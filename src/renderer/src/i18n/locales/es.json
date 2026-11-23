@@ -23722,7 +23722,7 @@
         "noWorkspaces": "Esta cuenta de ClickUp no tiene espacios de trabajo.",
         "taskIdRequired": "Se requiere un ID de tarea de ClickUp válido.",
         "commentBodyRequired": "Se requiere el texto del comentario.",
-        "updatesRequired": "Se requiere un estado o un nombre.",
+        "updatesRequired": "Se requiere un estado.",
         "updateFailed": "No se pudo actualizar la tarea.",
         "commentFailed": "No se pudo añadir el comentario."
       },
@@ -23824,7 +23824,9 @@
       "commentTooLarge": "El comentario es demasiado grande para enviarlo de forma segura.",
       "switchWorkspaceFailed": "No se pudo cambiar de espacio de trabajo de ClickUp.",
       "linkSourceUnavailable": "No se pudo vincular esta tarea de ClickUp. Vuelve a conectar ClickUp e inténtalo de nuevo.",
-      "connectionSuperseded": "Una solicitud más reciente reemplazó la conexión con ClickUp."
+      "connectionSuperseded": "Una solicitud más reciente reemplazó la conexión con ClickUp.",
+      "runtimeUpdateTitle": "ClickUp necesita un entorno de ejecución remoto más reciente",
+      "runtimeUpdateBody": "Actualiza el entorno de ejecución remoto para conectar ClickUp."
     }
   },
   "editorConflicts": {

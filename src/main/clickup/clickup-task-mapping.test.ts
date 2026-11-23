@@ -155,3 +155,23 @@ it('drops done and closed tasks from an open list yet keeps paging while ClickUp
   expect(mapClickUpTaskPage(payload, 'w', 4, true).tasks).toHaveLength(3)
   expect(mapClickUpTaskPage({ ...payload, last_page: true }, 'w', 4, false).nextPage).toBeNull()
 })
+
+it.each([
+  ['https://app.clickup.com/t/abc', 'https://app.clickup.com/t/abc'],
+  ['https://clickup.com/t/abc', 'https://clickup.com/t/abc'],
+  ['https://evil.example/t/abc', 'https://app.clickup.com/t/abc'],
+  ['https://clickup.com.evil.example/t/abc', 'https://app.clickup.com/t/abc'],
+  ['https://notclickup.com/t/abc', 'https://app.clickup.com/t/abc'],
+  ['http://app.clickup.com/t/abc', 'https://app.clickup.com/t/abc'],
+  ['javascript:alert(1)', 'https://app.clickup.com/t/abc'],
+  ['https://user:pw@app.clickup.com/t/abc', 'https://app.clickup.com/t/abc'],
+  ['not a url', 'https://app.clickup.com/t/abc']
+])('trusts the task url %s only on https clickup.com hosts', (url, expected) => {
+  expect(mapClickUpTask({ id: 'abc', url }, 'w')?.url).toBe(expected)
+})
+
+it('offers no next page past the page limit', () => {
+  const payload = { tasks: [{ id: 'a' }], last_page: false }
+  expect(mapClickUpTaskPage(payload, 'w', 999, true).nextPage).toBe(1000)
+  expect(mapClickUpTaskPage(payload, 'w', 1000, true).nextPage).toBeNull()
+})

@@ -15,9 +15,9 @@ import { formatClickUpDueDate } from '../listing/clickup-task-list'
 import {
   ClickUpAssignees,
   ClickUpPriorityLabel,
-  ClickUpStatusPill,
-  safeClickUpColor
+  ClickUpStatusPill
 } from '../listing/clickup-task-presentation'
+import { safeClickUpColor } from '../../../../../../shared/clickup/clickup-color'
 
 export function ClickUpTaskMetadataBar({
   task,
