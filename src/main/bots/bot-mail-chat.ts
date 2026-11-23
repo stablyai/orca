@@ -28,6 +28,8 @@ export async function closeMemberChat(
   runtime: OrcaRuntimeService,
   member: BotGroupMember
 ): Promise<void> {
+  // A closed host would skip the close, leaving the chat taking mail and its Runs where they are.
+  await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
   await closeStructuredAgentSessionChild(member.sessionId, { runtime })
   const db = runtime.getOrchestrationDb()
   const bot = runtime.bots.list().find((entry) => entry.id === member.botId)

@@ -89,6 +89,18 @@ describe("a member chat's name", () => {
     expect([title(ROOM), title(THREAD)]).toEqual(['Ship', 'Notes'])
   })
 
+  it('opens no chat host when there are no rooms to name', async () => {
+    const store = new BotGroupStore(new SyncDatabase(':memory:'))
+    const runtime = {
+      ensureStructuredAgentSessionHost: async () => {
+        throw new Error('opened the chat host')
+      }
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: naming reads the room store and the host.
+    const groups = { store, runtime } as unknown as BotGroupRuntime
+    await expect(nameBotGroupMemberChats(groups)).resolves.toBeUndefined()
+  })
+
   it('names chats made before this on load, leaving one someone renamed', async () => {
     const { title } = chats({
       [ROOM]: { conversationName: PROMPT },

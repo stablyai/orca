@@ -19,6 +19,10 @@ export async function nameBotGroupMemberChats(
   groups: readonly BotGroup[] = botGroups.store.list(),
   { kept = false }: { kept?: boolean } = {}
 ): Promise<void> {
+  // No rooms, nothing to name: the chat host is not opened for it.
+  if (groups.length === 0) {
+    return
+  }
   const host = await requireStructuredHost(botGroups.runtime)
   if (host.deps.store.readOnly) {
     return

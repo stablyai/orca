@@ -6,7 +6,8 @@ import type { BotGroup } from '../../shared/bots/bot-group'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import SyncDatabase from '../sqlite/sync-database'
 import { mailRoot } from './bot-group-mail-root'
-import { narrowGroupMailBatch } from './bot-group-peer-requests'
+import { narrowGroupMailBatch, reserveGroupMailTurn } from './bot-group-peer-requests'
+import { startsBotGroupRequest } from '../../shared/bots/bot-group-schema'
 import type { BotGroupRuntime } from './bot-group-runtime'
 import { BotGroupStore } from './bot-group-store'
 
@@ -34,9 +35,10 @@ function open() {
   db = new OrchestrationDb(join(directory, 'orchestration.db'))
   roomDb = new SyncDatabase(join(directory, 'rooms.db'))
   const store = new BotGroupStore(roomDb)
-  const runtime = { getOrchestrationDb: () => db }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mail narrowing reads only the room store and the orchestration DB.
-  const groups = { store, runtime } as unknown as BotGroupRuntime
+  const bots = { list: () => [{ id: 'bot-0', name: 'Scout', avatar: null, agent: 'claude' }] }
+  const runtime = { getOrchestrationDb: () => db, bots }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mail narrowing and its line read only the room store, the orchestration DB and the bot list.
+  const groups = { store, runtime, changed: () => {} } as unknown as BotGroupRuntime
   return { store, groups }
 }
 
@@ -173,6 +175,35 @@ describe("a room worker's follow-up reports", () => {
       messages: [],
       ended: [queued.id]
     })
+  })
+
+  it('after a Stop, start a request of their own that hand-offs and peer asks can serve', () => {
+    const { groups, first } = room()
+    const group = groups.store.get('room-1')
+    const through = groups.store.message('post-1')!.sequence
+    groups.store.put({
+      ...group,
+      members: [{ ...group.members[0]!, stoppedThroughSequence: through }]
+    })
+    const mail = db.insertMessage({
+      runId,
+      from: `dispatch:${start(first)}`,
+      to: `orca_session_id:${SESSION}`,
+      subject: 'done after stop',
+      type: 'worker_done'
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reservation reads only the notice's session, operation and mail ids.
+    reserveGroupMailTurn(groups, {
+      sessionId: SESSION,
+      operationId: 'op-report',
+      body: {
+        from: { orchestration: { message: 'mail-notice', messages: [{ messageId: mail.id }] } }
+      }
+    } as never)
+    const line = groups.store.operationMessage('op-report')!
+    expect(line).toMatchObject({ fromReports: true })
+    expect(line.rootRequestId).toBeUndefined()
+    expect(startsBotGroupRequest(line)).toBe(true)
   })
 
   it("leave a bot's own chat mail untouched", () => {
