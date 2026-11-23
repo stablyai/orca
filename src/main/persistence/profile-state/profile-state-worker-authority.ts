@@ -278,11 +278,14 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       initialization,
       this.options,
       reportInitializationFailure,
-      (writer) => this.handleIndeterminateWriterFailure(writer)
+      (writer, error) => this.handleIndeterminateWriterFailure(writer, error)
     )
   }
 
-  private handleIndeterminateWriterFailure(writer: ProfileStateWriteWorkerClient): void {
+  private handleIndeterminateWriterFailure(
+    writer: ProfileStateWriteWorkerClient,
+    error: Error
+  ): void {
     const stopping = closeIndeterminateProfileStateWriter(
       writer,
       () => this.writer === writer && !this.stopping && !this.closing && !this.stoppedFailure,
@@ -293,11 +296,14 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
         }
       }
     )
-    if (stopping) {
-      this.stopping = stopping.finally(() => {
-        this.stopping = undefined
-      })
+    if (!stopping) {
+      // Not recovering (closing, aborted, or mid idle-stop): saving has stopped, so say so.
+      reportTerminalReopenFailure(this.options.onFailure, error)
+      return
     }
+    this.stopping = stopping.finally(() => {
+      this.stopping = undefined
+    })
   }
 
   private stopIdleWriter(writer: ProfileStateWriteWorkerClient): void {

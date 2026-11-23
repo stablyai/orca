@@ -7,7 +7,7 @@ export function createProfileStateWriter(
   initialization: ProfileStateWriterInitialization,
   options: ProfileStateWorkerAuthorityOptions,
   reportInitializationFailure: boolean,
-  onIndeterminateFailure: (writer: ProfileStateWriteWorkerClient) => void
+  onIndeterminateFailure: (writer: ProfileStateWriteWorkerClient, error: Error) => void
 ): ProfileStateWriteWorkerClient {
   let writer: ProfileStateWriteWorkerClient
   writer = new ProfileStateWriteWorkerClient(initialization, {
@@ -15,7 +15,7 @@ export function createProfileStateWriter(
     reportInitializationFailure,
     onFailure: (error) => {
       if (profileStateWriterFailureOutcome(error) === 'indeterminate') {
-        onIndeterminateFailure(writer)
+        onIndeterminateFailure(writer, error)
       } else {
         options.onFailure?.(error)
       }
