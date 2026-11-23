@@ -32,6 +32,8 @@ export type BotConnectors = Pick<Bot, 'name'> &
     githubEvents2?: boolean
     /** Its host's Orca Cloud sends github.workflow_finished (`triggers.workflows`). */
     githubWorkflows?: boolean
+    /** Its host's Orca Cloud sends github.ci_finished (`triggers.ci_finished`). */
+    githubCiFinished?: boolean
   }
 
 type EventRule = Pick<AutomationEventTrigger, 'source' | 'event'>

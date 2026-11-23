@@ -223,8 +223,10 @@ export function createStartingWorkerDispatch(
     })
     this.db.exec('COMMIT')
     this.hasAnyDispatchContextsCache = true
+    const dispatch = this.getDispatchContextById(id) as DispatchContextRow
+    this.workerDockSources?.changedDispatch(id)
     return {
-      dispatch: this.getDispatchContextById(id) as DispatchContextRow,
+      dispatch,
       worker: this.getWorkerDispatch(id) as WorkerDispatchRow,
       task: this.getTask(task.id) as TaskRow
     }

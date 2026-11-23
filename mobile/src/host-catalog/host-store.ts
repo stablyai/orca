@@ -6,7 +6,6 @@ import { getNextHostNameFromHosts } from './host-names'
 import { mergeHostNameIdentity, withPersonalName } from './host-name-identity'
 import * as hostListLoads from './host-list-load-sharing'
 import { joinHostCatalogCredentials } from './host-catalog-credential-join'
-import { resetPairingKeychainForTests } from '../host-credentials/pairing-keychain'
 import {
   readHostDeviceToken,
   writeHostDeviceToken
@@ -26,8 +25,7 @@ import {
 import { scheduleOrphanedMobileRelayCleanup } from '../transport/relay/mobile-relay-orphan-cleanup'
 import {
   getHostCredentialWriteRevision,
-  markHostCredentialWrite,
-  resetHostCredentialWriteRevisionsForTests
+  markHostCredentialWrite
 } from '../host-credentials/host-credential-write-revision'
 import { createUnpairedHostCredentialDeletion } from '../pairing/unpaired-host-credential-deletion'
 import {
@@ -38,8 +36,7 @@ import {
 import {
   enqueueHostListMutation,
   hostListMutationsSettled,
-  mutateStoredHosts,
-  resetHostListMutationQueueForTests
+  mutateStoredHosts
 } from './host-list-mutation-queue'
 
 async function commitDeviceToken(hostId: string, token: string): Promise<void> {
@@ -316,12 +313,4 @@ export async function updateHostNameAndEndpoint(
     next[index] = updated
     return next
   })
-}
-
-export function resetHostStoreForTests(): void {
-  resetHostListMutationQueueForTests()
-  tokenCache.clear()
-  resetHostCredentialWriteRevisionsForTests()
-  hostListLoads.dropSharedHostListLoad()
-  resetPairingKeychainForTests()
 }

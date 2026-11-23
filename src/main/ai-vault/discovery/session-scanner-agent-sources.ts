@@ -83,6 +83,8 @@ export type AiVaultAgentSource = {
   directoryPredicate?: (name: string, depth: number) => boolean
   // Share the per-agent limit across alternate roots for one install.
   mergeRootDiscoveries?: boolean
+  // Skip a root that resolves (symlink or junction) to an earlier one.
+  dedupeRealRootDirs?: boolean
 }
 
 type AiVaultAgentSourceTable = Record<AiVaultDeletableAgent, AiVaultAgentSource> &
@@ -99,7 +101,9 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
       }),
     extensions: ['.jsonl'],
     // Subagent transcripts are read under their parent instead of duplicating History rows.
-    directoryPredicate: isClaudeProjectBucketDirectory
+    directoryPredicate: isClaudeProjectBucketDirectory,
+    // Account homes link their projects folder to the user's shared one.
+    dedupeRealRootDirs: true
   },
   qoder: {
     rootDirs: (options, wslHomeDirs) =>

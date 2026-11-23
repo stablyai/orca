@@ -1,6 +1,13 @@
 import type { BrowserCommandTargetParams } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import { clampOptionalNumber } from '../screencast/browser-screencast-budget'
+import type { BrowserMouseModifier } from '../../../browser/cdp/input/cdp-pointer-targets'
+import { BrowserError } from '../../../browser/browser-error'
+
+type BrowserMouseButtonParams = {
+  button?: string
+  modifiers?: BrowserMouseModifier[]
+} & BrowserCommandTargetParams
 
 export class RuntimeBrowserPointerInput {
   constructor(
@@ -28,13 +35,11 @@ export class RuntimeBrowserPointerInput {
       .mouseMove(params.x, params.y, target.worktreeId, target.browserPageId)
   }
 
-  async browserMouseDown(
-    params: { button?: string } & BrowserCommandTargetParams
-  ): Promise<unknown> {
+  async browserMouseDown(params: BrowserMouseButtonParams): Promise<unknown> {
     const target = await this.targets.resolveBrowserCommandTarget(params)
     return this.targets
       .requireAgentBrowserBridge()
-      .mouseDown(params.button, target.worktreeId, target.browserPageId)
+      .mouseDown(params.button, target.worktreeId, target.browserPageId, params.modifiers)
   }
 
   async browserMouseClick(
@@ -43,28 +48,44 @@ export class RuntimeBrowserPointerInput {
       y: number
       button?: string
       radius?: number
-      modifiers?: ('cmd' | 'ctrl' | 'alt' | 'shift')[]
+      modifiers?: BrowserMouseModifier[]
+      fileChooserRefusal?: 1
     } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.targets.resolveBrowserCommandTarget(params)
-    return this.targets
-      .requireAgentBrowserBridge()
-      .mouseClick(
-        params.x,
-        params.y,
-        params.button,
-        target.worktreeId,
-        target.browserPageId,
-        clampOptionalNumber(params.radius, 0, 64),
-        params.modifiers
-      )
+    try {
+      return await this.targets
+        .requireAgentBrowserBridge()
+        .mouseClick(
+          params.x,
+          params.y,
+          params.button,
+          target.worktreeId,
+          target.browserPageId,
+          clampOptionalNumber(params.radius, 0, 64),
+          params.modifiers
+        )
+    } catch (error) {
+      // Only phones send a radius; shipped ones replay a failed tap as a press, clicking the page twice.
+      if (
+        params.radius !== undefined &&
+        params.fileChooserRefusal !== 1 &&
+        error instanceof BrowserError &&
+        error.code === 'browser_file_chooser_opened'
+      ) {
+        return {
+          clicked: { x: params.x, y: params.y, button: 'left', adjusted: false, handled: true }
+        }
+      }
+      throw error
+    }
   }
 
-  async browserMouseUp(params: { button?: string } & BrowserCommandTargetParams): Promise<unknown> {
+  async browserMouseUp(params: BrowserMouseButtonParams): Promise<unknown> {
     const target = await this.targets.resolveBrowserCommandTarget(params)
     return this.targets
       .requireAgentBrowserBridge()
-      .mouseUp(params.button, target.worktreeId, target.browserPageId)
+      .mouseUp(params.button, target.worktreeId, target.browserPageId, params.modifiers)
   }
 
   async browserMouseWheel(

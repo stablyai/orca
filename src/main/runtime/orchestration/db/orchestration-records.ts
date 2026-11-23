@@ -126,6 +126,8 @@ export type QuestionRow = {
   created_at: string
   answered_at: string | null
   closed_at: string | null
+  /** How it ended with no answer: its asker was told it went unanswered, or no one read it. */
+  told: 'unanswered' | 'dropped' | null
 }
 
 export type MutationState = 'pending' | 'completed'

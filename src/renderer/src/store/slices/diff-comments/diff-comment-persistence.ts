@@ -63,15 +63,6 @@ const floorSeedEpochByQueue = new Map<string, number>()
 // The ids are every note this copy listed or tried to write since: only those are its to change on the host.
 const ownNoteIdsAfterFailure = new Map<string, Set<string>>()
 
-export function resetDiffCommentPersistenceForTests(): void {
-  persistQueueByWorktree.clear()
-  floorKeysByQueue.clear()
-  lastPersistedByQueue.clear()
-  lastMutationNextByQueue.clear()
-  floorSeedEpochByQueue.clear()
-  ownNoteIdsAfterFailure.clear()
-}
-
 /** One change to one copy's notes; the owner alone says which rows it reads, writes and rolls back. */
 export type DiffCommentMutation = {
   owner: DiffCommentOwner
@@ -133,14 +124,18 @@ export function enqueueDiffCommentPersist(
     let sent: DiffComment[] = []
     // What this copy last saw on disk; the host merges only the edits since then.
     // Why not always a promise: a write with nothing to re-read leaves in the turn it was dequeued in.
-    const baseFor = (requested: DiffComment[]): DiffComment[] | Promise<DiffComment[]> => {
+    const baseFor = (
+      requested: DiffComment[]
+    ): DiffComment[] | undefined | Promise<DiffComment[]> => {
       sent = requested
       const own = ownNoteIdsAfterFailure.get(floorKey)
       const owner = mutation.owner
-      if (!own || owner.kind !== 'worktree') {
+      if (!own) {
         return floor
       }
-      return rereadBase(owner, own, requested)
+      // Why no base: there is no folder re-read helper, and a failed write may still have landed,
+      // so the floor may not be what the host holds; the host replaces the list instead.
+      return owner.kind === 'worktree' ? rereadBase(owner, own, requested) : undefined
     }
     const rereadBase = async (
       owner: Extract<DiffCommentOwner, { kind: 'worktree' }>,
@@ -166,7 +161,7 @@ export function enqueueDiffCommentPersist(
         await writeDiffCommentsToHost(
           mutation.owner,
           requested,
-          Array.isArray(base) ? base : await base
+          base instanceof Promise ? await base : base
         )
       } else if (mutation.owner.kind === 'worktree') {
         const rows = findCopyRows(get(), worktreeId, mutation.owner.authority)
@@ -180,7 +175,7 @@ export function enqueueDiffCommentPersist(
         await writeDiffCommentsToHost(
           mutation.owner,
           requested,
-          Array.isArray(base) ? base : await base
+          base instanceof Promise ? await base : base
         )
       }
     } catch (err) {

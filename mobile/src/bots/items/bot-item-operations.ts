@@ -1,6 +1,7 @@
 // The owner's item calls from the phone: the host the route reaches (a paired server's too) reads and
 // changes the bot's items. Only a comment carries a request id (where the host takes one), so only a
 // comment's Retry is safe after a dropped reply.
+import { botFailureMessage } from '../bot-failure-message'
 import * as z from 'zod'
 import {
   BotItemShowReadSchema,
@@ -94,7 +95,7 @@ export type BotItemRead<T> =
   | { kind: 'read'; value: T }
   | { kind: 'failed'; notFound: boolean; message?: string }
 
-/** Every open item, closed ones a page at a time (`closedCursor` for the next), or these chats'. */
+/** Open items and a page of closed items, optionally scoped to a group’s rooms. */
 export async function readBotItems(
   client: RpcClient,
   botId: string,
@@ -157,7 +158,7 @@ async function write(send: () => Promise<unknown>): Promise<BotItemWriteOutcome>
     return isRpcDeliveryUnknown(error) ? { kind: 'unknown' } : { kind: 'not-sent' }
   }
   return reply instanceof Error
-    ? { kind: 'refused', message: reply.message }
+    ? { kind: 'refused', message: botFailureMessage(reply) ?? reply.message }
     : { kind: 'done', result: reply }
 }
 

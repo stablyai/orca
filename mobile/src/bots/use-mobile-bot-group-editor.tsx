@@ -111,6 +111,7 @@ export function useMobileBotGroupEditor(controller: HostScreenController): Mobil
           group={editing === 'new' ? undefined : editing}
           bots={bots}
           client={client}
+          hostName={controller.state.hostName}
           onClose={() => setEditing(null)}
           onSaved={(group) => {
             setEditing(null)

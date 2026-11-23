@@ -58,16 +58,7 @@ export function MobileBotItemRow({
       marker={formatBotItemNumber(item.number)}
       subtitle={owner ? undefined : question}
       subtitleLines={1}
-      detail={
-        owner ? (
-          <View style={styles.owner}>
-            <MobileBotAvatar avatar={owner.avatar} size={14} />
-            <Text style={styles.ownerText} numberOfLines={1}>
-              {question ? `${owner.name} · ${question}` : owner.name}
-            </Text>
-          </View>
-        ) : undefined
-      }
+      detail={owner ? <MobileBotItemOwnerLine owner={owner} line={question} /> : undefined}
       leading={
         checked === null ? (
           <MobileBotItemStatusIcon
@@ -105,6 +96,25 @@ export function MobileBotItemRow({
       onPress={onPress}
       onLongPress={onLongPress}
     />
+  )
+}
+
+/** In a group's list: the member a row is from, its face and name, then the row's own line. */
+export function MobileBotItemOwnerLine({
+  owner,
+  line
+}: {
+  owner: { name: string; avatar: MobileBotAvatarSource }
+  line?: string
+}) {
+  useMobileColorScheme()
+  return (
+    <View style={styles.owner}>
+      <MobileBotAvatar avatar={owner.avatar} size={14} />
+      <Text style={styles.ownerText} numberOfLines={1}>
+        {line ? `${owner.name} · ${line}` : owner.name}
+      </Text>
+    </View>
   )
 }
 

@@ -140,7 +140,9 @@ export function chatWorkerTurnStopReporter(
           if (
             generations.get(stop.sessionId) !== generation ||
             !current ||
-            status?.status === 'working'
+            status?.status === 'working' ||
+            // A turn its own background tasks hold open is a wait, which those waits record.
+            (stop.reason === 'finished' && deps.chatWaitsOnBackground?.(stop.sessionId) === true)
           ) {
             return
           }
@@ -253,7 +255,8 @@ export function chatWorkerTurnStopReporter(
 export function observeChatWorkerWorking(sessionId: string, deps: WorkerTurnStopReportDeps): void {
   try {
     const db = deps.getDb()
-    if (!db) {
+    // A chat its background tasks hold working has not started a turn.
+    if (!db || deps.chatWaitsOnBackground?.(sessionId) === true) {
       return
     }
     for (const { dispatch } of chatWorkerDispatches(sessionId, db)) {

@@ -16,6 +16,12 @@ export function usesModelSpecificAcpEfforts(agent: string): boolean {
   return agent === 'opencode' || agent === 'opencode2' || agent === 'omp' || agent === 'kilo'
 }
 
+/** Its listing's efforts stay unconfirmed until a chat runs the model, so a send refuses one the
+ *  model lacks rather than running at the agent's default. */
+export function confirmsListedEffortAtSend(agent: string): boolean {
+  return agent === 'kiro'
+}
+
 export function usesInstalledAgentModelCatalog(agent: string, coherentCatalog?: boolean): boolean {
   return coherentCatalog === true && independentAgentModelCatalog(agent)
 }

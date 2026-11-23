@@ -35,6 +35,12 @@ export type AiVaultScanOptions = {
   includeAntigravityIdeSessions?: boolean
   copilotSessionsDir?: string
   cursorProjectsDir?: string
+  /** Native Chat's Cursor sessions and the config folders they run in; resolved by the host process. */
+  cursorAcpSessions?: {
+    folders: readonly { configDir: string; sessionIds: readonly string[] }[]
+    /** Looked for under each WSL home's default `.cursor`. */
+    wslSessionIds: readonly string[]
+  }
   opencodeStorageDir?: string
   opencodeDbPaths?: readonly string[]
   /** Managed account OpenCode data directories; resolved by the host process. */
@@ -114,6 +120,8 @@ export type SessionFileDiscovery = {
   scopeFiles?: FileWithMtime[]
   // Conversation folder -> one top-level artifact file, seen while walking Antigravity brains.
   antigravityArtifactPaths?: ReadonlyMap<string, string>
+  // Declared roots not walked because they resolve to rootDir; rows under them are stale.
+  aliasRootDirs?: readonly string[]
 }
 
 export type SessionParseResult = {

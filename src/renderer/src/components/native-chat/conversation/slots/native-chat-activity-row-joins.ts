@@ -1,8 +1,8 @@
-// Where the desktop window draws activity rows close (`nativeChatActivityEdges` says which rows are
-// ones): two that meet sit 4 px apart, wherever a slot or turn boundary falls between them. Anything
-// else (a bubble, the agent's words, a turn's bar, diff or PR card) keeps the full row gap. A slot
-// that meets the activity row above is born pulled up into the row gap, so its estimate is right
-// from the first draw.
+// Where the desktop window draws one-line rows close (`nativeChatActivityEdges` says which rows are
+// ones): two that meet sit 6 px apart, wherever a slot or turn boundary falls between them. A turn's
+// opened pull request line counts as one too. Anything else (a bubble, the agent's words, a turn's
+// bar or diff) keeps the full row gap. A slot that meets the one-line row above is born pulled up
+// into the row gap, so its estimate is right from the first draw.
 import {
   nativeChatActivityEdges,
   type NativeChatActivityEdges
@@ -14,8 +14,8 @@ import {
 import type { NativeChatTimedRow } from './native-chat-timed-rows'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
-/** The space between two activity rows that meet, as `gap-1` draws it. */
-export const NATIVE_CHAT_ACTIVITY_ROW_GAP_PX = 4
+/** The space between two one-line rows that meet, as `gap-1.5` draws it. */
+export const NATIVE_CHAT_ACTIVITY_ROW_GAP_PX = 6
 
 const NO_EDGES: NativeChatActivityEdges = { top: false, bottom: false }
 
@@ -38,11 +38,10 @@ function activityEdges(slot: NativeChatTranscriptSlot | undefined): NativeChatAc
   const bar = slot.status !== undefined
   return {
     top: edges.top && !(bar && slot.statusAbove),
+    // The opened pull request line is drawn last, under the bar and diff.
     bottom:
-      edges.bottom &&
-      !(bar && !slot.statusAbove) &&
-      slot.turnDiff === undefined &&
-      slot.openedPullRequests === undefined
+      slot.openedPullRequests !== undefined ||
+      (edges.bottom && !(bar && !slot.statusAbove) && slot.turnDiff === undefined)
   }
 }
 
@@ -67,7 +66,7 @@ export function markNativeChatActivityJoins(
 /**
  * Whether a slot that opens on an activity row draws pulled up against the one above. Only when row
  * meets row: a timed row drawn under the slot before (an approval card) or the "New" marker on
- * either row keeps the whole row gap. A row that fades out whole keeps it too, as its negative margin
+ * this row keeps the whole row gap. A row that fades out whole keeps it too, as its negative margin
  * would pass through to the window's wrapper rather than shorten the row.
  */
 export function nativeChatSlotJoinsActivityAbove({
@@ -89,10 +88,8 @@ export function nativeChatSlotJoinsActivityAbove({
   if (previous?.kind !== 'message') {
     return false
   }
-  if (
-    markerKey !== undefined &&
-    (markerKey === slot.message.id || markerKey === previous.message.id)
-  ) {
+  // The "New" line draws above its own row only, so the row below that one still joins it.
+  if (markerKey === slot.message.id) {
     return false
   }
   return !(previous.itemNotes ?? [previous.message]).some(

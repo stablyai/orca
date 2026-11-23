@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest'
-import { sqlRewindFixture, rewindMessage } from './journal-sql-rewind.test-fixture'
+import { sqlRewindFixture, rewindMessage } from './journal-sql-provider-rewind.test-fixture'
 import { planJournalDomainRewindCut } from './journal-domain-rewind-cut'
 import { JournalSqlScope } from './journal-sql-scope'
 
@@ -14,7 +14,7 @@ const turn = (recordId: string) => ({
 })
 
 it('rewinds a Trae opener while keeping late output on the preceding turn and pending input', async () => {
-  const f = sqlRewindFixture(cleanups, 'trae')
+  const f = sqlRewindFixture(cleanups)
   const old = 'legacy:trae:chat-rewind:turn-lifecycle%3Ap%3Athread%3Aold%252Fturn'
   const next = 'legacy:trae:chat-rewind:turn-lifecycle%3Ap%3Athread%3Anext%252Fturn'
   await f.write(host('first'), rewindMessage('first', 'user'))

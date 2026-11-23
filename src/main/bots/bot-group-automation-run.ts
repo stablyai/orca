@@ -70,6 +70,8 @@ export async function sendBotGroupAutomationRun(
           text,
           createdAt: Date.now(),
           ...(run?.automationRun ? { automationRun: run.automationRun } : {}),
+          ...(run?.memorySource ? { memorySource: run.memorySource } : {}),
+          ...(run?.memorySource && run.triggeredBy ? { triggeredBy: run.triggeredBy } : {}),
           turns
         },
         contexts
