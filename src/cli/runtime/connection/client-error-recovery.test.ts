@@ -24,6 +24,6 @@ describe('worker-start refusal recovery', () => {
 
   it('keeps the request id when the outcome is not known to be effect-free', () => {
     const error = attachMutationRecovery(refusal(undefined), 'request-1')
-    expect((error as Error).message).toContain('Orchestration mutation request ID: request-1.')
+    expect(formatCliError(error)).toContain('Orchestration mutation request ID: request-1.')
   })
 })
