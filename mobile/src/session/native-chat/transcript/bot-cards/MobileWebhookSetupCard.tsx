@@ -1,7 +1,7 @@
 // A webhook automation's setup card in its chat, as on the computer: Copy URL up front, the key and a
 // sample call one tap away. Drawn in place of the saved row, so the URL is never folded away.
-import { useContext, useEffect, useState } from 'react'
-import { Text, View } from 'react-native'
+import { useContext, useEffect, useRef, useState } from 'react'
+import { AppState, Text, View } from 'react-native'
 import { Check, ChevronDown, ChevronRight, Webhook } from 'lucide-react-native'
 import {
   webhookAdapterName,
@@ -15,6 +15,7 @@ import {
 } from '../../../../bots/webhooks/mobile-webhook-copy'
 import { randomV4Uuid } from '../../../../platform/random-v4-uuid'
 import { copyPhoneWebhookUrl } from '../../../../bots/webhooks/mobile-webhook-url-copy'
+import { startHostBotRefresh } from '../../../../bots/host-bot-refresh'
 import { useNow } from '../../../../hooks/use-now'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../../../../platform/clipboard/clipboard'
@@ -63,28 +64,51 @@ export function MobileWebhookSetupCard({
   const called = hook?.state === 'live' && hook.lastCall !== null
   // "Last call 4m ago" moves on only once there is a call.
   const now = useNow(60_000, called)
+  // Raised when the host or hook changes and on unmount: an answer for an older scope copies nothing.
+  const keyScope = useRef(0)
   useEffect(() => {
-    if (!client) {
+    keyScope.current += 1
+    return () => {
+      keyScope.current += 1
+    }
+  }, [client, hookId])
+  // Until the hook is live it reads again on the host's notices, so Copy URL turns on by itself.
+  const waiting = hook === null || hook.state === 'pending'
+  useEffect(() => {
+    if (!client || !waiting) {
       return
     }
     let live = true
-    void webhookCardRead.request(client, { hookId }).then(
-      (reply) => {
-        const read = webhookCardRead.interpret(reply)
-        if (live) {
-          setHook({
-            state: read.state,
-            adapter: read.adapter ?? null,
-            lastCall: read.lastCall ?? null
-          })
+    let replied = false
+    const read = (): void => {
+      void webhookCardRead.request(client, { hookId }).then(
+        (reply) => {
+          replied = true
+          const answer = webhookCardRead.interpret(reply)
+          if (live) {
+            setHook({
+              state: answer.state,
+              adapter: answer.adapter ?? null,
+              lastCall: answer.lastCall ?? null
+            })
+          }
+        },
+        () => {
+          replied = true
         }
-      },
-      () => undefined
-    )
+      )
+    }
+    const stop = startHostBotRefresh({
+      client,
+      appState: AppState,
+      refresh: read,
+      listed: () => replied
+    })
     return () => {
       live = false
+      stop()
     }
-  }, [client, hookId])
+  }, [client, hookId, waiting])
 
   // Copy or send, one at a time; a refusal or a sent sample is said under the card.
   const settle = (work: Promise<{ text: string; failed: boolean } | null>): void => {
@@ -100,17 +124,24 @@ export function MobileWebhookSetupCard({
     if (!client) {
       return
     }
+    const scope = keyScope.current
     settle(
-      copyPhoneWebhookUrl(client, hookId, clipboard, () => true, what).then((result) => {
-        if (result.kind === 'refused') {
-          return { text: webhookErrorMessage(result.code, botName, t), failed: true }
-        }
-        if (what === 'url') {
+      copyPhoneWebhookUrl(client, hookId, clipboard, () => scope === keyScope.current, what).then(
+        (result) => {
+          if (result.kind === 'refused') {
+            return { text: webhookErrorMessage(result.code, botName, t), failed: true }
+          }
+          if (result.kind === 'dropped') {
+            return null
+          }
+          if (what === 'key') {
+            return { text: t('bots.webhooks.copiedKey', 'Key copied'), failed: false }
+          }
           copiedHooks.add(hookId)
           setCopied(true)
+          return null
         }
-        return null
-      })
+      )
     )
   }
   const sendSample = (): void => {

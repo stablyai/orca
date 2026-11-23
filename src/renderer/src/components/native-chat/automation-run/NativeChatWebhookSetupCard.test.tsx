@@ -12,6 +12,8 @@ import { NativeChatVisualOwnerContext } from '../media/visuals/native-chat-visua
 import { NativeChatAutomationSavedRow } from './NativeChatAutomationSavedRow'
 
 const HOOK = 'wh_SetupCardTest001'
+// A hook the host no longer has: its read fails.
+const GONE = 'wh_SetupCardGone001'
 const URL = `https://connector.orca.dev/hooks/${HOOK}/secret-key`
 const writes: string[] = []
 const reveals: unknown[] = []
@@ -22,7 +24,10 @@ let root: ReturnType<typeof createRoot>
 beforeEach(() => {
   writes.length = 0
   reveals.length = 0
-  setWebhookHostTransportForTests(async (target, method) => {
+  setWebhookHostTransportForTests(async (target, method, params) => {
+    if ('hookId' in params && params.hookId === GONE) {
+      throw new Error('webhook_not_found')
+    }
     if (method === 'webhooks.card') {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: answers webhooks.card, whose result is a WebhookSummary.
       return webhookSummaryFixture({ hookId: HOOK }) as never
@@ -71,6 +76,25 @@ const automation = {
 const OWNER = { target: { kind: 'local' }, sessionId: 's1', worktreeId: 'folder:fw-1' } as const
 const settle = (): Promise<void> =>
   act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)))
+function renderSaved(hookId: string): void {
+  act(() =>
+    root.render(
+      <NativeChatVisualOwnerContext.Provider value={OWNER}>
+        <NativeChatAutomationSavedRow
+          saved={{
+            change: 'created',
+            resultsTo: 'chat',
+            automation: {
+              ...automation,
+              on: [{ id: webhookRuleId(hookId), source: 'webhook', event: 'call' }]
+            }
+          }}
+          timestamp={0}
+        />
+      </NativeChatVisualOwnerContext.Provider>
+    )
+  )
+}
 const copyButton = (): HTMLButtonElement | undefined =>
   [...container.querySelectorAll('button')].find((button) => button.textContent === 'Copy URL')
 
@@ -110,4 +134,11 @@ it('copies from the automation bot’s own host, and offers nothing for an autom
   await settle()
   expect(reveals).toEqual([{ kind: 'local' }])
   expect(writes).toEqual([URL])
+})
+
+it('offers no key panel when the hook cannot be read', async () => {
+  renderSaved(GONE)
+  await settle()
+  expect(copyButton()).toBeDefined()
+  expect(container.textContent).not.toContain('Key and signing secret')
 })

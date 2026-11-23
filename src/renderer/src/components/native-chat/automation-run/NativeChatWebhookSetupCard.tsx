@@ -100,7 +100,8 @@ export function NativeChatWebhookSetupCard({
               setCopied(true)
             }}
           />
-          {pending ? null : (
+          {/* The key panel needs the hook's read; without it, Copy URL alone says what went wrong. */}
+          {pending || !summary ? null : (
             <Button
               variant="link-muted"
               size="inlineText"
