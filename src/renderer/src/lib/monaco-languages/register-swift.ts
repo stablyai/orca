@@ -14,6 +14,9 @@ function withSwiftRawStrings(language: MonarchLanguage): MonarchLanguage {
         // read a 17-sign opener's first sign as an operator and closed on the wrong quote (#47295).
         [/(#+)("""(?=\s*$))/, { token: 'string.quote', next: '@rawstring.$1.$2' }],
         [/(#+)(")/, { token: 'string.quote', next: '@rawline.$1.$2' }],
+        // Without this rule a failed opener retries `#+` at every sign of the run, which is
+        // quadratic (#46951). The lookahead is inert under this order; it only guards a reorder.
+        [/#+(?![#"])/, 'operator'],
         ...language.tokenizer.literal
       ],
       // A single-line raw string ends at the line break even when unterminated.
