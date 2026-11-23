@@ -25,7 +25,12 @@ export async function postFailedBotWorkerStart(
   await post({
     replyId: `worker-start-failed:${start.taskId}`,
     conversation: turn.address,
-    text: `I couldn't start the worker on ${start.machine}: ${start.reason}. Please retry it or check the bot's Chat.`,
+    text: `I couldn't start the worker on ${start.machine}. ${asSentence(start.reason)} Please retry it or check the bot's Chat.`,
     turnFor: 'none'
   })
+}
+
+function asSentence(text: string): string {
+  const trimmed = text.trim()
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`
 }

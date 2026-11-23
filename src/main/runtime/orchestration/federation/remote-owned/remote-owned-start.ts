@@ -73,7 +73,7 @@ const StartedOnServer = z.object({
   agent: z.string().nullable().optional(),
   launch: z.unknown().optional(),
   state: z.string().optional(),
-  lastError: z.string().optional()
+  lastError: z.string().nullable().optional()
 })
 
 /**
@@ -200,7 +200,7 @@ export async function startRemoteOwnedWorker(
       workerAddress: `dispatch:${started.data.dispatchId}`,
       task: task.spec,
       ...(started.data.state === 'failed'
-        ? { failure: started.data.lastError ?? 'the start failed', machine: server.name }
+        ? { failure: started.data.lastError || 'The start failed.', machine: server.name }
         : {})
     })
   }

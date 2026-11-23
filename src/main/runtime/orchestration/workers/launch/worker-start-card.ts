@@ -183,7 +183,7 @@ export function recordWorkerStartOutcome(
   if (state === 'failed') {
     const lastError =
       outcome && typeof outcome === 'object' && 'lastError' in outcome ? outcome.lastError : null
-    const reason = typeof lastError === 'string' ? lastError : 'the start failed'
+    const reason = typeof lastError === 'string' && lastError ? lastError : 'The start failed.'
     record({
       ...card,
       workerAddress: workerAddress ?? `dispatch:${card.dispatchId}`,
