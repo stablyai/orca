@@ -101,24 +101,26 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   writeSerializedDomains(
     ...args: Parameters<AsyncProfileStateAuthority['writeSerializedDomains']>
   ): Promise<void> {
-    return this.write((writer) => writer.writeSerializedDomains(...args))
+    return this.run((writer) => writer.writeSerializedDomains(...args)).then(() => {})
   }
 
   writeSerializedAutomationRuns(
     replacements: readonly ProfileStateDomainReplacement[],
     runs: readonly AutomationRun[]
   ): Promise<void> {
-    return this.write((writer) => writer.writeSerializedAutomationRuns(replacements, runs))
+    return this.run((writer) => writer.writeSerializedAutomationRuns(replacements, runs)).then(
+      () => {}
+    )
   }
 
   writeCompleteSerializedDomains(
     ...args: Parameters<AsyncProfileStateAuthority['writeCompleteSerializedDomains']>
   ): Promise<void> {
-    return this.write((writer) => writer.writeCompleteSerializedDomains(...args))
+    return this.run((writer) => writer.writeCompleteSerializedDomains(...args)).then(() => {})
   }
 
   writeSerializedState(payload: Buffer): Promise<void> {
-    return this.write((writer) => writer.writeSerializedState(payload))
+    return this.run((writer) => writer.writeSerializedState(payload)).then(() => {})
   }
 
   writeJsonExport(targetPath: string): Promise<number> {
@@ -146,6 +148,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
 
   close(options: { refreshLegacyDocuments?: boolean } = {}): Promise<void> {
     this.idleStop.cancel()
+    this.reopenPolicy.recordSaved()
     this.writer?.stopAdmission()
     this.closing ??= this.finishClose(options.refreshLegacyDocuments !== false)
     return this.closing
@@ -214,10 +217,6 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       (job, signal) =>
         runProfileStateBackupWorker(job, { workerPath: this.options.backupWorkerPath, signal })
     )
-  }
-
-  private write(command: (writer: ProfileStateWriteWorkerClient) => Promise<number>) {
-    return this.run(command).then(() => this.reopenPolicy.recordSaved())
   }
 
   private run<T>(command: (writer: ProfileStateWriteWorkerClient) => Promise<T>): Promise<T> {
@@ -298,12 +297,12 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
         }
         this.writer = null
         this.stoppedRevision = revision
-        this.reopenPolicy.recoverFrom(error)
         return true
       },
       () => this.reopenPolicy.reportStopped(error)
     )
     if (stopping) {
+      this.reopenPolicy.recoverFrom(error)
       this.stopping = stopping.finally(() => (this.stopping = undefined))
     }
   }

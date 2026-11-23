@@ -16,6 +16,7 @@ export function createProfileStateWriter(
     ...options,
     reportInitializationFailure,
     onSaveDelayChanged: policy.writerDelayChanged,
+    onAcknowledged: () => policy.recordSaved(),
     onFailure: (error) => {
       if (profileStateWriterFailureOutcome(error) === 'indeterminate') {
         onIndeterminateFailure(writer, error)

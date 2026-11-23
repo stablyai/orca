@@ -28,6 +28,8 @@ export type ProfileStateWriterConnectionOptions = {
   slowWarningMs?: number
   onFailure?: (error: Error) => void
   onSaveDelayChanged?: (delayed: boolean) => void
+  /** A command the worker completed, so storage is accepting this writer's work again. */
+  onAcknowledged?: () => void
   reportInitializationFailure?: boolean
   /** Monotonic clock; replace in tests to model stalled main loops. */
   clock?: () => number
@@ -265,6 +267,9 @@ export class ProfileStateWriterConnection {
       this.closeAcknowledged = true
     }
     this.latestRevision = value.revision
+    if (pending.command !== 'initialize' && pending.command !== 'close') {
+      this.options.onAcknowledged?.()
+    }
     this.settle(value)
   }
 

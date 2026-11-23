@@ -74,9 +74,11 @@ export class ProfileStateWriterReopenPolicy {
   /** A slow writer command raises the same notice that recovery keeps up until a save lands. */
   readonly writerDelayChanged = (delayed: boolean): void => {
     this.writerDelayed = delayed
-    this.publishNotice()
+    // A faulting command clears its delay just before recovery starts; publish after recovery claims the notice.
+    queueMicrotask(() => this.publishNotice())
   }
 
+  /** Storage acknowledged a command, or the authority is closing: recovery is over either way. */
   recordSaved(): void {
     if (this.recovering) {
       this.recovering = false
