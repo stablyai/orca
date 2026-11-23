@@ -6648,7 +6648,7 @@
           "upToDate_one": "{{count}} skill is up to date."
         },
         "SkillUpdateRow": {
-          "replaceWithOrca": "Replace with Orca's copy (keeps a backup)"
+          "replaceWithOrca": "Replace with this version's copy (keeps a backup)"
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "Update available",

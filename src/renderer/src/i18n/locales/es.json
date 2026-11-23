@@ -5213,7 +5213,7 @@
           "connectHost": "Conecta el host SSH"
         },
         "SkillUpdateRow": {
-          "replaceWithOrca": "Reemplazar por la copia de Orca (guarda una copia de seguridad)"
+          "replaceWithOrca": "Reemplazar por la copia de esta versión (guarda una copia de seguridad)"
         },
         "host": {
           "local": "Esta máquina",
