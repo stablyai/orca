@@ -1,8 +1,9 @@
 import { runProcess, spawnProcess } from '@orca/process-host'
 import { signalProcessTree } from '@orca/process-host/process-tree-termination'
-import { createHash } from 'node:crypto'
 import type { Readable } from 'node:stream'
 import { z } from 'zod'
+
+import { feishuDiagnostic, feishuProblem, FeishuHostError } from './feishu-cli-status'
 
 const EVENT = 'im.message.receive_v1'
 const appId = z.string().regex(/^cli_[a-zA-Z0-9]+$/)
@@ -14,7 +15,7 @@ export type FeishuProfile = z.infer<typeof profile>
 const message = z.object({
   type: z.literal(EVENT),
   chat_type: z.literal('p2p'),
-  message_type: z.literal('text'),
+  message_type: z.enum(['text', 'image', 'file']),
   create_time: z.string().regex(/^\d{13}$/),
   event_id: z.string().min(1).max(256),
   message_id: messageId,
@@ -35,7 +36,11 @@ export function readFeishuMessage(line: string): FeishuMessage | null {
   }
 }
 
-async function cli(args: string[], signal?: AbortSignal, input?: string): Promise<unknown> {
+export async function feishuCommand(
+  args: string[],
+  signal?: AbortSignal,
+  input?: string | Uint8Array
+): Promise<unknown> {
   const result = await runProcess({
     program: 'lark-cli',
     detached: process.platform !== 'win32',
@@ -77,7 +82,11 @@ export function eligibleProfiles(value: unknown): FeishuProfile[] {
   )
 }
 export async function listProfiles(signal?: AbortSignal): Promise<FeishuProfile[]> {
-  return eligibleProfiles(await cli(['profile', 'list'], signal))
+  try {
+    return eligibleProfiles(await feishuCommand(['profile', 'list'], signal))
+  } catch (error) {
+    throw new FeishuHostError(feishuProblem(error))
+  }
 }
 
 /** Never accumulate an unbounded partial line from either pipe. */
@@ -140,6 +149,7 @@ export async function consumeFeishu(
   }
   signal.addEventListener('abort', stop, { once: true })
   const startup = setTimeout(stop, 60_000).unref()
+  let diagnostic = ''
   try {
     await Promise.all([
       closed,
@@ -147,6 +157,10 @@ export async function consumeFeishu(
         if (line === `[event] ready event_key=${EVENT}` && !signal.aborted) {
           clearTimeout(startup)
           ready()
+        } else if (line.startsWith('{')) {
+          diagnostic = line.slice(0, 8192)
+        } else if (diagnostic && diagnostic.length + line.length < 8192) {
+          diagnostic += line
         }
       }),
       readLines(child.stdout, async (line) => {
@@ -156,6 +170,9 @@ export async function consumeFeishu(
         }
       })
     ])
+    if (!signal.aborted) {
+      throw new FeishuHostError(feishuDiagnostic(diagnostic))
+    }
   } finally {
     signal.removeEventListener('abort', stop)
     if (child.exitCode === null && child.signalCode === null && child.pid) {
@@ -174,7 +191,7 @@ export async function humanSentPairing(
   m: FeishuMessage,
   signal: AbortSignal
 ): Promise<boolean> {
-  const response = await cli(
+  const response = await feishuCommand(
     [
       '--profile',
       app,
@@ -214,39 +231,4 @@ export async function humanSentPairing(
       data: z.object({ items: z.tuple([item]) })
     })
     .safeParse(response).success
-}
-
-export async function replyFeishu(
-  app: string,
-  account: string,
-  original: string,
-  chat: string,
-  text: string,
-  signal: AbortSignal
-): Promise<void> {
-  const uuid = createHash('sha256')
-    .update(JSON.stringify([account, original]))
-    .digest('hex')
-    .slice(0, 48)
-  // Body on stdin also keeps long replies within Windows' command-line limit.
-  const response = await cli(
-    [
-      '--profile',
-      app,
-      'api',
-      'POST',
-      `/open-apis/im/v1/messages/${messageId.parse(original)}/reply`,
-      '--as',
-      'bot',
-      '--data',
-      '-'
-    ],
-    signal,
-    JSON.stringify({ msg_type: 'text', content: JSON.stringify({ text }), uuid })
-  )
-  z.object({
-    ok: z.literal(true),
-    identity: z.literal('bot'),
-    data: z.object({ chat_id: z.literal(chat), message_id: messageId })
-  }).parse(response)
 }

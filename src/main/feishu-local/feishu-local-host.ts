@@ -2,7 +2,7 @@ import { access, open } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { FeishuLocalState } from '../../shared/bots/feishu-local'
-import type { Binding } from './feishu-binding'
+import { dmKey, type Binding } from './feishu-binding'
 import { feishuStore, type FeishuStore } from './feishu-store-ops'
 import { errnoCodeOrUnknown } from '../../shared/errors/errno-code'
 import { listProfiles } from './feishu-cli'
@@ -128,6 +128,27 @@ export class FeishuLocalHost {
       .finally(() => this.retiring.delete(bot))
     this.retiring.set(bot, removal)
     return removal
+  }
+  async stageFile(
+    botId: string,
+    externalId: string,
+    mid: string,
+    name: string,
+    bytes: Buffer
+  ): Promise<void> {
+    const c = this.active.get(botId)
+    if (
+      this.stopping ||
+      this.retiring.has(botId) ||
+      !c ||
+      !c.binding.owner ||
+      dmKey(c.binding).externalId !== externalId ||
+      !this.runtime.bots.enabled() ||
+      !this.runtime.bots.list().some((b) => b.id === botId && !b.paused)
+    ) {
+      throw new Error('This Feishu conversation cannot receive files')
+    }
+    await this.inbox.stageFile(c.binding.account, mid, name, bytes)
   }
   repliesFilled(): void {
     for (const c of this.active.values()) {

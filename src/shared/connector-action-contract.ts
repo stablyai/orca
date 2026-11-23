@@ -6,7 +6,11 @@ export const CONNECTOR_ACTIONS_PATH = '/v1/connector/actions'
 
 /** Connector calls that post as a bot chat and say whom its turn acts for: the CLI sends its session
  *  and the host verifies it, so a chat can only speak for its own turn. */
-export const CONNECTOR_POST_METHOD_NAMES = ['connector.act', 'connector.reply'] as const
+export const CONNECTOR_POST_METHOD_NAMES = [
+  'connector.act',
+  'connector.reply',
+  'bots.feishuLocal.stageFile'
+] as const
 
 // A cloud without edit, delete or attach refuses them itself, as unsupported; set goes only to a cloud listing `set`.
 export const CONNECTOR_ACTION_VERBS = [

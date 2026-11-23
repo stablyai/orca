@@ -1,4 +1,5 @@
 // Who can ask the bot, every connector at once: each Slack workspace, Linear workspace and GitHub org's own whole list.
+import { FeishuIcon } from '../../icons/FeishuIcon'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot, BotLinear } from '../../../../../shared/bot-types'
 import type { ConnectorGitHubInstallation } from '../../../../../shared/connector-bot-github-contract'
@@ -101,6 +102,7 @@ export function BotWhoCanAskPage({ bot }: { bot: Bot }): React.JSX.Element {
       {feishu ? (
         <section className="flex min-w-0 flex-col gap-2">
           <h3 className="text-xs font-medium text-muted-foreground">
+            <FeishuIcon className="inline-block size-3.5 align-text-bottom" />{' '}
             {t('bots.feishu.name', 'Feishu')}
           </h3>
           <p className="text-sm">

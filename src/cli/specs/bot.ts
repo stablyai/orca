@@ -94,8 +94,17 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     path: ['bot', 'reply'],
     summary: 'Answer, as this bot, in the issue, pull request or thread that woke this run',
     usage:
-      'orca bot reply [--text <text> | --text-file <path|->] [--note <path:line:text>]... [--file <path>]... [--choice <label>]... [--react <emoji>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'text', 'text-file', 'note', 'file', 'choice', 'react'],
+      'orca bot reply [--text <text> | --text-file <path|->] [--note <path:line:text>]... [--file <path>]... [--file-stdin <filename>] [--choice <label>]... [--react <emoji>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'text',
+      'text-file',
+      'note',
+      'file',
+      'file-stdin',
+      'choice',
+      'react'
+    ],
     repeatableFlags: ['note', 'file', 'choice'],
     notes: [
       'For a progress note, a question, line notes or an emoji before your final message, which Orca posts there for you. Anywhere else, use `gh`, `orca linear` or `orca slack`.',

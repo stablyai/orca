@@ -1,3 +1,4 @@
+import { replyWithGeneratedFile } from './bot-reply-generated-file'
 import { randomUUID } from 'node:crypto'
 import { ORCA_SCRUB_SAFE_PANE_ENV } from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
@@ -222,6 +223,13 @@ function refuseFlags(flags: HandlerContext['flags']): void {
 
 export const BOT_REPLY_HANDLERS: Record<string, CommandHandler> = {
   'bot reply': async ({ flags, client, json, cwd }) => {
+    const generated = getOptionalStringFlag(flags, 'file-stdin')
+    if (generated !== undefined) {
+      if (['text', 'text-file', 'note', 'file', 'choice', 'react'].some((k) => flags.has(k))) {
+        throw new RuntimeClientError('invalid_argument', 'Send --file-stdin on its own.')
+      }
+      return replyWithGeneratedFile(generated, client, json)
+    }
     const choices = readReplyChoices(flags)
     refuseFlags(flags)
     const caller = replyCaller()

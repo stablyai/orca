@@ -1,7 +1,7 @@
 import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-outbox'
 import { outcomeSentence } from '../connector-cloud/connector-reply-outbox'
 import { dmKey, type Binding } from './feishu-binding'
-import { replyFeishu } from './feishu-cli'
+import { replyFeishu, finalFeishuMessage, uploadFeishuFile } from './feishu-replies'
 import type { FeishuStore } from './feishu-store-ops'
 
 /** Only the delivery named by the native turn's stamps owns the answer. */
@@ -47,12 +47,43 @@ export async function drainFeishuOutbox(
         if (!active()) {
           return
         }
+        const artifact = await inbox.artifact(b.account, row.deliveryId)
+        if (!active()) {
+          return
+        }
+        if (artifact && fill.outcome === 'answered' && !artifact.posted) {
+          const key =
+            artifact.key ?? (await uploadFeishuFile(b.app, artifact.name, artifact.bytes, signal))
+          if (!active()) {
+            return
+          }
+          if (!artifact.key) {
+            await inbox.uploaded(b.account, row.deliveryId, key)
+          }
+          if (!active()) {
+            return
+          }
+          await replyFeishu(
+            b.app,
+            b.account,
+            row.deliveryId,
+            b.chat,
+            { type: 'file', content: { file_key: key } },
+            'file',
+            signal
+          )
+          await inbox.filePosted(b.account, row.deliveryId)
+        }
+        if (!active()) {
+          return
+        }
         await replyFeishu(
           b.app,
           b.account,
           row.deliveryId,
           b.chat,
-          fill.prose || outcomeSentence(fill.outcome, 'Orca'),
+          finalFeishuMessage(fill.prose || outcomeSentence(fill.outcome, 'Orca')),
+          'final',
           signal
         )
       }

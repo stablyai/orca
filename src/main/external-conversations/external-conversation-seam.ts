@@ -308,11 +308,11 @@ export class ExternalConversationSeam {
     this.linked.set(conversationId(key), { key, worktreeId: chat.worktreeId })
     // A bot's request may list images; they go with its words, so the agent sees them at once.
     const images =
-      chat.bot && message.asker && this.deps.askerImages
+      chat.bot && message.asker && this.deps.askerImages && !message.storedImages
         ? await this.deps
             .askerImages({ botId: chat.bot.botId, conversation: key, asker: message.asker, signal })
             .catch(() => [])
-        : []
+        : (message.storedImages ?? [])
     const delivered = await this.chatDeliveries.deliver(host.chat, key, chat, {
       ...message,
       signal: message.transportSignal ? AbortSignal.any([signal, message.transportSignal]) : signal,
