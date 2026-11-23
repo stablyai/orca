@@ -1,7 +1,7 @@
 import { open, unlink, type FileHandle } from 'node:fs/promises'
 import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-protocol'
 import { SpoolFileIndex } from './provider-relay-spool-file-index'
-import { replaySpoolFile } from './provider-relay-spool-replay'
+import { replaySpoolFileRecords } from './provider-relay-spool-replay'
 
 export const RELAY_SPOOL_MEMORY_CAP_BYTES = 1024 * 1024
 export const RELAY_SPOOL_FILE_CAP_BYTES = 16 * 1024 * 1024
@@ -139,29 +139,29 @@ export class ProviderRelaySpool {
       generation === this.attachGeneration && this.mode === 'replaying' && !this.disposed
     await this.io
     let after = Math.max(fromSeq, this.acked)
-    // A write that failed partway left whole records in the file and copies in memory; send each once.
-    let fileHighest = after
-    const replayed =
-      this.fileIndex.lastSeq > 0
-        ? await replaySpoolFile({
+    // The highest seq the file should hold whole; a write that failed partway was taken out of it.
+    const fileLast = this.fileIndex.lastSeq
+    const file: Awaited<ReturnType<typeof replaySpoolFileRecords>> =
+      fileLast > 0
+        ? await replaySpoolFileRecords({
             path: this.options.path,
             after,
+            fileLast,
             current,
-            deliver: (record) => {
-              fileHighest = Math.max(fileHighest, record.seq)
-              this.options.deliver(record)
-            },
+            deliver: this.options.deliver,
             drained: this.options.drained
           })
-        : 'done'
-    if (replayed === 'failed' && current()) {
-      // Retrying would fail the same way and keep the agent paused; the loss is named instead.
+        : { outcome: 'done', highest: after }
+    if (file.outcome === 'lost' && current()) {
+      // Retrying would fail the same way and keep the agent paused; the loss is named instead,
+      // and the lost records count as acked so nobody waits on output that can never arrive.
+      this.acked = Math.max(this.acked, fileLast)
       this.removeFile()
       this.options.onFileLost?.()
-    } else if (replayed !== 'done' || !current()) {
+    } else if (file.outcome !== 'done' || !current()) {
       return this.nextSeqValue - 1
     }
-    after = fileHighest
+    after = file.highest
     // The memory tail waits for the client's socket too; an ack may compact memory meanwhile.
     let memory = this.memory
     let index = this.memoryHead

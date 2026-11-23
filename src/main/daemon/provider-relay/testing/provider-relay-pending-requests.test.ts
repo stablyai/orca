@@ -179,7 +179,7 @@ describe('provider relay pending requests', () => {
     fast.on('data', () => fastWrites++)
     await relay.attach('app-2', { socket: fast }, 0)
     slow.emit('drain')
-    expect(await first).toContain('taken over')
+    expect(await first).toContain('superseded')
     expect(slowWrites).toBe(1)
     // 4 held-request pieces plus 4 replayed spool pieces, each once.
     expect(fastWrites).toBe(8)

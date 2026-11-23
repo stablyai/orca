@@ -12,7 +12,7 @@ import { ProviderRelayLineReader } from './provider-relay-line-reader'
 import { unlink } from 'node:fs/promises'
 import { ProviderRelayAttachment, type ProviderRelayStream } from './provider-relay-attachment'
 
-const RELAY_TAKEN_OVER = 'Relay taken over by another attach'
+const RELAY_TAKEN_OVER = 'Relay attach superseded by a detach or another attach'
 
 type RelayOptions = {
   relayId: string
@@ -126,7 +126,6 @@ export class ProviderRelay {
       () => void this.detach(clientId)
     )
     this.attachment = attachment
-    this.collected = true
     // The initialize answer and held requests go first, as events, so no reply line has to carry them.
     const { initializeResult } = this.pending
     const pending = this.pending.records()
@@ -134,7 +133,8 @@ export class ProviderRelay {
       (initializeResult === null ||
         (await attachment.sendPieces('relayInitialize', 0, initializeResult))) &&
       (await this.sendEach(attachment, pending))
-    if (!sent) {
+    // A detach or takeover during the preamble owns the spool now; this attach must not touch it.
+    if (!sent || this.attachment !== attachment) {
       throw new Error(RELAY_TAKEN_OVER)
     }
     let replayThroughSeq: number
@@ -153,6 +153,8 @@ export class ProviderRelay {
     if (this.exitAnnounced) {
       this.sendExit()
     }
+    // Only a finished attach counts as seeing the outcome, so an exit during it can't remove the relay.
+    this.collected = true
     return this.attachResult(replayThroughSeq, pending, initializeResult !== null)
   }
 

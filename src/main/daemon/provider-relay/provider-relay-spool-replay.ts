@@ -9,6 +9,8 @@ type SpoolReplay = {
   /** False once the attach this replay serves was superseded or the spool disposed. */
   current: () => boolean
   deliver: (record: ProviderRelayRecord) => void
+  /** Every whole record read, delivered or not, so the caller can tell a cut-short file. */
+  seen: (seq: number) => void
   drained?: () => Promise<void>
 }
 
@@ -35,8 +37,11 @@ export async function replaySpoolFile(replay: SpoolReplay): Promise<SpoolReplayO
     }
     try {
       const record: unknown = JSON.parse(line)
-      if (isSpoolRecord(record) && record.seq > replay.after) {
-        replay.deliver(record)
+      if (isSpoolRecord(record)) {
+        replay.seen(record.seq)
+        if (record.seq > replay.after) {
+          replay.deliver(record)
+        }
       }
     } catch {}
   }
@@ -75,4 +80,34 @@ export async function replaySpoolFile(replay: SpoolReplay): Promise<SpoolReplayO
   } finally {
     stream.destroy()
   }
+}
+
+type SpoolFileReplay = Omit<SpoolReplay, 'seen'> & {
+  /** The highest seq the file should hold whole. */
+  fileLast: number
+}
+
+/**
+ * Replays the file part of a spool. 'lost' means it could not be read through, or ended before
+ * `fileLast`; `highest` is the last seq delivered, so a memory copy of it is not sent again.
+ */
+export async function replaySpoolFileRecords(
+  replay: SpoolFileReplay
+): Promise<{ outcome: 'done' | 'stale' | 'lost'; highest: number }> {
+  let highest = replay.after
+  let seen = 0
+  const outcome = await replaySpoolFile({
+    ...replay,
+    deliver: (record) => {
+      highest = Math.max(highest, record.seq)
+      replay.deliver(record)
+    },
+    seen: (seq) => {
+      seen = Math.max(seen, seq)
+    }
+  })
+  if (outcome === 'failed' || (outcome === 'done' && seen < replay.fileLast)) {
+    return { outcome: 'lost', highest }
+  }
+  return { outcome, highest }
 }
