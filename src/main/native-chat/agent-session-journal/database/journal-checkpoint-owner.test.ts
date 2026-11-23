@@ -37,7 +37,7 @@ it('replaces a checkpoint worker that dies, and the replacement checkpoints the 
     }
   })
   cleanup.push(() => owner.close())
-  // ~3000 frames each: past the worker's threshold, short of the writer's own autocheckpoint.
+  // ~3000 frames each: past the worker's threshold; the writer never checkpoints while a worker runs.
   const checkpointedBy = async (id: number) => {
     writer.prepare('INSERT INTO writes VALUES(?, zeroblob(1500000))').run(id)
     owner.afterCommit()
