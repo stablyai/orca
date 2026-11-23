@@ -2,89 +2,48 @@
 import { translate } from '@/i18n/i18n'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import type { BotTools } from '../../../../shared/bot-tools'
+import type { BotLookAround, LookAroundEvery } from '../../../../shared/bots/bot-look-around'
 import {
-  LOOK_AROUND_EVERY_LABELS,
-  lookedDay,
-  type BotLookAround,
-  type LookAroundEvery
-} from '../../../../shared/bots/bot-look-around'
+  botLookAroundLine,
+  botTidyUpLine,
+  type BotSettingsLineWords
+} from '../../../../shared/bots/bot-settings-row-lines'
 import type { BotTidyUp } from '../../../../shared/bots/bot-tidy-up'
-import { botToolTitle } from '../../../../shared/bots/bot-tool-labels'
+import { botToolsLine } from '../../../../shared/bots/bot-tool-labels'
 
-const CLOCK = { hour: 'numeric', minute: '2-digit' } as const
-const DATE = { month: 'short', day: 'numeric' } as const
-
-const off = (): string => translate('bots.settingsPage.off', 'Off')
 const none = (): string => translate('bots.settingsPage.none', 'None')
 
 /** Names as a short list: "Slack, GitHub". */
 export function nameList(names: readonly string[], intlLocale?: string): string {
-  return new Intl.ListFormat(intlLocale, { type: 'unit', style: 'short' }).format(names)
+  // Why: CJK unit lists have no separator ("SlackGitHub"); narrow conjunctions read "Slack、GitHub".
+  return new Intl.ListFormat(intlLocale, { type: 'conjunction', style: 'narrow' }).format(names)
 }
 
-/** "12:04 PM" today, "yesterday 4:12 PM", then "Oct 29". */
-function lookedWhen(at: number, now: number): string {
-  const day = lookedDay(at, now)
-  if (day === 'earlier') {
-    return uiDateTimeFormat(DATE).format(at)
-  }
-  const time = uiDateTimeFormat(CLOCK).format(at)
-  return day === 'today'
-    ? time
-    : translate('bots.settingsPage.yesterdayAt', 'yesterday {{time}}', { time })
-}
-
-/** "today", "yesterday", then "Oct 29". */
-function tidiedWhen(at: number, now: number): string {
-  const day = lookedDay(at, now)
-  return day === 'today'
-    ? translate('bots.settingsPage.today', 'today')
-    : day === 'yesterday'
-      ? translate('bots.settingsPage.yesterday', 'yesterday')
-      : uiDateTimeFormat(DATE).format(at)
+const LINE_WORDS: BotSettingsLineWords = {
+  t: translate,
+  format: (at, options) => uiDateTimeFormat(options).format(at)
 }
 
 /** "Every 4 hours, 8 AM to 8 PM · last looked 12:04 PM". */
-export function lookAroundLine(
-  setting: BotLookAround,
-  lastLookedAt: number | undefined,
-  now = Date.now()
-): string {
-  if (!setting.on) {
-    return off()
-  }
-  const every = LOOK_AROUND_EVERY_LABELS[setting.every]
-  return lastLookedAt
-    ? `${every} · ${translate('bots.settingsPage.lastLooked', 'last looked {{when}}', {
-        when: lookedWhen(lastLookedAt, now)
-      })}`
-    : every
+export function lookAroundLine(setting: BotLookAround, lastLookedAt: number | undefined): string {
+  return botLookAroundLine(setting, lastLookedAt, LINE_WORDS)
 }
 
 /** "Each night after 3 AM, or once this computer is awake · last tidied today". */
-export function tidyUpLine(
-  setting: BotTidyUp,
-  lastTidiedAt: number | undefined,
-  now = Date.now()
-): string {
-  if (!setting.on) {
-    return off()
-  }
-  const every =
-    setting.every === 'night'
-      ? translate(
-          'settings.bots.tidyUp.everyNightLine',
-          'Each night after 3 AM, or once this computer is awake'
-        )
-      : translate(
-          'settings.bots.tidyUp.everyWeekLine',
-          'Once a week after 3 AM, or once this computer is awake'
-        )
-  return lastTidiedAt
-    ? `${every} · ${translate('bots.settingsPage.lastTidied', 'last tidied {{when}}', {
-        when: tidiedWhen(lastTidiedAt, now)
-      })}`
-    : every
+export function tidyUpLine(setting: BotTidyUp, lastTidiedAt: number | undefined): string {
+  return botTidyUpLine(setting, lastTidiedAt, {
+    ...LINE_WORDS,
+    tidyEvery: (every) =>
+      every === 'night'
+        ? translate(
+            'settings.bots.tidyUp.everyNightLine',
+            'Each night after 3 AM, or once this computer is awake'
+          )
+        : translate(
+            'settings.bots.tidyUp.everyWeekLine',
+            'Once a week after 3 AM, or once this computer is awake'
+          )
+  })
 }
 
 /** "7 files": MEMORY.md and its topic files; null before the folder is read. */
@@ -130,26 +89,20 @@ export function toolsLine(
   agentLabel: string,
   intlLocale?: string
 ): string | null {
-  if (!tools) {
-    return null
-  }
-  const own = tools.own.map((tool) => botToolTitle(tool.name))
-  const inherited = tools.inherited.length
-  if (own.length === 0) {
-    return inherited > 0
-      ? translate('bots.settingsPage.toolsFrom', '{{count}} from {{agent}}', {
-          count: inherited,
-          agent: agentLabel
-        })
-      : none()
-  }
-  const names = nameList(own, intlLocale)
-  return inherited > 0
-    ? `${names} · ${translate('bots.settingsPage.toolsMore', '{{count}} more from {{agent}}', {
-        count: inherited,
+  return botToolsLine(tools, {
+    none: none(),
+    from: (count) =>
+      translate('bots.settingsPage.toolsFrom', '{{count}} from {{agent}}', {
+        count,
         agent: agentLabel
-      })}`
-    : names
+      }),
+    more: (count) =>
+      translate('bots.settingsPage.toolsMore', '{{count}} more from {{agent}}', {
+        count,
+        agent: agentLabel
+      }),
+    list: (names) => nameList(names, intlLocale)
+  })
 }
 
 /** Names, or "None". */

@@ -113,6 +113,7 @@ export function MobileNativeChatView({
   onDismissSendError,
   filePaths,
   onNeedFiles,
+  fileReference,
   skillDiscovery,
   onNeedSkills,
   sessionOptions,
@@ -346,7 +347,7 @@ export function MobileNativeChatView({
           {...offlineQueue.composerLock}
           sendDisabled={expandedPromptOwnsSend}
           placeholder={composerPlaceholder}
-          {...{ filePaths, onNeedFiles, skillDiscovery, onNeedSkills }}
+          {...{ filePaths, onNeedFiles, fileReference, skillDiscovery, onNeedSkills }}
           stop={canStop ? { onStop, held: turnIndicator?.stopRequestInFlight === true } : null}
         />
       </View>

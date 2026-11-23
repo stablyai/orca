@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -95,8 +96,7 @@ beforeAll(async () => {
   if (!bundles) {
     return
   }
-  await mkdir(join(mobileDir, '.tmp'), { recursive: true })
-  scratch = await mkdtemp(join(mobileDir, '.tmp', 'chat-subagent-view-'))
+  scratch = await mkdtemp(join(tmpdir(), 'orca-chat-subagent-view-'))
   const outDir = join(scratch, 'bundle')
   await esbuild.build({
     ...mobileWebAppBuildOptions([]),
@@ -136,8 +136,17 @@ async function openChat(hash = '') {
     isMobile: true
   })
   const page = await context.newPage()
+  const failures = []
+  page.on('pageerror', (error) => failures.push(error.message))
+  page.on('console', (message) => {
+    if (message.type() === 'error') failures.push(message.text())
+  })
   await page.goto(`${origin}/${hash}`)
-  await page.getByTestId('native-chat-view').waitFor()
+  try {
+    await page.getByTestId('native-chat-view').waitFor({ timeout: 10_000 })
+  } catch (error) {
+    throw new Error(`The chat fixture did not mount: ${failures.join('\n')}`, { cause: error })
+  }
   return page
 }
 

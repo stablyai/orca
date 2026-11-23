@@ -1,4 +1,5 @@
 import type { BridgeSessionBack } from './bridge-host-back'
+import { parseMobileSessionAccessTarget } from '../../session/mobile-session-item-target'
 import type { BridgeClientMessage } from '../bridge/protocol/bridge-envelope'
 import type { BridgeInitRoute } from '../bridge/protocol/bridge-init-route'
 import { BRIDGE_APP_INACTIVE_FRAME } from '../bridge/page-lifecycle/bridge-app-inactive'
@@ -37,7 +38,8 @@ export class BridgePageReaders {
   }
 
   accepts(route: BridgeInitRoute): boolean {
-    if (!route.params?.botItem) {
+    // An access request's review is safe on any page: one that can't open it lands on the chat.
+    if (!route.params?.botItem || parseMobileSessionAccessTarget(route.params.botItem)) {
       return true
     }
     if (this.itemLinks === undefined) {

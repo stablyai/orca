@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Keyboard, Pressable, ScrollView, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import {
@@ -15,6 +15,7 @@ import {
   askQuestionShowsPreviews,
   askConfirmLabel,
   askTypedText,
+  askUnansweredRequired,
   toggleAskOption
 } from '../../../../../../src/shared/native-chat/input/questions/native-chat-ask-card-rules'
 import { colors, pressedStyle } from '../../../../theme/mobile-theme'
@@ -50,6 +51,8 @@ type Props = {
   choiceOnly?: true
   /** Under the question: what the card's owner adds, e.g. a worker prompt's countdown. */
   note?: ReactNode
+  /** Each question's identity: when the prompt drops one (answered elsewhere), the rest keep their picks. */
+  questionKeys?: readonly string[]
 }
 
 function confirmLabels(t: Translate) {
@@ -74,8 +77,9 @@ export function MobileNativeChatAsk({
   allowOther,
   freeTextInputs,
   choiceOnly,
-  note
-}: Props): React.JSX.Element {
+  note,
+  questionKeys
+}: Props): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { scrollRef, inputRef, revealReply, onViewportLayout } = useMobileNativeChatReplyScroll()
@@ -107,6 +111,35 @@ export function MobileNativeChatAsk({
   const cancelBusy = busyControl === 'cancel' && isLocalPending(operation)
   const confirmBusy = submitting && !cancelBusy
   const autoAdvance = useMobileNativeChatAskAutoAdvance(submitting)
+  const [shownKeys, setShownKeys] = useState(questionKeys)
+  // Counts lines answered elsewhere while on screen: the line that takes over opens as showStep opens it.
+  const [stepsGone, setStepsGone] = useState(0)
+  useEffect(() => {
+    if (stepsGone > 0) {
+      inputRef.current?.blur()
+      scrollRef.current?.scrollTo({ y: 0, animated: false })
+    }
+  }, [stepsGone, inputRef, scrollRef])
+  if (questionKeys && shownKeys && questionKeys.join('\n') !== shownKeys.join('\n')) {
+    const carry = <T,>(values: readonly T[], fill: (qi: number) => T): T[] =>
+      questionKeys.map((key, qi) => {
+        const at = shownKeys.indexOf(key)
+        return at === -1 ? fill(qi) : values[at]!
+      })
+    // A pending auto-advance holds the old lines' picks.
+    autoAdvance.cancel()
+    setShownKeys(questionKeys)
+    setSelections(carry(selections, () => []))
+    setOtherText(carry(otherText, (qi) => freeTextInputs?.[qi]?.initialValue ?? ''))
+    const at = questionKeys.indexOf(shownKeys[index]!)
+    setIndex(Math.max(0, at))
+    if (at === -1) {
+      setStepsGone((count) => count + 1)
+    }
+    setViewedOption(null)
+    // React renders again at once with the carried state; this pass's lines no longer match it.
+    return null
+  }
   // Open each step at its question and end the last step's edit, so no typing lands out of view.
   const showStep = (next: (current: number) => number): void => {
     setViewedOption(null)
@@ -164,8 +197,7 @@ export function MobileNativeChatAsk({
 
   const total = prompt.questions.length
   const isLast = index === total - 1
-  const anyAnswered = (sel = selections): boolean =>
-    prompt.questions.some((_, i) => isAnswered(i, sel))
+  const anyAnswered = (sel = selections) => prompt.questions.some((_, i) => isAnswered(i, sel))
 
   const submit = async (sel: number[][]): Promise<void> => {
     if (!anyAnswered(sel) || isLocalPending(operationRef.current) || answerPending) {
@@ -196,10 +228,11 @@ export function MobileNativeChatAsk({
 
   const advance = async (sel = selections): Promise<void> => {
     autoAdvance.cancel()
-    if (isLast) {
+    const unanswered = askUnansweredRequired(prompt.questions, (i) => isAnswered(i, sel))
+    if (isLast && unanswered === -1) {
       await submit(sel)
     } else {
-      showStep((i) => Math.min(i + 1, total - 1))
+      showStep((i) => (isLast ? unanswered : Math.min(i + 1, total - 1)))
     }
   }
 
@@ -223,7 +256,7 @@ export function MobileNativeChatAsk({
   }
 
   const confirm = (): void => {
-    const action = askConfirmAction({ isLast, anyAnswered: anyAnswered() })
+    const action = askConfirmAction({ isLast, anyAnswered: anyAnswered(), waitsForAnswer })
     if (action === 'cancel') {
       void cancel('confirm')
     } else if (action === 'proceed') {
@@ -236,8 +269,18 @@ export function MobileNativeChatAsk({
   const otherSelected = (selections[index] ?? []).includes(OTHER)
   const freeTextInput = freeTextInputs?.[index]
   const currentAnswered = isAnswered(index)
-  const confirmLabel = askConfirmLabel(currentAnswered, isLast, anyAnswered())
+  // A required question offers Next or Submit, never Skip, and waits until it is answered.
+  const waitsForAnswer = q.required === true && !currentAnswered
+  const unansweredRequired = askUnansweredRequired(prompt.questions, (i) => isAnswered(i))
+  const confirmLabel = askConfirmLabel(
+    currentAnswered || waitsForAnswer,
+    isLast,
+    anyAnswered(),
+    unansweredRequired !== -1 && unansweredRequired !== index
+  )
   const confirmSkips = confirmLabel === 'skip'
+  const confirmBlocked =
+    askConfirmAction({ isLast, anyAnswered: anyAnswered(), waitsForAnswer }) === 'stay'
 
   return (
     <View style={styles.card}>
@@ -368,9 +411,13 @@ export function MobileNativeChatAsk({
           <MobilePendingButton
             label={confirmLabels(t)[confirmLabel]}
             pending={confirmBusy}
-            disabled={submitting}
+            disabled={submitting || confirmBlocked}
             onPress={confirm}
-            style={[styles.next, confirmSkips && styles.nextSkip]}
+            style={[
+              styles.next,
+              confirmSkips && styles.nextSkip,
+              confirmBlocked && styles.nextBlocked
+            ]}
             labelStyle={[styles.nextText, confirmSkips && styles.nextSkipText]}
             spinnerColor={confirmSkips ? colors.textPrimary : colors.bgBase}
           />

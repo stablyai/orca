@@ -25,11 +25,14 @@ export const BOT_ACCESS_COPY = {
   removeAnyTime: 'You can remove them from Who can ask at any time.',
   // {{computer}} for the desktop, which is the computer the bot runs on.
   thisComputer: 'this computer',
+  yourComputer: 'your computer',
   here: 'here',
   thisServer: 'this server',
   executionComputer: 'the computer this agent runs on',
   there: 'there',
   confirm: 'Give access',
+  // The confirm's dismiss button when it answers a request: it declines, unlike Escape.
+  reject: 'Reject',
   heading: 'Asking for access',
   decline: 'Decline',
   review: 'Review…',
@@ -101,9 +104,6 @@ export const BOT_ACCESS_COPY = {
 
 export type BotAccessCopyId = keyof typeof BOT_ACCESS_COPY
 
-/** {{computer}} and {{there}} on a phone, which is not the computer the bot runs on. */
-export const BOT_ACCESS_FROM_PHONE = { computer: 'your computer', there: 'there' } as const
-
 /** Name the execution host from the reader's device. */
 export type BotAccessHost =
   | { kind: 'this-computer' }
@@ -111,7 +111,13 @@ export type BotAccessHost =
   | { kind: 'owner-computer' }
   | { kind: 'unknown'; name: string | null }
 
-type PlaceWordId = 'thisComputer' | 'here' | 'thisServer' | 'there' | 'executionComputer'
+type PlaceWordId =
+  | 'thisComputer'
+  | 'yourComputer'
+  | 'here'
+  | 'thisServer'
+  | 'there'
+  | 'executionComputer'
 
 /** {{computer}} and {{there}} for `host`; `word` translates on the desktop. */
 export function botAccessPlace(
@@ -124,7 +130,8 @@ export function botAccessPlace(
     case 'server':
       return { computer: host.name?.trim() || word('thisServer'), there: word('there') }
     case 'owner-computer':
-      return BOT_ACCESS_FROM_PHONE
+      // Seen from a phone, which is not the computer the bot runs on.
+      return { computer: word('yourComputer'), there: word('there') }
     case 'unknown':
       return { computer: host.name?.trim() || word('executionComputer'), there: word('there') }
   }

@@ -11,6 +11,7 @@ type MobileQueuedMessageComposer = {
   onNeedSkills?: () => void
   filePaths: string[]
   onNeedFiles: ((query: string) => void) | undefined
+  fileReference?: (path: string) => string | undefined
   onError: (text: string) => void
   onMicPress: (() => void) | undefined
   micActive: boolean
@@ -32,6 +33,9 @@ export function useMobileQueuedMessageComposer(
     MobileQueuedMessageComposer,
     | 'agent'
     | 'structured'
+    | 'filePaths'
+    | 'onNeedFiles'
+    | 'fileReference'
     | 'onMicPress'
     | 'micActive'
     | 'micStarting'
@@ -42,13 +46,12 @@ export function useMobileQueuedMessageComposer(
   >
 ): MobileQueuedMessageComposer {
   const { agent, structured, onMicPress, micActive, micStarting, micProcessing } = composer
+  const { filePaths, onNeedFiles, fileReference } = composer
   const { dictationMode, onMicPressIn, onMicPressOut } = composer
   const {
     nativeChatSessionOptions,
     nativeChatSkills,
     loadNativeChatSkills,
-    nativeChatFilePaths,
-    loadNativeChatFiles,
     reportQueuedEditError
   } = controller
   return useMemo(
@@ -60,8 +63,9 @@ export function useMobileQueuedMessageComposer(
       ),
       skillDiscovery: nativeChatSkills,
       onNeedSkills: loadNativeChatSkills,
-      filePaths: nativeChatFilePaths,
-      onNeedFiles: loadNativeChatFiles,
+      filePaths,
+      onNeedFiles,
+      fileReference,
       onError: (message: string) => reportQueuedEditError?.(message),
       onMicPress,
       micActive,
@@ -77,8 +81,9 @@ export function useMobileQueuedMessageComposer(
       nativeChatSessionOptions,
       nativeChatSkills,
       loadNativeChatSkills,
-      nativeChatFilePaths,
-      loadNativeChatFiles,
+      filePaths,
+      onNeedFiles,
+      fileReference,
       reportQueuedEditError,
       onMicPress,
       micActive,

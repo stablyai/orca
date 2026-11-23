@@ -21,6 +21,7 @@ import { SettingsBadge } from '../../form-controls/SettingsFormControls'
 import { matchesSettingsSearch, type SettingsSearchEntry } from '../../search/settings-search'
 
 import { useTranslate } from '@/i18n/use-translate'
+import { translateExecutionHostLabel } from '@/runtime/hosts/display/execution-host-label'
 import { buildSetupHostOptions, getSetupStateLabel } from './repository-host-setup-options'
 import { RepositoryHostSetupActions } from './RepositoryHostSetupActions'
 import {
@@ -166,6 +167,12 @@ export function RepositoryHostSetupsSection({
   ) {
     return null
   }
+  // Default local labels ("Local Mac") read in the UI language; named hosts keep their names.
+  const hostLabel = (hostId: ExecutionHostId): string =>
+    translateExecutionHostLabel(
+      hostOptionById.get(hostId)?.label ?? getExecutionHostLabel(hostId),
+      t
+    )
 
   return (
     <SearchableSetting
@@ -209,8 +216,7 @@ export function RepositoryHostSetupsSection({
                   {switchableProjectHostSetups.map((setup) => (
                     <SelectItem key={setup.id} value={setup.id}>
                       <span className="block min-w-0 truncate">
-                        {hostOptionById.get(setup.executionHostId ?? setup.hostId)?.label ??
-                          getExecutionHostLabel(setup.executionHostId ?? setup.hostId)}
+                        {hostLabel(setup.executionHostId ?? setup.hostId)}
                       </span>
                     </SelectItem>
                   ))}
@@ -247,10 +253,7 @@ export function RepositoryHostSetupsSection({
           const runtimeOwnerHostId = runtimeOwnerEnvironmentId
             ? toRuntimeExecutionHostId(runtimeOwnerEnvironmentId)
             : null
-          const runtimeOwnerHostLabel = runtimeOwnerHostId
-            ? (hostOptionById.get(runtimeOwnerHostId)?.label ??
-              getExecutionHostLabel(runtimeOwnerHostId))
-            : ''
+          const runtimeOwnerHostLabel = runtimeOwnerHostId ? hostLabel(runtimeOwnerHostId) : ''
           const nestedSshStatus =
             runtimeOwnerEnvironmentId && executionHost?.kind === 'ssh'
               ? selectRuntimeAwareSshStatus(
@@ -300,11 +303,10 @@ export function RepositoryHostSetupsSection({
                       runtimeOwnerEnvironmentId,
                       executionHost.targetId
                     ),
-                    value1:
-                      hostOptionById.get(setup.hostId)?.label ?? getExecutionHostLabel(setup.hostId)
+                    value1: hostLabel(setup.hostId)
                   }
                 )
-              : (hostOptionById.get(setup.hostId)?.label ?? getExecutionHostLabel(setup.hostId))
+              : hostLabel(setup.hostId)
           const isCurrentSetup = setup.id === selectedProjectHostSetup?.id
           const canOpenSetup = setup.repoId.trim().length > 0
           const canRemoveSetup = !canOpenSetup && deletingSetupId !== setup.id

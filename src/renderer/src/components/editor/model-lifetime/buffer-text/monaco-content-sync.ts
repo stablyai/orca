@@ -1,6 +1,8 @@
 import type { editor } from 'monaco-editor'
 
 export type MonacoContentSyncMode = 'undoable' | 'read-only-live-tail'
+/** Mount-only: a stale retained model's undo entries describe text that no longer exists. */
+type MonacoMountSyncMode = MonacoContentSyncMode | 'reset-history'
 
 export function normalizeToModelEol(
   content: string,
@@ -55,10 +57,17 @@ function replaceModelContent(
   model: editor.ITextModel,
   currentContent: string,
   content: string,
-  mode: MonacoContentSyncMode,
+  mode: MonacoMountSyncMode,
   withUndoStops: boolean
 ): void {
   if (currentContent === content) {
+    return
+  }
+  if (mode === 'reset-history') {
+    // setValue drops undo entries that describe replaced text, but re-detects the EOL from it.
+    const eol = model.getEndOfLineSequence()
+    model.setValue(content)
+    model.setEOL(eol)
     return
   }
   const fullRange = model.getFullModelRange()
@@ -73,7 +82,7 @@ function replaceModelContent(
 export function syncContentOnMount(
   editorInstance: editor.IStandaloneCodeEditor,
   content: string,
-  mode: MonacoContentSyncMode = 'undoable',
+  mode: MonacoMountSyncMode = 'undoable',
   currentContentSnapshot?: string
 ): boolean {
   const model = editorInstance.getModel()
