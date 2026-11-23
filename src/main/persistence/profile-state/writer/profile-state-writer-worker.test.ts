@@ -186,7 +186,8 @@ describe('persistent profile state write worker', () => {
   async function interruptedAuthority(
     root: string,
     f: ReturnType<typeof fixture>,
-    afterCommit: boolean
+    afterCommit: boolean,
+    onFailure?: (error: Error) => void
   ) {
     const interruptedPath = join(root, 'interrupted-worker.cjs')
     const marker = JSON.stringify(join(root, 'interrupted-once'))
@@ -216,7 +217,8 @@ describe('persistent profile state write worker', () => {
       ]
     })
     const authority = new ProfileStateWorkerAuthority(f.initialization, {
-      workerPath: interruptedPath
+      workerPath: interruptedPath,
+      onFailure
     })
     await authority.ready
     const failure = await authority
@@ -238,10 +240,14 @@ describe('persistent profile state write worker', () => {
     })
 
     const committed = fixture()
-    const refused = await interruptedAuthority(committed.root, committed, true)
+    const failures: Error[] = []
+    const refused = await interruptedAuthority(committed.root, committed, true, (error) =>
+      failures.push(error)
+    )
     await expect(
       refused.writeSerializedDomains([{ domain: 'settings', payload: '{"overwrite":true}' }])
     ).rejects.toMatchObject({ code: 'profile-state-revision-conflict' })
+    expect(failures.map(profileStateWriterFailureOutcome)).toEqual(['indeterminate'])
     await refused.close().catch(() => {})
     expect(readState(committed.path, committed.profileId)).toEqual({
       settings: { interrupted: true }

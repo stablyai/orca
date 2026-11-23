@@ -266,7 +266,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     }
     const retry = this.reopenPolicy.recordFailure(error)
     if (!retry) {
-      reportTerminalReopenFailure(this.options.onFailure, error)
+      reportTerminalReopenFailure(this.options.onFailure, this.reopenPolicy.terminalFailure(error))
       return
     }
     this.writer = null
@@ -298,6 +298,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
         }
         this.writer = null
         this.stoppedRevision = revision
+        this.reopenPolicy.recoverFrom(error)
         return true
       },
       () => reportTerminalReopenFailure(this.options.onFailure, error)
