@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotPreviewSignal } from '../../../../shared/bots/bot-collapsed-preview'
 import { getBotGroupFoldKey } from '../../../../shared/sidebar-list/sections/group-keys'
-import { botGroupMemberBots } from '../../../../shared/bots/bot-sidebar-entries'
+import { botGroupMemberRefs } from '../../../../shared/bots/bot-sidebar-entries'
 import type { HostKeyedBotSidebarEntry } from './bot-sidebar-entry-keys'
 import {
   botGroupMemberDragId,
@@ -63,6 +63,14 @@ export function BotGroupFolder({
   onDelete: () => void
 }): React.JSX.Element {
   const toggleCollapsedGroup = useAppStore((s) => s.toggleCollapsedGroup)
+  // By host, so the header's faces and roster match the rows listed under it, paired computers' too.
+  const memberBots = useMemo(
+    () =>
+      botGroupMemberRefs(group.group).flatMap(
+        (ref) => bots.find((bot) => bot.hostId === ref.hostId && bot.id === ref.id) ?? []
+      ),
+    [group.group, bots]
+  )
   const drag = dragOf(folder.id)
   const fold: BotGroupRowFold | null =
     folder.members.length > 0
@@ -77,7 +85,7 @@ export function BotGroupFolder({
       <BotGroupRow
         group={group.group}
         home={group.home}
-        members={botGroupMemberBots(group.group, bots)}
+        members={memberBots}
         isActive={isActive}
         onOpen={onOpen}
         onManageMembers={onManageMembers}

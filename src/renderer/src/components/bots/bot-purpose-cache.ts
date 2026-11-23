@@ -26,6 +26,23 @@ export function setBotPurpose(key: string, purpose: string | null): void {
   publish()
 }
 
+const holders = new Map<string, number>()
+
+/** A row listing `key` holds its purpose; it clears once the last such row unmounts, since a bot
+ *  can list under two groups at once. Returns the release. */
+export function holdBotPurpose(key: string): () => void {
+  holders.set(key, (holders.get(key) ?? 0) + 1)
+  return () => {
+    const left = (holders.get(key) ?? 1) - 1
+    if (left > 0) {
+      holders.set(key, left)
+      return
+    }
+    holders.delete(key)
+    setBotPurpose(key, null)
+  }
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
