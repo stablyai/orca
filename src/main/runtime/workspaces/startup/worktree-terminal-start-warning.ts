@@ -1,3 +1,4 @@
+import { stripClaudePinnedLaunchMarker } from '../../../../shared/claude/claude-pinned-launch-error'
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 
@@ -8,7 +9,9 @@ export function appendWorktreeTerminalFailure(
   error: unknown
 ): string {
   const message = readableWslDistroHoldText(
-    formatTerminalStartFailure(error) ?? (error instanceof Error ? error.message : String(error))
+    stripClaudePinnedLaunchMarker(
+      formatTerminalStartFailure(error) ?? (error instanceof Error ? error.message : String(error))
+    )
   )
   const failure = `failed to create the ${kind} terminal for ${path}: ${message}`
   const combined = warning

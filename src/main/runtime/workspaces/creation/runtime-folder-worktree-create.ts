@@ -1,3 +1,4 @@
+import { appendWorktreeTerminalFailure } from '../startup/worktree-terminal-start-warning'
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { RuntimeLineageError } from '../lineage/runtime-lineage-error'
@@ -229,12 +230,7 @@ export async function createRuntimeFolderWorktree(args: {
         surface: 'background'
       }
     } catch (error) {
-      const message = readableWslDistroHoldText(
-        formatTerminalStartFailure(error) ??
-          (error instanceof Error ? error.message : String(error))
-      )
-      warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
-      console.warn(`[worktree-create] ${warning}`)
+      warning = appendWorktreeTerminalFailure(undefined, worktree.path, 'startup', error)
     }
   }
   if (

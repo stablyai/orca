@@ -1,3 +1,4 @@
+import { appendWorktreeTerminalFailure } from '../../runtime/workspaces/startup/worktree-terminal-start-warning'
 import { readableWslDistroHoldText } from '../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { canCheckoutExistingLocalBranch } from '../../runtime/workspaces/creation/runtime-worktree-create-git'
 /* eslint-disable max-lines */
@@ -469,11 +470,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
       surface: terminal.surface
     }
   } catch (error) {
-    const message = readableWslDistroHoldText(
-      error instanceof Error ? error.message : String(error)
-    )
-    warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
-    console.warn(`[worktree-create] ${warning}`)
+    warning = appendWorktreeTerminalFailure(undefined, worktree.path, 'startup', error)
     return { didSpawnSetup: false, warning }
   }
 
