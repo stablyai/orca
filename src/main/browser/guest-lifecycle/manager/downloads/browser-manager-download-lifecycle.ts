@@ -186,6 +186,15 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     }
   }
 
+  cancelDownload(args: { downloadId: string; senderWebContentsId: number }): boolean {
+    const download = this.downloadsById.get(args.downloadId)
+    if (!download || download.rendererWebContentsId !== args.senderWebContentsId) {
+      return false
+    }
+    this.cancelDownloadInternal(args.downloadId, 'Canceled.')
+    return true
+  }
+
   protected cancelDownloadInternal(
     downloadId: string,
     reason: string,
