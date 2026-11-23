@@ -11,10 +11,12 @@ import {
 } from './automation-receipt-client'
 
 const fixture = vi.hoisted(() => {
+  const navigation: unknown = null
+  const reply: unknown = {}
   const state = {
-    navigation: null as unknown,
+    navigation,
     status: new Map<string, unknown>(),
-    reply: {} as unknown,
+    reply,
     listeners: new Set<() => void>(),
     view: {
       activeView: 'terminal',
