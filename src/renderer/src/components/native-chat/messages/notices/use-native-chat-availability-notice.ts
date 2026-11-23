@@ -17,6 +17,7 @@ import { agentSessionRefusalReasonWords } from '../../../../../../shared/agent-s
 import type { AgentSessionWriteRefusal } from '../../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { isStructuredAgentSessionStartFailureRow } from '../../../../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import {
   cliMissingSentence,
   notSignedInSentence
@@ -79,7 +80,9 @@ export function useNativeChatAvailabilityNotice(input: {
   deliveryNotices?: ReadonlyMap<string, unknown>
 }): NativeChatComposerNotice | null {
   const t = useTranslate()
-  const { unavailable, journalItems } = input
+  const { unavailable } = input
+  // Both reasons read status rows and ids only, so a streamed reply's text revision keeps them.
+  const journalItems = input.journalItems && rowsBesideStreamedText(input.journalItems)
   const key = !unavailable
     ? null
     : unavailable.reason === 'notSignedIn'
