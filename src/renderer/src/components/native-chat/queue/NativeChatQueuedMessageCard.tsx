@@ -193,6 +193,8 @@ export function NativeChatQueuedMessageCard({
   const editable = actionable && !card.notEditable && onEdit !== undefined
   // Edit and Delete wait for hover or keyboard focus; Steer stays on every row.
   const toolCount = actionable ? (editable ? 2 : 1) : 0
+  const maskStyle: (React.CSSProperties & { '--queued-tools-mask': string }) | undefined =
+    toolCount > 0 ? { '--queued-tools-mask': queuedRowToolsMask(toolCount) } : undefined
   return (
     <li
       ref={drag?.rowRef}
@@ -242,11 +244,7 @@ export function NativeChatQueuedMessageCard({
                 ? '[mask-image:var(--queued-tools-mask)]'
                 : 'group-hover/queued:[mask-image:var(--queued-tools-mask)] group-has-[:focus-visible]/queued:[mask-image:var(--queued-tools-mask)] [@media(hover:none)]:group-focus-within/queued:[mask-image:var(--queued-tools-mask)]')
           )}
-          style={
-            toolCount > 0
-              ? ({ '--queued-tools-mask': queuedRowToolsMask(toolCount) } as React.CSSProperties)
-              : undefined
-          }
+          style={maskStyle}
         >
           {sender}
           {expanded ? null : (
