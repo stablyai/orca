@@ -271,8 +271,10 @@ def _session_env(session_id: str) -> dict[str, Any]:
         chat_id = _bound_session_value("HERMES_SESSION_CHAT_ID")
         if isinstance(chat_id, str) and chat_id != session_id:
             published = _published_env(chat_id)
-    # A gateway restarted from a chat's tool keeps that chat's token: no other session may use it.
-    return published if published is not None else {"${ORCA_AGENT_SESSION_TOOL_TOKEN_ENV}": None}
+    # A gateway restarted from a chat's tool keeps that chat's token: only the file's own may reach a tool.
+    env = dict(published) if isinstance(published, dict) else {}
+    env.setdefault("${ORCA_AGENT_SESSION_TOOL_TOKEN_ENV}", None)
+    return env
 
 
 def _make_hook(event_name: str) -> Callable[..., None]:

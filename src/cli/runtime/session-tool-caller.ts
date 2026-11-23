@@ -72,7 +72,7 @@ export async function adoptSessionToolCaller(
     }
     return
   }
-  delete env[ORCA_AGENT_SESSION_TOOL_TOKEN_ENV]
+  // The token stays: a CLI that runs itself again (packaged re-entry) trades it again.
   // The shared process's own identity is whichever chat started it.
   for (const key of CALLER_IDENTITY_ENV) {
     delete env[key]

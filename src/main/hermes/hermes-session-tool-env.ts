@@ -63,11 +63,7 @@ export const publishHermesSessionToolEnv: PublishSharedToolProcessSessionEnv = a
       return
     }
     await mkdir(dir, { recursive: true, mode: 0o700 })
-    // Renamed into place so a tool spawned meanwhile never reads half a file.
-    const staged = `${file}.${randomBytes(6).toString('hex')}.tmp`
-    const published = mustReach ? { ...values, [SHARED_TOOL_PROCESS_BOT_FIELD]: '1' } : values
-    await writeFile(staged, JSON.stringify(published), { mode: 0o600 })
-    await rename(staged, file)
+    await writeStaged(file, mustReach ? { ...values, [BOT_MARK]: '1' } : values)
     owners.set(file, publication)
   })
   return () =>
@@ -77,8 +73,18 @@ export const publishHermesSessionToolEnv: PublishSharedToolProcessSessionEnv = a
         return
       }
       owners.delete(file)
-      await rm(file, { force: true })
+      // A bot's shell that outlives its chat must still be refused, not run as the owner.
+      await (mustReach ? writeStaged(file, { [BOT_MARK]: '1' }) : rm(file, { force: true }))
     })
+}
+
+const BOT_MARK = SHARED_TOOL_PROCESS_BOT_FIELD
+
+/** Renamed into place so a tool spawned meanwhile never reads half a file. */
+async function writeStaged(file: string, values: Readonly<Record<string, string | null>>) {
+  const staged = `${file}.${randomBytes(6).toString('hex')}.tmp`
+  await writeFile(staged, JSON.stringify(values), { mode: 0o600 })
+  await rename(staged, file)
 }
 
 /** A bot's tools carry its limits only through Orca's plugin, on a Hermes with per-session env,

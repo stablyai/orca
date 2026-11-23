@@ -18,7 +18,10 @@ describe('adoptSessionToolCaller', () => {
     await adoptSessionToolCaller(env, async (token) =>
       token === 'token-b' ? { env: { ORCA_AGENT_SESSION_ID: 'chat-b' } } : { env: null }
     )
-    expect(env).toEqual({ ORCA_AGENT_SESSION_ID: 'chat-b' })
+    expect(env).toEqual({
+      ORCA_AGENT_SESSION_TOOL_TOKEN: 'token-b',
+      ORCA_AGENT_SESSION_ID: 'chat-b'
+    })
   })
 
   it('runs nothing when the host names no one or cannot answer', async () => {
@@ -30,7 +33,7 @@ describe('adoptSessionToolCaller', () => {
     ]) {
       const env: NodeJS.ProcessEnv = inherited()
       await expect(adoptSessionToolCaller(env, answer)).rejects.toThrow(/ran nothing/)
-      expect(env).toEqual({})
+      expect(env).toEqual({ ORCA_AGENT_SESSION_TOOL_TOKEN: 'token-b' })
     }
   })
 

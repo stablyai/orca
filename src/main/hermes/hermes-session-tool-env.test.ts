@@ -54,7 +54,10 @@ describe('publishHermesSessionToolEnv', () => {
 
   it("starts a bot's session only where its tools will carry the bot's identity", async () => {
     await markGateway(HERMES_PLUGIN_GENERATION)
-    await expect(publish('bot', () => true, {})).resolves.toBeTypeOf('function')
+    const withdrawBot = await publish('bot', () => true, {})
+    // A bot's shell that outlives the chat keeps a token-free mark that refuses it.
+    await withdrawBot()
+    expect(JSON.parse(await readFile(file(), 'utf-8'))).toEqual({ orcaBot: '1' })
     await expect(publish('bot', () => true, { agentVersion: '0.23.0' })).rejects.toMatchObject({
       installation: { minimumVersion: '0.23.1' }
     })
