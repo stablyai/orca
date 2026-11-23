@@ -90,10 +90,10 @@ describe('Sleep must not retire a terminal whose final history checkpoint did no
     return id
   }
 
-  function mockFinalCheckpoint(result: HistoryCheckpointResult): void {
+  function mockFinalCheckpoint(result: HistoryCheckpointResult) {
     const manager = adapter.getHistoryManager()
     expect(manager).not.toBeNull()
-    vi.spyOn(manager!, 'checkpoint').mockImplementation(async () => result)
+    return vi.spyOn(manager!, 'checkpoint').mockImplementation(async () => result)
   }
 
   function mockTakePendingOutput(impl: () => Promise<unknown>): void {
@@ -141,13 +141,36 @@ describe('Sleep must not retire a terminal whose final history checkpoint did no
 
     expect(adapter.hasPty(id)).toBe(true)
     expect(await adapter.probePtyLiveness(id)).toBe(true)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: protected retry sets the fix requires to be cleared; asserting them directly is the point of the test.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: protected retry sets the fix requires; asserting them directly is the point of the test.
     const internals = adapter as unknown as {
       sessionsNeedingFullCheckpoint: Set<string>
       sessionsNeedingLiveCheckpoint: Set<string>
     }
+    // The heavy-retry marker is cleared, but the live marker must survive: records drained into
+    // the failed take exist only in the emulator until a later pass commits a live snapshot.
     expect(internals.sessionsNeedingFullCheckpoint.has(id)).toBe(false)
+    expect(internals.sessionsNeedingLiveCheckpoint.has(id)).toBe(true)
+  })
+
+  it('commits a live snapshot on the next pass after a retryable final write', async () => {
+    const id = await spawnWithOutput('retry-then-commit-session', 'LATEST-TERMINAL-MARKER\r\n')
+    const checkpointSpy = mockFinalCheckpoint('retryable')
+
+    await expect(
+      adapter.shutdown(id, { immediate: true, keepHistory: true })
+    ).rejects.toBeInstanceOf(FinalCheckpointPreservationError)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: protected retry sets the fix requires; asserting them directly is the point of the test.
+    const internals = adapter as unknown as {
+      sessionsNeedingLiveCheckpoint: Set<string>
+    }
+    expect(internals.sessionsNeedingLiveCheckpoint.has(id)).toBe(true)
+
+    checkpointSpy.mockRestore()
+    await adapter.shutdown(id, { immediate: true, keepHistory: true })
+
+    expect(adapter.hasPty(id)).toBe(false)
     expect(internals.sessionsNeedingLiveCheckpoint.has(id)).toBe(false)
+    expect(await onDisk(id)).toContain('LATEST-TERMINAL-MARKER')
   })
 
   it('keeps the live terminal when the snapshot RPC rejects', async () => {
@@ -175,16 +198,18 @@ describe('Sleep must not retire a terminal whose final history checkpoint did no
     expect(adapter.hasPty(id)).toBe(true)
   })
 
-  it('still sleeps when history writes are permanently unavailable', async () => {
+  it('keeps the live terminal when history writes are unavailable', async () => {
     const id = await spawnWithOutput('unavailable-session', 'LATEST-TERMINAL-MARKER\r\n')
     mockFinalCheckpoint('unavailable')
 
-    await adapter.shutdown(id, { immediate: true, keepHistory: true })
+    await expect(
+      adapter.shutdown(id, { immediate: true, keepHistory: true })
+    ).rejects.toBeInstanceOf(FinalCheckpointPreservationError)
 
-    expect(adapter.hasPty(id)).toBe(false)
+    expect(adapter.hasPty(id)).toBe(true)
   })
 
-  it('still sleeps when the snapshot response cannot cross the wire', async () => {
+  it('keeps the live terminal when the snapshot response cannot cross the wire', async () => {
     const id = await spawnWithOutput('oversized-session', 'LATEST-TERMINAL-MARKER\r\n')
     mockTakePendingOutput(async () => {
       throw new DaemonProtocolError(
@@ -192,8 +217,10 @@ describe('Sleep must not retire a terminal whose final history checkpoint did no
       )
     })
 
-    await adapter.shutdown(id, { immediate: true, keepHistory: true })
+    await expect(
+      adapter.shutdown(id, { immediate: true, keepHistory: true })
+    ).rejects.toBeInstanceOf(FinalCheckpointPreservationError)
 
-    expect(adapter.hasPty(id)).toBe(false)
+    expect(adapter.hasPty(id)).toBe(true)
   })
 })

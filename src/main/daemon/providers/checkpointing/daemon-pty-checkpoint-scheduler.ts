@@ -1,5 +1,4 @@
 import { awaitDaemonWorkWithinCallerDeadline } from '../../launch/daemon-request-deadline'
-import { isDaemonResponseTooLargeError } from '../../protocol/daemon-errors'
 import { DaemonPtyConnectionLifecycle } from '../adapter/daemon-pty-connection-lifecycle'
 import { FinalCheckpointPreservationError } from '../adapter/daemon-pty-lifecycle-errors'
 import type { SessionCheckpointOutcome } from '../adapter/daemon-pty-runtime-state'
@@ -134,12 +133,10 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
     opts?: { final?: boolean; teardown?: boolean }
   ): Promise<{
     settled: Map<string, 'done' | 'unavailable' | 'uncaptured'>
-    errors: Map<string, unknown>
   }> {
     const settled = new Map<string, 'done' | 'unavailable' | 'uncaptured'>()
-    const errors = new Map<string, unknown>()
     if (!this.historyManager) {
-      return { settled, errors }
+      return { settled }
     }
     const ids = Array.from(sessionIds)
     let nextIndex = 0
@@ -174,10 +171,7 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
               settled.set(sessionId, result)
             }
           })
-          .catch((err) => {
-            errors.set(sessionId, err)
-            console.warn('[history] checkpoint failed:', sessionId, err)
-          })
+          .catch((err) => console.warn('[history] checkpoint failed:', sessionId, err))
       }
     }
     // Limit simultaneous CPU and disk work across dirty terminals.
@@ -191,37 +185,34 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
       () => checkpointNext()
     )
     await Promise.all(workers)
-    return { settled, errors }
+    return { settled }
   }
 
   /**
    * Decide whether a terminal may retire after its final checkpoint pass.
-   * Throws when the pass neither committed the screen nor failed in a way no retry can fix.
+   * Throws when the pass did not commit the screen; only 'done' may proceed to kill.
    */
   protected assertFinalCheckpointPreservation(
     sessionId: string,
-    outcome: 'done' | 'unavailable' | 'uncaptured' | undefined,
-    error: unknown
+    outcome: 'done' | 'unavailable' | 'uncaptured' | undefined
   ): void {
     if (outcome === 'done') {
       return
     }
-    // Preservation failures that no retry can fix must not pin a live terminal forever.
-    const permanentLoss =
-      !this.historyManager || outcome === 'unavailable' || isDaemonResponseTooLargeError(error)
-    if (!permanentLoss) {
-      // A failed Sleep must not leave a heavy full-snapshot retry running every interval.
-      this.sessionsNeedingFullCheckpoint.delete(sessionId)
-      this.sessionsNeedingLiveCheckpoint.delete(sessionId)
-      this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
-      throw new FinalCheckpointPreservationError(sessionId)
+    // With no history manager there is nothing the final pass could have committed.
+    if (!this.historyManager) {
+      return
     }
-    if (this.historyManager) {
-      console.warn(
-        '[history] sleep proceeds with the last committed checkpoint; the final checkpoint could not commit:',
-        sessionId
-      )
-    }
+    console.warn(
+      '[history] sleep retains the live terminal; the final checkpoint did not commit:',
+      sessionId
+    )
+    // A failed Sleep must not leave a heavy full-snapshot retry running every interval, but the
+    // live marker stays: records drained into a failed take exist only in the emulator until a
+    // later pass commits a live snapshot.
+    this.sessionsNeedingFullCheckpoint.delete(sessionId)
+    this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
+    throw new FinalCheckpointPreservationError(sessionId)
   }
 
   // A session without a checkpoint must write its first snapshot immediately.

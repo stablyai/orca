@@ -84,11 +84,3 @@ export function decodeDaemonResponseError(message: string): Error {
     ? new SessionNotFoundError(message.slice(prefix.length))
     : new DaemonProtocolError(message)
 }
-
-// Mirrors the message prefix NdjsonLineTooLongError builds in the shared NDJSON framer.
-const RESPONSE_TOO_LARGE_PREFIX = 'NDJSON line exceeds max '
-
-/** A refusal the daemon could not shrink: the encoded reply crossed its own line cap. */
-export function isDaemonResponseTooLargeError(error: unknown): boolean {
-  return error instanceof DaemonProtocolError && error.message.startsWith(RESPONSE_TOO_LARGE_PREFIX)
-}

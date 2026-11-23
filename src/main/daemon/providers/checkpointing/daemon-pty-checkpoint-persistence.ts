@@ -47,9 +47,8 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
       }
+      // 'committed' is the only outcome that does not settle its own markers in the take.
       this.sessionsNeedingFullCheckpoint.delete(sessionId)
-      this.sessionsNeedingLiveCheckpoint.delete(sessionId)
-      this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
       return settledCheckpointOutcome(checkpoint)
     }
     const take = await this.client.request<TakePendingOutputResult | null>('takePendingOutput', {
@@ -154,7 +153,6 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       return { checkpoint: 'committed', snapshot }
     }
     this.sessionsNeedingFullCheckpoint.delete(sessionId)
-    this.sessionsNeedingLiveCheckpoint.delete(sessionId)
     this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
     return this.historyManager
       ? { checkpoint: 'uncaptured', snapshot: null }

@@ -84,12 +84,10 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
     opts?: { final?: boolean; teardown?: boolean }
   ): Promise<{
     settled: Map<string, 'done' | 'unavailable' | 'uncaptured'>
-    errors: Map<string, unknown>
   }>
   protected abstract assertFinalCheckpointPreservation(
     sessionId: string,
-    outcome: 'done' | 'unavailable' | 'uncaptured' | undefined,
-    error: unknown
+    outcome: 'done' | 'unavailable' | 'uncaptured' | undefined
   ): void
   protected abstract publishAuditObservation(observation: DaemonAuditObservation): void
   protected abstract isRetiredEndpointTokenMissing(): boolean
