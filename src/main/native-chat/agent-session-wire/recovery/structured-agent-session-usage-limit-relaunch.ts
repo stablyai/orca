@@ -1,4 +1,7 @@
-import { rateLimitShowsRoom } from '../../../../shared/agent-usage/rate-limits/rate-limit-spent-windows'
+import {
+  rateLimitShowsRoom,
+  rateLimitSpentUntil
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-spent-windows'
 import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import {
@@ -142,7 +145,14 @@ export class UsageLimitRelaunchedCuts {
     if (this.switchReads.has(key)) {
       return
     }
-    if (scope.bootstrap?.()) {
+    const reading = scope.account?.read()
+    const usable =
+      reading?.status === 'ok' &&
+      (rateLimitSpentUntil(reading) !== undefined ||
+        (rateLimitShowsRoom(reading) &&
+          reading.updatedAt >= (cut.turnEndedAt ?? Number.NEGATIVE_INFINITY)))
+    const ask = usable ? undefined : (scope.account?.refresh ?? scope.bootstrap)
+    if (ask?.()) {
       this.switchReads.add(key)
     }
   }

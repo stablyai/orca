@@ -251,8 +251,13 @@ export class UsageLimitAccountHolds {
       typeof covering === 'number' ? covering : cut.resetsAt
     )
     const spentUntil = account && reading && rateLimitSpentUntil(reading)
-    if (typeof spentUntil === 'number') {
-      hold.heldUntil = Math.max(hold.heldUntil ?? spentUntil, spentUntil)
+    if ((movedCut || awaitingRoom) && spentUntil !== undefined) {
+      if (spentUntil === null) {
+        hold.unknownReset = true
+      } else {
+        hold.heldUntil = Math.max(hold.heldUntil ?? spentUntil, spentUntil)
+      }
+      hold.spentSeenAt = Math.max(hold.spentSeenAt ?? reading!.updatedAt, reading!.updatedAt)
     }
     if (
       account &&
