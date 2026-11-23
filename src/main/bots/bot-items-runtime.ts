@@ -2,6 +2,7 @@
 // the wire shows them (reads never write; worker and PR state come live from their own records), and
 // workers started for an item linked from orchestration's record. Changes owed to an item's chat go out
 // as orchestration mail; startup sends any a crash left owed.
+import type { DispatchRowChange } from '../runtime/orchestration/db/worker-status-notice'
 import type { Bot } from '../../shared/bot-types'
 import { botItemEventId, type BotItem, type BotItemEvent } from '../../shared/bots/bot-items'
 import { botItemsNeedingOwnerByBot } from '../../shared/bots/bot-item-groups'
@@ -306,6 +307,16 @@ export class BotItemsHost {
   /** The newest `limit` events before `beforeId` (0: the newest of all), oldest first. */
   async eventsBefore(uid: string, beforeId: number, limit: number): Promise<BotItemEvent[]> {
     return (await this.store().eventsBefore(uid, beforeId, limit)).map(eventViewOf)
+  }
+
+  /** Any write to a Dispatch's rows (the database's notice), before the readers it wakes read. */
+  workerRowChanged(dispatchId: string | null, change: DispatchRowChange): void {
+    this.join.rowChanged(dispatchId, change)
+  }
+
+  /** A paired server's verdicts on these Dispatches changed. */
+  federatedWorkersChanged(dispatchIds: readonly string[]): void {
+    this.join.dropWorkers(dispatchIds)
   }
 
   /** A Dispatch row changed: a start for an item is linked, and linked items re-read. */

@@ -13,9 +13,9 @@ import type { Automation } from '../../shared/automations/automation-definition'
 import type { IssueInfo, PRInfo } from '../../shared/github/pull-requests/pull-request-types'
 import type { BotItemLinkRecord } from './bot-items-schema'
 import type { BotWorkWorker } from './bot-work-types'
-import { readWorkerDockReasons } from '../runtime/orchestration/dock/worker-dock-read'
+import type { DispatchRowChange } from '../runtime/orchestration/db/worker-status-notice'
 import { workspaceReader, type BotWorkRuntime } from './bot-work-runtime'
-import { readWorkers } from './bot-work-workers-read'
+import { LinkedWorkerStates, type LinkedWorkerState } from './bot-items-linked-worker-states'
 
 type CacheRecord<T> = Readonly<Record<string, { data: T | null; fetchedAt: number }>>
 
@@ -48,20 +48,18 @@ function urlIndex<T extends { url: string }>(key: (url: string) => string) {
 const prsByUrl = urlIndex<PRInfo>((url) => url)
 const issuesByUrl = urlIndex<IssueInfo>((url) => url.toLowerCase())
 
-export type WorkerRead = {
-  worker: BotWorkWorker | null
-  pr: BotItemPullRequest | null
-  report: { subject: string; body: string | null } | null
-  /** Why it ended, as the chat's worker strip shows it. */
-  reason?: string | null
-}
+export type WorkerRead = LinkedWorkerState & { pr: BotItemPullRequest | null }
 
 export class BotItemLinkJoin {
+  private readonly states: LinkedWorkerStates
+
   constructor(
     private readonly workRuntime: BotWorkRuntime,
     private readonly githubCache: BotItemGitHubCache,
     private readonly automations: BotItemAutomations = () => []
-  ) {}
+  ) {
+    this.states = new LinkedWorkerStates(workRuntime)
+  }
 
   /** Each linked Dispatch's worker in one batch, so a follow-up still shows on the item.
    *  `pullRequests: false` skips the workspace and PR reads, for a caller that only needs states. */
@@ -74,59 +72,49 @@ export class BotItemLinkJoin {
     if (unique.length === 0) {
       return reads
     }
-    let workers: Map<string, BotWorkWorker | null>
-    let reasons: Map<string, string>
+    let states: Map<string, LinkedWorkerState | null>
     try {
-      workers = await readWorkers(this.workRuntime, unique)
-      reasons = readWorkerDockReasons(
-        this.workRuntime.getOrchestrationDb(),
-        [...workers.values()].flatMap((worker) => worker?.dispatchId ?? [])
-      )
+      states = await this.states.readStates(unique)
     } catch (error) {
       // Orchestration unreadable: every link reads `unknown`, never success or failure.
       console.warn('[bots] items: could not read linked workers', error)
       return reads
     }
-    // Links to one worker (a Dispatch and its follow-ups) read its workspace and report once; every
-    // workspace here reads its repo's worktrees and checks each path once, not once per worker.
+    // Links to one worker (a Dispatch and its follow-ups) read its workspace once; every workspace here
+    // reads its repo's worktrees and checks each path once, not once per worker.
     const readWorkspace = workspaceReader(this.workRuntime, new Map(), new Map())
     const prs = new Map<string, Promise<BotItemPullRequest | null>>()
-    const reports = new Map<string, WorkerRead['report']>()
     await Promise.all(
       unique.map(async (ref) => {
         // Left out: it couldn't be read, so its link reads `unknown`.
-        if (!workers.has(ref)) {
+        if (!states.has(ref)) {
           return
         }
-        const worker = workers.get(ref) ?? null
-        if (!worker) {
-          reads.set(ref, { worker, pr: null, report: null })
+        const state = states.get(ref) ?? null
+        if (!state?.worker) {
+          reads.set(ref, { worker: null, pr: null, report: null })
           return
         }
+        const { worker } = state
         let pr = prs.get(worker.dispatchId)
         if (!pr) {
           pr = pullRequests ? this.workerPr(worker, readWorkspace) : Promise.resolve(null)
           prs.set(worker.dispatchId, pr)
         }
-        if (worker.host === 'local' && !reports.has(worker.taskId)) {
-          reports.set(worker.taskId, this.report(worker.taskId))
-        }
-        // A server worker shows no report, even when a local retry of its Task has one.
-        const report = worker.host === 'local' ? (reports.get(worker.taskId) ?? null) : null
-        const reason = reasons.get(worker.dispatchId) ?? null
-        reads.set(ref, { worker, pr: await pr, report, reason })
+        reads.set(ref, { ...state, pr: await pr })
       })
     )
     return reads
   }
 
-  /** The report the worker ended with, as its Task recorded it (what worker cards show). */
-  private report(taskId: string): WorkerRead['report'] {
-    try {
-      return taskReport(this.workRuntime.getOrchestrationDb().getTask(taskId)?.result ?? null)
-    } catch {
-      return null
-    }
+  /** The database's notice of a Dispatch row write: drops the kept reads that walked it. */
+  rowChanged(dispatchId: string | null, change: DispatchRowChange): void {
+    this.states.rowChanged(dispatchId, change)
+  }
+
+  /** A paired server's verdicts on these Dispatches changed. */
+  dropWorkers(dispatchIds: readonly string[]): void {
+    this.states.drop(dispatchIds)
   }
 
   /** Server-hosted work shows no PR state until a remote PR read exists. */
@@ -253,21 +241,4 @@ function workerState(worker: BotWorkWorker | null): BotItemWorkerState {
     return 'stopped'
   }
   return worker.state === 'unverifiable' ? 'unknown' : worker.state
-}
-
-/** A Task's result: a worker's `{ subject, body }` report, or plain text. */
-function taskReport(result: string | null): WorkerRead['report'] {
-  if (!result?.trim()) {
-    return null
-  }
-  try {
-    const parsed: unknown = JSON.parse(result)
-    if (parsed && typeof parsed === 'object' && 'subject' in parsed) {
-      const body = 'body' in parsed && typeof parsed.body === 'string' ? parsed.body : null
-      return { subject: String(parsed.subject ?? ''), body }
-    }
-  } catch {
-    // Plain text is its own report.
-  }
-  return { subject: result.trim(), body: null }
 }

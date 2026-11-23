@@ -1,6 +1,5 @@
 // `bots.chatTree`: a bot's chats with the workers each started, built on the bot's host from its own records.
 import { structuredAgentSessionStatusPaneKey } from '../../shared/agent-session/view/structured-agent-session-tab'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentListVerdict } from '../../shared/agent-status/presentation/agent-list-status'
 import { handedAgentRows } from '../../shared/bots/bot-activity-handed-agents'
 import type { BotChatTreeRead, BotChatTreeWorker } from '../../shared/bots/bot-chat-tree'
@@ -23,6 +22,7 @@ import { buildBotChatBase, orderedBaseChats, readBotChatInputs } from './bot-cha
 import { createBotChatTreeIndex, type BotChatTreeIndex } from './bot-chat-tree-index'
 import { overlayBotChats } from './bot-chat-tree-overlay'
 import type { BotChatTreeWorkerCache } from './bot-chat-tree-worker-cache'
+import { workerStatusEvidence } from './settled-dispatch-read-cache'
 import { createSharedBotBuilds } from './shared-bot-builds'
 import {
   botStatusRowsByPaneKey,
@@ -64,27 +64,6 @@ function handedWorker(row: ReturnType<typeof handedAgentRows>[number]): BotChatT
     note: 'handed-over',
     ...(row.hostId ? { hostId: row.hostId } : {})
   }
-}
-
-/** The status row a worker's agent and host are read from, as a key that changes when that row does. */
-function workerStatusEvidence(
-  rows: readonly AgentStatusIpcPayload[]
-): (worker: OrchestrationSessionWorker) => string {
-  const byPane = new Map<string, AgentStatusIpcPayload>()
-  const byHandle = new Map<string, AgentStatusIpcPayload>()
-  for (const row of rows) {
-    byPane.set(row.paneKey, row)
-    if (row.terminalHandle) {
-      byHandle.set(row.terminalHandle, row)
-    }
-  }
-  const key = (row: AgentStatusIpcPayload | undefined): string =>
-    row ? `${row.agentType ?? ''}|${row.connectionId ?? ''}` : ''
-  // A worker's row is matched by its pane, else by its terminal handle.
-  return (worker) =>
-    `${key(worker.paneKey ? byPane.get(worker.paneKey) : undefined)}/${key(
-      worker.address ? byHandle.get(worker.address) : undefined
-    )}`
 }
 
 async function readBotChatBase(host: BotChatTreeHost, bot: Bot) {

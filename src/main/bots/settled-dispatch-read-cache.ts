@@ -1,0 +1,189 @@
+// Reads of settled workers kept between refreshes, so a refresh re-reads only running workers and those
+// whose rows changed since. Each read names every Dispatch it walked; a write to any of them drops it.
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { OrchestrationSessionWorker } from '../../shared/orchestration-session-workers'
+import type { DispatchRowChange } from '../runtime/orchestration/db/worker-status-notice'
+
+export const SETTLED_WORKER_STATES = new Set<OrchestrationSessionWorker['state']>([
+  'completed',
+  'failed',
+  'stopped'
+])
+
+type Entry<T> = { value: T; walked: readonly string[] }
+
+export class SettledDispatchReadCache<T> {
+  private readonly scopes = new Map<string, Map<string, Entry<T>>>()
+  /** Each walked Dispatch's kept reads, as `scope\0key`. */
+  private readonly readsOf = new Map<string, Set<string>>()
+  /** Bumped by every drop; a read only stores what nothing dropped while it ran. */
+  private epoch = 0
+  private clearedAt = 0
+  private insertedAt = 0
+  private readonly droppedAt = new Map<string, number>()
+  private readonly inserted = new Set<string>()
+  private source: unknown = null
+
+  /** `followsInserts`: a new Dispatch can extend a kept read's walk (a follow-up), so inserts are kept
+   *  for `takeInserted` and no read that started before one stores. */
+  constructor(
+    private readonly max: number,
+    private readonly followsInserts = false
+  ) {}
+
+  /** A read's start, against the database it reads (another one drops every read). */
+  begin(source: unknown): number {
+    if (source !== this.source) {
+      this.source = source
+      this.drop(null)
+    }
+    return this.epoch
+  }
+
+  get(scope: string, key: string): T | undefined {
+    const entries = this.scopes.get(scope)
+    const entry = entries?.get(key)
+    if (!entries || !entry) {
+      return undefined
+    }
+    // Most recently used last, so the oldest falls out first.
+    entries.delete(key)
+    entries.set(key, entry)
+    return entry.value
+  }
+
+  /** Keeps a read begun at `started` unless a Dispatch it walked was written since. */
+  set(scope: string, key: string, value: T, walked: readonly string[], started: number): void {
+    if (
+      this.clearedAt > started ||
+      this.insertedAt > started ||
+      walked.some((id) => (this.droppedAt.get(id) ?? 0) > started)
+    ) {
+      return
+    }
+    let entries = this.scopes.get(scope)
+    if (!entries) {
+      entries = new Map()
+      this.scopes.set(scope, entries)
+    }
+    this.remove(scope, key)
+    entries.set(key, { value, walked })
+    for (const id of walked) {
+      const reads = this.readsOf.get(id) ?? new Set()
+      reads.add(readId(scope, key))
+      this.readsOf.set(id, reads)
+    }
+    for (const oldest of entries.keys()) {
+      if (entries.size <= this.max) {
+        break
+      }
+      this.remove(scope, oldest)
+    }
+  }
+
+  /** Forgets the reads of scopes no longer on the host. */
+  keepScopes(scopes: readonly string[]): void {
+    const live = new Set(scopes)
+    for (const [scope, entries] of this.scopes) {
+      if (!live.has(scope)) {
+        for (const key of entries.keys()) {
+          this.remove(scope, key)
+        }
+        this.scopes.delete(scope)
+      }
+    }
+  }
+
+  /** The database's notice of a Dispatch row write; one to a row no Dispatch owns changes no read. */
+  rowChanged(dispatchId: string | null, change: DispatchRowChange): void {
+    if (change === 'inserted' && dispatchId !== null && this.followsInserts) {
+      this.epoch += 1
+      this.insertedAt = this.epoch
+      this.inserted.add(dispatchId)
+      if (this.inserted.size > this.max) {
+        this.inserted.clear()
+        this.drop(null)
+      }
+    }
+    if (dispatchId !== null || change === 'deleted') {
+      this.drop(dispatchId)
+    }
+  }
+
+  /** Dispatches inserted since the last call; the reader drops what each one continues. */
+  takeInserted(): string[] {
+    const ids = [...this.inserted]
+    this.inserted.clear()
+    return ids
+  }
+
+  /** These Dispatches' rows changed; null drops every read (a reset). */
+  drop(dispatchId: string | readonly string[] | null): void {
+    if (dispatchId !== null && typeof dispatchId !== 'string') {
+      for (const id of dispatchId) {
+        this.drop(id)
+      }
+      return
+    }
+    this.epoch += 1
+    if (dispatchId === null) {
+      this.scopes.clear()
+      this.readsOf.clear()
+      this.droppedAt.clear()
+      this.clearedAt = this.epoch
+      return
+    }
+    for (const read of this.readsOf.get(dispatchId) ?? []) {
+      const [scope, key] = read.split('\0')
+      this.remove(scope, key)
+    }
+    this.droppedAt.set(dispatchId, this.epoch)
+    if (this.droppedAt.size > this.max) {
+      // Older drops only guard reads that started before them; forgetting them all is as safe as a reset.
+      this.droppedAt.clear()
+      this.clearedAt = this.epoch
+    }
+  }
+
+  private remove(scope: string, key: string): void {
+    const entries = this.scopes.get(scope)
+    const entry = entries?.get(key)
+    if (!entries || !entry) {
+      return
+    }
+    entries.delete(key)
+    for (const id of entry.walked) {
+      const reads = this.readsOf.get(id)
+      reads?.delete(readId(scope, key))
+      if (reads?.size === 0) {
+        this.readsOf.delete(id)
+      }
+    }
+  }
+}
+
+function readId(scope: string, key: string): string {
+  return `${scope}\0${key}`
+}
+
+/** The live status a worker's read took its agent and host from; a kept read whose status since
+ *  changed (a host reconnected, an agent exited) is read again. */
+export function workerStatusEvidence(
+  rows: readonly AgentStatusIpcPayload[]
+): (worker: Pick<OrchestrationSessionWorker, 'paneKey' | 'address'>) => string {
+  const byPane = new Map<string, AgentStatusIpcPayload>()
+  const byHandle = new Map<string, AgentStatusIpcPayload>()
+  for (const row of rows) {
+    byPane.set(row.paneKey, row)
+    if (row.terminalHandle) {
+      byHandle.set(row.terminalHandle, row)
+    }
+  }
+  const key = (row: AgentStatusIpcPayload | undefined): string =>
+    row ? `${row.agentType ?? ''}|${row.connectionId ?? ''}` : ''
+  // A worker's row is matched by its pane, else by its terminal handle.
+  return (worker) =>
+    `${key(worker.paneKey ? byPane.get(worker.paneKey) : undefined)}/${key(
+      worker.address ? byHandle.get(worker.address) : undefined
+    )}`
+}
