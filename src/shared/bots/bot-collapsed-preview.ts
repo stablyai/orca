@@ -41,6 +41,35 @@ export function summarizeBotPreview(bots: readonly BotPreviewFacts[]) {
   }
 }
 
+export function collapsedBotPreview<T extends BotPreviewFacts>(
+  bots: readonly T[],
+  limit = 5,
+  current?: T
+) {
+  const ranked = rankBotsForPreview(bots)
+  const shown = ranked.slice(0, Math.max(0, Math.min(5, Math.floor(limit))))
+  const hidden = ranked.slice(shown.length)
+  // Keep the current chat visible without shifting faces that already fit.
+  const hiddenIndex = current ? hidden.indexOf(current) : -1
+  if (current && shown.length > 0 && hiddenIndex !== -1) {
+    hidden.splice(hiddenIndex, 1)
+    hidden.unshift(shown.at(-1)!)
+    shown[shown.length - 1] = current
+  }
+  return {
+    ...summarizeBotPreview(bots),
+    shown,
+    hidden,
+    hiddenSignal: hidden[0] ? botPreviewSignal(hidden[0]) : null
+  }
+}
+
+/** 20px faces 4px apart; reserve a circle for omitted bots before choosing the face cap. */
+export function botPreviewCapacity(width: number, count: number): number {
+  const circles = Math.max(0, Math.floor((width + 4) / 24))
+  return Math.max(0, Math.min(5, count > circles ? circles - 1 : circles))
+}
+
 export function botStatusNeedsAttention(status: WorktreeStatus): boolean {
   return status === 'permission' || status === 'failed' || status === 'unconfirmed'
 }
