@@ -13,6 +13,9 @@ import { appendRewindUsageLimitedTurn } from './structured-agent-session-rewind-
 import { weekly } from './structured-agent-session-usage-limit-fleet.test-fixture'
 import type { UsageLimitAccountScope } from '../../recovery/structured-agent-session-usage-limit-account-hold'
 import type { StructuredAgentSessionAccountMoveEdge } from '../structured-agent-session-host-types'
+import { accountMoveReleases } from '../../../../runtime/agent-session/environment/account-move-releases'
+import type { RuntimeStore } from '../../../../runtime/construction/runtime-store-contract'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_NOW
@@ -134,6 +137,37 @@ export async function chatOnAccountA() {
       releases.forEach((wake) => wake({ kind: 'dispatch', ended: [`structured:${SESSION}`] }))
     },
     accountReads: () => accountReads,
+    /** Its next start's home comes from the System-default launch environment (CODEX_HOME), with
+     *  the runtime's own settings watcher raising the edges. */
+    followSystemDefaultHome: () => {
+      let settings: Partial<GlobalSettings> = { agentDefaultEnv: { codex: { CODEX_HOME: home } } }
+      const listeners = new Set<(updates: Partial<GlobalSettings>) => void>()
+      const store = {
+        getSettings: () => settings,
+        onSettingsChanged: (listener: (updates: Partial<GlobalSettings>) => void) => {
+          listeners.add(listener)
+          return () => listeners.delete(listener)
+        }
+      } as unknown as Pick<RuntimeStore, 'getSettings' | 'onSettingsChanged'>
+      current.host.deps.accountMoveWakes = accountMoveReleases(
+        { subscribe: () => () => {} },
+        () => store,
+        { watch: () => {}, take: () => [], key: (sessionId) => `structured:${sessionId}` }
+      )
+      current.host.deps.launchAccountHome = async () => {
+        accountReads++
+        return { variable: 'CODEX_HOME', path: settings.agentDefaultEnv?.codex?.CODEX_HOME ?? '' }
+      }
+      // As the store notifies: only the keys whose value changed.
+      const write = (updates: Partial<GlobalSettings>) => {
+        settings = { ...settings, ...updates }
+        listeners.forEach((listener) => listener(updates))
+      }
+      return {
+        homeTo: (path: string) => write({ agentDefaultEnv: { codex: { CODEX_HOME: path } } }),
+        unrelatedWrite: (index: number) => write({ terminalFontSize: 12 + index })
+      }
+    },
     /** The person switches to `path` while the next account read is under way: that read still
      *  returns the selection it saw. */
     switchDuringNextAccountRead: (path: string) => {

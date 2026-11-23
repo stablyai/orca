@@ -17,7 +17,7 @@ async function personsWork(journal: Journal, next: AgentJournalSubmission): Prom
     return next.source?.kind === USER_MESSAGE_SOURCE.kind
   }
   const body = await journal.reads.itemBody(agentJournalSubmissionKey(next.clientMessageId))
-  return body?.kind === 'message' && body.from === undefined && !body.command
+  return body?.kind === 'message' && body.from === undefined
 }
 
 /** Keeps the person's unsent `next` waiting in the queue, so the agent on the old account never
@@ -80,16 +80,26 @@ const KEEP_RETRY_MS = 5_000
 const KEEP_RETRY_MAX_MS = 5 * 60_000
 
 /** Retries of a keep that failed, per chat: nothing else wakes a send left pending, so each tries
- *  again later than the last, never in a tight loop, until a keep settles. */
+ *  again later than the last, never in a tight loop, until a keep settles or the chat closes. */
 export class AccountMoveKeepRetries {
   private readonly retries = new Map<string, { timer: ReturnType<typeof setTimeout>; ms: number }>()
 
-  constructor(private readonly wake: (sessionId: string) => void) {}
+  constructor(
+    private readonly wake: (sessionId: string) => void,
+    private readonly open: (sessionId: string) => boolean
+  ) {}
 
   failed(sessionId: string): void {
     const previous = this.retries.get(sessionId)
+    clearTimeout(previous?.timer)
     const ms = previous ? Math.min(previous.ms * 2, KEEP_RETRY_MAX_MS) : KEEP_RETRY_MS
-    const timer = setTimeout(() => this.wake(sessionId), ms)
+    const timer = setTimeout(() => {
+      if (this.open(sessionId)) {
+        this.wake(sessionId)
+      } else {
+        this.retries.delete(sessionId)
+      }
+    }, ms)
     timer.unref?.()
     this.retries.set(sessionId, { timer, ms })
   }

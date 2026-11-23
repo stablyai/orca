@@ -37,6 +37,20 @@ export type QueuedMessageDrainDeps = {
   logger: StructuredAgentSessionLogger
 }
 
+/** The send a claimed card's message was admitted as before: the send the card was kept from, or
+ *  the card's first attempt. */
+async function firstAdmission(
+  journal: SqlAgentSessionJournal,
+  claimed: { messageId: string; clientMessageId: string }
+): Promise<string | undefined> {
+  if (await journal.reads.submission(claimed.messageId)) {
+    return claimed.messageId
+  }
+  const attempts = await journal.reads.input({ kind: 'linked-to', messageId: claimed.messageId })
+  return attempts.submissions.find((entry) => entry.clientMessageId !== claimed.clientMessageId)
+    ?.clientMessageId
+}
+
 /** Re-derive gates per serialized step; consume at most one draft, whose submission gates the next. */
 export class StructuredAgentSessionQueuedMessageDrain {
   private readonly scheduled = new Set<string>()
@@ -118,14 +132,16 @@ export class StructuredAgentSessionQueuedMessageDrain {
       throw refused?.error ?? new Error('queued message was not admitted')
     }
     if (result.kind === 'claimed') {
-      const record = this.deps.getRecord(sessionId)
+      const record = this.deps.onMessageAdmitted ? this.deps.getRecord(sessionId) : null
       if (record) {
+        const first = result.body.from ? undefined : await firstAdmission(journal, result)
         this.deps.onMessageAdmitted?.({
           sessionId,
           workspaceId: record.location.workspaceId,
           clientMessageId: result.clientMessageId,
           body: result.body,
-          joinsRunningTurn: result.steer
+          joinsRunningTurn: result.steer,
+          ...(first ? { firstAdmittedAs: first } : {})
         })
       }
       this.deps.wakeDelivery(sessionId)

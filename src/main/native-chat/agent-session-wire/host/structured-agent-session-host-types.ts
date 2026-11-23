@@ -363,6 +363,9 @@ export type AdmittedMessage = {
   body: AgentJournalMessageItem
   /** Sent into the running turn rather than opening one. */
   joinsRunningTurn: boolean
+  /** The send this same message was first admitted as, when a card hands it over again (kept from
+   *  that send, or a later attempt of its card): one message is one external post. */
+  firstAdmittedAs?: string
 }
 
 export type { StructuredAgentSessionLifetimeContext } from '../termination/structured-agent-session-host-lifetime'

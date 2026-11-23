@@ -122,6 +122,28 @@ describe('SlackMirror', () => {
     expect(told).toEqual([ended])
   })
 
+  it('posts a message handed over again under a new send once, and its turn still tells the reply', async () => {
+    const { mirror, calls, told, admit } = setUp([{ ok: true, value: { ts: '1.2' } }])
+    admit()
+    await flush()
+    mirror.turnEnded(SESSION)
+    mirror.admitted({
+      sessionId: SESSION,
+      workspaceId: WORKTREE,
+      clientMessageId: 'send-2',
+      body: typed,
+      joinsRunningTurn: false,
+      firstAdmittedAs: 'send-1'
+    })
+    await flush()
+    expect(calls.map(({ body }) => (body as { clientMessageId: string }).clientMessageId)).toEqual([
+      'send-1'
+    ])
+    expect(mirror.turnPosted(SESSION)).toBe(true)
+    mirror.turnEnded(SESSION)?.release(ended)
+    expect(told).toEqual([ended])
+  })
+
   it('names who typed each message as the host saw it', async () => {
     const cases: [AgentJournalMessageItem['typedBy'], unknown][] = [
       [{ by: 'host' }, { orcaName: 'Alice', typist: { kind: 'host' } }],

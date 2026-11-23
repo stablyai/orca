@@ -5,12 +5,16 @@ import type { GlobalSettings } from '../../../../shared/settings/global-settings
 import { hasAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { getManagedDataAccountService } from '../../../managed-data-accounts/service'
 
-/** The settings a start's account is chosen from; usage and name updates write none of them. */
+/** The settings a start's account is chosen from, including the launch environment a System-default
+ *  home comes from (CLAUDE_CONFIG_DIR, CODEX_HOME); usage and name updates write none of them. */
 const SELECTION_KEYS: readonly (keyof GlobalSettings)[] = [
   'activeClaudeManagedAccountId',
   'activeClaudeManagedAccountIdsByRuntime',
   'activeCodexManagedAccountId',
-  'activeCodexManagedAccountIdsByRuntime'
+  'activeCodexManagedAccountIdsByRuntime',
+  'agentDefaultEnv',
+  'nativeChatInheritShellEnvironment',
+  'nativeChatShellEnvironmentVariables'
 ]
 
 /** A Dispatch settling or the account selection changing can release a chat's held sends; mail
@@ -44,6 +48,7 @@ export function accountMoveReleases(
       })
       const stopSettings =
         settings()?.onSettingsChanged?.((updates) => {
+          // The store lists only keys whose value changed.
           if (SELECTION_KEYS.some((key) => key in updates)) {
             wake({ kind: 'account' })
           }

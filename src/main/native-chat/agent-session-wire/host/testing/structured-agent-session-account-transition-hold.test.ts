@@ -6,6 +6,7 @@ import {
   hostTestOperationId
 } from './structured-agent-session-host-test-data.test-fixture'
 import { QUEUED_RIG_CALLER } from './structured-agent-session-queued-message-rig.test-fixture'
+import type { AdmittedMessage } from '../structured-agent-session-host-types'
 import { structuredAgentSessionMessageSendMutation } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   MAIL,
@@ -15,6 +16,23 @@ import {
 } from './structured-agent-session-account-transition-hold.test-fixture'
 
 afterEach(async () => rig?.dispose())
+
+/** The person's messages the host tells its listener of, by the send each was admitted as. */
+function personsAdmitted() {
+  const told = vi.fn<(message: AdmittedMessage) => void>()
+  rig!.host.deps.onMessageAdmitted = told
+  return () =>
+    told.mock.calls.flatMap(([message]) =>
+      message.body.from
+        ? []
+        : [
+            {
+              clientMessageId: message.clientMessageId,
+              ...(message.firstAdmittedAs ? { firstAdmittedAs: message.firstAdmittedAs } : {})
+            }
+          ]
+    )
+}
 
 it('holds a send behind a background command, then delivers it once on the new account', async () => {
   const chat = await chatOnAccountA()
@@ -128,6 +146,7 @@ it('lets go of the hold once the person deletes the message it held', async () =
 
 it('takes a send back from the old account when its work shows up only after the send was accepted', async () => {
   const chat = await chatOnAccountA()
+  const admitted = personsAdmitted()
   chat.switchTo('/homes/b')
   // The agent reports a background command after the send is accepted, before it is handed over.
   chat.onHandoverAccountRead(() => chat.background([devServer()]))
@@ -149,6 +168,11 @@ it('takes a send back from the old account when its work shows up only after the
   await eventually(() => expect(chat.dispatchedTo('raced')).toHaveLength(1))
   expect(chat.dispatchedTo('raced')).toEqual([chat.child()!.fence])
   expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
+  // Handed over again from its card, it names the send it was first admitted as.
+  expect(admitted()).toEqual([
+    { clientMessageId: sent.id },
+    { clientMessageId: expect.not.stringMatching(sent.id), firstAdmittedAs: sent.id }
+  ])
 })
 
 it('never hands the old account a send it could not keep, and delivers it on the new one', async () => {
@@ -206,6 +230,7 @@ it('sends a queued card back to wait when the old account turns out busy as it i
 
 it('delivers a kept queued card once on the new account after mail drains and the old work settles', async () => {
   const chat = await chatOnAccountA()
+  const admitted = personsAdmitted()
   const first = rig!.send('first turn')
   await first.result
   await eventually(() => expect(chat.dispatchedTo('first turn')).toEqual([chat.accountA]))
@@ -220,6 +245,7 @@ it('delivers a kept queued card once on the new account after mail drains and th
   await eventually(async () =>
     expect((await rig!.handoff(queued.id))?.rejection).toMatchObject({ neverReachedAgent: true })
   )
+  const kept = await rig!.handoffId(queued.id)
 
   const mail = rig!.send('mail meanwhile', undefined, { internal: true, from: MAIL })
   await mail.result
@@ -231,6 +257,12 @@ it('delivers a kept queued card once on the new account after mail drains and th
   expect(chat.dispatchedTo('queued next')).toEqual([chat.child()!.fence])
   expect(chat.child()!.fence).not.toBe(chat.accountA)
   expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
+  // The card's second attempt names its first, so the message is one external post.
+  const delivered = await rig!.handoffId(queued.id)
+  expect(admitted().slice(-2)).toEqual([
+    { clientMessageId: kept },
+    { clientMessageId: delivered, firstAdmittedAs: kept }
+  ])
 })
 
 it('delivers a kept queued card once on the new account when the old work settles right after', async () => {
@@ -397,4 +429,52 @@ it("delivers the person's Continue on the old account when the worker's open Dis
   expect(continued).toMatchObject({ ok: true })
   // Kept back for the move, it would wait on the Dispatch that waits on it.
   await eventually(() => expect(chat.dispatchedTo('Continue now')).toEqual([chat.accountA]))
+})
+
+it('frees a held send when the System-default home goes back to the old account while its work still runs', async () => {
+  const chat = await chatOnAccountA()
+  chat.background([devServer()])
+  const homes = chat.followSystemDefaultHome()
+  homes.homeTo('/homes/b')
+  await rig!.send('held, then home a again').result
+  const host = rig!.host.collaboratorsForTests()
+  await eventually(() => expect(host.sessions.get(SESSION)?.awaitsAccountMove).toBe(true))
+  expect(chat.dispatchedTo('held, then home a again')).toEqual([])
+
+  homes.homeTo('/homes/a')
+  await eventually(() =>
+    expect(chat.dispatchedTo('held, then home a again')).toEqual([chat.accountA])
+  )
+})
+
+it("keeps the person's queued /compact from the old account when its work shows up at handover", async () => {
+  const chat = await chatOnAccountA()
+  const first = rig!.send('first turn')
+  await first.result
+  await eventually(() => expect(chat.dispatchedTo('first turn')).toEqual([chat.accountA]))
+  const fields = { command: 'compact' as const, delivery: 'queue-if-active' as const }
+  expect(
+    await rig!.host.conversationCommand(QUEUED_RIG_CALLER, {
+      envelope: rig!.envelope(fields, 'agentSession.conversationCommand', hostTestOperationId()),
+      ...fields
+    })
+  ).toMatchObject({ ok: true })
+  const [card] = await rig!.drafts()
+  expect(card).toMatchObject({ state: 'waiting' })
+  chat.switchTo('/homes/b')
+  chat.onHandoverAccountRead(() => chat.background([devServer()]))
+  await rig!.settleAccepted(first.id, 'first turn')
+
+  await eventually(async () =>
+    expect((await rig!.handoff(card!.messageId))?.rejection).toMatchObject({
+      neverReachedAgent: true
+    })
+  )
+  expect(await rig!.drafts()).toEqual([{ messageId: card!.messageId, state: 'waiting' }])
+  expect(rig!.compact).not.toHaveBeenCalled()
+
+  chat.background([devServer({ membership: 'settled', state: 'done', outcome: 'succeeded' })])
+  await eventually(() => expect(rig!.compact).toHaveBeenCalledOnce())
+  expect(rig!.compact.mock.calls[0]![0].fence).toBe(chat.child()!.fence)
+  expect(chat.child()!.fence).not.toBe(chat.accountA)
 })

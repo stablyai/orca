@@ -118,6 +118,15 @@ export class SlackMirror extends SlackMirrorLinks {
     if (!isPersonsMessage(message.body) || !slackMirrorMayPost(link) || !this.enabled()) {
       return
     }
+    const first = message.firstAdmittedAs && agentJournalSubmissionKey(message.firstAdmittedAs)
+    // Handed over again: the thread already has it, and this turn's reply still follows it there.
+    if (first && link.mirrorPosts?.[first]) {
+      this.turnPosts.set(
+        message.sessionId,
+        (this.turnPosts.get(message.sessionId) ?? new Set()).add(first)
+      )
+      return
+    }
     const itemId = agentJournalSubmissionKey(message.clientMessageId)
     const posts = this.turnPosts.get(message.sessionId) ?? new Set<string>()
     posts.add(itemId)
