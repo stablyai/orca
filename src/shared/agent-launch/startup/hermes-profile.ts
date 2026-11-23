@@ -37,3 +37,29 @@ export function readHermesProfileName(value: unknown): string | undefined {
     ? undefined
     : profile
 }
+
+/** A profile flag in a pane's Arguments: `--profile x`, `--profile=x` or `-p x`. */
+const HERMES_PROFILE_ARG = /(^|\s)(?:--profile(?:=|\s+)|-p\s+)([^\s"']+)/
+
+/** Whether the text already names a profile flag, whatever its value. */
+export function hasHermesProfileArg(argsText: string): boolean {
+  return HERMES_PROFILE_ARG.test(argsText)
+}
+
+/** The profile an Arguments select names, or null when it names none (the Default profile). */
+export function readHermesProfileArg(argsText: string): string | null {
+  const match = argsText.match(HERMES_PROFILE_ARG)
+  return match ? (readHermesProfileName(match[2]) ?? null) : null
+}
+
+/** Replace any profile flag with `--profile <id>`; null removes it (the Default profile). */
+export function withHermesProfileArgs(argsText: string, profile: string | null): string {
+  if (profile !== null && !HERMES_PROFILE_NAME.test(profile)) {
+    return argsText
+  }
+  const stripped = argsText.replace(HERMES_PROFILE_ARG, ' ').replace(/\s+/g, ' ').trim()
+  if (profile === null) {
+    return stripped
+  }
+  return stripped ? `${stripped} --profile ${profile}` : `--profile ${profile}`
+}

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
-import { HERMES_PROFILE_NAME } from '../../../../../shared/agent-launch/startup/hermes-profile'
-import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
-  parseExecutionHostId
-} from '../../../../../shared/execution-host/execution-host'
+  HERMES_PROFILE_NAME,
+  hasHermesProfileArg,
+  withHermesProfileArgs
+} from '../../../../../shared/agent-launch/startup/hermes-profile'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { HermesLaunchProfiles } from '../../../../../shared/hermes/hermes-launch-profiles'
 
 /** One answer per pane host: the local install, a WSL distro or an SSH target. */
@@ -41,7 +43,8 @@ function fetchHermesLaunchProfiles(
 /** Profiles for the Hermes launch submenu, fetched once per pane host; null until known. */
 export function useHermesLaunchProfiles(
   enabled: boolean,
-  executionHostId: ExecutionHostId | undefined,
+  /** An ExecutionHostId from menu rows, or a picker entry's looser host string. */
+  executionHostId: string | undefined,
   worktreeId: string | undefined
 ): HermesLaunchProfiles | null {
   const key = enabled ? cacheKey(executionHostId, worktreeId) : null
@@ -72,9 +75,7 @@ export function useHermesLaunchProfiles(
 }
 
 /** Profiles live where Hermes runs: the local machine (including its WSL distros) and SSH hosts. */
-export function hermesProfileSubmenuApplies(
-  executionHostId: ExecutionHostId | undefined
-): boolean {
+export function hermesProfileSubmenuApplies(executionHostId: ExecutionHostId | undefined): boolean {
   const kind = executionHostId === undefined ? 'local' : parseExecutionHostId(executionHostId)?.kind
   return kind === 'local' || kind === 'ssh'
 }
@@ -82,12 +83,8 @@ export function hermesProfileSubmenuApplies(
 /** `--profile <id>` folded into the pane's Arguments; null keeps the caller's own text.
  *  A profile flag already present is a choice typed in Settings or the picker, so it wins. */
 export function hermesProfileLaunchArgs(baseArgs: string, profile: string): string | null {
-  if (!HERMES_PROFILE_NAME.test(profile)) {
+  if (!HERMES_PROFILE_NAME.test(profile) || hasHermesProfileArg(baseArgs)) {
     return null
   }
-  const trimmed = baseArgs.trim()
-  if (/(^|\s)--profile(\s|=|$)/.test(trimmed) || /(^|\s)-p\s/.test(trimmed)) {
-    return null
-  }
-  return trimmed ? `${trimmed} --profile ${profile}` : `--profile ${profile}`
+  return withHermesProfileArgs(baseArgs, profile)
 }

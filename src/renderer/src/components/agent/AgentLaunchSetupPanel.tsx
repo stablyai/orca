@@ -30,6 +30,7 @@ import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-ke
 import { NativeChatSessionOptionRows } from '../native-chat/session/options/controls/NativeChatSessionOptionRows'
 import { AgentLaunchSetupFooter, type AgentLaunchSetupFooterHandle } from './AgentLaunchSetupFooter'
 import { AgentLaunchSetupPermission } from './AgentLaunchSetupPermission'
+import { HermesProfileMenu } from './launch-settings/HermesProfileMenu'
 import {
   acceptAgentPickerArguments,
   applyAgentPickerEdit,
@@ -372,6 +373,7 @@ export function AgentLaunchSetupPanel({
           </div>
         </div>
       ) : null}
+      <HermesProfileMenu {...{ entry, draft, disabled, installed, searching }} onEdit={editDraft} />
       {mode === 'select' ? (
         <>
           {installed && !searching ? (

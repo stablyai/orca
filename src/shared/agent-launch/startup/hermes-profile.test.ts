@@ -3,7 +3,10 @@ import {
   hermesProfileRoot,
   hermesStateDbProfile,
   hermesStateDbProfileArgs,
-  readHermesProfileName
+  hasHermesProfileArg,
+  readHermesProfileArg,
+  readHermesProfileName,
+  withHermesProfileArgs
 } from './hermes-profile'
 
 describe('readHermesProfileName', () => {
@@ -55,6 +58,29 @@ describe('hermesStateDbProfileArgs', () => {
   it('passes other agents stores through unnamed', () => {
     expect(hermesStateDbProfileArgs('/h/.claude/sessions/x.jsonl')).toEqual([])
     expect(hermesStateDbProfileArgs(null)).toEqual([])
+  })
+})
+
+describe('hermes profile arguments', () => {
+  it('reads an existing profile flag in every spelling', () => {
+    expect(readHermesProfileArg('--tui --profile work')).toBe('work')
+    expect(readHermesProfileArg('--profile=work --tui')).toBe('work')
+    expect(readHermesProfileArg('-p work')).toBe('work')
+    expect(readHermesProfileArg('--tui')).toBeNull()
+    expect(readHermesProfileArg('--profile default')).toBeNull()
+    expect(hasHermesProfileArg('--profile default')).toBe(true)
+    expect(hasHermesProfileArg('--tui')).toBe(false)
+  })
+
+  it('folds a picked profile into the user text', () => {
+    expect(withHermesProfileArgs('--tui', 'work')).toBe('--tui --profile work')
+    expect(withHermesProfileArgs('', 'work')).toBe('--profile work')
+    expect(withHermesProfileArgs('--profile old --tui', 'work')).toBe('--tui --profile work')
+    expect(withHermesProfileArgs('-p old', null)).toBe('')
+  })
+
+  it('leaves the text alone for a name that cannot be spliced', () => {
+    expect(withHermesProfileArgs('--tui', 'a;b')).toBe('--tui')
   })
 })
 
