@@ -18,11 +18,13 @@ export function useStructuredAgentTurnTiming(
     items,
     submissions,
     latestTurn,
+    working,
     hostClock
   }: {
     items: readonly AgentJournalRenderItem[]
     submissions: readonly AgentJournalSubmission[]
     latestTurn?: AgentSessionLatestTurn | null
+    working?: boolean
     hostClock?: StructuredAgentHostClock | null
   },
   turnId: string | null
@@ -35,7 +37,8 @@ export function useStructuredAgentTurnTiming(
   // Derive during render so the first paint of each turn already uses its correct start.
   const step = stepStructuredAgentTurnClock({
     timing: runningTiming,
-    turnId: runningKey,
+    // A send's early clock only while the agent works, so an idle viewer never gets a "Worked for" without a turn.
+    turnId: runningKey !== turnId && working !== true ? null : runningKey,
     now: Date.now,
     hostClock,
     latch

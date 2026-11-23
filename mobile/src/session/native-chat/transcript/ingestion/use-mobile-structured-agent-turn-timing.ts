@@ -46,7 +46,8 @@ export function useMobileStructuredAgentTurnTiming(
   // Derive during render so a new turn’s first paint counts from its correct start.
   const step = stepStructuredAgentTurnClock({
     timing: runningTiming,
-    turnId: runningKey,
+    // A send's early clock only while the agent works, so an idle viewer never gets a "Worked for" without a turn.
+    turnId: runningKey !== turnId && working !== true ? null : runningKey,
     now: Date.now,
     hostClock,
     latch
