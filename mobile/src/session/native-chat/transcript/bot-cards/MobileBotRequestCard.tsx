@@ -131,7 +131,7 @@ export function MobileBotRequestCard({
         ) : null
       }
       timestamp={timestamp}
-      disclosureKey={`bot-request:${cardId}`}
+      disclosureKey={cardId ? `bot-request:${cardId}` : undefined}
       fontScale={fontScale}
       details={
         view.sent ? (
