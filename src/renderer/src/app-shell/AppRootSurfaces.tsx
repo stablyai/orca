@@ -13,13 +13,14 @@ import { MarkdownTemplatePicker } from '../components/editor/markdown/documents/
 import RecentTabSwitcher from '../components/tab-bar/recent-switcher/RecentTabSwitcher'
 import { SkillFreshnessUpdateDialog } from '../components/skills/freshness/SkillFreshnessUpdateDialog'
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
-import { NativeChatResumeOnRestartModal } from '../components/native-chat-recovery/NativeChatResumeRuntimeModal'
+import { NativeChatResumeToasts } from '../components/native-chat-recovery/toast/NativeChatResumeToastHost'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { LanguagePackDiscoveryHost } from '../components/languages/LanguagePackDiscoveryHost'
 import { PluginInstallTrustDialogHost } from '../components/plugins/dialogs/PluginInstallTrustDialog'
 import { TelemetryFirstLaunchSurface } from '../components/onboarding/telemetry/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './chrome/ZoomOverlay'
 import { WslMoveDialogHost } from '../components/wsl-move/WslMoveDialog'
+import { AgentCliUpdateFailedDialogHost } from '../components/agent-cli-update/AgentCliUpdateFailedDialogHost'
 import { MacosUpdateRequirementHost } from '../components/macos-update-requirement/MacosUpdateRequirementHost'
 import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility'
 import { useAppStore } from '../store/index'
@@ -30,6 +31,8 @@ import {
   usePreloadWorktreeJumpPalette,
   WorktreeJumpPalette
 } from '../components/worktree-jump/worktree-jump-palette-preload'
+import { usePrefetchAvatarCapability } from '../components/bots/avatar-generation-capability-store'
+import { useLocalAgentCliUpdateCheck } from '../components/agent-cli-update/use-local-agent-cli-update-check'
 import {
   selectAppRootSurfacePetEnabled,
   selectAppRootSurfaceTelemetryOptedIn,
@@ -121,6 +124,8 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
   const languageReady = useLanguageReadiness((state) => state.ready)
   const { mountedLazyModalIds, shouldMountAddRepoDialog } = useLazyModalMounts()
   usePreloadWorktreeJumpPalette()
+  usePrefetchAvatarCapability()
+  useLocalAgentCliUpdateCheck()
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   // Subscribe only to consumed settings so unrelated preferences cannot rerender every overlay.
@@ -224,6 +229,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
             <NodeDistMirrorDialog />
           </ModalBoundary>
         ) : null}
+        <AgentCliUpdateFailedDialogHost />
         {/* The viewer must outlive the virtualized chat row that opened it. */}
         {activeModal === 'diagram-viewer' ? (
           <ModalBoundary boundaryId="modal.diagram-viewer" resetKey>
@@ -298,7 +304,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
         onChatUiHereCornerCardClose={() => onboardingGate.setChatUiHereCornerCardOpen(false)}
       />
       <OverlayBoundary boundaryId="overlay.native-chat-resume-on-restart" resetKey={activeView}>
-        <NativeChatResumeOnRestartModal />
+        <NativeChatResumeToasts />
       </OverlayBoundary>
       <OverlayBoundary boundaryId="overlay.star-nag-toast" resetKey={activeView}>
         <StarNagToastHost />

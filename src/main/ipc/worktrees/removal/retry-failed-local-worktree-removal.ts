@@ -14,7 +14,7 @@ import {
   rememberPreservedBranchCleanupTarget
 } from './preserved-branch-cleanup'
 import {
-  removeWorktreeMetadataAndTransientState,
+  removeDeletedCheckoutMetadataAndTransientState,
   stopPtysForDestructiveWorktreeRemoval
 } from './worktree-removal-ownership'
 import { worktreeHostIdentity } from '../../../persistence/worktree-meta-host-identity'
@@ -54,13 +54,14 @@ export function retryFailedLocalWorktreeRemoval(
           worktreeHostIdentity(store, worktreeId, LOCAL_EXECUTION_HOST_ID)
         )
         runtime.clearOptimisticReconcileToken(worktreeId)
-        removeWorktreeMetadataAndTransientState(
+        const trustDrop = removeDeletedCheckoutMetadataAndTransientState(
           { store, runtime },
           worktreeId,
           LOCAL_EXECUTION_HOST_ID,
           args.snapshotPruneBatchId
         )
         invalidateAuthorizedRootsCacheForRepo(store, repoId)
+        return trustDrop
       },
       onRemoved: ({ worktreeId, worktreePath }) => {
         const identity = purgedIdentities.get(worktreeId)

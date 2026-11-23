@@ -1,8 +1,11 @@
+import { slackPeopleOf } from '../../../../../shared/connectors/slack-mention-tokens'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { cn } from '@/lib/class-names'
 import { NativeChatMessageList } from '../NativeChatMessageList'
 import { NativeChatSideChatForkPointContext } from '../messages/actions/native-chat-fork-context'
+import { NativeChatSlackPeopleContext } from '../native-chat-markdown-mentions'
 import { NativeChatToolRunWindowProvider } from '../tools/runs/native-chat-tool-run-window-context'
+import { NativeChatGalleryCoveredFocusContext } from '../media/images/gallery/native-chat-image-gallery-context'
 import type { NativeChatFind } from '../viewport/find/use-native-chat-find'
 import {
   noteNativeChatSubagentParent,
@@ -51,8 +54,10 @@ export function NativeChatSubagentTranscripts({
     [open, openId, paneKey]
   )
   const isVisible = props.isVisible ?? true
+  const slackPeople = useMemo(() => slackPeopleOf(props.session.messages), [props.session.messages])
   const mainRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<HTMLDivElement>(null)
+  const shownView = useCallback(() => viewRef.current, [])
   const shownId = shown?.agentId ?? null
   const previousIdRef = useRef<string | null>(null)
   useEffect(() => {
@@ -86,11 +91,16 @@ export function NativeChatSubagentTranscripts({
           className={cn('flex min-h-0 flex-1 flex-col', shown && 'invisible')}
           inert={shown !== null}
         >
-          <NativeChatMessageList
-            {...props}
-            isVisible={isVisible && shown === null}
-            subagentView={main}
-          />
+          <NativeChatSlackPeopleContext value={slackPeople}>
+            {/* A view opened over an open image viewer takes the focus the viewer gives up. */}
+            <NativeChatGalleryCoveredFocusContext value={shownView}>
+              <NativeChatMessageList
+                {...props}
+                isVisible={isVisible && shown === null}
+                subagentView={main}
+              />
+            </NativeChatGalleryCoveredFocusContext>
+          </NativeChatSlackPeopleContext>
         </div>
         {shown ? (
           <div

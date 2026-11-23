@@ -1,5 +1,6 @@
 // Signing a bot's own tool in: the agent's CLI names the page to open and waits on its own localhost
 // callback, which a browser on another computer can't reach, so the address it ended on can be pasted back.
+import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,10 +8,18 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
 import type { BotToolServer } from '../../shared/bot-tools'
 import { ensureNodePtySpawnHelperExecutable } from '../providers/local-pty/local-pty-executable-spawn'
-import { codexToolProblems } from './bot-tools-codex'
+import { codexToolProblems, isTakenByCodexStdio } from './bot-tools-codex'
 import { redactBotToolText } from './bot-tool-redaction'
 import { readBotToolServers } from './bot-tools-file'
-import { claudeSignInFolder, codexSession, codexThread, type BotToolsCli } from './bot-tools-host'
+import {
+  claudeSignInFolder,
+  codexSession,
+  codexStdioToolNames,
+  codexThread,
+  hasBotToolsCli,
+  type BotToolsCli,
+  type BotToolsHome
+} from './bot-tools-host'
 import { cliWithLaunchTools } from './bot-launch-tools'
 import { advanceBotToolsEpoch } from './bot-tools-revision'
 
@@ -62,7 +71,7 @@ export function forgetBotToolSignIns(botId: string, name?: string): void {
 export async function connectBotTool(
   botId: string,
   name: string,
-  resolveCli: () => Promise<BotToolsCli>
+  resolveCli: () => Promise<BotToolsHome>
 ): Promise<{ authorizationUrl: string | null }> {
   // Pending from the start, replacing any earlier try: the CLI can take seconds to name its page,
   // and a client waiting on this must not read an earlier try's outcome, or none, meanwhile.
@@ -97,7 +106,7 @@ export async function connectBotTool(
  * host's callback, which only this host can reach.
  */
 export async function finishBotToolSignIn(
-  cli: BotToolsCli,
+  cli: Pick<BotToolsHome, 'botId'>,
   name: string,
   address: string
 ): Promise<void> {
@@ -107,7 +116,7 @@ export async function finishBotToolSignIn(
   try {
     url = new URL(address.trim())
   } catch {
-    throw new Error('Paste the whole address the sign-in page ended on.')
+    throw new BotFailureError('toolSignInAddressIncomplete')
   }
   const expected = callback ? new URL(callback) : null
   if (
@@ -116,44 +125,51 @@ export async function finishBotToolSignIn(
     url.pathname !== expected.pathname ||
     !url.searchParams.get('code')
   ) {
-    throw new Error(
-      `That isn't the address this sign-in ends on. Start it again with Connect, sign in, then paste the address your browser shows.`
-    )
+    throw new BotFailureError('toolSignInAddressWrong')
   }
   const answer = await fetch(url, { redirect: 'manual' }).catch(() => null)
   if (!answer || answer.status >= 400) {
-    throw new Error('The sign-in had already ended or timed out. Start it again with Connect.')
+    throw new BotFailureError('toolSignInEnded')
   }
 }
 
 async function startLogin(
-  cli: BotToolsCli,
+  cli: BotToolsHome,
   name: string
 ): Promise<{ authorizationUrl: string | null; finished: Promise<boolean> }> {
   const servers = await readBotToolServers(cli.folder)
   const server = servers.find((entry) => entry.name === name)
   if (!server) {
-    throw new Error(`This bot has no tool named ${name}.`)
+    throw new BotFailureError('toolNotFound', { name })
   }
   if ('url' in server && server.credential) {
-    throw new Error(`${name} uses its saved values and needs no sign-in.`)
+    throw new BotFailureError('toolNeedsNoSignIn', { name })
   }
-  return cli.agent === 'codex' ? codexLogin(cli, servers, name) : claudeLogin(cli, servers, name)
+  if (!hasBotToolsCli(cli)) {
+    throw new BotFailureError('toolSignInAgentUnsupported', { name })
+  }
+  return cli.agent === 'codex' ? codexLogin(cli, servers, server) : claudeLogin(cli, servers, name)
 }
 
 async function codexLogin(
   cli: BotToolsCli,
   servers: readonly BotToolServer[],
-  name: string
+  server: BotToolServer
 ): Promise<{ authorizationUrl: string; finished: Promise<boolean> }> {
+  const { name } = server
+  const ownerStdioNames = await codexStdioToolNames(cli)
+  // Its thread runs the owner's stdio server of that name instead, which has no sign-in.
+  if (isTakenByCodexStdio(server, ownerStdioNames)) {
+    throw new BotFailureError('toolNameTakenByCodexStdio', { name })
+  }
   const link = Promise.withResolvers<string>()
   const launch = await cliWithLaunchTools(cli, servers)
   const login = codexSession(launch.cli, SIGN_IN_TIMEOUT_MS, async (rpc) => {
-    const threadId = await codexThread(rpc, launch.cli, launch.tools)
+    const threadId = await codexThread(rpc, launch.cli, launch.tools, ownerStdioNames)
     const started = await rpc.request('mcpServer/oauth/login', { name, threadId })
     const url = LoginStarted.safeParse(started).data?.authorizationUrl
     if (!url) {
-      throw new Error(`Codex gave no sign-in page for ${name}.`)
+      throw new BotFailureError('toolCodexNoSignInPage', { name })
     }
     link.resolve(url)
     // The session must stay up until the browser reaches its callback.
@@ -229,14 +245,14 @@ async function claudeLogin(
     }
     const code = await Promise.race([exited, delay(250).then(() => null)])
     if (code !== null) {
-      throw new Error(
-        lastLine(redactBotToolText(output, servers)) ??
-          `Claude couldn't start signing in to ${name}.`
-      )
+      const said = lastLine(redactBotToolText(output, servers))
+      throw said === null
+        ? new BotFailureError('toolClaudeSignInFailed', { name })
+        : new Error(said)
     }
   }
   child.kill()
-  throw new Error(`Claude didn't open a sign-in page for ${name}.`)
+  throw new BotFailureError('toolClaudeNoSignInPage', { name })
 }
 
 // eslint-disable-next-line no-control-regex -- terminal output carries escape sequences.

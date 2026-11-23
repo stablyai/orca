@@ -127,6 +127,12 @@ export function settledJournalDomainSubmission(
         }
       : null
   }
+  if (input.state === 'accepted' && input.answeredInTurn) {
+    next.answeredInTurn = {
+      turnItemId: agentJournalItemKey(input.answeredInTurn.turn),
+      via: input.answeredInTurn.via
+    }
+  }
   if (input.recovered) {
     next.recovered = true
   }

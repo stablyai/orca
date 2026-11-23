@@ -1,5 +1,10 @@
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import { botsOfflineWord } from '../../bots/host-bot-listing'
+import { botHomeWorktreeId } from '../../bots/host-bots-read'
+import { mobileBotRowLimitText } from '../../bots/mobile-bot-row-line'
+import { useMobileBotUsageLimitStop } from '../../bots/use-mobile-bot-usage-limit-stop'
+import { useSharedNowSnapshot } from '../../hooks/use-now'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host/execution-host'
 import { mobileBotAvatarSource } from '../../bots/host-bot-row-facts'
 import { MobileBotFaceStack } from '../../bots/MobileBotFaceStack'
 import {
@@ -13,6 +18,9 @@ import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { HomeBotRow } from './home-bot-rows'
 
+const keepNow = (now: number): number => now
+const noClock = (): number => 0
+
 /** A bot or room on Home: the computer's Bots row, always naming where it runs. */
 export const MobileHomeBotRow = memo(function MobileHomeBotRow(props: {
   row: HomeBotRow
@@ -24,14 +32,29 @@ export const MobileHomeBotRow = memo(function MobileHomeBotRow(props: {
   useMobileColorScheme()
   const { row } = props
   const surface = props.grouped ? colors.bgPanel : undefined
+  // A kept row (no dot) isn't live, and a server's sessions aren't on its paired computer's feed.
+  const live =
+    row.kind === 'bot' && row.dot !== null && row.executionHost === LOCAL_EXECUTION_HOST_ID
+  // Only a live row's stop can end, so only it redraws on the clock.
+  const now = useSharedNowSnapshot(60_000, live ? keepNow : noClock)
+  const homeId = row.kind === 'bot' ? botHomeWorktreeId(row.bot) : null
+  const workspaceIds = useMemo(() => (homeId ? [homeId] : []), [homeId])
+  const stop = useMobileBotUsageLimitStop(live ? row.pairedHostId : null, workspaceIds, now)
+  const limitText =
+    row.kind === 'bot'
+      ? mobileBotRowLimitText(stop, row.line, {
+          dot: row.dot,
+          chatSessionId: row.bot.chatSessionId
+        })
+      : null
   return (
     <MobileBotRowView
       avatar={
         row.kind === 'bot' ? (
-          // Uploaded pictures need their own read; Home draws mascots, else the initial.
           <MobileBotRowAvatar
-            avatar={mobileBotAvatarSource(row.bot, undefined)}
+            avatar={mobileBotAvatarSource(row.bot)}
             dot={row.dot}
+            stopped={limitText !== null}
             surface={surface}
           />
         ) : (
@@ -43,7 +66,7 @@ export const MobileHomeBotRow = memo(function MobileHomeBotRow(props: {
       }
       title={row.title}
       unread={row.unread}
-      preview={row.preview}
+      preview={limitText ?? row.preview}
       previewLeading={
         <HostContextPill
           hostId={row.executionHost}

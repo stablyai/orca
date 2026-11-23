@@ -38,7 +38,12 @@ function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredA
       context.followUps.onDispatchSettledLate({
         sessionId,
         clientMessageId,
-        ...(outcome.state === 'accepted' ? { providerIdentity: outcome.providerIdentity } : outcome)
+        ...(outcome.state === 'accepted'
+          ? {
+              providerIdentity: outcome.providerIdentity,
+              ...(outcome.answeredInTurn ? { answeredInTurn: outcome.answeredInTurn } : {})
+            }
+          : outcome)
       })
     },
     persistResumePoint: async ({ sessionId, fence, handle }) => {

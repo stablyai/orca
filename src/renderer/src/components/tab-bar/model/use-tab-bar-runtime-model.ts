@@ -1,7 +1,9 @@
+import { shallow } from 'zustand/shallow'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store/index'
-import { buildStatusMap } from '../../../lib/source-control/paths/git-path-decoration'
+import { buildStatusMap } from '../../../../../shared/git/status/git-path-decoration'
 import { useAgentDetectionTargetForWorktree } from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
 import '@/lib/workspace/ownership/connection-context'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
@@ -208,15 +210,14 @@ export function useTabBarRuntimeModel({
     () => unifiedTabs.some((tab) => tab.contentType === 'simulator'),
     [unifiedTabs]
   )
-  const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
-    useShallow((state) => {
-      const policy = getClientCreationActionPolicy(state, worktreeId)
+  const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] =
+    useAppStoreWithHostStatuses((state, statuses) => {
+      const policy = getClientCreationActionPolicy(state, worktreeId, statuses)
       return [
         policy['managed-browser'].state === 'enabled',
         policy['mobile-emulator'].state === 'enabled'
       ] as const
-    })
-  )
+    }, shallow)
   // Why: tab-wide launch/title hints are safe only before split; gate the view-mode toggle to the active leaf's agent.
   const toggleTabViewMode = useAppStore((s) => s.toggleTabViewMode)
   // Why: every retained TabBar observes the same hot maps; one selector shares their projections.

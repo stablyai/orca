@@ -2,9 +2,7 @@ import { useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
-import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
-import { getLocalExecutionHostLabel } from '../../../../../../shared/execution-host/execution-host'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import {
@@ -18,7 +16,7 @@ import {
 import { SettingsBadge, SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import type { SettingsHostScope } from '../../host-scope/settings-host-scope'
-import { useHostBooleanSetting } from '../../host-scope/use-host-boolean-setting'
+import { useHostSetting, useSettingsHostLabel } from '../../host-scope/use-host-setting'
 import { formatBytes } from '../../../../../../shared/text/format-bytes'
 import { getDeleteAgentHistorySearchEntry } from './delete-agent-history-search'
 import { useCodexHistoryDiskUsage } from './use-codex-history-disk-usage'
@@ -35,17 +33,11 @@ export function DeleteAgentHistoryWithWorkspaceSetting({
   const t = useTranslate()
   const search = getDeleteAgentHistorySearchEntry()
   const updateSettingsOrThrow = useAppStore((state) => state.updateSettingsOrThrow)
-  const environmentId = runtimeTargetEnvironmentId(hostScope.target)
-  const hostName = useAppStateValue((state) =>
-    environmentId
-      ? state.runtimeEnvironments.find((entry) => entry.id === environmentId)?.name
-      : null
-  )
-  const hostLabel = hostName ?? getLocalExecutionHostLabel()
-  const { setting, update } = useHostBooleanSetting({
+  const hostLabel = useSettingsHostLabel(hostScope.target)
+  const { setting, update } = useHostSetting({
     owner: hostScope.target,
     settingKey: 'deleteChatHistoryWithWorkspace',
-    localEnabled: settings.deleteChatHistoryWithWorkspace === true,
+    localSettings: settings,
     // The throwing variant, so a failed local save shows the toast instead of only logging.
     updateLocalSettings: updateSettingsOrThrow,
     updateFailedMessage: t(
@@ -58,7 +50,7 @@ export function DeleteAgentHistoryWithWorkspaceSetting({
   // The row stays mounted while search hides it, so the size is read only when it can be seen.
   const diskUsage = useCodexHistoryDiskUsage(hostScope.target, matchesSettingsSearch(query, search))
   const [confirming, setConfirming] = useState(false)
-  const enabled = setting.state === 'ready' && setting.enabled
+  const enabled = setting.state === 'ready' && setting.value
   const historySize =
     diskUsage && diskUsage.rollouts > 0 && setting.state !== 'unsupported'
       ? formatBytes(diskUsage.bytes)
@@ -104,12 +96,12 @@ export function DeleteAgentHistoryWithWorkspaceSetting({
                     {diskUsage.complete
                       ? t(
                           'components.settings.agents.deleteHistoryWithWorkspace.codexHistoryTooltip',
-                          'Space Codex uses for its own chat history on {{host}}, including chats from workspaces you still have. This setting removes only chats from workspaces that no longer exist.',
+                          'Space Codex uses for its own chat history on {{host}}, including chats from workspaces you still have.',
                           { host: hostLabel }
                         )
                       : t(
                           'components.settings.agents.deleteHistoryWithWorkspace.codexHistoryTooltipAtLeast',
-                          'Codex uses at least this much space for its own chat history on {{host}}, including chats from workspaces you still have. This setting removes only chats from workspaces that no longer exist.',
+                          'Codex uses at least this much space for its own chat history on {{host}}, including chats from workspaces you still have.',
                           { host: hostLabel }
                         )}
                   </TooltipContent>

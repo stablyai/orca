@@ -52,7 +52,7 @@ export function registerBitbucketHandlers(): void {
   )
 
   ipcMain.handle('bitbucket:disconnect', async (): Promise<void> => {
-    disconnectBitbucket()
+    await disconnectBitbucket()
     _resetPreflightCache()
   })
 

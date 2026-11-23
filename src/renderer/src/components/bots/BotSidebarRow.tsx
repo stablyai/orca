@@ -14,6 +14,8 @@ import type { WorktreeStatus } from '../../../../shared/worktree/row-display/wor
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
+import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
+import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   BotAvatarStatusBadge,
@@ -29,8 +31,10 @@ export type BotSidebarRowProps = {
   /** Its home's key: the status and unread mark are the home's. */
   workspaceId: string
   hostId: ExecutionHostId
-  /** Null shows no status on the picture's corner, only the unread mark. */
+  /** The avatar shows exceptions and the row's end shows working; healthy states stay unmarked. */
   status: WorktreeStatus | null
+  /** Its chat, worker or run stopped on a usage limit while the row is quiet: the corner's tooltip. */
+  stopTip?: string | null
   isUnread: boolean
   isActive: boolean
   dimmed?: boolean
@@ -46,7 +50,8 @@ export type BotSidebarRowProps = {
   age: string | null
   /** The second line, under the name. */
   line: React.ReactNode
-  /** A column after both lines at the row's right edge, such as the fold toggle's strip. */
+  /** A column after both lines at the row's right edge, such as the fold toggle's strip. Given one,
+   *  it shows the row's working state; otherwise the row's end shows it. */
   trailing?: React.ReactNode
   /** What the hover card shows, rendered only while it is open. */
   hoverDetails: () => React.ReactNode
@@ -61,6 +66,7 @@ export function BotSidebarRow({
   workspaceId,
   hostId,
   status,
+  stopTip = null,
   isUnread,
   isActive,
   expanded,
@@ -81,7 +87,13 @@ export function BotSidebarRow({
   const [renameRequested, setRenameRequested] = useState(false)
   const [hoverOpen, setHoverOpen] = useState(false)
   const toggleUnread = (): void => setWorkspaceUnreadByUser(workspaceId, !isUnread, hostId)
-  const badge = { status, isUnread, sleeping: useBotAvatarBadgeSleeping(workspaceId, status) }
+  // Working shows once, at the row's end, where every working row shows it.
+  const badgeStatus = status === 'working' ? null : status
+  const badge = {
+    status: badgeStatus,
+    sleeping: useBotAvatarBadgeSleeping(workspaceId, badgeStatus),
+    stopTip
+  }
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -94,7 +106,7 @@ export function BotSidebarRow({
             WORKTREE_CARD_SURFACE_CLASS_NAME,
             // A two-line workspace card's padding, so bots sit as tight as Projects' rows.
             // A size container: the fold strip slims down in a narrow sidebar.
-            'group/bot-row @container/bot-row flex items-center pt-1.25 pb-1.5 pl-1.5',
+            'group/bot-row @container/bot-row flex items-center pt-1.25 pb-1.25 pl-1.25',
             !isActive && 'worktree-sidebar-card-hover',
             dimmed && 'opacity-60'
           )}
@@ -112,7 +124,7 @@ export function BotSidebarRow({
             }
           }}
         >
-          {/* The status sits on the picture's corner, the same in both card styles. */}
+          {/* Exceptions sit on the picture's corner, the same in both card styles. */}
           <span className="relative mr-2 shrink-0">
             <span className="flex" style={botAvatarBadgeCutout(badge)}>
               {avatar}
@@ -143,14 +155,14 @@ export function BotSidebarRow({
                       onBeginEditingConsumed={() => setRenameRequested(false)}
                     />
                     {age ? (
-                      <span className="ml-auto shrink-0 text-xs leading-4 text-muted-foreground tabular-nums">
+                      <span className="ml-auto shrink-0 text-3xs leading-none text-muted-foreground tabular-nums">
                         {age}
                       </span>
                     ) : null}
                   </div>
                   {line}
                 </div>
-                {trailing}
+                {trailing ?? (status === 'working' ? <BotRowWorkingMark /> : null)}
               </div>
             }
           >
@@ -180,5 +192,21 @@ export function BotSidebarRow({
         {menuFooter}
       </ContextMenuContent>
     </ContextMenu>
+  )
+}
+
+function BotRowWorkingMark(): React.JSX.Element {
+  const label = getWorktreeStatusLabel('working')
+  return (
+    // A chevron-wide slot follows it, so it lines up with the marks on fold rows' strips; a narrow
+    // row's slimmer strip ends 2px nearer the edge, so the mark does too.
+    <span
+      role="img"
+      aria-label={label}
+      className="flex shrink-0 items-center gap-0.5 can-hover:pointer-fine:@max-[15rem]/bot-row:-mr-0.5"
+    >
+      <StatusIndicator status="working" showTooltip={false} aria-hidden />
+      <span className="size-4" />
+    </span>
   )
 }

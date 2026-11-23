@@ -14,6 +14,9 @@ export type AskResult = {
   connectionLost?: boolean
   answerMessageId?: string | null
   pending?: boolean
+  /** Why no answer came: the question went unanswered, and what to do now. */
+  told?: 'unanswered' | 'dropped'
+  notice?: string | null
   next?: string
   legacyCompatibility?: LegacyCompatibilityResult
 }
@@ -27,6 +30,8 @@ type AskFields = {
   timeoutMs?: number
   cancelled?: true
   connectionLost?: true
+  told?: 'unanswered' | 'dropped'
+  notice?: string
   next?: string
 }
 
@@ -64,6 +69,8 @@ export function askView(args: {
         timeoutMs: value.timedOut ? waitedMs(value) : undefined,
         cancelled: value.cancelled ? true : undefined,
         connectionLost: value.connectionLost ? true : undefined,
+        told: value.told,
+        notice: value.notice ?? undefined,
         next: resume
           ? `Resume waiting; do not ask again: ${resume}`
           : value.legacyCompatibility?.resumeRequired
@@ -72,7 +79,9 @@ export function askView(args: {
       }
     },
     text: (fields, value) =>
-      fields.answer ?? withReceiptNext(askStatusLine(value, waitedMs(value)), fields),
+      fields.answer ??
+      fields.notice ??
+      withReceiptNext(askStatusLine(value, waitedMs(value)), fields),
     failure: (value) => {
       if (value.legacyCompatibility?.resumeRequired) {
         return {
@@ -109,6 +118,9 @@ function askStatusLine(value: AskResult, waitedMs: number): string {
   }
   if (value.timedOut) {
     return `Question ${value.messageId ?? '(unknown id)'} is still pending after ${waitedMs}ms.`
+  }
+  if (value.told) {
+    return `Question ${value.messageId} went unanswered.`
   }
   return `Wait for question ${value.messageId} ${value.connectionLost ? 'lost its connection' : 'was cancelled'}.`
 }

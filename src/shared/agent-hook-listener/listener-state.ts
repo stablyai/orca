@@ -16,7 +16,7 @@ import type { CodexSubagentRoster } from './providers/codex/codex-subagent-roste
 import type { CodexSubagentTranscriptState } from './providers/codex/codex-subagent-transcript'
 import type { CodexAsyncQuestions } from './providers/codex/codex-async-questions'
 import type { MusePaneState } from './providers/muse/muse-pane-state'
-import type { AgentHookEventPayload, ToolSnapshot } from './listener-event'
+import type { AgentHookEventPayload, AntigravityChildWork, ToolSnapshot } from './listener-event'
 import {
   deletePaneScopedCacheEntry,
   deletePaneScopedSetEntry,
@@ -47,7 +47,7 @@ export type HookListenerState = {
   antigravityCompletedTranscriptByPaneKey: Map<string, string>
   /** Work outliving the turn, kept until agy's fully idle Stop: the conversation that spawned in-process subagents,
    *  and run_command steps agy backgrounded (PreToolUse seen, the PostToolUse it sends when the command ends not yet). */
-  antigravityChildWorkByPaneKey: Map<string, { subagentParent?: string; commands?: Set<string> }>
+  antigravityChildWorkByPaneKey: Map<string, AntigravityChildWork>
   /** Journal-backed prompt for each jcode pane's current turn; see readJcodeTurnPrompt. */
   jcodeTurnPromptByPaneKey: Map<string, JcodeUserPromptEvidence | null>
   /** Open swarm-helper permission requests per jcode pane; see routeJcodeHelperHook. */
@@ -62,7 +62,8 @@ export type HookListenerState = {
   /** One-normalization provenance marker for a status backed only by restored child state. */
   claudeUnconfirmedRestoredStatusPaneKeys: Set<string>
   /** Panes whose latest authoritative Claude task inventory still has running non-agent work. */
-  claudeRunningNonAgentTaskPaneKeys: Set<string>
+  /** Panes whose main agent has running non-agent background tasks, with what each runs. */
+  claudeRunningNonAgentTasksByPaneKey: Map<string, readonly string[]>
   /** Panes whose latest authoritative Claude cron inventory still has a scheduled job. */
   claudeActiveSessionCronPaneKeys: Set<string>
   /** Background tasks each pane's main agent launched, and which of them still owe it a notification. */
@@ -140,7 +141,7 @@ export function createHookListenerState(
     claudeLeadStateByPaneKey: new Map(),
     claudeOpenToolUsesByPaneKey: new Map(),
     claudeUnconfirmedRestoredStatusPaneKeys: new Set(),
-    claudeRunningNonAgentTaskPaneKeys: new Set(),
+    claudeRunningNonAgentTasksByPaneKey: new Map(),
     claudeActiveSessionCronPaneKeys: new Set(),
     claudeLaunchedBackgroundTasksByPaneKey: new Map(),
     claudeConsumedCompactPromptIdByPaneKey: new Map(),
@@ -222,7 +223,7 @@ export function clearPaneProcessCacheState(state: HookListenerState, paneKey: st
   state.claudeLeadStateByPaneKey.delete(paneKey)
   state.claudeOpenToolUsesByPaneKey.delete(paneKey)
   state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
-  state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+  state.claudeRunningNonAgentTasksByPaneKey.delete(paneKey)
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
   state.claudeSessionOwnerByPaneKey.delete(paneKey)
@@ -280,7 +281,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeOpenToolUsesByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeUnconfirmedRestoredStatusPaneKeys, fromPaneKey, toPaneKey)
-  movePaneScopedSetEntries(state.claudeRunningNonAgentTaskPaneKeys, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.claudeRunningNonAgentTasksByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeActiveSessionCronPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeLaunchedBackgroundTasksByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSessionOwnerByPaneKey, fromPaneKey, toPaneKey)
@@ -329,7 +330,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.claudeLeadStateByPaneKey.clear()
   state.claudeOpenToolUsesByPaneKey.clear()
   state.claudeUnconfirmedRestoredStatusPaneKeys.clear()
-  state.claudeRunningNonAgentTaskPaneKeys.clear()
+  state.claudeRunningNonAgentTasksByPaneKey.clear()
   state.claudeActiveSessionCronPaneKeys.clear()
   state.claudeLaunchedBackgroundTasksByPaneKey.clear()
   state.claudeSessionOwnerByPaneKey.clear()

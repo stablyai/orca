@@ -11,9 +11,9 @@ vi.mock('../media/visuals/NativeChatInlineVisual', () => ({
 import { NativeChatCodeBlock } from './code/NativeChatCodeBlock'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 
-vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
-  loadOniguruma: (await import('@/lib/syntax-highlighting/oniguruma-test-harness'))
-    .loadNodeOniguruma
+// Direction is the subject here; highlighting would fetch its WASM over the network.
+vi.mock('@/lib/syntax-highlighting/oniguruma', () => ({
+  loadOniguruma: () => new Promise(() => {})
 }))
 
 afterEach(cleanup)

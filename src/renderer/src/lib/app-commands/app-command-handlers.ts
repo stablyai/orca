@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { readSidebarRevealTarget } from '@/components/sidebar/sidebar-reveal-target-state'
 import { workspaceRenameUnsupportedReason } from './workspace-rename-target'
 import { requestVirtualizedScrollAnchorRecord } from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
+import { setShowSleepingWorkspacesKeepingActiveRow } from '@/components/sidebar/worktree-list/controls/sleeping-workspaces-visibility'
 import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
 import { canNavigateWorktreeHistory } from '../../app-shell/chrome/titlebar-worktree-history-controls'
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../../components/sidebar/workspace-board/surface/useWorkspaceBoardPanel'
@@ -16,6 +17,7 @@ import {
 } from '../../components/sidebar/workspace-card/identity/child-workspaces-toggle-target'
 import { requestTerminalTabRename } from '../../components/tab-bar/terminal-tabs/terminal-tab-rename-request'
 import { useAppStore } from '../../store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { openPluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
@@ -153,7 +155,7 @@ export function createAppCommandHandlers(
         claim('sidebar.sleepingWorkspaces.toggle', () => {
           const store = useAppStore.getState()
           const nextShowSleeping = !store.showSleepingWorkspaces
-          store.setShowSleepingWorkspaces(nextShowSleeping)
+          setShowSleepingWorkspacesKeepingActiveRow(nextShowSleeping)
           if (nextShowSleeping) {
             store.setSidebarOpen(true)
           }
@@ -173,7 +175,7 @@ export function createAppCommandHandlers(
         }
         const groupKey = resolveChildWorkspacesToggleGroupKey(
           store,
-          getRenderedLineageChipKeys(store)
+          getRenderedLineageChipKeys(store, readRuntimeStatuses())
         )
         if (!groupKey) {
           return false

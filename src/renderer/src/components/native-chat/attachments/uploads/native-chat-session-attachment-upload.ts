@@ -8,7 +8,7 @@ import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/sess
 import { AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { translate } from '../../../../i18n/i18n'
 import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../../../../shared/agent-session/failures/agent-session-write-notice-copy'
-import { useAppStore } from '../../../../store/index'
+import { readRuntimeStatuses } from '../../../../store/slices/runtime-status/views/runtime-status-owner'
 import {
   isRuntimeHostContactRevoked,
   lastVerifiedRuntimeStatus
@@ -59,7 +59,7 @@ export function uploadNativeChatSessionAttachmentPaths(
 export function cachedNativeChatPasteUploadTarget(
   owner: NativeChatRuntimeSessionAttachmentOwner
 ): AgentSessionAttachmentUploadTarget | null {
-  const entry = useAppStore.getState().runtimeStatusByEnvironmentId.get(owner.environmentId)
+  const entry = readRuntimeStatuses().get(owner.environmentId)
   const status = isRuntimeHostContactRevoked(entry) ? null : lastVerifiedRuntimeStatus(entry)
   if (!status?.capabilities?.includes(AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY)) {
     return null

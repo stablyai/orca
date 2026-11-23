@@ -56,11 +56,6 @@ export function appendPendingSendCache(
   return writePendingSendCache(scope, [...existing, next])
 }
 
-export function clearPendingSendCacheForTests(): void {
-  pendingSendCache.clear()
-  pendingSendCounter = 0
-}
-
 // Synthetic launch ids never match real turns; reconcile normalized user text instead.
 export function launchPromptAsMessage(
   entry: NativeChatLaunchPrompt | null,

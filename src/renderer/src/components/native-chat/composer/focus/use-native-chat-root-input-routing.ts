@@ -7,7 +7,7 @@ import {
   type RefObject
 } from 'react'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
-import { DICTATION_FOCUS_INPUT_EVENT } from '../../../dictation/dictation-control-events'
+import { registerDictationInputOwner } from '../../../dictation/dictation-insertion-target'
 import { routeNativeChatRootKeyToInput } from './native-chat-root-key-routing'
 import { shouldFocusNativeChatPaneFromPointerTarget } from './native-chat-typing-redirect'
 import {
@@ -50,27 +50,28 @@ export function useNativeChatRootInputRouting(
         )
       }
     }
-    const onDictationFocusInput = (): void => {
-      const active = root.ownerDocument.activeElement
-      if (root.contains(active) || ownsUnfocusedInput(active)) {
-        nativeChatComposerDestination(rootRef.current, composerRef.current)?.focus()
-      }
-    }
     revealedChatRoots.add(root)
     root.ownerDocument.addEventListener('keydown', onKeyDown)
-    root.ownerDocument.addEventListener(DICTATION_FOCUS_INPUT_EVENT, onDictationFocusInput)
+    const releaseDictation = registerDictationInputOwner(root, {
+      focusInput: () =>
+        void nativeChatComposerDestination(rootRef.current, composerRef.current)?.focus(),
+      ownsOutsideFocus: ownsUnfocusedInput
+    })
     return () => {
       revealedChatRoots.delete(root)
       root.ownerDocument.removeEventListener('keydown', onKeyDown)
-      root.ownerDocument.removeEventListener(DICTATION_FOCUS_INPUT_EVENT, onDictationFocusInput)
+      releaseDictation()
     }
   }, [composerRef, questionAnswerInputRef, revealed, rootRef])
 
   const onPointerDownCapture = useCallback(
     (event: ReactPointerEvent) => {
+      // Portaled popovers bubble through React too; focusing the root would close them.
       if (
         !event.defaultPrevented &&
         event.button === 0 &&
+        event.target instanceof Node &&
+        rootRef.current?.contains(event.target) &&
         shouldFocusNativeChatPaneFromPointerTarget(event.target)
       ) {
         rootRef.current?.focus({ preventScroll: true })

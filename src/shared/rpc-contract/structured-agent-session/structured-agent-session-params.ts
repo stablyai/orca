@@ -233,6 +233,7 @@ export const SwitchToTerminalParams = OptionsParams.extend({
     .optional()
 }).strict()
 export const ItemParams = OptionsParams.extend({ itemId: z.string().min(1) }).strict()
+export const ToolCallerParams = z.object({ token: z.string().min(1).max(256) }).strict()
 // Why optional: only a host advertising the workspace-sleep-mark capability is sent `markAsleep`.
 export const SleepWorkspaceParams = z
   .object({ workspaceId: z.string().min(1), markAsleep: z.literal(true).optional() })
@@ -303,6 +304,12 @@ export const RestartResumableParams = z
 /** Absent selects the whole offered set; IDs narrow it. Host rechecks eligibility, excluding invented IDs. */
 export const RestartResumeParams = z
   .object({ sessionIds: z.array(SessionId).max(MAX_RESTART_RESUME_SESSIONS).optional() })
+  .strict()
+
+/** Waits for this start's own continuation of what the last run cut off; `taken` answers once it
+ *  has reserved its chats, before any agent starts. */
+export const RestartLaunchSettledParams = z
+  .object({ until: z.literal('taken').optional() })
   .strict()
 
 export const HistoryParams = z

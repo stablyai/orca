@@ -22,25 +22,45 @@ export function botPreviewSignal(bot: BotPreviewFacts): BotPreviewSignal {
 const PRIORITY = { attention: 0, unread: 1, working: 2 }
 
 /** Only the collapsed preview ranks bots; ties retain the host's saved order. */
-export function collapsedBotPreview<T extends BotPreviewFacts>(bots: readonly T[], limit = 5) {
-  const ranked = bots
-    .map((bot, index) => ({
-      bot,
-      index,
-      priority: botPreviewSignal(bot) === null ? 3 : PRIORITY[botPreviewSignal(bot)!]
-    }))
+export function rankBotsForPreview<T extends BotPreviewFacts>(bots: readonly T[]): T[] {
+  return bots
+    .map((bot, index) => {
+      const signal = botPreviewSignal(bot)
+      return { bot, index, priority: signal === null ? 3 : PRIORITY[signal] }
+    })
     .sort((a, b) => a.priority - b.priority || a.index - b.index)
     .map(({ bot }) => bot)
-  const shown = ranked.slice(0, Math.max(0, Math.min(5, Math.floor(limit))))
-  const hidden = ranked.slice(shown.length)
+}
+
+export function summarizeBotPreview(bots: readonly BotPreviewFacts[]) {
   return {
-    shown,
-    hidden,
-    hiddenSignal: hidden.length ? botPreviewSignal(hidden[0]!) : null,
     total: bots.length,
     attention: bots.filter((bot) => botPreviewSignal(bot) === 'attention').length,
     unread: bots.filter((bot) => bot.unread).length,
     working: bots.filter((bot) => bot.status === 'working' || bot.status === 'monitoring').length
+  }
+}
+
+export function collapsedBotPreview<T extends BotPreviewFacts>(
+  bots: readonly T[],
+  limit = 5,
+  current?: T
+) {
+  const ranked = rankBotsForPreview(bots)
+  const shown = ranked.slice(0, Math.max(0, Math.min(5, Math.floor(limit))))
+  const hidden = ranked.slice(shown.length)
+  // Keep the current chat visible without shifting faces that already fit.
+  const hiddenIndex = current ? hidden.indexOf(current) : -1
+  if (current && shown.length > 0 && hiddenIndex !== -1) {
+    hidden.splice(hiddenIndex, 1)
+    hidden.unshift(shown.at(-1)!)
+    shown[shown.length - 1] = current
+  }
+  return {
+    ...summarizeBotPreview(bots),
+    shown,
+    hidden,
+    hiddenSignal: hidden[0] ? botPreviewSignal(hidden[0]) : null
   }
 }
 

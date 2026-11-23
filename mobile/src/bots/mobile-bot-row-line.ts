@@ -10,8 +10,15 @@ import {
 } from '../../../src/shared/bots/bot-row-line'
 import { compactAgentStatusLine } from '../../../src/shared/agent-status/presentation/agent-compact-status'
 import { resolveProgramStatusPresentation } from '../../../src/shared/program-status/presentation'
+import { botNeedsYouCount } from '../../../src/shared/bots/bot-now'
+import {
+  botRowLimit,
+  usageLimitStopText,
+  type NamedUsageLimitStop
+} from '../../../src/shared/bots/bot-usage-limit-stop'
+import type { BotRowStatus } from '../../../src/shared/bots/bot-row-status'
 import { translate } from '../i18n/mobile-i18n'
-import { agentRowTimeAt } from '../worktree/agent-lineage/agent-row-display'
+import { agentDotState, agentRowTimeAt } from '../worktree/agent-lineage/agent-row-display'
 import type { MobileBotRowFacts } from './host-bot-row-facts'
 
 const PHONE_ROWS: BotRowLineReader<RuntimeWorktreeAgentRow> = {
@@ -45,12 +52,37 @@ const PHONE_ROWS: BotRowLineReader<RuntimeWorktreeAgentRow> = {
   at: (row) => agentRowTimeAt(row)
 }
 
+/** The bot's one Needs you count as its row holds it (`botNeedsYouCount`): its own chats and runs
+ *  still asking (a stale ask has decayed, as on the desktop) and its workers on a permission, beside its
+ *  items and the people asking for access. The row's badge and line both say it; the open panel's Items
+ *  tab also counts what only it reads. */
+export function mobileBotRowNeedsYou(
+  line: Pick<MobileBotRowFacts['line'], 'workers' | 'itemsNeedingYou'>,
+  rows: readonly RuntimeWorktreeAgentRow[],
+  now: number
+): number {
+  const asking = rows.filter((row) => {
+    const dot = agentDotState(row, now)
+    return dot === 'blocked' || dot === 'waiting'
+  }).length
+  return botNeedsYouCount(asking + (line.workers?.permission ?? 0), line.itemsNeedingYou ?? 0)
+}
+
 export function mobileBotRowLine(
   bot: Pick<MobileBotRowFacts, 'paused' | 'line'>,
   rows: readonly RuntimeWorktreeAgentRow[],
   now: number
 ): BotRowLine | null {
-  return selectBotRowLine({ ...bot.line, paused: bot.paused, rows, now }, PHONE_ROWS)
+  return selectBotRowLine(
+    {
+      ...bot.line,
+      paused: bot.paused,
+      rows,
+      needsYou: mobileBotRowNeedsYou(bot.line, rows, now),
+      now
+    },
+    PHONE_ROWS
+  )
 }
 
 /** The line's words, as the desktop's row says them. */
@@ -58,4 +90,27 @@ export function mobileBotRowLineText(line: BotRowLine, now: number): string {
   return botRowLineText(line, translate, (by) =>
     new Intl.DateTimeFormat(undefined, botWaitTimeFormat(by, now)).format(by)
   )
+}
+
+/** The desktop row's usage-limit line, said in place of a quiet line; null while the bot or a
+ *  worker works or asks. */
+export function mobileBotRowLimitText(
+  stop: NamedUsageLimitStop | null,
+  line: BotRowLine | null,
+  bot: {
+    dot: BotRowStatus | null
+    workers?: MobileBotRowFacts['line']['workers']
+    chatSessionId: string | null | undefined
+  }
+): string | null {
+  const { dot, workers } = bot
+  const busy =
+    dot === 'working' ||
+    dot === 'permission' ||
+    (workers?.working ?? 0) > 0 ||
+    (workers?.permission ?? 0) > 0
+  const limit = botRowLimit(stop, line, busy, bot.chatSessionId, translate)
+  return limit
+    ? [limit.place, usageLimitStopText(translate, limit.stop)].filter(Boolean).join(' · ')
+    : null
 }

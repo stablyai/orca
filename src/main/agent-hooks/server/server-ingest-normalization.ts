@@ -1,4 +1,7 @@
-import { retainOpenCodeWriterTopology } from './cli-writer-observation'
+import {
+  retainOpenCodeWriterTopology,
+  retainTmuxHookWriterTopology
+} from './cli-writer-observation'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { AgentHookAttributionDiagnostics } from '../../../shared/agent-hook-listener/state/agent-hook-attribution-diagnostics'
 import {
@@ -9,8 +12,9 @@ import {
   checkHookOwnerPresence,
   restateHookRoot
 } from '../../../shared/agent-hook-listener/presence/agent-hook-owner-presence'
-import type { HookRootEvidenceReader } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
+import { withStopTranscriptReadsSkipped } from '../../../shared/agent-hook-listener/transcript-lines'
+import { droidStopTranscriptPath } from '../../../shared/agent-hook-listener/providers/droid/droid-turn-outcome'
 import {
   isAgentHookSource,
   type AgentHookSource
@@ -36,13 +40,6 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
   protected readonly codexRolloutPrefetcher = new CodexHookRolloutPrefetcher()
 
   protected readonly attributionDiagnostics = new AgentHookAttributionDiagnostics()
-  /** Unset in tests and embedders without a process table: every acquisition reads as unknown. */
-  protected readHookRootEvidence: HookRootEvidenceReader | undefined
-
-  setHookRootEvidenceReader(reader: HookRootEvidenceReader): void {
-    this.readHookRootEvidence = reader
-  }
-
   /** Panes whose owner an undecided hook challenged: until that hook is admitted or refused, the
    *  owner's exit neither answers for the pane nor is forgotten. */
   protected readonly undecidedOwnerChallenges = new Map<string, number>()
@@ -114,13 +111,13 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
 
   protected setClaudeBackgroundEvidence(
     paneKey: string,
-    hasRunningTask: boolean,
+    runningTasks: readonly string[] | undefined,
     hasActiveCron: boolean
   ): void {
-    if (hasRunningTask) {
-      this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+    if (runningTasks) {
+      this.state.claudeRunningNonAgentTasksByPaneKey.set(paneKey, runningTasks)
     } else {
-      this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+      this.state.claudeRunningNonAgentTasksByPaneKey.delete(paneKey)
     }
     if (hasActiveCron) {
       this.state.claudeActiveSessionCronPaneKeys.add(paneKey)
@@ -129,10 +126,24 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
   }
 
+  /** Never scans a transcript on the event loop: a skipped Stop-text read comes back as a path. */
   protected normalizeLocalHookPayload(
     source: AgentHookSource,
     body: unknown,
     isReplay = false
+  ): NormalizedLocalHook {
+    const { value, skipped } = withStopTranscriptReadsSkipped(() =>
+      this.normalizeLocalHookPayloadNow(source, body, isReplay)
+    )
+    retainTmuxHookWriterTopology(value.event, body)
+    const droidVerdictTranscriptPath = droidStopTranscriptPath(source, value.event, body)
+    return { ...value, stopTranscriptPath: skipped.at(-1), droidVerdictTranscriptPath }
+  }
+
+  private normalizeLocalHookPayloadNow(
+    source: AgentHookSource,
+    body: unknown,
+    isReplay: boolean
   ): NormalizedLocalHook {
     if (source !== 'claude' || typeof body !== 'object' || body === null) {
       const event = normalizeHookPayload(this.state, source, body, this.env, {
@@ -167,7 +178,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     if (!paneKey) {
       return { event: normalizeHookPayload(this.state, source, body, this.env, { isReplay }) }
     }
-    const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
+    const previousRunningTask = this.state.claudeRunningNonAgentTasksByPaneKey.get(paneKey)
     const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
     const event = normalizeHookPayload(this.state, source, body, this.env, { isReplay })
     const transcriptPath = event?.providerSession?.transcriptPath
@@ -175,7 +186,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       // A wrapper's CLAUDE_CONFIG_DIR is only visible here; History scans it too (#23505).
       getClaudeObservedConfigDirs()?.observeTranscriptPath(transcriptPath)
     }
-    const nextRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
+    const nextRunningTask = this.state.claudeRunningNonAgentTasksByPaneKey.get(paneKey)
     const nextActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
     this.setClaudeBackgroundEvidence(paneKey, previousRunningTask, previousActiveCron)
     if (!event || event.paneKey !== paneKey) {
@@ -232,10 +243,9 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       }
       this.recordCurrentAuthorityObservation(event)
       toolCallOwner = event
-      const enriched = this.applyObservedLocalHook(event, normalized.onAccepted)
+      const enriched = this.applyLocalHookAndReply(source, aliasedBody, event, normalized)
       if (enriched) {
         this.checkAgentPresenceAfterHook(event, enriched)
-        this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
         this.scheduleTranscriptPoll(source, aliasedBody, enriched)
       }
     }
@@ -303,7 +313,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       this.observations.rebind(event.paneKey)
     }
     this.recordCurrentAuthorityObservation(event)
-    const enriched = this.applyObservedLocalHook(event, normalized.onAccepted, record.receivedAt)
+    const enriched = this.applyReplayedHookAndReply(event, normalized, record.receivedAt)
     // Replay defers children whose rollout path is unresolved; only the poll finds and reads them.
     if (enriched && record.source === 'codex') {
       this.requestReplayTranscriptPoll(body, enriched)

@@ -86,6 +86,7 @@ export function createScreencastHarness(): ScreencastHarness {
         }
       },
       flushPendingFrame: () => {},
+      startViewerEvents: () => {},
       session
     }
   })

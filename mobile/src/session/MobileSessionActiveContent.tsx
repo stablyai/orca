@@ -8,7 +8,7 @@ import {
   terminalPaneKeyboardLayout
 } from '../terminal/session/pane-layout/mobile-terminal-pane-layout'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
-import { MobileBrowserPane } from '../browser/MobileBrowserPane'
+import { MobileBrowserTabBody } from '../browser/MobileBrowserTabBody'
 import { TerminalPaneView } from '../terminal/session/pane-layout/TerminalPaneView'
 import { MountedTerminalPanes } from '../terminal/session/pane-layout/mounted-terminal-lru'
 import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
@@ -116,8 +116,7 @@ export function MobileSessionActiveContent({
     isPendingTerminalRecoveryParked,
     retryPendingTerminalRecovery,
     showLoadingState,
-    showEmptyState,
-    createTabBusy
+    showEmptyState
   } = controller
   const { keyboardLift, activeTerminalKeyboardLift, toastAnimatedStyle } =
     useMobileSessionContentKeyboardLift(controller)
@@ -159,7 +158,7 @@ export function MobileSessionActiveContent({
         hostName={hostTitle}
         lastTabs={controller.visibleTabs.length > 0 ? { hostId, worktreeId } : null}
         loading={showLoadingState}
-        creating={createTabBusy}
+        creating={controller.createTabBusy}
         createError={createError}
         onReconnect={forceReconnectHost ? () => void forceReconnectHost(hostId) : null}
         onRetryTabs={() => void retryPendingTerminalRecovery()}
@@ -227,12 +226,13 @@ export function MobileSessionActiveContent({
     ) : activeBrowserTab ? (
       <View style={styles.browserFrame}>
         {/* Why: pane owns imperative frame refs; don't render a stale frame while the old stream effect cleans up. */}
-        <MobileBrowserPane
+        <MobileBrowserTabBody
           key={activeBrowserTab.browserPageId ?? activeBrowserTab.id}
           client={client}
           worktreeId={worktreeId}
           tab={activeBrowserTab}
           screencastSupported={browserScreencastSupported}
+          hostSupport={controller.browserHostSupport}
           keyboardLift={keyboardLift}
           bottomInset={controller.insets.bottom}
           onToast={showToast}
@@ -309,6 +309,7 @@ export function MobileSessionActiveContent({
                     : activeTerminalKeyboardLift
               }
               terminalTheme={terminal.terminalTheme}
+              hostSettings={controller.terminalHostSettings}
               textScale={terminalTextScale}
               fontStyle={terminalFontStyle}
               onTextScaleChange={commitPinchedTextScale}

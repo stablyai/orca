@@ -13,12 +13,13 @@ import {
 } from '../../../../shared/bot-tools'
 import { parseBotToolPaste } from '../../../../shared/bot-tool-paste'
 import { botToolErrorMessage } from './bot-tools-client'
+import { botAgentLabel } from './bot-presentation'
 import {
   botToolDraftError,
   botToolDraftInput,
   draftFromServer,
   emptyBotToolDraft
-} from './bot-tool-draft'
+} from '../../../../shared/bots/bot-tool-draft'
 import { BotToolDetailsFields } from './BotToolDetailsFields'
 
 export function BotToolEditor({
@@ -51,17 +52,21 @@ export function BotToolEditor({
   const [error, setError] = useState<string | null>(null)
   const [pasteError, setPasteError] = useState<string | null>(null)
   const collision = taken.has(draft.name)
-  const invalid = botToolDraftError(draft, context.platform, saved)
+  const invalid = botToolDraftError(draft, context.platform, t, saved)
   const apply = (text: string) => {
     setPending(false)
     setManual(false)
     setError(null)
     try {
-      setDraft(draftFromServer(parseBotToolPaste(text, context.platform)))
+      setDraft(draftFromServer(parseBotToolPaste(text, context.platform, t)))
       setPasteError(null)
     } catch (caught) {
       setDraft(emptyBotToolDraft())
-      setPasteError(caught instanceof Error ? caught.message : 'The paste is invalid.')
+      setPasteError(
+        caught instanceof Error
+          ? caught.message
+          : t('bots.tools.pasteInvalid', 'The paste is invalid.')
+      )
     }
   }
   return (
@@ -87,11 +92,11 @@ export function BotToolEditor({
         <p className="text-xs text-muted-foreground">
           {host
             ? t('settings.bots.tools.details.executionContextOnHost', '{{agent}} · {{host}}', {
-                agent: context.agent === 'claude' ? 'Claude Code' : 'Codex',
+                agent: botAgentLabel(context.agent),
                 host
               })
             : t('settings.bots.tools.details.executionContext', '{{agent}} · This computer', {
-                agent: context.agent === 'claude' ? 'Claude Code' : 'Codex'
+                agent: botAgentLabel(context.agent)
               })}
           <br />
           {t('settings.bots.tools.details.workingFolder', 'Working folder:')}{' '}

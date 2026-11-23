@@ -53,6 +53,13 @@ export type JournalInputEvidenceFacts = {
   stoppedCandidates: JournalKeyedSet<string>
   carrierCoverage: JournalKeyedMap<string, readonly string[]>
   coveredBy: JournalKeyedMap<string, JournalKeyedSet<string>>
+  /** Known inputs per send fingerprint, ordered (submittedAt, ordinal) like the echo claimant's scan. */
+  echoCandidates: JournalKeyedMap<string, JournalInputPlaceStorage>
+  /** The same minus inputs found already echoed; a refresh re-admits one. */
+  openEchoCandidates: JournalKeyedMap<string, JournalInputPlaceStorage>
+  echoFingerprints: JournalKeyedMap<string, string>
+  /** Current /clear dividers by sequence; undefined until a query seeds it from the items. */
+  clearDividers: JournalInputPlaceStorage | undefined
   recoverableSubmissions: () => Iterable<AgentJournalSubmission>
   statusPendingIds: () => Iterable<string>
   nextOrdinal: number

@@ -2,9 +2,7 @@ import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
 import { refuseClaimedWorkerTerminal } from '../../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 import { probeWorkerOpenCodeModelLaunchSupport } from './launch/worker-opencode-model-preflight'
 import { resolveWorkerConfiguredAgentParams } from './launch/worker-configured-agent-preflight'
-import { waitForWorkerAgentReady } from '../../../../../terminal/wait/launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
-import { agentStartupBlockedMessage } from '../../../../../terminal/wait/agent-startup-blocked-message'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type {
   DispatchContextRow,
@@ -15,16 +13,15 @@ import type { OrchestrationEntryCaller } from '../../../../../orchestration/addr
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
 import { resolveWorkerStartModeOnHost } from '../../structured-workers/orchestration-worker-start-mode'
+import { lineageModeForResolvedAgent } from './worker-chat-lineage'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './placement/worker-start-agent-placement'
-import { awaitStructuredWorkerSetupGate } from './readiness/worker-start-structured-setup-gate'
 import { assertOrchestrationWorktreeCreationSupported } from './placement/folder-worktree-placement'
 import { resolveWorkerWorktreeCreationTarget } from './placement/worker-worktree-creation'
 import type { WorkerStartInput } from './worker-start-input'
 import {
   persistGatedSetupSpawnFailure,
-  persistWorkerReadinessStage,
-  persistWorkerSetupWaitOutcome
+  persistWorkerReadinessStage
 } from './readiness/worker-setup-gate'
 import { failWorkerStartWithReceipt } from './worker-start-receipt'
 import {
@@ -34,12 +31,19 @@ import {
 import { resolveDispatchAssigneeParty } from '../../../../../orchestration/addressing/orchestration-party'
 import { chatAssigneeOf, chatWorkerMode } from '../../chat-assignee-admission'
 import { recordCreatedWorkerTerminalCustody } from './placement/created-worker-terminal-custody'
-import { releaseRetriedWorkerTerminal } from '../release/retried-worker-terminal-release'
+import {
+  closeFailedSetupOnceRetryReady,
+  releaseRetriedWorkerTerminal
+} from '../release/retried-worker-terminal-release'
 import { requireWorkerAuthority, type WorkerEffect } from './placement/worker-placement-topology'
 import { prepareLocalWorkerStart } from './launch/worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './readiness/worker-start-readiness-settlement'
+import { handOverWhenReady } from './readiness/placed-worker-readiness'
 import type { WorkerStartMutation } from './worker-start-mutation'
-import { prepareWorkerStartCard } from '../../../../../orchestration/workers/launch/worker-start-card'
+import {
+  prepareWorkerStartCard,
+  recordWorkerStartOutcome
+} from '../../../../../orchestration/workers/launch/worker-start-card'
 import { rebindReusedStructuredWorker } from '../../structured-workers/orchestration-structured-worker-session'
 import { placedWorkerParty, type WorkerFollowUp } from '../follow-up/worker-follow-up-placement'
 
@@ -56,6 +60,8 @@ export async function startLocalWorker(args: {
   orchestrationMutation?: WorkerStartMutation
   /** Settings-driven; the executing host still gets to refuse below. */
   mode: WorkerStartModeReceipt
+  /** Stamped on the Dispatch so the workers this one starts start as chats too. */
+  chatLineage?: boolean
   /** Set when a worker starts its own helper; the helper reports to this Dispatch. */
   helperCreator?: DispatchContextRow
   followUp?: WorkerFollowUp
@@ -127,7 +133,8 @@ export async function startLocalWorker(args: {
       resolvedWorktreeId: resolvedWorktree?.id
     })
   }
-  const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
+  const decided = lineageModeForResolvedAgent(runtime, args.mode, { ...args, params, agent })
+  const hostMode = resolveWorkerStartModeOnHost(runtime, decided, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
 
   // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.
@@ -160,6 +167,32 @@ export async function startLocalWorker(args: {
     failedStage = stage
   }
   let result: unknown
+  const failStart = (error: unknown, stage = failedStage): Promise<unknown> =>
+    failWorkerStartWithReceipt({
+      runtime,
+      structuredSession: placed?.structuredSession ?? null,
+      db,
+      runId: run.id,
+      taskId: task.id,
+      dispatchId: started.dispatch.id,
+      failedStage: stage,
+      error,
+      setup: placed?.setupReceipt ?? EXISTING_WORKTREE_SETUP,
+      launch: placed?.launch ?? launch.receipt,
+      mode
+    })
+  const recordOutcome = (outcome: unknown): void => {
+    closeFailedSetupOnceRetryReady(runtime, db, params.retryOf, outcome)
+    recordWorkerStartOutcome(recordStart, outcome, {
+      reusedTerminal: Boolean(params.terminal),
+      dispatchId: started.dispatch.id,
+      taskId: task.id,
+      workerAddress: terminalHandle,
+      task: task.spec,
+      agent: agent ?? null,
+      followUp: args.followUp && { of: args.followUp.of, reopened: Boolean(placed?.reopened) }
+    })
+  }
   try {
     placed = await placeWorkerAgent({
       runtime,
@@ -199,106 +232,83 @@ export async function startLocalWorker(args: {
     }
     persistWorkerReadinessStage(setupStage)
 
+    const launchedAt = Date.now()
     failedStage = 'agent_readiness'
     // A structured worker's setup gate and its preamble's wait share one deadline: the timeout.
-    const readinessDeadline = Date.now() + (params.timeoutMs ?? 60_000)
-    // Structured readiness comes from preamble delivery, not TUI idle; only repo wait-for-setup policy gates here.
-    const wait = structuredSession
-      ? await awaitStructuredWorkerSetupGate({
-          runtime,
-          setup: setupReceipt,
-          effects,
-          timeoutMs: Math.max(0, readinessDeadline - Date.now())
-        })
-      : workerChat
-        ? // A chat takes its task as a queued send whatever it is doing, so nothing is waited on.
-          null
-        : await waitForWorkerAgentReady(runtime, terminalHandle, {
-            agent,
-            reusesTerminal: Boolean(params.terminal),
-            creation: placed.terminalCreation,
-            timeoutMs: params.timeoutMs ?? 60_000
-          })
-    if (wait) {
-      persistWorkerSetupWaitOutcome({ ...setupStage, wait })
-      if (!wait.satisfied) {
-        if (setupReceipt.state === 'failed') {
-          failedStage = 'setup_wait'
-        }
-        throw new Error(
-          wait.blockedReason
-            ? await agentStartupBlockedMessage(runtime, terminalHandle, wait.blockedReason)
-            : structuredSession
-              ? `Setup did not finish before the structured worker started (${wait.status}).`
-              : `Agent did not become ready (${wait.status}).`
-        )
+    const timeoutMs = params.timeoutMs ?? 60_000
+    const readinessDeadline = Date.now() + timeoutMs
+    const readiness = {
+      agent,
+      reusesTerminal: Boolean(params.terminal),
+      creation: placed.terminalCreation
+    }
+    // Fixed now: the hand-over may run later, from the background wait.
+    const placement = placed
+    const handle = terminalHandle
+    const worktreeId = resolvedWorktree.id
+    // A hand-over from the background wait gets a fresh delivery budget; one in time keeps the shared one.
+    const bindTerminal = (): void => {
+      const terminalAuthority = authority ?? requireWorkerAuthority(runtime, handle)
+      db.prepareStartingWorkerAuthority({
+        dispatchId: started.dispatch.id,
+        handle,
+        ...terminalAuthority,
+        worktreeId,
+        effects,
+        setupState: setupReceipt.state,
+        terminalOwnership: external ? 'external' : 'created'
+      })
+    }
+    const handOver = async (deliveryDeadline = readinessDeadline): Promise<unknown> => {
+      bindTerminal()
+      if (workerChat) {
+        rebindReusedStructuredWorker(handle, db)
       }
+      return deliverAndSettleWorkerStartReadiness({
+        runtime,
+        db,
+        run,
+        task: placement.extraSpec
+          ? { ...task, spec: `${task.spec}\n\n${placement.extraSpec}` }
+          : task,
+        dispatchId: started.dispatch.id,
+        dispatchDepth: started.dispatch.depth,
+        structuredSession,
+        terminalHandle: handle,
+        coordinatorHandle: params.from,
+        devMode: params.devMode,
+        requestId: orchestrationMutation?.requestId ?? started.dispatch.id,
+        agent: agent ?? null,
+        launchedAgent: external || workerChat ? null : (agent ?? null),
+        setupReceipt,
+        launchReceipt: placement.launch,
+        mode,
+        timeoutMs,
+        readinessDeadline: deliveryDeadline,
+        effects,
+        terminalRevealWarning: placement.warning,
+        onStage
+      })
     }
-    const terminalAuthority = authority ?? requireWorkerAuthority(runtime, terminalHandle)
-    db.prepareStartingWorkerAuthority({
-      dispatchId: started.dispatch.id,
-      handle: terminalHandle,
-      ...terminalAuthority,
-      worktreeId: resolvedWorktree.id,
-      effects,
-      setupState: setupReceipt.state,
-      terminalOwnership: external ? 'external' : 'created'
-    })
-    if (workerChat) {
-      rebindReusedStructuredWorker(terminalHandle, db)
-    }
-
-    result = await deliverAndSettleWorkerStartReadiness({
+    result = await handOverWhenReady({
       runtime,
-      db,
-      run,
-      task: placed.extraSpec ? { ...task, spec: `${task.spec}\n\n${placed.extraSpec}` } : task,
-      dispatchId: started.dispatch.id,
-      dispatchDepth: started.dispatch.depth,
       structuredSession,
-      terminalHandle,
-      coordinatorHandle: params.from,
-      devMode: params.devMode,
-      requestId: orchestrationMutation?.requestId ?? started.dispatch.id,
-      agent: agent ?? null,
-      launchedAgent: external || workerChat ? null : (agent ?? null),
-      setupReceipt,
-      launchReceipt: placed.launch,
-      mode,
-      timeoutMs: params.timeoutMs ?? 60_000,
+      workerChat: Boolean(workerChat),
+      setupStage,
+      readiness,
+      timeoutMs,
       readinessDeadline,
-      effects,
-      terminalRevealWarning: placed.warning,
-      onStage
+      launchedAt,
+      receipt: { runId: run.id, taskId: task.id, launch: placed.launch, mode },
+      onSetupFailed: () => onStage('setup_wait'),
+      handOver,
+      bindTerminal,
+      onHandedOver: recordOutcome,
+      fail: failStart
     })
   } catch (error) {
-    result = await failWorkerStartWithReceipt({
-      runtime,
-      structuredSession: placed?.structuredSession ?? null,
-      db,
-      runId: run.id,
-      taskId: task.id,
-      dispatchId: started.dispatch.id,
-      failedStage,
-      error,
-      setup: placed?.setupReceipt ?? EXISTING_WORKTREE_SETUP,
-      launch: placed?.launch ?? launch.receipt,
-      mode
-    })
+    result = await failStart(error)
   }
-  const state = result && typeof result === 'object' && 'state' in result ? result.state : null
-  // An unknown outcome with an agent launched may yet be a running worker: a bot records it, with no
-  // card. One that failed before any agent (a lost worktree reply) is no worker at all.
-  if (!params.terminal && terminalHandle && (state === 'ready' || state === 'outcome_unknown')) {
-    recordStart({
-      ready: state === 'ready',
-      dispatchId: started.dispatch.id,
-      taskId: task.id,
-      workerAddress: terminalHandle,
-      task: task.spec,
-      agent: agent ?? null,
-      followUp: args.followUp && { of: args.followUp.of, reopened: Boolean(placed?.reopened) }
-    })
-  }
+  recordOutcome(result)
   return result
 }
