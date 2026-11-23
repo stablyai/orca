@@ -87,8 +87,16 @@ export function getAgentResumeArgv(
     case 'kiro':
       return providerSession.key === 'session_id' ? ['kiro-cli', '--resume-id', id] : null
     case 'hermes':
+      // The live profile names the store directly; history rows fall back to their state.db path.
       return providerSession.key === 'session_id'
-        ? ['hermes', ...hermesStateDbProfileArgs(providerSession.transcriptPath), '--resume', id]
+        ? [
+            'hermes',
+            ...(providerSession.hermesProfile
+              ? ['-p', providerSession.hermesProfile]
+              : hermesStateDbProfileArgs(providerSession.transcriptPath)),
+            '--resume',
+            id
+          ]
         : null
   }
 }

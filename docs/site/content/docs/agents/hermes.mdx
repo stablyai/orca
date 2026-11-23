@@ -50,6 +50,12 @@ Hermes runs conversations and their tools in a per-profile gateway process. The 
 - Closing a chat or pressing Stop cancels its turn in the gateway.
 - One gateway serves every chat on the profile, so Orca's Hermes plugin hands each tool its own chat's Orca identity when the tool starts. The `orca` command inside a Hermes tool then acts as the chat or bot that ran it: orchestration, `orca bot`, `orca slack` and a bot's Google permission all work as they do in other chats. This needs Hermes 0.23.1 or later and Orca's agent status hooks for Hermes turned on. A gateway that was already running when Orca updated its plugin picks it up after `hermes gateway stop`.
 
+## Profiles
+
+Hermes' named profiles (`hermes profile use`, or `hermes -p <name>`) each keep their own config, plugins and session store. Orca lists them on the Hermes row of the quick-launch menu: hover it to pick **Default** or a profile under `~/.hermes/profiles/`, and the pane launches with `--profile <id>`. The profile the current environment would use is marked; the list reads the local Hermes install, so it is offered on local panes only.
+
+Sessions keep their profile: a hibernated or slept Hermes pane relaunches into the profile it ran in, and Session History rows resume from the profile store they came from. Session ids are only unique inside one profile's store, so resuming always names the profile the session belongs to.
+
 ## Remote hosts
 
 Install and sign in to Hermes on the machine that runs the workspace, such as a [Remote Orca Server](/docs/remote-servers). Chat is not available for SSH workspaces.

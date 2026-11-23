@@ -51,6 +51,7 @@ import { registerWorkspaceSpaceHandlers } from '../workspace-space/workspace-spa
 import { registerWorkspacePortHandlers } from '../ports/workspace-ports'
 import { registerLinkPreviewHandlers } from '../link-preview'
 import { registerLocalhostWorktreeLabelHandlers } from '../ports/localhost-worktree-labels'
+import { registerHermesLaunchProfileHandlers } from '../hermes/hermes-launch-profiles'
 import { registerAutomationHandlers } from '../automations'
 import { registerKeybindingHandlers } from '../keybindings'
 import { registerTelemetryHandlers } from '../telemetry'
@@ -216,6 +217,7 @@ export async function registerCoreHandlers(
     registerWorkspacePortHandlers(store)
     registerLinkPreviewHandlers()
     registerLocalhostWorktreeLabelHandlers(store)
+    registerHermesLaunchProfileHandlers()
     registerFilesystemHandlers(store, commitMessageAgentEnv)
     registerFilesystemWatcherHandlers()
     registerRuntimeHandlers(runtime)

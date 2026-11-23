@@ -121,6 +121,11 @@ SELECTED_KEYS = {
     "on_session_finalize": ("session_id", "platform"),
     "on_session_reset": ("session_id", "platform"),
 }
+# Session ids are only unique inside one profile's state.db, so Orca must resume into the
+# profile the session lives in. 'default' is the root home and 'custom' a Hermes-Desktop-chosen
+# home; neither names a --profile argument, so both stay unnamed here.
+NAMED_PROFILE = ""
+DEFAULT_AND_DESKTOP_HOMES = ("default", "custom")
 
 
 def _truncate_string(value: str) -> str:
@@ -238,6 +243,8 @@ def _payload_for_event(event_name: str, kwargs: dict[str, Any]) -> dict[str, Any
     for key in SELECTED_KEYS.get(event_name, ()):
         if key in kwargs:
             payload[key] = _jsonable(kwargs[key])
+    if NAMED_PROFILE and NAMED_PROFILE not in DEFAULT_AND_DESKTOP_HOMES:
+        payload["hermes_profile"] = NAMED_PROFILE
     if "user_message" in payload:
         payload["prompt"] = payload["user_message"]
     if "assistant_response" in payload:
@@ -285,6 +292,10 @@ def _make_hook(event_name: str) -> Callable[..., None]:
 
 
 def register(ctx: Any) -> None:
+    global NAMED_PROFILE
+    profile_name = getattr(ctx, "profile_name", None)
+    if isinstance(profile_name, str):
+        NAMED_PROFILE = profile_name.strip()
     for event_name in EVENTS:
         ctx.register_hook(event_name, _make_hook(event_name))
     # Hermes before 0.23.1 has no per-session env: its chats' tools keep no Orca identity.

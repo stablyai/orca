@@ -23,7 +23,9 @@ const agentProviderSessionSchema = z.preprocess(
     transcriptPath: z.string().min(1).optional(),
     cwd: z.string().min(1).optional(),
     effort: z.string().regex(AGENT_EFFORT_LEVEL).optional(),
-    permissionMode: z.string().optional()
+    permissionMode: z.string().optional(),
+    // Hermes resumes by profile store; normalizeAgentProviderSession already validated the id.
+    hermesProfile: z.string().min(1).optional()
   })
 )
 

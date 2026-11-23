@@ -21,3 +21,12 @@ export function hermesProfileRoot(home: string): string {
   const match = home.match(/^(.*)[\\/]profiles[\\/][^\\/]+[\\/]?$/)
   return match?.[1] || home
 }
+
+/** A hook-reported profile id that names a `--profile` argument: `default` is the root and
+ *  `custom` a Hermes-Desktop-chosen home, so neither may be spliced into argv. */
+export function readHermesProfileName(value: unknown): string | undefined {
+  const profile = typeof value === 'string' ? value.trim() : ''
+  return profile === 'default' || profile === 'custom' || !HERMES_PROFILE_NAME.test(profile)
+    ? undefined
+    : profile
+}

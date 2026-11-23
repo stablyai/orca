@@ -43,6 +43,7 @@ import { codexAccountsApi } from './api/agent-accounts/codex-accounts-bridge'
 import { claudeAccountsApi } from './api/agent-accounts/claude-accounts-bridge'
 import { cliApi } from './api/cli-install/cli-bridge'
 import { orcaUninstallApi } from './api/orca-uninstall/orca-uninstall-bridge'
+import { hermesApi } from './api/hermes/hermes-bridge'
 import { codexConfigSyncApi } from './api/agent-accounts/codex-config-sync-bridge'
 import { preflightApi } from './api/preflight/preflight-bridge'
 import { backgroundWorkerApi } from './api/diagnostics/background-worker-bridge'
@@ -158,6 +159,7 @@ const api = {
   claudeAccounts: claudeAccountsApi,
   cli: cliApi,
   orcaUninstall: orcaUninstallApi,
+  hermes: hermesApi,
   codexConfigSync: codexConfigSyncApi,
   preflight: preflightApi,
   backgroundWorker: backgroundWorkerApi,

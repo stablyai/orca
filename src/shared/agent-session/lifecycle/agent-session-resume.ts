@@ -1,4 +1,5 @@
 import { readAgentEffortLevel } from '../../agent-launch/choices/agent-effort-level'
+import { readHermesProfileName } from '../../agent-launch/startup/hermes-profile'
 import { readClaudePermissionMode } from './resume/provider-session-live-settings'
 import type { AgentHookSource } from '../../agent-hook-listener/transport/agent-hook-relay'
 import type {
@@ -53,6 +54,8 @@ export type AgentProviderSessionMetadata = {
   effort?: string
   /** Claude's live permission mode; a resume with no recorded recipe takes its permission from it. */
   permissionMode?: string
+  /** The Hermes named profile a live session runs in (`-p`); absent for the default profile. */
+  hermesProfile?: string
 }
 
 export type SleepingAgentLaunchConfig = {
@@ -188,13 +191,15 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
   const cwd = readPathFromKeys(record, ['cwd'])
   const effort = readAgentEffortLevel(record.effort)
   const permissionMode = readClaudePermissionMode(record.permissionMode)
+  const hermesProfile = readHermesProfileName(record.hermesProfile)
   return {
     key: record.key,
     id,
     ...(transcriptPath ? { transcriptPath } : {}),
     ...(cwd ? { cwd } : {}),
     ...(effort ? { effort } : {}),
-    ...(permissionMode ? { permissionMode } : {})
+    ...(permissionMode ? { permissionMode } : {}),
+    ...(hermesProfile ? { hermesProfile } : {})
   }
 }
 
@@ -232,8 +237,15 @@ export function extractAgentProviderSession(
     }
     // DSH's bridge has no persistence artifact and sends an empty transcript_path; retain its session ID only.
     // Kiro also reports no transcript path; its ID feeds --resume-id.
-    // Hermes' managed plugin posts the live session_id on every hook; `hermes --resume` takes it.
-    case 'hermes':
+    // Hermes' managed plugin posts the live session_id and its profile on every hook; `hermes -p <profile> --resume` takes both.
+    case 'hermes': {
+      const id = readSessionId(payload, ['session_id'])
+      if (!id) {
+        return null
+      }
+      const hermesProfile = readHermesProfileName(payload.hermes_profile)
+      return hermesProfile ? { key: 'session_id', id, hermesProfile } : { key: 'session_id', id }
+    }
     case 'kiro':
     case 'dsh': {
       const id = readSessionId(payload, ['session_id'])

@@ -6,7 +6,8 @@ export function providerSessionLocatorIdentifies(agent: string | undefined): boo
 }
 
 /** Compare the provider-owned values that identify the CLI resume target.
- *  Pi-family transcript resumes use file identity; other agents use provider ids. */
+ *  Pi-family transcript resumes use file identity; other agents use provider ids. Hermes ids are
+ *  only unique inside their profile's store, so two profiles holding one id resume different turns. */
 export function agentProviderSessionsEqual(
   agent: string | undefined,
   left: AgentProviderSessionMetadata | undefined,
@@ -18,6 +19,7 @@ export function agentProviderSessionsEqual(
   return (
     left.key === right.key &&
     left.id === right.id &&
-    (!providerSessionLocatorIdentifies(agent) || left.transcriptPath === right.transcriptPath)
+    (!providerSessionLocatorIdentifies(agent) || left.transcriptPath === right.transcriptPath) &&
+    (agent !== 'hermes' || left.hermesProfile === right.hermesProfile)
   )
 }
