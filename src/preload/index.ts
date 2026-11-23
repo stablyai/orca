@@ -225,17 +225,27 @@ if (process.contextIsolated) {
   window.api = api
 }
 
-// Flush Blink's decoded ScriptResource/image startup cache once initial hydration settles.
+// Flush Blink's decoded ScriptResource/image cache after startup hydration and when backgrounded.
+const flushBlinkMemoryCache = (): void => {
+  try {
+    webFrame.clearCache()
+  } catch {
+    // Best-effort cache eviction.
+  }
+}
 if (typeof setTimeout === 'function') {
   for (const delayMs of [8_000, 30_000]) {
-    setTimeout(() => {
-      try {
-        webFrame.clearCache()
-      } catch {
-        // Best-effort cache eviction.
-      }
-    }, delayMs)
+    setTimeout(flushBlinkMemoryCache, delayMs)
   }
+}
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+  let lastHiddenFlushAt = 0
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && Date.now() - lastHiddenFlushAt >= 15_000) {
+      lastHiddenFlushAt = Date.now()
+      flushBlinkMemoryCache()
+    }
+  })
 }
 
 installHiddenWindowFramePump(
