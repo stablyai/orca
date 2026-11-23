@@ -11,17 +11,10 @@ import { activateTerminalTabOnOwner } from '@/lib/workspace/tabs/terminal-tab-ow
 import type { TerminalPaneRevealTarget } from '../../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
 
 /** Map host terminal IDs to prefixed client mirrors before reveal; leaf IDs remain stable. */
-function toWindowTabId(target: TerminalPaneRevealTarget): string {
-  const host = parseExecutionHostId(target.executionHostId)
-  const environmentId = host
-    ? host.kind === 'runtime'
-      ? host.environmentId
-      : null
-    : // Why: reveal only focuses a tab; a twin keeps the id the caller named.
-      runtimeEnvironmentIdUnlessTwin(useAppStore.getState(), target.worktreeId)
-  return environmentId && !isWebTerminalSurfaceTabId(target.tabId)
-    ? toWebTerminalSurfaceTabId(target.tabId)
-    : target.tabId
+function toWindowTabId(tabId: string, environmentId: string | null): string {
+  return environmentId && !isWebTerminalSurfaceTabId(tabId)
+    ? toWebTerminalSurfaceTabId(tabId)
+    : tabId
 }
 
 /** Reveal through the workspace dispatcher on local/SSH/server/floating owners. Bare setActiveWorktree skips terminal view, sleeping resume and surface seeding, leaving parked SSH workspaces empty (#16731). Return false for unknown workspaces. */
@@ -33,8 +26,18 @@ export function revealTerminalPane(target: TerminalPaneRevealTarget): boolean {
   if (activated === false) {
     return false
   }
-  const tabId = toWindowTabId(target)
+  const host = parseExecutionHostId(target.executionHostId)
+  const explicitEnvironmentId = host
+    ? host.kind === 'runtime'
+      ? host.environmentId
+      : null
+    : undefined
+  const environmentId =
+    explicitEnvironmentId === undefined
+      ? runtimeEnvironmentIdUnlessTwin(useAppStore.getState(), target.worktreeId)
+      : explicitEnvironmentId
+  const tabId = toWindowTabId(target.tabId, environmentId)
   activateTabAndFocusPane(tabId, target.leafId, { flashFocusedPane: true })
-  activateTerminalTabOnOwner(target.worktreeId, tabId, target.leafId)
+  activateTerminalTabOnOwner(target.worktreeId, tabId, target.leafId, explicitEnvironmentId)
   return true
 }

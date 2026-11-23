@@ -87,6 +87,7 @@ export type BuildNotchSummaryArgs = {
   /** paneKey -> ack timestamp, mirrored into main from the renderer's acknowledgeAgents. */
   acknowledgedAtByPaneKey: Readonly<Record<string, number>>
   acknowledgedCompletions?: Readonly<Record<string, string>>
+  viewedPaneKeys?: ReadonlySet<string>
   /** Injected so the decay below is testable and so one tick sees one consistent clock. */
   now?: number
 }
@@ -95,6 +96,7 @@ export function buildNotchSummary({
   snapshot,
   acknowledgedAtByPaneKey,
   acknowledgedCompletions = {},
+  viewedPaneKeys,
   now = Date.now()
 }: BuildNotchSummaryArgs): NotchStatusSummary {
   const counts: Record<NotchLane, number> = { working: 0, attention: 0, done: 0 }
@@ -102,7 +104,7 @@ export function buildNotchSummary({
   const seen = new Set<string>()
 
   for (const entry of snapshot) {
-    if (entry.providerSessionOnly) {
+    if (entry.providerSessionOnly || viewedPaneKeys?.has(entry.paneKey)) {
       continue
     }
     if (entry.state === 'done' && entry.sessionBoundary === true) {

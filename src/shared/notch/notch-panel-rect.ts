@@ -15,6 +15,7 @@ export const EXPANDED_CURVE_GUTTER = 8
 /** Tallest card the panel must hold, before the list starts scrolling. */
 export const MENU_MAX_HEIGHT = 316
 export const EXPANDED_BOTTOM_PADDING = 8
+const UNAVAILABLE_GEOMETRY_TOP_INSET = 48
 
 export type ScreenBounds = { x: number; y: number; width: number; height: number }
 
@@ -110,7 +111,11 @@ export function computeNotchPanelMetrics(display: NotchDisplayInfo): NotchPanelM
     notchLeadingX: null,
     panelWidth,
     panelOriginX: bounds.x + bounds.width / 2 - panelWidth / 2,
-    panelOriginY,
+    // Auto-hidden menu bars can report zero even on a display with a physical camera cutout.
+    panelOriginY:
+      display.safeAreaTop === 0
+        ? panelOriginY
+        : panelOriginY + Math.max(menuBar, display.safeAreaTop ?? UNAVAILABLE_GEOMETRY_TOP_INSET),
     expandedHeight: barHeight + MENU_MAX_HEIGHT + EXPANDED_BOTTOM_PADDING,
     expandedContentSideInset: 0,
     cornerStyle: 'bubble',

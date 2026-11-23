@@ -23,8 +23,13 @@ let remoteSessions: NotchRemoteSessions | null = null
 let pendingReveal: NotchFocusPaneRequest | null = null
 let readyRendererId: number | null = null
 
+export function clearNotchViewedPanes(): void {
+  service?.setViewedPanes([])
+}
+
 export function resetNotchRevealReadiness(): void {
   readyRendererId = null
+  service?.setViewedPanes([])
 }
 
 function deliverPendingReveal(): void {
@@ -113,7 +118,11 @@ export function initializeNotchAgentStatus(): void {
       deliverPendingReveal()
     }
   })
-  const collapse = (): void => setNotchExpanded(false)
+  const collapse = (): void => {
+    setNotchExpanded(false)
+    clearNotchViewedPanes()
+  }
+  app.on('browser-window-blur', clearNotchViewedPanes)
   app.on('did-resign-active', collapse)
   app.on('browser-window-focus', collapse)
   const beforeQuit = (event: Event): void => {
@@ -128,6 +137,7 @@ export function initializeNotchAgentStatus(): void {
     remoteSessions = null
     service = null
     closeNotchWindowForQuit()
+    app.off('browser-window-blur', clearNotchViewedPanes)
     app.off('did-resign-active', collapse)
     app.off('browser-window-focus', collapse)
     app.off('before-quit', beforeQuit)

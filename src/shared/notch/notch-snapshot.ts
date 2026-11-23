@@ -4,6 +4,7 @@ import type { CollapsedBarLayout, NotchPresentation } from './notch-bar-geometry
 import type { NotchLane, NotchStatusSummary } from './notch-status-summary'
 
 export const NOTCH_SNAPSHOT_CHANNEL = 'notch:snapshot'
+export const NOTCH_VIEWED_PANES_CHANNEL = 'notch:viewedPanes'
 export const NOTCH_ACKNOWLEDGE_CHANNEL = 'notch:panesAcknowledged'
 export const NOTCH_SET_EXPANDED_CHANNEL = 'notch:setExpanded'
 export const NOTCH_FOCUS_PANE_CHANNEL = 'notch:focusPane'

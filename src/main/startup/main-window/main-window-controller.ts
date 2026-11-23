@@ -1,4 +1,5 @@
 import {
+  clearNotchViewedPanes,
   resetNotchRevealReadiness,
   syncNotchAgentStatus
 } from '../../notch/notch-desktop-lifecycle'
@@ -175,6 +176,9 @@ export async function openMainWindow(options: MainWindowOpenOptions = {}): Promi
     }
   })
   window.webContents.on('did-start-loading', resetNotchRevealReadiness)
+  window.on('hide', clearNotchViewedPanes)
+  window.on('minimize', clearNotchViewedPanes)
+  window.on('closed', clearNotchViewedPanes)
   recordCrashBreadcrumb('main_window_created')
   logStartupMilestone('window-created')
   const createTray = createSystemTrayDeferred(window, () => logStartupMilestone('tray-created'))

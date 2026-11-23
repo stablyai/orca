@@ -70,3 +70,44 @@ it('keeps the same remote completion read across reconnect and cold start withou
   expect(restored.getSummary().counts.done).toBe(1)
   restored.stop()
 })
+
+it('keeps viewing transient and host-qualified without acknowledging a hidden completion', () => {
+  const source = {
+    getStatusSnapshot: () => [
+      {
+        paneKey: 'runtime:a|tab:leaf',
+        state: 'done' as const,
+        completionIdentity: 'turn-a',
+        prompt: '',
+        connectionId: null,
+        receivedAt: 1000,
+        stateStartedAt: 1000
+      },
+      {
+        paneKey: 'runtime:b|tab:leaf',
+        state: 'done' as const,
+        completionIdentity: 'turn-b',
+        prompt: '',
+        connectionId: null,
+        receivedAt: 1000,
+        stateStartedAt: 1000
+      }
+    ],
+    subscribeStatusRowMutations: () => () => {}
+  }
+  const service = new NotchStatusService({ source })
+  service.start()
+  service.setViewedPanes(['runtime:a|tab:leaf'])
+  expect(service.getSummary().counts).toEqual({ working: 0, attention: 0, done: 1 })
+  service.setViewedPanes([])
+  expect(service.getSummary().counts).toEqual({ working: 0, attention: 0, done: 2 })
+  service.setViewedPanes(['runtime:a|tab:leaf'])
+  service.stop()
+  service.start()
+  expect(service.getSummary().counts.done).toBe(2)
+  service.acknowledgePanes(['runtime:a|tab:leaf'], 1001)
+  service.setViewedPanes(['runtime:a|tab:leaf'])
+  service.setViewedPanes([])
+  expect(service.getSummary().counts.done).toBe(1)
+  service.stop()
+})

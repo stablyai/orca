@@ -1,7 +1,8 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import {
   type NotchFocusPaneRequest,
   NOTCH_ACKNOWLEDGE_CHANNEL,
+  NOTCH_VIEWED_PANES_CHANNEL,
   NOTCH_FOCUS_PANE_CHANNEL,
   NOTCH_SET_EXPANDED_CHANNEL,
   NOTCH_RENDERER_READY_CHANNEL,
@@ -49,6 +50,19 @@ export function registerNotchHandlers({
     if (isNotchRenderer(event.sender) && event.senderFrame === event.sender.mainFrame) {
       publishNotchSnapshot()
     }
+  })
+  ipcMain.removeAllListeners(NOTCH_VIEWED_PANES_CHANNEL)
+  ipcMain.on(NOTCH_VIEWED_PANES_CHANNEL, (event, paneKeys: unknown) => {
+    const mainWindow = getTrustedUIRendererWindow()
+    if (event.senderFrame !== event.sender.mainFrame || event.sender !== mainWindow?.webContents) {
+      return
+    }
+    const viewing =
+      mainWindow.isVisible() &&
+      mainWindow.isFocused() &&
+      !mainWindow.isMinimized() &&
+      !app.isHidden()
+    getService()?.setViewedPanes(viewing ? sanitizePaneKeys(paneKeys) : [])
   })
   ipcMain.removeAllListeners(NOTCH_ACKNOWLEDGE_CHANNEL)
   ipcMain.removeAllListeners(NOTCH_SET_EXPANDED_CHANNEL)

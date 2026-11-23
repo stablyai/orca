@@ -166,7 +166,10 @@ export function createNotchWindow(options: NotchWindowOptions): BrowserWindow | 
     })
     const rows = options.buildRows(summary)
     // Collapsing with no sessions left would otherwise leave an empty card hanging open.
-    const isExpanded = expanded && rows.length > 0
+    if (rows.length === 0) {
+      expanded = false
+    }
+    const isExpanded = expanded
     const rect = isExpanded
       ? expandedWindowRect(metrics, rows.length)
       : collapsedWindowRect(metrics, layout)
@@ -203,17 +206,34 @@ export function createNotchWindow(options: NotchWindowOptions): BrowserWindow | 
     })
   }
 
+  let geometryRefreshRunning = false
+  let geometryRefreshPending = false
   const refreshGeometry = async (): Promise<void> => {
-    const geometryByDisplayId = await readScreenGeometry()
-    if (window.isDestroyed() || notchWindow !== window) {
+    geometryRefreshPending = true
+    if (geometryRefreshRunning) {
       return
     }
-    // v1 pins the bar to the primary display; per-display panels are out of scope.
-    const display = screen.getPrimaryDisplay()
-    metrics = computeNotchPanelMetrics(
-      toNotchDisplayInfo(display, geometryByDisplayId.get(display.id))
-    )
-    reposition(options.getSummary())
+    geometryRefreshRunning = true
+    try {
+      do {
+        geometryRefreshPending = false
+        const geometryByDisplayId = await readScreenGeometry()
+        if (window.isDestroyed() || notchWindow !== window) {
+          return
+        }
+        // A display event during sampling invalidates that read, even if it shared a helper.
+        if (geometryRefreshPending) {
+          continue
+        }
+        const display = screen.getPrimaryDisplay()
+        metrics = computeNotchPanelMetrics(
+          toNotchDisplayInfo(display, geometryByDisplayId.get(display.id))
+        )
+        reposition(options.getSummary())
+      } while (geometryRefreshPending)
+    } finally {
+      geometryRefreshRunning = false
+    }
   }
 
   repaint = () => reposition(options.getSummary())

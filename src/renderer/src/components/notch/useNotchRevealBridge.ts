@@ -1,9 +1,5 @@
-import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import { subscribeAgentSubjectReads } from '@/attention/agent-subject-read-actions'
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import { toHostSessionPaneKey } from '../../../../shared/workspace-layout/terminal-surface-id'
-import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { notchPaneKeyForSubject } from './notch-session-identity'
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -70,24 +66,9 @@ export function useNotchRevealBridge(): void {
     () =>
       subscribeAgentSubjectReads((reads) => {
         const state = useAppStore.getState()
-        const keys = reads.map((read) => {
-          const pane = parsePaneKey(read.subjectKey)
-          const source = pane
-            ? state.agentStatusByPaneKey.projection.mobileSource(read.subjectKey, pane.tabId)
-            : null
-          const target = read.structured?.target
-          const environmentId =
-            target?.kind === 'environment'
-              ? target.environmentId
-              : target?.kind === 'local'
-                ? null
-                : runtimeEnvironmentIdUnlessTwin(state, source?.worktreeId)
-          const canonicalKey = read.structured
-            ? structuredAgentSessionStatusPaneKey(read.structured.sessionId)
-            : toHostSessionPaneKey(read.subjectKey)
-          return environmentId
-            ? `${toRuntimeExecutionHostId(environmentId)}|${canonicalKey}`
-            : canonicalKey
+        const keys = reads.flatMap((read) => {
+          const key = notchPaneKeyForSubject(state, read.subjectKey, read.structured)
+          return key ? [key] : []
         })
         window.api.notch?.acknowledgePanes(keys)
       }),

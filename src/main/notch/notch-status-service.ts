@@ -37,6 +37,7 @@ export class NotchStatusService {
   private acknowledgedAtByPaneKey: Record<string, number> = {}
   private readonly acknowledgedCompletions: Record<string, string>
   private readonly onAcknowledgedCompletionsChanged: NotchStatusServiceOptions['onAcknowledgedCompletionsChanged']
+  private viewedPaneKeys = new Set<string>()
   private summary: NotchStatusSummary = EMPTY_NOTCH_SUMMARY
   private cancelPendingFlush: (() => void) | null = null
   private flushPending = false
@@ -84,6 +85,7 @@ export class NotchStatusService {
       unsubscribe()
     }
     this.listeners.clear()
+    this.viewedPaneKeys.clear()
     this.started = false
   }
 
@@ -95,6 +97,20 @@ export class NotchStatusService {
     this.listeners.add(listener)
     return () => {
       this.listeners.delete(listener)
+    }
+  }
+
+  setViewedPanes(paneKeys: readonly string[]): void {
+    const next = new Set(paneKeys)
+    if (
+      next.size === this.viewedPaneKeys.size &&
+      [...next].every((key) => this.viewedPaneKeys.has(key))
+    ) {
+      return
+    }
+    this.viewedPaneKeys = next
+    if (this.started) {
+      this.recompute()
     }
   }
 
@@ -153,7 +169,8 @@ export class NotchStatusService {
     const next = buildNotchSummary({
       snapshot,
       acknowledgedAtByPaneKey: this.acknowledgedAtByPaneKey,
-      acknowledgedCompletions: this.acknowledgedCompletions
+      acknowledgedCompletions: this.acknowledgedCompletions,
+      viewedPaneKeys: this.viewedPaneKeys
     })
     if (summariesEqual(this.summary, next)) {
       return

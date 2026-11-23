@@ -5,22 +5,37 @@ import { createRoot } from 'react-dom/client'
 import { useAppStore } from './store'
 import { NotchPanel } from './components/notch/NotchPanel'
 import { I18nProvider } from './i18n/I18nProvider'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import type { NotchSnapshot } from '../../shared/notch/notch-snapshot'
 
 document.documentElement.classList.add('dark')
 document.documentElement.dataset.orcaNotch = ''
 function NotchRoot(): React.JSX.Element | null {
   useEffect(() => {
-    const apply = (settings: Awaited<ReturnType<typeof window.api.settings.get>>): void => {
-      useAppStore.setState({ settings })
-    }
-    void window.api.settings.get().then(apply)
-    return window.api.settings.onChanged((updates) => {
+    let cancelled = false
+    let initialized = false
+    let pending: Partial<GlobalSettings> = {}
+    const unsubscribe = window.api.settings.onChanged((updates) => {
+      if (!initialized) {
+        pending = { ...pending, ...updates }
+        return
+      }
       const settings = useAppStore.getState().settings
       if (settings) {
-        apply({ ...settings, ...updates })
+        useAppStore.setState({ settings: { ...settings, ...updates } })
       }
     })
+    void window.api.settings.get().then((settings) => {
+      if (!cancelled) {
+        initialized = true
+        useAppStore.setState({ settings: { ...settings, ...pending } })
+        pending = {}
+      }
+    })
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
   }, [])
   const [snapshot, setSnapshot] = useState<NotchSnapshot | null>(null)
 
