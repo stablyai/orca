@@ -18,11 +18,13 @@ export function useSidebarTagModeProps(
   const { addTagToIdentities } = useWorkspaceTagCommands()
   return {
     tagOrder,
-    onTagWorktrees: addTagToIdentities,
-    // Why: a tag-mode drag means "tag this"; auto-opening the status board competes with the tag sections.
-    onWorkspaceBoardDragPreviewStart:
-      groupBy === 'tag'
-        ? NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
-        : onWorkspaceBoardDragPreviewStart
+    viewportProps: {
+      onTagWorktrees: addTagToIdentities,
+      // Why: a tag-mode drag means "tag this"; auto-opening the status board competes with the tag sections.
+      onWorkspaceBoardDragPreviewStart:
+        groupBy === 'tag'
+          ? NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
+          : onWorkspaceBoardDragPreviewStart
+    }
   }
 }
