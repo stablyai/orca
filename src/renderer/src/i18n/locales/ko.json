@@ -21889,6 +21889,7 @@
           "selectionWithheldCount_other": "선택한 워크스페이스 {{count}}개가 현재 필터에 의해 숨겨져 선택 해제되었습니다.",
           "selectAllSafetyChecked_one": "안전 검사를 마친 워크스페이스 {{count}}개 선택",
           "selectAllSafetyChecked_other": "안전성 검사를 마친 워크스페이스 {{count}}개 모두 선택",
+          "clearSelection": "선택 해제",
           "lastActive": "마지막 활동: {{value0}}",
           "projectNamed": "프로젝트: {{value0}}",
           "moreFlags": "플래그 {{value0}}개 더 보기",
