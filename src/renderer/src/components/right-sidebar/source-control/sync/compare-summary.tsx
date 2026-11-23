@@ -218,7 +218,7 @@ export function CompareUnavailable({
               'Branch compare unavailable'
             )}
       </div>
-      <div className="mt-1 text-muted-foreground">
+      <div className="mt-1 min-w-0 text-muted-foreground [overflow-wrap:anywhere]">
         {summary.errorMessage ??
           t(
             'auto.components.right.sidebar.SourceControl.b6922abb13',

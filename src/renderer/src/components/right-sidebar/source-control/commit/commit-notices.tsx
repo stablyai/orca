@@ -100,7 +100,7 @@ export function CommitNotices({
           id="commit-area-remote-error"
           role="alert"
           aria-live="polite"
-          className="mt-1 text-[11px] text-destructive"
+          className="mt-1 text-[11px] text-destructive [overflow-wrap:anywhere]"
         >
           {remoteActionError}
         </p>
@@ -140,7 +140,7 @@ export function CommitNotices({
           id="commit-area-generate-error"
           role="alert"
           aria-live="polite"
-          className="mt-1 text-[11px] text-destructive"
+          className="mt-1 text-[11px] text-destructive [overflow-wrap:anywhere]"
         >
           {generateError}
         </p>

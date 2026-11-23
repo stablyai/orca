@@ -318,7 +318,10 @@ export function GitHistoryPanel({
       </div>
       {!collapsed && state.status === 'error' && !result && (
         <div
-          className={cn(expandedBodyClassName, 'px-6 py-2 text-[11px] text-destructive')}
+          className={cn(
+            expandedBodyClassName,
+            'px-6 py-2 text-[11px] text-destructive [overflow-wrap:anywhere]'
+          )}
           style={expandedBodyStyle}
         >
           {state.error}

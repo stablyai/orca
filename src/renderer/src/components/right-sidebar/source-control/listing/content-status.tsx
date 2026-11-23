@@ -145,7 +145,7 @@ export function SourceControlContentStatus({
               </span>
             </div>
             {showRawStatusError && (
-              <pre className="scrollbar-sleek max-h-24 overflow-auto font-mono text-xs break-words whitespace-pre-wrap text-muted-foreground">
+              <pre className="scrollbar-sleek max-h-24 overflow-auto font-mono text-xs whitespace-pre-wrap [overflow-wrap:anywhere] text-muted-foreground">
                 {statusReadError}
               </pre>
             )}

@@ -91,7 +91,10 @@ function CommitFilesBody({
 
   if (state.status === 'error') {
     return (
-      <div className="py-1 pl-9 pr-3 text-[11px] text-destructive" title={state.error}>
+      <div
+        className="py-1 pl-9 pr-3 text-[11px] text-destructive [overflow-wrap:anywhere]"
+        title={state.error}
+      >
         {state.error}
       </div>
     )
