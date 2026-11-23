@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react'
+import { Platform } from 'react-native'
 import {
   useMobileNativeChatTailFollow,
   type MobileScrollTailMetrics
@@ -34,25 +35,41 @@ export function useBotItemActivityFollow(args: { scopeKey: string; hasItems: boo
     [attach]
   )
   const record = tail.recordScrollMetrics
+  const onEndDistance = tail.pageListProps.onEndDistance
+  const report = useCallback(
+    (metrics: MobileScrollTailMetrics, byReader: boolean) => {
+      if (Platform.OS !== 'web') {
+        record(metrics)
+        return
+      }
+      // Web sends no drag events; Orca's own scrolls land at the end, so a scroll elsewhere is the reader's.
+      const { contentOffset, contentSize, layoutMeasurement } = metrics
+      onEndDistance(contentSize.height - (contentOffset.y + layoutMeasurement.height), byReader)
+    },
+    [record, onEndDistance]
+  )
   const onScroll = useCallback(
     (event: { nativeEvent: MobileScrollTailMetrics }) => {
       offset.current = event.nativeEvent.contentOffset.y
       viewHeight.current = event.nativeEvent.layoutMeasurement.height
       contentHeight.current = event.nativeEvent.contentSize.height
-      record(event.nativeEvent)
+      report(event.nativeEvent, true)
     },
-    [record]
+    [report]
   )
   const pin = tail.pinToTailAfterContentResize
   const recheckEnd = useCallback(() => {
     if (viewHeight.current > 0 && contentHeight.current > 0) {
-      record({
-        contentOffset: { y: offset.current },
-        contentSize: { height: contentHeight.current },
-        layoutMeasurement: { height: viewHeight.current }
-      })
+      report(
+        {
+          contentOffset: { y: offset.current },
+          contentSize: { height: contentHeight.current },
+          layoutMeasurement: { height: viewHeight.current }
+        },
+        false
+      )
     }
-  }, [record])
+  }, [report])
   // Growth and a resized view (the keyboard) send no scroll event, so this rechecks the end, as
   // desktop's transcript resize does; a reader left above it then sees Scroll to latest.
   const onContentSizeChange = useCallback(

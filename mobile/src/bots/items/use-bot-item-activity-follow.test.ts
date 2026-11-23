@@ -6,7 +6,8 @@ import {
   type BotItemActivityScrollView
 } from './use-bot-item-activity-follow'
 
-vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+const platform = vi.hoisted(() => ({ OS: 'ios' }))
+vi.mock('react-native', () => ({ Platform: platform }))
 
 const VIEW_HEIGHT = 600
 
@@ -16,6 +17,7 @@ let renderer: ReactTestRenderer | null = null
 let follow: Follow | null = null
 
 afterEach(() => {
+  platform.OS = 'ios'
   act(() => renderer?.unmount())
   renderer = null
   follow = null
@@ -140,4 +142,19 @@ it('shows Scroll to latest when the view shrinks (the keyboard) under a reader n
 
   layout(view, 300)
   expect(follow!.tail.showJumpToTail).toBe(true)
+})
+
+it('on web, where no drag events come, a scroll up holds its place and a scroll back follows', () => {
+  platform.OS = 'web'
+  const view = open()
+  view.y = 500
+  settle(view)
+  grow(view, 2300)
+  expect(view.y).toBe(500)
+  expect(follow!.tail.showJumpToTail).toBe(true)
+
+  view.y = 2300 - VIEW_HEIGHT
+  settle(view)
+  grow(view, 2600)
+  expect(view.y).toBe(2600 - VIEW_HEIGHT)
 })
