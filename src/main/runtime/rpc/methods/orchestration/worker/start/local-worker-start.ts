@@ -13,6 +13,7 @@ import type { OrchestrationEntryCaller } from '../../../../../orchestration/addr
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
 import { resolveWorkerStartModeOnHost } from '../../structured-workers/orchestration-worker-start-mode'
+import { lineageModeForResolvedAgent } from './worker-chat-lineage'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './placement/worker-start-agent-placement'
 import { assertOrchestrationWorktreeCreationSupported } from './placement/folder-worktree-placement'
@@ -129,7 +130,8 @@ export async function startLocalWorker(args: {
       resolvedWorktreeId: resolvedWorktree?.id
     })
   }
-  const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
+  const decided = lineageModeForResolvedAgent(runtime, args.mode, { ...args, params, agent })
+  const hostMode = resolveWorkerStartModeOnHost(runtime, decided, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
 
   // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.

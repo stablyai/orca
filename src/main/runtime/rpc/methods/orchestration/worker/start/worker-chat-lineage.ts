@@ -40,6 +40,7 @@ export function decideStartMode(
   params: Parameters<typeof decideWorkerStartMode>[0]['params'] & {
     from?: string
     retryOf?: string
+    chatLineage?: true
   },
   caller: OrchestrationEntryCaller | undefined,
   followUp: { of: string } | undefined
@@ -49,21 +50,52 @@ export function decideStartMode(
   return { mode: decideWorkerStartMode({ params, settings, chatLineage }), chatLineage }
 }
 
-/** A lineage start that had to take a terminal says why on its item too, where its owner looks. */
-export function noteTerminalFallbackOnItem(
-  runtime: Pick<OrcaRuntimeService, 'botItems'>,
-  itemUid: string | undefined,
+/** A configured alias resolves to its agent after the start's mode was decided: a lineage start
+ *  decides again for the agent it names, so an alias of a chat-capable agent still starts a chat. */
+export function lineageModeForResolvedAgent(
+  runtime: Parameters<typeof readWorkerStartModeSettings>[0],
+  decided: ReturnType<typeof decideWorkerStartMode>,
+  start: {
+    chatLineage?: boolean
+    params: Parameters<typeof decideWorkerStartMode>[0]['params']
+    agent: string | undefined
+  }
+): ReturnType<typeof decideWorkerStartMode> {
+  if (!start.chatLineage || !start.agent || start.agent === start.params.agent) {
+    return decided
+  }
+  return decideWorkerStartMode({
+    params: { ...start.params, agent: start.agent },
+    settings: readWorkerStartModeSettings(runtime),
+    chatLineage: true
+  })
+}
+
+/** A lineage start that had to take a terminal says why on its item too, where its owner looks.
+ *  An explicit `--terminal` reuse fell back from nothing (and may name a chat), so it notes nothing. */
+export async function noteTerminalFallbackOnItem(
+  runtime: { botItems: Pick<OrcaRuntimeService['botItems'], 'store' | 'changed'> },
+  start: { itemUid?: string; chatLineage: boolean; terminal?: string },
   receipt: unknown
-): void {
+): Promise<void> {
   const parsed = TerminalFallbackReceipt.safeParse(receipt)
-  if (!itemUid || !parsed.success || parsed.data.mode.mode !== 'terminal') {
+  if (
+    !start.itemUid ||
+    !start.chatLineage ||
+    start.terminal ||
+    !parsed.success ||
+    parsed.data.mode.mode !== 'terminal'
+  ) {
     return
   }
   const text = `Worker dispatch:${parsed.data.dispatchId} started in a terminal. ${parsed.data.mode.detail}`
-  void runtime.botItems
-    .store()
-    .orcaComment(itemUid, text, 'worker-start')
-    .catch((error: unknown) => console.warn('[orchestration] item fallback note failed', error))
+  const store = runtime.botItems.store()
+  await store.orcaComment(start.itemUid, text, 'worker-start')
+  // Open item views re-read on change, as for any other item write.
+  const record = await store.get(start.itemUid)
+  if (record) {
+    runtime.botItems.changed([record])
+  }
 }
 
 // A failed start reports a terminal mode too, but started nothing to note.

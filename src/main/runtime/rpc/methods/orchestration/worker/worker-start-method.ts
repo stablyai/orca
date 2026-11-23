@@ -135,7 +135,8 @@ export async function startWorker(
     followUp
   })
   await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
-  noteTerminalFallbackOnItem(runtime, chatLineage ? checked?.itemUid : undefined, receipt)
+  const note = { itemUid: checked?.itemUid, chatLineage, terminal: params.terminal }
+  void noteTerminalFallbackOnItem(runtime, note, receipt).catch(warnItemNote)
   const started = withLink(withRun(withWorkerStartNext(receipt)))
   return checked && started && typeof started === 'object'
     ? { ...started, linkedItem: checked.linkedItem }
@@ -304,4 +305,8 @@ export async function prepareWorkerStart(
     existingTask,
     withRun
   }
+}
+
+function warnItemNote(error: unknown): void {
+  console.warn('[orchestration] item fallback note failed', error)
 }
