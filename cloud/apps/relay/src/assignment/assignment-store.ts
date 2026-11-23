@@ -118,6 +118,9 @@ import {
 } from '../registered-migration-abandonment.js'
 
 type AssignmentIdentity = { userId: string; relayHostId: string }
+
+// Primary keys one dormant-candidate page may read (AssignmentStore.dormantAssignmentPage).
+export const DORMANT_PAGE_SCAN_MAX = 2_000
 type CellHeartbeat = {
   cellId: string
   cellUrl: string
@@ -6046,6 +6049,98 @@ export class RelayAssignmentStore {
         leaseExpiresAt
       }
     })
+  }
+
+  // Dormant edge moves (EdgeAssignments.moveDormantToEdge): whether the source cell admits from
+  // memory, read from the same cached set /v1/assign reads, and its current process (the seat
+  // feed the director polls must be that process's). Unknown refuses (as refuseReserveCell does):
+  // a reserve-mode row's counters cannot be judged without knowing its mode.
+  async dormantEdgeSource(
+    cellId: string
+  ): Promise<{ admitMode: 'db' | 'reserve'; runtimeIncarnation: string | null }> {
+    const cells = await this.reserveModeCells()
+    if (cells === null) { throw new RelayCellInReserveModeError(null) }
+    const runtime = (
+      await this.database.query(`SELECT cell_incarnation FROM relay_cell_runtime WHERE cell_id = ?`, [cellId])
+    )[0]
+    return {
+      admitMode: cells.has(cellId) ? 'reserve' : 'db',
+      runtimeIncarnation: runtime ? text(runtime, 'cell_incarnation') : null
+    }
+  }
+
+  // The region a dormant host is judged and recorded for on the edge: its last asked-for region,
+  // else its cell's. A dormant host makes no ask, so this stands in for the region its ask names.
+  async dormantHostRegion(identity: AssignmentIdentity, cellId: string): Promise<RelayRegion> {
+    const preference = (
+      await this.database.query(
+        `SELECT preferred_region FROM relay_assignment_region_preferences
+         WHERE user_id = ? AND relay_host_id = ?`,
+        [identity.userId, identity.relayHostId]
+      )
+    )[0]
+    if (preference) { return relayRegion(preference, 'preferred_region') }
+    return await this.cellRegion(this.database, cellId)
+  }
+
+  // One page of a cell's dormant candidates, in primary key order after `after`. Coarse on
+  // purpose: the dormant TTL, and on a database-mode cell no counters. Leases, the seat map and
+  // open migrations are judged by the move itself, under its row lock, so a page never decides
+  // anything. relay_assignments has no cell_id index, so a filter on cell_id alone could read the
+  // whole table on one of the director's few pool connections. Each call therefore reads at most
+  // DORMANT_PAGE_SCAN_MAX primary keys after the cursor (two index range scans of that window) and
+  // returns a cursor whenever the window was full, even with no candidate in it.
+  async dormantAssignmentPage(
+    cellId: string,
+    after: AssignmentIdentity | undefined,
+    limit: number
+  ): Promise<{ admitMode: 'db' | 'reserve'; candidates: AssignmentIdentity[]; next?: AssignmentIdentity }> {
+    const { admitMode } = await this.dormantEdgeSource(cellId)
+    const cutoff = this.now() - ASSIGNMENT_LIMITS.dormantTtlMs
+    // Row comparisons, as idle-regional-rehome-selection pages: one primary key range on Postgres.
+    const afterSql = after ? 'AND (user_id, relay_host_id) > (?, ?)' : ''
+    const afterArgs = after ? [after.userId, after.relayHostId] : []
+    // The window's last key, if the window is full; none means the window runs to the table's end.
+    const windowEndRow = (
+      await this.database.query(
+        `SELECT user_id, relay_host_id FROM relay_assignments
+         WHERE TRUE ${afterSql}
+         ORDER BY user_id ASC, relay_host_id ASC
+         LIMIT 1 OFFSET ?`,
+        [...afterArgs, DORMANT_PAGE_SCAN_MAX - 1]
+      )
+    )[0]
+    const windowEnd = windowEndRow
+      ? { userId: text(windowEndRow, 'user_id'), relayHostId: text(windowEndRow, 'relay_host_id') }
+      : undefined
+    const rows = await this.database.query(
+      `SELECT user_id, relay_host_id FROM relay_assignments
+       WHERE cell_id = ? AND last_activity_at <= ?
+         ${admitMode === 'db'
+           ? `AND reserved_controls = 0 AND reserved_splices = 0 AND reserved_invites = 0
+              AND pending_installs = 0 AND pending_confirmations = 0 AND migration_leases = 0`
+           : ''}
+         ${afterSql}
+         ${windowEnd ? 'AND (user_id, relay_host_id) <= (?, ?)' : ''}
+       ORDER BY user_id ASC, relay_host_id ASC
+       LIMIT ?`,
+      [
+        cellId,
+        cutoff,
+        ...afterArgs,
+        ...(windowEnd ? [windowEnd.userId, windowEnd.relayHostId] : []),
+        limit + 1
+      ]
+    )
+    const candidates = rows.slice(0, limit).map((row) => ({
+      userId: text(row, 'user_id'),
+      relayHostId: text(row, 'relay_host_id')
+    }))
+    const last = candidates.at(-1)
+    if (rows.length > limit && last) { return { admitMode, candidates, next: last } }
+    // The window was full: resume after it, whether or not it held a candidate.
+    if (windowEnd) { return { admitMode, candidates, next: windowEnd } }
+    return { admitMode, candidates }
   }
 
   async inspectRegionalRehomeControl(): Promise<RegionalRehomeControl> {

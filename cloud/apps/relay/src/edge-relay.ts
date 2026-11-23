@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
+import { mayNormallyReassign } from '@orca-cloud/relay-contract/assignment-invariants'
 import { RELAY_DEFAULT_REGION, RelayRegionSchema, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
 import type { RelayAssignment } from './assignment/assignment-store.js'
 import { lockedSelector, registerExistingOnlyCell, requireSelectorMatchesAdmission } from './cell-admission-selector.js'
@@ -207,6 +208,42 @@ export class EdgeMoveDeferredError extends Error {
   }
 }
 
+// An operator's dormant move (EdgeAssignments.moveDormantToEdge) was refused under the row lock and
+// nothing changed. The reason is all the caller logs or answers: never an identity.
+export type EdgeDormantMoveRefusal =
+  | 'assignment_not_found'
+  | 'already_on_edge'
+  | 'source_mismatch'
+  | 'units_held'
+  | 'not_dormant'
+  | 'lease_live'
+  | 'migration_open'
+  // From the caller's seat map check (EdgeDormantMoveGuard.recheck).
+  | 'host_seated'
+  | 'host_recently_seated'
+  | 'host_booked'
+  | 'feed_not_fresh'
+
+export class EdgeDormantMoveRefusedError extends Error {
+  constructor(readonly reason: EdgeDormantMoveRefusal) {
+    super(`relay_edge_dormant_move_refused:${reason}`)
+  }
+}
+
+// What a dormant move requires of the row, judged under its lock (EdgeAssignments.refuseUnlessDormant).
+// staleCounters: the source cell admits from memory (reserve mode), so counters no live lease backs
+// are allowed, exactly as drain-stale's heldUnits stale path allows them; on a database-mode cell
+// the counters are the truth and must all be zero.
+// recheck: the caller's in-memory evidence that the host is not live (the seat map), judged again
+// under the row lock and once more after the push, before the commit. A refusal at either point
+// rolls the move back: the map only ever learns of a join after the fact, so the later it is
+// read, the narrower the window in which a host that just connected could be moved.
+export type EdgeDormantMoveGuard = {
+  sourceCellId: string
+  staleCounters: boolean
+  recheck?: () => EdgeDormantMoveRefusal | null
+}
+
 export type EdgeHeldCounters = {
   controls: number
   splices: number
@@ -264,10 +301,13 @@ export type EdgeRoute = { frontDoor?: string; byCountry?: boolean; switchable: b
 // (director/edge.json moveOwnControl, edgeMoveOwnControlAsk); see EdgeAssignments.heldUnits.
 // staleOnReserveCells: reserve-mode cells (moveOwnControl 'drain-stale', a qualifying ask). A row
 // on one of them whose counters no lease backs moves with them zeroed.
+// dormant: an operator's move of a dormant host, only through moveDormantToEdge, which passes no
+// route (so never the front-door path); never set by an ask.
 export type EdgeMoveOptions = {
   keepOnly?: boolean
   ownControl?: boolean
   staleOnReserveCells?: ReadonlySet<string>
+  dormant?: EdgeDormantMoveGuard
 }
 
 // What a move takes off the host's old cell (EdgeAssignments.heldUnits): its own control unit and
@@ -575,6 +615,20 @@ export class EdgeAssignments {
     const recordRegion = async (transaction: RelayDatabase, onlyIfChanged = false) => {
       // keepOnly writes no region: the record (or its absence) is what the ask was judged by.
       if (options.keepOnly === true) { return }
+      if (options.dormant) {
+        // A dormant move answers the edge's own URL: a front door left recorded from an earlier
+        // stay (fenceAway's delete is best-effort) must not be what the host's phones are told.
+        await transaction.query(
+          `INSERT INTO relay_edge_host_regions
+           (user_id, relay_host_id, region, recorded_at, cell_url, pending_epoch, pending_cell_url)
+           VALUES (?, ?, ?, ?, NULL, NULL, NULL)
+           ON CONFLICT (user_id, relay_host_id) DO UPDATE
+             SET region = excluded.region, recorded_at = excluded.recorded_at, cell_url = NULL,
+                 pending_epoch = NULL, pending_cell_url = NULL`,
+          [identity.userId, identity.relayHostId, region ?? RELAY_DEFAULT_REGION, now]
+        )
+        return
+      }
       await transaction.query(
         `INSERT INTO relay_edge_host_regions (user_id, relay_host_id, region, recorded_at)
          VALUES (?, ?, ?, ?)
@@ -600,6 +654,8 @@ export class EdgeAssignments {
       if (options.keepOnly === true && (!row || text(row, 'cell_id') !== EDGE_CELL_ID)) {
         throw new EdgeMoveDeferredError('not_on_edge')
       }
+      // Before any branch below writes: a dormant move never inserts a row or refreshes an edge one.
+      if (options.dormant) { await this.refuseUnlessDormant(transaction, identity, row, options.dormant) }
       if (!row) {
         const epoch = mapFloor + 1
         // A missing row locks nothing: a concurrent first ask may insert it first. The loser
@@ -638,11 +694,23 @@ export class EdgeAssignments {
         await recordRegion(transaction, true)
         return this.answer(identity, integer(row, 'assignment_epoch'), leaseExpiresAt)
       }
-      const own = await this.heldUnits(transaction, identity, row, options)
+      const heldBefore = requestUnits(row)
+      let own = await this.heldUnits(transaction, identity, row, options)
+      // A dormant move always takes the old cell's share with it (a zero-unit release): its control
+      // connection reservations at the old epoch are released, as rebalance-dormant releases them,
+      // so nothing of the host is left counted on a cell being retired.
+      if (options.dormant && !own) {
+        own = { cellId: text(row, 'cell_id'), assignmentEpoch: integer(row, 'assignment_epoch'), activityId: null, units: 0 }
+      }
       const epoch = Math.max(integer(row, 'assignment_epoch'), mapFloor) + 1
       await this.writeMove(transaction, identity, epoch, leaseExpiresAt, now, own)
       // Still under the row lock: the row commits only once the edge holds the host's data.
       const pushed = await this.pushOnto(transaction, identity, epoch, region)
+      // The push took time: a seat that appeared meanwhile rolls the move back. The edge then holds
+      // an epoch the row never committed, as after any push whose move did not commit; a later
+      // push re-mints above it (pushOnto), and nothing answers the edge for the host until then.
+      const lateRefusal = options.dormant?.recheck?.()
+      if (lateRefusal) { throw new EdgeDormantMoveRefusedError(lateRefusal) }
       await recordRegion(transaction)
       if (own) { await this.releaseOldCellUnits(transaction, identity, own, now) }
       console.warn(
@@ -650,11 +718,97 @@ export class EdgeAssignments {
           event: 'orca_relay_edge_moved',
           fromCellId: text(row, 'cell_id'),
           assignmentEpoch: pushed,
-          ...(own ? (own.activityId === null ? { staleUnits: true } : { ownControl: true }) : {})
+          ...(options.dormant ? { dormant: true } : {}),
+          ...(own
+            ? own.activityId === null
+              ? heldBefore > 0 ? { staleUnits: true } : {}
+              : { ownControl: true }
+            : {})
         })
       )
       return this.answer(identity, pushed, leaseExpiresAt)
     })
+  }
+
+  // An operator's move of one dormant host off a GCE cell being retired (POST
+  // /v1/admin/edge-move-dormant). The host makes no ask, so nothing else would ever move its row.
+  // Exactly the ask's move (moveToEdge): one transaction under the assignment row lock, a strictly
+  // newer epoch above mapFloor, the push under the locked-call cap, the region record and the
+  // moved log; refuseUnlessDormant only decides, under that lock, whether the row may move at all.
+  // No front door: the host's own next ask picks its origin (route.switchable), so a dormant host
+  // is answered the edge's own URL until then.
+  async moveDormantToEdge(
+    identity: Identity,
+    mapFloor: number,
+    region: RelayRegion,
+    guard: EdgeDormantMoveGuard
+  ): Promise<RelayAssignment> {
+    return await this.moveToEdge(identity, mapFloor, region, undefined, {
+      dormant: guard,
+      // heldUnits' stale path, limited to the one cell this move names.
+      ...(guard.staleCounters ? { staleOnReserveCells: new Set([guard.sourceCellId]) } : {})
+    })
+  }
+
+  // The dormant move's checks, under the assignment row lock, in the lock order every lease writer
+  // uses (assignment, then leases). Dormant is rebalance-dormant's rule (mayNormallyReassign: no
+  // counters and no activity for ASSIGNMENT_LIMITS.dormantTtlMs); on a reserve-mode cell stale
+  // counters are judged as zero, as heldUnits' stale path treats them, and no lease may be live.
+  private async refuseUnlessDormant(
+    transaction: RelayDatabase,
+    identity: Identity,
+    row: SqlRow | undefined,
+    guard: EdgeDormantMoveGuard
+  ): Promise<void> {
+    if (!row) { throw new EdgeDormantMoveRefusedError('assignment_not_found') }
+    const cellId = text(row, 'cell_id')
+    if (cellId === EDGE_CELL_ID) { throw new EdgeDormantMoveRefusedError('already_on_edge') }
+    if (cellId !== guard.sourceCellId) { throw new EdgeDormantMoveRefusedError('source_mismatch') }
+    const units = requestUnits(row)
+    if (units > 0 && !guard.staleCounters) { throw new EdgeDormantMoveRefusedError('units_held') }
+    const now = this.now()
+    // Stale counters (reserve mode only, see above) are judged as zero; the dormant TTL still applies.
+    const counter = (field: string) => (guard.staleCounters ? 0 : integer(row, field))
+    const record = {
+      relayHostId: identity.relayHostId,
+      cellId,
+      assignmentEpoch: integer(row, 'assignment_epoch'),
+      leaseExpiresAt: integer(row, 'lease_expires_at'),
+      lastActivityAt: integer(row, 'last_activity_at'),
+      reservedControls: counter('reserved_controls'),
+      reservedSplices: counter('reserved_splices'),
+      reservedInvites: counter('reserved_invites'),
+      pendingInstalls: counter('pending_installs'),
+      pendingConfirmations: counter('pending_confirmations'),
+      migrationLeases: counter('migration_leases')
+    }
+    if (!mayNormallyReassign(record, now)) { throw new EdgeDormantMoveRefusedError('not_dormant') }
+    let leases: SqlRow[]
+    try {
+      leases = await transaction.queryLocked(
+        `SELECT expires_at FROM relay_assignment_activity_leases
+         WHERE user_id = ? AND relay_host_id = ? ORDER BY activity_id ASC`,
+        [identity.userId, identity.relayHostId],
+        { failIfUnavailable: true }
+      )
+    } catch (error) {
+      // Someone holds the host's leases right now: not dormant enough to wait on, retry later.
+      if (error instanceof Error && error.message === 'database_lock_unavailable') { throw new EdgeMoveBusyError() }
+      throw error
+    }
+    // Any cell's lease counts: a live one anywhere means the host is not dormant.
+    if (leases.some((lease) => integer(lease, 'expires_at') > now)) {
+      throw new EdgeDormantMoveRefusedError('lease_live')
+    }
+    try {
+      await this.deferIfMigrating(transaction, identity)
+    } catch (error) {
+      if (error instanceof EdgeMoveDeferredError) { throw new EdgeDormantMoveRefusedError('migration_open') }
+      throw error
+    }
+    // The seat map again, now that no ask of this host can change the row under us.
+    const refusal = guard.recheck?.()
+    if (refusal) { throw new EdgeDormantMoveRefusedError(refusal) }
   }
 
   private async moveToEdgeWithFrontDoor(

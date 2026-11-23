@@ -163,6 +163,9 @@ export type SeatFeedCellState = {
   admitModeRaw?: 'db' | 'reserve'
   // Step 5: when the answered poll was sent, and the cell's own reserve numbers.
   polledAt?: number
+  // When the last poll whose reply reached the cell's head (no `more` page left) was sent: the map
+  // holds every change the cell made before this instant. A partial page moves polledAt only.
+  caughtUpPolledAt?: number
   bookings?: number
   units?: number
   ceiling?: number
@@ -306,6 +309,7 @@ export class ShadowSeatDirectory {
     cursor.admitModeEffective = response.admitModeEffective
     cursor.admitModeRaw = response.admitModeRaw
     cursor.polledAt = polledAt
+    if (response.more !== true) { cursor.caughtUpPolledAt = polledAt }
     cursor.bookings = response.counts?.bookings
     cursor.units = response.counts?.units
     cursor.ceiling = response.counts?.ceiling
@@ -313,7 +317,7 @@ export class ShadowSeatDirectory {
   }
 
   // The newest booking any cell reported for this host since this director started.
-  bookingOf(userId: string, relayHostId: string): { cellId: string; epoch: number } | undefined {
+  bookingOf(userId: string, relayHostId: string): { cellId: string; epoch: number; at: number } | undefined {
     return this.bookings.get(hostKey(userId, relayHostId))
   }
 
@@ -350,6 +354,7 @@ export class ShadowSeatDirectory {
     cursor.seq = undefined
     // An image without the feed takes no booking.
     cursor.polledAt = undefined
+    cursor.caughtUpPolledAt = undefined
     cursor.bookings = undefined
     cursor.units = undefined
     cursor.ceiling = undefined
