@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   statfsSync,
   writeFileSync
@@ -61,30 +62,43 @@ function bytes(path: string): number {
 }
 
 // An operation is charged its grant until it actually grows past it.
-function charge(path: string): number {
+function charge(path: string): { bytes: number; unwritten: number } {
   let reserved = 0
   try {
     reserved = Number(readFileSync(join(path, RESERVED_FILE), 'utf8')) || 0
   } catch {
     // No grant yet.
   }
-  return Math.max(bytes(path), reserved)
+  const written = bytes(path)
+  return { bytes: Math.max(written, reserved), unwritten: Math.max(0, reserved - written) }
 }
 
-function chargedBytes(parent: string, except?: string): number {
-  let total = 0
+/** Everything charged against the quota, and the part granted but not yet on disk. */
+function chargedBytes(parent: string, except?: string): { bytes: number; unwritten: number } {
+  const total = { bytes: 0, unwritten: 0 }
   for (const entry of readdirSync(parent, { withFileTypes: true })) {
     const path = join(parent, entry.name)
     if (path === except) {
       continue
     }
     try {
-      total += entry.isDirectory() ? charge(path) : lstatSync(path).size
+      const charged = entry.isDirectory()
+        ? charge(path)
+        : { bytes: lstatSync(path).size, unwritten: 0 }
+      total.bytes += charged.bytes
+      total.unwritten += charged.unwritten
     } catch {
       // Removed while we counted.
     }
   }
   return total
+}
+
+// Replaced whole, so a concurrent reader never sees a truncated grant.
+function recordGrant(root: string, bytes: number): void {
+  const pending = join(root, `${RESERVED_FILE}.pending`)
+  writeFileSync(pending, String(bytes), { mode: 0o600 })
+  renameSync(pending, join(root, RESERVED_FILE))
 }
 
 function ownerIsDead(path: string): boolean {
@@ -153,7 +167,7 @@ export function createClaudeImportScratch(options: ClaudeImportScratchOptions = 
   ownedParent(parent)
   sweepClaudeImportScratch({ parent })
   // Leftovers from live or unknown owners count against this import's share.
-  if (chargedBytes(parent) >= quotaBytes) {
+  if (chargedBytes(parent).bytes >= quotaBytes) {
     throw new ClaudeImportResourceError('Claude history import scratch quota is full.')
   }
   if (freeBytes(parent) < reserveBytes) {
@@ -197,15 +211,26 @@ export function createClaudeImportScratch(options: ClaudeImportScratchOptions = 
     /** Grants and records the bytes the next write batch may add, within quota and reserve. */
     grantBytes(): number {
       const own = bytes(root)
-      const grant = Math.max(
-        0,
-        Math.min(
-          GRANT_BYTES,
-          quotaBytes - chargedBytes(parent, root) - own,
-          freeBytes(root) - reserveBytes
+      const fits = (grant: number) => {
+        const others = chargedBytes(parent, root)
+        return Math.max(
+          0,
+          Math.min(
+            grant,
+            quotaBytes - others.bytes - own,
+            // Free space other imports were granted but haven't written yet is already spoken for.
+            freeBytes(root) - others.unwritten - reserveBytes
+          )
         )
-      )
-      writeFileSync(join(root, RESERVED_FILE), String(own + grant), { mode: 0o600 })
+      }
+      // Record, then recount, then only shrink: of two imports granting at once, the later
+      // recorder sees the earlier one, so their grants never share the same space.
+      const tentative = fits(GRANT_BYTES)
+      recordGrant(root, own + tentative)
+      const grant = fits(tentative)
+      if (grant < tentative) {
+        recordGrant(root, own + grant)
+      }
       return grant
     },
     /** Synchronous, so a worker that answers right after cannot cut the removal short. */

@@ -103,9 +103,12 @@ export async function readClaudeTranscriptWindow(
     maxBytes?: number
     visit?: TranscriptRowVisitor
     select?: (recordEnd: number) => boolean
+    /** Also report what readClaudeTranscriptFrontier with this bound would find, in this one pass. */
+    frontierBytes?: number
   }
 ): Promise<{
   rows: Record<string, unknown>[]
+  frontier?: string
   bytesRead: number
   decodedBytes: number
   consumedBytes: number
@@ -130,7 +133,8 @@ export async function readClaudeTranscriptWindow(
       newestFirst.push(row)
       return false
     },
-    input.select
+    input.select,
+    input.frontierBytes
   )
   return { ...result, rows: newestFirst.toReversed() }
 }
@@ -138,9 +142,11 @@ export async function readClaudeTranscriptWindow(
 async function visitClaudeTranscriptTail(
   input: TranscriptSource & { endBytes?: number; maxBytes?: number; check: () => void },
   visit: TranscriptRowVisitor,
-  select?: (recordEnd: number) => boolean
+  select?: (recordEnd: number) => boolean,
+  frontierBytes?: number
 ): Promise<{
   outcome: 'found' | 'absent' | 'capacity'
+  frontier?: string
   bytesRead: number
   decodedBytes: number
   consumedBytes: number
@@ -160,8 +166,11 @@ async function visitClaudeTranscriptTail(
     let decodedBytes = 0
     let consumedBytes = 0
     let skippedRecords = 0
+    let frontier: string | undefined
+    let frontierSettled = frontierBytes === undefined
     const result = (outcome: 'found' | 'absent' | 'capacity') => ({
       outcome,
+      frontier,
       bytesRead,
       decodedBytes,
       consumedBytes,
@@ -193,6 +202,18 @@ async function visitClaudeTranscriptTail(
       skippedRecords += complete && skipped ? 1 : 0
       decodedBytes += bytes?.length ?? 0
       const row = bytes ? parseRow(bytes) : null
+      // A frontier probe from the complete end reaches this record only if it reads the
+      // delimiter before it; the newest record with a UUID settles the answer either way.
+      if (
+        !frontierSettled &&
+        complete &&
+        recordEnd < consumedBytes &&
+        typeof row?.uuid === 'string' &&
+        row.uuid
+      ) {
+        frontierSettled = true
+        frontier = nextRecordEnd >= consumedBytes - (frontierBytes ?? 0) ? row.uuid : undefined
+      }
       const found = row !== null && visit(row, recordEnd)
       bytesSinceYield += recordBytes
       pieces = []

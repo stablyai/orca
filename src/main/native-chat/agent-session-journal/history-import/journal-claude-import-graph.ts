@@ -51,6 +51,23 @@ function messageType(value: unknown): string | null {
 export function createClaudeImportGraph(options: ClaudeImportScratchOptions = {}) {
   const scratch = openScratch(options)
   let db: Database
+  // Admit the next batch of writes only within the remaining quota and free-space reserve.
+  const limitPages = () => {
+    const pageSize = Number(db.pragma('page_size', { simple: true }))
+    const pages = Number(db.pragma('page_count', { simple: true }))
+    const allowance = Math.floor(scratch.grantBytes() / pageSize)
+    if (allowance <= 0) {
+      throw new ClaudeImportResourceError('Claude history import scratch is full.')
+    }
+    db.pragma(`max_page_count = ${pages + allowance}`)
+  }
+  const write = <T>(run: () => T): T => {
+    try {
+      return run()
+    } catch (error) {
+      throw storageFailure(error)
+    }
+  }
   try {
     db = new Database(scratch.filename)
     scratch.attach(() => db.close())
@@ -60,6 +77,10 @@ export function createClaudeImportGraph(options: ClaudeImportScratchOptions = {}
       PRAGMA temp_store = FILE;
       PRAGMA cache_size = -4096;
       PRAGMA mmap_size = 0;
+    `)
+    // The schema's own pages come out of the first grant too.
+    write(limitPages)
+    db.exec(`
       CREATE TABLE rows (
         position INTEGER PRIMARY KEY, line_index INTEGER NOT NULL, uuid TEXT, parent_uuid TEXT,
         logical_parent_uuid TEXT, type TEXT, assistant_id TEXT, candidate INTEGER NOT NULL,
@@ -76,29 +97,6 @@ export function createClaudeImportGraph(options: ClaudeImportScratchOptions = {}
   } catch (error) {
     scratch.close()
     throw storageFailure(error)
-  }
-  const pageSize = Number(db.pragma('page_size', { simple: true }))
-  // Admit the next batch of writes only within the remaining quota and free-space reserve.
-  const limitPages = () => {
-    const pages = Number(db.pragma('page_count', { simple: true }))
-    const allowance = Math.floor(scratch.grantBytes() / pageSize)
-    if (allowance <= 0) {
-      throw new ClaudeImportResourceError('Claude history import scratch is full.')
-    }
-    db.pragma(`max_page_count = ${pages + allowance}`)
-  }
-  const write = <T>(run: () => T): T => {
-    try {
-      return run()
-    } catch (error) {
-      throw storageFailure(error)
-    }
-  }
-  try {
-    write(limitPages)
-  } catch (error) {
-    scratch.close()
-    throw error
   }
   const insert = db.prepare(`INSERT INTO rows
     (position, line_index, uuid, parent_uuid, logical_parent_uuid, type, assistant_id, candidate, raw_payload)
@@ -142,7 +140,7 @@ export function createClaudeImportGraph(options: ClaudeImportScratchOptions = {}
         }
       }
     }
-    return payload?.length ?? 0
+    return payload ? Buffer.byteLength(payload) : 0
   }
   let writes = 0
   let pendingBytes = 0

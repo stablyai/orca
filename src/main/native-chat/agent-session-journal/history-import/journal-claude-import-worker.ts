@@ -14,43 +14,50 @@ import type {
 type ImportResult = Extract<ClaudeImportWorkerResponse, { kind: 'imported' }>['result']
 
 let entryOverride: string | undefined
-// First opens and recoveries queue apart, so a large first open never holds a recovery's sends.
-const queues = { first: Promise.resolve(), recovery: Promise.resolve() }
+// A few imports of each kind run at once: a large first open never holds a recovery or a rewind,
+// and the heavy host never takes an unbounded pile of transcript workers.
+const SLOTS_PER_KIND = 3
+type Slots = { active: number; waiting: (() => void)[] }
+const slots: Record<'first' | 'recovery', Slots> = {
+  first: { active: 0, waiting: [] },
+  recovery: { active: 0, waiting: [] }
+}
 
-/** One importer of each kind per host keeps the heavy host from piling up. */
-async function takeTurn(
-  kind: keyof typeof queues,
-  signal: AbortSignal | undefined
-): Promise<() => void> {
-  const previous = queues[kind]
-  let release = () => {}
-  queues[kind] = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  if (!signal) {
-    await previous
-    return release
+async function takeSlot(kind: keyof typeof slots, signal?: AbortSignal): Promise<() => void> {
+  const pool = slots[kind]
+  if (pool.active < SLOTS_PER_KIND) {
+    pool.active += 1
+  } else {
+    // A released slot passes straight to the next waiter, so a newcomer can't take it first.
+    await new Promise<void>((resolve, reject) => {
+      const admit = () => {
+        signal?.removeEventListener('abort', cancel)
+        resolve()
+      }
+      const cancel = () => {
+        pool.waiting.splice(pool.waiting.indexOf(admit), 1)
+        reject(signal?.reason)
+      }
+      pool.waiting.push(admit)
+      signal?.addEventListener('abort', cancel, { once: true })
+      if (signal?.aborted) {
+        cancel()
+      }
+    })
   }
-  let onAbort = () => {}
-  try {
-    await Promise.race([
-      previous,
-      new Promise<never>((_, reject) => {
-        onAbort = () => reject(signal.reason)
-        signal.addEventListener('abort', onAbort, { once: true })
-        if (signal.aborted) {
-          onAbort()
-        }
-      })
-    ])
-  } catch (error) {
-    // Later imports still wait for the one ahead of this cancelled turn.
-    void previous.then(release)
-    throw error
-  } finally {
-    signal.removeEventListener('abort', onAbort)
+  let released = false
+  return () => {
+    if (released) {
+      return
+    }
+    released = true
+    const next = pool.waiting.shift()
+    if (next) {
+      next()
+    } else {
+      pool.active -= 1
+    }
   }
-  return release
 }
 
 /** Tests bundle the entry themselves; the app builds it beside the main entry. */
@@ -75,9 +82,9 @@ export async function importClaudeTranscriptInWorker(
 ): Promise<ImportResult> {
   const { signal, ...work } = input
   signal?.throwIfAborted()
-  const release = await takeTurn(work.bounded ? 'recovery' : 'first', signal)
+  const release = await takeSlot(work.bounded ? 'recovery' : 'first', signal)
   try {
-    // The turn ahead can settle in the same tick as an abort.
+    // A slot can open in the same tick as an abort.
     signal?.throwIfAborted()
     return await runImportWorker(work, signal)
   } finally {

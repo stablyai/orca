@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statfsSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -71,4 +79,17 @@ it('removes its database before reporting that the quota refused the first write
     ClaudeImportResourceError
   )
   expect(readdirSync(parent)).toEqual([])
+})
+
+it('keeps the free-space reserve for grants another import has not written yet', () => {
+  mkdirSync(parent, { recursive: true })
+  const { bavail, bsize } = statfsSync(parent)
+  // Leave about 8 MiB above the reserve; the first grant takes it.
+  const reserveBytes = Number(bavail) * Number(bsize) - 8 * 1024 * 1024
+  const first = createClaudeImportScratch({ parent, reserveBytes })
+  const second = createClaudeImportScratch({ parent, reserveBytes })
+  expect(first.grantBytes()).toBeGreaterThan(6 * 1024 * 1024)
+  expect(second.grantBytes()).toBeLessThan(2 * 1024 * 1024)
+  first.close()
+  second.close()
 })

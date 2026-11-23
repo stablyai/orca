@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
+import type * as NodeFsPromises from 'node:fs/promises'
 import { stat, utimes, writeFile } from 'node:fs/promises'
 import * as capacityRecovery from './claude-transcript-capacity-recovery'
 import * as transcriptTail from './claude-transcript-tail'
@@ -17,8 +18,26 @@ import {
   SESSION
 } from './claude-transcript-catch-up.test-support'
 
-// ESM namespaces cannot be spied on; wrap the source stream to count what the importer reads.
+// ESM namespaces cannot be spied on; wrap streams and handles to count what the importer reads.
 const sourceStreams = vi.hoisted((): NodeFs.ReadStream[] => [])
+const handleReads = vi.hoisted(() => ({ bytes: 0 }))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
+  return {
+    ...actual,
+    open: async (...args: Parameters<typeof actual.open>) => {
+      const handle = await actual.open(...args)
+      const read = handle.read.bind(handle)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards every argument and result of the real read unchanged.
+      handle.read = (async (...readArgs: Parameters<typeof read>) => {
+        const result = await read(...readArgs)
+        handleReads.bytes += result.bytesRead
+        return result
+      }) as typeof handle.read
+      return handle
+    }
+  }
+})
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   return {
@@ -283,6 +302,7 @@ it.each([undefined, true] as const)(
     )
     const { size } = await stat(c.filePath)
     sourceStreams.length = 0
+    handleReads.bytes = 0
     const window = vi.spyOn(transcriptTail, 'readClaudeTranscriptWindow')
     const imported = await claudeImport.importClaudeTranscript({
       agent: 'claude',
@@ -293,9 +313,10 @@ it.each([undefined, true] as const)(
       maxBytes: 128 * 1024 * 1024,
       bounded
     })
-    const streamBytes = sourceStreams.reduce((sum, stream) => sum + stream.bytesRead, 0)
-    const reads = await Promise.all(window.mock.results.map(({ value }) => value))
-    const bytesRead = reads.reduce((sum, read) => sum + read.bytesRead, streamBytes)
+    await Promise.all(window.mock.results.map(({ value }) => value))
+    // Every source read: streamed lines plus handle reads by the window and any frontier probe.
+    const bytesRead =
+      sourceStreams.reduce((sum, stream) => sum + stream.bytesRead, 0) + handleReads.bytes
     // The spool keeps payloads, so a first import reads the file once and recovery its window.
     expect(bytesRead).toBe(bounded ? 64 * 1024 * 1024 : size)
     expect(imported.items.map(({ identity }) => identity)).toEqual(

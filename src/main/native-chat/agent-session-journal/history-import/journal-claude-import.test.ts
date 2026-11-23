@@ -8,6 +8,7 @@ import { importClaudeTranscript } from './journal-claude-import'
 import './journal-claude-import-worker.test-fixture'
 import { importClaudeTranscriptInWorker } from './journal-claude-import-worker'
 import {
+  readClaudeTranscriptFrontier,
   readClaudeTranscriptTail,
   readClaudeTranscriptWindow
 } from '../../../claude/transcripts/claude-transcript-tail'
@@ -452,4 +453,36 @@ it('honours a cancel that arrives while the import waits for its turn', async ()
   })
   controller.abort()
   await expect(imported).rejects.toThrow()
+})
+
+it('finds the same frontier in the window pass as the bounded probe a reopen repeats', async () => {
+  root = await mkdtemp(join(tmpdir(), 'orca-claude-frontier-'))
+  const filePath = join(root, 'session.jsonl')
+  const answer = '{"type":"assistant","uuid":"answer","message":{"content":"A"}}'
+  const filler = '{"type":"file-history-snapshot","data":"xxxxxxxx"}'
+  const cases = [
+    `${answer}\n${filler}\n${filler}\n`,
+    `${answer}\n${filler}\n${filler}\n{"type":"progress","uuid":"partial"}`,
+    `${filler}\n${answer}\n{"torn\n${filler}\n`,
+    `\n${answer}\n`
+  ]
+  for (const content of cases) {
+    await writeFile(filePath, content)
+    const size = Buffer.byteLength(content)
+    for (let bound = 1; bound <= size + 1; bound += 1) {
+      const window = await readClaudeTranscriptWindow({
+        filePath,
+        check: () => {},
+        frontierBytes: bound,
+        visit: () => false
+      })
+      const probe = await readClaudeTranscriptFrontier({
+        filePath,
+        consumedBytes: window.consumedBytes,
+        maxBytes: bound,
+        check: () => {}
+      })
+      expect([content, bound, window.frontier]).toEqual([content, bound, probe])
+    }
+  }
 })
