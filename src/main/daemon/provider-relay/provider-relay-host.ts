@@ -118,9 +118,9 @@ export class ProviderRelayHost {
         ownerExecutable: spec.ownerExecutable
       }
     )
-    let spawnError: (Error & { code?: unknown }) | null = null
+    const failure: { error: (Error & { code?: unknown }) | null } = { error: null }
     managed.child.on('error', (error: Error & { code?: unknown }) => {
-      spawnError ??= error
+      failure.error ??= error
     })
     const relay = new ProviderRelay({
       relayId,
@@ -138,7 +138,7 @@ export class ProviderRelayHost {
     if (pid === undefined) {
       this.relays.delete(relayId)
       await relay.dispose()
-      const error: (Error & { code?: unknown }) | null = spawnError
+      const { error } = failure
       return {
         spawnError: {
           code: typeof error?.code === 'string' ? error.code : 'UNKNOWN',
