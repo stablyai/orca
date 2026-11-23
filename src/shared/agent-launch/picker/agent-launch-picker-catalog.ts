@@ -16,6 +16,7 @@ import {
   agentPermissionHasTerminalChoice
 } from '../permissions/tui-agent-permission-choice'
 import type { TuiAgent } from '../catalog/tui-agent'
+import { agentChatPermissionModes } from '../permissions/agent-chat-permission-support'
 import type { AgentPickerEntry, AgentPickerModel, AgentPickerSurface } from './agent-launch-picker'
 import { classifyAgentModels } from '../../agent-session/options/model-catalog/legacy-agent-models'
 
@@ -98,7 +99,8 @@ export function agentPickerEntryOptions(
     if (option.id !== 'effort') {
       return [option]
     }
-    if (!live.efforts.length) {
+    const levels = surface === 'chat' ? structuredModelEfforts(live) : live.efforts
+    if (!levels.length) {
       return !composer && live.effortsKnown === false ? [option] : []
     }
     return [
@@ -106,7 +108,7 @@ export function agentPickerEntryOptions(
         ...option,
         kind: {
           type: 'select' as const,
-          choices: surface === 'chat' ? structuredModelEfforts(live) : live.efforts,
+          choices: levels,
           defaultValue: live.defaultEffort ?? ''
         }
       }
@@ -115,8 +117,11 @@ export function agentPickerEntryOptions(
 }
 
 export function agentPickerPermissions(agent: TuiAgent, surface: AgentPickerSurface) {
-  return agentPermissionChoices(agent).filter(
-    (choice) => surface === 'chat' || agentPermissionHasTerminalChoice(agent, choice)
+  const chatModes = agentChatPermissionModes(agent)?.modes
+  return agentPermissionChoices(agent).filter((choice) =>
+    surface === 'chat'
+      ? choice === 'own' || !chatModes || chatModes.some((mode) => mode === choice)
+      : agentPermissionHasTerminalChoice(agent, choice)
   )
 }
 

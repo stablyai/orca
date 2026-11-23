@@ -212,8 +212,7 @@ export function useMobileNativeChatController(
       hostId,
       isTabChatView,
       isWorking: activeTurn.isWorking,
-      reportedModel: activeSessionTab?.agentStatus?.model ?? null,
-      modelSwitchCommand: activeSessionTab?.agentStatus?.modelSwitchCommand,
+      reportedStatus: activeSessionTab?.agentStatus,
       structured: {
         optionPickerRequest: structuredNativeChat.optionPickerRequest,
         optionSurface: structuredNativeChat.optionSurface,

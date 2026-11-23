@@ -5,10 +5,11 @@ import {
   observeFilePublication
 } from './file-content-observation'
 import { createHash, randomUUID } from 'node:crypto'
-import { linkSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { linkSync, lstatSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl } from '../windows/windows-directory-acl'
 import { isPermissionError } from './permission-errors'
+import { isHardLinkUnsupported } from './hard-link-unsupported-error'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { nodeFileContentsEqualSync } from '../../shared/file-content/node-file-content-equality'
 import { renameFileWithWindowsRetry } from '../../shared/file-write/windows-retry-file-operations'
@@ -19,37 +20,44 @@ export function writeFileAtomically(
   contents: string | Uint8Array,
   options?: { mode?: number }
 ): void {
-  const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
   // Rechecked before every rename attempt: a Windows retry waits, and another writer can save meanwhile.
   const stillCurrent = (): boolean => {
     assertGuardedFileCurrent(targetPath)
     return true
   }
-  try {
-    writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
-    renameFileWithWindowsRetry(tmpPath, targetPath, stillCurrent)
-    observeFilePublication(targetPath, contents)
-  } catch (error) {
-    rmSync(tmpPath, { force: true })
-    // Chromium can reset inherited userData ACLs after startup; repair the parent and retry once.
-    if (isPermissionError(error) && process.platform === 'win32') {
+  let firstError: unknown
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
+    try {
+      writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
+      renameFileWithWindowsRetry(tmpPath, targetPath, stillCurrent)
+      observeFilePublication(targetPath, contents)
+      return
+    } catch (error) {
       try {
-        grantDirAcl(dirname(targetPath))
-        const retryTmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
-        try {
-          writeFileSync(retryTmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
-          renameFileWithWindowsRetry(retryTmpPath, targetPath, stillCurrent)
-          observeFilePublication(targetPath, contents)
-          return
-        } catch {
-          rmSync(retryTmpPath, { force: true })
+        rmSync(tmpPath, { force: true })
+      } catch (cleanupError) {
+        if (attempt === 0) {
+          throw cleanupError
         }
+      }
+      if (attempt > 0) {
+        break
+      }
+      firstError = error
+      if (!isPermissionError(error) || process.platform !== 'win32') {
+        break
+      }
+      try {
+        // Chromium can reset inherited userData ACLs after startup; repair the parent and retry once.
+        grantDirAcl(dirname(targetPath))
       } catch {
         // Preserve the original write error when ACL repair fails.
+        break
       }
     }
-    throw error
   }
+  throw firstError
 }
 
 /**
@@ -67,15 +75,17 @@ export function writeFileAtomicallyIfUnchanged(
   // Guarded recovery moves files through a held name; keep those passes eligible for retry.
   invalidateFileObservation(targetPath)
   assertGuardedFileCurrent(targetPath)
-  let published: boolean
-  try {
-    published = attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
-  } catch (error) {
-    if (!isPermissionError(error) || process.platform !== 'win32') {
-      throw error
+  let published = false
+  for (let attempt = 0; ; attempt++) {
+    try {
+      published = attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
+      break
+    } catch (error) {
+      if (attempt > 0 || !isPermissionError(error) || process.platform !== 'win32') {
+        throw error
+      }
+      grantDirAcl(dirname(targetPath))
     }
-    grantDirAcl(dirname(targetPath))
-    published = attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
   }
   if (published) {
     recordGuardedPublication(targetPath, () => digestFileContent(contents))
@@ -182,7 +192,7 @@ function restoreMovedFileWithoutOverwrite(
     try {
       // A link refuses a name another program took meanwhile and keeps the file's permissions. A
       // crash before the held name goes leaves two equal files, and the next try drops the held one.
-      if (publishFileWithoutOverwrite(sourcePath, path)) {
+      if (publishHeldFile(sourcePath, path)) {
         drop()
         if (attempt > 0) {
           console.warn('[atomic-file] Kept an earlier version beside', targetPath, path)
@@ -232,9 +242,16 @@ function attemptGuardedAtomicWrite(
   try {
     writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
     if (expectedContents === null) {
-      return publishFileWithoutOverwrite(tmpPath, targetPath)
+      return publishHeldFile(tmpPath, targetPath)
     }
-    assertHardLinkPublicationSupported(tmpPath, targetPath)
+    try {
+      assertHardLinkPublicationSupported(tmpPath, targetPath)
+    } catch (error) {
+      // Why: \\wsl$ shares and FAT/exFAT have no hard links, so they go on to the rename path below.
+      if (!isHardLinkUnsupported(error)) {
+        throw error
+      }
+    }
     try {
       renameFileWithWindowsRetry(targetPath, heldPath)
     } catch (error) {
@@ -247,7 +264,7 @@ function attemptGuardedAtomicWrite(
       restoreHeld = true
       return false
     }
-    if (!publishFileWithoutOverwrite(tmpPath, targetPath)) {
+    if (!publishHeldFile(tmpPath, targetPath)) {
       // Another writer's file supersedes the held one, even if it is deleted again meanwhile.
       superseded = true
       restoreHeld = false
@@ -278,6 +295,27 @@ function assertHardLinkPublicationSupported(sourcePath: string, targetPath: stri
   } finally {
     rmSync(probePath, { force: true })
   }
+}
+
+// No hard links and no no-replace rename in Node: a save landing between this lstat and the rename is still replaced; the window is only that pair.
+function publishHeldFile(sourcePath: string, targetPath: string): boolean {
+  try {
+    return publishFileWithoutOverwrite(sourcePath, targetPath)
+  } catch (error) {
+    if (!isHardLinkUnsupported(error)) {
+      throw error
+    }
+  }
+  try {
+    lstatSync(targetPath)
+    return false
+  } catch (error) {
+    if (!isDefinitiveAbsence(error)) {
+      throw error
+    }
+  }
+  renameSync(sourcePath, targetPath)
+  return true
 }
 
 export function publishFileWithoutOverwrite(sourcePath: string, targetPath: string): boolean {

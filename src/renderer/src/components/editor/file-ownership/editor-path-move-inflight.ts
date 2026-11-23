@@ -66,11 +66,3 @@ export function isActiveMoveSourcePath(
   }
   return false
 }
-
-export function __clearEditorPathMovesForTests(): void {
-  operations.clear()
-}
-
-export function __activeEditorPathMoveCountForTests(): number {
-  return operations.size
-}

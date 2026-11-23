@@ -1,6 +1,6 @@
 import { createElement, useLayoutEffect } from 'react'
-import { act, type ReactTestRenderer } from 'react-test-renderer'
-import { createWithQueryClient } from '../../../../test-support/query-client-test-renderer'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { documentQueryClient } from '../../../../test-support/rpc-recording/react-mounting/hook-mount'
 import { vi } from 'vitest'
 import type {
   AgentSessionModelCatalogResult,
@@ -183,8 +183,9 @@ async function mountOptions(props: Omit<ProbeProps, 'onRender'>) {
     commits.push(controller)
   }
   let renderer: ReactTestRenderer | null = null
+  const queries = documentQueryClient()
   await act(async () => {
-    renderer = createWithQueryClient(createElement(Probe, { ...props, onRender }))
+    renderer = create(queries.wrap(createElement(Probe, { ...props, onRender })))
   })
   await settle()
   const current = (): Controller => {
@@ -198,12 +199,13 @@ async function mountOptions(props: Omit<ProbeProps, 'onRender'>) {
     commits,
     rerender: async (next: Partial<Omit<ProbeProps, 'onRender'>>) => {
       await act(async () => {
-        renderer?.update(createElement(Probe, { ...props, ...next, onRender }))
+        renderer?.update(queries.wrap(createElement(Probe, { ...props, ...next, onRender })))
       })
       await settle()
     },
     unmount: async () => {
       await act(async () => renderer?.unmount())
+      await queries.end()
     }
   }
 }

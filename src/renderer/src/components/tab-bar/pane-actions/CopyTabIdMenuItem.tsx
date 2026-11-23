@@ -1,3 +1,4 @@
+import { Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { ContextMenuItem } from '@/components/ui/context-menu'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
@@ -22,7 +23,8 @@ export function CopyTabIdMenuItem({
   }
 
   return (
-    <Item inset onSelect={() => void copyTabId()}>
+    <Item onSelect={() => void copyTabId()}>
+      <Copy className="size-3.5" />
       {t('components.tab.bar.CopyTabIdMenuItem.copy', 'Copy Tab ID')}
     </Item>
   )

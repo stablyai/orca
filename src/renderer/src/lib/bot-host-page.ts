@@ -29,7 +29,8 @@ import {
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 
 export type BotHostPageOptions = {
-  /** The bot the page is for; without one, any bot of the host lends its workspace. */
+  /** The bot the page is for, whose workspace it must open in; without one, any bot of the host
+   *  lends its workspace. */
   bot?: BotRef
   /** This app's own bots: `system` opens the system browser, `link-setting` follows "Open links in Orca". */
   local: 'system' | 'link-setting'
@@ -62,7 +63,14 @@ export function openBotHostPageOrSay(
 ): HttpLinkDestination | 'unrouted' {
   const opened = openBotHostPage(hostId, url, options)
   if (opened === 'unrouted') {
-    toast.error(botHostUnroutedMessage(hostId))
+    toast.error(
+      options.bot && !hostBot(hostId, options.bot)
+        ? translate(
+            'bots.host.botWorkspaceUnavailable',
+            'This agent’s workspace isn’t available here now, so the page can’t open in it.'
+          )
+        : botHostUnroutedMessage(hostId)
+    )
   }
   return opened
 }
@@ -77,12 +85,17 @@ export function botHostUnroutedMessage(hostId: ExecutionHostId): string {
   )
 }
 
+/** The named bot, or with none named any bot of the host; never another bot in place of the named. */
+function hostBot(hostId: ExecutionHostId, ref?: BotRef) {
+  const bots = readBots()
+  return ref
+    ? bots.find((entry) => isSameBot(entry, ref))
+    : bots.find((entry) => entry.hostId === hostId)
+}
+
 /** Opens the page in a workspace of the host's bots, only if that page's owner is the host itself. */
 export function openOnServer(hostId: ExecutionHostId, url: string, ref?: BotRef): boolean {
-  const bots = readBots()
-  const bot =
-    (ref && bots.find((entry) => isSameBot(entry, ref))) ??
-    bots.find((entry) => entry.hostId === hostId)
+  const bot = hostBot(hostId, ref)
   if (!bot) {
     return false
   }

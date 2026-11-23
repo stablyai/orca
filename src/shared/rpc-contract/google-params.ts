@@ -47,8 +47,12 @@ export const GoogleDisconnectParams = z.object({
   revoke: z.boolean().optional()
 })
 
+export const GoogleDefaultSetParams = z.object({ ...Caller, account: Email })
+
 export const GoogleBotAccessSetParams = z.object({
   ...Caller,
   botId: requiredString('Missing bot id'),
-  on: z.boolean()
+  on: z.boolean(),
+  /** Keys (botAskerKeys) of the askers the caller showed for confirmation; Google stays off when Who can ask no longer matches. */
+  confirmedAskers: z.array(z.string()).max(1000).optional()
 })

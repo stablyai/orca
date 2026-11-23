@@ -1,3 +1,4 @@
+import { sessionWorkerBackgroundWait } from './session-worker-background-wait'
 import type {
   FleetDurableWorker,
   OrchestrationFleetWorker
@@ -174,9 +175,10 @@ export type DispatchFleetEvidence = {
 }
 
 export function readDispatchFleetEvidence(runtime: SessionWorkersRuntime): DispatchFleetEvidence {
+  const rows = runtime.getAgentStatusSnapshotFn?.() ?? []
   return {
-    statuses: runtime.getOrchestrationFleetAgentStatusSnapshot(),
-    chatStatusRows: latestLiveAgentStatusRowsByPaneKey(runtime.getAgentStatusSnapshotFn?.() ?? [])
+    statuses: runtime.getOrchestrationFleetAgentStatusSnapshot(undefined, rows),
+    chatStatusRows: latestLiveAgentStatusRowsByPaneKey(rows)
   }
 }
 
@@ -256,6 +258,7 @@ function sessionWorker(
     agent: worker.provider?.id ?? provider ?? requestedAgent(db, worker.dispatchId),
     state,
     activity: sessionWorkerActivity(worker, chatSessionId, chatStatusRows),
+    ...sessionWorkerBackgroundWait(worker, state, chatSessionId, chatStatusRows),
     pendingQuestion: hasPendingQuestion(worker),
     liveness: worker.liveness.verdict,
     host: worker.host.kind,

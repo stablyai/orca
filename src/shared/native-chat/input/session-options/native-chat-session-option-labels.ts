@@ -15,6 +15,7 @@ export const NATIVE_CHAT_SESSION_OPTION_COPY = {
   thinking: 'Thinking',
   standard: 'Standard',
   none: 'None',
+  off: 'Off',
   minimal: 'Minimal',
   low: 'Low',
   medium: 'Medium',
@@ -50,6 +51,7 @@ export const sayNativeChatSessionOptionEnglish: NativeChatSessionOptionSay = (id
 
 const LEVEL_IDS = {
   none: 'none',
+  off: 'off',
   minimal: 'minimal',
   low: 'low',
   medium: 'medium',
