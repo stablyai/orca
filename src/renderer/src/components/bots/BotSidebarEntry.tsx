@@ -20,7 +20,6 @@ import {
   capBotWorkspaceLines,
   countLiveBotWorkspaces
 } from '../../../../shared/bots/bot-sidebar-workspaces'
-import { ROOT_PROJECT_GROUP_HEADER_BUCKET } from '@/components/sidebar/worktree-list/drag/project-group-header-drop'
 import { BotRow } from './BotRow'
 import { BotSidebarChats } from './BotSidebarChats'
 import { botListsUnderRow } from '../../../../shared/bots/bot-sidebar-tree'
@@ -45,6 +44,10 @@ const BOT_WORKSPACE_LINE_INDENT_NEW_CARD_STYLE = 27
 /** A bot's row with the workspaces its workers made, one Compact line each under the bot's avatar. */
 /** The Bots section's reorder, which measures each entry, workspaces included, by these attributes. */
 export type BotSidebarEntryDrag = {
+  /** The row's drag id, unique among the rows it trades places with. */
+  id: string
+  /** The rows it trades places with: the top level, or one group's members. */
+  bucket: string
   index: number
   dragging: boolean
   /** Some bot is dragging, so rows slide to their drop offsets. */
@@ -319,10 +322,22 @@ export function BotSidebarDragFrame({
         drag?.dragging && 'pointer-events-none opacity-0'
       )}
       data-bot-sidebar-entry={id}
-      data-project-group-header-id={drag ? id : undefined}
+      data-project-group-header-id={drag?.id}
       data-project-group-header-index={drag?.index}
-      data-project-group-header-bucket={drag ? ROOT_PROJECT_GROUP_HEADER_BUCKET : undefined}
-      onPointerDown={drag?.onPointerDown}
+      data-project-group-header-bucket={drag?.bucket}
+      onPointerDown={
+        drag
+          ? (event) => {
+              // A group's frame holds its members' frames: a press drags only the row it lands on.
+              if (
+                event.target instanceof Element &&
+                event.target.closest('[data-bot-sidebar-entry]') === event.currentTarget
+              ) {
+                drag.onPointerDown(event)
+              }
+            }
+          : undefined
+      }
     >
       {/* Only the content slides, so the drag keeps measuring the frame where it stands. */}
       <div

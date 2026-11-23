@@ -12,10 +12,14 @@ import { folderWorkspaceKey } from '../../../../shared/workspace/identity/worksp
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import { botStatusNeedsAttention } from '../../../../shared/bots/bot-collapsed-preview'
-import { arrangeBotSidebarEntries } from '../../../../shared/bots/bot-sidebar-view'
+import {
+  arrangeBotSidebarEntries,
+  type BotSidebarEntryActivity
+} from '../../../../shared/bots/bot-sidebar-view'
 import type { BotSidebarEntry } from '../../../../shared/bots/bot-sidebar-entries'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
+import { botGroupMemberEntryKeys } from './bot-group-folders'
 
 /** Each home's own status and its workers' (their root workspaces), in `homes` order. */
 export function useBotHomeWorkers(homes: readonly FolderWorkspace[]): {
@@ -56,24 +60,48 @@ export function useBotSidebarArrangement(entries: readonly Entry[]): Entry[] {
   const view = useAppStore((s) => s.botSidebarView)
   const homes = useMemo(() => entries.map((entry) => entry.home), [entries])
   const homeWorkers = useBotHomeWorkers(homes)
+  const activities = entries.map((entry, index) => {
+    const { own, workers, workerStatuses } = homeWorkers[index]!
+    return {
+      needsYou: [own, ...workerStatuses].some(botStatusNeedsAttention),
+      activityAt: Math.max(
+        entry.home.lastActivityAt,
+        entry.kind === 'group' ? (entry.group.latest?.at ?? 0) : 0,
+        ...workers.map((worker) => worker.lastActivityAt)
+      )
+    }
+  })
   const ranked = arrangeBotSidebarEntries(
     entries.map((entry, index) => ({ ...entry, index })),
     view,
-    ({ index, ...entry }) => {
-      const { own, workers, workerStatuses } = homeWorkers[index]!
-      return {
-        needsYou: [own, ...workerStatuses].some(botStatusNeedsAttention),
-        activityAt: Math.max(
-          entry.home.lastActivityAt,
-          entry.kind === 'group' ? (entry.group.latest?.at ?? 0) : 0,
-          ...workers.map((worker) => worker.lastActivityAt)
-        )
-      }
-    }
+    // A group lists its bots under it, so it ranks by the busiest of it and them.
+    ({ index, ...entry }) =>
+      entry.kind === 'group'
+        ? withMembersActivity(activities[index]!, entry.group, entries, activities)
+        : activities[index]!
   ).map(({ id }) => id)
   const shownIds = useOrderHeldWhileEngaged(ranked, view.sortBy, 'bots')
   return useMemo(() => {
     const byId = new Map(entries.map((entry) => [entry.id, entry]))
     return shownIds.flatMap((id) => byId.get(id) ?? [])
   }, [entries, shownIds])
+}
+
+function withMembersActivity(
+  own: BotSidebarEntryActivity,
+  group: BotGroup,
+  entries: readonly Entry[],
+  activities: readonly BotSidebarEntryActivity[]
+): BotSidebarEntryActivity {
+  const members = new Set(botGroupMemberEntryKeys(group))
+  return entries.reduce(
+    (busiest, entry, index) =>
+      entry.kind === 'bot' && members.has(entry.id)
+        ? {
+            needsYou: busiest.needsYou || activities[index]!.needsYou,
+            activityAt: Math.max(busiest.activityAt, activities[index]!.activityAt)
+          }
+        : busiest,
+    own
+  )
 }

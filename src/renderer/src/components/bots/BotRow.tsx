@@ -132,9 +132,13 @@ export function BotRow({
       trailing={
         fold ? (
           <BotRowFoldToggle
-            botName={bot.name}
-            fold={fold}
-            working={!offline && status === 'working'}
+            name={bot.name}
+            folded={fold.folded}
+            mark={botRowFoldMark(
+              fold.folded ? botFoldLiveStatus(fold.counts) : null,
+              !offline && status === 'working'
+            )}
+            onToggle={fold.onToggle}
           />
         ) : null
       }
@@ -215,25 +219,33 @@ function BotRowHostIcon({ label }: { label: string }): React.JSX.Element {
   )
 }
 
-function BotRowFoldToggle({
-  botName,
-  fold,
-  working
-}: {
-  botName: string
-  fold: BotRowFold
-  /** The bot itself is working: the row's working mark sits here, on the strip. */
+/** A fold strip's one mark: a folded row's ask outranks the row's own work, which outranks the rest. */
+export function botRowFoldMark(
+  /** The folded rows' most urgent live status; null while unfolded. */
+  live: 'permission' | 'working' | 'failed' | null,
+  /** The row itself is working: its working mark sits on the strip. */
   working: boolean
+): 'permission' | 'working' | 'failed' | null {
+  return live === 'permission' ? live : working ? 'working' : live
+}
+
+/** A row's fold toggle, a bot's or a group's: the row's right edge, with its one mark. */
+export function BotRowFoldToggle({
+  name,
+  folded,
+  mark,
+  onToggle
+}: {
+  name: string
+  folded: boolean
+  mark: 'permission' | 'working' | 'failed' | null
+  onToggle: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const statusId = useId()
-  const { folded, counts } = fold
-  const live = folded ? botFoldLiveStatus(counts) : null
-  // One mark: a folded workspace's ask outranks the bot's own work, which outranks the rest.
-  const mark = live === 'permission' ? live : working ? 'working' : live
   const label = folded
-    ? t('bots.chats.unfold', 'Unfold {{name}}', { name: botName })
-    : t('bots.chats.fold', 'Fold {{name}}', { name: botName })
+    ? t('bots.chats.unfold', 'Unfold {{name}}', { name })
+    : t('bots.chats.fold', 'Fold {{name}}', { name })
   return (
     // The row's whole right edge, top to bottom, so it is easy to hit; a folded summary widens it
     // leftward.
@@ -255,12 +267,12 @@ function BotRowFoldToggle({
       aria-expanded={!folded}
       onClick={(event) => {
         event.stopPropagation()
-        fold.onToggle()
+        onToggle()
       }}
       onKeyDown={(event) => event.stopPropagation()}
     >
-      {/* Folded, only its most urgent live workspace's status: a bare count of every workspace it
-          ever made said nothing at a glance. Folded or not, the bot's own work shows here too. */}
+      {/* Folded, only the most urgent live status of what it hides (a bot's workspaces, a group's
+          bots): a bare count said nothing at a glance. Folded or not, the row's own work shows too. */}
       {mark === 'working' ? (
         <span id={statusId} className="sr-only">
           {getWorktreeStatusLabel(mark)}

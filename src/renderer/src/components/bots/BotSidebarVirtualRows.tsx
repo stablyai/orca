@@ -32,7 +32,7 @@ const observeListOffset: typeof observeElementOffset = (instance, report) =>
     }
   })
 
-export function BotSidebarVirtualRows<Entry extends { id: string }>({
+export function BotSidebarVirtualRows<Entry extends { id: string; nestedIds?: readonly string[] }>({
   entries,
   listRef,
   draggingId,
@@ -46,7 +46,19 @@ export function BotSidebarVirtualRows<Entry extends { id: string }>({
   renderEntry: (entry: Entry, index: number) => ReactNode
 }): React.JSX.Element {
   const [focusedId, setFocusedId] = useState<string | null>(null)
-  const indexById = useMemo(() => new Map(entries.map(({ id }, index) => [id, index])), [entries])
+  // A row listed inside another (a group's member) is found through the row holding it; a bot
+  // listed under two groups is found under the first.
+  const indexById = useMemo(() => {
+    const byId = new Map<string, number>()
+    entries.forEach(({ id, nestedIds = [] }, index) => {
+      for (const key of [id, ...nestedIds]) {
+        if (!byId.has(key)) {
+          byId.set(key, index)
+        }
+      }
+    })
+    return byId
+  }, [entries])
   const rangeExtractor = useCallback(
     (range: Range) =>
       extractPinnedVirtualRange(
