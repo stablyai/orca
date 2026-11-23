@@ -29,3 +29,9 @@ export const AzureDevOpsPrVote = AzureDevOpsPr.extend({
   ...Confirmed,
   vote: z.union([z.literal(10), z.literal(5), z.literal(0), z.literal(-5)])
 })
+
+export const AzureDevOpsPrBuild = AzureDevOpsPr.extend({
+  buildId: z.number().int().positive(),
+  logs: z.boolean().optional(),
+  tail: z.number().int().positive().max(1000).optional()
+})

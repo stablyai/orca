@@ -8,6 +8,7 @@ export const AZURE_DEVOPS_HANDLER_GROUP: HandlerGroup = {
     'azure-devops pr threads',
     'azure-devops pr checks',
     'azure-devops pr files',
+    'azure-devops pr build',
     'azure-devops pr comment',
     'azure-devops pr vote'
   ],

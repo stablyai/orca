@@ -146,6 +146,7 @@ import {
 import {
   AzureDevOpsPr,
   AzureDevOpsPrBranch,
+  AzureDevOpsPrBuild,
   AzureDevOpsPrComment,
   AzureDevOpsPrFiles,
   AzureDevOpsPrVote
@@ -1245,6 +1246,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'azureBoards.workItemComments': AzureBoardsWorkItemComments,
   'azureDevOps.pr': AzureDevOpsPr,
   'azureDevOps.prAwaitingReview': AzureBoardsRepo,
+  'azureDevOps.prBuild': AzureDevOpsPrBuild,
   'azureDevOps.prChecks': AzureDevOpsPr,
   'azureDevOps.prComment': AzureDevOpsPrComment,
   'azureDevOps.prFiles': AzureDevOpsPrFiles,

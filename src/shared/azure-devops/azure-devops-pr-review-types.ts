@@ -96,3 +96,38 @@ export type AzureDevOpsPrFiles = {
   headCommit: string | null
   files: AzureDevOpsPrFileChange[]
 }
+
+export type AzureDevOpsBuildStep = {
+  name: string
+  /** Stage, Phase, Job or Task, as the build timeline reports it. */
+  type: string
+  state: string | null
+  result: string | null
+  errorCount: number
+  logId: number | null
+  /** Error and warning messages the step reported. */
+  issues: string[]
+}
+
+export type AzureDevOpsBuildLog = {
+  step: string
+  lines: string[]
+  /** Earlier lines were left out to keep the tail. */
+  truncated: boolean
+}
+
+export type AzureDevOpsPrBuild = {
+  id: number
+  number: string | null
+  definition: string | null
+  status: string | null
+  result: string | null
+  sourceBranch: string | null
+  sourceVersion: string | null
+  startTime: string | null
+  finishTime: string | null
+  url: string | null
+  steps: AzureDevOpsBuildStep[]
+  /** Tails of the failed task logs, when asked for. */
+  logs: AzureDevOpsBuildLog[]
+}

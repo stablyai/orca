@@ -1,17 +1,23 @@
 import {
   AZURE_DEVOPS_PR_REVIEW_READ_RUNTIME_CAPABILITY,
+  type AzureDevOpsPrBuild,
   type AzureDevOpsPrCheck,
   type AzureDevOpsPrDetail,
   type AzureDevOpsPrFiles,
   type AzureDevOpsPrSummary,
   type AzureDevOpsPrThread
 } from '../../shared/azure-devops/azure-devops-pr-review-types'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
+import {
+  getOptionalPositiveIntegerFlag,
+  getOptionalStringFlag,
+  getRequiredStringFlag
+} from '../arguments/flags'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import {
   formatAzureDevOpsPr,
+  formatAzureDevOpsPrBuild,
   formatAzureDevOpsPrChecks,
   formatAzureDevOpsPrFiles,
   formatAzureDevOpsPrList,
@@ -96,5 +102,22 @@ export const AZURE_DEVOPS_PR_HANDLERS: Record<string, CommandHandler> = {
       ...(since !== undefined ? { sinceIteration: since } : {})
     })
     printResult(response, context.json, formatAzureDevOpsPrFiles)
+  },
+  'azure-devops pr build': async (context) => {
+    const id = prId(context)
+    const buildId = getOptionalPositiveIntegerFlag(context.flags, 'build')
+    if (buildId === undefined) {
+      throw new RuntimeClientError('invalid_argument', 'Pass --build <buildId> from `pr checks`.')
+    }
+    const tail = getOptionalPositiveIntegerFlag(context.flags, 'tail')
+    const repo = await prTarget(context)
+    const response = await context.client.call<AzureDevOpsPrBuild>('azureDevOps.prBuild', {
+      repo,
+      id,
+      buildId,
+      logs: context.flags.get('log') === true,
+      ...(tail !== undefined ? { tail: Math.min(tail, 1000) } : {})
+    })
+    printResult(response, context.json, formatAzureDevOpsPrBuild)
   }
 }

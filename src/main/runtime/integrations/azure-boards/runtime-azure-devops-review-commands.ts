@@ -1,10 +1,12 @@
 import type {
+  AzureDevOpsPrBuild,
   AzureDevOpsPrCheck,
   AzureDevOpsPrDetail,
   AzureDevOpsPrFiles,
   AzureDevOpsPrSummary,
   AzureDevOpsPrThread
 } from '../../../../shared/azure-devops/azure-devops-pr-review-types'
+import { getAzureDevOpsPullRequestBuild } from '../../../azure-devops/pull-request-review/pr-build-client'
 import {
   listAzureDevOpsPullRequestChecks,
   listAzureDevOpsPullRequestFiles,
@@ -88,5 +90,19 @@ export class RuntimeAzureDevOpsReviewCommands {
   ): Promise<{ vote: number }> {
     const repo = await resolveAzureDevOpsRepoSelector(this.deps, repoSelector)
     return setAzureDevOpsPullRequestVote(await locateAzureDevOpsPullRequest(repo, id), id, vote)
+  }
+
+  async getAzureDevOpsPrBuild(
+    repoSelector: string,
+    id: number,
+    buildId: number,
+    options: { logs?: boolean; tail?: number } = {}
+  ): Promise<AzureDevOpsPrBuild> {
+    const repo = await resolveAzureDevOpsRepoSelector(this.deps, repoSelector)
+    return getAzureDevOpsPullRequestBuild(
+      await locateAzureDevOpsPullRequest(repo, id),
+      buildId,
+      options
+    )
   }
 }

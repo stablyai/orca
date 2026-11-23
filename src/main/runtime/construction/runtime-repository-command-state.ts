@@ -224,6 +224,12 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
     return this.azureDevOpsReviewCommands.listAzureDevOpsPrFiles(repo, id, sinceIteration)
   }
 
+  getAzureDevOpsPrBuild(
+    ...args: Parameters<AzureReview['getAzureDevOpsPrBuild']>
+  ): ReturnType<AzureReview['getAzureDevOpsPrBuild']> {
+    return this.azureDevOpsReviewCommands.getAzureDevOpsPrBuild(...args)
+  }
+
   addAzureDevOpsPrComment(
     ...args: Parameters<AzureReview['addAzureDevOpsPrComment']>
   ): ReturnType<AzureReview['addAzureDevOpsPrComment']> {

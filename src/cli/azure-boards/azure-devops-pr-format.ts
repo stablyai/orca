@@ -1,4 +1,5 @@
 import type {
+  AzureDevOpsPrBuild,
   AzureDevOpsPrCheck,
   AzureDevOpsPrDetail,
   AzureDevOpsPrFiles,
@@ -89,5 +90,23 @@ export function formatAzureDevOpsPrFiles(files: AzureDevOpsPrFiles): string {
           (file) =>
             `${file.changeType}\t${file.path}${file.originalPath && file.originalPath !== file.path ? ` (from ${file.originalPath})` : ''}`
         ))
+  ].join('\n')
+}
+
+export function formatAzureDevOpsPrBuild(build: AzureDevOpsPrBuild): string {
+  return [
+    `Build ${build.number ?? build.id} ${build.definition ?? ''}: ${build.status ?? '?'}${build.result ? `, ${build.result}` : ''}`.trim(),
+    ...(build.url ? [`URL: ${build.url}`] : []),
+    ...build.steps
+      .filter((step) => step.type === 'Task' || step.type === 'Job')
+      .map(
+        (step) =>
+          `  ${step.result ?? step.state ?? '?'}\t${step.type}\t${step.name}${step.issues.length > 0 ? `\n${step.issues.map((issue) => `      ${issue}`).join('\n')}` : ''}`
+      ),
+    ...build.logs.flatMap((log) => [
+      '',
+      `--- ${log.step}${log.truncated ? ' (last lines)' : ''}`,
+      ...log.lines
+    ])
   ].join('\n')
 }

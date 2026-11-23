@@ -351,6 +351,7 @@ const ORCA_AZURE_DEVOPS_PR_MARKDOWN = [
   "ORCA azure-devops pr list --json                       # active, non-draft PRs where you are a reviewer, with your vote",
   "ORCA azure-devops pr show <id> --json                  # description, reviewers and votes, merge state, iteration count",
   "ORCA azure-devops pr checks <id> --json                # branch policies, builds (stale ones flagged), external statuses",
+  "ORCA azure-devops pr build <id> --build <buildId> --log --json   # a failing build's steps and the tail of its failed task logs",
   "ORCA azure-devops pr threads <id> --json               # human discussion with file and line; system threads left out",
   "ORCA azure-devops pr files <id> --since-iteration <n> --json   # only what changed after iteration n",
   "```",

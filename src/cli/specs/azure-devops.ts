@@ -58,6 +58,20 @@ export const AZURE_DEVOPS_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca azure-devops pr files 4321 --since-iteration 2 --json']
   },
   {
+    path: ['azure-devops', 'pr', 'build'],
+    summary: "Read a PR build's steps, and the tail of its failed task logs",
+    usage:
+      'orca azure-devops pr build <id> --build <buildId> [--log] [--tail <n>] [--repo <selector>] [--json]',
+    allowedFlags: [...REPO_FLAGS, 'id', 'build', 'log', 'tail'],
+    booleanFlags: ['log'],
+    positionalArgs: ['id'],
+    notes: [
+      REPO_NOTE,
+      'Take <buildId> from `pr checks`. --log adds the last --tail lines (default 150, at most 1000) of up to three failed tasks.'
+    ],
+    examples: ['orca azure-devops pr build 4321 --build 9876 --log --json']
+  },
+  {
     path: ['azure-devops', 'pr', 'comment'],
     summary: 'Post a comment on a pull request (needs --confirm)',
     usage:

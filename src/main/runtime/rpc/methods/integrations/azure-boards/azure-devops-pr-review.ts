@@ -2,6 +2,7 @@ import { AzureBoardsRepo } from '../../../../../../shared/rpc-contract/azure-boa
 import {
   AzureDevOpsPr,
   AzureDevOpsPrBranch,
+  AzureDevOpsPrBuild,
   AzureDevOpsPrComment,
   AzureDevOpsPrFiles,
   AzureDevOpsPrVote
@@ -47,6 +48,16 @@ export const AZURE_DEVOPS_PR_REVIEW_METHODS = [
     params: AzureDevOpsPrFiles,
     handler: async (params, { runtime }) =>
       runtime.listAzureDevOpsPrFiles(params.repo, params.id, params.sinceIteration)
+  }),
+  defineMethod({
+    name: 'azureDevOps.prBuild',
+    permission: 'workspace',
+    params: AzureDevOpsPrBuild,
+    handler: async (params, { runtime }) =>
+      runtime.getAzureDevOpsPrBuild(params.repo, params.id, params.buildId, {
+        logs: params.logs,
+        tail: params.tail
+      })
   }),
   defineMethod({
     name: 'azureDevOps.prComment',
