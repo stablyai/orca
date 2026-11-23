@@ -171,6 +171,11 @@ export async function commitStagedWebStoreExtension(
       const sourceProfileId = browserExtensionSourceProfileId(enableInProfileId)
       await startBrowserExtensionsForSettings(enableInProfileId)
       await loadBrowserExtensionIntoProfile(enableInProfileId, record)
+      if (sourceProfileId !== enableInProfileId) {
+        // Why start it: its attach settles an earlier removal, which would otherwise undo this enable.
+        await startBrowserExtensionsForSettings(sourceProfileId)
+        await loadBrowserExtensionIntoProfile(sourceProfileId, record)
+      }
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, sourceProfileId, extensionId, true)
       )

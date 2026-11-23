@@ -17,6 +17,6 @@ export function clientHostedPagesSettingsNote(
     clientHostedPagesNote:
       setting === 'identity'
         ? `${pages} use that desktop's browser identity, not this host's. Change it there in Settings › Browser.`
-        : `${pages} don't run this host's extensions; Default-profile pages there run that desktop's own.`
+        : `${pages} don't run this host's extensions; on an up-to-date desktop, Default-profile pages run that desktop's own.`
   }
 }
