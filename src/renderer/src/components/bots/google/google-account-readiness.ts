@@ -27,6 +27,15 @@ export function googleAccountChoices(account: GoogleAccountView): GoogleServiceC
   )
 }
 
+/**
+ * What a sign-in asks Google for: what the account has, else every service. An account this host
+ * can't read lists no services, and a sign-in must ask for at least one.
+ */
+export function googleSignInChoices(account: GoogleAccountView | undefined): GoogleServiceChoice[] {
+  const choices = account ? googleAccountChoices(account) : []
+  return choices.length > 0 ? choices : [...GOOGLE_SERVICE_CHOICES]
+}
+
 /** Checks the account's leftovers again every 30 s while shown, for ten minutes. */
 export function useRecheckWhileBroken(target: RuntimeClientTarget, broken: boolean): void {
   const environmentId = target.kind === 'environment' ? target.environmentId : null

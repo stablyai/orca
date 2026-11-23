@@ -16,8 +16,7 @@ import { useBotHostLabel } from '../use-bot-host-label'
 import { setBotGoogle, useGoogleHost } from './google-connect-client'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
-import { GOOGLE_SERVICE_CHOICES } from '../../../../../shared/google/google-scopes'
-import { googleAccountChoices } from './google-account-readiness'
+import { googleSignInChoices } from './google-account-readiness'
 import { GoogleSignInWaiting } from './GoogleSignInWaiting'
 import { useGoogleSignIn } from './use-google-sign-in'
 
@@ -115,10 +114,7 @@ export function BotGoogleCard({
           ? {
               addAccount: {
                 label: t('bots.google.addAccount', 'Add another Google account'),
-                onClick: () =>
-                  void signIn.connect(
-                    fallback ? googleAccountChoices(fallback) : GOOGLE_SERVICE_CHOICES
-                  )
+                onClick: () => void signIn.connect(googleSignInChoices(fallback))
               }
             }
           : {}),

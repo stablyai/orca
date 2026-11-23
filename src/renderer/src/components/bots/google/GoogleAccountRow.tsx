@@ -24,6 +24,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import { STATUS_DOT_CLASSES } from '../bot-connector-row-parts'
 import {
   googleAccountChoices,
+  googleSignInChoices,
   googleReadinessFixer,
   useRecheckWhileBroken
 } from './google-account-readiness'
@@ -153,7 +154,7 @@ export function GoogleAccountRow({
         )}
       </div>
       {!connected ? (
-        <Button size="sm" onClick={() => signIn(choices, account.email)}>
+        <Button size="sm" onClick={() => signIn(googleSignInChoices(account), account.email)}>
           {t('bots.google.reconnect', 'Reconnect')}
         </Button>
       ) : problem && face?.fix ? (

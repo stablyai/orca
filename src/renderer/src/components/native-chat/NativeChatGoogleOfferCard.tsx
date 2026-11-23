@@ -8,19 +8,18 @@ import { BotAppBrandLogo } from '../bots/apps/BotAppBrandLogo'
 import { BOT_CONNECTORS } from '../bots/bot-connectors'
 import { useConnectorSetup } from '../bots/ConnectorSetupDialogs'
 import { useGoogleHost } from '../bots/google/google-connect-client'
-import { googleAccountChoices } from '../bots/google/google-account-readiness'
+import { googleSignInChoices } from '../bots/google/google-account-readiness'
 import { GoogleSignInWaiting } from '../bots/google/GoogleSignInWaiting'
 import { useGoogleSignIn } from '../bots/google/use-google-sign-in'
 import { useTurnOnBotGoogle } from '../bots/google/use-turn-on-bot-google'
 import type { Bot } from '../../../../shared/bot-types'
-import { GOOGLE_SERVICE_CHOICES } from '../../../../shared/google/google-scopes'
 import {
   NativeChatCardActions,
   NativeChatCardFrame,
   NativeChatCardStatus
 } from './NativeChatCardFrame'
 import { NativeChatOfferActions, useNativeChatOffer } from './NativeChatOfferActions'
-import { googleOfferFace } from './google-offer-face'
+import { googleOfferFace, googleOfferSignedInAnswer } from './google-offer-face'
 
 export function NativeChatGoogleOfferCard({
   bot,
@@ -39,7 +38,7 @@ export function NativeChatGoogleOfferCard({
   const face = google ? googleOfferFace(google, bot.google === true) : { kind: 'connect' as const }
   const defaultAccount = face.kind === 'connect' ? null : face.defaultAccount
   const fallback = google?.accounts.find((account) => account.email === defaultAccount)
-  const choices = fallback ? googleAccountChoices(fallback) : GOOGLE_SERVICE_CHOICES
+  const choices = googleSignInChoices(fallback)
   // The account this card connected, when it isn't the default; the bot is told to name it.
   const added = answering.sent?.[0] ?? null
   const shown = added ?? defaultAccount
@@ -49,13 +48,14 @@ export function NativeChatGoogleOfferCard({
     if (!connected || (bot.google !== true && !(await turnOnGoogle(bot)))) {
       return
     }
-    if (connected.email !== defaultAccount) {
-      answering.send(
-        t('components.native-chat.googleOffer.useAccount', 'Use {{email}} for Google.', {
-          email: connected.email
-        }),
-        [connected.email]
-      )
+    const text = t('components.native-chat.googleOffer.useAccount', 'Use {{email}} for Google.', {
+      email: connected.email
+    })
+    const answer = googleOfferSignedInAnswer(connected.email, { added, defaultAccount })
+    if (answer === 'again') {
+      answering.sendAgain(text, [connected.email])
+    } else if (answer === 'send') {
+      answering.send(text, [connected.email])
     }
   }
 

@@ -38,3 +38,18 @@ export function googleOfferFace(
     reconnect: fallback.status === 'reconnect'
   }
 }
+
+/**
+ * How the card tells the chat about an account it just signed in: a first answer (`send`), a new
+ * answer on a card that already named one (`again`; its one-time claim is spent), or nothing when the
+ * account is the one the card already reads.
+ */
+export function googleOfferSignedInAnswer(
+  email: string,
+  card: { added: string | null; defaultAccount: string | null }
+): 'send' | 'again' | null {
+  if (card.added) {
+    return email === card.added ? null : 'again'
+  }
+  return email === card.defaultAccount ? null : 'send'
+}

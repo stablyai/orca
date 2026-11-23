@@ -13,12 +13,9 @@ import type { Bot } from '../../../../../shared/bot-types'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { GoogleStatusView } from '../../../../../shared/google/google-connect-types'
-import {
-  GOOGLE_SERVICE_CHOICES,
-  type GoogleServiceChoice
-} from '../../../../../shared/google/google-scopes'
+import type { GoogleServiceChoice } from '../../../../../shared/google/google-scopes'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import { googleAccountChoices } from './google-account-readiness'
+import { googleSignInChoices } from './google-account-readiness'
 import { GoogleAccountRow } from './GoogleAccountRow'
 import { GoogleServicePicker } from './GoogleServicePicker'
 import { GoogleSignInWaiting } from './GoogleSignInWaiting'
@@ -206,9 +203,7 @@ function AccountList({
             size="sm"
             variant="outline"
             disabled={signIn.state.kind === 'waiting'}
-            onClick={() =>
-              connect(fallback ? googleAccountChoices(fallback) : GOOGLE_SERVICE_CHOICES)
-            }
+            onClick={() => connect(googleSignInChoices(fallback))}
           >
             <Plus />
             {t('bots.google.addAccount', 'Add another Google account')}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GoogleAccountView } from '../../../../shared/google/google-connect-types'
-import { googleOfferFace } from './google-offer-face'
+import { googleOfferFace, googleOfferSignedInAnswer } from './google-offer-face'
 
 const account = (email: string, status: GoogleAccountView['status'] = 'connected') => ({
   email,
@@ -59,5 +59,21 @@ describe('the Google Connect card', () => {
       defaultAccount: null,
       canAdd: false
     })
+  })
+})
+
+describe('telling the chat which account the card signed in', () => {
+  const card = { added: null, defaultAccount: 'work@x.com' }
+
+  it('answers once for another account, and not for the default', () => {
+    expect(googleOfferSignedInAnswer('me@x.com', card)).toBe('send')
+    expect(googleOfferSignedInAnswer('work@x.com', card)).toBeNull()
+  })
+
+  it('answers again, without the spent claim, when an answered card adds one more', () => {
+    const answered = { ...card, added: 'me@x.com' }
+    expect(googleOfferSignedInAnswer('side@x.com', answered)).toBe('again')
+    expect(googleOfferSignedInAnswer('work@x.com', answered)).toBe('again')
+    expect(googleOfferSignedInAnswer('me@x.com', answered)).toBeNull()
   })
 })
