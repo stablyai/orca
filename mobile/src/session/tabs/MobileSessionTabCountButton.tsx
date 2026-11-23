@@ -54,8 +54,13 @@ export function MobileSessionTabCountButton({
       <View style={styles.countBox}>
         <Text style={styles.countText}>{count}</Text>
       </View>
-      {anyUnread ? <Bell size={12} color={colors.statusAmber} fill={colors.statusAmber} /> : null}
-      {othersNeedYou ? <View style={styles.alert} /> : null}
+      {othersNeedYou ? (
+        <View style={[styles.alert, active && styles.alertActive]} />
+      ) : anyUnread ? (
+        <View pointerEvents="none" style={[styles.unreadBadge, active && styles.unreadBadgeActive]}>
+          <Bell size={10} color={colors.statusAmber} fill={colors.statusAmber} />
+        </View>
+      ) : null}
     </Pressable>
   )
 }
@@ -101,5 +106,19 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.statusRed,
     borderWidth: 2,
     borderColor: colors.bgPanel
+  },
+  alertActive: {
+    borderColor: colors.bgRaised
+  },
+  unreadBadge: {
+    position: 'absolute',
+    top: 5,
+    right: 6,
+    padding: 2,
+    borderRadius: radii.pill,
+    backgroundColor: colors.bgPanel
+  },
+  unreadBadgeActive: {
+    backgroundColor: colors.bgRaised
   }
 }))

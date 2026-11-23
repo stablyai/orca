@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native'
-import { Plus } from 'lucide-react-native'
+import { Bell, Plus } from 'lucide-react-native'
 import { triggerMediumImpact } from '../../platform/haptics/haptics'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { AgentStateDot } from '../../agents/presentation/AgentStateDot'
@@ -13,6 +13,7 @@ import {
   resolveTabStripHiddenTabs,
   resolveTabStripScrollOffset,
   resolveTabStripTapOffset,
+  type TabStripEdgeHint,
   type TabStripHiddenTabs
 } from '../../components/controls/tab-strip-scroll'
 import { colors } from '../../theme/mobile-theme'
@@ -29,12 +30,31 @@ import type { MobileSessionController } from '../use-mobile-session-controller'
 
 const DOUBLE_TAP_RENAME_MS = 300
 
-function StripTabDot({ tabId, state }: { tabId: string; state: AgentDotState | undefined }) {
-  const [startedEmpty] = useState({ tabId, empty: state === undefined })
+function StripTabDot({
+  tabId,
+  state,
+  unreadBell
+}: {
+  tabId: string
+  state: AgentDotState | undefined
+  unreadBell: boolean
+}) {
+  const [startedEmpty] = useState({ tabId, empty: state === undefined && !unreadBell })
+  if (unreadBell) {
+    return <Bell size={10} color={colors.statusAmber} fill={colors.statusAmber} />
+  }
   if (startedEmpty.tabId === tabId && startedEmpty.empty) {
     return <ArrivingStripTabDot state={state} />
   }
   return state && state !== 'idle' ? <AgentStateDot state={state} /> : null
+}
+
+function TabStripEdgeBadge({ hint }: { hint: TabStripEdgeHint }) {
+  return hint === 'unread' ? (
+    <Bell size={10} color={colors.statusAmber} fill={colors.statusAmber} />
+  ) : (
+    <AgentStateDot state={hint} />
+  )
 }
 
 function ArrivingStripTabDot({ state }: { state: AgentDotState | undefined }) {
@@ -98,9 +118,11 @@ export function MobileSessionTabStrip({
     [visibleTabs, terminals, now, activeSessionTabId]
   )
   const tabStates = useMemo(() => {
-    const states = new Map<string, AgentDotState>()
+    const states = new Map<string, TabStripEdgeHint>()
     for (const row of rows) {
-      if (row.dotState) {
+      if (row.unread && row.group === 'other') {
+        states.set(row.tab.id, 'unread')
+      } else if (row.dotState) {
         states.set(row.tab.id, row.dotState)
       }
     }
@@ -256,6 +278,7 @@ export function MobileSessionTabStrip({
             const { tab, title } = row
             const isActive = tab.id === activeSessionTabId
             const status = row.dotState && row.dotState !== 'idle' ? row.dotState : undefined
+            const unreadBell = row.unread && row.group === 'other'
             const baseLabel = isForkedChatTab(tab) ? mobileForkAccessibleName(title) : title
             return (
               <Pressable
@@ -276,14 +299,13 @@ export function MobileSessionTabStrip({
                 }}
                 onPress={() => pressTab(tab)}
                 accessibilityRole="tab"
-                accessibilityLabel={
-                  status
-                    ? t('session.tabStrip.tabStatus', '{{title}}, {{status}}', {
-                        title: baseLabel,
-                        status: agentStateLabel(status)
-                      })
-                    : baseLabel
-                }
+                accessibilityLabel={[
+                  baseLabel,
+                  unreadBell ? t('agents.list.unread', 'Unread') : null,
+                  status ? agentStateLabel(status) : null
+                ]
+                  .filter(Boolean)
+                  .join(', ')}
                 accessibilityState={{ selected: isActive }}
                 onLongPress={() => {
                   triggerMediumImpact()
@@ -292,7 +314,7 @@ export function MobileSessionTabStrip({
                 delayLongPress={400}
               >
                 <View style={styles.tabLabelRow}>
-                  <StripTabDot tabId={tab.id} state={row.dotState} />
+                  <StripTabDot tabId={tab.id} state={row.dotState} unreadBell={unreadBell} />
                   <View style={styles.tabIcon}>
                     <MobileSessionTabMark row={row} size={13} />
                   </View>
@@ -309,12 +331,12 @@ export function MobileSessionTabStrip({
         </ScrollView>
         {leftHint ? (
           <View pointerEvents="none" style={[styles.edgeHint, styles.edgeHintLeft]}>
-            <AgentStateDot state={leftHint} />
+            <TabStripEdgeBadge hint={leftHint} />
           </View>
         ) : null}
         {rightHint ? (
           <View pointerEvents="none" style={[styles.edgeHint, styles.edgeHintRight]}>
-            <AgentStateDot state={rightHint} />
+            <TabStripEdgeBadge hint={rightHint} />
           </View>
         ) : null}
       </View>

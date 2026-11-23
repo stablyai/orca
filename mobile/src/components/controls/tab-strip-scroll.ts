@@ -109,19 +109,24 @@ export function resolveTabStripHiddenTabs(args: {
   return { left, right }
 }
 
+export type TabStripEdgeHint = AgentDotState | 'unread'
+
 // Lower ranks win when several hidden tabs share an edge; other states get no edge hint.
-const EDGE_HINT_RANK: Partial<Record<AgentDotState, number>> = {
+const EDGE_HINT_RANK: Partial<Record<TabStripEdgeHint, number>> = {
   blocked: 0,
   waiting: 0,
+  permission: 0,
+  failed: 0,
   working: 1,
-  monitoring: 1
+  monitoring: 1,
+  unread: 2
 }
 
 export function resolveTabStripEdgeHint(
   tabIds: readonly string[],
-  tabStates: ReadonlyMap<string, AgentDotState>
-): AgentDotState | null {
-  let hint: AgentDotState | null = null
+  tabStates: ReadonlyMap<string, TabStripEdgeHint>
+): TabStripEdgeHint | null {
+  let hint: TabStripEdgeHint | null = null
   for (const tabId of tabIds) {
     const state = tabStates.get(tabId)
     const rank = state ? EDGE_HINT_RANK[state] : undefined
