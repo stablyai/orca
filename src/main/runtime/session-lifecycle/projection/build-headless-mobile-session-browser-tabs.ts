@@ -65,7 +65,6 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         : []
     const publishedServerTabs = serverTabs.map((tab) => {
       const navigation = this.agentBrowserBridge?.getPageNavigationState(tab.browserPageId)
-      const audio = this.agentBrowserBridge?.getPageAudioState(tab.browserPageId)
       const persistedProps = this.getPersistedUnifiedSessionTabProps(
         worktreeId,
         this.serveBrowserTabs.unifiedTabId(worktreeId, tab.browserPageId)
@@ -85,10 +84,8 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         faviconUrl: this.agentBrowserBridge?.getRemoteTabFaviconUrl(tab.browserPageId) ?? null,
         loadError: tab.loadError ?? undefined,
         certificateFailure: tab.certificateFailure ?? undefined,
-        ...(audio?.audible ? { audible: true as const } : {}),
-        ...(audio?.muted ? { audioMuted: true as const } : {}),
-        ...(persistedProps ? { color: persistedProps.color } : {}),
-        ...(persistedProps ? { isPinned: persistedProps.isPinned === true } : {}),
+        ...this.agentBrowserBridge?.getPageAudioRowFields(tab.browserPageId),
+        ...(persistedProps && { ...persistedProps, isPinned: persistedProps.isPinned === true }),
         isActive: tab.active === true
       }
     })

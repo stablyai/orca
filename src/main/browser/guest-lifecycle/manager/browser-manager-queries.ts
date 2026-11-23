@@ -179,13 +179,17 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     return { loading: guest.isLoadingMainFrame(), ...readGuestNavigationState(guest) }
   }
 
-  getBrowserPageAudioState(browserPageId: string): { audible: boolean; muted: boolean } | null {
+  /** Session rows carry sound flags only when set, so silent pages and older readers see none. */
+  getBrowserPageAudioRowFields(browserPageId: string): { audible?: true; audioMuted?: true } {
     const webContentsId = this.pageWebContentsId(browserPageId)
     const guest = webContentsId === undefined ? undefined : webContents.fromId(webContentsId)
     if (!guest || guest.isDestroyed()) {
-      return null
+      return {}
     }
-    return { audible: guest.isCurrentlyAudible(), muted: guest.isAudioMuted() }
+    return {
+      ...(guest.isCurrentlyAudible() ? { audible: true as const } : {}),
+      ...(guest.isAudioMuted() ? { audioMuted: true as const } : {})
+    }
   }
 
   getBrowserPageCertificateFailure(browserPageId: string): BrowserCertificateFailure | null {
