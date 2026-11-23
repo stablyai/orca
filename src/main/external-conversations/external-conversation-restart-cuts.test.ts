@@ -23,8 +23,11 @@ const linked: LinkedConversation = {
     bot: { kind: 'bot', botId: 'bot-1' }
   }
 }
-const delivered = {
+const delivered: AgentJournalRenderItem = {
   itemId: 'm-1',
+  sequence: 1,
+  revision: 1,
+  observedAt: 1,
   body: {
     kind: 'message',
     role: 'user',
@@ -32,7 +35,7 @@ const delivered = {
     origin: 'connector',
     connectorConversation: { source: 'slack', externalId: 'C1:111.222' }
   }
-} as unknown as AgentJournalRenderItem
+}
 
 function ends(overrides: Partial<RestartCutTurnEndsDeps> = {}) {
   return restartCutTurnEnds({
@@ -73,6 +76,19 @@ describe('restartCutTurnEnds', () => {
 
   it('ends nothing for a linked chat the last run did not cut', async () => {
     expect(await ends({ cutByLastRun: new Set(['chat-2']) })).toEqual([])
+  })
+
+  it('ends a turn the owner typed in Orca only once the Slack mirror posted it', async () => {
+    const typed: AgentJournalRenderItem = {
+      ...delivered,
+      body: { kind: 'message', role: 'user', blocks: [] }
+    }
+    expect(await ends({ openerOf: async () => typed })).toEqual([])
+    const mirrored: LinkedConversation = {
+      ...linked,
+      link: { ...linked.link, mirrorPosts: { 'm-1': { state: 'posted', at: 1 } } }
+    }
+    expect(await ends({ openerOf: async () => typed, linksFor: () => [mirrored] })).toHaveLength(1)
   })
 
   it('ends nothing whose agent may still be running, or whose turn its conversation never heard', async () => {

@@ -40,14 +40,18 @@ export type RestartCutTurnEndsDeps = {
 }
 
 /** Whether the conversation was told of the turn this message opened: its own delivery, a
- *  continuation of its requests, or mail finishing its ask (as ChatTurns hears them). */
+ *  continuation of its requests, mail finishing its ask (as ChatTurns hears them), or the owner's
+ *  message the Slack mirror posted there. */
 export function conversationHeardTurn(
   { link }: LinkedConversation,
   opener: AgentJournalRenderItem | null | undefined
 ): boolean {
   const body = opener?.body
-  if (body?.kind !== 'message') {
+  if (!opener || body?.kind !== 'message') {
     return false
+  }
+  if (link.mirrorPosts?.[opener.itemId]?.state === 'posted') {
+    return true
   }
   const names = (conversation: { source: string; externalId: string } | undefined) =>
     conversation?.source === link.source && conversation.externalId === link.externalId
@@ -85,7 +89,8 @@ export async function restartCutTurnEnds(deps: RestartCutTurnEndsDeps): Promise<
       ends.push({
         kind: 'turn-ended',
         ...conversationPane(conversation.link, conversation.workspace.worktreeId),
-        // Ends the open turn the last run told, never one this start began.
+        // A fence, not the turn's own start (lost with the last run): the cloud ends its open turn
+        // when that turn is no newer, so this ends what the last run told, never one this start began.
         turnId: deps.startedAt,
         stopReason: 'interruption',
         // No words: Slack and GitHub edit the status only, Linear ends its session with the error.
