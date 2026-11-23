@@ -9,6 +9,8 @@ const RENDERER_HEAP_RAM_FRACTION = 0.4
 const RENDERER_HEAP_FLOOR_MB = 3072
 // Pointer compression caps V8 at 4096MB even if the flag requests more.
 const RENDERER_HEAP_CAP_MB = 4096
+// Cap young-generation semi-space so large old-space ceilings don't retain 48-64 MiB of idle new_space.
+const MAX_SEMI_SPACE_SIZE_MB = 4
 
 type HeapOverride = number | 'disable' | undefined
 
@@ -66,15 +68,19 @@ export function enableRendererHeapHeadroom(
   const totalMemoryBytes = options.totalMemoryBytes ?? totalmem()
   const envOverride = (options.env ?? process.env)[RENDERER_HEAP_ENV_VAR]
   const ceilingMb = computeRendererHeapCeilingMb(totalMemoryBytes, envOverride)
-  if (ceilingMb === null) {
-    return
-  }
   const existing = app.commandLine.getSwitchValue('js-flags')
+  const additions: string[] = []
   // Respect explicit heap flags rather than append an ignored duplicate.
-  if (existing.includes('--max-old-space-size')) {
+  if (ceilingMb !== null && !existing.includes('--max-old-space-size')) {
+    additions.push(`--max-old-space-size=${ceilingMb}`)
+  }
+  if (!existing.includes('--max-semi-space-size')) {
+    additions.push(`--max-semi-space-size=${MAX_SEMI_SPACE_SIZE_MB}`)
+  }
+  if (additions.length === 0) {
     return
   }
-  const flag = `--max-old-space-size=${ceilingMb}`
+  const flag = additions.join(' ')
   // Set process-wide js-flags before ready so newly spawned V8 isolates inherit them.
   app.commandLine.appendSwitch('js-flags', existing ? `${existing} ${flag}` : flag)
 }

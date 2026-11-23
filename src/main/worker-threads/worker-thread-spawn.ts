@@ -5,6 +5,8 @@ import type { WorkerThreadRole } from './worker-thread-roles'
 /** V8's default CodeRange (512 MB on x64) costs every worker ~600 MB of address space, so a few
  * workers exhaust a `ulimit -v` host (#37538). Worker JIT code stays far below this. */
 export const WORKER_CODE_RANGE_MB = 64
+/** Cap worker young generation (2x semi-space) so idle/short-lived workers don't retain 32-64 MiB. */
+export const WORKER_MAX_YOUNG_GENERATION_MB = 8
 
 export type WorkerThreadObserver = {
   /** Runs before construction: a worker copies environment data when it is created. */
@@ -44,7 +46,11 @@ export function spawnWorkerThread(
   }
   const worker = new Worker(filename, {
     ...options,
-    resourceLimits: { codeRangeSizeMb: WORKER_CODE_RANGE_MB, ...options.resourceLimits }
+    resourceLimits: {
+      codeRangeSizeMb: WORKER_CODE_RANGE_MB,
+      maxYoungGenerationSizeMb: WORKER_MAX_YOUNG_GENERATION_MB,
+      ...options.resourceLimits
+    }
   })
   spawned.set(worker, worker.threadId)
   try {
