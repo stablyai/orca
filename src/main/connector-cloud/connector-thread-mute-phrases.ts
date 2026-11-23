@@ -133,7 +133,11 @@ export function mayBeThreadMuteCommand(text: string): boolean {
 /** Whether the message @mentions the bot anywhere, as its Slack user or by a whole name ("@reviewer"
  *  is not "@reviewer-2", nor "ops@reviewer.io"). */
 export function mentionsBot(text: string, bot: ThreadBot): boolean {
-  const lower = text.toLowerCase()
+  // Code (```blocks``` and `spans`) only quotes a name; it mentions no one.
+  const lower = text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`[^`\n]*`/g, ' ')
+    .toLowerCase()
   const userId = bot.userId?.toLowerCase()
   return (
     (userId !== undefined && lower.includes(`<@${userId}>`)) ||

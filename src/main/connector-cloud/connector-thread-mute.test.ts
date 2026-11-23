@@ -58,6 +58,8 @@ describe('a mention in a muted thread', () => {
     expect(step('ping @reviewer-2')).toBe('silence')
     expect(step('@reviewer-2 hello')).toBe('silence')
     expect(step('send it to ops@reviewer.io')).toBe('silence')
+    expect(step('the example username is `@reviewer`')).toBe('silence')
+    expect(step('```\n<@U0BOT> hi\n```')).toBe('silence')
   })
 })
 
