@@ -139,10 +139,7 @@ export async function acquireCodexStructuredSession(input: {
           }
     acquisitions.assertCurrent(sessionId, attempt)
     account = launch.codexHome ? deps.resolveAccountKind?.(launch.codexHome) : undefined
-    const open = codexConnectionOpener(deps, sessionId, {
-      ...launch,
-      stillWanted: () => !attempt.cancelled
-    })
+    const open = codexConnectionOpener(deps, sessionId, launch, attempt)
     // Read at spawn: a Windows shared open can fall back to the chat's own server.
     sharedServer = () => opensSharedCodexServer(open)
     const connection = await open(

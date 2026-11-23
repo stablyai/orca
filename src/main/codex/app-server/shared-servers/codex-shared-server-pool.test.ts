@@ -530,26 +530,28 @@ describe('shared Codex app-servers', () => {
     })
     expect(opener).toBe(spawnCodexAppServerConnection)
     expect(
-      codexConnectionOpener({ sharedServers: () => true }, 's', {}, 'win32', () => false)
+      codexConnectionOpener({ sharedServers: () => true }, 's', {}, {}, 'win32', () => false)
     ).toBe(spawnCodexAppServerConnection)
-    expect(codexConnectionOpener({ sharedServers: () => false }, 's', {}, 'linux')).toBe(
+    expect(codexConnectionOpener({ sharedServers: () => false }, 's', {}, {}, 'linux')).toBe(
       spawnCodexAppServerConnection
     )
     // Off on Windows never even loads the job addon.
     const windowsSharing = vi.fn(() => true)
     expect(
-      codexConnectionOpener({ sharedServers: () => false }, 's', {}, 'win32', windowsSharing)
+      codexConnectionOpener({ sharedServers: () => false }, 's', {}, {}, 'win32', windowsSharing)
     ).toBe(spawnCodexAppServerConnection)
     expect(windowsSharing).not.toHaveBeenCalled()
   })
 
   it("marks a shared opener, so a chat's recovery never signals the server it shares", () => {
     expect(
-      opensSharedCodexServer(codexConnectionOpener({ sharedServers: () => true }, 's', {}, 'linux'))
+      opensSharedCodexServer(
+        codexConnectionOpener({ sharedServers: () => true }, 's', {}, {}, 'linux')
+      )
     ).toBe(true)
     expect(
       opensSharedCodexServer(
-        codexConnectionOpener({ sharedServers: () => false }, 's', {}, 'linux')
+        codexConnectionOpener({ sharedServers: () => false }, 's', {}, {}, 'linux')
       )
     ).toBe(false)
   })
@@ -795,7 +797,8 @@ describe('shared Codex app-servers', () => {
       const open = codexConnectionOpener(
         { sharedServers: () => true },
         's',
-        { stillWanted: () => false },
+        {},
+        { cancelled: true },
         'win32',
         () => true,
         () => pool
