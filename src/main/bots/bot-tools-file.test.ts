@@ -2,13 +2,19 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { botToolDraftInput, draftFromServer } from '../../shared/bots/bot-tool-draft'
 import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secure-storage/secret-store'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import {
   botToolCredentialsPath,
+  commitBotToolOAuth,
+  newBotToolCredentialId,
   readBotToolCredential,
+  readBotToolOAuth,
   useBotToolCredentialsRoot
 } from './bot-tool-credentials'
+import { readBotToolDetails } from './bot-tool-details'
+import { addBotTool, updateBotTool, type BotToolsHome } from './bot-tools-host'
 import {
   botSessionToolServers,
   botToolsPath,
@@ -113,6 +119,30 @@ describe("a bot's tools file", () => {
   })
 })
 
+const signedInNotion = async () => {
+  const folder = tempDir('bot-tools-file-')
+  const home: BotToolsHome = {
+    botId: 'bot',
+    folder,
+    signInFolder: folder,
+    otherBotFolders: [],
+    agent: 'gemini'
+  }
+  const id = newBotToolCredentialId()
+  await addBotTool(
+    home,
+    { ...notion, transport: 'http', credential: id },
+    new Map([[id, { url: notion.url, signIn: true as const }]])
+  )
+  const tokens = { access_token: 'access', token_type: 'bearer' }
+  commitBotToolOAuth(folder, id, (current) => ({
+    url: notion.url,
+    grant: current!.grant + 1,
+    record: { resource: notion.url, tokens }
+  }))
+  return { folder, home, id, tokens }
+}
+
 describe('an edited tool', () => {
   it('keeps its credential id, so a running chat’s relay address gets the new value', async () => {
     const folder = tempDir('bot-tools-file-')
@@ -134,6 +164,61 @@ describe('an edited tool', () => {
     expect(after && 'credential' in after ? after.credential : null).toBe(id)
     expect(readBotToolCredential(folder, id)?.headers).toEqual({ authorization: 'rotated' })
   })
+
+  it('keeps its Orca sign-in when the editor saves it unchanged', async () => {
+    const { folder, home, id, tokens } = await signedInNotion()
+    const { version, server } = await readBotToolDetails(folder, 'notion')
+
+    await updateBotTool(home, 'notion', version, botToolDraftInput(draftFromServer(server)))
+
+    const [after] = await readBotToolServers(folder)
+    expect(after && 'credential' in after ? after.credential : null).toBe(id)
+    expect(readBotToolOAuth(folder, id)?.record.tokens).toEqual(tokens)
+  })
+
+  it('keeps its Orca sign-in when a save adding a header row is refused', async () => {
+    const { folder, home, id, tokens } = await signedInNotion()
+    const { version } = await readBotToolDetails(folder, 'notion')
+
+    await expect(
+      updateBotTool(home, 'notion', version, {
+        name: 'notion',
+        url: notion.url,
+        transport: 'http',
+        headers: [{ key: 'x-extra', value: 'one' }]
+      })
+    ).rejects.toThrow('Orca signs in to this tool')
+
+    const [after] = await readBotToolServers(folder)
+    expect(after && 'credential' in after ? after.credential : null).toBe(id)
+    expect(readBotToolOAuth(folder, id)?.record.tokens).toEqual(tokens)
+  })
+
+  it('drops saved header values the editor removed', async () => {
+    const folder = tempDir('bot-tools-file-')
+    const home: BotToolsHome = {
+      botId: 'bot',
+      folder,
+      signInFolder: folder,
+      otherBotFolders: [],
+      agent: 'gemini'
+    }
+    await writeBotToolServers(folder, [{ ...notion, headers: { authorization: SECRET } }])
+    const [before] = await readBotToolServers(folder)
+    const id = before && 'credential' in before ? before.credential! : ''
+    const { version, server } = await readBotToolDetails(folder, 'notion')
+
+    await updateBotTool(
+      home,
+      'notion',
+      version,
+      botToolDraftInput({ ...draftFromServer(server), headers: [] })
+    )
+
+    const [after] = await readBotToolServers(folder)
+    expect(after && 'credential' in after ? after.credential : undefined).toBeUndefined()
+    expect(readBotToolCredential(folder, id)).toBeNull()
+  })
 })
 
 describe('saving a tool', () => {
@@ -150,28 +235,32 @@ describe('saving a tool', () => {
     ).rejects.toThrow('Tools changed')
   })
 
-  it('leaves the saved values as they were when the file write throws', async () => {
-    const folder = tempDir('bot-tools-file-')
-    await writeBotToolServers(folder, [
-      { ...notion, url: 'https://old.test/mcp', headers: { authorization: 'old' } }
-    ])
-    const [server] = await readBotToolServers(folder)
-    const id = server && 'credential' in server ? server.credential! : ''
-    chmodSync(join(folder, '.orca'), 0o500)
-    try {
-      await expect(
-        changeBotToolServers(folder, () => [
-          { ...notion, url: 'https://new.test/mcp', headers: { authorization: 'new' } }
-        ])
-      ).rejects.toThrow()
-    } finally {
-      chmodSync(join(folder, '.orca'), 0o700)
+  // Windows ignores folder modes, and the atomic writer retries permission errors there.
+  it.skipIf(process.platform === 'win32')(
+    'leaves the saved values as they were when the file write throws',
+    async () => {
+      const folder = tempDir('bot-tools-file-')
+      await writeBotToolServers(folder, [
+        { ...notion, url: 'https://old.test/mcp', headers: { authorization: 'old' } }
+      ])
+      const [server] = await readBotToolServers(folder)
+      const id = server && 'credential' in server ? server.credential! : ''
+      chmodSync(join(folder, '.orca'), 0o500)
+      try {
+        await expect(
+          changeBotToolServers(folder, () => [
+            { ...notion, url: 'https://new.test/mcp', headers: { authorization: 'new' } }
+          ])
+        ).rejects.toThrow()
+      } finally {
+        chmodSync(join(folder, '.orca'), 0o700)
+      }
+      expect(readBotToolCredential(folder, id)).toEqual({
+        url: 'https://old.test/mcp',
+        headers: { authorization: 'old' }
+      })
     }
-    expect(readBotToolCredential(folder, id)).toEqual({
-      url: 'https://old.test/mcp',
-      headers: { authorization: 'old' }
-    })
-  })
+  )
 })
 
 describe('the tools a chat launched with', () => {
@@ -182,25 +271,21 @@ describe('the tools a chat launched with', () => {
     workspaceId = folderWorkspaceKey('scout-home')
   ) => botSessionToolServers(bots, { provider, location: { workspaceId } }, folder, relay)
 
-  it('gives a bot with no tools a revision its first tool changes', async () => {
+  it('changes the revision when the first tool is added and the last tool is removed', async () => {
     const folder = tempDir('bot-tools-revision-')
-    const { launched } = await launch(folder)
-    expect(launched).not.toBeNull()
+    const { launched: empty } = await launch(folder)
+    expect(empty).not.toBeNull()
 
     await writeBotToolServers(folder, [notion])
 
-    expect(await currentBotToolsRevision(folder)).not.toBe(launched?.revision)
-    expect(botToolsEpoch(folder)).not.toBe(launched?.epoch)
-  })
-
-  it('changes the revision when the last tool goes', async () => {
-    const folder = tempDir('bot-tools-revision-')
-    await writeBotToolServers(folder, [notion])
-    const { launched } = await launch(folder)
+    const { launched: configured } = await launch(folder)
+    expect(configured).not.toBeNull()
+    expect(configured?.revision).not.toBe(empty?.revision)
+    expect(configured?.epoch).not.toBe(empty?.epoch)
 
     await writeBotToolServers(folder, [])
 
-    expect(await currentBotToolsRevision(folder)).not.toBe(launched?.revision)
+    expect(await currentBotToolsRevision(folder)).not.toBe(configured?.revision)
   })
 
   it('counts a finished sign-in, and an edit made outside Orca, as a change', async () => {

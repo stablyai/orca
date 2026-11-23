@@ -1,5 +1,7 @@
+import { useTranslate } from '@/i18n/use-translate'
 import type React from 'react'
 import { useMemo } from 'react'
+import { ProviderDetailsMenu } from '../usage/ProviderDetailsMenu'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import { useAppStore } from '../../../store/index'
@@ -13,8 +15,7 @@ import {
 
 export type ClaudeSwitcherMenuProps = {
   claude: ProviderRateLimits | null
-  compact: boolean
-  iconOnly: boolean
+  iconOnly?: boolean
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
 } & (
@@ -24,10 +25,25 @@ export type ClaudeSwitcherMenuProps = {
 )
 
 export function ClaudeSwitcherMenu(props: ClaudeSwitcherMenuProps): React.JSX.Element | null {
+  const t = useTranslate()
   if (props.chatAction) {
     return <ChatClaudeSwitcherMenu {...props} chatAction={props.chatAction} />
   }
   const owner = props.ownerUsage.owner
+  if (!owner) {
+    return (
+      <ProviderDetailsMenu
+        provider={props.claude}
+        iconOnly={props.iconOnly}
+        asSubmenu={props.asSubmenu}
+        triggerContent={props.triggerContent}
+        ariaLabel={t(
+          'auto.components.status.bar.StatusBar.3dd7ddfae1',
+          'Open Claude details and account switcher'
+        )}
+      />
+    )
+  }
   return (
     <ClaudeSwitcherForOwner
       {...props}

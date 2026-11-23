@@ -25,10 +25,13 @@ import { revokeAgentSessionPublicationFences } from '../../agent-session/agent-s
 import { RUN_PANE_KEY_MATCH_SUFFIX_SQL } from './pane-key-match'
 import { installWorkerTerminalPriorOwnerIndex } from './worker-terminal/worker-terminal-prior-owner-index'
 import { UNRELEASED_MINTED_WORKER_TERMINAL_SQL } from './worker-terminal/worker-terminal-release'
+import { installWorkerDockSchema } from './schema/worker-dock-schema'
+import { WorkerDockSourcePresence } from './worker-dock-source-presence'
 
 class OrchestrationDbCore {
   readonly crewChanges = new CrewChanges()
   db: Database.Database
+  readonly workerDockSources: WorkerDockSourcePresence
 
   // Cache Dispatch emptiness to skip per-terminal queries on 16ms graph ticks for users without orchestration.
   hasAnyDispatchContextsCache: boolean | undefined
@@ -53,6 +56,8 @@ class OrchestrationDbCore {
   private changedDispatchIds: Set<string> | null = null
   /** The user's auto-close switch; this runtime's choice also governs the remote workers it coordinates. */
   workerAutoReleaseEnabled: (() => boolean) | undefined
+  /** PTYs whose pointers were released this session; title edges skip the release write for them. */
+  readonly releasedPointerPtyIds = new Set<string>()
 
   constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)
@@ -70,11 +75,15 @@ class OrchestrationDbCore {
     // Read before migrate, which drops the capture triggers it may need to rebuild around.
     const removedWorkCaptureWasIntact = isRemovedWorkCaptureIntact(this.db)
     migrate.call(this as unknown as OrchestrationDb)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attached schema methods are installed before any DB instance is constructed.
+    installWorkerDockSchema.call(this as unknown as OrchestrationDb)
+    this.workerDockSources = new WorkerDockSourcePresence(this.db)
     refreshOutstandingDeliveryTrigger(this.db)
     installWorkerTerminalPriorOwnerIndex(this)
     for (const [table, columns] of [
       ['messages', ['answer_sender_snapshot']],
-      ['federation_relay_items', ['answer_sender_report']]
+      ['federation_relay_items', ['answer_sender_report']],
+      ['message_dispatch_provenance', ['sender_snapshot']]
     ] as const) {
       const existing = new Set(
         this.db

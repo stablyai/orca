@@ -4,6 +4,9 @@ export const CODEX_PENDING_LOGIN_URL_CHANGED_CHANNEL = 'codexAccounts:pendingLog
 /** The rejection a cancelled `codex login` produces; the Accounts pane reads it to keep a cancellation out of the error toast. */
 export const CODEX_LOGIN_CANCELLED_MESSAGE = 'Codex sign-in was cancelled.'
 
+// Codex app-server sends this only for a login that is not ChatGPT (API key or Bedrock); missing auth reads differently.
+const CODEX_API_KEY_RATE_LIMIT_ERROR_RE = /chatgpt authentication required to read rate limits/i
+
 const CODEX_AUTH_ERROR_PATTERNS = [
   /access token could not be refreshed/i,
   /authentication session could not be refreshed/i,
@@ -18,6 +21,11 @@ const CODEX_AUTH_ERROR_PATTERNS = [
   // API-key-only homes lack ChatGPT tokens, so account/rateLimits/read cannot recover through a fallback read.
   /chatgpt authentication required/i
 ]
+const CODEX_USAGE_AUTH_REJECTION_PATTERNS = [
+  /\btoken_(?:revoked|expired|invalidated)\b/i,
+  /invalidated oauth token/i,
+  /backend-api\/wham\/usage failed: 401\b/i
+]
 const ANSI_ESCAPE_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[a-zA-Z]`, 'g')
 
 export function isCodexAuthError(error: string | null | undefined): boolean {
@@ -26,6 +34,29 @@ export function isCodexAuthError(error: string | null | undefined): boolean {
     return false
   }
   return CODEX_AUTH_ERROR_PATTERNS.some((pattern) => pattern.test(message))
+}
+
+/** A Codex usage failure that only signing in to the same account again can fix. */
+export function isCodexUsageSignInRequired(limits: {
+  provider: string
+  error: string | null
+  usageMetadata?: { failureKind?: string; unverifiableOwner?: boolean }
+}): boolean {
+  const { error, usageMetadata } = limits
+  if (limits.provider !== 'codex' || !error || usageMetadata?.unverifiableOwner) {
+    return false
+  }
+  if (usageMetadata?.failureKind) {
+    return usageMetadata.failureKind === 'stale-token'
+  }
+  return (
+    isCodexAuthError(error) ||
+    CODEX_USAGE_AUTH_REJECTION_PATTERNS.some((pattern) => pattern.test(error))
+  )
+}
+
+export function isCodexApiKeyRateLimitError(error: string | null | undefined): boolean {
+  return CODEX_API_KEY_RATE_LIMIT_ERROR_RE.test(error?.trim() ?? '')
 }
 
 export function extractCodexAuthError(output: string | null | undefined): string | null {

@@ -1,6 +1,6 @@
 // A Google setup card in a bot's chat. Orca writes it when the bot asks for one; the card itself
-// draws from the bot's setup run, so it locks and updates on every client. Older clients and the
-// phone paint its `text` as a plain line.
+// draws from the bot's setup run, so it locks and updates on every client. Older clients paint its
+// `text` as a plain line.
 import * as z from 'zod'
 import type {
   AgentJournalItemBody,

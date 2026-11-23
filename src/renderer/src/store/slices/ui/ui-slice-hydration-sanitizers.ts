@@ -15,7 +15,6 @@ import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import { isTopLevelView } from '../../../../../shared/ui-chrome/top-level-view'
-import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { resolveVisibleWorkspaceHostIds } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { persistedUIValuesEqual } from '../../../../../shared/collections/persisted-ui-equality'
 import '../../../../../shared/orca-profiles/constants'
@@ -111,42 +110,30 @@ export function sanitizeActivityBarPosition(position: unknown): ActivityBarPosit
   return position === 'side' ? 'side' : 'top'
 }
 
-export function sanitizePaneKeyTimestampRecord(
-  value: unknown,
-  maxAgeMs: number = AGENT_STATUS_HYDRATE_MAX_AGE_MS
-): Record<string, number> {
+// Agent rows hydrate at any age (structured chats, and terminal panes still placed), so pane-keyed
+// read state is never age-pruned; the newest entries bound growth instead.
+const PANE_KEY_TIMESTAMP_MAX_ENTRIES = 500
+
+export function sanitizePaneKeyTimestampRecord(value: unknown): Record<string, number> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return {}
   }
-  const cutoff = Date.now() - maxAgeMs
   const out: Record<string, number> = {}
-  for (const [key, ackAt] of Object.entries(value as Record<string, unknown>)) {
+  for (const [key, at] of Object.entries(value as Record<string, unknown>)) {
     if (!isSafePersistedRecordKey(key)) {
       continue
     }
-    if (typeof ackAt !== 'number' || !Number.isFinite(ackAt) || ackAt <= 0 || ackAt < cutoff) {
+    if (typeof at !== 'number' || !Number.isFinite(at) || at <= 0) {
       continue
     }
-    out[key] = ackAt
+    out[key] = at
   }
-  return out
-}
-
-export const sanitizeAcknowledgedAgentsByPaneKey = sanitizePaneKeyTimestampRecord
-
-// Structured chat rows hydrate at any age, so cutoffs are never age-pruned; the newest clears bound growth instead.
-const ACTIVITY_CLEARED_AT_MAX_ENTRIES = 500
-
-export function sanitizeActivityClearedAtByPaneKey(value: unknown): Record<string, number> {
-  const valid = sanitizePaneKeyTimestampRecord(value, Number.POSITIVE_INFINITY)
-  const entries = Object.entries(valid)
-  if (entries.length <= ACTIVITY_CLEARED_AT_MAX_ENTRIES) {
-    return valid
+  const entries = Object.entries(out)
+  if (entries.length <= PANE_KEY_TIMESTAMP_MAX_ENTRIES) {
+    return out
   }
   return Object.fromEntries(
-    entries
-      .toSorted(([, left], [, right]) => right - left)
-      .slice(0, ACTIVITY_CLEARED_AT_MAX_ENTRIES)
+    entries.toSorted(([, left], [, right]) => right - left).slice(0, PANE_KEY_TIMESTAMP_MAX_ENTRIES)
   )
 }
 
@@ -276,5 +263,37 @@ export function sanitizePerWorktreePreferences(
     showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
     // Same persisted shape as the dotfile map: a per-worktree boolean opt-in record.
     notificationsMutedByWorktree: sanitizeShowDotfilesByWorktree(ui.notificationsMutedByWorktree)
+  }
+}
+
+export function sanitizeActivityBarArrangement(
+  ui: {
+    activityBarOrder?: unknown
+    activityBarBotOrder?: unknown
+    activityBarHidden?: unknown
+    activityBarPosition?: unknown
+  },
+  current: {
+    activityBarOrder: string[]
+    activityBarBotOrder: string[]
+    activityBarHidden: string[]
+  }
+): {
+  activityBarOrder: string[]
+  activityBarBotOrder: string[]
+  activityBarHidden: string[]
+  activityBarPosition: ActivityBarPosition
+} {
+  const strings = (value: unknown): string[] =>
+    Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []
+  return {
+    activityBarPosition: sanitizeActivityBarPosition(ui.activityBarPosition),
+    activityBarOrder:
+      preserveStringArrayIdentity(current.activityBarOrder, strings(ui.activityBarOrder)) ?? [],
+    activityBarBotOrder:
+      preserveStringArrayIdentity(current.activityBarBotOrder, strings(ui.activityBarBotOrder)) ??
+      [],
+    activityBarHidden:
+      preserveStringArrayIdentity(current.activityBarHidden, strings(ui.activityBarHidden)) ?? []
   }
 }

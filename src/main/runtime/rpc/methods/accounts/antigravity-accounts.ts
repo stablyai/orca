@@ -13,6 +13,11 @@ import { AntigravityChatAuthConfigSchema } from '../../../../../shared/agent-acc
 import { getAntigravityAccountService } from '../../../../antigravity/native-account-host'
 import { restartIdleAgyChats, withAntigravityChatBackend } from './antigravity-chat-backend'
 import {
+  lastAntigravityAgySignedOut,
+  onAntigravityChatApiKeyChanged
+} from '../../../../antigravity/antigravity-chat-route'
+import { readyAntigravityHostAcpVersion } from '../../../../antigravity/antigravity-host-acp'
+import {
   cancelAntigravityChatSignIn,
   completeAntigravityChatSignIn,
   readAntigravityChatSignInStatus,
@@ -67,7 +72,9 @@ function detectChatAuth(runtime: OrcaRuntimeService) {
     config: () => readAntigravityChatAuthConfig(runtime.requireStore()),
     launchEnv,
     apiKeyStatus: () => readAntigravityChatApiKeyStatus(launchEnv),
-    liveChats: () => countStructuredAgentChats('antigravity')
+    liveChats: () => countStructuredAgentChats('antigravity'),
+    agyVersion: readyAntigravityHostAcpVersion,
+    agySignedOut: lastAntigravityAgySignedOut
   })
 }
 
@@ -204,6 +211,8 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
     params: AntigravityChatApiKeySaveParams,
     handler: async ({ apiKey }, ctx) => {
       await storeAntigravityChatApiKey(apiKey)
+      // A key can move key chats onto agy.
+      onAntigravityChatApiKeyChanged()
       await restartLiveChats(ctx.runtime)
       return apiKeyStatus(ctx.runtime)
     }
@@ -214,6 +223,7 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
     params: null,
     handler: async (_, ctx) => {
       await clearAntigravityChatApiKey()
+      onAntigravityChatApiKeyChanged()
       await restartLiveChats(ctx.runtime)
       return apiKeyStatus(ctx.runtime)
     }

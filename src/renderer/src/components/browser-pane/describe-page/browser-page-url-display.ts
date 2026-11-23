@@ -4,9 +4,12 @@ import '../../../../../shared/orca-profiles/constants'
 import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,
-  redactKagiSessionToken
+  redactKagiSessionToken,
+  resolveRemoteFailureExternalUrl
 } from '../../../../../shared/browser/navigation/browser-url'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
+import { forwardedUrlForRemoteUrl } from '@/lib/workspace-ports/workspace-port-urls'
+import type { PortForwardEntry } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import { browserFileUrlToAbsolutePath } from './browser-artifact-upload'
 import type { BrowserTabPageState } from './browser-page-types'
 
@@ -28,6 +31,26 @@ export function getNotebookPathFromBrowserUrl(url: string): string | null {
 
 export function getOpenableExternalUrl(currentUrl: string): string | null {
   return normalizeExternalBrowserUrl(redactKagiSessionToken(currentUrl))
+}
+
+/** For a page that browses through a remote host, whose loopback this desktop's browser cannot reach. */
+export function getRemoteRoutedOpenableExternalUrl(currentUrl: string): string | null {
+  return resolveRemoteFailureExternalUrl(redactKagiSessionToken(currentUrl))
+}
+
+/** For a page that browses through an SSH host, whose loopback this desktop reaches only through that port's forward. */
+export function getSshRoutedOpenableExternalUrl(
+  currentUrl: string,
+  forwards: readonly PortForwardEntry[]
+): string | null {
+  const url = redactKagiSessionToken(currentUrl)
+  // A public URL opens as is; only the SSH host's loopback needs its forward.
+  const publicUrl = resolveRemoteFailureExternalUrl(url)
+  if (publicUrl) {
+    return publicUrl
+  }
+  const forwarded = forwardedUrlForRemoteUrl(url, forwards)
+  return forwarded ? normalizeExternalBrowserUrl(forwarded) : null
 }
 
 export function retryBrowserTabLoad(

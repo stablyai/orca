@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { applyTerminalAppearance } from './terminal-appearance'
 import { useThemeBackgroundStore } from '@/store/appearance/theme-background'
-import { usePluginFontReady } from '@/store/plugins/appearance/plugin-fonts'
+import { usePluginFontLoadKey } from '@/store/plugins/appearance/plugin-fonts'
 import type { MountedTerminalPaneLifecycleDeps } from '../mounting/terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from '../mounting/use-terminal-pane-lifecycle-refs'
 
@@ -24,7 +24,7 @@ export function useMountedTerminalAppearance(
   // Why: a theme image arrives after plugin themes load, so the single-paint switch must re-run then.
   const themeBackgroundActive = useThemeBackgroundStore((state) => state.active)
   // Why: a plugin terminal font joins the font list only once it loads, so cells re-measure then.
-  const terminalFontReady = usePluginFontReady(deps.settings?.terminalFontFamily)
+  const terminalFontLoadKey = usePluginFontLoadKey(deps.settings?.terminalFontFamily)
   useEffect(() => {
     const manager = deps.managerRef.current
     const currentSettings = deps.settingsRef.current
@@ -49,7 +49,7 @@ export function useMountedTerminalAppearance(
     deps.mountedManager,
     deps.settings,
     themeBackgroundActive,
-    terminalFontReady,
+    terminalFontLoadKey,
     deps.systemPrefersDark,
     deps.effectiveMacOptionAsAlt,
     deps.managerRef,

@@ -25,6 +25,7 @@ import { requireConfirmedRunning } from './wsl-orcad-connection-errors'
 import { WslOrcadLivenessSupervisor } from './wsl-orcad-liveness-supervisor'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { openWslOrcadWatch } from './wsl-orcad-watch'
+import { isWslHostIdleStopped } from '../host-lifecycle/wsl-host-idle-stop'
 
 function transportFor(distro: string, environmentId = defaultWslOrcadEnvironmentId(distro)) {
   return createWslOrcadHostTransport({
@@ -69,6 +70,8 @@ export function createWslOrcadLivenessSupervisor(options: {
       ),
     collectCensus: collectWslOrcadCensus,
     hasUserVisibleWork: options.hasUserVisibleWork,
+    // Registered hosts use the default id; the idle-stop close lands before the exit's settle ends.
+    wasIdleStopped: (distro) => isWslHostIdleStopped(defaultWslOrcadEnvironmentId(distro)),
     deferUntilRunning: deferUntilWslDistroRunning,
     requireRunning: async (distro) =>
       requireConfirmedRunning(await readSettledConfirmedRunningWslDistros(distro), distro),

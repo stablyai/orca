@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { DeleteWorktreeError } from './DeleteWorktreeError'
 import { useAppStore } from '@/store'
@@ -11,10 +11,7 @@ import { DeleteWorktreeLineageNotice } from './DeleteWorktreeLineageNotice'
 import { DeleteWorktreeDialogFooter } from './DeleteWorktreeDialogFooter'
 import { DeleteWorktreeDialogHeading } from './DeleteWorktreeDialogDescription'
 import { DeleteWorktreeTargetPreview } from './DeleteWorktreeTargetPreview'
-import {
-  DeleteWorktreeChangesSummary,
-  DeleteWorktreeUnknownChangesWarning
-} from './DeleteWorktreeChangesSummary'
+import { DeleteWorktreeChangesSummary } from './DeleteWorktreeChangesSummary'
 import { useRemovalUnsavedFiles } from './use-removal-unsaved-files'
 import { persistDeleteWorktreeConfirmSkipPreference } from './delete-worktree-preference-toast'
 import {
@@ -61,7 +58,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     [hostOptions, t]
   )
   const isOpen = activeModal === 'delete-worktree'
-  const deleteButtonRef = useRef<HTMLButtonElement>(null)
   const worktreeId = typeof modalData.worktreeId === 'string' ? modalData.worktreeId : ''
   const worktreeIds = useMemo(
     () =>
@@ -199,10 +195,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     deleteStateByWorktreeId,
     repoMap
   })
-  // Per-target hints only warn once changes are known; pending or failed checks still lose data.
-  const hasUnknownChangeState = [...dirtyChanges.checkStates].some(
-    ([key, state]) => state !== 'complete' && !dirtyChanges.counts.has(key)
-  )
 
   const handleOpenChange = useDeleteWorktreeDialogDismissal({
     isOpen,
@@ -318,13 +310,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         scrollable
         busy={isDeleting || isSavingForcePreference || isDetachingChildren}
         initialFocus="cancel"
-        onOpenAutoFocus={(event) => {
-          const button = deleteButtonRef.current
-          if (button && !button.disabled) {
-            event.preventDefault()
-            button.focus({ preventScroll: true })
-          }
-        }}
       >
         <DeleteWorktreeDialogHeading
           title={title}
@@ -337,11 +322,13 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         />
 
         {isMainWorktree ? null : (
-          // Keep file checks from moving the footer. Only the user can expand the compact preview.
           <div
-            className={`scrollbar-sleek flex max-h-[50vh] min-w-0 flex-col overflow-y-auto ${hasTargetList ? 'h-48 gap-3' : 'h-16 gap-1 has-[button[aria-expanded=true]]:h-auto'}`}
+            className={
+              hasTargetList
+                ? 'scrollbar-sleek flex h-48 max-h-[50vh] min-w-0 flex-col gap-3 overflow-y-auto *:shrink-0'
+                : 'flex min-w-0 flex-col empty:hidden'
+            }
           >
-            {!isBatchDelete && hasUnknownChangeState && <DeleteWorktreeUnknownChangesWarning />}
             {isBatchDelete ? (
               <DeleteWorktreeTargetPreview
                 isBatchDelete
@@ -396,7 +383,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           isDetachingChildren={isDetachingChildren}
           deleteDisabled={preserveChildrenSelected && !canPreserveChildren}
           canForceDelete={canForceDelete}
-          deleteButtonRef={deleteButtonRef}
           onForceDelete={
             preserveChildrenSelected ? handleDetachAndDelete : () => handleDelete(true)
           }

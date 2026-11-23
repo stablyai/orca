@@ -1,18 +1,44 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { Shuffle } from 'lucide-react-native'
+import { parseBotAvatar } from '../../../src/shared/bot-avatar'
 import type { BotAgent } from '../../../src/shared/bot-types'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { HostKindIcon } from '../components/icons/HostKindIcon'
 import { ListGroup, ListRow } from '../components/list/ListGroup'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
+import { MobileBotAvatar } from './MobileBotAvatar'
 import type { NewBotComputer } from './new-bot-computers'
 import { readBotAgentChoices, readSignedInEmail } from './new-bot-host-reads'
+
+/** New bot's picture, with Another picture's shuffle on its corner. */
+export function NewBotPicture(props: { avatar: string; onShuffle: () => void }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const picture = parseBotAvatar(props.avatar)
+  return (
+    <View>
+      {picture?.kind === 'mascot' ? (
+        <MobileBotAvatar avatar={{ kind: 'mascot', id: picture.id }} size={72} />
+      ) : null}
+      <Pressable
+        style={({ pressed }) => [styles.shuffle, pressed && styles.pressed]}
+        onPress={props.onShuffle}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t('bots.new.shuffle', 'Another picture')}
+      >
+        <Shuffle size={14} color={colors.textSecondary} />
+      </Pressable>
+    </View>
+  )
+}
 
 /** The chosen computer's agent choices; null until it answers. */
 export function useNewBotAgentChoices(client: RpcClient | null): BotAgent[] | null {
@@ -112,36 +138,47 @@ export function NewBotRunsOn(props: {
   )
 }
 
-/** Agent: the chosen agent, which opens the computer's choices. */
+/** Agent: the chosen agent, which opens the computer's choices; null when the computer has none. */
 export function NewBotAgentRow(props: {
-  agent: BotAgent
+  agent: BotAgent | null
+  hostLabel: string
   /** The computer hasn't said which agents it has yet: the row waits, as the desktop's picker does. */
   loading: boolean
   onPick: () => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const label = botAgentLabel(props.agent)
+  const { agent } = props
+  const label = agent ? botAgentLabel(agent) : t('bots.new.noAgent', 'None')
   return (
-    <ListGroup style={styles.agent}>
-      <ListRow
-        key="agent"
-        title={t('bots.new.agent', 'Agent')}
-        accessory={
-          <View style={styles.value}>
-            {props.loading ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
-            <MobileAgentIcon agentId={props.agent} size={14} />
-            <Text style={styles.valueText} numberOfLines={1}>
-              {label}
-            </Text>
-          </View>
-        }
-        navigates
-        busy={props.loading}
-        onPress={props.onPick}
-        accessibilityLabel={`${t('bots.new.agent', 'Agent')}, ${label}`}
-      />
-    </ListGroup>
+    <>
+      <ListGroup style={styles.agent}>
+        <ListRow
+          key="agent"
+          title={t('bots.new.agent', 'Agent')}
+          accessory={
+            <View style={styles.value}>
+              {props.loading ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
+              {agent ? <MobileAgentIcon agentId={agent} size={14} /> : null}
+              <Text style={styles.valueText} numberOfLines={1}>
+                {label}
+              </Text>
+            </View>
+          }
+          navigates={agent !== null}
+          busy={props.loading}
+          {...(agent ? { onPress: props.onPick } : {})}
+          accessibilityLabel={`${t('bots.new.agent', 'Agent')}, ${label}`}
+        />
+      </ListGroup>
+      {agent ? null : (
+        <Text style={styles.note}>
+          {t('bots.new.noChatAgents', 'No chat agents available on {{host}}.', {
+            host: props.hostLabel
+          })}
+        </Text>
+      )}
+    </>
   )
 }
 
@@ -209,5 +246,14 @@ const styles = themedStyleSheet(() => ({
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.xs
   },
-  agent: { marginTop: spacing.md }
+  agent: { marginTop: spacing.md },
+  shuffle: {
+    position: 'absolute',
+    right: -spacing.sm,
+    bottom: -spacing.sm,
+    padding: spacing.xs,
+    borderRadius: radii.pill,
+    backgroundColor: colors.bgRaised
+  },
+  pressed: { opacity: 0.7 }
 }))

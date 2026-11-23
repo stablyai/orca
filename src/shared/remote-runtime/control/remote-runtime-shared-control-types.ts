@@ -120,6 +120,10 @@ export type RemoteRuntimeSharedControlConnectionOptions = {
   clientCapabilities?: readonly RuntimeCapability[]
   isManuallyDisconnected?: () => boolean
   isCapabilityPaused?: () => boolean
+  /** Orca's own idle stop holds this server down: no socket is opened or retried until cleared. */
+  isIdleStopped?: () => boolean
+  /** The server closed this socket saying it stopped idle, before the close is handled. */
+  onIdleStop?: () => void
   /** The server's VM is asleep: no socket is opened or retried until its workspace wakes it. */
   prepareSleepCheck?: () => (() => boolean) | Promise<() => boolean>
   /** Publishes local transport diagnostics after a meaningful state transition. */

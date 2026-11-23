@@ -24,7 +24,10 @@ import {
   parseWorkspaceKey
 } from '../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { OrcaRuntimeWithWindowlessTerminalActivity } from '../sidebar-inputs/temporal/orca-runtime-windowless-terminal-activity'
+import {
+  OrcaRuntimeWithTerminalWorkerRestartResume,
+  unrefTimer
+} from './orca-runtime-terminal-worker-restart-resume'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 import type { AgentStatusStoreView } from '../sidebar-inputs/workspace-facts/workspace-activity-facts-producer'
 import { subscribeHookStatusTitles } from '../terminal/layout/hook-status-title-subscription'
@@ -48,14 +51,8 @@ import {
   type TerminalAgentWorkspaceLabels
 } from '../push/notifications/terminal-agent-phone-push'
 
-function unrefTimer(run: () => void, delayMs: number): { cancel: () => void } {
-  const timer = setTimeout(run, delayMs)
-  timer.unref?.()
-  return { cancel: () => clearTimeout(timer) }
-}
-
 /** All hosts/builds own transition detection and windowless phone pushes. */
-export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWindowlessTerminalActivity {
+export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithTerminalWorkerRestartResume {
   readonly agentTransitions = new AgentTransitionDetector({
     resolveTabWorktreeId: (tabId) => this.tabs.get(tabId)?.worktreeId,
     subscribeToPtyExit: (ptyId, listener) => this.subscribeToPtyExit(ptyId, listener),
@@ -111,7 +108,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     setTimer: unrefTimer
   })
   // The execution host observes its own panes, so local, SSH and paired-server workers are all seen.
-  private readonly terminalWorkerTurnStops = new TerminalWorkerTurnStops({
+  protected readonly terminalWorkerTurnStops = new TerminalWorkerTurnStops({
     ...this.workerTurnStopReportDeps,
     ...this.terminalWorkerResolution,
     readHookRow: (paneKey) => this.agentTransitions.latestRow(paneKey),
@@ -204,11 +201,13 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
       github2:
         cloud?.cloudFeatures()?.has('triggers.github2' satisfies ConnectorCloudFeature) ?? false,
       workflows:
-        cloud?.cloudFeatures()?.has('triggers.workflows' satisfies ConnectorCloudFeature) ?? false
+        cloud?.cloudFeatures()?.has('triggers.workflows' satisfies ConnectorCloudFeature) ?? false,
+      ciFinished:
+        cloud?.cloudFeatures()?.has('triggers.ci_finished' satisfies ConnectorCloudFeature) ?? false
     })
   }
 
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithWindowlessTerminalActivity>) {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithTerminalWorkerRestartResume>) {
     super(...args)
     this.servedOrcaProfileId = args[2]?.servedOrcaProfileId ?? null
     this.automation.botChat = (bot, id) => botChatTakingMail(this, bot, id)
@@ -226,7 +225,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
         const dispatchId = this.getAgentStatusOrchestrationContextForPaneKey(paneKey)?.dispatchId
         return dispatchId ? (index?.botOfDispatch(dispatchId) ?? null) : null
       },
-      inGroupRoom: (sessionId) => this.botSessions.groupRoomOf(sessionId) !== null,
+      groupRoomOf: (sessionId) => this.botSessions.groupRoomOf(sessionId)?.group.id ?? null,
       workerPane: (paneKey) =>
         this.getAgentStatusOrchestrationContextForPaneKey(paneKey) !== undefined,
       readEveryBot: () => this.botChatTreeIndex?.readEveryBot() !== false

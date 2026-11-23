@@ -1,11 +1,29 @@
 // Bot items: what a bot is doing for its owner and what it needs from them. One list per host; each
 // item belongs to one bot and one of its chats. The host's store is the truth; this is the wire shape.
-import type { BotItemAsk } from './bot-item-ask'
+import type { BotItemDecision } from './bot-item-ask'
 
-export const BOT_ITEM_STATUSES = ['planned', 'working', 'needs_you', 'done', 'canceled'] as const
+/** Waiting: its work waits on something outside the bot and its owner; Needs you waits on the owner. */
+export const BOT_ITEM_STATUSES = [
+  'planned',
+  'working',
+  'waiting',
+  'needs_you',
+  'done',
+  'canceled'
+] as const
 export type BotItemStatus = (typeof BOT_ITEM_STATUSES)[number]
 
-export const BOT_ITEM_OPEN_STATUSES: readonly BotItemStatus[] = ['planned', 'working', 'needs_you']
+export const BOT_ITEM_OPEN_STATUSES: readonly BotItemStatus[] = [
+  'planned',
+  'working',
+  'waiting',
+  'needs_you'
+]
+
+/** What the owner's status pickers offer: Waiting only where the item's host has it. */
+export function botItemPickerStatuses(waiting: boolean): readonly BotItemStatus[] {
+  return waiting ? BOT_ITEM_STATUSES : BOT_ITEM_STATUSES.filter((status) => status !== 'waiting')
+}
 
 export function isOpenBotItemStatus(status: BotItemStatus): boolean {
   return BOT_ITEM_OPEN_STATUSES.includes(status)
@@ -20,6 +38,7 @@ export const BOT_ITEM_ERROR_CODES = [
   'items_read_only',
   'items_unavailable',
   'item_changed',
+  // From hosts that recorded answers (v1.4.265); this host no longer refuses with it.
   'question_closed'
 ] as const
 export type BotItemErrorCode = (typeof BOT_ITEM_ERROR_CODES)[number] | 'invalid_argument'
@@ -40,13 +59,16 @@ export const BOT_ITEM_LIMITS = {
   description: 20_000,
   doneMeans: 2_000,
   text: 8_000,
+  /** What a Waiting item waits on: one line. */
+  wait: 200,
   links: 50,
   listPage: 50,
+  /** Also the most items one list read names by uid. */
   listPageMax: 100,
   eventsPage: 50
 } as const
 
-export const BOT_ITEM_LINK_KINDS = ['dispatch', 'pr', 'url', 'file'] as const
+export const BOT_ITEM_LINK_KINDS = ['dispatch', 'pr', 'url', 'file', 'automation'] as const
 export type BotItemLinkKind = (typeof BOT_ITEM_LINK_KINDS)[number]
 
 export type BotItemChatKind = 'home' | 'chat' | 'thread' | 'automation'
@@ -101,18 +123,25 @@ export type BotItemLinkView =
       latest: string | null
       title: string | null
       state: BotItemWorkerState
+      /** Its start failed before an agent ran, so there is no worker to open. Absent from older hosts. */
+      neverStarted?: true
       host: string | null
       /** Activity read from orchestration's own records, never copied onto the item. */
       startedAt: number | null
       settledAt: number | null
       /** The report the worker ended with: its result. */
       report: { subject: string; body: string | null } | null
+      /** Why it ended, as the chat's worker strip shows it. Absent from older hosts. */
+      reason?: string | null
       pr: BotItemPullRequest | null
     }
   | { kind: 'pr'; ref: string; pr: BotItemPullRequest | null }
   /** `issue`: a GitHub issue link the host's issue cache has read. */
   | { kind: 'url'; ref: string; issue?: BotItemIssue }
   | { kind: 'file'; ref: string }
+  /** `automations create --item`: a wait or schedule that will wake the bot for it. `active`: it still
+   *  exists and is on. */
+  | { kind: 'automation'; ref: string; name: string | null; active: boolean }
 
 /** One link per worker: a bot can link several steps of one follow-up chain, and each step reads as the
  *  chain's newest Dispatch, so all but the first are the same worker again. */
@@ -147,7 +176,10 @@ export const BOT_ITEM_EVENT_KINDS = [
 ] as const
 export type BotItemEventKind = (typeof BOT_ITEM_EVENT_KINDS)[number]
 
-/** An image on an owner's comment: a committed chat attachment on the bot's host, named and sized there. */
+/** Files besides images on one comment, as `bot reply --file` takes. */
+export const BOT_ITEM_COMMENT_FILE_MAX_COUNT = 10
+
+/** An image on a comment: a committed chat attachment on the bot's host, named and sized there. */
 export type BotItemCommentImage = { path: string; name: string; bytes: number }
 
 /** A `commented` event's images, dropping any entry a newer or damaged record shaped otherwise. */
@@ -163,6 +195,24 @@ export function botItemCommentImages(data: Record<string, unknown>): BotItemComm
         'bytes' in image &&
         typeof image.bytes === 'number'
           ? [{ path: image.path, name: image.name, bytes: image.bytes }]
+          : []
+      )
+    : []
+}
+
+/** A skill the owner picked in a comment, by the file on the bot's host its agent loads it from. */
+export type BotItemCommentSkill = { name: string; path: string }
+
+export function botItemCommentSkills(data: Record<string, unknown>): BotItemCommentSkill[] {
+  return Array.isArray(data.skills)
+    ? data.skills.flatMap((skill: unknown) =>
+        typeof skill === 'object' &&
+        skill !== null &&
+        'name' in skill &&
+        typeof skill.name === 'string' &&
+        'path' in skill &&
+        typeof skill.path === 'string'
+          ? [{ name: skill.name, path: skill.path }]
           : []
       )
     : []
@@ -187,12 +237,16 @@ export type BotItem = {
   /** `gone`: the host read its chats and this one's record is deleted, so its comments take no attachments. */
   chat: { id: string; kind: BotItemChatKind; title: string | null; gone?: true }
   madeBy: { botId: string; name: string | null; chatId: string } | null
-  /** Needs you: the agent's comment asking the owner, the row's second line. `ask`: its decisions and
-   *  choices when it gave them, so the open question's card never waits on its event's page.
-   *  `answerable`: asked on a host that takes answers, so its card records one. A recorded answer or
-   *  the owner's reply (which moves the item on) closes it; a later unrelated comment never counts. */
-  question: { eventId: string; text: string; ask?: BotItemAsk; answerable?: true } | null
+  /** Needs you: the agent's comment asking the owner. `gist`: its body's first line; `decisions`: its
+   *  question lines (`--ask`) and their quick replies (`--option`). */
+  question: { eventId: string; text: string; gist?: string; decisions?: BotItemDecision[] } | null
+  /** The ask waiting on the owner, which can be older than `question` when a later question left it
+   *  open, and can outlast the Needs you another ask's answer ended; the item's view reads back to it.
+   *  Absent from older hosts and from lists. */
+  waitingAsk?: string
   closeNote: string | null
+  /** Waiting: what it waits on, and when that was set. */
+  wait: { text: string; at: number } | null
   links: BotItemLinkView[]
   version: number
   lastEventId: string
@@ -272,8 +326,8 @@ export function botItemActivityAt(
 }
 
 /**
- * Stale is derived, never a status: Needs you, or In progress with no live linked worker, untouched for the
- * bot's stale days; Planned for three times that. `null` days: never. A snoozed item is not stale.
+ * Stale is derived, never a status: Needs you, or In progress or Waiting with no live linked worker,
+ * untouched for the bot's stale days; Planned for three times that. `null` days: never. A snoozed item is not stale.
  */
 export function isBotItemStale(
   item: Pick<BotItem, 'status' | 'lastActivityAt' | 'snoozedUntil' | 'links'>,
@@ -288,6 +342,7 @@ export function isBotItemStale(
     case 'needs_you':
       return idle >= staleDays * DAY_MS
     case 'working':
+    case 'waiting':
       return (
         idle >= staleDays * DAY_MS &&
         !item.links.some((link) => link.kind === 'dispatch' && isLiveBotItemWorker(link.state))

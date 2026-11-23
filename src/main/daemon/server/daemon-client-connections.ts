@@ -167,6 +167,7 @@ export class DaemonClientConnections {
         // Negotiate on the last NDJSON line before the client switches to binary frames.
         ...(streamFraming === BINARY_STREAM_FRAMING ? { streamFraming } : {}),
         ...daemonHelloResizeModel(),
+        ...(hello.role === 'control' ? { visibleProjectionSnapshots: true } : {}),
         ...(identity.launchNonce && identity.startedAtMs
           ? {
               daemonIdentity: {

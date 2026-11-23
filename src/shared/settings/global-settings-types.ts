@@ -147,10 +147,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalWordSeparator?: string
   terminalCursorOpacity?: number
   terminalQuickCommands?: TerminalQuickCommand[]
-  /** Windows-only: close (X) hides to tray instead of quitting; the tray icon is always present regardless. */
-  minimizeToTrayOnClose?: boolean
-  /** macOS: toggles the additive menu-bar entry (Orca survives last-window close); doesn't change Dock behavior. */
-  showMenuBarIcon?: boolean
   /** Windows convention: right-click pastes; macOS/Linux keep the context menu. */
   terminalRightClickToPaste: boolean
   /** One-shot guard distinguishing the old global true default from a per-platform choice. */
@@ -213,9 +209,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   nativeChatResumeWorkOnRestart?: boolean
   /** Queue follow-ups while the agent works on capable hosts; absent means on. */
   nativeChatQueueFollowUps?: boolean
-  /** Opt-in: when a chat stops on a usage limit with a known reset time, send it "Continue where
-   *  you left off." once the limit resets, unless that chat was told not to. */
-  nativeChatAutoContinueAfterUsageLimit?: boolean
   /** Teach newly started native chats to create inline visuals; absent means on. */
   nativeChatInlineVisuals?: boolean
   /** Hovering a web link in chat fetches the page to preview it; absent means on. GitHub cards ignore this. */
@@ -275,6 +268,20 @@ export type GlobalSettings = GlobalSettingsBase & {
   floatingTerminalEnabled: boolean
   /** Main-side new-page kill switch for paired Electron client-hosted browser placement. */
   browserClientHostedRemoteEnabled?: boolean
+  /** Main-side kill switch for Orca's copy of agy. Off, it runs no chat and isn't updated: new
+   *  chats use the user's own signed-in agy or Orca's server, and chats already on agy run the
+   *  user's own agy (same history) or, where there is none, refuse as agy not found. Absent means on. */
+  antigravityManagedAgyEnabled?: boolean
+  /** Kill switch for Orca updating its installed Antigravity ACP server by itself when a newer Orca
+   *  pins a newer release. Off, the older server keeps running until Update in Settings, and an
+   *  automatic download in flight stops. Host-owned: each host (desktop, SSH, WSL) reads its own
+   *  value; there is no UI. Separate from antigravityManagedAgyEnabled: with that off, chats run on
+   *  this server. Absent means on. */
+  antigravityServerAutoUpdateEnabled?: boolean
+  /** How chats on the Google account method sign in: agy's own login, or Orca's built-in sign-in
+   *  on Google's ACP server. Absent or 'auto': the server where Orca's sign-in is already in use,
+   *  else agy. */
+  antigravityGoogleSignIn?: 'auto' | 'agy' | 'orca'
   /** Browser profile new tabs in a workspace use; missing = 'shared' (the Default profile). */
   browserProfileScope?: BrowserProfileScope
   /** Profile new tabs use per browser host when no repo/workspace profile applies; missing = Default. */

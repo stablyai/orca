@@ -40,6 +40,7 @@ export const EXECUTION_HOST_METHODS = [
   'connector.slackMirror.status',
   // Transcripts live on the host that ran the agent, which is also where resume launches it.
   'aiVault.listSessions',
+  'aiVault.prepareSessionHandoffPrompt',
   'aiVault.prepareSessionResume',
   'aiVault.resolveSessionTitles',
   'aiVault.searchSessions',
@@ -65,12 +66,16 @@ export const EXECUTION_HOST_METHODS = [
   'browser.mouseMove',
   'browser.mouseUp',
   'browser.mouseWheel',
+  // Answers a streamed page's permission, sign-in or open-app prompt on the host that asked; gated on browser.page-prompts.v1.
+  'browser.pagePromptAnswer',
   // Read-only list so the phone can name a tab's profile and offer the host's profiles for a new tab.
   'browser.profileList',
   'browser.reload',
   'browser.screencast',
   'browser.screencast.ack',
   'browser.screencast.unsubscribe',
+  // Gated on browser.mobile-stop.v1; older hosts refuse it here.
+  'browser.stop',
   'browser.tabCreate',
   'browser.viewport',
   // Pasted images must land on the host whose terminal reads the path.
@@ -191,6 +196,7 @@ export const EXECUTION_HOST_METHODS = [
   'host.wsl.listDistros',
   'preflight.check',
   'preflight.detectAgents',
+  'preflight.installedAgents',
   'preflight.detectRemoteAgents',
   'preflight.refreshAgents',
   'hostedReview.create',
@@ -210,6 +216,12 @@ export const EXECUTION_HOST_METHODS = [
   'orchestration.workerApprovalsSubscribe',
   'orchestration.workerApprovalsUnsubscribe',
   'orchestration.approvalAnswer',
+  // Asks from agents on paired servers wait on this computer for its person, as on its phone. The phone
+  // reads and removes Always allow choices; adding one without a card stays on the desktop.
+  'pairedServerAsks.list',
+  'pairedServerAsks.decide',
+  'pairedServerAsks.allowances',
+  'pairedServerAsks.disallow',
   // The worker's own host keeps it open and owns its countdown; older phones still report typing and viewing.
   'orchestration.workerTerminalUserInput',
   'orchestration.workerChatTouch',

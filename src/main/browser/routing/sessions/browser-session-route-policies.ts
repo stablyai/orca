@@ -1,5 +1,6 @@
 import { session } from 'electron'
 import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
+import type { BrowserSessionPermissionOptions } from '../../site-settings/permissions/browser-session-permission-handlers'
 import { isBrowserRoutePartition } from '../partitions/browser-route-identity'
 import {
   clearBrowserSessionPartitionPolicies,
@@ -14,7 +15,10 @@ const SESSION_COOKIE_RESTORE_TIMEOUT_MS = 3_000
 export async function installBrowserRoutePartitionPolicies(
   profile: BrowserSessionProfile,
   partition: string,
-  { sitePermissions }: { sitePermissions?: 'saved' | 'session' } = {}
+  {
+    sitePermissions,
+    clipboardRead
+  }: Pick<BrowserSessionPermissionOptions, 'sitePermissions' | 'clipboardRead'> = {}
 ): Promise<void> {
   if (!isBrowserRoutePartition(partition)) {
     throw new Error('browser_route_partition_profile_unavailable')
@@ -22,7 +26,7 @@ export async function installBrowserRoutePartitionPolicies(
   await Promise.all([
     installBrowserSessionPartitionPolicies(
       { ...profile, partition },
-      { applyAppWideProxy: false, fileSystemAccess: false, sitePermissions }
+      { applyAppWideProxy: false, fileSystemAccess: false, sitePermissions, clipboardRead }
     ),
     // Why here: SSH and This-device partitions both pass through before their first page loads.
     withTimeout(

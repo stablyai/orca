@@ -221,17 +221,15 @@ export function AppWorkspaceShell(props: {
               list={<WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />}
             />
             <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
-              {/* Automations/artifacts own their headers; another titlebar would leave an empty stripe. */}
-              {layout.stackedSidebarOpen &&
-              layout.activeView !== 'automations' &&
-              layout.activeView !== 'artifacts' ? (
+              {/* Every page sits under the top bar; window controls and board sheets rely on it. */}
+              {layout.stackedSidebarOpen ? (
                 <div className="titlebar">{titlebarMainStrip}</div>
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
                 {/* Match the open sidebar header’s alignment to prevent toggle jitter. */}
                 {showsFloatingRightSidebarToggle(layout) && (
                   <div
-                    className="absolute top-0 z-10 flex items-center h-[36px]"
+                    className="absolute top-0 z-10 flex h-(--app-header-height) items-center"
                     style={
                       {
                         // Why: --window-controls-width keeps the toggle clear of the fixed window-controls overlay (138px on custom chrome, 0px otherwise); no internal spacer — one would cover the pane-actions Ellipsis button with an unclickable div.

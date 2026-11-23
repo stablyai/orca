@@ -181,6 +181,9 @@ export type AgentJournalQuestion = {
   /** Present when the provider accepts an answer outside the offered options. */
   freeTextQuestionId?: string
   freeTextInput?: AgentJournalFreeTextInput
+  /** The provider takes a reply that leaves this question unanswered. Absent from older hosts, whose
+   *  questions must all be answered. */
+  skippable?: true
 }
 
 export type {
@@ -364,10 +367,7 @@ export type AgentJournalRowAttribution = AgentJournalProducerLinkage & {
   turnScope: AgentJournalTurnScope
 }
 
-export type AgentJournalPosition = {
-  sequence: number
-  index: number
-}
+export type AgentJournalPosition = { sequence: number; index: number }
 
 /** Order by sequence; provider observedAt can precede earlier sequences after crash recovery. */
 export type AgentJournalRenderItem = AgentJournalProducerLinkage & {
@@ -432,7 +432,9 @@ export type AgentJournalSubmission = AgentJournalWrittenStamp & {
   /** On `rejected`: the turn a Codex send was answered into, when that turn ended without taking
    *  it. null: the host recorded that it was answered into no turn, as every other rejection is
    *  (Claude, a queued message taken back before handover, restart recovery). Absent: written
-   *  before this field existed, or not rejected. A stored value this build cannot read is null. */
+   *  before this field existed, or not rejected. A stored value this build cannot read is null.
+   *  On `accepted`: the running turn the send joined, which another send opened; absent when it
+   *  opened its own or the provider did not say. */
   answeredInTurn?: AgentJournalAnsweredTurn | null
   /** Set when crash reconciliation resolved the dispatch, not the provider. A live
    *  `unknown` is a send still outstanding; a recovered one outlived its writer. */

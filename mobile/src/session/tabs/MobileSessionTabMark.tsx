@@ -1,32 +1,44 @@
 import { useState } from 'react'
 import { Image } from 'react-native'
-import { Bell, File, FileText, Globe, SquareTerminal } from 'lucide-react-native'
+import { File, FileText, Globe, SquareTerminal } from 'lucide-react-native'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import type { MobileSessionTabRow } from './mobile-session-tab-rows'
+import {
+  mobileSessionTabAgentId,
+  mobileSessionTabKindLabel,
+  type MobileSessionTabRow
+} from './mobile-session-tab-rows'
+import type { MobileSessionTab } from './mobile-session-tabs'
 
-/** A bell while the tab's agent is unread, else its agent icon, else the page's favicon, else the tab kind's icon. */
+/** A tab menu's header: the tab's mark in a tile, and what kind of tab it is under the title. */
+export function mobileSessionTabMenuHeader(
+  tab: MobileSessionTab | null | undefined,
+  terminals: readonly { handle: string; agentIdentity?: string }[]
+): { headerIcon?: React.JSX.Element; message?: string } {
+  if (!tab) {
+    return {}
+  }
+  return {
+    headerIcon: (
+      <MobileSessionTabMark
+        row={{ tab, agentId: mobileSessionTabAgentId(tab, terminals) }}
+        size={17}
+      />
+    ),
+    message: mobileSessionTabKindLabel(tab)
+  }
+}
+
+/** The tab's agent icon, else the page's favicon, else an icon for what kind of tab it is. */
 export function MobileSessionTabMark({
   row,
   size
 }: {
-  row: Pick<MobileSessionTabRow, 'tab' | 'agentId' | 'unread'>
+  row: Pick<MobileSessionTabRow, 'tab' | 'agentId'>
   size: number
 }) {
   useMobileColorScheme()
-  const t = useMobileTranslation()
-  if (row.unread) {
-    return (
-      <Bell
-        size={size}
-        color={colors.statusAmber}
-        fill={colors.statusAmber}
-        accessibilityLabel={t('agents.list.unread', 'Unread')}
-      />
-    )
-  }
   if (row.agentId) {
     return <MobileAgentIcon agentId={row.agentId} size={size} />
   }

@@ -20,6 +20,11 @@ const ROW_SIZE = 13
 const ROW_LEADING = 7
 const ICON = 14
 
+/** The row words' type, for a part drawn beside them such as an action that reads as words. */
+export function mobileNativeChatEventRowType(fontScale: number) {
+  return scaledType(ROW_SIZE, fontScale, ROW_LEADING)
+}
+
 export type MobileNativeChatEventBadge = 'running' | 'failed'
 
 /** The row's 14pt mark with its state in a badge at the bottom right: a spinner while it runs, a red ✕ when it failed. */
@@ -65,13 +70,14 @@ export function MobileNativeChatEventRow({
   disclosureKey,
   fontScale,
   onLongPress,
+  wordsLines = 1,
   testID
 }: {
   icon: ReactNode
   /** Its state on the mark; VoiceOver hears it with the row's words. */
   badge?: MobileNativeChatEventBadge | null
-  /** The row's words: the name in primary text, the rest muted. */
-  children: ReactNode
+  /** The row's words: the name in primary text, the rest muted; given whether its details are open. */
+  children: ReactNode | ((open: boolean) => ReactNode)
   /** The words as plain text: the row button's name, with the time. */
   label: string
   /** Right after the words, such as an open button. */
@@ -82,6 +88,8 @@ export function MobileNativeChatEventRow({
   disclosureKey?: string
   fontScale: number
   onLongPress?: () => void
+  /** Lines the words may take; 0 lets a summary whose facts must all show wrap freely. */
+  wordsLines?: number
   testID?: string
 }): React.JSX.Element {
   useMobileColorScheme()
@@ -95,7 +103,7 @@ export function MobileNativeChatEventRow({
   const [open, setOpen] = useMobileNativeChatDisclosure(disclosureKey, false)
   const time = useMobileNativeChatMessageTimeLabel(timestamp)
   const toggles = details !== undefined && details !== null && details !== false
-  const type = scaledType(ROW_SIZE, fontScale, ROW_LEADING)
+  const type = mobileNativeChatEventRowType(fontScale)
   const line = { height: type.lineHeight }
   return (
     <View testID={testID}>
@@ -121,10 +129,10 @@ export function MobileNativeChatEventRow({
         </View>
         <Text
           pointerEvents={toggles ? 'none' : 'auto'}
-          numberOfLines={2}
+          numberOfLines={wordsLines}
           style={[styles.words, type]}
         >
-          {children}
+          {typeof children === 'function' ? children(toggles && open) : children}
         </Text>
         {action ? <View style={[styles.action, line]}>{action}</View> : null}
         <View pointerEvents="none" style={styles.spacer} />

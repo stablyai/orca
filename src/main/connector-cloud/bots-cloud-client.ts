@@ -230,6 +230,7 @@ export function botsCloudClient(cloud: Pick<ConnectorCloud, 'call'>) {
         loopback: { port: number; nonce: string } | null
         switchAccount: boolean
         loginKey?: string
+        addAccess?: { workspace?: string }
       }
     ) =>
       sourceAnswer(source)(
@@ -242,7 +243,8 @@ export function botsCloudClient(cloud: Pick<ConnectorCloud, 'call'>) {
               ? { loopbackPort: options.loopback.port, loopbackNonce: options.loopback.nonce }
               : {}),
             ...(options.switchAccount ? { switchAccount: true } : {}),
-            ...(options.loginKey ? { loginKey: options.loginKey } : {})
+            ...(options.loginKey ? { loginKey: options.loginKey } : {}),
+            ...(options.addAccess ? { addAccess: options.addAccess } : {})
           }),
           ConnectorConnectStartSchema
         )
@@ -286,11 +288,15 @@ export function botsCloudClient(cloud: Pick<ConnectorCloud, 'call'>) {
           method: 'GET'
         })
       ),
-    unlinkGitHub: async () =>
+    /** One linked GitHub user; none unlinks the account as an older cloud does. */
+    unlinkGitHub: async (userId?: string) =>
       gitHubAnswer(
-        await cloud.call(`${CONNECTOR_PATHS.github}/link`, undefined, z.undefined(), {
-          method: 'DELETE'
-        })
+        await cloud.call(
+          `${CONNECTOR_PATHS.github}/link${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`,
+          undefined,
+          z.undefined(),
+          { method: 'DELETE' }
+        )
       ),
     githubUsers: async (query: string) =>
       gitHubAnswer(
@@ -301,12 +307,15 @@ export function botsCloudClient(cloud: Pick<ConnectorCloud, 'call'>) {
           { method: 'GET' }
         )
       ),
-    /** Null clears it, so a comment naming no bot asks which one. */
-    setGitHubDefaultBot: async (botId: string | null) =>
+    /** Null clears it, so a comment naming none asks which one; `userId` picks the linked user. */
+    setGitHubDefaultBot: async (botId: string | null, userId?: string) =>
       gitHubAnswer(
-        await cloud.call(`${CONNECTOR_PATHS.github}/default-bot`, { v: 1, botId }, z.undefined(), {
-          method: 'PUT'
-        })
+        await cloud.call(
+          `${CONNECTOR_PATHS.github}/default-bot`,
+          userId ? { v: 1, botId, userId } : { v: 1, botId },
+          z.undefined(),
+          { method: 'PUT' }
+        )
       )
   }
 }
