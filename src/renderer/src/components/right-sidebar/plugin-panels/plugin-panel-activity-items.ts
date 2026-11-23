@@ -89,17 +89,21 @@ function spokenName(item: ActivityBarItem): string {
   return item.accessibleTitle ?? item.title
 }
 
+function nameKey(name: string): string {
+  return name.trim().toLocaleLowerCase()
+}
+
 function nameCounts(items: readonly ActivityBarItem[]): Map<string, number> {
   const counts = new Map<string, number>()
   for (const item of items) {
-    const key = spokenName(item).trim().toLocaleLowerCase()
+    const key = nameKey(spokenName(item))
     counts.set(key, (counts.get(key) ?? 0) + 1)
   }
   return counts
 }
 
 function collides(item: ActivityBarItem, counts: Map<string, number>): boolean {
-  return (counts.get(spokenName(item).trim().toLocaleLowerCase()) ?? 0) > 1
+  return (counts.get(nameKey(spokenName(item))) ?? 0) > 1
 }
 
 /** Gives each plugin panel a tooltip and accessible name no other visible tab shares: a
@@ -118,13 +122,17 @@ export function withDistinctPluginPanelNames(items: ActivityBarItem[]): Activity
   const pluginCounts = nameCounts(byPlugin)
   return byPlugin.map((item, index) => {
     const original = items[index]
-    // Why the tab path: it is `publisher/plugin/panel`, unique for every panel.
-    return original && item !== original && collides(item, pluginCounts)
-      ? {
-          ...original,
-          accessibleTitle: `${spokenName(original)} (${item.id.replace(/^plugin:/, '')})`
-        }
-      : item
+    if (!original || item === original || !collides(item, pluginCounts)) {
+      return item
+    }
+    const panelName = `${spokenName(original)} (${item.id.replace(/^plugin:/, '')})`
+    let accessibleTitle = panelName
+    // Another plugin can already be using the generated panel name as its own title.
+    for (let suffix = 2; pluginCounts.has(nameKey(accessibleTitle)); suffix++) {
+      accessibleTitle = `${panelName} (${suffix})`
+    }
+    pluginCounts.set(nameKey(accessibleTitle), 1)
+    return { ...original, accessibleTitle }
   })
 }
 

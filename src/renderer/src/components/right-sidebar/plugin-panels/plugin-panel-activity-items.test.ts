@@ -193,6 +193,19 @@ it('names colliding plugin panels apart and leaves distinct ones alone', () => {
     'Acme: dashboard (acme/db/alt)'
   ])
   expect(sameTitle.map((item) => item.title)).toEqual(['Dashboard', 'dashboard'])
+
+  const existingLabel = withDistinctPluginPanelNames(
+    getPluginPanelActivityItems([
+      panel('acme/db', 'Acme', 'main', 'Dashboard'),
+      panel('acme/db', 'Acme', 'alt', 'Dashboard'),
+      panel('beta/db', 'Acme', 'main', 'Dashboard (acme/db/main)')
+    ])
+  )
+  expect(spokenNames(existingLabel)).toEqual([
+    'Acme: Dashboard (acme/db/main) (2)',
+    'Acme: Dashboard (acme/db/alt)',
+    'Acme: Dashboard (acme/db/main)'
+  ])
 })
 
 it('keeps built-in tab names and renames a plugin panel that copies one', () => {
