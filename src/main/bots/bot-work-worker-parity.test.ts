@@ -110,6 +110,28 @@ describe('the work record through the bots DB worker', () => {
     expect(viaWorker.forgotten).toBe(true)
     expect(viaWorker.afterForget).toEqual(['d-done'])
   })
+
+  it('records every one of several starts for one conversation that land at once', async () => {
+    const work = workerBotWork(storePath())
+    opened.push(work)
+    const record = new BotWorkRecord({
+      store: () => work.store,
+      workers: async (ids) => new Map(ids.map((id) => [id, worker(id)])),
+      workspaces: () => async () => null,
+      conversationTitle: () => null,
+      turnAddress: async () => null
+    })
+    const ids = ['d-1', 'd-2', 'd-3', 'd-4']
+    await Promise.all(
+      ids.map((id) => record.started({ botId: 'bot-1', address: THREAD }, start(id)))
+    )
+    // A start the reads saw again records nothing more.
+    await record.started({ botId: 'bot-1', address: THREAD }, start('d-2'))
+
+    const rows = await work.store.liveRows('bot-1')
+    expect(rows.map((row) => row.dispatchId).sort()).toEqual(ids)
+    expect(rows.filter((row) => row.current)).toHaveLength(1)
+  })
 })
 
 function start(dispatchId: string) {

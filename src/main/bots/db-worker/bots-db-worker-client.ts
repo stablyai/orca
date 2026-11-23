@@ -61,7 +61,8 @@ export class BotsDbWorkerClient {
       },
       // A timed-out transaction can still be inside SQLite; never start a second worker beside it.
       awaitRetirement: true,
-      createUnavailableError: (message) => unavailable(message),
+      // Plain here: call() gives items' failures their retry advice, and no other store's.
+      createUnavailableError: (message) => new Error(message),
       describeTimeout: (ms) => `the bots DB worker timed out after ${ms}ms`,
       describeExit: (code) => `the bots DB worker exited with code ${code}`,
       describeCrashLoop: (lastError) => `the bots DB worker crashed repeatedly: ${lastError}`,

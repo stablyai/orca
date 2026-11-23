@@ -67,17 +67,8 @@ export class BotWorkRecord {
     if (rows.some((row) => workers?.get(row.dispatchId)?.dispatchId === start.dispatchId)) {
       return
     }
-    // Another start, or a close, may land during the reads; storage then refuses this write, and
-    // one more try against what is there now makes this, the newest, current.
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const current = await store.live(turn.botId, turn.address)
-      if (current?.dispatchId === start.dispatchId) {
-        return
-      }
-      if (await (current ? store.replace(current, bind) : store.bind(bind))) {
-        return
-      }
-    }
+    // One transaction in the worker: starts and closes landing meanwhile are each seen in turn.
+    await store.makeCurrent(bind)
   }
 
   /** Validates a live row, closing it on proof; null once it is closed, by this or anyone. */

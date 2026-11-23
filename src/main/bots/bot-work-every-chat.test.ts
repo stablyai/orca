@@ -136,17 +136,21 @@ describe('the work record across a bot chats', () => {
     raw.close()
 
     const work = workerBotWork(path)
-    const store = work.store
-    const record = new BotWorkRecord({
-      store: () => store,
-      workers: async (ids) => new Map(ids.map((id) => [id, worker(id)])),
-      workspaces: () => async () => null,
-      conversationTitle: () => null,
-      turnAddress: async () => null
-    })
-    expect(await store.liveRows()).toEqual([])
-    await record.forgetBot('bot-1')
-    work.dispose()
+    try {
+      const store = work.store
+      const record = new BotWorkRecord({
+        store: () => store,
+        workers: async (ids) => new Map(ids.map((id) => [id, worker(id)])),
+        workspaces: () => async () => null,
+        conversationTitle: () => null,
+        turnAddress: async () => null
+      })
+      expect(await store.liveRows()).toEqual([])
+      await record.forgetBot('bot-1')
+    } finally {
+      // Closed before the raw read below.
+      work.dispose()
+    }
 
     const check = new SyncDatabase(path)
     expect(check.prepare("SELECT closed_at FROM bot_work WHERE id = 'later'").all()).toEqual([

@@ -10,7 +10,7 @@ export const BOT_WORK_OPS = [
   'isOpen',
   'bind',
   'close',
-  'replace'
+  'makeCurrent'
 ] as const satisfies readonly (keyof BotWorkStore)[]
 
 export type BotWorkOp = (typeof BOT_WORK_OPS)[number]

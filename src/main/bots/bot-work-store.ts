@@ -158,6 +158,30 @@ export class BotWorkStore {
     )
   }
 
+  /** This Dispatch becomes the address's current row, in one transaction: the current row, unless it
+   *  is already this Dispatch's, steps aside, still live. Concurrent starts each land, newest last. */
+  makeCurrent(input: BotWorkBind, now = Date.now()): BotWorkRow | null {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const current = this.live(input.botId, input.address)
+      if (current?.dispatchId === input.dispatchId) {
+        this.db.exec('COMMIT')
+        return current
+      }
+      if (current) {
+        this.db
+          .prepare(`UPDATE bot_work SET current = 0 WHERE id = ? AND generation = ?`)
+          .run(current.rowId, current.generation)
+      }
+      const row = this.bind(input, now)
+      this.db.exec(row ? 'COMMIT' : 'ROLLBACK')
+      return row
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
   /** The current row steps aside, still live, and the next generation becomes current, in one
    *  transaction. */
   replace(ref: BotWorkRef, input: BotWorkBind, now = Date.now()): BotWorkRow | null {
