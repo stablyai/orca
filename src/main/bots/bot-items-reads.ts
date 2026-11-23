@@ -33,19 +33,31 @@ export type BotItemListQuery = {
 }
 
 export class BotItemsReads extends BotItemsTables {
-  /** The item's ask waiting on the owner, which a later question can leave open, as its row keeps it;
-   *  an item from before that column is worked out from its events once. */
+  /** The item's ask waiting on the owner, which a later question can leave open, as its row keeps it.
+   *  A row kept before its newest event (an item from before the column, or one an older Orca wrote to)
+   *  is worked out from its events again. */
   protected waitingAsk(item: Pick<BotItemRecord, 'uid'>): number | null {
-    const row = this.db.prepare('SELECT waiting_ask FROM items WHERE uid = ?').get(item.uid)
+    const row = this.db
+      .prepare('SELECT waiting_ask, waiting_ask_at, last_event_id FROM items WHERE uid = ?')
+      .get(item.uid)
     const kept = row ? optionalInteger(row, 'waiting_ask') : null
-    if (kept !== null) {
+    if (
+      row &&
+      kept !== null &&
+      optionalInteger(row, 'waiting_ask_at') === integer(row, 'last_event_id')
+    ) {
       return kept === 0 ? null : kept
     }
-    const ask = this.readWaitingAsk(item.uid)
+    const paired = this.readWaitingAsk(item.uid)
     if (!this.readOnly) {
-      this.keepWaitingAsk(item.uid, ask)
+      try {
+        this.keepWaitingAsk(item.uid, paired)
+      } catch (error) {
+        // Only saves a later open the pairing; a file the disk won't let us write still reads.
+        console.warn('[bots] items: keeping a waiting ask failed', error)
+      }
     }
-    return ask
+    return paired.ask
   }
 
   /** Links of a kind to any of these refs, across items. */

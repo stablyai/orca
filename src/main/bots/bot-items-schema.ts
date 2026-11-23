@@ -128,8 +128,10 @@ export const BOT_ITEMS_MIGRATIONS: readonly string[] = [
   CREATE INDEX idx_item_links_ref ON item_links(kind, ref);
   `,
   `
-  -- The ask waiting on the owner, worked out from the events as they land: 0 none, NULL not yet.
+  -- The ask waiting on the owner (0: none), as the events up to waiting_ask_at pair it; it holds while
+  -- that is still last_event_id.
   ALTER TABLE items ADD COLUMN waiting_ask INTEGER;
+  ALTER TABLE items ADD COLUMN waiting_ask_at INTEGER;
   `
 ]
 

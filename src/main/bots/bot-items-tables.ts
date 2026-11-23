@@ -100,6 +100,8 @@ export class BotItemsTables {
     mail: boolean,
     now: number
   ): number {
+    // Only comments and moves pair asks with answers; any other event leaves a kept ask holding.
+    const pairs = kind === 'commented' || kind === 'status'
     const result = this.db
       .prepare(
         `INSERT INTO item_events (item_uid, kind, actor, data, mail, action, created_at)
@@ -122,13 +124,13 @@ export class BotItemsTables {
     this.db
       .prepare(
         `UPDATE items SET version = version + 1, last_event_id = ?, last_activity_at = ?,
-           updated_at = ?, others_last_event_id = CASE WHEN ? THEN ? ELSE others_last_event_id END
+           updated_at = ?, others_last_event_id = CASE WHEN ? THEN ? ELSE others_last_event_id END,
+           waiting_ask_at = CASE WHEN ? AND waiting_ask_at = last_event_id THEN ? ELSE waiting_ask_at END
          WHERE uid = ?`
       )
-      .run(id, now, now, Number(actor.kind !== 'owner'), id, uid)
-    // Only comments and moves pair asks with answers; the row keeps the result so opens read no history,
-    // worked out once per item per write.
-    if (kind === 'commented' || kind === 'status') {
+      .run(id, now, now, Number(actor.kind !== 'owner'), id, Number(!pairs), id, uid)
+    // The row keeps the result so opens read no history, worked out once per item per write.
+    if (pairs) {
       if (this.repair) {
         this.repair.add(uid)
       } else {
@@ -138,19 +140,25 @@ export class BotItemsTables {
     return id
   }
 
-  /** The ask waiting on the owner while the item is open, paired from all its events as clients do. */
-  protected readWaitingAsk(uid: string): number | null {
-    const events = this.db
+  /** The ask waiting on the owner while the item is open, paired from all its events as clients do, and
+   *  the newest event that pairing read. */
+  protected readWaitingAsk(uid: string): { ask: number | null; at: number } {
+    const records = this.db
       .prepare('SELECT * FROM item_events WHERE item_uid = ? ORDER BY id')
       .all(uid)
-      .map((row) => eventViewOf(eventRecordOf(row)))
+      .map(eventRecordOf)
     // Any open status pairs alike; readers drop the ask once the item closes.
-    const ask = botItemWaitingAsk({ status: 'working' }, events)
-    return ask ? parseBotItemEventId(ask.askId) : null
+    const ask = botItemWaitingAsk({ status: 'working' }, records.map(eventViewOf))
+    return { ask: ask ? parseBotItemEventId(ask.askId) : null, at: records.at(-1)?.id ?? 0 }
   }
 
-  protected keepWaitingAsk(uid: string, ask: number | null): void {
-    this.db.prepare('UPDATE items SET waiting_ask = ? WHERE uid = ?').run(ask ?? 0, uid)
+  /** Keeps a pairing only while it read the item's newest event: one a write landed after stays unkept. */
+  protected keepWaitingAsk(uid: string, paired: { ask: number | null; at: number }): void {
+    this.db
+      .prepare(
+        'UPDATE items SET waiting_ask = ?, waiting_ask_at = ? WHERE uid = ? AND last_event_id = ?'
+      )
+      .run(paired.ask ?? 0, paired.at, uid, paired.at)
   }
 
   protected requireItem(uid: string): BotItemRecord {
