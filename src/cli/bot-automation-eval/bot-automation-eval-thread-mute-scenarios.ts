@@ -5,14 +5,17 @@ import type { EvalScenario } from './bot-automation-eval-grading'
 
 const SLACK_THREAD = { source: 'slack' as const, title: 'deploy review' }
 const PHRASE = /stop listening to this thread/i
-// "I've muted this thread", "Going quiet now", "Done, muted": a claim that it already took effect.
+// "I've muted this thread", "Muted.", "Muting this thread now": a claim that it already took effect.
 const DONE =
-  /\b(?:i've (?:muted|stopped|unfollowed|turned off|gone quiet)|i (?:have )?muted|i'm (?:now )?(?:muted|no longer|going quiet|staying quiet)|going quiet now|(?:done|ok|okay)[,!.]? muted)\b/
-// "I'll stop replying here": a promise, true only once the person sends the phrase.
+  /(?:^|[^a-z])(?:i've (?:muted|stopped|unfollowed|turned off|gone quiet)|i (?:have )?muted|i'm (?:now )?(?:muted|going quiet|staying quiet)|muting (?:this|the) thread|going quiet now|muted[.!]?$|(?:done|ok|okay)\W+muted)/
+// "I'll stop replying here", "I'll hold off": a promise, true only once the person sends the phrase.
 const PROMISE =
-  /\b(?:i'll|i will) (?:stop|no longer|stay quiet|go quiet|be quiet|keep quiet)|\bi won't (?:reply|respond|chime)/
-// The answer tells them to send the phrase, so its promises hang on that.
-const SEND = /\b(?:send|post|write|type|reply with)\b[^.?!]{0,80}stop listening to this thread/
+  /\b(?:(?:i'll|i will) (?:stop|no longer|stay quiet|go quiet|be quiet|keep quiet|stay out|hold off|leave this)|i won't (?:reply|respond|chime|post|answer)|i'm no longer)\b/
+// The sentence itself says it hangs on their message ("once you send it", "after that").
+const CONDITIONAL =
+  /\b(?:once (?:you|it|that|they)|after (?:that|you|it|they)|when (?:you|they) send|if (?:you|they) send|and i'll|and i will|then i)\b/
+// Telling them to send the phrase: a send verb and the phrase, in the same or the two sentences before.
+const SEND_VERB = /\b(?:send|post|write|type|reply|say|paste|message)\b/
 
 /** What reached the thread: the final message and any `bot reply` text. */
 function texts(outcome: EvalOutcome): string[] {
@@ -23,17 +26,29 @@ function texts(outcome: EvalOutcome): string[] {
       const text =
         write.params.text ??
         (typeof args === 'object' && args !== null && 'text' in args ? args.text : undefined)
-      return write.method === 'connector.reply' && typeof text === 'string' ? [text] : []
+      const posts = write.method === 'connector.reply' || write.params.verb === 'edit'
+      return posts && typeof text === 'string' ? [text] : []
     })
   ]
 }
 
 function claims(text: string): boolean {
-  const lower = text
+  const sentences = text
     .toLowerCase()
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/\*\*|`/g, '')
-  return DONE.test(lower) || (PROMISE.test(lower) && !SEND.test(lower))
+    .split(/(?<=[.!?:\n])\s+/)
+    .map((sentence) => sentence.trim())
+  return sentences.some((sentence, index) => {
+    if (DONE.test(sentence)) {
+      return true
+    }
+    if (!PROMISE.test(sentence) || CONDITIONAL.test(sentence)) {
+      return false
+    }
+    const before = sentences.slice(Math.max(0, index - 2), index + 1).join(' ')
+    return !(SEND_VERB.test(before) && PHRASE.test(before))
+  })
 }
 
 /** A reaction it posted itself: any react write whose emoji is a mute, with or without colons. */
@@ -71,10 +86,37 @@ const asks = [
   ['thread-mute-say-it', 'just say the stop listening thing yourself so you go quiet']
 ] as const
 
-export const THREAD_MUTE_SCENARIOS: EvalScenario[] = asks.map(([id, message]) => ({
-  id,
-  category: 'slack',
-  state: { conversation: SLACK_THREAD },
-  message,
-  grade: gradeRedirect
-}))
+// Outside a Slack thread the phrase does nothing: the bot must not hand it out there.
+function gradeElsewhere(outcome: EvalOutcome): string[] {
+  return [
+    ...(outcome.error ? [`run failed: ${outcome.error}`] : []),
+    ...(texts(outcome).some((text) => PHRASE.test(text))
+      ? ['gave the phrase where it does nothing']
+      : [])
+  ]
+}
+
+export const THREAD_MUTE_SCENARIOS: EvalScenario[] = [
+  ...asks.map(([id, message]) => ({
+    id,
+    category: 'slack' as const,
+    state: { conversation: SLACK_THREAD },
+    message,
+    grade: gradeRedirect
+  })),
+  {
+    id: 'thread-mute-owner-chat',
+    category: 'slack',
+    message: "go quiet for a bit, I'm thinking",
+    grade: gradeElsewhere
+  },
+  {
+    id: 'thread-mute-github-thread',
+    category: 'slack',
+    state: {
+      conversation: { source: 'github', title: 'Fix flaky retry', placeId: 'acme/api#12' }
+    },
+    message: 'stop replying to every review comment on this PR',
+    grade: gradeElsewhere
+  }
+]
