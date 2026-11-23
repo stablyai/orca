@@ -3,20 +3,29 @@ import { DropdownMenuLabel } from '../../../ui/dropdown-menu'
 import { useAppStore } from '../../../../store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { isRemoteCliControlAllowed } from '../../../../../../shared/remote-runtime/ssh/ssh-remote-cli-control'
-import type { BrowserSshPageCookieImportRoute } from '@/store/slices/browser/browser-slice-contract'
+import type {
+  BrowserPageCookieImportRoute,
+  BrowserSshPageCookieImportRoute
+} from '@/store/slices/browser/browser-slice-contract'
 
 // Name the import machine for remote pages: it chooses the browser inventory and receives permission prompts. Local imports need no notice.
 export function BrowserCookieImportMachineNotice({
-  sshRoute = null
+  pageRoute = null
 }: {
-  /** Set when the import comes from a page browsing through an SSH host. */
-  sshRoute?: BrowserSshPageCookieImportRoute | null
+  /** Set when a page imports into its own jar; Settings imports follow the Settings host. */
+  pageRoute?: BrowserPageCookieImportRoute | null
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const detectedBrowsersHost = useAppStore((s) => s.detectedBrowsersHost)
-  if (sshRoute) {
-    return <SshPageCookieImportNotice route={sshRoute} />
+  const settingsBrowsersHost = useAppStore((s) => s.detectedBrowsersHost)
+  if (pageRoute?.kind === 'ssh') {
+    return <SshPageCookieImportNotice route={pageRoute} />
   }
+  // A page always imports this desktop's browsers; only a server's page needs saying so.
+  const detectedBrowsersHost = !pageRoute
+    ? settingsBrowsersHost
+    : pageRoute.kind === 'client-host'
+      ? { machine: 'client' as const, hostLabel: pageRoute.hostLabel }
+      : null
   if (!detectedBrowsersHost) {
     return null
   }

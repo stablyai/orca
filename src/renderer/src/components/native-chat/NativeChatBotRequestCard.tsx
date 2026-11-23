@@ -23,6 +23,7 @@ import {
 } from '../../../../shared/bots/bot-request-card-view'
 import type { BotCardCopyValues } from '../../../../shared/native-chat/bot-cards/bot-card-copy'
 import { NativeChatEventRow } from './messages/events/NativeChatEventRow'
+import { NativeChatClientAskRequestCard } from './NativeChatClientAskRequestCard'
 import {
   NATIVE_CHAT_INLINE_NAME,
   NATIVE_CHAT_ROW_SHARE
@@ -93,6 +94,17 @@ export function NativeChatBotRequestCard({
 }): React.JSX.Element {
   useTranslation()
   const bot = useBots().find((entry) => entry.id === card.toBotId)
+  // Asked of an agent on a computer paired to this chat's host: read from that host, not a bot's.
+  if (card.client) {
+    return (
+      <NativeChatClientAskRequestCard
+        card={card}
+        client={card.client}
+        cardId={cardId}
+        timestamp={timestamp}
+      />
+    )
+  }
   if (!bot) {
     return (
       <NativeChatEventRow

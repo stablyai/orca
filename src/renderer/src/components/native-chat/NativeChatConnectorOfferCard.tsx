@@ -1,6 +1,5 @@
 // The Connect card a bot asks for with `orca bot connectors --offer`: connects in one click, and reads
 // Connected however the connector got added, with the action that adds access to it.
-import { botTarget } from '@/lib/bot-hosts'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
@@ -12,14 +11,12 @@ import { connectorDescription } from '../bots/AddConnectorDialog'
 import { BotAppBrandLogo } from '../bots/apps/BotAppBrandLogo'
 import { BOT_CONNECTORS, connectorAddAccessLabel, connectorAdded } from '../bots/bot-connectors'
 import { useConnectorSetup } from '../bots/ConnectorSetupDialogs'
-import { useGoogleHost } from '../bots/google/google-connect-client'
 import { botLinearWorkspaces, botSlackApps, type Bot } from '../../../../shared/bot-types'
 import type {
   ConnectorOffer,
   ConnectorOfferSource,
   LinkedOfferSource
 } from '../../../../shared/bots/bot-connector-offer'
-import { googleBotConnectState } from '../../../../shared/google/google-bot-connect-state'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import {
   NativeChatCardActions,
@@ -27,6 +24,7 @@ import {
   NativeChatCardStatus
 } from './NativeChatCardFrame'
 import { NativeChatOfferActions, useNativeChatOffer } from './NativeChatOfferActions'
+import { NativeChatGoogleOfferCard } from './NativeChatGoogleOfferCard'
 import { notReaching, ServerSignInOffer, SignInOffer } from './NativeChatSignInOffer'
 import { OrcaCloudSignInLine, orcaCloudSignInReason } from '../bots/orca-cloud-sign-in'
 import { useOrcaCloudNeedsSignIn } from '../bots/orca-cloud-signed-out'
@@ -49,21 +47,6 @@ function SlackOffer(props: OfferProps): React.JSX.Element {
     return team?.state === 'installed' && team.teamName ? [team.teamName] : []
   })
   return <OfferCard {...props} names={names} />
-}
-
-// Connected only once the bot may use Google and this computer is signed in to it.
-function GoogleOffer(props: OfferProps): React.JSX.Element {
-  const view = useGoogleHost(botTarget(props.bot))
-  const state =
-    view.status === 'ready'
-      ? googleBotConnectState({
-          allowed: props.bot.google === true,
-          client: view.google.client,
-          accounts: view.google.accounts
-        })
-      : null
-  const connected = state?.allowed === true && state.host === 'connected'
-  return <OfferCard {...props} names={[]} connected={connected} />
 }
 
 function GitHubOffer(props: OfferProps): React.JSX.Element {
@@ -102,20 +85,17 @@ function OfferCard({
   offer,
   messageId,
   names,
-  pause,
-  connected: connectedOverride
-}: OfferProps & { names: readonly string[]; connected?: boolean }): React.JSX.Element {
+  pause
+}: OfferProps & { names: readonly string[] }): React.JSX.Element {
   const t = useTranslate()
   useTranslation()
   const answering = useNativeChatOffer(bot.id, messageId)
   const setup = useConnectorSetup(bot)
   const connector = BOT_CONNECTORS.find((entry) => entry.id === offer.source)
   const wanted = offer.workspace?.toLowerCase()
-  const connected =
-    connectedOverride ??
-    (wanted
-      ? names.some((name) => name.toLowerCase() === wanted)
-      : connectorAdded(bot, offer.source))
+  const connected = wanted
+    ? names.some((name) => name.toLowerCase() === wanted)
+    : connectorAdded(bot, offer.source)
   const label = connector?.label ?? offer.source
   // Connected, but its host's sign-in keeps the events away: never reads as done.
   const paused = connected && pause != null
@@ -231,7 +211,7 @@ function SourceOffer(props: OfferProps): React.JSX.Element {
     case 'github':
       return <GitHubOffer {...props} />
     case 'google':
-      return <GoogleOffer {...props} />
+      return <NativeChatGoogleOfferCard bot={props.bot} messageId={props.messageId} />
     case 'linear':
       return (
         <OfferCard
@@ -268,7 +248,7 @@ export function NativeChatConnectorOfferCard({
   const source = offer.source
   // Google's events come from the host's own Google sign-in, not through Orca Cloud.
   if (source === 'google') {
-    return <GoogleOffer bot={bot} offer={{ ...offer, source }} messageId={messageId} />
+    return <NativeChatGoogleOfferCard bot={bot} messageId={messageId} />
   }
   const props = { bot, offer: { ...offer, source }, messageId }
   return bot.hostId === LOCAL_EXECUTION_HOST_ID ? (
