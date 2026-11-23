@@ -50,6 +50,7 @@ const RUNS_BOUND_TO_COORDINATOR_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
 
 export function getRun(this: OrchestrationDb, id: string): RunRow | undefined {
   const run = this.getRunRaw(id)
+  this.workerDockSources?.rememberRun(run)
   return run ? exposeRunTimestamps(run) : undefined
 }
 

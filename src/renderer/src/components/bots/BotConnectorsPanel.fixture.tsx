@@ -259,3 +259,28 @@ export const googlePage = defineFixture({
   render: () => <Panel bot={base} />,
   interact: () => openRow('Google')
 })
+
+const openPageMenu = async (row: string, name: string): Promise<void> => {
+  await openRow(row)
+  const trigger = [...document.querySelectorAll<HTMLElement>('button')].find(
+    (button) => button.getAttribute('aria-label') === `${name} actions`
+  )
+  trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+  await settle(200)
+}
+
+/** The Google page's menu: add another account, as GitHub's does. */
+export const googlePageMenu = defineFixture({
+  width: 420,
+  setup: () => fresh({ linearLinked: true, composio: false }),
+  render: () => <Panel bot={base} />,
+  interact: () => openPageMenu('Google', 'Google')
+})
+
+/** The GitHub page's menu: add an org, another login, or read again what the logins reach. */
+export const gitHubPageMenu = defineFixture({
+  width: 420,
+  setup: () => fresh({ linearLinked: true, composio: false }),
+  render: () => <Panel bot={base} />,
+  interact: () => openPageMenu('GitHub · stablyai', 'GitHub · stablyai')
+})

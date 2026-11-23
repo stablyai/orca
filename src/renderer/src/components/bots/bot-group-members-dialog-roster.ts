@@ -36,6 +36,7 @@ export function withUnlistedMembers(bots: readonly Bot[], group: BotGroup | unde
             agent: member.agent,
             avatar: member.avatar,
             ...(member.avatarColor ? { avatarColor: member.avatarColor } : {}),
+            ...(member.avatarOutfit ? { avatarOutfit: member.avatarOutfit } : {}),
             paused: false,
             notifications: { needsPermission: false, taskComplete: false, couldNotFinish: false },
             members: [],
@@ -90,6 +91,7 @@ export function remoteRoster(
           name: bot.name,
           avatar: bot.avatar,
           ...(bot.avatarColor ? { avatarColor: bot.avatarColor } : {}),
+          ...(bot.avatarOutfit ? { avatarOutfit: bot.avatarOutfit } : {}),
           agent: bot.agent
         }
       ]

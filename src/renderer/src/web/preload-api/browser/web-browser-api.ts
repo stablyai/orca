@@ -120,6 +120,7 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
     sessionGoogleCookieClearTarget: () => Promise.resolve(null),
     sessionClearGoogleCookies: () => Promise.resolve('unverified' as const),
     sessionClearDefaultCookies: () => Promise.resolve(false),
+    sessionClearDefaultCookiesForClientHost: () => Promise.resolve(null),
     sitePermissionsList: () => Promise.resolve([]),
     sitePermissionsSet: () => Promise.resolve([]),
     notifyActiveTabChanged: () => Promise.resolve(false),

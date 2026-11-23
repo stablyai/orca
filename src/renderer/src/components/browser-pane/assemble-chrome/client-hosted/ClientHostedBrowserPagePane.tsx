@@ -17,7 +17,7 @@ import { attachBrowserClientPageToViewport } from '../../host-guest/client-pages
 import { useBrowserClientHostedPopupNotices } from '../../navigate/browser-client-hosted-popup-notices'
 import { useBrowserClientHostedPermissionNotices } from '../../navigate/browser-client-hosted-permission-notices'
 import { useClientHostedBrowserIntroTour } from './use-client-hosted-browser-intro-tour'
-import { ClientHostedBrowserUnavailableNotice } from './client-hosted-browser-unavailable-notice'
+import { ClientHostedBrowserPageStandIn } from './client-hosted-browser-page-stand-in'
 import { watchBrowserClientPageGuestLoss } from '../../host-guest/recovery/browser-client-page-guest-loss'
 import { useClientHostedBrowserAnnotate } from '../../annotate/use-client-hosted-browser-annotate'
 import { ClientHostedBrowserPageOverlays } from './client-hosted-browser-page-overlays'
@@ -36,9 +36,8 @@ import { useBrowserPageWebviewShortcuts } from '../../host-guest/input/use-brows
 import { useBrowserPageZoomFeedback } from '../../host-guest/viewport/use-browser-page-zoom-feedback'
 import { ClientHostedBrowserLoadFailure } from '../../navigate/client-hosted-browser-load-failure'
 import { useClientHostedPageUrlSubmission } from '../../navigate/use-client-hosted-page-url-submission'
-import { useClientPageWorkspaceFileDrop } from '../../navigate/browser-page-workspace-file-drop'
+import { useWorkspaceDocPageFileDrop } from '../../navigate/browser-page-workspace-file-drop'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
-import { BrowserNewTabPage } from '../../new-tab/BrowserNewTabPage'
 import { useBrowserPageReloadActions } from '../../navigate/use-browser-page-reload-actions'
 import { consumeBrowserPageDeferredNavigation } from '../../navigate/browser-page-deferred-navigation'
 import { toDisplayUrl } from '../../describe-page/browser-page-url-display'
@@ -145,7 +144,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
   )
   const getAgentCursorHost = useCallback(() => webviewRef.current?.parentElement ?? null, [])
   useBrowserAgentCursor(browserTab.id, webviewRef, getAgentCursorHost)
-  const fileDrop = useClientPageWorkspaceFileDrop(browserTab.id, worktreeId, pageBox.contentRef)
+  const fileDrop = useWorkspaceDocPageFileDrop(browserTab.id, worktreeId, pageBox.contentRef)
 
   const annotate = useClientHostedBrowserAnnotate(
     props,
@@ -337,6 +336,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
         canGoForward={browserTab.canGoForward}
         webviewRef={webviewRef}
         onReload={() => reload.reloadWebviewOrRecoverGuest(false)}
+        remoteRoutedNetwork
       />
       <div data-contextual-tour-target="client-hosted-browser-controls">
         <ClientHostedBrowserPageToolbar
@@ -389,16 +389,16 @@ export function ClientHostedBrowserPagePane(props: Props) {
               onRetry={() => reload.runReloadTrigger('reload')}
             />
           ) : null}
-          {initialization.unavailable ? (
-            <ClientHostedBrowserUnavailableNotice
-              runtimeEnvironmentId={runtimeEnvironmentId}
-              worktreeId={worktreeId}
-              reopenUrl={browserTab.url}
-              placementHostClientId={browserHostClientId}
-            />
-          ) : initialization.showNewTab ? (
-            <BrowserNewTabPage page={browserTab} onOpenUrl={navigateToUrl} serversElsewhere />
-          ) : null}
+          <ClientHostedBrowserPageStandIn
+            unavailable={initialization.unavailable}
+            showNewTab={initialization.showNewTab}
+            runtimeEnvironmentId={runtimeEnvironmentId}
+            worktreeId={worktreeId}
+            browserPageId={browserTab.id}
+            reopenUrl={browserTab.url}
+            placementHostClientId={browserHostClientId}
+            onOpenUrl={navigateToUrl}
+          />
         </div>
         {devToolsPageFlex === null ? null : <BrowserDevToolsDock browserPageId={browserTab.id} />}
       </div>

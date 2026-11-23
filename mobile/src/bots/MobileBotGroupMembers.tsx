@@ -1,3 +1,4 @@
+import { botFailureMessage } from './bot-failure-message'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useState } from 'react'
 import { LayoutAnimation, Pressable, ScrollView, Text, View } from 'react-native'
@@ -120,7 +121,7 @@ export function MobileBotGroupMembers({
         : groupCreate.interpret(await groupCreate.request(client, { name: name.trim(), botIds }))
       onSaved(result.group)
     } catch (error) {
-      setError(String(error))
+      setError(botFailureMessage(error) ?? String(error))
       setBusy(false)
     }
   }

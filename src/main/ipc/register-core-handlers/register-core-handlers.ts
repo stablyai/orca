@@ -41,6 +41,7 @@ import { registerTerminalPreviewHandlers } from '../terminal-views/terminal-prev
 import { registerDeveloperPermissionHandlers } from '../developer-permissions/developer-permissions'
 import { registerComputerUsePermissionHandlers } from '../computer-use-permissions'
 import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser/browser'
+import { registerBrowserBookmarkHandlers } from '../browser/browser-bookmarks-ipc'
 import { setTrustedBrowserRendererWebContentsId } from '../browser/browser-renderer-trust'
 import { registerSessionHandlers } from '../session'
 import { registerSettingsHandlers } from '../settings/settings'
@@ -202,6 +203,7 @@ export async function registerCoreHandlers(
       onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch
     })
     registerBrowserHandlers(store)
+    registerBrowserBookmarkHandlers()
     registerShellHandlers(store)
     registerPetHandlers()
     registerSessionHandlers(store, runtime)

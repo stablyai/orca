@@ -11,6 +11,8 @@ export type BrowserScreencastDeviceMetrics = {
   apply: () => Promise<void>
   clear: () => Promise<void>
   isOverridden: () => boolean
+  /** Chromium's mobile emulation cancels page zoom, so frames must not report it. */
+  emulatesMobile: () => boolean
 }
 
 export function createBrowserScreencastDeviceMetrics(
@@ -19,16 +21,19 @@ export function createBrowserScreencastDeviceMetrics(
   options: BrowserScreencastOptions
 ): BrowserScreencastDeviceMetrics {
   let deviceMetricsOverridden = false
+  let mobileEmulated = false
   const sendViewportCommand = (method: string, params: Record<string, unknown>): Promise<unknown> =>
     runDebuggerCommandWithTimeout(method, () => sendGuestCdpCommand(webContents, method, params))
 
   const clearDeviceMetricsOverride = async (): Promise<void> => {
     if (webContents.isDestroyed() || !dbg.isAttached()) {
       deviceMetricsOverridden = false
+      mobileEmulated = false
       return
     }
     await sendDebuggerCommand(dbg, 'Emulation.clearDeviceMetricsOverride')
     deviceMetricsOverridden = false
+    mobileEmulated = false
   }
 
   const applyDeviceMetricsOverride = async (): Promise<void> => {
@@ -41,13 +46,15 @@ export function createBrowserScreencastDeviceMetrics(
       return
     }
     const deviceScaleFactor = positiveNumber(options.deviceScaleFactor) ?? 1
+    const mobile = options.mobile === true
     // Navigation can drop emulation; restore client viewport metrics before fallback captures.
     await sendViewportCommand('Emulation.setDeviceMetricsOverride', {
       width: viewportWidth,
       height: viewportHeight,
       deviceScaleFactor,
-      mobile: options.mobile === true
+      mobile
     })
+    mobileEmulated = mobile
     await sendViewportCommand('Emulation.setVisibleSize', {
       width: viewportWidth,
       height: viewportHeight
@@ -58,6 +65,7 @@ export function createBrowserScreencastDeviceMetrics(
   return {
     apply: applyDeviceMetricsOverride,
     clear: clearDeviceMetricsOverride,
-    isOverridden: () => deviceMetricsOverridden
+    isOverridden: () => deviceMetricsOverridden,
+    emulatesMobile: () => mobileEmulated
   }
 }
