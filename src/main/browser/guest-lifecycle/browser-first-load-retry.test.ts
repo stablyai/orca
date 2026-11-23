@@ -74,6 +74,7 @@ describe('a restored first load that may have stalled while extensions loaded', 
     closed.destroyed = true
     closed.emit('destroyed')
     expect(closed.listenerCount('did-start-navigation')).toBe(0)
+    expect(extensions.listenerCount('extension-loaded')).toBe(0)
     ready.resolve()
     await settle()
     expect(loads.map((count) => count())).toEqual([0, 0, 0, 0])

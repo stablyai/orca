@@ -1,6 +1,6 @@
 import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 
-/** Profiles by id, with a partition lookup kept in step with every change instead of a scan. */
+/** Profiles by id, with a partition index rebuilt at the first lookup after a change. */
 export class BrowserSessionProfileMap extends Map<string, BrowserSessionProfile> {
   private idsByPartition: Map<string, string> | null = null
 

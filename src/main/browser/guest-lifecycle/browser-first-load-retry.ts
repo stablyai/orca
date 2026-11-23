@@ -6,8 +6,9 @@ type Retry = {
   dispose: () => void
 }
 // One reaction per readiness promise; a page leaves its set when it commits, stops, navigates
-// elsewhere or closes, so only live pages are kept while extension startup runs on.
-const retriesByReady = new WeakMap<Promise<unknown>, Set<Retry>>()
+// elsewhere or closes, and the extension listener is on only while the set has pages.
+type Retries = { pending: Set<Retry>; listen: (on: boolean) => void }
+const retriesByReady = new WeakMap<Promise<unknown>, Retries>()
 
 // Chromium's WebRequestAPI resets a session's URL loader factories, dropping requests in flight,
 // only when its first extension with one of these permissions loads.
@@ -49,22 +50,26 @@ export function retryFirstLoadIfStalled(
 ): void {
   let retries = retriesByReady.get(ready)
   if (!retries) {
-    const pending = new Set<Retry>()
-    retries = pending
-    retriesByReady.set(ready, pending)
+    const pages = new Set<Retry>()
     const extensions = contents.session.extensions
     const extensionLoaded = (_event: Electron.Event, loaded: Electron.Extension): void => {
       if (!resetsRequests(extensions, loaded)) {
         return
       }
-      for (const retry of pending) {
+      for (const retry of pages) {
         retry.disrupted ||= retry.started
       }
     }
-    extensions.on('extension-loaded', extensionLoaded)
+    retries = {
+      pending: pages,
+      listen: (on) =>
+        on
+          ? extensions.on('extension-loaded', extensionLoaded)
+          : extensions.off('extension-loaded', extensionLoaded)
+    }
+    retriesByReady.set(ready, retries)
     void ready.then(() => {
-      extensions.off('extension-loaded', extensionLoaded)
-      for (const retry of pending) {
+      for (const retry of pages) {
         retry.dispose()
         if (retry.disrupted) {
           console.warn(
@@ -75,7 +80,7 @@ export function retryFirstLoadIfStalled(
       }
     })
   }
-  const set = retries
+  const { pending, listen } = retries
   const cancel = (): void => retry.dispose()
   const navigationStarted = (
     details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>
@@ -100,14 +105,19 @@ export function retryFirstLoadIfStalled(
     disrupted: false,
     started: false,
     dispose: () => {
-      set.delete(retry)
+      if (pending.delete(retry) && pending.size === 0) {
+        listen(false)
+      }
       contents.off('did-start-navigation', navigationStarted)
       contents.off('did-navigate', cancel)
       contents.off('did-stop-loading', stopped)
       contents.off('destroyed', cancel)
     }
   }
-  set.add(retry)
+  if (pending.size === 0) {
+    listen(true)
+  }
+  pending.add(retry)
   contents.on('did-start-navigation', navigationStarted)
   contents.on('did-navigate', cancel)
   contents.on('did-stop-loading', stopped)
