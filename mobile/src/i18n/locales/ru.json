@@ -3045,7 +3045,8 @@
       "language": {
         "description": "При выборе «Как в системе» используется язык устройства. Запросы разрешений всегда отображаются на языке устройства.",
         "heading": "ЯЗЫК",
-        "systemWithCurrent": "Как в системе ({{language}})"
+        "systemWithCurrent": "Как в системе ({{language}})",
+        "vietnamese": "Tiếng Việt"
       },
       "theme": {
         "dark": "Тёмная",

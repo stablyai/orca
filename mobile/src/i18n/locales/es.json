@@ -2972,7 +2972,8 @@
       "language": {
         "description": "La opción Sistema usa el idioma de este dispositivo. Las solicitudes de permiso siempre usan el idioma del dispositivo.",
         "heading": "IDIOMA",
-        "systemWithCurrent": "Sistema ({{language}})"
+        "systemWithCurrent": "Sistema ({{language}})",
+        "vietnamese": "Tiếng Việt"
       },
       "theme": {
         "dark": "Oscuro",

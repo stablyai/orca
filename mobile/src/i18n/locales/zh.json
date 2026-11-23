@@ -3915,7 +3915,8 @@
       "language": {
         "description": "选择“系统”时，将跟随此设备的语言。权限提示始终使用设备语言",
         "heading": "语言",
-        "systemWithCurrent": "系统（{{language}}）"
+        "systemWithCurrent": "系统（{{language}}）",
+        "vietnamese": "Tiếng Việt"
       },
       "usage": {
         "used": "已用",

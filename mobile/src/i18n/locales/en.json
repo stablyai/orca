@@ -12,7 +12,8 @@
       "language": {
         "systemWithCurrent": "System ({{language}})",
         "heading": "LANGUAGE",
-        "description": "System follows this device’s language. Permission prompts always use the device language."
+        "description": "System follows this device’s language. Permission prompts always use the device language.",
+        "vietnamese": "Tiếng Việt"
       },
       "usage": {
         "used": "Used",

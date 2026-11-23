@@ -39,6 +39,11 @@ const LOCALE_CONFIG = {
     targetLanguage: 'fr',
     displayName: 'French',
     cacheFile: '.fr-catalog-cache.json'
+  },
+  vi: {
+    targetLanguage: 'vi',
+    displayName: 'Vietnamese',
+    cacheFile: '.vi-catalog-cache.json'
   }
 }
 

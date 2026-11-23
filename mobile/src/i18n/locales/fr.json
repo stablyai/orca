@@ -2972,7 +2972,8 @@
       "language": {
         "description": "L'option Système utilise la langue de cet appareil. Les demandes d'autorisation utilisent toujours la langue de l'appareil.",
         "heading": "LANGUE",
-        "systemWithCurrent": "Système ({{language}})"
+        "systemWithCurrent": "Système ({{language}})",
+        "vietnamese": "Tiếng Việt"
       },
       "theme": {
         "dark": "Sombre",

@@ -2892,7 +2892,8 @@
       "language": {
         "description": "「システム」はこのデバイスの言語に従います。権限の確認画面には常にデバイスの言語が使われます。",
         "heading": "言語",
-        "systemWithCurrent": "システム（{{language}}）"
+        "systemWithCurrent": "システム（{{language}}）",
+        "vietnamese": "Tiếng Việt"
       },
       "theme": {
         "dark": "ダーク",

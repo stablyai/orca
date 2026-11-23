@@ -2889,7 +2889,8 @@
       "language": {
         "description": "「系統」會使用此裝置的語言。權限提示一律使用裝置語言。",
         "heading": "語言",
-        "systemWithCurrent": "系統（{{language}}）"
+        "systemWithCurrent": "系統（{{language}}）",
+        "vietnamese": "Tiếng Việt"
       },
       "theme": {
         "dark": "深色",

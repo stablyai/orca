@@ -2891,7 +2891,8 @@
       "language": {
         "description": "시스템을 선택하면 이 기기의 언어를 따릅니다. 권한 요청은 항상 기기 언어로 표시됩니다.",
         "heading": "언어",
-        "systemWithCurrent": "시스템 ({{language}})"
+        "systemWithCurrent": "시스템 ({{language}})",
+        "vietnamese": "Tiếng Việt"
       },
       "theme": {
         "dark": "다크",
