@@ -11,7 +11,10 @@ import {
   NativeChatReplyRevealsContext,
   NativeChatSaveFallbackContext
 } from './native-chat-reply-reveals'
-import { documentHeldDrawnCount } from '../session/structured/read/document-viewer-visibility'
+import {
+  documentHeldDrawnCount,
+  documentRowShowsSavesOnly
+} from '../session/structured/read/document-viewer-visibility'
 import {
   nativeChatRevealStepFrames,
   nativeChatTextAppended,
@@ -136,6 +139,14 @@ export function useNativeChatPacedText(
   const [grew, setGrew] = useState(initial.shown < text.length)
   const heldTextSession = useContext(NativeChatHeldTextSessionContext)
   const heldDrawn = useRef(documentHeldDrawnCount(heldTextSession))
+  // Drawn only at its saves, the reply's chat stops taking live text until the reply ends.
+  useEffect(
+    () =>
+      drawsWhole && streaming && heldTextSession !== undefined
+        ? documentRowShowsSavesOnly(heldTextSession, rowKey)
+        : undefined,
+    [drawsWhole, streaming, heldTextSession, rowKey]
+  )
 
   useLayoutEffect(() => {
     const previous = pace.current

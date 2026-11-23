@@ -8,6 +8,7 @@ import {
 } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
+import { withDocumentSavesOnly } from './document-viewer-visibility'
 import { createStructuredAgentSessionPRLinkObserver } from './structured-agent-session-pr-link-observer'
 import { nativeChatShowsPromptSuggestions } from '../../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 
@@ -185,13 +186,13 @@ export function createReadOwner(
   const replyTextListeners = new Set<() => void>()
   const replyTextShown = (): boolean =>
     [...activations.values()].some((effects) => effects.showsReplyText === true)
-  const replyText = {
+  const replyText = withDocumentSavesOnly(sessionId, {
     shown: replyTextShown,
     subscribe: (changed: () => void) => {
       replyTextListeners.add(changed)
       return () => replyTextListeners.delete(changed)
     }
-  }
+  })
   const noteReaders = (before: boolean): void => {
     if (replyTextShown() !== before) {
       replyTextListeners.forEach((changed) => changed())

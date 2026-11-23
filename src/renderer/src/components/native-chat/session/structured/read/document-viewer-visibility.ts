@@ -74,3 +74,60 @@ export function documentLiveTextViewer(
     setShown
   }
 }
+
+// Per chat, the streaming replies drawn only at their saves, and who to tell when that changes.
+const savesOnlyRows = new Map<string, Set<string>>()
+const savesOnlyWatchers = new Map<string, Set<() => void>>()
+
+/** A streaming reply that fell back to its saves: its chat takes no live text until it ends, so the
+ *  host sends what it would discard no more. Returns the release. */
+export function documentRowShowsSavesOnly(sessionId: string, rowKey: string): () => void {
+  const rows = savesOnlyRows.get(sessionId) ?? new Set<string>()
+  const was = rows.size > 0
+  rows.add(rowKey)
+  savesOnlyRows.set(sessionId, rows)
+  if (!was) {
+    savesOnlyWatchers.get(sessionId)?.forEach((changed) => changed())
+  }
+  return () => {
+    rows.delete(rowKey)
+    if (rows.size === 0 && savesOnlyRows.get(sessionId) === rows) {
+      savesOnlyRows.delete(sessionId)
+      savesOnlyWatchers.get(sessionId)?.forEach((changed) => changed())
+    }
+  }
+}
+
+export function documentShowsSavesOnly(sessionId: string): boolean {
+  return (savesOnlyRows.get(sessionId)?.size ?? 0) > 0
+}
+
+export function subscribeDocumentSavesOnly(sessionId: string, changed: () => void): () => void {
+  const watchers = savesOnlyWatchers.get(sessionId) ?? new Set<() => void>()
+  watchers.add(changed)
+  savesOnlyWatchers.set(sessionId, watchers)
+  return () => {
+    watchers.delete(changed)
+    if (watchers.size === 0 && savesOnlyWatchers.get(sessionId) === watchers) {
+      savesOnlyWatchers.delete(sessionId)
+    }
+  }
+}
+
+/** A chat's reply-text interest, withdrawn while one of its streaming replies shows only saves. */
+export function withDocumentSavesOnly(
+  sessionId: string,
+  readers: StructuredAgentSessionReplyTextInterest
+): StructuredAgentSessionReplyTextInterest {
+  return {
+    shown: () => !documentShowsSavesOnly(sessionId) && readers.shown(),
+    subscribe: (changed) => {
+      const stopReaders = readers.subscribe(changed)
+      const stopSavesOnly = subscribeDocumentSavesOnly(sessionId, changed)
+      return () => {
+        stopReaders()
+        stopSavesOnly()
+      }
+    }
+  }
+}

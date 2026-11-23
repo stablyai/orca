@@ -198,6 +198,13 @@ const CommentMarkdown = React.memo(
       extension,
       unknownHtmlAsText ? unknownHtmlRendersAsText : undefined
     )
+    // Once a reply fades, every block keeps the word renderer (plain where nothing fades), so a
+    // block leaving the window keeps its nodes and a reader's selection in it, math included.
+    const [hadWordFade, setHadWordFade] = React.useState(fadeFrom !== undefined)
+    if (fadeFrom !== undefined && !hadWordFade) {
+      setHadWordFade(true)
+    }
+    const blockComponents = hadWordFade || fadeFrom !== undefined ? fadingComponents : components
 
     return (
       <GitHubBodyImageUrlsContext.Provider value={bodyImageUrls}>
@@ -246,7 +253,7 @@ const CommentMarkdown = React.memo(
                             fadeHoldTo: fadeHold.to - block.start
                           }
                         : {})}
-                      components={blockFadeFrom === undefined ? components : fadingComponents}
+                      components={blockComponents}
                       urlTransform={
                         allowFileUriLinks
                           ? commentMarkdownFileUriUrlTransform

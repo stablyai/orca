@@ -10,7 +10,10 @@ import {
 } from './native-chat-reply-reveals'
 import { createNativeChatReplyRevealTracker } from '../../../../../shared/native-chat/transcript/row-content/native-chat-reply-reveals'
 import type { NativeChatTextReveal } from '../../../../../shared/native-chat/transcript/row-content/native-chat-text-reveal'
-import { documentViewerVisibility } from '../session/structured/read/document-viewer-visibility'
+import {
+  documentViewerVisibility,
+  withDocumentSavesOnly
+} from '../session/structured/read/document-viewer-visibility'
 
 // A mounted reveal keeps its clock's timers; unmount each test's hooks before the next.
 afterEach(cleanup)
@@ -355,4 +358,38 @@ it("keeps revealing through the render that brings a fallen-back reply's final s
   } finally {
     vi.useRealTimers()
   }
+})
+
+it("withdraws its chat's live text while a reply shows only its saves, until the reply ends", () => {
+  const { reveals } = createNativeChatReplyRevealTracker()
+  reveals.drawn.set('reply', {
+    source: 'one',
+    shown: 3,
+    arrivals: [],
+    drawsWhole: true,
+    savedAt: 1
+  })
+  const root = { current: null }
+  const { rerender } = renderHook(
+    ({ streaming }) => useNativeChatPacedText('reply', 'one', streaming, root, 1),
+    {
+      initialProps: { streaming: true },
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <NativeChatHeldTextSessionContext.Provider value="chat-saves">
+          <NativeChatReplyRevealsContext.Provider value={reveals}>
+            <NativeChatSaveFallbackContext.Provider value>
+              {children}
+            </NativeChatSaveFallbackContext.Provider>
+          </NativeChatReplyRevealsContext.Provider>
+        </NativeChatHeldTextSessionContext.Provider>
+      )
+    }
+  )
+  const interest = withDocumentSavesOnly('chat-saves', {
+    shown: () => true,
+    subscribe: () => () => {}
+  })
+  expect(interest.shown()).toBe(false)
+  rerender({ streaming: false })
+  expect(interest.shown()).toBe(true)
 })
