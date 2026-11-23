@@ -103,7 +103,7 @@ function supersededLoadError(): Error {
 
 /**
  * Starts a load queued during the hold. Behind saved history it lands after the back list, as if
- * made after the restore, unless it carries request data that a history entry can't.
+ * made after the restore, unless it carries load options, which a history entry can't.
  */
 export function startHeldLoad(
   contents: Electron.WebContents,
@@ -111,7 +111,10 @@ export function startHeldLoad(
   history: { entries: Electron.NavigationEntry[]; index: number } | null
 ): Promise<void> {
   const { url, options } = requested
-  if (!history || options?.postData || options?.extraHeaders || options?.httpReferrer) {
+  if (
+    !history ||
+    Object.values(options ?? {}).some((value) => value !== undefined && value !== '')
+  ) {
     return contents.loadURL(url, options)
   }
   const entries = [...history.entries.slice(0, history.index + 1), { url, title: '' }]
