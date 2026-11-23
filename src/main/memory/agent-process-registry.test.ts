@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   agentRegistrationMark,
+  hasAgentProcessRegistrations,
   listAgentProcessRoots,
   noteAgentProcessChat,
   registerAgentProcess
@@ -76,5 +77,22 @@ describe('agent process registry', () => {
 
     expect(listAgentProcessRoots()).toEqual([])
     release()
+  })
+
+  it('asks samples for agent trees only while a run belongs to a chat', () => {
+    const releaseProbe = registerAgentProcess(4646)
+    expect(hasAgentProcessRegistrations()).toBe(false)
+
+    const releaseChat = registerAgentProcess(4747)
+    const mark = agentRegistrationMark()
+    noteAgentProcessChat(4747, 'chat')
+    expect(hasAgentProcessRegistrations()).toBe(true)
+    // A sample begun before the link didn't ask for the tree, so it leaves the root out.
+    expect(listAgentProcessRoots(mark)).toEqual([])
+
+    releaseChat()
+    releaseChat()
+    expect(hasAgentProcessRegistrations()).toBe(false)
+    releaseProbe()
   })
 })
