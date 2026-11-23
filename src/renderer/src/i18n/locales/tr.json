@@ -22256,7 +22256,7 @@
       "signInRequired": "Bu hesabı kullanmak için yeniden oturum açın",
       "signInAgain": "Yeniden oturum aç",
       "usageSignInLabel": "Yeniden oturum aç",
-      "usageSignInMessage": "Seçili Claude hesabında yeniden oturum açmanız gerekiyor. Ayarlar > Yapay Zeka Sağlayıcı Hesapları bölümünü açın veya Sistem varsayılanı seçeneğini seçin.",
+      "usageSignInMessage": "Bu hesapta yeniden oturum açmanız gerekiyor.",
       "signIn": "Oturum aç",
       "moreSignInOptions": "Diğer oturum açma seçenekleri",
       "copySignInLink": "Bunun yerine oturum açma bağlantısını kopyala",
@@ -24199,7 +24199,8 @@
       },
       "ask": {
         "notSentYet": "henüz gönderilmedi",
-        "replaced": "Ajan yeni bir soru sordu. Okuyup yanıtlayın."
+        "replaced": "Ajan yeni bir soru sordu. Okuyup yanıtlayın.",
+        "replacedByNewer": "Daha yeni bir soruyla değiştirildi"
       },
       "chat": {
         "moreItems": "+{{count}} tane daha"

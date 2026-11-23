@@ -21712,7 +21712,7 @@
       "signInRequired": "Inicia sesión de nuevo para usar esta cuenta",
       "signInAgain": "Iniciar sesión de nuevo",
       "usageSignInLabel": "Iniciar sesión de nuevo",
-      "usageSignInMessage": "La cuenta de Claude seleccionada necesita que inicies sesión de nuevo. Abre Ajustes > Cuentas de proveedores de IA, o elige Predeterminado del sistema.",
+      "usageSignInMessage": "Esta cuenta necesita que inicies sesión de nuevo.",
       "signIn": "Iniciar sesión",
       "moreSignInOptions": "Más opciones de inicio de sesión",
       "copySignInLink": "Copiar el enlace de inicio de sesión en su lugar",
@@ -24681,7 +24681,8 @@
       },
       "ask": {
         "notSentYet": "aún no enviado",
-        "replaced": "El agente ha hecho una nueva pregunta. Léela y luego responde."
+        "replaced": "El agente ha hecho una nueva pregunta. Léela y luego responde.",
+        "replacedByNewer": "Sustituida por una pregunta más reciente"
       },
       "readMoreClosedFailed": "No se pudieron leer más elementos cerrados"
     },

@@ -40,6 +40,7 @@ export function BotItemQuestionLines({
   waiting,
   answers = NO_ANSWERS,
   byOrder,
+  replaced = false,
   actions,
   className
 }: {
@@ -54,6 +55,8 @@ export function BotItemQuestionLines({
   answers?: readonly (BotItemEvent | null)[]
   /** Per line, answered only by a comment naming no line: that comment shows as itself. */
   byOrder?: readonly boolean[]
+  /** A later ask replaced its open lines. */
+  replaced?: boolean
   /** While it waits, what its quick replies do; absent where the item takes no comment. */
   actions?: BotItemQuickReplyActions
   /** Its spacing from the body above; by default a gap under a body. */
@@ -171,6 +174,11 @@ export function BotItemQuestionLines({
           )
         })}
       </div>
+      {replaced && answered.some((words, index) => !words && !unsent?.[index]) ? (
+        <div className="mt-1.5 text-xs text-muted-foreground">
+          {t('bots.items.ask.replacedByNewer', 'Replaced by a newer question')}
+        </div>
+      ) : null}
     </div>
   )
 }

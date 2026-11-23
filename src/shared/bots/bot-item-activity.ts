@@ -30,6 +30,8 @@ export type BotItemActivityEntry =
       answers?: (BotItemEvent | null)[]
       /** On an ask: per line, answered only by order (a comment naming no line). */
       byOrder?: boolean[]
+      /** On an ask a later one replaced: its open lines take no answer. */
+      replaced?: true
       /** On the owner's reply to a question: the question it answers, by its first line. */
       replyTo?: { eventId: string; text: string }
       /** The owner's answer reads in full on its ask's lines ("Question → answer"): no card of its own. */
@@ -184,6 +186,7 @@ function eventEntries(
         ? asked.waiting
         : event.id === item.question?.eventId && event.actor.kind !== 'owner' && !askWaiting,
       ...(asked ? { answers: asked.answers, byOrder: asked.byOrder } : {}),
+      ...(asked?.replaced ? { replaced: true as const } : {}),
       ...(replyTo ? { replyTo } : {}),
       ...(readsOnAsk(event, pairing) ? { onAsk: true as const } : {})
     })

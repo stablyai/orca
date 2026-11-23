@@ -8,7 +8,7 @@ import type { TerminalAgent } from '../../../../shared/agent-status/identity/ter
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
-import type { TerminalCommandPaintRecord } from '../input/terminal-command-paint'
+import type { TerminalCommandPaintRecord } from '../input/terminal-command-paint-record'
 import {
   durableWriteTempPath,
   removeStaleDurableWriteTempFiles,

@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "Erneut anmelden",
-      "usageSignInMessage": "Für das ausgewählte Claude-Konto ist eine erneute Anmeldung erforderlich. Einstellungen > Konten für KI-Anbieter öffnen oder „Systemstandard“ auswählen."
+      "usageSignInMessage": "Für dieses Konto ist eine erneute Anmeldung erforderlich."
     }
   },
   "agentHistory": {
@@ -4621,7 +4621,8 @@
       "skillLimit": "Nachricht nicht gesendet. Wähle höchstens {{limit}} Skill-Dateien aus und versuche es erneut.",
       "ask": {
         "notSentYet": "noch nicht gesendet",
-        "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann."
+        "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann.",
+        "replacedByNewer": "Durch eine neuere Frage ersetzt"
       }
     },
     "needs": {

@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "Iniciar sesión de nuevo",
-      "usageSignInMessage": "La cuenta de Claude seleccionada necesita que inicies sesión de nuevo. Abre Ajustes > Cuentas de proveedores de IA, o elige Predeterminado del sistema."
+      "usageSignInMessage": "Esta cuenta necesita que inicies sesión de nuevo."
     }
   },
   "agentHistory": {
@@ -4731,7 +4731,8 @@
       "skillLimit": "Mensaje no enviado. Selecciona como máximo {{limit}} archivos de habilidades e inténtalo de nuevo.",
       "ask": {
         "notSentYet": "aún no enviado",
-        "replaced": "El agente ha hecho una nueva pregunta. Léela y luego responde."
+        "replaced": "El agente ha hecho una nueva pregunta. Léela y luego responde.",
+        "replacedByNewer": "Sustituida por una pregunta más reciente"
       }
     },
     "needs": {

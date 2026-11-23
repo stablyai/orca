@@ -22,7 +22,7 @@
     },
     "claude": {
       "usageSignInLabel": "重新登录",
-      "usageSignInMessage": "所选 Claude 账户需要您重新登录，请打开设置 > AI 提供商账户，或选择系统默认"
+      "usageSignInMessage": "此账户需要您重新登录。"
     },
     "usage": {
       "percentLeft": "剩余 {{value}}%"
@@ -6831,7 +6831,8 @@
         "previous": "上一个问题",
         "step": "第 {{n}} 个，共 {{total}} 个",
         "next": "下一个问题",
-        "replaced": "智能体提出了新问题。请先阅读，再回复"
+        "replaced": "智能体提出了新问题。请先阅读，再回复",
+        "replacedByNewer": "已由较新的问题取代"
       },
       "write": {
         "unknown": "发送时连接中断，内容可能已经送达。重新连接后请先查看“活动”，再决定是否重新发送",
