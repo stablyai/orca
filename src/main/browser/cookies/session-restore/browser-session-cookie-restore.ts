@@ -247,6 +247,10 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
     await writeTrackedSnapshot(tracker, []).catch((error: unknown) =>
       console.warn('[browser-session-cookies] Save failed:', error)
     )
+    // Quit or a retirement may have started meanwhile: its own write must not queue behind a read.
+    if (quitting || trackers.get(tracker.filePath) !== tracker) {
+      return
+    }
   }
   if (!canSealSessionCookies()) {
     return

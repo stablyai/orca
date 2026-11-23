@@ -319,6 +319,29 @@ describe('session cookie snapshot that a launch could not read', () => {
     expect((await launch()).jar.names()).toEqual([])
   })
 
+  it('quit makes the last removal without waiting on a retry that would read the jar', async () => {
+    const { jar, target, clear, restore } = await savedButUnread()
+    io.rmFailures = 1
+    await expect(clear.clearBrowserCookieJar(target)).rejects.toThrow('EBUSY')
+    let releaseRemoval = () => {}
+    io.rmHold = new Promise((resolve) => (releaseRemoval = resolve))
+    io.rmFailures = 1
+    // The timer's retry is now held in its removal, which will fail.
+    await vi.advanceTimersByTimeAsync(30_000)
+    const releaseReads = jar.holdReads()
+    const quit = restore.flushBrowserSessionCookiesOnQuit()
+    io.rmHold = null
+    releaseRemoval()
+
+    try {
+      // Settles with every jar read still held.
+      await quit
+      expect(existsSync(snapshotFile())).toBe(false)
+    } finally {
+      releaseReads()
+    }
+  })
+
   it('a full clear whose removal failed gets one last try at quit', async () => {
     const { target, clear, restore } = await savedButUnread()
     io.rmFailures = 1
