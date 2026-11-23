@@ -24,7 +24,8 @@ async function settleLifecycleCall(
 export async function activateWorktreeFromSidebar(
   worktreeId: string,
   executionHostId?: ExecutionHostId,
-  options?: { revealInSidebar?: boolean }
+  /** `providesInitialSurface`: the caller opens the first tab itself, so an empty workspace is not seeded with the default one. */
+  options?: { revealInSidebar?: boolean; providesInitialSurface?: true }
 ): Promise<void> {
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
@@ -39,6 +40,7 @@ export async function activateWorktreeFromSidebar(
   activateAndRevealWorktree(worktreeId, {
     navigationIntent: 'user-open',
     revealInSidebar: false,
+    ...(options?.providesInitialSurface ? { providesInitialSurface: true } : {}),
     ...(executionHostId ? { executionHostId } : {})
   })
 

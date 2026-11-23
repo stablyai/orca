@@ -29,7 +29,10 @@ export async function launchConversationInAgentTaskGroup(args: {
     )
     return
   }
-  await activateWorktreeFromSidebar(args.worktreeId, args.executionHostId)
+  // The launch below is the first tab; without this an empty workspace also opened its default chat.
+  await activateWorktreeFromSidebar(args.worktreeId, args.executionHostId, {
+    providesInitialSurface: true
+  })
   const outcome = launchAgentInNewTabWithOutcome({
     requestId: createNonSecureContextUuid(),
     agent,
