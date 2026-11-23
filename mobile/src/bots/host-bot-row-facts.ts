@@ -39,6 +39,8 @@ export type MobileBotRowFacts = {
   dot: BotRowStatus
   /** A folded row's glyph: its most urgent live workspace. */
   foldLive: ReturnType<typeof botFoldLiveStatus>
+  /** Its home's and workers' workspace ids, whose sessions' usage-limit stops its line says. */
+  workspaceIds: readonly string[]
   /** New Up next suggestions, counted apart from unread. */
   upNext?: number
   /** What its line reads beside the home's agent rows: its Chat, its threads' links, its waits. */

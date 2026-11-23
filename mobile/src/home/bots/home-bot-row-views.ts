@@ -10,6 +10,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../src/shared/execution-host/execution-host'
+import type { BotRowLine } from '../../../../src/shared/bots/bot-row-line'
 import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import type { WorktreeStatus } from '../../../../src/shared/worktree/row-display/worktree-status-rollup'
 import { agentStatusGroup, listedAgentVerdict } from '../../agents/agent-list-rows'
@@ -57,7 +58,13 @@ export type HomeRowBase = {
 
 /** A bot, or a group room as the computer's Bots list shows it among its bots. */
 export type HomeBotRow =
-  | (HomeRowBase & { kind: 'bot'; bot: PhoneBot; dot: BotRowStatus | null })
+  | (HomeRowBase & {
+      kind: 'bot'
+      bot: PhoneBot
+      dot: BotRowStatus | null
+      /** What `preview` says, which a usage-limit stop takes the place of while it is quiet. */
+      line: BotRowLine | null
+    })
   | (HomeRowBase & {
       kind: 'group'
       group: BotGroup
@@ -164,6 +171,7 @@ export function botRow(
     title: bot.name,
     bot,
     dot: botDot(agents, bot.paused, now),
+    line,
     preview: line ? mobileBotRowLineText(line, now) : '',
     age: lineAt === null ? null : formatTimeAgo(lineAt, now),
     unread: agents.some((entry) => listedAgentVerdict(entry.agent)?.unread === true),
@@ -239,7 +247,8 @@ export function keptRows(
       ...kept(`${place.placeKey}\nbot:${bot.id}`, bot.name),
       kind: 'bot',
       bot,
-      dot: null
+      dot: null,
+      line: null
     })),
     ...groups.map((group): HomeBotRow => ({
       ...kept(`${place.placeKey}\ngroup:${group.id}`, group.name),

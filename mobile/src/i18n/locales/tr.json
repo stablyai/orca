@@ -5166,6 +5166,10 @@
       "today": "bugün",
       "yesterday": "dün",
       "lastTidied": "son toparlama {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "{{time}} saatinde devam eder",
+      "hitLimit": "Limite ulaşıldı · {{time}} saatinde sıfırlanır"
     }
   },
   "sidebar": {

@@ -5388,6 +5388,10 @@
       "today": "сегодня",
       "yesterday": "вчера",
       "lastTidied": "последняя уборка {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Продолжит в {{time}}",
+      "hitLimit": "Лимит исчерпан · сброс в {{time}}"
     }
   },
   "sidebar": {

@@ -5247,6 +5247,10 @@
       "today": "今日",
       "yesterday": "昨日",
       "lastTidied": "最後の整理 {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "{{time}} に再開",
+      "hitLimit": "上限に到達 · {{time}} にリセット"
     }
   },
   "sidebar": {

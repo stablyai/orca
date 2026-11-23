@@ -5584,6 +5584,10 @@
       "today": "오늘",
       "yesterday": "어제",
       "lastTidied": "마지막 정리 {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "{{time}}에 계속",
+      "hitLimit": "한도 도달 · {{time}}에 초기화"
     }
   },
   "sidebar": {
