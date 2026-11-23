@@ -212,6 +212,22 @@ export function noteStreamedTextDerivation<P extends readonly object[]>(
   return derived
 }
 
+/** Links `next`, a copy of `from` whose entries changed only in streamed text, as a projection
+ *  of `from` and as revised in place at the entries it replaced. */
+export function noteStreamedTextRevisedList<P extends readonly object[]>(next: P, from: P): P {
+  if (next !== from && next.length === from.length) {
+    textOnlyProjections.set(next, textOnlyProjections.get(from) ?? from)
+    const at: number[] = []
+    next.forEach((entry, index) => {
+      if (entry !== from[index]) {
+        at.push(index)
+      }
+    })
+    noteRevisedInPlace(next, from, at)
+  }
+  return next
+}
+
 /** A projection to give a consumer that never reads streamed text: the same list across a stream's
  *  text revisions, so its memo holds while a reply streams. */
 export function projectionBesideStreamedText<P extends readonly object[]>(projected: P): P {

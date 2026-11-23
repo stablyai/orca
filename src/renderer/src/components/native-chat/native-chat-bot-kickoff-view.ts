@@ -61,7 +61,7 @@ export function useNativeChatBotKickoffView(
     () =>
       live
         ? nativeChatFirstScreen(
-            messages,
+            structure,
             turnEnded,
             refusedReason === null
               ? null
@@ -78,7 +78,7 @@ export function useNativeChatBotKickoffView(
         : null,
     [
       live,
-      messages,
+      structure,
       turnEnded,
       refusedReason,
       refusedDetail,

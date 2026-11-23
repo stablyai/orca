@@ -47,7 +47,8 @@ export function NativeChatSubagentViewBar({
     () => nativeChatSubagentSwitcherItems(entries, subagentRows, unnamed),
     [entries, subagentRows, unnamed]
   )
-  const labelOf = (id: string): string => items.find((item) => item.id === id)?.label ?? unnamed
+  const labels = useMemo(() => new Map(items.map((item) => [item.id, item.label])), [items])
+  const labelOf = (id: string): string => labels.get(id) ?? unnamed
   const agentId = chain.at(-1)!
   const entry = entries.get(agentId)
   const state = entry ? normalizeSubagentState(entry.state) : null

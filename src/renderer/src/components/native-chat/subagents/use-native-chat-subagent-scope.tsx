@@ -37,6 +37,7 @@ import { NativeChatSubagentPrompt } from './NativeChatSubagentPrompt'
 import { nativeChatSubagentHandoff } from './native-chat-subagent-handoff'
 import {
   projectionBesideStreamedText,
+  noteStreamedTextRevisedList,
   rowsBesideStreamedText,
   stageBesideStreamedText
 } from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
@@ -147,9 +148,15 @@ export function useNativeChatSubagentScope({
     () => (agentId === null ? NO_MESSAGES : subagentOwnRows(savedOwnRows)),
     [agentId, savedOwnRows]
   )
+  // Its own reply streaming revises only text, so every stage that reads none holds on the saved rows.
   const own = useMemo(
-    () => (agentId === null ? NO_MESSAGES : subagentOwnRows(ownRows)),
-    [agentId, ownRows]
+    () =>
+      agentId === null
+        ? NO_MESSAGES
+        : ownRows === savedOwnRows
+          ? savedOwn
+          : noteStreamedTextRevisedList(subagentOwnRows(ownRows), savedOwn),
+    [agentId, ownRows, savedOwn, savedOwnRows]
   )
   const endingKey = useMemo(
     () =>
@@ -183,8 +190,14 @@ export function useNativeChatSubagentScope({
   )
   // Apart from the conversation, so the parent's live text leaves a subagent's view as it was.
   const ownMessages = useMemo(
-    () => (endingRow === null ? own : [...own, endingRow]),
-    [endingRow, own]
+    () =>
+      agentId !== null && own === savedOwn
+        ? savedMessages
+        : noteStreamedTextRevisedList(
+            endingRow === null ? own : [...own, endingRow],
+            savedMessages
+          ),
+    [agentId, endingRow, own, savedMessages, savedOwn]
   )
   const messages = agentId === null ? conversation : ownMessages
   const heads = useMemo(
@@ -227,7 +240,7 @@ export function useNativeChatSubagentScope({
         <NativeChatSubagentViewBar
           chain={chain}
           entries={entries}
-          subagentRows={subagentRows}
+          subagentRows={subagentStructure}
           onOpen={open}
         />
       ) : null,

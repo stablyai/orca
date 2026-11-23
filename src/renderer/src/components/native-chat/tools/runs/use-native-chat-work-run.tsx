@@ -10,6 +10,7 @@ import {
 } from '../../../../../../shared/native-chat/transcript/folding/native-chat-work-run'
 import { NativeChatReasoningRow } from '../../messages/reasoning/NativeChatReasoningRow'
 import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
+import { positionsRevisedFrom } from '../../../../../../shared/agent-session/view/revised-in-place-lists'
 import type { NativeChatToolRunAsides } from './NativeChatToolRun'
 import type { NativeChatDiffReveal } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
 
@@ -51,13 +52,27 @@ export function useNativeChatWorkRunStreamed(
   members: readonly NativeChatMessage[] | undefined
 ): ReadonlyMap<string, NativeChatMessage> | null {
   return useMemo(() => {
-    const laidOut = members && stageBesideStreamedText(members)
-    if (!members || laidOut === members) {
+    if (!members) {
+      return null
+    }
+    const laidOut = stageBesideStreamedText(members)
+    if (laidOut === members) {
       return null
     }
     const streamed = new Map<string, NativeChatMessage>()
+    // A revision patched in place names its changed members, so a long run isn't walked each frame.
+    const at = positionsRevisedFrom(members, laidOut)
+    if (at) {
+      for (const index of at) {
+        const member = members[index]
+        if (member && member !== laidOut[index]) {
+          streamed.set(member.id, member)
+        }
+      }
+      return streamed
+    }
     members.forEach((member, index) => {
-      if (member !== laidOut![index]) {
+      if (member !== laidOut[index]) {
         streamed.set(member.id, member)
       }
     })

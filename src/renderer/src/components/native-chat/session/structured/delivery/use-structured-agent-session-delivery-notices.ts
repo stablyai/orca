@@ -65,12 +65,18 @@ function useCommandItemIds(
   )
   const previousRef = useRef(ids)
   const previous = previousRef.current
-  const stable =
-    previous.size === ids.size && [...ids].every((id) => previous.has(id)) ? previous : ids
+  const stable = sameIds(previous, ids) ? previous : ids
   useEffect(() => {
     previousRef.current = stable
   }, [stable])
   return stable
+}
+
+// The memo holds while only a reply streams, so the same set skips comparing its ids.
+function sameIds(previous: ReadonlySet<string>, ids: ReadonlySet<string>): boolean {
+  return (
+    previous === ids || (previous.size === ids.size && [...ids].every((id) => previous.has(id)))
+  )
 }
 
 /** Reuse equivalent prior notices and the whole prior map when every entry matches. */
