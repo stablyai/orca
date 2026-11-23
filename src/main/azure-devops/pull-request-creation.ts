@@ -23,6 +23,11 @@ import {
 import { getAzureDevOpsPullRequestForBranch } from './client'
 import { mapAzureDevOpsPullRequest, type RawAzureDevOpsPullRequest } from './pull-request-mappers'
 import { getAzureDevOpsRepoRef, type AzureDevOpsRepoRef } from './repository-ref'
+import {
+  azureDevOpsTokenCommand,
+  cachedAzureDevOpsCommandToken,
+  ensureAzureDevOpsCommandToken
+} from './azure-devops-token-command'
 
 const CREATE_REQUEST_TIMEOUT_MS = 60_000
 
@@ -39,7 +44,10 @@ function envValue(name: string): string | null {
 
 function getAuthConfig(): AzureDevOpsCreateAuthConfig {
   return {
-    pat: envValue('ORCA_AZURE_DEVOPS_TOKEN') ?? envValue('ORCA_AZURE_DEVOPS_PAT'),
+    pat:
+      envValue('ORCA_AZURE_DEVOPS_TOKEN') ??
+      envValue('ORCA_AZURE_DEVOPS_PAT') ??
+      cachedAzureDevOpsCommandToken(),
     accessToken: envValue('ORCA_AZURE_DEVOPS_ACCESS_TOKEN'),
     username: envValue('ORCA_AZURE_DEVOPS_USERNAME')
   }
@@ -47,7 +55,8 @@ function getAuthConfig(): AzureDevOpsCreateAuthConfig {
 
 export function isAzureDevOpsReviewCreationAuthenticated(): boolean {
   const config = getAuthConfig()
-  return Boolean(config.pat || config.accessToken)
+  // A configured token command counts before its first run; the request reports a failed lookup.
+  return Boolean(config.pat || config.accessToken || azureDevOpsTokenCommand())
 }
 
 function authHeaders(config: AzureDevOpsCreateAuthConfig): Record<string, string> {
@@ -230,6 +239,7 @@ export async function createAzureDevOpsPullRequest(
     ...(input.draft ? { isDraft: true } : {})
   }
 
+  await ensureAzureDevOpsCommandToken()
   try {
     const raw = await requestCreatePullRequest(
       repo,

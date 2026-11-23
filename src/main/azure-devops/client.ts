@@ -20,6 +20,7 @@ import {
   requestAzureDevOpsJson,
   requestAzureDevOpsJsonAtBase
 } from './azure-devops-api-request'
+import { ensureAzureDevOpsCommandToken } from './azure-devops-token-command'
 export { normalizeAzureDevOpsApiBaseUrl } from './azure-devops-api-request'
 
 export type AzureDevOpsAuthStatus = {
@@ -142,6 +143,7 @@ function sortPullRequestsForBranch(
 }
 
 export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus> {
+  await ensureAzureDevOpsCommandToken()
   const config = getAzureDevOpsAuthConfig()
   const baseUrl = config.apiBaseUrl ? normalizeAzureDevOpsApiBaseUrl(config.apiBaseUrl) : null
   const hasToken = azureDevOpsTokenConfigured(config)
