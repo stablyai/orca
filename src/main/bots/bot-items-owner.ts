@@ -73,7 +73,6 @@ export class BotItemsOwner extends BotItemsWrites {
       if (
         question &&
         questionEventId !== undefined &&
-        question.id !== questionEventId &&
         !waiting.some(({ id }) => id === questionEventId)
       ) {
         throw new BotItemError(

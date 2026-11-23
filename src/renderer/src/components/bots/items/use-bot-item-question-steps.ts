@@ -14,6 +14,7 @@ import type {
   BotItemEvent
 } from '../../../../../shared/bots/bot-items'
 import {
+  botItemPickedReplies,
   botItemQuestionLine,
   type BotItemQuestionShape
 } from '../../../../../shared/bots/bot-item-ask'
@@ -73,7 +74,8 @@ export type BotItemQuestionSteps = {
 export type BotItemQuickReplyActions = {
   /** `askId`: the ask whose quick reply it is. */
   send: (text: string, askId: string) => void
-  edit: (text: string) => void
+  /** Into the box; `ask.named` names its question, for when the box replies to another ask's line. */
+  edit: (text: string, ask?: { askId: string; named: string }) => void
   /** Into the box as a comment of its own, answering no line: answers held for an earlier ask. */
   recover: (text: string) => void
   /** Type your answer: the comment box takes focus, glowing once. */
@@ -200,7 +202,10 @@ export function useBotItemQuestionSteps(
   const quick = useLatestHandler((text: string, quickAskId: string) => {
     const own = botItemQuestionPairing(item, events).questions.get(quickAskId)?.shape
     if (own) {
-      const answers = own.decisions.map((_, index) => botItemAnswerWords(own, index, { text }))
+      const picked = botItemPickedReplies(own, { text })
+      const answers = own.decisions.map((_, index) =>
+        picked[index]?.length ? botItemAnswerWords(own, index, { text }) : null
+      )
       setSent({ askId: quickAskId, text, answers })
     }
     send(text, [], quickAskId)

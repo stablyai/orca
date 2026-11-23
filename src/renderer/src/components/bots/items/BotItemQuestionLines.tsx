@@ -9,6 +9,7 @@ import { Pencil } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
+  botItemQuestionLine,
   botItemQuickReplyText,
   type BotItemQuestionShape
 } from '../../../../../shared/bots/bot-item-ask'
@@ -141,7 +142,10 @@ export function BotItemQuestionLines({
                       onClick={(event) => {
                         const text = botItemQuickReplyText(shape, decision, reply)
                         if (event.altKey || event.shiftKey) {
-                          actions.edit(text)
+                          actions.edit(text, {
+                            askId,
+                            named: `${botItemQuestionLine(decision.question)} → ${reply.label}`
+                          })
                         } else {
                           actions.send(text, askId)
                         }

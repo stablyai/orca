@@ -74,10 +74,10 @@ function answersAskedQuestions(text: string, asked: ReadonlySet<string>): boolea
 type OpenAsk = { id: string; entry: BotItemQuestionAnswers }
 type AnsweredLines = { ask: OpenAsk; lines: number[]; byOrder: boolean }
 
-/** The open asks' lines a reply answers, trying the ask it names first (the host names the one the
- *  comment box replies to: a quick reply's own, else the oldest waiting): a quick reply's words, a
- *  recorded answer, or the first open line by order. "Question → answer" lines go to every open ask
- *  asking that question. */
+/** The open asks' lines a reply answers. The host names the ask it answers (a quick reply's own, else
+ *  the oldest waiting, the one the comment box replies to): a quick reply's words and a recorded answer
+ *  answer only that ask, and a comment naming no line takes its first open line. "Question → answer"
+ *  lines go to every open ask asking that question. */
 function answeredLines(
   open: readonly OpenAsk[],
   reply: BotItemEvent,
@@ -97,7 +97,8 @@ function answeredLines(
   // A line read by order is open to a comment that names it.
   const isOpen = ({ answers, byOrder }: BotItemQuestionAnswers, index: number): boolean =>
     !answers[index] || byOrder[index] === true
-  for (const ask of asks) {
+  // Bare quick-reply words answer only the ask the reply names; an older host's names its current one.
+  for (const ask of named ? [named] : open) {
     const { shape } = ask.entry
     const picked = shape.decisions.findIndex(
       (decision, index) =>

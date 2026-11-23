@@ -256,13 +256,15 @@ export function BotItemBody({
         ? undefined
         : {
             send: quick,
-            edit: (text: string) => comment.current?.fill(text),
+            // A quick reply of an ask the box isn't replying to names its question, so it answers that one.
+            edit: (text: string, ask?: { askId: string; named: string }) =>
+              comment.current?.fill(ask && ask.askId !== waitingLine?.eventId ? ask.named : text),
             recover: (text: string) => comment.current?.fill(text, true),
             type: () => comment.current?.answer(),
             steps,
             sent
           },
-    [deleted, comment, quick, steps, sent]
+    [deleted, comment, quick, steps, sent, waitingLine?.eventId]
   )
   // The waiting question's comment, with its words and quick replies, is read even when it is older
   // than the loaded page: earlier pages load until it shows.
