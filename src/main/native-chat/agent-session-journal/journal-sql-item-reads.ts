@@ -125,7 +125,8 @@ export function readJournalDomainItems(
                 }
               : {})
           },
-          operation.itemIds
+          operation.itemIds,
+          operation.options
         )
       }
     }

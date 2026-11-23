@@ -7,7 +7,10 @@ import {
   usableJournalHistoryOrigin,
   type NativeCopyOrigin
 } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
-import { prepareJsonlTranscriptImport } from '../../native-chat/agent-session-journal/history-import/journal-jsonl-import'
+import {
+  MAX_LEGACY_IMPORT_RETAINED_BYTES,
+  prepareJsonlTranscriptImport
+} from '../../native-chat/agent-session-journal/history-import/journal-jsonl-import'
 import { stat } from 'node:fs/promises'
 import { ClaudeImportResourceError } from '../../native-chat/agent-session-journal/history-import/journal-claude-import-resource-error'
 import { readClaudeTranscriptFrontier } from './claude-transcript-tail'
@@ -69,6 +72,13 @@ export async function prepareClaudeTranscriptCapacityRecovery(
     sessionId: input.sessionId,
     recordId: continuedOutsideRecordId(`capacity:${input.providerSessionId}:${input.leafUuid}`)
   }
+  const notice = (skipped: number) => ({
+    identity: noticeIdentity,
+    // A passed-over record may be one of the newest turns.
+    body: continuedOutsideNotice(false, skipped ? 'unloaded' : 'recent'),
+    ownerFence: 0,
+    turnScope: { kind: 'thread' as const }
+  })
   const prepared = await prepareJsonlTranscriptImport({
     agent: 'claude',
     boundedClaude: true,
@@ -76,7 +86,17 @@ export async function prepareClaudeTranscriptCapacityRecovery(
     sessionId: input.providerSessionId,
     filePath: input.filePath,
     maxBytes: input.maxBytes,
-    signal
+    signal,
+    claudeRestore: {
+      budget: ({ sourceSkippedRecords }) =>
+        MAX_LEGACY_IMPORT_RETAINED_BYTES -
+        Buffer.byteLength(JSON.stringify(notice(sourceSkippedRecords))),
+      page: (items, remaining, checkTransfer) =>
+        keepSavedRecoveryText(items, history.reads, remaining, () => {
+          checkTransfer()
+          check()
+        })
+    }
   })
   check()
   if (!prepared.ok || !prepared.items.length) {
@@ -140,9 +160,7 @@ export async function prepareClaudeTranscriptCapacityRecovery(
       : undefined
     return batch.finish('claude-history-unloaded', input.physicalCursor, historyOrigin)
   }
-  const kept = await keepSavedRecoveryText(prepared.items, prepared.savedKeys, history.reads, check)
-  check()
-  const ids = kept.items.flatMap((item) =>
+  const ids = prepared.items.flatMap((item) =>
     item.identity.provider === 'claude' ? [item.identity.uuid] : []
   )
   const providerHandle = {
@@ -155,7 +173,6 @@ export async function prepareClaudeTranscriptCapacityRecovery(
     // The window includes array punctuation; IDs appear again in the origin, outside the items.
     reservedBytes:
       prepared.retainedBytes +
-      kept.addedBytes +
       ids.reduce((bytes, id) => bytes + Buffer.byteLength(JSON.stringify(id)) + 1, 0) +
       Buffer.byteLength(
         JSON.stringify({ providerHandle, noticeIdentity, sourceFrontier: prepared.sourceFrontier })
@@ -177,19 +194,7 @@ export async function prepareClaudeTranscriptCapacityRecovery(
         sourceConsumedBytes: prepared.sourceConsumedBytes,
         sourceMtimeMs: prepared.sourceMtimeMs
       },
-      items: [
-        ...kept.items,
-        {
-          identity: noticeIdentity,
-          // A passed-over record may be one of the newest turns, so the notice says newer turns are missing.
-          body: continuedOutsideNotice(
-            false,
-            prepared.sourceSkippedRecords ? 'unloaded' : 'recent'
-          ),
-          ownerFence: 0,
-          turnScope: { kind: 'thread' }
-        }
-      ]
+      items: [...prepared.items, notice(prepared.sourceSkippedRecords ?? 0)]
     }
   }
 }

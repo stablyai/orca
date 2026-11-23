@@ -2,6 +2,7 @@ import { mayBeClaudeConversationRecord } from '../../transcript-decoding/transcr
 import type { ClaudeImportScratchOptions } from './journal-claude-import-scratch'
 import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
 import { importClaudeTranscriptInWorker } from './journal-claude-import-worker'
+import type { ClaudeImportRestore } from './journal-claude-import-window'
 import { createImportedForkTip, observeOmpForkTip } from './imported-fork-tip'
 import {
   adoptedTranscriptSourceObserver,
@@ -34,7 +35,6 @@ export type PreparedLegacyImport =
       sourceConsumedBytes?: number
       sourceMtimeMs?: number
       sourceSkippedRecords?: number
-      savedKeys?: string[][]
     }
   // cause keeps a typed adoption refusal for the caller.
   | { ok: false; error: string; cause?: unknown }
@@ -77,6 +77,7 @@ async function decodeJsonlReplacementItems(input: {
   limits?: JournalPayloadLimits
   createCollector?: LegacyTranscriptCollectorFactory
   boundedClaude?: true
+  claudeRestore?: ClaudeImportRestore
   maxBytes?: number
   claudeScratch?: ClaudeImportScratchOptions
 }): Promise<{
@@ -88,24 +89,26 @@ async function decodeJsonlReplacementItems(input: {
   sourceConsumedBytes?: number
   sourceMtimeMs?: number
   sourceSkippedRecords?: number
-  savedKeys?: string[][]
 }> {
   if (input.transcriptAgent === 'claude') {
     try {
       // Only cloneable fields cross into the worker.
-      return await importClaudeTranscriptInWorker({
-        agent: input.agent,
-        filePath: input.filePath,
-        sessionId: input.sessionId,
-        signal: input.signal,
-        source: input.source,
-        limits: input.limits ?? LEGACY_IMPORT_BLOCK_LIMITS,
-        retainedBytes: MAX_LEGACY_IMPORT_RETAINED_BYTES,
-        bounded: input.boundedClaude,
-        maxBytes: input.maxBytes,
-        decodedMessageIdentities: input.decodedMessageIdentities,
-        scratch: input.claudeScratch
-      })
+      return await importClaudeTranscriptInWorker(
+        {
+          agent: input.agent,
+          filePath: input.filePath,
+          sessionId: input.sessionId,
+          signal: input.signal,
+          source: input.source,
+          limits: input.limits ?? LEGACY_IMPORT_BLOCK_LIMITS,
+          retainedBytes: MAX_LEGACY_IMPORT_RETAINED_BYTES,
+          bounded: input.boundedClaude,
+          maxBytes: input.maxBytes,
+          decodedMessageIdentities: input.decodedMessageIdentities,
+          scratch: input.claudeScratch
+        },
+        input.claudeRestore
+      )
     } catch (error) {
       // Without the spool a first open keeps the plain newest window; recovery keeps prior history.
       if (input.boundedClaude || !(error instanceof ClaudeImportResourceError)) {

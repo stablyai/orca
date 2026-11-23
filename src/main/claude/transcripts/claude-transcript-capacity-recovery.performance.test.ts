@@ -5,6 +5,7 @@ import { stat, utimes, writeFile } from 'node:fs/promises'
 import * as capacityRecovery from './claude-transcript-capacity-recovery'
 import * as transcriptTail from './claude-transcript-tail'
 import * as claudeImport from '../../native-chat/agent-session-journal/history-import/journal-claude-import'
+import * as payloadBounds from '../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import { catchUpClaudeTranscript } from './claude-transcript-catch-up'
 import { claudeSourceBlockId } from '../structured/journal/claude-streamed-block-identity'
 import '../../native-chat/agent-session-journal/history-import/journal-claude-import-worker.test-fixture'
@@ -406,4 +407,228 @@ it('reads and decodes a bounded recent window despite a large prefix', async () 
     uuid: 'newest',
     message: { content: 'Newest answer' }
   })
+})
+
+it('restores a saved batch over 16 MiB and replaces only the whole newest suffix', async () => {
+  const c = await chat('batch')
+  const rows: string[] = []
+  const whole = 'W'.repeat(600 * 1024)
+  for (let i = 0; i < 32; i++) {
+    const uuid = `answer-${i}`
+    rows.push(
+      JSON.stringify({
+        type: 'assistant',
+        uuid,
+        parentUuid: i ? `answer-${i - 1}` : null,
+        message: { content: whole }
+      })
+    )
+    await c.journal.appendItem(
+      { provider: 'claude', sessionId: PROVIDER, uuid },
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: whole }] },
+      { fence: 1, turnScope: { kind: 'thread' } }
+    )
+  }
+  await writeFile(c.filePath, `${rows.join('\n')}\n`)
+  const plan = await prepareCapacityRecovery(c)
+  expect(plan).toHaveProperty('kind', 'replace')
+  if (!('operation' in plan)) {
+    return
+  }
+  const { items, providerHandle, historyOrigin } = plan.operation
+  expect(items).toHaveLength(28)
+  expect(items.slice(0, -1).map(({ identity }) => identity)).toEqual(
+    Array.from({ length: 27 }, (_, i) => ({
+      provider: 'claude',
+      sessionId: PROVIDER,
+      uuid: `answer-${i + 5}`
+    }))
+  )
+  for (const { body } of items.slice(0, -1)) {
+    expect(body).toEqual({
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: whole }]
+    })
+  }
+  expect(items.at(-1)?.body).toMatchObject({ presentation: 'continued-outside-recent' })
+  expect(Buffer.byteLength(JSON.stringify(items))).toBeLessThanOrEqual(16 * 1024 * 1024)
+  expect(providerHandle).toMatchObject({ leafUuid: 'answer-31' })
+  expect(historyOrigin).toMatchObject({
+    ids: Array.from({ length: 27 }, (_, i) => `answer-${i + 5}`),
+    sourceFrontier: 'answer-31',
+    sourceConsumedBytes: (await stat(c.filePath)).size
+  })
+})
+
+it('restores whole standalone and embedded tool inputs within their saved call', async () => {
+  const c = await chat('batch')
+  const toolInput = { path: 'file.txt', content: '\\"é'.repeat(16_000) }
+  const call = (id: string) => ({ type: 'tool_use', id, name: 'Write', input: toolInput })
+  const source = [
+    { uuid: 'standalone', parentUuid: null, content: [call('single-call')] },
+    {
+      uuid: 'mixed',
+      parentUuid: 'standalone',
+      content: [{ type: 'text', text: 'Writing the file' }, call('mixed-call'), call('other-call')]
+    }
+  ]
+  const rows = source.map(({ uuid, parentUuid, content }) =>
+    JSON.stringify({
+      type: 'assistant',
+      uuid,
+      parentUuid,
+      sessionId: PROVIDER,
+      message: { role: 'assistant', id: uuid, content }
+    })
+  )
+  await writeFile(c.filePath, `${rows.join('\n')}\n`)
+  for (const [uuid, callId] of [
+    ['standalone', 'single-call'],
+    ['mixed', 'mixed-call']
+  ]) {
+    await c.journal.appendItem(
+      { provider: 'claude', sessionId: PROVIDER, uuid: uuid! },
+      { kind: 'tool-call', callId, name: 'Write', input: toolInput, state: 'completed' },
+      { fence: 1, turnScope: { kind: 'thread' } }
+    )
+  }
+  const plan = await prepareCapacityRecovery(c)
+  expect('operation' in plan && plan.operation.items.map(({ body }) => body)).toEqual([
+    {
+      kind: 'tool-call',
+      callId: 'single-call',
+      name: 'Write',
+      input: toolInput,
+      state: 'completed'
+    },
+    {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [
+        { type: 'text', text: 'Writing the file' },
+        { type: 'tool-call', callId: 'mixed-call', name: 'Write', input: toolInput },
+        {
+          type: 'tool-call',
+          callId: 'other-call',
+          name: 'Write',
+          input: expect.objectContaining({ truncated: true })
+        }
+      ]
+    },
+    expect.objectContaining({ presentation: 'continued-outside-recent' })
+  ])
+})
+
+it('keeps prior history and leaves the source uncertified when a saved row cannot be read alone', async () => {
+  const c = await chat('batch')
+  const text = 'whole'.repeat(240_000)
+  await writeFile(
+    c.filePath,
+    `${JSON.stringify({
+      type: 'assistant',
+      uuid: 'new-answer',
+      parentUuid: 'old-leaf',
+      message: { content: text }
+    })}\n`
+  )
+  await c.journal.appendItem(
+    { provider: 'claude', sessionId: PROVIDER, uuid: 'new-answer' },
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] },
+    { fence: 1, turnScope: { kind: 'thread' } }
+  )
+  await catchUpClaudeTranscript({
+    sessionId: SESSION,
+    providerSessionId: PROVIDER,
+    leafUuid: 'old-leaf',
+    claudeConfigDir: c.config,
+    cwd: c.cwd,
+    sink: c.deferred.sink,
+    mode: 'recovery'
+  })
+  expect((await c.items()).map(({ body }) => body)).toEqual([
+    expect.objectContaining({ kind: 'turn' }),
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'old answer' }] },
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] },
+    expect.objectContaining({ presentation: 'continued-outside-unloaded' })
+  ])
+  expect(await c.journal.reads.historyOrigin()).toBeNull()
+})
+
+it('keeps the prior epoch if the newest item cannot fit whole', async () => {
+  const c = await chat('batch')
+  const content = Array.from({ length: 540 }, (_, index) => ({
+    type: 'tool_use',
+    id: `call-${index}`,
+    name: 'Write',
+    input: { content: '\\'.repeat(8_300) }
+  }))
+  await writeFile(
+    c.filePath,
+    `${JSON.stringify({
+      type: 'assistant',
+      uuid: 'new-answer',
+      parentUuid: 'old-leaf',
+      message: { role: 'assistant', content }
+    })}\n`
+  )
+  await catchUpClaudeTranscript({
+    sessionId: SESSION,
+    providerSessionId: PROVIDER,
+    leafUuid: 'old-leaf',
+    claudeConfigDir: c.config,
+    cwd: c.cwd,
+    sink: c.deferred.sink,
+    mode: 'recovery'
+  })
+  expect((await c.items()).map(({ body }) => body)).toEqual([
+    expect.objectContaining({ kind: 'turn' }),
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'old answer' }] },
+    expect.objectContaining({ presentation: 'continued-outside-unloaded' })
+  ])
+})
+
+async function prepareCapacityRecovery(c: Awaited<ReturnType<typeof chat>>) {
+  const signal = new AbortController().signal
+  return await capacityRecovery.prepareClaudeTranscriptCapacityRecovery(
+    {
+      sessionId: SESSION,
+      providerSessionId: PROVIDER,
+      leafUuid: 'old-leaf',
+      filePath: c.filePath,
+      physicalCursor: await c.journal.reads.physicalCursor()
+    },
+    { history: c.journal, signal, check: () => signal.throwIfAborted(), warn: () => {} }
+  )
+}
+
+// PR #45200: equal-length saved blocks must not rehash the earlier candidates for each match.
+it('hashes 512 equal-length saved blocks once each', async () => {
+  const c = await chat('batch')
+  const rows: string[] = []
+  for (let row = 0; row < 16; row++) {
+    const uuid = `blocks-${row}`
+    const blocks = Array.from({ length: 32 }, (_, index) => ({
+      type: 'text' as const,
+      text: String(index).padStart(2, '0') + 'x'.repeat(20 * 1024 - 2)
+    }))
+    rows.push(
+      JSON.stringify({
+        type: 'assistant',
+        uuid,
+        parentUuid: row ? `blocks-${row - 1}` : null,
+        message: { role: 'assistant', content: blocks }
+      })
+    )
+    await c.journal.appendItem(
+      { provider: 'claude', sessionId: PROVIDER, uuid },
+      { kind: 'message', role: 'assistant', blocks },
+      { fence: 1, turnScope: { kind: 'thread' } }
+    )
+  }
+  await writeFile(c.filePath, `${rows.join('\n')}\n`)
+  const digest = vi.spyOn(payloadBounds, 'digestPayload')
+  const plan = await prepareCapacityRecovery(c)
+  expect('operation' in plan && plan.operation.items).toHaveLength(17)
+  expect(digest).toHaveBeenCalledTimes(512)
 })
