@@ -1,8 +1,14 @@
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
-import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
+import type { Translate } from '@/i18n/use-translate'
+import {
+  buildNativeChatTranscript,
+  type NativeChatTranscriptSlot
+} from './native-chat-transcript-slots'
+import { nativeChatMessageSlotHeight } from './native-chat-message-slot-height'
+import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
 
-/** Where each row is drawn: a slot's own row by its index, a run or note member as -1. */
+/** Where each row is drawn: a slot's own row by its index; a run or note cluster's rows as -1. */
 const slotIndexes = new WeakMap<readonly NativeChatTranscriptSlot[], Map<string, number>>()
 
 function slotIndexById(slots: readonly NativeChatTranscriptSlot[]): Map<string, number> {
@@ -13,10 +19,10 @@ function slotIndexById(slots: readonly NativeChatTranscriptSlot[]): Map<string, 
       if (slot.kind !== 'message') {
         continue
       }
-      for (const member of [...(slot.workRun ?? []), ...(slot.itemNotes ?? [])]) {
-        index.set(member.id, -1)
-      }
-      index.set(slot.message.id, at)
+      // A cluster draws its members (its head included) from its own list, which a patch can't reach.
+      const members = [...(slot.workRun ?? []), ...(slot.itemNotes ?? [])]
+      index.set(slot.message.id, members.length > 0 ? -1 : at)
+      members.forEach((member) => index!.set(member.id, -1))
     }
     slotIndexes.set(slots, index)
   }
@@ -51,21 +57,22 @@ function sameBesideText(saved: NativeChatMessage, current: NativeChatMessage): b
 }
 
 /**
- * Slots built from the rows as of their last save, with each streaming row's current message in
- * its slot, so a live window rebuilds no transcript structure. Null when a streamed row would
- * draw differently (its first words, an image), which needs a full build.
+ * Slots built from `built` with each streaming row's current message in its slot, so a live
+ * window rebuilds no transcript structure. Null when a streamed row would draw differently (its
+ * first words, an image) or is drawn inside a cluster, which needs a full build.
  */
 export function withStreamedRows(
   slots: readonly NativeChatTranscriptSlot[],
-  saved: readonly NativeChatMessage[],
-  rows: readonly NativeChatMessage[]
+  built: readonly NativeChatMessage[],
+  rows: readonly NativeChatMessage[],
+  typography?: NativeChatTranscriptSlotsInput['typography']
 ): NativeChatTranscriptSlot[] | null {
-  if (saved.length !== rows.length) {
+  if (built.length !== rows.length) {
     return null
   }
   let next: NativeChatTranscriptSlot[] | undefined
   for (const [index, current] of rows.entries()) {
-    const before = saved[index]!
+    const before = built[index]!
     if (before === current) {
       continue
     }
@@ -78,12 +85,50 @@ export function withStreamedRows(
       continue
     }
     const slot = slots[at]
-    // A row drawn inside another's slot, or combined with others, is built again.
     if (slot?.kind !== 'message' || slot.message !== before) {
       return null
     }
+    // Its own estimate moves with its text; joins and hanging controls only offset it.
+    const grown =
+      nativeChatMessageSlotHeight(current, slot, typography) -
+      nativeChatMessageSlotHeight(before, slot, typography)
     next ??= slots.slice()
-    next[at] = { ...slot, message: current }
+    next[at] = { ...slot, message: current, estimatedHeight: slot.estimatedHeight + grown }
   }
   return next ?? (slots as NativeChatTranscriptSlot[])
+}
+
+type Built = ReturnType<typeof buildNativeChatTranscript>
+
+/** One transcript's slots across live windows: built once from its saved rows, then patched with
+ *  each window's streamed rows. A full build its streamed rows needed is kept as the next base,
+ *  so later windows patch from it instead of building again. */
+export function createNativeChatStreamedTranscript(): (
+  input: Omit<NativeChatTranscriptSlotsInput, 'messages'>,
+  saved: readonly NativeChatMessage[],
+  rows: readonly NativeChatMessage[],
+  t?: Translate
+) => Built {
+  let base: {
+    input: Omit<NativeChatTranscriptSlotsInput, 'messages'>
+    saved: readonly NativeChatMessage[]
+    rows: readonly NativeChatMessage[]
+    built: Built
+  } | null = null
+  return (input, saved, rows, t) => {
+    if (!base || base.input !== input || base.saved !== saved) {
+      base = {
+        input,
+        saved,
+        rows: saved,
+        built: buildNativeChatTranscript({ ...input, messages: saved }, t)
+      }
+    }
+    const slots = withStreamedRows(base.built.slots, base.rows, rows, input.typography)
+    if (slots) {
+      return { ...base.built, slots }
+    }
+    base = { input, saved, rows, built: buildNativeChatTranscript({ ...input, messages: rows }, t) }
+    return base.built
+  }
 }

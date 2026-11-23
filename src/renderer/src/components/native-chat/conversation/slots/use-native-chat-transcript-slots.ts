@@ -9,13 +9,10 @@ import {
   type NativeChatLiveLine
 } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-live-line'
 import { isNativeChatRowInLiveWorkingTurn } from '../../../../../../shared/native-chat/transcript/turns/native-chat-live-turn-membership'
-import {
-  buildNativeChatTranscript,
-  type NativeChatTranscriptSlot
-} from './native-chat-transcript-slots'
+import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatSideChatForkPoint } from '../../messages/actions/native-chat-side-chat-fork-point'
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
-import { withStreamedRows } from './native-chat-transcript-streamed-slots'
+import { createNativeChatStreamedTranscript } from './native-chat-transcript-streamed-slots'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { useNativeChatWorkers } from '../../native-chat-workers-context'
 import {
@@ -139,14 +136,11 @@ export function useNativeChatTranscriptSlots({
       unresolvedRowIds
     ]
   )
-  const built = useMemo(
-    () => buildNativeChatTranscript({ ...buildInput, messages: saved }),
-    [buildInput, saved]
+  const [streamedTranscript] = useState(createNativeChatStreamedTranscript)
+  const { slots, forkPoint, quietTurnKeys } = useMemo(
+    () => streamedTranscript(buildInput, saved, messages),
+    [streamedTranscript, buildInput, saved, messages]
   )
-  const { slots, forkPoint, quietTurnKeys } = useMemo(() => {
-    const slots = withStreamedRows(built.slots, saved, messages)
-    return slots ? { ...built, slots } : buildNativeChatTranscript({ ...buildInput, messages })
-  }, [built, buildInput, saved, messages])
   useNativeChatQuietTurnLeave({
     quietTurnKeys,
     liveTurnKey,

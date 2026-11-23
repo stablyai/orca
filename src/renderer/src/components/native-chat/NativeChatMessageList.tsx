@@ -6,7 +6,6 @@ import { NativeChatNewRowsAnnouncement } from './viewport/new-rows/NativeChatNew
 import { useNativeChatNewRowsMarker } from './viewport/new-rows/native-chat-new-rows-marker'
 import { useNativeChatRowTypography } from './viewport/virtualization/use-native-chat-row-typography'
 import { useNativeChatShownRows } from './conversation/slots/use-native-chat-shown-rows'
-import { projectionBesideStreamedText } from '../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { nativeChatShowsTurnDiffSummary } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
@@ -171,7 +170,7 @@ export function NativeChatMessageList({
   // Pending/failed reads cannot page; recovery remounts the sentinel to recheck its range.
   const showOlderHistory = hasMore && session.readPhase === 'ready' && scope.pagesHistory
   // Ids never change with a reply's text, so the set holds while one streams.
-  const savedMessages = projectionBesideStreamedText(messages)
+  const savedMessages = turnRows.structureMessages ?? messages
   const loadedMessageIds = useMemo(
     () => new Set(savedMessages.map(({ id }) => id)),
     [savedMessages]
