@@ -1,5 +1,6 @@
 import { asRecord } from '../../../ai-vault/parsing/session-record-fields'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
+import { readClaudeTaskNotification } from '../../../../shared/agent-hook-listener/providers/claude/background-tasks/claude-task-notification-text'
 
 export function withClaudeConversationContent(
   handle: ClaudeJournalTranslator['handle']
@@ -35,6 +36,25 @@ export function isClaudeTaskNotificationTurnStart(frame: Record<string, unknown>
     frame.isSynthetic !== true &&
     frame.isCompactSummary !== true
   )
+}
+
+/** The task a delivered notification names: Claude woke for that task's finish (or Monitor event). */
+export function claudeTaskNotificationWake(
+  frame: Record<string, unknown>,
+  envelope: { content: readonly unknown[] }
+): string | null {
+  if (!isClaudeTaskNotificationTurnStart(frame)) {
+    return null
+  }
+  for (const part of envelope.content) {
+    const block = asRecord(part)
+    const text = block?.type === 'text' && typeof block.text === 'string' ? block.text.trim() : ''
+    const notification = text ? readClaudeTaskNotification(text) : null
+    if (notification) {
+      return notification.taskId
+    }
+  }
+  return null
 }
 
 /** Resume repair text is not conversation; semantic siblings still take their normal paths. */

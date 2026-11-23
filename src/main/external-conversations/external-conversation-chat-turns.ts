@@ -8,7 +8,7 @@ import type { LinkedConversation } from './external-conversation-links'
 import { conversationPane } from './external-conversation-types'
 import { isConversationReport } from './external-conversation-turn-opener'
 import { ToldWorkLinks } from './external-conversation-told-work-links'
-import { settleWake, wokenTurn } from './external-conversation-wake-answers'
+import { orcaSteered, settleWake, wokenTurn } from './external-conversation-wake-answers'
 import { ConversationWorkers } from './external-conversation-workers'
 import type { ChatTurnsDeps } from './external-conversation-chat-turns-deps'
 import {
@@ -267,14 +267,21 @@ export class ChatTurns {
     if (shared && !heard) {
       return
     }
+    const heardSoFar = heard
     void news.readTurn().then(async (turn) => {
       // Mail finishing what its conversation asked (its workers' reports, another bot's answer to its
       // request) woke the chat, so the answer goes back there; other mail is answered in Orca.
       const opener = turn.opener ?? turn.latestOpener
       const reported =
         origin === 'local' && !shared && Boolean(opener && isConversationReport(opener.body))
-      const children = shared ? [] : this.deps.childWork(linked.link.sessionId)
-      const woken = origin === 'local' && !shared && wokenTurn(turn, linked.link, children)
+      const woken = origin === 'local' && !shared && wokenTurn(turn, linked.link)
+      // A wake-up someone in Orca steered into is theirs, though the thread saw it start.
+      const steeredWake =
+        origin === 'local' &&
+        !reported &&
+        turn.wake?.steered === true &&
+        orcaSteered(linked.link, ended.turnId)
+      const heard = heardSoFar && !steeredWake
       if (!shared) {
         const answered = heard || reported || woken
         settleWake(this.deps, linked, { answered, startedAt: ended.turnId, endedAt: news.at })
@@ -289,8 +296,11 @@ export class ChatTurns {
       const words = legacyTurnWords(turn, linked.link, replied, reply)
       if (!heard && !reported && !woken) {
         // No one in the thread asked: a bot's turn Orca raised tells how it went, never what it said.
-        if (linked.link.bot && promptRaisedBy(linked.link, turn.opener ?? null) === 'orca') {
-          endAdoptedTurn(end, this.deps.promptsAudience, turn)
+        if (
+          steeredWake ||
+          (linked.link.bot && promptRaisedBy(linked.link, turn.opener ?? null) === 'orca')
+        ) {
+          endAdoptedTurn(end, () => steeredWake || this.deps.promptsAudience(), turn)
         }
         return
       }

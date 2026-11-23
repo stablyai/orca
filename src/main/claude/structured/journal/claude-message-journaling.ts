@@ -37,6 +37,7 @@ import {
   type ClaudeTurnSource
 } from '../turns/claude-turn-opening'
 import type { ClaudeOpenTurn } from '../turns/claude-open-turn'
+import { claudeTaskNotificationWake } from './claude-internal-message-content'
 import type { ClaudeAssistantFailures } from './claude-assistant-failures'
 import type { ClaudeUsageLimits } from './claude-usage-limits'
 import type { ClaudeThreadGoal } from './claude-thread-goal'
@@ -90,6 +91,10 @@ export function journalClaudeMessage(
     return false
   }
   let changed = false
+  const wake = claudeTaskNotificationWake(message, envelope)
+  if (wake) {
+    ctx.turn.wakes.observe(wake, ctx.turn.isOpen)
+  }
   const results = claudeToolResults(envelope)
   // Tool results belong to their caller, including child callers; preserve its reference for later corrections.
   // Other rows belong to the envelope producer so child output cannot become root activity.

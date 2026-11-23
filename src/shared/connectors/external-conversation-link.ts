@@ -74,10 +74,10 @@ export type ExternalConversationLink = {
    *  didn't ask for that turn; kept so a restarted watch still tells only its state, never its words.
    *  Cleared at that turn's end. */
   adoptedTurn?: { itemId: string; at: number }
-  /** Background tasks (child work ids) its conversation's own turns started that still run, and when
-   *  the chat's last turn ended: a turn their finishing wakes answers the conversation too.
-   *  Main-process data: clients ignore it. */
-  wakeAnswers?: { tasks: string[]; at: number }
+  /** Provider task ids of background work its conversation's own turns started that still runs: a
+   *  turn only their notifications wake answers the conversation too. Main-process data: clients
+   *  ignore it. */
+  wakeAnswers?: { tasks: string[] }
   /** When someone in Orca last steered a message into the chat's running turn: that turn's tasks are
    *  theirs, never the conversation's. Main-process data: clients ignore it. */
   orcaJoinedAt?: number

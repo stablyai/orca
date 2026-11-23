@@ -1,10 +1,7 @@
 import type { AgentJournalBotMessageFields } from './agent-journal-bot-message-fields'
 import type { AgentJournalTypedBy } from './agent-journal-typed-by'
 import type { AgentSessionForkedFromMark } from '../conversation-naming/agent-session-fork-name'
-import type {
-  AgentJournalApprovalMatchedAskRule,
-  AgentJournalApprovalSubject
-} from './agent-session-journal-approval-subject'
+import type * as ApprovalSubjects from './agent-session-journal-approval-subject'
 import type { AgentJournalCursor, AgentJournalItemIdentity } from './agent-session-journal-identity'
 import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 import type { AgentSessionProviderContextBoundary } from '../conversation-context/agent-session-provider-context'
@@ -203,8 +200,8 @@ export type AgentJournalApprovalItem = {
   description?: string
   decisionReason?: string
   blockedPath?: string
-  matchedAskRule?: AgentJournalApprovalMatchedAskRule
-  subject?: AgentJournalApprovalSubject
+  matchedAskRule?: ApprovalSubjects.AgentJournalApprovalMatchedAskRule
+  subject?: ApprovalSubjects.AgentJournalApprovalSubject
   personOnly?: true
   detail: string | null
   options: AgentJournalPromptOption[]
@@ -252,6 +249,9 @@ export type AgentJournalTurnLifecycle = {
   /** On a turn a conversation command opened: the provider turn that carried out the command,
    *  once the provider opened one. Nothing else re-derives it after the command settles. */
   providerTurnId?: string
+  /** On a turn the provider opened itself: the provider task ids whose finish notifications woke it
+   *  (a background command, a Monitor event). Absent when nothing named the wake-up. */
+  wokenBy?: string[]
 }
 
 /** Provider thread-goal lifecycle. Open like other persisted vocabularies: a

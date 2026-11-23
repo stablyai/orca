@@ -12,6 +12,7 @@ import {
 } from './claude-turn-lifecycle-item'
 import type { ClaudeCommandTurn } from './claude-command-turn'
 import { createClaudeTurnOpener, type ClaudeTurnSource } from './claude-turn-opening'
+import { ClaudeTurnWakes } from './claude-turn-wakes'
 import {
   claudeQuotaTurnEndResolution,
   refineClaudeQuotaTurnEnd
@@ -68,6 +69,7 @@ export class ClaudeOpenTurn {
   /** The ending of a step a steer cut short, until the steer's own cycle starts. */
   private steerHandoffEnd: ClaudeTurnEnd | null = null
   private startedSend: ClaudeStartedSend | null = null
+  readonly wakes = new ClaudeTurnWakes()
   private readonly opener: (
     frame: Record<string, unknown>,
     source: ClaudeTurnSource | null,
@@ -83,7 +85,7 @@ export class ClaudeOpenTurn {
         if (this.startedSend) {
           this.allowReopen()
         }
-        this.open(turn, observedAt)
+        this.open({ ...turn, ...this.wakes.take(!this.startedSend) }, observedAt)
       }
     })
   }
@@ -156,6 +158,7 @@ export class ClaudeOpenTurn {
 
   /** Supersede the previous turn before opening another; a missing result must not leave old work live. */
   open(turn: ClaudeCurrentTurn, observedAt: number): void {
+    this.wakes.take(false)
     this.steerHandoffEnd = null
     this.usageLimitEvidence = null
     this.deps.onOpen?.()
@@ -178,6 +181,7 @@ export class ClaudeOpenTurn {
 
   /** The host already wrote the command row; only publish its eventual end. */
   beginCommand(turn: ClaudeCurrentTurn): void {
+    this.wakes.take(false)
     this.steerHandoffEnd = null
     this.usageLimitEvidence = null
     this.deps.onOpen?.()

@@ -39,9 +39,8 @@ export function chatTurnFacts(
     reported: (sessionId: string) => runningTurnOpenedByConversationReport(chats, sessionId),
     woken: (sessionId: string) => {
       const link = findLinkForSession(store, sessionId)?.link
-      const chat = currentChat(chats)
-      const turn = chat?.publishedWork(sessionId)?.activeTurn
-      return !!link && wokenRunningTurn(link, turn, chat?.reads.childWork(sessionId) ?? [])
+      const turn = currentChat(chats)?.publishedWork(sessionId)?.activeTurn
+      return !!link && wokenRunningTurn(link, turn)
     },
     /** No turn runs, and only tasks its conversation's turns started do: a worker one of them starts
      *  reports there. */

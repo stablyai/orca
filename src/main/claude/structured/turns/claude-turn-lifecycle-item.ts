@@ -16,6 +16,8 @@ export type ClaudeCurrentTurn = {
   /** Anchor to the user echo, an unechoed started submission, or the provider-resumed lifecycle row. */
   userItemId: string
   command?: ClaudeCommandTurn
+  /** Provider task ids whose notifications opened this provider-resumed turn. */
+  wokenBy?: string[]
 }
 
 export function claudeCurrentTurnIdentity(turn: ClaudeCurrentTurn): AgentJournalItemIdentity {
@@ -76,8 +78,11 @@ export function claudeTurnLifecycleItem(
   options: StructuredAgentSessionAppendOptions
   publishCoalescingKey: string
 } {
-  const { sessionId, turnId, startedAt, requestedAt, userItemId } = turn
-  const requested = requestedAt === undefined ? {} : { requestedAt }
+  const { sessionId, turnId, startedAt, requestedAt, userItemId, wokenBy } = turn
+  const requested = {
+    ...(requestedAt === undefined ? {} : { requestedAt }),
+    ...(wokenBy?.length ? { wokenBy } : {})
+  }
   return {
     identity: claudeCurrentTurnIdentity(turn),
     body: agentJournalTurnBody(

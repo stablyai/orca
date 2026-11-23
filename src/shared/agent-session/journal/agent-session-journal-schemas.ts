@@ -263,7 +263,8 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     kind: z.literal('turn'),
     ...TurnLifecycleFields,
     contextUsage: AgentSessionContextUsageSchema.optional(),
-    providerTurnId: z.string().min(1).optional()
+    providerTurnId: z.string().min(1).optional(),
+    wokenBy: z.array(z.string().min(1).max(512)).min(1).max(16).optional()
   }),
   ...BOT_JOURNAL_ITEM_BODIES
 ])
