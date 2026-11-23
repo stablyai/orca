@@ -126,12 +126,27 @@ export function refuseUndeliverableSessionRecipient(
   terminalRecipient: TerminalAgentRecipient,
   noEffect = 'No message was sent.'
 ): SessionRecipientRefusal | null {
+  const result = resolveSessionRecipient(recipient, store, db, terminalRecipient, noEffect)
+  return 'session' in result ? null : result
+}
+
+type SessionRecipientReach =
+  | Extract<StructuredSessionMailReach, { kind: 'reachable' }>
+  | SessionRecipientRefusal
+
+export function resolveSessionRecipient(
+  recipient: SessionRecipient,
+  store: AgentSessionRecordReader | null,
+  db: OrchestrationDb,
+  terminalRecipient: TerminalAgentRecipient,
+  noEffect: string
+): SessionRecipientReach {
   // Before the host check: terminal-only users have no agent-session host to blame.
   const terminal = terminalAgentRefusal(recipient.sessionId, terminalRecipient, noEffect)
   if (terminal) {
     return terminal
   }
-  return refuseUnreachableSessionRecipient(
+  return resolveSessionRecipientReach(
     recipient,
     store,
     (records, found) => structuredSessionMailReach(records, found, db),
@@ -146,15 +161,16 @@ export function refuseUndeliverableSessionRecipientWith(
   store: AgentSessionRecordReader | null,
   noEffect = 'No message was sent.'
 ): SessionRecipientRefusal | null {
-  return refuseUnreachableSessionRecipient(
+  const result = resolveSessionRecipientReach(
     recipient,
     store,
     (records, found) => structuredSessionMailReachWith(context, records, found),
     noEffect
   )
+  return 'session' in result ? null : result
 }
 
-function refuseUnreachableSessionRecipient(
+function resolveSessionRecipientReach(
   recipient: SessionRecipient,
   store: AgentSessionRecordReader | null,
   reach: (
@@ -162,7 +178,7 @@ function refuseUnreachableSessionRecipient(
     found: AgentSessionConversationView
   ) => StructuredSessionMailReach,
   noEffect: string
-): SessionRecipientRefusal | null {
+): SessionRecipientReach {
   const { sessionId } = recipient
   if (!store) {
     return {
@@ -210,7 +226,7 @@ function refuseUnreachableSessionRecipient(
           unreachable: 'ended'
         }
   }
-  return null
+  return reached
 }
 
 function providerIdRefusal(

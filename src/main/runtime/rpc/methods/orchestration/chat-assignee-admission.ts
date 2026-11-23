@@ -5,13 +5,12 @@ import {
 } from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
-import { observeChatAssignee } from '../../../orchestration/workers/lifecycle/chat-assignee'
 import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import type { OrchestrationPartyIdentity as OrchestrationParty } from '../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { readAgentSessionRecordStore } from '../../../orchestration/addressing/session-lineage/structured-session-lineage'
 import {
-  refuseUndeliverableSessionRecipient,
+  resolveSessionRecipient,
   resolveTerminalAgentRecipient
 } from './messaging/session-recipient'
 
@@ -31,30 +30,19 @@ export async function admitChatAssignee(
   sessionId: OrcaSessionId,
   db: OrchestrationDb
 ): Promise<AgentSessionConversationView> {
-  // A failed install leaves no store, which the refusal below names.
   await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
   const terminalRecipient = await resolveTerminalAgentRecipient(sessionId)
-  // Read after every wait: the store this admission checks is the one it then observes.
-  const store = readAgentSessionRecordStore()
-  const refusal = refuseUndeliverableSessionRecipient(
+  const recipient = resolveSessionRecipient(
     { sessionId, address: formatOrcaSessionAddress(sessionId) },
-    store,
+    readAgentSessionRecordStore(),
     db,
     terminalRecipient,
     NO_EFFECTS
   )
-  if (refusal) {
-    throw new OrchestrationError(refusal.code, refusal.message, { effectsApplied: false })
+  if ('session' in recipient) {
+    return recipient.session
   }
-  const observed = observeChatAssignee(sessionId, db, store)
-  if (observed.status !== 'live') {
-    throw new OrchestrationError(
-      'recipient_unreachable',
-      `Agent session ${sessionId} cannot take a task here: ${observed.reason} ${NO_EFFECTS}`,
-      { effectsApplied: false }
-    )
-  }
-  return observed.session
+  throw new OrchestrationError(recipient.code, recipient.message, { effectsApplied: false })
 }
 
 /** A coordinator can't be its own worker: it would answer its own task forever. */

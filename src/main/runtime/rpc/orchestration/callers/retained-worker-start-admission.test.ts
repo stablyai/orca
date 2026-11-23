@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import {
   mintStructuredWorkerHandle,
@@ -172,4 +173,71 @@ it('refuses a closed worker as a target before assigning work or sending mail', 
   expect(db.getDispatchContext(task.id)).toEqual(savedDispatch)
   expect(db.getWorkerDispatch(stopped.id)).toEqual(savedWorker)
   expect(db.getWorkerTerminalResourceByHandle(handle)).toEqual(savedResource)
+})
+
+it('distinguishes an unverifiable chat successor from lost worker identity', async () => {
+  const { db, dispatch, records, runtime } = (h = createSessionCallerHarness(hostRef))
+  const missingSuccessor = testOrcaSessionId('320bb396-30d3-4593-870e-175cfdf0d1b1')
+  const lostWorker = testOrcaSessionId('99d63fbd-357f-4fdc-9682-9dbb040e3e88')
+  records.set(SESSION_Y, {
+    ...sessionRecord(SESSION_Y),
+    conversationCommand: {
+      command: 'clear',
+      state: 'completed',
+      replacementSessionId: missingSuccessor,
+      operationId: 'clear-task-chat',
+      callerKey: 'caller',
+      phase: 'committed'
+    }
+  })
+  records.set(lostWorker, sessionRecord(lostWorker))
+  const run = db.createRun({
+    objective: 'Continue work',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null,
+    coordinatorOrcaSessionId: SESSION_X
+  })
+  const priorTask = db.createTask({ spec: 'Previous work', runId: run.id })
+  const { dispatch: prior } = db.createStartingWorkerDispatch({
+    creator: { kind: 'session', orcaSessionId: SESSION_X },
+    maxDepth: 4,
+    taskId: priorTask.id,
+    startOptions: {},
+    runtimeEpoch: runtime.getRuntimeId()
+  })
+  db.prepareStartingWorkerAuthority({
+    dispatchId: prior.id,
+    handle: mintStructuredWorkerHandle(),
+    paneKey: mintStructuredWorkerPaneKey(lostWorker),
+    processIncarnation: structuredWorkerProcessIncarnation(lostWorker),
+    worktreeId: WORKSPACE_X,
+    effects: [],
+    setupState: 'not_applicable'
+  })
+  const task = db.createTask({ spec: 'Assign new work', runId: run.id })
+  const caller = { sessionId: SESSION_X }
+  for (const [to, code, detail] of [
+    [ADDRESS_Y, 'recipient_unreachable', missingSuccessor],
+    [formatOrcaSessionAddress(lostWorker), 'session_caller_not_live', lostWorker]
+  ] as const) {
+    expect(
+      await dispatch(
+        orchestrationRequest('orchestration.dispatch', { task: task.id, run: run.id, to }, caller)
+      )
+    ).toMatchObject({
+      ok: false,
+      error: { code, message: expect.stringContaining(detail), data: { effectsApplied: false } }
+    })
+    expect(
+      await dispatch(
+        orchestrationRequest(
+          'orchestration.send',
+          { to, run: run.id, subject: 'Test mail' },
+          caller
+        )
+      )
+    ).toMatchObject({ ok: false, error: { code, message: expect.stringContaining(detail) } })
+  }
+  expect(db.getTask(task.id)).toEqual(task)
+  expect(db.getDispatchContext(task.id)).toBeUndefined()
 })
