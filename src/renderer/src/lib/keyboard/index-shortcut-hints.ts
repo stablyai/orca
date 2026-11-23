@@ -142,7 +142,7 @@ function attach(): void {
   window.addEventListener('pointerdown', hide, true)
   window.addEventListener('pointermove', releaseUnheld, true)
   // Why: main consumes Cmd/Ctrl+digit, and macOS can then withhold the modifier's keyup from the page.
-  unsubscribeModifierKeyUp = window.api.ui.onModifierKeyUp(releaseUnheld)
+  unsubscribeModifierKeyUp = window.api?.ui?.onModifierKeyUp?.(releaseUnheld) ?? null
   window.addEventListener('blur', hide)
   document.addEventListener('visibilitychange', onVisibilityChange)
 }
