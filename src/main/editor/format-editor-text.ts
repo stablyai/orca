@@ -8,8 +8,12 @@ import {
 } from '../../shared/editor/formatting/editor-formatter'
 import { getRepoExecutionHostId } from '../../shared/execution-host/execution-host'
 import { isPathInsideOrEqual } from '../../shared/file-access/cross-platform-path'
+import { homedir } from 'node:os'
 import { resolveCliCommandAsync } from '../../shared/shell/command-resolution/node-cli-command-async-resolution'
-import { isSpawnableCommand } from '../../shared/shell/command-resolution/node-cli-command-resolution'
+import {
+  isSpawnableCommand,
+  pathEnvRelativeTo
+} from '../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   listLocalCommandPaths,
   resolveCommandOnLocalPath
@@ -38,8 +42,14 @@ async function resolveWindowsFormatterProgram(program: string, cwd: string): Pro
     )
   }
   // Windows searches cwd before PATH, then the CLI install dirs the user's terminal also gets.
-  const local = await resolveCommandOnLocalPath(program, { cwd })
-  return local ?? (await resolveCliCommandAsync(program))
+  // A relative PATH entry (`node_modules\.bin`) resolves against the worktree, as it would in a shell.
+  const pathEnv = pathEnvRelativeTo(process.env.PATH, cwd, 'win32')
+  const env = { ...process.env, ...(pathEnv === undefined ? {} : { PATH: pathEnv }) }
+  const local = await resolveCommandOnLocalPath(program, { cwd, env })
+  return (
+    local ??
+    (await resolveCliCommandAsync(program, { pathEnv: pathEnv ?? null, homePath: homedir() }))
+  )
 }
 
 async function formatterFilePath(filePath: string): Promise<string> {
