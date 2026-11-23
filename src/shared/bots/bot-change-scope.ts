@@ -235,7 +235,19 @@ export function botGroupRoomConcerned(scope: BotChangeScope | undefined, groupId
   if (kinds.length > 0 && !kinds.includes('groups')) {
     return false
   }
-  return scope?.groupIds?.includes(groupId) ?? true
+  return scope?.groupIds ? namedRooms(scope.groupIds).has(groupId) : true
+}
+
+// Each notice's rooms as a set, built once however many open rooms ask.
+const roomSets = new WeakMap<readonly string[], ReadonlySet<string>>()
+
+function namedRooms(groupIds: readonly string[]): ReadonlySet<string> {
+  let rooms = roomSets.get(groupIds)
+  if (!rooms) {
+    rooms = new Set(groupIds)
+    roomSets.set(groupIds, rooms)
+  }
+  return rooms
 }
 
 /** The scope a runtime event carries, read loosely (a peer of another version may send anything). */
@@ -253,10 +265,12 @@ export function readBotChangeScope(event: unknown): BotChangeScope | undefined {
       : undefined
   const kindBots = 'kindBots' in event ? readStringLists(event.kindBots) : undefined
   const needsYou = 'needsYou' in event ? readBotNeedsYouCounts(event.needsYou) : undefined
-  const groupIds =
+  // A list with no room in it names none, so every room re-reads.
+  const named =
     'groupIds' in event && Array.isArray(event.groupIds)
       ? event.groupIds.filter((id): id is string => typeof id === 'string')
-      : undefined
+      : []
+  const groupIds = named.length > 0 ? named : undefined
   return botIds || kinds
     ? {
         ...(botIds ? { botIds } : {}),
