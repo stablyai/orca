@@ -19,6 +19,13 @@ export type AzureDevOpsReviewData = {
   error: string | null
 }
 
+const EMPTY_REVIEW_ROWS: Omit<AzureDevOpsReviewData, 'loading'> = {
+  reviewers: [],
+  checks: [],
+  comments: [],
+  error: null
+}
+
 /**
  * Its own state, never the panel's shared checks/comments: the GitHub effects clear those
  * whenever no GitHub PR is selected, which would wipe these rows.
@@ -31,13 +38,16 @@ export function useAzureDevOpsReviewData(input: {
   isRefreshing: boolean
 }): AzureDevOpsReviewData {
   const { repo, worktree, number, updatedAt, isRefreshing } = input
-  const [state, setState] = useState<Omit<AzureDevOpsReviewData, 'loading'>>({
-    reviewers: [],
-    checks: [],
-    comments: [],
-    error: null
-  })
+  const [state, setState] = useState<Omit<AzureDevOpsReviewData, 'loading'>>(EMPTY_REVIEW_ROWS)
   const [loading, setLoading] = useState(true)
+  // Rows belong to one PR: a different repo, workspace or number must never show the last one's.
+  const identity = `${repo?.id ?? ''}\0${worktree?.id ?? ''}\0${number}`
+  const [shownIdentity, setShownIdentity] = useState(identity)
+  if (shownIdentity !== identity) {
+    setShownIdentity(identity)
+    setState(EMPTY_REVIEW_ROWS)
+    setLoading(true)
+  }
   // A finished header Refresh re-reads too, so its spinner means these rows as well.
   const [refreshGeneration, setRefreshGeneration] = useState(0)
   const wasRefreshing = useRef(isRefreshing)

@@ -57,7 +57,16 @@ export function parseAzureDevOpsColumnOptions(value: unknown): AzureDevOpsBacklo
 }
 
 function filterValues(raw: RawFilterValue | undefined): string[] {
-  return (raw?.value ?? [])
+  // Saved settings are user data: a non-array value or a null entry is skipped, never thrown on.
+  const entries: unknown = raw?.value
+  if (!Array.isArray(entries)) {
+    return []
+  }
+  return entries
+    .filter(
+      (entry): entry is NonNullable<RawFilterValue['value']>[number] =>
+        Boolean(entry) && typeof entry === 'object'
+    )
     .map((entry) =>
       typeof entry.value === 'string'
         ? entry.value

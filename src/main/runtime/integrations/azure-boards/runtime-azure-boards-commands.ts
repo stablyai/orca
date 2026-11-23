@@ -115,16 +115,28 @@ export class RuntimeAzureBoardsCommands {
   async setAzureBoardsWorkItemState(
     repoSelector: string,
     id: number,
-    state: string
+    state: string,
+    expectedRev?: number
   ): Promise<AzureDevOpsWorkItem> {
-    return setAzureDevOpsWorkItemState(await this.resolveAzureRepo(repoSelector), id, state)
+    return setAzureDevOpsWorkItemState(
+      await this.resolveAzureRepo(repoSelector),
+      id,
+      state,
+      expectedRev
+    )
   }
 
   async setAzureBoardsWorkItemAssignee(
     repoSelector: string,
     id: number,
-    assignee: string | null
+    assignee: string | null,
+    expectedRev?: number
   ): Promise<AzureDevOpsWorkItem> {
-    return setAzureDevOpsWorkItemAssignee(await this.resolveAzureRepo(repoSelector), id, assignee)
+    return setAzureDevOpsWorkItemAssignee(
+      await this.resolveAzureRepo(repoSelector),
+      id,
+      assignee,
+      expectedRev
+    )
   }
 }

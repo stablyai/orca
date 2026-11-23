@@ -54,10 +54,12 @@ const REPO = {
   webBaseUrl: 'https://dev.azure.com/acme/Project/_git/repo'
 }
 const registeredRepo = { id: 'repo-1', path: '/repo', connectionId: null }
+const registeredRemoteRepo = { id: 'repo-2', path: '/srv/repo', connectionId: 'ssh-1' }
+const registeredRepos = [registeredRepo, registeredRemoteRepo]
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers read only getRepo and getRepos off the store.
 const store = {
-  getRepo: (id: string) => (id === registeredRepo.id ? registeredRepo : undefined),
-  getRepos: () => [registeredRepo]
+  getRepo: (id: string) => registeredRepos.find((repo) => repo.id === id),
+  getRepos: () => registeredRepos
 } as unknown as Store
 
 describe('azure-devops boards ipc', () => {
@@ -141,6 +143,15 @@ describe('azure-devops boards ipc', () => {
       )
     ).rejects.toThrow('azure_devops_repo_unverifiable')
     expect(getLocalProjectWorktreeGitOptions).not.toHaveBeenCalled()
+  })
+
+  it('refuses a path no registered repo owns before probing its remote', async () => {
+    getAzureDevOpsRepoRef.mockResolvedValue(REPO)
+    await expect(
+      handlers.get('azureDevOpsBoards:listTeams')!({}, { repoPath: '/elsewhere/repo' })
+    ).rejects.toThrow('not registered')
+    expect(getAzureDevOpsRepoRef).not.toHaveBeenCalled()
+    expect(listAzureDevOpsTeams).not.toHaveBeenCalled()
   })
 
   it('routes team endpoints by team id when the identity carries one', async () => {

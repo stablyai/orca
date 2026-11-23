@@ -75,8 +75,9 @@ export const AZURE_BOARDS_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['azure-boards', 'state', 'set'],
     summary: 'Move a work item to another state of its type (needs --confirm)',
-    usage: 'orca azure-boards state set <id> --to <state> [--confirm] [--repo <selector>] [--json]',
-    allowedFlags: [...REPO_FLAGS, 'id', 'to', 'confirm'],
+    usage:
+      'orca azure-boards state set <id> --to <state> [--confirm [--expect-rev <rev>]] [--repo <selector>] [--json]',
+    allowedFlags: [...REPO_FLAGS, 'id', 'to', 'confirm', 'expect-rev'],
     booleanFlags: ['confirm'],
     positionalArgs: ['id'],
     notes: [REPO_NOTE, WRITE_NOTE, 'An unknown state lists the valid ones for that item type.']
@@ -85,8 +86,8 @@ export const AZURE_BOARDS_COMMAND_SPECS: CommandSpec[] = [
     path: ['azure-boards', 'assignee', 'set'],
     summary: 'Assign a work item (needs --confirm)',
     usage:
-      'orca azure-boards assignee set <id> (--to <email> | --me) [--confirm] [--repo <selector>] [--json]',
-    allowedFlags: [...REPO_FLAGS, 'id', 'to', 'me', 'confirm'],
+      'orca azure-boards assignee set <id> (--to <email> | --me) [--confirm [--expect-rev <rev>]] [--repo <selector>] [--json]',
+    allowedFlags: [...REPO_FLAGS, 'id', 'to', 'me', 'confirm', 'expect-rev'],
     booleanFlags: ['confirm', 'me'],
     positionalArgs: ['id'],
     notes: [REPO_NOTE, WRITE_NOTE]
@@ -94,8 +95,9 @@ export const AZURE_BOARDS_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['azure-boards', 'assignee', 'clear'],
     summary: 'Unassign a work item (needs --confirm)',
-    usage: 'orca azure-boards assignee clear <id> [--confirm] [--repo <selector>] [--json]',
-    allowedFlags: [...REPO_FLAGS, 'id', 'confirm'],
+    usage:
+      'orca azure-boards assignee clear <id> [--confirm [--expect-rev <rev>]] [--repo <selector>] [--json]',
+    allowedFlags: [...REPO_FLAGS, 'id', 'confirm', 'expect-rev'],
     booleanFlags: ['confirm'],
     positionalArgs: ['id'],
     notes: [REPO_NOTE, WRITE_NOTE]

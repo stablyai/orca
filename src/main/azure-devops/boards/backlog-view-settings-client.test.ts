@@ -68,6 +68,25 @@ describe('parseAzureDevOpsSavedFilter', () => {
   it('returns null for a non-JSON value', () => {
     expect(parseAzureDevOpsSavedFilter('nope')).toBeNull()
   })
+
+  it('skips malformed nested values instead of throwing, keeping the valid ones', () => {
+    expect(
+      parseAzureDevOpsSavedFilter(
+        JSON.stringify({
+          'System.Tags': { value: {} },
+          'System.State': { value: [null, 'x', { value: 'Active' }] }
+        })
+      )
+    ).toEqual({
+      keyword: null,
+      workItemTypes: [],
+      assignedTo: [],
+      states: ['Active'],
+      areaPaths: [],
+      iterationPaths: [],
+      tags: []
+    })
+  })
 })
 
 describe('mapAzureDevOpsBacklogViewSettings', () => {

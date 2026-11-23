@@ -25,6 +25,7 @@ export async function addAzureDevOpsWorkItemComment(
   id: number,
   text: string
 ): Promise<{ commentId: number }> {
+  await currentWorkItem(repo, id)
   await reserveAzureDevOpsWrite('workItemComment')
   const result = await requestAzureDevOpsJsonAtBase<{ id?: number }>(
     resolveAzureDevOpsApiBases(repo).project,
@@ -40,12 +41,32 @@ export async function addAzureDevOpsWorkItemComment(
   return { commentId: result?.id ?? 0 }
 }
 
+const TEAM_PROJECT_FIELD = 'System.TeamProject'
+
+/** Ids are unique per organization, so an id from another project must be refused, not patched. */
 async function currentWorkItem(repo: AzureDevOpsRepoRef, id: number): Promise<AzureDevOpsWorkItem> {
-  const [item] = await hydrateAzureDevOpsWorkItems(repo, [id], [], { requireResponse: true })
+  const [item] = await hydrateAzureDevOpsWorkItems(repo, [id], [TEAM_PROJECT_FIELD], {
+    requireResponse: true
+  })
   if (!item) {
     throw new Error(`Work item ${id} was not found in this project.`)
   }
+  const project = item.fields[TEAM_PROJECT_FIELD]
+  if (typeof project !== 'string' || project.toLowerCase() !== repo.project.toLowerCase()) {
+    throw new Error(
+      `Work item ${id} belongs to ${typeof project === 'string' ? `project "${project}"` : 'another project'}, not "${repo.project}"; pass --repo for that project.`
+    )
+  }
   return item
+}
+
+/** The approved preview's revision: the write is refused if the item moved past it. */
+function requireExpectedRevision(item: AzureDevOpsWorkItem, expectedRev: number | undefined): void {
+  if (expectedRev !== undefined && item.rev !== expectedRev) {
+    throw new Error(
+      `Work item ${item.id} changed after the preview (rev ${expectedRev} → ${item.rev}). Read it again and ask the user before retrying.`
+    )
+  }
 }
 
 async function patchWorkItem(
@@ -78,12 +99,14 @@ async function patchWorkItem(
 export async function setAzureDevOpsWorkItemState(
   repo: AzureDevOpsRepoRef,
   id: number,
-  state: string
+  state: string,
+  expectedRev?: number
 ): Promise<AzureDevOpsWorkItem> {
   const [item, types] = await Promise.all([
     currentWorkItem(repo, id),
     getAzureDevOpsWorkItemTypes(repo)
   ])
+  requireExpectedRevision(item, expectedRev)
   const states = types[item.workItemType]?.states.map((each) => each.name) ?? []
   const match = states.find((name) => name.toLowerCase() === state.trim().toLowerCase())
   if (!match) {
@@ -117,9 +140,11 @@ async function signedInAccount(repo: AzureDevOpsRepoRef): Promise<string> {
 export async function setAzureDevOpsWorkItemAssignee(
   repo: AzureDevOpsRepoRef,
   id: number,
-  assignee: string | null
+  assignee: string | null,
+  expectedRev?: number
 ): Promise<AzureDevOpsWorkItem> {
   const item = await currentWorkItem(repo, id)
+  requireExpectedRevision(item, expectedRev)
   const value =
     assignee === null ? '' : assignee === '@me' ? await signedInAccount(repo) : assignee.trim()
   return patchWorkItem(repo, item, 'System.AssignedTo', value)

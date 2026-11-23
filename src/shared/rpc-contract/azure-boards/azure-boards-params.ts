@@ -26,13 +26,18 @@ export const AzureBoardsWorkItemCommentAdd = AzureBoardsWorkItem.extend({
   text: requiredString('Missing comment text').pipe(z.string().max(10_000))
 })
 
+// The revision the user saw in the preview; a newer one refuses the write.
+const ExpectedRev = { expectedRev: z.number().int().positive().optional() }
+
 export const AzureBoardsWorkItemStateSet = AzureBoardsWorkItem.extend({
   ...Confirmed,
+  ...ExpectedRev,
   state: requiredString('Missing state')
 })
 
 export const AzureBoardsWorkItemAssigneeSet = AzureBoardsWorkItem.extend({
   ...Confirmed,
+  ...ExpectedRev,
   // An email or account name, `@me`, or null to unassign.
   assignee: z.string().trim().min(1).max(320).nullable()
 })

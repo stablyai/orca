@@ -61,13 +61,18 @@ export const AZURE_BOARDS_METHODS = [
     permission: 'workspace',
     params: AzureBoardsWorkItemStateSet,
     handler: async (params, { runtime }) =>
-      runtime.setAzureBoardsWorkItemState(params.repo, params.id, params.state)
+      runtime.setAzureBoardsWorkItemState(params.repo, params.id, params.state, params.expectedRev)
   }),
   defineMethod({
     name: 'azureBoards.setAssignee',
     permission: 'workspace',
     params: AzureBoardsWorkItemAssigneeSet,
     handler: async (params, { runtime }) =>
-      runtime.setAzureBoardsWorkItemAssignee(params.repo, params.id, params.assignee)
+      runtime.setAzureBoardsWorkItemAssignee(
+        params.repo,
+        params.id,
+        params.assignee,
+        params.expectedRev
+      )
   })
 ]

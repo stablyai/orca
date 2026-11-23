@@ -118,6 +118,41 @@ function envAuthHeaders(config: AzureDevOpsAuthConfig): Record<string, string> {
   return {}
 }
 
+export const AZURE_DEVOPS_TRUSTED_HOSTS_ENV = 'ORCA_AZURE_DEVOPS_TRUSTED_HOSTS'
+
+/**
+ * Hosted Azure DevOps, the configured API base URL's host, or a host listed in
+ * ORCA_AZURE_DEVOPS_TRUSTED_HOSTS (comma-separated, for Azure DevOps Server).
+ */
+export function isTrustedAzureDevOpsCredentialHost(
+  baseUrl: string,
+  configuredApiBaseUrl: string | null,
+  trustedHosts: string | undefined = process.env[AZURE_DEVOPS_TRUSTED_HOSTS_ENV]
+): boolean {
+  const host = hostnameOf(baseUrl)
+  if (!host) {
+    return false
+  }
+  if (host === 'dev.azure.com' || host.endsWith('.visualstudio.com')) {
+    return true
+  }
+  if (configuredApiBaseUrl && hostnameOf(configuredApiBaseUrl) === host) {
+    return true
+  }
+  return (trustedHosts ?? '')
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .some((entry) => entry.length > 0 && entry === host)
+}
+
+function hostnameOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.toLowerCase()
+  } catch {
+    return null
+  }
+}
+
 /**
  * Env tokens win; otherwise hosted Azure DevOps falls back to the az CLI's
  * Entra login. On-prem Azure DevOps Server never tries az — it only accepts
@@ -129,7 +164,8 @@ export async function resolveAzureDevOpsAuthHeaders(
   const config = getAzureDevOpsAuthConfig()
   const fromEnv = envAuthHeaders(config)
   if (Object.keys(fromEnv).length > 0) {
-    return fromEnv
+    // A repo remote can name any host; the user's token only goes where they pointed it.
+    return isTrustedAzureDevOpsCredentialHost(baseUrl, config.apiBaseUrl) ? fromEnv : {}
   }
   if (!isEntraEligibleAzureDevOpsBaseUrl(baseUrl)) {
     return {}

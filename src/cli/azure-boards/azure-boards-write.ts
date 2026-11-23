@@ -1,6 +1,10 @@
 import { AZURE_BOARDS_AGENT_WRITE_RUNTIME_CAPABILITY } from '../../shared/azure-devops/azure-boards-agent-types'
 import type { AzureDevOpsWorkItem } from '../../shared/azure-devops/boards-types'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
+import {
+  getOptionalPositiveIntegerFlag,
+  getOptionalStringFlag,
+  getRequiredStringFlag
+} from '../arguments/flags'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
@@ -17,6 +21,32 @@ export function requireAzureDevOpsWriteConfirmation(
       `${preview}\nNothing was changed. Show this to the user and rerun with --confirm once they approve.`
     )
   }
+}
+
+/** The preview shows the revision being approved; --expect-rev holds the write to it. */
+async function previewWithRevision(
+  context: HandlerContext,
+  repo: string,
+  id: number,
+  change: string
+): Promise<number | undefined> {
+  const expectedRev = getOptionalPositiveIntegerFlag(context.flags, 'expect-rev')
+  if (context.flags.get('confirm') === true) {
+    return expectedRev
+  }
+  const current = await context.client.call<AzureDevOpsWorkItem | null>('azureBoards.workItem', {
+    repo,
+    id
+  })
+  const item = current.result
+  const now = item
+    ? `Now: ${item.state}, ${item.assignedTo?.displayName ?? 'unassigned'} (rev ${item.rev}).`
+    : 'The item could not be read.'
+  requireAzureDevOpsWriteConfirmation(
+    context,
+    `${change}\n${now}${item ? `\nRerun with --confirm --expect-rev ${item.rev} so a later edit refuses the write.` : ''}`
+  )
+  return expectedRev
 }
 
 function formatUpdated(item: AzureDevOpsWorkItem): string {
@@ -52,12 +82,18 @@ export function azureBoardsWriteHandlers(
     'azure-boards state set': async (context) => {
       const id = workItemId(context)
       const state = getRequiredStringFlag(context.flags, 'to').trim()
-      requireAzureDevOpsWriteConfirmation(context, `Would move work item ${id} to "${state}".`)
       const repo = await writeTarget(context)
+      const expectedRev = await previewWithRevision(
+        context,
+        repo,
+        id,
+        `Would move work item ${id} to "${state}".`
+      )
       const response = await context.client.call<AzureDevOpsWorkItem>('azureBoards.setState', {
         repo,
         id,
         state,
+        expectedRev,
         confirm: true
       })
       printResult(response, context.json, formatUpdated)
@@ -73,27 +109,36 @@ export function azureBoardsWriteHandlers(
         )
       }
       const assignee = me ? '@me' : (to ?? '')
-      requireAzureDevOpsWriteConfirmation(
+      const repo = await writeTarget(context)
+      const expectedRev = await previewWithRevision(
         context,
+        repo,
+        id,
         `Would assign work item ${id} to ${me ? 'you' : assignee}.`
       )
-      const repo = await writeTarget(context)
       const response = await context.client.call<AzureDevOpsWorkItem>('azureBoards.setAssignee', {
         repo,
         id,
         assignee,
+        expectedRev,
         confirm: true
       })
       printResult(response, context.json, formatUpdated)
     },
     'azure-boards assignee clear': async (context) => {
       const id = workItemId(context)
-      requireAzureDevOpsWriteConfirmation(context, `Would unassign work item ${id}.`)
       const repo = await writeTarget(context)
+      const expectedRev = await previewWithRevision(
+        context,
+        repo,
+        id,
+        `Would unassign work item ${id}.`
+      )
       const response = await context.client.call<AzureDevOpsWorkItem>('azureBoards.setAssignee', {
         repo,
         id,
         assignee: null,
+        expectedRev,
         confirm: true
       })
       printResult(response, context.json, formatUpdated)

@@ -61,6 +61,10 @@ async function resolveRepo(
   args: AzureDevOpsBoardsRepoArgs
 ): Promise<{ repo: AzureDevOpsRepoRef; localGitOptions: { wslDistro?: string } }> {
   const connectionId = args.connectionId ?? null
+  // The renderer names a path; only a repo the user registered may have its remote probed.
+  if (!findRegisteredRepo(store, args)) {
+    throw new Error('This repository is not registered in Orca.')
+  }
   const localGitOptions = resolveLocalGitOptions(store, args)
   const repo = await getAzureDevOpsRepoRef(args.repoPath, connectionId, localGitOptions)
   if (!repo) {
