@@ -1,23 +1,18 @@
 import { Text } from 'react-native'
 import type { PairedServerAskCard } from '../../../../../../src/shared/rpc-contract/paired-server-asks-params'
-import { toSafeDisplayLine } from '../../../../../../src/shared/text/display-text-safety'
 import { colors, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import type { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import type { MobileNativeChatCollapsedPrompt } from './MobileNativeChatPromptStrip'
-import type {
-  MobilePairedServerAsks,
-  MobilePairedServerDecision
+import {
+  pairedServerAskerName,
+  type MobilePairedServerAsks,
+  type MobilePairedServerDecision
 } from './use-mobile-paired-server-asks'
 
 const NO_OTHER = [false] as const
 const DECISIONS: readonly MobilePairedServerDecision[] = ['once', 'always', 'deny']
-
-/** Who on the paired server asks: its agent's bot name, else its own name, else how it signs. */
-function askerName(card: PairedServerAskCard): string {
-  return toSafeDisplayLine(card.from.sender?.bot?.name ?? card.from.sender?.name ?? card.from.label)
-}
 
 /** Text the server wrote, shown as itself inside the card's Markdown title. */
 function literal(text: string): string {
@@ -37,7 +32,7 @@ export function pairedServerAskSlot(
   const server = card.serverName || t('chat.pairedServerAsk.thisServer', 'this server')
   const titleOf = (name: (text: string) => string): string =>
     t('chat.pairedServerAsk.title', '{{from}} wants to message {{to}} on this computer', {
-      from: name(askerName(card)),
+      from: name(pairedServerAskerName(card)),
       to: name(card.botName ?? card.botId)
     })
   // The strip shows text as it is; the card's title is Markdown.
