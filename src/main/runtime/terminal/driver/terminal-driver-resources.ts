@@ -38,6 +38,7 @@ import { RuntimeWorktreeBaseReconciliation } from '../../workspaces/metadata/run
 import { RuntimeWorktreeRemovalInFlight } from '../../workspaces/removal/runtime-worktree-removal-in-flight'
 import { ServeBrowserTabs } from '../../browser/headless/serve-browser-tabs'
 import { readBrowserTabBar } from '../../browser/tabs/browser-tab-listing'
+import { resolveRemoteCliBrowserScopeSelector } from '../../desktop-browser-bridge/remote-cli-browser-scope'
 import {
   ownsBrowserTabBarWorkspace,
   resolveBrowserHostWorkspaceSelector
@@ -190,12 +191,9 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
           (s) => this.resolveWorkspaceSelector(s),
           this.mobileSessionTabsByWorktree
         ),
+      // Creating tabs, unlike page commands, needs a workspace this runtime owns.
       resolveBrowserWorkspace: (selector) =>
-        resolveBrowserHostWorkspaceSelector(
-          selector,
-          (s) => this.resolveBrowserWorkspace(s),
-          this.mobileSessionTabsByWorktree
-        ),
+        resolveRemoteCliBrowserScopeSelector(selector) ?? this.resolveBrowserWorkspace(selector),
       getBrowserHostLeaseRegistry: () => getBrowserHostLeaseRegistry(this),
       getBrowserHostRequestRegistry: () => getBrowserHostRequestRegistry(this),
       getPairedDeviceName: (pairedDeviceId) => this.getPairedDeviceNameFn(pairedDeviceId),

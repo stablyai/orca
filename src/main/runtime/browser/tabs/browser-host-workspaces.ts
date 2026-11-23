@@ -9,7 +9,7 @@ import { WORKSPACE_SELECTOR_NOT_FOUND } from '../../workspaces/catalog/workspace
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { rendersBrowserPagesIn } from './browser-tab-listing'
 
-/** Peers stream the pages this window publishes, including ones in workspaces another runtime owns. */
+/** Page commands from peers reach the pages this window publishes, even in workspaces another runtime owns. */
 export function resolveBrowserHostWorkspaceSelector<T extends { id: string }>(
   selector: string,
   resolve: (selector: string) => Promise<T>,

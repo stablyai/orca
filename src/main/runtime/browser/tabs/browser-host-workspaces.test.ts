@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { runInRemoteCliBrowserScope } from '../../desktop-browser-bridge/remote-cli-browser-scope'
 import { resolveBrowserHostWorkspaceSelector } from './browser-host-workspaces'
 
 const SSH_WORKSPACE = 'repo-on-ssh-host::/home/me/app'
@@ -44,5 +45,17 @@ describe('resolveBrowserHostWorkspaceSelector', () => {
         new Map([[SSH_WORKSPACE, snapshot([])]])
       )
     ).rejects.toThrow('selector_not_found')
+  })
+
+  it('never widens an SSH host command scoped to another workspace', async () => {
+    await expect(
+      runInRemoteCliBrowserScope('other-workspace', () =>
+        resolveBrowserHostWorkspaceSelector(
+          `id:${SSH_WORKSPACE}`,
+          notInCatalog,
+          new Map([[SSH_WORKSPACE, snapshot(['page-1'])]])
+        )
+      )
+    ).rejects.toThrow('An SSH host can only reach browser tabs in its own workspaces.')
   })
 })
