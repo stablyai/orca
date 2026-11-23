@@ -32,12 +32,14 @@ function carriedOptions(
   to: string
 ): QueuedMessageRow['options'] {
   const agent = host.deps.store.getConversation(to)?.provider
-  if (!card.options || agent === host.deps.store.getConversation(from)?.provider) {
+  if (!card.options || !agent) {
+    return undefined
+  }
+  if (agent === host.deps.store.getConversation(from)?.provider) {
     return card.options
   }
   const { interactionMode } = card.options
   return interactionMode &&
-    agent &&
     host.deps.agents.definition(agent)?.restingOptions.acceptsKey('interactionMode')
     ? { interactionMode }
     : undefined
@@ -72,11 +74,11 @@ export async function carryQueuedMessages(
         }
         const hold = card.state === 'returned' ? QUEUED_MESSAGE_PAUSED_SEND_FAILED : card.holdReason
         const options = carriedOptions(host, card, from, to)
+        // No steer: the turn it was meant to join stays in the old Chat, so it runs as its own turn.
         await target.insert({
           messageId,
           body: card.body,
           ...(options ? { options } : {}),
-          ...(card.deliveryMode ? { deliveryMode: card.deliveryMode } : {}),
           ...(hold ? { holdReason: hold } : {}),
           ...(card.unattended !== undefined ? { unattended: card.unattended } : {})
         })

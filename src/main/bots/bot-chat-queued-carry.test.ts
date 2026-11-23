@@ -18,6 +18,26 @@ import {
 import { QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED } from '../native-chat/agent-session-journal/queued-messages/queued-message-table'
 import { outcomeSentence, replyEventsOf } from '../connector-cloud/connector-reply-outbox'
 import { botChatSessions } from './bot-chat-session'
+import { eventually } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
+import { NO_STRUCTURED_AGENTS } from '../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
+import type { StructuredAgentRegistry } from '../native-chat/agent-session-wire/providers/structured-agent-registry'
+import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
+
+/** The real host, reading agent declarations from `agents` where the move asks for them. */
+function withAgents(
+  host: StructuredAgentSessionHost,
+  agents: StructuredAgentRegistry
+): StructuredAgentSessionHost {
+  return new Proxy(host, {
+    get(target, key) {
+      if (key === 'deps') {
+        return { ...target.deps, agents }
+      }
+      const value: unknown = Reflect.get(target, key, target)
+      return typeof value === 'function' ? value.bind(target) : value
+    }
+  })
+}
 
 const party = { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null }
 const RESULT_SENDER: AgentMessageSource = {
@@ -50,7 +70,8 @@ describe('replacing a chat carries its unsent queued messages', () => {
 
   async function setup(
     createChat?: (sessionId: string) => Promise<void>,
-    newChatAgent: 'codex' | 'claude' = 'codex'
+    newChatAgent: 'codex' | 'claude' = 'codex',
+    agents?: StructuredAgentRegistry
   ) {
     rig = await createQueuedMessageTestRig()
     const current = rig
@@ -91,7 +112,7 @@ describe('replacing a chat carries its unsent queued messages', () => {
           return bot
         }
       },
-      host: async () => current.host,
+      host: async () => (agents ? withAgents(current.host, agents) : current.host),
       createChat: async (_bot, sessionId) => (createChat ?? attach)(sessionId),
       showTab: async () => {},
       closeChat: async (sessionId) => {
@@ -203,24 +224,43 @@ describe('replacing a chat carries its unsent queued messages', () => {
     })
   })
 
-  it('sends a moved card with the mode, model and delivery it was queued with', async () => {
-    const { chats } = await setup()
+  /** Replaces the chat with only the Plan card left to move, and resolves to what it sent there. */
+  async function sendsPlanCard(newChatAgent: 'codex' | 'claude', agents?: StructuredAgentRegistry) {
+    const { chats } = await setup(undefined, newChatAgent, agents)
+    const { queuedMessages } = (await rig!.host.conversation(HOST_TEST_SESSION)).journal
+    const others = (await queuedMessages.list()).filter(
+      (card) => card.messageId !== 'plan' && card.messageId !== 'editing'
+    )
+    await queuedMessages.withdraw(others.map((card) => card.messageId))
     const next = await chats.reset('bot-1')
+    expect(rig!.store.getConversation(next)?.provider).toBe(newChatAgent)
     const { journal } = await rig!.host.conversation(next)
-    expect(await journal.queuedMessages.get('plan')).toMatchObject({
-      options: { interactionMode: 'plan', model: 'gpt-fixture', effort: 'high' },
-      deliveryMode: 'steer'
+    expect((await journal.queuedMessages.get('plan'))?.deliveryMode).not.toBe('steer')
+    let sent: Parameters<typeof rig.dispatch>[0] | undefined
+    await eventually(() => {
+      sent = rig!.dispatch.mock.calls.find(([input]) => input.sessionId === next)?.[0]
+      expect(sent).toBeDefined()
+    })
+    return sent!.executionOptions
+  }
+
+  it('sends a moved card with the mode, model and effort it was queued with', async () => {
+    expect(await sendsPlanCard('codex')).toMatchObject({
+      interactionMode: 'plan',
+      model: 'gpt-fixture',
+      effort: 'high'
     })
   })
 
   it('keeps only Plan or Build when the new chat runs another agent', async () => {
-    const { chats } = await setup(undefined, 'claude')
-    const next = await chats.reset('bot-1')
-    expect(rig!.store.getConversation(next)?.provider).toBe('claude')
-    const { journal } = await rig!.host.conversation(next)
-    const card = await journal.queuedMessages.get('plan')
-    expect(card?.options).toEqual({ interactionMode: 'plan' })
-    expect(card?.deliveryMode).toBe('steer')
+    const options = await sendsPlanCard('claude')
+    expect(options?.interactionMode).toBe('plan')
+    expect(options?.model).not.toBe('gpt-fixture')
+    expect(options?.effort).not.toBe('high')
+  })
+
+  it('drops the mode when the new chat runs an agent without one', async () => {
+    expect((await sendsPlanCard('claude', NO_STRUCTURED_AGENTS))?.interactionMode).toBeUndefined()
   })
 
   it('keeps them in the old chat when the new chat cannot be made', async () => {
