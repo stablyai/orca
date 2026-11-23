@@ -109,13 +109,15 @@ function answeredLines(
     return { lines: [picked], byOrder: false }
   }
   // Several questions answered in one comment, a line each; or a quick reply edited before sending.
-  const named = botItemNamedAnswers(shape, text).flatMap((words, index) =>
+  const wordsByLine = botItemNamedAnswers(shape, text)
+  const named = wordsByLine.flatMap((words, index) =>
     words !== null && isOpen(index) ? [index] : []
   )
   if (named.length > 0) {
     return { lines: named, byOrder: false }
   }
-  if (answersAskedQuestions(text, asked)) {
+  // If the named lines were answered meanwhile, a late reply can't take another line by order.
+  if (wordsByLine.some((words) => words !== null) || answersAskedQuestions(text, asked)) {
     return none
   }
   const next = answers.indexOf(null)

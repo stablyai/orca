@@ -20,6 +20,7 @@ import { botErrorMessage } from '../bot-presentation'
 import { botHostTakes } from '../bot-host-capability'
 import { commentOnBotItem } from './use-bot-items'
 import { returnBotItemCommentDraft } from './bot-item-comment-draft'
+import { botItemClearDeliveredAnswers, botItemHeldAnswersScope } from './bot-item-held-answers'
 
 const usePendingComments = createBotItemPendingCommentsHook({ useEffect, useSyncExternalStore })
 
@@ -48,7 +49,18 @@ export function useBotItemPendingComments(
           ? t('bots.items.ask.replaced', 'The agent asked a new question. Read it, then reply.')
           : botErrorMessage(error)
       ),
-    returnText: (text) => returnBotItemCommentDraft(bot, uid, text),
+    // An ask of several keeps its picks held for its card's recovery row instead.
+    returnText: (text, { intent }) => {
+      if (!intent || intent.shape.decisions.length < 2) {
+        returnBotItemCommentDraft(bot, uid, text)
+      }
+    },
+    // Its answers leave the ask's held picks: the host has them.
+    delivered: ({ intent }) => {
+      if (intent && intent.shape.decisions.length > 1) {
+        botItemClearDeliveredAnswers(botItemHeldAnswersScope(bot, uid, intent.askId), intent)
+      }
+    },
     requestIds: botHostTakes(bot, BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY),
     questionIds: botHostTakes(bot, BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY),
     plain: botHostTakes(bot, BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY),

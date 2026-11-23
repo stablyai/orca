@@ -1770,10 +1770,6 @@
       "activity": {
         "anotherAgent": "Another agent"
       },
-      "ask": {
-        "heldCount_one": "{{count}} answer not sent yet, <send>send anyway</send>",
-        "heldCount_other": "{{count}} answers not sent yet, <send>send anyway</send>"
-      },
       "pill": {
         "moveCount_one": "Move {{count}} item to",
         "moveCount_other": "Move {{count}} items to"

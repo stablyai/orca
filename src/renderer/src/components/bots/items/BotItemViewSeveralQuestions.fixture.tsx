@@ -1,12 +1,12 @@
-// An agent's ask of several questions on the item page: one line at a time, answers picked or typed in
-// the comment box held until the last line or "send anyway".
+// An agent's ask of several questions on the item page: every question on one card, answers picked or
+// typed in the comment box held until Send posts them as one comment.
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 import { botRefKey } from '@/lib/bot-hosts'
 import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
 import { BotItemBody } from './BotItemView'
-import { botItemHeldAnswersScope } from './use-bot-item-question-steps'
+import { botItemHeldAnswersScope } from './bot-item-held-answers'
 
 const asker = { kind: 'bot' as const, botId: fixtureCos.id, chatId: 'chat-home' }
 
@@ -80,8 +80,7 @@ const severalView = {
   ]
 }
 
-// An ask of four questions, two picked: one line at a time, the picks held above until the last or
-// "send anyway".
+// An ask of four questions, two picked: the picked lines fold, the rest stay open, and Send reads 2/4.
 export const severalQuestions = defineFixture({
   width: 900,
   render: () => (
@@ -112,9 +111,9 @@ const typedItem = makeTestBotItem(232, {
 const typedView = { ...severalView, item: typedItem }
 const TYPED = 'Top strip, but ask a second opinion before landing it.'
 
-// Words in the box, with `held` the answers held for other lines (none by default): a reused fixture
+// An empty box, with `held` the answers held for other lines (none by default): a reused fixture
 // page keeps the draft store, so earlier held answers would otherwise ride along.
-function typeInBox(uid: string, held = ''): void {
+function clearBox(uid: string, held = ''): void {
   updateNativeChatComposerDraft(
     botItemHeldAnswersScope(fixtureCos, uid, 'e61'),
     { text: held },
@@ -122,23 +121,34 @@ function typeInBox(uid: string, held = ''): void {
   )
   updateNativeChatComposerDraft(
     `bot-item-comment:${botRefKey(fixtureCos)}:${uid}`,
-    { text: TYPED },
+    { text: '' },
     'immediate'
   )
 }
 
-async function sendFromBox(frame: HTMLElement): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 250))
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// Words arriving in the open item's empty box take the line "Replying to" names; Enter holds them.
+async function typeAndEnter(frame: HTMLElement, uid: string, held = ''): Promise<void> {
+  // Again once open: drafts a theme's earlier run left are restored from storage after setup.
+  clearBox(uid, held)
+  await pause(250)
+  updateNativeChatComposerDraft(
+    `bot-item-comment:${botRefKey(fixtureCos)}:${uid}`,
+    { text: TYPED },
+    'immediate'
+  )
+  await pause(250)
   frame.querySelector<HTMLButtonElement>('button[aria-label="Comment"]')?.click()
-  await new Promise((resolve) => setTimeout(resolve, 400))
+  await pause(400)
 }
 
-// Words typed for the first of several questions, sent from the box: held like a picked answer, the
-// line folds above as "Question → answer · not sent yet", the step moves to the next open line, and
-// "1 answer not sent yet, send anyway" shows. Nothing posts until the last line.
+// Words typed for the first of several questions, Enter in the box: held like a pick, the line folds
+// to "✓ Question → answer", the box empties and names the next open line, and Send counts it.
+// Nothing posts until Send.
 export const severalQuestionsTypedAnswer = defineFixture({
   width: 900,
-  setup: () => typeInBox(typedItem.uid),
+  setup: () => clearBox(typedItem.uid),
   render: () => (
     <div className="flex h-[640px] flex-col bg-sidebar">
       <BotItemBody
@@ -148,8 +158,39 @@ export const severalQuestionsTypedAnswer = defineFixture({
       />
     </div>
   ),
-  interact: sendFromBox
+  interact: (frame) => typeAndEnter(frame, typedItem.uid)
 })
+
+const reopenedItem = makeTestBotItem(235, { ...severalItem, uid: 'fixture-several-typed-reopened' })
+const reopenedView = { ...severalView, item: reopenedItem }
+
+// The held typed answer reopened: its words show as the pencil chip, which puts them back in the box.
+export const severalQuestionsTypedAnswerReopened = defineFixture({
+  width: 900,
+  setup: () => clearBox(reopenedItem.uid),
+  render: () => (
+    <div className="flex h-[640px] flex-col bg-sidebar">
+      <BotItemBody
+        bot={{ ...fixtureCos, name: 'Layouts helper' }}
+        item={reopenedItem}
+        view={reopenedView}
+      />
+    </div>
+  ),
+  interact: async (frame) => {
+    await typeAndEnter(frame, reopenedItem.uid)
+    frame
+      .querySelector<HTMLButtonElement>('button[title^="Where should the chat switcher live? →"]')
+      ?.click()
+    await pause(250)
+  }
+})
+
+// The other three lines' recommended answers, held.
+const OTHERS_HELD = SEVERAL.questions
+  .slice(1)
+  .map(({ prompt, options }) => `${prompt} → ${options[0]!.label}`)
+  .join('\n')
 
 const onItsWayItem = makeTestBotItem(233, {
   ...severalItem,
@@ -157,19 +198,12 @@ const onItsWayItem = makeTestBotItem(233, {
 })
 const onItsWayView = { ...severalView, item: onItsWayItem }
 
-// Words typed for the last open line, the other three held: all four post as one comment. While the
-// host takes it the ask stops asking, its lines read "Question → answer", and the box names no
-// question until the host's read has the comment.
+// Words typed for the first line, the other three held, then Send: all four post as one comment.
+// While the host takes it the lines fold as sent and stay, and the box names no question.
 export const severalQuestionsTypedAnswerOnItsWay = defineFixture({
   width: 900,
   setup: () => {
-    typeInBox(
-      onItsWayItem.uid,
-      SEVERAL.questions
-        .slice(1)
-        .map(({ prompt, options }) => `${prompt} → ${options[0]!.label}`)
-        .join('\n')
-    )
+    clearBox(onItsWayItem.uid, OTHERS_HELD)
     const runtime: unknown = window.api.runtime
     Reflect.set(window.api, 'runtime', {
       ...(typeof runtime === 'object' ? runtime : {}),
@@ -186,7 +220,13 @@ export const severalQuestionsTypedAnswerOnItsWay = defineFixture({
       />
     </div>
   ),
-  interact: sendFromBox
+  interact: async (frame) => {
+    await typeAndEnter(frame, onItsWayItem.uid, OTHERS_HELD)
+    ;[...frame.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.trim() === 'Send')
+      ?.click()
+    await pause(400)
+  }
 })
 
 const readItem = makeTestBotItem(234, {
@@ -216,8 +256,8 @@ const readView = {
   ]
 }
 
-// One answer the host already has (sent with "send anyway", or by an older build): the answered line
-// reads "Question → answer" above, and the step is on the next open line, 1 of 3, which the box names.
+// One answer the host already has (a partial Send, or an older build): the answered line reads
+// "Question → answer", and the box names the next open line.
 export const severalQuestionsTypedAnswerRead = defineFixture({
   width: 900,
   render: () => (

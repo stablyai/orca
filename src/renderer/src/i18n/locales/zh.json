@@ -27955,16 +27955,17 @@
         "pickCustom": "自定义时间"
       },
       "ask": {
-        "heldCount_other": "{{count}} 条回答尚未发送，<send>仍然发送</send>",
-        "next": "下一个问题",
         "notSentYet": "尚未发送",
-        "previous": "上一个问题",
         "recommended": "推荐",
-        "step": "第 {{n}} 个，共 {{total}} 个",
         "typeAnswer": "输入你的回答",
         "replaced": "智能体提出了新问题。请先阅读，再回复",
         "replacedByNewer": "已由较新的问题取代",
-        "skipped": "已跳过"
+        "skipped": "已跳过",
+        "send": "发送",
+        "sending": "正在发送…",
+        "sendSome": "发送 {{count}}/{{total}}",
+        "sendSomeLabel": "发送 {{total}} 个回答中的 {{count}} 个",
+        "changeAnswer": "{{question}}：{{answer}}。更改回答"
       },
       "readMoreClosedFailed": "无法读取更多已关闭的条目"
     },

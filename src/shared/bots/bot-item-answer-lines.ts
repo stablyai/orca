@@ -119,3 +119,29 @@ export function botItemUnsentAnswers(
 ): (string | null)[] {
   return held.map((words, index) => (answered[index] ? null : words))
 }
+
+/** A ride-along comment: the picks' lines, then the owner's own words, which answer no line. A line of
+ *  those words that would read as answering one of the ask's questions ("Question → …") is quoted
+ *  ("> "), again until no question's lead matches it, so it can't settle that question unseen; every
+ *  other line stays as typed. A lead is finite, so the quoting stops. */
+export function botItemRideAlongText(
+  shape: BotItemQuestionShape,
+  picks: readonly (string | null)[],
+  text: string
+): string {
+  const heads = shape.decisions.map((decision) => `${botItemQuestionLine(decision.question)} →`)
+  const rounds = Math.ceil(Math.max(0, ...heads.map((head) => head.length)) / 2) + 1
+  const words = text.split('\n').map((line) => {
+    let quoted = line
+    for (let round = 0; round < rounds; round += 1) {
+      const lead = quoted.trim()
+      if (!heads.some((head) => lead.startsWith(head))) {
+        break
+      }
+      quoted = `> ${quoted}`
+    }
+    return quoted
+  })
+  const answered = botItemAnswersText(shape, picks)
+  return answered ? `${answered}\n${words.join('\n')}` : words.join('\n')
+}
