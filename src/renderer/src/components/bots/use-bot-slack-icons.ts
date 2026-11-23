@@ -75,6 +75,15 @@ function forget(bot: Bot, attempt: number): void {
   }
 }
 
+// Checked after each wait: a newer look, bots turned off, or the host gone makes the rest of this one moot.
+function stillCurrent(bot: Bot, attempt: number): boolean {
+  return (
+    handled.get(botRefKey(bot))?.attempt === attempt &&
+    readBotsEnabled() &&
+    readBotHostState(bot.hostId) === 'live'
+  )
+}
+
 function pump(hostId: string): void {
   const jobs = pending.get(hostId)
   const next = running.has(hostId) ? undefined : jobs?.entries().next().value
@@ -119,13 +128,19 @@ async function publish(bot: Bot, look: string, attempt: number): Promise<void> {
       failures.delete(botRefKey(bot))
       return
     }
+    if (!stillCurrent(bot, attempt)) {
+      return
+    }
     const png = await drawBotSlackIcon(
       parsed.id,
       bot.avatarColor ?? null,
       wornBotOutfit(bot.avatarOutfit)
     )
-    if (!png || !readBotsEnabled()) {
+    if (!png) {
       forget(bot, attempt)
+      return
+    }
+    if (!stillCurrent(bot, attempt)) {
       return
     }
     if (await uploadBotSlackIcon(bot, look, png)) {
@@ -275,6 +290,14 @@ export function useBotSlackIcons(): void {
     return () => {
       stopBots()
       stopCameBack()
+      // Off, nothing here is kept: no list, no waiting attempts, and the one running stops at its next check.
+      seenBots = null
+      seenLive = null
+      listedCount = 0
+      handled.clear()
+      failures.clear()
+      retry.clear()
+      pending.clear()
     }
   }, [enabled])
 }

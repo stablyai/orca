@@ -170,6 +170,10 @@ export class BotSlackIcons {
 
   /** Keeps a window's drawing of `look`; false when the bot's look changed since, so it is dropped. */
   async store(botId: string, look: string, png: Uint8Array): Promise<boolean> {
+    // A drawing for a look the bot no longer has is dropped before its pixels are decoded.
+    if (!this.deps.enabled() || botSlackIconLook(this.deps.bot(botId)) !== look) {
+      return false
+    }
     if (!(await isWholeIcon(png))) {
       throw new Error('bot_avatar_invalid')
     }
