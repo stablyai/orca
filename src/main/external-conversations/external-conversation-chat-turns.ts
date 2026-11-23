@@ -21,6 +21,7 @@ import {
   readOnce,
   turnFailure,
   botTurnReply,
+  readCoalescedOutboxCoverage,
   type ChatTurnEnd,
   type ChatTurnReplies,
   type SlackMirrorTurn
@@ -266,7 +267,8 @@ export class ChatTurns {
       return
     }
     // Read with the end's turn id in one tick so both name one turn; its message is read later.
-    const outboxed = this.deps.chatTurnOutboxed?.(news.sessionId) === true
+    const deliveries =
+      (news.mergedTurnCount ?? 1) > 1 ? this.deps.chatTurnOutboxDeliveries?.(news.sessionId) : null
     const origin = this.deps.chatTurnOrigin(news.sessionId, this.turnOf(paneKey))
     const ended = {
       kind: 'turn-ended' as const,
@@ -304,9 +306,14 @@ export class ChatTurns {
       return
     }
     void news.readTurn().then(async (turn) => {
-      const reply = botTurnReply(end, linked.link, turn, heard && origin === 'delivery', outboxed)
-      const links = readOnce(() => this.toldLinks.next(paneKey, linked.link))
       const fill = this.deps.replyFill?.()
+      const requested = heard && origin === 'delivery'
+      const outboxed =
+        fill && requested
+          ? await readCoalescedOutboxCoverage(end, linked.link, turn, deliveries)
+          : false
+      const reply = botTurnReply(end, linked.link, turn, requested, outboxed)
+      const links = readOnce(() => this.toldLinks.next(paneKey, linked.link))
       const replied = await endRepliedTurn(end, turn, linked.link, links, fill, reply)
       if (replied === 'told') {
         return

@@ -1,4 +1,5 @@
 import type { ConversationReplyFill } from './external-conversation-reply-fill'
+import type { OutboxDelivery } from './external-conversation-ended-turn'
 import type { SlackMirrorTurn } from './slack-mirror'
 import { setPromptPublication } from './external-conversation-prompt-publication'
 import type { AgentJournalCursor } from '../../shared/agent-session/journal/agent-session-journal-identity'
@@ -119,9 +120,8 @@ export type ConversationEventsDeps = {
   onWatchDisposed?: () => void
   /** Read once per ended chat turn. */
   chatTurnOrigin: (sessionId: string, turnAt: number | null) => ConnectorTurnOrigin
-  /** Whether every delivery the chat's ending turn answers has reply outbox rows; read before
-   *  chatTurnOrigin. */
-  chatTurnOutboxed?: (sessionId: string) => boolean
+  /** The ended turn's deliveries, when every one is eligible for the reply outbox. */
+  chatTurnOutboxDeliveries?: (sessionId: string) => readonly OutboxDelivery[] | null
   /** Whether a delivery was sent to the chat (or its running turn claims some) and it hasn't ended. */
   chatTurnDelivered: (sessionId: string) => boolean
   /** The delivery a chat turn that began at `turnAt` answers; taken once. */

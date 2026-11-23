@@ -4,7 +4,9 @@ import { isConversationReport } from './external-conversation-turn-opener'
 import {
   endedTurn,
   endedTurnAttribution,
-  type EndedChatTurn
+  coalescedOutboxCoverage,
+  type EndedChatTurn,
+  type OutboxDelivery
 } from './external-conversation-ended-turn'
 export type { EndedChatTurn } from './external-conversation-ended-turn'
 import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
@@ -90,6 +92,7 @@ export type ChatNews =
       readTurn: () => Promise<EndedChatTurn>
       /** Only whom the turn acts for (its opener and the deliveries it answered), read by index. */
       readAttribution?: () => Promise<Pick<EndedChatTurn, 'opener' | 'stamps'>>
+      readOutboxCoverage?: (deliveries: readonly OutboxDelivery[]) => Promise<boolean>
       at: number
     }
 
@@ -124,6 +127,14 @@ export function watchChatNews(
                 sessionId,
                 event.completion.turnId,
                 event.completion.journalCursor
+              ),
+            readOutboxCoverage: (deliveries) =>
+              coalescedOutboxCoverage(
+                chat,
+                sessionId,
+                event.completion.turnId,
+                event.completion.journalCursor,
+                deliveries
               ),
             at: completedAt
           })
@@ -213,7 +224,7 @@ export async function deliverToChat(
   // admitted: told the moment the chat takes the message, before its turn can begin.
   delivery: ConnectorMessage & {
     signal: AbortSignal
-    admitted?: () => void
+    admitted?: (operationId: string) => void
     deliveryId?: string
     images?: readonly string[]
   }
@@ -235,6 +246,7 @@ export async function deliverToChat(
     return refused(CHAT_GONE_REFUSAL)
   }
   const fence = record.currentFence
+  const operationId = createStructuredAgentSessionOperationId(randomUUID)
   let admitted = false
   try {
     const outcome = await sendAgentTurn({
@@ -274,7 +286,7 @@ export async function deliverToChat(
             : {}),
           ...(delivery.memorySource ? { memorySource: delivery.memorySource } : {})
         },
-        operationId: createStructuredAgentSessionOperationId(randomUUID),
+        operationId,
         expectedRuntimeFence: fence,
         delivery: 'now',
         personsMessage: true,
@@ -284,7 +296,7 @@ export async function deliverToChat(
             throw new Error(refusalOf(signal))
           }
           admitted = true
-          delivery.admitted?.()
+          delivery.admitted?.(operationId)
         }
       }
     })

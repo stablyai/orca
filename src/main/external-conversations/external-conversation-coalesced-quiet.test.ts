@@ -39,6 +39,8 @@ import { harness, installedChats } from './external-conversation-seam.test-fixtu
 import { WORKTREE } from './external-conversation.test-fixture'
 import { StructuredAgentSessionJournalProjections } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-journal-projection'
 import type { ConversationKey } from './external-conversation-types'
+import { conversationReplyFill } from './external-conversation-reply-fill'
+import { ConnectorReplyRecovery } from './external-conversation-reply-recovery'
 
 // Reproduction: worker status at 16:25:51 holds the answer's completion until NO_REPLY at 16:25:54.
 const KEY: ConversationKey = { source: 'slack', externalId: 'T1:C9:1795167481.858319' }
@@ -62,8 +64,11 @@ const WORKER_STATUS: AgentMessageSource = {
   }
 }
 
-function linkedBot(chats: ConversationChatHost, extra: Parameters<typeof harness>[2] = {}) {
-  const key = KEY
+function linkedBot(
+  chats: ConversationChatHost,
+  extra: Parameters<typeof harness>[2] = {},
+  key = KEY
+) {
   const h = harness(undefined, undefined, extra)
   const host: ExternalConversationHost = { chat: chats }
   h.seam.linkChat(key, {
@@ -113,20 +118,25 @@ async function dispatched(send: () => Promise<unknown>, taken: Taken): Promise<s
 let deliveries = 0
 let outboxPath: string
 
+async function sendFromThread(linked: ReturnType<typeof linkedBot>, reply?: boolean) {
+  const bots = { refusal: () => null, open: vi.fn(), workLinks: async () => [] }
+  const clock = vi.spyOn(HOST_CLOCK, 'now').mockReturnValue(400)
+  try {
+    return await linked.seam.send({ bots, ...linked.host }, linked.key, `d${(deliveries += 1)}`, {
+      text: 'do a prod release scan for the new delta PRs',
+      ...(reply ? { reply: { account: 'account-a' } } : {})
+    })
+  } finally {
+    clock.mockRestore()
+  }
+}
+
 /** A message from the linked thread; `reply` when the cloud takes its answer through the outbox. */
 function askFromThread(
   linked: ReturnType<typeof linkedBot>,
   input: { reply?: boolean; taken?: Taken } = {}
 ): Promise<string> {
-  const bots = { refusal: () => null, open: vi.fn(), workLinks: async () => [] }
-  return dispatched(async () => {
-    const clock = vi.spyOn(HOST_CLOCK, 'now').mockReturnValue(400)
-    await linked.seam.send({ bots, ...linked.host }, linked.key, `d${(deliveries += 1)}`, {
-      text: 'do a prod release scan for the new delta PRs',
-      ...(input.reply ? { reply: { account: 'account-a' } } : {})
-    })
-    clock.mockRestore()
-  }, input.taken ?? null)
+  return dispatched(() => sendFromThread(linked, input.reply), input.taken ?? null)
 }
 
 /** Orca sends a worker's mail into the bot's chat, which owes it a turn until one names it. */
@@ -256,6 +266,32 @@ async function botChat() {
   return { chats: installedChats(host).chats, completions }
 }
 
+function replyRecovery() {
+  const { host } = hostTestState()
+  const journal = () => host.deps.store.connectorReplies()
+  const fill = conversationReplyFill(journal, () => {})
+  const recovery = new ConnectorReplyRecovery({
+    journal,
+    chat: () => host,
+    hasSession: () => true,
+    isBot: () => true,
+    agentOf: () => 'codex',
+    fillTurn: fill,
+    filled: () => {}
+  })
+  return {
+    replyFill: () => fill,
+    recover: async () => {
+      try {
+        await recovery.boot()
+        return await journal().read(HOST_TEST_SESSION)
+      } finally {
+        recovery.dispose()
+      }
+    }
+  }
+}
+
 beforeEach(() => {
   outboxPath = mkdtempSync(join(tmpdir(), 'orca-coalesced-quiet-'))
   vi.useFakeTimers({ toFake: ['Date'], now: HOST_TEST_NOW })
@@ -360,13 +396,27 @@ it('keeps a single-turn NO_REPLY silent and logs only the merged decision, witho
   expect(quietLogs()).toHaveLength(1)
 })
 
-it('posts no stand-in to a thread that asked through the reply outbox, whose own row has the answer', async () => {
+it.each(['outbox only', 'outbox and a refused legacy delivery'])(
+  'posts no stand-in when recovery has the answer (%s)',
+  async (kind) => {
   const { chats } = await botChat()
-  const linked = linkedBot(chats)
+  const replies = replyRecovery()
+  const linked = linkedBot(chats, replies)
   const asked = await askFromThread(linked, { reply: true })
   let mail = ''
   await providerTurn('turn-a', asked, [ANSWER], {
     running: async () => {
+      if (kind === 'outbox and a refused legacy delivery') {
+        const { host } = hostTestState()
+        vi.spyOn(host, 'send').mockImplementationOnce(async (_caller, request) => {
+          await request.beforeRun?.()
+          return {
+            ok: false,
+            refusal: { code: 'agent_session_operation_capacity', message: 'At capacity' }
+          }
+        })
+        expect(await sendFromThread(linked)).toMatchObject({ outcome: 'refused' })
+      }
       mail = await sendMail()
     }
   })
@@ -392,11 +442,16 @@ it('posts no stand-in to a thread that asked through the reply outbox, whose own
   expect(last.stamps?.some((stamp) => stamp.conversation.externalId === KEY.externalId)).not.toBe(
     true
   )
-})
+  expect(await replies.recover()).toMatchObject([
+    { conversation: KEY, fill: { outcome: 'answered', prose: ANSWER } }
+  ])
+  }
+)
 
 it('still posts the stand-in when one of the merged deliveries has no reply outbox row', async () => {
   const { chats } = await botChat()
-  const linked = linkedBot(chats)
+  const replies = replyRecovery()
+  const linked = linkedBot(chats, replies)
   const asked = await askFromThread(linked, { reply: true })
   let again = ''
   let mail = ''
@@ -416,7 +471,56 @@ it('still posts the stand-in when one of the merged deliveries has no reply outb
   expect(ended(linked.events)[0]?.lastAssistantMessage).toBe(
     'I replied but the message may not have reached you. Please ask again.'
   )
+  expect(await replies.recover()).toMatchObject([{ fill: { outcome: 'answered', prose: ANSWER } }])
 })
+
+it('keeps the stand-in for a Linear delivery with reply metadata', async () => {
+  const { chats } = await botChat()
+  const replies = replyRecovery()
+  const linked = linkedBot(chats, replies, { source: 'linear', externalId: 'org:issue-1' })
+  const asked = await askFromThread(linked, { reply: true })
+  let mail = ''
+  await providerTurn('turn-a', asked, [ANSWER], {
+    running: async () => {
+      mail = await sendMail()
+    }
+  })
+  await providerTurn('turn-b', mail, ['NO_REPLY'])
+  await eventually(() => expect(ended(linked.events)).toHaveLength(1))
+  expect(await replies.recover()).toEqual([])
+  expect(ended(linked.events)[0]?.lastAssistantMessage).toBe(
+    'I replied but the message may not have reached you. Please ask again.'
+  )
+})
+
+it.each([{ owed: true } as const, { steeredInto: 'other-turn' }])(
+  'keeps the stand-in when a second reply row lacks provider attribution (%j)',
+  async (taken) => {
+    const { chats } = await botChat()
+    const replies = replyRecovery()
+    const linked = linkedBot(chats, replies)
+    const asked = await askFromThread(linked, { reply: true })
+    let mail = ''
+    await providerTurn('turn-a', asked, [ANSWER], {
+      running: async () => {
+        await askFromThread(linked, { reply: true, taken })
+        mail = await sendMail()
+      }
+    })
+    await providerTurn('turn-b', mail, ['NO_REPLY'])
+    await eventually(() => expect(ended(linked.events)).toHaveLength(1))
+    const rows = await replies.recover()
+    expect(rows.map((row) => row.fill)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ outcome: 'answered', prose: ANSWER }),
+        expect.objectContaining({ outcome: 'interrupted', failure: { category: 'unconfirmed' } })
+      ])
+    )
+    expect(ended(linked.events)[0]?.lastAssistantMessage).toBe(
+      'I replied but the message may not have reached you. Please ask again.'
+    )
+  }
+)
 
 it('stays silent when the thread message itself got the quiet answer after merged mail', async () => {
   const { chats, completions } = await botChat()

@@ -13,37 +13,52 @@ vi.mock('./external-conversation-chat', async (importOriginal) => ({
 }))
 
 describe('ChatDeliveries.deliver', () => {
-  it('vetoes outbox silence at admission, before a rows-less send returns', async () => {
-    const deliveries = new ChatDeliveries(vi.fn())
-    const key = { source: 'slack' as const, externalId: 'T1:C1:1.0' }
-    const chat = { worktreeId: 'folder:home', sessionId: 's1', agent: 'claude' as const }
-    const send = (deliveryId: string, reply?: { account: string }) =>
-      deliveries.deliver(undefined, key, chat, {
-        text: 'hi',
-        deliveryId,
-        signal: new AbortController().signal,
-        ...(reply ? { reply } : {})
-      })
-    chatModule.deliverToChat.mockImplementationOnce(async (_chat, _link, delivery) => {
-      delivery.admitted?.()
-      return { outcome: 'accepted' }
-    })
-    await send('d1', { account: 'a' })
-    expect(deliveries.answeredThroughOutbox('s1')).toBe(true)
+  it.each(['refused', 'accepted'] as const)(
+    'accounts for a legacy delivery at admission and drops it after %s',
+    async (outcome) => {
+      const deliveries = new ChatDeliveries(vi.fn())
+      const key = { source: 'slack' as const, externalId: 'T1:C1:1.0' }
+      const chat = { worktreeId: 'folder:home', sessionId: 's1', agent: 'claude' as const }
+      const send = (deliveryId: string, reply?: { account: string }) =>
+        deliveries.deliver(undefined, key, chat, {
+          text: 'hi',
+          deliveryId,
+          signal: new AbortController().signal,
+          ...(reply ? { reply } : {})
+        })
+      const accept = () => {
+        chatModule.deliverToChat.mockImplementationOnce(async (_chat, _link, delivery) => {
+          delivery.admitted?.('op-durable')
+          return { outcome: 'accepted' }
+        })
+      }
+      accept()
+      await send('d1', { account: 'a' })
+      expect(deliveries.outboxDeliveries('s1')).toMatchObject([{ deliveryId: 'd1' }])
 
-    let finish: (delivery: Delivery) => void = () => {}
-    chatModule.deliverToChat.mockImplementationOnce((_chat, _link, delivery) => {
-      delivery.admitted?.()
-      return new Promise((resolve) => (finish = resolve))
-    })
-    const pending = send('d2')
-    await vi.waitFor(() => expect(chatModule.deliverToChat).toHaveBeenCalledTimes(2))
-    // A turn ending now answers the rows-less message too: no outbox row has its words.
-    expect(deliveries.answeredThroughOutbox('s1')).toBe(false)
-    finish({ outcome: 'accepted' })
-    await pending
-    expect(deliveries.answeredThroughOutbox('s1')).toBe(false)
-  })
+      let finish: (delivery: Delivery) => void = () => {}
+      let started = () => {}
+      const admission = new Promise<void>((resolve) => (started = resolve))
+      chatModule.deliverToChat.mockImplementationOnce((_chat, _link, delivery) => {
+        delivery.admitted?.('op-legacy')
+        started()
+        return new Promise((resolve) => (finish = resolve))
+      })
+      const pending = send('d2')
+      await admission
+      expect(deliveries.outboxDeliveries('s1')).toBeNull()
+      if (outcome === 'accepted') {
+        expect(deliveries.origin('s1', null)).toBe('delivery')
+        accept()
+        await send('d3', { account: 'a' })
+      }
+      finish(outcome === 'refused' ? { outcome, reason: 'agent_not_reachable' } : { outcome })
+      await pending
+      expect(deliveries.outboxDeliveries('s1')).toMatchObject([
+        { deliveryId: outcome === 'refused' ? 'd1' : 'd3' }
+      ])
+    }
+  )
 })
 
 describe('ChatDeliveries.adopt', () => {
@@ -57,7 +72,7 @@ describe('ChatDeliveries.adopt', () => {
 
     expect(link).toHaveBeenCalledWith(key, chat, 'Deploy pings')
     // No reply outbox row answers an adopted turn: its legacy end does.
-    expect(deliveries.answeredThroughOutbox('s1')).toBe(false)
+    expect(deliveries.outboxDeliveries('s1')).toBeNull()
     expect(deliveries.origin('s1', null)).toBe('delivery')
     expect(deliveries.origin('s1', null)).toBe('local')
   })

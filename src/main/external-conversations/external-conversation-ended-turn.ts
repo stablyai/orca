@@ -1,4 +1,12 @@
 import type { AgentJournalCursor } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalConnectorDelivery } from '../../shared/agent-session/journal/agent-journal-bot-message-fields'
+import { agentJournalTurnOpener } from '../../shared/agent-session/journal/agent-session-journal-turn-opener'
+import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
+import {
+  readAgentJournalTurn,
+  readAgentJournalTurnOutcome
+} from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { readJournalTurnOpenerRows } from '../native-chat/agent-session-journal/journal-turn-opener-rows'
 import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot
@@ -34,6 +42,66 @@ export type EndedChatTurn = {
   turnItemId?: string
   stamps?: ConnectorReplyStamp[]
   turnProse?: string
+}
+
+export type OutboxDelivery = AgentJournalConnectorDelivery & { operationId: string }
+
+/** Only an earlier successful turn's opener or steer receipt can prove its coverage. */
+export async function coalescedOutboxCoverage(
+  chat: ConversationChat,
+  sessionId: string,
+  finalTurnId: string,
+  cursor: AgentJournalCursor | undefined,
+  deliveries: readonly OutboxDelivery[]
+): Promise<boolean> {
+  if (!cursor) {
+    return false
+  }
+  const reads = await chat.journalReads(sessionId)
+  const { snapshot } = await reads.operationWindow({
+    operationIds: deliveries.map((delivery) => delivery.operationId),
+    anchorsOnly: true,
+    turnShape: true,
+    withoutToolOutput: true
+  })
+  if (snapshot.cursor.epoch !== cursor.epoch || snapshot.cursor.sequence < cursor.sequence) {
+    return false
+  }
+  const items = snapshot.items.filter((item) => item.sequence <= cursor.sequence)
+  const final = endedChatTurnRow(items, finalTurnId)
+  if (!final) {
+    return false
+  }
+  const rows = await readJournalTurnOpenerRows(reads, items)
+  const journal = { items, submissions: snapshot.submissions }
+  const wanted = (stamp: AgentJournalConnectorDelivery, id: string) =>
+    JSON.stringify([stamp.account, stamp.conversation.source, stamp.conversation.externalId, id])
+  const missing = new Set(
+    deliveries.flatMap((delivery) =>
+      [delivery.deliveryId, ...(delivery.carried ?? [])].map((id) => wanted(delivery, id))
+    )
+  )
+  for (const item of items) {
+    const turn = readAgentJournalTurn(item.body)
+    if (
+      !isRootAgentJournalItem(item) ||
+      !turn ||
+      item.sequence >= final.sequence ||
+      readAgentJournalTurnOutcome(turn) !== 'success'
+    ) {
+      continue
+    }
+    const opener = turn.userItemId ? agentJournalTurnOpener(rows, turn.userItemId) : null
+    for (const stamp of connectorReplyTurnStamps(journal, opener, item.itemId)) {
+      for (const id of [stamp.deliveryId, ...(stamp.carried ?? [])]) {
+        missing.delete(wanted(stamp, id))
+      }
+    }
+    if (missing.size === 0) {
+      return true
+    }
+  }
+  return false
 }
 
 export async function endedTurn(

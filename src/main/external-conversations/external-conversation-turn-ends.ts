@@ -7,7 +7,7 @@ import type { ChatNews } from './external-conversation-chat'
 import type { ConversationEvent } from './external-conversation-events'
 import { connectorFailure } from './external-conversation-failure'
 import type { SlackMirrorTurn } from './slack-mirror'
-import type { EndedChatTurn } from './external-conversation-ended-turn'
+import type { EndedChatTurn, OutboxDelivery } from './external-conversation-ended-turn'
 import type { ConversationReplyFill, FilledTurn } from './external-conversation-reply-fill'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
@@ -99,9 +99,8 @@ export type ChatTurnReplies = {
   replyFill?: () => ConversationReplyFill | null
   /** Read once per ended turn. */
   chatTurnOrigin: (sessionId: string, turnAt: number | null) => ConnectorTurnOrigin
-  /** Whether every delivery the ending turn answers has reply outbox rows; read before
-   *  chatTurnOrigin, which ends the turn. */
-  chatTurnOutboxed?: (sessionId: string) => boolean
+  /** The ended turn's deliveries, when every one is eligible for the reply outbox. */
+  chatTurnOutboxDeliveries?: (sessionId: string) => readonly OutboxDelivery[] | null
 }
 
 /** The first call reads; every later one gets that same read. */
@@ -248,9 +247,30 @@ function ownerDmAnswer(link: ExternalConversationLink, turn: EndedChatTurn): boo
 const COALESCED_QUIET_REPLY =
   'I replied but the message may not have reached you. Please ask again.'
 
-/** Only count metadata can turn a quiet completion into a constant; earlier text is never read.
- *  `outboxed`: every delivery the turn answers has reply outbox rows, which post each merged
- *  turn's own words, so nothing was dropped. */
+/** Check attribution only when a merged completion could otherwise post a stand-in. */
+export function readCoalescedOutboxCoverage(
+  end: ChatTurnEnd,
+  link: ExternalConversationLink,
+  turn: EndedChatTurn,
+  deliveries: readonly OutboxDelivery[] | null | undefined
+): Promise<boolean> | false {
+  if (
+    !deliveries?.length ||
+    !link.bot ||
+    !turn.lastAssistantMessage ||
+    !isQuietBotResult(turn.lastAssistantMessage) ||
+    answersThread(link, turn) ||
+    deliveries.some(
+      ({ conversation }) =>
+        conversation.source !== link.source || conversation.externalId !== link.externalId
+    )
+  ) {
+    return false
+  }
+  return end.news.readOutboxCoverage?.(deliveries).catch(() => false) ?? false
+}
+
+/** The earlier turns' text never goes in the legacy stand-in. */
 export function botTurnReply(
   end: ChatTurnEnd,
   link: ExternalConversationLink,

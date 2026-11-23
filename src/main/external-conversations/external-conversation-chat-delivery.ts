@@ -15,6 +15,8 @@ import {
   type ConversationChatHost
 } from './external-conversation-chat'
 import { HOST_CLOCK } from './external-conversation-host'
+import { answersThroughOutbox } from '../../shared/agent-session/journal/journal-connector-reply'
+import type { OutboxDelivery } from './external-conversation-ended-turn'
 import type { ConnectorMessage, ConversationKey, Delivery } from './external-conversation-types'
 
 /** A native chat a conversation links to; chats run only on this host. */
@@ -45,8 +47,7 @@ export function linkedChat(worktreeId: string, link: ExternalConversationLink): 
 export class ChatDeliveries {
   // Chats sent a delivery since their last turn ended; that turn is the delivery's, not Orca-typed.
   private readonly delivered = new Set<string>()
-  // Of those, chats one of whose deliveries no reply outbox row answers: its legacy turn end does.
-  private readonly legacyAnswered = new Set<string>()
+  private readonly replyDeliveries = new Map<string, Map<object, OutboxDelivery | null>>()
   // Chats a delivery is being sent to; their turn may start before the send returns.
   private readonly sending = new Map<string, Set<object>>()
   private readonly generations = new Map<string, object>()
@@ -70,7 +71,7 @@ export class ChatDeliveries {
     this.generations.clear()
     this.sending.clear()
     this.delivered.clear()
-    this.legacyAnswered.clear()
+    this.replyDeliveries.clear()
     this.unstarted.clear()
     this.openTurns.clear()
   }
@@ -129,14 +130,22 @@ export class ChatDeliveries {
     } else {
       this.openTurns.delete(sessionId)
     }
-    this.legacyAnswered.delete(sessionId)
+    this.replyDeliveries.delete(sessionId)
     return this.delivered.delete(sessionId) ? 'delivery' : 'local'
   }
 
-  /** Whether every delivery the chat took since its last turn ended has reply outbox rows, which
-   *  post each turn's own words; read before `origin` ends the turn. */
-  answeredThroughOutbox(sessionId: string): boolean {
-    return this.delivered.has(sessionId) && !this.legacyAnswered.has(sessionId)
+  /** Every tracked delivery must be eligible before journal attribution can prove coverage. */
+  outboxDeliveries(sessionId: string): OutboxDelivery[] | null {
+    const deliveries = [...(this.replyDeliveries.get(sessionId)?.values() ?? [])]
+    return deliveries.length > 0 && deliveries.every((delivery) => delivery !== null)
+      ? deliveries
+      : null
+  }
+
+  private replyWindow(sessionId: string): Map<object, OutboxDelivery | null> {
+    const window = this.replyDeliveries.get(sessionId) ?? new Map<object, OutboxDelivery | null>()
+    this.replyDeliveries.set(sessionId, window)
+    return window
   }
 
   /**
@@ -168,14 +177,20 @@ export class ChatDeliveries {
   /** A chat that already took its message elsewhere (an automation run): its turn is the conversation's. */
   adopt(key: ConversationKey, chat: LinkableChat, text: string): void {
     // Marked first, so the running turn the link joins is the conversation's.
+    const window = this.replyWindow(chat.sessionId)
+    const attempt = {}
+    window.set(attempt, null)
+    const wasDelivered = this.delivered.has(chat.sessionId)
     this.delivered.add(chat.sessionId)
     try {
       this.link(key, chat, text)
     } catch (error) {
-      this.delivered.delete(chat.sessionId)
+      window.delete(attempt)
+      if (!wasDelivered) {
+        this.delivered.delete(chat.sessionId)
+      }
       throw error
     }
-    this.legacyAnswered.add(chat.sessionId)
   }
 
   /** Linked once the chat takes the message, so a refused one never takes a shared chat's replies. */
@@ -198,16 +213,18 @@ export class ChatDeliveries {
     sending.add(attempt)
     this.sending.set(chat.sessionId, sending)
     const current = () => this.generations.get(chat.sessionId) === generation
+    let window = this.replyWindow(chat.sessionId)
+    const reply =
+      delivery.reply && delivery.deliveryId && answersThroughOutbox(key.source)
+        ? { ...delivery.reply, conversation: key, deliveryId: delivery.deliveryId }
+        : null
     // Listed at admission: the turn it starts may begin before the send returns, and none before.
     let sent: { deliveryId: string; sentAt: number } | undefined
-    const admitted = () => {
+    const admitted = (operationId: string) => {
       if (current()) {
         sent = this.admit(chat.sessionId, delivery.deliveryId)
-        // Its turn may end before the send returns: a rows-less one vetoes outbox silence from here.
-        // A later refusal leaves the veto, which only keeps the lost-reply notice until the turn ends.
-        if (!delivery.reply) {
-          this.legacyAnswered.add(chat.sessionId)
-        }
+        window = this.replyWindow(chat.sessionId)
+        window.set(attempt, reply ? { ...reply, operationId } : null)
       }
     }
     const outcome = await deliverToChat((await chats?.ensure()) ?? null, chatLink(key, chat), {
@@ -224,6 +241,14 @@ export class ChatDeliveries {
     }
     // Only a committed send's turn is the delivery's. A bot's title reads what its asker wrote.
     if (outcome.outcome === 'refused') {
+      window.delete(attempt)
+      if (
+        window.size === 0 &&
+        !this.sending.has(chat.sessionId) &&
+        this.replyDeliveries.get(chat.sessionId) === window
+      ) {
+        this.replyDeliveries.delete(chat.sessionId)
+      }
       const left = this.unstarted.get(chat.sessionId)?.filter((entry) => entry !== sent)
       if (left?.length) {
         this.unstarted.set(chat.sessionId, left)
@@ -231,10 +256,12 @@ export class ChatDeliveries {
         this.unstarted.delete(chat.sessionId)
       }
     } else {
-      // Marked first, so a turn the link joins is the delivery's.
-      this.delivered.add(chat.sessionId)
-      if (!delivery.reply) {
-        this.legacyAnswered.add(chat.sessionId)
+      // A turn end that consumed this admission leaves nothing for a late receipt to restore.
+      if (this.replyDeliveries.get(chat.sessionId) === window) {
+        if (!sent) {
+          window.set(attempt, null)
+        }
+        this.delivered.add(chat.sessionId)
       }
       this.link(key, chat, delivery.asker?.text ?? delivery.text, delivery.asker)
     }
