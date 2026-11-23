@@ -28,23 +28,34 @@ describe('saved agent status between batched saves', () => {
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-turn-edge-persistence-'))
     server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     server.stop()
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  it('saves a turn edge within a second and leaves same-turn updates to the batched save', async () => {
+  it('saves turn edges within a second and leaves same-turn updates to the batched save', () => {
     report('working', 'turn one')
-    await vi.waitFor(() => expect(saved().state).toBe('working'), { timeout: 3000 })
+    vi.advanceTimersByTime(0)
+    expect(saved().state).toBe('working')
 
+    // A second edge inside the window waits for it, so a burst of edges shares one write.
     report('done', 'turn one')
-    await vi.waitFor(() => expect(saved().state).toBe('done'), { timeout: 3000 })
+    vi.advanceTimersByTime(999)
+    expect(saved().state).toBe('working')
+    vi.advanceTimersByTime(1)
+    expect(saved().state).toBe('done')
 
     report('done', 'same turn, newer text')
-    // Past the turn-edge window: only the batched save would write this.
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    vi.advanceTimersByTime(60_000)
     expect(saved()).toMatchObject({ state: 'done', prompt: 'turn one' })
+
+    // An edge after a quiet spell saves at once.
+    report('working', 'turn two')
+    vi.advanceTimersByTime(0)
+    expect(saved()).toMatchObject({ state: 'working', prompt: 'turn two' })
   })
 })
