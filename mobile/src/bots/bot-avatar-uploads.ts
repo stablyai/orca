@@ -48,16 +48,15 @@ export function noteListedBots(
   }
 }
 
-/** Forgets every bot a removed paired host listed, its own and its servers', with their pictures. */
-export function forgetBotAvatarUploads(pairedHostId: string): void {
+/** Lets go of a removed paired host's clients, for its own bots and its servers'. Their pictures stay
+ *  while drawn, as another paired host may relay the same server, and go under the budget after. */
+export function forgetBotAvatarClients(pairedHostId: string): void {
   for (const [id, { key }] of listedBy) {
     if (key === pairedHostId || key.startsWith(`${pairedHostId}\n`)) {
       listedBy.delete(id)
       waiting.delete(id)
-      uploads.delete(id)
     }
   }
-  listeners.forEach((listener) => listener())
 }
 
 // After the commit: a remount runs every cleanup before any mount, and must not drop what it draws again.
