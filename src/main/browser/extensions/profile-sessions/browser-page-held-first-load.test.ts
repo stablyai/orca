@@ -25,6 +25,7 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 }
 
 function hold(page: FakePage, ready: Promise<void>): Promise<void> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the held load uses only loadURL, on/off/once and isDestroyed, which FakePage provides.
   const contents = page as unknown as Electron.WebContents
   return loadPageWhenReady(contents, ready, (requested) =>
     contents.loadURL(requested?.url ?? 'https://saved.test/')
@@ -66,6 +67,7 @@ const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolv
 
 function fakeSession(): { sess: Electron.Session; extensions: EventEmitter } {
   const extensions = Object.assign(new EventEmitter(), { getExtension: () => null })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the presence wait reads only session.extensions events and getExtension.
   return { sess: { extensions } as unknown as Electron.Session, extensions }
 }
 
