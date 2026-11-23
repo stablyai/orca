@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type { Cookie, CookiesSetDetails, Session } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as FsPromises from 'node:fs/promises'
+import type * as SecureFile from '../../../../shared/secure-storage/secure-file'
 import { setSecretStore } from '../../../../shared/secure-storage/secret-store'
 import type { CdpCookie } from '../browser-cdp-cookie'
 import type * as ClearStore from '../browser-cookie-clear-store'
@@ -12,12 +13,22 @@ import type * as Trackers from './browser-session-cookie-tracker'
 type Listener = (event: unknown, cookie: Cookie, cause: string, removed: boolean) => void
 
 const sessions = new Map<string, ReturnType<typeof fakeSession>>()
-const io = vi.hoisted(() => ({
+type FakeIo = {
+  rmCalls: number
+  rmFailures: number
+  rmHold: Promise<void> | null
+  writes: number
+  cdpReads: number
+  cdpReply: unknown
+}
+const io = vi.hoisted((): FakeIo => ({
   rmCalls: 0,
   rmFailures: 0,
+  rmHold: null,
+  writes: 0,
   cdpReads: 0,
   // When set, the CDP read replies with this, through the real reply check.
-  cdpReply: undefined as unknown
+  cdpReply: undefined
 }))
 
 vi.mock('electron', () => ({
@@ -34,11 +45,27 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     ...actual,
     rm: async (...args: Parameters<typeof actual.rm>) => {
       io.rmCalls += 1
+      const hold = io.rmHold
+      if (hold) {
+        await hold
+      }
       if (io.rmFailures > 0) {
         io.rmFailures -= 1
         throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' })
       }
       return actual.rm(...args)
+    }
+  }
+})
+
+// Counts sealed writes, so a test can show one never landed, not just that a file went later.
+vi.mock('../../../../shared/secure-storage/secure-file', async (importOriginal) => {
+  const actual = await importOriginal<typeof SecureFile>()
+  return {
+    ...actual,
+    writeSecureFile: (...args: Parameters<typeof actual.writeSecureFile>) => {
+      io.writes += 1
+      return actual.writeSecureFile(...args)
     }
   }
 })
@@ -124,6 +151,11 @@ function fakeSession() {
           session: true,
           sameSite: details.sameSite ?? 'unspecified'
         }
+        // As Chromium does: a set replaces the cookie with the same name, domain and path.
+        jar = jar.filter(
+          (old) =>
+            old.name !== cookie.name || old.domain !== cookie.domain || old.path !== cookie.path
+        )
         jar.push(cookie)
         emitLater(cookie, false)
       },
@@ -206,6 +238,7 @@ async function launch(
   snapshots.configureBrowserSessionCookieSnapshots(directory)
   const restore = await import('./browser-session-cookie-restore')
   const clear = await import('./browser-session-cookie-clear')
+  const retire = await import('./browser-session-cookie-route-restore')
   decryptFails = options.unreadable ?? false
   for (const name of options.unrestorable ?? []) {
     rejectedSets.add(name)
@@ -222,14 +255,21 @@ async function launch(
     decryptFails = false
     rejectedSets.clear()
   }
-  return { jar, target, clear, restore, snapshots }
+  return { jar, target, clear, restore, retire, snapshots }
 }
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'orca-session-cookie-restore-'))
   decryptFails = false
   sealing = true
-  Object.assign(io, { rmCalls: 0, rmFailures: 0, cdpReads: 0, cdpReply: undefined })
+  Object.assign(io, {
+    rmCalls: 0,
+    rmFailures: 0,
+    rmHold: null,
+    writes: 0,
+    cdpReads: 0,
+    cdpReply: undefined
+  })
   setSecretStore({
     isEncryptionAvailable: () => sealing,
     encryptString: (text) => Buffer.from(text, 'utf8'),
@@ -544,59 +584,60 @@ describe('session cookie snapshot of a retired profile', () => {
   }
 
   it('a Google clear after a retirement whose removal failed reports it unverified', async () => {
-    const { restore } = await signedIn()
+    const { retire } = await signedIn()
     io.rmFailures = 1
-    restore.forgetBrowserSessionCookies('default')
+    retire.forgetBrowserSessionCookies('default')
 
     expect(await clearGoogle()).toBe('unverified')
     expect(existsSync(snapshotFile())).toBe(true)
   })
 
   it('a full clear after a retirement whose removal failed fails', async () => {
-    const { target, clear, restore } = await signedIn()
+    const { target, clear, retire } = await signedIn()
     io.rmFailures = 1
-    restore.forgetBrowserSessionCookies('default')
+    retire.forgetBrowserSessionCookies('default')
 
     await expect(clear.clearBrowserCookieJar(target)).rejects.toThrow('not_persisted')
   })
 
   it('a Google clear admitted before a retirement answers with that retirement', async () => {
-    const { jar, restore } = await signedIn()
+    const { jar, retire } = await signedIn()
     const releaseFlush = jar.holdFlush()
     const clearing = clearGoogle()
     await settle()
     io.rmFailures = 1
-    restore.forgetBrowserSessionCookies('default')
+    retire.forgetBrowserSessionCookies('default')
     releaseFlush()
 
     expect(await clearing).toBe('unverified')
   })
 
   it('a Google clear after a retirement that removed the file reports it cleared', async () => {
-    const { restore, snapshots } = await signedIn()
-    restore.forgetBrowserSessionCookies('default')
+    const { retire } = await signedIn()
+    retire.forgetBrowserSessionCookies('default')
 
     expect(await clearGoogle()).toBe('cleared')
     expect(existsSync(snapshotFile())).toBe(false)
-    expect(lastTrackers?.pendingSnapshotRemoval(snapshots.snapshotPath('default'))).toBeUndefined()
     expect((await launch()).jar.names()).toEqual([])
   })
 
   it('a quit save held while the profile is retired does not write the file back', async () => {
-    const { jar, restore } = await signedIn()
+    const { jar, restore, retire } = await signedIn()
     await jar.cookies.set({ url: 'https://example.org/', name: 'new', secure: true })
     await settle()
     const release = jar.holdReads()
     const quit = restore.flushBrowserSessionCookiesOnQuit()
     await settle()
-    restore.forgetBrowserSessionCookies('default')
+    const writes = io.writes
+    retire.forgetBrowserSessionCookies('default')
     release()
     await quit
-    while (lastTrackers?.pendingSnapshotRemoval(snapshotFile())) {
+
+    // Not even for a moment: no write lands after the retirement.
+    expect(io.writes).toBe(writes)
+    while (existsSync(snapshotFile())) {
       await settle()
     }
-
-    expect(existsSync(snapshotFile())).toBe(false)
   })
 })
 
@@ -667,7 +708,8 @@ describe('CDP cookie reply for a saved read', () => {
     return { ...launched, before: readFileSync(snapshotFile()) }
   }
 
-  for (const reply of [{}, { cookies: null }, { cookies: [null] }, { cookies: [{ name: 'x' }] }]) {
+  const invalid = [{}, { cookies: null }, { cookies: [null] }, { cookies: [{ name: 'x' }] }]
+  for (const reply of [...invalid, { cookies: [{ name: 'x', value: 'y' }] }]) {
     it(`a save whose reply is ${JSON.stringify(reply)} fails and leaves the file`, async () => {
       const { before } = await changedAfterLaunch()
       io.cdpReply = reply
@@ -724,6 +766,34 @@ describe('session cookie snapshot with a cookie launch could not restore', () =>
     expect((await launch()).jar.names()).toEqual(['other', 'sid'])
   })
 
+  it('a change to its unpartitioned twin keeps the partitioned one it shares a scope with', async () => {
+    const partitioned: CdpCookie = {
+      ...sessionCookie('sid', 'example.com'),
+      partitionKey: { topLevelSite: 'https://a.example', hasCrossSiteAncestor: false }
+    }
+    await saveSnapshot([sessionCookie('sid', 'example.com'), partitioned])
+    const { jar } = await launch()
+    expect(jar.names()).toEqual(['sid'])
+    io.cdpReads = 0
+
+    await jar.cookies.set({
+      url: 'https://example.com/',
+      name: 'sid',
+      value: 'newer',
+      secure: true
+    })
+    await settle()
+    await elapse(30_000)
+
+    expect(io.cdpReads).toBe(1)
+    const persisted = JSON.parse(readFileSync(snapshotFile(), 'utf8'))
+    const saved: CdpCookie[] = JSON.parse(Buffer.from(persisted.cookies, 'base64').toString('utf8'))
+    expect(saved.map((cookie) => [cookie.value, cookie.partitionKey?.topLevelSite])).toEqual([
+      ['newer', undefined],
+      ['sid-value', 'https://a.example']
+    ])
+  })
+
   it('a real sign-out elsewhere and a newer value for it still stick', async () => {
     const { jar } = await partlyRestored()
 
@@ -740,5 +810,136 @@ describe('session cookie snapshot with a cookie launch could not restore', () =>
     const relaunched = await launch()
     expect(relaunched.jar.names()).toEqual(['sid'])
     expect((await relaunched.jar.cookies.get()).map((cookie) => cookie.value)).toEqual(['newer'])
+  })
+})
+
+describe('a cookie clear, quit and retirement at the real callers', () => {
+  const ROUTE = `persist:orca-browser-v1-${'a'.repeat(64)}`
+  const signedIn = async () => {
+    await saveSnapshot([sessionCookie('sid', 'example.com'), sessionCookie('SID', 'google.com')])
+    return launch()
+  }
+  const settleUntil = async (done: () => boolean) => {
+    for (let i = 0; i < 200 && !done(); i++) {
+      await settle()
+    }
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  })
+
+  it('quit waits for a Google clear admitted before its live deletion', async () => {
+    const { jar, restore } = await signedIn()
+    // The restore's own cookie events are saved first, so quit has nothing of its own to read.
+    await settle()
+    await elapse(30_000)
+    const release = jar.holdReads()
+    const clearing = clearGoogle()
+    await settle()
+    let quitDone = false
+    const quit = restore.flushBrowserSessionCookiesOnQuit().then(() => (quitDone = true))
+    await settleUntil(() => quitDone)
+
+    expect(quitDone).toBe(false)
+    release()
+    expect(await clearing).toBe('cleared')
+    await quit
+    expect((await launch()).jar.names()).toEqual(['sid'])
+  })
+
+  it('a Google clear revoked midway persists nothing', async () => {
+    await signedIn()
+    const before = readFileSync(snapshotFile())
+    let checks = 0
+    const google = await import('../browser-google-cookie-clear')
+
+    const result = await google.clearGoogleCookiesFromPartition(PARTITION, () => {
+      checks += 1
+      if (checks > 1) {
+        throw new Error('The browser profile connection changed. Try again.')
+      }
+    })
+
+    expect(result).toBe('unverified')
+    expect(readFileSync(snapshotFile())).toEqual(before)
+  })
+
+  it('a later retirement that left the file answers a clear with its own receipt', async () => {
+    const { retire, snapshots } = await signedIn()
+    retire.forgetBrowserSessionCookies('default')
+    await settleUntil(() => !existsSync(snapshotFile()))
+    // The file is back (written outside this jar's tracking), and its next retirement can't remove it.
+    await snapshots.writeSessionCookieSnapshot(snapshotFile(), [sessionCookie('SID', 'google.com')])
+    io.rmFailures = 1
+    retire.forgetBrowserSessionCookies('default')
+
+    expect(await clearGoogle()).toBe('unverified')
+  })
+
+  it('quit waits for a retirement still removing its file', async () => {
+    const { restore, retire } = await signedIn()
+    let releaseRemoval = () => {}
+    io.rmHold = new Promise((resolve) => (releaseRemoval = resolve))
+    retire.forgetBrowserSessionCookies('default')
+    await settle()
+    let quitDone = false
+    const quit = restore.flushBrowserSessionCookiesOnQuit().then(() => (quitDone = true))
+    await settleUntil(() => quitDone)
+
+    expect(quitDone).toBe(false)
+    io.rmHold = null
+    releaseRemoval()
+    await quit
+    expect(existsSync(snapshotFile())).toBe(false)
+  })
+
+  it('a Google clear queued behind quit edits what quit wrote, so a sign-out sticks', async () => {
+    const { jar, restore } = await signedIn()
+    await jar.cookies.remove('https://example.com/', 'sid')
+    await settle()
+    const release = jar.holdReads()
+    const quit = restore.flushBrowserSessionCookiesOnQuit()
+    await settle()
+    const clearing = clearGoogle()
+    await settle()
+    release()
+    await quit
+    await clearing
+
+    expect((await launch()).jar.names()).toEqual([])
+  })
+
+  it('a full clear of an unread file settles without reading the jar, and later cookies save', async () => {
+    await saveSnapshot([sessionCookie('sid', 'example.com')])
+    const { jar, target, clear } = await launch({ unreadable: true })
+    const release = jar.holdReads()
+    let done = false
+    const clearing = clear.clearBrowserCookieJar(target).then(() => (done = true))
+    await settleUntil(() => done)
+
+    expect(done).toBe(true)
+    await jar.cookies.set({ url: 'https://example.org/', name: 'after', secure: true })
+    release()
+    await clearing
+    await settle()
+    await elapse(30_000)
+    expect((await launch()).jar.names()).toEqual(['after'])
+  })
+
+  it('a route jar being retired is not restored again until its release', async () => {
+    const { retire } = await launch()
+    sessions.set(ROUTE, fakeSession())
+    const tracked = () => lastTrackers?.sessionCookieTrackers.size
+    await retire.restoreBrowserRoutePartitionSessionCookies(ROUTE)
+    expect(tracked()).toBe(2)
+
+    await retire.forgetBrowserRoutePartitionSessionCookies(ROUTE)
+    await retire.restoreBrowserRoutePartitionSessionCookies(ROUTE)
+    expect(tracked()).toBe(1)
+
+    retire.releaseRetiredRoutePartitions([ROUTE])
+    await retire.restoreBrowserRoutePartitionSessionCookies(ROUTE)
+    expect(tracked()).toBe(2)
   })
 })

@@ -3,8 +3,8 @@ import { browserSessionRegistry } from '../sessions/profiles/browser-session-reg
 import { session, type Cookies } from 'electron'
 import type { GoogleCookieClearResult } from '../../../shared/browser/cookies/browser-google-cookie-clear'
 import { withCookieMutationLock } from './mutation/cookie-mutation-lock'
-import { persistBrowserCookieClear } from './session-restore/browser-session-cookie-clear'
-import { sessionCookieTrackerFor } from './session-restore/browser-session-cookie-tracker'
+import { clearCookiesDurably } from './session-restore/browser-session-cookie-clear'
+import { admittedSessionCookieTracker } from './session-restore/browser-session-cookie-tracker'
 import { cookieRemovalUrl } from './storage/cookie-removal-url'
 import { isNonTransplantableCookieDomain } from './policy/cookie-import-exclusions'
 import { normalizeCookieDomain } from './policy/cookie-domain'
@@ -51,10 +51,13 @@ export async function clearGoogleCookiesFromPartition(
   validate?: () => void
 ): Promise<GoogleCookieClearResult> {
   const target = session.fromPartition(partition)
-  await sessionCookieTrackerFor(target)?.restored
-  const result = await clearGoogleCookies(target, validate)
-  const persisted = await persistBrowserCookieClear(target, (cookie) =>
-    isNonTransplantableCookieDomain(cookie.domain ?? '')
+  await admittedSessionCookieTracker(target)?.restored
+  // A clear revoked midway (the profile or route changed) reports 'unverified' and persists nothing.
+  const { result, persisted } = await clearCookiesDurably(
+    target,
+    (cookie) => isNonTransplantableCookieDomain(cookie.domain ?? ''),
+    () => clearGoogleCookies(target, validate),
+    (live) => live !== 'unverified'
   )
   // The saved session cookies may still sign Google back in on restart: not a success.
   return persisted || (result !== 'cleared' && result !== 'empty') ? result : 'unverified'

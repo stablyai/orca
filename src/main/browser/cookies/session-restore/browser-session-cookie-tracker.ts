@@ -1,8 +1,6 @@
 import type { Cookie, Session } from 'electron'
 import type { CdpCookie } from '../browser-cdp-cookie'
-import { cdpCookieScopeKey } from '../browser-cookie-clear-store'
-import { groupByScope, type ScopeChange } from './browser-session-cookie-scopes'
-import { writeSessionCookieSnapshot } from './browser-session-cookie-snapshot-file'
+import type { ScopeChange } from './browser-session-cookie-scopes'
 
 export type SessionCookieTracker = {
   target: Session
@@ -21,10 +19,12 @@ export type SessionCookieTracker = {
   /** Set until the file has been read: a save before then would compare against nothing. */
   reading: boolean
   /**
-   * Scopes whose saved cookies launch could not put back in the jar. A live read can't show them,
-   * so they stay as saved until a cookie event there proves a real change.
+   * Saved cookies launch could not put back in the jar, by scope. A scope can hold several
+   * partitioned twins, so each is kept as saved until a CDP read shows that one live.
    */
-  unrestored: Set<string>
+  unrestored: Map<string, CdpCookie[]>
+  /** Set when changes went unrecorded (a clear of a file launch couldn't read): the next save reads the whole jar. */
+  fullRead: boolean
   /** Scopes whose cookies changed since `saved` was read. */
   changedScopes: Map<string, ScopeChange>
   /** Set while a save reads: scopes that changed meanwhile, which the read may have missed. */
@@ -42,8 +42,9 @@ export type SessionCookieTracker = {
 // Why keyed by file path: the same browser profile id ('default') exists in every Orca profile.
 export const sessionCookieTrackers = new Map<string, SessionCookieTracker>()
 
-// A retired tracker, by jar, so a clear admitted before the retirement can await its receipt.
-const retiredTrackers = new WeakMap<Session, SessionCookieTracker>()
+// The tracker last retired for each file, until a new tracker takes the file: a clear admitted to
+// it answers with the latest retirement's receipt. One per file a tracker held this launch.
+const retiredTrackers = new Map<string, SessionCookieTracker>()
 // A file's removal still running, so a later tracker for the same file starts after it.
 const pendingRemovals = new Map<string, Promise<void>>()
 
@@ -70,7 +71,7 @@ export function retireSessionCookieSnapshot(
   filePath: string,
   remove: (filePath: string) => Promise<void>
 ): Promise<void> {
-  const tracker = sessionCookieTrackers.get(filePath)
+  const tracker = sessionCookieTrackers.get(filePath) ?? retiredTrackers.get(filePath)
   stopTrackingSessionCookies(filePath)
   const before = Promise.all([tracker?.saving, pendingRemovals.get(filePath)])
   const removal = before.then(() => remove(filePath))
@@ -85,24 +86,50 @@ export function retireSessionCookieSnapshot(
     }
   })
   if (tracker) {
+    // A retirement with no tracker left still answers clears admitted to the one retired before.
     tracker.saved = new Map()
+    tracker.unrestored = new Map()
     tracker.retired = removal.then(
       () => true,
       () => false
     )
-    retiredTrackers.set(tracker.target, tracker)
+    retiredTrackers.set(filePath, tracker)
   }
   return removal
 }
 
 /** The tracker a clear on this jar answers to: the current one, else the one retired last. */
 export function admittedSessionCookieTracker(target: Session): SessionCookieTracker | undefined {
-  return sessionCookieTrackerFor(target) ?? retiredTrackers.get(target)
+  return (
+    sessionCookieTrackerFor(target) ??
+    [...retiredTrackers.values()].find((tracker) => tracker.target === target)
+  )
+}
+
+/** Whether the latest retirement of a retired tracker's file removed it. */
+export async function retirementRemovedFile(tracker: SessionCookieTracker): Promise<boolean> {
+  for (;;) {
+    const receipt = tracker.retired
+    const removed = (await receipt) ?? false
+    if (tracker.retired === receipt) {
+      return removed
+    }
+  }
+}
+
+/** For a new tracker taking a file: the retired one no longer answers for it. */
+export function releaseRetiredTracker(filePath: string): void {
+  retiredTrackers.delete(filePath)
 }
 
 /** Settles once a retirement's removal of this file has finished, if one is running. */
 export function pendingSnapshotRemoval(filePath: string): Promise<void> | undefined {
   return pendingRemovals.get(filePath)
+}
+
+/** Every retirement removal still running. */
+export function pendingSnapshotRemovals(): Promise<void>[] {
+  return [...pendingRemovals.values()]
 }
 
 export function cancelPendingSave(tracker: SessionCookieTracker): void {
@@ -127,14 +154,4 @@ export function queueSnapshotWrite<T>(
     })
   tracker.saving = settled
   return run
-}
-
-/** Writes the file, then records what it holds: a failed write must leave the next save something to write. */
-export async function writeTrackedSnapshot(
-  tracker: SessionCookieTracker,
-  cookies: CdpCookie[]
-): Promise<void> {
-  await writeSessionCookieSnapshot(tracker.filePath, cookies)
-  tracker.saved = groupByScope(cookies, cdpCookieScopeKey)
-  tracker.savedFile = 'same'
 }

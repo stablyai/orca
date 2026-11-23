@@ -2,7 +2,8 @@ import { isBrowserRoutePartition } from '../../routing/partitions/browser-route-
 import { restoreSnapshotTargets } from './browser-session-cookie-restore'
 import {
   removeSessionCookieSnapshot,
-  routeSnapshotPath
+  routeSnapshotPath,
+  snapshotPath
 } from './browser-session-cookie-snapshot-file'
 import { retireSessionCookieSnapshot } from './browser-session-cookie-tracker'
 
@@ -26,23 +27,44 @@ export async function restoreBrowserRoutePartitionSessionCookies(partition: stri
   return restore
 }
 
-/** For route partition storage being cleared: its saved session cookies go with it, before the jar is. */
+/**
+ * For route partition storage being cleared: its saved session cookies go with it, before the jar
+ * is. Its restore stays settled until `releaseRetiredRoutePartitions`, after the native wipe and
+ * the binding removal, so no page restores (and tracks) the jar while it is still being retired.
+ */
 export async function forgetBrowserRoutePartitionSessionCookies(partition: string): Promise<void> {
   if (!isBrowserRoutePartition(partition)) {
     return
   }
   const filePath = routeSnapshotPath(partition)
-  try {
-    // File first: any restore that starts from here on reads nothing.
-    await retireSessionCookieSnapshot(filePath, removeSessionCookieSnapshot)
-  } finally {
-    // One that read it already (or ran past its page's timeout) finishes before the jar is cleared,
-    // and the next restore tracks the jar again even when the file could not go.
-    const restore = routeRestores.get(filePath)
-    await restore
-    // Only after it settles, so an overlapping retirement waits for the same restore.
-    if (routeRestores.get(filePath) === restore) {
-      routeRestores.delete(filePath)
+  // One already reading the file (or past its page's timeout) finishes before the file goes.
+  const restore = routeRestores.get(filePath)
+  routeRestores.set(filePath, restore ?? Promise.resolve())
+  await restore
+  // File first: any restore that starts from here on reads nothing.
+  await retireSessionCookieSnapshot(filePath, removeSessionCookieSnapshot)
+}
+
+/** After a route partition's wipe and binding removal: its next page restores and tracks it again. */
+export function releaseRetiredRoutePartitions(partitions: readonly string[]): void {
+  for (const partition of partitions) {
+    if (isBrowserRoutePartition(partition)) {
+      routeRestores.delete(routeSnapshotPath(partition))
     }
   }
+}
+
+/** For a browser profile being deleted. */
+export function forgetBrowserSessionCookies(profileId: string): void {
+  try {
+    void retireSessionCookieSnapshot(snapshotPath(profileId), removeSessionCookieSnapshot).catch(
+      (error: unknown) => warnForgetFailed(profileId, error)
+    )
+  } catch (error) {
+    warnForgetFailed(profileId, error)
+  }
+}
+
+function warnForgetFailed(label: string, error: unknown): void {
+  console.warn('[browser-session-cookies] Could not delete saved cookies for', label, error)
 }

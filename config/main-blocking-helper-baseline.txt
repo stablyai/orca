@@ -138,7 +138,7 @@
 4 src/main/browser/cookies/imports/import-validated-cookies.ts
 3 src/main/browser/cookies/route-partition/browser-route-partition-cookie-import.ts # browser cookie source detection moved here from the import IPC and client-route import
 1 src/main/browser/cookies/route-partition/browser-ssh-route-cookie-import.ts # same source detection as the local import IPC
-2 src/main/browser/cookies/session-restore/browser-session-cookie-restore.ts
+1 src/main/browser/cookies/session-restore/browser-session-cookie-restore.ts
 1 src/main/browser/cookies/session-restore/browser-session-cookie-snapshot-file.ts
 5 src/main/browser/cookies/sources/browser-cookie-detection.ts
 4 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
