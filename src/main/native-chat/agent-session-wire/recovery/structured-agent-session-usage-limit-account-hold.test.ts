@@ -66,6 +66,37 @@ it('holds it while the account it moved to is spent too', async () => {
   expect(holds.verdict('chat', cut, SWITCHED + 20_000).resetsAt).toBe(spentUntil)
 })
 
+it('does not use an old-account reading after a moved chat changes reading source', async () => {
+  let current = true
+  const holds = new UsageLimitAccountHolds()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attribution reads only these fields
+  const host = {
+    store: {
+      getRecord: () => ({
+        provider: 'codex',
+        location: { wslDistro: null },
+        launchedAccount: { fence: 3, accountHome: HIT },
+        lease: { runtimeFence: 3 }
+      })
+    },
+    launchAccountHome: async () => NEXT,
+    usageLimitAutoContinue: {
+      accountUsage: async () => ({
+        scope: NEXT.path,
+        account: {
+          key: NEXT.path,
+          read: () => (current ? reading({ usedPercent: 0, resetsAt: SWITCHED }) : null),
+          refresh: () => true
+        }
+      })
+    }
+  } as unknown as Parameters<UsageLimitAccountHolds['attribute']>[1]
+  await holds.attribute('chat', host, CUT, SWITCHED)
+  current = false
+  const cut = holds.withSwitchReset('chat', CUT)
+  expect(holds.ready('chat', cut, SWITCHED + 20_000)).toBe(false)
+})
+
 it('leaves an unknown reset unknown when the chat never moved accounts', async () => {
   const holds = await attributed(HIT, reading({ usedPercent: 10, resetsAt: SWITCHED + 3_600_000 }))
   const cut = holds.withSwitchReset('chat', CUT)
