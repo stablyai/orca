@@ -2,6 +2,7 @@ import { isIP } from 'node:net'
 import { networkInterfaces, type NetworkInterfaceInfo } from 'node:os'
 import {
   isAutoAdvertisablePairingInterface,
+  isTunnelInterface,
   isVirtualBridgeInterface,
   selectAutoAdvertisedPairingAddress
 } from '../../../../../../shared/remote-runtime/pairing/pairing-address-auto-selection'
@@ -130,9 +131,11 @@ function rankInterface({ name, address, hasDefaultRoute }: NetworkInterface): nu
     return 0
   }
   const bridgePenalty = isVirtualBridgeInterface(name, hasDefaultRoute) ? 2 : 0
+  // A tunnel's default route is synthetic: keep it behind the LAN even when it holds the route.
+  const tunnelPenalty = isTunnelInterface(name) ? 2 : 0
   // The default-route adapter is the one the LAN reaches; it wins ties with idle or VPN adapters.
   const defaultRouteBonus = hasDefaultRoute ? 0.5 : 0
-  return (address.includes(':') ? 2 : 1) + bridgePenalty - defaultRouteBonus
+  return (address.includes(':') ? 2 : 1) + bridgePenalty + tunnelPenalty - defaultRouteBonus
 }
 
 export async function getDefaultPairingAddress(
