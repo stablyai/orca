@@ -17,16 +17,19 @@ export function powerShellNativeLaunch(
   prependArgs = '',
   after = ''
 ): string {
-  if (
-    command.includes('--%', launch.end) &&
-    (readLaunchArguments(command, 'powershell', launch)?.includes('--%') ?? true)
-  ) {
+  const args = readLaunchArguments(command, 'powershell', launch)
+  if (command.includes('--%', launch.end) && (args?.includes('--%') ?? true)) {
     return command
   }
+  // A native program gets a bare a,b as one argument, but a script block gets an array: quote literal argv.
+  const suffix =
+    args && command.includes(',', launch.end)
+      ? args.map((arg) => ` ${quotePowerShellLiteral(arg)}`).join('')
+      : command.slice(launch.end)
   const escape = `if (-not (Test-Path Function:__OrcaEscapeNativeArgs)) { ${ESCAPE_FUNCTION} }; $orcaNativeArgs = @(__OrcaEscapeNativeArgs $orcaProgram (${prependArgs}@($args))); `
   // PowerShell consumes the first -- for a script block, preserving later -- and leaving flags unbound.
   const program = quotePowerShellLiteral(launch.executable)
-  return `${command.slice(0, launch.invocationStart)}& { $orcaProgram = ${program}; ${before}${escape}${INVOCATION}${after}${SCRIPT_END}${command.slice(launch.end)}`
+  return `${command.slice(0, launch.invocationStart)}& { $orcaProgram = ${program}; ${before}${escape}${INVOCATION}${after}${SCRIPT_END}${suffix}`
 }
 
 export function unwrapPowerShellNativeLaunch(command: string): string {

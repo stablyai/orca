@@ -209,3 +209,13 @@ it('ends PowerShell Claude account routing before the next statement', () => {
   )
   expect(recognizeAgentProcessFromCommandLine(command)?.agent).toBe('claude')
 })
+
+it('passes a bare PowerShell comma argument to Codex as one argument', () => {
+  const command = prepareShellNativeAgentLaunch(
+    `& 'C:\\tools\\codex.exe' --add-dir C:\\work\\one,two 'a,b'`,
+    'powershell',
+    false
+  )
+  expect(command.endsWith(` } -- '--add-dir' 'C:\\work\\one,two' 'a,b'`)).toBe(true)
+  expect(recognizeAgentProcessFromCommandLine(command)?.agent).toBe('codex')
+})
