@@ -325,6 +325,8 @@ export type DispatchContextRow = {
    *  answers (`worker-start --for`); retries inherit both. */
   origin_ref: string | null
   for_message_id: string | null
+  /** 1 when this worker, and every worker it starts, starts as a chat wherever one can run. */
+  chat_lineage: 1 | null
 }
 
 export type DecisionGateRow = {

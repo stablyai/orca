@@ -2,6 +2,7 @@ import {
   type RecognizedAgentProcess,
   recognizeAgentProcess
 } from '../../../../../shared/agent-status/process/agent-process-recognition'
+import { isShellProcess } from '../../../../../shared/agent-status/process/shell-process-detection'
 import { parseAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { admitRemoteForegroundEvidence } from '../../../../../shared/terminal/pty/foreground/remote-foreground-evidence-admission'
 import {
@@ -13,6 +14,7 @@ import { getRemoteRuntimeTerminalHandle } from '@/runtime/hosted-terminals/ident
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
 import type { LastCompletionIdentity } from './agent-completion-identity-store'
 import type { ProcessMonitorState } from './agent-completion-process-types'
+import type { CadenceFollowUp } from './agent-completion-poll-scheduler'
 import { POLL_TIER_INTERVAL_MS } from './agent-completion-poll-cadence'
 
 export type RemoteInspectionState = {
@@ -38,7 +40,7 @@ export function handleAgentCompletionInspectionResult(args: {
   state: ProcessMonitorState
   clearAgentRunEvidence: () => void
   hasPendingHookDone: () => boolean
-  scheduleNextPoll: () => void
+  requestFollowUp: (kind: CadenceFollowUp) => void
   handleRecognizedProcess: (process: RecognizedAgentProcess) => void
   dispatchCompletion: CompletionDispatch
   remoteInspection: RemoteInspectionState
@@ -50,7 +52,7 @@ export function handleAgentCompletionInspectionResult(args: {
     state,
     clearAgentRunEvidence,
     hasPendingHookDone,
-    scheduleNextPoll,
+    requestFollowUp,
     handleRecognizedProcess,
     dispatchCompletion,
     remoteInspection
@@ -62,10 +64,12 @@ export function handleAgentCompletionInspectionResult(args: {
   ) {
     state.pendingProcessExit = null
     state.consecutiveInspectionErrors += 1
-    scheduleNextPoll()
+    requestFollowUp('error')
     return false
   }
   if (remote) {
+    state.idleShellUnproven = false
+    state.foregroundIsCommand = false
     const evidence = result.foregroundProcessEvidence
     // Only authoritative remote evidence may change routing or synthesize exit; legacy names and unverifiable reads cannot.
     const expectedIncarnationId = options.getExpectedIncarnationId?.() ?? null
@@ -136,18 +140,33 @@ export function handleAgentCompletionInspectionResult(args: {
   }
   state.consecutiveInspectionErrors = 0
   const recognized = recognizeAgentProcess(result.foregroundProcess)
+  const exitNoticed =
+    result.foregroundExitWatched === true && options.receivesForegroundExitNotices?.() !== false
+  // A command can start an agent with no OS event, so only a host's proof of an idle shell ends re-checks; a pane
+  // that cannot receive host facts would also miss runtime-input notices, so it keeps re-checking.
+  state.idleShellUnproven =
+    !recognized &&
+    (result.idleShellProven !== true || options.receivesForegroundExitNotices?.() === false)
+  state.foregroundIsCommand =
+    !recognized && result.foregroundProcess !== null && !isShellProcess(result.foregroundProcess)
   if (recognized) {
     handleRecognizedProcess(recognized)
+    // Without the host's exit notice a silent exit has no event, so keep the slow re-check that caught it.
+    // A watched pid also settles a cached name the child census contradicts: its exit is the notice.
+    if (!exitNoticed) {
+      requestFollowUp('unresolved')
+    }
     return true
   }
   if (hasPendingHookDone()) {
-    scheduleNextPoll()
+    requestFollowUp('pending')
     return false
   }
   if (state.lastForegroundAgent && state.hasAgentRunEvidence) {
     if (result.hasChildProcesses) {
       state.pendingProcessExit = null
-      scheduleNextPoll()
+      // A background child can outlive the agent silently, so keep reading until it settles.
+      requestFollowUp('unresolved')
       return false
     }
     const pending = state.pendingProcessExit
@@ -160,11 +179,11 @@ export function handleAgentCompletionInspectionResult(args: {
         process: state.lastForegroundAgent,
         firstObservedAtMonotonic: performance.now()
       }
-      scheduleNextPoll()
+      requestFollowUp('pending')
       return false
     }
     if (performance.now() - pending.firstObservedAtMonotonic <= LOCAL_PROCESS_EXIT_SETTLE_MS) {
-      scheduleNextPoll()
+      requestFollowUp('pending')
       return false
     }
     const exited = state.lastForegroundAgent
@@ -182,9 +201,15 @@ export function handleAgentCompletionInspectionResult(args: {
     state.lastForegroundAgent = null
     clearAgentRunEvidence()
     options.onForegroundAgentExited?.(exited)
+    if (state.idleShellUnproven) {
+      requestFollowUp('unresolved')
+    }
   } else {
     state.lastForegroundAgent = null
     clearAgentRunEvidence()
+    if (state.idleShellUnproven) {
+      requestFollowUp('unresolved')
+    }
   }
   return false
 }

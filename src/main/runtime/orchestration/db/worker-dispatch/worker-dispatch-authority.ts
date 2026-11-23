@@ -32,6 +32,18 @@ export function prepareStartingWorkerAuthority(
         `Dispatch ${params.dispatchId} is not starting.`
       )
     }
+    // A terminal this start created binds only the process its custody recorded, never a replacement.
+    const custody = this.getWorkerTerminalResourceByOwner(params.dispatchId)
+    if (
+      params.terminalOwnership === 'created' &&
+      custody?.process_incarnation &&
+      custody.process_incarnation !== params.processIncarnation
+    ) {
+      throw new OrchestrationError(
+        'worker_identity_changed',
+        `Terminal ${params.handle} no longer runs the process Dispatch ${params.dispatchId} started.`
+      )
+    }
     if (
       dispatch.launch_token_hash &&
       params.launchTokenHash &&

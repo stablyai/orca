@@ -13,6 +13,7 @@ export type WorkerTerminalReleaseRuntime = StructuredSessionSurfaceRuntime &
     | 'showTerminal'
     | 'resolveTerminalHandleByProcessIncarnation'
     | 'getTerminalPaneKey'
+    | 'getTerminalHandleForPaneKey'
     | 'getTerminalProcessIncarnation'
     | 'getTerminalLivenessVerdict'
     | 'checkTerminalAgentPresence'

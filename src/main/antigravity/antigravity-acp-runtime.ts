@@ -6,6 +6,7 @@ import { probeAntigravityAcpServer } from './antigravity-acp-runtime-probe'
 
 // 1.4.2 and later write skills/system/run-workflow/SKILL.md into the chat's workspace unless the
 // session disables run_workflow; check a newer release in an empty folder before moving this pin.
+// Also check which client names it offers non-Gemini models to (managedServerClientInfo).
 const VERSION = '1.5.2'
 const RELEASES = 'https://dl.google.com/agy-extensions/releases'
 const COMMAND = process.platform === 'win32' ? 'agy_acp_server.exe' : 'agy_acp_server.par'
@@ -99,6 +100,8 @@ export const ANTIGRAVITY_ACP_RUNTIME: ManagedRuntime = {
   label: 'Antigravity',
   root: (dataDirectory) => join(dataDirectory, 'agent-runtimes', 'antigravity'),
   pin,
+  // A newer Orca pins a newer server; chats on the old one keep running it until they end.
+  updatesToPin: true,
   validate: (folder, pinned, signal) =>
     probeAntigravityAcpServer(join(folder, COMMAND), pinned.version, signal)
 }

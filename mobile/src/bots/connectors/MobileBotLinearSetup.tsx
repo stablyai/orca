@@ -22,6 +22,7 @@ import type { PhoneBot } from '../host-bots-operations'
 import { MobileConnectorSourceIcon } from '../MobileConnectorSourceIcon'
 import { ConnectorHandoff, useFollowHost } from './MobileConnectorAccountParts'
 import { connectorAccountErrorMessage, linearWorkspaceLabel } from './mobile-connector-account-copy'
+import { MobileConnectorTryIt } from './MobileConnectorTryIt'
 import type { PhoneLinearView } from './use-phone-connector-account'
 import { usePhoneConnectTrip } from './use-phone-connect-trip'
 
@@ -65,7 +66,7 @@ export function MobileBotLinearSetup(props: {
   showToast: (message: string, durationMs?: number) => void
   save: (updates: { linearWorkspaces: BotLinearLink[] }) => Promise<boolean>
   onClose: () => void
-  /** Turned on: the workspace's page takes over. */
+  /** Turned on, after Try it: the workspace's page takes over. */
   onDone: (workspaceId: string) => void
 }) {
   const t = useMobileTranslation()
@@ -73,6 +74,8 @@ export function MobileBotLinearSetup(props: {
   const clipboard = useClipboardWriter()
   const [picked, setPicked] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  /** The workspace it turned on in: Try it shows. */
+  const [done, setDone] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const { trip, start, cancel } = usePhoneConnectTrip(
     props.client,
@@ -81,7 +84,11 @@ export function MobileBotLinearSetup(props: {
     linear.refresh
   )
   useBackClaim(() => {
-    props.onClose()
+    if (done) {
+      props.onDone(done)
+    } else {
+      props.onClose()
+    }
     return true
   })
 
@@ -125,8 +132,7 @@ export function MobileBotLinearSetup(props: {
     })
     setSaving(false)
     if (saved) {
-      props.showToast(t('bots.linear.setup.isOn', '{{name}} is on Linear', { name: bot.name }))
-      props.onDone(workspace.workspaceId)
+      setDone(workspace.workspaceId)
     }
   }
   // The sign-in was for turning the bot on: once it links an installed workspace, it turns on there.
@@ -151,6 +157,32 @@ export function MobileBotLinearSetup(props: {
   // An admin installs whenever they get to it, so the step follows the host while it shows.
   useFollowHost(step.kind === 'needs-admin', refresh)
 
+  if (done) {
+    const mention = `@Orca ${bot.folder}`
+    const label = `bot:${bot.folder}`
+    return (
+      <MobileConnectorTryIt
+        connector="linear"
+        subtitle={t('bots.linear.setup.isOn', '{{name}} is on Linear', { name: bot.name })}
+        heading={t('bots.linear.setup.tryIt', 'Try it on any Linear issue')}
+        ways={[
+          { key: 'mention', title: mention, copy: mention },
+          {
+            key: 'label',
+            title: label,
+            subtitle: t('bots.linear.setup.orLabel', 'or add the label'),
+            copy: label
+          }
+        ]}
+        note={t('bots.linear.setup.actsOnHost', 'Orca acts as that Linear user from {{host}}.', {
+          host: hostName
+        })}
+        banner={props.banner}
+        showToast={props.showToast}
+        onDone={() => props.onDone(done)}
+      />
+    )
+  }
   const error = (code: string) => connectorAccountErrorMessage('linear', code, hostName, t)
   const another = (
     <ListRow

@@ -111,6 +111,11 @@ export function slackTeamState(
   )
 }
 
+/** Slack's own link to an app's direct messages in its workspace: it opens the Slack app there. */
+export function slackAppMessagesUrl(appId: string, teamId: string): string {
+  return `https://slack.com/app_redirect?${new URLSearchParams({ app: appId, team: teamId }).toString()}`
+}
+
 export type SlackPostAs = 'person' | 'computer'
 
 // POST `${bots}/<id>/slack/post-as`: applied at once (the setup's own pick, naming its install link's

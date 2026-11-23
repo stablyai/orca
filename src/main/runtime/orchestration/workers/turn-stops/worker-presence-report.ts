@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
@@ -12,10 +11,14 @@ import {
   type WorkerPresenceRow
 } from '../../db/worker-presence/worker-presence-store'
 import {
+  approvalReportId,
   isDeliberateRest,
+  isFailedLeadTurnFence,
+  presenceReportId,
   sendWorkerReport,
   stopReportId,
   workerTurnStopDispatchId,
+  type WorkerRestFact,
   type WorkerTurnStop,
   type WorkerTurnStopDispatch,
   type WorkerTurnStopReportDeps
@@ -27,18 +30,9 @@ const LIVE_ATTACHMENT_STATES: readonly string[] = POTENTIALLY_LIVE_REMOTE_ATTACH
 // Kept with an undecided rest; the report shows only the end of it.
 const STORED_OUTPUT_MAX_CHARS = 2_000
 
-export type WorkerRest = Pick<
-  WorkerTurnStop,
-  | 'from'
-  | 'lastOutput'
-  | 'awaitsReply'
-  | 'approval'
-  | 'turnStartedAt'
-  | 'mailTaken'
-  | 'requestError'
-  | 'startSurface'
-  | 'blockedStart'
-> & { reason: 'finished' | 'errored' | 'needs-input' | 'start-unconfirmed' | 'start-blocked' }
+export type WorkerRest = Pick<WorkerTurnStop, WorkerRestFact> & {
+  reason: Exclude<WorkerTurnStop['reason'], WorkerGone['reason']>
+}
 
 export type WorkerGone = Pick<
   WorkerTurnStop,
@@ -292,27 +286,19 @@ function reconcileWorkerReport(
     writeWorkerPresence(db, dispatchId, decided(finishedMail))
     return false
   }
+  // A background wait is one fact however often a prompt interrupts it.
   const id =
     'approval' in rest && rest.approval
       ? approvalReportId(dispatchId, rest.approval.approvalId)
-      : presenceReportId(dispatchId, row.generation)
+      : 'backgroundWait' in rest && rest.backgroundWait
+        ? stopReportId(dispatchId, `background:${rest.backgroundWait.since}`)
+        : isFailedLeadTurnFence(row.fence)
+          ? stopReportId(dispatchId, row.fence)
+          : presenceReportId(dispatchId, row.generation)
   const sent = sendWorkerReport(db, target, rest, id, deps, () =>
     writeWorkerPresence(db, dispatchId, decided(finishedMail))
   )
   return sent || keep()
-}
-
-/** One stable id per rest: writing it twice, here or at a Run home, is a no-op. */
-export function presenceReportId(dispatchId: string, generation: number): string {
-  return `msg_rest_${createHash('sha256')
-    .update(JSON.stringify([dispatchId, generation]))
-    .digest('hex')
-    .slice(0, 24)}`
-}
-
-/** Approvals open and close on their own, so each keeps one report whatever the worker does meanwhile. */
-export function approvalReportId(dispatchId: string, approvalId: string): string {
-  return stopReportId(dispatchId, `approval:${approvalId}`)
 }
 
 /** A build before the presence table may already have told the coordinator of this rest, by its own key.

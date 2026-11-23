@@ -20,6 +20,7 @@ import { getWorkspaceCleanupSortFieldLabel } from './workspace-cleanup-facet-lab
 export function WorkspaceCleanupSortHeader({
   sort,
   selectableCount,
+  selectedBulkCount,
   selectedSelectableCount,
   selectedCount,
   deleteDisabled,
@@ -28,8 +29,11 @@ export function WorkspaceCleanupSortHeader({
   onDeleteSelected
 }: {
   sort: WorkspaceCleanupSortState
+  /** Displayed rows select-all can add (never manually excluded rows). */
   selectableCount: number
-  /** Visible selected rows; drives the select-all checkbox state. */
+  /** Checked rows among those select-all can add. */
+  selectedBulkCount: number
+  /** Checked displayed rows, including manually ticked excluded ones; what the header clears. */
   selectedSelectableCount: number
   /** Every selected row, including ones hidden by filters; what Delete acts on. */
   selectedCount: number
@@ -39,20 +43,30 @@ export function WorkspaceCleanupSortHeader({
   onDeleteSelected: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const allSelected = selectableCount > 0 && selectedSelectableCount >= selectableCount
-  const someSelected = selectableCount > 0 && selectedSelectableCount > 0 && !allSelected
+  const allSelected = selectableCount > 0 && selectedBulkCount >= selectableCount
+  const anyChecked = selectedSelectableCount > 0
+  // Mixed also covers "only excluded rows ticked", so one click can always clear the display.
+  const someSelected = anyChecked && !allSelected
   const selectAllLabel = t(
     'components.workspace.cleanup.browse.selectAllSafetyChecked',
     'Select all {{count}} safety-checked workspaces',
-    { count: selectableCount, defaultValue_one: 'Select {{count}} safety-checked workspace' }
+    {
+      count: selectableCount,
+      defaultValue_one: 'Select {{count}} safety-checked workspace'
+    }
   )
+  // The control clears when anything displayed is checked, so it must announce that, and never "Select all 0".
+  const clearLabel = t('components.workspace.cleanup.browse.clearSelection', 'Clear selection')
+  const emptyLabel = t('components.workspace.cleanup.browse.noWorkspaces', 'No workspaces found.')
+  const controlLabel = anyChecked ? clearLabel : selectableCount > 0 ? selectAllLabel : emptyLabel
   return (
     <div className="flex h-13 items-center gap-2 border-b border-border bg-muted/25 px-4">
       <Checkbox
         checked={someSelected ? 'indeterminate' : allSelected}
-        disabled={selectableCount === 0}
-        aria-label={selectAllLabel}
-        onCheckedChange={() => onToggleSelectAll(!allSelected)}
+        disabled={selectableCount === 0 && !anyChecked}
+        aria-label={controlLabel}
+        // A checked or mixed header clears every displayed check; an empty one selects all.
+        onCheckedChange={() => onToggleSelectAll(!anyChecked)}
       />
       {/* Bulk action sits beside the selection it acts on; it appears once something is selected. */}
       {selectedCount > 0 ? (
@@ -78,7 +92,7 @@ export function WorkspaceCleanupSortHeader({
         </div>
       ) : (
         <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-          {selectAllLabel}
+          {selectableCount > 0 ? selectAllLabel : emptyLabel}
         </span>
       )}
       <DropdownMenu modal={false}>

@@ -37,6 +37,7 @@ export async function handOverWhenReady(
       'runId' | 'taskId' | 'launch' | 'mode'
     >
     handOver: (deliveryDeadline?: number) => Promise<unknown>
+    bindTerminal: () => void
     onHandedOver: (outcome: unknown) => void
     fail: (error: unknown, failedStage?: string) => Promise<unknown>
   }
@@ -72,6 +73,7 @@ export async function handOverWhenReady(
       const handedOver = args.handOver(Date.now() + args.timeoutMs)
       args.onHandedOver(await handedOver.catch((error: unknown) => args.fail(error)))
     },
+    bindTerminal: args.bindTerminal,
     fail: async (error, failedStage) => {
       await args.fail(error, failedStage)
     }
@@ -147,4 +149,20 @@ async function awaitPlacedWorkerReadiness(
     )
   }
   return null
+}
+
+/** A reused slept agent resumes in place first, so readiness, authority and custody are its woken
+ *  process's; returns the stopped process whose custody passes to the resume. */
+export async function wakeReusedSleptAgent(
+  runtime: OrcaRuntimeService,
+  placed: Pick<PlacedWorkerReadiness, 'structuredSession'> & { terminalHandle: string },
+  workerChat: unknown,
+  timeoutMs: number
+): Promise<string | null> {
+  if (placed.structuredSession || workerChat) {
+    return null
+  }
+  const incarnation = runtime.sleptAgentProcessIncarnation(placed.terminalHandle)
+  await runtime.wakeSleptAgentHandle(placed.terminalHandle, { timeoutMs })
+  return incarnation
 }
