@@ -35,7 +35,7 @@ const UPLOAD: BotPictureCustom = {
   fallback: '',
   after: 0,
   description: 'Your image',
-  upload: true
+  sentToSlack: true
 }
 
 // An emoji picture from before mascots, which Slack never gets.

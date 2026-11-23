@@ -14,6 +14,7 @@ import {
   useSavedPictureDescription
 } from '@/components/bots/generated-avatar-descriptions'
 import {
+  isMascotAvatar,
   isUploadAvatar,
   mascotAvatar,
   parseBotAvatar,
@@ -325,7 +326,7 @@ export function useBotPictureSetting(
       fallback: botFallback({ name: bot.name, avatar: kept.avatar }),
       after: kept.after,
       ...(keptMascot?.kind === 'mascot' ? { mascot: keptMascot.id } : {}),
-      upload: Boolean(kept.png) || isUploadAvatar(kept.avatar),
+      sentToSlack: Boolean(kept.png) || isUploadAvatar(kept.avatar) || isMascotAvatar(kept.avatar),
       // A generated picture's caption is the description that made it.
       description:
         generatedPictureDescription(kept.png) ??

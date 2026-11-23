@@ -31,10 +31,10 @@ export function BotPictureButton({
   const t = useTranslate()
   const colors = useBotHostHas(bot.hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY)
   const outfits = useBotHostHas(bot.hostId, BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY)
-  // An image has no color or outfit, so the note says only that Slack gets it; an emoji or initial
-  // isn't sent to Slack, so it gets no note.
+  // An image (or a mascot this build doesn't know) has no color or outfit here, so the note says only
+  // that Slack gets it; an emoji or initial isn't sent to Slack, so it gets no note.
   const look = pictureTakesLook(picture.value, picture.custom)
-  const toSlack = Boolean(bot.slack) && (look || picture.custom?.upload === true)
+  const toSlack = Boolean(bot.slack) && (look || picture.custom?.sentToSlack === true)
   return (
     <Popover>
       <PopoverTrigger asChild>
