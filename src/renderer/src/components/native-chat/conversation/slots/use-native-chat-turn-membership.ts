@@ -6,7 +6,10 @@ import type {
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { AgentSessionLatestTurn } from '../../../../../../shared/agent-session/agent-session-wire'
 import { nativeChatTurnMembership } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-membership'
-import { nativeChatRowsInDrawOrder } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-grouping'
+import {
+  nativeChatRowsInDrawOrder,
+  nativeChatRevisedRowsInDrawOrder
+} from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-grouping'
 import {
   projectionBesideStreamedText,
   rowsBesideStreamedText
@@ -52,6 +55,6 @@ export function useNativeChatTurnMembership(
   }, [items, journalSubmissions, latestTurn, structure])
   return useMemo(() => {
     const { drawOrder, ...turns } = membership
-    return { ...turns, messages: nativeChatRowsInDrawOrder(messages, drawOrder) }
+    return { ...turns, messages: nativeChatRevisedRowsInDrawOrder(messages, drawOrder) }
   }, [membership, messages])
 }

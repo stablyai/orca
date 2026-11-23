@@ -1,6 +1,11 @@
 import { expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import * as slotsModule from './native-chat-transcript-slots'
+import {
+  withoutPullRequestEventRows,
+  PULL_REQUEST_EVENT_PRESENTATION
+} from '../../../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
+import { nativeChatRevisedRowsInDrawOrder } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-grouping'
 import { noteRevisedInPlace } from '../../../../../../shared/agent-session/view/revised-in-place-lists'
 import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { buildNativeChatTranscript } from './native-chat-transcript-slots'
@@ -191,33 +196,64 @@ function counted(row: NativeChatMessage): NativeChatMessage {
   )
 }
 
-function historyOf(turns: number): NativeChatMessage[] {
+function historyOf(turns: number, withCiLine: boolean): NativeChatMessage[] {
   const rows: NativeChatMessage[] = []
   for (let turn = 0; turn < turns; turn++) {
     rows.push(counted(message(`ask-${turn}`, 'user', `Question ${turn}`)))
     rows.push(counted(message(`answer-${turn}`, 'assistant', `Answer ${turn}`)))
   }
+  if (withCiLine) {
+    rows.splice(
+      2,
+      0,
+      counted({
+        id: 'ci-result',
+        role: 'system',
+        blocks: [
+          { type: 'text', text: 'CI passed', presentation: PULL_REQUEST_EVENT_PRESENTATION }
+        ],
+        timestamp: 1,
+        source: 'transcript'
+      })
+    )
+  }
   return rows
 }
 
-/** Row reads the last 19 of a stream of 20 windows make, each revising the previous window's last row in place,
- *  through the slots, the waiting split and a row lookup. */
-function rowReadsStreaming(turns: number): { reads: number; keysHeld: boolean } {
-  const saved = historyOf(turns)
+type Shown = 'as-loaded' | 'ci-lines-hidden' | 'host-ordered'
+
+/** The rows the transcript draws, as production derives them from the loaded rows. */
+function shownRows(shown: Shown, turns: number) {
+  const drawOrder = Array.from({ length: turns * 2 }, (_, index) => (index < 2 ? 1 - index : index))
+  const turnKeys = Array.from({ length: turns * 2 + 1 }, (_, index) => `turn-${index >> 1}`)
+  return (rows: readonly NativeChatMessage[]): readonly NativeChatMessage[] =>
+    shown === 'ci-lines-hidden'
+      ? withoutPullRequestEventRows({ messages: rows, turnKeys }).messages
+      : shown === 'host-ordered'
+        ? nativeChatRevisedRowsInDrawOrder(rows, drawOrder)
+        : rows
+}
+
+/** Row reads the last 19 of a stream of 20 windows make, each revising the previous window's
+ *  last row in place, through the shown rows, the slots, the waiting split and a row lookup. */
+function rowReadsStreaming(turns: number, shown: Shown): { reads: number; keysHeld: boolean } {
+  const show = shownRows(shown, turns)
+  const loaded = historyOf(turns, shown === 'ci-lines-hidden')
+  const saved = show(loaded)
   const input = {
     ...inputFor(saved),
     turnKeys: saved.map((_, index) => `turn-${index >> 1}`),
-    liveTurnKey: `turn-${turns - 1}`
+    liveTurnKey: `turn-${(saved.length - 1) >> 1}`
   }
   const project = createNativeChatStreamedTranscript()
   const built = project(input, saved, saved).slots
-  let previous: readonly NativeChatMessage[] = saved
-  let raw = saved
+  let previous: readonly NativeChatMessage[] = loaded
+  let raw = loaded
   let reads = 0
   let keysHeld = true
   const lookedUp = `ask-${turns - 1}`
   splitNativeChatSlotsWaitingBehindLiveTurn(built, undefined)
-  nativeChatSlotIndexOf(built, lookedUp)
+  const lookedUpAt = nativeChatSlotIndexOf(built, lookedUp)
   fieldReads = 0
   let text = `Answer ${turns - 1}`
   for (let window = 0; window < 20; window++) {
@@ -232,10 +268,10 @@ function rowReadsStreaming(turns: number): { reads: number; keysHeld: boolean } 
       }
     })
     noteRevisedInPlace(countedRows, previous, [next.length - 1])
-    const { slots } = project(input, saved, countedRows)
+    const { slots } = project(input, saved, show(countedRows))
     const split = splitNativeChatSlotsWaitingBehindLiveTurn(slots, undefined)
     keysHeld &&= stageBesideStreamedText(split.slots) === built
-    keysHeld &&= nativeChatSlotIndexOf(split.slots, lookedUp) === built.length - 2
+    keysHeld &&= nativeChatSlotIndexOf(split.slots, lookedUp) === lookedUpAt
     previous = countedRows
     raw = next
     // The first window indexes the built slots, once per build; later windows reuse it.
@@ -248,13 +284,16 @@ function rowReadsStreaming(turns: number): { reads: number; keysHeld: boolean } 
 }
 
 // Perf contract: a live window visits only the rows it revised, so its cost does not grow with
-// history: its slots stay linked to the built ones that key, marker, timed-row and rail readers
-// kept, and the waiting split and row lookups answer from what they found for those.
-it('visits only revised rows each window, at any history length', () => {
-  const small = rowReadsStreaming(200)
-  const large = rowReadsStreaming(2000)
-  expect(small.keysHeld).toBe(true)
-  expect(large.keysHeld).toBe(true)
-  expect(large.reads).toBe(small.reads)
-  expect(large.reads).toBeLessThan(200)
-})
+// history: its shown rows and slots stay linked to the built ones that key, marker, timed-row and
+// rail readers kept, and the waiting split and row lookups answer from what they found for those.
+it.each<Shown>(['as-loaded', 'ci-lines-hidden', 'host-ordered'])(
+  'visits only revised rows each window, at any history length (%s)',
+  (shown) => {
+    const small = rowReadsStreaming(200, shown)
+    const large = rowReadsStreaming(2000, shown)
+    expect(small.keysHeld).toBe(true)
+    expect(large.keysHeld).toBe(true)
+    expect(large.reads).toBe(small.reads)
+    expect(large.reads).toBeLessThan(200)
+  }
+)
