@@ -301,7 +301,7 @@ describe('a background run answers the conversation it was launched for', () => 
     expect(t.link().wakeAnswers).toBeUndefined()
   })
 
-  it('places a wake-up whose start a restarted watch never saw by its own start', async () => {
+  it('places a wake-up whose start a restarted watch never saw by its own start, and no other end', async () => {
     const t = harness()
     await t.turn(10, { from: 'thread', launches: [{ run: 'worker-retry', sends: ['thread'] }] })
     await t.turn(21, { woke: ['worker-retry'], says: 'Worker started.', unwatched: true })
@@ -310,6 +310,9 @@ describe('a background run answers the conversation it was launched for', () => 
       turnId: 21,
       lastAssistantMessage: 'Worker started.'
     })
+    // Any other end a restarted watch never saw starting is placed as before: unplaced.
+    await t.turn(30, { from: 'thread', says: 'Done.', unwatched: true })
+    expect(t.events.at(-1)).toMatchObject({ kind: 'turn-ended', turnId: null })
   })
 
   it('saves the record only when a launch adds to it', async () => {
@@ -355,7 +358,7 @@ describe('a background run answers the conversation it was launched for', () => 
   })
 })
 
-it('reads each launch’s sends as the conversations that delivered them', async () => {
+it('reads each launch’s sends as the conversations that delivered them, an edited one as no one’s', async () => {
   const row = (itemId: string, sequence: number, body: Record<string, unknown>) => ({
     itemId,
     sequence,
@@ -368,17 +371,19 @@ it('reads each launch’s sends as the conversations that delivered them', async
     role: 'user',
     blocks: [{ type: 'text', text }]
   })
+  const delivered = (text: string, deliveryId: string) => ({
+    ...said(text),
+    connectorDelivery: { account: 'a', conversation: THREAD, deliveryId }
+  })
   const items = [
     row(agentJournalSubmissionKey('c1'), 1, {
-      ...said('Retry the worker.'),
-      connectorDelivery: {
-        account: 'a',
-        conversation: THREAD,
-        deliveryId: 'd1'
-      }
+      ...delivered('Retry the worker.', 'd1'),
+      origin: 'connector'
     }),
     row(agentJournalSubmissionKey('c2'), 2, said('And the build.')),
-    row('turn-row', 3, {
+    // The owner edited this queued delivery before it was sent: the edit drops its origin.
+    row(agentJournalSubmissionKey('c3'), 3, delivered('Then deploy.', 'd3')),
+    row('turn-row', 4, {
       kind: 'turn',
       turnId: 't1',
       state: 'completed',
@@ -386,11 +391,12 @@ it('reads each launch’s sends as the conversations that delivered them', async
       userItemId: agentJournalSubmissionKey('c1'),
       launches: [
         { run: 'r1', sends: ['c1'], runs: [] },
-        { run: 'r2', sends: ['c1', 'c2'], runs: ['w1'] }
+        { run: 'r2', sends: ['c1', 'c2'], runs: ['w1'] },
+        { run: 'r3', sends: ['c3'], runs: [] }
       ]
     })
   ]
-  const cursor = { epoch: 'e', sequence: 3 }
+  const cursor = { epoch: 'e', sequence: 4 }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: endedTurn reads only these journal reads; the rows are journal-shaped.
   const chat = {
     journalReads: async () => ({
@@ -401,7 +407,8 @@ it('reads each launch’s sends as the conversations that delivered them', async
   const turn = await endedTurn(chat, SESSION, 't1', cursor)
   expect(turn.launches).toEqual([
     { run: 'r1', sends: [THREAD], runs: [] },
-    { run: 'r2', sends: [THREAD, null], runs: ['w1'] }
+    { run: 'r2', sends: [THREAD, null], runs: ['w1'] },
+    { run: 'r3', sends: [null], runs: [] }
   ])
 })
 

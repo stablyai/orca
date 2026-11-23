@@ -110,9 +110,11 @@ type ClaudeFrameSendFacts = {
   startedSend?: ClaudeStartedSend
   renamedTo?: string
   handedSends?: ClaudeHandedSends
+  handedPending?: true
 }
 // Most frames carry neither fact; this runs on every frame, streaming deltas included.
 const NO_SEND_FACTS: ClaudeFrameSendFacts = Object.freeze({})
+const HANDED_PENDING: ClaudeFrameSendFacts = Object.freeze({ handedPending: true })
 
 /** Send facts read when the frame arrives: its delivery can run after the send's echo settles it. */
 export function claudeFrameSendFacts(
@@ -127,14 +129,27 @@ export function claudeFrameSendFacts(
     message.type === 'system' && message.subtype === 'task_started'
       ? claudeHandedSends(session)
       : undefined
+  const pending = claudeHandsPending(session)
   if (!startedSend && !renamedTo && !handedSends) {
-    return NO_SEND_FACTS
+    return pending ? HANDED_PENDING : NO_SEND_FACTS
   }
   return {
     ...(startedSend ? { startedSend } : {}),
     ...(renamedTo ? { renamedTo } : {}),
-    ...(handedSends ? { handedSends } : {})
+    ...(handedSends ? { handedSends } : {}),
+    ...(pending ? { handedPending: true as const } : {})
   }
+}
+
+/** Orca holds a send it handed Claude and hasn't seen reported settled (the list below is not
+ *  empty), or has no session to tell: checked on every frame, so it builds nothing. */
+function claudeHandsPending(session: ClaudeSession | null): boolean {
+  return (
+    !session ||
+    session.dispatchWaiters.length > 0 ||
+    session.retiredDispatchWaiters.length > 0 ||
+    (session.unreportedSettlements?.size ?? 0) > 0
+  )
 }
 
 /** Every send Orca has handed Claude and not seen reported settled: waiting in any state (queued,

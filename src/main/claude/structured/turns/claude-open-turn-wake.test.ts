@@ -87,6 +87,7 @@ type SendFacts = {
   requestedAt?: number
   startedSend?: { clientMessageId: string }
   handedSends?: { ids: readonly string[]; unnamed: boolean }
+  handedPending?: true
 }
 const opens = (clientMessageId: string): SendFacts => ({ startsTurn: true, clientMessageId })
 const handed = (ids: string[], unnamed = false): SendFacts => ({ handedSends: { ids, unnamed } })
@@ -496,4 +497,20 @@ it('records no launch while Orca holds a send it can’t name, or holds no list'
   expect(
     replay({}, frames, { [LAUNCHED]: { handedSends: undefined } }).some((row) => row.launches)
   ).toBe(false)
+})
+
+it('drops a wake-up’s names for good once Orca holds a send it handed Claude, echoed or not', () => {
+  const inside = replay({}, frames, { [WOKEN + 1]: { handedPending: true } })
+  const woken = inside.at(-1)?.turnId
+  expect(inside.find((row) => row.turnId === woken)?.wokenBy).toEqual([RUN])
+  expect(inside.at(-1)?.wokenBy).toBeUndefined()
+  // Seen first on the frame that ends it: the names leave before the end is saved.
+  const atEnd = replay({}, frames, { [frames.length - 1]: { handedPending: true } })
+  expect(atEnd.filter((row) => row.state !== 'running').some((row) => row.wokenBy)).toBe(false)
+})
+
+it('names nothing on a wake-up after Orca held a send between turns', () => {
+  const turns = replay({}, frames, { [ENDED + 1]: { handedPending: true } })
+  expect(turns.at(-1)?.turnId).toBe(replay().at(-1)?.turnId)
+  expect(turns.some((row) => row.turnId === turns.at(-1)?.turnId && row.wokenBy)).toBe(false)
 })

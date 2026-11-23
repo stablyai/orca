@@ -301,15 +301,17 @@ export class ChatTurns {
         }
         return
       }
-      const [workLinks] = await Promise.all([links(), this.workers.check(paneKey, 'turn-ended')])
+      // A wake-up posts its final words only: no work links to look up for it.
+      const told = heard || reported ? links() : Promise.resolve([])
+      const [workLinks] = await Promise.all([told, this.workers.check(paneKey, 'turn-ended')])
       if (generation !== this.generation) {
         return
       }
       // Owner words steered in and posted to the thread go before the answer.
       ;(mirrored ? mirrored.release : this.deps.emit)({
         ...ended,
-        // A watch begun mid-turn never saw its start: the turn's own start places it.
-        turnId: ended.turnId ?? turn.startedAt ?? null,
+        // A watch begun mid-turn never saw a wake-up's start: the turn's own start places it.
+        turnId: ended.turnId ?? (woken ? turn.startedAt : undefined) ?? null,
         ...end.turnFor(turn),
         origin: reported || woken ? 'delivery' : origin,
         ...(words ? { lastAssistantMessage: words } : {}),

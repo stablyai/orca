@@ -27,6 +27,8 @@ export type ClaudeStructuredSessionEvent =
       /** On a task's start: every send Orca has handed Claude that may have reached it (see
        *  `claudeHandedSends`). */
       handedSends?: ClaudeHandedSends
+      /** On any frame: Orca holds a send it handed Claude and hasn't seen reported settled. */
+      handedPending?: true
       /** The user's new title from Claude's rename command, read when the frame arrived. */
       renamedTo?: string
       /** Host clock at receipt; stamped on turn boundaries only. */

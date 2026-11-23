@@ -101,9 +101,11 @@ export async function endedTurn(
     wake && row
       ? structuredAgentSessionTurnAssistantMessage(items, row.itemId)
       : latestStructuredAgentSessionAssistantMessage(items)
+  let byItemId: Map<string, AgentJournalRenderItem> | undefined
+  const bySubmission = () => (byItemId ??= new Map(items.map((item) => [item.itemId, item])))
   const launches = lifecycle?.launches?.map((launch) => ({
     run: launch.run,
-    sends: launch.sends.map((send) => sentFrom(items, opener, send)),
+    sends: launch.sends.map((send) => sentFrom(bySubmission(), opener, send)),
     runs: launch.runs
   }))
   return {
@@ -118,17 +120,20 @@ export async function endedTurn(
   }
 }
 
-/** The conversation whose delivery a send was, as written on its message when delivered. */
+/** The conversation whose delivery a send was, as written on its message when delivered. A
+ *  delivery the owner edited (it loses its connector origin) is the owner's own. */
 function sentFrom(
-  items: readonly AgentJournalRenderItem[],
+  items: ReadonlyMap<string, AgentJournalRenderItem>,
   opener: AgentJournalRenderItem | null | undefined,
   send: string
 ): EndedTurnLaunch['sends'][number] {
   const key = agentJournalSubmissionKey(send)
-  const body = (opener?.itemId === key ? opener : items.find((item) => item.itemId === key))?.body
-  return body?.kind === 'message'
-    ? (body.connectorConversation ?? body.connectorDelivery?.conversation ?? null)
-    : null
+  const body = (opener?.itemId === key ? opener : items.get(key))?.body
+  if (body?.kind !== 'message') {
+    return null
+  }
+  const delivered = body.origin === 'connector' ? body.connectorDelivery?.conversation : undefined
+  return body.connectorConversation ?? delivered ?? null
 }
 
 /** Whom an ended turn acts for, from its own rows by index (STA-16396 moves the other ends here).

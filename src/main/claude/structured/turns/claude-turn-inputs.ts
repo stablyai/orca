@@ -40,11 +40,24 @@ export class ClaudeTurnInputs {
 
   /** One provider frame before it opens or joins a turn; true when it changed `turn`'s row. */
   observe(
-    event: { message: Record<string, unknown>; startsTurn?: true; handedSends?: ClaudeHandedSends },
+    event: {
+      message: Record<string, unknown>
+      startsTurn?: true
+      handedSends?: ClaudeHandedSends
+      handedPending?: true
+    },
     turn: ClaudeCurrentTurn | null
   ) {
     const { message: frame, handedSends: handed } = event
     const opensTurn = !!event.startsTurn
+    // A send Orca handed Claude may reach it with no echo yet, or never: no wake-up is only its runs'.
+    if (event.handedPending) {
+      if (turn) {
+        this.launches.handedDuring()
+      } else {
+        this.wakes.messaged()
+      }
+    }
     if (!turn && !opensTurn && isRootInput(frame)) {
       this.wakes.messaged()
     }

@@ -32,6 +32,8 @@ export class ClaudeTurnLaunches {
   private steersNamed = 0
   /** A prompt was answered: from Slack or Orca, the adapter can't tell, so it's no one's input. */
   private answered = false
+  /** Orca held a send it handed Claude while the turn ran: a wake-up is no longer only its runs'. */
+  private handed = false
   /** Runs this turn launched: their finish is its own work, not an input. */
   private readonly launched = new BoundedMap<string, true>({ maxEntries: MAX_LAUNCHED })
 
@@ -46,7 +48,12 @@ export class ClaudeTurnLaunches {
     this.inputsSeen = 0
     this.steersNamed = 0
     this.answered = false
+    this.handed = false
     this.launched.clear()
+  }
+
+  handedDuring(): void {
+    this.handed = true
   }
 
   /** Someone answered the turn's question or approval. */
@@ -67,7 +74,13 @@ export class ClaudeTurnLaunches {
 
   /** A message was read into the turn: a wake-up then is no longer only its runs'. */
   get messaged(): boolean {
-    return this.sends.length > 0 || this.inputsSeen > 0 || this.steersNamed > 0 || this.answered
+    return (
+      this.sends.length > 0 ||
+      this.inputsSeen > 0 ||
+      this.steersNamed > 0 ||
+      this.answered ||
+      this.handed
+    )
   }
 
   /** One provider frame inside the open turn; true when it records a launch on `turn`. */
