@@ -1,6 +1,17 @@
 import { readFile } from 'node:fs/promises'
 import { createServer, connect, type Server, type Socket } from 'node:net'
+import { createInterface } from 'node:readline'
+import { spawnProcess } from '@orca/process-host'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  loadWindowsSecurityAsync,
+  resetWindowsSecurityLoadForTests,
+  setWindowsSecurityForTests
+} from '../../../../shared/secure-storage/windows-security-addon'
+import {
+  createFakeWindowsSecurity,
+  FAKE_USER_SID
+} from '../../../../shared/secure-storage/windows-security-addon.test-fixture'
 import {
   findProcNetTcpClientUid,
   verifySocksClientOwner
@@ -73,11 +84,11 @@ describe.skipIf(process.platform === 'win32')('verifySocksClientOwner on Linux',
     await expect(verifySocksClientOwner(accepted('127.0.0.2', 54321), readTable)).resolves.toEqual({
       allowed: false,
       reason: 'foreign-owner',
-      uid: 1001
+      owner: 'uid 1001'
     })
     await expect(
       verifySocksClientOwner(accepted('::ffff:127.0.0.1', 51000), readTable)
-    ).resolves.toEqual({ allowed: false, reason: 'foreign-owner', uid: 1002 })
+    ).resolves.toEqual({ allowed: false, reason: 'foreign-owner', owner: 'uid 1002' })
     await expect(
       verifySocksClientOwner(accepted('127.0.0.1', 50000), readTable)
     ).resolves.toMatchObject({ allowed: false, reason: 'lookup-failed' })
@@ -88,6 +99,134 @@ describe.skipIf(process.platform === 'win32')('verifySocksClientOwner on Linux',
     ).resolves.toMatchObject({ allowed: false, reason: 'lookup-failed', detail: 'EACCES' })
   })
 })
+
+describe('verifySocksClientOwner on Windows', () => {
+  const realPlatform = process.platform
+  const socket = {
+    localAddress: '127.0.0.1',
+    localPort: 40000,
+    remoteAddress: '127.0.0.1',
+    remotePort: 54321
+  }
+  const withOwner = (lookup: () => Promise<{ pid: number; sid: string } | null>) => {
+    const fake = createFakeWindowsSecurity()
+    fake.tcpClientOwnerAsync = lookup
+    setWindowsSecurityForTests(fake)
+  }
+
+  beforeEach(() => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+  })
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: realPlatform })
+    resetWindowsSecurityLoadForTests()
+  })
+
+  it('admits only this SID, refuses when a lookup that ran finds no owner, and admits unchecked only without the lookup', async () => {
+    withOwner(async () => ({ pid: 7, sid: FAKE_USER_SID }))
+    await expect(verifySocksClientOwner(socket)).resolves.toEqual({ allowed: true })
+    withOwner(async () => ({ pid: 8, sid: 'S-1-5-21-1-2-3-1002' }))
+    await expect(verifySocksClientOwner(socket)).resolves.toEqual({
+      allowed: false,
+      reason: 'foreign-owner',
+      owner: 'S-1-5-21-1-2-3-1002'
+    })
+    withOwner(async () => null)
+    await expect(verifySocksClientOwner(socket)).resolves.toMatchObject({
+      allowed: false,
+      reason: 'lookup-failed'
+    })
+    withOwner(async () => {
+      throw new Error('OpenProcess failed with Win32 error 5')
+    })
+    await expect(verifySocksClientOwner(socket)).resolves.toEqual({
+      allowed: false,
+      reason: 'lookup-failed',
+      detail: 'OpenProcess failed with Win32 error 5'
+    })
+
+    const stale = createFakeWindowsSecurity()
+    stale.hasNativeExport = (name) => name !== 'tcpClientOwnerAsync'
+    setWindowsSecurityForTests(stale)
+    await expect(verifySocksClientOwner(socket)).resolves.toMatchObject({
+      allowed: true,
+      unchecked: expect.any(String)
+    })
+    setWindowsSecurityForTests(null)
+    await expect(verifySocksClientOwner(socket)).resolves.toMatchObject({
+      allowed: true,
+      unchecked: expect.any(String)
+    })
+  })
+})
+
+// Runs in the Windows boundary CI job, which builds the real addon.
+describe.skipIf(process.platform !== 'win32')(
+  'verifySocksClientOwner against the real Windows TCP table',
+  () => {
+    let server: Server | null = null
+    const cleanups: (() => void)[] = []
+    afterEach(() => {
+      cleanups.splice(0).forEach((cleanup) => cleanup())
+      server?.close()
+      resetWindowsSecurityLoadForTests()
+    })
+
+    const listen = async (): Promise<{ port: number; accepted: Promise<Socket> }> => {
+      const accepted = new Promise<Socket>((resolve) => {
+        server = createServer(resolve)
+      })
+      await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve))
+      const address = server!.address()
+      if (!address || typeof address === 'string') {
+        throw new Error('no TCP address')
+      }
+      return { port: address.port, accepted }
+    }
+
+    it("admits this process's own client", async () => {
+      const { port, accepted } = await listen()
+      const client = connect(port, '127.0.0.1')
+      cleanups.push(() => client.destroy())
+      const socket = await accepted
+      cleanups.push(() => socket.destroy())
+      // toEqual: a stale addon would answer { allowed: true, unchecked }.
+      await expect(verifySocksClientOwner(socket)).resolves.toEqual({ allowed: true })
+    })
+
+    it("reads the connecting side's row, not the listener's accepted copy", async () => {
+      const security = await loadWindowsSecurityAsync()
+      if ('error' in security) {
+        throw new Error(`the windows-security addon did not load: ${security.error}`)
+      }
+      const { port, accepted } = await listen()
+      const child = spawnProcess({
+        program: process.execPath,
+        args: [
+          '-e',
+          "const s = require('node:net').connect(Number(process.env.PORT), '127.0.0.1', () => console.log('connected')); process.stdin.on('end', () => s.destroy()); process.stdin.resume()"
+        ],
+        env: { ...process.env, PORT: String(port) },
+        stdio: 'pipe'
+      })
+      cleanups.push(() => child.stdin.end())
+      const socket = await accepted
+      cleanups.push(() => socket.destroy())
+      await createInterface({ input: child.stdout })[Symbol.asyncIterator]().next()
+
+      const clientPort = socket.remotePort!
+      await expect(
+        security.addon.tcpClientOwnerAsync('127.0.0.1', clientPort, '127.0.0.1', port)
+      ).resolves.toEqual({ pid: child.pid, sid: security.userSid })
+      await expect(
+        security.addon.tcpClientOwnerAsync('127.0.0.1', port, '127.0.0.1', clientPort)
+      ).resolves.toEqual({ pid: process.pid, sid: security.userSid })
+      await expect(
+        security.addon.tcpClientOwnerAsync('127.0.0.2', clientPort, '127.0.0.1', port)
+      ).resolves.toBeNull()
+    })
+  }
+)
 
 describe.skipIf(process.platform !== 'linux')(
   'verifySocksClientOwner against the real kernel',

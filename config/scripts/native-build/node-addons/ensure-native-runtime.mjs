@@ -335,7 +335,7 @@ function loadNativeModule(moduleName) {
   if (moduleName === '@orca/windows-security') {
     const security = require(moduleName)
     // currentUserSid loads the addon; a stale build that still loads lacks the newest export.
-    if (!security.currentUserSid() || !security.hasNativeExport('isolatedSpawnBreaksAwayFromJob')) {
+    if (!security.currentUserSid() || !security.hasNativeExport('tcpClientOwnerAsync')) {
       throw new Error('stale build without the newest export; rebuild it')
     }
     return

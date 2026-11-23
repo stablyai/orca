@@ -1,10 +1,13 @@
 import { readFile } from 'node:fs/promises'
 import type { Socket } from 'node:net'
 import { parseProcNetTcpEndpoint, parseProcNetTcpRow } from '../../../ports/linux-proc-net-tcp-rows'
+import { loadWindowsSecurityAsync } from '../../../../shared/secure-storage/windows-security-addon'
 
 export type SocksClientOwnerVerdict =
-  | { allowed: true }
-  | { allowed: false; reason: 'foreign-owner'; uid: number }
+  /** `unchecked` says why this build can't look the owner up; the loopback check still applied. */
+  | { allowed: true; unchecked?: string }
+  /** `owner` is `uid <n>` on Linux and the token user's SID on Windows. */
+  | { allowed: false; reason: 'foreign-owner'; owner: string }
   | { allowed: false; reason: 'lookup-failed'; detail: string }
 
 type Endpoint = { host: string; port: number }
@@ -15,21 +18,25 @@ type AcceptedSocket = {
   remotePort?: number
 }
 
-type Refusal = Exclude<SocksClientOwnerVerdict, { allowed: true }>
-
 /** Admits a loopback client once its owner checks out. Chromium can't authenticate to SOCKS, so the owner is the only credential. */
 export function createSocksClientAdmission(): (socket: Socket, admit: () => void) => void {
   const logged = new Set<string>()
-  const logOnce = (refusal: Refusal): void => {
-    const key = refusal.reason === 'foreign-owner' ? `uid:${refusal.uid}` : refusal.reason
+  const logOnce = (verdict: SocksClientOwnerVerdict): void => {
+    const key = verdict.allowed
+      ? 'unchecked'
+      : verdict.reason === 'foreign-owner'
+        ? `owner:${verdict.owner}`
+        : verdict.reason
     if (logged.has(key)) {
       return
     }
     logged.add(key)
     console.warn(
-      refusal.reason === 'foreign-owner'
-        ? `[browser-tunnel] Refused a browser SOCKS connection from uid ${refusal.uid}; only this user's browser may use it.`
-        : `[browser-tunnel] Refused a browser SOCKS connection: could not confirm its owner in /proc/net (${refusal.detail}).`
+      verdict.allowed
+        ? `[browser-tunnel] Browser SOCKS clients are checked for loopback only: ${verdict.unchecked}.`
+        : verdict.reason === 'foreign-owner'
+          ? `[browser-tunnel] Refused a browser SOCKS connection from ${verdict.owner}; only this user's browser may use it.`
+          : `[browser-tunnel] Refused a browser SOCKS connection: could not confirm its owner (${verdict.detail}).`
     )
   }
   return (socket, admit) => {
@@ -41,11 +48,13 @@ export function createSocksClientAdmission(): (socket: Socket, admit: () => void
       if (socket.destroyed) {
         return
       }
+      if (!verdict.allowed || verdict.unchecked) {
+        logOnce(verdict)
+      }
       if (verdict.allowed) {
         admit()
         return
       }
-      logOnce(verdict)
       socket.destroy()
     })
   }
@@ -82,13 +91,13 @@ export function findProcNetTcpClientUid(
   return null
 }
 
-/** Linux lists every user's sockets with their owner; the client end must be ours. Other platforms rely on the loopback check. */
+/** Linux and Windows list every user's connections with their owner; the client end must be ours. macOS relies on the loopback check. */
 export async function verifySocksClientOwner(
   socket: AcceptedSocket,
   readTable: (path: string) => Promise<string> = (path) => readFile(path, 'utf-8')
 ): Promise<SocksClientOwnerVerdict> {
   const ownUid = process.platform === 'linux' ? process.getuid?.() : undefined
-  if (ownUid === undefined) {
+  if (process.platform !== 'win32' && ownUid === undefined) {
     return { allowed: true }
   }
   const client = toEndpoint(socket.remoteAddress, socket.remotePort)
@@ -97,6 +106,9 @@ export async function verifySocksClientOwner(
     return { allowed: false, reason: 'lookup-failed', detail: 'socket has no address' }
   }
   try {
+    if (process.platform === 'win32') {
+      return await verifyWindowsClientOwner(client, listener)
+    }
     // The kernel pages these tables and can skip a row that moved mid-read, so look twice before refusing.
     for (let attempt = 0; attempt < 2; attempt++) {
       // A 4-tuple is unique across both tables; dual-stack clients appear in tcp6 as v4-mapped.
@@ -105,7 +117,7 @@ export async function verifySocksClientOwner(
         if (uid !== null) {
           return uid === ownUid
             ? { allowed: true }
-            : { allowed: false, reason: 'foreign-owner', uid }
+            : { allowed: false, reason: 'foreign-owner', owner: `uid ${uid}` }
         }
       }
     }
@@ -117,6 +129,32 @@ export async function verifySocksClientOwner(
       detail: error instanceof Error ? error.message : String(error)
     }
   }
+}
+
+async function verifyWindowsClientOwner(
+  client: Endpoint,
+  listener: Endpoint
+): Promise<SocksClientOwnerVerdict> {
+  const security = await loadWindowsSecurityAsync()
+  // Only a missing lookup admits unchecked; a lookup that ran and found nothing refuses.
+  if ('error' in security) {
+    return { allowed: true, unchecked: `the security addon did not load (${security.error})` }
+  }
+  if (!security.addon.hasNativeExport('tcpClientOwnerAsync')) {
+    return { allowed: true, unchecked: 'the security addon predates the owner lookup' }
+  }
+  const owner = await security.addon.tcpClientOwnerAsync(
+    client.host,
+    client.port,
+    listener.host,
+    listener.port
+  )
+  if (!owner) {
+    return { allowed: false, reason: 'lookup-failed', detail: 'client connection not listed' }
+  }
+  return owner.sid === security.userSid
+    ? { allowed: true }
+    : { allowed: false, reason: 'foreign-owner', owner: owner.sid }
 }
 
 function toEndpoint(address: string | undefined, port: number | undefined): Endpoint | null {
