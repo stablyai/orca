@@ -5,30 +5,15 @@ type AwakeModeSource = {
   subscribe: (listener: (status: ComputerAwakeStatus) => void) => () => void
 }
 
-/**
- * Runs the WSL-host watcher only while keep-awake is Auto, the one mode that reads WSL counts.
- * Why: Off and On never consult them, so watching would hold one inventory stream per host for nothing.
- * Each Auto session gets a fresh watcher: rows already working when it first sees a host stay
- * uncounted until fresh evidence, since nothing was observed while the mode was not Auto.
- */
+// Why: only Auto reads WSL counts; Off/On would hold an inventory stream per host for nothing.
 export function runWslHostAgentAwakeWhileAuto(
   source: AwakeModeSource,
   createWatcher: () => { dispose: () => void }
 ): () => void {
   let watcher: { dispose: () => void } | null = null
-  let starting = false
   const sync = (status: ComputerAwakeStatus): void => {
     if (status.mode === 'auto') {
-      if (watcher || starting) {
-        return
-      }
-      // Why: a watcher that reports while constructing re-enters here before it is assigned.
-      starting = true
-      try {
-        watcher = createWatcher()
-      } finally {
-        starting = false
-      }
+      watcher ??= createWatcher()
     } else if (watcher) {
       const stopping = watcher
       watcher = null
