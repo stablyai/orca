@@ -187,7 +187,7 @@ describe('persistent profile state write worker', () => {
     root: string,
     f: ReturnType<typeof fixture>,
     afterCommit: boolean,
-    onFailure?: (error: Error) => void
+    reported: { failures: Error[]; delays: boolean[] }
   ) {
     const interruptedPath = join(root, 'interrupted-worker.cjs')
     const marker = JSON.stringify(join(root, 'interrupted-once'))
@@ -218,7 +218,8 @@ describe('persistent profile state write worker', () => {
     })
     const authority = new ProfileStateWorkerAuthority(f.initialization, {
       workerPath: interruptedPath,
-      onFailure
+      onFailure: (error) => reported.failures.push(error),
+      onSaveDelayChanged: (delayed) => reported.delays.push(delayed)
     })
     await authority.ready
     const failure = await authority
@@ -230,24 +231,26 @@ describe('persistent profile state write worker', () => {
 
   it('reopens after an indeterminate write only when the transaction did not commit', async () => {
     const rolledBack = fixture()
-    const recovered = await interruptedAuthority(rolledBack.root, rolledBack, false)
+    const recovery = { failures: [] as Error[], delays: [] as boolean[] }
+    const recovered = await interruptedAuthority(rolledBack.root, rolledBack, false, recovery)
     await expect(
       recovered.writeSerializedDomains([{ domain: 'settings', payload: '{"recovered":true}' }])
     ).resolves.toBeUndefined()
+    // The notice stays up from the interrupted write until a save lands; nothing reports saving stopped.
+    expect(recovery).toEqual({ failures: [], delays: [true, false] })
     await recovered.close()
     expect(readState(rolledBack.path, rolledBack.profileId)).toEqual({
       settings: { recovered: true }
     })
 
     const committed = fixture()
-    const failures: Error[] = []
-    const refused = await interruptedAuthority(committed.root, committed, true, (error) =>
-      failures.push(error)
-    )
+    const refusal = { failures: [] as Error[], delays: [] as boolean[] }
+    const refused = await interruptedAuthority(committed.root, committed, true, refusal)
     await expect(
       refused.writeSerializedDomains([{ domain: 'settings', payload: '{"overwrite":true}' }])
     ).rejects.toMatchObject({ code: 'profile-state-revision-conflict' })
-    expect(failures.map(profileStateWriterFailureOutcome)).toEqual(['indeterminate'])
+    expect(refusal.failures.map(profileStateWriterFailureOutcome)).toEqual(['indeterminate'])
+    expect(refusal.delays).toEqual([true, false])
     await refused.close().catch(() => {})
     expect(readState(committed.path, committed.profileId)).toEqual({
       settings: { interrupted: true }

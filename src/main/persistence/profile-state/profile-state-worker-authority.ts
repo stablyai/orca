@@ -21,10 +21,7 @@ import {
   closeIdleProfileStateWriter,
   ProfileStateIdleWriterStop
 } from './writer/profile-state-idle-writer-stop'
-import {
-  ProfileStateWriterReopenPolicy,
-  reportTerminalReopenFailure
-} from './writer/profile-state-writer-reopen-policy'
+import { ProfileStateWriterReopenPolicy } from './writer/profile-state-writer-reopen-policy'
 
 export type ProfileStateWorkerAuthorityOptions = {
   workerPath?: string
@@ -43,7 +40,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   private stopping: Promise<void> | undefined
   private readonly idleStop: ProfileStateIdleWriterStop
   private inFlight = 0
-  private readonly reopenPolicy = new ProfileStateWriterReopenPolicy()
+  private readonly reopenPolicy = new ProfileStateWriterReopenPolicy(() => this.options)
   private stoppedFailure: Error | undefined
   private backups: ProfileStateBackupRotation
   private closing: Promise<void> | undefined
@@ -104,26 +101,24 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   writeSerializedDomains(
     ...args: Parameters<AsyncProfileStateAuthority['writeSerializedDomains']>
   ): Promise<void> {
-    return this.run((writer) => writer.writeSerializedDomains(...args)).then(() => {})
+    return this.write((writer) => writer.writeSerializedDomains(...args))
   }
 
   writeSerializedAutomationRuns(
     replacements: readonly ProfileStateDomainReplacement[],
     runs: readonly AutomationRun[]
   ): Promise<void> {
-    return this.run((writer) => writer.writeSerializedAutomationRuns(replacements, runs)).then(
-      () => {}
-    )
+    return this.write((writer) => writer.writeSerializedAutomationRuns(replacements, runs))
   }
 
   writeCompleteSerializedDomains(
     ...args: Parameters<AsyncProfileStateAuthority['writeCompleteSerializedDomains']>
   ): Promise<void> {
-    return this.run((writer) => writer.writeCompleteSerializedDomains(...args)).then(() => {})
+    return this.write((writer) => writer.writeCompleteSerializedDomains(...args))
   }
 
   writeSerializedState(payload: Buffer): Promise<void> {
-    return this.run((writer) => writer.writeSerializedState(payload)).then(() => {})
+    return this.write((writer) => writer.writeSerializedState(payload))
   }
 
   writeJsonExport(targetPath: string): Promise<number> {
@@ -221,6 +216,10 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     )
   }
 
+  private write(command: (writer: ProfileStateWriteWorkerClient) => Promise<number>) {
+    return this.run(command).then(() => this.reopenPolicy.recordSaved())
+  }
+
   private run<T>(command: (writer: ProfileStateWriteWorkerClient) => Promise<T>): Promise<T> {
     this.idleStop.cancel()
     this.inFlight += 1
@@ -266,7 +265,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       return
     }
     if (!this.reopenPolicy.recordFailure(error)) {
-      reportTerminalReopenFailure(this.options.onFailure, this.reopenPolicy.terminalFailure(error))
+      this.reopenPolicy.reportStopped(error)
       return
     }
     this.writer = null
@@ -281,6 +280,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       initialization,
       this.options,
       reportInitializationFailure,
+      this.reopenPolicy,
       (writer, error) => this.handleIndeterminateWriterFailure(writer, error)
     )
   }
@@ -301,7 +301,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
         this.reopenPolicy.recoverFrom(error)
         return true
       },
-      () => reportTerminalReopenFailure(this.options.onFailure, error)
+      () => this.reopenPolicy.reportStopped(error)
     )
     if (stopping) {
       this.stopping = stopping.finally(() => (this.stopping = undefined))

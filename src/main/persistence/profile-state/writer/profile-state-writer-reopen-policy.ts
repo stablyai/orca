@@ -1,15 +1,24 @@
 const REOPEN_LOG_INTERVAL_MS = 10 * 60_000
 const MAX_REOPEN_BACKOFF_MS = 60_000
 
-/** Counts idle-writer reopens and spaces out retries after a failed one, so saving never wedges. */
+/** Counts writer reopens, spaces out retries after a failed one, and keeps the save notice up while recovering. */
 export class ProfileStateWriterReopenPolicy {
   private reopens = 0
   private lastLogMs: number | undefined
   private failure: { error: unknown; failures: number; retryAtMs: number } | undefined
   private bypassOnce = false
-  private interrupted: unknown
+  private interrupted: Error | undefined
+  private recovering = false
+  private writerDelayed = false
+  private noticeShown = false
 
-  constructor(private readonly now: () => number = Date.now) {}
+  constructor(
+    private readonly callbacks: () => {
+      onFailure?: (error: Error) => void
+      onSaveDelayChanged?: (delayed: boolean) => void
+    } = () => ({}),
+    private readonly now: () => number = Date.now
+  ) {}
 
   get count(): number {
     return this.reopens
@@ -39,16 +48,53 @@ export class ProfileStateWriterReopenPolicy {
       return
     }
     this.lastLogMs = now
-    console.info(`[persistence] Reopened the idle profile writer (${this.reopens} reopens so far)`)
+    console.info(`[persistence] Reopened the profile writer (${this.reopens} reopens so far)`)
   }
 
   /** The interrupted write a reopen recovers from; a refused reopen reports it, not its revision conflict. */
-  recoverFrom(error: unknown): void {
+  recoverFrom(error: Error): void {
+    if (!this.recovering) {
+      console.warn(
+        '[persistence] A profile save was interrupted; retrying on the next save:',
+        error
+      )
+    }
     this.interrupted = error
+    this.recovering = true
+    this.publishNotice()
   }
 
-  terminalFailure(error: unknown): unknown {
-    return this.interrupted ?? error
+  /** Saving stopped for good: report it, carrying the interrupted write when recovering from one. */
+  reportStopped(error: unknown): void {
+    this.recovering = false
+    this.publishNotice()
+    reportTerminalReopenFailure(this.callbacks().onFailure, this.interrupted ?? error)
+  }
+
+  /** A slow writer command raises the same notice that recovery keeps up until a save lands. */
+  readonly writerDelayChanged = (delayed: boolean): void => {
+    this.writerDelayed = delayed
+    this.publishNotice()
+  }
+
+  recordSaved(): void {
+    if (this.recovering) {
+      this.recovering = false
+      this.publishNotice()
+    }
+  }
+
+  private publishNotice(): void {
+    const shown = this.recovering || this.writerDelayed
+    if (shown === this.noticeShown) {
+      return
+    }
+    this.noticeShown = shown
+    try {
+      this.callbacks().onSaveDelayChanged?.(shown)
+    } catch (error) {
+      console.error('[persistence] Could not report delayed saving:', error)
+    }
   }
 
   recordSuccess(): void {
@@ -69,7 +115,7 @@ export class ProfileStateWriterReopenPolicy {
       failures === 1 ? 0 : Math.min(1_000 * 2 ** (failures - 2), MAX_REOPEN_BACKOFF_MS)
     this.failure = { error, failures, retryAtMs: this.now() + retryInMs }
     console.warn(
-      `[persistence] Could not reopen the idle profile writer; retrying in ${retryInMs} ms:`,
+      `[persistence] Could not reopen the profile writer; retrying in ${retryInMs} ms:`,
       error
     )
     return { retryInMs }

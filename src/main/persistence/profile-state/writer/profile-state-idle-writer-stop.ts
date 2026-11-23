@@ -12,10 +12,6 @@ export class ProfileStateIdleWriterStop {
     }
   ) {}
 
-  get pending(): boolean {
-    return this.timer !== undefined
-  }
-
   scheduleAfterReady(): void {
     void this.options.getWriter()?.ready.then(
       () => this.schedule(),
