@@ -7,6 +7,7 @@ import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/recor
 import { isSelfStartedTurnRow } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
 import type { AgentChildWorkView } from '../../shared/agent-status/child-work/agent-status-child-work-view'
 import { isLiveChildWork } from '../../shared/agent-status/child-work/agent-status-child-work-liveness'
+import { FIRST_GENERATION } from '../../shared/agent-status/child-work/agent-status-child-work-evidence-admission'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type { EndedChatTurn } from './external-conversation-ended-turn'
 import type { LinkedConversation } from './external-conversation-links'
@@ -36,9 +37,10 @@ export function orcaSteered(
 }
 
 /** At a turn's end: the runs its conversation's turns started that still run. A turn that answered
- *  the conversation adds the runs first seen during it (its end, read later, may see newer ones); any
- *  other turn, or one someone in Orca steered into, adds none. A resumed task is a new run, so a
- *  resume from Orca drops the thread's claim on it. */
+ *  the conversation adds the first runs of work first seen during it (its end, read later, may see
+ *  newer ones); any other turn, or one someone in Orca steered into, adds none. A resumed task is a
+ *  new run with no start time of its own, so it is never added, and a resume from Orca drops the
+ *  thread's claim on the task. */
 export function settleWake(
   deps: WakeAnswersDeps,
   linked: LinkedConversation,
@@ -51,7 +53,10 @@ export function settleWake(
   const started =
     turn.answered && startedAt !== null && !orcaSteered(linked.link, startedAt)
       ? live.filter(
-          (child) => child.firstObservedAt >= startedAt && child.firstObservedAt <= endedAt
+          (child) =>
+            child.invocation.generation === FIRST_GENERATION &&
+            child.firstObservedAt >= startedAt &&
+            child.firstObservedAt <= endedAt
         )
       : []
   const kept = linked.link.wakeAnswers?.runs ?? []

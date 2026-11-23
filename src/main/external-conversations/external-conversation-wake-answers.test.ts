@@ -168,6 +168,10 @@ function harness() {
         prompt?: PendingPrompt
         /** Someone in Orca steers in while the end's journal read is pending. */
         steerDuringRead?: number
+        /** Runs that finished into the wake-up after the thread was told it started. */
+        absorbs?: string[]
+        /** What else happens while the end's journal read is pending. */
+        duringRead?: () => void
       }
     ) {
       leadStartedAt = at
@@ -191,7 +195,12 @@ function harness() {
       active = null
       pending = null
       const wake = opts.woke
-        ? { wake: { wokenBy: opts.woke, steered: opts.steeredAt !== undefined } }
+        ? {
+            wake: {
+              wokenBy: [...opts.woke, ...(opts.absorbs ?? [])],
+              steered: opts.steeredAt !== undefined
+            }
+          }
         : {}
       const words = opts.says ? { lastAssistantMessage: opts.says } : {}
       chat.news({
@@ -200,6 +209,7 @@ function harness() {
         outcome: 'success',
         at: at + 5,
         readTurn: async () => {
+          opts.duringRead?.()
           if (opts.steerDuringRead !== undefined) {
             vi.spyOn(Date, 'now').mockReturnValue(opts.steerDuringRead)
             recordAdmittedTurn({ store }, orcaSteer)
@@ -332,6 +342,34 @@ describe('a background task wake-up answers the conversation whose own turn star
       started: ['steered-job'],
       steerDuringRead: 14,
       says: 'On it.'
+    })
+    expect(t.link().wakeAnswers).toBeUndefined()
+  })
+
+  it('ends in Orca a wake-up another run finished into, and records nothing it started', async () => {
+    const t = harness()
+    await t.turn(10, { from: 'thread', started: ['worker-retry'], says: 'Retrying.' })
+    t.finish('worker-retry')
+    await t.turn(21, {
+      woke: ['worker-retry'],
+      absorbs: ['private-build'],
+      started: ['follow-up'],
+      says: 'Build and worker both done.'
+    })
+    expect(t.said()).toEqual(['Retrying.'])
+    expect(t.link().wakeAnswers).toBeUndefined()
+  })
+
+  it('never records a run resumed while the end is read', async () => {
+    const t = harness()
+    await t.turn(10, {
+      from: 'thread',
+      started: ['job-run-1'],
+      says: 'Started.',
+      duringRead: () => {
+        t.finish('job-run-1')
+        t.resume('job-run-1', 'job-run-2')
+      }
     })
     expect(t.link().wakeAnswers).toBeUndefined()
   })

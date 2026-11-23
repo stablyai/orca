@@ -8,7 +8,7 @@ import type { LinkedConversation } from './external-conversation-links'
 import { conversationPane } from './external-conversation-types'
 import { isConversationReport } from './external-conversation-turn-opener'
 import { ToldWorkLinks } from './external-conversation-told-work-links'
-import { orcaSteered, settleWake, wokenTurn } from './external-conversation-wake-answers'
+import { settleWake, wokenTurn } from './external-conversation-wake-answers'
 import { ConversationWorkers } from './external-conversation-workers'
 import type { ChatTurnsDeps } from './external-conversation-chat-turns-deps'
 import {
@@ -278,14 +278,11 @@ export class ChatTurns {
       const current = this.deps.linkedFor(paneKey)
       const link = current?.link ?? linked.link
       const woken = origin === 'local' && !shared && wokenTurn(turn, link)
-      // A wake-up the thread saw start that someone in Orca steered into is theirs.
-      const steeredWake =
-        heardSoFar &&
-        origin === 'local' &&
-        !reported &&
-        turn.wake?.steered === true &&
-        orcaSteered(link, ended.turnId)
-      const heard = heardSoFar && !steeredWake
+      // A wake-up the thread saw start that turned out not to be only its own (someone in Orca
+      // steered in, or another run finished into it) ends in Orca.
+      const revokedWake =
+        heardSoFar && origin === 'local' && !reported && turn.wake !== undefined && !woken
+      const heard = heardSoFar && !revokedWake
       if (!shared && current) {
         const answered = heard || reported || woken
         settleWake(this.deps, current, { answered, startedAt: ended.turnId, endedAt: news.at })
@@ -301,10 +298,10 @@ export class ChatTurns {
       if (!heard && !reported && !woken) {
         // No one in the thread asked: a bot's turn Orca raised tells how it went, never what it said.
         if (
-          steeredWake ||
+          revokedWake ||
           (linked.link.bot && promptRaisedBy(linked.link, turn.opener ?? null) === 'orca')
         ) {
-          endAdoptedTurn(end, () => steeredWake || this.deps.promptsAudience(), turn)
+          endAdoptedTurn(end, () => revokedWake || this.deps.promptsAudience(), turn)
         }
         return
       }

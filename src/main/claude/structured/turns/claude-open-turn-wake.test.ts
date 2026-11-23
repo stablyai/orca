@@ -3,6 +3,7 @@ import type { AgentJournalItemBody } from '../../../../shared/agent-session/jour
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import capture from '../../__fixtures__/claude-subagent-permission-frames.json'
 import { createClaudeJournalTranslator } from '../journal/claude-structured-journal-translation'
+import { resolveAgentJournalTurnRowWrite } from '../../../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 
 // Claude resumes on its own when a background task finishes. In the SDK's own order the system
 // task_notification frame (naming the finished run by the call that started it) arrives between turns
@@ -68,4 +69,22 @@ it('names a task that finishes into the wake-up too', () => {
   }
   const turns = replay({ index: 18, frame: other })
   expect(turns.at(-1)).toMatchObject({ wokenBy: [RUN, 'toolu_private'] })
+})
+
+it('keeps no names on the ended row once a finish into the wake-up names no run', () => {
+  const unnamed: Record<string, unknown> = { ...frames[17], uuid: 'unnamed-notification' }
+  delete unnamed.tool_use_id
+  const turns = replay({ index: 18, frame: unnamed })
+  const running = turns.findLast((row) => row.state === 'running' && row.wokenBy)!
+  const ended = turns.at(-1)!
+  expect(running.wokenBy).toEqual([RUN])
+  expect(ended.wokenBy).toBeUndefined()
+  // The journal merges each revision into the row it has; the ended row must not keep the names.
+  const merged = resolveAgentJournalTurnRowWrite(
+    { itemBody: () => running, newestTurn: () => null, contextWindowHeld: () => false },
+    { identity: { provider: 'claude', sessionId: SESSION, uuid: 'turn' } },
+    { lifecycle: ended },
+    Number.MAX_SAFE_INTEGER
+  )
+  expect(merged?.body.wokenBy).toBeUndefined()
 })
