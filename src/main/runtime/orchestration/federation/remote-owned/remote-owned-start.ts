@@ -147,7 +147,12 @@ export async function startRemoteOwnedWorker(
   const startCard = prepareWorkerStartCard(runtime, ctx.orchestrationCaller)
   let receipt: unknown
   try {
-    markRemotePlacementSent(db, taskId, forward.key)
+    markRemotePlacementSent(
+      db,
+      taskId,
+      forward.key,
+      Math.ceil(budgets.attachDeadlineMs / 60_000) + 12
+    )
     receipt = await callRemoteOwnedServer(runtime, link, {
       method: 'orchestration.workerStart',
       params: {

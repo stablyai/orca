@@ -25,7 +25,6 @@ import {
 import { getOpenRemoteRunLink, type RemoteRunLinkRow } from './remote-run-links'
 import { getLiveRemotePlacement, type RemotePlacementRow } from './remote-placement-hold'
 import { writtenRow } from './written-row'
-
 export function getRemotePlacement(
   db: OrchestrationDb,
   taskId: string
@@ -35,16 +34,8 @@ export function getRemotePlacement(
     | RemotePlacementRow
     | undefined
 }
-
 type TaskCreation = Omit<Parameters<OrchestrationDb['createTask']>[0], 'id' | 'runId'>
 
-/**
- * Claims the Task for a start on the link's server before the start is sent: the Task is
- * dispatched here and fenced from every other start until the server answers. A same-key retry
- * finds its own reservation and clears its never-sent mark before it sends. `nothingSent` says no
- * earlier send under this key can have reached the server. Creates the Task (under its adopted ID)
- * when `create` is given.
- */
 export function reserveRemotePlacement(
   db: OrchestrationDb,
   params: {
@@ -66,7 +57,6 @@ export function reserveRemotePlacement(
       )
     }
     const existing = getRemotePlacement(db, params.taskId)
-    // Only this link's own reservation answers a retry; one under a link a re-pair closed holds nothing.
     if (
       existing?.request_key === params.requestKey &&
       existing.conversation_id === link.conversation_id
@@ -74,12 +64,19 @@ export function reserveRemotePlacement(
       db.db
         .prepare(
           `UPDATE remote_placements
-           SET never_sent_at = NULL, sent_at = NULL, ambiguous_sent_at = NULL WHERE task_id = ?`
+           SET never_sent_at = NULL, sent_at = NULL, sent_recovery_at = NULL,
+             ambiguous_sent_at = NULL WHERE task_id = ?`
         )
         .run(params.taskId)
       commitLifecycleWriteTransaction(db.db, transaction)
       return {
-        placement: { ...existing, never_sent_at: null, sent_at: null, ambiguous_sent_at: null },
+        placement: {
+          ...existing,
+          never_sent_at: null,
+          sent_at: null,
+          sent_recovery_at: null,
+          ambiguous_sent_at: null
+        },
         task: writtenRow(db.getTask(params.taskId), `Task ${params.taskId}`),
         nothingSent: existing.never_sent_at !== null
       }
@@ -107,7 +104,7 @@ export function reserveRemotePlacement(
            conversation_id = excluded.conversation_id, state = 'reserved',
            request_key = excluded.request_key, prior_task_status = excluded.prior_task_status,
            dispatch_id = excluded.dispatch_id, never_sent_at = NULL, sent_at = NULL,
-           ambiguous_sent_at = NULL`
+           sent_recovery_at = NULL, ambiguous_sent_at = NULL`
       )
       .run(
         task.id,
@@ -152,7 +149,6 @@ export function releaseRemotePlacement(
   try {
     const placement = getRemotePlacement(db, taskId)
     if (placement?.state === 'reserved' && placement.request_key === requestKey) {
-      // A refused retry leaves the attempt it retried as the Task's current one.
       if (placement.dispatch_id) {
         db.db
           .prepare(`UPDATE remote_placements SET state = 'accepted' WHERE task_id = ?`)

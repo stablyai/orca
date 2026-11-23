@@ -14,6 +14,7 @@ export type RemotePlacementRow = {
   created_at: string
   never_sent_at: string | null
   sent_at: string | null
+  sent_recovery_at: string | null
   ambiguous_sent_at: string | null
 }
 
@@ -57,7 +58,7 @@ export function markRemotePlacementNeverSent(
   db.db
     .prepare(
       `UPDATE remote_placements SET never_sent_at = datetime('now'), sent_at = NULL,
-         ambiguous_sent_at = NULL
+         sent_recovery_at = NULL, ambiguous_sent_at = NULL
        WHERE task_id = ? AND request_key = ? AND state = 'reserved'`
     )
     .run(taskId, requestKey)
@@ -71,7 +72,7 @@ export function markRemotePlacementAmbiguous(
 ): void {
   db.db
     .prepare(
-      `UPDATE remote_placements SET ambiguous_sent_at = datetime('now')
+      `UPDATE remote_placements SET ambiguous_sent_at = datetime('now'), sent_recovery_at = NULL
        WHERE task_id = ? AND request_key = ? AND state = 'reserved'`
     )
     .run(taskId, requestKey)
@@ -81,15 +82,16 @@ export function markRemotePlacementAmbiguous(
 export function markRemotePlacementSent(
   db: OrchestrationDb,
   taskId: string,
-  requestKey: string
+  requestKey: string,
+  recoveryDelayMinutes: number
 ): void {
   db.db
     .prepare(
-      `UPDATE remote_placements SET sent_at = datetime('now'), never_sent_at = NULL,
-         ambiguous_sent_at = NULL
+      `UPDATE remote_placements SET sent_at = datetime('now'),
+         sent_recovery_at = datetime('now', ?), never_sent_at = NULL, ambiguous_sent_at = NULL
        WHERE task_id = ? AND request_key = ? AND state = 'reserved'`
     )
-    .run(taskId, requestKey)
+    .run(`+${recoveryDelayMinutes} minutes`, taskId, requestKey)
 }
 
 /**
@@ -110,6 +112,9 @@ export function retireNeverSentReservation(db: OrchestrationDb, taskId: string):
     )
     .get(taskId) as { dispatch_id: string | null } | undefined
   if (reservation?.dispatch_id) {
+    db.db
+      .prepare('UPDATE remote_dispatches SET task_settled_here = 1 WHERE dispatch_id = ?')
+      .run(reservation.dispatch_id)
     db.db.prepare(`UPDATE remote_placements SET state = 'accepted' WHERE task_id = ?`).run(taskId)
   } else if (reservation) {
     db.db.prepare('DELETE FROM remote_placements WHERE task_id = ?').run(taskId)
@@ -127,16 +132,27 @@ export function retireExpiredAmbiguousReservation(db: OrchestrationDb, taskId: s
       `SELECT dispatch_id FROM remote_placements
        WHERE task_id = ? AND state = 'reserved'
          AND never_sent_at IS NULL
-         AND julianday(COALESCE(ambiguous_sent_at, sent_at, created_at)) <= julianday('now', ?)
+         AND (
+           (ambiguous_sent_at IS NOT NULL AND julianday(ambiguous_sent_at) <= julianday('now', ?))
+           OR (ambiguous_sent_at IS NULL AND sent_recovery_at IS NOT NULL
+             AND julianday(sent_recovery_at) <= julianday('now'))
+           OR (ambiguous_sent_at IS NULL AND sent_recovery_at IS NULL
+             AND julianday(COALESCE(sent_at, created_at)) <= julianday('now', ?))
+         )
          AND EXISTS (
            SELECT 1 FROM remote_run_links
            WHERE conversation_id = remote_placements.conversation_id AND state = 'open'
          )`
     )
-    .get(taskId, `-${AMBIGUOUS_REMOTE_START_RECOVERY_MINUTES} minutes`) as
-    | { dispatch_id: string | null }
-    | undefined
+    .get(
+      taskId,
+      `-${AMBIGUOUS_REMOTE_START_RECOVERY_MINUTES} minutes`,
+      `-${AMBIGUOUS_REMOTE_START_RECOVERY_MINUTES} minutes`
+    ) as { dispatch_id: string | null } | undefined
   if (reservation?.dispatch_id) {
+    db.db
+      .prepare('UPDATE remote_dispatches SET task_settled_here = 1 WHERE dispatch_id = ?')
+      .run(reservation.dispatch_id)
     db.db.prepare(`UPDATE remote_placements SET state = 'accepted' WHERE task_id = ?`).run(taskId)
   } else if (reservation) {
     db.db.prepare('DELETE FROM remote_placements WHERE task_id = ?').run(taskId)

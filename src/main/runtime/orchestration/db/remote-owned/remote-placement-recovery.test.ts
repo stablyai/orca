@@ -65,17 +65,17 @@ describe('ambiguous remote start recovery', () => {
         "UPDATE remote_placements SET created_at = datetime('now', '-16 minutes') WHERE task_id = ?"
       )
       .run(TASK)
-    markRemotePlacementSent(db, TASK, 'start-key')
+    markRemotePlacementSent(db, TASK, 'start-key', 15)
 
     expect(() => db.updateTaskStatus(TASK, 'failed')).toThrow(/cannot move to failed/)
     expect(getRemotePlacement(db, TASK)?.sent_at).not.toBeNull()
   })
 
   it('lets an operator retire an in-flight start after its recovery window', () => {
-    markRemotePlacementSent(db, TASK, 'start-key')
+    markRemotePlacementSent(db, TASK, 'start-key', 15)
     db.db
       .prepare(
-        "UPDATE remote_placements SET sent_at = datetime('now', '-16 minutes') WHERE task_id = ?"
+        "UPDATE remote_placements SET sent_at = datetime('now', '-16 minutes'), sent_recovery_at = datetime('now', '-16 minutes') WHERE task_id = ?"
       )
       .run(TASK)
 
@@ -92,6 +92,13 @@ describe('ambiguous remote start recovery', () => {
   it('lets an operator cancel an old unanswered retry that still names its previous Dispatch', () => {
     db.db
       .prepare(
+        `INSERT INTO remote_dispatches (
+           dispatch_id, conversation_id, run_id, environment_id, task_id, status, worker_state
+         ) VALUES (?, ?, ?, ?, ?, 'failed', 'failed')`
+      )
+      .run('dispatch_old', link.conversation_id, link.run_id, link.environment_id, TASK)
+    db.db
+      .prepare(
         "UPDATE remote_placements SET dispatch_id = 'dispatch_old', created_at = datetime('now', '-16 minutes') WHERE task_id = ?"
       )
       .run(TASK)
@@ -101,6 +108,11 @@ describe('ambiguous remote start recovery', () => {
       state: 'accepted',
       dispatch_id: 'dispatch_old'
     })
+    expect(
+      db.db
+        .prepare('SELECT task_settled_here FROM remote_dispatches WHERE dispatch_id = ?')
+        .get('dispatch_old')
+    ).toMatchObject({ task_settled_here: 1 })
     expect(
       reserveRemotePlacement(db, {
         link,
