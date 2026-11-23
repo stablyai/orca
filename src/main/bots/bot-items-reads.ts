@@ -3,14 +3,11 @@
 import {
   botItemEventId,
   isOpenBotItemStatus,
-  parseBotItemEventId,
   type BotItemLinkKind,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
-import { botItemWaitingAsk } from '../../shared/bots/bot-item-question-answers'
 import {
   eventRecordOf,
-  eventViewOf,
   integer,
   itemRecordOf,
   linkRecordOf,
@@ -36,15 +33,19 @@ export type BotItemListQuery = {
 }
 
 export class BotItemsReads extends BotItemsTables {
-  /** The item's ask waiting on the owner, which a later question can leave open: read from all its
-   *  events as clients pair them. */
-  protected waitingAsk(item: Pick<BotItemRecord, 'uid' | 'status'>): number | null {
-    const events = this.db
-      .prepare('SELECT * FROM item_events WHERE item_uid = ? ORDER BY id')
-      .all(item.uid)
-      .map((row) => eventViewOf(eventRecordOf(row)))
-    const ask = botItemWaitingAsk(item, events)
-    return ask ? parseBotItemEventId(ask.askId) : null
+  /** The item's ask waiting on the owner, which a later question can leave open, as its row keeps it;
+   *  an item from before that column is worked out from its events once. */
+  protected waitingAsk(item: Pick<BotItemRecord, 'uid'>): number | null {
+    const row = this.db.prepare('SELECT waiting_ask FROM items WHERE uid = ?').get(item.uid)
+    const kept = row ? optionalInteger(row, 'waiting_ask') : null
+    if (kept !== null) {
+      return kept === 0 ? null : kept
+    }
+    const ask = this.readWaitingAsk(item.uid)
+    if (!this.readOnly) {
+      this.keepWaitingAsk(item.uid, ask)
+    }
+    return ask
   }
 
   /** Links of a kind to any of these refs, across items. */

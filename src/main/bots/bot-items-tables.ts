@@ -4,12 +4,14 @@ import type SyncDatabase from '../sqlite/sync-database'
 import {
   BOT_ITEM_LIMITS,
   isOpenBotItemStatus,
+  parseBotItemEventId,
   type BotItemActor,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
+import { botItemWaitingAsk } from '../../shared/bots/bot-item-question-answers'
 import { BotItemError } from './bot-item-error'
 import { linkWords, type BotItemLinkInput } from './bot-items-input'
-import { eventRecordOf, itemRecordOf, linkRecordOf } from './bot-items-rows'
+import { eventRecordOf, eventViewOf, itemRecordOf, linkRecordOf } from './bot-items-rows'
 import type { BotItemEventRecord, BotItemLinkRecord, BotItemRecord } from './bot-items-schema'
 
 export class BotItemsTables {
@@ -117,7 +119,26 @@ export class BotItemsTables {
          WHERE uid = ?`
       )
       .run(id, now, now, Number(actor.kind !== 'owner'), id, uid)
+    // Only comments and moves pair asks with answers; the row keeps the result so opens read no history.
+    if (kind === 'commented' || kind === 'status') {
+      this.keepWaitingAsk(uid, this.readWaitingAsk(uid))
+    }
     return id
+  }
+
+  /** The ask waiting on the owner while the item is open, paired from all its events as clients do. */
+  protected readWaitingAsk(uid: string): number | null {
+    const events = this.db
+      .prepare('SELECT * FROM item_events WHERE item_uid = ? ORDER BY id')
+      .all(uid)
+      .map((row) => eventViewOf(eventRecordOf(row)))
+    // Any open status pairs alike; readers drop the ask once the item closes.
+    const ask = botItemWaitingAsk({ status: 'working' }, events)
+    return ask ? parseBotItemEventId(ask.askId) : null
+  }
+
+  protected keepWaitingAsk(uid: string, ask: number | null): void {
+    this.db.prepare('UPDATE items SET waiting_ask = ? WHERE uid = ?').run(ask ?? 0, uid)
   }
 
   protected requireItem(uid: string): BotItemRecord {

@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { afterEach, expect, it } from 'vitest'
 import {
   BOT_ITEM_EVENT_KINDS,
@@ -22,8 +26,8 @@ const MERGE = 'Merge it?'
 const stores: BotItemsStore[] = []
 afterEach(() => stores.splice(0).forEach((store) => store.dispose()))
 
-function item() {
-  const store = BotItemsStore.open(':memory:')
+function item(path = ':memory:') {
+  const store = BotItemsStore.open(path)
   stores.push(store)
   const { uid } = store.add(
     {
@@ -201,4 +205,25 @@ it('keeps a reply that names one set out of another set with the same choices', 
   const { asks } = view()
   expect(asks.get(botItemEventId(first))?.answers.map(Boolean)).toEqual([true, false])
   expect(asks.get(botItemEventId(second))?.answers.map(Boolean)).toEqual([false])
+})
+
+it('works out the waiting ask of a row from before the column as its events pair it', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'bot-items-'))
+  try {
+    const path = join(dir, 'items.sqlite')
+    const { store, uid, ask, comment } = item(path)
+    const first = ask([HOSTS, GO])
+    comment(`${HOSTS} → Yes`, first)
+    ask([MERGE])
+    const kept = store.viewRows([uid], true).waitingAsks[uid]
+    expect(kept).toBe(botItemEventId(first))
+    const file = new DatabaseSync(path)
+    file.prepare('UPDATE items SET waiting_ask = NULL').run()
+    expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(kept)
+    expect(file.prepare('SELECT waiting_ask FROM items').get()).toEqual({ waiting_ask: first })
+    file.close()
+  } finally {
+    stores.splice(0).forEach((store) => store.dispose())
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
