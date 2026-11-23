@@ -112,16 +112,11 @@ export abstract class RuntimeUnmountedSleptAgents extends RuntimeSleptMailboxWak
   }
 
   /** The connected process a handle names; works for window panes, which own their handles, and for
-   *  a resume into an unmounted pane, which holds the name before its pane is published. */
+   *  a resume into an unmounted pane, whose takeover left the name only on the resumed process. A
+   *  handle record still on the stopped process is not awake until the takeover moves it. */
   protected wokenHandlePtyId(handle: string): string | null {
-    for (const ptyId of [
-      this.handles.get(handle)?.ptyId,
-      this.terminalIdentity.firstReversePtyId(handle)
-    ]) {
-      if (ptyId && this.ptysById.get(ptyId)?.connected === true) {
-        return ptyId
-      }
-    }
-    return null
+    const record = this.handles.get(handle)
+    const ptyId = record ? record.ptyId : this.terminalIdentity.firstReversePtyId(handle)
+    return ptyId && this.ptysById.get(ptyId)?.connected === true ? ptyId : null
   }
 }
