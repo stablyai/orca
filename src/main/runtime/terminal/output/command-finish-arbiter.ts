@@ -34,69 +34,52 @@ export type CommandFinishArbiterDeps = {
 type PendingMark = {
   lanes: CommandMarkLanes
   incarnation: string | null | undefined
-  /** Which of its lane's marks this is: the other lane's mark with the same count is the same one. */
-  count: number
-  read: Promise<LaunchedAgentForeground>
-}
-
-type PaneMarks = {
-  counts: Record<Lane, number>
-  pending: Partial<Record<Lane, PendingMark>>
-  /** Each lane's last settled mark, kept so the other lane's sight of it reuses the same read. */
-  settled: Partial<Record<Lane, PendingMark>>
 }
 
 /** One owner for an OSC 133;D. Agents such as Devin print their own around each turn, so in a pane
  *  with an agent a mark counts only once a read finds the shell, not that agent, in front.
  *  An unknown read, or a command starting before it answers, keeps the mark, as before. Each lane
- *  reads bytes at its own pace (the title tracker trails command paint), so each settles only its
- *  own marks; the two share a read only for the same mark. */
+ *  reads bytes at its own pace (the title tracker trails command paint) and may see a chunk's marks
+ *  differently, so each reads and settles only its own. */
 export class CommandFinishArbiter {
-  private readonly panes = new Map<string, PaneMarks>()
+  private readonly pending = new Map<string, Partial<Record<Lane, PendingMark>>>()
 
   constructor(private readonly deps: CommandFinishArbiterDeps) {}
 
   note(ptyId: string, lanes: CommandMarkLanes): void {
     const lane: Lane = lanes.authority ? 'authority' : 'paint'
     const agent = this.deps.agentFor(ptyId)
-    let pane = this.panes.get(ptyId)
-    if (!pane && !agent) {
-      this.deps.finish(ptyId, lanes)
-      return
-    }
-    pane ??= { counts: { authority: 0, paint: 0 }, pending: {}, settled: {} }
-    this.panes.set(ptyId, pane)
-    pane.counts[lane] += 1
+    const pane = this.pending.get(ptyId)
     // A newer mark in this lane decides; the earlier one's read no longer speaks for it.
-    delete pane.pending[lane]
+    if (pane) {
+      delete pane[lane]
+    }
     if (!agent) {
+      this.forgetIfIdle(ptyId)
       this.deps.finish(ptyId, lanes)
       return
     }
-    const count = pane.counts[lane]
-    const incarnation = this.deps.incarnationOf(ptyId)
-    const otherLane: Lane = lane === 'authority' ? 'paint' : 'authority'
-    const same = [pane.pending[otherLane], pane.settled[otherLane]].find(
-      (other) => other?.count === count && other.incarnation === incarnation
-    )
-    const read =
-      same?.read ?? this.deps.readForeground(ptyId, agent).catch(() => 'unknown' as const)
-    const mark: PendingMark = { lanes, incarnation, count, read }
-    pane.pending[lane] = mark
-    void this.decide(ptyId, lane, mark)
+    const mark: PendingMark = { lanes, incarnation: this.deps.incarnationOf(ptyId) }
+    this.pending.set(ptyId, { ...pane, [lane]: mark })
+    void this.decide(ptyId, lane, mark, agent)
   }
 
   /** A command started after `lane` saw its pending mark: the mark was the shell's. */
   noteCommandStarted(ptyId: string, lane: Lane): void {
-    const mark = this.panes.get(ptyId)?.pending[lane]
+    const mark = this.pending.get(ptyId)?.[lane]
     if (mark) {
       this.settle(ptyId, lane, mark, 'shell')
     }
   }
 
-  private async decide(ptyId: string, lane: Lane, mark: PendingMark): Promise<void> {
-    const foreground = await mark.read
-    if (this.panes.get(ptyId)?.pending[lane] === mark) {
+  private async decide(
+    ptyId: string,
+    lane: Lane,
+    mark: PendingMark,
+    agent: TuiAgent
+  ): Promise<void> {
+    const foreground = await this.deps.readForeground(ptyId, agent).catch(() => 'unknown' as const)
+    if (this.pending.get(ptyId)?.[lane] === mark) {
       this.settle(ptyId, lane, mark, foreground)
     }
   }
@@ -107,20 +90,23 @@ export class CommandFinishArbiter {
     mark: PendingMark,
     foreground: LaunchedAgentForeground
   ): void {
-    const pane = this.panes.get(ptyId)
+    const pane = this.pending.get(ptyId)
     if (pane) {
-      delete pane.pending[lane]
-      pane.settled[lane] = mark
+      delete pane[lane]
     }
-    const incarnation = this.deps.incarnationOf(ptyId)
-    if (incarnation === undefined && !pane?.pending.authority && !pane?.pending.paint) {
-      this.panes.delete(ptyId)
-    }
+    this.forgetIfIdle(ptyId)
     // Why: a rebind reset what the old process owned; its mark must not retire the new one's.
-    if (foreground === 'agent' || incarnation !== mark.incarnation) {
+    if (foreground === 'agent' || this.deps.incarnationOf(ptyId) !== mark.incarnation) {
       this.deps.dismiss(ptyId, mark.lanes)
     } else {
       this.deps.finish(ptyId, mark.lanes)
+    }
+  }
+
+  private forgetIfIdle(ptyId: string): void {
+    const pane = this.pending.get(ptyId)
+    if (pane && !pane.authority && !pane.paint) {
+      this.pending.delete(ptyId)
     }
   }
 }
