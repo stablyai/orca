@@ -21,6 +21,7 @@ import {
   startProfileStateWriterSlowWarning
 } from './profile-state-writer-slow-warning'
 import { ProfileStateWriterThread } from './profile-state-writer-thread'
+import { isProfileStateSaveCommand } from './profile-state-writer-request'
 
 export type ProfileStateWriterConnectionOptions = {
   workerPath?: string
@@ -217,8 +218,8 @@ export class ProfileStateWriterConnection {
       now: this.options.clock,
       acknowledgedRevision: this.lastAcknowledgedRevision,
       onSlow: () => {
-        // Only a save in progress is a slow save; a slow read or export has nothing unsaved to report.
-        if (this.active?.id === id && command.startsWith('write-')) {
+        // Only a save in progress is a slow save; a slow export has nothing unsaved to report.
+        if (this.active?.id === id && isProfileStateSaveCommand(command)) {
           this.reportSaveDelay(true)
         }
       }
@@ -270,7 +271,7 @@ export class ProfileStateWriterConnection {
       this.closeAcknowledged = true
     }
     this.latestRevision = value.revision
-    if (pending.command !== 'initialize' && pending.command !== 'close') {
+    if (isProfileStateSaveCommand(pending.command)) {
       this.options.onAcknowledged?.()
     }
     this.settle(value)

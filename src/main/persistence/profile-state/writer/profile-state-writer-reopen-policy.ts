@@ -85,7 +85,8 @@ export class ProfileStateWriterReopenPolicy {
   /** Saving stopped for good. A revision conflict after an interrupted write reports that write instead. */
   reportStopped(error: unknown): void {
     this.endRecovery()
-    const cause = this.interrupted && isRevisionConflict(error) ? this.interrupted : error
+    const cause =
+      this.interrupted && isProfileStateRevisionConflict(error) ? this.interrupted : error
     reportTerminalReopenFailure(this.callbacks().onFailure, cause)
   }
 
@@ -100,6 +101,7 @@ export class ProfileStateWriterReopenPolicy {
   recordSaved(): void {
     // The acknowledged command is no longer slow; its own clear arrives a microtask later.
     this.writerDelayed = false
+    this.interrupted = undefined
     if (this.recovering) {
       this.endRecovery()
     }
@@ -133,7 +135,7 @@ export class ProfileStateWriterReopenPolicy {
 
   /** Logs and returns the delay before a retry, or null when the failure is terminal (a revision conflict). */
   recordFailure(error: unknown): { retryInMs: number } | null {
-    if (isRevisionConflict(error)) {
+    if (isProfileStateRevisionConflict(error)) {
       return null
     }
     const failures = (this.failure?.failures ?? 0) + 1
@@ -161,7 +163,7 @@ export function reportTerminalReopenFailure(
   }
 }
 
-function isRevisionConflict(error: unknown): boolean {
+export function isProfileStateRevisionConflict(error: unknown): boolean {
   return (
     typeof error === 'object' &&
     error !== null &&
