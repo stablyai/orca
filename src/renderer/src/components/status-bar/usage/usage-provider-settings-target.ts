@@ -19,6 +19,8 @@ export function getUsageProviderAccountsSectionId(
       return 'accounts-grok'
     case 'cursor':
       return 'accounts-cursor'
+    case 'copilot':
+      return 'accounts-copilot'
     case 'antigravity':
     case 'kimi':
     case 'muse':

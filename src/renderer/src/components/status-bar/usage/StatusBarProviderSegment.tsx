@@ -178,6 +178,9 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'S'
     case 'codex':
       return 'X'
+    case 'copilot':
+      // C is Claude and U is Cursor. P is unused and is the readable letter in Copilot.
+      return 'P'
   }
 }
 
@@ -266,6 +269,9 @@ export function ProviderSegment({
       : getTightestUsageSection(p, t, 'all')
     : null
   const sections = getStatusBarUsageSections(p, mode, t)
+  // Copilot's chip is remaining AI credits. Details keep the Used/Left toggle.
+  const chipDisplay = provider === 'copilot' ? 'remaining' : display
+  const meterWindow = provider === 'copilot' ? (sections[0]?.window ?? null) : tightest?.window
   const groupedBuckets = sections.map((section) => section.window).filter(isGroupedUsagePool)
   const showLabels = mode === 'verbose' || !compact
   const now = useResetCountdownClock(
@@ -329,8 +335,8 @@ export function ProviderSegment({
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
-      {!template && mode === 'verbose' && tightest && !compact ? (
-        <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
+      {!template && mode === 'verbose' && meterWindow && !compact ? (
+        <MiniBar usedPct={clampUsedPercent(meterWindow.usedPercent)} display={chipDisplay} />
       ) : null}
       {template ? (
         <CustomUsageText template={template} limits={p} display={display} now={now} />
@@ -348,7 +354,7 @@ export function ProviderSegment({
             <WindowLabel
               w={section.window}
               label={formatStatusBarSectionLabel(p, section, now, t)}
-              display={display}
+              display={chipDisplay}
               showLabel={showLabels}
               labelFirst={section.labelFirst}
             />

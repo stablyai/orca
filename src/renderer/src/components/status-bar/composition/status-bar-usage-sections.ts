@@ -4,6 +4,7 @@ import type {
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import { isCursorUsageBucket } from '../../../../../shared/agent-usage/rate-limits/cursor-usage-buckets'
+import { COPILOT_AIC_BUCKET_NAME } from '../../../../../shared/agent-usage/rate-limits/copilot-usage-buckets'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { formatRateLimitWindowChipLabel } from '../../../../../shared/agent-usage/rate-limits/rate-limit-window-label'
@@ -25,6 +26,11 @@ export function getStatusBarUsageSections(
 ): StatusBarUsageSection[] {
   if (!p || p.status === 'idle' || p.status === 'unavailable') {
     return []
+  }
+  if (p.provider === 'copilot') {
+    // The chip is the AI credit balance. Chat and completions stay in the details panel.
+    const aic = (p.buckets ?? []).find((bucket) => bucket.name === COPILOT_AIC_BUCKET_NAME)
+    return aic ? [{ key: aic.name, window: aic, label: aic.name, labelFirst: true }] : []
   }
   if (mode === 'compact') {
     // Why 'all': the status bar keeps its original headline, Fable included.

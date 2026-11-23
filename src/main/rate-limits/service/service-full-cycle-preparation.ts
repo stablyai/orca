@@ -5,6 +5,7 @@ import { fetchGrokRateLimits } from '../providers/grok/grok-fetcher'
 import { readGrokAuthSession } from '../providers/grok/grok-auth'
 import { fetchCursorRateLimits } from '../providers/cursor/cursor-fetcher'
 import { readCursorAuthSession } from '../providers/cursor/cursor-auth'
+import { fetchCopilotRateLimits } from '../providers/copilot/copilot-usage-fetcher'
 import { fetchZcodeRateLimits } from '../providers/zcode/zcode-usage-fetcher'
 import { fetchAntigravityRateLimits } from '../providers/antigravity/antigravity-usage-fetcher'
 import { antigravityUsageDisabledSnapshot } from '../providers/antigravity/antigravity-usage-snapshot'
@@ -153,6 +154,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
       grok: this.withFetchingStatus(previousState.grok, 'grok'),
       cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
+      copilot: this.withFetchingStatus(previousState.copilot, 'copilot'),
       zcode: zcodeConfigChanged
         ? this.withFetchingStatus(null, 'zcode')
         : this.withFetchingStatus(previousState.zcode, 'zcode')
@@ -188,6 +190,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     )
     const missingWslCodexHome =
       codexFetchGated || codexHomePath ? null : this.getMissingWslCodexHomeResult(codexTarget)
+    const copilotResultPromise = fetchCopilotRateLimits({ signal }).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
     const grokResultPromise = fetchGrokRateLimits({
       signal,
       authReadResult: grokAuthReadResult
@@ -296,6 +302,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       ],
       grokResultPromise,
       cursorResultPromise,
+      copilotResultPromise,
       zcodeResultPromise,
       antigravityResultPromise
     }

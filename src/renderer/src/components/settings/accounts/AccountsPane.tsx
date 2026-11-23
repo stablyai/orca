@@ -7,22 +7,20 @@ import type {
 import type { CodexConfigSyncStatus } from '../../../../../shared/agent-accounts/codex/codex-config-sync-types'
 import type { RateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { useObservedAccountPlans } from './use-observed-account-plans'
-import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
-import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   emptyClaudeAccountsState,
   emptyCodexAccountsState,
-  getProviderAccountsOwnerKey,
-  watchProviderAccounts
+  getProviderAccountsOwnerKey
 } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { getAccountsClaudeSearchEntries } from './accounts-claude-search'
 import {
   getAccountsCodexSearchEntries,
-  getAccountsGeminiSearchEntries,
+  getAccountsCopilotSearchEntries,
   getAccountsCursorSearchEntries,
+  getAccountsGeminiSearchEntries,
   getAccountsGrokSearchEntries,
   getAccountsAntigravitySearchEntries,
   getAccountsLocationSearchEntries,
@@ -41,11 +39,12 @@ import {
   providerAccountIsActiveInView,
   providerAccountMatchesView
 } from '../../provider-accounts/provider-account-visibility'
-import { GrokAccountsSection } from './providers/GrokAccountsSection'
 import { AntigravityAccountsSection } from './providers/AntigravityAccountsSection'
-import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { CopilotAccountsSection } from './providers/CopilotAccountsSection'
 import { CursorAccountsSection } from './providers/CursorAccountsSection'
+import { GrokAccountsSection } from './providers/GrokAccountsSection'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { useAccountsPaneOwnerWatch } from './use-accounts-pane-owner-watch'
 import { ZcodePlanAccountsSection } from './usage/ZcodePlanAccountsSection'
 import type {
   AccountsPaneProps,
@@ -252,40 +251,13 @@ export function AccountsPane({
     updateSettings
   )
 
-  useEffect(() => {
-    const owner: RuntimeClientTarget = scopeEnvironmentId
-      ? { kind: 'environment', environmentId: scopeEnvironmentId }
-      : { kind: 'local' }
-    // Keep remote watchers open for streamed usage after the initial snapshot; local watchers resolve once.
-    const watcher = watchProviderAccounts(owner, {
-      onSnapshot: (snapshot) => {
-        // Failed-provider rosters are substituted empty data; retain prior state and keep the loaded gate shut.
-        if (!snapshot.failedProviders?.includes('codex')) {
-          setCodexAccounts(snapshot.codex)
-          setCodexAccountsLoaded(true)
-        }
-        if (!snapshot.failedProviders?.includes('claude')) {
-          setClaudeAccounts(snapshot.claude)
-        }
-        if (scopeEnvironmentId) {
-          setOwnerUsage({ environmentId: scopeEnvironmentId, rateLimits: snapshot.rateLimits })
-        }
-      },
-      onClosedAfterSnapshot: () => setOwnerUsage(null),
-      onError: (error) => {
-        toast.error(
-          translate(
-            'auto.components.settings.AccountsPane.loadAccountsFailed',
-            'Could not load provider accounts.'
-          ),
-          { description: String((error as Error)?.message ?? error) }
-        )
-      }
-    })
-    return () => {
-      watcher.close()
-    }
-  }, [scopeEnvironmentId])
+  useAccountsPaneOwnerWatch({
+    scopeEnvironmentId,
+    setCodexAccounts,
+    setCodexAccountsLoaded,
+    setClaudeAccounts,
+    setOwnerUsage
+  })
 
   // One construction site: each runner reads the owner ref only when its action settles.
   const { runCodexAccountAction, runClaudeAccountAction, renameAccount } =
@@ -402,6 +374,10 @@ export function AccountsPane({
     ) : null,
     readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
       <CursorAccountsSection key="cursor" />
+    ) : null,
+    readsOwnerGrokCursor &&
+    matchesSettingsSearch(searchQuery, getAccountsCopilotSearchEntries()) ? (
+      <CopilotAccountsSection key="copilot" />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsZcodePlanSearchEntries()) ? (
       <ZcodePlanAccountsSection

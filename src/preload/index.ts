@@ -90,6 +90,7 @@ import { minimaxCredentialsApi } from './api/agent-accounts/minimax-credentials-
 import { zcodePlanCredentialsApi } from './api/agent-accounts/zcode-plan-credentials-bridge'
 import { grokAccountsApi } from './api/agent-accounts/grok-accounts-bridge'
 import { cursorAccountsApi } from './api/agent-accounts/cursor-accounts-bridge'
+import { copilotAccountsApi } from './api/agent-accounts/copilot-accounts-bridge'
 import { sshApi } from './api/ssh/ssh-bridge'
 import { plainSshTerminalApi } from './api/terminal/plain-ssh-terminal-bridge'
 import { legacyRelayBridgeApi } from './api/mobile/legacy-relay-bridge-api'
@@ -205,6 +206,7 @@ const api = {
   zcodePlanCredentials: zcodePlanCredentialsApi,
   grokAccounts: grokAccountsApi,
   cursorAccounts: cursorAccountsApi,
+  copilotAccounts: copilotAccountsApi,
   ssh: sshApi,
   plainSsh: plainSshTerminalApi,
   legacyRelayBridge: legacyRelayBridgeApi,

@@ -117,6 +117,7 @@ export type InternalRateLimitState = {
   cursor: ProviderRateLimits | null
   zcode: ProviderRateLimits | null
   muse: ProviderRateLimits | null
+  copilot: ProviderRateLimits | null
 }
 
 export function normalizePollingInterval(ms: number): number {

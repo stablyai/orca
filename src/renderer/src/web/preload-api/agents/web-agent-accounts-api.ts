@@ -79,6 +79,21 @@ export function createOpenCodeGoCredentialsApi(): PreloadApi['opencodeGoCredenti
   }
 }
 
+export function createCopilotAccountsApi(): NonNullable<Partial<PreloadApi>['copilotAccounts']> {
+  return {
+    getStatus: () =>
+      Promise.resolve({
+        signedIn: false,
+        login: null,
+        planType: null,
+        error: translate(
+          'auto.components.web.preloadApi.copilotAccounts.hostOnly',
+          'Copilot sign-in details are only readable on the computer running Orca.'
+        )
+      })
+  }
+}
+
 export function createGrokAccountsApi(): NonNullable<Partial<PreloadApi>['grokAccounts']> {
   const unsigned = {
     signedIn: false,

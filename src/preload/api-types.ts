@@ -2,6 +2,7 @@ import type {
   ClaudeAccountsApi,
   CodexAccountsApi,
   CodexConfigSyncApi,
+  CopilotAccountsApi,
   CursorAccountsApi,
   GrokAccountsApi,
   MinimaxCredentialsApi,
@@ -186,6 +187,7 @@ export type PreloadApi = {
   zcodePlanCredentials: ZcodePlanCredentialsApi
   grokAccounts: GrokAccountsApi
   cursorAccounts: CursorAccountsApi
+  copilotAccounts: CopilotAccountsApi
   ssh: SshApi
   /** Desktop only: an unmanaged ssh login to a host whose move is blocked. */
   plainSsh?: PlainSshTerminalApi

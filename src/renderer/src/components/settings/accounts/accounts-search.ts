@@ -3,13 +3,20 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getAccountsClaudeSearchEntries } from './accounts-claude-search'
+import {
+  getAccountsCopilotSearchEntries,
+  getAccountsCursorSearchEntries
+} from './accounts-cursor-copilot-search'
+
+export { getAccountsCopilotSearchEntries, getAccountsCursorSearchEntries }
 
 export const ACCOUNTS_SECTION_IDS = {
   codex: 'accounts-codex',
   minimax: 'accounts-minimax',
   grok: 'accounts-grok',
   antigravity: 'accounts-antigravity',
-  cursor: 'accounts-cursor'
+  cursor: 'accounts-cursor',
+  copilot: 'accounts-copilot'
 } as const
 
 export const getAccountsLocationSearchEntries = createLocalizedCatalog(() => [
@@ -231,39 +238,6 @@ export const getAccountsAntigravitySearchEntries = createLocalizedCatalog(() => 
   }
 ])
 
-export const getAccountsCursorSearchEntries = createLocalizedCatalog(() => [
-  {
-    targetSectionId: ACCOUNTS_SECTION_IDS.cursor,
-    title: translate('auto.components.settings.accounts.search.cursor.39bbdebe13', 'Cursor usage'),
-    description: translate(
-      'auto.components.settings.accounts.search.cursor.description',
-      'Plan usage read from the Cursor sign-in already on this computer (cursor-agent login).'
-    ),
-    keywords: [
-      ...translateSearchKeyword(
-        'auto.components.settings.accounts.search.cursor.kw.cursor',
-        'cursor'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.accounts.search.cursor.kw.usage',
-        'usage'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.accounts.search.cursor.kw.spend',
-        'spend'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.accounts.search.cursor.kw.rateLimit',
-        'rate limit'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.accounts.search.cursor.kw.statusBar',
-        'status bar'
-      )
-    ]
-  }
-])
-
 export const getAccountsZcodePlanSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
@@ -307,5 +281,6 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsGrokSearchEntries(),
   ...getAccountsAntigravitySearchEntries(),
   ...getAccountsCursorSearchEntries(),
+  ...getAccountsCopilotSearchEntries(),
   ...getAccountsZcodePlanSearchEntries()
 ])

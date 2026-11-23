@@ -68,6 +68,7 @@ export type StatusBarItem =
   | 'cursor'
   | 'zcode'
   | 'muse'
+  | 'copilot'
   | 'ssh'
   | 'resource-usage'
   | 'ports'

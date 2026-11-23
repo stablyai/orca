@@ -4,6 +4,7 @@ import { createWebE2EApi } from './preload-api/app/web-e2e-api'
 import {
   createClaudeAccountsApi,
   createCodexAccountsApi,
+  createCopilotAccountsApi,
   createCursorAccountsApi,
   createGrokAccountsApi,
   createZcodePlanCredentialsApi,
@@ -133,6 +134,7 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     zcodePlanCredentials: createZcodePlanCredentialsApi(),
     grokAccounts: createGrokAccountsApi(),
     cursorAccounts: createCursorAccountsApi(),
+    copilotAccounts: createCopilotAccountsApi(),
     codexAccounts: createCodexAccountsApi(),
     claudeAccounts: createClaudeAccountsApi(),
     cli: createCliApi(),

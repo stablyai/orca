@@ -40,6 +40,7 @@ vi.mock('../providers/antigravity/antigravity-usage-fetcher', () => ({
 }))
 
 vi.mock('../providers/cursor/cursor-fetcher', () => ({ fetchCursorRateLimits: vi.fn() }))
+vi.mock('../providers/copilot/copilot-usage-fetcher', () => ({ fetchCopilotRateLimits: vi.fn() }))
 vi.mock('../providers/cursor/cursor-auth', () => ({ readCursorAuthSession: vi.fn() }))
 vi.mock('../../minimax/minimax-cookie-store', () => ({
   hasMiniMaxSessionCookie: vi.fn(() => false)

@@ -5,6 +5,7 @@ import type {
 } from '../../../shared/agent-accounts/managed-account-types'
 import type { CodexConfigSyncStatus } from '../../../shared/agent-accounts/codex/codex-config-sync-types'
 import type {
+  CopilotAccountStatus,
   CursorAccountStatus,
   GrokAccountStatus
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
@@ -83,6 +84,10 @@ export type GrokAccountsApi = {
 
 export type CursorAccountsApi = {
   getStatus: () => Promise<CursorAccountStatus>
+}
+
+export type CopilotAccountsApi = {
+  getStatus: () => Promise<CopilotAccountStatus>
 }
 
 export type MinimaxCredentialsApi = {

@@ -52,6 +52,9 @@ vi.mock('../providers/grok/grok-fetcher', () => ({
 vi.mock('../providers/cursor/cursor-fetcher', () => ({
   fetchCursorRateLimits: vi.fn()
 }))
+vi.mock('../providers/copilot/copilot-usage-fetcher', () => ({
+  fetchCopilotRateLimits: vi.fn()
+}))
 
 vi.mock('../providers/cursor/cursor-auth', () => ({
   readCursorAuthSession: vi.fn()

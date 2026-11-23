@@ -50,7 +50,8 @@ const USAGE_PROVIDER_IDS: Record<UsageProviderKey, ProviderRateLimits['provider'
   grok: 'grok',
   cursor: 'cursor',
   zcode: 'zcode',
-  muse: 'muse'
+  muse: 'muse',
+  copilot: 'copilot'
 }
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the keys of a Record<UsageProviderKey, …>.

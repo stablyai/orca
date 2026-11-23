@@ -109,6 +109,7 @@ export type ProviderRateLimits = {
     | 'cursor'
     | 'zcode'
     | 'muse'
+    | 'copilot'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
   /** 7-day weekly window, null if not available. */
@@ -181,6 +182,14 @@ export type GrokAccountStatus = {
   error: string | null
 }
 
+export type CopilotAccountStatus = {
+  signedIn: boolean
+  /** GitHub login of the Copilot CLI account. Never a token. */
+  login: string | null
+  planType: string | null
+  error: string | null
+}
+
 export type CursorAccountStatus = {
   signedIn: boolean
   email: string | null
@@ -204,6 +213,7 @@ export type RateLimitState = {
   cursor: ProviderRateLimits | null
   zcode: ProviderRateLimits | null
   muse: ProviderRateLimits | null
+  copilot: ProviderRateLimits | null
   /** Cookie is stored outside GlobalSettings; this durable flag keeps MiniMax visible across reloads/snapshot refreshes. */
   minimaxCookieConfigured: boolean
   /** Expose API-key presence only; main retains the secret. Combined with cookie presence, keeps MiniMax visible across reloads. */

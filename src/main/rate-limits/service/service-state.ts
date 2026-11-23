@@ -41,7 +41,8 @@ export abstract class RateLimitServiceState {
     grok: null,
     cursor: null,
     zcode: null,
-    muse: null
+    muse: null,
+    copilot: null
   }
   protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
   // Async Keychain/desktop DB probing belongs in fetch cycles, never synchronous construction.
@@ -62,7 +63,8 @@ export abstract class RateLimitServiceState {
     antigravity: 0,
     cursor: 0,
     zcode: 0,
-    muse: 0
+    muse: 0,
+    copilot: 0
   }
   // Failures increase activation backoff; success/unavailable resets it.
   protected activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
@@ -76,7 +78,8 @@ export abstract class RateLimitServiceState {
     antigravity: 0,
     cursor: 0,
     zcode: 0,
-    muse: 0
+    muse: 0,
+    copilot: 0
   }
   protected mainWindow: BrowserWindow | null = null
   /** Paired clients streaming usage (accounts.subscribe); headless hosts have no window to watch. */

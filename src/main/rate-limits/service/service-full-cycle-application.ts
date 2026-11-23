@@ -60,6 +60,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       ],
       grokResultPromise,
       cursorResultPromise,
+      copilotResultPromise,
       zcodeResultPromise,
       antigravityResultPromise
     } = prepared
@@ -216,17 +217,20 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled] = await Promise.all([
-      grokResultPromise,
-      cursorResultPromise,
-      zcodeResultPromise,
-      antigravityResultPromise
-    ])
+    const [grokSettled, cursorSettled, copilotSettled, zcodeSettled, antigravitySettled] =
+      await Promise.all([
+        grokResultPromise,
+        cursorResultPromise,
+        copilotResultPromise,
+        zcodeResultPromise,
+        antigravityResultPromise
+      ])
     if (signal.aborted) {
       return
     }
     const grok = settleSiblingProviderResult('grok', grokSettled)
     const cursor = settleSiblingProviderResult('cursor', cursorSettled)
+    const copilot = settleSiblingProviderResult('copilot', copilotSettled)
     const settledZcode = settleSiblingProviderResult('zcode', zcodeSettled)
     const zcode = isZcodeUsageCredentialCurrent(settledZcode)
       ? settledZcode
@@ -251,6 +255,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       previousZcodeAccount === zcodeAccount
     this.trackActiveFailureStreak('grok', grok)
     this.trackActiveFailureStreak('cursor', cursor)
+    this.trackActiveFailureStreak('copilot', copilot)
     if (shouldApplyZcode) {
       this.trackActiveFailureStreak('zcode', zcode)
     }
@@ -261,6 +266,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
       cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor),
+      copilot: this.applyStalePolicy(copilot, previousState.copilot),
       zcode: !shouldApplyZcode
         ? this.state.zcode
         : zcodeConfigChanged

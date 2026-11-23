@@ -203,6 +203,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   '_jiraIssueWorktreeCardPropertyDefaulted',
   '_kimiStatusBarDefaultAdded',
   '_minimaxStatusBarDefaultAdded',
+  '_copilotStatusBarDefaultAdded',
   '_museStatusBarDefaultAdded',
   '_portsStatusBarDefaultAdded',
   '_sortBySmartMigrated',

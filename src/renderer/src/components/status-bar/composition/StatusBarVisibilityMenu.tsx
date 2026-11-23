@@ -162,6 +162,16 @@ export function StatusBarVisibilityMenu({
           </DropdownMenuCheckboxItem>
         )}
         <DropdownMenuCheckboxItem
+          checked={statusBarItems.includes('copilot')}
+          onCheckedChange={() => {
+            recordFeatureInteraction('usage-tracking')
+            toggleStatusBarItem('copilot')
+          }}
+        >
+          <AgentIcon agent="copilot" size={14} />
+          {t('auto.components.status.bar.StatusBar.copilotUsageMenu', 'Copilot Usage')}
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
           checked={statusBarItems.includes('cursor')}
           onCheckedChange={() => {
             recordFeatureInteraction('usage-tracking')
