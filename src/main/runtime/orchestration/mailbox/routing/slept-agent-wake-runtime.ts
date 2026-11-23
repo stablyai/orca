@@ -153,6 +153,11 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     const wasReady = this.graphStatus === 'ready'
     const restored = super.markRendererReloadCancelled(windowId, fence)
     this.recheckSleptWaitsOnReady(wasReady)
+    if (restored) {
+      // Changes sent while the reload held notifications were dropped; the kept window needs the whole set.
+      this.resetHeldWorktreesPublication()
+      this.publishHeldWorktrees()
+    }
     return restored
   }
 
