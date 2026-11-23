@@ -6,6 +6,10 @@ const offsetByStripKey = new Map<string, { scrollLeft: number; tabId: string | n
 // Live groups only (closed ones are dropped at unmount); the cap just bounds groups closed while their strip was released.
 const MAX_REMEMBERED_STRIPS = 8192
 
+export function isTabStripGroupOpen(worktreeId: string, groupId: string): boolean {
+  return useAppStore.getState().groupsByWorktree[worktreeId]?.some((g) => g.id === groupId) ?? false
+}
+
 function rememberTabStripScroll(
   key: string,
   worktreeId: string,
@@ -13,8 +17,7 @@ function rememberTabStripScroll(
   tabId: string | null
 ): void {
   offsetByStripKey.delete(key)
-  const groupOpen = useAppStore.getState().groupsByWorktree[worktreeId]?.some((g) => g.id === key)
-  if (!groupOpen) {
+  if (!isTabStripGroupOpen(worktreeId, key)) {
     return
   }
   offsetByStripKey.set(key, { scrollLeft, tabId })

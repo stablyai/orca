@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { startWindowsTerminalCapabilityReprobe } from './windows-terminal-capability-reprobe'
 import { readWindowsTerminalCapabilities } from './windows-terminal-capability-read'
+import { isWindowsTerminalCapabilityOwnerHeld } from './windows-terminal-capability-holds'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type WindowsTerminalCapabilities = {
@@ -87,7 +88,8 @@ function pruneExpiredCapabilityOwners(now: number): void {
     if (
       now - cached.loadedAt >= CAPABILITY_CACHE_TTL_MS &&
       !pendingCapabilitiesByOwnerKey.has(ownerKey) &&
-      !subscribersByOwnerKey.has(ownerKey)
+      !subscribersByOwnerKey.has(ownerKey) &&
+      !isWindowsTerminalCapabilityOwnerHeld(ownerKey)
     ) {
       cachedCapabilitiesByOwnerKey.delete(ownerKey)
       latestCapabilityRequestIdByOwnerKey.delete(ownerKey)

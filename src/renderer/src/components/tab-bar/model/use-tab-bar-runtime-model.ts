@@ -1,6 +1,6 @@
 import { shallow } from 'zustand/shallow'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store/index'
 import { buildStatusMap } from '../../../../../shared/git/status/git-path-decoration'
@@ -15,10 +15,14 @@ import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
+import {
+  holdWindowsTerminalCapabilitiesForReleasedStrip,
+  releaseWindowsTerminalCapabilityHold
+} from '@/runtime/hosts/capabilities/windows-terminal-capability-holds'
 import type { WindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { shouldShowMobileEmulatorTabIntro } from '../../emulator-pane/tab-intro/mobile-emulator-tab-intro-visibility'
 import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
-import { isTabStripReturning } from '../strip/tab-strip-scroll-memory'
+import { isTabStripGroupOpen, isTabStripReturning } from '../strip/tab-strip-scroll-memory'
 import type { TabBarAgentProjections } from './tab-agent-types-by-tab-id'
 import { shouldShowWindowsShellMenu } from '../create-menu/windows-shell-menu-visibility'
 import { createUnifiedTabLookup } from './tab-bar-item-model'
@@ -142,6 +146,18 @@ export function useTabBarRuntimeModel({
     isWebClient ||
     Boolean(worktreeConnectionId)
   const [returningStrip] = useState(() => isTabStripReturning(groupId))
+  useEffect(() => {
+    if (!groupId || !shouldProbeWindowsShellCapabilities) {
+      return
+    }
+    releaseWindowsTerminalCapabilityHold(groupId)
+    return () => {
+      // Unmounting with the group still open means its workspace released the layout; keep the answer for the return.
+      if (isTabStripGroupOpen(worktreeId, groupId)) {
+        holdWindowsTerminalCapabilitiesForReleasedStrip(groupId, windowsTerminalCapabilityOwnerKey)
+      }
+    }
+  }, [groupId, worktreeId, shouldProbeWindowsShellCapabilities, windowsTerminalCapabilityOwnerKey])
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldProbeWindowsShellCapabilities,
     false,
