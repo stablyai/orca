@@ -35,6 +35,9 @@ function warnLegacy(step: string, sessionId: string, error: unknown): void {
 export class JournalSqlConversions {
   private readonly pending = new Map<string, Conversion>()
   private readonly ready = new Map<string, string>()
+  private backgroundStorage?: Promise<
+    Awaited<ReturnType<JournalSqlReaderPool['conversionStorage']>>
+  >
   private retryAt = 0
   private retryDelay = 60_000
   private closed = false
@@ -151,7 +154,7 @@ export class JournalSqlConversions {
 
   private async convert(sessionId: string, promotion: AbortSignal): Promise<string | null> {
     if (!promotion.aborted) {
-      const storage = await this.storage(true)
+      const storage = await this.backgroundStorageForRun()
       if (
         isDiskAlmostFull(storage) ||
         storage.freeBytes - (storage.remainingBytes ?? Infinity) * CONVERSION_EXPANSION <
@@ -221,5 +224,9 @@ export class JournalSqlConversions {
     } catch {
       throw new JournalConversionStorageError()
     }
+  }
+
+  private backgroundStorageForRun() {
+    return (this.backgroundStorage ??= this.storage(true))
   }
 }

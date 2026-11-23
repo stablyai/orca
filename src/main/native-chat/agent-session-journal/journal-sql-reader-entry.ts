@@ -213,20 +213,7 @@ async function handle(id: number, operation: JournalSqlReaderRequest['operation'
         if (!source) {
           throw new Error('journal conversion source is unavailable')
         }
-        const remainingBytes = operation.estimate
-          ? source
-              .prepare(`SELECT session_id,coalesce(sum(length(row_json)), 0) AS bytes FROM journal_rows
-                WHERE session_id IN (SELECT session_id FROM journal_sessions) GROUP BY session_id`)
-              .all()
-              .reduce((bytes, row) => {
-                const converted = db!
-                  .prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?')
-                  .get(row.session_id)?.epoch
-                return converted === null || converted === undefined
-                  ? bytes + Number(row.bytes)
-                  : bytes
-              }, 0)
-          : undefined
+        const remainingBytes = operation.estimate ? conversionEstimate(source, db!) : undefined
         reply({
           type: 'conversion-storage',
           id,
@@ -280,6 +267,25 @@ async function handle(id: number, operation: JournalSqlReaderRequest['operation'
           : journalSqlFailure(error)
     })
   }
+}
+
+function conversionEstimate(source: Database.Database, destination: Database.Database): number {
+  const sourceIds = new Set(
+    source
+      .prepare('SELECT session_id FROM journal_sessions')
+      .all()
+      .map(({ session_id }) => String(session_id))
+  )
+  if (sourceIds.size === 0) {
+    return 0
+  }
+  const unconverted = destination
+    .prepare('SELECT session_id FROM journal_chat_state WHERE epoch IS NULL')
+    .all()
+    .filter(({ session_id }) => sourceIds.has(String(session_id))).length
+  const pages = Number(source.pragma('page_count', { simple: true }))
+  const pageSize = Number(source.pragma('page_size', { simple: true }))
+  return Math.ceil((pages * pageSize * unconverted) / sourceIds.size)
 }
 
 function openOriginal(): Database.Database | undefined {
