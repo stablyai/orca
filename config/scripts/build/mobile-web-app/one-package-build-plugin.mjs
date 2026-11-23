@@ -1,7 +1,9 @@
-import { dirname } from 'node:path'
+import { realpathSync } from 'node:fs'
+import { dirname, join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const PACKAGE_BUILD_PLUGIN_NAME = 'orca-one-package-build'
+const mobileDir = fileURLToPath(new URL('../../../../mobile', import.meta.url))
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -43,26 +45,41 @@ const PACKAGE_BUILD_REDIRECTS = [
   },
   {
     // react-native-web pins an older color parser than expo-router's; every importer takes expo-router's,
-    // the one react-native ships the phone app, so both parse a color alike.
+    // the one react-native ships to the phone app, so both parse a color alike.
     from: '@react-native/normalize-colors',
     to: '@react-native/normalize-colors',
     via: 'expo-router'
   }
 ]
 
-// Resolve from inside the package, so a bare import finds the copy that package itself resolves.
+// Find `via` as the app depends on it, then its own copy of `dependency`: resolving from inside the
+// package finds that copy, and the copy's real path is what the result must land in. Without that check
+// a `via` that drops the dependency would silently get whichever version is hoisted further up.
 // The marker skips the redirects: expo-router's own one points at the page's shim, not the package.
-async function packageDir(build, name, args) {
-  const { path, errors } = await build.resolve(name, {
-    kind: args.kind,
-    importer: args.importer,
-    resolveDir: args.resolveDir,
+async function viaDependency(build, via, dependency) {
+  const { path, errors } = await build.resolve(via, {
+    kind: 'import-statement',
+    resolveDir: mobileDir,
     pluginData: { [PACKAGE_BUILD_PLUGIN_NAME]: true }
   })
   if (errors.length > 0) {
-    throw new Error(`${PACKAGE_BUILD_PLUGIN_NAME}: ${name} no longer resolves`)
+    throw new Error(`${PACKAGE_BUILD_PLUGIN_NAME}: ${via} no longer resolves`)
   }
-  return dirname(path)
+  const packageMarker = `${sep}node_modules${sep}${via.split('/').join(sep)}${sep}`
+  const at = path.lastIndexOf(packageMarker)
+  if (at === -1) {
+    throw new Error(`${PACKAGE_BUILD_PLUGIN_NAME}: ${via} resolved outside node_modules (${path})`)
+  }
+  const ownLink = join(path.slice(0, at), 'node_modules', dependency)
+  let own
+  try {
+    own = realpathSync(ownLink)
+  } catch {
+    throw new Error(
+      `${PACKAGE_BUILD_PLUGIN_NAME}: ${via} no longer depends on ${dependency} itself`
+    )
+  }
+  return { resolveDir: dirname(path), own }
 }
 
 export const packageBuildPlugin = {
@@ -82,15 +99,21 @@ export const packageBuildPlugin = {
       if (!redirect) {
         return undefined
       }
+      const via = redirect.via ? await viaDependency(build, redirect.via, redirect.to) : null
       const { path, namespace, sideEffects, errors } = await build.resolve(redirect.to, {
         kind: args.kind,
         importer: args.importer,
-        resolveDir: redirect.via ? await packageDir(build, redirect.via, args) : args.resolveDir,
+        resolveDir: via ? via.resolveDir : args.resolveDir,
         pluginData: { [PACKAGE_BUILD_PLUGIN_NAME]: true }
       })
       // An upgrade that moves the target fails the build instead of shipping both copies again.
       if (errors.length > 0) {
         throw new Error(`${PACKAGE_BUILD_PLUGIN_NAME}: ${redirect.to} no longer resolves`)
+      }
+      if (via && !realpathSync(path).startsWith(`${via.own}${sep}`)) {
+        throw new Error(
+          `${PACKAGE_BUILD_PLUGIN_NAME}: ${redirect.to} resolved to ${path}, not ${redirect.via}'s own copy at ${via.own}`
+        )
       }
       return { path, namespace, sideEffects }
     })
