@@ -93,10 +93,11 @@ function launchPath(env: NodeJS.ProcessEnv): string | undefined {
 
 // Matches hostShellEnvironment's TTL on the same capture, so launch bursts share one refresh.
 const STARTUP_PATH_REFRESH_MS = 10_000
-const MAX_WARMED_SHELLS = 8
+// Past this size, shells not warmed within the TTL are forgotten; a recent one never is, so none warms early.
+const MAX_WARMED_SHELLS = 64
 const warmedShells = new Map<string, number>()
 
-/** Refreshes a stale or failed capture in the background, at most once per shell per TTL for a bounded set of shells. */
+/** Refreshes a stale or failed capture in the background, at most once per shell per TTL. */
 function warmStartupPath(shellOverride: string | null | undefined): void {
   const key = shellOverride ?? ''
   const now = Date.now()
@@ -104,20 +105,16 @@ function warmStartupPath(shellOverride: string | null | undefined): void {
   if (last !== undefined && now - last < STARTUP_PATH_REFRESH_MS) {
     return
   }
-  // Oldest first: a new shell takes the slot of one not warmed within the TTL, so none is shut out.
-  const [oldest, oldestAt] = warmedShells.entries().next().value ?? []
-  if (last === undefined && warmedShells.size >= MAX_WARMED_SHELLS) {
-    if (
-      oldest === undefined ||
-      oldestAt === undefined ||
-      now - oldestAt < STARTUP_PATH_REFRESH_MS
-    ) {
-      return
-    }
-    warmedShells.delete(oldest)
-  }
   warmedShells.delete(key)
   warmedShells.set(key, now)
+  if (warmedShells.size > MAX_WARMED_SHELLS) {
+    for (const [shell, at] of warmedShells) {
+      if (now - at < STARTUP_PATH_REFRESH_MS) {
+        break
+      }
+      warmedShells.delete(shell)
+    }
+  }
   void captureLoginShellEnvironment({
     shellOverride,
     refreshAfterMs: STARTUP_PATH_REFRESH_MS
