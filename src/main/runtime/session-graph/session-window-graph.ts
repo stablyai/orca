@@ -122,7 +122,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithSlep
       const connected = this.graphLeafConnected(ptyId, leaf.worktreeId)
       const tailSource = existing?.ptyId === ptyId ? existing : existingPty
 
-      nextLeaves.set(leafKey, {
+      const nextLeaf: RuntimeLeafRecord = {
         ...leaf,
         ptyId,
         ptyGeneration,
@@ -149,7 +149,8 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithSlep
           existing?.ptyId === ptyId && existing.paneTitle === leaf.paneTitle
             ? existing.paneTitleUpdatedAt
             : graphSyncedAt
-      })
+      }
+      nextLeaves.set(leafKey, nextLeaf)
 
       // Main-owned pane presence does not prove its terminal is connected.
       if (leaf.ptyId && connected && !this.mainDecidesLiveness(leaf.worktreeId)) {
@@ -164,7 +165,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithSlep
       }
 
       if (existing && (existing.ptyId !== ptyId || existing.ptyGeneration !== ptyGeneration)) {
-        if (!this.retainLeafHandle(leaf, existing.ptyId, ptyId, ptyGeneration)) {
+        if (!this.retainLeafHandle(nextLeaf, existing, ptyId, ptyGeneration)) {
           this.invalidateLeafHandle(leafKey)
         }
       }

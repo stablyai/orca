@@ -93,18 +93,19 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
    *  to it), or when Agent Sleep stopped the previous one: the handle stays on the stopped process
    *  (its output and identity still answer for the idle agent) until the resume takes it over. */
   protected retainLeafHandle(
-    leaf: Pick<RuntimeLeafRecord, 'tabId' | 'leafId'>,
-    previousPtyId: string | null,
+    leaf: Pick<RuntimeLeafRecord, 'tabId' | 'leafId' | 'tailLinesTotal'>,
+    previous: Pick<RuntimeLeafRecord, 'ptyId' | 'tailLinesTotal'>,
     ptyId: string | null,
     ptyGeneration: number
   ): boolean {
+    const previousPtyId = previous.ptyId
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
     const handle = this.handleByLeafKey.get(leafKey)
     const sleptPtyId = handle ? this.sleptBoundPtyId(leaf, handle, previousPtyId) : null
     if (sleptPtyId) {
       return ptyId === null || ptyId === sleptPtyId
         ? true
-        : this.rebindSleptLeafHandle(leafKey, ptyId, ptyGeneration)
+        : this.rebindSleptLeafHandle(leaf, ptyId, ptyGeneration, previous.tailLinesTotal)
     }
     return previousPtyId === null && this.adoptFirstPtyForLeafHandle(leafKey, ptyId, ptyGeneration)
   }
@@ -136,11 +137,24 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
   }
 
   /** The resume takes over the slept handle: the stopped process's aliases go, the name moves on. */
-  private rebindSleptLeafHandle(leafKey: string, ptyId: string, ptyGeneration: number): boolean {
+  private rebindSleptLeafHandle(
+    leaf: Pick<RuntimeLeafRecord, 'tabId' | 'leafId' | 'tailLinesTotal'>,
+    ptyId: string,
+    ptyGeneration: number,
+    sleptLinesTotal: number
+  ): boolean {
+    const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
     const handle = this.handleByLeafKey.get(leafKey)
     const record = handle ? this.handles.get(handle) : null
     if (!handle || !record?.ptyId) {
       return false
+    }
+    // The handle's line cursors continue from the slept output, so a cursor read before the sleep
+    // still reaches everything the resumed process prints.
+    const resumed = this.ptysById.get(ptyId)
+    if (resumed) {
+      resumed.tailLinesTotal += sleptLinesTotal
+      leaf.tailLinesTotal = resumed.tailLinesTotal
     }
     if (this.handleByPtyId.get(record.ptyId) === handle) {
       this.terminalIdentity.unbindPty(record.ptyId)

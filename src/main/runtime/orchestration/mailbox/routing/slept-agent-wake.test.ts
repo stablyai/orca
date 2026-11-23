@@ -98,6 +98,40 @@ describe('Agent-slept window pane wake', () => {
     slept.db.close()
   })
 
+  it('keeps a cursor read before the sleep reading what the resumed process prints', async () => {
+    const slept = await sleptPane('one\r\ntwo\r\nthree\r\n')
+    const { runtime, handle } = slept
+    const beforeWake = await runtime.readTerminal(handle, {})
+    const cursor = Number(beforeWake.nextCursor)
+    expect(cursor).toBeGreaterThanOrEqual(3)
+
+    registerBoundPty(runtime, WOKEN_PTY_ID, WORKTREE_ID, null, {
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      incarnationId: 'woken-incarnation'
+    })
+    slept.rows = [statusRow({ receivedAt: 2 })]
+    await runtime.syncWindowGraph(1, graph(WOKEN_PTY_ID))
+    runtime.onPtyData(WOKEN_PTY_ID, 'resumed\r\n', 2)
+
+    const afterWake = await runtime.readTerminal(handle, { cursor })
+    expect(afterWake.tail).toEqual(['resumed'])
+    expect(afterWake.nextCursor).toBe(String(cursor + 1))
+    slept.db.close()
+  })
+
+  it("refuses a terminal's query reply to a slept agent without waking it", async () => {
+    const slept = await sleptPane()
+    const resume = vi.fn(async () => true)
+    slept.runtime.setNotifier(wakeNotifier(resume))
+
+    await expect(
+      slept.runtime.sendTerminal(slept.handle, { text: '\x1b[1;1R' }, { inputKind: 'query-reply' })
+    ).resolves.toMatchObject({ accepted: false, bytesWritten: 0 })
+    expect(resume).not.toHaveBeenCalled()
+    slept.db.close()
+  })
+
   it('names a slept pane by its own handle, which a copied Terminal ID wakes', async () => {
     const { db, runtime, handle } = await sleptPane()
 
@@ -191,11 +225,14 @@ describe('Agent-slept window pane wake', () => {
 })
 
 /** An idle agent pane that Agent Sleep stopped: main marked the exact process, and the pane has none. */
-async function sleptPane() {
+async function sleptPane(outputBeforeSleep?: string) {
   const db = createDatabase('orca-slept-wake-')
   const slept: { db: typeof db; rows: AgentStatusIpcPayload[] } = { db, rows: [] }
   const { runtime } = await createRuntime(db, { getAgentStatusSnapshotForPane: () => slept.rows })
   await driveToLiveIdle(runtime)
+  if (outputBeforeSleep) {
+    runtime.onPtyData(PTY_ID, outputBeforeSleep, 1)
+  }
   const handle = runtime.getTerminalHandleForPaneKey(PANE_KEY)!
   slept.rows = [statusRow({ receivedAt: 1, paneSleep: { ptyId: PTY_ID } })]
   const settleStop = runtime.intentionalPtyStops.mark(PTY_ID, 'reversible', 'mailbox-incarnation')
