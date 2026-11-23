@@ -12,18 +12,18 @@ export async function redriveWaitingChatMail(
   /** The chats holding orchestration mail as a send or card. */
   owedMail: readonly string[],
   redriveMail: (sessionId: string) => void
-): Promise<void> {
+): Promise<number> {
   if (owedMail.length === 0) {
-    return
+    return 0
   }
   const waiting = await host.deps.journalDatabase.readers.database({
     kind: 'waiting-card-sessions',
     sessionIds: owedMail
   })
   if (waiting.kind !== 'sessions') {
-    return
+    return 0
   }
-  await mapWithConcurrency(waiting.sessionIds, 4, async (sessionId) => {
+  const woken = await mapWithConcurrency(waiting.sessionIds, 4, async (sessionId) => {
     // Skipped when it can no longer be opened (ended, refused); nothing else would send its mail.
     if (
       await host.conversation(sessionId).then(
@@ -33,6 +33,9 @@ export async function redriveWaitingChatMail(
     ) {
       redriveMail(sessionId)
       host.wakeQueuedMessages(sessionId)
+      return true
     }
+    return false
   })
+  return woken.filter(Boolean).length
 }
