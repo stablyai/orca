@@ -90,6 +90,26 @@ async function serverThreadSession(
   return link?.sessionId ?? null
 }
 
+const TAB_LIST_WAIT_MS = 5_000
+
+/** Until the host's next tab list for the workspace lands, or a few seconds pass. */
+function nextTabList(workspaceId: string): Promise<void> {
+  const before = useAppStore.getState().unifiedTabsByWorktree[workspaceId]
+  return new Promise((resolve) => {
+    const done = (): void => {
+      clearTimeout(timer)
+      unsubscribe()
+      resolve()
+    }
+    const timer = setTimeout(done, TAB_LIST_WAIT_MS)
+    const unsubscribe = useAppStore.subscribe((state) => {
+      if (state.unifiedTabsByWorktree[workspaceId] !== before) {
+        done()
+      }
+    })
+  })
+}
+
 /**
  * Opens the bot on whichever computer lists it. `conversation`: this computer had no chat for the
  * link's thread, so a server's bot opens the server's chat for it. A thread no computer has a chat
@@ -115,13 +135,16 @@ export async function openBotLinkHome(
         return
       }
       // A server's chat tabs reach this window only once its home is open here, as the sidebar opens it.
+      const workspaceId = folderWorkspaceKey(bot.folderWorkspaceId)
+      const tabsListed = workspaceId in useAppStore.getState().unifiedTabsByWorktree
       if (!openBotHome(bot)) {
         return
       }
+      if (!tabsListed) {
+        await nextTabList(workspaceId)
+      }
       await activateAiVaultStructuredSession(
-        {
-          structuredSession: { workspaceId: folderWorkspaceKey(bot.folderWorkspaceId), sessionId }
-        },
+        { structuredSession: { workspaceId, sessionId } },
         undefined,
         botTarget(bot)
       )
