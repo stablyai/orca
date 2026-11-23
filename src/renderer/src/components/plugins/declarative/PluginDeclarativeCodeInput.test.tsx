@@ -121,3 +121,18 @@ it('hides diagnostics for good after an edit the guest cannot hear', () => {
   fireEvent.change(textarea, { target: { value: 'abcd' } })
   expect(document.querySelectorAll('[data-tone]').length).toBe(0)
 })
+
+it('numbers edits past what the guest saw before a remount', () => {
+  const props: Props = {
+    ...base,
+    defaultValue: 'abc',
+    diagnostics: [{ from: 0, to: 3, message: 'bad' }],
+    $edit: 5
+  }
+  const emit = vi.fn()
+  const { container, rerender } = render(<PluginDeclarativeCodeInput props={props} emit={emit} />)
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'abcd' } })
+  expect(emit).toHaveBeenCalledWith('change', ['abcd'], { edit: 6 })
+  rerender(<PluginDeclarativeCodeInput props={{ ...props }} emit={emit} />)
+  expect(container.querySelectorAll('[data-tone]').length).toBe(0)
+})

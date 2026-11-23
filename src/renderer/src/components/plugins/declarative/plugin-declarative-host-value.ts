@@ -42,7 +42,8 @@ export function usePluginDeclarativeHostValue<T>(options: {
     local: value ?? options.defaultValue ?? options.fallback,
     remote: value,
     acked,
-    sent: 0
+    // The guest keeps its count across remounts; new ids must start past what it has already seen.
+    sent: acked
   }))
   let current = state
   if (!Object.is(state.remote, value) || state.acked !== acked) {
