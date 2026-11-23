@@ -7,10 +7,11 @@ import type {
 } from '../protocol/daemon-provider-relay-protocol'
 import { ProviderRelayPendingRequests } from './provider-relay-pending-requests'
 import { ProviderRelaySpool } from './provider-relay-spool'
+import { ProviderRelayLineReader } from './provider-relay-line-reader'
+import { unlink } from 'node:fs/promises'
 import { streamFramesFor } from '../transport/framing/daemon-stream-data-split'
 import type { DaemonStreamFraming } from '../transport/framing/daemon-stream-binary-framing'
 
-const NEWLINE = 0x0a
 /** Keeps each event frame well under the stream's line cap even after JSON escaping. */
 const EVENT_PIECE_CHARS = 1024 * 1024
 
@@ -19,6 +20,8 @@ type RelayOptions = {
   chatKey: string
   managed: ManagedProviderProcess
   spoolPath: string
+  /** Test seam; defaults to the reader's own spill size. */
+  lineSpillBytes?: number
   /** The agent exited or its stdout ended: the record may now be finished or expire. */
   onSettled: () => void
   /** No client is attached anymore; an ended relay may now expire. */
@@ -47,7 +50,8 @@ export class ProviderRelay {
   readonly pending = new ProviderRelayPendingRequests()
   private readonly spool: ProviderRelaySpool
   private attachment: Attachment | null = null
-  private partial: Buffer[] = []
+  private readonly lines: ProviderRelayLineReader
+  private readerBusy = false
   private exitStatus: ProviderRelayExit | null = null
   private stdoutEnded = false
   private exitAnnounced = false
@@ -67,18 +71,17 @@ export class ProviderRelay {
       },
       drained: () => this.drained()
     })
-    stdout.on('data', (chunk: Buffer) => this.readStdout(chunk))
-    stdout.once('end', () => {
-      this.flushPartial()
-      this.stdoutEnded = true
-      this.announceExitIfDone()
-      // A trailing line flushed after exit may have reopened the spool.
-      if (!this.live && !this.attachment) {
-        this.spool.closeHandle()
-      }
-      // Exit usually lands first; the ended relay is only settled once its output has ended too.
-      options.onSettled()
+    this.lines = new ProviderRelayLineReader({
+      spillPath: `${options.spoolPath}.line`,
+      onLine: (line) => this.appendLine(line),
+      onBusy: (busy) => {
+        this.readerBusy = busy
+        this.updateReading()
+      },
+      ...(options.lineSpillBytes ? { spillBytes: options.lineSpillBytes } : {})
     })
+    stdout.on('data', (chunk: Buffer) => this.lines.push(chunk))
+    stdout.once('end', () => void this.lines.end().then(() => this.stdoutDone()))
     stdout.on('error', () => {})
     options.managed.child.stdin.on('error', () => {})
     options.managed.onExit((exit) => {
@@ -191,34 +194,21 @@ export class ProviderRelay {
       // stdin end starts provider-exec's own close ladder; owner death would start the same one.
       void this.close().catch(() => {})
     }
-    await this.spool.dispose()
+    await Promise.all([
+      this.spool.dispose(),
+      unlink(`${this.options.spoolPath}.line`).catch(() => {})
+    ])
   }
 
-  private readStdout(chunk: Buffer): void {
-    let start = 0
-    let newline = chunk.indexOf(NEWLINE, start)
-    while (newline !== -1) {
-      const tail = chunk.subarray(start, newline)
-      const line =
-        this.partial.length === 0
-          ? tail.toString('utf8')
-          : Buffer.concat([...this.partial, tail]).toString('utf8')
-      this.partial = []
-      this.appendLine(line)
-      start = newline + 1
-      newline = chunk.indexOf(NEWLINE, start)
+  private stdoutDone(): void {
+    this.stdoutEnded = true
+    this.announceExitIfDone()
+    // A trailing line flushed after exit may have reopened the spool.
+    if (!this.live && !this.attachment) {
+      this.spool.closeHandle()
     }
-    if (start < chunk.length) {
-      this.partial.push(chunk.subarray(start))
-    }
-  }
-
-  private flushPartial(): void {
-    if (this.partial.length > 0) {
-      const line = Buffer.concat(this.partial).toString('utf8')
-      this.partial = []
-      this.appendLine(line)
-    }
+    // Exit usually lands first; the ended relay is only settled once its output has ended too.
+    this.options.onSettled()
   }
 
   private appendLine(line: string): void {
@@ -234,7 +224,7 @@ export class ProviderRelay {
   /** Stdout pauses while the spool is at its cap or the agent is owed too many answers. */
   private updateReading(): void {
     // An exited agent answers nothing, so only the spool may still hold its output back.
-    const paused = this.spoolPaused || (this.live && this.pending.full)
+    const paused = this.spoolPaused || this.readerBusy || (this.live && this.pending.full)
     if (paused !== this.readingPaused) {
       this.readingPaused = paused
       const { stdout } = this.options.managed.child

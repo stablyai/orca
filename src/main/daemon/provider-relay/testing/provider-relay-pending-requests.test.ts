@@ -126,4 +126,25 @@ describe('provider relay pending requests', () => {
     relay.ack(relay.info().nextSeq - 1)
     expect(stdout.isPaused()).toBe(false)
   })
+
+  it('detects a held request whose line spilled to disk once it is stitched back', async () => {
+    const { managed, stdout } = fakeManaged()
+    const relay = new ProviderRelay({
+      relayId: 'r-4',
+      chatKey: 'chat',
+      managed,
+      spoolPath: join(dir, 'r-4.ndjson'),
+      lineSpillBytes: 1024,
+      onSettled: () => {},
+      onDetached: () => {}
+    })
+    await relay.attach('app-1', { socket: new PassThrough() }, 0)
+    const request = `{"type":"control_request","request_id":"big","request":{"subtype":"can_use_tool","input":"${'y'.repeat(20_000)}"}}\n`
+    for (let at = 0; at < request.length; at += 500) {
+      stdout.write(request.slice(at, at + 500))
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(relay.info().pendingCount).toBe(1)
+    expect(relay.info().nextSeq).toBe(2)
+  })
 })
