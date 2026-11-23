@@ -48,7 +48,7 @@ export class BotAvatarSync {
   private writes = 0
   // Per bot, drawn icons kept so far, so a send that read none before one was kept is sent again.
   private readonly icons = new Map<string, number>()
-  // Per bot, its drawn icon as last sent, by look and icon count.
+  // Per bot, its drawn icon while a send of it is out or to be retried, by look and icon count.
   private readonly prepared = new Map<
     string,
     { look: string; icons: number; icon: { version: string; png: string } }
@@ -229,6 +229,8 @@ export class BotAvatarSync {
       this.resend(bot.id)
     } else if (sent) {
       this.sent.set(bot.id, avatar)
+      // Kept only for a retry: once taken, its bytes are let go.
+      this.prepared.delete(bot.id)
       // The picture may have changed while this one was on its way: only then is the roster read again.
       if (this.changedWhileSending.delete(bot.id)) {
         // While bots are off a pass only reads again once they are on.

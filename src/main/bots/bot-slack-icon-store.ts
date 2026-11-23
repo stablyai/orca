@@ -127,6 +127,8 @@ export async function writeBotSlackIcon(
 /** A bot's drawn icon by id: whether one is wanted, kept, and read back for the cloud. */
 export class BotSlackIcons {
   private readonly listeners = new Set<(botId: string) => void>()
+  // Per bot, the icon file last found whole, by its size and change time.
+  private readonly whole = new Map<string, { path: string; size: number; mtimeMs: number }>()
 
   constructor(
     private readonly deps: {
@@ -144,8 +146,23 @@ export class BotSlackIcons {
     if (botSlackIconLook(bot) !== look) {
       return { wanted: false, current: false }
     }
-    const kept = await readBotSlackIcon(this.deps.filesystem, this.deps.root(), bot)
-    return { wanted: kept === null, current: true }
+    // A file already found whole, unchanged since, is not read and decoded again (each reconnect asks).
+    const path = join(botFolder(this.deps.root(), botId), botSlackIconFile(look))
+    const stat = await this.deps.filesystem.statFile(path)
+    const known = this.whole.get(botId)
+    if (
+      stat &&
+      known?.path === path &&
+      known.size === stat.size &&
+      known.mtimeMs === stat.mtimeMs
+    ) {
+      return { wanted: false, current: true }
+    }
+    const kept = stat && (await readBotSlackIcon(this.deps.filesystem, this.deps.root(), bot))
+    if (stat && kept) {
+      this.whole.set(botId, { path, size: stat.size, mtimeMs: stat.mtimeMs })
+    }
+    return { wanted: !kept, current: true }
   }
 
   /** Keeps a window's drawing of `look`; false when the bot's look changed since, so it is dropped. */
@@ -179,6 +196,7 @@ export class BotSlackIcons {
 
   /** A deleted bot's icons go with it. */
   forget(botId: string): Promise<void> {
+    this.whole.delete(botId)
     return this.deps.filesystem.removeTree(botFolder(this.deps.root(), botId))
   }
 

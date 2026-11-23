@@ -16,7 +16,9 @@ import { botSlackIconLook } from '../../../../shared/bots/bot-slack-icon'
 import { drawBotSlackIcon } from './bot-slack-icon-raster'
 
 // Per bot, the look asked about or drawn this session; a failed one is let go for the next bots read.
-const handled = new Map<string, string>()
+const handled = new Map<string, { look: string; attempt: number }>()
+// Each attempt's number, so a late failure of an older one never lets a newer one go.
+let attempts = 0
 // Per host, one drawing at a time, so a stalled host never holds up another's.
 const queues = new Map<string, Promise<void>>()
 // What the last run saw, so a notice that changed neither the bots nor which hosts are live (a Needs You
@@ -46,20 +48,22 @@ async function uploadBotSlackIcon(bot: BotRef, look: string, png: string): Promi
   return stored
 }
 
-function forget(bot: Bot, look: string): void {
-  seen.delete(bot)
-  if (handled.get(botRefKey(bot)) === look) {
+// Lets a failed or outdated attempt go; the next bots notice, of any kind, looks at the bot again.
+function forget(bot: Bot, attempt: number): void {
+  if (handled.get(botRefKey(bot))?.attempt === attempt) {
     handled.delete(botRefKey(bot))
+    seen.delete(bot)
+    seenBots = null
   }
 }
 
-async function publish(bot: Bot, look: string): Promise<void> {
+async function publish(bot: Bot, look: string, attempt: number): Promise<void> {
   // A newer look took its place while it waited, or its host went away: that one, or the return, asks again.
-  if (handled.get(botRefKey(bot)) !== look) {
+  if (handled.get(botRefKey(bot))?.attempt !== attempt) {
     return
   }
   if (readBotHostState(bot.hostId) !== 'live') {
-    forget(bot, look)
+    forget(bot, attempt)
     return
   }
   try {
@@ -67,7 +71,7 @@ async function publish(bot: Bot, look: string): Promise<void> {
     const want = parsed?.kind === 'mascot' ? await botSlackIconWanted(bot, look) : null
     if (!want?.current) {
       // The host hasn't saved this look yet (a window's own edit): asked again on the next bots read.
-      forget(bot, look)
+      forget(bot, attempt)
       return
     }
     if (!want.wanted || parsed?.kind !== 'mascot') {
@@ -79,15 +83,15 @@ async function publish(bot: Bot, look: string): Promise<void> {
       wornBotOutfit(bot.avatarOutfit)
     )
     if (!png) {
-      forget(bot, look)
+      forget(bot, attempt)
       return
     }
     if (!(await uploadBotSlackIcon(bot, look, png))) {
       // The look changed on the host meanwhile: picking it again asks again.
-      forget(bot, look)
+      forget(bot, attempt)
     }
   } catch (error) {
-    forget(bot, look)
+    forget(bot, attempt)
     console.warn('[bots] could not draw the Slack icon', error)
   }
 }
@@ -102,15 +106,17 @@ export function publishBotSlackIcon(bot: Bot): void {
   }
   const key = botRefKey(bot)
   if (
-    handled.get(key) === look ||
+    handled.get(key)?.look === look ||
     readBotHostState(bot.hostId) !== 'live' ||
     !botHostHas(bot.hostId, BOTS_SLACK_ICON_RUNTIME_CAPABILITY)
   ) {
     return
   }
-  handled.set(key, look)
+  attempts += 1
+  const attempt = attempts
+  handled.set(key, { look, attempt })
   const queued: Promise<void> = (queues.get(bot.hostId) ?? Promise.resolve())
-    .then(() => publish(bot, look))
+    .then(() => publish(bot, look, attempt))
     .finally(() => {
       // A settled queue is let go, so an unpaired host keeps nothing here.
       if (queues.get(bot.hostId) === queued) {
@@ -188,7 +194,10 @@ export function useBotSlackIcons(): void {
     if (!enabled) {
       return
     }
+    // Another client may have replaced icons while bots were off here: every look is asked about again.
+    handled.clear()
     seenBots = null
+    seenLive = null
     publishLooks()
     const stopBots = subscribeToBotChanges(publishLooks)
     const stopCameBack = onBotHostCameBack(hostCameBack)
