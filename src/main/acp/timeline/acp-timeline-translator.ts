@@ -46,7 +46,7 @@ export class AcpTimelineTranslator {
   /** Drained by the lane in journal order. */
   readonly subagents = new AcpSubagents()
   readonly children: AcpChildSessions
-  private readonly ownership: AcpTimelineOwnership
+  protected readonly ownership: AcpTimelineOwnership
   private readonly started = new BoundedMap<string, true>({ maxEntries: 128 })
   readonly elicitations = new AcpUrlElicitations()
   readonly failures: AcpTurnFailures

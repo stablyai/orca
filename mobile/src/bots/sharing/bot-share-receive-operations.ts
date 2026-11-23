@@ -20,7 +20,14 @@ const ReviewSchema = z.looseObject({
   bot: z.looseObject({
     name: z.string(),
     purpose: z.string(),
-    avatar: z.looseObject({ mascot: z.string().optional() }).optional(),
+    avatar: z
+      .looseObject({
+        mascot: z.string().optional(),
+        // The shared mascot's look, which the host gives the new bot when it keeps that mascot.
+        color: z.string().optional().catch(undefined),
+        outfit: z.string().optional().catch(undefined)
+      })
+      .optional(),
     skills: z.array(z.looseObject({ name: z.string() })),
     tools: z.array(z.looseObject({ id: z.string(), name: z.string(), url: z.string() })),
     connectors: z.array(z.looseObject({ kind: z.string() })),

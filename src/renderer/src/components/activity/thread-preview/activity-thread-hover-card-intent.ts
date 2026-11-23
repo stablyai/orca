@@ -29,12 +29,6 @@ function isRowControl(target: EventTarget): boolean {
   return target instanceof Element && target.closest('[data-activity-thread-control]') !== null
 }
 
-export function _resetActivityHoverCardIntentForTest(): void {
-  lastPointerPosition = null
-  openCardCount = 0
-  lastCardClosedAt = Number.NEGATIVE_INFINITY
-}
-
 type OpenTimers = { progress: number | undefined; open: number }
 
 // Owns opening from pointer rest and keyboard focus; Radix owns closing and card traversal.

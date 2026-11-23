@@ -5,8 +5,7 @@ export default defineConfig({
   // A string tsconfig skips the lookup, which otherwise climbs to the desktop app's tsconfig.
   oxc: { tsconfig: false },
   resolve: {
-    // The director contract tests import the shipped desktop and phone clients from the app
-    // sources; their `zod` resolves to this package's copy, so no root install is needed.
+    // Sources imported from sibling packages resolve `zod` to this package's copy, so no root install is needed.
     dedupe: ['zod'],
     alias: {
       // The directory, so subpath imports (relay-contract/relay-regions) resolve too.

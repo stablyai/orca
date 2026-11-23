@@ -83,6 +83,9 @@ export function agentHookRuntimeDeps(
       readChildWorkHandles: (subject) => server.getStructuredChildWorkHandles(subject)
     },
     readHookCliWriterObservation: (row) => server.readCliWriterObservation(row),
+    // A command mark retires the pane's launch and proves an agent's exit, on every host.
+    retireAgentHookCompatibilityAuthority: (paneKey, options) =>
+      server.retireProcessAuthority(paneKey, options),
     checkHookAgentPresence: (paneKey, exitedSince, options) =>
       options?.settleForSleep
         ? server.settleExitProofForSleep(paneKey)

@@ -244,6 +244,8 @@ export class AcpStructuredOptions {
     }
   }
 
+  refusesEffort = (value: string) => this.effortOption() !== null && !this.offersEffort(value)
+
   write(key: string, value: string): AcpOptionWrite | null {
     return buildAcpOptionWrite({
       key,

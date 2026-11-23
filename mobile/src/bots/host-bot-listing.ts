@@ -48,8 +48,6 @@ export type ListedHostBots = {
   view: BotSidebarView
   workspaceLineage: Readonly<Record<string, WorkspaceLineage>>
   worktreeLineage: Readonly<Record<string, WorktreeLineage>>
-  /** Uploaded pictures read so far, by bot id. */
-  avatarUris: ReadonlyMap<string, string>
   unseen?: Readonly<Record<string, number>>
   /** Each bot's waits still waiting, by bot id, for its row's line. */
   waits?: BotListWaits

@@ -21,6 +21,7 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folde
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { AgentQuestionIcon } from '@/components/agent/status/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/agent/status/AgentWorkingSpinner'
+import { unreadAlertDotClassName } from '@/components/sidebar/workspace-card/surface/WorktreeCardStatusSlot'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { structuredAgentSessionOwnerForTab } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
@@ -151,7 +152,7 @@ export function BotCollapsedPreview({
   return (
     <span
       ref={ref}
-      className="pointer-events-none flex min-w-0 flex-1 items-center justify-center overflow-hidden p-1"
+      className="pointer-events-none flex min-w-0 flex-1 items-center justify-start overflow-hidden p-1"
       data-bot-preview=""
     >
       <span className="isolate flex items-center gap-1">
@@ -258,6 +259,6 @@ function PreviewPip({ signal }: { signal: ReturnType<typeof botPreviewSignal> })
     )
   }
   return signal === 'unread' ? (
-    <span className="pointer-events-none absolute -right-0.5 -bottom-0.5 z-10 size-2 rounded-full bg-foreground ring-1 ring-sidebar" />
+    <span className={cn(unreadAlertDotClassName, 'z-10')} aria-hidden="true" />
   ) : null
 }

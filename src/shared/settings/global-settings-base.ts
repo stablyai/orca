@@ -10,6 +10,7 @@ import type { PerfNoticeGlobalSettings } from '../perf-notices/perf-notice-setti
 import type { ClaudeAccountSwitchSettings } from '../agent-accounts/claude/claude-account-switch-settings'
 import type { NativeChatGlobalSettings } from '../native-chat/settings/native-chat-appearance-settings'
 import type { NativeChatIdleStopSettings } from '../native-chat/settings/native-chat-idle-stop'
+import type { NativeChatUsageLimitAutoContinueSettings } from '../native-chat/settings/native-chat-usage-limit-auto-continue'
 import type { EditorTypographySettings } from '../editor/appearance/editor-typography-settings-types'
 import type { PluginAppearanceSettings } from '../plugins/appearance/plugin-appearance-settings-types'
 import type { PluginFileTypeSuggestionSettings } from '../plugins/contributions/plugin-file-type'
@@ -31,6 +32,7 @@ import type { PRAutoRefreshSettings } from '../source-control/hosted-review/revi
 import type { ManagedAccountNameSettings } from '../agent-accounts/managed-account-display-names'
 import type { NewTabMenuSettings } from '../new-tab-menu/new-tab-menu-layout'
 import type { UiLanguageSettings } from '../i18n/ui-language-settings'
+import type { ChatDeleteSettings } from '../agent-session/chat-deletion/orca-chat-delete'
 
 type DesktopWindowSettings = {
   /** Windows-only: close (X) hides to tray instead of quitting; the tray icon is always present regardless. */
@@ -48,6 +50,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   ClaudeAgentViewSettings &
   NativeChatGlobalSettings &
   NativeChatIdleStopSettings &
+  NativeChatUsageLimitAutoContinueSettings &
   WorktreeDeletionPreferences &
   WorktreeCardDisplaySettings &
   ClaudeAccountSwitchSettings &
@@ -75,4 +78,5 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   PRAutoRefreshSettings &
   ManagedAccountNameSettings &
   NewTabMenuSettings &
-  UiLanguageSettings
+  UiLanguageSettings &
+  ChatDeleteSettings

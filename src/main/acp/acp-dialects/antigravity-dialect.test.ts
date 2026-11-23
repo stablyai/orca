@@ -309,7 +309,8 @@ it('tracks Antigravity invoke_subagent, manage_subagents, and swarm lifecycles a
     },
     220
   )
-  expect(translator.subagents.drainEvidence()).toEqual([
+  const addedEvidence = translator.subagents.drainEvidence()
+  expect(addedEvidence).toEqual([
     expect.objectContaining({
       type: 'live',
       observedAt: 210,
@@ -332,7 +333,11 @@ it('tracks Antigravity invoke_subagent, manage_subagents, and swarm lifecycles a
       type: 'live',
       observedAt: 220,
       child: expect.objectContaining({
-        handle: { idKind: 'task_id', id: 'swarm:verifier-1' },
+        handle: {
+          idKind: 'task_id',
+          id: 'swarm:verifier-1',
+          runId: expect.stringMatching(/^acp-child-run:/)
+        },
         state: 'working',
         description: 'verifier-1: unit'
       })
@@ -341,12 +346,20 @@ it('tracks Antigravity invoke_subagent, manage_subagents, and swarm lifecycles a
       type: 'live',
       observedAt: 220,
       child: expect.objectContaining({
-        handle: { idKind: 'task_id', id: 'swarm:verifier-2' },
+        handle: {
+          idKind: 'task_id',
+          id: 'swarm:verifier-2',
+          runId: expect.stringMatching(/^acp-child-run:/)
+        },
         state: 'working',
         description: 'verifier-2: lint'
       })
     })
   ])
+  const verifier1RunId =
+    addedEvidence[2]?.type === 'live' ? addedEvidence[2].child.handle.runId : undefined
+  const verifier2RunId =
+    addedEvidence[3]?.type === 'live' ? addedEvidence[3].child.handle.runId : undefined
 
   // Oversized swarm worker counts are ignored.
   translator.notification(
@@ -399,7 +412,7 @@ it('tracks Antigravity invoke_subagent, manage_subagents, and swarm lifecycles a
     {
       type: 'ended',
       observedAt: 230,
-      handle: { idKind: 'task_id', id: 'swarm:verifier-1' },
+      handle: { idKind: 'task_id', id: 'swarm:verifier-1', runId: verifier1RunId },
       outcome: 'cancelled'
     },
     {
@@ -416,7 +429,7 @@ it('tracks Antigravity invoke_subagent, manage_subagents, and swarm lifecycles a
     {
       type: 'ended',
       observedAt: 250,
-      handle: { idKind: 'task_id', id: 'swarm:verifier-2' },
+      handle: { idKind: 'task_id', id: 'swarm:verifier-2', runId: verifier2RunId },
       outcome: 'succeeded'
     }
   ])

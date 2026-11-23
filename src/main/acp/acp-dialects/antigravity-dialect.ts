@@ -280,7 +280,13 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   sessionLostNotice: (notice) => notice.includes(REBUILD_FAILED),
   // Not marked signed out: agy may already hold a refreshed token for the next prompt.
   notification: (method, params) => acpReplyNoticeFailure(method, params, TURN_FAILURE_NOTICE),
-  providerRetry: (text) => RETRY_NOTICE.exec(text)?.[1],
+  providerRetry: (update) => {
+    const cause =
+      update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text'
+        ? RETRY_NOTICE.exec(update.content.text)?.[1]
+        : undefined
+    return cause === undefined ? undefined : { cause }
+  },
   // Avoid using the full command line as the tool name.
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),
   // Logout would clear the account shared by every Antigravity chat on this host.
