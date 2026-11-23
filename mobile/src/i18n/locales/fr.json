@@ -5016,7 +5016,7 @@
         "updateHost": "Mettre à jour Orca sur {{host}}",
         "cantReach": "Injoignable",
         "unsupported": "Cette app n’est pas encore prise en charge",
-        "interrupted": "Connexion interrompue par un redémarrage"
+        "interrupted": "Connexion interrompue"
       },
       "removeNamed": "Retirer {{app}}",
       "signIn": {

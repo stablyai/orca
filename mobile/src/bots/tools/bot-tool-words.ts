@@ -35,7 +35,7 @@ export function botToolSignInLine(
     case 'unsupported':
       return t('bots.tools.face.unsupported', 'This app isn’t supported yet')
     case 'interrupted':
-      return t('bots.tools.face.interrupted', 'Sign-in interrupted by a restart')
+      return t('bots.tools.face.interrupted', 'Sign-in interrupted')
     case null:
       return null
   }

@@ -6903,7 +6903,7 @@
         "updateHost": "Update Orca on {{host}}",
         "cantReach": "Can’t reach",
         "unsupported": "This app isn’t supported yet",
-        "interrupted": "Sign-in interrupted by a restart"
+        "interrupted": "Sign-in interrupted"
       },
       "removeNamed": "Remove {{app}}",
       "signIn": {

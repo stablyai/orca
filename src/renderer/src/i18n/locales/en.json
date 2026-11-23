@@ -29665,7 +29665,7 @@
       "cantReach": "Can’t reach",
       "signInOrca": "Works with Claude and Codex",
       "finishing": "Finishing sign-in…",
-      "interrupted": "Sign-in interrupted by a restart",
+      "interrupted": "Sign-in interrupted",
       "updateHost": "Update Orca on {{host}} to sign in to apps",
       "updateServer": "Update Orca on the server to sign in to apps",
       "updateHostShort": "Update Orca on {{host}}",

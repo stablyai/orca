@@ -4985,7 +4985,7 @@
         "updateHost": "{{host}} の Orca を更新",
         "cantReach": "接続できません",
         "unsupported": "このアプリはまだサポートされていません",
-        "interrupted": "再起動によりサインインが中断されました"
+        "interrupted": "サインインが中断されました"
       },
       "removeNamed": "{{app}} を削除",
       "signIn": {

@@ -4904,7 +4904,7 @@
         "updateHost": "{{host}} üzerindeki Orca'yı güncelle",
         "cantReach": "Ulaşılamıyor",
         "unsupported": "Bu uygulama henüz desteklenmiyor",
-        "interrupted": "Oturum açma yeniden başlatmayla kesildi"
+        "interrupted": "Oturum açma kesildi"
       },
       "removeNamed": "{{app}} kaldır",
       "signIn": {

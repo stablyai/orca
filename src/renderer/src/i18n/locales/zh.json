@@ -28301,7 +28301,7 @@
       "cantReach": "无法连接",
       "signInOrca": "适用于 Claude 和 Codex",
       "finishing": "正在完成登录…",
-      "interrupted": "登录因重启而中断",
+      "interrupted": "登录已中断",
       "updateHost": "请更新 {{host}} 上的 Orca 以登录应用",
       "updateServer": "请更新服务器上的 Orca 以登录应用",
       "updateHostShort": "更新 {{host}} 上的 Orca",

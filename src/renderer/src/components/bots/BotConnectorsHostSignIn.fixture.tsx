@@ -1,5 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { BotOwnTool } from '../../../../shared/bot-tools'
+import { end, startedKey } from './bot-tool-sign-in-state'
 import { base, clickWhenShown, named, Panel, settle, stub } from './bot-connectors-host-fixture'
 
 // The web and the phone, whose bots run on their paired server: the server signs the bot in, the
@@ -69,6 +70,25 @@ export const updateNeeded = defineFixture({
     }),
   render: () => <Panel bot={base} />,
   interact: signIn
+})
+
+/** The server restarted while the sign-in waited on the pasted address. */
+export const interrupted = defineFixture({
+  width: 372,
+  setup: () => {
+    stub({
+      linearLinked: true,
+      composio: false,
+      host: 'paste',
+      owned: [acme({ state: 'signed-out' })]
+    })
+  },
+  render: () => <Panel bot={base} />,
+  interact: async () => {
+    end(startedKey(base, 'acme-notes'), 'failed', 'interrupted')
+    await clickWhenShown((button) => Boolean(button.textContent?.includes('Acme notes')))
+    await settle(300)
+  }
 })
 
 /** Add by URL from the web: the sign-in waits on the pasted address. */

@@ -5124,7 +5124,7 @@
         "updateHost": "Обновить Orca на {{host}}",
         "cantReach": "Нет связи",
         "unsupported": "Это приложение пока не поддерживается",
-        "interrupted": "Вход прерван перезапуском"
+        "interrupted": "Вход прерван"
       },
       "removeNamed": "Удалить {{app}}",
       "signIn": {

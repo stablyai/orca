@@ -7226,7 +7226,7 @@
         "updateHost": "更新 {{host}} 上的 Orca",
         "cantReach": "无法连接",
         "unsupported": "暂不支持此应用",
-        "interrupted": "登录因重启而中断"
+        "interrupted": "登录已中断"
       },
       "removeNamed": "移除 {{app}}",
       "signIn": {

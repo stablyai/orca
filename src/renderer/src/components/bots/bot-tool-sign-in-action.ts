@@ -54,7 +54,7 @@ export function botToolSignInWords(
       return { line: t('bots.apps.unsupported', 'This app isn’t supported yet'), need: null }
     case 'interrupted':
       return {
-        line: t('bots.toolApp.interrupted', 'Sign-in interrupted by a restart'),
+        line: t('bots.toolApp.interrupted', 'Sign-in interrupted'),
         need: null
       }
     case null:
