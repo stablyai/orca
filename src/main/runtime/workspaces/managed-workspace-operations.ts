@@ -201,14 +201,10 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
     const resolved =
       requiredHostId && scope?.type !== 'folder'
         ? await this.showManagedWorktree(worktreeSelector, requiredHostId)
-        : reads && scope?.type !== 'folder'
-          ? // The row the launch target would resolve, through the batch's reads; on any miss it
-            // resolves the row itself, as without them.
-            await this.resolveGitWorktreeSelector(
-              scope?.type === 'worktree' ? `id:${scope.worktreeId}` : worktreeSelector,
-              undefined,
-              reads
-            ).catch(() => undefined)
+        : reads && scope?.type === 'worktree'
+          ? // The row the launch target would resolve for this worktree key (never a folder or the
+            // floating workspace), through the batch's reads; a miss throws as it would there.
+            await this.resolveGitWorktreeSelector(`id:${scope.worktreeId}`, undefined, reads)
           : undefined
     return this.resolveTerminalWorkspaceLaunchTarget(
       worktreeSelector,

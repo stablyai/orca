@@ -19,7 +19,8 @@ import { useBotActivity } from './use-bot-activity'
 import { useBotNeedsYouCount, useBotNow, type BotNeedView } from './use-bot-now'
 import type { BotHostReadState } from './use-bot-host-read'
 import type { StoppedForSignIn } from './BotNeedRow'
-import { useBotItems, useBotItemsSeenMark } from './items/use-bot-items'
+import { useBotItems } from './items/use-bot-items'
+import { useBotItemsSeenMark } from './items/use-bot-items-seen-mark'
 import {
   useBotItemsShownList,
   type BotItemsClosedPage,
