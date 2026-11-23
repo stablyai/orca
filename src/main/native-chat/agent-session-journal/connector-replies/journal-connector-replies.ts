@@ -17,13 +17,15 @@ type Target = { sessionId: string; epoch: string }
 
 /** One row per delivery a committed admission takes (its head and each carried id); a repeat keeps
  *  the first. Only Slack's conversations are answered through the outbox. A continuation's
- *  admission claims, in the same transaction, the unclaimed rows its cut owes. */
+ *  admission claims, in the same transaction, the unclaimed rows its cut owes. With `adopt`, a card
+ *  moved here under the same id takes over the open rows that id held in its old chat. */
 export function recordJournalConnectorReplies(
   db: Database.Database,
   target: Target,
   messageId: string,
   queued: boolean,
-  body: AgentJournalMessageItem
+  body: AgentJournalMessageItem,
+  adopt = false
 ): void {
   claimJournalConnectorReplies(db, target, messageId, body)
   const stamp = body.connectorDelivery
@@ -32,7 +34,12 @@ export function recordJournalConnectorReplies(
   }
   const insert = db.prepare(`INSERT INTO journal_connector_replies
     (account,delivery_id,source,external_id,session_id,epoch,message_id,queued)
-    VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(account,delivery_id) DO NOTHING`)
+    VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(account,delivery_id) ${
+      adopt
+        ? `DO UPDATE SET session_id=excluded.session_id,epoch=excluded.epoch,queued=excluded.queued
+      WHERE message_id=excluded.message_id AND outcome IS NULL AND ${EXPECT_OPEN}`
+        : 'DO NOTHING'
+    }`)
   for (const deliveryId of [stamp.deliveryId, ...(stamp.carried ?? [])]) {
     insert.run(
       stamp.account,

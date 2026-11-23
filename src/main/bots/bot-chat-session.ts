@@ -117,7 +117,7 @@ export function botChatSessions(deps: BotChatDependencies) {
     await deps.createChat(bot, sessionId)
     // Saved before anything else can fail, so the bot never loses a Chat it made.
     await deps.bots.setChatSession(bot.id, sessionId)
-    await carryQueuedMessages(host, bot.id, bot.chatSessionId, sessionId)
+    await carryQueuedMessages(host, bot.chatSessionId, sessionId)
     await deps.dropUnreadMail(bot, bot.chatSessionId)
     await nameNewHome(host, { ...bot, chatSessionId: sessionId }, bot.chatSessionId)
     return sessionId

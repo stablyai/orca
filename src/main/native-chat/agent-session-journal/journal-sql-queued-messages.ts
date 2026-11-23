@@ -53,7 +53,10 @@ export type JournalSqlQueueWrite =
         messageId: string
         body: AgentJournalMessageItem
         requireAttachments?: true
-        holdReason?: QueuedMessageHoldReason
+        /** A card moved from another chat keeps whatever hold it had there. */
+        holdReason?: string
+        /** It takes over the open reply rows its id held in that chat. */
+        adoptConnectorReplies?: true
         options?: AgentSessionExecutionOptions
         deliveryMode?: 'queue' | 'steer'
         unattended?: boolean
@@ -111,6 +114,11 @@ export class SqlJournalQueuedMessages {
 
   async failureHolds(): Promise<boolean> {
     return (await this.read({ kind: 'failure-holds' }, 'failure-holds')).held
+  }
+
+  /** Whether an editor holds this card now, as the drain's own selection reads it. */
+  async editHeld(messageId: string): Promise<boolean> {
+    return (await this.read({ kind: 'edit-held', messageId, now: this.now() }, 'edit-held')).held
   }
 
   async list(): Promise<QueuedMessageRow[]> {

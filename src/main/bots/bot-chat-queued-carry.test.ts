@@ -14,6 +14,7 @@ import {
   hostTestMessage,
   hostTestOperationId
 } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
+import { QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED } from '../native-chat/agent-session-journal/queued-messages/queued-message-table'
 import { botChatSessions } from './bot-chat-session'
 
 const party = { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null }
@@ -28,6 +29,11 @@ const MAIL: AgentMessageSource = {
   orchestration: { message: 'mail-notice', mailbox: 'term_bot', dispatchId: null, messages: [] }
 }
 const IMAGE = { type: 'image-ref', path: '/private-fixture/shot.png' } as const
+const DM_DELIVERY = {
+  account: 'acct-1',
+  conversation: { source: 'slack', externalId: 'D123' },
+  deliveryId: 'delivery-1'
+}
 
 function textOf(body: AgentJournalMessageItem): string {
   return body.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
@@ -78,6 +84,13 @@ describe('replacing a chat carries its unsent queued messages', () => {
       showTab: async () => {},
       closeChat: async (sessionId) => {
         await current.host.close(sessionId, 'user-close')
+        // Someone opens the closed chat from its history and starts editing a card.
+        const { queuedMessages } = (await current.host.conversation(sessionId)).journal
+        const editing = await queuedMessages.get('editing')
+        await queuedMessages.editLeases.acquire(
+          { callerKey: 'phone', editId: 'edit-1' },
+          { messageId: 'editing', fingerprint: editing!.fingerprint }
+        )
         return { stopped: true }
       },
       dropUnreadMail: async () => {}
@@ -96,6 +109,17 @@ describe('replacing a chat carries its unsent queued messages', () => {
       messageId: 'image',
       body: { ...message('look at this'), blocks: [...message('look at this').blocks, IMAGE] }
     })
+    await queuedMessages.insert({
+      messageId: 'dm',
+      body: { ...message('slack dm'), connectorDelivery: DM_DELIVERY },
+      unattended: false
+    })
+    await queuedMessages.insert({
+      messageId: 'unconfirmed',
+      body: message('maybe sent'),
+      holdReason: QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED
+    })
+    await queuedMessages.insert({ messageId: 'editing', body: message('editing') })
     return { chats }
   }
 
@@ -114,16 +138,43 @@ describe('replacing a chat carries its unsent queued messages', () => {
     return [...sent, ...(await queuedTexts(sessionId))]
   }
 
-  it('moves them, in order with sender and images, out of the old chat; mail stays', async () => {
+  it('moves them, in order with sender and images, out of the old chat', async () => {
     const { chats } = await setup()
     const next = await chats.reset('bot-1')
     expect(next).not.toBe(HOST_TEST_SESSION)
     const bodies = await received(next)
-    expect(bodies.map(textOf)).toEqual(['owner text', 'run result', 'look at this'])
+    expect(bodies.map(textOf)).toEqual([
+      'owner text',
+      'run result',
+      'look at this',
+      'slack dm',
+      'maybe sent'
+    ])
     expect(bodies[0].from).toBeUndefined()
     expect(bodies[1].from).toEqual(RESULT_SENDER)
     expect(bodies[2].blocks).toContainEqual(IMAGE)
-    expect((await queuedTexts(HOST_TEST_SESSION)).map(textOf)).toEqual(['mail'])
+    // Orchestration mail stays with the old chat's mailbox; a card being edited stays with its editor.
+    expect((await queuedTexts(HOST_TEST_SESSION)).map(textOf)).toEqual(['mail', 'editing'])
+  })
+
+  it('keeps a moved direct message answerable from the new chat', async () => {
+    const { chats } = await setup()
+    const next = await chats.reset('bot-1')
+    const rows = (await rig!.store.connectorReplies().read()).filter(
+      (row) => row.deliveryId === DM_DELIVERY.deliveryId
+    )
+    expect(rows).toEqual([expect.objectContaining({ sessionId: next, messageId: 'dm' })])
+    expect(rows[0].fill).toBeUndefined()
+  })
+
+  it('keeps a held card held in the new chat', async () => {
+    const { chats } = await setup()
+    const next = await chats.reset('bot-1')
+    const { journal } = await rig!.host.conversation(next)
+    expect(await journal.queuedMessages.get('unconfirmed')).toMatchObject({
+      state: 'waiting',
+      holdReason: QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED
+    })
   })
 
   it('keeps them in the old chat when the new chat cannot be made', async () => {
@@ -135,7 +186,10 @@ describe('replacing a chat carries its unsent queued messages', () => {
       'owner text',
       'run result',
       'mail',
-      'look at this'
+      'look at this',
+      'slack dm',
+      'maybe sent',
+      'editing'
     ])
   })
 })
