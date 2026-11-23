@@ -22,6 +22,16 @@ import {
 } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 
 async function probeRefusedSource(filePath: string, check: () => void) {
+  try {
+    return await probeUnchangedSource(filePath, check)
+  } catch {
+    check()
+    // An unreadable source stays uncertified; the notice still lands.
+    return undefined
+  }
+}
+
+async function probeUnchangedSource(filePath: string, check: () => void) {
   const { size, mtimeMs } = await stat(filePath)
   check()
   const sourceFrontier = await readClaudeTranscriptFrontier({

@@ -8,7 +8,6 @@ import {
   statfsSync,
   writeFileSync
 } from 'node:fs'
-import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
@@ -16,6 +15,9 @@ import { ClaudeImportResourceError } from './journal-claude-import-resource-erro
 const RESERVE_BYTES = 512 * 1024 * 1024
 const QUOTA_BYTES = 4 * 1024 * 1024 * 1024
 const OPERATION_PREFIX = 'operation-'
+// Each write batch is granted at most this much, so imports in other processes overshoot by little.
+const GRANT_BYTES = 64 * 1024 * 1024
+const RESERVED_FILE = 'reserved'
 // Windows holds a just-closed SQLite file briefly; Node retries EBUSY/EPERM removals.
 const REMOVAL = { recursive: true, force: true, maxRetries: 5, retryDelay: 100 } as const
 
@@ -51,6 +53,33 @@ function bytes(path: string): number {
     const child = join(path, entry.name)
     try {
       total += entry.isDirectory() ? bytes(child) : lstatSync(child).size
+    } catch {
+      // Removed while we counted.
+    }
+  }
+  return total
+}
+
+// An operation is charged its grant until it actually grows past it.
+function charge(path: string): number {
+  let reserved = 0
+  try {
+    reserved = Number(readFileSync(join(path, RESERVED_FILE), 'utf8')) || 0
+  } catch {
+    // No grant yet.
+  }
+  return Math.max(bytes(path), reserved)
+}
+
+function chargedBytes(parent: string, except?: string): number {
+  let total = 0
+  for (const entry of readdirSync(parent, { withFileTypes: true })) {
+    const path = join(parent, entry.name)
+    if (path === except) {
+      continue
+    }
+    try {
+      total += entry.isDirectory() ? charge(path) : lstatSync(path).size
     } catch {
       // Removed while we counted.
     }
@@ -124,8 +153,7 @@ export function createClaudeImportScratch(options: ClaudeImportScratchOptions = 
   ownedParent(parent)
   sweepClaudeImportScratch({ parent })
   // Leftovers from live or unknown owners count against this import's share.
-  const othersBytes = bytes(parent)
-  if (othersBytes >= quotaBytes) {
+  if (chargedBytes(parent) >= quotaBytes) {
     throw new ClaudeImportResourceError('Claude history import scratch quota is full.')
   }
   if (freeBytes(parent) < reserveBytes) {
@@ -166,23 +194,24 @@ export function createClaudeImportScratch(options: ClaudeImportScratchOptions = 
     attach(close: () => void) {
       closeDatabase = close
     },
-    /** Bytes this operation may still add before the quota or the free-space reserve. */
-    allowanceBytes(): number {
-      return Math.max(
+    /** Grants and records the bytes the next write batch may add, within quota and reserve. */
+    grantBytes(): number {
+      const own = bytes(root)
+      const grant = Math.max(
         0,
-        // Recounted per batch so imports sharing the folder share one quota.
-        Math.min(quotaBytes - bytes(parent), freeBytes(root) - reserveBytes)
+        Math.min(
+          GRANT_BYTES,
+          quotaBytes - chargedBytes(parent, root) - own,
+          freeBytes(root) - reserveBytes
+        )
       )
+      writeFileSync(join(root, RESERVED_FILE), String(own + grant), { mode: 0o600 })
+      return grant
     },
-    async close(): Promise<void> {
-      if (closed) {
-        return
-      }
-      settle()
-      try {
-        await rm(root, REMOVAL)
-      } catch {
-        // Left for the next sweep, still charged against the quota.
+    /** Synchronous, so a worker that answers right after cannot cut the removal short. */
+    close(): void {
+      if (!closed) {
+        releaseOnExit()
       }
     }
   }

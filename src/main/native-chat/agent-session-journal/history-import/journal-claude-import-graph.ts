@@ -13,6 +13,7 @@ type StoredPayload = { raw: string; lineIndex: number; position: number }
 
 const SQLITE_FULL = 13
 const BATCH_ROWS = 1024
+const BATCH_BYTES = 16 * 1024 * 1024
 
 // SQLite refuses pages past max_page_count with SQLITE_FULL; that is the quota or reserve.
 function storageFailure(error: unknown): unknown {
@@ -73,14 +74,14 @@ export function createClaudeImportGraph(options: ClaudeImportScratchOptions = {}
       CREATE INDEX expanded_chunk ON expanded(chunk);
     `)
   } catch (error) {
-    void scratch.close()
+    scratch.close()
     throw storageFailure(error)
   }
   const pageSize = Number(db.pragma('page_size', { simple: true }))
   // Admit the next batch of writes only within the remaining quota and free-space reserve.
   const limitPages = () => {
     const pages = Number(db.pragma('page_count', { simple: true }))
-    const allowance = Math.floor(scratch.allowanceBytes() / pageSize)
+    const allowance = Math.floor(scratch.grantBytes() / pageSize)
     if (allowance <= 0) {
       throw new ClaudeImportResourceError('Claude history import scratch is full.')
     }
@@ -96,7 +97,7 @@ export function createClaudeImportGraph(options: ClaudeImportScratchOptions = {}
   try {
     write(limitPages)
   } catch (error) {
-    void scratch.close()
+    scratch.close()
     throw error
   }
   const insert = db.prepare(`INSERT INTO rows
@@ -115,6 +116,8 @@ export function createClaudeImportGraph(options: ClaudeImportScratchOptions = {}
     const candidate = isClaudeConversationEntry(row)
     const message = claudeRecord(row.message)
     const assistantId = type === 'assistant' ? text(message?.id) : null
+    // Only message rows can become items; other records keep just their links.
+    const payload = type ? JSON.stringify(row) : null
     insert.run(
       position,
       lineIndex,
@@ -124,8 +127,7 @@ export function createClaudeImportGraph(options: ClaudeImportScratchOptions = {}
       type,
       assistantId,
       candidate ? 1 : 0,
-      // Only message rows can become items; other records keep just their links.
-      type ? JSON.stringify(row) : null
+      payload
     )
     if (Array.isArray(message?.content)) {
       for (const value of message.content) {
@@ -140,11 +142,16 @@ export function createClaudeImportGraph(options: ClaudeImportScratchOptions = {}
         }
       }
     }
+    return payload?.length ?? 0
   }
   let writes = 0
+  let pendingBytes = 0
   // Autocommit costs a file write per statement; bounded transactions also bound each admission.
-  const written = () => {
-    if (++writes % BATCH_ROWS === 0) {
+  const written = (bytes = 0) => {
+    pendingBytes += bytes
+    // A batch stays well inside one grant, even when its rows carry large payloads.
+    if (++writes % BATCH_ROWS === 0 || pendingBytes >= BATCH_BYTES) {
+      pendingBytes = 0
       write(() => {
         db.exec('COMMIT')
         limitPages()
@@ -159,8 +166,7 @@ export function createClaudeImportGraph(options: ClaudeImportScratchOptions = {}
       if (row.isSidechain === true || row.parent_tool_use_id != null) {
         return
       }
-      write(() => insertRow(row, position, lineIndex))
-      written()
+      written(write(() => insertRow(row, position, lineIndex)))
     },
     async select(check: () => void): Promise<void> {
       // As the chain walker does, the tip is the newest conversation entry with an identity.

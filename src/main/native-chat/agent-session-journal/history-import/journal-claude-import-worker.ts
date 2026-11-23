@@ -14,13 +14,17 @@ import type {
 type ImportResult = Extract<ClaudeImportWorkerResponse, { kind: 'imported' }>['result']
 
 let entryOverride: string | undefined
-let queue: Promise<void> = Promise.resolve()
+// First opens and recoveries queue apart, so a large first open never holds a recovery's sends.
+const queues = { first: Promise.resolve(), recovery: Promise.resolve() }
 
-/** One importer per host keeps scratch accounting simple and the heavy host from piling up. */
-async function takeTurn(signal: AbortSignal | undefined): Promise<() => void> {
-  const previous = queue
+/** One importer of each kind per host keeps the heavy host from piling up. */
+async function takeTurn(
+  kind: keyof typeof queues,
+  signal: AbortSignal | undefined
+): Promise<() => void> {
+  const previous = queues[kind]
   let release = () => {}
-  queue = new Promise<void>((resolve) => {
+  queues[kind] = new Promise<void>((resolve) => {
     release = resolve
   })
   if (!signal) {
@@ -71,8 +75,10 @@ export async function importClaudeTranscriptInWorker(
 ): Promise<ImportResult> {
   const { signal, ...work } = input
   signal?.throwIfAborted()
-  const release = await takeTurn(signal)
+  const release = await takeTurn(work.bounded ? 'recovery' : 'first', signal)
   try {
+    // The turn ahead can settle in the same tick as an abort.
+    signal?.throwIfAborted()
     return await runImportWorker(work, signal)
   } finally {
     release()
@@ -99,6 +105,9 @@ async function runImportWorker(
     worker.postMessage(request)
   }
   signal?.addEventListener('abort', abort, { once: true })
+  if (signal?.aborted) {
+    abort()
+  }
   try {
     const response = await new Promise<ClaudeImportWorkerResponse>((resolve, reject) => {
       worker.once('message', resolve)

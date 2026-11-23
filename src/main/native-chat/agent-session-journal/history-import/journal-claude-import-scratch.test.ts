@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it } from 'vitest'
 import { createClaudeImportScratch } from './journal-claude-import-scratch'
 import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
 import { createClaudeImportGraph } from './journal-claude-import-graph'
@@ -29,7 +29,7 @@ function operation(name: string, owner?: string): string {
 it('removes its operation on close', async () => {
   const scratch = createClaudeImportScratch({ parent })
   writeFileSync(scratch.filename, 'rows')
-  await scratch.close()
+  scratch.close()
   expect(readdirSync(parent)).toEqual([])
 })
 
@@ -39,7 +39,7 @@ it('sweeps only operations whose recorded owner is dead', async () => {
   const unowned = operation('unowned')
   const scratch = createClaudeImportScratch({ parent })
   expect([existsSync(dead), existsSync(live), existsSync(unowned)]).toEqual([false, true, true])
-  await scratch.close()
+  scratch.close()
 })
 
 it('charges leftovers it cannot prove dead against the quota', () => {
@@ -57,17 +57,18 @@ it('refuses admission inside the free-space reserve without leaving an operation
   expect(readdirSync(parent)).toEqual([])
 })
 
-it('shares one quota between imports that grow at the same time', async () => {
+it('charges one import the grant another has not written yet', () => {
   const first = createClaudeImportScratch({ parent, quotaBytes: 1024 * 1024 })
   const second = createClaudeImportScratch({ parent, quotaBytes: 1024 * 1024 })
-  writeFileSync(first.filename, Buffer.alloc(768 * 1024))
-  expect(second.allowanceBytes()).toBeLessThan(256 * 1024)
-  await Promise.all([first.close(), second.close()])
+  expect(first.grantBytes()).toBeGreaterThan(1000 * 1024)
+  expect(second.grantBytes()).toBeLessThan(24 * 1024)
+  first.close()
+  second.close()
 })
 
-it('removes its database when the quota refuses the first write batch', async () => {
+it('removes its database before reporting that the quota refused the first write batch', () => {
   expect(() => createClaudeImportGraph({ parent, quotaBytes: 1024 })).toThrow(
     ClaudeImportResourceError
   )
-  await vi.waitFor(() => expect(readdirSync(parent)).toEqual([]))
+  expect(readdirSync(parent)).toEqual([])
 })

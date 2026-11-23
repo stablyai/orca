@@ -6,6 +6,7 @@ import { prepareLegacyTranscriptImport } from './journal-legacy-import'
 import { prepareJsonlTranscriptImport } from './journal-jsonl-import'
 import { importClaudeTranscript } from './journal-claude-import'
 import './journal-claude-import-worker.test-fixture'
+import { importClaudeTranscriptInWorker } from './journal-claude-import-worker'
 import {
   readClaudeTranscriptTail,
   readClaudeTranscriptWindow
@@ -431,4 +432,24 @@ it('counts a complete record over the per-record cap that the window passes over
   const window = await readClaudeTranscriptWindow({ filePath, check: () => {} })
   expect(window.skippedRecords).toBe(1)
   expect(window.rows.map((r) => r.uuid)).toEqual(['older', 'newest'])
+})
+
+it('honours a cancel that arrives while the import waits for its turn', async () => {
+  root = await mkdtemp(join(tmpdir(), 'orca-claude-cancel-'))
+  const filePath = join(root, 'session.jsonl')
+  await writeFile(
+    filePath,
+    '{"type":"user","uuid":"q","parentUuid":null,"message":{"content":"Question"}}\n'
+  )
+  const controller = new AbortController()
+  const imported = importClaudeTranscriptInWorker({
+    agent: 'claude',
+    filePath,
+    sessionId: 'cancel-session',
+    limits: { inlineHeadBytes: 1024 },
+    retainedBytes: 2400,
+    signal: controller.signal
+  })
+  controller.abort()
+  await expect(imported).rejects.toThrow()
 })

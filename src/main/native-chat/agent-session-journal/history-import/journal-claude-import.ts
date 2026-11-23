@@ -121,7 +121,7 @@ export async function importClaudeTranscript(input: ImportInput): Promise<Import
     }
     return { ...result, sourceEmpty, forkTipItemIds: [] }
   } finally {
-    await graph.close()
+    graph.close()
   }
 }
 
