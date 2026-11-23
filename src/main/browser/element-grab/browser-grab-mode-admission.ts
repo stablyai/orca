@@ -18,9 +18,11 @@ export function retireGrabModeAdmission(state: GrabModeAdmission): void {
   state.pending = null
 }
 
+/** `onAdmitted` runs synchronously only for an accepted request, so a refusal publishes nothing. */
 export function queueGrabModeOperation(
   browserPageId: string,
-  operation: GrabModeRequest['run']
+  operation: GrabModeRequest['run'],
+  onAdmitted: () => void = () => {}
 ): Promise<BrowserSetGrabModeResult> {
   let state = grabModeOperationByPageId.get(browserPageId)
   const created = !state
@@ -32,6 +34,7 @@ export function queueGrabModeOperation(
     grabModeOperationByPageId.set(browserPageId, state)
   }
   retireGrabModeAdmission(state)
+  onAdmitted()
   const admission = state
   const result = new Promise<BrowserSetGrabModeResult>((resolve) => {
     admission.pending = { run: operation, resolve }

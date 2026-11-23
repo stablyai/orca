@@ -6,10 +6,12 @@ const mocks = vi.hoisted(
     guest: (EventEmitter & { id: number; isDestroyed: () => boolean }) | null
     handlers: Map<string, (event: unknown, args: unknown) => unknown>
     run: (enabled: boolean, signal: AbortSignal) => Promise<boolean>
+    cancelledOps: string[]
   } => ({
     guest: null,
     handlers: new Map<string, (event: unknown, args: unknown) => unknown>(),
-    run: async (_enabled: boolean, _signal: AbortSignal): Promise<boolean> => true
+    run: async (_enabled: boolean, _signal: AbortSignal): Promise<boolean> => true,
+    cancelledOps: []
   })
 )
 vi.mock('electron', () => ({
@@ -23,7 +25,7 @@ vi.mock('electron', () => ({
 vi.mock('../../browser/guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     getAuthorizedGuest: () => mocks.guest,
-    cancelGrabOp: () => {},
+    cancelGrabOp: (page: string) => mocks.cancelledOps.push(page),
     setGrabMode: (
       _page: string,
       enabled: boolean,
@@ -41,6 +43,8 @@ import { registerBrowserGrabHandlers, resetGrabModeState } from './browser-grab-
 beforeEach(() => {
   resetGrabModeState()
   mocks.guest = Object.assign(new EventEmitter(), { id: 7, isDestroyed: () => false })
+  mocks.run = async () => true
+  mocks.cancelledOps = []
   mocks.handlers.clear()
   registerBrowserGrabHandlers()
 })
@@ -120,4 +124,45 @@ it('distinguishes missing-guest cleanup from a positive clean capture permit', a
     { browserPageId: 'gone', enabled: false, requestId: 'cleanup' }
   )
   await expect(result).resolves.toEqual({ ok: true, clean: false })
+})
+
+const setMode = (page: string, enabled: boolean, requestId: string): Promise<unknown> =>
+  Promise.resolve(
+    mocks.handlers.get('browser:setGrabMode')?.(
+      { sender: { id: 17 } },
+      { browserPageId: page, enabled, requestId }
+    )
+  )
+const cancelMode = (page: string, requestId: string): unknown =>
+  mocks.handlers.get('browser:cancelGrab')?.(
+    { sender: { id: 17 } },
+    { browserPageId: page, requestId }
+  )
+
+it('a request refused at admission leaves no owner that a later cancel could match', async () => {
+  mocks.run = (_enabled, signal) =>
+    new Promise<boolean>((resolve) =>
+      signal.addEventListener('abort', () => resolve(false), { once: true })
+    )
+  const held = Array.from({ length: 32 }, (_, index) =>
+    setMode(`held-${index}`, false, `held-${index}`)
+  )
+  await expect(setMode('refused', false, 'refused')).resolves.toEqual({
+    ok: false,
+    reason: 'not-ready'
+  })
+  expect(cancelMode('refused', 'refused')).toBe(false)
+  resetGrabModeState()
+  await Promise.all(held)
+})
+
+it('a late cancel for a request bound to a replaced registration leaves the replacement page work alone', async () => {
+  await expect(setMode('page', true, 'original')).resolves.toEqual({ ok: true, clean: false })
+  mocks.guest = Object.assign(new EventEmitter(), { id: 8, isDestroyed: () => false })
+  expect(cancelMode('page', 'original')).toBe(true)
+  expect(mocks.cancelledOps).toEqual([])
+
+  await expect(setMode('page', true, 'replacement')).resolves.toEqual({ ok: true, clean: false })
+  expect(cancelMode('page', 'replacement')).toBe(true)
+  expect(mocks.cancelledOps).toEqual(['page'])
 })

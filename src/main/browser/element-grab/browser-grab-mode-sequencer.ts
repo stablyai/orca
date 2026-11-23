@@ -12,7 +12,13 @@ import {
   supersededGrabMode
 } from './browser-grab-mode-admission'
 
-type ModeOwner = { requestId?: string; identity: string; scope?: GrabDocumentScope }
+type ModeOwner = {
+  requestId?: string
+  identity: string
+  scope?: GrabDocumentScope
+  /** Only a completed enable grants selection; a failed or disabling request never does. */
+  armed: boolean
+}
 type ModeOptions = {
   requestId?: string
   paletteKeys?: boolean
@@ -55,43 +61,50 @@ export async function setBrowserGrabMode(
   if (previous && previous.identity !== identity && !resolveGuest()) {
     return { ok: false, reason: 'not-authorized' }
   }
-  const owner: ModeOwner = { requestId: options.requestId, identity }
+  const owner: ModeOwner = { requestId: options.requestId, identity, armed: false }
   const intent = { enabled }
-  owners.set(browserPageId, owner)
-  intents.set(browserPageId, intent)
   const isCurrent = (): boolean => intents.get(browserPageId) === intent
-  return queueGrabModeOperation(browserPageId, async (signal) => {
-    let guest = resolveGuest()
-    if (!guest && enabled && waitForGuest) {
-      await waitForGuest(signal).catch(() => {})
-      guest = resolveGuest()
-    }
-    if (!isCurrent() || signal.aborted) {
-      return supersededGrabMode()
-    }
-    if (!guest) {
-      return enabled ? supersededGrabMode() : { ok: true, clean: false }
-    }
-    owner.scope = grabDocumentScope(guest)
-    const success = await browserManager.setGrabMode(
-      browserPageId,
-      enabled,
-      guest,
-      options.destination,
-      () => resolveGuest() === guest,
-      signal,
-      () => {
-        if (owners.get(browserPageId) === owner) {
-          options.onPolicyRetired?.()
-        }
-      },
-      options.paletteKeys
-    )
-    if (!isCurrent() || signal.aborted) {
-      return supersededGrabMode()
-    }
-    return success ? { ok: true, clean: !enabled } : { ok: false, reason: 'injection-failed' }
-  }).finally(() => {
+  const admit = (): void => {
+    owners.set(browserPageId, owner)
+    intents.set(browserPageId, intent)
+  }
+  return queueGrabModeOperation(
+    browserPageId,
+    async (signal) => {
+      let guest = resolveGuest()
+      if (!guest && enabled && waitForGuest) {
+        await waitForGuest(signal).catch(() => {})
+        guest = resolveGuest()
+      }
+      if (!isCurrent() || signal.aborted) {
+        return supersededGrabMode()
+      }
+      if (!guest) {
+        return enabled ? supersededGrabMode() : { ok: true, clean: false }
+      }
+      owner.scope = grabDocumentScope(guest)
+      const success = await browserManager.setGrabMode(
+        browserPageId,
+        enabled,
+        guest,
+        options.destination,
+        () => resolveGuest() === guest,
+        signal,
+        () => {
+          if (owners.get(browserPageId) === owner) {
+            options.onPolicyRetired?.()
+          }
+        },
+        options.paletteKeys
+      )
+      if (!isCurrent() || signal.aborted) {
+        return supersededGrabMode()
+      }
+      owner.armed = success && enabled
+      return success ? { ok: true, clean: !enabled } : { ok: false, reason: 'injection-failed' }
+    },
+    admit
+  ).finally(() => {
     if (isCurrent()) {
       intents.delete(browserPageId)
     }
@@ -111,6 +124,7 @@ export function isCurrentBrowserGrabRequest(
   return (
     owner?.requestId === requestId &&
     owner.identity === identity &&
+    owner.armed &&
     owner.scope?.current === true &&
     owner.scope === grabDocumentScope(guest)
   )
@@ -123,11 +137,12 @@ export function cancelBrowserGrabMode(
   identity: string
 ): boolean {
   const owner = owners.get(browserPageId)
+  const guest = resolveGuest()
   if (requestId !== undefined) {
     if (!owner || owner.requestId !== requestId || owner.identity !== identity) {
       return false
     }
-  } else if (!resolveGuest()) {
+  } else if (!guest) {
     return false
   }
   const admission = grabModeOperationByPageId.get(browserPageId)
@@ -139,6 +154,12 @@ export function cancelBrowserGrabMode(
     retireGrabOverlay(owner.scope)
   }
   owners.delete(browserPageId)
-  browserManager.cancelGrabOp(browserPageId, 'user')
+  // A request-bound cancel reaches page work only on the registration that request bound.
+  if (
+    requestId === undefined ||
+    (guest && owner?.scope?.current === true && owner.scope === grabDocumentScope(guest))
+  ) {
+    browserManager.cancelGrabOp(browserPageId, 'user')
+  }
   return true
 }
