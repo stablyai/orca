@@ -117,6 +117,8 @@ export type RuntimeMobileSessionBrowserTab = {
   audible?: true
   /** The host muted the tab's sound; absent when unmuted and from older hosts. */
   audioMuted?: true
+  /** An agent is using the page; absent otherwise and from older hosts. */
+  agentDriving?: true
   color?: string | null
   isPinned?: boolean
   isActive: boolean

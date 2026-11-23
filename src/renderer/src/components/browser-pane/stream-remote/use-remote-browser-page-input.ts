@@ -7,6 +7,7 @@ import {
 import { useRemoteBrowserPageKeyboard } from './use-remote-browser-page-keyboard'
 import type { BrowserPageEditCommand } from '../assemble-chrome/context-menu/browser-page-context-menu-items'
 import { RemoteBrowserInputQueue } from './remote-browser-input-queue'
+import type { RemoteBrowserHostMenuPress } from './remote-browser-host-context-menus'
 import { useRemoteBrowserPageHover } from './use-remote-browser-page-hover'
 import { useRemoteBrowserSelectPopup } from './remote-browser-select-popup'
 import type { RemoteBrowserPageInputParams } from './remote-browser-page-input-params'
@@ -53,6 +54,7 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     busy,
     pickerAvailable,
     pagePointerOwned,
+    hostContextMenus,
     inputQueue,
     imageRef,
     remoteViewportRef,
@@ -69,8 +71,14 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     scheduleRemoteTabInfoRefresh,
     setPaneNotice
   } = input
-  const { readSelectPopupAfterPress, selectPopupElement } = useRemoteBrowserSelectPopup(input)
+  const {
+    checkSelectListAfterPress,
+    readSelectPopupAfterPress,
+    closeSelectPopupForPageInput,
+    selectPopupElement
+  } = useRemoteBrowserSelectPopup(input)
   const rightPressForwardedRef = useRef(false)
+  const menuPressRef = useRef<RemoteBrowserHostMenuPress | null>(null)
   // macOS Control+click is a right press, through to its release.
   const controlClickRef = useRef(false)
   const getRemoteImagePoint = useCallback(
@@ -103,12 +111,20 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     const point = getRemoteImagePoint(event)
     controlClickRef.current = isMacControlClick(event)
     const button = controlClickRef.current ? 'right' : getRemoteBrowserMouseButton(event.button)
-    // Right presses open Orca's page menu unless a page tool owns the pointer.
-    if (button === 'right' && !pagePointerOwned) {
+    const pageMenuPress = button === 'right' && !pagePointerOwned
+    // Older hosts open no page menus, so their right presses only open Orca's probed menu.
+    if (pageMenuPress && !hostContextMenus.supported) {
       return
     }
     if (!target || !pageId || !image || !operationToken || !point || !button) {
       return
+    }
+    const menuPress = pageMenuPress
+      ? hostContextMenus.notePress(event.clientX, event.clientY)
+      : null
+    menuPressRef.current = menuPress
+    if (!menuPress) {
+      hostContextMenus.clearPress()
     }
     if (button === 'right') {
       rightPressForwardedRef.current = true
@@ -130,6 +146,7 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return
       }
+      closeSelectPopupForPageInput()
       try {
         const params = { worktree: runtimeWorktree, page: pageId }
         await callRuntimeRpc(
@@ -138,12 +155,16 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
           { ...params, x: point.x, y: point.y },
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
+        if (menuPress) {
+          hostContextMenus.markPressSent(menuPress)
+        }
         await callRuntimeRpc(
           target,
           'browser.mouseDown',
           { ...params, button, modifiers },
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
+        checkSelectListAfterPress({ target, pageId, operationToken, button })
       } catch (error) {
         if (isCurrentRemoteOperationToken(operationToken)) {
           if (isRemoteBrowserPageMissingError(error)) {
@@ -179,6 +200,7 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     if (!target || !pageId || !operationToken || !point || !button) {
       return
     }
+    const menuPress = button === 'right' && !pagePointerOwned ? menuPressRef.current : null
     if (button === 'right') {
       rightPressForwardedRef.current = false
     }
@@ -197,6 +219,10 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
           { ...params, x: point.x, y: point.y },
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
+        // Windows hosts open the page menu on the release.
+        if (menuPress) {
+          hostContextMenus.markPressSent(menuPress)
+        }
         await callRuntimeRpc(
           target,
           'browser.mouseUp',
@@ -204,9 +230,7 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
         scheduleRemoteTabInfoRefresh(operationToken, 250)
-        // Off the lane, so typing after a click skips a round trip; input sent within it may reach
-        // the host before this read, which only matters when the click opened a list.
-        void readSelectPopupAfterPress({ target, pageId, operationToken, button })
+        await readSelectPopupAfterPress({ target, pageId, operationToken, button })
       } catch (error) {
         if (isCurrentRemoteOperationToken(operationToken)) {
           if (isRemoteBrowserPageMissingError(error)) {
@@ -236,7 +260,8 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
       isCurrentRemoteOperationToken,
       closeMissingRemotePage,
       scheduleRemoteTabInfoRefresh,
-      setPaneNotice
+      setPaneNotice,
+      closeSelectPopupForPageInput
     })
 
   const handleRemotePointerMove = useRemoteBrowserPageHover({

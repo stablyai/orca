@@ -2232,6 +2232,8 @@
       "editSavedArguments": "請在設定 > 代理程式 > 引數中編輯。",
       "emptyMessage": "此訊息為空，因此未傳送。",
       "fullAccessAsRoot": "{{agent}} 以 root 身分執行時不會使用「完整存取權」。請在執行此聊天的電腦上，前往「設定 → 代理程式」為 {{agent}} 選擇其他權限，然後開始新的聊天。",
+      "botToolsNeedStatusHooks": "{{agent}} 機器人需要代理程式狀態鉤子：機器人的工具正是透過它們以機器人身分運作。請在「設定 → 代理程式」中為 {{agent}} 開啟，然後開始新的聊天。",
+      "botToolsGatewayOutdated": "{{agent}} 的閘道仍在執行舊版 Orca 外掛，因此此機器人的工具無法以機器人身分運作。請執行 `hermes gateway stop`，然後開始新的聊天。",
       "historyInOtherAccount": "此聊天的歷史記錄位於另一個 Claude 帳戶中。請切換回該帳戶以繼續此聊天。",
       "historyTooLarge": "此對話的歷史記錄過大，無法在此恢復。",
       "hostFault": "Orca 遇到問題，因此此操作未完成。",
@@ -4608,15 +4610,16 @@
         "next": "下一個項目",
         "subWhere": "事項 {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "暫不"
-      },
       "write": {
         "offline": "{{host}} 已離線。"
       },
       "thisComputer": "電腦",
       "readFailedClosedPage": "無法讀取更多已關閉的事項。",
-      "skillLimit": "訊息未傳送。請最多選擇 {{limit}} 個技能檔案後再試一次。"
+      "skillLimit": "訊息未傳送。請最多選擇 {{limit}} 個技能檔案後再試一次。",
+      "ask": {
+        "notSentYet": "尚未傳送",
+        "replaced": "代理程式提出了新問題。請先閱讀，再回覆。"
+      }
     },
     "needs": {
       "chat": "你與 {{name}} 的對話",
@@ -5045,6 +5048,7 @@
       "toolClaudePrepareFailed": "無法在 Claude Code 中準備 {{name}}。請檢查工具設定。",
       "toolNameTaken": "這個機器人已經有名為 {{name}} 的工具。",
       "toolNameTakenByAgent": "你的 {{agent}} 已經有名為 {{name}} 的工具，這個機器人也會取得它。請用 --name 換一個名稱。",
+      "toolNameTakenByCodexStdio": "你的 Codex 已經有名為 {{name}} 的本機工具，所以這個機器人的 {{name}} 無法執行。請重新命名這個機器人的工具。",
       "toolNotUpdated": "工具沒有更新。",
       "toolSignInAddressIncomplete": "請貼上登入頁面最後停留的完整位址。",
       "toolSignInAddressWrong": "這不是本次登入結束時的位址。請用「連線」重新開始，登入後貼上瀏覽器顯示的位址。",

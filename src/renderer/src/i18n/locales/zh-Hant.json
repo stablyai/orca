@@ -816,8 +816,6 @@
       }
     },
     "agents": {
-      "installedRegion": "已安裝的智慧體",
-      "availableRegion": "可安裝的智慧體",
       "permissionsTitle": "權限",
       "permissionsChoiceExplanation": "每個代理程式無須詢問即可執行的操作。可在下方為個別代理程式另行設定。",
       "permissionEachOwn": "各代理程式自身的設定",
@@ -1976,7 +1974,7 @@
         }
       },
       "claudeAgentRowView": {
-        "subagentNavigationSetup": "請先在「設定」→「代理程式」啟用 Claude 子代理程式導覽，再於 Orca 中啟動 Claude 2.1.300+。請確認 keybindings.json 仍將 Ctrl+Alt+G、H 或 V 繫結至 command:orca-agent-view。",
+        "subagentNavigationSetup": "請先在「設定 → 代理程式」啟用 Claude 子代理程式導覽，再於 Orca 中啟動 Claude 2.1.300+。請確認 keybindings.json 仍將 Ctrl+Alt+G、H 或 V 繫結至 command:orca-agent-view。",
         "permissionPrompt": "切換代理程式前，請先回應 Claude 的權限提示。"
       },
       "wslHostWindowsDriveRefusal": {
@@ -8382,7 +8380,7 @@
           "ffe13e36fb": "缺失",
           "1e8f8d8fae": "就緒",
           "checking": "檢查已安裝的代理程式和技能路徑…",
-          "noAgents": "在 PATH 上未偵測到代理程式 CLI。在「設定」→「代理程式」中安裝代理程式，然後重新檢查。",
+          "noAgents": "在 PATH 上未偵測到代理程式 CLI。在「設定 → 代理程式」中安裝代理程式，然後重新檢查。",
           "fullCoverage_one": "偵測到的 1 個代理程式已具備此技能。",
           "fullCoverage_other": "偵測到的 {{value0}} 個代理程式均具備此技能。",
           "noCoverage": "安裝上面的技能，然後重新檢查。",
@@ -12827,12 +12825,12 @@
           "thisComputer": "此電腦",
           "defaultHostHelp": "現有專案會保留在原位置。",
           "defaultHostWebHelp": "此瀏覽器會在所選的伺服器上開啟新專案。",
-          "updateAll": "全部更新（{{count}}）",
+          "updateAll": "全部更新",
+          "updatesCount_other": "有 {{count}} 項可用更新",
           "addServer": "新增伺服器",
           "moreWaysToAdd": "更多新增伺服器的方式",
           "pasteAccessLink": "貼上存取連結",
           "checkForUpdates": "檢查更新",
-          "emptyDescription": "配對開發機、雲端主機或家中的桌上型電腦。此電腦進入睡眠時，工作階段仍會在配對的主機上繼續執行。",
           "movePaused": "遷移已暫停",
           "shareTitle": "共用此電腦",
           "done": "完成",
@@ -18993,6 +18991,8 @@
         "agentCommandFailed": "{{agent}} 在「設定 → 代理程式」中的命令未能啟動 {{agent}}：{{detail}}。請修改或重設。",
         "runtimeNotInstalled": "執行此聊天的電腦上未安裝 {{agent}}。請在新版 Orca 中從聊天裡安裝。",
         "fullAccessAsRoot": "{{agent}} 以 root 身分執行時不會使用「完整存取權」。請在執行此聊天的電腦上，前往「設定 → 代理程式」為 {{agent}} 選擇其他權限，然後開始新的聊天。",
+        "botToolsNeedStatusHooks": "{{agent}} 機器人需要代理程式狀態鉤子：機器人的工具正是透過它們以機器人身分運作。請在「設定 → 代理程式」中為 {{agent}} 開啟，然後開始新的聊天。",
+        "botToolsGatewayOutdated": "{{agent}} 的閘道仍在執行舊版 Orca 外掛，因此此機器人的工具無法以機器人身分運作。請執行 `hermes gateway stop`，然後開始新的聊天。",
         "launchPreparationFailed": "Orca 無法在執行此聊天的電腦上準備啟動 {{agent}}。",
         "conversationOpenElsewhere": "Codex 尚未關閉此對話。請稍後重試，或關閉其他 Codex 終端機。",
         "conversationOpenInTerminal": "{{agent}} 已在另一個終端機中執行此對話。請在該處結束 {{agent}} 或關閉該終端機，以便在此繼續。",
@@ -19689,7 +19689,6 @@
         "steerHint": "在代理程式工作時立即傳送",
         "sendHint": "立即傳送此訊息",
         "delete": "刪除",
-        "moreActions": "更多操作",
         "moveChanged": "佇列在移動前已變更。請重新拖曳訊息。",
         "reorderHint": "拖曳以重新排序，或使用上、下方向鍵。",
         "reorderMessage": "重新排序訊息",
@@ -20234,6 +20233,7 @@
           "selectionVanishedCount_other": "所選的 {{count}} 個工作區已不存在。",
           "selectionWithheldCount_other": "所選的 {{count}} 個工作區已被目前的篩選條件隱藏，因此已取消選取。",
           "selectAllSafetyChecked_other": "選取全部 {{count}} 個已通過安全檢查的工作區",
+          "clearSelection": "清除選取",
           "lastActive": "上次活動時間：{{value0}}"
         },
         "scan": {
@@ -20723,8 +20723,7 @@
         "finished": "暫時的協作工作者已完成 · {{countdown}}後關閉",
         "keepOpen": "保持開啟",
         "bannerRunning": "協作工作者 · 完成後 2 分鐘關閉",
-        "bannerFinished": "協作工作者已完成 · {{countdown}}後關閉",
-        "temporaryBadge": "暫時"
+        "bannerFinished": "協作工作者已完成 · {{countdown}}後關閉"
       }
     },
     "wslHostMark": {
@@ -23988,6 +23987,7 @@
       "toolClaudePrepareFailed": "無法在 Claude Code 中準備 {{name}}。請檢查工具設定。",
       "toolNameTaken": "這個機器人已經有名為 {{name}} 的工具。",
       "toolNameTakenByAgent": "你的 {{agent}} 已經有名為 {{name}} 的工具，這個機器人也會取得它。請用 --name 換一個名稱。",
+      "toolNameTakenByCodexStdio": "你的 Codex 已經有名為 {{name}} 的本機工具，所以這個機器人的 {{name}} 無法執行。請重新命名這個機器人的工具。",
       "toolNotUpdated": "工具沒有更新。",
       "toolSignInAddressIncomplete": "請貼上登入頁面最後停留的完整位址。",
       "toolSignInAddressWrong": "這不是本次登入結束時的位址。請用「連線」重新開始，登入後貼上瀏覽器顯示的位址。",

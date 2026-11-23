@@ -376,6 +376,7 @@
       "toolGone": "This bot no longer has that tool.",
       "toolNameTaken": "This bot already has a tool named {{name}}.",
       "toolNameTakenByAgent": "Your {{agent}} already has a tool named {{name}}, which this bot gets too. Pick another name with --name.",
+      "toolNameTakenByCodexStdio": "Your Codex already has a local tool named {{name}}, so this bot's {{name}} can't run. Rename this bot's tool.",
       "toolNeedsNoSignIn": "{{name}} uses its saved values and needs no sign-in.",
       "toolNotFound": "This bot has no tool named {{name}}.",
       "toolNotUpdated": "The tool was not updated.",
@@ -409,6 +410,10 @@
       "folderItems_other": "{{count}} items"
     },
     "items": {
+      "ask": {
+        "heldCount_one": "{{count}} answer not sent yet, <send>send anyway</send>",
+        "heldCount_other": "{{count}} answers not sent yet, <send>send anyway</send>"
+      },
       "needYouCount_one": "{{count}} item needs you",
       "needYouCount_other": "{{count}} items need you",
       "pill": {
@@ -912,7 +917,7 @@
         "paused": "{{bot}} is paused."
       },
       "toolAdded": {
-        "heading": "Added a tool",
+        "added": "Added",
         "remove": "Remove",
         "removed": "Removed"
       },
@@ -1198,6 +1203,8 @@
       "uncommittedFiles_other": "{{count}} uncommitted"
     },
     "failure": {
+      "botToolsGatewayOutdated": "{{agent}}'s gateway is still running an older copy of Orca's plugin, so this bot's tools can't act as the bot. Run `hermes gateway stop`, then start a new chat.",
+      "botToolsNeedStatusHooks": "{{agent}} bots need Agent status hooks: they are how a bot's tools act as the bot. Turn them on for {{agent}} in Settings → Agents, then start a new chat.",
       "forkOriginalLatestOnly": "{{agent}} can only fork the latest response in the original chat. Open that chat and fork its latest response once it has finished.",
       "forkOriginalLatestOnlyNamed": "{{agent}} can only fork the latest response in \"{{detail}}\". Open that chat and fork its latest response once it has finished.",
       "forkOriginalMissing": "{{agent}} could not find this response in the original chat. Open it and fork from there.",

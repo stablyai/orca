@@ -71,7 +71,7 @@ export type BotItemCommentBoxHandle = ReturnType<typeof composerQuoteTarget> & {
   /** Focus the box and type `text` at its caret. */
   type: (text: string) => void
   /** Put `text` in the box in place of its words, to add to before sending; `plain`: as a comment
-   *  of its own, with "Replying to" hidden. */
+   *  of its own, with "Replying to" hidden; else as the answer, naming the question. */
   fill: (text: string, plain?: boolean) => void
   /** Focus the box to answer the waiting question in your own words: it glows once, naming it. */
   answer: () => void
@@ -240,9 +240,8 @@ function BotItemCommentField({
       composer.current?.focus({ caretAtEnd: true, glow: true })
     },
     fill: (text, plain) => {
-      if (plain) {
-        reply.hide()
-      }
+      const mark = plain ? reply.hide : reply.show
+      mark()
       setDraft(`${text} `)
       if (input.current) {
         input.current.value = `${text} `

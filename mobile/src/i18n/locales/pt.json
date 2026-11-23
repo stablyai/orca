@@ -2668,6 +2668,8 @@
       "editSavedArguments": "Edite-os em Configurações > Agentes > Argumentos.",
       "emptyMessage": "Esta mensagem está vazia, por isso não foi enviada.",
       "fullAccessAsRoot": "{{agent}} não usará Acesso total enquanto for executado como root. Escolha outra permissão para {{agent}} em Configurações → Agentes para o computador que executa este chat e inicie um novo chat.",
+      "botToolsNeedStatusHooks": "Os bots do {{agent}} precisam dos Hooks de status do agente: é por eles que as ferramentas de um bot agem como o bot. Ative-os para o {{agent}} em Configurações → Agentes e depois inicie um novo chat.",
+      "botToolsGatewayOutdated": "O gateway do {{agent}} ainda está executando uma versão antiga do plugin do Orca, então as ferramentas deste bot não podem agir como o bot. Execute `hermes gateway stop` e depois inicie um novo chat.",
       "historyInOtherAccount": "O histórico deste chat está em outra conta do Claude. Volte para essa conta para continuar.",
       "historyTooLarge": "O histórico desta conversa é grande demais para ser restaurado aqui.",
       "hostFault": "O Orca encontrou um problema, por isso isto não foi concluído.",
@@ -5298,15 +5300,16 @@
         "next": "Próximo item",
         "subWhere": "Item {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "Agora não"
-      },
       "write": {
         "offline": "{{host}} está offline."
       },
       "thisComputer": "O computador",
       "readFailedClosedPage": "Não foi possível ler mais itens fechados.",
-      "skillLimit": "Mensagem não enviada. Selecione no máximo {{limit}} arquivos de habilidade e tente novamente."
+      "skillLimit": "Mensagem não enviada. Selecione no máximo {{limit}} arquivos de habilidade e tente novamente.",
+      "ask": {
+        "notSentYet": "ainda não enviado",
+        "replaced": "O agente fez uma nova pergunta. Leia e responda."
+      }
     },
     "needs": {
       "chat": "Seu chat com {{name}}",
@@ -5738,6 +5741,7 @@
       "toolClaudePrepareFailed": "Não foi possível preparar {{name}} no Claude Code. Verifique a configuração da ferramenta.",
       "toolNameTaken": "Este bot já tem uma ferramenta chamada {{name}}.",
       "toolNameTakenByAgent": "Seu {{agent}} já tem uma ferramenta chamada {{name}}, que este bot também recebe. Escolha outro nome com --name.",
+      "toolNameTakenByCodexStdio": "Seu Codex já tem uma ferramenta local chamada {{name}}, então {{name}} deste bot não pode ser executada. Renomeie a ferramenta deste bot.",
       "toolNotUpdated": "A ferramenta não foi atualizada.",
       "toolSignInAddressIncomplete": "Cole o endereço completo em que a página de login terminou.",
       "toolSignInAddressWrong": "Esse não é o endereço em que este login termina. Comece de novo com Conectar, faça login e cole o endereço que o navegador mostra.",

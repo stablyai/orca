@@ -38,7 +38,7 @@ const CallId = z.string().regex(WEBHOOK_CALL_ID_PATTERN, 'Missing call id')
 const OperationId = requiredString('Missing operation id')
 const Filter = z.string().min(1)
 
-/** webhooks.call → { callId, text }: one call, fenced as the caller's words. */
+/** webhooks.call → WebhookCallText: one call, fenced as the caller's words. */
 export const WebhookCallShow = z.object({ hookId: HookId, callId: CallId })
 /** webhooks.check → WebhookCheckResult: how many recent calls the filters, or the hook's own, match. */
 export const WebhookCheck = z.object({
@@ -85,8 +85,19 @@ export const WebhookSecret = z.object({
   generate: z.literal(true).optional()
 })
 
-/** Recent calls the filters match, don't match, or can't be told (body cut short or no longer kept). */
-export type WebhookCheckResult = { matched: number; unmatched: number; unknown: number }
+/** Recent calls the filters match, don't match, or can't be told (body cut short or no longer kept).
+ *  ignored: those of the unknown the hook's filters ignored, whose body was never kept; absent from
+ *  an older host. */
+export type WebhookCheckResult = {
+  matched: number
+  unmatched: number
+  unknown: number
+  ignored?: number
+}
+
+/** webhooks.call: the call fenced as the caller's words; ignored (an older host never says) when the
+ *  cloud kept no body and text says why. */
+export type WebhookCallText = { callId: string; text: string; ignored?: true }
 
 /** What the card and row show; nothing in it is secret. */
 export type WebhookSummary = {

@@ -475,8 +475,6 @@
       }
     },
     "agents": {
-      "installedRegion": "已安装的智能体",
-      "availableRegion": "可安装的智能体",
       "permissionsTitle": "权限",
       "permissionsChoiceExplanation": "每个智能体无需询问即可执行的操作。你可以在下方为单个智能体单独设置",
       "permissionEachOwn": "各智能体自己的设置",
@@ -1157,7 +1155,6 @@
       },
       "avatarSlackNote": "Slack 会同步头像，但不包括颜色或装扮。",
       "avatarSlackNoteColor": "Slack 会同步头像，但不包括颜色。",
-      "avatarSlackNotePicture": "也会更改 bot 在 Slack 中的头像。",
       "linearStatus": {
         "checking": "检查中",
         "unknown": "无法检查",
@@ -13554,12 +13551,12 @@
           "thisComputer": "此电脑",
           "defaultHostHelp": "现有项目保持不变",
           "defaultHostWebHelp": "此浏览器会在所选服务器上打开新项目",
-          "updateAll": "全部更新（{{count}}）",
+          "updateAll": "全部更新",
+          "updatesCount_other": "有 {{count}} 个可用更新",
           "addServer": "添加服务器",
           "moreWaysToAdd": "添加服务器的更多方式",
           "pasteAccessLink": "粘贴访问链接",
           "checkForUpdates": "检查更新",
-          "emptyDescription": "配对开发机、云主机或家里的台式机，此电脑休眠时，会话会继续在那里运行",
           "movePaused": "迁移已暂停",
           "shareTitle": "共享此电脑",
           "done": "完成",
@@ -19948,6 +19945,8 @@
         "agentCommandFailed": "设置 → 智能体中{{agent}}的“命令”未能启动 {{agent}}：{{detail}}。请修改或重置命令。",
         "runtimeNotInstalled": "运行此聊天的计算机上未安装 {{agent}}，请在最新版本的 Orca 中从聊天里安装",
         "fullAccessAsRoot": "{{agent}} 以 root 身份运行时不会使用完全访问。请在运行此聊天的计算机的“设置”→“智能体”中为 {{agent}} 选择其他权限，然后开始新的聊天",
+        "botToolsNeedStatusHooks": "{{agent}} 机器人需要代理状态钩子：机器人的工具正是通过它们以机器人身份运行。请在“设置”→“智能体”中为 {{agent}} 开启，然后开始新的聊天。",
+        "botToolsGatewayOutdated": "{{agent}} 的网关仍在运行旧版 Orca 插件，因此此机器人的工具无法以机器人身份运行。请运行 `hermes gateway stop`，然后开始新的聊天。",
         "launchPreparationFailed": "Orca 无法在运行此聊天的计算机上准备启动 {{agent}}",
         "conversationOpenElsewhere": "Codex 仍在保持此对话打开。请稍后重试，或关闭其他 Codex 终端",
         "conversationOpenInTerminal": "{{agent}} 已在另一个终端中运行此对话。请退出那里的 {{agent}} 或关闭该终端，然后在这里继续",
@@ -20761,7 +20760,6 @@
         "steerHint": "在智能体工作时立即发送",
         "sendHint": "立即发送此消息",
         "delete": "删除",
-        "moreActions": "更多操作",
         "moveChanged": "队列在此移动前发生了变化。请重新拖动该消息",
         "reorderHint": "拖动可重新排序，或使用上、下方向键",
         "reorderMessage": "重新排序消息",
@@ -21583,7 +21581,6 @@
       },
       "toolAdded": {
         "removed": "已移除",
-        "heading": "已添加工具",
         "remove": "移除",
         "added": "已添加"
       }
@@ -21805,6 +21802,7 @@
           "selectionVanishedCount_other": "所选的 {{count}} 个工作区已不存在",
           "selectionWithheldCount_other": "所选的 {{count}} 个工作区被当前筛选条件隐藏，已取消选择",
           "selectAllSafetyChecked_other": "选择全部 {{count}} 个已通过安全检查的工作区",
+          "clearSelection": "清除选择",
           "lastActive": "最后活跃：{{value0}}",
           "projectNamed": "项目：{{value0}}",
           "moreFlags": "显示其余 {{value0}} 个标记",
@@ -22791,6 +22789,7 @@
       "thisComputer": "此计算机",
       "unavailable": "{{agent}} 在此主机上不可用",
       "update": "更新",
+      "updateTo": "更新到 {{version}}",
       "verifying": "正在检查已下载的运行时",
       "installTitle": "安装 {{agent}} 以开始聊天",
       "continueTitle": "安装 {{agent}} 以继续",
@@ -22827,8 +22826,7 @@
         "finished": "临时编排工作代理已完成 · {{countdown}}后关闭",
         "keepOpen": "保持打开",
         "bannerRunning": "编排工作代理 · 完成后 2 分钟关闭",
-        "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭",
-        "temporaryBadge": "临时"
+        "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭"
       }
     },
     "wslHostMark": {
@@ -27742,7 +27740,6 @@
       "runningCount": "{{count}} 个运行中",
       "showMoreCount": "再显示 {{count}} 个",
       "workers": "工作者",
-      "waitingCount": "{{count}} 个等待中",
       "loading": "正在加载聊天…",
       "readFailed": "无法读取此 bot 的聊天",
       "delete": "删除聊天",
@@ -29588,11 +29585,8 @@
         "isIn": "{{name}} 已加入 Slack",
         "ready": "你的 Slack 应用已准备就绪。请在 Slack 中批准以完成设置",
         "approve": "在 Slack 中批准",
-        "otherBrowser": "要在其他浏览器中批准？",
         "approveAsYourself": "请以你本人的身份在 Slack 中批准。要在其他浏览器中批准？",
         "waitingAdmin": "如果你的工作区需要管理员批准新应用，{{name}} 会在管理员批准后加入。如果管理员拒绝，点击“重新安装”会复用同一个应用",
-        "expired": "安装链接已过期",
-        "otherUser": "批准它的是另一个 Slack 账户。请获取新链接，并以你本人的身份批准",
         "newLink": "获取新链接",
         "linkCopied": "链接已复制",
         "copyLink": "复制链接",
@@ -29610,6 +29604,22 @@
         "connect": "连接 Slack",
         "openInSlack": "在 Slack 中给它发消息",
         "cancel": "取消"
+      },
+      "problem": {
+        "reconnecting": "正在等待 {{host}} 重新连接…",
+        "reconnectingNext": "{{host}} 恢复后，Slack 设置会自动重新开始。你无需从头开始，也无需粘贴令牌",
+        "offline": "Orca 无法连接到 {{host}}",
+        "offlineNext": "请确认 {{host}} 上的 Orca 正在运行，然后重新连接。{{host}} 恢复后，Slack 设置会重新开始",
+        "otherUser": "另一个 Slack 账号批准了此连接",
+        "otherUserNext": "登录了另一个 Slack 账号的人批准了 Slack 链接，因此 {{bot}} 无法以你的身份操作。请获取新链接，并在登录你自己的 Slack 账号后批准",
+        "expired": "Slack 登录未完成。",
+        "expiredNext": "Slack 链接在有人批准连接前已过期。",
+        "tokenRejected": "Slack 拒绝了此工作区的令牌",
+        "tokenRejectedNext": "这通常发生在 Slack 应用被移除或令牌被撤销之后。请更换令牌，重新设置 {{bot}}",
+        "reconnect": "重新连接",
+        "replaceToken": "更换令牌",
+        "details": "详细信息",
+        "reconnectFailed": "Orca 仍无法连接到 {{host}}"
       },
       "connection": {
         "appSettings": "Slack 应用设置",
@@ -29670,7 +29680,14 @@
         "confirm": "此电脑上的 Orca 会使用 {{email}} 的令牌创建 Slack 应用。{{host}} 只会获得此 bot 的应用",
         "offerMac": "此 Mac 已以 {{email}} 身份登录 Orca，该账户已有 {{workspace}} 的令牌",
         "offer": "此电脑已以 {{email}} 身份登录 Orca，该账户已有 {{workspace}} 的令牌",
-        "use": "使用它 →"
+        "use": "使用它 →",
+        "question": "改用你的 {{device}} 上的 Slack 登录？",
+        "firstQuestion": "你的 {{device}} 已登录 Slack。使用该登录？",
+        "useDevice": "使用 {{device}} 的登录",
+        "questionHere": "改用这台电脑的 Slack 登录？",
+        "firstQuestionHere": "这台电脑已登录 Slack。使用该登录？",
+        "useHere": "使用这台电脑的登录",
+        "anotherWay": "用其他方式设置"
       },
       "postAs": {
         "orcaUser": "Orca 用户",
@@ -29688,22 +29705,27 @@
       "mentionLine": "在频道或私信中提及 <code>@{{name}}</code>",
       "reconnect": {
         "expiredTitle": "Slack 令牌已过期",
-        "useTitleMac": "使用你的 Mac 上的令牌？",
-        "useTitle": "使用这台电脑上的令牌？",
         "whyMine": "每台电脑各自保存 Slack 令牌。Slack 已不再接受 {{email}} 使用的令牌",
         "whyHost": "每台电脑各自保存 Slack 令牌。Slack 已不再接受 {{host}} 使用的令牌",
         "why": "Slack 已不再接受此工作区保存的令牌",
         "submit": "重新连接",
         "about": "关于 Slack 令牌",
-        "useDetail": "“使用”会用 {{email}} 的令牌设置此 bot 的 Slack 应用。{{host}} 只会获得此 bot 的应用",
-        "hostExpiredMac": "<host>{{host}}</host> 的令牌已过期。这台 Mac 上的令牌可用",
-        "hostExpired": "<host>{{host}}</host> 的令牌已过期。这台电脑上的令牌可用",
-        "pasteInstead": "改为粘贴令牌",
-        "use": "使用",
         "kept": "Orca Cloud 会加密保存新令牌，以后在这里创建 bots 只需点击一下",
         "mineMac": "这台 Mac 上的令牌已过期。请粘贴新令牌",
         "mine": "这台电脑上的令牌已过期。请粘贴新令牌",
-        "paste": "粘贴新令牌以重新连接"
+        "paste": "粘贴新令牌以重新连接",
+        "expiredOnTitle": "{{host}} 上的 Slack 登录已过期",
+        "signInAgain": "重新登录"
+      },
+      "approve": {
+        "noteUntil": "仅可使用一次，有效期至 {{time}}。请在那里以你自己的身份登录 Slack；Orca Cloud 会把批准结果传回 {{host}}。",
+        "note": "仅可使用一次。请在那里以你自己的身份登录 Slack；Orca Cloud 会把批准结果传回 {{host}}。",
+        "noteUntilHere": "仅可使用一次，有效期至 {{time}}。请在那里以你自己的身份登录 Slack。",
+        "noteHere": "仅可使用一次。请在那里以你自己的身份登录 Slack。",
+        "openOn": "在 {{host}} 上打开 Slack",
+        "otherDevice": "在其他设备上批准",
+        "linkLabel": "Slack 批准链接",
+        "copied": "已复制"
       }
     },
     "page": {
@@ -29758,6 +29780,7 @@
       "toolClaudePrepareFailed": "无法在 Claude Code 中准备 {{name}}。请检查工具配置。",
       "toolNameTaken": "这个机器人已经有名为 {{name}} 的工具。",
       "toolNameTakenByAgent": "你的 {{agent}} 已经有名为 {{name}} 的工具，这个机器人也会获得它。请用 --name 换一个名称。",
+      "toolNameTakenByCodexStdio": "你的 Codex 已经有名为 {{name}} 的本地工具，所以这个机器人的 {{name}} 无法运行。请重命名这个机器人的工具。",
       "toolNotUpdated": "工具没有更新。",
       "toolSignInAddressIncomplete": "请粘贴登录页面最后停留的完整地址。",
       "toolSignInAddressWrong": "这不是本次登录结束时的地址。请用“连接”重新开始，登录后粘贴浏览器显示的地址。",

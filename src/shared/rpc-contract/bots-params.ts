@@ -86,6 +86,9 @@ export const BotCreate = z.object({
       skills: z.array(z.string().min(1).max(64)).max(32)
     })
     .optional(),
+  /** With `fromTemplate`: the template's name as the client showed it, in its own language. A bot
+   *  still named that gets the folder the template's English name makes; older hosts ignore it. */
+  templateNameShown: BotNameSchema.optional(),
   /** A shared link the owner reviewed: the bot is made from exactly that version, or nothing is made.
    *  `toolIds` are the tools the owner ticked. */
   fromShare: z

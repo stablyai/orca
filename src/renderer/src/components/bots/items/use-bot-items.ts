@@ -277,17 +277,18 @@ export function botItemsByBot<I extends Pick<BotItem, 'uid'>>(
   return [...groups.values()]
 }
 
-/** One status for any number of items: one mail per chat, so one turn for the bot. */
+/** One status for any number of items: one mail per chat, so one turn for the bot. `note`: Cancel's
+ *  reason, or what Waiting waits on. */
 export function setBotItemsStatus(
   bot: BotRef,
   uids: readonly string[],
   status: BotItemStatus,
-  reason?: string
+  note?: string
 ): Promise<unknown> {
   return callBotRpc(bot, 'bots.items.owner.status', {
     items: uids,
     status,
-    ...(reason ? { reason } : {})
+    ...(note ? (status === 'waiting' ? { note } : { reason: note }) : {})
   })
 }
 

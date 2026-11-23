@@ -50,7 +50,7 @@ import type { DispatchRowChange } from './orchestration/db/worker-status-notice'
 import type { AdmittedMessage } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import { isStructuredAttentionMuted } from './agent-session/lifecycle/structured-agent-session-mobile-attention'
 import { backfillInstalledBotBackgroundChats } from '../bots/bot-background-chat-backfill'
-import { runtimeBotItems } from '../bots/bot-items-runtime'
+import { runtimeBotItems } from '../bots/runtime-bot-items'
 import { botItemOfReport } from '../bots/bot-item-report-fact'
 import { listeningClients } from './orchestration/federation/client-asks/client-ask-listeners'
 
@@ -204,7 +204,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     getOrchestrationDb: () => this.getOrchestrationDb(),
     resolveOrchestrationWorkerServer: (selector) => this.resolveOrchestrationWorkerServer(selector),
     callOrchestrationWorkerServer: (...args) => this.callOrchestrationWorkerServer(...args),
-    getOrchestrationFleetAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot(),
+    getOrchestrationFleetAgentStatusSnapshot: (...args) =>
+      this.getOrchestrationFleetAgentStatusSnapshot(...args),
     ensureStructuredAgentSessionHost: () => this.ensureStructuredAgentSessionHost(),
     // Read per call: the host binds it after this field initializes.
     getAgentStatusSnapshotFn: () => this.getAgentStatusSnapshotFn?.() ?? [],
@@ -276,7 +277,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
         requestTurnEnded: (sessionId, turnId, ended) =>
           this.botSessions.turnEnded(sessionId, turnId, ended),
         recentChats: (botId, sessionId) => this.botSessions.recentChats(botId, sessionId),
-        unansweredQuestionNote: (sessionId) => this.botSessions.unansweredQuestionNote(sessionId),
+        unansweredQuestionNote: (sessionId, botId) =>
+          this.botSessions.unansweredQuestionNote(sessionId, botId),
         botChats: (bot, sessionId) => this.botSessions.chatsOf(bot, sessionId),
         pairedBotRosters: this.pairedBotRosters.read,
         clientName: (installationId) => listeningClients(this, installationId)[0]?.name ?? null,
