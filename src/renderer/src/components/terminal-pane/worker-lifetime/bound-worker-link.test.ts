@@ -43,4 +43,12 @@ describe('the worker a bound terminal names', () => {
       reveal: null
     })
   })
+
+  it('names the paired server whose workspace it focuses', () => {
+    const workerTab = tab('tab-worker', 'parser fix')
+    const tabs = { [worktreeId]: [workerTab] }
+    expect(
+      boundWorkerLink(boundTo, findBoundWorkerTab(tabs, boundTo), 'its worker', 'env-1').reveal
+    ).toEqual({ worktreeId, paneKey: workerPane, hostId: 'runtime:env-1' })
+  })
 })

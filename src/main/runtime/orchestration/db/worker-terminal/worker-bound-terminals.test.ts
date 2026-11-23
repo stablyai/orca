@@ -166,18 +166,33 @@ describe('terminals bound to a worker', () => {
   })
 
   it("decides a paired server's worker from this host's coordinator", () => {
-    const party = (orcaSessionId: string | null, terminalHandle: string | null = null) => ({
-      terminalHandle,
-      paneKey: null,
-      orcaSessionId
+    const party = (orcaSessionId: string | null, creatorDispatchId: string | null = null) => ({
+      orcaSessionId,
+      creatorDispatchId
     })
     expect(coordinatorKeepOpenByDefault(db, 'new-child', party(botChat), isBotChat)).toBe(false)
     expect(coordinatorKeepOpenByDefault(db, 'new-child', party(personChat), isBotChat)).toBe(true)
-    // A worker a bot started, coordinating a helper of its own on the server.
-    const worker = startWorker(botChat)
+    // A chat worker a bot started, starting a helper of its own there: its chat is no bot's, but
+    // its recorded Dispatch leads back to one.
+    const workerChat = createOrcaSessionId(randomUUID)
+    const botsWorker = startWorker(botChat)
     expect(
-      coordinatorKeepOpenByDefault(db, 'new-child', party(null, worker.agentHandle), isBotChat)
+      coordinatorKeepOpenByDefault(
+        db,
+        'new-child',
+        party(workerChat, botsWorker.dispatchId),
+        isBotChat
+      )
     ).toBe(false)
+    const personsWorker = startWorker(personChat)
+    expect(
+      coordinatorKeepOpenByDefault(
+        db,
+        'new-child',
+        party(workerChat, personsWorker.dispatchId),
+        isBotChat
+      )
+    ).toBe(true)
   })
 
   it('Keep open on a bound terminal keeps only that one', async () => {

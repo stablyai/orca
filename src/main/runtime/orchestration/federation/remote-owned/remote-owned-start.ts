@@ -138,10 +138,8 @@ export async function startRemoteOwnedWorker(
       { effectsApplied: false }
     )
   }
-  const { coordinator, bindRun, taskDeps, existingTask, withRun } = await prepareWorkerStart(
-    params,
-    ctx
-  )
+  const { coordinator, bindRun, helperCreator, taskDeps, existingTask, withRun } =
+    await prepareWorkerStart(params, ctx)
   const db = runtime.getOrchestrationDb()
   const server = await runtime.resolveOrchestrationWorkerServer(params.on!)
   // This caller's workspace is here, so a server's new-child nests under it across machines.
@@ -185,7 +183,10 @@ export async function startRemoteOwnedWorker(
   const keepOpenByDefault = coordinatorKeepOpenByDefault(
     db,
     params.worktree,
-    coordinator ?? null,
+    {
+      orcaSessionId: coordinator?.orcaSessionId ?? null,
+      creatorDispatchId: helperCreator?.id ?? null
+    },
     (sessionId) => botOfSession(runtime.bots, sessionId) !== null
   )
   const startCard = prepareWorkerStartCard(runtime, ctx.orchestrationCaller)

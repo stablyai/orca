@@ -51,7 +51,7 @@ export function WorkerAutoCloseBanner({
   const countdown =
     state.closesAt === null ? null : formatWorkerAutoCloseCountdown(state.closesAt, nowMs)
   const title = state.boundTo ? (
-    <BoundWorkerTitle boundTo={state.boundTo} countdown={countdown} />
+    <BoundWorkerTitle boundTo={state.boundTo} countdown={countdown} environmentId={environmentId} />
   ) : countdown === null ? (
     t(
       'components.orchestration.workerAutoClose.bannerRunning',

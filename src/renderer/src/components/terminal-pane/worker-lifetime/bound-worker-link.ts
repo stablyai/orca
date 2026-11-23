@@ -8,7 +8,7 @@ export type BoundWorkerLink = {
   /** The worker's tab while it is open, for its agent icon. */
   tab?: TerminalTab
   /** The worker's own pane to focus; null once its terminal is gone, so the name is plain text. */
-  reveal: { worktreeId: string; paneKey: string } | null
+  reveal: { worktreeId: string; paneKey: string; hostId?: `runtime:${string}` } | null
 }
 
 /** The worker's open tab, looked up in its own workspace first; a store selector, so it returns the
@@ -40,7 +40,9 @@ export function findBoundWorkerTab(
 export function boundWorkerLink(
   boundTo: BoundWorker,
   tab: TerminalTab | undefined,
-  fallbackName: string
+  fallbackName: string,
+  // The paired server the banner's workspace is on; a local twin may share its workspace id.
+  environmentId: string | null = null
 ): BoundWorkerLink {
   if (!tab) {
     return { name: boundTo.name ?? fallbackName, reveal: null }
@@ -48,6 +50,10 @@ export function boundWorkerLink(
   return {
     name: tab.customTitle ?? stripLeadingAgentTitleDecoration(tab.title),
     tab,
-    reveal: { worktreeId: tab.worktreeId, paneKey: boundTo.paneKey }
+    reveal: {
+      worktreeId: tab.worktreeId,
+      paneKey: boundTo.paneKey,
+      ...(environmentId ? { hostId: `runtime:${environmentId}` as const } : {})
+    }
   }
 }

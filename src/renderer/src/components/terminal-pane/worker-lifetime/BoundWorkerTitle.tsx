@@ -16,17 +16,20 @@ const NAME_SLOT = '\u0000'
  *  focuses the worker's pane while it has one, plain text once it is gone. */
 export function BoundWorkerTitle({
   boundTo,
-  countdown
+  countdown,
+  environmentId
 }: {
   boundTo: BoundWorker
   countdown: string | null
+  environmentId: string | null
 }): React.JSX.Element {
   const t = useTranslate()
   const tab = useAppStore((state) => findBoundWorkerTab(state.tabsByWorktree, boundTo))
   const link = boundWorkerLink(
     boundTo,
     tab,
-    t('components.orchestration.workerAutoClose.boundFallbackName', 'its worker')
+    t('components.orchestration.workerAutoClose.boundFallbackName', 'its worker'),
+    environmentId
   )
   const line =
     countdown === null
@@ -59,7 +62,7 @@ export function BoundWorkerTitle({
           variant="link"
           size="inlineInherit"
           className="max-w-full align-bottom"
-          onClick={() => revealWorkerPane(reveal.worktreeId, reveal.paneKey)}
+          onClick={() => revealWorkerPane(reveal.worktreeId, reveal.paneKey, reveal.hostId)}
         >
           {icon}
           {name}
