@@ -24,6 +24,12 @@ import {
   forgetPeerQuestionOut,
   recordPeerQuestionOut
 } from '../../../../orchestration/federation/peer-mail/peer-questions-out'
+import { sanitizeWorkTargetLabel } from '../../../../../../shared/agent-session/work-target/agent-session-work-target'
+import {
+  activeBotWorkTargetForCaller,
+  describeExpectedPlacementFlags
+} from '../../../../../bots/bot-turn-work-target'
+import { isWorkTargetFollowUpMessageType } from '../../../../../bots/bot-work-target-follow-up'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 
@@ -64,6 +70,39 @@ export async function sendPeerMail(args: {
   const caller = peerMailLocalCaller({ ...args, from: params.from })
   const toBot =
     parseBotAddress(to) !== null || params.chat !== undefined || params.item !== undefined
+  const activeWorkTarget = activeBotWorkTargetForCaller(
+    runtime.botWorkTargets,
+    args.orchestrationCaller
+  )
+  if (activeWorkTarget && !toBot && isWorkTargetFollowUpMessageType(type)) {
+    const label = sanitizeWorkTargetLabel(activeWorkTarget.canonicalTarget.displayName)
+    const expectedFlags = describeExpectedPlacementFlags(activeWorkTarget)
+    const guidance = expectedFlags
+      ? ` Start a worker with \`orca orchestration worker-start ${expectedFlags}\` instead.`
+      : ''
+    if (!activeWorkTarget.onEnvironmentId) {
+      throw new OrchestrationError(
+        'invalid_argument',
+        `This turn targets "${label}" on this host, not paired server "${params.on}".${guidance} Nothing was sent.`,
+        NOTHING_SENT
+      )
+    }
+    if (
+      params.on !== activeWorkTarget.onEnvironmentId &&
+      params.on !== activeWorkTarget.canonicalTarget.hostLabel
+    ) {
+      throw new OrchestrationError(
+        'invalid_argument',
+        `This turn targets "${label}" on paired server "${activeWorkTarget.canonicalTarget.hostLabel ?? activeWorkTarget.onEnvironmentId}", not "${params.on}".${guidance} Nothing was sent.`,
+        NOTHING_SENT
+      )
+    }
+    throw new OrchestrationError(
+      'capability_unsupported',
+      `This turn targets "${label}". Peer mail via \`send --on\` to a bare terminal or session (${to}) cannot verify target registration and workspace incarnation; send to a verified worker \`dispatch:<id>\` or start a worker with \`orca orchestration worker-start ${expectedFlags}\`. Nothing was sent.`,
+      NOTHING_SENT
+    )
+  }
   const server = await requirePeerMailServer(runtime, params.on, toBot, type)
   const conversation = runtime.getOrchestrationDb().openHomePeerMailConversation({
     environmentId: server.environmentId,

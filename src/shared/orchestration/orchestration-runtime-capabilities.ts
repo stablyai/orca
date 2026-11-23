@@ -58,6 +58,9 @@ export const ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY =
 /** Runs the workers a paired Orca places here as its own, coordinated from that Orca (wire v1). */
 export const ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY =
   'orchestration.remote-owned-workers.v1' as const
+/** Verifies peer-forwarded bot work-target placement before admitting follow-up mail or restarts. */
+export const ORCHESTRATION_WORK_TARGET_FOLLOW_UP_RUNTIME_CAPABILITY =
+  'orchestration.work-target-follow-up.v1' as const
 /** A paired Orca's chat-lineage start (`chatLineage`) starts here as a chat, and so do the workers it starts. */
 export const ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY =
   'orchestration.chat-lineage.v1' as const
@@ -90,5 +93,6 @@ export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
   ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY,
   ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORK_TARGET_FOLLOW_UP_RUNTIME_CAPABILITY,
   ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY
 ] as const

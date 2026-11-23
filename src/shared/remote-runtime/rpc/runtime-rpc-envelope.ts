@@ -3,6 +3,7 @@ import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connecti
 import { z } from 'zod'
 import type { OrchestrationCompatibilityEvidence } from '../../orchestration/orchestration-compatibility-evidence'
 import type { RemoteOwnedPeerRun } from '../../orchestration/remote-owned-wire'
+import type { ResolvedBotWorkTargetPlacement } from '../../agent-session/work-target/agent-session-work-target'
 
 // Independently updated peers may add envelope fields; strip unknown fields while validating known ones.
 const MetaSuccess = z
@@ -80,6 +81,8 @@ export type RuntimeOrchestrationEnvelope = {
   orchestrationRequestId?: string
   /** A paired Orca acting as the coordinator of one of its Runs on this server. */
   orchestrationPeerRun?: RemoteOwnedPeerRun
+  /** Host-verified work target carried over an authenticated paired peer-Run call. */
+  orchestrationPeerWorkTarget?: ResolvedBotWorkTargetPlacement
   compatibilityInvocationId?: string
   orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
 }

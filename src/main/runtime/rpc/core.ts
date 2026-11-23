@@ -109,6 +109,8 @@ export type RpcRequest = {
   orchestrationRequestId?: string
   // Untrusted wire input; only a paired Orca's runtime pairing admits it (orchestration-peer-caller).
   orchestrationPeerRun?: unknown
+  // Untrusted wire input; admitted only alongside an authenticated peer Run (orchestration-peer-caller).
+  orchestrationPeerWorkTarget?: unknown
   compatibilityInvocationId?: string
   orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
   // Untrusted wire evidence; runtime-source-admission validates it.

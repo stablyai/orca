@@ -221,6 +221,11 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** Active-turn validated work target for each bot session's single targeted message. */
   readonly botWorkTargets = new BotTurnWorkTargetRegistry()
 
+  /** Read-only catalog store for live work-target verification across follow-up paths. */
+  getBotWorkTargetCatalogStore(): RuntimeStore | null {
+    return this.store
+  }
+
   private readonly botJournal = journaledItemsNotice(this, (scope) =>
     this.botChangeNotices.changed(scope)
   )

@@ -184,6 +184,49 @@ export type ResolvedBotWorkTargetPlacement = {
   canonicalTarget: AgentJournalWorkTarget
 }
 
+const ExecutionHostIdSchema = SafeWorkTargetId.refine(
+  (value): value is ExecutionHostId => parseExecutionHostId(value) !== null,
+  'Invalid execution host ID'
+)
+
+/** Strict schema for persisted SQLite provenance and authenticated peer-forwarded work targets. */
+export const ResolvedBotWorkTargetPlacementSchema = z
+  .object({
+    mode: z.enum(['new-top-level', 'existing']),
+    repoSelector: SafeWorkTargetId.optional(),
+    worktreeSelector: SafeWorkTargetId.optional(),
+    targetHostId: ExecutionHostIdSchema.optional(),
+    expectedWorkspaceInstanceId: SafeWorkTargetId.optional(),
+    onEnvironmentId: SafeWorkTargetId.optional(),
+    onExpectedPairingRevision: z.number().finite().nonnegative().optional(),
+    onExpectedPeerFingerprint: SafeWorkTargetId.optional(),
+    canonicalTarget: JournalWorkTargetSchema.refine(
+      (value) => parseExecutionHostId(value.hostId) !== null,
+      'Invalid canonical target execution host ID'
+    )
+  })
+  .strict()
+
+/** Normalize a paired-server placement into the paired server's own local host scope. */
+export function toPeerLocalWorkTargetPlacement(
+  placement: ResolvedBotWorkTargetPlacement
+): ResolvedBotWorkTargetPlacement {
+  const canonical = stripWorkTargetHostPin(placement.canonicalTarget)
+  return {
+    mode: placement.mode,
+    ...(placement.repoSelector ? { repoSelector: placement.repoSelector } : {}),
+    ...(placement.worktreeSelector ? { worktreeSelector: placement.worktreeSelector } : {}),
+    targetHostId: LOCAL_EXECUTION_HOST_ID,
+    ...(placement.expectedWorkspaceInstanceId
+      ? { expectedWorkspaceInstanceId: placement.expectedWorkspaceInstanceId }
+      : {}),
+    canonicalTarget: {
+      ...canonical,
+      hostId: LOCAL_EXECUTION_HOST_ID
+    }
+  }
+}
+
 /** Strip markup, brackets, quotes, backticks and control chars so labels cannot forge context instructions. */
 export function sanitizeWorkTargetLabel(text: string): string {
   return stripControlChars(text)

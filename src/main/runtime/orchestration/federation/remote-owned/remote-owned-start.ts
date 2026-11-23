@@ -5,7 +5,8 @@ import { z } from 'zod'
 import type { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
 import {
   ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY,
-  ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY
+  ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORK_TARGET_FOLLOW_UP_RUNTIME_CAPABILITY
 } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { startsInChatLineage } from '../../../rpc/methods/orchestration/worker/start/worker-chat-lineage'
 import { ORCHESTRATION_CONTRACT_PREFLIGHT_TIMEOUT_MS } from '../../../../../shared/orchestration/orchestration-timing-budgets'
@@ -53,6 +54,14 @@ export async function serverOwnsPlacedWorkers(
   server: OrchestrationWorkerServer
 ): Promise<boolean> {
   return serverSupports(runtime, server, ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY)
+}
+
+/** Whether the paired server enforces peer-forwarded bot work targets on follow-up sends and restarts. */
+export async function serverSupportsWorkTargetFollowUp(
+  runtime: OrcaRuntimeService,
+  server: OrchestrationWorkerServer
+): Promise<boolean> {
+  return serverSupports(runtime, server, ORCHESTRATION_WORK_TARGET_FOLLOW_UP_RUNTIME_CAPABILITY)
 }
 
 async function serverSupports(

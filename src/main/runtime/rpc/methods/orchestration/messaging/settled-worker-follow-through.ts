@@ -25,6 +25,7 @@ import {
   startWorkerFollowUp,
   type WorkerFollowUpOutcome
 } from './worker-follow-up'
+import { verifyUnreadFollowThroughBeforeAction } from '../../../../../bots/bot-work-target-unread-provenance'
 import { captureReportedWorkerResumeSession } from '../worker/follow-up/worker-resume-session-capture'
 import { reportedWorkerOutcome } from '../worker/start/worker-start-receipt'
 import { afterWorkerStartWait } from '../worker/start/readiness/worker-start-waits'
@@ -49,7 +50,7 @@ export function continueUnreadWorkerMail(
   db: OrchestrationDb,
   dispatchId: string
 ): void {
-  void continueUnreadMail(runtime, db, dispatchId).catch((error: unknown) => {
+  void continueUnreadWorkerMailNow(runtime, db, dispatchId).catch((error: unknown) => {
     console.warn('[orchestration] unread worker mail was not continued', dispatchId, error)
   })
 }
@@ -66,7 +67,8 @@ const CHAT_FOLLOW_UP_TASK = {
   body: 'You have new orchestration messages. They arrive next, one at a time; act on each.'
 }
 
-async function continueUnreadMail(
+/** Awaitable unread-mail follow-through for callers and restart-recovery verification. */
+export async function continueUnreadWorkerMailNow(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   dispatchId: string
@@ -113,6 +115,8 @@ async function continueUnreadMail(
   let outcome: WorkerFollowUpOutcome | undefined
   try {
     plan = planWorkerFollowUp(db, dispatchId, first.type)
+    const steerId = plan?.kind === 'steer' ? plan.dispatchId : undefined
+    await verifyUnreadFollowThroughBeforeAction(runtime, db, dispatchId, steerId)
     outcome =
       plan?.kind === 'start'
         ? await startWorkerFollowUp({
@@ -123,7 +127,8 @@ async function continueUnreadMail(
             message: receivesMailWhole(plan.latest.assignee_handle)
               ? CHAT_FOLLOW_UP_TASK
               : FOLLOW_UP_TASK,
-            takesMailOf: dispatchId
+            takesMailOf: dispatchId,
+            trustedUnreadMailFollowThrough: true
           })
         : plan
   } catch (error) {

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { OrchestrationError } from '../../orchestration-error'
 import { environmentStoreWriteCount } from '../../../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
+import type { ResolvedBotWorkTargetPlacement } from '../../../../../shared/agent-session/work-target/agent-session-work-target'
 import type { RuntimeRequestGuard } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { pairedOrchestrationPeers, type OrchestrationWorkerServer } from '../environment-transport'
 import {
@@ -36,6 +37,7 @@ export async function callRemoteOwnedServer(
     timeoutMs: number
     requestId?: string
     whileLink: readonly RemoteRunLinkRow['state'][]
+    peerWorkTarget?: ResolvedBotWorkTargetPlacement
   }
 ): Promise<unknown> {
   const db = runtime.getOrchestrationDb()
@@ -112,7 +114,8 @@ export async function callRemoteOwnedServer(
         runId: link.run_id,
         conversationId: link.conversation_id,
         label: runtime.readMachineName()
-      }
+      },
+      ...(call.peerWorkTarget ? { orchestrationPeerWorkTarget: call.peerWorkTarget } : {})
     },
     {
       expectedEnvironmentPairingRevision: link.pairing_revision ?? undefined,

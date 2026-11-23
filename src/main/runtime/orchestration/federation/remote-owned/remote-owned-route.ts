@@ -9,7 +9,6 @@ import { emptyWorkerListPage } from '../../../rpc/methods/orchestration/worker/w
 import { ORCHESTRATION_FLEET_PAGE_MAX } from '../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
-import { isOrchestrationMutation } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import {
@@ -23,15 +22,19 @@ import {
   getRemoteRunLink,
   type RemoteRunLinkRow
 } from '../../db/remote-owned/remote-run-links'
-import { callRemoteOwnedServer } from './remote-owned-calls'
-import { remoteForwardKey, type RemoteForwardKey } from './remote-forward-caller'
+import {
+  forwardToRemoteOwnedLink,
+  paramsForRemoteOwnedServer,
+  REMOTE_OWNED_READ_TIMEOUT_MS
+} from './remote-owned-forward'
+import { remoteForwardKey } from './remote-forward-caller'
 import { inServerTerms, serverNeverAnswered } from './remote-owned-answers'
-import { remoteWorkerShow, remoteServerName } from './remote-owned-reads'
+import { remoteWorkerShow } from './remote-owned-reads'
 import { OrchestrationError } from '../../orchestration-error'
 import { latestRunLink, repairedListError } from './re-paired-run-list'
-import { explainRemoteServerFailure } from './remote-server-unreachable'
 import { serverOwnsPlacedWorkers, startRemoteOwnedWorker } from './remote-owned-start'
 import { settleUnansweredAbandon, stopRemoteWorker } from './remote-owned-stop'
+import { resolveRemoteOwnedFollowUpWorkTarget } from './remote-owned-work-target'
 import {
   assertBotWorkTargetPairingRevision,
   resolveWorkerStartWorkTargetValues
@@ -41,10 +44,6 @@ import type { ResolvedBotWorkTargetPlacement } from '../../../../../shared/agent
 type Routed = { handled: false } | { handled: true; result: unknown }
 
 const LOCAL: Routed = { handled: false }
-// Long enough for a send that starts a follow-up worker there and waits for it to be ready.
-const FORWARD_TIMEOUT_MS = 180_000
-// A read gives up soon on a sleeping server, whose socket stays open.
-const READ_TIMEOUT_MS = 5_000
 // What `--on <server>` sends there; send and reply --on stay peer mail.
 const SERVER_CALLS: ReadonlySet<string> = new Set([
   'orchestration.workerStart',
@@ -112,7 +111,10 @@ export async function routeRemoteOwnedCall(
     try {
       return {
         handled: true,
-        result: await forwardToLink(runtime, subject, request.method, access, values, forward)
+        result: await forwardToRemoteOwnedLink(runtime, subject, request.method, access, values, {
+          forward,
+          onAnswer: (answer) => seedNamedRemoteDispatches(db, subject.link, answer)
+        })
       }
     } catch (error) {
       if (!serverNeverAnswered(error) || !getOpenRemoteRunLink(db, subject.link.conversation_id)) {
@@ -124,7 +126,19 @@ export async function routeRemoteOwnedCall(
       }
     }
   }
-  const result = await forwardToLink(runtime, subject, request.method, access, values, forward)
+  const peerWorkTarget = await resolveRemoteOwnedFollowUpWorkTarget({
+    runtime,
+    db,
+    ctx,
+    method: request.method,
+    messageType: stringField(values, 'type'),
+    subject
+  })
+  const result = await forwardToRemoteOwnedLink(runtime, subject, request.method, access, values, {
+    forward,
+    peerWorkTarget,
+    onAnswer: (answer) => seedNamedRemoteDispatches(db, subject.link, answer)
+  })
   if (request.method === 'orchestration.reply' && subject.questionId) {
     // The answer never runs this Orca's reply, so its question's ending is recorded here.
     recordRemoteAskAnswered(db, subject.questionId)
@@ -181,17 +195,19 @@ async function routeServerCall(
         result: emptyWorkerListPage(numberField(values, 'limit') ?? ORCHESTRATION_FLEET_PAGE_MAX)
       }
     }
-    const forwarded = paramsForServer(access, values)
+    const forwarded = paramsForRemoteOwnedServer(access, values)
     try {
       return {
         handled: true,
         result: link
-          ? await forwardToLink(runtime, { link }, request.method, access, values)
+          ? await forwardToRemoteOwnedLink(runtime, { link }, request.method, access, values, {
+              onAnswer: (answer) => seedNamedRemoteDispatches(db, link, answer)
+            })
           : await runtime.callOrchestrationWorkerServer(
               server.environmentId,
               request.method,
               forwarded,
-              READ_TIMEOUT_MS,
+              REMOTE_OWNED_READ_TIMEOUT_MS,
               undefined,
               { expectedEnvironmentPairingRevision: server.pairingRevision }
             )
@@ -219,7 +235,7 @@ async function routeServerCall(
       server.environmentId,
       request.method,
       { request: forward.key },
-      READ_TIMEOUT_MS,
+      REMOTE_OWNED_READ_TIMEOUT_MS,
       undefined,
       { expectedEnvironmentPairingRevision: server.pairingRevision }
     )
@@ -254,53 +270,19 @@ function remoteSubject(
   return undefined
 }
 
-/** This Orca's caller, Run and server fields mean nothing there: the server names the caller itself. */
-function paramsForServer(access: OrchestrationMethodAccessDeclaration, values: Values): Values {
-  const local = new Set<string>(
-    [
-      access.caller,
-      access.callerPane,
-      access.server,
-      ...Object.entries(access.targets)
-        .filter(([, kind]) => kind === 'run')
-        .map(([field]) => field)
-    ].filter((field): field is string => field !== undefined)
-  )
-  return Object.fromEntries(Object.entries(values).filter(([field]) => !local.has(field)))
-}
+/** A retry of a start this Orca already took on today's path stays there, whatever the server runs now. */
+const holdsLocalReceipt = (db: OrchestrationDb, ctx: RpcContext, requestId: string | undefined) =>
+  requestId !== undefined &&
+  db.getMutationReceipt(
+    ctx.authenticatedCallerFingerprint ?? db.getOrCreateLocalMutationCallerFingerprint(),
+    requestId
+  ) !== undefined
 
-async function forwardToLink(
-  runtime: OrcaRuntimeService,
-  { link, dispatchId }: RemoteSubject,
-  method: string,
-  access: OrchestrationMethodAccessDeclaration,
-  values: Values,
-  forward?: RemoteForwardKey
-): Promise<unknown> {
-  const db = runtime.getOrchestrationDb()
-  const server = await remoteServerName(runtime, link.environment_id)
-  const params = paramsForServer(access, values)
-  try {
-    const answer = await callRemoteOwnedServer(runtime, link, {
-      method,
-      params,
-      timeoutMs: isOrchestrationMutation(method, params) ? FORWARD_TIMEOUT_MS : READ_TIMEOUT_MS,
-      ...(forward ? { requestId: forward.key } : {}),
-      whileLink: ['open']
-    })
-    seedNamedDispatches(db, link, answer)
-    return inServerTerms(answer, { server, forward, link })
-  } catch (error) {
-    throw inServerTerms(explainRemoteServerFailure(error, { server, method, params, dispatchId }), {
-      server,
-      forward,
-      link
-    })
-  }
-}
-
-/** A Dispatch the server's answer names (a follow-up it started) is its; record it so commands about it route there. */
-function seedNamedDispatches(db: OrchestrationDb, link: RemoteRunLinkRow, answer: unknown): void {
+function seedNamedRemoteDispatches(
+  db: OrchestrationDb,
+  link: RemoteRunLinkRow,
+  answer: unknown
+): void {
   const named: Values = answer && typeof answer === 'object' ? { ...answer } : {}
   const dispatchId = stringField(named, 'dispatchId')
   const taskId = stringField(named, 'taskId')
@@ -314,14 +296,6 @@ function seedNamedDispatches(db: OrchestrationDb, link: RemoteRunLinkRow, answer
     }
   })
 }
-
-/** A retry of a start this Orca already took on today's path stays there, whatever the server runs now. */
-const holdsLocalReceipt = (db: OrchestrationDb, ctx: RpcContext, requestId: string | undefined) =>
-  requestId !== undefined &&
-  db.getMutationReceipt(
-    ctx.authenticatedCallerFingerprint ?? db.getOrCreateLocalMutationCallerFingerprint(),
-    requestId
-  ) !== undefined
 
 const isSessionAddress = (value: unknown): boolean =>
   typeof value === 'string' && value.startsWith(ORCA_SESSION_ADDRESS_PREFIX)

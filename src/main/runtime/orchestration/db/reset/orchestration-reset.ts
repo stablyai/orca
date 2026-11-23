@@ -63,6 +63,7 @@ export function resetAll(this: OrchestrationDb): void {
     DELETE FROM tasks;
     DELETE FROM messages;
     DELETE FROM message_dispatch_provenance;
+    DELETE FROM message_work_target_provenance;
     DELETE FROM run_coordinator_handles;
     DELETE FROM runs;
     DELETE FROM removed_orchestration_work;
@@ -115,6 +116,7 @@ export function resetMessages(this: OrchestrationDb): void {
     DELETE FROM deliveries;
     DELETE FROM messages;
     DELETE FROM message_dispatch_provenance;
+    DELETE FROM message_work_target_provenance;
     DELETE FROM structured_pointer_operations;
   `)
 }

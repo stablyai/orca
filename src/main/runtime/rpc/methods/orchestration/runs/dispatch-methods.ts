@@ -24,6 +24,8 @@ import {
 } from '../chat-assignee-admission'
 import { sendChatTask } from '../chat-task-delivery'
 import { dispatchTaskSource } from '../../../../orchestration/coordinator/dispatch/dispatch-task-source'
+import { activeBotWorkTargetForCaller } from '../../../../../bots/bot-turn-work-target'
+import { verifyBareRecipientMatchesWorkTarget } from '../../../../../bots/bot-work-target-follow-up'
 
 export const ORCHESTRATION_DISPATCH_METHODS = [
   defineOrchestrationMethod({
@@ -81,6 +83,14 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           `Task ${params.task} is ${task.status}; only ready tasks can be dispatched`,
           task
         )
+      }
+
+      const activeWorkTarget = activeBotWorkTargetForCaller(
+        runtime.botWorkTargets,
+        orchestrationCaller
+      )
+      if (activeWorkTarget) {
+        await verifyBareRecipientMatchesWorkTarget(runtime, to, activeWorkTarget)
       }
 
       // A structured worker's chat keeps the pane and process its custody is held under.

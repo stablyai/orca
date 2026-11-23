@@ -29,6 +29,8 @@ export type WorkerFollowUp = {
   acceptedBy?: { callerFingerprint: string; requestId: string }
   /** The Dispatch whose unread mail this follow-up's Task tells it to check. */
   takesMailOf?: string
+  /** Set only by settled-worker-follow-through so background unread mail uses its own SQLite provenance. */
+  trustedUnreadMailFollowThrough?: boolean
   /** Appended to the Task when a reopen falls back to a fresh agent. */
   earlierWork?: string
 }

@@ -35,6 +35,7 @@ import {
   passHeldWorkerMail,
   settledDispatchId
 } from './settled-worker-follow-through'
+import { resolveSendWorkTargetGuard } from '../../../../../bots/bot-work-target-send-guards'
 
 export const ORCHESTRATION_SEND_METHODS = [
   defineOrchestrationMethod({
@@ -151,6 +152,13 @@ export const ORCHESTRATION_SEND_METHODS = [
       }
 
       const sendWarnings: SendRecipientWarning[] = []
+      const rawRecipient = to
+      const targetGuard = resolveSendWorkTargetGuard(
+        runtime,
+        orchestrationCaller,
+        from,
+        params.type
+      )
       let messageRunId = routing.run?.id
       if (!isGroupAddress(to) && !to.startsWith('run:') && !to.startsWith('dispatch:')) {
         const terminal = await prepareSessionRecipient(runtime, to, revalidateLegacyCoordinator)
@@ -195,6 +203,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           addressedDispatchId && to === `dispatch:${addressedDispatchId}`
             ? db.getFederatedDispatch(addressedDispatchId)
             : undefined
+        await targetGuard?.verifyDirect(db, to, rawRecipient)
         // Federated targets perform their own liveness check before relaying.
         if (addressedDispatchId && !federatedTarget) {
           const plan = planWorkerFollowUp(db, addressedDispatchId, params.type ?? 'status')
@@ -272,7 +281,8 @@ export const ORCHESTRATION_SEND_METHODS = [
           recordMutationReceipt,
           markWorkerDoneMutationEffectFree,
           withSendWarnings: (sent) =>
-            finished?.receipt(withSendWarnings(sent)) ?? withSendWarnings(sent)
+            finished?.receipt(withSendWarnings(sent)) ?? withSendWarnings(sent),
+          workTargetProvenance: targetGuard?.provenanceFor(to)
         })
         followThroughWorkerReport(
           runtime,
@@ -297,7 +307,8 @@ export const ORCHESTRATION_SEND_METHODS = [
         legacyCoordinatorRunId,
         revalidateLegacyCoordinator,
         recordMutationReceipt,
-        withSendWarnings
+        withSendWarnings,
+        workTargetGuard: targetGuard
       })
     })
   })

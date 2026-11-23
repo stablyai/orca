@@ -29,6 +29,13 @@ import type { SendParams } from './send-params'
 import type { SendRecipientWarning } from './recipient-routing'
 import { peerMailLocalCaller } from './peer-mail-local-caller'
 import { clientAskCard } from './client-ask-card'
+import { parseBotAddress } from '../../../../../../shared/bot-roster'
+import { sanitizeWorkTargetLabel } from '../../../../../../shared/agent-session/work-target/agent-session-work-target'
+import {
+  activeBotWorkTargetForCaller,
+  describeExpectedPlacementFlags
+} from '../../../../../bots/bot-turn-work-target'
+import { isWorkTargetFollowUpMessageType } from '../../../../../bots/bot-work-target-follow-up'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 
@@ -74,6 +81,23 @@ export function sendClientAsk(args: {
     )
   }
   const caller = peerMailLocalCaller({ ...args, from: params.from })
+  const activeWorkTarget = activeBotWorkTargetForCaller(
+    runtime.botWorkTargets,
+    args.orchestrationCaller
+  )
+  if (
+    activeWorkTarget &&
+    parseBotAddress(to) === null &&
+    isWorkTargetFollowUpMessageType(type.data)
+  ) {
+    const label = sanitizeWorkTargetLabel(activeWorkTarget.canonicalTarget.displayName)
+    const expectedFlags = describeExpectedPlacementFlags(activeWorkTarget)
+    throw new OrchestrationError(
+      'capability_unsupported',
+      `This turn targets "${label}". Sending work via \`send --on-client\` to ${to} cannot verify the selected project/workspace target; start a worker with \`orca orchestration worker-start ${expectedFlags}\` instead. Nothing was sent.`,
+      NOTHING_SENT
+    )
+  }
   const cardFor = (computer: { installationId: string; computer: string }) =>
     clientAskCard({
       asker: caller.address,

@@ -28,8 +28,8 @@ import {
 } from '../launch/worker-launch-preferences'
 import { recordWorkerLaunchObservation } from '../../../../../../orchestration/workers/launch/worker-launch-observation'
 
-/** Name only the two required fields so untyped worktree accessors cannot introduce any into unions. */
-type PlacedWorktree = { id: string; repoId: string }
+/** Name only the required fields plus optional checkout occupant ID so untyped worktree accessors cannot introduce any into unions. */
+type PlacedWorktree = { id: string; repoId: string; instanceId?: string }
 type WorkerStructuredSession = Awaited<ReturnType<typeof createStructuredWorkerSessionForWorktree>>
 
 export type WorkerAgentPlacement = {

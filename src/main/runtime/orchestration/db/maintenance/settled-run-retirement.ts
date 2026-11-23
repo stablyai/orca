@@ -30,6 +30,7 @@ const RUN_CHILD_DELETES: readonly { table: string; where: string; pageRows?: num
   { table: 'worker_presence', where: `dispatch_id IN (${DISPATCH_IDS})` },
   { table: 'message_dispatch_provenance', where: `dispatch_id IN (${DISPATCH_IDS})` },
   { table: 'message_dispatch_provenance', where: `message_id IN (${MESSAGE_IDS})` },
+  { table: 'message_work_target_provenance', where: `message_id IN (${MESSAGE_IDS})` },
   { table: 'structured_mail_sends', where: `message_id IN (${MESSAGE_IDS})` },
   { table: 'legacy_operation_receipts', where: `principal_id IN (${LEGACY_PRINCIPAL_IDS})` },
   { table: 'legacy_mail_receipts', where: `principal_id IN (${LEGACY_PRINCIPAL_IDS})` },

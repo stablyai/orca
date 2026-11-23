@@ -120,6 +120,7 @@ export async function startLocalWorker(args: {
     createsWorktree,
     mode,
     resolvedWorktreeId: resolvedWorktree?.id,
+    resolvedWorktreeInstanceId: resolvedWorktree?.instanceId,
     repoSelector: creationTarget ? runtimeRepoSelectorText(creationTarget.repoSelector) : undefined,
     agent,
     launchReceipt: launch.receipt
@@ -221,6 +222,7 @@ export async function startLocalWorker(args: {
     const placement = placed
     const handle = terminalHandle
     const worktreeId = resolvedWorktree.id
+    const worktreeInstanceId = resolvedWorktree.instanceId ?? null
     // A hand-over from the background wait gets a fresh delivery budget; one in time keeps the shared one.
     const bindTerminal = (): void => {
       const terminalAuthority = authority ?? requireWorkerAuthority(runtime, handle)
@@ -229,6 +231,7 @@ export async function startLocalWorker(args: {
         handle,
         ...terminalAuthority,
         worktreeId,
+        worktreeInstanceId,
         effects,
         setupState: setupReceipt.state,
         terminalOwnership: external ? 'external' : 'created'

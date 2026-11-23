@@ -30,6 +30,7 @@ export function createLocalWorkerStartDispatch(
     createsWorktree,
     mode,
     resolvedWorktreeId,
+    resolvedWorktreeInstanceId,
     repoSelector,
     agent,
     launchReceipt
@@ -40,6 +41,7 @@ export function createLocalWorkerStartDispatch(
     createsWorktree: boolean
     mode: WorkerStartModeReceipt
     resolvedWorktreeId: string | undefined
+    resolvedWorktreeInstanceId?: string | undefined
     repoSelector: string | undefined
     agent: TuiAgent | undefined
     launchReceipt: OrchestrationWorkerLaunchReceipt
@@ -49,6 +51,7 @@ export function createLocalWorkerStartDispatch(
     worktree: requestedWorktree,
     mode,
     resolvedWorktreeId: resolvedWorktreeId ?? null,
+    resolvedWorktreeInstanceId: resolvedWorktreeInstanceId ?? null,
     name: params.name ?? null,
     repo: repoSelector ?? params.repo ?? null,
     baseBranch: params.baseBranch ?? null,

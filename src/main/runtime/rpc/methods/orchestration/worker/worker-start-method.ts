@@ -24,6 +24,8 @@ import { buildOrchestrationTaskDisplayMetadata } from '../../../../../../shared/
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './start/admission/worker-start-prompt-budget'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { resolveBotTurnWorkTargetForCaller } from '../../../../../bots/bot-turn-work-target'
+import { resolveVerifiedFollowUpWorkTarget } from '../../../../../bots/bot-work-target-unread-provenance'
+import type { ResolvedBotWorkTargetPlacement } from '../../../../../../shared/agent-session/work-target/agent-session-work-target'
 import { checkedWorkerOrigin } from '../../bots-items-worker-origin'
 import { decideStartMode, noteTerminalFallbackOnItem } from './start/worker-chat-lineage'
 import { withKeepOpenDefault } from './start/worker-keep-open-default'
@@ -171,19 +173,21 @@ export async function prepareWorkerStart(
       '--timeout-ms is too large for worker-start transport grace; the derived timeout must fit within the timer limit.'
     )
   }
-  // Background unread-mail follow-through belongs to an earlier worker, not the bot's active targeted turn.
-  const resolvedWorkTarget = followUp?.takesMailOf
-    ? { params, enforcement: undefined }
-    : resolveBotTurnWorkTargetForCaller(
-        params,
-        runtime.botWorkTargets,
-        orchestrationCaller,
-        Boolean(followUp)
-      )
-  params = resolvedWorkTarget.params
-  const workTarget = resolvedWorkTarget.enforcement
-  assertWorkerStartPlacementBoundaries(params, orchestrationCaller, followUp)
   const db = runtime.getOrchestrationDb()
+  let workTarget: ResolvedBotWorkTargetPlacement | undefined
+  if (followUp) {
+    workTarget = await resolveVerifiedFollowUpWorkTarget(runtime, db, orchestrationCaller, followUp)
+  } else {
+    const resolvedWorkTarget = resolveBotTurnWorkTargetForCaller(
+      params,
+      runtime.botWorkTargets,
+      orchestrationCaller,
+      false
+    )
+    params = resolvedWorkTarget.params
+    workTarget = resolvedWorkTarget.enforcement
+  }
+  assertWorkerStartPlacementBoundaries(params, orchestrationCaller, followUp)
   const coordinator = resolveOrchestrationCaller(runtime, {
     callerTerminalHandle: params.from,
     callerEvidence: orchestrationCompatibilityEvidence,

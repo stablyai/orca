@@ -44,7 +44,7 @@ export type ResolvedWorkerStartWorkTarget<T extends WorkerStartPlacementParams> 
   enforcement?: ResolvedBotWorkTargetPlacement
 }
 
-function describeExpectedPlacementFlags(placement: ResolvedBotWorkTargetPlacement): string {
+export function describeExpectedPlacementFlags(placement: ResolvedBotWorkTargetPlacement): string {
   const parts: string[] = []
   if (placement.onEnvironmentId) {
     parts.push(`--on ${placement.onEnvironmentId}`)
@@ -55,6 +55,30 @@ function describeExpectedPlacementFlags(placement: ResolvedBotWorkTargetPlacemen
     parts.push(`--worktree ${placement.worktreeSelector}`)
   }
   return parts.join(' ')
+}
+
+/** Resolve the host-trusted work target for a session caller or authenticated paired peer caller. */
+export function activeBotWorkTargetForCaller(
+  registry: BotTurnWorkTargetRegistry | undefined,
+  caller: OrchestrationEntryCaller | undefined
+): ResolvedBotWorkTargetPlacement | undefined {
+  if (caller?.kind === 'peer') {
+    return caller.workTarget
+  }
+  const session = sessionCallerOf(caller)
+  return session ? registry?.getForTurn(session.sessionId) : undefined
+}
+
+/** Stable trusted origin label stored alongside durable message work-target provenance. */
+export function workTargetProvenanceOriginForCaller(
+  caller: OrchestrationEntryCaller | undefined,
+  fallbackFrom: string
+): string {
+  if (caller?.kind === 'peer') {
+    return `peer:${caller.peerRun.conversation_id}`
+  }
+  const session = sessionCallerOf(caller)
+  return session ? `session:${session.sessionId}` : fallbackFrom
 }
 
 function workTargetConflictError(message: string): OrchestrationError {
@@ -202,10 +226,9 @@ export function resolveBotTurnWorkTargetForCaller<T extends WorkerStartPlacement
   caller: OrchestrationEntryCaller | undefined,
   isFollowUp: boolean
 ): ResolvedWorkerStartWorkTarget<T> {
-  const session = sessionCallerOf(caller)
   return resolveBotTurnWorkTargetToWorkerStart(
     params,
-    session ? registry?.getForTurn(session.sessionId) : undefined,
+    activeBotWorkTargetForCaller(registry, caller),
     isFollowUp
   )
 }
