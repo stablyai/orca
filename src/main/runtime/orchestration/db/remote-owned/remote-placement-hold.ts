@@ -13,6 +13,7 @@ export type RemotePlacementRow = {
   dispatch_id: string | null
   created_at: string
   never_sent_at: string | null
+  sent_at: string | null
   ambiguous_sent_at: string | null
 }
 
@@ -55,7 +56,8 @@ export function markRemotePlacementNeverSent(
 ): void {
   db.db
     .prepare(
-      `UPDATE remote_placements SET never_sent_at = datetime('now')
+      `UPDATE remote_placements SET never_sent_at = datetime('now'), sent_at = NULL,
+         ambiguous_sent_at = NULL
        WHERE task_id = ? AND request_key = ? AND state = 'reserved'`
     )
     .run(taskId, requestKey)
@@ -75,6 +77,21 @@ export function markRemotePlacementAmbiguous(
     .run(taskId, requestKey)
 }
 
+/** The start is about to leave this Orca; it cannot be cancelled until its answer is classified. */
+export function markRemotePlacementSent(
+  db: OrchestrationDb,
+  taskId: string,
+  requestKey: string
+): void {
+  db.db
+    .prepare(
+      `UPDATE remote_placements SET sent_at = datetime('now'), never_sent_at = NULL,
+         ambiguous_sent_at = NULL
+       WHERE task_id = ? AND request_key = ? AND state = 'reserved'`
+    )
+    .run(taskId, requestKey)
+}
+
 /**
  * A cancel of the Task retires its reservation when no start for it can have reached the server:
  * no attempt there, and every send failed before leaving this Orca. Any other reservation may
@@ -86,7 +103,10 @@ export function retireNeverSentReservation(db: OrchestrationDb, taskId: string):
       `DELETE FROM remote_placements
        WHERE task_id = ? AND state = 'reserved'
          AND never_sent_at IS NOT NULL
-         AND conversation_id IN (SELECT conversation_id FROM remote_run_links WHERE state = 'open')`
+         AND EXISTS (
+           SELECT 1 FROM remote_run_links
+           WHERE conversation_id = remote_placements.conversation_id AND state = 'open'
+         )`
     )
     .run(taskId)
 }
@@ -102,8 +122,12 @@ export function retireExpiredAmbiguousReservation(db: OrchestrationDb, taskId: s
       `DELETE FROM remote_placements
        WHERE task_id = ? AND state = 'reserved'
          AND never_sent_at IS NULL
-         AND julianday(COALESCE(ambiguous_sent_at, created_at)) <= julianday('now', ?)
-         AND conversation_id IN (SELECT conversation_id FROM remote_run_links WHERE state = 'open')`
+         AND julianday(COALESCE(ambiguous_sent_at,
+           CASE WHEN sent_at IS NULL THEN created_at END)) <= julianday('now', ?)
+         AND EXISTS (
+           SELECT 1 FROM remote_run_links
+           WHERE conversation_id = remote_placements.conversation_id AND state = 'open'
+         )`
     )
     .run(taskId, `-${AMBIGUOUS_REMOTE_START_RECOVERY_MINUTES} minutes`)
 }

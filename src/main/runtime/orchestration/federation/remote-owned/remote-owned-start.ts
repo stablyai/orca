@@ -21,6 +21,7 @@ import {
 import {
   markRemotePlacementAmbiguous,
   markRemotePlacementNeverSent,
+  markRemotePlacementSent,
   refuseTaskOfClosedPairing
 } from '../../db/remote-owned/remote-placement-hold'
 import { openRemoteRunLink } from '../../db/remote-owned/remote-run-links'
@@ -146,6 +147,7 @@ export async function startRemoteOwnedWorker(
   const startCard = prepareWorkerStartCard(runtime, ctx.orchestrationCaller)
   let receipt: unknown
   try {
+    markRemotePlacementSent(db, taskId, forward.key)
     receipt = await callRemoteOwnedServer(runtime, link, {
       method: 'orchestration.workerStart',
       params: {

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
 import type { OrchestrationWorkerServer } from '../../federation/environment-transport'
 import { getRemotePlacement, reserveRemotePlacement } from './remote-placements'
-import { markRemotePlacementAmbiguous } from './remote-placement-hold'
+import { markRemotePlacementAmbiguous, markRemotePlacementSent } from './remote-placement-hold'
 import { openRemoteRunLink } from './remote-run-links'
 
 const SERVER: OrchestrationWorkerServer = {
@@ -56,6 +56,18 @@ describe('ambiguous remote start recovery', () => {
 
     expect(() => db.updateTaskStatus(TASK, 'failed')).toThrow(/cannot move to failed/)
     expect(getRemotePlacement(db, TASK)?.ambiguous_sent_at).not.toBeNull()
+  })
+
+  it('keeps an in-flight send fenced even when its legacy reservation is old', () => {
+    db.db
+      .prepare(
+        "UPDATE remote_placements SET created_at = datetime('now', '-16 minutes') WHERE task_id = ?"
+      )
+      .run(TASK)
+    markRemotePlacementSent(db, TASK, 'start-key')
+
+    expect(() => db.updateTaskStatus(TASK, 'failed')).toThrow(/cannot move to failed/)
+    expect(getRemotePlacement(db, TASK)?.sent_at).not.toBeNull()
   })
 
   it('keeps a recent unanswered start fenced for same-request recovery', () => {
