@@ -110,16 +110,22 @@ export async function readReplyEvidence(
   // Read only when a row's own send was rejected as a Stop's could be: most passes have none.
   const stopRejected = (send: AgentJournalSubmission | undefined) =>
     send?.dispatchState === 'rejected' && stopMayHaveRejected(send)
-  const stop = rows.some(
+  const stopRead = rows.some(
     (row) =>
       stopRejected(submissionOf(row)) ||
       (row.claimMessageId !== undefined &&
         stopRejected(submissionByKey(agentJournalSubmissionKey(row.claimMessageId))))
   )
-    ? await savedStop(chat, sessionId)
-    : null
-  const rejected = (submission: AgentJournalSubmission) =>
-    rejectedVerdict(submission, stop, rejectionOf)
+  const stop = stopRead ? await savedStop(chat, sessionId) : null
+  // A row admitted after these rows were read is judged without the Stop: it waits for a rerun.
+  let deferredForStop = false
+  const rejected = (submission: AgentJournalSubmission): ReplyRecoveryVerdict | null => {
+    if (!stopRead && stopRejected(submission)) {
+      deferredForStop = true
+      return null
+    }
+    return rejectedVerdict(submission, stop, rejectionOf)
+  }
   const turnRowOf = (cutTurnId: string) =>
     snapshot.items.findLast(
       (item) => readAgentJournalTurn(item.body)?.turnId === cutTurnId || item.itemId === cutTurnId
@@ -186,6 +192,7 @@ export async function readReplyEvidence(
     cutOpener,
     claimVerdict,
     rejected,
+    deferredForStop: () => deferredForStop,
     // Only turns that could have answered a row still unfilled.
     turns: () => {
       const placed = rows.map((row) => messageOf(row)?.sequence ?? 0).filter((at) => at > 0)

@@ -230,6 +230,9 @@ export class ConnectorReplyRecovery {
         ...(verdict.failure ? { failure: verdict.failure } : {})
       }))
     )
+    if (view.deferredForStop()) {
+      this.again.add(sessionId)
+    }
     const owed = (await journal.read(sessionId)).filter((row) => !row.fill)
     if (owed.length > 0) {
       this.watch(chat, sessionId)
