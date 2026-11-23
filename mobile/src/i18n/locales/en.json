@@ -5611,6 +5611,8 @@
       "computer": "Computer",
       "computerMessage": "Where the bot runs.",
       "agentOn": "On {{host}}.",
+      "noAgent": "None",
+      "noChatAgents": "No chat agents available on {{host}}.",
       "botsOffOn": "Bots are off on {{host}}",
       "updateDesktopFirst": "Update Orca on {{host}} first",
       "checking": "Checking…"
@@ -6464,6 +6466,7 @@
         "title": "No items yet",
         "body": "When {{bot}} takes on something for you, it shows up here with what it is doing and what it needs from you.",
         "needsYou": "Nothing needs you.",
+        "allClear": "Nothing needs you",
         "filtered": "No items match."
       },
       "toast": {
