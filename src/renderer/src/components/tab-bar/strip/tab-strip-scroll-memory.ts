@@ -23,11 +23,6 @@ function pruneClosedGroupOffsets(): void {
 }
 
 function rememberTabStripScroll(key: string, scrollLeft: number, tabId: string | null): void {
-  // At the start the mount-time reveal already shows the same tabs.
-  if (scrollLeft === 0) {
-    offsetByStripKey.delete(key)
-    return
-  }
   offsetByStripKey.set(key, { scrollLeft, tabId })
   if (offsetByStripKey.size > pruneAtSize) {
     pruneClosedGroupOffsets()
