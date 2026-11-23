@@ -10,6 +10,8 @@ export type WakeAlertsEnv = AlertsEnv & {
   NO_SOCKET_MIN?: string
   // Comma-separated rule ids this deployment never evaluates (e.g. 'silent' where no clients run).
   ALERTS_OFF?: string
+  // Which rules are firing and when each was last posted (alerts.ts). Unbound: every breaching run posts.
+  ALERT_STATE?: KVNamespace
 }
 
 export type WakeThresholds = Thresholds & { noSocketPct: number; noSocketMin: number; probesPerWindow: number }
@@ -36,22 +38,26 @@ export function thresholds(env: WakeAlertsEnv): WakeThresholds {
   }
 }
 
-// Counts per whole minute before atSec (0 = the last minute), weighted by Analytics Engine sampling,
-// so one query gives every window alerts.ts compares. atSec is the run's scheduled time, never the
-// query's NOW(), so consecutive runs' minutes line up exactly 5 apart. blobs: [event, label, version, reason, place]; double1
-// is the event's value (a wake event's value is its host count).
+// Each column the SQL sums per minute, weighted by Analytics Engine sampling. blobs: [event, label,
+// version, reason, place]; double1 is the event's value (a wake event's value is its host count).
+export const COLUMNS = {
+  socket_open: "sumIf(_sample_interval, blob1 = 'socket_open')",
+  refuse_401: "sumIf(_sample_interval, blob1 = 'refuse' AND blob4 = 'token')",
+  refuse_country: "sumIf(_sample_interval, blob1 = 'refuse' AND blob4 = 'country')",
+  keys_unavailable: "sumIf(_sample_interval, blob1 = 'upgrade' AND blob2 = 'keys_unavailable')",
+  admin_failures: "sumIf(_sample_interval, blob1 = 'admin' AND blob2 != '200')",
+  wakes: "sumIf(_sample_interval * double1, blob1 = 'wake')",
+  wake_no_socket: "sumIf(_sample_interval * double1, blob1 = 'wake' AND blob2 = 'no_socket')",
+  wake_error: "sumIf(_sample_interval * double1, blob1 = 'wake' AND blob2 = 'error')",
+  events: "sumIf(_sample_interval, blob1 != 'refuse')"
+} as const
+
+// Counts per whole minute before atSec (0 = the last minute), so one query gives both windows.
+// atSec is the run's scheduled time, never the query's NOW().
 export const SQL = (dataset: string, fromMin: number, atSec: number) => `
 SELECT
   intDiv(${atSec} - toUInt32(timestamp), 60) AS ago,
-  sumIf(_sample_interval, blob1 = 'socket_open') AS socket_open,
-  sumIf(_sample_interval, blob1 = 'refuse' AND blob4 = 'token') AS refuse_401,
-  sumIf(_sample_interval, blob1 = 'refuse' AND blob4 = 'country') AS refuse_country,
-  sumIf(_sample_interval, blob1 = 'upgrade' AND blob2 = 'keys_unavailable') AS keys_unavailable,
-  sumIf(_sample_interval, blob1 = 'admin' AND blob2 != '200') AS admin_failures,
-  sumIf(_sample_interval * double1, blob1 = 'wake') AS wakes,
-  sumIf(_sample_interval * double1, blob1 = 'wake' AND blob2 = 'no_socket') AS wake_no_socket,
-  sumIf(_sample_interval * double1, blob1 = 'wake' AND blob2 = 'error') AS wake_error,
-  sumIf(_sample_interval, blob1 != 'refuse') AS events
+${Object.entries(COLUMNS).map(([name, sum]) => `  ${sum} AS ${name}`).join(',\n')}
 FROM ${dataset}
 WHERE timestamp > toDateTime(${atSec - fromMin * 60}) AND timestamp <= toDateTime(${atSec})
 GROUP BY ago
