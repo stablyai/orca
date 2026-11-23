@@ -156,4 +156,37 @@ describe('ClickUpTokenDialog', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
     expect(onConnected).toHaveBeenCalledTimes(1)
   })
+
+  it('ignores a connect from before the parent closed and reopened the dialog', async () => {
+    let settle!: (result: ClickUpMutationResult) => void
+    store.connectClickUp.mockReturnValue(
+      new Promise<ClickUpMutationResult>((resolve) => {
+        settle = resolve
+      })
+    )
+    const onOpenChange = vi.fn()
+    const onConnected = vi.fn()
+    const dialog = (open: boolean): React.JSX.Element => (
+      <ClickUpTokenDialog
+        owner={local}
+        open={open}
+        onOpenChange={onOpenChange}
+        onConnected={onConnected}
+      />
+    )
+    const { rerender } = render(dialog(true))
+    fireEvent.change(tokenInput(), { target: { value: 'pk_first' } })
+    submitForm()
+
+    rerender(dialog(false))
+    rerender(dialog(true))
+    fireEvent.change(tokenInput(), { target: { value: 'pk_typed_after_reopen' } })
+    await act(async () => {
+      settle({ ok: true })
+    })
+
+    expect(onOpenChange).not.toHaveBeenCalled()
+    expect(onConnected).not.toHaveBeenCalled()
+    expect(tokenInput().value).toBe('pk_typed_after_reopen')
+  })
 })

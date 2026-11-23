@@ -58,12 +58,13 @@ export function ClickUpTokenDialog({
   const tokenErrorId = useId()
   // The host, not its session generation: a reconnect of the same host keeps what was typed for it.
   const ownerKey = getEnvironmentRuntimeIdentityKey(runtimeTargetEnvironmentId(owner))
-  // Counts owner changes, so a connect from before A to B and back to A is not mistaken for one of this A.
-  const ownerGenerationRef = useRef(0)
-  // A layout effect, so a connect that settles right after the owner-change commit is already stale.
+  // Counts owner changes and open/close flips, so a connect from before A to B and back to A, or from before a
+  // parent-driven close and reopen, is not mistaken for one of this dialog session.
+  const attemptGenerationRef = useRef(0)
+  // A layout effect, so a connect that settles right after the commit is already stale.
   useLayoutEffect(() => {
-    ownerGenerationRef.current += 1
-  }, [ownerKey])
+    attemptGenerationRef.current += 1
+  }, [ownerKey, open])
   const [dialogState, setDialogState] = useState(() => closedClickUpTokenDialogState(ownerKey))
   const resolvedDialogState = resolveClickUpTokenDialogState(dialogState, open, ownerKey)
   if (resolvedDialogState !== dialogState) {
@@ -87,9 +88,9 @@ export function ClickUpTokenDialog({
     }
     setDialogState((current) => ({ ...current, connectState: 'connecting', connectError: null }))
     // The dialog may have moved to another owner by the time the request settles; its outcome is not theirs.
-    const ownerGeneration = ownerGenerationRef.current
+    const attemptGeneration = attemptGenerationRef.current
     const isStale = (): boolean =>
-      !mountedRef.current || ownerGenerationRef.current !== ownerGeneration
+      !mountedRef.current || attemptGenerationRef.current !== attemptGeneration
     try {
       const result = await connectClickUp(owner, token)
       if (isStale()) {
