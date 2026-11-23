@@ -44,45 +44,48 @@ function hasStoppedWslHost(state: {
   return false
 }
 
-export function selectWorktreeActivityPtyIds(
-  state: AppState,
-  worktreeId: string
-): Record<string, string[]> {
-  const ptyIds = selectLivePtyIdsForWorktree(state, worktreeId)
+function selectStoppedWorktreeEnvironmentId(state: AppState, worktreeId: string): string | null {
   if (!hasStoppedWslHost(state)) {
-    return ptyIds
+    return null
   }
   const owner = selectWorkspaceRuntimeEnvironmentId(state, worktreeId)
-  return owner && selectStoppedWslDistro(state, owner) !== null
-    ? withoutStoppedHostPtys(ptyIds, owner)
-    : ptyIds
+  return owner && selectStoppedWslDistro(state, owner) !== null ? owner : null
 }
 
 type StatusMemo = { inputs: readonly unknown[]; status: WorktreeStatus }
 
-// Every caller (sidebar cards, Bots rows, pickers) resolves the same ids on each store write; each
-// id re-resolves only when one of its own inputs changes.
-const statusMemoByWorktreeId = new Map<string, StatusMemo>()
-const STATUS_MEMO_LIMIT = 2000
-// One store write runs every mounted selector against one state; each id is checked once per write.
-let generation: { state: AppState; statusById: Map<string, WorktreeStatus> } | null = null
+// Carry only the workspaces read in the previous snapshot, regardless of how many were visible.
+let generation: {
+  state: AppState
+  byWorktreeId: Map<string, StatusMemo>
+  carried: ReadonlyMap<string, StatusMemo> | undefined
+} | null = null
 
 export function selectWorktreeActivityStatus(
   statusInputs: AppState,
   worktreeId: string
 ): WorktreeStatus {
   if (generation?.state !== statusInputs) {
-    generation = { state: statusInputs, statusById: new Map() }
+    generation = {
+      state: statusInputs,
+      byWorktreeId: new Map(),
+      carried: generation?.byWorktreeId
+    }
   }
-  let status = generation.statusById.get(worktreeId)
-  if (status === undefined) {
-    status = resolveMemoizedStatus(statusInputs, worktreeId)
-    generation.statusById.set(worktreeId, status)
+  const { byWorktreeId, carried } = generation
+  let memo = byWorktreeId.get(worktreeId)
+  if (memo === undefined) {
+    memo = resolveMemoizedStatus(statusInputs, worktreeId, carried?.get(worktreeId))
+    byWorktreeId.set(worktreeId, memo)
   }
-  return status
+  return memo.status
 }
 
-function resolveMemoizedStatus(statusInputs: AppState, worktreeId: string): WorktreeStatus {
+function resolveMemoizedStatus(
+  statusInputs: AppState,
+  worktreeId: string,
+  memo: StatusMemo | undefined
+): StatusMemo {
   const summary = selectWorktreeAgentActivitySummary(statusInputs, worktreeId)
   const inputs = [
     statusInputs.tabsByWorktree[worktreeId] ?? EMPTY_TABS,
@@ -91,20 +94,21 @@ function resolveMemoizedStatus(statusInputs: AppState, worktreeId: string): Work
       statusInputs.unifiedTabsByWorktree[worktreeId],
       statusInputs.structuredChatSleptAtByPaneKey
     ),
-    selectWorktreeActivityPtyIds(statusInputs, worktreeId),
+    selectLivePtyIdsForWorktree(statusInputs, worktreeId),
+    selectStoppedWorktreeEnvironmentId(statusInputs, worktreeId),
     selectRuntimePaneTitlesForWorktree(statusInputs, worktreeId),
     selectTerminalLayoutRootsForWorktree(statusInputs, worktreeId),
     summary
   ] as const
-  const memo = statusMemoByWorktreeId.get(worktreeId)
   if (memo && inputs.every((input, index) => input === memo.inputs[index])) {
-    return memo.status
+    return memo
   }
   const [
     tabs,
     browserTabs,
     hasStructuredChat,
     ptyIdsByTabId,
+    stoppedEnvironmentId,
     runtimePaneTitlesByTabId,
     terminalLayoutRootsByTabId
   ] = inputs
@@ -112,7 +116,9 @@ function resolveMemoizedStatus(statusInputs: AppState, worktreeId: string): Work
     tabs,
     browserTabs,
     hasStructuredChat,
-    ptyIdsByTabId,
+    ptyIdsByTabId: stoppedEnvironmentId
+      ? withoutStoppedHostPtys(ptyIdsByTabId, stoppedEnvironmentId)
+      : ptyIdsByTabId,
     runtimePaneTitlesByTabId,
     agentStatusPaneIdsByTabId: summary.agentStatusPaneIdsByTabId,
     stalePaneIdsByTabId: summary.stalePaneIdsByTabId,
@@ -125,11 +131,7 @@ function resolveMemoizedStatus(statusInputs: AppState, worktreeId: string): Work
     hasUnconfirmed: summary.hasUnconfirmed,
     hasLiveDone: summary.hasLiveDone
   })
-  if (!memo && statusMemoByWorktreeId.size >= STATUS_MEMO_LIMIT) {
-    statusMemoByWorktreeId.clear()
-  }
-  statusMemoByWorktreeId.set(worktreeId, { inputs, status })
-  return status
+  return { inputs, status }
 }
 
 export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
