@@ -27,7 +27,7 @@ export function useStructuredAgentTurnTiming(
   },
   turnId: string | null
 ): { settledTurns: NativeChatSettledTurns; workingStartedAt: number | null } {
-  const { settledTurns, runningTiming } = useMemo(
+  const { settledTurns, runningTiming, runningKey } = useMemo(
     () => selectStructuredAgentTurnBars(items, submissions, turnId, latestTurn),
     [items, submissions, turnId, latestTurn]
   )
@@ -35,7 +35,7 @@ export function useStructuredAgentTurnTiming(
   // Derive during render so the first paint of each turn already uses its correct start.
   const step = stepStructuredAgentTurnClock({
     timing: runningTiming,
-    turnId,
+    turnId: runningKey,
     now: Date.now,
     hostClock,
     latch

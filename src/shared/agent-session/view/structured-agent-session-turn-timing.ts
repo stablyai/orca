@@ -138,6 +138,39 @@ function writtenSends(submissions: readonly AgentJournalSubmission[]): ReadonlyM
   return written
 }
 
+const writtenOpeningSendBySubmissions = new WeakMap<
+  readonly AgentJournalSubmission[],
+  { key: string; timing: StructuredAgentTurnTiming } | null
+>()
+
+/** A written send still awaiting its turn record times the clock from its stamp, so a late viewer sees the real elapsed time. */
+function writtenOpeningSend(
+  submissions: readonly AgentJournalSubmission[]
+): { key: string; timing: StructuredAgentTurnTiming } | null {
+  const cached = writtenOpeningSendBySubmissions.get(submissions)
+  if (cached !== undefined) {
+    return cached
+  }
+  let opening: { key: string; timing: StructuredAgentTurnTiming } | null = null
+  for (const submission of submissions) {
+    const writtenAt = submission.writtenAt
+    if (
+      submission.dispatchState === 'pending' &&
+      writtenAt !== undefined &&
+      Number.isFinite(writtenAt) &&
+      writtenAt > 0 &&
+      (opening === null || writtenAt > opening.timing.startedAt)
+    ) {
+      opening = {
+        key: agentJournalSubmissionKey(submission.clientMessageId),
+        timing: { state: 'running', startedAt: writtenAt, writtenAt, observedAt: writtenAt }
+      }
+    }
+  }
+  writtenOpeningSendBySubmissions.set(submissions, opening)
+  return opening
+}
+
 export function selectStructuredAgentTurnTimings(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = []
@@ -254,8 +287,18 @@ export function selectStructuredAgentTurnBars(
 ): {
   settledTurns: NativeChatSettledTurns
   runningTiming: StructuredAgentTurnTiming | null
+  /** The running turn's id, or the written opening send's key before its turn record exists. */
+  runningKey: string | null
 } {
   const turns = readStructuredAgentJournalTurns(items, submissions)
+  if (turnId === null) {
+    const opening = writtenOpeningSend(submissions)
+    return {
+      settledTurns: settledTurnsOf(turns, submissions),
+      runningTiming: opening?.timing ?? null,
+      runningKey: opening?.key ?? null
+    }
+  }
   const unloaded =
     turnId !== null && !turns.byTurnId.has(turnId) && latestTurn?.turn.turnId === turnId
       ? latestTurn
@@ -269,8 +312,7 @@ export function selectStructuredAgentTurnBars(
             ? undefined
             : writtenSends(submissions).get(unloaded.turn.userItemId)
         )
-      : turnId === null
-        ? null
-        : (turns.byTurnId.get(turnId) ?? null)
+      : (turns.byTurnId.get(turnId) ?? null),
+    runningKey: turnId
   }
 }

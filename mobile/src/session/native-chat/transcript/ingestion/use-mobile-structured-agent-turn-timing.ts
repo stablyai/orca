@@ -34,7 +34,7 @@ export function useMobileStructuredAgentTurnTiming(
   turnJournal: NativeChatTurnJournal
   workingStartedAt: number | null
 } {
-  const { settledTurns, runningTiming } = useMemo(
+  const { settledTurns, runningTiming, runningKey } = useMemo(
     () => selectStructuredAgentTurnBars(items, submissions, turnId, latestTurn),
     [items, submissions, turnId, latestTurn]
   )
@@ -46,7 +46,7 @@ export function useMobileStructuredAgentTurnTiming(
   // Derive during render so a new turn’s first paint counts from its correct start.
   const step = stepStructuredAgentTurnClock({
     timing: runningTiming,
-    turnId,
+    turnId: runningKey,
     now: Date.now,
     hostClock,
     latch
