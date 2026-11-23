@@ -601,6 +601,12 @@
       "sshPage": {
         "stored": "Сохранено в браузере для {{host}}.",
         "googleCookiesSkipped": "Файлы cookie Google не импортированы. Откройте страницу, которая работает через {{host}}, и войдите в Google."
+      },
+      "picker": {
+        "menuItem": "Импортировать файлы cookie…",
+        "search": "Поиск профилей",
+        "lastUsed": "Недавно использованные",
+        "noMatches": "Нет совпадений"
       }
     },
     "passwords": {

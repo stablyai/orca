@@ -543,6 +543,12 @@
       "sshPage": {
         "stored": "{{host}} tarayıcısında saklandı.",
         "googleCookiesSkipped": "Google çerezleri içe aktarılmadı. {{host}} üzerinden gezinen bir sayfa açın, ardından Google'da oturum açın."
+      },
+      "picker": {
+        "menuItem": "Çerezleri İçe Aktar…",
+        "search": "Profillerde ara",
+        "lastUsed": "Son kullanılan",
+        "noMatches": "Eşleşme yok"
       }
     },
     "passwords": {

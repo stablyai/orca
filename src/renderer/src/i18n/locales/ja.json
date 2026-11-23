@@ -22053,6 +22053,12 @@
       "sshPage": {
         "stored": "{{host}} 用のブラウザに保存しました。",
         "googleCookiesSkipped": "Google の Cookie はインポートされませんでした。{{host}} 経由で閲覧するページを開き、Google にサインインしてください。"
+      },
+      "picker": {
+        "menuItem": "Cookie のインポート…",
+        "search": "プロファイルを検索",
+        "lastUsed": "前回使用",
+        "noMatches": "一致する項目がありません"
       }
     },
     "passwords": {

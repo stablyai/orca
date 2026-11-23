@@ -23408,6 +23408,12 @@
       "sshPage": {
         "stored": "{{host}}용 브라우저에 저장했습니다.",
         "googleCookiesSkipped": "Google 쿠키는 가져오지 않았습니다. {{host}}를 통해 탐색하는 페이지를 열고 Google에 로그인하세요."
+      },
+      "picker": {
+        "menuItem": "쿠키 가져오기…",
+        "search": "프로필 검색",
+        "lastUsed": "최근 사용",
+        "noMatches": "일치하는 항목 없음"
       }
     },
     "passwords": {

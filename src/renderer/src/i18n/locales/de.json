@@ -543,6 +543,12 @@
       "sshPage": {
         "stored": "Im Browser für {{host}} gespeichert.",
         "googleCookiesSkipped": "Google-Cookies wurden nicht importiert. Öffne eine Seite, die über {{host}} surft, und melde dich dann bei Google an."
+      },
+      "picker": {
+        "menuItem": "Cookies importieren…",
+        "search": "Profile suchen",
+        "lastUsed": "Zuletzt verwendet",
+        "noMatches": "Keine Treffer"
       }
     },
     "passwords": {

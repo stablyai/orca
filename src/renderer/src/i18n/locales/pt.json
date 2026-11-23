@@ -1446,6 +1446,12 @@
       "sshPage": {
         "stored": "Salvo no navegador de {{host}}.",
         "googleCookiesSkipped": "Os cookies do Google não foram importados. Abra uma página que navegue por {{host}} e entre no Google."
+      },
+      "picker": {
+        "menuItem": "Importar Cookies…",
+        "search": "Pesquisar perfis",
+        "lastUsed": "Usado por último",
+        "noMatches": "Nenhum resultado"
       }
     },
     "googleCookieClear": {

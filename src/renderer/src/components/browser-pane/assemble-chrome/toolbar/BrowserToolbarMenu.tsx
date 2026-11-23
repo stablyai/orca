@@ -109,8 +109,14 @@ export function BrowserToolbarMenu({
   // Force the menu open for the tour unless a new tab page is already showing the Import hint.
   const importHintOnPage =
     isBlankTab && shouldShowBrowserImportHint({ persistedUIReady, browserImportHintHidden })
+  // The picker replaces the menu it opened from, so the tour stops holding the menu while it shows.
+  const [importPickerOpen, setImportPickerOpen] = useState(false)
   const shouldForceMenuOpen =
-    showsCookieImport && browserCookieTourStepActive && isActive && !importHintOnPage
+    showsCookieImport &&
+    browserCookieTourStepActive &&
+    isActive &&
+    !importHintOnPage &&
+    !importPickerOpen
 
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
@@ -387,6 +393,8 @@ export function BrowserToolbarMenu({
                 onFetchDetectedBrowsers: () => void fetchDetectedBrowsers(),
                 browserSessionImportState,
                 pageRoute,
+                pickerOpen: importPickerOpen,
+                onPickerOpenChange: setImportPickerOpen,
                 onImportFromBrowser: (browserFamily, browserProfile) =>
                   void handleImportFromBrowser(browserFamily, browserProfile),
                 onImportFromFile: () => void handleImportFromFile()

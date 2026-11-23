@@ -514,6 +514,12 @@
       "sshPage": {
         "stored": "已儲存到 {{host}} 的瀏覽器。",
         "googleCookiesSkipped": "未匯入 Google Cookie。請開啟一個透過 {{host}} 瀏覽的頁面，然後登入 Google。"
+      },
+      "picker": {
+        "menuItem": "匯入 Cookie…",
+        "search": "搜尋設定檔",
+        "lastUsed": "上次使用",
+        "noMatches": "沒有相符項目"
       }
     },
     "passwords": {

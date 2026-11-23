@@ -44,9 +44,10 @@ import {
   type BrowserToolbarProfileSubProps
 } from '../profile-routing/browser-toolbar-profile-sub'
 import {
-  BrowserToolbarImportCookiesSub,
-  type BrowserToolbarImportCookiesSubProps
-} from '../profile-routing/browser-toolbar-import-cookies-sub'
+  BrowserToolbarImportCookiesItem,
+  type BrowserToolbarImportCookiesProps
+} from '../profile-routing/browser-toolbar-import-cookies-item'
+import { BrowserCookieImportPicker } from '../profile-routing/browser-cookie-import-picker'
 
 /** Page actions that used to be toolbar buttons or hidden behind a right-click on Reload. */
 export type BrowserToolbarPageActions = {
@@ -66,7 +67,7 @@ type BrowserToolbarMenuDropdownProps = {
   /** The page's host's profiles; null where that host can't switch this page. */
   profile: BrowserToolbarProfileSubProps | null
   /** Null on streamed pages, whose jar is the server's and takes no import from this desktop. */
-  cookieImport: BrowserToolbarImportCookiesSubProps | null
+  cookieImport: BrowserToolbarImportCookiesProps | null
   pageActions: BrowserToolbarPageActions
   /** The Extensions › submenu; null where the page's session runs no extensions. */
   extensionsSub: React.ReactNode
@@ -107,134 +108,155 @@ export function BrowserToolbarMenuDropdown({
     onFind || onZoomPage || onApplyViewportPreset || onSetSiteColorScheme
   )
   return (
-    <DropdownMenu modal={false} open={menuOpen} onOpenChange={onMenuOpenChange}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          ref={overflow.triggerRef}
-          size="icon-xs"
-          variant="muted-field-icon"
-          title={menuLabel}
-          aria-label={menuLabel}
-          data-contextual-tour-target={
-            extensionsSub && extensionDiscoveryTarget ? 'browser-extensions-control' : undefined
-          }
-          data-browser-profile-id={profile?.effectiveProfileId}
-        >
-          <Ellipsis className="size-3.5" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className="w-60"
-        data-browser-page-menu-id={browserPageId}
-        onCloseAutoFocus={overflow.onMenuCloseAutoFocus}
-      >
-        {/* Logins first: without cookies or the right profile, most sites are unusable. */}
-        {cookieImport ? <BrowserToolbarImportCookiesSub {...cookieImport} /> : null}
-        {profile ? <BrowserToolbarProfileSub {...profile} /> : null}
-        {cookieImport || profile ? <DropdownMenuSeparator /> : null}
-        {overflow.annotateToolItems}
-        {hasPageDisplayItems ? <DropdownMenuSeparator /> : null}
-        {onFind ? (
-          <DropdownMenuItem
-            // Why deferred: focus returning to the ⋯ trigger would pull it out of the find field.
-            onSelect={() => overflow.deferUntilClose(onFind)}
+    <>
+      <DropdownMenu modal={false} open={menuOpen} onOpenChange={onMenuOpenChange}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            ref={overflow.triggerRef}
+            size="icon-xs"
+            variant="muted-field-icon"
+            title={menuLabel}
+            aria-label={menuLabel}
+            data-contextual-tour-target={
+              extensionsSub && extensionDiscoveryTarget ? 'browser-extensions-control' : undefined
+            }
+            data-browser-profile-id={profile?.effectiveProfileId}
           >
-            <Search className="size-3.5" />
-            {t('browser.toolbar.findOnPage', 'Find on page')}
-            {findShortcut ? <DropdownMenuShortcut>{findShortcut}</DropdownMenuShortcut> : null}
-          </DropdownMenuItem>
-        ) : null}
-        {onZoomPage ? <BrowserToolbarZoomRow display={siteDisplay} onZoom={onZoomPage} /> : null}
-        {onApplyViewportPreset ? (
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <Monitor className="size-3.5" />
-              {t('auto.components.browser.pane.BrowserToolbarMenu.e5d31de1a9', 'Viewport Size')}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuPortal>
-              <DropdownMenuSubContent data-browser-page-menu-id={browserPageId}>
-                {/* Use radio semantics for viewport selection; encode null as default because Radix values must be strings. */}
-                <DropdownMenuRadioGroup
-                  value={viewportPresetId ?? 'default'}
-                  onValueChange={(v) =>
-                    onApplyViewportPreset(v === 'default' ? null : (v as BrowserViewportPresetId))
-                  }
-                >
-                  <DropdownMenuRadioItem value="default">
-                    {t('auto.components.browser.pane.BrowserToolbarMenu.ed8f54509d', 'Default')}
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuSeparator />
-                  {BROWSER_VIEWPORT_PRESETS.map((preset) => (
-                    <DropdownMenuRadioItem key={preset.id} value={preset.id}>
-                      <span className="truncate">{browserViewportPresetLabel(preset, t)}</span>
+            <Ellipsis className="size-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          className="w-60"
+          data-browser-page-menu-id={browserPageId}
+          onCloseAutoFocus={overflow.onMenuCloseAutoFocus}
+        >
+          {/* Logins first: without cookies or the right profile, most sites are unusable. */}
+          {cookieImport ? (
+            <BrowserToolbarImportCookiesItem
+              {...cookieImport}
+              deferUntilClose={overflow.deferUntilClose}
+            />
+          ) : null}
+          {profile ? <BrowserToolbarProfileSub {...profile} /> : null}
+          {cookieImport || profile ? <DropdownMenuSeparator /> : null}
+          {overflow.annotateToolItems}
+          {hasPageDisplayItems ? <DropdownMenuSeparator /> : null}
+          {onFind ? (
+            <DropdownMenuItem
+              // Why deferred: focus returning to the ⋯ trigger would pull it out of the find field.
+              onSelect={() => overflow.deferUntilClose(onFind)}
+            >
+              <Search className="size-3.5" />
+              {t('browser.toolbar.findOnPage', 'Find on page')}
+              {findShortcut ? <DropdownMenuShortcut>{findShortcut}</DropdownMenuShortcut> : null}
+            </DropdownMenuItem>
+          ) : null}
+          {onZoomPage ? <BrowserToolbarZoomRow display={siteDisplay} onZoom={onZoomPage} /> : null}
+          {onApplyViewportPreset ? (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Monitor className="size-3.5" />
+                {t('auto.components.browser.pane.BrowserToolbarMenu.e5d31de1a9', 'Viewport Size')}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent data-browser-page-menu-id={browserPageId}>
+                  {/* Use radio semantics for viewport selection; encode null as default because Radix values must be strings. */}
+                  <DropdownMenuRadioGroup
+                    value={viewportPresetId ?? 'default'}
+                    onValueChange={(v) =>
+                      onApplyViewportPreset(v === 'default' ? null : (v as BrowserViewportPresetId))
+                    }
+                  >
+                    <DropdownMenuRadioItem value="default">
+                      {t('auto.components.browser.pane.BrowserToolbarMenu.ed8f54509d', 'Default')}
                     </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuSubContent>
-            </DropdownMenuPortal>
-          </DropdownMenuSub>
-        ) : null}
-        {onSetSiteColorScheme ? (
-          <BrowserToolbarAppearanceSub
-            browserPageId={browserPageId}
-            display={siteDisplay}
-            onSetColorScheme={onSetSiteColorScheme}
-          />
-        ) : null}
+                    <DropdownMenuSeparator />
+                    {BROWSER_VIEWPORT_PRESETS.map((preset) => (
+                      <DropdownMenuRadioItem key={preset.id} value={preset.id}>
+                        <span className="truncate">{browserViewportPresetLabel(preset, t)}</span>
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
+          ) : null}
+          {onSetSiteColorScheme ? (
+            <BrowserToolbarAppearanceSub
+              browserPageId={browserPageId}
+              display={siteDisplay}
+              onSetColorScheme={onSetSiteColorScheme}
+            />
+          ) : null}
 
-        <DropdownMenuSeparator />
+          <DropdownMenuSeparator />
 
-        {pageActions.onHardReload ? (
-          <DropdownMenuItem onSelect={pageActions.onHardReload}>
-            <RotateCcw className="size-3.5" />
-            {t('auto.components.browser.pane.BrowserPane.a1f3c2e4b5', 'Hard Reload')}
-            {hardReloadShortcut ? (
-              <DropdownMenuShortcut>{hardReloadShortcut}</DropdownMenuShortcut>
+          {pageActions.onHardReload ? (
+            <DropdownMenuItem onSelect={pageActions.onHardReload}>
+              <RotateCcw className="size-3.5" />
+              {t('auto.components.browser.pane.BrowserPane.a1f3c2e4b5', 'Hard Reload')}
+              {hardReloadShortcut ? (
+                <DropdownMenuShortcut>{hardReloadShortcut}</DropdownMenuShortcut>
+              ) : null}
+            </DropdownMenuItem>
+          ) : null}
+          {pageActions.onOpenDevTools ? (
+            <DropdownMenuItem onSelect={pageActions.onOpenDevTools}>
+              <SquareCode className="size-3.5" />
+              {t('auto.components.browser.pane.BrowserPane.ec75d0c412', 'Open browser devtools')}
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem
+            disabled={!pageActions.onOpenExternal}
+            onSelect={() => pageActions.onOpenExternal?.()}
+          >
+            <ExternalLink className="size-3.5" />
+            {t('auto.components.browser.pane.BrowserPane.0f41bf80c7', 'Open in default browser')}
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
+
+          {extensionsSub}
+          {extensionsSub ? <DropdownMenuSeparator /> : null}
+
+          <DropdownMenuItem
+            // Why deferred: focus returning to the ⋯ trigger would otherwise close the dialog at once.
+            onSelect={() =>
+              overflow.deferUntilClose(() =>
+                useAppStore.getState().setBrowserHistoryPageId(browserPageId)
+              )
+            }
+          >
+            <History className="size-3.5" />
+            {t('browser.history.menuItem', 'History')}
+            {historyShortcut ? (
+              <DropdownMenuShortcut>{historyShortcut}</DropdownMenuShortcut>
             ) : null}
           </DropdownMenuItem>
-        ) : null}
-        {pageActions.onOpenDevTools ? (
-          <DropdownMenuItem onSelect={pageActions.onOpenDevTools}>
-            <SquareCode className="size-3.5" />
-            {t('auto.components.browser.pane.BrowserPane.ec75d0c412', 'Open browser devtools')}
+          <DropdownMenuItem
+            onSelect={() => {
+              useAppStore.getState().openSettingsTarget({ pane: 'browser', repoId: null })
+              useAppStore.getState().openSettingsPage()
+            }}
+          >
+            <Settings className="size-3.5" />
+            {t('auto.components.browser.pane.BrowserToolbarMenu.a771c2b6c8', 'Browser Settings…')}
           </DropdownMenuItem>
-        ) : null}
-        <DropdownMenuItem
-          disabled={!pageActions.onOpenExternal}
-          onSelect={() => pageActions.onOpenExternal?.()}
-        >
-          <ExternalLink className="size-3.5" />
-          {t('auto.components.browser.pane.BrowserPane.0f41bf80c7', 'Open in default browser')}
-        </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
-
-        {extensionsSub}
-        {extensionsSub ? <DropdownMenuSeparator /> : null}
-
-        <DropdownMenuItem
-          // Why deferred: focus returning to the ⋯ trigger would otherwise close the dialog at once.
-          onSelect={() =>
-            overflow.deferUntilClose(() =>
-              useAppStore.getState().setBrowserHistoryPageId(browserPageId)
-            )
-          }
-        >
-          <History className="size-3.5" />
-          {t('browser.history.menuItem', 'History')}
-          {historyShortcut ? <DropdownMenuShortcut>{historyShortcut}</DropdownMenuShortcut> : null}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={() => {
-            useAppStore.getState().openSettingsTarget({ pane: 'browser', repoId: null })
-            useAppStore.getState().openSettingsPage()
-          }}
-        >
-          <Settings className="size-3.5" />
-          {t('auto.components.browser.pane.BrowserToolbarMenu.a771c2b6c8', 'Browser Settings…')}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {cookieImport ? (
+        <BrowserCookieImportPicker
+          open={cookieImport.pickerOpen}
+          onOpenChange={cookieImport.onPickerOpenChange}
+          anchorRef={overflow.triggerRef}
+          browserPageId={cookieImport.browserPageId}
+          detectedBrowsers={cookieImport.detectedBrowsers}
+          pageRoute={cookieImport.pageRoute}
+          onImportFromBrowser={cookieImport.onImportFromBrowser}
+          onImportFromFile={cookieImport.onImportFromFile}
+        />
+      ) : null}
+    </>
   )
 }
