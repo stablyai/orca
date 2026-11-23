@@ -1,6 +1,6 @@
-// Name and picture: the desktop header's rename and picture picker on one page. A photo uploads as it
-// is picked, as the desktop's does; the name, mascot and background save on Done. No Generate: it runs an
-// image agent on the computer you look from, and a phone has none.
+// Name and picture: the desktop header's rename and picture picker on one page. Everything, a picked
+// photo included, saves on Done, so Cancel keeps the picture: an upload overwrites the bot's only copy.
+// No Generate: it runs an image agent on the computer you look from, and a phone has none.
 import { useState, type ReactNode } from 'react'
 import { Pressable, View } from 'react-native'
 import { ImageUp } from 'lucide-react-native'
@@ -15,6 +15,7 @@ import {
   DEFAULT_BOT_AVATAR_COLOR
 } from '../../../src/shared/bots/bot-avatar-color'
 import { BOT_NAME_MAX_LENGTH } from '../../../src/shared/bot-types'
+import { wornBotOutfit } from '../../../src/shared/bots/bot-avatar-outfit'
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
 import { TextField } from '../components/composer-input/TextField'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
@@ -55,7 +56,7 @@ export function MobileBotIdentityPage(props: {
   const picker = useMediaPicker()
   const { bot } = props
   // As the page opened: only what is changed here is sent, so an edit made elsewhere meanwhile stays.
-  const [opened, setOpened] = useState(() => {
+  const [opened] = useState(() => {
     const saved = parseBotAvatar(bot.avatar)
     return {
       name: bot.name,
@@ -70,8 +71,10 @@ export function MobileBotIdentityPage(props: {
   const [busy, setBusy] = useState(false)
   const [width, setWidth] = useState(0)
 
+  // The outfit isn't edited here but stays on, so the preview shows it as Done will save it.
+  const outfit = wornBotOutfit(bot.avatarOutfit)
   const preview: MobileBotAvatarSource = mascot
-    ? { kind: 'mascot', id: mascot, ...(color ? { color } : {}) }
+    ? { kind: 'mascot', id: mascot, ...(color ? { color } : {}), ...(outfit ? { outfit } : {}) }
     : photo
       ? { kind: 'image', uri: `data:image/png;base64,${photo}` }
       : props.avatar
@@ -85,12 +88,15 @@ export function MobileBotIdentityPage(props: {
       ...(mascot && mascot !== opened.mascot ? { avatar: mascotAvatar(mascot) } : {}),
       ...(mascot && props.takesColor && color !== opened.color ? { avatarColor: color } : {})
     }
-    if (Object.keys(updates).length === 0) {
+    // A mascot picked after the photo replaces it.
+    const png = mascot ? null : photo
+    const edits = Object.keys(updates).length > 0
+    if (!edits && !png) {
       props.onCancel()
       return
     }
     setBusy(true)
-    const ok = await props.onSave(updates)
+    const ok = (!edits || (await props.onSave(updates))) && (!png || (await props.onUpload(png)))
     setBusy(false)
     if (ok) {
       props.onCancel()
@@ -103,13 +109,8 @@ export function MobileBotIdentityPage(props: {
       if (!picked) {
         return
       }
-      const png = await botAvatarPngFromPhoto(picked)
-      if (await props.onUpload(png)) {
-        setPhoto(png)
-        // The photo is saved now, so picking the earlier mascot again is a change.
-        setOpened((held) => ({ ...held, mascot: null }))
-        setMascot(null)
-      }
+      setPhoto(await botAvatarPngFromPhoto(picked))
+      setMascot(null)
     } catch (error) {
       props.showToast(
         error instanceof BotAvatarPhotoError

@@ -5,8 +5,10 @@ import { botRefKey, botTarget, type BotRef } from '@/lib/bot-hosts'
 import { readCachedRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
+  BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY,
-  BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY
+  BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY
 } from '../../../../../shared/bot-runtime-capabilities'
 import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
 import {
@@ -35,7 +37,9 @@ export function useBotItemPendingComments(
         botItemPendingCommentText(entry),
         entry.paths,
         entry.requestId ?? undefined,
-        entry.questionId ?? undefined
+        entry.questionId ?? undefined,
+        entry.plain,
+        entry.skills
       ),
     failed: (error, replaced) =>
       toast.error(
@@ -44,7 +48,9 @@ export function useBotItemPendingComments(
           : botErrorMessage(error)
       ),
     requestIds: takesCapability(bot, BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY),
-    questionIds: takesCapability(bot, BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY)
+    questionIds: takesCapability(bot, BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY),
+    plain: takesCapability(bot, BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY),
+    skills: takesCapability(bot, BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY)
   })
 }
 

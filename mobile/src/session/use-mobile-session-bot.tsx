@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BOTS_ITEMS_RUNTIME_CAPABILITY,
   BOTS_MOBILE_RUNTIME_CAPABILITY
 } from '../../../src/shared/bot-runtime-capabilities'
+import { botItemUidOfPaneKey } from '../../../src/shared/bots/bot-notification-pane-keys'
 import type { BotPanelOpen } from '../bots/MobileBotPanel'
-import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { MobileBotAvatar } from '../bots/MobileBotAvatar'
 import { botHomeChatReset, botSessionStart } from '../bots/bot-sheet-operations'
+import { mobileBotRefusalText } from '../bots/mobile-bot-refusal-text'
+import { readAgentSessionErrorRefusal } from '../../../src/shared/agent-session/failures/agent-session-write-failure'
 import { readBotAgentChoices } from '../bots/new-bot-host-reads'
 import type { BotAgent } from '../../../src/shared/bot-types'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
@@ -27,9 +29,15 @@ import {
 } from './tabs/pending-session-selection'
 import type { MobileSessionPanelRouteActionsModel } from './use-mobile-session-panel-route-actions'
 import type { MobileNewTabBotActions } from './tabs/MobileNewTabSheet'
+import type { MobileSessionItemLink } from './mobile-session-item-target'
+import { useSessionRouteRequest } from './use-session-route-request'
 
-/** A bot's home route: its header facts, its sheet, and its new chats from +. */
-export function useMobileSessionBot(scope: MobileSessionPanelRouteActionsModel) {
+/** A bot's home route: its header facts, its panel, and its new chats from +; `access`, an access
+ *  request its push asked to review, opens in the bot's panel. */
+export function useMobileSessionBot(
+  scope: MobileSessionPanelRouteActionsModel,
+  access: MobileSessionItemLink['access'] = null
+) {
   const {
     hostId,
     client,
@@ -52,17 +60,10 @@ export function useMobileSessionBot(scope: MobileSessionPanelRouteActionsModel) 
     enabled: isFolderWorkspaceRoute && botsOnPhone && hostId !== undefined,
     hostKey: hostBotsKey(hostId ?? '', executionHost)
   })
-  // A host that serves items to phones gets the bot panel behind an Items button; an older one keeps
-  // today's sheet behind ⋯ and source control in the bar.
+  // The bot panel opens behind an Items button, on a host that serves items to phones.
   const itemsOnPhone = useRouteCapability(BOTS_ITEMS_RUNTIME_CAPABILITY) && routeBot !== null
   const t = useMobileTranslation()
-  const [showBotSheet, setShowBotSheet] = useState(false)
   const [botPanel, setBotPanel] = useState<BotPanelOpen | null>(null)
-  // A desktop edit since the last read must not ride back on the sheet's next save.
-  const openBotSheet = () => {
-    routeBot?.refresh()
-    setShowBotSheet(true)
-  }
   const refreshRouteBot = routeBot?.refresh
   const openBotPanel = useCallback(
     (open: BotPanelOpen) => {
@@ -71,6 +72,21 @@ export function useMobileSessionBot(scope: MobileSessionPanelRouteActionsModel) 
     },
     [refreshRouteBot]
   )
+  // The panel reads the bot's requests as it opens, so the push's request needs no route read.
+  if (access && itemsOnPhone) {
+    access.reviewed()
+    setBotPanel({ access: access.requestId })
+  }
+  // An item question's push opens its page once the bot is read.
+  const paneRequest = useSessionRouteRequest('paneKey')
+  const openedPaneRequest = useRef<typeof paneRequest>(null)
+  useEffect(() => {
+    const itemUid = botItemUidOfPaneKey(paneRequest?.value)
+    if (itemUid && itemsOnPhone && openedPaneRequest.current !== paneRequest) {
+      openedPaneRequest.current = paneRequest
+      openBotPanel({ item: itemUid })
+    }
+  }, [paneRequest, itemsOnPhone, openBotPanel])
   const now = useNow(60_000, routeBot !== null)
 
   const botStatus = useMemo(() => {
@@ -124,11 +140,16 @@ export function useMobileSessionBot(scope: MobileSessionPanelRouteActionsModel) 
         sessionId
       })
       void fetchSessionTabs()
-    } catch {
+    } catch (error) {
       pendingSelectionRef.current = withoutUnansweredLaunch(pendingSelectionRef.current, lock)
       triggerError()
-      // The host's refusals are codes, not sentences for the owner.
-      showToast(t('bots.chatStartFailed', 'Couldn’t start the chat'), 1800)
+      // A refused chat says why in chat's words; other host errors are codes, not sentences for the owner.
+      const refusal = readAgentSessionErrorRefusal(error)
+      if (refusal) {
+        showToast(mobileBotRefusalText(refusal), 2400)
+      } else {
+        showToast(t('bots.chatStartFailed', 'Couldn’t start the chat'), 1800)
+      }
     }
   }
 
@@ -183,30 +204,13 @@ export function useMobileSessionBot(scope: MobileSessionPanelRouteActionsModel) 
       }
     : null
 
-  const botMoreActions: ActionSheetAction[] =
-    routeBot && !itemsOnPhone
-      ? [
-          {
-            id: 'bot',
-            label: routeBot.bot.name,
-            hint: t('bots.sheet.hint', 'Activity, automations and settings'),
-            renderIcon: () => <MobileBotAvatar avatar={routeBot.avatar} size={16} />,
-            onPress: openBotSheet
-          }
-        ]
-      : []
-
   return {
     routeBot,
     botStatus,
-    showBotSheet,
-    setShowBotSheet,
-    openBotSheet,
     itemsOnPhone,
     botPanel,
     setBotPanel,
     openBotPanel,
-    botMoreActions,
     botNewTabActions,
     confirmingHomeChat,
     setConfirmingHomeChat,

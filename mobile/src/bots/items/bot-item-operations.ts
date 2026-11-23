@@ -1,6 +1,7 @@
 // The owner's item calls from the phone: the host the route reaches (a paired server's too) reads and
 // changes the bot's items. Only a comment carries a request id (where the host takes one), so only a
 // comment's Retry is safe after a dropped reply.
+import { botFailureMessage } from '../bot-failure-message'
 import * as z from 'zod'
 import {
   BotItemShowReadSchema,
@@ -8,7 +9,11 @@ import {
   type BotItemShowRead,
   type BotItemsListRead
 } from '../../../../src/shared/bots/bot-item-schema'
-import type { BotItem, BotItemStatus } from '../../../../src/shared/bots/bot-items'
+import type {
+  BotItem,
+  BotItemCommentSkill,
+  BotItemStatus
+} from '../../../../src/shared/bots/bot-items'
 import { readHostMethodReply } from '../../host-screen/sidebar-feed/host-sidebar-feed-operations'
 import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -90,7 +95,7 @@ export type BotItemRead<T> =
   | { kind: 'read'; value: T }
   | { kind: 'failed'; notFound: boolean; message?: string }
 
-/** Every open item, closed ones a page at a time (`closedCursor` for the next), or these chats'. */
+/** Open items and a page of closed items, optionally scoped to a group’s rooms. */
 export async function readBotItems(
   client: RpcClient,
   botId: string,
@@ -153,7 +158,7 @@ async function write(send: () => Promise<unknown>): Promise<BotItemWriteOutcome>
     return isRpcDeliveryUnknown(error) ? { kind: 'unknown' } : { kind: 'not-sent' }
   }
   return reply instanceof Error
-    ? { kind: 'refused', message: reply.message }
+    ? { kind: 'refused', message: botFailureMessage(reply) ?? reply.message }
     : { kind: 'done', result: reply }
 }
 
@@ -163,7 +168,11 @@ export function commentOnBotItem(
   client: RpcClient,
   uid: string,
   text: string,
-  extra: { images?: readonly string[]; requestId?: string } = {}
+  extra: {
+    images?: readonly string[]
+    requestId?: string
+    skills?: readonly BotItemCommentSkill[]
+  } = {}
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
     const reply = await itemComment.request(
@@ -172,7 +181,8 @@ export function commentOnBotItem(
         item: uid,
         text,
         ...(extra.images?.length ? { images: [...extra.images] } : {}),
-        ...(extra.requestId ? { requestId: extra.requestId } : {})
+        ...(extra.requestId ? { requestId: extra.requestId } : {}),
+        ...(extra.skills?.length ? { skills: [...extra.skills] } : {})
       },
       { failWhenDisconnected: true }
     )

@@ -1,5 +1,6 @@
 import type { WebContents } from 'electron'
-export type BrowserMouseModifier = 'cmd' | 'ctrl' | 'alt' | 'shift'
+import type { BrowserMouseModifier } from '../../../../shared/rpc-contract/browser/browser-params'
+export type { BrowserMouseModifier }
 
 type CdpMouseButton = 'left' | 'middle' | 'right'
 

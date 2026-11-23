@@ -14,6 +14,7 @@ import { BotConnectorOffer } from '../../../../shared/rpc-contract/bots-look-aro
 import { hostGoogleBotState } from '../../../bots/bot-google-access'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { LOOK_AROUND_REFUSAL } from '../../../bots/bot-look-around-policy'
+import { refuseBotGroupRoomCard } from '../../../bots/bot-group-session-access'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, InvalidArgumentError } from '../core'
@@ -43,6 +44,7 @@ export async function postConnectorOffer(
   offer: ConnectorOffer,
   runtime: Pick<OrcaRuntimeService, 'servesWithoutWindow'>
 ): Promise<void> {
+  refuseBotGroupRoomCard(callerSessionId)
   const host = getStructuredAgentSessionHost()
   // Null for a session this host doesn't run.
   const destination = await host?.captureAgentStartDestination(callerSessionId)

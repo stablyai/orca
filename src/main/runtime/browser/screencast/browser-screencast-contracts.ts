@@ -1,4 +1,7 @@
-import type { BrowserScreencastResult } from '../../../../shared/browser/runtime/runtime-browser-contracts'
+import type {
+  BrowserScreencastPointer,
+  BrowserScreencastResult
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
   BrowserScreencastFrameBudget,
   BrowserScreencastSession,
@@ -22,6 +25,10 @@ export type BrowserScreencastParams = {
   minFrameIntervalMs?: number
   // The viewer acks frames with browser.screencast.ack; `ready` echoes `frameAck: true`.
   frameAck?: 1
+  // The viewer draws the page's cursor and link bubble: `ready.pointer`, then `pointer` events.
+  pointerEvents?: 1
+  // The viewer asks the page's permission, sign-in and open-app prompts: `pagePrompt` events.
+  pagePrompts?: 1
 } & BrowserCommandTargetParams
 
 export type BrowserScreencastStartResult = {
@@ -31,6 +38,8 @@ export type BrowserScreencastStartResult = {
   session: Omit<BrowserScreencastSession, 'updateFrameBudget'>
   // Replay the joining snapshot once the caller's pre-ready gate opens.
   flushPendingFrame: () => void
+  // After `ready`, so a prompt already open reaches a viewer that knows the stream.
+  startPagePrompts: () => void
 }
 
 export type ActiveBrowserScreencastSubscriber = {
@@ -47,6 +56,9 @@ export type ActiveBrowserScreencastSubscriber = {
   delivery: ScreencastSubscriberDeliveryState
   // Present when the viewer acks frames; `release` unregisters it from acks.
   frameCredit: { credit: BrowserScreencastFrameCredit; release: () => void } | null
+  pointerEvents: boolean
+  // Present while the viewer is asked the page's prompts.
+  releasePagePrompts: (() => void) | null
 }
 
 export type ActiveBrowserScreencastPage = {
@@ -57,4 +69,5 @@ export type ActiveBrowserScreencastPage = {
   subscribers: Map<string, ActiveBrowserScreencastSubscriber>
   viewportOwnerSubscriptionId: string | null
   appliedBudget: BrowserScreencastFrameBudget
+  pointer: () => BrowserScreencastPointer
 }

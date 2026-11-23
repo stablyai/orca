@@ -119,7 +119,7 @@ export const BOT_ITEM_COMMAND_SPECS: CommandSpec[] = [
     variadicPositional: true,
     notes: [
       ...ITEM_NOTES,
-      '<ref> is dispatch:<ctx_id>, pr:<owner/repo#n> (or the PR URL), a URL or a file path. Workers started with `worker-start --item` link themselves.'
+      '<ref> is dispatch:<ctx_id>, pr:<owner/repo#n> (or the PR URL), a URL or a file path. Workers started with `worker-start --item` link themselves. Items of other bots take your own workers, PRs, URLs and files too; their status stays with their bot.'
     ]
   },
   {

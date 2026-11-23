@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { GOOSE_ACP_DIALECT } from '../acp/acp-dialects/goose-dialect'
+import { deliverGooseInstructions } from '../acp/launch/acp-instructions'
 import type { AcpAccountBinding } from '../acp/launch/acp-account-binding'
 import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
@@ -52,6 +53,8 @@ export const GOOSE_LAUNCH_SPEC: AcpLaunchSpec = {
   },
   // Session discovery deletes its listing session.
   modelDiscovery: { kind: 'session', listingNamesConfiguredModel: false },
+  instructions: deliverGooseInstructions,
+  instructionsInWorkspace: true,
   compaction: true,
   transcriptImport: null,
   sessionHistory: GOOSE_SESSION_HISTORY

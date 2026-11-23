@@ -103,7 +103,16 @@ export const googleStatusRead = bindDeferredRpcOperation(
           .array(
             z.looseObject({
               email: z.string(),
-              services: z.array(z.looseObject({ service: z.string(), state: z.string() }))
+              // `reconnect`: Google ended this sign-in.
+              status: z.string().optional(),
+              services: z.array(
+                z.looseObject({
+                  service: z.string(),
+                  state: z.string(),
+                  detail: z.string().optional(),
+                  enableUrl: z.string().optional()
+                })
+              )
             })
           )
           .optional()

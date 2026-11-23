@@ -6,6 +6,8 @@ import {
   type ConnectorOfferSource
 } from '../../../../../src/shared/bots/bot-connector-offer'
 import { useHostBotById, useHostBotsEntry } from '../../../bots/host-bot-store'
+import { useBotPanelOpener } from '../../../bots/bot-item-open'
+import type { ConnectorPage } from '../../../bots/connectors/connector-pages'
 import type { PhoneBot } from '../../../bots/host-bots-operations'
 import { useMobileBotCardHost } from './bot-cards/mobile-bot-card-host'
 import {
@@ -81,8 +83,26 @@ function connectorDescription(t: Translate, source: ConnectorOfferSource): strin
   }
 }
 
-/** A bot's Connect card. Connecting happens on the computer, so the phone says where; Not now answers it
- *  here. Once the bot has the connector, it says so, or that it's paused while its host is signed out. */
+const LIST: ConnectorPage = { kind: 'list' }
+
+/** Where the desktop card's Connect (or add access) goes on the phone: the source's setup page, or for a
+ *  GitHub already linked, Add a connector, whose GitHub row adds another organization. */
+function connectPage(source: ConnectorOfferSource, bot: PhoneBot | null): ConnectorPage {
+  switch (source) {
+    case 'slack':
+      return { kind: 'slack-setup', teamId: undefined, from: LIST }
+    case 'linear':
+      return { kind: 'linear-setup', workspaceId: undefined, from: LIST }
+    case 'github':
+      return bot?.github ? { kind: 'add' } : { kind: 'github-setup', from: LIST }
+    case 'google':
+      return { kind: 'google-connect', from: LIST }
+  }
+}
+
+/** A bot's Connect card. Connect opens the source's setup in the bot's Settings; Not now answers it here.
+ *  Once the bot has the connector, it says so, or that it's paused while its host is signed out. With no
+ *  panel to open (an older host), the card says to connect on the computer. */
 export function MobileNativeChatConnectorOfferRow({
   offer,
   cardId,
@@ -102,6 +122,17 @@ export function MobileNativeChatConnectorOfferRow({
   const host = useMobileBotCardHost()
   const cloudStatus = useHostBotsEntry(host?.hostKey ?? null)?.connectorStatus
   const paused = connected && offer.source !== 'google' && cloudStatus === 'signed-out'
+  const panel = useBotPanelOpener(offer.botId)
+  const openSetup = panel ? () => panel.open({ settings: connectPage(offer.source, bot) }) : null
+  // As the desktop: an offer naming another workspace of a source the bot has adds that workspace.
+  const addsWorkspace =
+    offer.workspace !== undefined &&
+    connectorOfferConnected(bot, { ...offer, workspace: undefined })
+  const connectLabel = addsWorkspace
+    ? offer.source === 'github'
+      ? t('bots.connectors.addOrg', 'Add org')
+      : t('bots.connectors.addWorkspace', 'Add workspace')
+    : t('bots.connectorOffer.connect', 'Connect {{service}}', { service: name })
   const meta = (text: string) => (
     <MobileBotCardMeta fontScale={fontScale} lines={3}>
       {text}
@@ -135,9 +166,21 @@ export function MobileNativeChatConnectorOfferRow({
               {t('bots.connectorOffer.connected', 'Connected')}
             </Text>
           </View>
-          {/* As the desktop card's add action, which the phone points to. */}
-          {offer.addAccess && offer.source !== 'google'
-            ? meta(
+          {/* As the desktop card's add action. */}
+          {offer.addAccess && offer.source !== 'google' ? (
+            openSetup ? (
+              <MobileBotCardActions>
+                <MobileNativeChatNoticePill
+                  label={
+                    offer.source === 'github'
+                      ? t('bots.connectors.addGitHubAccess', 'Add repositories or organizations')
+                      : t('bots.connectors.addAnotherWorkspace', 'Add another workspace')
+                  }
+                  onPress={openSetup}
+                />
+              </MobileBotCardActions>
+            ) : (
+              meta(
                 offer.source === 'github'
                   ? t(
                       'bots.connectorOffer.addGitHubAccess',
@@ -148,16 +191,19 @@ export function MobileNativeChatConnectorOfferRow({
                       'Add another workspace in Orca on your computer, from the card in this chat.'
                     )
               )
-            : null}
+            )
+          ) : null}
         </>
       ) : (
         <>
-          {meta(
-            t(
-              'bots.connectorOffer.onComputer',
-              'Connect it in Orca on your computer, from the card in this chat.'
-            )
-          )}
+          {openSetup
+            ? null
+            : meta(
+                t(
+                  'bots.connectorOffer.onComputer',
+                  'Connect it in Orca on your computer, from the card in this chat.'
+                )
+              )}
           {answer.error ? (
             <Text style={[styles.error, scaledType(typography.metaSize, fontScale)]}>
               {answer.error}
@@ -170,6 +216,9 @@ export function MobileNativeChatConnectorOfferRow({
                 disabled={!answer.ready}
                 onPress={answer.dismiss}
               />
+              {openSetup ? (
+                <MobileNativeChatNoticePill label={connectLabel} primary onPress={openSetup} />
+              ) : null}
             </MobileBotCardActions>
           )}
         </>

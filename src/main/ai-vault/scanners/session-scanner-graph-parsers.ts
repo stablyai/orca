@@ -203,7 +203,7 @@ export async function parseMessageGraphSessionContent(
 
 type MessageGraphParseState = {
   accumulator: SessionAccumulator
-  ompTitle: OmpTranscriptTitle | null
+  persistedTitle: OmpTranscriptTitle | null
 }
 
 function consumeMessageGraphRecordLine(state: MessageGraphParseState, line: string): void {
@@ -214,14 +214,16 @@ function consumeMessageGraphRecordLine(state: MessageGraphParseState, line: stri
   }
   if (accumulator.agent === 'pi' && isOmpWrittenRecord(record)) {
     accumulator.agent = 'omp'
-    accumulator.fallbackTitle = accumulator.title
-    accumulator.title = null
   }
   updateTimeline(accumulator, extractString(record.timestamp))
-  // Fold before the writer is known: an OMP title can precede the record that proves OMP wrote it.
-  state.ompTitle = foldOmpTranscriptTitle(state.ompTitle, record)
-  if (accumulator.agent === 'omp' && state.ompTitle) {
-    accumulator.title = state.ompTitle.title
+  // Pi and OMP persist names apart from the prompt, so the first prompt is only a fallback.
+  const persistsTitle = accumulator.agent === 'pi' || accumulator.agent === 'omp'
+  // Pi clears its name with an empty session_info, falling back to the first prompt.
+  const piNameCleared =
+    accumulator.agent === 'pi' && record.type === 'session_info' && !extractString(record.name)
+  state.persistedTitle = piNameCleared ? null : foldOmpTranscriptTitle(state.persistedTitle, record)
+  if (persistsTitle) {
+    accumulator.title = state.persistedTitle?.title ?? null
   }
   if (record.type === 'session') {
     const sessionId = extractString(record.id)
@@ -245,7 +247,7 @@ function consumeMessageGraphRecordLine(state: MessageGraphParseState, line: stri
   if (role === 'user' || role === 'assistant') {
     accumulator.messageCount++
     if (role === 'user') {
-      if (accumulator.agent === 'omp') {
+      if (persistsTitle) {
         accumulator.fallbackTitle ??= extractMessageText(message)
       } else {
         accumulator.title ??= extractMessageText(message)
@@ -270,7 +272,7 @@ export function createMessageGraphSessionResumeState(
       sessionId: sessionIdFromFileName(file.path),
       messages
     }),
-    ompTitle: null
+    persistedTitle: null
   })
   return withGraphSubagentTranscriptCount(state, file.path)
 }
@@ -282,7 +284,7 @@ function createMessageGraphResumeState(state: MessageGraphParseState): Resumable
     clone: () =>
       createMessageGraphResumeState({
         accumulator: cloneSessionAccumulator(state.accumulator),
-        ompTitle: state.ompTitle
+        persistedTitle: state.persistedTitle
       }),
     touchFile: (file) => {
       state.accumulator.modifiedAt = file.modifiedAt

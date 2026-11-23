@@ -99,7 +99,7 @@ const EventSchema = z.object({
     .optional()
 })
 
-const AutomationRunMessageSchema = z.object({
+export const AutomationRunMessageSchema = z.object({
   runId: z.string().min(1),
   automation: AutomationFactsSchema,
   trigger: z.enum(['scheduled', 'event', 'manual']),
