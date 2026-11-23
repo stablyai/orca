@@ -7,9 +7,17 @@ describe('staged RPC replies', () => {
   it('hands the asking device back the exact reply, and no other device', async () => {
     const replies = new RuntimeRpcStagedReplies(() => 'rt')
     // A surrogate pair straddles the first part boundary; quotes and escapes ride along.
-    const data = `${'a'.repeat(RUNTIME_RPC_STAGED_REPLY_PART_CHARS - 1)}😀"\\\n${'b'.repeat(RUNTIME_RPC_STAGED_REPLY_PART_CHARS)}`
-    const original = { id: 'r1', ok: true as const, result: { data }, _meta: { runtimeId: 'rt' } }
+    const reply = (data: string) => ({
+      id: 'r1',
+      ok: true as const,
+      result: { data },
+      _meta: { runtimeId: 'rt' }
+    })
+    const prefix = JSON.stringify(reply('')).indexOf('""') + 1
+    const pad = 'a'.repeat(RUNTIME_RPC_STAGED_REPLY_PART_CHARS - 1 - prefix)
+    const original = reply(`${pad}😀"\\\n${'b'.repeat(RUNTIME_RPC_STAGED_REPLY_PART_CHARS)}`)
     const text = JSON.stringify(original)
+    expect(text.charCodeAt(RUNTIME_RPC_STAGED_REPLY_PART_CHARS - 1)).toBe(0xd83d)
     const handle = replies.stage('phone-a', text, Buffer.byteLength(text))!
 
     expect(replies.read('phone-b', handle.replyId, 0)).toBeNull()
