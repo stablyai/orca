@@ -65,7 +65,7 @@ async function readJson<T>(path: string, schema: z.ZodType<T>): Promise<Read<T>>
   try {
     raw = await readFile(path)
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'ENOENT'
+    return error instanceof Error && 'code' in error && error.code === 'ENOENT'
       ? { value: null }
       : { unreadable: DAMAGED }
   }
