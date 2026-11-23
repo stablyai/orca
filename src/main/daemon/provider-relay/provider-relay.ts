@@ -61,7 +61,8 @@ export class ProviderRelay {
         this.updateReading()
       },
       drained: () => this.attachment?.drained() ?? Promise.resolve(),
-      onFileLost: () => this.fail('spool-unreadable')
+      onFileLost: () => this.fail('spool-unreadable'),
+      onAckWanted: (seq) => this.attachment?.askForAck(seq)
     })
     this.lines = new ProviderRelayLineReader({
       spillPath: `${options.spoolPath}.line`,

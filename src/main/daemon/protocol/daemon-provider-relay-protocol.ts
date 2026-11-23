@@ -17,7 +17,11 @@ export type ProviderRelaySpawnSpec = {
 export type ProviderRelayRequest =
   | { id: string; type: 'relaySpawn'; payload: { spec: ProviderRelaySpawnSpec; chatKey: string } }
   | { id: string; type: 'relayAttach'; payload: { relayId: string; fromSeq: number } }
-  /** Must be a request, never a notification: a full agent input refuses it, and only a reply can say so. */
+  /**
+   * Must be a request, never a notification: a full agent input refuses it, and only a reply can say
+   * so. Data over `RELAY_WRITE_CHUNK_CHARS` (a large image prompt) is sent as consecutive writes of
+   * at most that many chars; the agent's stdin is a byte stream, so a line may span writes.
+   */
   | { id: string; type: 'relayWrite'; payload: { relayId: string; data: string } }
   | { id: string; type: 'relayAck'; payload: { relayId: string; seq: number } }
   | { id: string; type: 'relayClose'; payload: { relayId: string; grace?: 'brief' } }
@@ -79,10 +83,25 @@ export type ProviderRelayListResult = { relays: ProviderRelayInfo[] }
 /** A line longer than one frame piece arrives as consecutive pieces of one seq; `more` marks all but the last. */
 export type ProviderRelayDataEvent = {
   type: 'event'
-  /** `relayInitialize` and `relayPending` are sent on attach; `relayData` is the spool, in seq order. */
+  /**
+   * `relayInitialize` and `relayPending` are sent on attach; `relayData` is the spool, in seq order.
+   * On a binary-framed stream each piece is a DATA frame carrying the raw line bytes, and the frame
+   * reader restores `payload.line`; an NDJSON stream gets the JSON event.
+   */
   event: 'relayData' | 'relayPending' | 'relayInitialize'
   sessionId: string
   payload: { seq: number; line: string; more?: true }
+}
+
+/**
+ * Acks may be batched (about once a second is plenty). The daemon sends this once each time unacked
+ * output reaches half its memory cap; the client should then ack everything it has received.
+ */
+export type ProviderRelayAckWantedEvent = {
+  type: 'event'
+  event: 'relayAckWanted'
+  sessionId: string
+  payload: { seq: number }
 }
 
 export type ProviderRelayExitEvent = {
@@ -91,3 +110,9 @@ export type ProviderRelayExitEvent = {
   sessionId: string
   payload: ProviderRelayExit
 }
+
+/**
+ * The largest `data` one `relayWrite` should carry. Even fully `\u`-escaped it stays under the
+ * control socket's 16 MiB line limit, so a large write in such chunks always arrives.
+ */
+export const RELAY_WRITE_CHUNK_CHARS = 2 * 1024 * 1024

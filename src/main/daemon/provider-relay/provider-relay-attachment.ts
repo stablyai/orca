@@ -1,9 +1,20 @@
 import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-protocol'
 import { streamFramesFor } from '../transport/framing/daemon-stream-data-split'
-import type { DaemonStreamFraming } from '../transport/framing/daemon-stream-binary-framing'
+import {
+  BINARY_STREAM_FRAMING,
+  encodeBinaryRelayLineFrame,
+  type DaemonStreamFraming
+} from '../transport/framing/daemon-stream-binary-framing'
 
 /** Keeps each event frame well under the stream's line cap even after JSON escaping. */
 const EVENT_PIECE_CHARS = 1024 * 1024
+
+/** A piece never ends between the halves of a surrogate pair, so each piece encodes as UTF-8. */
+function pieceEnd(line: string, offset: number): number {
+  const end = Math.min(offset + EVENT_PIECE_CHARS, line.length)
+  const last = line.charCodeAt(end - 1)
+  return end < line.length && last >= 0xd800 && last <= 0xdbff ? end - 1 : end
+}
 
 /** The client's event stream; its close detaches the relay, as a closing stream detaches a PTY. */
 export type ProviderRelayStream = {
@@ -60,27 +71,58 @@ export class ProviderRelayAttachment {
   }
 
   sendLine(event: ProviderRelayLineEvent, { seq, line }: ProviderRelayRecord): void {
-    if (line.length <= EVENT_PIECE_CHARS) {
-      this.send(this.lineEvent(event, seq, line))
-      return
-    }
-    for (let offset = 0; offset < line.length; offset += EVENT_PIECE_CHARS) {
-      const end = offset + EVENT_PIECE_CHARS
-      this.send(this.lineEvent(event, seq, line.slice(offset, end), end < line.length))
-    }
+    let offset = 0
+    do {
+      const end = pieceEnd(line, offset)
+      this.sendPiece(event, seq, line.slice(offset, end), end < line.length)
+      offset = end
+    } while (offset < line.length)
   }
 
   /** Sends a line in pieces, waiting for the socket after each; false once released. */
   async sendPieces(event: ProviderRelayLineEvent, seq: number, line: string): Promise<boolean> {
-    for (let offset = 0; offset < line.length || offset === 0; offset += EVENT_PIECE_CHARS) {
-      const end = offset + EVENT_PIECE_CHARS
-      this.send(this.lineEvent(event, seq, line.slice(offset, end), end < line.length))
+    let offset = 0
+    do {
+      const end = pieceEnd(line, offset)
+      this.sendPiece(event, seq, line.slice(offset, end), end < line.length)
+      offset = end
       await this.drained()
       if (this.released) {
         return false
       }
-    }
+    } while (offset < line.length)
     return true
+  }
+
+  askForAck(seq: number): void {
+    this.send({ type: 'event', event: 'relayAckWanted', sessionId: this.relayId, payload: { seq } })
+  }
+
+  /** A binary stream carries the piece as raw bytes; an NDJSON one gets the JSON event. */
+  private sendPiece(
+    event: ProviderRelayLineEvent,
+    seq: number,
+    piece: string,
+    more: boolean
+  ): void {
+    const { socket, framing } = this.stream
+    if (this.released || socket.destroyed) {
+      return
+    }
+    const payload = more ? { seq, more: true as const } : { seq }
+    const frame =
+      framing === BINARY_STREAM_FRAMING
+        ? encodeBinaryRelayLineFrame(this.relayId, event, payload, piece)
+        : null
+    socket.write(
+      frame ??
+        streamFramesFor(framing).control({
+          type: 'event',
+          event,
+          sessionId: this.relayId,
+          payload: { ...payload, line: piece }
+        })
+    )
   }
 
   drained(): Promise<void> {
@@ -99,14 +141,5 @@ export class ProviderRelayAttachment {
       socket.once('drain', done)
       socket.once('close', done)
     })
-  }
-
-  private lineEvent(event: ProviderRelayLineEvent, seq: number, line: string, more = false) {
-    return {
-      type: 'event',
-      event,
-      sessionId: this.relayId,
-      payload: more ? { seq, line, more: true } : { seq, line }
-    }
   }
 }

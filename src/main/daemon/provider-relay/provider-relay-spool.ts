@@ -1,7 +1,7 @@
 import { open, unlink, type FileHandle } from 'node:fs/promises'
 import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-protocol'
 import { SpoolFileIndex } from './provider-relay-spool-file-index'
-import { replaySpoolFileRecords } from './provider-relay-spool-replay'
+import { replayMemoryTail, replaySpoolFileRecords } from './provider-relay-spool-replay'
 
 export const RELAY_SPOOL_MEMORY_CAP_BYTES = 1024 * 1024
 export const RELAY_SPOOL_FILE_CAP_BYTES = 16 * 1024 * 1024
@@ -22,6 +22,8 @@ type SpoolOptions = {
   drained?: () => Promise<void>
   /** The detached file could not be read back; its records are gone and the owner ends the agent. */
   onFileLost?: () => void
+  /** Unacked output reached half the memory cap: a client acking in batches should ack now. */
+  onAckWanted?: (throughSeq: number) => void
   memoryCapBytes?: number
   fileCapBytes?: number
 }
@@ -58,6 +60,7 @@ export class ProviderRelaySpool {
   private fileEpoch = 0
   private io: Promise<void> = Promise.resolve()
   private paused = false
+  private ackAsked = false
   private disposed = false
   private readonly memoryCap: number
   private readonly fileCap: number
@@ -163,29 +166,18 @@ export class ProviderRelaySpool {
       return this.nextSeqValue - 1
     }
     after = file.highest
-    // The memory tail waits for the client's socket too; an ack may compact memory meanwhile.
-    let memory = this.memory
-    let index = this.memoryHead
-    while (true) {
-      if (memory !== this.memory) {
-        memory = this.memory
-        const at = memory.findIndex((record) => record.seq > after)
-        index = at === -1 ? memory.length : at
-      }
-      if (index >= memory.length) {
-        break
-      }
-      const record = memory[index++]
-      if (record.seq <= after) {
-        continue
-      }
-      this.options.deliver(record)
-      after = record.seq
-      await this.options.drained?.()
-      if (!current()) {
-        return this.nextSeqValue - 1
-      }
+    const tail = await replayMemoryTail({
+      memory: () => this.memory,
+      head: this.memoryHead,
+      after,
+      current,
+      deliver: this.options.deliver,
+      drained: this.options.drained
+    })
+    if (tail === null) {
+      return this.nextSeqValue - 1
     }
+    after = tail
     this.mode = 'attached'
     this.updatePressure()
     return Math.min(after, this.nextSeqValue - 1)
@@ -255,6 +247,12 @@ export class ProviderRelaySpool {
         ? [this.fileIndex.unackedBytes + this.memoryBytes, this.fileCap]
         : [this.memoryBytes, this.memoryCap]
     const paused = !this.disposed && (this.paused ? held >= cap / 2 : held >= cap)
+    // Asked once per crossing, so a client can ack rarely and still never stall the agent.
+    const ackWanted = this.mode !== 'detached' && held >= cap / 2
+    if (ackWanted && !this.ackAsked) {
+      this.options.onAckWanted?.(this.nextSeqValue - 1)
+    }
+    this.ackAsked = ackWanted
     if (paused !== this.paused) {
       this.paused = paused
       this.options.onPressureChanged(paused)

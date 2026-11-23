@@ -5,7 +5,7 @@ export type JsonRpcPrefix =
   | { kind: 'response-unknown' }
   | { kind: 'unknown' }
 
-type LeadingProperty = { key: string; value?: string | number }
+export type LeadingProperty = { key: string; value?: string | number }
 
 function readJsonStringEnd(value: string, start: number): number | null {
   if (value[start] !== '"') {
@@ -73,7 +73,15 @@ function skipJsonLiteral(value: string, start: number): number | null {
   return null
 }
 
-function leadingJsonRpcProperties(prefix: string): LeadingProperty[] {
+/**
+ * The leading top-level fields of a JSON object, read without parsing it. With `stopAtContainer`,
+ * the scan ends at the first object or array value (its key is still listed), so an envelope's
+ * `params`/`result` payload is never walked.
+ */
+export function leadingJsonProperties(
+  prefix: string,
+  options: { stopAtContainer?: boolean } = {}
+): LeadingProperty[] {
   const properties: LeadingProperty[] = []
   let cursor = 0
   const skipWhitespace = (): void => {
@@ -107,6 +115,9 @@ function leadingJsonRpcProperties(prefix: string): LeadingProperty[] {
     skipWhitespace()
     if (prefix[cursor] === '{' || prefix[cursor] === '[') {
       properties.push({ key: String(key) })
+      if (options.stopAtContainer) {
+        break
+      }
       const valueEnd = skipJsonContainer(prefix, cursor)
       if (valueEnd === null) {
         break
@@ -162,7 +173,7 @@ function leadingJsonRpcProperties(prefix: string): LeadingProperty[] {
 
 export function classifyJsonRpcPrefix(prefix: string): JsonRpcPrefix {
   // Inspect complete top-level fields only; nested result/params must not impersonate JSON-RPC envelope keys.
-  const properties = leadingJsonRpcProperties(prefix)
+  const properties = leadingJsonProperties(prefix)
   const method = properties.find((property) => property.key === 'method')?.value
   const id = properties.find((property) => property.key === 'id')?.value
   if (typeof method === 'string' && (typeof id === 'number' || typeof id === 'string')) {

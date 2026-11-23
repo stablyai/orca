@@ -116,3 +116,41 @@ export async function replaySpoolFileRecords(
   const sentOwed = sent.filter((seq) => seq > owedAfter).length
   return { outcome: sentOwed < replay.index.countAfter(owedAfter) ? 'lost' : 'done', highest }
 }
+
+type MemoryTailReplay = {
+  /** Read live: an ack may compact memory into a new array while a drain wait is pending. */
+  memory: () => readonly ProviderRelayRecord[]
+  head: number
+  after: number
+  current: () => boolean
+  deliver: (record: ProviderRelayRecord) => void
+  drained?: () => Promise<void>
+}
+
+/** Sends memory records after `after`, waiting for the socket after each; null once superseded. */
+export async function replayMemoryTail(replay: MemoryTailReplay): Promise<number | null> {
+  let { after } = replay
+  let memory = replay.memory()
+  let index = replay.head
+  while (true) {
+    // Checked before the bounds test: a compaction during the wait shortens the array.
+    if (memory !== replay.memory()) {
+      memory = replay.memory()
+      const at = memory.findIndex((record) => record.seq > after)
+      index = at === -1 ? memory.length : at
+    }
+    if (index >= memory.length) {
+      return after
+    }
+    const record = memory[index++]
+    if (record.seq <= after) {
+      continue
+    }
+    replay.deliver(record)
+    after = record.seq
+    await replay.drained?.()
+    if (!replay.current()) {
+      return null
+    }
+  }
+}

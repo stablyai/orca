@@ -1,4 +1,8 @@
 import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-protocol'
+import {
+  leadingJsonProperties,
+  type LeadingProperty
+} from '../../../shared/json-stream/json-rpc-record-prefix'
 
 type JsonObject = Record<string, unknown>
 
@@ -26,8 +30,12 @@ const MAX_PENDING_REQUESTS = 256
 const MAX_PENDING_CHARS = 8 * 1024 * 1024
 /** Codex resolves a server request elsewhere (another client, a timeout) and says so with this. */
 const RESOLVED_METHOD = 'serverRequest/resolved'
-/** JSON may escape the slash; the parsed method is the same. */
-const RESOLVED_METHOD_ESCAPED = 'serverRequest\\/resolved'
+/**
+ * Agent lines are classified from their leading envelope fields only (`id`, `method`, `type`,
+ * `request_id`), which every supported agent writes before its payload. The scan stops at the first
+ * object value and never reads past this many chars, so a notification is never parsed whole.
+ */
+const ENVELOPE_SCAN_CHARS = 4096
 
 /** A client line longer than this is forwarded but not classified, so it can't grow without bound. */
 const MAX_CLIENT_LINE_CHARS = 256 * 1024 * 1024
@@ -94,54 +102,55 @@ export class ProviderRelayPendingRequests {
 
   observeAgentLine(record: ProviderRelayRecord): void {
     const { line } = record
-    const maybeRpcRequest =
-      line.includes('"method"') &&
-      (line.includes('"id"') ||
-        line.includes(RESOLVED_METHOD) ||
-        line.includes(RESOLVED_METHOD_ESCAPED))
-    const maybeControl = line.includes('control_')
-    // Until the initialize answer is seen, any line shaped like an answer is parsed for it.
-    const awaitingInitialize = this.initializeKey !== null && this.initializeResult === null
-    const maybeAnswer =
-      awaitingInitialize && (line.includes('"result"') || line.includes('"error"'))
-    if (!maybeRpcRequest && !maybeControl && !maybeAnswer && !mayHideKey(line)) {
-      return
-    }
-    const message = parseObject(line)
-    if (!message) {
-      return
-    }
-    if (message.method === RESOLVED_METHOD) {
-      const key = isObject(message.params) ? rpcId(message.params.requestId) : null
+    const head = line.length > ENVELOPE_SCAN_CHARS ? line.slice(0, ENVELOPE_SCAN_CHARS) : line
+    const fields = leadingJsonProperties(head, { stopAtContainer: true })
+    const field = (key: string): LeadingProperty | undefined =>
+      fields.find((property) => property.key === key)
+    const method = field('method')?.value
+    const type = field('type')?.value
+    if (method === RESOLVED_METHOD) {
+      // Rare, and its request id sits inside `params`, so this one notification is parsed.
+      const message = parseObject(line)
+      const key = isObject(message?.params) ? rpcId(message.params.requestId) : null
       if (key) {
         this.release(key)
       }
       return
     }
-    if (typeof message.method === 'string') {
-      const key = rpcId(message.id)
+    if (typeof method === 'string') {
+      const key = rpcId(field('id')?.value)
       if (key) {
         this.hold(key, record)
       }
       return
     }
-    if (message.type === 'control_request') {
-      const key = controlId(message.request_id)
-      if (key) {
+    if (type === 'control_request' || type === 'control_cancel_request') {
+      const key = controlId(field('request_id')?.value)
+      if (key && type === 'control_request') {
         this.hold(key, record)
-      }
-      return
-    }
-    if (message.type === 'control_cancel_request') {
-      const key = controlId(message.request_id)
-      if (key) {
+      } else if (key) {
         this.release(key)
       }
       return
     }
-    if (awaitingInitialize && this.responseKey(message) === this.initializeKey) {
+    if (this.initializeKey === null || this.initializeResult !== null) {
+      return
+    }
+    // A Claude answer keeps its request id inside `response`; only that line is parsed.
+    const answerKey =
+      type === 'control_response'
+        ? this.responseKeyOf(line)
+        : field('result') || field('error')
+          ? rpcId(field('id')?.value)
+          : null
+    if (answerKey === this.initializeKey) {
       this.initializeResult = line
     }
+  }
+
+  private responseKeyOf(line: string): string | null {
+    const message = parseObject(line)
+    return message ? this.responseKey(message) : null
   }
 
   /**
