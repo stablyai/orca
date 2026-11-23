@@ -58,6 +58,8 @@ export type StructuredWorkerStopOutcome = {
   /** Whether a close was actually issued; the receipt's `processAction` may claim nothing more. */
   closeAttempted: boolean
   reason?: string
+  /** Its agent was still starting: settles when that start ends (see closeStructuredAgentSessionChild). */
+  whenStartEnds?: Promise<boolean>
 }
 
 /** Prove stop by observing no host-held session and no live lease after close; void close alone proves nothing.

@@ -8,7 +8,7 @@ import { HOST_TEST_SESSION as SESSION } from '../../../../../native-chat/agent-s
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   closeStructuredAgentSessionChild,
-  STARTING_AGENT_STOPPED_REASON
+  STARTING_AGENT_STOPPING_REASON
 } from '../../../../agent-session/lifecycle/structured-agent-session-close'
 import { observeStructuredSession } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { sendStructuredWorkerPreamble } from './orchestration-structured-worker-session'
@@ -61,20 +61,35 @@ describe('a structured worker whose agent is slow to start', () => {
     expect(briefSends(current)).toBe(1)
   })
 
-  it('stops as stopped, with the plain reason, while its agent is still starting', async () => {
+  it('returns from a stop at once while the acquire never settles, without claiming stopped', async () => {
     const { current, release } = await workerWithHeldStart()
     expect(await sendBrief(current)).toBe('starting')
-    let closed: Awaited<ReturnType<typeof closeStructuredAgentSessionChild>> | undefined
-    const closing = closeStructuredAgentSessionChild(SESSION).then((outcome) => (closed = outcome))
-    // The close has cut the start, but its acquire is still held: no exit is proven yet.
-    await eventually(() => expect(current.host.reads.agentStarting(SESSION)).toBe(false))
-    expect(closed).toBeUndefined()
-    release()
-    expect(await closing).toEqual({
-      stopped: true,
+    // Held for the whole stop: the acquire never settles while the stop runs.
+    const closed = await closeStructuredAgentSessionChild(SESSION)
+    expect(closed).toMatchObject({
+      stopped: false,
       closeAttempted: true,
-      reason: STARTING_AGENT_STOPPED_REASON
+      reason: STARTING_AGENT_STOPPING_REASON
     })
+    let ended: boolean | undefined
+    void closed.whenStartEnds?.then((stopped) => (ended = stopped))
+    await Promise.resolve()
+    expect(ended).toBeUndefined()
+    expect(observeStructuredSession(SESSION).status).not.toBe('exited')
+    // Teardown drains the host's start work, so let the held acquire go.
+    release()
+    await closed.whenStartEnds
+  })
+
+  it('closes the child a cancelled acquire brings up late, then settles stopped', async () => {
+    const { current, release } = await workerWithHeldStart()
+    expect(await sendBrief(current)).toBe('starting')
+    const closed = await closeStructuredAgentSessionChild(SESSION)
+    expect(closed.stopped).toBe(false)
+    // The acquire ignored the abort and returns a live child after the close.
+    release()
+    expect(await closed.whenStartEnds).toBe(true)
+    expect(current.releaseAcquisition).toHaveBeenCalledTimes(1)
     expect(observeStructuredSession(SESSION).status).toBe('exited')
     expect(briefSends(current)).toBe(0)
   })

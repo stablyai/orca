@@ -13,6 +13,9 @@ export type StructuredAgentSessionCloseOutcome = {
   stopped: boolean
   closeAttempted: boolean
   reason?: string
+  /** The close cut a start whose acquire had not returned: true once that start has ended and its
+   *  exit is proven, false when it ended without that proof. */
+  whenStartEnds?: Promise<boolean>
 }
 
 export type StructuredSessionSurfaceRuntime = Pick<
@@ -77,9 +80,19 @@ export async function closeStructuredAgentSessionChild(
       options.afterClose?.()
     }
   }
-  if (admitted && wasStarting && closeFailure === undefined) {
-    // Close aborts the start, but its acquire may still spawn: only its released lease proves exit.
-    await host.reads.startAttemptsEnded(sessionId)
+  if (
+    admitted &&
+    wasStarting &&
+    closeFailure === undefined &&
+    !structuredSessionCloseSettled(sessionId)
+  ) {
+    // The aborted start refuses its late child, but an acquire may return long after: never wait on it.
+    return {
+      stopped: false,
+      closeAttempted: true,
+      reason: STARTING_AGENT_STOPPING_REASON,
+      whenStartEnds: settleCancelledStart(host, sessionId, surface, options.runtime)
+    }
   }
   if (!admitted || !structuredSessionCloseSettled(sessionId)) {
     return {
@@ -101,6 +114,32 @@ export async function closeStructuredAgentSessionChild(
 
 export const STARTING_AGENT_STOPPED_REASON =
   'Its agent was still starting; Orca cancelled the start.'
+
+export const STARTING_AGENT_STOPPING_REASON =
+  'Its agent was still starting; Orca will close it as soon as it comes up.'
+
+async function settleCancelledStart(
+  host: StructuredAgentSessionHost,
+  sessionId: string,
+  surface: StructuredSessionSurface | null,
+  runtime: StructuredSessionSurfaceRuntime | undefined
+): Promise<boolean> {
+  try {
+    await host.reads.startAttemptsEnded(sessionId)
+    if (!structuredSessionCloseSettled(sessionId)) {
+      return false
+    }
+    await retireCapturedStructuredSessionSurface(host, sessionId, surface, runtime)
+    return true
+  } catch (error) {
+    host.deps.logger.warn('settling a cancelled start failed', {
+      scope: 'cancelled-start-close',
+      sessionId,
+      error
+    })
+    return false
+  }
+}
 
 /** Capture actual presentation independently: a failed SHOW can leave Retry with no table row. */
 export function captureStructuredSessionSurface(
