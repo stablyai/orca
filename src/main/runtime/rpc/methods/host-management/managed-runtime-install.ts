@@ -149,16 +149,27 @@ function acpInstallation(
     launchGate
       ? launchGate.run(() => stopStructuredAgentChats(agent, managedRuntime.label), work)
       : Promise.reject(new Error(`${managedRuntime.label} cannot be removed on this host.`))
-  // The chat host's own state root, where its launches look.
-  return new ManagedRuntimeInstallation(agent, managedRuntime, {
+  // The chat host's own state root, where its launches look. Its kill switch is this host's own setting.
+  const store = runtime.requireStore()
+  const updatesAllowed = (settings: ReturnType<typeof store.getSettings>) =>
+    spec.managedRuntimeUpdatesAllowed?.(settings) !== false
+  const installation = new ManagedRuntimeInstallation(agent, managedRuntime, {
     dataDirectory,
     program: 'server',
     findExternal,
-    updatesEnabled: () =>
-      spec.managedRuntimeUpdatesAllowed?.(runtime.requireStore().getSettings()) !== false,
+    updatesEnabled: () => updatesAllowed(store.getSettings()),
     fence,
     revisions
   })
+  // Turned off mid-download, the automatic update stops instead of finishing.
+  if (managedRuntime.updatesToPin) {
+    store.onSettingsChanged?.((_updates, settings) => {
+      if (!updatesAllowed(settings)) {
+        installation.stopAutoUpdate()
+      }
+    })
+  }
+  return installation
 }
 
 /** These chats run the user's own install when the host has one, so Orca's copy is the fallback. */

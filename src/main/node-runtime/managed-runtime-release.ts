@@ -53,10 +53,11 @@ export type ManagedAgentCli = {
   standsInFor?: string
 }
 
-let serverUseListener: ((agent: string) => void) | null = null
+const serverUseListeners = new Set<(agent: string) => void>()
 /** Told each time a chat starts on Orca's installed server, so an update that failed is retried on use. */
-export function onManagedServerUse(listener: (agent: string) => void): void {
-  serverUseListener = listener
+export function onManagedServerUse(listener: (agent: string) => void): () => void {
+  serverUseListeners.add(listener)
+  return () => serverUseListeners.delete(listener)
 }
 /** A launch resolved to `version` of Orca's `runtime`; only runtimes that follow their pin listen. */
 export function noteManagedServerUse(
@@ -65,7 +66,7 @@ export function noteManagedServerUse(
   version: string | undefined
 ): void {
   if (version !== undefined && runtime?.updatesToPin) {
-    serverUseListener?.(agent)
+    serverUseListeners.forEach((listener) => listener(agent))
   }
 }
 
