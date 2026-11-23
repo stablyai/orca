@@ -28,6 +28,8 @@ export type NativeChatBotChatRoom = NativeChatComposerRoom & {
   /** What picking the member with this `@` menu value puts in the draft. */
   token?: (value: string) => string | undefined
   opened?: () => void
+  /** A message the chat took: what it names is recorded now, not when it was picked. */
+  sent?: (text: string) => void
 }
 
 /** A bot a draft names, as the chat can reach it now: its current name, its picture sized for a

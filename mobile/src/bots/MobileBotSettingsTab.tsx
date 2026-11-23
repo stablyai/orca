@@ -1,20 +1,15 @@
 import { useState } from 'react'
-import { AGENT_CHAT_PERMISSION_MODES } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
-import { agentChatPermissionModes } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-support'
 import { BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY } from '../../../src/shared/bot-runtime-capabilities'
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
 import { lookAroundSupported, type BotLookAround } from '../../../src/shared/bots/bot-look-around'
 import type { BotTidyUp } from '../../../src/shared/bots/bot-tidy-up'
 import { UNSAVED_DRAFTS_REMOVAL_REFUSAL } from '../../../src/shared/worktree/removal/removal'
-import { agentChatPermissionModeCopy } from '../../../src/shared/agent-session/options/permissions/structured-agent-session-permission-option'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { ChoiceRows } from '../host-screen/workspace-options/workspace-option-rows'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { botAvatarUpload, botDelete, botUpdate } from './bot-sheet-operations'
 import { MobileBotSettingsOffline } from './MobileBotSettingsOffline'
-import { SettingsNote } from '../settings/settings-screen-frame'
 import {
   MobileLookAroundPage,
   MobileLookAroundSection,
@@ -33,6 +28,7 @@ import {
   MobileBotStalePage,
   type BotSettingsTarget
 } from './MobileBotSettingsRoot'
+import { MobileBotPermissionsPage } from './MobileBotPermissionsPage'
 import { MobileBotIdentityPage } from './MobileBotIdentityPage'
 import { MobileBotAgentPage } from './MobileBotAgentPage'
 import { MobileBotComputerPage } from './MobileBotComputerPage'
@@ -42,9 +38,6 @@ import { useMobileBotConnectorSettings } from './connectors/MobileBotConnectors'
 import { useBotSoulMemorySkills } from './use-bot-soul-memory-skills'
 import { useMobileBotSharingSettings } from './sharing/MobileBotSharing'
 import { botSaveErrorMessage } from './mobile-bot-sheet-copy'
-
-/** The bot's home folder on its computer (null until read), and where to go once Settings deletes it. */
-export type BotSettingsHome = { folderPath: string | null; onDeleted: () => void }
 
 /** The bot's Settings, as the desktop's: one list, and a page for each row that has more. */
 export function MobileBotSettingsTab(props: {
@@ -60,7 +53,8 @@ export function MobileBotSettingsTab(props: {
   /** The host answers: off, every setting is read-only. */
   online: boolean
   hostName: string
-  home: BotSettingsHome
+  /** The bot's home folder on its computer (null until read), and where to go once Settings deletes it. */
+  home: { folderPath: string | null; onDeleted: () => void }
   /** Puts a draft in the bot's Home Chat, where hooks are made; null while no chat shows. */
   onAskInChat?: ((draft: string) => void) | null
   onOpenFile?: (path: string) => void
@@ -293,7 +287,9 @@ export function MobileBotSettingsTab(props: {
         onSwitch={async (agent) => {
           // The Home Chat starts fresh now, not on its next message, as the desktop's switch does.
           if ((await save({ agent, launch: null })) && props.client) {
-            await ensureBotHomeChat(props.client, bot.id)
+            await ensureBotHomeChat(props.client, bot.id).then(
+              (refusal) => refusal && props.showToast(refusal, 3000)
+            )
           }
         }}
       />
@@ -341,43 +337,18 @@ export function MobileBotSettingsTab(props: {
     )
   }
 
-  const modes = agentChatPermissionModes(bot.agent)?.modes ?? AGENT_CHAT_PERMISSION_MODES
   if (page === 'permissions') {
-    const permissionChoices = [
-      {
-        id: 'inherit',
-        label: t('bots.settings.sameAsChats', 'Same as chats'),
-        description: t('bots.settings.sameAsChatsDetail', 'Uses your chat permission setting.')
-      },
-      ...modes.map((mode) => ({ id: mode, ...agentChatPermissionModeCopy(bot.agent, mode) }))
-    ]
     return (
-      <>
-        <SheetHeader
-          title={t('bots.settings.permissions', 'Permissions')}
-          onBack={backToSettings}
-        />
-        {offlineBanner}
-        <ChoiceRows
-          choices={permissionChoices}
-          selected={bot.permissionMode ?? 'inherit'}
-          disabled={!props.online}
-          onSelect={(mode) => {
-            if (mode === 'inherit' || modes.some((value) => value === mode)) {
-              void save({
-                permissionMode: mode === 'inherit' ? null : modes.find((value) => value === mode)!
-              })
-              closePage()
-            }
-          }}
-        />
-        <SettingsNote>
-          {t(
-            'bots.settings.permissionsDetail',
-            'The starting permission for new sessions. Anything beyond it asks in the session.'
-          )}
-        </SettingsNote>
-      </>
+      <MobileBotPermissionsPage
+        bot={bot}
+        disabled={!props.online}
+        banner={offlineBanner}
+        onBack={backToSettings}
+        onPick={(permissionMode) => {
+          void save({ permissionMode })
+          closePage()
+        }}
+      />
     )
   }
   return (

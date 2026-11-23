@@ -17,6 +17,7 @@ import { botLinearWorkspaces, botSlackApps, type Bot } from '../../../shared/bot
 import {
   BOT_PACKAGE_PURPOSE_MAX,
   botPackageResults,
+  packagedMascotLook,
   type BotPackageConnector,
   type BotPackageV1,
   type BotShareLeftOut
@@ -188,7 +189,7 @@ async function readAvatar(
 ): Promise<Pick<BotShareable, 'avatar' | 'avatarImage'>> {
   const avatar = parseBotAvatar(bot.avatar)
   if (avatar?.kind === 'mascot') {
-    return { avatar: { mascot: avatar.id }, avatarImage: null }
+    return { avatar: { mascot: avatar.id, ...packagedMascotLook(bot) }, avatarImage: null }
   }
   if (avatar?.kind === 'upload' && isUploadAvatar(bot.avatar)) {
     const path = await ownPath(home, BOT_AVATAR_FILE)

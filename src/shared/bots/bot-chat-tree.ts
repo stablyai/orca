@@ -15,6 +15,8 @@ export type BotChatTreeWorker = {
   worktreeId?: string
   paneKey?: string
   note?: 'handed-over' | 'from-closed-chat' | 'automation-terminal'
+  /** Running, but its turn is over and it waits on background tasks it started. Absent from older hosts. */
+  waitsOnBackground?: true
   /** Stop and open go through it; absent for a handed-over agent. */
   dispatchId?: string
   /** `runtime:<id>` when the workspace runs on another paired computer. */

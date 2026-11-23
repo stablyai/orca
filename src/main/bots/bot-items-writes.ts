@@ -1,8 +1,14 @@
 // A bot commenting, closing and linking its own items (comments go on closed items too, and from the
-// bot that made one with `--for`; the rest only on open ones), and Orca linking a worker started for an item.
-import type { BotItemActor, BotItemCommentImage } from '../../shared/bots/bot-items'
+// bot that made one with `--for`; the rest only on open ones), any agent linking its own work to any
+// open item, and Orca linking a worker started for an item.
+import {
+  isOpenBotItemStatus,
+  type BotItemActor,
+  type BotItemCommentImage
+} from '../../shared/bots/bot-items'
 import { BotItemError } from './bot-item-error'
 import { BotItemsEdits } from './bot-items-edits'
+import { assertBotItemAttach } from './bot-items-tables'
 import {
   assertBotItemText,
   linkWords,
@@ -66,15 +72,17 @@ export class BotItemsWrites extends BotItemsEdits {
     })
   }
 
+  /** `startedBy`: the agent whose chat started each linked Dispatch, as orchestration records it. */
   link(
     uid: string,
     links: readonly BotItemLinkInput[],
     actor: BotItemBotActor,
+    startedBy: Readonly<Record<string, string | null>> = {},
     now = Date.now()
   ): BotItemWriteOutcome {
     return this.transaction(() => {
       const item = this.requireItem(uid)
-      this.requireOwnerWrite(item, actor)
+      assertBotItemAttach(item, actor, links, (dispatchId) => startedBy[dispatchId] ?? null)
       const existing = this.links(uid)
       const fresh = uniqueBotItemLinks(links).filter(
         (link) => !existing.some((entry) => entry.kind === link.kind && entry.ref === link.ref)
@@ -89,28 +97,33 @@ export class BotItemsWrites extends BotItemsEdits {
     })
   }
 
-  /** A worker started for an item (`worker-start --item`): linked once, and Planned or Needs you
-   *  moves to In progress. A closed item keeps its status. `chatId`: the item's bot's chat that ran
-   *  it, whose write it is, as `item set` would be; Orca's own catch-up when that chat is unknown. */
+  /** A worker started for an item (`worker-start --item`): linked once, and when the item's own agent
+   *  started it, Planned or Needs you moves to In progress; anyone else's worker never moves it. A
+   *  closed item takes no link (a retry keeps its first start's item). `starter`: the starting agent and chat, whose write it is, as
+   *  `item link` would be; Orca's own catch-up when that chat is unknown. */
   linkStartedWorker(
     uid: string,
     dispatchId: string,
-    chatId: string | null = null,
+    starter: { botId: string | null; chatId: string | null },
     now = Date.now()
   ): number | null {
     return this.transaction(() => {
       const item = this.get(uid)
-      if (!item || this.links(uid).some((l) => l.kind === 'dispatch' && l.ref === dispatchId)) {
+      if (
+        !item ||
+        !isOpenBotItemStatus(item.status) ||
+        this.links(uid).some((l) => l.kind === 'dispatch' && l.ref === dispatchId)
+      ) {
         return null
       }
-      const actor: BotItemActor = chatId
-        ? { kind: 'bot', botId: item.ownerBotId, chatId }
-        : { kind: 'orca', why: 'worker-start' }
+      const { botId, chatId } = starter
+      const actor: BotItemActor =
+        botId && chatId ? { kind: 'bot', botId, chatId } : { kind: 'orca', why: 'worker-start' }
       const mail = mailsItemChat(item, actor)
       const links = { links: [`dispatch:${dispatchId}`] }
       let eventId = this.appendEvent(uid, 'linked', actor, links, mail, now)
       this.insertLinks(uid, [{ kind: 'dispatch', ref: dispatchId }], eventId)
-      if (item.status === 'planned' || item.status === 'needs_you') {
+      if (botId === item.ownerBotId && (item.status === 'planned' || item.status === 'needs_you')) {
         this.writeStatus(uid, 'working', null, actor, now)
         const moved = { from: item.status, to: 'working' }
         eventId = this.appendEvent(uid, 'status', actor, moved, mail, now)

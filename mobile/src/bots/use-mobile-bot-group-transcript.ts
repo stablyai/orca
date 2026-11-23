@@ -7,7 +7,7 @@ import {
 } from '../../../src/shared/bots/bot-group-transcript'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { groupRead } from './bot-group-operations'
-import { readHostBots } from './host-bots-read'
+import { hostBotsKey, readHostBots } from './host-bots-read'
 import type { PhoneBot } from './host-bots-operations'
 import { startHostBotRefresh } from './host-bot-refresh'
 import {
@@ -18,13 +18,30 @@ import {
 } from '../../../src/shared/bots/bot-change-scope'
 const ROOM_KINDS: readonly BotChangeKind[] = ['groups', 'bot']
 const ITEM_KINDS: readonly BotChangeKind[] = ['items', 'workers']
+// A chat starting or ending a wait on the owner: what a member's asks are read from.
+const ASK_KINDS: readonly BotChangeKind[] = ['chats', 'status']
 
 /** Bumps for the group's Items list to read again: `rooms` its rooms, `all` every member's items,
- *  `bots` one member's. */
+ *  `bots` one member's; `asks` the same for members' chats alone, which change too often to re-read
+ *  their items with. */
 export type BotGroupItemReads = {
   rooms: number
   all: number
   bots: Readonly<Record<string, number>>
+  asks: { all: number; bots: Readonly<Record<string, number>> }
+}
+
+/** Who a change names among the members: every one (null), or some. */
+function namedMembers(
+  changed: BotChangeScope | undefined,
+  kinds: readonly BotChangeKind[],
+  memberIds: readonly string[]
+): readonly string[] | null {
+  if (!botChangeConcerns(changed, { kinds })) {
+    return []
+  }
+  const named = botChangeBotIds(changed, kinds)
+  return named === null ? null : named.filter((id) => memberIds.includes(id))
 }
 
 function sameCounts(
@@ -81,7 +98,12 @@ export function useMobileBotGroupTranscript(
   )
   const [bots, setBots] = useState<PhoneBot[]>([])
   const [needsYou, setNeedsYou] = useState<Readonly<Record<string, number>>>({})
-  const [itemReads, setItemReads] = useState<BotGroupItemReads>({ rooms: 0, all: 0, bots: {} })
+  const [itemReads, setItemReads] = useState<BotGroupItemReads>({
+    rooms: 0,
+    all: 0,
+    bots: {},
+    asks: { all: 0, bots: {} }
+  })
   // The members the Items drawer reads, which it sets from the group list: a thread room's own read
   // lists only the thread's members.
   const itemMemberIds = useRef<readonly string[]>([])
@@ -93,19 +115,23 @@ export function useMobileBotGroupTranscript(
     let request = 0
     const refresh = (changed?: BotChangeScope) => {
       const rooms = botChangeConcerns(changed, { kinds: ['groups'] })
-      const named = botChangeConcerns(changed, { kinds: ITEM_KINDS })
-        ? botChangeBotIds(changed, ITEM_KINDS)
-        : []
-      // An items or workers change naming no bot can change every member's list. A group change
-      // reaches the lists only by moving their rooms, which re-reads them through the group list.
-      const everyMember = named === null
-      // Another bot's items or workers change nothing a member's list shows.
-      const members = everyMember ? [] : named.filter((id) => itemMemberIds.current.includes(id))
-      if (rooms || everyMember || members.length > 0) {
+      // An items or workers change naming no bot can change every member's list; another bot's
+      // changes nothing a member's list shows. A group change reaches the lists only by moving their
+      // rooms, which re-reads them through the group list.
+      const members = namedMembers(changed, ITEM_KINDS, itemMemberIds.current)
+      const askers = namedMembers(changed, ASK_KINDS, itemMemberIds.current)
+      if (rooms || members?.length !== 0 || askers?.length !== 0) {
         setItemReads((last) => ({
           rooms: last.rooms + (rooms ? 1 : 0),
-          all: last.all + (everyMember ? 1 : 0),
-          bots: members.length > 0 ? bumpEach(last.bots, members) : last.bots
+          all: last.all + (members === null ? 1 : 0),
+          bots: members?.length ? bumpEach(last.bots, members) : last.bots,
+          asks:
+            askers?.length !== 0
+              ? {
+                  all: last.asks.all + (askers === null ? 1 : 0),
+                  bots: askers ? bumpEach(last.asks.bots, askers) : last.asks.bots
+                }
+              : last.asks
         }))
       }
       // An items notice carries the host's new Needs you counts, which the bot list read would bring.
@@ -119,7 +145,7 @@ export function useMobileBotGroupTranscript(
       const current = ++request
       void Promise.all([
         groupRead.request(client, { groupId, threadId }),
-        readHostBots(client, hostId)
+        readHostBots(client, hostBotsKey(hostId))
       ])
         .then(([reply, bots]) => {
           if (closed || current !== request) {
@@ -142,7 +168,7 @@ export function useMobileBotGroupTranscript(
       appState: AppState,
       refresh,
       listed: () => true,
-      interest: () => ({ kinds: [...ROOM_KINDS, ...ITEM_KINDS] })
+      interest: () => ({ kinds: [...ROOM_KINDS, ...ITEM_KINDS, ...ASK_KINDS] })
     })
     return () => {
       closed = true

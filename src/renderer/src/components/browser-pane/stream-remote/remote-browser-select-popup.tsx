@@ -1,0 +1,270 @@
+import { memo, useCallback, useRef, useState } from 'react'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel } from '@/components/ui/select'
+import * as SelectPrimitive from 'radix-ui/select'
+import {
+  isRemoteBrowserInputOpenedDialogError,
+  isRemoteBrowserPageMissingError
+} from './remote-browser-stream-errors'
+import type { RemoteBrowserOperationToken } from './remote-browser-stream-tokens'
+import type { RemoteBrowserPageInputParams } from './remote-browser-page-input-params'
+import {
+  mapRemoteBrowserPageRect,
+  readRemoteBrowserFrameGeometry,
+  type RemoteBrowserRuntimeTarget
+} from './remote-browser-page-input-model'
+import {
+  REMOTE_OPEN_SELECT_POPUP_EXPRESSION,
+  buildRemoteSelectOptionChoiceExpression,
+  groupRemoteSelectPopupOptions,
+  readRemoteSelectPopupResult,
+  type RemoteSelectPopup,
+  type RemoteSelectPopupGroup
+} from './remote-browser-select-popup-model'
+
+const RPC_OPTIONS = { timeoutMs: 15_000, suppressFeatureInteraction: true }
+
+type RemoteBrowserPress = {
+  target: RemoteBrowserRuntimeTarget
+  pageId: string
+  operationToken: RemoteBrowserOperationToken
+}
+
+type RemoteSelectPopupState = RemoteSelectPopup &
+  RemoteBrowserPress & {
+    clientRect: { left: number; top: number; width: number; height: number }
+  }
+
+export function useRemoteBrowserSelectPopup({
+  busy,
+  isActive,
+  pagePointerOwned,
+  imageRef,
+  remoteCssViewportSizeRef,
+  remoteViewportSizeRef,
+  frameMetadata,
+  runtimeWorktree,
+  enqueueRemoteInput,
+  isCurrentRemoteOperationToken,
+  closeMissingRemotePage,
+  scheduleRemoteTabInfoRefresh,
+  mountedRef,
+  setPaneNotice
+}: Omit<
+  RemoteBrowserPageInputParams,
+  | 'pickerAvailable'
+  | 'inputQueue'
+  | 'remoteViewportRef'
+  | 'runtimeTarget'
+  | 'lifecycle'
+  | 'createRemoteOperationToken'
+>): {
+  /** Call after a press is sent, without awaiting it: the next input must not wait for this read. */
+  readSelectPopupAfterPress: (press: RemoteBrowserPress & { button: string }) => Promise<void>
+  selectPopupElement: React.JSX.Element | null
+} {
+  const [selectPopup, setSelectPopup] = useState<RemoteSelectPopupState | null>(null)
+  const latestPressReadRef = useRef(0)
+  // A hidden or busy pane has no frame under the list to anchor it to.
+  if (selectPopup && (!isActive || busy)) {
+    setSelectPopup(null)
+  }
+
+  const readSelectPopupAfterPress = async ({
+    button,
+    ...press
+  }: RemoteBrowserPress & { button: string }): Promise<void> => {
+    const pressRead = ++latestPressReadRef.current
+    // Only a primary press opens a list; a page tool's press picks the element instead.
+    if (button !== 'left' || pagePointerOwned) {
+      return
+    }
+    let popup: RemoteSelectPopup | null = null
+    try {
+      popup = readRemoteSelectPopupResult(
+        await callRuntimeRpc(
+          press.target,
+          'browser.eval',
+          {
+            worktree: runtimeWorktree,
+            page: press.pageId,
+            expression: REMOTE_OPEN_SELECT_POPUP_EXPRESSION
+          },
+          RPC_OPTIONS
+        )
+      )
+    } catch {
+      // The press already landed; a page that cannot answer just shows no list, as before.
+      return
+    }
+    const image = imageRef.current
+    // Reads overlap, so only the latest press's answer may open or close the list.
+    if (
+      !image ||
+      !mountedRef.current ||
+      pressRead !== latestPressReadRef.current ||
+      !isCurrentRemoteOperationToken(press.operationToken)
+    ) {
+      return
+    }
+    const clientRect = popup
+      ? mapRemoteBrowserPageRect({
+          rect: popup.rect,
+          ...readRemoteBrowserFrameGeometry(image, {
+            cssViewportSize: remoteCssViewportSizeRef.current,
+            requestedViewportSize: remoteViewportSizeRef.current,
+            frameMetadata
+          })
+        })
+      : null
+    // A later press that opened no list replaces one an earlier press left open.
+    setSelectPopup(popup && clientRect ? { ...popup, ...press, clientRect } : null)
+  }
+
+  // Stable, so a screencast frame re-rendering the pane does not re-render a long option list.
+  const chooseSelectOption = useCallback(
+    (popup: RemoteSelectPopupState, index: number): void => {
+      const option = popup.options[index]
+      setSelectPopup(null)
+      if (!option) {
+        return
+      }
+      const expression = buildRemoteSelectOptionChoiceExpression({
+        index,
+        optionCount: popup.optionCount,
+        label: option.label
+      })
+      void enqueueRemoteInput(async () => {
+        if (!isCurrentRemoteOperationToken(popup.operationToken)) {
+          return
+        }
+        try {
+          await callRuntimeRpc(
+            popup.target,
+            'browser.eval',
+            { worktree: runtimeWorktree, page: popup.pageId, expression },
+            RPC_OPTIONS
+          )
+          // A change handler may navigate, as a language or country picker often does.
+          scheduleRemoteTabInfoRefresh(popup.operationToken, 250)
+        } catch (error) {
+          // The stream shows a dialog the change handler opened; its error text is for agents.
+          if (
+            !isCurrentRemoteOperationToken(popup.operationToken) ||
+            isRemoteBrowserInputOpenedDialogError(error)
+          ) {
+            return
+          }
+          if (isRemoteBrowserPageMissingError(error)) {
+            closeMissingRemotePage(popup.pageId)
+            return
+          }
+          setPaneNotice({
+            kind: 'consequence',
+            text: error instanceof Error ? error.message : 'Choosing the option failed.'
+          })
+        }
+      })
+    },
+    [
+      closeMissingRemotePage,
+      enqueueRemoteInput,
+      isCurrentRemoteOperationToken,
+      runtimeWorktree,
+      scheduleRemoteTabInfoRefresh,
+      setPaneNotice
+    ]
+  )
+  const dismissSelectPopup = useCallback((): void => setSelectPopup(null), [])
+  // Keys reach the page only through the frame, so arrows and typing need it focused again.
+  const refocusFrame = useCallback((): void => imageRef.current?.focus(), [imageRef])
+
+  return {
+    readSelectPopupAfterPress,
+    selectPopupElement: selectPopup ? (
+      <RemoteBrowserSelectPopup
+        popup={selectPopup}
+        onChoose={chooseSelectOption}
+        onDismiss={dismissSelectPopup}
+        onClosed={refocusFrame}
+      />
+    ) : null
+  }
+}
+
+/** The page's <select> list, drawn under the select box since the frame cannot show it. */
+const RemoteBrowserSelectPopup = memo(function RemoteBrowserSelectPopup({
+  popup,
+  onChoose,
+  onDismiss,
+  onClosed
+}: {
+  popup: RemoteSelectPopupState
+  onChoose: (popup: RemoteSelectPopupState, index: number) => void
+  onDismiss: () => void
+  onClosed: () => void
+}): React.JSX.Element {
+  return (
+    <Select
+      open
+      value={popup.selectedIndex >= 0 ? String(popup.selectedIndex) : undefined}
+      onValueChange={(value) => onChoose(popup, Number(value))}
+      onOpenChange={(open) => {
+        if (!open) {
+          onDismiss()
+        }
+      }}
+    >
+      {/* An unstyled anchor over the page's own select box, which the frame already draws. */}
+      <SelectPrimitive.Trigger
+        aria-hidden
+        tabIndex={-1}
+        className="pointer-events-none fixed opacity-0"
+        style={popup.clientRect}
+      />
+      <SelectContent
+        data-testid="remote-browser-select-popup"
+        position="popper"
+        side="bottom"
+        align="start"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          onClosed()
+        }}
+        // Tab leaves the list, as natively; the next Tab moves focus in the page.
+        onKeyDown={(event) => {
+          if (event.key === 'Tab') {
+            event.preventDefault()
+            onDismiss()
+          }
+        }}
+      >
+        {groupRemoteSelectPopupOptions(popup.options).map((group) =>
+          group.label === null ? (
+            group.options.map((option) => <RemoteSelectOption key={option.index} option={option} />)
+          ) : (
+            <SelectGroup key={group.options[0]?.index}>
+              <SelectLabel>{group.label}</SelectLabel>
+              {group.options.map((option) => (
+                <RemoteSelectOption key={option.index} option={option} />
+              ))}
+            </SelectGroup>
+          )
+        )}
+      </SelectContent>
+    </Select>
+  )
+})
+
+function RemoteSelectOption({
+  option
+}: {
+  option: RemoteSelectPopupGroup['options'][number]
+}): React.JSX.Element {
+  return (
+    <SelectItem value={String(option.index)} disabled={option.disabled}>
+      {/* An empty option still takes a row natively. */}
+      {option.label || ' '}
+    </SelectItem>
+  )
+}

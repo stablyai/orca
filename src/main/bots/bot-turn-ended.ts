@@ -15,7 +15,6 @@ import {
 import { readBotActiveWork } from './bot-active-work-read'
 import { BOT_WORK_NOTE_TIMEOUT_MS } from './bot-work-record'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
-import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { Bot } from '../../shared/bot-types'
 import type { BotChatRow } from '../../shared/bots/bot-chat-row'
 import { readBotChats } from '../runtime/rpc/methods/bots-chats'
@@ -49,11 +48,7 @@ export type BotSessionHooks = {
   requestFailed: (failure: StructuredAgentSessionRequestFailure) => void
   groupRoomOf: (sessionId: string) => BotGroupRoomOfSession | null
   /** What a bot's other chats did lately, for a turn of one of its chats. */
-  recentChats: (
-    botId: string,
-    sessionId: string,
-    message: AgentJournalMessageItem
-  ) => Promise<BotRecentChatsSection | null>
+  recentChats: (botId: string, sessionId: string) => Promise<BotRecentChatsSection | null>
   /** The every-fifth-turn note on questions the owner left unanswered, for a turn starting now. */
   unansweredQuestionNote: (sessionId: string) => Promise<string | null>
   /** A bot's chats on this host, closed ones too, each with whether it takes mail. */
@@ -62,23 +57,16 @@ export type BotSessionHooks = {
   sendItemMail: (mail: BotItemMail) => Promise<boolean>
 }
 
-/** The turn's live-work slot: who it acts for is settled first, so a block kept from an owner turn
- *  is never reused for a turn whose audience is unknown or not the owner (null drops it); only an
- *  owner turn's slow or failed read keeps what the chat last got (undefined). */
-async function activeWorkSlot(
+/** The turn's live-work slot; a slow or failed read keeps what the chat last got (undefined). */
+function activeWorkSlot(
   runtime: OrcaRuntimeService,
-  botId: string,
-  sessionId: string,
-  message: AgentJournalMessageItem
-): Promise<BotActiveWorkSection | null | undefined> {
-  // One deadline for both steps, so the turn waits no longer than the existing bound.
-  const deadline = Date.now() + BOT_WORK_NOTE_TIMEOUT_MS
-  const gate = await withTimeout(
-    readBotActiveWork(runtime, botId, sessionId, message),
+  botId: string
+): Promise<BotActiveWorkSection | undefined> {
+  return withTimeout<BotActiveWorkSection | undefined>(
+    readBotActiveWork(runtime, botId),
     BOT_WORK_NOTE_TIMEOUT_MS,
-    null
+    undefined
   )
-  return gate ? withTimeout(gate.section, Math.max(0, deadline - Date.now()), undefined) : null
 }
 
 export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
@@ -102,21 +90,20 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
       ),
     groupRoomOf: (sessionId) => botGroupRoomOfSession(runtime, sessionId),
     // A stalled read never holds a message back: past the bound, this turn goes without it.
-    // With the bot's live work, which rides the same resend-on-change key; only an owner turn's
-    // slow live-work read keeps what the chat last got.
-    recentChats: async (botId, sessionId, message) =>
+    // With the bot's live work, which rides the same resend-on-change key; a slow live-work read
+    // keeps what the chat last got.
+    recentChats: async (botId, sessionId) =>
       joinedTurnSections(
         sections,
         sessionId,
         await Promise.all([
-          // A slow read drops the recent chats (null), never keeps a section a turn for another
-          // audience got.
+          // A slow read drops the recent chats (null).
           withTimeout(
-            readBotRecentChats(runtime, botId, sessionId, message),
+            readBotRecentChats(runtime, botId, sessionId),
             BOT_WORK_NOTE_TIMEOUT_MS,
             null
           ),
-          activeWorkSlot(runtime, botId, sessionId, message)
+          activeWorkSlot(runtime, botId)
         ])
       ),
     // Like the recent chats: a failed or stalled read means no note this turn, never a held message.

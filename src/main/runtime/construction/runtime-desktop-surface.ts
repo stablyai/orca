@@ -16,7 +16,7 @@ export type RendererReply = { requestId: string }
 
 export type RuntimeDesktopSurface = {
   /** Headless hosts retain the formatter's English defaults. */
-  translateNotification?(key: string, fallback: string): string
+  translateNotification?(key: string, fallback: string, values?: Record<string, unknown>): string
   /** This machine's own idle state; undefined is unknown. Absent on hosts with no desktop. */
   isAwayForMobileNotifications?(): boolean | undefined
   /** Show a native notification. Returns false when the host cannot, so callers can say so. */

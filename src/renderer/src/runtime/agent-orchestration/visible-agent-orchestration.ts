@@ -1,6 +1,5 @@
 import type { AppState } from '@/store/types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
-import { getStructuredAgentSessionTabs } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
@@ -10,18 +9,15 @@ import {
   parseRemoteRuntimePtyId
 } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status/identity/agent-status-worktree-attribution'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { keyedListsMatch } from '@/store/record-transitions/keyed-list-match'
 import { orchestrationContextsEqual } from '@/store/slices/agent-status/orchestration/agent-status-orchestration-context'
+import { resolveStructuredAgentSessionOwner } from '../native-chat/session-ownership/structured-agent-session-owner'
 import {
-  resolveStructuredAgentSessionOwner,
-  structuredAgentSessionOwnerForTab,
-  structuredAgentSessionOwnerInputs
-} from '../native-chat/session-ownership/structured-agent-session-owner'
+  aliasKey,
+  orchestrationRowWorkForTest,
+  rowIdentities
+} from './orchestration-row-identities'
 
 type Contexts = Record<string, AgentStatusOrchestrationContext>
 export type VisibleOrchestrationState = WorktreeRuntimeOwnerState &
@@ -47,48 +43,12 @@ export function recordOrchestrationProducer(
 ): void {
   producerByContext.set(context, host)
 }
-type RowIdentities = {
-  inputs: unknown[]
-  aliases: Map<string, string>
-  canonical: Map<string, { key: string; host: string | null }>
-  worktrees: Map<string, string>
-}
-let rowCache: RowIdentities | undefined
 let cache: { inputs: unknown[]; contexts: Contexts } | undefined
 let visits = 0
-const aliasKey = (host: string, key: string) => `${host}\0${key}`
-
-function rowIdentities(state: VisibleOrchestrationState): RowIdentities {
-  // The chat list keeps its identity across terminal-only writes, so a title leaves rows cached.
-  const structuredTabs = getStructuredAgentSessionTabs(state.unifiedTabsByWorktree ?? EMPTY)
-  const inputs = [structuredTabs, ...structuredAgentSessionOwnerInputs(state)]
-  if (rowCache && inputs.every((value, index) => value === rowCache?.inputs[index])) {
-    return rowCache
-  }
-  const aliases = new Map<string, string>()
-  const worktrees = new Map<string, string>()
-  const canonical = new Map<string, { key: string; host: string | null }>()
-  for (const tab of structuredTabs) {
-    visits++
-    if (!tab.entityId) {
-      continue
-    }
-    const key = structuredAgentSessionPaneKey(
-      structuredAgentSessionTabId(tab.entityId),
-      tab.entityId
-    )
-    const actual = structuredAgentSessionPaneKey(tab.id, tab.entityId)
-    const host = structuredAgentSessionOwnerForTab(state, tab)
-    canonical.set(actual, { key, host })
-    worktrees.set(actual, tab.worktreeId)
-    if (host && !aliases.has(aliasKey(host, key))) {
-      aliases.set(aliasKey(host, key), actual)
-    }
-  }
-  rowCache = { inputs, aliases, canonical, worktrees }
-  return rowCache
+export function visibleOrchestrationWorkForTest(): { visits: number; paneKeyEncodes: number } {
+  const rows = orchestrationRowWorkForTest()
+  return { visits: visits + rows.visits, paneKeyEncodes: rows.paneKeyEncodes }
 }
-
 type TerminalInputs = Pick<
   VisibleOrchestrationState,
   'unifiedTabsByWorktree' | 'tabsByWorktree' | 'ptyIdsByTabId'
