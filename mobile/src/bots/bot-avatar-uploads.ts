@@ -33,10 +33,9 @@ export function noteListedBots(
 ): void {
   const listed = new Set(bots.map((bot) => bot.id))
   for (const [id, by] of listedBy) {
-    // Gone from its host's list: nothing reads it there again.
+    // Gone from its host's list: nothing reads it there again. A wait stays, for a list that brings it back.
     if (by.key === key && !listed.has(id)) {
       listedBy.delete(id)
-      waiting.delete(id)
     }
   }
   for (const { id, avatar } of bots) {
@@ -54,7 +53,6 @@ export function forgetBotAvatarClients(pairedHostId: string): void {
   for (const [id, { key }] of listedBy) {
     if (key === pairedHostId || key.startsWith(`${pairedHostId}\n`)) {
       listedBy.delete(id)
-      waiting.delete(id)
     }
   }
 }
