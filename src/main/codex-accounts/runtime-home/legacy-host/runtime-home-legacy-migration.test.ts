@@ -209,26 +209,30 @@ describe('CodexRuntimeHomeService', () => {
     expect(trackedImportOutcomes()).toEqual(['imported'])
   })
 
-  it('imports a linked account history and ignores an account folder without a home folder', async () => {
-    const elsewhere = join(testState.userDataDir, 'elsewhere-history.jsonl')
-    writeFileSync(elsewhere, '{"id":"linked-1"}\n', 'utf-8')
-    const managedHomePath = createManagedAuth(
-      testState.userDataDir,
-      'account-1',
-      '{"account":"managed"}\n'
-    )
-    symlinkSync(elsewhere, join(managedHomePath, 'history.jsonl'))
-    const orphan = join(testState.userDataDir, 'codex-accounts', 'orphan')
-    mkdirSync(orphan, { recursive: true })
-    writeFileSync(join(orphan, 'home'), 'not a folder', 'utf-8')
+  // File symlinks need Developer Mode or elevation on Windows.
+  it.skipIf(process.platform === 'win32')(
+    'imports a linked account history and ignores an account folder without a home folder',
+    async () => {
+      const elsewhere = join(testState.userDataDir, 'elsewhere-history.jsonl')
+      writeFileSync(elsewhere, '{"id":"linked-1"}\n', 'utf-8')
+      const managedHomePath = createManagedAuth(
+        testState.userDataDir,
+        'account-1',
+        '{"account":"managed"}\n'
+      )
+      symlinkSync(elsewhere, join(managedHomePath, 'history.jsonl'))
+      const orphan = join(testState.userDataDir, 'codex-accounts', 'orphan')
+      mkdirSync(orphan, { recursive: true })
+      writeFileSync(join(orphan, 'home'), 'not a folder', 'utf-8')
 
-    await startService()
+      await startService()
 
-    expect(readFileSync(join(getRuntimeCodexHomePath(), 'history.jsonl'), 'utf-8')).toBe(
-      '{"id":"linked-1"}\n'
-    )
-    expect(readFileSync(elsewhere, 'utf-8')).toBe('{"id":"linked-1"}\n')
-  })
+      expect(readFileSync(join(getRuntimeCodexHomePath(), 'history.jsonl'), 'utf-8')).toBe(
+        '{"id":"linked-1"}\n'
+      )
+      expect(readFileSync(elsewhere, 'utf-8')).toBe('{"id":"linked-1"}\n')
+    }
+  )
 
   it('never writes an existing shared history, and account removal keeps the account history', async () => {
     const runtimeHistoryPath = join(getRuntimeCodexHomePath(), 'history.jsonl')
