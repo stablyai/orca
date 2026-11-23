@@ -36,8 +36,8 @@ const SELECT_OPENING_KEYS = new Set([
   'Alt+ArrowUp'
 ])
 const FOCUS_MOVING_KEYS = new Set(['Tab', 'Shift+Tab', 'Escape'])
-// Script can move focus unseen (a dialog, a reload, an agent), so "not a select" holds only while typing.
-const NOT_SELECT_TRUSTED_WHILE_TYPING_MS = 2_000
+// Script can move focus unseen (a dialog, a reload, an agent), so "not a select" holds only briefly.
+const NOT_SELECT_TRUSTED_MS = 2_000
 
 /** Whether the page's focused element was a select when last read, so keys typed in a text field cost no read. */
 class RemotePageSelectFocus {
@@ -60,20 +60,15 @@ class RemotePageSelectFocus {
     }
   }
 
-  /** Each key that relies on it keeps it fresh, so steady typing in a text field reads nothing. */
+  /** Steady typing in a text field reads at most once per trust window. */
   ruledOut(page: string): boolean {
     const known = this.known
-    const now = performance.now()
-    if (
-      !known ||
-      known.selectFocused ||
-      known.page !== page ||
-      now - known.at >= NOT_SELECT_TRUSTED_WHILE_TYPING_MS
-    ) {
-      return false
-    }
-    known.at = now
-    return true
+    return Boolean(
+      known &&
+      !known.selectFocused &&
+      known.page === page &&
+      performance.now() - known.at < NOT_SELECT_TRUSTED_MS
+    )
   }
 }
 
