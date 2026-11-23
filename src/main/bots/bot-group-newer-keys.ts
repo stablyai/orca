@@ -115,21 +115,15 @@ export function parsedRecord(text: unknown): Json | null {
   }
 }
 
-/** A list written by a build that couldn't read the stored one: the stored entries it never wrote
- *  (`seen` names those it did, then removed) first, then what it wrote, so it adds to the list
- *  and never clears what it couldn't see. */
+/** A list written by a build that couldn't read the stored one: the stored entries it didn't
+ *  write first, then what it wrote, so it adds to the list and never clears it. */
 export function withUnreadEntries(
   written: readonly unknown[],
   stored: readonly unknown[],
-  id: readonly string[],
-  seen: ReadonlySet<string | null> = new Set()
+  id: readonly string[]
 ): unknown[] {
   const ids = new Set(written.map((entry) => keptEntryId(entry, id)))
-  const hidden = stored.filter((entry) => {
-    const key = keptEntryId(entry, id)
-    return !ids.has(key) && !seen.has(key)
-  })
-  return [...hidden, ...written]
+  return [...stored.filter((entry) => !ids.has(keptEntryId(entry, id))), ...written]
 }
 
 /** The record's text with the marker first, where the database finds it without parsing. */

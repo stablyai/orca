@@ -53,6 +53,7 @@ const SCHEMAS = {
       pausedAfter: true,
       automationRun: true,
       fromItems: true,
+      fromReports: true,
       memorySource: true,
       triggeredBy: true
     }).extend({
@@ -79,7 +80,12 @@ const SCHEMAS = {
         .optional()
         .catch(undefined)
     }),
-    message: Message.omit({ fromItems: true, memorySource: true, triggeredBy: true }).extend({
+    message: Message.omit({
+      fromItems: true,
+      fromReports: true,
+      memorySource: true,
+      triggeredBy: true
+    }).extend({
       turns: z.array(
         Turn.omit({ avatarOutfit: true, failure: true }).extend({ agent: z.enum(AGENTS_271) })
       ),
@@ -97,15 +103,32 @@ const SCHEMAS = {
 
 export type ReleasedBuild = keyof typeof SCHEMAS
 
+/** The insert shared by v1.4.268 and #46196. The latter could ask without writing an index. */
+export function appendBeforeAskIndex(db: Database, message: Omit<BotGroupMessage, 'sequence'>) {
+  db.prepare('INSERT INTO bot_group_messages(id, group_id, record) VALUES (?, ?, ?)').run(
+    message.id,
+    message.groupId,
+    JSON.stringify(message)
+  )
+}
+
 /** The store as a released build ran it, on the same database. */
 export function releasedStore(db: Database, build: ReleasedBuild) {
   const schema = SCHEMAS[build]
   const read = (table: string, id: string) =>
     JSON.parse(String(db.prepare(`SELECT record FROM ${table} WHERE id = ?`).get(id)!.record))
+  const message = (id: string): Omit<BotGroupMessage, 'sequence'> =>
+    schema.message.parse(read('bot_group_messages', id))
+  const update = (post: Omit<BotGroupMessage, 'sequence'>) => {
+    db.prepare('UPDATE bot_group_messages SET record = ? WHERE id = ? AND group_id = ?').run(
+      JSON.stringify(post),
+      post.id,
+      post.groupId
+    )
+  }
   return {
     group: (id: string): BotGroup => schema.group.parse(read('bot_groups', id)),
-    message: (id: string): Omit<BotGroupMessage, 'sequence'> =>
-      schema.message.parse(read('bot_group_messages', id)),
+    message,
     put(group: BotGroup) {
       // v1.4.270 started writing the paired roster's key always, also when it was cleared.
       const record =
@@ -114,20 +137,23 @@ export function releasedStore(db: Database, build: ReleasedBuild) {
         'INSERT INTO bot_groups(id, record) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET record = excluded.record'
       ).run(group.id, JSON.stringify(record))
     },
-    update(message: Omit<BotGroupMessage, 'sequence'>) {
-      db.prepare('UPDATE bot_group_messages SET record = ? WHERE id = ? AND group_id = ?').run(
-        JSON.stringify(message),
-        message.id,
-        message.groupId
-      )
-    },
-    /** v1.4.268's: it knew no question index. */
-    append(message: Omit<BotGroupMessage, 'sequence'>) {
-      db.prepare('INSERT INTO bot_group_messages(id, group_id, record) VALUES (?, ?, ?)').run(
-        message.id,
-        message.groupId,
-        JSON.stringify(message)
-      )
+    update,
+    retarget(id: string, operationId: string) {
+      const post = message(id)
+      const { error: _error, ...turn } = post.turns[0]
+      db.exec('SAVEPOINT released_retarget')
+      try {
+        update({ ...post, turns: [{ ...turn, operationId }] })
+        db.prepare('INSERT INTO bot_group_operations(operation_id, message_id) VALUES (?, ?)').run(
+          operationId,
+          id
+        )
+      } catch (error) {
+        db.exec('ROLLBACK TO released_retarget')
+        throw error
+      } finally {
+        db.exec('RELEASE released_retarget')
+      }
     },
     /** v1.4.268's: it knew no question index. */
     deleteGroup(groupId: string) {

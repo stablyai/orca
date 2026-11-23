@@ -5,7 +5,7 @@ import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { remoteRoomMailArrived, settleStoredRoomMail } from './bot-group-remote-answers'
 import type { BotGroupRuntime } from './bot-group-runtime'
 import { BotGroupStore } from './bot-group-store'
-import { releasedStore } from './bot-group-released-builds.test-fixture'
+import { appendBeforeAskIndex, releasedStore } from './bot-group-released-builds.test-fixture'
 
 // What keeps a group's paired roster, remote answers and image refs through a rollback, and how a
 // remote answer's mail finds its post without reading the group's rooms.
@@ -344,6 +344,44 @@ describe('a released build rewriting records it only partly knows', () => {
     expect(upgraded.message(line.id)!.fromItems).toBe(true)
   })
 
+  it('keeps a report line’s origin and outfit after v1.4.268 retargets its unfinished turn', () => {
+    const { db, groups, group } = room()
+    const id = 'mail:session-juno:msg_1'
+    groups.store.append({
+      id,
+      groupId: group.id,
+      author: { kind: 'bot', id: 'bot-local', name: 'Juno' },
+      text: 'Juno read a worker report',
+      createdAt: 3,
+      fromReports: true,
+      turns: [
+        {
+          operationId: 'op-1',
+          sessionId: 'session-juno',
+          botId: 'bot-local',
+          botName: 'Juno',
+          avatar: null,
+          avatarOutfit: 'top-hat',
+          agent: 'claude',
+          mailbox: true,
+          error: 'Rate limited.',
+          failure: { code: 'rate-limited' }
+        }
+      ]
+    })
+
+    releasedStore(db, 'v1.4.268').retarget(id, 'op-2')
+    const upgraded = new BotGroupStore(db)
+    const post = upgraded.operationMessage('op-2')!
+    upgraded.update({ ...post, text: 'Retried' })
+
+    const retried = upgraded.message(id)!
+    expect(retried.fromReports).toBe(true)
+    const turn = retried.turns[0]
+    expect(turn).toMatchObject({ operationId: 'op-2', avatarOutfit: 'top-hat' })
+    expect([turn.error, turn.failure]).toEqual([undefined, undefined])
+  })
+
   it('keeps a paired roster v1.4.271 could not read through its rename', () => {
     const { db, groups, group } = room()
     const helper = { ...NOVA, agent: 'codebuddy' as const }
@@ -390,6 +428,32 @@ describe('a released build rewriting records it only partly knows', () => {
     old.put({ ...old.group(group.id), remoteMembers: [ATLAS] })
     old.put({ ...old.group(group.id), remoteMembers: [] })
     expect(new BotGroupStore(db).get(group.id).remoteMembers).toEqual([helper])
+  })
+
+  it('keeps removed a member this build removes after v1.4.271 hid it', () => {
+    const { db, group } = room()
+    const helper = { ...NOVA, agent: 'codebuddy' as const }
+    new BotGroupStore(db).put({ ...group, remoteMembers: [ATLAS, helper] })
+    const old = releasedStore(db, 'v1.4.271')
+    old.put({ ...old.group(group.id), name: 'Renamed' })
+    const upgraded = new BotGroupStore(db)
+    expect(upgraded.get(group.id).remoteMembers).toEqual([ATLAS, helper])
+    upgraded.put({ ...upgraded.get(group.id), remoteMembers: [ATLAS] })
+    expect(new BotGroupStore(db).get(group.id).remoteMembers).toEqual([ATLAS])
+  })
+
+  it('keeps a paired roster through v1.4.268 and then v1.4.271 renaming it', () => {
+    const { db, group } = room()
+    const helper = { ...NOVA, agent: 'codebuddy' as const }
+    new BotGroupStore(db).put({ ...group, remoteMembers: [ATLAS, helper] })
+    const v268 = releasedStore(db, 'v1.4.268')
+    v268.put({ ...v268.group(group.id), name: 'One' })
+    const v271 = releasedStore(db, 'v1.4.271')
+    v271.put({ ...v271.group(group.id), name: 'Two' })
+    expect(new BotGroupStore(db).get(group.id)).toMatchObject({
+      name: 'Two',
+      remoteMembers: [ATLAS, helper]
+    })
   })
 
   it('still clears a paired roster v1.4.271 emptied', () => {
@@ -508,7 +572,7 @@ describe('the question index after an older build', () => {
     const old = releasedStore(db, 'v1.4.268')
     old.update(old.message('post-1'))
     old.deleteGroup(group.id)
-    old.append(REUSED_POST)
+    appendBeforeAskIndex(db, REUSED_POST)
     expect(groups.store.remoteAskMessage('q-1')).toBeNull()
     // Nor does the reused id get back what the deleted post's rewrite dropped.
     expect(new BotGroupStore(db).message('post-1')!.remoteAsks).toBeUndefined()
@@ -519,14 +583,7 @@ describe('the question index after an older build', () => {
     db.exec('DROP TRIGGER bot_group_messages_drop_remote_asks')
     const old = releasedStore(db, 'v1.4.268')
     old.deleteGroup(group.id)
-    old.append({
-      id: 'post-1',
-      groupId: 'group-2',
-      author: { kind: 'owner' },
-      text: 'hi',
-      createdAt: 5,
-      turns: []
-    })
+    appendBeforeAskIndex(db, REUSED_POST)
     const reopened = groupsOn(orchestration, new BotGroupStore(db))
     expect(reopened.store.remoteAskMessage('q-1')).toBeNull()
   })
@@ -543,16 +600,15 @@ describe('the question index after an older build', () => {
     expect(row.get('q-1')?.message_id).toBe(posted.id)
   })
 
-  it('places an answer for a post a build without the index added, far back in the room', () => {
+  it('places an answer for a post #46196 added without the index, far back in the room', () => {
     const { db, orchestration, group, posted, arrive, unread } = room()
-    const old = releasedStore(db, 'v1.4.268')
-    old.append({
+    appendBeforeAskIndex(db, {
       ...posted,
       id: 'post-2',
       remoteAsks: [{ ...ATLAS, requestId: 'q-2', state: 'sent' }]
     })
     for (let index = 0; index < 45; index++) {
-      old.append({ ...posted, id: `later-${index}`, remoteAsks: undefined })
+      appendBeforeAskIndex(db, { ...posted, id: `later-${index}`, remoteAsks: undefined })
     }
     const groups = groupsOn(orchestration, new BotGroupStore(db))
     arrive('q-2', 'Two.')
