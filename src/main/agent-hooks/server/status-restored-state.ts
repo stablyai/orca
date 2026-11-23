@@ -16,16 +16,21 @@ function restoredStateEdge(
   return leadTurn(before) !== leadTurn(after) ? 'turn' : null
 }
 
-export type RestoredStateRevisions = Record<'authority' | 'turn', number>
+/** Authority edges as a revision (they save everything at once) and the panes whose lead turn
+ *  changed since their row was saved (only those rows save ahead of the batch). */
+export type RestoredStateEdges = { authority: number; turnKeys: Set<string> }
 
-/** Counts a row mutation's restored-state edge, which schedules its save ahead of the batch. */
-export function countRestoredStateEdge(
-  revisions: RestoredStateRevisions,
+/** Records a row mutation's restored-state edge, which schedules its save ahead of the batch. */
+export function noteRestoredStateEdge(
+  edges: RestoredStateEdges,
+  paneKey: string,
   before: AgentHookEventPayload | undefined,
   after: AgentHookEventPayload | undefined
 ): void {
   const edge = restoredStateEdge(before, after)
-  if (edge) {
-    revisions[edge]++
+  if (edge === 'authority') {
+    edges.authority++
+  } else if (edge === 'turn') {
+    edges.turnKeys.add(paneKey)
   }
 }

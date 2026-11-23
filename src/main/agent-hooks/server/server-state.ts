@@ -42,7 +42,7 @@ import type {
   StatusRowMutationListener
 } from './server-types'
 import { RevisionedMap } from './revisioned-map'
-import { countRestoredStateEdge } from './status-restored-state'
+import { noteRestoredStateEdge } from './status-restored-state'
 import type { TerminalModelWait } from './server-model-wait'
 import { recordAgentExit, forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
 import { paneAgentIdentity, type PaneAgentIdentity } from './pane-agent-identity'
@@ -281,12 +281,12 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
           this.statusPersistRemovedKeys.add(key)
         }
       }
-      countRestoredStateEdge(this.restoredStateRevisions, before, after)
+      noteRestoredStateEdge(this.restoredStateEdges, key, before, after)
     }
   })
   protected readonly statusPersistDirtyKeys = new Set<string>()
   protected readonly statusPersistRemovedKeys = new Set<string>()
-  protected readonly restoredStateRevisions = { authority: 0, turn: 0 }
+  protected readonly restoredStateEdges = { authority: 0, turnKeys: new Set<string>() }
   protected get legacyRowHooks(): Parameters<typeof createHookListenerState>[0] {
     return {}
   }
