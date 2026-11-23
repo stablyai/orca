@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { surfaceRuntime } from '../terminal/surface/terminal-surface-replies.test-fixture'
+import { OrcaRuntimeService } from '../orca-runtime'
 
 const WORKSPACE = 'folder:project-work'
 describe('desktop session focus publication', () => {
   it('uses only the current authoritative renderer publication, including metadata-only chat changes', async () => {
-    const { runtime } = surfaceRuntime()
+    const runtime = new OrcaRuntimeService()
     expect(runtime.readActiveSessionId(WORKSPACE)).toBeUndefined()
     const seen: (string | null | undefined)[] = []
     const stop = runtime.onActiveSessionChanged(() => {
@@ -36,13 +36,13 @@ describe('desktop session focus publication', () => {
         ...graph,
         activeSessionIdsByWorkspace: { [WORKSPACE]: 'wrong_window' }
       })
-    ).rejects.toThrow()
+    ).rejects.toThrow('Runtime graph publisher does not match the authoritative window')
     expect(runtime.readActiveSessionId(WORKSPACE)).toBeUndefined()
     stop()
   })
 
   it('notifies subscribers when focus becomes unavailable and when a cancelled reload restores it', async () => {
-    const { runtime } = surfaceRuntime()
+    const runtime = new OrcaRuntimeService()
     const seen: (string | null | undefined)[] = []
     const stop = runtime.onActiveSessionChanged(() => {
       seen.push(runtime.readActiveSessionId(WORKSPACE))
@@ -70,7 +70,7 @@ describe('desktop session focus publication', () => {
   })
 
   it('does not expose headless focus intentions or malformed identities as desktop selection', async () => {
-    const { runtime } = surfaceRuntime()
+    const runtime = new OrcaRuntimeService()
     await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, {
       tabs: [],
       leaves: [],
@@ -78,7 +78,7 @@ describe('desktop session focus publication', () => {
       activeSessionIdsByWorkspace: { [WORKSPACE]: 'codex_A' }
     })
     expect(runtime.readActiveSessionId(WORKSPACE)).toBeUndefined()
-    const { runtime: desktop } = surfaceRuntime()
+    const desktop = new OrcaRuntimeService()
     await desktop.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
