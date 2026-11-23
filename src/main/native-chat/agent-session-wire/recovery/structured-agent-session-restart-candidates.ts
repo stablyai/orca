@@ -7,7 +7,10 @@ import type { AgentSessionJournal } from '../../agent-session-journal/journal-st
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import { hostCanStartRecord } from '../providers/structured-agent-session-provider-support'
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
-import { liveProviderRelayChats } from '../../../provider-relay/app-provider-relays'
+import {
+  listProviderRelaysAtLaunch,
+  liveProviderRelayChats
+} from '../../../provider-relay/app-provider-relays'
 import {
   structuredAgentSessionResumableSet,
   type StructuredAgentSessionResumableSet
@@ -29,10 +32,10 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
   movedOn: (marker: AgentSessionResumeMarker) => Promise<boolean>
   savedByNewerOrca: (sessionId: string) => boolean
 }): StructuredAgentSessionRestartCandidateReader {
-  return (markers, leaseState) =>
+  return async (markers, leaseState) =>
     structuredAgentSessionResumableSet({
       // A chat whose agent kept working under the terminal host was never cut; it reattaches.
-      markers: withoutKeptRunningChats(markers),
+      markers: await withoutKeptRunningChats(markers),
       getRecord: deps.getRecord,
       supportsRecord: (record) => hostCanStartRecord(deps, record),
       movedOn: deps.movedOn,
@@ -47,9 +50,13 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
     })
 }
 
-function withoutKeptRunningChats(
+async function withoutKeptRunningChats(
   markers: readonly AgentSessionResumeMarker[]
-): readonly AgentSessionResumeMarker[] {
+): Promise<readonly AgentSessionResumeMarker[]> {
+  if (markers.length === 0) {
+    return markers
+  }
+  await listProviderRelaysAtLaunch()
   const kept = liveProviderRelayChats()
   return kept.size === 0 ? markers : markers.filter((marker) => !kept.has(marker.sessionId))
 }

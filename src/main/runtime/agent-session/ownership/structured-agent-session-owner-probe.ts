@@ -11,20 +11,28 @@ import {
   keptRunningProviderRelayPid,
   listProviderRelaysAtLaunch
 } from '../../../provider-relay/app-provider-relays'
+import { providerOwnerHeldElsewhere } from '../../../provider-relay/provider-relay-owner-ancestry'
 
 /**
  * An owner still running under the terminal host is this app's to reattach, not an orphan to stop:
  * it reads as unprovable, which recovery releases without signalling it.
  */
 async function keptRunningProbe(
-  record: AgentSessionRecord
+  record: AgentSessionRecord,
+  hostId: string
 ): Promise<AgentSessionOwnerProbe | null> {
   const owner = record.lease.ownerProcess
   if (!owner) {
     return null
   }
   await listProviderRelaysAtLaunch()
-  return keptRunningProviderRelayPid(record.sessionId) === owner.pid
+  // The inventory may have missed a daemon that was slow to answer; the process tree can't.
+  const kept =
+    keptRunningProviderRelayPid(record.sessionId) === owner.pid ||
+    (owner.hostId === hostId &&
+      process.platform !== 'win32' &&
+      (await providerOwnerHeldElsewhere(owner.pid)) === true)
+  return kept
     ? { outcome: 'indeterminate', reason: 'owner kept running under the terminal host' }
     : null
 }
@@ -36,7 +44,7 @@ export function createStructuredAgentSessionOwnerProbe(
   findSpawnTokenProcesses = findAgentSessionSpawnTokenProcesses
 ): (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe> {
   return async (record) => {
-    const kept = await keptRunningProbe(record)
+    const kept = await keptRunningProbe(record, hostId)
     if (kept) {
       return kept
     }
@@ -89,7 +97,7 @@ export function createStructuredAgentSessionOwnerProbes(
     }[] = []
     for (const record of records) {
       const owner = record.lease.ownerProcess
-      const kept = await keptRunningProbe(record)
+      const kept = await keptRunningProbe(record, hostId)
       if (kept) {
         results.set(record.sessionId, kept)
       } else if (owner?.hostId === hostId) {

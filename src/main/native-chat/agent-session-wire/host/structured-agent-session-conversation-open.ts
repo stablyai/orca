@@ -4,6 +4,10 @@ import { prWatchStorage } from '../../../github/pr-watch/pr-watch-storage'
 // other unhanded sends are rejected (journal-unsent-send-hold.ts / queued-message-pause.ts).
 // Settlement needs no lease and starts no provider child.
 
+import {
+  keptRunningProviderRelayPid,
+  listProviderRelaysAtLaunch
+} from '../../../provider-relay/app-provider-relays'
 import type { JournalSqlDatabase } from '../../agent-session-journal/database/journal-sql-database'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import { openAgentSessionJournal } from '../../agent-session-journal/journal-store-factory'
@@ -123,7 +127,8 @@ export async function openStructuredAgentSessionConversationJournal(
       : {})
   })
   // No local child writes unopened journals; settle the gone generation before readers/new children.
-  if (!options.acquisition) {
+  // An agent the terminal host kept running is not gone: its turn goes on once it reattaches.
+  if (!options.acquisition && !(await agentKeptRunning(sessionId))) {
     await settleGoneGeneration(deps, record, journal)
   }
   try {
@@ -152,6 +157,23 @@ export async function resettleOpenStructuredAgentSessionConversation(
 ): Promise<void> {
   const record = deps.store.getConversation(sessionId)
   if (session && record?.ownerObservation.deathEvidence) {
+    await settleGoneGeneration(deps, record, session.journal)
+  }
+}
+
+async function agentKeptRunning(sessionId: string): Promise<boolean> {
+  await listProviderRelaysAtLaunch()
+  return keptRunningProviderRelayPid(sessionId) !== null
+}
+
+/** A kept agent ended before it could be reattached; its turn settles as any gone one does. */
+export async function settleGoneStructuredAgentSessionGeneration(
+  deps: StructuredAgentSessionConversationOpenDeps,
+  sessionId: string,
+  session: StructuredAgentSessionHostSession
+): Promise<void> {
+  const record = deps.store.getConversation(sessionId)
+  if (record) {
     await settleGoneGeneration(deps, record, session.journal)
   }
 }

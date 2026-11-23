@@ -1,9 +1,15 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
 import type {
   ProviderRelayDetachPolicy,
-  ProviderRelayInfo,
   ProviderRelaySpawnSpec
 } from '../daemon/protocol/daemon-provider-relay-protocol'
+import {
+  forgetKeptProviderRelay,
+  keptProviderRelay,
+  listKeptProviderRelays,
+  liveKeptProviderRelayChats,
+  recheckKeptProviderRelay
+} from './provider-relay-launch-inventory'
 import type { ManagedProviderProcess } from '../provider-process/managed-provider-process'
 import {
   resolveProviderChildEnv,
@@ -44,19 +50,11 @@ export type RelayedProviderProcess = {
   reattached: boolean
 }
 
-type ListedRelay = { channel: ProviderRelayChannel; info: ProviderRelayInfo }
-
-const LAUNCH_LIST_TIMEOUT_MS = 3_000
-/** Launch waits this long for the daemon before treating every chat as having no kept agent. */
-const LAUNCH_DAEMON_WAIT_MS = 10_000
 /** Quit waits at most this for detaches before disconnecting; a closing stream detaches anyway. */
 const QUIT_DETACH_WAIT_MS = 5_000
 const CONNECT_TIMEOUT_MS = 1_000
 
 let route: ProviderRelayRoute | null = null
-/** Relays found at launch, by chat, until their chat rebinds or they are dropped. */
-const listed = new Map<string, ListedRelay>()
-let listing: Promise<void> | null = null
 /** Every relay this app is attached to, by chat; quit detaches these instead of closing them. */
 const attached = new Map<string, RelayedProviderChild>()
 const markersFor = new WeakMap<RelayedProviderChild, ProviderRelayWorkMarkers>()
@@ -78,58 +76,56 @@ function policyFor(markers: ProviderRelayWorkMarkers, working = false): Provider
   return { idleStopMs: route?.idleStopMs() ?? null, working, ...markers }
 }
 
-/** One `relayList` per daemon, once; later launches and the restart offer read the result. */
+/** Lists the daemons' kept relays once per launch (again after a daemon that didn't answer). */
 export function listProviderRelaysAtLaunch(): Promise<void> {
   const installed = route
-  if (!installed) {
-    return Promise.resolve()
-  }
-  listing ??= (async () => {
-    const clients = await withTimeout(
-      installed.all().catch(() => []),
-      LAUNCH_DAEMON_WAIT_MS,
-      [] as DaemonClient[]
-    )
-    await Promise.all(
-      clients.map(async (client) => {
-        if (!client.getDaemonIdentity()?.providerRelay) {
-          return
-        }
-        const channel = providerRelayChannel(client)
-        const result = await withTimeout(
-          channel.list(LAUNCH_LIST_TIMEOUT_MS).catch(() => null),
-          LAUNCH_LIST_TIMEOUT_MS,
-          null
-        )
-        for (const info of result?.relays ?? []) {
-          // A relay someone else is attached to belongs to another running app.
-          if (!info.attached && info.chatKey) {
-            listed.set(info.chatKey, { channel, info })
-          }
-        }
-      })
-    )
-  })()
-  return listing
+  return installed ? listKeptProviderRelays(() => installed.all()) : Promise.resolve()
 }
 
 /** Chats whose agent is still running under the daemon; restart offers must leave these alone. */
 export function liveProviderRelayChats(): ReadonlySet<string> {
-  return new Set([...listed].filter(([, relay]) => relay.info.exit === null).map(([key]) => key))
+  return liveKeptProviderRelayChats()
 }
 
 /** The pid of the chat's agent the daemon kept running, until this app reattaches it. */
 export function keptRunningProviderRelayPid(chatKey: string): number | null {
-  const relay = listed.get(chatKey)
+  const relay = keptProviderRelay(chatKey)
   return relay && relay.info.exit === null ? relay.info.pid : null
 }
 
 /** Ended relays found at launch are dropped once their chat cold-resumes. */
 export function dropListedProviderRelay(chatKey: string): void {
-  const relay = listed.get(chatKey)
-  listed.delete(chatKey)
+  const relay = keptProviderRelay(chatKey)
   if (relay) {
+    forgetKeptProviderRelay(chatKey, relay)
     void relay.channel.close(relay.info.relayId).catch(() => {})
+  }
+}
+
+/** A kept agent that may still run must never get a second writer beside it. */
+export class KeptProviderRelayUnreachableError extends Error {
+  constructor(readonly chatKey: string) {
+    super('agent_kept_running_unreachable')
+    this.name = 'KeptProviderRelayUnreachableError'
+  }
+}
+
+/** Chats being reattached at launch: a proven-gone agent ends the rebind instead of starting anew. */
+const rebinding = new Set<string>()
+
+export async function withProviderRelayRebind<T>(chatKey: string, run: () => Promise<T>) {
+  rebinding.add(chatKey)
+  try {
+    return await run()
+  } finally {
+    rebinding.delete(chatKey)
+  }
+}
+
+export class KeptProviderRelayEndedError extends Error {
+  constructor(readonly chatKey: string) {
+    super('agent_kept_running_ended')
+    this.name = 'KeptProviderRelayEndedError'
   }
 }
 
@@ -219,29 +215,40 @@ function relayedChild(
   })
 }
 
-/** The chat's agent kept from before this app started, attached from its last acked line. */
+/**
+ * The chat's agent kept from before this app started, attached from its last acked line. The
+ * inventory row stays until the attach works or the daemon proves the agent gone; anything in
+ * between refuses the start, so no second writer runs beside a kept agent.
+ */
 async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProviderProcess | null> {
-  const relay = listed.get(launch.chatKey)
+  const relay = keptProviderRelay(launch.chatKey)
   if (!relay) {
     return null
   }
-  listed.delete(launch.chatKey)
   const { channel, info } = relay
-  if (info.exit !== null || info.pid === null || !(await connected(channel.client))) {
-    void channel.close(info.relayId).catch(() => {})
-    return null
+  if (info.exit === null && info.pid !== null && (await connected(channel.client))) {
+    const child = relayedChild(channel, info.relayId, info.pid, launch, launch.passWhileHeld)
+    const started = await child.start(info.ackedSeq).then(
+      () => child.exited === null,
+      () => false
+    )
+    if (started) {
+      forgetKeptProviderRelay(launch.chatKey, relay)
+      track(launch.chatKey, child, launch.markers)
+      return { managed: relayedManagedProcess(child), child, reattached: true }
+    }
   }
-  const child = relayedChild(channel, info.relayId, info.pid, launch, launch.passWhileHeld)
-  try {
-    await child.start(info.ackedSeq)
-  } catch {
-    return null
+  const verdict =
+    info.exit === null ? await recheckKeptProviderRelay(launch.chatKey, relay) : 'gone'
+  if (verdict !== 'gone') {
+    throw new KeptProviderRelayUnreachableError(launch.chatKey)
   }
-  if (child.exited) {
-    return null
+  forgetKeptProviderRelay(launch.chatKey, relay)
+  void channel.close(info.relayId).catch(() => {})
+  if (rebinding.has(launch.chatKey)) {
+    throw new KeptProviderRelayEndedError(launch.chatKey)
   }
-  track(launch.chatKey, child, launch.markers)
-  return { managed: relayedManagedProcess(child), child, reattached: true }
+  return null
 }
 
 /**
@@ -256,7 +263,7 @@ export async function launchRelayedProviderProcess(
   if (!route) {
     return null
   }
-  await listing
+  await listProviderRelaysAtLaunch()
   const kept = await reattachListed(relay)
   if (kept) {
     return kept
