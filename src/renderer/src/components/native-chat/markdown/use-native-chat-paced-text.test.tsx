@@ -162,3 +162,43 @@ it('takes a save made while it was unmounted when it mounts again', () => {
     vi.useRealTimers()
   }
 })
+
+it('keeps a reply that shows only its saves on its last save through a catch-up', () => {
+  vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+  try {
+    const { reveals } = createNativeChatReplyRevealTracker()
+    reveals.drawn.set('reply', {
+      source: 'one',
+      shown: 3,
+      arrivals: [],
+      drawsWhole: true,
+      savedAt: 2
+    })
+    const root = { current: null }
+    const { result, rerender } = renderHook(
+      ({ text, revision }) => useNativeChatPacedText('reply', text, true, root, revision),
+      {
+        initialProps: { text: 'one', revision: 2 },
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <NativeChatReplyRevealsContext.Provider value={reveals}>
+            <NativeChatHeldTextSessionContext.Provider value="chat-saves">
+              {children}
+            </NativeChatHeldTextSessionContext.Provider>
+          </NativeChatReplyRevealsContext.Provider>
+        )
+      }
+    )
+    // Shown again with live text that came while hidden, but no new save.
+    act(() => {
+      documentViewerVisibility('chat-saves').heldDrawn?.()
+    })
+    rerender({ text: 'one two', revision: 2 })
+    act(() => vi.advanceTimersByTime(600))
+    expect(result.current.text).toBe('one')
+    rerender({ text: 'one two three', revision: 3 })
+    act(() => vi.advanceTimersByTime(600))
+    expect(result.current.text).toBe('one two three')
+  } finally {
+    vi.useRealTimers()
+  }
+})

@@ -142,7 +142,8 @@ export function useNativeChatPacedText(
     // Text held while the window was hidden is drawn at once, without a fade.
     const caughtUp = heldDrawn.current !== documentHeldDrawnCount(heldTextSession)
     heldDrawn.current = documentHeldDrawnCount(heldTextSession)
-    if (!streaming || caughtUp || saved.current.revision !== savedRevision) {
+    // A reply showing only its saves keeps the last one through a catch-up; its next save shows more.
+    if (!streaming || (caughtUp && !drawsWhole) || saved.current.revision !== savedRevision) {
       saved.current = { revision: savedRevision, text }
       if (drawsWhole) {
         setSavedText(saved.current.text)
