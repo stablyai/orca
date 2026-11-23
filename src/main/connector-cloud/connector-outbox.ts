@@ -47,8 +47,8 @@ export class ConnectorOutbox<T> {
       onStamped?: (batch: readonly T[], stamp: ConnectorStamp) => void
       /** A refused head was halved, keeping its number. */
       onSplit?: (batch: readonly T[], from: ConnectorStamp, to: ConnectorStamp) => void
-      /** A single refused item was dropped. */
-      onDropped?: (item: T, stamp: ConnectorStamp) => void
+      /** A single refused item was dropped, with why the cloud refused it. */
+      onDropped?: (item: T, stamp: ConnectorStamp, failure?: ConnectorFailure) => void
     }
   ) {
     this.items = options.initial ?? []
@@ -103,7 +103,7 @@ export class ConnectorOutbox<T> {
    * The cloud refused `stamp`'s head as too large or malformed, which no retry fixes: it goes again as its
    * first half, same number. A single item is dropped instead; returns it so the caller can say so.
    */
-  refused(stamp: ConnectorStamp): T | null {
+  refused(stamp: ConnectorStamp, failure?: ConnectorFailure): T | null {
     if (this.stamp !== stamp) {
       return null
     }
@@ -116,7 +116,7 @@ export class ConnectorOutbox<T> {
     this.stamp = { ...stamp, size: 0 }
     this.notify()
     if (dropped !== undefined) {
-      this.options.onDropped?.(dropped, stamp)
+      this.options.onDropped?.(dropped, stamp, failure)
     }
     return dropped ?? null
   }
@@ -198,7 +198,7 @@ export class ConnectorOutboxSender<T> {
           continue
         }
         if (failure && isRefusedAsSent(failure)) {
-          this.dropped(this.outbox.refused(head.stamp))
+          this.dropped(this.outbox.refused(head.stamp, failure))
           continue
         }
         if (failure) {

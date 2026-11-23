@@ -11,7 +11,7 @@ import type {
   ConversationEvent,
   ConversationSnapshot
 } from '../external-conversations/external-conversation-events'
-import { SIGNED_OUT } from './connector-cloud-request'
+import { SIGNED_OUT, type ConnectorFailure } from './connector-cloud-request'
 import { ConnectorOutbox, type ConnectorOutboxHead, type ConnectorStamp } from './connector-outbox'
 import { ConnectorTurnEndFile } from './connector-turn-outbox-file'
 import { connectorSnapshot, jsonBytes } from './connector-snapshot'
@@ -155,9 +155,14 @@ export class ConnectorTurnEvents {
         void this.replies.accepted(batch)
       },
       onSplit: (batch) => this.trace.split(batch),
-      onDropped: (item, stamp) => {
+      onDropped: (item, stamp, failure) => {
         this.trace.dropped(item, stamp)
-        // Its row stays unsent until the cloud takes it: a later drain hands it over again.
+        // A reply refused as invalid can't succeed as sent: it stays in flight, so this process
+        // never resends it (its row stays unsent). Any other refusal (a 503 outcome that doesn't
+        // stand yet) goes again later.
+        if (failure?.status === 400) {
+          return
+        }
         this.replies.forget([item])
         this.replies.retryLater()
       }
@@ -326,8 +331,8 @@ export class ConnectorTurnEvents {
     this.outbox.accepted(stamp)
   }
 
-  refused(stamp: ConnectorStamp): ConnectorEvent | null {
-    return this.outbox.refused(stamp)
+  refused(stamp: ConnectorStamp, failure?: ConnectorFailure): ConnectorEvent | null {
+    return this.outbox.refused(stamp, failure)
   }
 
   /** Drops everything, file included: no other account can report these turns. */
