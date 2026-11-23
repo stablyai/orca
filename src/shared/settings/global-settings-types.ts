@@ -272,6 +272,10 @@ export type GlobalSettings = GlobalSettingsBase & {
    *  chats use the user's own signed-in agy or Orca's server, and chats already on agy run the
    *  user's own agy (same history) or, where there is none, refuse as agy not found. Absent means on. */
   antigravityManagedAgyEnabled?: boolean
+  /** Main-side kill switch for Orca updating its installed Antigravity ACP server by itself when a
+   *  newer Orca pins a newer release. Off, the older server keeps running until Update in Settings.
+   *  Separate from antigravityManagedAgyEnabled: with that off, chats run on this server. Absent means on. */
+  antigravityServerAutoUpdateEnabled?: boolean
   /** How chats on the Google account method sign in: agy's own login, or Orca's built-in sign-in
    *  on Google's ACP server. Absent or 'auto': the server where Orca's sign-in is already in use,
    *  else agy. */

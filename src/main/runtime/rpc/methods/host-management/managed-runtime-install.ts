@@ -13,6 +13,7 @@ import {
 } from '../../../../acp/launch/acp-launch-command'
 import type { ManagedRuntimeProgram } from '../../../../../shared/agent-launch/installation/managed-runtime-install'
 import { ManagedRuntimeInstallation } from '../../../../node-runtime/managed-runtime-installation'
+import { onManagedServerUse } from '../../../../node-runtime/managed-runtime-release'
 import '../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { isAgentSessionPreSpawnError } from '../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
@@ -153,6 +154,8 @@ function acpInstallation(
     dataDirectory,
     program: 'server',
     findExternal,
+    updatesEnabled: () =>
+      spec.managedRuntimeUpdatesAllowed?.(runtime.requireStore().getSettings()) !== false,
     fence,
     revisions
   })
@@ -214,6 +217,15 @@ const AUTO_UPDATE_USE_THROTTLE_MS = 10 * 60_000
 let autoUpdatesStarted = false
 const lastUseCheck = new Map<string, number>()
 
+/** Use is the signal a copy matters; the installation's own backoff decides whether it downloads. */
+function checkForUpdateOnUse(key: string): void {
+  const now = Date.now()
+  if (now - (lastUseCheck.get(key) ?? 0) >= AUTO_UPDATE_USE_THROTTLE_MS) {
+    lastUseCheck.set(key, now)
+    checkForUpdate(key)
+  }
+}
+
 function checkForUpdate(key: string): void {
   installations
     .get(key)
@@ -223,7 +235,8 @@ function checkForUpdate(key: string): void {
     })
 }
 
-/** Keep Orca's own copies current without a client ever prompting: once after launch, then as they're used. */
+/** Keep Orca's own copies current without a client ever prompting: once after launch, then as they're used.
+ *  Installs only add a release folder, so chats on the older one keep running it. */
 export function startManagedRuntimeAutoUpdates(): void {
   if (autoUpdatesStarted) {
     return
@@ -234,15 +247,11 @@ export function startManagedRuntimeAutoUpdates(): void {
     for (const key of installations.keys()) {
       checkForUpdate(key)
     }
+    // A server's download is large, so a chat started during startup never begins it early.
+    onManagedServerUse((agent) => checkForUpdateOnUse(`server:${agent}`))
   }, AUTO_UPDATE_FIRST_CHECK_MS).unref()
-  // Use is the signal a copy matters; the release lookup itself is cached for an hour.
-  onManagedAgentUse((agent) => {
-    const now = Date.now()
-    if (now - (lastUseCheck.get(agent) ?? 0) >= AUTO_UPDATE_USE_THROTTLE_MS) {
-      lastUseCheck.set(agent, now)
-      checkForUpdate(`cli:${agent}`)
-    }
-  })
+  // The release lookup itself is cached for an hour.
+  onManagedAgentUse((agent) => checkForUpdateOnUse(`cli:${agent}`))
 }
 
 export const MANAGED_RUNTIME_INSTALL_METHODS = [

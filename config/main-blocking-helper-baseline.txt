@@ -805,7 +805,7 @@
 2 src/main/native-chat/transcript-history/opencode/transcript-opencode2-fork-coverage.ts
 2 src/main/native-chat/transcript-history/opencode/transcript-opencode2-sqlite.ts
 1 src/main/network/macos-tailscale-dns-diagnostic.ts
-3 src/main/node-runtime/managed-runtime-installation.ts
+2 src/main/node-runtime/managed-runtime-installation.ts
 1 src/main/node-runtime/managed-runtime-release-install.ts
 1 src/main/node-runtime/managed-runtime-release.ts
 9 src/main/notebook/python-environments.ts

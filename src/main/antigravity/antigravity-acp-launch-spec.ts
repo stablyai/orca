@@ -91,6 +91,7 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   account: antigravityChatAccount,
   installDirectories: () => [],
   managedRuntime: ANTIGRAVITY_ACP_RUNTIME,
+  managedRuntimeUpdatesAllowed: (settings) => settings.antigravityServerAutoUpdateEnabled !== false,
   // Yolo still requests questions and administrative reviews.
   permissionModeConfig: {
     values: { ask: 'default', 'accept-edits': 'auto_edit', 'full-access': 'yolo' }
@@ -178,6 +179,7 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
     join(homePath, '.local', 'bin')
   ],
   managedRuntime: undefined,
+  managedRuntimeUpdatesAllowed: undefined,
   resolveSessionMeta: undefined,
   // agy has no full-access mode, so its launch flag grants it; plan approvals still reach the chat.
   permissionModeConfig: {

@@ -17,9 +17,9 @@ import {
   type ManagedRuntime
 } from './managed-runtime-release'
 import { installFailureText, installRuntimeRelease } from './managed-runtime-release-install'
+import { AutoUpdateBackoff, pinnedReleaseAhead } from './managed-runtime-auto-update'
 
 const DEADLINE_MS = 45 * 60_000
-const AUTO_UPDATE_RETRY_MS = 60 * 60_000
 
 export type ManagedRuntimeInstallationDeps = {
   dataDirectory: string
@@ -63,8 +63,8 @@ export class ManagedRuntimeInstallation {
   private running: Run | null = null
   private mutation: Promise<void>
   private facts: { phase: string; read: Promise<InstalledFacts> } | null = null
-  /** One attempt per release per hour, so a failing update isn't redownloaded on every use. */
-  private lastAutoUpdate: { version: string; at: number } | null = null
+  /** Backs off a failing update, so it isn't redownloaded on every use. */
+  private readonly autoUpdates = new AutoUpdateBackoff()
 
   constructor(
     private readonly agent: string,
@@ -109,7 +109,7 @@ export class ManagedRuntimeInstallation {
 
   private async readInstalledFacts(): Promise<InstalledFacts> {
     const pin = this.runtime.pin()
-    const { release, broken, unreadable } = resolveInstalledRuntimeRelease(this.root, pin)
+    const { release, broken, unreadable } = this.readReleases(pin)
     if (!unreadable) {
       this.deps.onRelease?.(release?.folder ?? null)
     }
@@ -133,34 +133,43 @@ export class ManagedRuntimeInstallation {
     }
   }
 
-  /** Bring Orca's own copy to the latest release; never installs one nobody asked for or touches a user's own. */
+  /** Bring Orca's own copy to the latest or pinned release; never installs one nobody asked for or touches a user's own. */
   async updateIfBehind(): Promise<void> {
-    if (!this.runtime.refreshPin || this.running || this.deps.updatesEnabled?.() === false) {
+    const { runtime } = this
+    if (
+      (!runtime.refreshPin && !runtime.updatesToPin) ||
+      this.running ||
+      this.deps.updatesEnabled?.() === false
+    ) {
       return
     }
     // Nothing installed has nothing to update, so the latest release isn't looked up.
     if (!(await runtimeReleaseMayBePublished(this.root))) {
       return
     }
+    const version = runtime.refreshPin
+      ? await this.latestBehind()
+      : pinnedReleaseAhead(runtime.pin(), this.readReleases())
+    if (version === null || this.running || !this.autoUpdates.due(version)) {
+      return
+    }
+    this.autoUpdates.started(this.install().id)
+  }
+
+  /** The latest release, when Orca's copy is what chats run and it is older. */
+  private async latestBehind(): Promise<string | null> {
     const state = await this.status()
-    if (
-      state.source === 'managed' &&
+    return state.source === 'managed' &&
       state.installedVersion !== null &&
       state.available &&
-      state.version !== null &&
-      !state.installedCurrent &&
-      !this.running
-    ) {
-      const { lastAutoUpdate } = this
-      if (
-        lastAutoUpdate?.version === state.version &&
-        Date.now() - lastAutoUpdate.at < AUTO_UPDATE_RETRY_MS
-      ) {
-        return
-      }
-      this.lastAutoUpdate = { version: state.version, at: Date.now() }
-      this.install()
-    }
+      !state.installedCurrent
+      ? state.version
+      : null
+  }
+
+  /** The releases under the root, all Orca's, and which one launches run. */
+  private readReleases(pin = this.runtime.pin()) {
+    return resolveInstalledRuntimeRelease(this.root, pin)
   }
 
   /** Join installs; canceled work must finish cleanup before another begins. */
@@ -244,6 +253,7 @@ export class ManagedRuntimeInstallation {
     if (operation?.id === run.id && (settles || !run.controller.signal.aborted)) {
       this.state.set({ ...operation, ...patch })
       if (settles) {
+        this.autoUpdates.settled(run.id, patch.phase ?? 'failed')
         // Reread the disk now so onRelease learns the outcome even when no client is watching.
         void this.status(false).catch(() => {})
         releasesRevision += 1
@@ -312,7 +322,7 @@ export class ManagedRuntimeInstallation {
   }
 
   private async reclaim(): Promise<void> {
-    const { release, unreadable } = resolveInstalledRuntimeRelease(this.root, this.runtime.pin())
+    const { release, unreadable } = this.readReleases()
     if (!unreadable) {
       this.deps.onRelease?.(release?.folder ?? null)
     }
