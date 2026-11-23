@@ -270,6 +270,7 @@ export class AgentHookServer extends AgentHookServerLifecycle {
    *  spool. A report naming its process counts only while that process runs. */
   async readRestoredAgentStatus(paneKey: string): Promise<
     | (Pick<ParsedAgentStatusPayload, 'state' | 'mainAgent' | 'sessionBoundary'> & {
+        agentType?: ParsedAgentStatusPayload['agentType']
         receivedAt?: number
       })
     | null

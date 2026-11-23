@@ -51,7 +51,13 @@ export function runReattachedAgentStatusRestore(
     host.getHeadlessWriteChain(ptyId),
     ...paneKeys.map((paneKey) => agentHookServer.readRestoredAgentStatus(paneKey))
   ]).then(async ([agent, , ...reports]) => {
-    const report = reports.find((candidate) => candidate !== null)
+    const report = agent
+      ? reports.find(
+          (candidate) =>
+            candidate !== null &&
+            (candidate.agentType === undefined || candidate.agentType === agent)
+        )
+      : undefined
     const turn = agent && report ? hookLeadTurnState(report) : null
     const proven = !turn && !!agent && (await host.isRetainedFrameProven(ptyId, agent))
     if (!isCurrent()) {

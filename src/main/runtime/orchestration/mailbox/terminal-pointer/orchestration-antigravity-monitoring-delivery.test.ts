@@ -316,4 +316,34 @@ describe('orchestration mail delivery for Antigravity coordinators in monitoring
     })
     db.close()
   })
+
+  it('ignores a restored done report from a different agent than the foreground process', async () => {
+    vi.useFakeTimers()
+    const restoredAt = Date.now() - 60_000
+    const db = new OrchestrationDb(':memory:')
+    const harness = await createRuntime(db, { launchAgent: null })
+    const write = installInputRecordingController(harness.runtime, 'agy')
+    harness.runtime.startReattachedOutputClock(PTY_ID, {
+      pid: 4242,
+      incarnationId: 'mailbox-incarnation'
+    })
+    const run = createBoundRun(db, 'Antigravity mismatched restore Run')
+    const message = insertWorkerDone(db, run.id, 'Unread before restart')
+    vi.spyOn(agentHookServer, 'readRestoredAgentStatus').mockResolvedValue({
+      agentType: 'claude',
+      state: 'done',
+      receivedAt: restoredAt
+    })
+
+    harness.runtime.restoreReattachedAgentStatus(PTY_ID)
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(pointerCount(write)).toBe(0)
+    expect(harness.runtime.idleEvidenceSource.getFirstPartyAgentStatus(PTY_ID)).toBeNull()
+    expect(db.getMessageById(message.id)).toMatchObject({
+      delivered_at: null,
+      pointer_enter_pending: 0
+    })
+    db.close()
+  })
 })
