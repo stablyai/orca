@@ -16,6 +16,7 @@ export async function clearBrowserCookieJar(target: Session): Promise<void> {
 /**
  * For a cookie clear: what it removed leaves Chromium's store and the saved session cookies now,
  * not at their next commit up to 30 s later, so a crash before then can't sign pages back in.
+ * Exception: a partial clear leaves a file this launch could not read, since its other sites are unknown.
  */
 export async function persistBrowserCookieClear(
   target: Session,

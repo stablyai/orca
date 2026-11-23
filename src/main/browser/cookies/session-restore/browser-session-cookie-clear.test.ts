@@ -134,18 +134,22 @@ describe('session cookie snapshot after a cookie clear', () => {
     expect((await launch()).jar.names()).toEqual(['sid'])
   })
 
-  it('a clear that touches no saved cookie keeps a file this launch could not read', async () => {
-    const first = await launch()
-    const file = first.snapshots.snapshotPath('default')
-    await first.snapshots.writeSessionCookieSnapshot(file, [sessionCookie('sid', 'example.com')])
-    chmodSync(file, 0o000)
-    const { target, clear, snapshots } = await launch()
-    chmodSync(file, 0o600)
+  // chmod cannot hide a file from root or on Windows.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'a clear that touches no saved cookie keeps a file this launch could not read',
+    async () => {
+      const first = await launch()
+      const file = first.snapshots.snapshotPath('default')
+      await first.snapshots.writeSessionCookieSnapshot(file, [sessionCookie('sid', 'example.com')])
+      chmodSync(file, 0o000)
+      const { target, clear, snapshots } = await launch()
+      chmodSync(file, 0o600)
 
-    await clear.persistBrowserCookieClear(target, (cookie) => cookie.domain === 'google.com')
+      await clear.persistBrowserCookieClear(target, (cookie) => cookie.domain === 'google.com')
 
-    expect((await snapshots.readSessionCookieSnapshot(file))?.map((cookie) => cookie.name)).toEqual(
-      ['sid']
-    )
-  })
+      expect(
+        (await snapshots.readSessionCookieSnapshot(file))?.map((cookie) => cookie.name)
+      ).toEqual(['sid'])
+    }
+  )
 })
