@@ -320,11 +320,11 @@ export class StructuredAgentSessionTurnCompletionFeed {
       ) {
         continue
       }
-      if (recording) {
-        heard?.add(subscriber.id)
-      }
       try {
         subscriber.emit(event)
+        if (recording) {
+          heard?.add(subscriber.id)
+        }
       } catch {
         this.subscribers.delete(subscriber.id)
       }
