@@ -27,6 +27,7 @@ export type NativeChatMarkdownLine = {
 const FENCE = /^ {0,3}(`{3,}|~{3,})/
 const HEADING = /^ {0,3}(#{1,6})(?=\s|$)\s?/
 const QUOTE = /^ {0,3}(?:>[ \t]?)+/
+const SETEXT_DASHES = /^ {0,3}-+[ \t]*$/
 const RULE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
 const BULLET = /^[ \t]*[-*+](?=[ \t])[ \t]?/
 const ORDERED = /^[ \t]*\d{1,9}[.)](?=[ \t])[ \t]?/
@@ -69,7 +70,7 @@ function classifyLine(
     }
   }
   // `---` under a text line is a setext heading in the chat, not a rule.
-  if (RULE.test(line) && !(previousIsText && line.trimStart().startsWith('-'))) {
+  if (RULE.test(line) && !(previousIsText && SETEXT_DASHES.test(line))) {
     return { line: { block: { kind: 'rule' }, spans: [whole(line, 'marker')] }, fence: null }
   }
   const heading = HEADING.exec(line)
@@ -118,10 +119,19 @@ function whole(line: string, kind: NativeChatMarkdownSpanKind): NativeChatMarkdo
   return { from: 0, to: line.length, kind }
 }
 
-const CODE_SPAN = /(?<!`)(`+)(?!`)([^]*?[^`])\1(?!`)/g
 const EMPHASIS: { pattern: RegExp; marker: number; kinds: NativeChatMarkdownSpanKind[] }[] = [
-  { pattern: /(\*\*\*|___)(?=\S)(.+?)(?<=\S)\1/g, marker: 3, kinds: ['bold', 'italic'] },
-  { pattern: /(\*\*|__)(?=\S)(.+?)(?<=\S)\1/g, marker: 2, kinds: ['bold'] },
+  { pattern: /(\*\*\*)(?=\S)(.+?)(?<=\S)\1/g, marker: 3, kinds: ['bold', 'italic'] },
+  {
+    pattern: /(?<![\p{L}\p{N}_])(___)(?=\S)(.+?)(?<=\S)\1(?![\p{L}\p{N}_])/gu,
+    marker: 3,
+    kinds: ['bold', 'italic']
+  },
+  { pattern: /(\*\*)(?=\S)(.+?)(?<=\S)\1/g, marker: 2, kinds: ['bold'] },
+  {
+    pattern: /(?<![\p{L}\p{N}_])(__)(?=\S)(.+?)(?<=\S)\1(?![\p{L}\p{N}_])/gu,
+    marker: 2,
+    kinds: ['bold']
+  },
   { pattern: /(~~)(?=\S)(.+?)(?<=\S)\1/g, marker: 2, kinds: ['strike'] },
   { pattern: /(\*)(?=[^\s*])(.+?)(?<=[^\s*])\1/g, marker: 1, kinds: ['italic'] },
   {
@@ -137,27 +147,33 @@ function mask(text: string, from: number, to: number): string {
   return text.slice(0, from) + MASK.repeat(to - from) + text.slice(to)
 }
 
-/** Inline code first, then emphasis on what is left; consumed markers are masked so spans nest. */
+/** Code spans first (a backslash is literal inside them), then escapes, then emphasis; consumed
+ *  markers are masked so spans nest. */
 function inline(line: string, start: number): NativeChatMarkdownSpan[] {
   const spans: NativeChatMarkdownSpan[] = []
   let text = mask(line, 0, start)
-  // A backslash escapes the next character from forming a marker.
-  for (let index = start; index < line.length - 1; index++) {
+  let index = start
+  while (index < line.length) {
     if (line[index] === '\\') {
-      text = mask(text, index, index + 2)
+      text = mask(text, index, Math.min(index + 2, line.length))
+      index += 2
+    } else if (line[index] === '`') {
+      const tick = /^`+/.exec(line.slice(index))![0].length
+      const close = findClosingTicks(line, index + tick, tick)
+      if (close < 0) {
+        index += tick
+        continue
+      }
+      spans.push(
+        { from: index, to: index + tick, kind: 'marker' },
+        { from: index + tick, to: close, kind: 'code' },
+        { from: close, to: close + tick, kind: 'marker' }
+      )
+      text = mask(text, index, close + tick)
+      index = close + tick
+    } else {
       index++
     }
-  }
-  for (const match of text.matchAll(CODE_SPAN)) {
-    const from = match.index
-    const to = from + match[0].length
-    const tick = match[1].length
-    spans.push(
-      { from, to: from + tick, kind: 'marker' },
-      { from: from + tick, to: to - tick, kind: 'code' },
-      { from: to - tick, to, kind: 'marker' }
-    )
-    text = mask(text, from, to)
   }
   for (const { pattern, marker, kinds } of EMPHASIS) {
     for (const match of text.matchAll(pattern)) {
@@ -175,6 +191,19 @@ function inline(line: string, start: number): NativeChatMarkdownSpan[] {
   return spans
 }
 
-export function nativeChatMarkdownInlineSpans(text: string): NativeChatMarkdownSpan[] {
-  return inline(text, 0)
+/** Where a run of exactly `length` backticks starts at or after `from`, or -1. */
+function findClosingTicks(line: string, from: number, length: number): number {
+  let index = from
+  while (index < line.length) {
+    if (line[index] !== '`') {
+      index++
+      continue
+    }
+    const run = /^`+/.exec(line.slice(index))![0].length
+    if (run === length && index > from) {
+      return index
+    }
+    index += run
+  }
+  return -1
 }

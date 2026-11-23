@@ -29,6 +29,15 @@ describe('classifyNativeChatMarkdown', () => {
     expect(kinds(['~~~', '- x']).map((b) => b.kind)).toEqual(['fence', 'code'])
   })
 
+  it('keeps spaced dashes a rule under text, and a fence open past a pill-shaped tail', () => {
+    expect(kinds(['text', '- - -']).map((b) => b.kind)).toEqual(['text', 'rule'])
+    expect(kinds(['```', '``` \uFFFC', '# raw']).map((b) => b.kind)).toEqual([
+      'fence',
+      'code',
+      'code'
+    ])
+  })
+
   it('does not treat a hash without a space, or a dash under text, as a heading or rule', () => {
     expect(kinds(['#tag', 'title', '---']).map((b) => b.kind)).toEqual(['text', 'text', 'text'])
   })
@@ -40,5 +49,9 @@ describe('classifyNativeChatMarkdown', () => {
     expect(styled('`**no**` and \\*no\\*', 'italic')).toEqual([])
     expect(styled('snake_case_name and 2 * 3 * 4', 'italic')).toEqual([])
     expect(styled('a ~~gone~~', 'strike')).toEqual(['gone'])
+    expect(styled('foo__bar__baz and foo___bar___baz', 'bold')).toEqual([])
+    expect(styled('__bar__ and ___baz___', 'bold')).toEqual(['baz', 'bar'])
+    expect(styled('`C:\\` and **bold** and `x`', 'bold')).toEqual(['bold'])
+    expect(styled('`C:\\` and **bold** and `x`', 'code')).toEqual(['C:\\', 'x'])
   })
 })

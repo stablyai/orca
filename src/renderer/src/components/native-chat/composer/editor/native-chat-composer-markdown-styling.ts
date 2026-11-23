@@ -4,7 +4,6 @@ import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view'
 import {
   classifyNativeChatMarkdown,
-  nativeChatMarkdownInlineSpans,
   type NativeChatMarkdownBlock,
   type NativeChatMarkdownSpanKind
 } from './native-chat-composer-markdown-syntax'
@@ -12,6 +11,7 @@ import './native-chat-composer-markdown.css'
 
 // Why: a pasted log must not make every keystroke restyle thousands of lines.
 const MAX_STYLED_SIZE = 30_000
+const PILL = '\uFFFC'
 
 const SPAN_CLASS: Record<NativeChatMarkdownSpanKind, string> = {
   marker: 'native-chat-md-marker',
@@ -51,10 +51,8 @@ function styleDraft(doc: ProseMirrorNode): DecorationSet {
       paragraphs.push({ node, pos: offset })
     }
   })
-  // A pill or other inline node is not text: only a line that starts with text can open a block.
-  const lines = paragraphs.map(
-    ({ node }) => (node.firstChild?.isText ? node.firstChild.text : '') ?? ''
-  )
+  // A pill is one placeholder character, so it is never syntax and spans keep their document offsets.
+  const lines = paragraphs.map(({ node }) => node.textBetween(0, node.content.size, '', PILL))
   const classified = classifyNativeChatMarkdown(lines)
   const decorations: Decoration[] = []
   paragraphs.forEach(({ node, pos }, index) => {
@@ -63,23 +61,15 @@ function styleDraft(doc: ProseMirrorNode): DecorationSet {
     if (className) {
       decorations.push(Decoration.node(pos, pos + node.nodeSize, { class: className }))
     }
-    // A pill is not text and splits the line: text after one is styled for inline syntax only.
-    let offset = pos + 1
-    node.forEach((part, _, childIndex) => {
-      if (part.isText && part.text) {
-        const partSpans = childIndex === 0 ? spans : nativeChatMarkdownInlineSpans(part.text)
-        for (const span of partSpans) {
-          if (span.to > span.from) {
-            decorations.push(
-              Decoration.inline(offset + span.from, offset + span.to, {
-                class: SPAN_CLASS[span.kind]
-              })
-            )
-          }
-        }
+    for (const span of spans) {
+      if (span.to > span.from) {
+        decorations.push(
+          Decoration.inline(pos + 1 + span.from, pos + 1 + span.to, {
+            class: SPAN_CLASS[span.kind]
+          })
+        )
       }
-      offset += part.nodeSize
-    })
+    }
   })
   return DecorationSet.create(doc, decorations)
 }
