@@ -55,22 +55,25 @@ export function useHermesLaunchProfiles(
   worktreeId: string | undefined
 ): HermesLaunchProfiles | null {
   const key = enabled ? cacheKey(executionHostId, worktreeId) : null
-  const [profiles, setProfiles] = useState<HermesLaunchProfiles | null>(
-    key ? (cacheByHost.get(key) ?? null) : null
+  // The answer is stored with its request: a host that returns no profiles must not inherit the
+  // previous host's list, which would offer `--profile` names that host does not have.
+  const [resolved, setResolved] = useState<{ key: string; profiles: HermesLaunchProfiles } | null>(
+    () => (key ? readCachedProfiles(key) : null)
   )
   useEffect(() => {
     if (!key) {
       return
     }
-    const cached = cacheByHost.get(key)
+    const cached = readCachedProfiles(key)
     if (cached) {
-      setProfiles(cached)
+      setResolved(cached)
       return
     }
     let cancelled = false
     void fetchHermesLaunchProfiles(executionHostId, worktreeId).then((next) => {
+      // An empty answer leaves this host unknown: the caller hides the list rather than borrowing.
       if (!cancelled && next && next.profiles.length > 0) {
-        setProfiles(next)
+        setResolved({ key, profiles: next })
       }
     })
     return () => {
@@ -78,7 +81,12 @@ export function useHermesLaunchProfiles(
     }
     // The key dedupes fetches; the request fields satisfy exhaustive-deps and are stable strings.
   }, [key, executionHostId, worktreeId])
-  return profiles
+  return resolved && resolved.key === key ? resolved.profiles : null
+}
+
+function readCachedProfiles(key: string): { key: string; profiles: HermesLaunchProfiles } | null {
+  const profiles = cacheByHost.get(key)
+  return profiles ? { key, profiles } : null
 }
 
 /** Profiles live where Hermes runs: the local machine (including its WSL distros), an SSH host,
