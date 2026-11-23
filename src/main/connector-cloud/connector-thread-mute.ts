@@ -39,6 +39,8 @@ const UNMUTE_PHRASES = [
   'you can respond again'
 ]
 
+const MAX_COMMAND_WORDS = 8
+
 const COMMANDS = new Map<string, ThreadMuteCommand>([
   ...MUTE_PHRASES.map((phrase) => [phrase, 'mute'] as const),
   ...UNMUTE_PHRASES.map((phrase) => [phrase, 'unmute'] as const)
@@ -113,12 +115,16 @@ export function mayBeThreadMuteCommand(text: string): boolean {
   if (commandOf(rest) !== null) {
     return true
   }
-  // A mention may name its bot in the words after it ("@Orca Reviewer bot mute").
+  // A mention may name its bot in the words after it ("@Orca Reviewer bot mute"); no phrase, with
+  // its "please" and "thanks", runs past the last few words.
   const words = rest.split(' ')
-  return (
-    rest !== normalized(text) &&
-    words.some((_word, drop) => drop > 0 && commandOf(words.slice(drop).join(' ')) !== null)
-  )
+  const tail = Math.max(1, words.length - MAX_COMMAND_WORDS)
+  for (let drop = tail; rest !== normalized(text) && drop < words.length; drop++) {
+    if (commandOf(words.slice(drop).join(' ')) !== null) {
+      return true
+    }
+  }
+  return false
 }
 
 /** Whether the message @mentions the bot anywhere, as its Slack user or by name. */
