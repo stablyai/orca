@@ -2,7 +2,7 @@ import React from 'react'
 import { Activity, CircleCheck, CircleDashed } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { AgentQuestionIcon } from '@/components/agent/status/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/agent/status/AgentWorkingSpinner'
 import {
@@ -20,31 +20,32 @@ import type { AgentListStatus } from '../../../../../shared/agent-status/present
 
 export type AgentDotState = AgentListStatus
 
-/** Return the accessible label shared by every visual agent-state marker. */
-export function agentStateLabel(state: AgentDotState): string {
+/** Return the accessible label shared by every visual agent-state marker. Pass the render's t
+ *  where a memoized caller must follow a language switch. */
+export function agentStateLabel(state: AgentDotState, t: Translate = translate): string {
   switch (state) {
     case 'working':
-      return translate('auto.components.AgentStateDot.working', 'Working')
+      return t('auto.components.AgentStateDot.working', 'Working')
     case 'monitoring':
-      return translate('auto.components.AgentStateDot.monitoring', 'Monitoring background tasks')
+      return t('auto.components.AgentStateDot.monitoring', 'Monitoring background tasks')
     case 'blocked':
-      return translate('auto.components.AgentStateDot.blocked', 'Blocked')
+      return t('auto.components.AgentStateDot.blocked', 'Blocked')
     case 'waiting':
-      return translate('auto.components.AgentStateDot.waiting', 'Waiting for input')
+      return t('auto.components.AgentStateDot.waiting', 'Waiting for input')
     case 'interrupted':
-      return translate('auto.components.AgentStateDot.interrupted', 'Interrupted')
+      return t('auto.components.AgentStateDot.interrupted', 'Interrupted')
     case 'failed':
-      return translate('auto.components.AgentStateDot.failed', 'Failed')
+      return t('auto.components.AgentStateDot.failed', 'Failed')
     case 'done':
-      return translate('auto.components.AgentStateDot.done', 'Done')
+      return t('auto.components.AgentStateDot.done', 'Done')
     case 'idle':
-      return translate('auto.components.AgentStateDot.idle', 'Idle')
+      return t('auto.components.AgentStateDot.idle', 'Idle')
     case 'unverifiable':
-      return translate('auto.components.AgentStateDot.unverifiable', 'No recent update')
+      return t('auto.components.AgentStateDot.unverifiable', 'No recent update')
     case 'unconfirmed':
-      return translate('auto.components.AgentStateDot.unconfirmed', 'Couldn’t confirm')
+      return t('auto.components.AgentStateDot.unconfirmed', 'Couldn’t confirm')
     case 'permission':
-      return translate('auto.components.AgentStateDot.permission', 'Needs attention')
+      return t('auto.components.AgentStateDot.permission', 'Needs attention')
   }
 }
 
