@@ -123,6 +123,8 @@ export type BotItemLinkView =
       latest: string | null
       title: string | null
       state: BotItemWorkerState
+      /** Its start failed before an agent ran, so there is no worker to open. Absent from older hosts. */
+      neverStarted?: true
       host: string | null
       /** Activity read from orchestration's own records, never copied onto the item. */
       startedAt: number | null
