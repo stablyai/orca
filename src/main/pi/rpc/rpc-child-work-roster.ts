@@ -1,5 +1,8 @@
 import type { JsonlRpcRecord } from '../../jsonl-rpc/peer'
-import type { AgentChildWorkOutcome } from '../../../shared/agent-status/child-work/agent-status-child-work'
+import type {
+  AgentChildWorkKind,
+  AgentChildWorkOutcome
+} from '../../../shared/agent-status/child-work/agent-status-child-work'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import { normalizeAgentSubagentsField } from '../../../shared/agent-status/contracts/agent-status-subagent-snapshot'
 import { PI_NATIVE_CHAT_SUBAGENTS_STATUS_KEY } from '../managed-extensions/agent-status/agent-status-subagent-roster-source'
@@ -10,24 +13,49 @@ const OUTCOMES = new Map<unknown, AgentChildWorkOutcome>([
   ['aborted', 'cancelled']
 ])
 
-/** Turns the managed status extension's roster lines into child-work edges; a child that leaves the roster has ended. */
-export class PiRpcSubagents {
+export type PiRpcChildWorkChannel = {
+  statusKey: string
+  field: string
+  kind: AgentChildWorkKind
+  idPrefix: string
+}
+
+export const PI_RPC_SUBAGENTS_CHANNEL: PiRpcChildWorkChannel = {
+  statusKey: PI_NATIVE_CHAT_SUBAGENTS_STATUS_KEY,
+  field: 'subagents',
+  kind: 'agent',
+  idPrefix: ''
+}
+
+/** Any extension may list its background commands here; live commands hold the chat in Monitoring. */
+export const PI_RPC_BACKGROUND_COMMANDS_CHANNEL: PiRpcChildWorkChannel = {
+  statusKey: 'orca-background-commands',
+  field: 'commands',
+  kind: 'command',
+  idPrefix: 'command:'
+}
+
+/** Turns one roster status line into child-work edges; a child that leaves the roster has ended. */
+export class PiRpcChildWorkRoster {
   private live = new Set<string>()
 
-  constructor(private readonly deliver: (evidence: AgentChildWorkEvidence[]) => void) {}
+  constructor(
+    private readonly deliver: (evidence: AgentChildWorkEvidence[]) => void,
+    private readonly channel: PiRpcChildWorkChannel
+  ) {}
 
   /** Consumes the roster status line before decoration is dropped; false for every other frame. */
   receive(frame: JsonlRpcRecord): boolean {
-    if (frame.method !== 'setStatus' || frame.statusKey !== PI_NATIVE_CHAT_SUBAGENTS_STATUS_KEY) {
+    if (frame.method !== 'setStatus' || frame.statusKey !== this.channel.statusKey) {
       return false
     }
-    let roster: { subagents?: unknown; ended?: unknown }
+    let roster: Record<string, unknown> | null
     try {
       roster = JSON.parse(String(frame.statusText))
     } catch {
       return true
     }
-    const rows = normalizeAgentSubagentsField(roster?.subagents) ?? []
+    const rows = normalizeAgentSubagentsField(roster?.[this.channel.field]) ?? []
     const ended =
       roster?.ended && typeof roster.ended === 'object'
         ? new Map(Object.entries(roster.ended))
@@ -37,8 +65,8 @@ export class PiRpcSubagents {
       type: 'live',
       observedAt,
       child: {
-        handle: { idKind: 'task_id', id: row.id },
-        kind: 'agent',
+        handle: { idKind: 'task_id', id: this.channel.idPrefix + row.id },
+        kind: this.channel.kind,
         residency: 'background',
         state: 'working',
         ...(row.agentType ? { agentType: row.agentType } : {}),
@@ -57,7 +85,12 @@ export class PiRpcSubagents {
       }
     }
     for (const [id, outcome] of endings) {
-      evidence.push({ type: 'ended', observedAt, handle: { idKind: 'task_id', id }, outcome })
+      evidence.push({
+        type: 'ended',
+        observedAt,
+        handle: { idKind: 'task_id', id: this.channel.idPrefix + id },
+        outcome
+      })
     }
     this.live = next
     if (evidence.length > 0) {
