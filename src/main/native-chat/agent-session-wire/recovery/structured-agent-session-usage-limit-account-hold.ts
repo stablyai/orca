@@ -1,5 +1,4 @@
 import { rateLimitSpentUntil } from '../../../../shared/agent-usage/rate-limits/rate-limit-spent-windows'
-import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS,
   type NativeChatUsageLimitCut
@@ -28,39 +27,15 @@ import {
   isAccountHoldSchedulable,
   withMovedCutReset
 } from './structured-agent-session-usage-limit-account-schedule'
-
-/** The polled usage of the account a chat continues on, as the host attributes it. */
-export type UsageLimitAccountUsage = {
-  /** Attributed home and account identity; state kept for another account never applies. */
-  key: string
-  /** The reading now, or null once it no longer describes this account. */
-  read: () => ProviderRateLimits | null
-  /** A non-forced fetch that keeps the poller's Retry-After and failure backoff; with
-   *  `notWithinMs`, at most one per account that often, however many chats ask. False when the
-   *  service started none. */
-  refresh: (notWithinMs?: number) => boolean
-}
-
-/** Where a launch would bill: a hold never outlives the scope it was taken in. */
-export type UsageLimitAccountScope = {
-  /** Canonical launch home plus billing kind. */
-  scope: string
-  /** The reading that describes this scope's account; absent when none does. */
-  account?: UsageLimitAccountUsage
-  /** Asks for a first reading while the provider has none, like `refresh`; a due send waits for it
-   *  briefly. */
-  bootstrap?: (notWithinMs?: number) => boolean
-}
-
-export type UsageLimitAccountVerdict = {
-  /** The latest reset the send waits for: the cut's, or a later one the account still shows spent. */
-  resetsAt: number
-  /** The account shows a spent window with no known reset; nothing is sent automatically. */
-  unknownReset: boolean
-  /** Due, but no reading taken since that reset has arrived yet. */
-  awaitingReading: boolean
-}
-
+import type {
+  UsageLimitAccountScope,
+  UsageLimitAccountVerdict
+} from './structured-agent-session-usage-limit-account-types'
+export type {
+  UsageLimitAccountScope,
+  UsageLimitAccountUsage,
+  UsageLimitAccountVerdict
+} from './structured-agent-session-usage-limit-account-types'
 type Hold = {
   cut: string
   scope?: string
@@ -70,7 +45,6 @@ type Hold = {
   /** When the newest reading that put spending into effect was taken; only later room releases. */
   spentSeenAt?: number
   refreshedFor?: number
-  /** When a due send of this held reset first found no reading to wait for. */
   bootstrapSince?: { reset: number; at: number }
 }
 
@@ -80,9 +54,7 @@ type AttributionHost = Pick<
 > & { store: Pick<AgentSessionRecordStore, 'getRecord'> }
 
 const GRACE_MS = 15_000
-/** How long a due send waits for a fresh reading before it goes on the reset it has. */
 const READING_WAIT_MS = 120_000
-/** How often an account with an unknown reset is asked for a reading; only room can end it. */
 const UNKNOWN_RESET_ASK_MS = 10 * 60_000
 
 /** Derived each pass from the polled reading; nothing is saved. A hold only grows for its cut and account. */
@@ -101,10 +73,6 @@ export class UsageLimitAccountHolds {
    *  their changes, not chats. */
   private launchHomes = new Map<string, Promise<AgentSessionAccountHome | null>>()
   private readings = new Map<string, Promise<UsageLimitAccountScope | undefined>>()
-
-  get size(): number {
-    return this.holds.size + this.scopes.size + this.bindings.size
-  }
 
   /** Launch homes and readings resolve again, once each, from here on. */
   beginPass(): void {
@@ -234,7 +202,12 @@ export class UsageLimitAccountHolds {
     const scope = this.scopes.get(id)
     let hold = this.holds.get(id)
     if (!hold && !scope) {
-      return { resetsAt: cut.resetsAt, unknownReset: false, awaitingReading: false }
+      return {
+        resetsAt: cut.resetsAt,
+        unknownReset: false,
+        awaitingReading: false,
+        awaitingRoom: limited.resetFromSwitch === true
+      }
     }
     const account = scope?.account
     if (
@@ -298,7 +271,7 @@ export class UsageLimitAccountHolds {
       hold.heldUntil ?? cut.resetsAt,
       (hold.unknownReset && hold.spentSeenAt) || cut.resetsAt
     )
-    const room = this.relaunched.roomAt(id, identity(limited), account?.key, reading, now)
+    const room = this.relaunched.roomAt(id, switchFreeIdentity(limited), account?.key, reading, now)
     const resetsAt = room !== undefined && room < heldTo && !hold.unknownReset ? room : heldTo
     let waitFrom = resetsAt + GRACE_MS
     if (!account && scope?.bootstrap && now >= waitFrom) {
@@ -314,7 +287,8 @@ export class UsageLimitAccountHolds {
       awaitingReading:
         (account ? !fresh(resetsAt) : scope?.bootstrap !== undefined) &&
         now >= waitFrom &&
-        now < waitFrom + READING_WAIT_MS
+        now < waitFrom + READING_WAIT_MS,
+      awaitingRoom: limited.resetFromSwitch === true && room === undefined
     }
   }
 
@@ -334,6 +308,9 @@ export class UsageLimitAccountHolds {
   ): boolean {
     const hold = this.verdict(id, cut, now)
     const [record, scope] = [this.holds.get(id), this.scopes.get(id)]
+    if (hold.awaitingRoom) {
+      return false
+    }
     if (hold.unknownReset) {
       // The poller may be idle (unfocused, no viewer), and only a reading with room ends this.
       scope?.account?.refresh(UNKNOWN_RESET_ASK_MS)

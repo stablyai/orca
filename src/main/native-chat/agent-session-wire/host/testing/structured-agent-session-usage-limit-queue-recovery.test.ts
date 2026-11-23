@@ -38,7 +38,7 @@ function reading(usedPercent: number, updatedAt: number): ProviderRateLimits {
   }
 }
 
-async function relaunchedChat() {
+async function relaunchedChat(reset = RESET) {
   let clock = NOW
   let homePath = join(tmpdir(), 'orca-usage-fixture', 'a')
   const nextHome = join(tmpdir(), 'orca-usage-fixture', 'b')
@@ -107,7 +107,9 @@ async function relaunchedChat() {
     {
       kind: 'status',
       ...agentSessionFailureWords(
-        agentSessionFailureFact('usageLimitReached', { usageLimit: { resetsAt: RESET } }),
+        agentSessionFailureFact('usageLimitReached', {
+          usageLimit: reset === undefined ? {} : { resetsAt: reset }
+        }),
         { surface: 'row' }
       )
     },
@@ -134,7 +136,10 @@ async function relaunchedChat() {
 
   homePath = nextHome
   await relaunch()
-  expect(await journal.reads.usageLimitCut()).toMatchObject({ fence: cutFence, resetsAt: RESET })
+  expect(await journal.reads.usageLimitCut()).toMatchObject({
+    fence: cutFence,
+    ...(reset === undefined ? {} : { resetsAt: reset })
+  })
 
   return {
     current,
@@ -225,4 +230,16 @@ it('holds a retry when the account is exhausted and asks for a missing reading',
   expect(requested).toContainEqual({ notWithinMs: 600_000 })
   expect(await pass(20_000, reading(100, NOW + 20_000))).toEqual([])
   expect(await pass(45_000, reading(100, NOW + 45_000))).toEqual([])
+})
+
+it('requires fresh room before a resetless relaunched cut continues', async () => {
+  const { pass } = await relaunchedChat(undefined)
+  expect(await pass(5_000, null)).toEqual([])
+  expect(
+    await pass(20_000, { ...reading(0, NOW + 20_000), status: 'error', error: 'offline' })
+  ).toEqual([])
+  expect(await pass(35_000, reading(0, NOW - 1))).toEqual([])
+  expect(await pass(50_000, { ...reading(0, NOW + 50_000), weekly: null })).toEqual([])
+  expect(await pass(65_000, reading(0, NOW + 65_000))).toEqual([])
+  expect(await pass(85_000, reading(0, NOW + 85_000))).toHaveLength(1)
 })
