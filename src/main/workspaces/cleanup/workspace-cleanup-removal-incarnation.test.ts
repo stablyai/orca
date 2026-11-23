@@ -200,6 +200,8 @@ it.each([true, false])(
       )
     } finally {
       release.resolve()
+      // Teardown must not close the store under a removal that is still running.
+      await removal.catch(() => undefined)
     }
     expect(await removal).toMatchObject({ outcome: 'failed' })
     expect(readFileSync(join(f.path, 'tracked'), 'utf8')).toBe('seed')
