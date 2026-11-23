@@ -21,6 +21,13 @@ export class ClaudeTurnInputs {
    *  runs' launches are. As long-lived as this Claude process, whose background shells end with it. */
   private readonly launchedIn = new BoundedMap<string, string>({ maxEntries: 64 })
 
+  /** The root agent's calls, as launches read them; built once, not per frame. */
+  private readonly calls = {
+    has: (id: string) => this.toolOrigins.has(id),
+    shell: (id: string) => this.shells.has(id),
+    childOwnerRef: (id: string) => this.toolOrigins.childOwnerRef(id)
+  }
+
   /** What finished before the turn being opened, taken as it was named. */
   private finishedBefore: FinishedBefore | undefined
 
@@ -62,19 +69,14 @@ export class ClaudeTurnInputs {
       if (turn) {
         this.launches.handedDuring()
       } else {
-        this.wakes.messaged()
+        this.wakes.handed()
       }
     }
     if (!turn && !opensTurn && isRootInput(frame)) {
       this.wakes.messaged()
     }
     const named = this.wakes.observe(frame, turn, this.toolOrigins)
-    const calls = {
-      has: (id: string) => this.toolOrigins.has(id),
-      shell: (id: string) => this.shells.has(id),
-      childOwnerRef: (id: string) => this.toolOrigins.childOwnerRef(id)
-    }
-    const launched = !!turn && this.launches.observe(frame, opensTurn, calls, turn, handed)
+    const launched = !!turn && this.launches.observe(frame, opensTurn, this.calls, turn, handed)
     const launch = launched && turn ? turn.launches?.at(-1) : undefined
     if (launch && turn) {
       this.launchedIn.set(launch.run, agentJournalItemKey(claudeCurrentTurnIdentity(turn)))

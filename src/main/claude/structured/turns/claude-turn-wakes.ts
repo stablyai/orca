@@ -19,6 +19,7 @@ export class ClaudeTurnWakes {
   /** A finish between turns that can't be named (no run id, or past the cap): the next wake-up names
    *  none, since naming the rest would leave it out. */
   private unnamed = false
+  private handedBefore = false
   /** Runs the open turn started itself; their finish is that turn's own work, not a wake. */
   private readonly startedInTurn = new BoundedMap<string, true>({ maxEntries: MAX_STARTED_IN_TURN })
   /** Each started task's run: a shell's final update names only its task, and arrives first. */
@@ -79,14 +80,22 @@ export class ClaudeTurnWakes {
     this.unnamed = true
   }
 
+  /** Orca held a send it handed Claude between turns: the next turn names no runs. Its launches
+   *  still list that send, by id, so it isn't unnamed for them. */
+  handed(): void {
+    this.handedBefore = true
+  }
+
   /** Taken by the turn that opens next: what finished before it (`unnamed` when a finish can't be
    *  named), and the names when Claude opened it itself, not a send. */
   take(opensItself: boolean): { wokenBy?: string[]; finished: FinishedBefore } {
     const finished = { runs: this.pending, unnamed: this.unnamed }
+    const handed = this.handedBefore
     this.pending = []
     this.unnamed = false
+    this.handedBefore = false
     this.startedInTurn.clear()
-    const named = opensItself && !finished.unnamed && finished.runs.length > 0
+    const named = opensItself && !handed && !finished.unnamed && finished.runs.length > 0
     return { ...(named ? { wokenBy: finished.runs } : {}), finished }
   }
 

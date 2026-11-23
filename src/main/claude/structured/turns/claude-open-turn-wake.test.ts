@@ -94,6 +94,8 @@ type SendFacts = {
 const opens = (clientMessageId: string): SendFacts => ({ startsTurn: true, clientMessageId })
 const handed = (ids: string[], unnamed = false): SendFacts => ({ handedSends: { ids, unnamed } })
 const noneHanded = handed([])
+/** What a real host marks on a frame by default: the opening send is on its list until its echo. */
+const hostFacts = (index: number): SendFacts => (index === 0 ? { handedPending: true } : {})
 
 /** Replays the capture; `after[i]` runs once frame i is handled (more frames, or the host's calls). */
 function replay(
@@ -134,7 +136,7 @@ function replay(
       ...event
     })
   source.forEach((frame, index) => {
-    send(frame, index + 1, index === 1 ? opens('c1') : (tagged[index] ?? {}))
+    send(frame, index + 1, index === 1 ? opens('c1') : (tagged[index] ?? hostFacts(index)))
     after[index]?.((extra, event) => send(extra, index + 1, event), translator)
   })
   return turns
@@ -530,4 +532,12 @@ it('records on a wake-up the row that launched each run it names, and only a rec
   // Its names dropped, it points at no launch either.
   const messaged = replay({ [WOKEN + 1]: (send) => send(echo('late')) })
   expect(messaged.at(-1)?.wokeFrom).toBeUndefined()
+})
+
+it('stamps a thread turn’s launch though its own send was outstanding before its echo', () => {
+  // The host marks the frames before the opening send's echo: that send is still on its list.
+  const turns = replay({}, frames, { 0: { handedPending: true } })
+  expect(turns.find((row) => row.launches)?.launches).toEqual([
+    { run: RUN, sends: ['c1'], runs: [] }
+  ])
 })
