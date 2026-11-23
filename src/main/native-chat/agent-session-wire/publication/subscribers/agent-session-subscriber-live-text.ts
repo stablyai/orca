@@ -21,6 +21,7 @@ import {
   subscriberLiveTextReaders
 } from './agent-session-subscriber-live-text-readers'
 export {
+  forgetEndedTurnRows,
   letsGoOfLiveRows,
   liveTextRecipients,
   LiveTextViewerShows,

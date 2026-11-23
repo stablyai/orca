@@ -5,6 +5,8 @@ import type {
 } from '../../journal-ingress/structured-agent-session-event-sink'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import { isAppendOnlyLiveRow } from '../../journal-ingress/structured-agent-session-live-text-rows'
+import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-session/agent-session-wire'
+import { endsAgentSessionTurn } from '../../../../../shared/agent-session/view/live-read/agent-session-text-append'
 import type { Subscriber } from './agent-session-subscribe-input'
 import type { SubscriberLiveRow } from './agent-session-subscriber-live-text'
 
@@ -269,6 +271,28 @@ export function forgetEndedLiveRows(
   for (const itemId of sent.keys()) {
     const waits = within === undefined && subscriber.holdsTextBase?.(itemId) === false
     if (!streaming.has(itemId) && within?.has(itemId) !== false && !waits) {
+      sent.delete(itemId)
+    }
+  }
+}
+
+/** A batch ending a turn ends its replies, so their last sent rows are let go of; their append
+ *  bases may have left the sender's bounded cache first, so a missing base can't tell. */
+export function forgetEndedTurnRows(
+  subscriber: Subscriber,
+  event: AgentSessionSubscribeEvent
+): void {
+  const sent = subscriber.liveSent
+  if (event.type !== 'batch' || !sent || sent.size === 0) {
+    return
+  }
+  const ended = new Set(event.batch.items.filter(endsAgentSessionTurn).map((item) => item.itemId))
+  if (ended.size === 0) {
+    return
+  }
+  for (const [itemId, row] of sent) {
+    const scope = row.source.turnScope
+    if (scope?.kind === 'turn' && ended.has(scope.turnItemId)) {
       sent.delete(itemId)
     }
   }

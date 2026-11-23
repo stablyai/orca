@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import {
+  forgetEndedTurnRows,
   framesWithin,
   liveTextRecipients,
   noteLiveRowsHeld,
@@ -116,6 +117,50 @@ it('keeps a row awaiting its append base, and lets go of one whose turn ended', 
   ])
   // Unbounded otherwise: every finished reply would ride along in each later publication.
   expect([...sentRowsAfter(reader, before, []).keys()]).toEqual(['awaiting'])
+})
+
+it("lets go of an ended turn's rows though their append bases left the cache first", () => {
+  const reply = (itemId: string, turnItemId: string) => ({
+    source: {
+      itemId,
+      revision: 1,
+      sequence: 4,
+      observedAt: 1,
+      turnScope: { kind: 'turn' as const, turnItemId },
+      body: { kind: 'message' as const, role: 'assistant' as const, blocks: [] }
+    },
+    sent: {} as never,
+    bytes: 1
+  })
+  const reader = subscriber({
+    // Evicted: the sender holds no base for either, so neither reads as ended.
+    holdsTextBase: () => false,
+    liveSent: new Map([
+      ['finished', reply('finished', 'turn-1')],
+      ['running', reply('running', 'turn-2')]
+    ])
+  })
+  forgetEndedTurnRows(reader, {
+    type: 'batch',
+    sessionId: 'session',
+    fence: 1,
+    batch: {
+      cursor: { epoch: 'e', sequence: 5 },
+      items: [
+        {
+          itemId: 'turn-1',
+          revision: 2,
+          sequence: 5,
+          observedAt: 1,
+          turnScope: { kind: 'thread' },
+          body: { kind: 'turn', turnId: 't1', state: 'completed' }
+        }
+      ],
+      removedItemIds: [],
+      submissions: []
+    }
+  })
+  expect([...reader.liveSent!.keys()]).toEqual(['running'])
 })
 
 it('splits one publication into frames that each stay within the budget', () => {

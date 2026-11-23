@@ -300,6 +300,7 @@ export class AgentSessionSubscribers {
         ...options,
         isActive: () => this.isActive(subscriber)
       })
+      liveText.forgetEndedTurnRows(subscriber, event)
       if (options?.historyView !== undefined && this.isActive(subscriber)) {
         subscriber.historyView = options.historyView
       }

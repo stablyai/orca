@@ -83,7 +83,8 @@ function isFinished(item: AgentJournalRenderItem): boolean {
     : body.kind === 'message' && body.completedAt !== undefined
 }
 
-function endsTurn(item: AgentJournalRenderItem): boolean {
+/** A turn row that ended: its replies no longer grow. */
+export function endsAgentSessionTurn(item: AgentJournalRenderItem): boolean {
   return item.body.kind === 'turn' && item.body.state !== 'running'
 }
 
@@ -228,7 +229,7 @@ export function sendingTextAppends<R>(
       // which any reader takes, while a reader missing a base its sender holds could not.
       // A replacement page with no turn running, on it or off it, holds only finished replies.
       if (event.type === 'batch') {
-        const ended = event.batch.items.filter(endsTurn).map((item) => item.itemId)
+        const ended = event.batch.items.filter(endsAgentSessionTurn).map((item) => item.itemId)
         if (ended.length > 0) {
           send.release(new Set(ended))
         }
