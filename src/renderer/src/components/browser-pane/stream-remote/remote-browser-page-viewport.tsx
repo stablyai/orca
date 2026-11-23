@@ -39,6 +39,7 @@ import {
 } from './remote-browser-stream-status'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RemoteBrowserRuntimeTarget } from './remote-browser-page-input-model'
+import type { RemoteBrowserKeyboardProxyHandlers } from './remote-browser-page-input-params'
 import { useWorkspaceDocPageFileDrop } from '../navigate/browser-page-workspace-file-drop'
 import {
   BrowserPageFeedbackBadge,
@@ -78,9 +79,7 @@ export function RemoteBrowserPageViewport({
   handleRemotePointerDown,
   handleRemotePointerUp,
   handleRemoteContextMenu,
-  handleRemoteScreenshotKeyDown,
-  handleRemoteScreenshotPaste,
-  handleRemoteKeyboardProxyText,
+  keyboardProxyHandlers,
   handleRemotePointerMove,
   annotateOverlays
 }: {
@@ -118,9 +117,7 @@ export function RemoteBrowserPageViewport({
   handleRemotePointerDown: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemoteContextMenu: (event: React.MouseEvent<HTMLImageElement>) => void
-  handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void
-  handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLTextAreaElement>) => void
-  handleRemoteKeyboardProxyText: (event: React.SyntheticEvent<HTMLTextAreaElement>) => void
+  keyboardProxyHandlers: RemoteBrowserKeyboardProxyHandlers
   /** Takes pointer leaves too, which move the page's pointer off it. */
   handleRemotePointerMove: (event: React.PointerEvent<HTMLImageElement>) => void
   annotateOverlays: React.ReactNode
@@ -234,11 +231,11 @@ export function RemoteBrowserPageViewport({
               if (!isImeOwnedKeyboardEvent(event)) {
                 find.closeFindOnPageEscape(event)
               }
-              handleRemoteScreenshotKeyDown(event)
+              keyboardProxyHandlers.onKeyDown(event)
             }}
-            onPaste={handleRemoteScreenshotPaste}
-            onCompositionEnd={handleRemoteKeyboardProxyText}
-            onInput={handleRemoteKeyboardProxyText}
+            onPaste={keyboardProxyHandlers.onPaste}
+            onCompositionEnd={keyboardProxyHandlers.onText}
+            onInput={keyboardProxyHandlers.onText}
           />
         </>
       ) : (
