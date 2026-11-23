@@ -35,7 +35,7 @@ export function fakeCodex(
   closeTree: 'exited' | 'unverifiable' = 'exited',
   /** Whether thread/backgroundTerminals/terminate actually stops the command. */
   terminateWorks = true,
-  codex: { listUnsupported?: boolean; unsubscribeFails?: boolean } = {}
+  codex: { listUnsupported?: boolean; unsubscribeFails?: boolean; interruptRefused?: boolean } = {}
 ) {
   const servers: FakeServer[] = []
   let nextThread = 1
@@ -109,6 +109,9 @@ export function fakeCodex(
         }
         if (method === 'thread/backgroundTerminals/list' && codex.listUnsupported) {
           throw new CodexAppServerUnsupportedError('codex app-server does not support list')
+        }
+        if (method === 'turn/interrupt' && codex.interruptRefused) {
+          throw new Error('codex app-server turn/interrupt failed')
         }
         if (method === 'thread/unsubscribe' && codex.unsubscribeFails) {
           throw new Error('codex app-server thread/unsubscribe failed')

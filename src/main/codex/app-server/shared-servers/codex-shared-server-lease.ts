@@ -68,6 +68,8 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   readonly resumedThreads = new Set<string>()
   /** Turns a Stop of this chat's has interrupted; one running that isn't here needs its own. */
   readonly interruptedTurns = new Set<string>()
+  /** Interrupts Codex refused; the next Stop re-sends them, but they never wake a retry. */
+  readonly refusedInterrupts = new Set<string>()
   readonly outstanding = new Set<(error: Error) => void>()
   /** Threads that opened after this chat left, and the server letting each go. */
   readonly abandonedThreads = new Set<string>()

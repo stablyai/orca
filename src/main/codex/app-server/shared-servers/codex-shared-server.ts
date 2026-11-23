@@ -131,7 +131,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
       () =>
         this.hasExited ||
         this.leases.size < others ||
-        running().some((turnId) => !seen.has(turnId)) ||
+        running().some((turnId) => !seen.has(turnId) && !lease.refusedInterrupts.has(turnId)) ||
         (lease.pendingOpens.size === 0 &&
           !this.turns.anyStartPending(threads()) &&
           !this.hasRunningTurn(threads())),
