@@ -24728,6 +24728,8 @@
       "hitTip": "{{agent}} alcanzó su límite de uso · se restablece a las {{time}}"
     },
     "section": {
+      "scrollLeft": "Desplazar a la izquierda · {{amount}} ocultos",
+      "scrollRight": "Desplazar a la derecha · {{amount}} ocultos",
       "title": "Bots",
       "startFromScratch": "Empezar de cero"
     },
