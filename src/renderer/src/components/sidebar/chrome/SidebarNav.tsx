@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { Suspense } from 'react'
 import { BookOpen, CalendarClock, EyeOff, Files, Search, Smartphone } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store/index'
@@ -51,6 +51,9 @@ export function shouldShowAgentDashboardButton(
 const AgentDashboardSidebarEntry = lazyWithRetry(
   () => import('../../dashboard/sidebar/AgentDashboardSidebarEntry')
 )
+const ConversationKnowledgeSidebarEntry = lazyWithRetry(
+  () => import('../ConversationKnowledgeSidebarEntry')
+)
 
 const SidebarNav = React.memo(function SidebarNav() {
   const t = useTranslate()
@@ -66,6 +69,9 @@ const SidebarNav = React.memo(function SidebarNav() {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const activeView = useAppStore((s) => s.activeView)
   const showAgentDashboardButton = useAppStore((s) => shouldShowAgentDashboardButton(s.settings))
+  const showConversationKnowledgeButton = useAppStore(
+    (s) => s.settings?.conversationKnowledgeEnabled === true
+  )
   const showAutomationsButton = useAppStore((s) => shouldShowAutomationsButton(s.settings))
   const showMobileButton = useAppStore((s) => shouldShowMobileButton(s.settings))
   const showArtifactsButton = useAppStore((s) => shouldShowArtifactsButton(s.settings))
@@ -222,6 +228,11 @@ const SidebarNav = React.memo(function SidebarNav() {
         <React.Suspense fallback={null}>
           <AgentDashboardSidebarEntry />
         </React.Suspense>
+      ) : null}
+      {showConversationKnowledgeButton ? (
+        <Suspense fallback={null}>
+          <ConversationKnowledgeSidebarEntry />
+        </Suspense>
       ) : null}
       {showMobileButton && !appRailVisible ? (
         <ContextMenu>

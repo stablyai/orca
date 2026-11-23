@@ -124,6 +124,11 @@ export function useWorktreeJumpPaletteController({
     ...openTabs,
     ...projectTargets
   })
+  const knowledge = useWorktreeJumpPaletteKnowledgeSearch({
+    enabled: storeState.settings?.conversationKnowledgeEnabled === true && localState.knowledgeOnly,
+    query: localState.deferredQuery,
+    visible
+  })
   const sections = useWorktreeJumpPaletteSections({
     ...localState,
     ...filter,
@@ -150,7 +155,8 @@ export function useWorktreeJumpPaletteController({
     ...openTabs,
     ...sections,
     ...taskSearch,
-    ...taskUrl
+    ...taskUrl,
+    ...knowledge
   })
   const selectionLifecycle = useWorktreeJumpPaletteSelectionLifecycle({
     ...storeState,
@@ -164,7 +170,8 @@ export function useWorktreeJumpPaletteController({
     ...sections,
     ...listEntries,
     ...taskSearch,
-    ...taskUrl
+    ...taskUrl,
+    ...knowledge
   })
   const botScope = useWorktreeJumpPaletteBotScope({
     ...localState,
@@ -201,6 +208,7 @@ export function useWorktreeJumpPaletteController({
     ...localState,
     ...taskUrl,
     ...taskSearch,
+    ...knowledge,
     ...filter,
     ...worktrees,
     ...openTabs,
@@ -221,3 +229,4 @@ export function useWorktreeJumpPaletteController({
 }
 
 export type WorktreeJumpPaletteController = ReturnType<typeof useWorktreeJumpPaletteController>
+import { useWorktreeJumpPaletteKnowledgeSearch } from '../use-worktree-jump-palette-knowledge-search'

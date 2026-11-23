@@ -22,6 +22,7 @@ import {
 } from '../contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../execution-host/execution-host'
 import { sessionPreviewSearchText } from './ai-vault-session-display'
+import { isConversationKnowledgeGenerationTitle } from '../../conversation-knowledge-items'
 
 // Move the plain descriptor type without importing renderer project-attribution runtime.
 export type AiVaultSessionProject = {
@@ -81,6 +82,9 @@ export function filterAiVaultSessions(
   )
 
   const filtered = sessions.filter((session) => {
+    if (isConversationKnowledgeGenerationTitle(session.title)) {
+      return false
+    }
     if (!agentSet.has(session.agent)) {
       return false
     }

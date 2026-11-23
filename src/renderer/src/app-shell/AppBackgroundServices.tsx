@@ -1,3 +1,5 @@
+import { ConversationKnowledgeIndexGate } from '../components/ConversationKnowledgeIndexGate'
+import { ConversationKnowledgeLaunchContextGate } from '../components/ConversationKnowledgeLaunchContextGate'
 import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { AgentHibernationGate } from '../lib/agent-session/hibernation/AgentHibernationGate'
@@ -41,6 +43,8 @@ export function AppBackgroundServices(): React.JSX.Element {
       <RemoteHostBrowserControlNoticeHost />
       {/* Keep agent-status retention subscriptions out of the App render tree. */}
       <AiVaultTabTitleSyncGate />
+      <ConversationKnowledgeIndexGate />
+      <ConversationKnowledgeLaunchContextGate />
       <TerminalSessionNameSyncGate />
       <SavedHostScopeWidenGate />
       {dashboardPopoutEnabled ? (

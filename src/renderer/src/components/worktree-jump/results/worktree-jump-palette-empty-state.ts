@@ -5,6 +5,9 @@ import type { WorktreeJumpPaletteController } from '../use-worktree-jump-palette
 export function getWorktreeJumpPaletteResultCount(
   controller: WorktreeJumpPaletteController
 ): number {
+  if (controller.knowledgeOnly) {
+    return controller.knowledgeItems.length
+  }
   return controller.hasQuery
     ? controller.worktreeItems.length +
         controller.projectTargetItems.length +
@@ -22,6 +25,15 @@ export function getWorktreeJumpPaletteEmptyState(
   title: string
   subtitle: string
 } {
+  if (controller.knowledgeOnly) {
+    return {
+      title: t('conversationKnowledge.empty.search', 'No matching summaries or related nodes.'),
+      subtitle: t(
+        'conversationKnowledge.status.readyDescription',
+        'Generate updates to index new or changed conversations.'
+      )
+    }
+  }
   if (controller.filterActive) {
     return {
       title: t('worktreeJumpPalette.filter.emptyTitle', 'No results match the active filter'),

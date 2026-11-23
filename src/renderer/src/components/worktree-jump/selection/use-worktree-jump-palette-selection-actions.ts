@@ -1,3 +1,4 @@
+import { openConversationKnowledgeItem } from '@/lib/conversation-knowledge-selection'
 import { advanceBotPaletteGeneration } from '@/components/bots/reveal-bot-sidebar-row'
 import type { WorktreeJumpPaletteBotScope } from '../use-worktree-jump-palette-bot-scope'
 import { skipPaletteExitAnimation } from './worktree-jump-palette-exit-animation'
@@ -16,7 +17,7 @@ import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace/search/tab
 import type { CmdJActionResult, CmdJSettingsResult } from '@/components/cmd-j/palette-results'
 import type { CmdJProjectSearchResult } from '@/components/cmd-j/palette-project-results'
 import { getUnavailableQuickActionMessage } from '../../cmd-j/quick-action-context'
-import { getSettingsTargetFromSectionId } from '../worktree-jump-palette-settings-target'
+import { getSettingsTargetFromPaletteResult } from '../worktree-jump-palette-settings-target'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { useAppStore } from '@/store/index'
 import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'
@@ -165,10 +166,7 @@ export function useWorktreeJumpPaletteSelectionActions({
   )
   const handleSelectSettings = useCallback(
     (result: CmdJSettingsResult) => {
-      const target = getSettingsTargetFromSectionId(result.sectionId)
-      if (result.targetSectionId) {
-        target.sectionId = result.targetSectionId
-      }
+      const target = getSettingsTargetFromPaletteResult(result)
       dismissForSelection()
       openSettingsTarget(target)
       openSettingsPage()
@@ -264,6 +262,9 @@ export function useWorktreeJumpPaletteSelectionActions({
       advanceBotPaletteGeneration()
       if (item.type === 'worktree') {
         handleSelectWorktree(item.worktree)
+      } else if (item.type === 'conversation-knowledge') {
+        openConversationKnowledgeItem(item.item)
+        dismissForSelection()
       } else if (item.type === 'project-target') {
         handleSelectProjectTarget(item.result)
       } else if (item.type === 'browser-page') {

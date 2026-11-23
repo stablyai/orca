@@ -110,6 +110,12 @@ export function buildPrimaryCommitMessageAgentSpecs({
       // Match the official picker’s descending version order.
       models: [
         {
+          id: 'gpt-5.6-sol',
+          label: 'GPT-5.6 Sol',
+          thinkingLevels: OPENAI_THINKING_LEVELS,
+          defaultThinkingLevel: 'low'
+        },
+        {
           id: 'gpt-5.6-terra',
           label: 'GPT-5.6 Terra',
           thinkingLevels: OPENAI_THINKING_LEVELS,

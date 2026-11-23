@@ -1,3 +1,9 @@
+import type { ConversationKnowledgeItem } from '../../../../shared/conversation-knowledge-items'
+export type ConversationKnowledgePaletteItem = {
+  id: string
+  type: 'conversation-knowledge'
+  item: ConversationKnowledgeItem
+}
 import type { BrowserPaletteSearchResult } from '@/lib/browser/palette/browser-palette-search'
 import type { PaletteSearchResult } from '@/lib/workspace/search/worktrees/worktree-palette-search'
 import type { SimulatorPaletteSearchResult } from '@/lib/simulator/search/simulator-palette-search-types'
@@ -96,6 +102,7 @@ export type PaletteItem =
   | ProjectTargetPaletteItem
   | SettingsPaletteItem
   | QuickActionPaletteItem
+  | ConversationKnowledgePaletteItem
   | BrowserPaletteItem
   | SimulatorPaletteItem
   | WorkspaceTabPaletteItem

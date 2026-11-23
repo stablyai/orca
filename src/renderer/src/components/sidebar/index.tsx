@@ -46,6 +46,9 @@ import { WorktreeCardsUpdateNotice } from './workspace-card/template/WorktreeCar
 
 // Load the shared Activity badge/list pipeline after the sidebar shell.
 const SidebarAgentsList = lazyWithRetry(() => import('../activity/sidebar/SidebarAgentsList'))
+const ConversationKnowledgeSidebarHost = lazyWithRetry(
+  () => import('./ConversationKnowledgeSidebarHost')
+)
 
 const WorktreeMetaDialog = lazyWithRetry(
   () => import('./workspace-card/metadata/WorktreeMetaDialog')
@@ -398,6 +401,15 @@ function Sidebar({
             sidebarOpen={sidebarOpen}
             workspaceBoardOpen={workspaceBoardOpen}
             closeWorkspaceBoard={closeWorkspaceBoard}
+            leftSidebarStyle={leftSidebarStyle}
+            statusBarVisible={statusBarVisible}
+          />
+        </React.Suspense>
+      ) : null}
+      {settings?.conversationKnowledgeEnabled === true ? (
+        <React.Suspense fallback={null}>
+          <ConversationKnowledgeSidebarHost
+            sidebarOpen={sidebarOpen}
             leftSidebarStyle={leftSidebarStyle}
             statusBarVisible={statusBarVisible}
           />

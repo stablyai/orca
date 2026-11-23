@@ -1,3 +1,14 @@
+import type {
+  ConversationKnowledgeIndexStatus,
+  ConversationKnowledgeItem,
+  ConversationKnowledgeListResult,
+  GenerateConversationKnowledgeRequest,
+  StartConversationKnowledgeIndexRequest
+} from '../../../shared/conversation-knowledge-items'
+import type {
+  AiVaultHistoryReadResult,
+  AiVaultHistorySearchResult
+} from '../../../shared/ai-vault-history-types'
 import { createSessionSearchClient } from '../../../shared/ai-vault/search/ai-vault-search-client'
 import type {
   AiVaultSearchRequest,
@@ -13,6 +24,7 @@ import type {
   AiVaultDeleteSessionResult
 } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import type {
+  AiVaultAgent,
   AiVaultFirstUserPromptArgs,
   AiVaultListArgs,
   AiVaultSubagentListArgs
@@ -51,6 +63,26 @@ export const aiVaultApi = {
   ): Promise<AiVaultSearchStatus> =>
     ipcRenderer.invoke('aiVault:setSearchEnabled', executionHostId, enabled),
   clearSearchIndex: (): Promise<void> => ipcRenderer.invoke('aiVault:clearSearchIndex'),
+  searchHistory: (args: { query: string; limit?: number }): Promise<AiVaultHistorySearchResult> =>
+    ipcRenderer.invoke('aiVault:searchHistory', args),
+  readHistory: (args: {
+    agent: AiVaultAgent
+    sessionId: string
+    limit?: number
+  }): Promise<AiVaultHistoryReadResult> => ipcRenderer.invoke('aiVault:readHistory', args),
+  enrichHistory: (args: GenerateConversationKnowledgeRequest): Promise<ConversationKnowledgeItem> =>
+    ipcRenderer.invoke('aiVault:enrichHistory', args),
+  listKnowledge: (args?: {
+    query?: string
+    scopePaths?: string[]
+  }): Promise<ConversationKnowledgeListResult> => ipcRenderer.invoke('aiVault:listKnowledge', args),
+  startKnowledgeIndex: (
+    args: StartConversationKnowledgeIndexRequest
+  ): Promise<ConversationKnowledgeIndexStatus> =>
+    ipcRenderer.invoke('aiVault:startKnowledgeIndex', args),
+  getKnowledgeIndexStatus: (): Promise<ConversationKnowledgeIndexStatus> =>
+    ipcRenderer.invoke('aiVault:getKnowledgeIndexStatus'),
+  cancelKnowledgeIndex: (): Promise<void> => ipcRenderer.invoke('aiVault:cancelKnowledgeIndex'),
   listSessions: (args?: AiVaultListArgs) => ipcRenderer.invoke('aiVault:listSessions', args),
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) =>
     ipcRenderer.invoke('aiVault:resolveSessionTitles', args),

@@ -1,4 +1,5 @@
 import { ShortcutKeyCombo } from '../ui/ShortcutKeyCombo'
+import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
 import { WorktreeJumpPaletteTaskSearchStatus } from './tasks/worktree-jump-palette-task-search-status'
 import type React from 'react'
 import { X } from 'lucide-react'
@@ -136,6 +137,27 @@ export function WorktreeJumpPaletteSurface({
           </div>
         }
       />
+      {controller.settings?.conversationKnowledgeEnabled === true && !scoped ? (
+        <ToggleGroup
+          type="single"
+          variant="segmented"
+          size="xs"
+          value={controller.knowledgeOnly ? 'knowledge' : 'all'}
+          onValueChange={(value) => {
+            if (value) {
+              controller.setKnowledgeOnly(value === 'knowledge')
+            }
+          }}
+          aria-label={t('worktreeJumpPalette.searchScope', 'Search scope')}
+        >
+          <ToggleGroupItem value="all">
+            {t('worktreeJumpPalette.allResults', 'All')}
+          </ToggleGroupItem>
+          <ToggleGroupItem value="knowledge">
+            {t('worktreeJumpPalette.knowledgeResults', 'Knowledge')}
+          </ToggleGroupItem>
+        </ToggleGroup>
+      ) : null}
       <WorkspaceEmojiSuggestionPopover
         anchorRef={controller.inputRef}
         open={controller.emojiInput.open}
@@ -169,9 +191,9 @@ export function WorktreeJumpPaletteSurface({
         }}
         className="max-h-[min(600px,calc(100vh-14rem))] px-2.5 pb-2.5 pt-2"
       >
-        {controller.isLoading &&
+        {(controller.knowledgeOnly ? controller.knowledgeLoading : controller.isLoading) &&
         controller.selectableItems.length === 0 &&
-        !controller.showCreateAction ? (
+        (controller.knowledgeOnly || !controller.showCreateAction) ? (
           <PaletteState
             title={t('auto.components.WorktreeJumpPalette.ff908adfe9', 'Loading jump targets')}
             subtitle={t(
@@ -179,7 +201,8 @@ export function WorktreeJumpPaletteSurface({
               'Gathering your recent worktrees and open tabs.'
             )}
           />
-        ) : controller.selectableItems.length === 0 && !controller.showCreateAction ? (
+        ) : controller.selectableItems.length === 0 &&
+          (controller.knowledgeOnly || !controller.showCreateAction) ? (
           <CommandEmpty className="py-0">
             <PaletteState title={emptyState.title} subtitle={emptyState.subtitle} />
           </CommandEmpty>

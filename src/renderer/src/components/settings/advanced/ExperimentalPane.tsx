@@ -1,3 +1,4 @@
+import { ConversationKnowledgeExperimentalSetting } from '../ConversationKnowledgeExperimentalSetting'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
@@ -60,6 +61,14 @@ export function ExperimentalPane({
   return (
     <div className="space-y-8">
       <SettingsGroup>
+        {matchesSettingsSearch(searchQuery, [
+          getExperimentalSearchEntry().conversationKnowledge
+        ]) ? (
+          <ConversationKnowledgeExperimentalSetting
+            settings={settings}
+            updateSettings={updateSettings}
+          />
+        ) : null}
         {showAgentDashboard ? (
           <AgentDashboardExperimentalSetting settings={settings} updateSettings={updateSettings} />
         ) : null}

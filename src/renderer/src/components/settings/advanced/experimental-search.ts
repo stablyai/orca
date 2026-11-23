@@ -10,6 +10,26 @@ import { getWslHostsExperimentalSearchEntry } from '../wsl/hosts/wsl-hosts-exper
 export const getExperimentalSearchEntry = createLocalizedCatalog(
   () =>
     ({
+      conversationKnowledge: {
+        title: translate('conversationKnowledge.name', 'Conversation Knowledge'),
+        description: translate(
+          'conversationKnowledge.settings.searchDescription',
+          'Build a searchable knowledge layer from agent session history.'
+        ),
+        keywords: [
+          ...translateSearchKeyword(
+            'conversationKnowledge.settings.keyword.conversation',
+            'conversation'
+          ),
+          ...translateSearchKeyword('conversationKnowledge.settings.keyword.history', 'history'),
+          ...translateSearchKeyword(
+            'conversationKnowledge.settings.keyword.knowledge',
+            'knowledge'
+          ),
+          ...translateSearchKeyword('conversationKnowledge.settings.keyword.summary', 'summary'),
+          ...translateSearchKeyword('conversationKnowledge.settings.keyword.graph', 'graph')
+        ]
+      },
       pet: {
         title: translate('auto.components.settings.experimental.search.87d99e634b', 'Pet'),
         description: translate(

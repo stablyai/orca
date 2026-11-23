@@ -44,7 +44,8 @@ type DesktopWindowSettings = {
 }
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
-export type GlobalSettingsBase = AntigravityChatAuthSettings &
+export type GlobalSettingsBase = ConversationKnowledgeSettings &
+  AntigravityChatAuthSettings &
   EmulatorOpeningSettings &
   SshRemoteControlSettings &
   ClaudeAgentViewSettings &
@@ -80,3 +81,4 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   NewTabMenuSettings &
   UiLanguageSettings &
   ChatDeleteSettings
+import type { ConversationKnowledgeSettings } from '../conversation-knowledge-settings'

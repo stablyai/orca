@@ -1,4 +1,15 @@
 import type {
+  ConversationKnowledgeIndexStatus,
+  ConversationKnowledgeItem,
+  ConversationKnowledgeListResult,
+  GenerateConversationKnowledgeRequest,
+  StartConversationKnowledgeIndexRequest
+} from '../../../shared/conversation-knowledge-items'
+import type {
+  AiVaultHistoryReadResult,
+  AiVaultHistorySearchResult
+} from '../../../shared/ai-vault-history-types'
+import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse,
   AiVaultSearchStatus
@@ -12,6 +23,7 @@ import type {
   AiVaultSessionHandoffResult
 } from '../../../shared/ai-vault/contracts/ai-vault-session-handoff'
 import type {
+  AiVaultAgent,
   AiVaultFirstUserPromptArgs,
   AiVaultFirstUserPromptResult,
   AiVaultListArgs,
@@ -52,6 +64,22 @@ export type AiVaultApi = {
   /** Rebuilds the local index after deletion. */
   clearSearchIndex: () => Promise<void>
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
+  searchHistory: (args: { query: string; limit?: number }) => Promise<AiVaultHistorySearchResult>
+  readHistory: (args: {
+    agent: AiVaultAgent
+    sessionId: string
+    limit?: number
+  }) => Promise<AiVaultHistoryReadResult>
+  enrichHistory: (args: GenerateConversationKnowledgeRequest) => Promise<ConversationKnowledgeItem>
+  listKnowledge: (args?: {
+    query?: string
+    scopePaths?: string[]
+  }) => Promise<ConversationKnowledgeListResult>
+  startKnowledgeIndex: (
+    args: StartConversationKnowledgeIndexRequest
+  ) => Promise<ConversationKnowledgeIndexStatus>
+  getKnowledgeIndexStatus: () => Promise<ConversationKnowledgeIndexStatus>
+  cancelKnowledgeIndex: () => Promise<void>
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => Promise<AiVaultSessionTitlesResult>
   cancelListSessions: (args: { requestToken: string }) => Promise<void>
   prepareSessionResume: (

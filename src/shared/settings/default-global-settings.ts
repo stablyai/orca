@@ -1,3 +1,4 @@
+import { DEFAULT_CONVERSATION_KNOWLEDGE_SETTINGS } from '../conversation-knowledge-settings'
 import type { GlobalSettings } from './global-settings-types'
 import type { NotificationSettings } from '../notifications/notification-settings-types'
 import type { VoiceSettings } from '../speech/speech-types'
@@ -236,6 +237,7 @@ export function buildDefaultSettings(args: {
     disabledTuiAgents: [...DEFAULT_DISABLED_TUI_AGENTS],
     pluginSystemEnabled: true,
     pluginSystemDefaultedOn: true,
+    ...DEFAULT_CONVERSATION_KNOWLEDGE_SETTINGS,
     disabledPlugins: [],
     pluginConsents: {},
     devPluginPaths: [],

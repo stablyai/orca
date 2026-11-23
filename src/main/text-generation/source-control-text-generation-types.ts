@@ -52,6 +52,7 @@ export type TextGenerationOperation =
   | 'pull-request-fields'
   | 'branch-name'
   | 'jira-issue-summary'
+  | 'knowledge-enrichment'
   | 'conversation-name'
   | 'bot-suggestions'
   | 'dictation-cleanup'
@@ -75,6 +76,7 @@ export type InternalTextGenerationResult =
   | ({
       success: false
       canceled?: boolean
+      cleanupUnverified?: boolean
       failureOutput?: AgentGenerationFailureOutput
     } & TextGenerationFailureFields)
 

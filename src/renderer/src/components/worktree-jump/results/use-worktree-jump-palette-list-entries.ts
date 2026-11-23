@@ -1,8 +1,7 @@
-import { useEffect, useMemo } from 'react'
-import {
-  getWorktreePaletteSelectionItemIds,
-  CREATE_WORKTREE_ITEM_ID
-} from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
+import { useMemo } from 'react'
+import { useWorktreeJumpPaletteEntrySelection } from '../selection/use-worktree-jump-palette-entry-selection'
+import type { ConversationKnowledgeItem } from '../../../../../shared/conversation-knowledge-items'
+import { CREATE_WORKTREE_ITEM_ID } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
@@ -10,7 +9,6 @@ import {
   type PaletteItem,
   type PaletteListEntry
 } from '../worktree-jump-palette-model'
-import { buildPaletteListEntryRenderKeys } from '@/components/cmd-j/palette-list-entry-render-keys'
 import { BROWSER_NAVIGATION_ACTION_ID } from '@/components/cmd-j/browser-navigation-action'
 import {
   buildPaletteExtraSectionEntries,
@@ -24,14 +22,18 @@ import type { WorktreeJumpPaletteLocalState } from '../state/use-worktree-jump-p
 import type { WorktreeJumpPaletteTaskSearch } from '../tasks/use-worktree-jump-palette-task-search'
 import type { WorktreeJumpPaletteBotScopeEntries } from '../worktree-jump-palette-bot-scope-entries'
 
-type WorktreeJumpPaletteListEntriesInput = WorktreeJumpPaletteSections &
-  Pick<WorktreeJumpPaletteTaskSearch, 'taskItems'> &
+type WorktreeJumpPaletteListEntriesInput = WorktreeJumpPaletteSections & {
+  knowledgeOnly: boolean
+  knowledgeItems: ConversationKnowledgeItem[]
+} & Pick<WorktreeJumpPaletteTaskSearch, 'taskItems'> &
   Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'> &
   Pick<WorktreeJumpPaletteLocalState, 'autoSelectedItemIdRef' | 'taskSourceUrl'> &
   Pick<WorktreeJumpPaletteSections, 'middleLeadsSections' | 'handleExpandSection'> &
   Omit<WorktreeJumpPaletteBotScopeEntries, 'botScopeNote'>
 
 export function useWorktreeJumpPaletteListEntries({
+  knowledgeOnly,
+  knowledgeItems,
   hasQuery,
   openTabsLeadSections,
   paletteSections,
@@ -46,6 +48,14 @@ export function useWorktreeJumpPaletteListEntries({
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const { listEntries, defaultSelectionStart } = useMemo(() => {
+    if (knowledgeOnly) {
+      const entries: PaletteListEntry[] = knowledgeItems.map((item) => ({
+        id: `knowledge:${item.id}`,
+        type: 'conversation-knowledge',
+        item
+      }))
+      return { listEntries: entries, defaultSelectionStart: 0 }
+    }
     if (botScopeEntries) {
       return { listEntries: botScopeEntries, defaultSelectionStart: 0 }
     }
@@ -249,6 +259,8 @@ export function useWorktreeJumpPaletteListEntries({
     return { listEntries: entries, defaultSelectionStart: 0 }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
   }, [
+    knowledgeOnly,
+    knowledgeItems,
     botScopeEntries,
     handleExpandSection,
     hasQuery,
@@ -271,35 +283,12 @@ export function useWorktreeJumpPaletteListEntries({
       ),
     [listEntries]
   )
-  const listEntryRenderKeys = useMemo(
-    () => buildPaletteListEntryRenderKeys(listEntries.map((entry) => entry.id)),
-    [listEntries]
-  )
-  const selectionItemIds = useMemo(
-    () => getWorktreePaletteSelectionItemIds(listEntries, listEntryRenderKeys),
-    [listEntries, listEntryRenderKeys]
-  )
-  // null keeps the shared rule: first row, never an unasked Create.
-  const defaultSelectionItemId = useMemo(
-    () =>
-      defaultSelectionStart > 0
-        ? (getWorktreePaletteSelectionItemIds(
-            listEntries.slice(defaultSelectionStart),
-            listEntryRenderKeys.slice(defaultSelectionStart)
-          )[0] ?? null)
-        : null,
-    [defaultSelectionStart, listEntries, listEntryRenderKeys]
-  )
-  useEffect(() => {
-    autoSelectedItemIdRef.current = defaultSelectionItemId ?? selectionItemIds[0] ?? null
-  }, [autoSelectedItemIdRef, defaultSelectionItemId, selectionItemIds])
-  return {
+  const selection = useWorktreeJumpPaletteEntrySelection(
     listEntries,
-    listEntryRenderKeys,
-    selectableItems,
-    selectionItemIds,
-    defaultSelectionItemId
-  }
+    defaultSelectionStart,
+    autoSelectedItemIdRef
+  )
+  return { listEntries, selectableItems, ...selection }
 }
 
 export type WorktreeJumpPaletteListEntries = ReturnType<typeof useWorktreeJumpPaletteListEntries>

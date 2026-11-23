@@ -240,6 +240,7 @@ export async function registerCoreHandlers(
       ensureStructuredSessionOwnership
     })
     registerAiVaultHandlers({
+      commitMessageAgentEnv,
       getUserDataPath: () => app.getPath('userData'),
       ensureStructuredSessionOwnership,
       getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,

@@ -14,6 +14,7 @@ const SourceControl = lazy(() => import('./source-control/panel/SourceControl'))
 const ChecksPanel = lazy(() => import('./checks-panel/ChecksPanel'))
 const PortsPanel = lazy(() => import('./ports/PortsPanel'))
 const AiVaultSidebarPanel = lazy(() => import('./ai-vault/panel/AiVaultSidebarPanel'))
+const ConversationKnowledgePanel = lazy(() => import('./ConversationKnowledgePanel'))
 const FolderWorkspaceWorktreesPanel = lazy(
   () => import('./folder-workspaces/FolderWorkspaceWorktreesPanel')
 )
@@ -51,6 +52,7 @@ export function RightSidebarPanelContent({
     >
       <Suspense fallback={effectiveTab === 'bot-chats' ? <BotChatsSkeleton toolbar /> : null}>
         {effectiveTab === 'explorer' && <FileExplorer />}
+        {effectiveTab === 'conversation-knowledge' && <ConversationKnowledgePanel />}
         {effectiveTab === 'source-control' &&
           (isFolderWorkspace ? (
             rightSidebarOpen && <FolderWorkspaceSourceControl />

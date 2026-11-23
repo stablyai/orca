@@ -47,6 +47,7 @@ pnpm dev:fresh [--keep] [--seed-from[=<profile dir>]]   # temporary profile, rem
 
 - Local installs use pnpm's global virtual store (`~/pnpm/store`) shared by all worktrees. Do not keep a `node_modules` in your home directory: it hides missing-dependency bugs. Set `ORCA_PNPM_GLOBAL_VIRTUAL_STORE=0` in your shell to opt out.
 - Before a cross-architecture build (including `pnpm build:mac`, which builds x64 and arm64), run `pnpm install:release`.
+- Desktop packages require the built-in SSH deployment template by default. Build it with `pnpm build:orcad-template` before packaging. `ORCA_REQUIRE_ORCAD_TEMPLATE=0` is an explicit local-only opt-out; those packages cannot deploy SSH workspaces.
 - On Linux, `pnpm build`, `pnpm build:native`, and packaging need a running Docker daemon for the clipboard helper. For native Wayland development, run `pnpm build:native` before `pnpm dev`. See the [clipboard build guide](../native/wayland-clipboard/README.md#building-and-testing).
 
 ## Troubleshooting
