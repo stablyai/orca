@@ -90,17 +90,19 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     }, MAC_DEFERRED_STAGING_TIMEOUT_MS)
   }
 
-  protected stopWatchingMacStaging(): void {
+  protected finishMacStaging(): string | null {
+    const version = this.macInstallerStagingVersion
     this.macInstallerStagingVersion = null
     if (this.macStagingTimer) {
       clearTimeout(this.macStagingTimer)
       this.macStagingTimer = null
     }
+    return version
   }
 
   protected publishDownloadStatus(status: UpdateStatus): void {
     if (status.state === 'downloaded') {
-      this.stopWatchingMacStaging()
+      this.finishMacStaging()
     }
     if (status.state !== 'downloaded' || status.version !== this.automaticDownloadVersion) {
       this.sendStatus(status)
@@ -180,11 +182,11 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     if (this.deferHeadlessServeInstall('download', version)) {
       return
     }
-    this.stopWatchingMacStaging()
+    this.finishMacStaging()
     this.automaticDownloadVersion = automatic ? version : null
     this.downloadInFlight = true
     const localBuildDownload = this.activeUpdateSource === 'local'
-    beginMacUpdateDownload(version)
+    beginMacUpdateDownload()
     // Acknowledge acceptance before setup delays progress events so the card responds immediately.
     this.sendStatus({ state: 'downloading', percent: 0, version })
     const startDownload = (): void => {

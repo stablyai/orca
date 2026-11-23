@@ -69,6 +69,7 @@ export function buildUpdateCardErrorModel(
             'Could not restart to install the update.'
           ),
           detail: installError,
+          releaseUrl: isLocalBuild ? undefined : getReleaseNotesUrlForVersion(status.version),
           primaryAction: {
             label: t('auto.components.UpdateCard.2c2d3e03ca', 'Try Again'),
             onClick: onInstallRetry
@@ -102,6 +103,9 @@ export function buildUpdateCardErrorModel(
       title: t('auto.components.UpdateCard.4cf109845a', 'Update Error'),
       summary: message,
       detail: installError ?? message,
+      releaseUrl: isLocalBuild
+        ? undefined
+        : getReleaseNotesUrlForVersion(status.version ?? cachedVersion),
       primaryAction: {
         label: t('auto.components.UpdateCard.2c2d3e03ca', 'Try Again'),
         onClick: onInstallRetry
