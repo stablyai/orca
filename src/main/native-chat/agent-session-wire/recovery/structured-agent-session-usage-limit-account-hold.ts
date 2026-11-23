@@ -215,7 +215,12 @@ export class UsageLimitAccountHolds {
   }
 
   withSwitchReset<T extends NativeChatUsageLimitCut>(id: string, cut: T): T & SwitchReset {
-    return withMovedCutReset(this.movedSince.get(id), cut)
+    const moved = this.movedSince.get(id)
+    const relaunchedAt = this.relaunched.at(id, switchFreeIdentity(cut))
+    return withMovedCutReset(
+      moved ?? (relaunchedAt ? { cut: switchFreeIdentity(cut), at: relaunchedAt } : undefined),
+      cut
+    )
   }
 
   verdict(
@@ -227,7 +232,6 @@ export class UsageLimitAccountHolds {
     const moved = this.movedSince.get(id)
     const movedCut = moved?.cut === switchFreeIdentity(limited)
     const cut = movedCut ? { ...limited, resetsAt: Math.min(limited.resetsAt, moved.at) } : limited
-    const scope = this.scopes.get(id)
     let hold = this.holds.get(id)
     // Nothing attributed and nothing held: the cut decides, and nothing is kept for it.
     if (!hold && !scope) {
@@ -340,15 +344,9 @@ export class UsageLimitAccountHolds {
       return false
     }
     if (now < Math.max(hold.resetsAt + GRACE_MS, notBefore)) {
-      if (this.relaunched.waits(id, identity(cut))) {
-        // Only room ends a relaunched cut's wait early, and the poller may be idle: ask for it,
-        // a first reading too while the provider has none.
-        const ask = scope?.account?.refresh ?? scope?.bootstrap
-        ask?.(UNKNOWN_RESET_ASK_MS)
-      }
       return false
     }
-    const refresh = scope?.account?.refresh ?? scope?.bootstrap
+    const refresh = this.scopes.get(id)?.account?.refresh ?? this.scopes.get(id)?.bootstrap
     if (hold.awaitingReading && record && refresh && record.refreshedFor !== hold.resetsAt) {
       if (refresh()) {
         record.refreshedFor = hold.resetsAt

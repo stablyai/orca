@@ -103,8 +103,9 @@ export class UsageLimitRelaunchedCuts {
     }
   }
 
-  waits(id: string, cut: string): boolean {
-    return this.relaunches.get(id)?.cut === cut
+  at(id: string, cut: string): number | undefined {
+    const relaunch = this.relaunches.get(id)
+    return relaunch?.cut === cut ? relaunch.at : undefined
   }
 
   /** When room released the cut, while the live reading of `account` still shows it: the first
