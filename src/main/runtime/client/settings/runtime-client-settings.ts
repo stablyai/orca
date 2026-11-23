@@ -103,6 +103,8 @@ export class RuntimeClientSettingsController {
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
       worktreeCardDetailsRow: settings.worktreeCardDetailsRow !== false,
+      hidePrimaryWorktreeMarker: settings.hidePrimaryWorktreeMarker === true,
+      worktreeIndentPx: Math.max(0, Math.min(64, Math.floor(settings.worktreeIndentPx ?? 18))),
       compactWorktreeCards: settings.compactWorktreeCards === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
@@ -141,8 +143,7 @@ export class RuntimeClientSettingsController {
       nativeChatCiResultLines: nativeChatShowsCiResultLines(settings),
       hostNotifications: projectHostNotificationSettings(settings.notifications),
       trackerAccountHost: getSettingsFocusedExecutionHostId(settings),
-      // Why projected: a paired client's AI buttons start these actions' agents, and must honour
-      // the agent saved for each one as the desktop does. Absent on older hosts.
+      // Projected so paired clients honour each action's saved agent; absent on older hosts.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),
       nativeChatDefaults: hostNativeChatDefaults(settings, this.isHeadless()),
       hostSettingOverrides: Object.fromEntries(

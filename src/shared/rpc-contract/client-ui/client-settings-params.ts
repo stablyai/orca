@@ -15,6 +15,7 @@ import { WorkspaceCleanupRulesParam } from '../workspace-cleanup/workspace-clean
 import { AGENT_CHAT_PERMISSION_MODES } from '../../agent-launch/permissions/agent-chat-permission-mode'
 import { PR_AUTO_REFRESH_CADENCES } from '../../source-control/hosted-review/review-refresh-policy'
 import { HOST_OWNED_SETTING_UPDATE_SHAPE } from '../../settings/host-owned-settings'
+import { MAX_WORKTREE_INDENT_PX } from '../../worktree/card-display-settings-types'
 
 export const TaskProviderParam = z.custom<TaskProvider>(isTaskProvider, {
   message: 'Unknown task provider'
@@ -129,6 +130,8 @@ export const SettingsUpdate = z
       .optional(),
     experimentalNewWorktreeCardStyle: z.boolean().optional(),
     worktreeCardDetailsRow: z.boolean().optional(),
+    hidePrimaryWorktreeMarker: z.boolean().optional(),
+    worktreeIndentPx: z.number().int().min(0).max(MAX_WORKTREE_INDENT_PX).optional(),
     /** The host-side switch for bots, so a headless server can turn them on. */
     botsEnabled: z.boolean().optional(),
     agentStatusHooksEnabled: z.boolean().optional(),

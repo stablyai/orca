@@ -1,4 +1,9 @@
-export const SIDEBAR_TREE_INDENT = 18
+import {
+  DEFAULT_WORKTREE_INDENT_PX,
+  normalizeWorktreeIndentPx
+} from '../../../../../../shared/worktree/card-display-settings-types'
+
+export const SIDEBAR_TREE_INDENT = DEFAULT_WORKTREE_INDENT_PX
 // Why: keeps project-grouped cards reading as children after the surface inset is subtracted.
 const PROJECT_WORKTREE_CARD_EXTRA_INDENT = 2
 // Why: seats full-row flush-card content under the group header; smaller pullback = more indent.
@@ -27,9 +32,7 @@ function clampDepth(depth: number): number {
 }
 
 export function getSidebarTreeIndent(indentPx?: number): number {
-  const step =
-    typeof indentPx === 'number' && Number.isFinite(indentPx) ? indentPx : SIDEBAR_TREE_INDENT
-  return Math.max(0, Math.min(64, Math.floor(step)))
+  return normalizeWorktreeIndentPx(indentPx)
 }
 
 export function getLineageChildrenInlineOffset(indentPx?: number): number {
@@ -53,13 +56,10 @@ export function getWorktreeCardContentIndent(args: {
   lineageDepth: number
   indentPx?: number
 }): number {
-  const step = getSidebarTreeIndent(args.indentPx)
-  const lineageIndent = clampDepth(args.lineageDepth) * step
+  const lineageIndent = clampDepth(args.lineageDepth) * getSidebarTreeIndent(args.indentPx)
   return args.isGrouped
     ? getProjectGroupHeaderPaddingLeft(args.groupDepth) +
         GROUPED_CARD_TITLE_HEADER_LABEL_OFFSET +
-        step -
-        SIDEBAR_TREE_INDENT +
         lineageIndent
     : lineageIndent
 }

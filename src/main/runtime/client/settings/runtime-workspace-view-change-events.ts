@@ -11,6 +11,8 @@ const WORKSPACE_VIEW_SETTINGS: readonly (keyof GlobalSettings)[] = [
   'compactWorktreeCards',
   'experimentalNewWorktreeCardStyle',
   'worktreeCardDetailsRow',
+  'hidePrimaryWorktreeMarker',
+  'worktreeIndentPx',
   'showPinnedWorktreesInGroups'
 ]
 
