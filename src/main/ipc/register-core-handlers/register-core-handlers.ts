@@ -142,7 +142,7 @@ export async function registerCoreHandlers(
     })
     registerCliHandlers()
     registerOrcaUninstallHandlers(store)
-    registerPreflightHandlers(store)
+    registerPreflightHandlers(store, runtime)
     registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
     registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
     registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)

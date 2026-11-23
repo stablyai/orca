@@ -8,6 +8,7 @@ import { resolveQualifiedAgentDetectionHost } from './preflight-workspace-target
 import { listInstalledWorkspaceAgents } from './installed-agents'
 import { runPreflightCheck } from '../../../../preflight/agent-detection'
 import { detectRemoteWindowsTerminalCapabilities } from '../../../../ipc/preflight/preflight-remote-windows-terminal-capabilities'
+import { prepareQueuedAgentLaunch } from '../../../../preflight/prepare-queued-agent-launch'
 
 import {
   assertAgentDetectionHostRunning,
@@ -57,6 +58,17 @@ export const PREFLIGHT_METHODS = [
     params: PreflightProjectAgentDetection,
     // Only the host knows the workspace's actual project runtime, including WSL.
     handler: async (params, { runtime }) => {
+      if (params.launch) {
+        const ptyId = runtime.getTerminalPtyIdForHandle(params.launch.terminal)
+        return ptyId
+          ? prepareQueuedAgentLaunch(
+              runtime,
+              ptyId,
+              params.launch,
+              runtime.requireStore().getSettings()
+            )
+          : { preparedCommand: null }
+      }
       if (params.project) {
         // Ungated: it serves a workspace create in that project, which boots the distro anyway.
         return runtime.detectProjectLaunchContext(params.project.repo)

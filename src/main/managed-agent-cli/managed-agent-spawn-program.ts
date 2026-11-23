@@ -19,6 +19,7 @@ import {
   normalizeRuntimePathForComparison
 } from '../../shared/file-access/cross-platform-path'
 import { normalizePathEntry } from '../../shared/shell/command-resolution/node-cli-command-resolution'
+import { toWindowsWslDrivePath } from '../../shared/file-access/wsl-paths'
 import { resolveWindowsGitBashShellPathAsync } from '../pty/shell-startup/git-bash'
 import { resolveLoginShellEnvironment } from '../startup/shell-environment/login-shell-environment'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
@@ -39,10 +40,14 @@ const stockPrograms = [...stockAgents.keys()]
 type SpawnLaunch = {
   launchCommand: string | undefined
   codexRuntime?: 'host' | 'wsl'
+  sshTarget?: boolean
   getSettings?: () => SpawnSettings | undefined
   cwd?: string
+  readCwd?: () => Promise<string | undefined>
   env?: Record<string, string | undefined>
   envToDelete?: readonly string[]
+  /** A queued launch has already seeded the PTY; never pass request values into a profile subprocess. */
+  queuedPath?: string | null
   shellOverride?: string
   sourceShell?: AgentStartupShell
 }
@@ -92,7 +97,7 @@ async function effectiveSearchPath(
   const launchEnvPath = launchPath(spawn.env ?? {})
   const profileShell = spawn.sourceShell ?? shell
   const shellOverride =
-    !scopedPath && process.platform === 'win32'
+    !scopedPath && spawn.queuedPath === undefined && process.platform === 'win32'
       ? profileShell === 'cmd'
         ? null
         : profileShell === 'posix'
@@ -110,24 +115,32 @@ async function effectiveSearchPath(
       : undefined
   const path = scopedPath
     ? scopedPath[1]
-    : launchPath(await resolveLoginShellEnvironment({ shellOverride, env: initialEnv }))
+    : spawn.queuedPath !== undefined
+      ? (spawn.queuedPath ?? undefined)
+      : launchPath(await resolveLoginShellEnvironment({ shellOverride, env: initialEnv }))
   const nativePath =
     process.platform === 'win32' && shell === 'posix'
       ? msysDrivePathToWindows
       : (value: string) => value
-  const cwd = resolve(nativePath(spawn.cwd ?? process.cwd()), nativePath(launch.cwd ?? '.'))
-  // Capturing Git Bash returns the Windows child's PATH; an inline Bash assignment uses colons.
+  // Profile capture and a PTY's env seed use native delimiters; Bash's inline PATH uses colons.
   const pathDelimiter =
     process.platform === 'win32' && shell === 'posix' && scopedPath ? ':' : delimiter
   const directories =
     path !== undefined && (path !== '' || process.platform !== 'win32')
       ? path
           .split(pathDelimiter)
-          .map((entry) => resolve(cwd, nativePath(normalizePathEntry(process.platform, entry))))
+          .map((entry) => nativePath(normalizePathEntry(process.platform, entry)))
       : []
-  return (
-    process.platform === 'win32' && shell === 'cmd' ? [cwd, ...directories] : directories
-  ).join(delimiter)
+  const searchesCwd = process.platform === 'win32' && shell === 'cmd'
+  if (!searchesCwd && directories.every(isAbsolute)) {
+    return directories.join(delimiter)
+  }
+  const launchCwd = nativePath(launch.cwd ?? '.')
+  const cwd = isAbsolute(launchCwd)
+    ? launchCwd
+    : resolve(nativePath((await spawn.readCwd?.()) || spawn.cwd || process.cwd()), launchCwd)
+  const absoluteDirectories = directories.map((entry) => resolve(cwd, entry))
+  return (searchesCwd ? [cwd, ...absoluteDirectories] : absoluteDirectories).join(delimiter)
 }
 
 export async function alignManagedAgentLaunchAtSpawn(
@@ -168,7 +181,10 @@ async function resolveLaunchExecutable(
   command: string
 ): Promise<string> {
   const prefix = command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS)
-  if (!stockPrograms.some((program) => prefix.includes(program))) {
+  if (
+    !stockPrograms.some((program) => prefix.includes(program)) &&
+    !/[\\/]agent-runtimes[\\/]/i.test(prefix)
+  ) {
     return command
   }
   const sourceShell = spawn.sourceShell ?? shell
@@ -178,7 +194,8 @@ async function resolveLaunchExecutable(
   }
   const program =
     process.platform === 'win32' && sourceShell === 'posix'
-      ? msysDrivePathToWindows(launch.executable)
+      ? ((spawn.codexRuntime === 'wsl' ? toWindowsWslDrivePath(launch.executable) : null) ??
+        msysDrivePathToWindows(launch.executable))
       : launch.executable
   const managedAgent = managedPathAgent(program)
   const agent = managedAgent ?? stockAgents.get(launch.executable)
@@ -200,7 +217,7 @@ async function resolveLaunchExecutable(
   ) {
     return render(launch.executable)
   }
-  if (spawn.codexRuntime === 'wsl') {
+  if (spawn.sshTarget || spawn.codexRuntime === 'wsl') {
     return managedAgent ? render(stockLaunchProgram(agent, 'linux', true)) : command
   }
   if (!settings && !managedAgent) {

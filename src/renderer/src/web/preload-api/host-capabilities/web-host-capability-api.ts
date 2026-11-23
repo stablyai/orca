@@ -1,7 +1,13 @@
 import type {
+  AgentDetectionArgs,
+  AgentInventoryReply,
   PreflightStatus,
   RefreshAgentsResult
 } from '../../../../../preload/api/preflight/preflight-api'
+import type {
+  PreparedAgentLaunch,
+  QueuedAgentLaunch
+} from '../../../../../shared/agent-launch/startup/queued-agent-launch'
 import type { PreloadApi } from '../../../../../preload/api-types'
 import type {
   ComputerUsePermissionSetupResult,
@@ -17,14 +23,27 @@ import { callRuntimeResult, getRemoteRuntimeStatus } from '../../runtime/client/
 import { requireActiveEnvironmentOrNull } from '../../runtime/client/web-runtime-session'
 import { getBrowserPlatform } from '../web-storage'
 
-async function detectRuntimeAgents(args?: {
-  withManagedAgentCommands?: boolean
-}): Promise<unknown> {
+function detectRuntimeAgents(args: { launch: QueuedAgentLaunch }): Promise<PreparedAgentLaunch>
+function detectRuntimeAgents(
+  args: AgentDetectionArgs & { withManagedAgentCommands: true }
+): Promise<AgentInventoryReply>
+function detectRuntimeAgents(args?: AgentDetectionArgs): Promise<string[]>
+async function detectRuntimeAgents(
+  args?:
+    | (AgentDetectionArgs & { withManagedAgentCommands?: boolean })
+    | { launch: QueuedAgentLaunch }
+): Promise<PreparedAgentLaunch | AgentInventoryReply | string[]> {
+  // Queued launches address their bound terminal via its own pinned RPC target.
+  if (args && 'launch' in args) {
+    return { preparedCommand: null }
+  }
   if (!requireActiveEnvironmentOrNull()) {
     return []
   }
   const params = args?.withManagedAgentCommands ? { withManagedAgentCommands: true } : undefined
-  return callRuntimeResult<unknown>('preflight.detectAgents', params).catch(() => [])
+  return callRuntimeResult<AgentInventoryReply | string[]>('preflight.detectAgents', params).catch(
+    () => []
+  )
 }
 
 export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
@@ -78,8 +97,7 @@ export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight
     },
     // The zcode probe spawns a host CLI; web must not decide the host’s install state.
     zcodeInteractiveCapability: async () => 'unknown' as const,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host answers the inventory exactly when withManagedAgentCommands is set, as the overloads say.
-    detectAgents: detectRuntimeAgents as PreloadApi['preflight']['detectAgents'],
+    detectAgents: detectRuntimeAgents,
     refreshAgents: (args) =>
       requireActiveEnvironmentOrNull()
         ? callRuntimeResult('preflight.refreshAgents', args)

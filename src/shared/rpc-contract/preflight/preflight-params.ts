@@ -6,6 +6,17 @@ import { RepoSelector } from '../github/github-repo-target-params'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import type { WorkspaceLaunchKind } from '../../agent-launch/contracts/workspace-launch-kind'
 import type { ProjectExecutionRuntimeResolution } from '../../execution-host/project-execution-runtime'
+import { TERMINAL_INPUT_MAX_BYTES } from '../../terminal/input/terminal-input'
+
+export const PreflightQueuedAgentLaunch = z.object({
+  terminal: z.string().min(1).max(4096),
+  command: z.string().min(1).max(TERMINAL_INPUT_MAX_BYTES),
+  shell: z.enum(['posix', 'powershell', 'cmd']),
+  shellOverride: z.string().max(4096).optional(),
+  cwd: z.string().max(4096).optional(),
+  path: z.string().max(32_767).nullable().optional(),
+  images: z.boolean().optional()
+})
 
 export const PreflightCheck = z.object({
   force: z.boolean().optional()
@@ -44,11 +55,14 @@ export const PreflightAgentRefresh = PreflightAgentDetection.safeExtend({
 export const PreflightProjectAgentDetection = PreflightAgentDetection.safeExtend({
   /** Answer `{ agents, managedAgentCommands }`; older hosts drop it and answer the list alone. */
   withManagedAgentCommands: z.boolean().optional(),
+  launch: PreflightQueuedAgentLaunch.optional(),
   project: RepoSelector.extend({ repo: RepoSelector.shape.repo.pipe(z.string().max(4096)) })
     .strict()
     .optional()
 }).refine(
-  (value) => !value.project || (!value.worktreeId && !value.repoId && !value.worktreeHostId),
+  (value) =>
+    !value.project ||
+    (!value.worktreeId && !value.repoId && !value.worktreeHostId && !value.launch),
   'Choose project, repository or worktree'
 )
 

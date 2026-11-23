@@ -5,6 +5,23 @@ export abstract class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRunt
 
   protected abstract replaceHeadlessTerminalAfterExecutionContextChange(ptyId: string): void
 
+  readQueuedLaunchPty(ptyId: string) {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty?.connected && !this.ptyController?.hasPty?.(ptyId)) {
+      return null
+    }
+    return {
+      connectionId: pty?.connectionId,
+      isWsl: pty?.isWsl,
+      wslDistro: this.wslDistroByPtyId.get(ptyId) ?? pty?.wslDistro,
+      readForegroundProcess: () => this.ptyController?.getForegroundProcess?.(ptyId),
+      readCwd: async () =>
+        this.terminalCwdByPtyId.get(ptyId) ||
+        (await this.ptyController?.getCwd?.(ptyId)) ||
+        undefined
+    }
+  }
+
   preparePtyExecutionContext(
     ptyId: string,
     wslDistro: string | null,

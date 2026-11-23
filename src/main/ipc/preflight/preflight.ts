@@ -18,6 +18,9 @@ import { getPreflightWslTarget } from './preflight-runtime-target'
 import { runAsWslExecUserAct } from '../../wsl/discovery/wsl-background-exec-gate'
 import { deferRefusedPreflight } from './preflight-wsl-refusal-retry'
 import { agentCommandOverrideDetectionOptions } from '../../preflight/installed-agent-detection'
+import { PreflightQueuedAgentLaunch } from '../../../shared/rpc-contract/preflight/preflight-params'
+import { prepareQueuedAgentLaunch } from '../../preflight/prepare-queued-agent-launch'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 
 type AgentDetectionRequest = PreflightRuntimeContext & {
   enabledOnly?: boolean
@@ -36,7 +39,10 @@ function runPreflightAct<T>(
   )
 }
 
-export function registerPreflightHandlers(store?: Pick<Store, 'getSettings'>): void {
+export function registerPreflightHandlers(
+  store?: Pick<Store, 'getSettings'>,
+  runtime?: Pick<OrcaRuntimeService, 'readQueuedLaunchPty'>
+): void {
   const detectionOptions = (args?: AgentDetectionRequest) => {
     if (!args?.enabledOnly) {
       // Overrides still apply: a configured CLI outside PATH must be listed in every inventory.
@@ -64,14 +70,21 @@ export function registerPreflightHandlers(store?: Pick<Store, 'getSettings'>): v
   // Mount-time detection must not start a stopped distro; opening an agent picker wakes it.
   ipcMain.handle(
     'preflight:detectAgents',
-    async (_event, args?: AgentDetectionRequest & PreflightWake) =>
-      runPreflightAct(args, async () => {
+    async (_event, args?: AgentDetectionRequest & PreflightWake & { launch?: unknown }) => {
+      if (args?.launch !== undefined) {
+        const launch = PreflightQueuedAgentLaunch.parse(args.launch)
+        return runtime
+          ? prepareQueuedAgentLaunch(runtime, launch.terminal, launch, store?.getSettings())
+          : { preparedCommand: null }
+      }
+      return runPreflightAct(args, async () => {
         const host: AgentDetectionHost = { kind: 'local', context: args }
         await assertAgentDetectionHostRunning(host)
         return args?.withManagedAgentCommands
           ? detectAgentInventoryOnHost(host, detectionOptions(args))
           : detectAgentsOnHost(host, detectionOptions(args))
       })
+    }
   )
 
   ipcMain.handle('preflight:zcodeInteractiveCapability', async () =>

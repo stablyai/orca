@@ -21,7 +21,11 @@ import {
   readLaunchPosition,
   type LaunchPosition
 } from './launch-position'
-import { powerShellNativeLaunch, unwrapPowerShellNativeLaunch } from './powershell-native-launch'
+import {
+  powerShellNativeLaunch,
+  unwrapPowerShellNativeLaunch,
+  withPowerShellClaudeNativeArgs
+} from './powershell-native-launch'
 import { quoteStartupArg, type AgentStartupShell } from './tui-agent-startup-shell'
 
 export const CODEX_EXECUTABLE = /^codex(\.(exe|cmd|bat|ps1))?$/i
@@ -142,6 +146,17 @@ export function withCodexDirectLaunchCommand(
   return wrapper
     ? command.slice(0, launch.start) + wrapper.prefix + command.slice(launch.start)
     : command
+}
+
+export function prepareShellNativeAgentLaunch(
+  command: string,
+  shell: AgentStartupShell,
+  images: boolean
+): string {
+  const codex = withCodexDirectLaunchCommand(command, shell, { images, probeInShell: true })
+  return shell === 'powershell' && codex === command
+    ? withPowerShellClaudeNativeArgs(command)
+    : codex
 }
 
 /** Recover the invocation from Orca's generated POSIX preflight for startup classification. */

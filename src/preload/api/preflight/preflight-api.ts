@@ -1,4 +1,8 @@
 import type { ZCodeInteractiveCapability } from '../../../shared/agent-launch/installation/zcode-missing-tui'
+import type {
+  PreparedAgentLaunch,
+  QueuedAgentLaunch
+} from '../../../shared/agent-launch/startup/queued-agent-launch'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import type {
   PathSource,
@@ -27,7 +31,7 @@ export type PreflightStatus = {
   }
 }
 
-type AgentDetectionArgs = PreflightRuntimeContext & {
+export type AgentDetectionArgs = PreflightRuntimeContext & {
   enabledOnly?: boolean
   wakeWslDistro?: boolean
   userInitiated?: boolean
@@ -62,6 +66,7 @@ export type PreflightApi = {
   /** Complete by default; background callers opt into host-owned enabled preferences.
    *  `withManagedAgentCommands` adds the full paths to Orca's copies the host would launch. */
   detectAgents: {
+    (args: { launch: QueuedAgentLaunch }): Promise<PreparedAgentLaunch>
     (args: AgentDetectionArgs & { withManagedAgentCommands: true }): Promise<AgentInventoryReply>
     (args?: AgentDetectionArgs): Promise<string[]>
   }

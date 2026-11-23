@@ -162,6 +162,7 @@ export type RuntimeStore = {
     agentPermissionDefault?: GlobalSettings['agentPermissionDefault']
     agentPermissionOverrides?: GlobalSettings['agentPermissionOverrides']
     terminalWindowsShell?: GlobalSettings['terminalWindowsShell']
+    terminalInlineImages?: GlobalSettings['terminalInlineImages']
     // Read by the launch-line carry rule to name the shell a local line is typed into.
     terminalDefaultShell?: GlobalSettings['terminalDefaultShell']
     floatingTerminalEnabled?: GlobalSettings['floatingTerminalEnabled']
