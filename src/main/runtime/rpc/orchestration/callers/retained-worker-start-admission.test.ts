@@ -6,6 +6,7 @@ import {
   structuredWorkerProcessIncarnation
 } from '../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import {
+  ADDRESS_Y,
   createSessionCallerHarness,
   orchestrationRequest,
   SESSION_X,
@@ -28,7 +29,7 @@ let h: ReturnType<typeof createSessionCallerHarness> | undefined
 
 afterEach(() => h?.close())
 
-it('distinguishes a closed retained worker from a refused caller before changing the Task', async () => {
+it('refuses a closed worker as a target before assigning work or sending mail', async () => {
   const { db, dispatch, records, runtime } = (h = createSessionCallerHarness(hostRef, () => ({
     present: true,
     sessionIds: [SESSION_X]
@@ -102,6 +103,7 @@ it('distinguishes a closed retained worker from a refused caller before changing
   })
   expect(db.getRun(run.id)?.coordinator_orca_session_id).toBe(SESSION_X)
 
+  const ready = db.createTask({ spec: 'Assign a ready task', runId: run.id })
   const retry = { task: task.id, run: run.id, retryOf: stopped.id, terminal: handle }
   const start = (sessionId: string) =>
     dispatch(orchestrationRequest('orchestration.workerStart', retry, { sessionId }))
@@ -113,7 +115,38 @@ it('distinguishes a closed retained worker from a refused caller before changing
   expect(savedWorker).toMatchObject({ state: 'stopped', stage: 'process_stopped' })
   expect(savedResource).toMatchObject({ owner_dispatch_id: stopped.id, ownership_state: 'owned' })
 
-  const targetRefusal = await start(SESSION_X)
+  const requestedChat = `The requested chat ${SESSION_Y} is closed.`
+  const assignmentRefusal = {
+    ok: false,
+    error: {
+      code: 'recipient_unreachable',
+      message: `${requestedChat} No effects were applied.`,
+      data: { effectsApplied: false }
+    }
+  }
+  expect(await start(SESSION_X)).toMatchObject(assignmentRefusal)
+  expect(
+    await dispatch(
+      orchestrationRequest(
+        'orchestration.dispatch',
+        { task: ready.id, run: run.id, to: ADDRESS_Y },
+        { sessionId: SESSION_X }
+      )
+    )
+  ).toMatchObject(assignmentRefusal)
+  expect(
+    await dispatch(
+      orchestrationRequest(
+        'orchestration.send',
+        { to: ADDRESS_Y, run: run.id, subject: 'Synthetic mail' },
+        { sessionId: SESSION_X }
+      )
+    )
+  ).toMatchObject({
+    ok: false,
+    error: { code: 'recipient_unreachable', message: `${requestedChat} No message was sent.` }
+  })
+
   expect(await start(ORIGINAL_COORDINATOR)).toMatchObject({
     ok: false,
     error: {
@@ -133,15 +166,10 @@ it('distinguishes a closed retained worker from a refused caller before changing
   expect(await start(SESSION_Y)).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
   expect(db.getRun(run.id)).toEqual(savedRun)
   expect(db.getTask(task.id)).toEqual(savedTask)
+  expect(db.getTask(ready.id)).toEqual(ready)
+  expect(db.getDispatchContext(ready.id)).toBeUndefined()
+  expect(db.getLatestUnreadMessageSequence(handle)).toBeUndefined()
   expect(db.getDispatchContext(task.id)).toEqual(savedDispatch)
   expect(db.getWorkerDispatch(stopped.id)).toEqual(savedWorker)
   expect(db.getWorkerTerminalResourceByHandle(handle)).toEqual(savedResource)
-  expect(targetRefusal).toMatchObject({
-    ok: false,
-    error: {
-      code: 'recipient_unreachable',
-      message: `Cannot assign work to the requested worker. Agent session ${SESSION_Y} has ended: its chat was closed. No effects were applied.`,
-      data: { effectsApplied: false }
-    }
-  })
 })

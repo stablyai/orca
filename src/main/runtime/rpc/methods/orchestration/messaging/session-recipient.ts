@@ -9,7 +9,6 @@ import {
   type OrcaSessionAddress,
   type OrcaSessionId
 } from '../../../../../../shared/agent-session/identity/orca-session-address'
-// The caller codes, reused: each names the same fact about a session, whichever side of the mail it is on.
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import {
   lookupOrcaAgentSession,
@@ -34,7 +33,7 @@ export type SessionRecipient = { sessionId: OrcaSessionId; address: OrcaSessionA
 export type SessionRecipientUnreachable = 'ended' | 'other-host' | 'unverifiable'
 
 export type SessionRecipientRefusal = {
-  code: (typeof CODES)[keyof typeof CODES]
+  code: (typeof CODES)[keyof typeof CODES] | 'recipient_unreachable'
   message: string
   /** Set by the reach check alone, so a chat list can say why without parsing the message. */
   unreachable?: SessionRecipientUnreachable
@@ -193,20 +192,23 @@ function refuseUnreachableSessionRecipient(
   }
   if (reached.kind === 'unverifiable') {
     return {
-      code: CODES.notLive,
-      message: `The session continuing agent session ${sessionId} after a /clear cannot be verified: ${reached.reason} ${noEffect}`,
+      code: 'recipient_unreachable',
+      message: `Orca could not verify the chat continuing the requested session ${sessionId} after /clear. ${reached.reason} ${noEffect}`,
       unreachable: 'unverifiable'
     }
   }
   if (reached.kind === 'ended') {
-    return {
-      code: CODES.notLive,
-      message:
-        reached.reason === 'worker-identity-lost'
-          ? `Agent session ${sessionId} is a structured worker whose worker identity this host no longer has, so it can never read that mail. ${noEffect}`
-          : `Agent session ${sessionId} has ended: its chat was closed. ${noEffect}`,
-      unreachable: reached.reason === 'worker-identity-lost' ? 'unverifiable' : 'ended'
-    }
+    return reached.reason === 'worker-identity-lost'
+      ? {
+          code: CODES.notLive,
+          message: `Agent session ${sessionId} is a structured worker whose worker identity this host no longer has. ${noEffect}`,
+          unreachable: 'unverifiable'
+        }
+      : {
+          code: 'recipient_unreachable',
+          message: `The requested chat ${sessionId} is closed. ${noEffect}`,
+          unreachable: 'ended'
+        }
   }
   return null
 }

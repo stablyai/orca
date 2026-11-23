@@ -3,7 +3,6 @@ import {
   formatOrcaSessionAddress,
   type OrcaSessionId
 } from '../../../../../shared/agent-session/identity/orca-session-address'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration/orchestration-session-caller-codes'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { observeChatAssignee } from '../../../orchestration/workers/lifecycle/chat-assignee'
@@ -45,15 +44,7 @@ export async function admitChatAssignee(
     NO_EFFECTS
   )
   if (refusal) {
-    // The caller has already been resolved. This reach check names the assignment's target.
-    const unreachable = refusal.code === CODES.notLive
-    throw new OrchestrationError(
-      unreachable ? 'recipient_unreachable' : refusal.code,
-      unreachable
-        ? `Cannot assign work to the requested worker. ${refusal.message}`
-        : refusal.message,
-      { effectsApplied: false }
-    )
+    throw new OrchestrationError(refusal.code, refusal.message, { effectsApplied: false })
   }
   const observed = observeChatAssignee(sessionId, db, store)
   if (observed.status !== 'live') {
