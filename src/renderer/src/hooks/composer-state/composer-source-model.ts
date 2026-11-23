@@ -1,6 +1,7 @@
 import type { GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
+import type { ClickUpTask } from '../../../../shared/clickup/clickup-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
@@ -42,6 +43,7 @@ export type ComposerSourceModel = {
   handleNameValueChange: (nextName: string) => void
   handleOpenAgentSettings: () => void
   handleOpenJiraSettings: () => void
+  handleOpenClickUpSettings: () => void
   handleProjectChange: (projectId: string) => void
   handleProjectHostSetupChange: (setupId: string) => void
   handleRemoveLinkedWorkItem: () => void
@@ -55,6 +57,7 @@ export type ComposerSourceModel = {
   handleSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   handleSmartGitLabItemSelect: (item: GitLabWorkItem) => void
   handleSmartJiraIssueSelect: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
+  handleSmartClickUpTaskSelect: (task: ClickUpTask, sourceContext: TaskSourceContext) => void
   handleSmartLinearIssueSelect: (issue: LinearIssue) => void
   handleSparseSelectPreset: (preset: SparsePreset | null) => void
   insertComposerFolderPaths: (folderPaths: string[]) => void

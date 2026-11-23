@@ -16793,7 +16793,15 @@
             "crossRepoDifferentTaskSource": "The GitHub URL points to {{repo}}, which is different from the selected task source.",
             "crossRepoDifferentProject": "The GitHub URL points to {{repo}}, which is different from the selected project.",
             "useAsWorkspaceName": "Use <name>\"{{name}}\"</name> as workspace name",
-            "createNewBranchNamed": "Create new branch <name>{{name}}</name>"
+            "createNewBranchNamed": "Create new branch <name>{{name}}</name>",
+            "searchClickUp": "Search ClickUp tasks or paste a task URL",
+            "retryClickUp": "Retry",
+            "loadingClickUp": "Loading ClickUp task…",
+            "clickupDisconnected": "Connect ClickUp in Settings to link this task",
+            "clickupRuntimeUpdate": "Update the remote runtime to link ClickUp",
+            "clickupReadFailed": "Couldn’t load this ClickUp task",
+            "clickupLoaded": "ClickUp task loaded",
+            "clickupMode": "ClickUp"
           },
           "ProjectCombobox": {
             "empty": "No projects match your search.",
@@ -16823,7 +16831,8 @@
                   "b1418294ea": "Start typing to search GitLab MRs and issues.",
                   "80e7791c93": "No matching branches.",
                   "b4e65d98a6": "Start typing to search Linear issues.",
-                  "5ba5d3e516": "Start typing to search Jira issues, or paste an issue URL."
+                  "5ba5d3e516": "Start typing to search Jira issues, or paste an issue URL.",
+                  "clickup": "Start typing to search ClickUp tasks, or paste a task URL."
                 }
               }
             }

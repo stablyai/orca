@@ -1,3 +1,7 @@
+import {
+  parseClickUpTaskReference,
+  type ClickUpTaskReference
+} from '../../shared/clickup/clickup-task-reference'
 import type {
   ClickUpComment,
   ClickUpStatusOption,
@@ -12,16 +16,10 @@ import {
   mapClickUpComments,
   mapClickUpListStatuses,
   mapClickUpTask,
-  mapClickUpTasks
+  mapClickUpTaskPage
 } from './clickup-response-mapping'
-import {
-  clickUpTaskMatchesText,
-  parseClickUpSearchIntent,
-  parseClickUpTaskReference,
-  type ClickUpTaskReference
-} from './clickup-task-search-query'
+import { clickUpTaskMatchesText, parseClickUpSearchIntent } from './clickup-task-search-query'
 
-const TASKS_PER_PAGE = 100
 const SEARCH_PAGE_LIMIT = 5
 const COMMENT_PAGE_SIZE = 25
 const COMMENT_PAGE_LIMIT = 4
@@ -78,12 +76,7 @@ async function fetchTaskPage(
     context.token,
     `/team/${encodeURIComponent(context.workspaceId)}/task?${listQuery(filter, context.viewer?.id ?? null, page)}`
   )
-  const tasks = mapClickUpTasks(payload, context.workspaceId)
-  const lastPage =
-    payload && typeof payload === 'object' && 'last_page' in payload
-      ? payload.last_page === true
-      : tasks.length < TASKS_PER_PAGE
-  return { tasks, nextPage: lastPage || tasks.length === 0 ? null : page + 1 }
+  return mapClickUpTaskPage(payload, context.workspaceId, page, filter.includeClosed)
 }
 
 export async function listTasks(

@@ -11,6 +11,7 @@ type ComposerNavigationActionsInput = Pick<
   | 'selectedProjectGroup'
   | 'setActiveRuntimeEnvironmentPreference'
   | 'smartNameJiraSourceContext'
+  | 'smartNameClickUpSourceContext'
   | 'sourceIntentBlocksCreate'
 >
 
@@ -28,6 +29,7 @@ export function useComposerNavigationActions(input: ComposerNavigationActionsInp
     selectedProjectGroup,
     setActiveRuntimeEnvironmentPreference,
     smartNameJiraSourceContext,
+    smartNameClickUpSourceContext,
     sourceIntentBlocksCreate
   } = input
 
@@ -37,26 +39,31 @@ export function useComposerNavigationActions(input: ComposerNavigationActionsInp
     closeModal()
   }, [closeModal, openSettingsPage, openSettingsTarget])
 
-  const handleOpenJiraSettings = useCallback((): void => {
-    const runtimeEnvironmentId = getTaskSourceRuntimeSettings(
-      smartNameJiraSourceContext
-    ).activeRuntimeEnvironmentId
-    const targetRuntimeEnvironmentId = runtimeEnvironmentId ?? null
-    void setActiveRuntimeEnvironmentPreference(targetRuntimeEnvironmentId).then((selected) => {
-      if (!selected) {
-        return
-      }
-      openSettingsTarget({ pane: 'integrations', repoId: null })
-      openSettingsPage()
-      closeModal()
-    })
-  }, [
-    closeModal,
-    openSettingsPage,
-    openSettingsTarget,
-    setActiveRuntimeEnvironmentPreference,
-    smartNameJiraSourceContext
-  ])
+  // Why: the integration lives on the host that owns the source, so Settings must target that host first.
+  const openIntegrationSettings = useCallback(
+    (sourceContext: ComposerNavigationActionsInput['smartNameJiraSourceContext']): void => {
+      const runtimeEnvironmentId =
+        getTaskSourceRuntimeSettings(sourceContext).activeRuntimeEnvironmentId
+      const targetRuntimeEnvironmentId = runtimeEnvironmentId ?? null
+      void setActiveRuntimeEnvironmentPreference(targetRuntimeEnvironmentId).then((selected) => {
+        if (!selected) {
+          return
+        }
+        openSettingsTarget({ pane: 'integrations', repoId: null })
+        openSettingsPage()
+        closeModal()
+      })
+    },
+    [closeModal, openSettingsPage, openSettingsTarget, setActiveRuntimeEnvironmentPreference]
+  )
+  const handleOpenJiraSettings = useCallback(
+    (): void => openIntegrationSettings(smartNameJiraSourceContext),
+    [openIntegrationSettings, smartNameJiraSourceContext]
+  )
+  const handleOpenClickUpSettings = useCallback(
+    (): void => openIntegrationSettings(smartNameClickUpSourceContext),
+    [openIntegrationSettings, smartNameClickUpSourceContext]
+  )
 
   const folderCreateDisabled =
     creating ||
@@ -68,6 +75,7 @@ export function useComposerNavigationActions(input: ComposerNavigationActionsInp
   return {
     handleOpenAgentSettings,
     handleOpenJiraSettings,
+    handleOpenClickUpSettings,
     folderCreateDisabled
   }
 }

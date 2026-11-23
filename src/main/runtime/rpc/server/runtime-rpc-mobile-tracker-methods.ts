@@ -2,6 +2,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 
 /** Linear, Jira and ClickUp have no workspace; untagged phone calls use the desktop's "New projects open on" host, as its Tasks page does. */
 export const DEFAULT_SCOPE_HOST_METHODS = [
+  'clickup.addTaskComment',
   'clickup.connect',
   'clickup.getTask',
   'clickup.listStatuses',
@@ -10,6 +11,7 @@ export const DEFAULT_SCOPE_HOST_METHODS = [
   'clickup.selectWorkspace',
   'clickup.status',
   'clickup.taskComments',
+  'clickup.updateTask',
   'jira.attachmentImage',
   'jira.getIssue',
   'jira.issueComments',

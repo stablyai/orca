@@ -7,13 +7,13 @@ import { taskRuntimeStatusRead } from './mobile-task-runtime-operations'
 import { firstPaintTaskKeys } from './task-query-storage'
 import {
   readKeptTaskHydration,
+  readTaskClickUpStatus,
   readTaskHydration,
   readTaskJiraStatus,
   taskHydrationWrites,
   type TaskHydration
 } from './task-queries'
 import { MOBILE_TASKS_CAPABILITY } from './mobile-tasks-capability'
-import { filterMobileTaskProviders } from './mobile-supported-task-providers'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   filterAvailableTaskProviders,
@@ -47,6 +47,9 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
     setGithubProjectTable,
     setItems,
     setLinearConnected,
+    closeClickUpOverlays,
+    clickupStatusRequestIdRef,
+    setClickUpConnection,
     setJiraConnection,
     jiraStatusRequestIdRef,
     setJiraFilter,
@@ -109,12 +112,10 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
 
     const preferredProviders = normalizeVisibleTaskProviders(settings.visibleTaskProviders)
     const linearIsConnected = hydration.linearConnected
-    const availableProviders = filterMobileTaskProviders(
-      filterAvailableTaskProviders(preferredProviders, {
-        gitlabInstalled: hydration.glabInstalled,
-        linearConnected: linearIsConnected
-      })
-    )
+    const availableProviders = filterAvailableTaskProviders(preferredProviders, {
+      gitlabInstalled: hydration.glabInstalled,
+      linearConnected: linearIsConnected
+    })
     const nextVisibleProviders =
       preferredProviders.includes('linear') && !availableProviders.includes('linear')
         ? [...availableProviders, 'linear' as const]
@@ -153,6 +154,9 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
     if (kept.hydration && !viewShownRef.current) {
       if (kept.jira) {
         setJiraConnection(kept.jira)
+      }
+      if (kept.clickup) {
+        setClickUpConnection(kept.clickup)
       }
       applyView(kept.hydration)
     }
@@ -197,6 +201,7 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
       setShowLinearTeamPicker(false)
       setShowLinearDisplayPicker(false)
       setShowLinearConnect(false)
+      closeClickUpOverlays()
       setShowGitHubKindPicker(false)
       setShowGitHubPresetPicker(false)
       setShowGitLabViewPicker(false)
@@ -231,6 +236,7 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
     setShowLinearTeamPicker(false)
     setShowLinearDisplayPicker(false)
     setShowLinearConnect(false)
+    closeClickUpOverlays()
     setShowGitHubKindPicker(false)
     setShowGitHubPresetPicker(false)
     setShowGitLabViewPicker(false)
@@ -269,6 +275,9 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
       if (kept.jira) {
         setJiraConnection(kept.jira)
       }
+      if (kept.clickup) {
+        setClickUpConnection(kept.clickup)
+      }
       applyHydration(kept.hydration)
       applied = kept.hydration
     } else {
@@ -292,6 +301,7 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
         setShowLinearTeamPicker(false)
         setShowLinearDisplayPicker(false)
         setShowLinearConnect(false)
+        closeClickUpOverlays()
         setShowGitHubKindPicker(false)
         setShowGitHubPresetPicker(false)
         setShowGitLabViewPicker(false)
@@ -324,13 +334,21 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
       }
       setTasksSupportState({ kind: 'supported', client })
       setError('')
-      // Jira is advisory and must not delay the other providers.
+      // Jira and ClickUp are advisory and must not delay the other providers.
       const jiraRequestId = ++jiraStatusRequestIdRef.current
       void readTaskJiraStatus(queryClient, hostId, client)
         .then((connection) => {
           if (!stale && jiraStatusRequestIdRef.current === jiraRequestId) {
             // Unchanged keeps its identity, so the list read it feeds is not restarted.
             setJiraConnection((current) => replaceEqualDeep(current, connection))
+          }
+        })
+        .catch(() => {})
+      const clickupRequestId = ++clickupStatusRequestIdRef.current
+      void readTaskClickUpStatus(queryClient, hostId, client)
+        .then((connection) => {
+          if (!stale && clickupStatusRequestIdRef.current === clickupRequestId) {
+            setClickUpConnection((current) => replaceEqualDeep(current, connection))
           }
         })
         .catch(() => {})

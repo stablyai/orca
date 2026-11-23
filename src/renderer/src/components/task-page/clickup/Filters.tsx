@@ -1,10 +1,12 @@
 import { LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { shouldSuppressEnterSubmit } from '@/lib/workspace/creation/new-workspace-enter-guard'
+import { isClickUpStatusClosed } from '../../../../../shared/clickup/clickup-task-filter'
 import type { ClickUpTaskScope } from '../../../../../shared/clickup/clickup-types'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { safeClickUpColor } from './listing/clickup-task-presentation'
@@ -35,27 +37,38 @@ export function TaskPageClickUpFilters({
     { id: 'all', label: t('taskProviders.clickup.scopeAll', 'All') }
   ]
   const selectedStatuses = clickupFilter.statuses ?? []
+  const closedStatusNames = new Set(
+    clickupKnownStatuses.filter(isClickUpStatusClosed).map((status) => status.name)
+  )
+  const offeredStatuses = clickupFilter.includeClosed
+    ? clickupKnownStatuses
+    : clickupKnownStatuses.filter((status) => !closedStatusNames.has(status.name))
   // Why: a selected status stays toggleable even when the current results no longer include it.
   const statusChips = [
-    ...clickupKnownStatuses,
+    ...offeredStatuses,
     ...selectedStatuses
-      .filter((name) => !clickupKnownStatuses.some((status) => status.name === name))
+      .filter((name) => !offeredStatuses.some((status) => status.name === name))
       .map((name) => ({ name, color: '' }))
   ]
-  const toggleStatus = (name: string): void =>
+  const withStatuses = (
+    current: typeof clickupFilter,
+    statuses: string[]
+  ): typeof clickupFilter => ({
+    scope: current.scope,
+    includeClosed: current.includeClosed,
+    ...(statuses.length > 0 ? { statuses } : {})
+  })
+  // Why: an open-only list cannot hold a done status, so keeping it selected would show nothing.
+  const toggleIncludeClosed = (): void =>
     setClickUpFilter((current) => {
-      const active = current.statuses ?? []
-      const next = active.includes(name)
-        ? active.filter((entry) => entry !== name)
-        : [...active, name]
-      return {
-        scope: current.scope,
-        includeClosed: current.includeClosed,
-        ...(next.length > 0 ? { statuses: next } : {})
-      }
+      const includeClosed = !current.includeClosed
+      const statuses = (current.statuses ?? []).filter(
+        (name) => includeClosed || !closedStatusNames.has(name)
+      )
+      return { ...withStatuses(current, statuses), includeClosed }
     })
   return (
-    <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 pt-2 pb-2 shadow-sm">
+    <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 pt-2 pb-0 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           {scopes.map((scope) => (
@@ -69,16 +82,14 @@ export function TaskPageClickUpFilters({
               {scope.label}
             </button>
           ))}
-          <Button
-            variant={clickupFilter.includeClosed ? 'secondary' : 'ghost'}
-            size="sm"
+          <button
+            type="button"
             aria-pressed={clickupFilter.includeClosed}
-            onClick={() =>
-              setClickUpFilter((current) => ({ ...current, includeClosed: !current.includeClosed }))
-            }
+            onClick={toggleIncludeClosed}
+            className={cn(CHIP_CLASS, clickupFilter.includeClosed ? CHIP_ACTIVE : CHIP_IDLE)}
           >
             {t('taskProviders.clickup.includeClosed', 'Include closed')}
-          </Button>
+          </button>
         </div>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -102,36 +113,30 @@ export function TaskPageClickUpFilters({
         </Tooltip>
       </div>
       {statusChips.length > 0 ? (
-        <div
-          role="group"
+        <ToggleGroup
+          type="multiple"
+          variant="segmented"
+          size="xs"
+          spacing={1}
+          value={selectedStatuses}
           aria-label={t('taskProviders.clickup.statusFilter', 'Filter by status')}
-          className="mt-2 flex flex-wrap items-center gap-1.5"
+          onValueChange={(next) => setClickUpFilter((current) => withStatuses(current, next))}
+          className="mt-3 flex-wrap"
         >
           {statusChips.map((status) => {
-            const active = selectedStatuses.includes(status.name)
             const color = safeClickUpColor(status.color)
             return (
-              <button
-                key={status.name}
-                type="button"
-                aria-pressed={active}
-                onClick={() => toggleStatus(status.name)}
-                className={cn(
-                  'inline-flex max-w-[200px] items-center gap-1.5',
-                  CHIP_CLASS,
-                  active ? CHIP_ACTIVE : CHIP_IDLE
-                )}
-              >
+              <ToggleGroupItem key={status.name} value={status.name} className="max-w-[200px]">
                 <span
                   aria-hidden
                   className="size-2 shrink-0 rounded-full bg-muted-foreground/60"
                   style={color ? { backgroundColor: color } : undefined}
                 />
                 <span className="truncate">{status.name}</span>
-              </button>
+              </ToggleGroupItem>
             )
           })}
-        </div>
+        </ToggleGroup>
       ) : null}
       <div className="mt-3 flex items-center gap-3">
         <div className="relative min-w-[320px] flex-1">
@@ -159,6 +164,7 @@ export function TaskPageClickUpFilters({
             density="compact"
             inset="leadingIcon"
             adornment="trailing"
+            className="h-8"
           />
           {clickupSearchInput || appliedClickUpSearch ? (
             <button

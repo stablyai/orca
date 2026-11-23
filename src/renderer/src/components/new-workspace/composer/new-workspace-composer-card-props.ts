@@ -14,6 +14,7 @@ import type { SmartNameMode } from '../../../../../shared/new-workspace/smart-wo
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/name-field/smart-workspace-name-field-model'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab/gitlab-types'
+import type { ClickUpTask } from '../../../../../shared/clickup/clickup-types'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { SetupAgentStartupPolicy } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
@@ -97,6 +98,8 @@ export type NewWorkspaceComposerCardProps = {
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   onSmartJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
   onOpenJiraSettings?: () => void
+  onSmartClickUpTaskSelect?: (task: ClickUpTask, sourceContext: TaskSourceContext) => void
+  onOpenClickUpSettings?: () => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
   reuseEligibleBranch?: string | null
@@ -109,6 +112,7 @@ export type NewWorkspaceComposerCardProps = {
   onCreateMultipleChange?: (next: boolean) => void
   smartNameGitHubSourceContext?: TaskSourceContext | null
   smartNameJiraSourceContext?: TaskSourceContext | null
+  smartNameClickUpSourceContext?: TaskSourceContext | null
   forkPushWarning: string | null
   detectedAgentIds: Set<TuiAgent> | null
   onOpenAgentSettings: (invoker: HTMLButtonElement) => void

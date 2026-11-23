@@ -1,5 +1,4 @@
 import { optionalSettingsRead } from '../../../settings/mobile-settings-read-operations'
-import { filterMobileTaskProviders } from '../../../tasks/screen-state/mobile-supported-task-providers'
 import { useCallback, useEffect, useState } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../../../src/shared/workspace-setup/orca-yaml-hook-types'
 import type { RpcAcceptedResult } from '../../../transport/rpc/rpc-accepted-result'
@@ -149,12 +148,10 @@ export function useNewWorkspaceRuntimeContext(
         readProbeMember(settledValue(linearRes, taskLinearStatusRead.interpret), 'connected') ===
         true
       const visibleProviders = normalizeVisibleTaskProviders(settingsValue?.visibleTaskProviders)
-      const availableProviders = filterMobileTaskProviders(
-        filterAvailableTaskProviders(visibleProviders, {
-          gitlabInstalled: glabInstalled,
-          linearConnected
-        })
-      ).filter((provider) => visibleProviders.includes(provider))
+      const availableProviders = filterAvailableTaskProviders(visibleProviders, {
+        gitlabInstalled: glabInstalled,
+        linearConnected
+      }).filter((provider) => visibleProviders.includes(provider))
       publish({ availableProviders })
       const [jiraRes] = await jiraProbe
       if (!stale) {

@@ -25,7 +25,12 @@ export const REQUIRED_SCHEDULES = [
 // cutover all end these before their replies arrive.
 const SIBLING_INTERRUPTION_LATE_REPLIES: Readonly<Record<string, readonly string[]>> = {
   'settings-workspace-context-fulfilled': ['preflight.check#1', 'linear.status#1', 'jira.status#1'],
-  'settings-task-hydration-fulfilled': ['preflight.check#1', 'linear.status#1', 'jira.status#1']
+  'settings-task-hydration-fulfilled': [
+    'preflight.check#1',
+    'linear.status#1',
+    'jira.status#1',
+    'clickup.status#1'
+  ]
 }
 
 export function siblingSchedules(

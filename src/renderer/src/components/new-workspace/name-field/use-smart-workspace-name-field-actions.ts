@@ -52,6 +52,7 @@ export function useSmartWorkspaceNameFieldActions(
     onGitHubItemSelect,
     onGitLabItemSelect,
     onJiraIssueSelect,
+    onClickUpTaskSelect,
     onLinearIssueSelect,
     onValueChange,
     setOpen,
@@ -101,6 +102,18 @@ export function useSmartWorkspaceNameFieldActions(
           return
         }
         onJiraIssueSelect?.(row.issue, sourceContext)
+      } else if (row.kind === 'clickup') {
+        const sourceContext = resolveRow(row)?.taskSourceContext
+        if (!sourceContext) {
+          toast.error(
+            translate(
+              'taskProviders.clickup.linkSourceUnavailable',
+              'Couldn’t link this ClickUp task. Reconnect ClickUp, then try again.'
+            )
+          )
+          return
+        }
+        onClickUpTaskSelect?.(row.task, sourceContext)
       } else {
         onLinearIssueSelect(row.issue)
       }
@@ -112,6 +125,7 @@ export function useSmartWorkspaceNameFieldActions(
       onGitHubItemSelect,
       onGitLabItemSelect,
       onJiraIssueSelect,
+      onClickUpTaskSelect,
       onLinearIssueSelect,
       onValueChange,
       setOpen,

@@ -1,5 +1,5 @@
 import { isRecord } from '../agent-status/child-work/agent-status-child-work-value-guards'
-import type { ClickUpTaskListFilter } from './clickup-types'
+import type { ClickUpStatusOption, ClickUpTaskListFilter } from './clickup-types'
 
 const MAX_STATUS_FILTERS = 50
 const MAX_STATUS_NAME_LENGTH = 200
@@ -30,4 +30,9 @@ export function normalizeClickUpPage(value: unknown): number {
     value <= MAX_PAGE_INDEX
     ? value
     : 0
+}
+
+/** ClickUp's `include_closed=false` drops only `closed` statuses; `done` ones must be dropped here. */
+export function isClickUpStatusClosed(status: Pick<ClickUpStatusOption, 'type'>): boolean {
+  return status.type === 'done' || status.type === 'closed'
 }

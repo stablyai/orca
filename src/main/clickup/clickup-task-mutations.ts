@@ -1,3 +1,4 @@
+import { parseClickUpTaskReference } from '../../shared/clickup/clickup-task-reference'
 import { taskProviderFailure } from '../../shared/work-items/task-provider-failure'
 import type {
   ClickUpCommentResult,
@@ -7,7 +8,6 @@ import type {
 import { clickupRequest } from './authenticated-request'
 import { isClickUpAuthError } from './clickup-api-error'
 import { withClickUpContext } from './client'
-import { parseClickUpTaskReference } from './clickup-task-search-query'
 import { taskEndpoint } from './clickup-task-queries'
 
 type MutationFailure = ReturnType<typeof taskProviderFailure>

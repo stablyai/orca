@@ -178,6 +178,8 @@ export function settingsMountAdapters(
         connState: 'connected',
         hostId: 'host-1',
         jiraStatusRequestIdRef: { current: 0 },
+        clickupStatusRequestIdRef: { current: 0 },
+        closeClickUpOverlays: () => {},
         defaultLinearTeamSelectionRef: { current: null },
         taskResumeRef: { current: {} },
         runtimeTaskSettings: {},

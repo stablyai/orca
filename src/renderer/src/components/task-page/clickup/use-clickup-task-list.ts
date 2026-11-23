@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { taskProviderErrorText } from '@/lib/work-items/task-provider-error-copy'
 import { useAppStore } from '@/store/index'
+import { withBusyFlag } from './clickup-busy-flag'
 import {
   clickupListCacheKey,
   clickupSearchCacheKey
@@ -148,17 +149,16 @@ export function useClickUpTaskList({ enabled, sourceContext, filter, query }: Cl
     if (nextPage === null || loadingMore) {
       return
     }
-    setLoadingMore(true)
     try {
-      const page = await listClickUpTasks({ filter, page: nextPage }, { sourceContext })
+      const page = await withBusyFlag(setLoadingMore, () =>
+        listClickUpTasks({ filter, page: nextPage }, { sourceContext })
+      )
       setLoaded((current) =>
         current.key === listKey ? { key: listKey, pages: current.pages + 1 } : current
       )
       rememberStatuses(page.tasks)
     } catch (error) {
       toast.error(errorText(error))
-    } finally {
-      setLoadingMore(false)
     }
   }, [filter, listClickUpTasks, listKey, loadingMore, nextPage, rememberStatuses, sourceContext])
 

@@ -35,7 +35,8 @@ function ClickUpTaskWorkspaceBody({
   const { displayed } = detail
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
-      <div className="flex-none border-b border-border/50 bg-muted/30 px-4 py-3">
+      {/* Why: the sheet spans the window top, so inset the actions below the fixed Windows/Linux controls overlay. */}
+      <div className="flex-none border-b border-border/50 bg-muted/30 py-3 pl-4 pr-[max(1rem,var(--window-controls-width,0px))]">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">

@@ -1,5 +1,5 @@
 import { resolveWorkItemSourceRow } from './work-item-source-selection'
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useId, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { getJiraIssueSearchQuery } from '../../../../../shared/new-workspace/smart-workspace-source-results'
 import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../../../shared/new-workspace/smart-workspace-source-query'
@@ -13,10 +13,13 @@ import { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
 import { useSmartWorkspaceGithubSearch } from './use-smart-workspace-github-search'
 import { useSmartWorkspaceGitlabSearch } from './use-smart-workspace-gitlab-search'
 import { useWorkItemSourcePresentation } from './use-work-item-source-presentation'
+import { useClickUpTaskSearch } from './use-clickup-task-search'
+import { useClickUpUrlSource } from './use-clickup-url-source'
 import { useSmartWorkspaceSecondarySearches } from './use-smart-workspace-secondary-searches'
 
 export function useWorkItemSourceSearch({
   jiraSourceContext = null,
+  clickupSourceContext = null,
   disabled = false,
   textOnly = false,
   branchesEnabled = true,
@@ -30,6 +33,7 @@ export function useWorkItemSourceSearch({
   const normalizedProps: NormalizedWorkItemSourceSearchProps = {
     ...props,
     jiraSourceContext,
+    clickupSourceContext,
     disabled,
     textOnly,
     branchesEnabled,
@@ -63,8 +67,30 @@ export function useWorkItemSourceSearch({
     const timer = window.setTimeout(() => setLinearUrlLoadingFeedbackQuery(linearQuery), 200)
     return () => window.clearTimeout(timer)
   }, [linearLoading, setLinearUrlLoadingFeedbackQuery, linearQuery, linearUrlIntentOwnsInput])
+  const clickupUrlSource = useClickUpUrlSource({
+    value: foundation.value,
+    enabled:
+      !disabled &&
+      !textOnly &&
+      (foundation.mode === 'smart' || foundation.mode === 'clickup') &&
+      !props.sourceSelected,
+    sourceContext: clickupSourceContext,
+    connection: foundation.clickupConnection
+  })
+  const clickupSearch = useClickUpTaskSearch({
+    enabled:
+      !disabled &&
+      !textOnly &&
+      foundation.mode === 'clickup' &&
+      foundation.clickupConnection.status?.connected === true &&
+      !clickupUrlSource.intent &&
+      sourceQueryWithinLimit,
+    sourceContext: clickupSourceContext,
+    query: foundation.debouncedQuery
+  })
   const shouldQueryGithub =
     sourceQueryWithinLimit &&
+    !clickupUrlSource.intent &&
     !repoBackedSourcesDisabled &&
     !foundation.jiraSource.intent &&
     !linearUrlIntentOwnsInput &&
@@ -73,6 +99,7 @@ export function useWorkItemSourceSearch({
     (foundation.mode === 'smart' || foundation.mode === 'github')
   const shouldQueryLinear =
     linearQueryWithinLimit &&
+    !clickupUrlSource.intent &&
     !foundation.jiraSource.intent &&
     !textOnly &&
     foundation.linearAvailable &&
@@ -104,6 +131,7 @@ export function useWorkItemSourceSearch({
   })
   const shouldQueryGitlab =
     sourceQueryWithinLimit &&
+    !clickupUrlSource.intent &&
     !repoBackedSourcesDisabled &&
     !foundation.jiraSource.intent &&
     !linearUrlIntentOwnsInput &&
@@ -116,11 +144,12 @@ export function useWorkItemSourceSearch({
     sourceQueryWithinLimit,
     shouldQueryGitlab
   })
-  const presentation = useWorkItemSourcePresentation(foundation, {
-    linearUrlIntent,
-    linearUrlIntentOwnsInput,
-    linearQuery
-  })
+  const clickupStatusId = useId()
+  const presentation = useWorkItemSourcePresentation(
+    foundation,
+    { url: clickupUrlSource, tasks: clickupSearch.tasks, loading: clickupSearch.loading },
+    { linearUrlIntent, linearUrlIntentOwnsInput, linearQuery }
+  )
   const resolveRow = useCallback(
     (row: (typeof presentation.rows)[number]) =>
       resolveWorkItemSourceRow(
@@ -129,9 +158,11 @@ export function useWorkItemSourceSearch({
           github: foundation.githubSourceContext,
           gitlab: foundation.gitlabSourceContext ?? null,
           linear: foundation.linearSourceContext,
-          jira: foundation.jiraSource.boundSourceContext ?? foundation.jiraSourceContext
+          jira: foundation.jiraSource.boundSourceContext ?? foundation.jiraSourceContext,
+          clickup: clickupSourceContext
         },
-        foundation.jiraConnectionStatus?.sites
+        foundation.jiraConnectionStatus?.sites,
+        foundation.clickupConnection.status?.workspaces
       ),
     [
       foundation.githubSourceContext,
@@ -139,12 +170,17 @@ export function useWorkItemSourceSearch({
       foundation.linearSourceContext,
       foundation.jiraSource.boundSourceContext,
       foundation.jiraSourceContext,
-      foundation.jiraConnectionStatus?.sites
+      foundation.jiraConnectionStatus?.sites,
+      foundation.clickupConnection.status?.workspaces,
+      clickupSourceContext
     ]
   )
   return {
     ...foundation,
     ...presentation,
+    clickupUrlSource,
+    clickupReadError: clickupSearch.error,
+    clickupStatusId,
     resolveRow,
     linearStatusId: foundation.linearStatusId
   }

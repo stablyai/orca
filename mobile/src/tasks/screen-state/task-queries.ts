@@ -11,6 +11,12 @@ import {
 } from '../providers/jira/jira-mobile-connection'
 import { jiraConnectionStatusProbe } from '../providers/jira/mobile-jira-operations'
 import {
+  readClickUpConnectionProbeReply,
+  type MobileClickUpConnection
+} from '../providers/clickup/clickup-mobile-connection'
+import { clickUpConnectionStatusProbe } from '../providers/clickup/mobile-clickup-operations'
+import { clickUpFilterKey } from '../providers/clickup/mobile-clickup-filters'
+import {
   taskLinearStatusRead,
   taskPreflightRead,
   taskUiStateRead
@@ -26,6 +32,7 @@ import type { ProviderLoadActionsModel } from '../task-list/use-mobile-tasks-pro
 import {
   NO_TASK_INPUT as NO_INPUT,
   TASKS_TARGET,
+  taskClickUpStatusStorage,
   taskHydrationStorage,
   taskJiraStatusStorage,
   taskListStorage
@@ -82,16 +89,36 @@ export const taskJiraStatusQuery = defineHostQuery<typeof NO_INPUT, MobileJiraCo
   retry: false
 })
 
-/** The hydration and Jira status last read for the host; `stored` when it is an earlier launch's copy, which only draws the view. */
+// ClickUp is advisory like Jira: its own read, so it never holds up the other providers.
+export const taskClickUpStatusQuery = defineHostQuery<typeof NO_INPUT, MobileClickUpConnection>({
+  ...taskClickUpStatusStorage,
+  fetch: (client) =>
+    clickUpConnectionStatusProbe
+      .request(client)
+      .catch(() => null)
+      .then(readClickUpConnectionProbeReply),
+  gcTime: 10 * 60_000,
+  retry: false
+})
+
+/** The hydration and Jira and ClickUp status last read for the host; `stored` when it is an earlier launch's copy, which only draws the view. */
 export function readKeptTaskHydration(
   queryClient: QueryClient,
   hostId: string
-): { hydration?: TaskHydration; jira?: MobileJiraConnection; stored: boolean } {
+): {
+  hydration?: TaskHydration
+  jira?: MobileJiraConnection
+  clickup?: MobileClickUpConnection
+  stored: boolean
+} {
   const hydrationKey = hostQueryKey(hostId, taskHydrationQuery.family, TASKS_TARGET, NO_INPUT)
   return {
     hydration: queryClient.getQueryData(hydrationKey),
     jira: queryClient.getQueryData(
       hostQueryKey(hostId, taskJiraStatusQuery.family, TASKS_TARGET, NO_INPUT)
+    ),
+    clickup: queryClient.getQueryData(
+      hostQueryKey(hostId, taskClickUpStatusQuery.family, TASKS_TARGET, NO_INPUT)
     ),
     stored: holdsRestoredHostQueryData(queryClient, hashKey(hydrationKey))
   }
@@ -113,6 +140,17 @@ export function readTaskJiraStatus(queryClient: QueryClient, hostId: string, cli
   return readHostQueryLive(
     queryClient,
     taskJiraStatusQuery,
+    { hostId, client },
+    TASKS_TARGET,
+    NO_INPUT,
+    { replace: true }
+  )
+}
+
+export function readTaskClickUpStatus(queryClient: QueryClient, hostId: string, client: RpcClient) {
+  return readHostQueryLive(
+    queryClient,
+    taskClickUpStatusQuery,
     { hostId, client },
     TASKS_TARGET,
     NO_INPUT,
@@ -144,7 +182,7 @@ export function patchTaskHydration(
 
 // The list a filter showed last, so going back to that filter paints it at once.
 export type TaskListSnapshot = (
-  | { items: TaskItem[]; github?: undefined }
+  | { items: TaskItem[]; github?: undefined; clickup?: undefined }
   // First GitHub page's banners and page count, so restored rows page and warn as they did.
   | {
       items: Extract<TaskItem, { provider: 'github' }>[]
@@ -154,6 +192,13 @@ export type TaskListSnapshot = (
         sourceFallbacks: GitHubIssueSourceFallback[]
         countedTotalPages: number | null
       }
+      clickup?: undefined
+    }
+  // The loaded ClickUp pages and where the host's next one starts, so a restored list keeps paging.
+  | {
+      items: Extract<TaskItem, { provider: 'clickup' }>[]
+      github?: undefined
+      clickup: { nextPage: number | null }
     }
 ) & {
   // Some repos failed to read; shown with the rows.
@@ -182,6 +227,8 @@ export function readTaskList(
 type TaskListInput = Pick<
   ProviderLoadActionsModel,
   | 'appliedQuery'
+  | 'clickupConnection'
+  | 'clickupFilter'
   | 'githubKind'
   | 'githubMode'
   | 'gitlabFilter'
@@ -229,8 +276,14 @@ export function taskListParams(input: TaskListInput, repoKey: string): HostQuery
             query
           }
         : null
-    // Mobile has no ClickUp list (see filterMobileTaskProviders), so there is no read to key.
     case 'clickup':
-      return null
+      return input.clickupConnection.connected
+        ? {
+            provider,
+            workspace: input.clickupConnection.selectedWorkspaceId,
+            filter: clickUpFilterKey(input.clickupFilter),
+            query
+          }
+        : null
   }
 }

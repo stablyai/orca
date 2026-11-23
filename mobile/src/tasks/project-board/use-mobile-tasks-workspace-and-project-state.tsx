@@ -39,10 +39,10 @@ import type {
 } from '../mobile-tasks-project-workspace-types'
 
 export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateModel) {
-  // Jira/Linear issues have no repo; ask for a target instead of choosing the first.
+  // Jira, Linear and ClickUp items have no repo; ask for a target instead of choosing the first.
   const [workspaceRepoPickerItem, setWorkspaceRepoPickerItem] = useState<Extract<
     TaskItem,
-    { provider: 'linear' | 'jira' }
+    { provider: 'linear' | 'jira' | 'clickup' }
   > | null>(null)
   const [workspaceCreateDraft, setWorkspaceCreateDraft] = useState<WorkspaceCreateDraft | null>(
     null

@@ -6,6 +6,7 @@ import type {
 import type { GitPushTarget as WorkspaceCreateGitPushTarget } from '../../../../src/shared/worktree/types'
 import type { RpcSendParams } from '../../../../src/shared/rpc-contract/rpc-send-params'
 import {
+  buildClickUpWorkspaceSource,
   buildJiraWorkspaceSource,
   getWorkspaceSourceName
 } from '../../../../src/shared/new-workspace/workspace-source'
@@ -59,11 +60,21 @@ type WorkspaceCreateJiraItem = {
   }
 }
 
+type WorkspaceCreateClickUpItem = {
+  provider: 'clickup'
+  source: {
+    id: string
+    name: string
+    url: string
+  }
+}
+
 export type WorkspaceCreateTaskItem =
   | WorkspaceCreateGitHubItem
   | WorkspaceCreateGitLabItem
   | WorkspaceCreateLinearItem
   | WorkspaceCreateJiraItem
+  | WorkspaceCreateClickUpItem
 
 export type WorkspaceCreateParams = RpcSendParams<'worktree.create'>
 
@@ -126,7 +137,9 @@ export function buildTaskWorkspaceCreateParams(args: {
         })
       : item.provider === 'jira'
         ? getWorkspaceSourceName(buildJiraWorkspaceSource(item.source))
-        : getWorkspaceSourceName({ provider: item.provider, ...item.source })
+        : item.provider === 'clickup'
+          ? getWorkspaceSourceName(buildClickUpWorkspaceSource(item.source))
+          : getWorkspaceSourceName({ provider: item.provider, ...item.source })
   const displayName = nameIsAutoManaged
     ? { displayName: sourceName.displayName, displayNameKind: 'generated' as const }
     : workspaceName?.trim()
@@ -180,6 +193,19 @@ export function buildTaskWorkspaceCreateParams(args: {
       }),
       ...displayName,
       linkedWorkItem: buildJiraWorkspaceSource(item.source),
+      ...common
+    }
+  }
+
+  if (item.provider === 'clickup') {
+    return {
+      repo: `id:${targetRepoId}`,
+      name: resolveWorkspaceCreateName({
+        draft: workspaceName,
+        fallback: `cu-${item.source.id.toLowerCase()}`
+      }),
+      ...displayName,
+      linkedWorkItem: buildClickUpWorkspaceSource(item.source),
       ...common
     }
   }

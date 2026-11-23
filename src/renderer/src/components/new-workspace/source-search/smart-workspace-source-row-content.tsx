@@ -47,6 +47,9 @@ export function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
   if (row.kind === 'jira' || row.kind === 'jira-account') {
     return <JiraIcon className="size-3.5 shrink-0 text-muted-foreground" />
   }
+  if (row.kind === 'clickup') {
+    return <ClickUpIcon className="size-3.5 shrink-0 text-muted-foreground" />
+  }
   return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
 }
 
@@ -162,6 +165,14 @@ export function RowLabel({
       <span className="min-w-0 truncate">
         <span className="font-medium text-foreground">{row.site.displayName}</span>
         {row.site.email ? ` — ${row.site.email}` : ''}
+      </span>
+    )
+  }
+  if (row.kind === 'clickup') {
+    return (
+      <span className="min-w-0 truncate">
+        <span className="font-medium text-foreground">{row.task.customId ?? row.task.id}</span>{' '}
+        {row.task.name}
       </span>
     )
   }

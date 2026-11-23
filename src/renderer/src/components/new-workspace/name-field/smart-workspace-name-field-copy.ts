@@ -106,10 +106,15 @@ export function getSmartWorkspaceNameFieldCopy(
                     'auto.components.new.workspace.SmartWorkspaceNameField.searchJira',
                     'Search Jira issues or paste an issue URL'
                   )
-                : t(
-                    'auto.components.new.workspace.SmartWorkspaceNameField.workspaceName',
-                    'Workspace name'
-                  )
+                : mode === 'clickup'
+                  ? t(
+                      'auto.components.new.workspace.SmartWorkspaceNameField.searchClickUp',
+                      'Search ClickUp tasks or paste a task URL'
+                    )
+                  : t(
+                      'auto.components.new.workspace.SmartWorkspaceNameField.workspaceName',
+                      'Workspace name'
+                    )
 
   return {
     crossRepoSwitchTitle,

@@ -1,8 +1,9 @@
-import { parseJiraIssueUrl, JIRA_ISSUE_KEY_PATTERN } from '../jira/jira-issue-url'
-import { parseLinearIssueInput, parseLinearIssueUrlIntent } from '../linear/links'
+import { JIRA_ISSUE_KEY_PATTERN } from '../jira/jira-issue-url'
+import { parseLinearIssueInput } from '../linear/links'
 import { getTaskSourceCacheScope } from '../work-items/task-source-context'
 import type { WorkspaceAttachment } from '../worktree/types'
 import { getPublicForgeProviderForHost } from '../git/remotes/public-forge-host'
+import { parseTaskTrackerReferenceUrl } from './workspace-reference-task-tracker-url'
 
 export type WorkspaceReferenceQuery =
   | { kind: 'url'; identity: string }
@@ -88,34 +89,9 @@ function parseReferenceRoute(
   url: URL,
   providerHint?: WorkspaceAttachment['provider']
 ): WorkspaceAttachment {
-  const linear = parseLinearIssueUrlIntent(url.href)
-  if (linear) {
-    url.pathname = `/${linear.organizationUrlKey.toLowerCase()}/issue/${linear.identifier}`
-    return {
-      provider: 'linear',
-      type: 'issue',
-      number: 0,
-      identifier: linear.identifier,
-      linearIdentifier: linear.identifier,
-      linearOrganizationUrlKey: linear.organizationUrlKey.toLowerCase(),
-      url: url.href
-    }
-  }
-  // Git hosts (and Bitbucket Server /repos/ file views) also serve /browse/KEY-1 paths.
-  const jira =
-    (!providerHint || providerHint === 'jira') && !url.pathname.includes('/repos/')
-      ? parseJiraIssueUrl(url.href)
-      : null
-  if (jira) {
-    url.pathname = `${jira.sitePath}/browse/${jira.issueKey}`
-    return {
-      provider: 'jira',
-      type: 'issue',
-      number: 0,
-      identifier: jira.issueKey,
-      jiraIdentifier: jira.issueKey,
-      url: url.href
-    }
+  const taskTracker = parseTaskTrackerReferenceUrl(url, providerHint)
+  if (taskTracker) {
+    return taskTracker
   }
   const gitlab = /^(\/.+)\/-\/(merge_requests|issues)\/(\d+)(?:\/.*)?$/.exec(url.pathname)
   if (gitlab && url.hostname !== 'github.com' && url.hostname !== 'linear.app') {

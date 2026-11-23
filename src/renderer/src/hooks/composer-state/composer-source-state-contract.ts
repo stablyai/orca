@@ -42,11 +42,15 @@ export type ComposerSourceState = {
     ComposerModel,
     | 'handleSmartLinearIssueSelect'
     | 'handleSmartJiraIssueSelect'
+    | 'handleSmartClickUpTaskSelect'
     | 'handleClearSmartNameSelection'
     | 'smartNameSelection'
   >
   composerNavigationActions: Pick<
     ComposerModel,
-    'handleOpenAgentSettings' | 'handleOpenJiraSettings' | 'folderCreateDisabled'
+    | 'handleOpenAgentSettings'
+    | 'handleOpenJiraSettings'
+    | 'handleOpenClickUpSettings'
+    | 'folderCreateDisabled'
   >
 }

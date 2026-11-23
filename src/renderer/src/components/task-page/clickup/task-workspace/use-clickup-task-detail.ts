@@ -17,6 +17,7 @@ import type {
   ClickUpTask
 } from '../../../../../../shared/clickup/clickup-types'
 import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
+import { withBusyFlag } from '../clickup-busy-flag'
 
 type LoadState = { loading: boolean; error: string | null }
 
@@ -101,14 +102,11 @@ export function useClickUpTaskDetail(task: ClickUpTask, sourceContext: TaskSourc
       if (pendingStatus || status.name === displayed.status.name) {
         return
       }
-      setPendingStatus(true)
-      try {
-        const result = await updateClickUpTaskStatus(displayed, status, { sourceContext })
-        if (!result.ok) {
-          toast.error(taskProviderErrorMessage(result))
-        }
-      } finally {
-        setPendingStatus(false)
+      const result = await withBusyFlag(setPendingStatus, () =>
+        updateClickUpTaskStatus(displayed, status, { sourceContext })
+      )
+      if (!result.ok) {
+        toast.error(taskProviderErrorMessage(result))
       }
     },
     [displayed, pendingStatus, sourceContext, updateClickUpTaskStatus]
@@ -128,9 +126,10 @@ export function useClickUpTaskDetail(task: ClickUpTask, sourceContext: TaskSourc
       )
       return
     }
-    setCommentSubmitting(true)
     try {
-      const result = await addClickUpTaskComment(task.id, bodyState.body, { sourceContext })
+      const result = await withBusyFlag(setCommentSubmitting, () =>
+        addClickUpTaskComment(task.id, bodyState.body, { sourceContext })
+      )
       if (result.ok) {
         setCommentDraft('')
       } else {
@@ -138,8 +137,6 @@ export function useClickUpTaskDetail(task: ClickUpTask, sourceContext: TaskSourc
       }
     } catch (error) {
       toast.error(errorText(error))
-    } finally {
-      setCommentSubmitting(false)
     }
   }, [addClickUpTaskComment, commentDraft, commentSubmitting, sourceContext, task.id])
 

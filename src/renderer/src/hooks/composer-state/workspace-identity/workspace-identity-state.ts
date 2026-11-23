@@ -23,6 +23,7 @@ import {
   getWorkspaceSourceProvider,
   isGitLabIssueUrl
 } from '../../../../../shared/new-workspace/workspace-source'
+import { isBlockingClickUpUrlIntent } from '../../../../../shared/new-workspace/smart-workspace-clickup-source-rows'
 import {
   type SmartNameMode,
   isBlockingJiraUrlIntent
@@ -142,8 +143,11 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
 
   const [smartNameMode, setSmartNameMode] = useState<SmartNameMode>('smart')
 
-  // Why: a pasted Jira URL is not a workspace name yet — block create until it resolves to an issue.
-  const sourceIntentBlocksCreate = !linkedWorkItem && isBlockingJiraUrlIntent(smartNameMode, name)
+  // Why: a pasted Jira or ClickUp URL is not a workspace name yet — block create until it resolves.
+  const sourceIntentBlocksCreate =
+    !linkedWorkItem &&
+    (isBlockingJiraUrlIntent(smartNameMode, name) ||
+      isBlockingClickUpUrlIntent(smartNameMode, name))
 
   const [reuseEligibleBranch, setReuseEligibleBranch] = useState<string | null>(null)
 

@@ -26,6 +26,8 @@ export function SmartWorkspaceSourceResultList({
     | 'setMrStateFilter'
     | 'typedTextActionRow'
     | 'jiraSource'
+    | 'clickupUrlSource'
+    | 'clickupReadError'
     | 'loading'
     | 'searchResultRows'
     | 'linearStatusChecked'
@@ -51,6 +53,8 @@ export function SmartWorkspaceSourceResultList({
     setMrStateFilter,
     typedTextActionRow,
     jiraSource,
+    clickupUrlSource,
+    clickupReadError,
     loading,
     searchResultRows,
     linearStatusChecked,
@@ -63,6 +67,8 @@ export function SmartWorkspaceSourceResultList({
   } = model
   // Why: only the Linear tab speaks for Linear; Smart lists what the other sources return.
   const visibleLinearReadError = mode === 'linear' ? linearReadError : null
+  const visibleClickUpReadError =
+    mode === 'clickup' && !clickupUrlSource.intent ? clickupReadError : null
   const credentialError =
     visibleLinearReadError && isIntegrationCredentialDecryptionError(visibleLinearReadError)
   return (
@@ -132,7 +138,12 @@ export function SmartWorkspaceSourceResultList({
             )}
           </div>
         ) : null}
-        {jiraSource.errorKind ? null : reserveLinearLoadingResults ? (
+        {visibleClickUpReadError && !loading ? (
+          <div role="status" aria-live="polite" className="px-3 py-6 text-center text-xs">
+            <p className="text-muted-foreground">{visibleClickUpReadError}</p>
+          </div>
+        ) : null}
+        {jiraSource.errorKind || clickupUrlSource.errorKind ? null : reserveLinearLoadingResults ? (
           <div
             aria-hidden="true"
             className={cn('space-y-1 p-1', !showLinearUrlLoadingFeedback && 'invisible')}
@@ -153,9 +164,12 @@ export function SmartWorkspaceSourceResultList({
               <div key={index} className="h-8 animate-pulse rounded bg-muted/40" />
             ))}
           </div>
-        ) : searchResultRows.length === 0 && !typedTextActionRow && !visibleLinearReadError ? (
+        ) : searchResultRows.length === 0 &&
+          !typedTextActionRow &&
+          !visibleLinearReadError &&
+          !visibleClickUpReadError ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-            {jiraSource.intent
+            {jiraSource.intent || clickupUrlSource.intent
               ? null
               : mode === 'linear' && linearStatusChecked && !linearStatus.connected
                 ? t(

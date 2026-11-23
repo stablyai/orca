@@ -1759,6 +1759,15 @@
     "smartRailRow": {
       "title": "Smart rail",
       "subtitle": "Shows keys for what your agent is doing"
+    },
+    "clickUpConnectPrompt": {
+      "updateDesktop": "Update Orca on this host",
+      "reconnectOnDesktop": "Reconnect ClickUp on your desktop",
+      "connectOnDesktop": "Connect ClickUp on your desktop",
+      "credentialUnreadable": "ClickUp is saved but unreadable: {{credentialError}}",
+      "lostConnection": "ClickUp was disconnected or rejected the saved token. Add your personal API token again in Orca desktop under Settings → Integrations, then check again.",
+      "connectHint": "Add your ClickUp personal API token in Orca desktop under Settings → Integrations, then check again.",
+      "checkAgain": "Check again"
     }
   },
   "pullRequest": {
@@ -4916,7 +4925,8 @@
       "changeStatus": "Change status",
       "copyLink": "Copy link",
       "startWorkspace": "Start workspace",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "copyClickUpLink": "Copy ClickUp link"
     },
     "itemDetailContent": {
       "pipelineJobs_one": "{{count}} jobs",
@@ -4941,7 +4951,9 @@
       "project": "Project",
       "priority": "Priority",
       "assignees": "Assignees",
-      "loading": "Loading details…"
+      "loading": "Loading details…",
+      "list": "List",
+      "dueDate": "Due date"
     },
     "itemDetailDrawer": {
       "refreshDetails": "Refresh details"
@@ -4993,7 +5005,8 @@
       "jiraStatusFailed": "Failed to read Jira status",
       "connectLinearTitle": "Connect your Linear account",
       "connectLinearMessage": "Browse and start work on your assigned Linear issues directly from Tasks.",
-      "connectLinearButton": "Connect Linear"
+      "connectLinearButton": "Connect Linear",
+      "clickUpStatusFailed": "Failed to read ClickUp status"
     },
     "options": {
       "githubDescription": "Issues and pull requests",
@@ -5047,7 +5060,8 @@
       "myTodosDescription": "Pending GitLab todos",
       "updatedSortDescription": "Newest activity first",
       "repository": "Repository",
-      "repositorySortDescription": "Group by repository, then newest activity"
+      "repositorySortDescription": "Group by repository, then newest activity",
+      "clickupDescription": "Assigned and workspace tasks"
     },
     "projectComments": {
       "comments_one": "{{count}} comment",
@@ -5185,7 +5199,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "Search project view...",
-      "providerPlaceholder": "Search {{provider}} tasks..."
+      "providerPlaceholder": "Search {{provider}} tasks...",
+      "clickUpPlaceholder": "Search by name or ID, or paste a ClickUp task link"
     },
     "workspaceCreateDrawer": {
       "title": "Create Workspace",
@@ -5352,7 +5367,9 @@
     "itemComments": {
       "noComments": "No comments yet",
       "oneComment": "1 comment",
-      "commentCount": "{{commentCount}} comments"
+      "commentCount": "{{commentCount}} comments",
+      "clickUpTask": "ClickUp task",
+      "openInClickUp": "Open in ClickUp"
     },
     "listState": {
       "loading": "Loading tasks…"
@@ -5364,7 +5381,36 @@
     "runtimeHydration": {
       "loadFailed": "Failed to load Tasks settings"
     },
-    "rerunUnsuccessful": "Retry checks"
+    "rerunUnsuccessful": "Retry checks",
+    "clickUpConnection": {
+      "updateHost": "Update Orca on this host to browse ClickUp on mobile."
+    },
+    "clickUp": {
+      "scopeAll": "All",
+      "scopeAssigned": "Assigned to me",
+      "scopeAssignedSubtitle": "Tasks assigned to you",
+      "scopeAllSubtitle": "Every task in the selected Workspace",
+      "closedSection": "Closed tasks",
+      "includeClosed": "Include closed",
+      "includeClosedSubtitle": "Also show done and closed tasks",
+      "statusSection": "Status",
+      "allStatuses": "All statuses",
+      "loadMore": "Load more tasks",
+      "loadMoreLabel": "Load more",
+      "scopeTitle": "ClickUp Tasks",
+      "workspaceTitle": "ClickUp Workspace",
+      "workspaceHostNote": "Also switches the Workspace in Orca on your desktop.",
+      "switchWorkspaceFailed": "Failed to switch Workspace",
+      "changeStatus": "Change Status",
+      "task": "ClickUp task",
+      "loadingStatuses": "Loading statuses...",
+      "noStatuses": "This list has no statuses to choose from",
+      "loadStatusesFailed": "Failed to load statuses",
+      "addCommentFailed": "Failed to add comment",
+      "you": "You",
+      "updateFailed": "Failed to update task",
+      "loadMoreFailed": "Failed to load more ClickUp tasks"
+    }
   },
   "terminal": {
     "webView": {

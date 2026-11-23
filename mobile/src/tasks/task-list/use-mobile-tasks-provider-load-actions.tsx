@@ -1,3 +1,4 @@
+import { replaceEqualDeep } from '@tanstack/react-query'
 import type { ClassifiedError } from '../../../../src/shared/errors/classified-error'
 import { getWorkItemPageErrorTypes } from '../../../../src/shared/github/work-items/work-item-page-errors'
 import type { RuntimeHydrationModel } from '../screen-state/use-mobile-tasks-runtime-hydration'
@@ -5,6 +6,10 @@ import {
   readJiraConnection,
   reconcileJiraConnection
 } from '../providers/jira/jira-mobile-connection'
+import {
+  readClickUpConnection,
+  reconcileClickUpConnection
+} from '../providers/clickup/clickup-mobile-connection'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
   PER_REPO_FETCH_LIMIT,
@@ -53,6 +58,8 @@ export type ProviderLoadActionsInput = Pick<
   | 'linearAccountBindingRef'
   | 'setJiraConnection'
   | 'jiraStatusRequestIdRef'
+  | 'setClickUpConnection'
+  | 'clickupStatusRequestIdRef'
   | 'setLinearConnected'
   | 'setLinearTeams'
   | 'setLinearWorkspaces'
@@ -76,6 +83,8 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     linearAccountBindingRef,
     setJiraConnection,
     jiraStatusRequestIdRef,
+    setClickUpConnection,
+    clickupStatusRequestIdRef,
     setLinearConnected,
     setLinearTeams,
     setLinearWorkspaces,
@@ -95,6 +104,27 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       setJiraConnection((current) => reconcileJiraConnection(current, next))
     }
   }, [client, clientRef, connState, tasksSupported, setJiraConnection, jiraStatusRequestIdRef])
+
+  const refreshClickUpConnection = useCallback(async (): Promise<void> => {
+    if (!client || connState !== 'connected' || !tasksSupported) {
+      return
+    }
+    const requestId = ++clickupStatusRequestIdRef.current
+    const next = await readClickUpConnection(client)
+    if (clientRef.current === client && clickupStatusRequestIdRef.current === requestId) {
+      // Unchanged keeps its identity, so the list read it feeds is not restarted.
+      setClickUpConnection((current) =>
+        replaceEqualDeep(current, reconcileClickUpConnection(current, next))
+      )
+    }
+  }, [
+    client,
+    clientRef,
+    connState,
+    tasksSupported,
+    setClickUpConnection,
+    clickupStatusRequestIdRef
+  ])
 
   const loadLinearContext = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !tasksSupported) {
@@ -283,6 +313,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
   )
   return Object.assign(model, {
     refreshJiraConnection,
+    refreshClickUpConnection,
     loadLinearContext,
     persistLinearTeamSelection,
     fetchGitHubItemsPage,

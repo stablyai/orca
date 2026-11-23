@@ -7,6 +7,7 @@ import { FilterChip } from '../../components/nav-bar/FilterChip'
 import { renderMobileTasksGitHubViewControls } from './mobile-tasks-github-view-controls'
 import { renderMobileTasksLinearViewControls } from '../providers/linear/mobile-tasks-linear-view-controls'
 import { renderMobileTasksJiraViewControls } from '../providers/jira/mobile-tasks-jira-view-controls'
+import { renderMobileTasksClickUpViewControls } from '../providers/clickup/mobile-tasks-clickup-view-controls'
 import { mobileTasksFilterCount } from './mobile-tasks-filter-sheet'
 
 /** The scope dropdowns, then the one Filter chip that opens Filter & display. */
@@ -17,6 +18,7 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
     gitlabFilterLabel,
     gitlabView,
     hostedRepos,
+    clickupConnection,
     jiraConnection,
     linearConnected,
     provider,
@@ -29,7 +31,8 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
   } = model
   if (
     (provider === 'linear' && !linearConnected) ||
-    (provider === 'jira' && !jiraConnection.connected)
+    (provider === 'jira' && !jiraConnection.connected) ||
+    (provider === 'clickup' && !clickupConnection.connected)
   ) {
     return null
   }
@@ -86,6 +89,8 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
       {renderMobileTasksLinearViewControls(model)}
 
       {renderMobileTasksJiraViewControls(model)}
+
+      {renderMobileTasksClickUpViewControls(model)}
 
       <FilterChip
         label={

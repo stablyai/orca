@@ -1,5 +1,6 @@
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { fetchJiraTaskIssues } from '../providers/jira/mobile-jira-task-source'
+import { fetchClickUpTaskPage } from '../providers/clickup/mobile-clickup-task-source'
 import { joinSentences } from '../../../../src/shared/text/sentence-joining'
 import { translate } from '../../i18n/mobile-i18n'
 import { gitlabTodoListRead } from './mobile-task-list-operations'
@@ -14,6 +15,7 @@ import type { TaskItem } from '../mobile-tasks-project-workspace-types'
 import { buildPartialRepositoryNotice } from '../repositories/mobile-tasks-repository-presentation'
 import {
   createGitLabTask,
+  createClickUpTask,
   createGitLabTodoTask,
   createJiraTask,
   createLinearTask,
@@ -27,6 +29,7 @@ import type { ProviderLoadActionsModel } from './use-mobile-tasks-provider-load-
 export type TaskListReadInput = Pick<
   ProviderLoadActionsModel,
   | 'appliedQuery'
+  | 'clickupFilter'
   | 'fetchGitHubItemsPage'
   | 'gitlabFilter'
   | 'gitlabView'
@@ -81,6 +84,14 @@ export async function readTaskListRows(
           ])
         : ''
     }
+  }
+  if (provider === 'clickup') {
+    const { tasks, nextPage } = await fetchClickUpTaskPage(client, {
+      query: appliedQuery,
+      filter: input.clickupFilter,
+      page: 0
+    })
+    return { items: tasks.map(createClickUpTask), clickup: { nextPage } }
   }
   if (provider === 'linear') {
     const normalizedQuery = appliedQuery.trim()

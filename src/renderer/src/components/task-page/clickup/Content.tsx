@@ -76,7 +76,9 @@ export function TaskPageClickUpContent({
     )
   }
 
-  const showEmpty = !clickupLoading && clickupTasks.length === 0 && !clickupError
+  // Why: a page can come back empty once closed tasks are dropped while later pages still hold open ones.
+  const showEmpty =
+    !clickupLoading && clickupTasks.length === 0 && !clickupError && clickupNextPage === null
   return (
     <div className="@container flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
       <div className="flex min-h-10 flex-none flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3 py-1">

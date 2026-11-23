@@ -8,6 +8,7 @@ import { ExternalLink } from 'lucide-react-native'
 import { TextField } from '../../components/composer-input/TextField'
 import { styles, getGitLabPipelineStatusStyle } from '../mobile-tasks-legacy-styles'
 import {
+  commentDate,
   taskKindLabel,
   formatDurationSeconds,
   discussionSummary
@@ -65,6 +66,28 @@ function detailRows(item: ActionableTaskItem, payload: DetailPayload): DetailRow
       rows.push({ label: project, value: payload.projectName })
     }
   }
+  if (payload.provider === 'clickup') {
+    if (payload.assignees.length) {
+      rows.push({
+        label: translate('tasks.itemDetailContent.assignees', 'Assignees'),
+        value: payload.assignees.join(', ')
+      })
+    }
+    if (payload.priorityName) {
+      rows.push({
+        label: translate('tasks.itemDetailContent.priority', 'Priority'),
+        value: payload.priorityName
+      })
+    }
+    rows.push({
+      label: translate('tasks.itemDetailContent.list', 'List'),
+      value: [payload.folderName, payload.listName].filter(Boolean).join(' / ')
+    })
+    const due = commentDate(payload.dueAt)
+    if (due) {
+      rows.push({ label: translate('tasks.itemDetailContent.dueDate', 'Due date'), value: due })
+    }
+  }
   if (
     (payload.provider === 'github' || payload.provider === 'gitlab') &&
     payload.assignees.length
@@ -80,6 +103,7 @@ function detailRows(item: ActionableTaskItem, payload: DetailPayload): DetailRow
 export function renderMobileTasksItemDetailContent(model: ConnectionPresentationModel) {
   const {
     actionItem,
+    addClickUpComment,
     addHostedItemComment,
     addLinearComment,
     commentSendNotice,
@@ -346,6 +370,14 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
               onChangeText: setItemCommentDraft,
               disabled: mutatingStatus,
               onSubmit: () => void addHostedItemComment(actionItem)
+            })
+          : null}
+        {detailPayload.provider === 'clickup' && actionItem.provider === 'clickup'
+          ? renderCommentComposer({
+              value: itemCommentDraft,
+              onChangeText: setItemCommentDraft,
+              disabled: mutatingStatus,
+              onSubmit: () => void addClickUpComment(actionItem)
             })
           : null}
         {detailPayload.provider === 'linear' && actionItem.provider === 'linear'

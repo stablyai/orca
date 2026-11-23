@@ -78,6 +78,11 @@ import {
   renderMobileTasksProjectDetailDrawer
 } from './project-board/mobile-tasks-project-detail-drawer'
 import { MobileTasksItemDetailDrawer } from './item-detail/mobile-tasks-item-detail-drawer'
+import {
+  renderMobileTasksClickUpScopePicker,
+  renderMobileTasksClickUpStatusPicker,
+  renderMobileTasksClickUpWorkspacePicker
+} from './providers/clickup/mobile-tasks-clickup-pickers'
 
 export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentationModel }) {
   const colorScheme = useMobileColorScheme()
@@ -231,6 +236,9 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
         {renderMobileTasksLinearFilterPicker(model)}
         {renderMobileTasksJiraFilterPicker(model)}
         {renderMobileTasksJiraSitePicker(model)}
+        {renderMobileTasksClickUpScopePicker(model)}
+        {renderMobileTasksClickUpWorkspacePicker(model)}
+        {renderMobileTasksClickUpStatusPicker(model)}
 
         {renderMobileTasksLinearWorkspacePicker(model)}
 

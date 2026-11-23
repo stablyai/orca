@@ -8,6 +8,7 @@ import {
   parseBoundedSmartWorkspaceLinearIssueUrlIntent,
   prioritizeSmartWorkspaceLinearIssueResults
 } from '../../../../../shared/new-workspace/smart-workspace-linear-intent'
+import { buildClickUpSourceRows } from '../../../../../shared/new-workspace/smart-workspace-clickup-source-rows'
 import { resolveSmartWorkspaceCommandValue } from '../../../../../shared/new-workspace/smart-workspace-command-value'
 import {
   buildSmartWorkspaceSourceRows,
@@ -17,6 +18,8 @@ import {
 } from '../../../../../shared/new-workspace/smart-workspace-source-results'
 import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../../../shared/new-workspace/smart-workspace-source-query'
 import { RESULT_LIMIT, type RowEntry } from '../name-field/smart-workspace-name-field-model'
+import type { ClickUpTask } from '../../../../../shared/clickup/clickup-types'
+import type { ClickUpUrlSourceState } from './use-clickup-url-source'
 import type { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
 
 type Foundation = ReturnType<typeof useWorkItemSourceFoundation>
@@ -27,6 +30,7 @@ function isTypedTextSourceRow(row: RowEntry): boolean {
 
 export function useWorkItemSourcePresentation(
   foundation: Foundation,
+  clickup: { url: ClickUpUrlSourceState; tasks: readonly ClickUpTask[]; loading: boolean },
   options?: {
     linearUrlIntent?: ReturnType<typeof parseBoundedSmartWorkspaceLinearIssueUrlIntent>
     linearUrlIntentOwnsInput?: boolean
@@ -92,6 +96,16 @@ export function useWorkItemSourcePresentation(
         site
       }))
     }
+    const clickupRows = buildClickUpSourceRows({
+      mode,
+      intent: clickup.url.intent,
+      task: clickup.url.task,
+      tasks: getVisibleHeldProviderResults({ items: clickup.tasks, value, debouncedQuery }),
+      resultLimit: RESULT_LIMIT
+    })
+    if (clickupRows) {
+      return clickupRows
+    }
     const results = buildSmartWorkspaceSourceRows({
       branches: getVisibleBranchResults({
         branches,
@@ -139,6 +153,9 @@ export function useWorkItemSourcePresentation(
       ? results
       : results.filter((row) => !isTypedTextSourceRow(row))
   }, [
+    clickup.tasks,
+    clickup.url.intent,
+    clickup.url.task,
     foundation.typedTextEnabled,
     branches,
     branchResultsSource,
@@ -176,7 +193,7 @@ export function useWorkItemSourcePresentation(
   const isQueryStale =
     !linearUrlIntentOwnsInput && trimmedValue.length > 0 && trimmedDebouncedQuery !== trimmedValue
   // Why: unambiguous refs highlight their source row instead of the typed-text fallback.
-  const sourceIntent = useMemo<'github' | 'gitlab' | 'linear' | 'jira' | null>(() => {
+  const sourceIntent = useMemo<'github' | 'gitlab' | 'linear' | 'jira' | 'clickup' | null>(() => {
     if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
       return null
     }
@@ -186,6 +203,9 @@ export function useWorkItemSourcePresentation(
     }
     if (jiraSource.intent) {
       return 'jira'
+    }
+    if (clickup.url.intent) {
+      return 'clickup'
     }
     if (/^#\d+$/.test(trimmed) || parseGitHubIssueOrPRLink(trimmed) !== null) {
       return 'github'
@@ -206,7 +226,7 @@ export function useWorkItemSourcePresentation(
       }
     }
     return null
-  }, [jiraSource.intent, linearAvailable, rows, value])
+  }, [clickup.url.intent, jiraSource.intent, linearAvailable, rows, value])
   // Why: a slow host status read must not let Enter accept a pasted Linear URL as plain text.
   const unresolvedLinearUrlIntent =
     linearUrlIntentOwnsInput &&
@@ -238,7 +258,14 @@ export function useWorkItemSourcePresentation(
     linearLoading && (!linearUrlIntentOwnsInput || showLinearUrlLoadingFeedback)
   const loading = jiraSource.intent
     ? jiraSource.loading
-    : githubLoading || gitlabLoading || branchesLoading || visibleLinearLoading || jiraLoading
+    : clickup.url.intent
+      ? clickup.url.loading
+      : githubLoading ||
+        gitlabLoading ||
+        branchesLoading ||
+        visibleLinearLoading ||
+        jiraLoading ||
+        clickup.loading
   // Why: only spin on first load, not refreshes with retained rows.
   const showSearchSpinner = loading && searchResultRows.length === 0
   const ActiveInputIcon =

@@ -1,10 +1,12 @@
 import { isRecord } from '../../shared/agent-status/child-work/agent-status-child-work-value-guards'
+import { isClickUpStatusClosed } from '../../shared/clickup/clickup-task-filter'
 import type {
   ClickUpComment,
   ClickUpPriority,
   ClickUpStatusOption,
   ClickUpStatusType,
   ClickUpTask,
+  ClickUpTaskPage,
   ClickUpUser,
   ClickUpViewer,
   ClickUpWorkspace
@@ -13,6 +15,7 @@ import type {
 type RawRecord = Record<string, unknown>
 
 const STATUS_TYPES: readonly ClickUpStatusType[] = ['open', 'custom', 'done', 'closed']
+const TASKS_PER_PAGE = 100
 const DEFAULT_STATUS_COLOR = '#87909e'
 const EPOCH_ISO = new Date(0).toISOString()
 
@@ -171,6 +174,26 @@ export function mapClickUpTasks(payload: unknown, fallbackWorkspaceId: string): 
   return asArray(asRecord(payload)?.tasks).flatMap(
     (entry) => mapClickUpTask(entry, fallbackWorkspaceId) ?? []
   )
+}
+
+/**
+ * Maps one `GET /team/{id}/task` page. Closed-status tasks are dropped when `includeClosed` is off,
+ * while `nextPage` follows ClickUp's own paging so a fully filtered page still offers the next one.
+ */
+export function mapClickUpTaskPage(
+  payload: unknown,
+  workspaceId: string,
+  page: number,
+  includeClosed: boolean
+): ClickUpTaskPage {
+  const fetched = mapClickUpTasks(payload, workspaceId)
+  const raw = asRecord(payload)
+  const lastPage =
+    raw && 'last_page' in raw ? raw.last_page === true : fetched.length < TASKS_PER_PAGE
+  return {
+    tasks: includeClosed ? fetched : fetched.filter((task) => !isClickUpStatusClosed(task.status)),
+    nextPage: lastPage || fetched.length === 0 ? null : page + 1
+  }
 }
 
 function commentText(raw: RawRecord): string {

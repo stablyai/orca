@@ -11,6 +11,7 @@ import type {
 } from '../mobile-tasks-view-state-types'
 import type { TaskItem } from '../mobile-tasks-project-workspace-types'
 import type { JiraIssue } from '../../../../src/shared/jira/jira-types'
+import type { ClickUpTask } from '../../../../src/shared/clickup/clickup-types'
 import type {
   GitHubWorkItem,
   GitLabTodo,
@@ -259,6 +260,19 @@ export function createJiraTask(issue: JiraIssue): Extract<TaskItem, { provider: 
     status: issue.status.name,
     updatedAt: issue.updatedAt,
     source: issue
+  }
+}
+
+export function createClickUpTask(task: ClickUpTask): Extract<TaskItem, { provider: 'clickup' }> {
+  return {
+    // Workspace-qualified so ids from different Workspaces never collide.
+    key: `clickup:${task.workspaceId || 'workspace'}:${task.id}`,
+    provider: 'clickup',
+    title: task.name,
+    subtitle: [task.customId, task.list.name].filter(Boolean).join(' · '),
+    status: task.status.name,
+    updatedAt: task.updatedAt,
+    source: task
   }
 }
 

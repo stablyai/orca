@@ -2,9 +2,10 @@ import { expect, it } from 'vitest'
 import {
   mapClickUpComments,
   mapClickUpTask,
+  mapClickUpTaskPage,
   mapClickUpWorkspaces
 } from './clickup-response-mapping'
-import { parseClickUpSearchIntent, parseClickUpTaskReference } from './clickup-task-search-query'
+import { parseClickUpSearchIntent } from './clickup-task-search-query'
 
 it('maps a full task payload with millisecond strings and a hidden folder', () => {
   const task = mapClickUpTask(
@@ -118,36 +119,6 @@ it('maps workspaces and comments, dropping entries without ids', () => {
   ])
 })
 
-it('parses task urls, raw ids and custom ids', () => {
-  expect(parseClickUpTaskReference('https://app.clickup.com/t/86abc12de')).toEqual({
-    kind: 'id',
-    id: '86abc12de'
-  })
-  expect(parseClickUpTaskReference('https://app.clickup.com/t/86abc12de?comment=1')).toEqual({
-    kind: 'id',
-    id: '86abc12de'
-  })
-  expect(parseClickUpTaskReference('https://app.clickup.com/t/9001/eng-7')).toEqual({
-    kind: 'custom-id',
-    customId: 'ENG-7',
-    workspaceId: '9001'
-  })
-  expect(parseClickUpTaskReference('ENG-123')).toEqual({
-    kind: 'custom-id',
-    customId: 'ENG-123',
-    workspaceId: null
-  })
-  expect(parseClickUpTaskReference('  86abc12de ')).toEqual({ kind: 'id', id: '86abc12de' })
-})
-
-it('rejects foreign hosts and non-task paths', () => {
-  expect(parseClickUpTaskReference('https://evil.example/t/86abc12de')).toBeNull()
-  expect(parseClickUpTaskReference('https://notclickup.com/t/86abc12de')).toBeNull()
-  expect(parseClickUpTaskReference('https://app.clickup.com/9001/v/l/6-1-1')).toBeNull()
-  expect(parseClickUpTaskReference('login bug')).toBeNull()
-  expect(parseClickUpTaskReference('')).toBeNull()
-})
-
 it('flags whether a reference came from a url so a bare word can still be text-searched', () => {
   expect(parseClickUpSearchIntent('https://app.clickup.com/t/86abc12de')).toMatchObject({
     kind: 'reference',
@@ -161,4 +132,26 @@ it('flags whether a reference came from a url so a bare word can still be text-s
     kind: 'text',
     text: 'fix the login'
   })
+})
+
+it('drops done and closed tasks from an open list yet keeps paging while ClickUp has pages', () => {
+  const task = (id: string, type: string) => ({ id, name: id, status: { status: id, type } })
+  const payload = {
+    tasks: [task('1', 'done'), task('2', 'closed'), task('3', 'custom')],
+    last_page: false
+  }
+  const open = mapClickUpTaskPage(payload, 'w', 4, false)
+  expect(open.tasks.map((entry) => entry.id)).toEqual(['3'])
+  expect(open.nextPage).toBe(5)
+
+  const allDone = mapClickUpTaskPage(
+    { ...payload, tasks: payload.tasks.slice(0, 2) },
+    'w',
+    4,
+    false
+  )
+  expect(allDone).toEqual({ tasks: [], nextPage: 5 })
+
+  expect(mapClickUpTaskPage(payload, 'w', 4, true).tasks).toHaveLength(3)
+  expect(mapClickUpTaskPage({ ...payload, last_page: true }, 'w', 4, false).nextPage).toBeNull()
 })

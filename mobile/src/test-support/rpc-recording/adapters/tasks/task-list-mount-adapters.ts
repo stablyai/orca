@@ -80,6 +80,7 @@ export function taskListMountAdapters(
         connState: 'connected',
         defaultLinearTeamSelectionRef: { current: null },
         jiraStatusRequestIdRef: { current: 0 },
+        clickupStatusRequestIdRef: { current: 0 },
         githubKind: 'issues',
         keepSettings: () => {},
         taskUiReady: true,
@@ -139,6 +140,16 @@ export function taskListMountAdapters(
           gitlabFilter: 'opened',
           gitlabView: 'project',
           hostId: 'host-1',
+          clickupConnection: {
+            connected: false,
+            workspaces: [],
+            selectedWorkspaceId: null,
+            credentialError: null,
+            unavailableReason: null,
+            lostConnection: false
+          },
+          clickupFilter: { scope: 'assigned', includeClosed: false },
+          refreshClickUpConnection: async () => {},
           jiraConnection: { connected: false, sites: [], selection: null, credentialError: null },
           jiraFilter: 'assigned',
           linearConnected: true,
@@ -186,6 +197,10 @@ export function taskListMountAdapters(
     return mountModelHook(context, {
       useHook: (model) => useActions(model),
       fixture: {
+        appliedQuery: '',
+        clickupFilter: { scope: 'assigned', includeClosed: false },
+        clickupLoadingMore: false,
+        clickupNextPage: null,
         clientRef: { current: context.client },
         connState: 'connected',
         fetchGitHubItemsPage: async () => ({ items: [], failedCount: 0 }),

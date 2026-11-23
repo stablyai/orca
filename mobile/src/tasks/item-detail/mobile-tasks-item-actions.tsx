@@ -29,6 +29,7 @@ export function mobileTasksItemMenuActions(
   const {
     actionItem,
     mutatingStatus,
+    setClickUpStatusPickerItem,
     setLinearStatusPickerItem,
     setMergeMethodTaskItem,
     setPendingHostedStateChange
@@ -105,6 +106,14 @@ export function mobileTasksItemMenuActions(
       onPress: () => setLinearStatusPickerItem(actionItem)
     })
   }
+  if (actionItem.provider === 'clickup') {
+    actions.push({
+      label: translate('tasks.itemActions.changeStatus', 'Change status'),
+      icon: GitBranch,
+      disabled: mutatingStatus,
+      onPress: () => setClickUpStatusPickerItem(actionItem)
+    })
+  }
   return actions
 }
 
@@ -114,6 +123,9 @@ function copyLinkLabel(provider: string): string {
   }
   if (provider === 'linear') {
     return translate('tasks.itemActions.copyLinearLink', 'Copy Linear link')
+  }
+  if (provider === 'clickup') {
+    return translate('tasks.itemActions.copyClickUpLink', 'Copy ClickUp link')
   }
   return translate('tasks.itemActions.copyLink', 'Copy link')
 }
@@ -158,9 +170,11 @@ export function renderMobileTasksItemActions(
         testID="mobile-tasks-start-workspace"
         onPress={() =>
           taskDetailHandoff.closeThen(() => {
-            // Jira and Linear are not repo-scoped; ask for the target repo instead of choosing the first.
+            // Jira, Linear and ClickUp are not repo-scoped; ask for the target repo instead of choosing the first.
             const needsRepoChoice =
-              actionItem.provider === 'linear' || actionItem.provider === 'jira'
+              actionItem.provider === 'linear' ||
+              actionItem.provider === 'jira' ||
+              actionItem.provider === 'clickup'
             if (needsRepoChoice && workspaceRepos.length > 1) {
               setWorkspaceRepoPickerItem(actionItem)
               return

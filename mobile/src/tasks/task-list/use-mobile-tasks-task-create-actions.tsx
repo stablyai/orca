@@ -1,4 +1,4 @@
-import type { LinearItemActionsModel } from '../providers/linear/use-mobile-tasks-linear-item-actions'
+import type { ClickUpItemActionsModel } from '../providers/clickup/use-mobile-tasks-clickup-item-actions'
 import { colors } from '../../theme/mobile-theme'
 import { useCallback } from 'react'
 import type { RepoSummary } from '../mobile-tasks-provider-detail-types'
@@ -15,7 +15,7 @@ import {
 } from '../item-detail/mobile-task-item-state-operations'
 import { taskRepoPreferenceWrite } from './mobile-task-list-operations'
 
-export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
+export function useMobileTasksTaskCreateActions(model: ClickUpItemActionsModel) {
   const {
     client,
     createBody,
