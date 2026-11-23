@@ -139,6 +139,7 @@ export async function startRemoteOwnedWorker(
     run: _run,
     on: _on,
     task: _task,
+    taskDisplayName: _taskDisplayName,
     deps: _deps,
     parent: _parent,
     ...options
