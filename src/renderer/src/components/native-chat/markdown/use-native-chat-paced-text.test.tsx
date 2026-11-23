@@ -285,7 +285,7 @@ it("keeps revealing through the render that brings a fallen-back reply's final s
     })
     const root = { current: null }
     const renders: { text: string; revealing: boolean }[] = []
-    const { rerender } = renderHook(
+    const { rerender, unmount } = renderHook(
       ({ text, revision, streaming }) => {
         const paced = useNativeChatPacedText('reply', text, streaming, root, revision)
         renders.push({ text, revealing: paced.revealing })
@@ -307,6 +307,8 @@ it("keeps revealing through the render that brings a fallen-back reply's final s
     expect(renders.filter((render) => render.text === final).map((r) => r.revealing)).not.toContain(
       false
     )
+    // Its reveal's deadline timer is real; stop it before the environment is torn down.
+    unmount()
   } finally {
     vi.useRealTimers()
   }
