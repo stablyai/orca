@@ -34,11 +34,13 @@ export function useStructuredAgentTurnTiming(
     [items, submissions, turnId, latestTurn]
   )
   const [latch, setLatch] = useState<StructuredAgentTurnClockLatch | null>(null)
+  const opening = runningKey !== null && runningKey !== turnId
   // Derive during render so the first paint of each turn already uses its correct start.
   const step = stepStructuredAgentTurnClock({
     timing: runningTiming,
     // A send's early clock only while the agent works, so an idle viewer never gets a "Worked for" without a turn.
-    turnId: runningKey !== turnId && working !== true ? null : runningKey,
+    turnId: opening && working !== true ? null : runningKey,
+    opening,
     now: Date.now,
     hostClock,
     latch

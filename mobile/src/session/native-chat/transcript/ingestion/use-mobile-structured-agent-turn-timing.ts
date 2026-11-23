@@ -8,6 +8,8 @@ import type { AgentSessionLatestTurn } from '../../../../../../src/shared/agent-
 import type { NativeChatTurnJournal } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import type { StructuredAgentHostClock } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import { selectStructuredAgentTurnBars } from '../../../../../../src/shared/agent-session/view/structured-agent-session-turn-timing'
+import { structuredAgentSessionHostSaysWorking } from '../../../../../../src/shared/agent-session/view/structured-agent-session-live-turn'
+import { isStructuredAgentSessionMainAgentWorking } from '../../../../../../src/shared/agent-session/view/structured-agent-session-main-agent-working'
 import {
   stepStructuredAgentTurnClock,
   type StructuredAgentTurnClockLatch
@@ -20,12 +22,14 @@ export function useMobileStructuredAgentTurnTiming(
     submissions,
     latestTurn,
     working,
+    fence,
     hostClock
   }: {
     items: readonly AgentJournalRenderItem[]
     submissions: readonly AgentJournalSubmission[]
     latestTurn?: AgentSessionLatestTurn | null
     working?: boolean
+    fence?: number | null
     hostClock?: StructuredAgentHostClock | null
   },
   turnId: string | null
@@ -43,11 +47,19 @@ export function useMobileStructuredAgentTurnTiming(
     [items, submissions, latestTurn, working]
   )
   const [latch, setLatch] = useState<StructuredAgentTurnClockLatch | null>(null)
+  const opening = runningKey !== null && runningKey !== turnId
+  // Working as the session derives it, so older hosts without the flag match desktop.
+  const agentWorking =
+    opening &&
+    structuredAgentSessionHostSaysWorking(working, () =>
+      isStructuredAgentSessionMainAgentWorking(turnId, submissions, fence)
+    )
   // Derive during render so a new turn’s first paint counts from its correct start.
   const step = stepStructuredAgentTurnClock({
     timing: runningTiming,
     // A send's early clock only while the agent works, so an idle viewer never gets a "Worked for" without a turn.
-    turnId: runningKey !== turnId && working !== true ? null : runningKey,
+    turnId: opening && agentWorking !== true ? null : runningKey,
+    opening,
     now: Date.now,
     hostClock,
     latch

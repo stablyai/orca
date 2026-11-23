@@ -14,6 +14,8 @@ export type StructuredAgentTurnClockLatch = {
   firstSeenAt: number
   /** Absent until a host sample has arrived; the row's append time applies instead. */
   hostNow?: number
+  /** Latched for an opening send before its turn record; its turn keeps this basis. */
+  opening?: true
 }
 
 export function latchStructuredAgentTurnClock(
@@ -38,6 +40,8 @@ export function stepStructuredAgentTurnClock(input: {
   now: StructuredAgentTurnClockReader
   hostClock: StructuredAgentHostClock | null | undefined
   latch: StructuredAgentTurnClockLatch | null
+  /** turnId names an opening send whose turn record has not arrived. */
+  opening?: boolean
 }): { latch: StructuredAgentTurnClockLatch | null; workingStartedAt: number | null } {
   const { timing, turnId, latch } = input
   if (turnId === null) {
@@ -46,7 +50,12 @@ export function stepStructuredAgentTurnClock(input: {
   const next =
     latch?.turnId === turnId
       ? latch
-      : latchStructuredAgentTurnClock(turnId, input.now(), input.hostClock)
+      : latch?.opening && latch.hostNow !== undefined && !input.opening
+        ? { turnId, firstSeenAt: latch.firstSeenAt, hostNow: latch.hostNow }
+        : {
+            ...latchStructuredAgentTurnClock(turnId, input.now(), input.hostClock),
+            ...(input.opening ? { opening: true as const } : {})
+          }
   return {
     latch: next,
     workingStartedAt: timing
