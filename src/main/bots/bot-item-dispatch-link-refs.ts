@@ -14,6 +14,7 @@ const READ_OPS: ReadonlySet<BotItemsOp> = new Set<BotItemsOp>([
   'list',
   'needsYou',
   'viewRows',
+  'closeActors',
   'latestEventId',
   'owedMail'
 ])

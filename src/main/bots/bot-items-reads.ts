@@ -1,6 +1,7 @@
 // Item reads beyond one row: a bot's list with exact counts, links by what they point at, and the rows
 // item views need in one round trip.
 import {
+  type BotItemActor,
   botItemEventId,
   isOpenBotItemStatus,
   type BotItemLinkKind,
@@ -111,6 +112,21 @@ export class BotItemsReads extends BotItemsTables {
         lastActivityAt: Number(row.last_activity_at),
         snoozedUntil: optionalInteger(row, 'snoozed_until')
       }))
+  }
+
+  /** Who made each item's newest status event: for a closed item, who closed it. */
+  closeActors(uids: readonly string[]): Record<string, BotItemActor> {
+    const actors: Record<string, BotItemActor> = {}
+    for (const row of this.db
+      .prepare(
+        `SELECT * FROM item_events WHERE id IN (SELECT MAX(id) FROM item_events
+           WHERE kind = 'status' AND item_uid IN (SELECT value FROM json_each(?)) GROUP BY item_uid)`
+      )
+      .all(JSON.stringify(uids))) {
+      const event = eventRecordOf(row)
+      actors[event.itemUid] = event.actor
+    }
+    return actors
   }
 
   /** What item views need, for many items in one round trip: rows, links, Needs you questions, waits

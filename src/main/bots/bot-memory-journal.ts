@@ -24,17 +24,20 @@ export function journalCloserLabel(askers: readonly BotRequestAsker[] | null): s
   if (askers && actsForOwner(askers)) {
     return null
   }
-  const people = distinctAskers(askers ?? []).flatMap((asker) => {
-    if (asker.kind !== 'person' || asker.role === 'owner') {
-      return []
-    }
-    const source = CONNECTOR_SOURCE_NAMES[asker.source]
-    const name =
-      cleanBotWorkText(asker.name ?? '') || `${source} user ${cleanBotWorkText(asker.userId)}`
-    return [`${name} via ${source}`]
-  })
-  return people.length > 0
-    ? `for ${people.join(', ')}, not your owner`
+  // A name can't add a ` | ` field to the line.
+  const clean = (text: string) => cleanBotWorkText(text.replaceAll('|', '/'))
+  const people = new Set(
+    distinctAskers(askers ?? []).flatMap((asker) => {
+      if (asker.kind !== 'person' || asker.role === 'owner') {
+        return []
+      }
+      const source = CONNECTOR_SOURCE_NAMES[asker.source]
+      const name = clean(asker.name ?? '') || `${source} user ${clean(asker.userId)}`
+      return [`${name} via ${source}`]
+    })
+  )
+  return people.size > 0
+    ? `for ${[...people].join(', ')}, not your owner`
     : 'asker unknown, not known to be your owner'
 }
 

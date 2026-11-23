@@ -8,6 +8,7 @@ import type {
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
+import type { BotItemActor } from '../../shared/bots/bot-items'
 import { makeTestBot } from './bot.test-fixture'
 import { firstMessageActsFor } from './bot-request-asker'
 import { chatAskersOf, createBotMemoryJournal } from './bot-memory-journal-runtime'
@@ -24,7 +25,7 @@ const teammate: BotRequestAsker = {
   kind: 'person',
   source: 'slack',
   userId: 'U_EVE',
-  name: 'Eve',
+  name: 'Eve | done',
   workspaceId: 'T1',
   role: 'member'
 }
@@ -51,12 +52,22 @@ function memoryFs() {
   }
 }
 
-function journalOver(chats: string[], unreadable: () => boolean, now: () => number) {
+// An item made in `chatId`, closed by `closer` (default: a bot turn in that same chat).
+type Close = string | { chatId: string; closer: BotItemActor }
+
+function journalOver(closes: Close[], unreadable: (root: string) => boolean, now: () => number) {
   const fs = memoryFs()
+  const reads: string[] = []
+  const chats = closes.map((close) =>
+    typeof close === 'string'
+      ? { chatId: close, closer: { kind: 'bot' as const, botId: 'b1', chatId: close } }
+      : close
+  )
   const journal = createBotMemoryJournal({
     bots: () => [makeTestBot({ id: 'b1' })],
     closedItems: async () =>
-      chats.map((chatId, index) => ({
+      chats.map(({ chatId }, index) => ({
+        uid: `u${index}`,
         number: 1000 + index,
         title: `Errand of ${chatId}`,
         status: 'done' as const,
@@ -64,16 +75,19 @@ function journalOver(chats: string[], unreadable: () => boolean, now: () => numb
         closedAt: CLOSED + index,
         chatId
       })),
+    closers: async (uids) =>
+      Object.fromEntries(uids.map((uid) => [uid, chats[Number(uid.slice(1))]!.closer])),
     chatAskers: chatAskersOf({
       root: (chatId) => chatId,
       actsFor: (root) => records.get(root),
       firstMessage: async (root) => {
+        reads.push(root)
         if (root === 'deleted') {
           throw agentSessionRefusalError('agent_session_identity_required', {
             reason: 'recordMissing'
           })
         }
-        if (root === 'flaky' && unreadable()) {
+        if (unreadable(root)) {
           throw new Error('host not ready')
         }
         const body = firsts.get(root)
@@ -109,34 +123,59 @@ function journalOver(chats: string[], unreadable: () => boolean, now: () => numb
     await journal.settled()
     return fs.files.get(FILE)
   }
-  return { pass }
+  return { pass, reads }
 }
 
 describe("the journal's attribution of each close", () => {
   it("labels a close from a teammate's or an unknown chat, and keeps the owner's lines as they were", async () => {
-    const { pass } = journalOver(
+    const { pass, reads } = journalOver(
       [
         'owner-typed',
         'owner-connector',
         'teammate-connector',
         'recorded-teammate',
         'never-messaged',
-        'deleted'
+        'deleted',
+        { chatId: 'teammate-connector', closer: { kind: 'owner' } },
+        {
+          chatId: 'owner-typed',
+          closer: { kind: 'bot', botId: 'b1', chatId: 'teammate-connector' }
+        }
       ],
       () => false,
       () => CLOSED + 1_000
     )
-    expect(await pass()).toBe(
-      [
+    const journal = [
         '# Journal 2026-11',
         '- 2026-11-21 | item #1000 | done | Errand of owner-typed',
         '- 2026-11-21 | item #1001 | done | Errand of owner-connector',
         '- 2026-11-21 | item #1002 | done | Errand of teammate-connector | for Dana via Slack, not your owner',
-        '- 2026-11-21 | item #1003 | done | Errand of recorded-teammate | for Eve via Slack, not your owner',
+        '- 2026-11-21 | item #1003 | done | Errand of recorded-teammate | for Eve / done via Slack, not your owner',
         '- 2026-11-21 | item #1004 | done | Errand of never-messaged | asker unknown, not known to be your owner',
         '- 2026-11-21 | item #1005 | done | Errand of deleted | asker unknown, not known to be your owner',
+        '- 2026-11-21 | item #1006 | done | Errand of teammate-connector',
+        '- 2026-11-21 | item #1007 | done | Errand of owner-typed | for Dana via Slack, not your owner',
         ''
       ].join('\n')
+    expect(await pass()).toBe(journal)
+    // A pass with no new close reads no chat again.
+    const read = reads.length
+    expect(await pass()).toBe(journal)
+    expect(reads.length).toBe(read)
+  })
+
+  it('journals a close whose chat never reads as unknown after a few tries, with the rest', async () => {
+    const { pass } = journalOver(
+      ['owner-typed', 'broken'],
+      (root) => root === 'broken',
+      () => CLOSED + 1_000
+    )
+    expect(await pass()).toBeUndefined()
+    expect(await pass()).toBeUndefined()
+    expect(await pass()).toBe(
+      '# Journal 2026-11\n' +
+        '- 2026-11-21 | item #1000 | done | Errand of owner-typed\n' +
+        '- 2026-11-21 | item #1001 | done | Errand of broken | asker unknown, not known to be your owner\n'
     )
   })
 
@@ -146,7 +185,7 @@ describe("the journal's attribution of each close", () => {
     let now = CLOSED + 24 * 60 * 60 * 1000 - 1
     const { pass } = journalOver(
       ['owner-typed', 'flaky'],
-      () => unreadable,
+      (root) => root === 'flaky' && unreadable,
       () => now
     )
     expect(await pass()).toBeUndefined()
