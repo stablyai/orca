@@ -169,7 +169,20 @@ export async function startRemoteOwnedWorker(
       createdByStart: !existingTask,
       nothingSent
     })
-    throw inServerTerms(error, { server: server.name, forward })
+    const unanswered = serverNeverAnswered(error) && errorData(error)?.effectsApplied !== false
+    const translated = inServerTerms(error, { server: server.name, forward })
+    if (unanswered && translated instanceof OrchestrationError) {
+      throw new OrchestrationError(
+        translated.code,
+        `${translated.message} Retry the original start with --retry-request ${forward.requestId} to recover its receipt without starting another worker. If ${taskId} is still dispatched after 15 minutes and you want to give up recovery, run orchestration task-update --id ${taskId} --status failed.`,
+        {
+          ...errorData(translated),
+          taskId,
+          retryRequest: forward.requestId
+        }
+      )
+    }
+    throw translated
   }
   const started = StartedOnServer.safeParse(receipt)
   if (started.success) {

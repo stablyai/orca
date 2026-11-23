@@ -15,6 +15,10 @@ export type RemotePlacementRow = {
   never_sent_at: string | null
 }
 
+// A start call waits at most three minutes. Leave ample time for a delayed server, then let an
+// operator retire an unanswered reservation instead of permanently stranding the Task.
+const AMBIGUOUS_REMOTE_START_RECOVERY_MINUTES = 15
+
 /**
  * The Task's placement on a server, while its link is open. Under a closed link (a re-made
  * pairing) the server can never answer for it, so it holds nothing: not the Task, not its starts.
@@ -70,6 +74,23 @@ export function retireNeverSentReservation(db: OrchestrationDb, taskId: string):
          AND conversation_id IN (SELECT conversation_id FROM remote_run_links WHERE state = 'open')`
     )
     .run(taskId)
+}
+
+/**
+ * An unanswered sent start has no Dispatch to stop. Once its recovery window has elapsed, an
+ * explicit Task cancellation may retire the fence; retrying first with the original request key
+ * remains the idempotent route to recover a late server receipt.
+ */
+export function retireExpiredAmbiguousReservation(db: OrchestrationDb, taskId: string): void {
+  db.db
+    .prepare(
+      `DELETE FROM remote_placements
+       WHERE task_id = ? AND state = 'reserved' AND dispatch_id IS NULL
+         AND never_sent_at IS NULL
+         AND julianday(created_at) <= julianday('now', ?)
+         AND conversation_id IN (SELECT conversation_id FROM remote_run_links WHERE state = 'open')`
+    )
+    .run(taskId, `-${AMBIGUOUS_REMOTE_START_RECOVERY_MINUTES} minutes`)
 }
 
 /**
