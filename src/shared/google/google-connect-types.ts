@@ -1,6 +1,6 @@
 import type { HostAccountSignInPhase } from '../agent-accounts/host-account-sign-in-types'
 import type { GoogleClientView } from './google-client-config'
-import type { GoogleService } from './google-scopes'
+import type { GoogleService, GoogleServiceChoice } from './google-scopes'
 
 // Host serves google.*: import a Desktop client, connect and disconnect accounts, and the bot toggle.
 export const GOOGLE_CONNECT_RUNTIME_CAPABILITY = 'google.connect.v1' as const
@@ -35,6 +35,15 @@ export type GoogleAccountView = {
   services: GoogleServiceReadiness[]
   checkedAt?: number
   connectedAt: number
+  /** The app it signed in through (never its secret); absent from an older host. */
+  app?: { clientId: string; projectId?: string }
+}
+
+/** What a Connect asks the host for; `currentApp`: a saved account signs in through this computer's app (a setup that just made it). */
+export type GoogleSignInAsk = {
+  services: readonly GoogleServiceChoice[]
+  account?: string
+  currentApp?: boolean
 }
 
 /** Whether Google still knows this computer's app key; `gone` once its client or project was removed. */

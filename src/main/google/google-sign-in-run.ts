@@ -61,6 +61,8 @@ export type GoogleSignInOptions = {
   choices: readonly GoogleServiceChoice[]
   /** The person is at this host, so its browser opens. */
   openBrowser: boolean
+  /** Signs a saved account in through this computer's app too, as a setup that just made it does. */
+  currentApp?: boolean
 }
 
 /** The app a sign-in goes through: its id and secret, and the Cloud project its APIs are checked in. */
@@ -72,15 +74,17 @@ type GoogleSignInClient = Pick<GoogleClientConfig, 'clientId' | 'clientSecret' |
  */
 async function signInClient(
   deps: GoogleSignInDeps,
-  loginHint: string | undefined
+  options: GoogleSignInOptions,
+  signal: AbortSignal
 ): Promise<GoogleSignInClient | null> {
-  const saved = loginHint ? await readGoogleAccount(loginHint) : null
+  const saved =
+    options.loginHint && !options.currentApp ? await readGoogleAccount(options.loginHint) : null
   const current = await deps.client()
   if (!saved || saved.client.clientId === current?.clientId) {
     return current
   }
   // An app Google no longer knows can't sign the account in again.
-  if (current && (await checkGoogleClientKey(deps.http, saved.client)) === 'gone') {
+  if (current && (await checkGoogleClientKey(deps.http, saved.client, signal)) === 'gone') {
     return current
   }
   return { ...saved.client, ...(saved.projectId ? { projectId: saved.projectId } : {}) }
@@ -124,15 +128,20 @@ export async function runGoogleSignIn(
   options: GoogleSignInOptions,
   channel: CallerOwnedSignInChannel<GoogleSignInPrompt, string>
 ): Promise<GoogleAccountRecord> {
-  const client = await signInClient(deps, options.loginHint)
+  const client = await signInClient(deps, options, channel.signal)
   if (!client) {
     throw new Error(NO_GOOGLE_CLIENT)
   }
+  channel.signal.throwIfAborted()
   const { codeVerifier, codeChallenge, state } = createOrcaCloudPkceSecrets()
   const expiresAt = deps.now() + GOOGLE_SIGN_IN_TTL_MS
   const expected: { current: GoogleSignInExpectation | null } = { current: null }
 
   const prompt = async (redirectUri: string): Promise<void> => {
+    // A sign-in cancelled while its app was being chosen opens nothing.
+    if (channel.signal.aborted) {
+      return
+    }
     expected.current = { state, redirectUri, expiresAt }
     const url = authorizeUrl(client, {
       redirectUri,

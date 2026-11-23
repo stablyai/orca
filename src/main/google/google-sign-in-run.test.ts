@@ -12,6 +12,8 @@ vi.mock('node:os', async (actual) => ({
 
 const { readGoogleAccount, saveGoogleAccount } = await import('./google-credential-store')
 const { runGoogleSignIn } = await import('./google-sign-in-run')
+const { googleAccountView } = await import('./google-connect')
+const { googleAccountApp } = await import('../../shared/google/google-account-app')
 
 const CURRENT = {
   clientId: 'current-id',
@@ -28,7 +30,11 @@ function idToken(email: string): string {
 }
 
 /** Signs in through a fake Google that answers as `signedInAs`; returns the app each step used. */
-async function signIn(signedInAs: string, loginHint?: string, goneApps: string[] = []) {
+async function signIn(
+  signedInAs: string,
+  loginHint?: string,
+  { goneApps = [], currentApp = false }: { goneApps?: string[]; currentApp?: boolean } = {}
+) {
   const used: { authorize?: string; exchange?: string } = {}
   const http: typeof fetch = async (input, init) => {
     const url = String(input)
@@ -56,7 +62,8 @@ async function signIn(signedInAs: string, loginHint?: string, goneApps: string[]
       callerLoopbackPort: 4567,
       choices: [],
       openBrowser: false,
-      ...(loginHint ? { loginHint } : {})
+      ...(loginHint ? { loginHint } : {}),
+      ...(currentApp ? { currentApp } : {})
     },
     {
       signal: new AbortController().signal,
@@ -101,6 +108,23 @@ describe('the Google app a sign-in goes through', () => {
     expect(used).toEqual({ authorize: 'own-id', exchange: 'own-id' })
     expect(record.client).toEqual(OWN)
     expect(record.projectId).toBe('own-project')
+    // Its API links and admin requests name that app too, and the view never carries its secret.
+    const view = googleAccountView(record)
+    expect(googleAccountApp(view, CURRENT)).toEqual({
+      clientId: 'own-id',
+      projectId: 'own-project'
+    })
+    expect(JSON.stringify(view)).not.toContain('own-secret')
+  })
+
+  it('is this computer’s app for a saved account when a setup just made it', async () => {
+    await saveAccount('me@gmail.com')
+    const { record, used } = await signIn('me@gmail.com', 'me@gmail.com', { currentApp: true })
+    expect(used).toEqual({ authorize: 'current-id', exchange: 'current-id' })
+    expect(googleAccountApp(googleAccountView(record), CURRENT)).toEqual({
+      clientId: 'current-id',
+      projectId: 'current-project'
+    })
   })
 
   it('is this computer’s app for a new account', async () => {
@@ -120,7 +144,7 @@ describe('the Google app a sign-in goes through', () => {
 
   it('is this computer’s app when Google no longer knows the account’s own', async () => {
     await saveAccount('me@gmail.com')
-    const { used } = await signIn('me@gmail.com', 'me@gmail.com', ['own-id'])
+    const { used } = await signIn('me@gmail.com', 'me@gmail.com', { goneApps: ['own-id'] })
     expect(used).toEqual({ authorize: 'current-id', exchange: 'current-id' })
   })
 

@@ -130,7 +130,7 @@ export const GOOGLE_METHODS = [
     name: 'google.signIn.start',
     permission: 'workspace',
     params: GoogleSignInStartParams,
-    handler: async ({ botToken, callerLoopbackPort, account, services }, ctx) => {
+    handler: async ({ botToken, callerLoopbackPort, account, services, currentApp }, ctx) => {
       refuseFromBot(botToken, ctx)
       // Only a person at this host sees a browser opened here; a paired device opens its own.
       const here = ctx.caller?.kind === 'local-cli' || ctx.caller?.kind === 'desktop'
@@ -138,6 +138,7 @@ export const GOOGLE_METHODS = [
         ...(callerLoopbackPort !== undefined ? { callerLoopbackPort } : {}),
         ...(account ? { loginHint: account } : {}),
         ...(services ? { services } : {}),
+        ...(currentApp ? { currentApp } : {}),
         openBrowser: here && callerLoopbackPort === undefined
       })
     }
