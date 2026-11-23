@@ -1,6 +1,6 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { commandMarkAgent } from '../output/command-finish-arbiter'
-import { TerminalCommandPaint } from './terminal-command-paint'
+import { TerminalCommandPaint, type CommandPaintMarks } from './terminal-command-paint'
 import { agentPaintSignal } from './terminal-agent-paint-signal'
 
 /** The pane's latest agent reports, as its record holds them. */
@@ -19,7 +19,7 @@ export function observeTerminalCommandPaint(
   data: string,
   normalizedText: string,
   at: number
-): boolean {
+): CommandPaintMarks {
   record.commandPaint ??= new TerminalCommandPaint()
   return record.commandPaint.observe(data, normalizedText, at, record)
 }

@@ -13,52 +13,83 @@ export function commandMarkAgent(record: {
   return isTuiAgent(agent) ? agent : null
 }
 
+/** Who reads a mark: the runtime's launch and hook authority (`exitCode`), and command paint. */
+export type CommandMarkLanes = { authority?: { exitCode: number | null }; paint?: true }
+
 export type CommandFinishArbiterDeps = {
   /** The pane's agent when its host can find one in front; null applies a mark at once. */
   agentFor(ptyId: string): TuiAgent | null
+  incarnationOf(ptyId: string): string | null | undefined
+  /** `agent` only when the program in front is that agent itself. */
   readForeground(ptyId: string, agent: TuiAgent): Promise<LaunchedAgentForeground>
-  /** The shell finished the command: retire what the command owned. */
-  finish(ptyId: string, exitCode: number | null): void
-  /** The agent printed the mark itself and still runs. */
-  dismiss(ptyId: string): void
+  /** The shell finished the command. */
+  finish(ptyId: string, lanes: CommandMarkLanes): void
+  /** The agent printed the mark itself and still runs, or the pane runs another process now. */
+  dismiss(ptyId: string, lanes: CommandMarkLanes): void
 }
 
-/** One owner for an OSC 133;D: agents such as Devin print their own around each turn, so in a pane
- *  with an agent the mark is the shell's only once the foreground read finds the shell in front.
- *  An unknown read keeps the mark, as before; the latest mark decides. */
+type PendingMark = {
+  agent: TuiAgent
+  incarnation: string | null | undefined
+  lanes: CommandMarkLanes
+}
+
+/** One owner for an OSC 133;D. Agents such as Devin print their own around each turn, so in a pane
+ *  with an agent a mark counts only once one read finds the shell, not that agent, in front.
+ *  An unknown read, or a command starting before it answers, keeps the mark, as before. */
 export class CommandFinishArbiter {
-  private readonly pending = new Map<string, number>()
-  private nextMark = 0
+  private readonly pending = new Map<string, PendingMark>()
 
   constructor(private readonly deps: CommandFinishArbiterDeps) {}
 
-  note(ptyId: string, exitCode: number | null): void {
+  /** A lane saw a mark. The other lane's sight of the same mark joins its read; a second mark in
+   *  one lane is a newer mark, whose read decides both. */
+  note(ptyId: string, lane: CommandMarkLanes): void {
     const agent = this.deps.agentFor(ptyId)
     if (!agent) {
-      this.pending.delete(ptyId)
-      this.deps.finish(ptyId, exitCode)
+      this.deps.finish(ptyId, lane)
       return
     }
-    const mark = ++this.nextMark
+    const earlier = this.pending.get(ptyId)
+    const joins =
+      earlier &&
+      !(lane.authority && earlier.lanes.authority) &&
+      !(lane.paint && earlier.lanes.paint)
+    if (earlier && joins) {
+      earlier.lanes = { ...earlier.lanes, ...lane }
+      return
+    }
+    const mark: PendingMark = {
+      agent,
+      incarnation: this.deps.incarnationOf(ptyId),
+      lanes: { ...earlier?.lanes, ...lane }
+    }
     this.pending.set(ptyId, mark)
-    void this.decide(ptyId, agent, exitCode, mark)
+    void this.decide(ptyId, mark)
   }
 
-  private async decide(
-    ptyId: string,
-    agent: TuiAgent,
-    exitCode: number | null,
-    mark: number
-  ): Promise<void> {
-    const foreground = await this.deps.readForeground(ptyId, agent).catch(() => 'unknown' as const)
+  /** A command started: a mark still awaiting its read was the shell's, finishing the last one. */
+  noteCommandStarted(ptyId: string): void {
+    const mark = this.pending.get(ptyId)
+    if (mark) {
+      this.pending.delete(ptyId)
+      this.deps.finish(ptyId, mark.lanes)
+    }
+  }
+
+  private async decide(ptyId: string, mark: PendingMark): Promise<void> {
+    const foreground = await this.deps
+      .readForeground(ptyId, mark.agent)
+      .catch(() => 'unknown' as const)
     if (this.pending.get(ptyId) !== mark) {
       return
     }
     this.pending.delete(ptyId)
-    if (foreground === 'agent') {
-      this.deps.dismiss(ptyId)
+    // Why: a rebind reset what the old process owned; its mark must not retire the new one's.
+    if (foreground === 'agent' || this.deps.incarnationOf(ptyId) !== mark.incarnation) {
+      this.deps.dismiss(ptyId, mark.lanes)
     } else {
-      this.deps.finish(ptyId, exitCode)
+      this.deps.finish(ptyId, mark.lanes)
     }
   }
 }

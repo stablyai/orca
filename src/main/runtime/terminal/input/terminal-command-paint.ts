@@ -17,6 +17,8 @@ function hasVisibleText(normalizedText: string): boolean {
   return VISIBLE_CHARACTER_RE.test(stripAnsiEscapeSequences(normalizedText))
 }
 
+export type CommandPaintMarks = { finishHeld: boolean; heldFinishStarted: boolean }
+
 /** OSC 133;C follows the prompt/echo; only visible bytes after it prove the running command painted. */
 export class TerminalCommandPaint {
   private awaitingPaint = false
@@ -44,12 +46,8 @@ export class TerminalCommandPaint {
   private restoredReportAt: number | null = null
   private markerEndInChunk = -1
   /** A finish mark in a pane with an agent, held until the foreground read says whose it was: the
-   *  reports it would retire, and when a command started after it. */
-  private heldFinish: {
-    titleAt: number | null
-    status: object | null
-    startAt: number | null
-  } | null = null
+   *  reports it would retire. */
+  private heldFinish: { titleAt: number | null; status: object | null } | null = null
   /** Armed at each command start; absent before the first marker, where no command is attributable. */
   private composers: Map<
     DraftPasteMarkerSignal,
@@ -62,13 +60,14 @@ export class TerminalCommandPaint {
     }
   )
 
-  /** Returns true when a finish mark was held for the foreground read (`settleHeldFinish`). */
+  /** What the arbiter must hear: a finish held for its read (`settleHeldFinish`), and a command
+   *  start that proved a held finish the shell's. */
   observe(
     data: string,
     normalizedText: string,
     at: number,
     reports: TerminalReportHolder
-  ): boolean {
+  ): CommandPaintMarks {
     if (this.startFollowsFinishInRead) {
       this.startFollowsFinishInRead = false
       this.startedAt = at
@@ -77,18 +76,20 @@ export class TerminalCommandPaint {
     }
     this.markerEndInChunk = -1
     let finishEnd = this.scanner.scan(data)
+    const marks: CommandPaintMarks = { finishHeld: false, heldFinishStarted: false }
+    // A command start before the read answers: the held finish counts, as before.
+    if (this.heldFinish && this.markerEndInChunk !== -1) {
+      this.settleHeldFinish(true)
+      marks.heldFinishStarted = true
+    }
     // Why hold: agents (Devin) print their own 133;D at each turn's end; only the shell's ends the command.
-    const held = finishEnd !== -1 && commandMarkAgent(reports) !== null
-    if (held) {
+    if (finishEnd > this.markerEndInChunk && commandMarkAgent(reports) !== null) {
       this.heldFinish = {
         titleAt: reports.lastOscTitleAt ?? null,
-        status: reports.lastExplicitAgentStatus ?? null,
-        startAt: this.markerEndInChunk > finishEnd ? at : null
+        status: reports.lastExplicitAgentStatus ?? null
       }
+      marks.finishHeld = true
       finishEnd = -1
-      this.markerEndInChunk = -1
-    } else if (this.heldFinish && this.markerEndInChunk !== -1) {
-      this.heldFinish.startAt ??= at
     }
     if (finishEnd > this.markerEndInChunk) {
       // Why keep plain paint: with the shell in front, a command that printed and returned (a
@@ -100,7 +101,7 @@ export class TerminalCommandPaint {
         )
       }
       this.finishCommand(reports.lastOscTitleAt ?? null, reports.lastExplicitAgentStatus ?? null)
-      return held
+      return marks
     }
     if (this.markerEndInChunk !== -1) {
       // Why only at a boundary: an agent that writes its own 133;C mid-session is not a new command.
@@ -119,20 +120,21 @@ export class TerminalCommandPaint {
       }
       // Why the rest of this chunk counts: a fast binary can paint in the same read as the marker.
       this.runCommand(data.slice(this.markerEndInChunk))
-      return held
+      return marks
     }
     if (this.betweenCommands) {
-      return held
+      return marks
     }
     if (this.awaitingPaint && hasVisibleText(normalizedText)) {
       this.awaitingPaint = false
       this.repaintRequestable = false
     }
     this.observeComposers(data)
-    return held
+    return marks
   }
 
   private finishCommand(titleAt: number | null, status: object | null): void {
+    this.heldFinish = null
     this.betweenCommands = true
     this.boundarySinceReattach = this.reattach === 'armed'
     // Why identity at the finish: a gap later clears betweenCommands, and the finished
@@ -186,21 +188,12 @@ export class TerminalCommandPaint {
     }
   }
 
-  /** The foreground read for a held finish: the shell's ends the command (and starts any typed
-   *  since); the agent's own changes nothing. */
+  /** The foreground read for a held finish: the shell's ends the command; the agent's own changes nothing. */
   settleHeldFinish(shellFinished: boolean): void {
     const held = this.heldFinish
     this.heldFinish = null
-    if (!held || !shellFinished) {
-      return
-    }
-    this.finishCommand(held.titleAt, held.status)
-    if (held.startAt !== null) {
-      // A command typed before the read answered: it must paint again to count.
-      this.startedAt = held.startAt
-      this.startSeen = true
-      this.restoredReportAt = null
-      this.runCommand('')
+    if (held && shellFinished) {
+      this.finishCommand(held.titleAt, held.status)
     }
   }
 

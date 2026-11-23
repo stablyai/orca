@@ -1,4 +1,4 @@
-import { TerminalCommandPaint } from '../input/terminal-command-paint'
+import { TerminalCommandPaint, type CommandPaintMarks } from '../input/terminal-command-paint'
 import { CommandFinishArbiter, commandMarkAgent } from './command-finish-arbiter'
 import type { LaunchedAgentForeground } from '../wait/launched-agent-foreground'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -26,7 +26,7 @@ import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/t
 
 export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithScheduleWaitBlockedCheck {
   protected abstract retirePtyAgentLaunchAuthority(ptyId: string, confirmedExit?: boolean): void
-  abstract readLaunchedAgentForeground(
+  abstract readCommandMarkForeground(
     ptyId: string,
     agent: TuiAgent
   ): Promise<LaunchedAgentForeground>
@@ -36,34 +36,45 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
     exitedSince?: number
   ): Promise<'live' | 'unverifiable' | 'exited' | null>
 
-  // Why two lanes: the daemon's mark and the main byte stream's arrive in either order, or alone.
   private readonly commandFinishes = new CommandFinishArbiter({
-    agentFor: (ptyId) => this.commandMarkAgentFor(ptyId),
-    readForeground: (ptyId, agent) => this.readLaunchedAgentForeground(ptyId, agent),
-    finish: (ptyId, exitCode) => this.applyShellCommandFinished(ptyId, exitCode),
-    dismiss: () => {}
+    agentFor: (ptyId) => {
+      const pty = this.ptysById.get(ptyId)
+      // A host that can never find the agent in front keeps every mark, as before.
+      return pty && this.launchedAgentHostProvesAgent(ptyId) ? commandMarkAgent(pty) : null
+    },
+    incarnationOf: (ptyId) => this.ptysById.get(ptyId)?.incarnationId,
+    readForeground: (ptyId, agent) => this.readCommandMarkForeground(ptyId, agent),
+    finish: (ptyId, lanes) => {
+      if (lanes.paint) {
+        this.ptysById.get(ptyId)?.commandPaint?.settleHeldFinish(true)
+      }
+      if (lanes.authority) {
+        this.applyShellCommandFinished(ptyId, lanes.authority.exitCode)
+      }
+    },
+    dismiss: (ptyId, lanes) => {
+      if (lanes.paint) {
+        this.ptysById.get(ptyId)?.commandPaint?.settleHeldFinish(false)
+      }
+    }
   })
-
-  private readonly commandPaintFinishes = new CommandFinishArbiter({
-    agentFor: (ptyId) => this.commandMarkAgentFor(ptyId),
-    readForeground: (ptyId, agent) => this.readLaunchedAgentForeground(ptyId, agent),
-    finish: (ptyId) => this.ptysById.get(ptyId)?.commandPaint?.settleHeldFinish(true),
-    dismiss: (ptyId) => this.ptysById.get(ptyId)?.commandPaint?.settleHeldFinish(false)
-  })
-
-  private commandMarkAgentFor(ptyId: string): TuiAgent | null {
-    const pty = this.ptysById.get(ptyId)
-    // A host that can never find the agent in front keeps every mark, as before.
-    return pty && this.launchedAgentHostProvesAgent(ptyId) ? commandMarkAgent(pty) : null
-  }
 
   /** An OSC 133;D: in a pane with an agent it counts once the foreground read finds the shell. */
   protected noteCommandFinished(ptyId: string, exitCode: number | null): void {
-    this.commandFinishes.note(ptyId, exitCode)
+    this.commandFinishes.note(ptyId, { authority: { exitCode } })
   }
 
-  protected settleHeldCommandPaintFinish(ptyId: string): void {
-    this.commandPaintFinishes.note(ptyId, null)
+  protected noteCommandStarted(ptyId: string): void {
+    this.commandFinishes.noteCommandStarted(ptyId)
+  }
+
+  protected noteCommandPaintMarks(ptyId: string, marks: CommandPaintMarks): void {
+    if (marks.heldFinishStarted) {
+      this.commandFinishes.noteCommandStarted(ptyId)
+    }
+    if (marks.finishHeld) {
+      this.commandFinishes.note(ptyId, { paint: true })
+    }
   }
 
   private applyShellCommandFinished(ptyId: string, exitCode: number | null): void {

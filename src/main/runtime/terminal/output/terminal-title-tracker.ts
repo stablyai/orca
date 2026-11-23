@@ -158,6 +158,7 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
           this.applyPtyProgramActivity(ptyId, activity)
         },
         onCommandStarted: () => {
+          this.noteCommandStarted(ptyId)
           this.openCodeRunLifetime.onCommandStarted(ptyId)
         },
         onCommandFinished: (exitCode: number | null) => {
