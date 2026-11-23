@@ -8,13 +8,12 @@ import { slackTeamState } from '../../../../src/shared/connector-bot-slack-contr
 import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { ListRow } from '../../components/list/ListGroup'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { hostReadClient } from '../../query/host-read-client'
 import { SettingsSection } from '../../settings/settings-screen-frame'
 import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileConnectorSourceIcon } from '../MobileConnectorSourceIcon'
-import { slackStateRead } from './bot-slack-operations'
+import { readSlack } from './use-phone-bot-slack'
 
 /** Each workspace's name as one of the host's bots there reads it (one read per bot, again once the
  *  phone is back online); its id until known. */
@@ -40,24 +39,18 @@ function useSlackTeamNames(
     }
     let current = true
     for (const [botId, teams] of JSON.parse(key) as [string, string[]][]) {
-      void slackStateRead
-        .request(hostReadClient(client), { botId })
-        .then((reply) => slackStateRead.interpret(reply))
-        .then(
-          (read) => {
-            if (!current || !read.ok) {
-              return
-            }
-            const found = teams.flatMap((teamId) => {
-              const team = slackTeamState(read.value, teamId)
-              return team.state === 'installed' && team.teamName
-                ? [[teamId, team.teamName] as const]
-                : []
-            })
-            setNames((shown) => new Map([...shown, ...found]))
-          },
-          () => {}
-        )
+      void readSlack(client, botId).then((read) => {
+        if (!current || read?.status !== 'ready') {
+          return
+        }
+        const found = teams.flatMap((teamId) => {
+          const team = slackTeamState(read.slack, teamId)
+          return team.state === 'installed' && team.teamName
+            ? [[teamId, team.teamName] as const]
+            : []
+        })
+        setNames((shown) => new Map([...shown, ...found]))
+      })
     }
     return () => {
       current = false
