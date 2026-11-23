@@ -24,14 +24,17 @@ export function isVirtualBridgeInterface(name: string, hasDefaultRoute?: boolean
   return VIRTUAL_BRIDGE_INTERFACE_PATTERN.test(name)
 }
 
+/** Bridges stay manually selectable but are never auto-advertised; ranking must agree with that. */
+export function isAutoAdvertisablePairingInterface(iface: PairingNetworkInterface): boolean {
+  return !isVirtualBridgeInterface(iface.name, iface.hasDefaultRoute)
+}
+
 // Share QR and picker selection to avoid advertising a different address. Bridges remain manually selectable.
 // Undefined omits direct addressing: Relay carries its own invite, while LAN-only pairing refuses.
 export function selectAutoAdvertisedPairingAddress(
   interfaces: readonly PairingNetworkInterface[]
 ): string | undefined {
-  const advertisable = interfaces.filter(
-    (iface) => !isVirtualBridgeInterface(iface.name, iface.hasDefaultRoute)
-  )
+  const advertisable = interfaces.filter(isAutoAdvertisablePairingInterface)
   return (
     advertisable.find((iface) => isTailnetIPv4Address(iface.address))?.address ??
     advertisable[0]?.address

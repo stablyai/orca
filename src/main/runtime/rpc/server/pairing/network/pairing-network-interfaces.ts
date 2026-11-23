@@ -1,6 +1,7 @@
 import { isIP } from 'node:net'
 import { networkInterfaces, type NetworkInterfaceInfo } from 'node:os'
 import {
+  isAutoAdvertisablePairingInterface,
   isVirtualBridgeInterface,
   selectAutoAdvertisedPairingAddress
 } from '../../../../../../shared/remote-runtime/pairing/pairing-address-auto-selection'
@@ -41,13 +42,15 @@ async function defaultRouteNamesFor(
 
 /** The route bonus only decides anything when the best non-Tailscale candidates rank equal. */
 function hasRankTie(interfaces: readonly NetworkInterface[]): boolean {
+  // A bridge is dropped before selection, so it can neither win the rank nor stand in for Tailscale.
+  const advertisable = interfaces.filter(isAutoAdvertisablePairingInterface)
   // A Tailscale address wins every tie at rank 0, so the bonus cannot change the advertised one.
-  if (interfaces.some((iface) => isTailnetIPv4Address(iface.address))) {
+  if (advertisable.some((iface) => isTailnetIPv4Address(iface.address))) {
     return false
   }
   let best = Number.POSITIVE_INFINITY
   let bestCount = 0
-  for (const iface of interfaces) {
+  for (const iface of advertisable) {
     const rank = rankInterface(iface)
     if (rank < best) {
       best = rank
