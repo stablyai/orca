@@ -191,8 +191,8 @@ export type PersistedUIState = {
   activityClearedAtByPaneKey?: Record<string, number>
   /** Renderer ui:set explicit unread turn stamps survive restart alongside acknowledgments and cutoffs. */
   manuallyUnreadTurnsByPaneKey?: Record<string, number>
-  /** Chat read marks saved under a tab's key, keyed `<record> <tab key>`, with the value last carried to the conversation key; a mark is carried again only when its value changes. */
-  chatReadMarksCarriedFrom?: Record<string, number>
+  /** A paired web client copied its own chat cutoffs and unread turns to conversation keys once (chat-read-mark-copy.ts). */
+  chatReadMarksCopiedHere?: boolean
   /** User-hidden setup-guide sidebar entry; a reversible declutter pref (Help menu stays available), not completion. */
   setupGuideSidebarDismissed?: boolean
   /** One-shot marker for the browser setup-guide milestone; profiles missing it are evaluated once in the renderer (completion needs runtime probes). */
@@ -258,6 +258,8 @@ export type PersistedUIState = {
   _inlineAgentsDefaultedForExperiment?: boolean
   /** One-shot flag for the inline-agents default-on rollout; distinct from _inlineAgentsDefaultedForExperiment, which was stamped every load and is permanently dirty. */
   _inlineAgentsDefaultedForAllUsers?: boolean
+  /** Main copied saved chat read marks to conversation keys once (chat-read-mark-copy-at-load.ts). */
+  _chatReadMarksCopiedToConversationKeys?: boolean
   /** One-shot migration flag for split-out card properties, set once so later deliberate unchecks of Linear issue/Ports stick across restarts. */
   _expandedWorktreeCardPropertiesDefaulted?: boolean
   /** One-shot backfill flag for 'jira-issue', which joined the defaults after the expansion migration had already stamped upgraded profiles. */

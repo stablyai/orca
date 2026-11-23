@@ -17,10 +17,7 @@ import {
 } from '../../lib/workspace/persistence/workspace-session-hydration-keys'
 import { hydratePersistedUIAfterStartupRead } from './startup-ui-hydration'
 import { isWebClientLocation } from '../platform/web-client-location'
-import {
-  carryChatReadMarks,
-  chatReadMarkRecordsCarriedHere
-} from '@/store/slices/agent-status/structured-sessions/chat-read-mark-carry'
+import { copyWebClientChatReadMarksOnce } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
 import {
   logRendererStartupDiagnostic,
   timeRendererStartupStep,
@@ -215,7 +212,10 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
               sessionRead.session,
               useAppStore.getState().reconcileWorktreeTabModels
             )
-            carryChatReadMarks(useAppStore, chatReadMarkRecordsCarriedHere(isWebClientLocation()))
+            // A failed saved-UI read hydrated defaults; copying then would mark an empty copy done.
+            if (uiHydrated && isWebClientLocation()) {
+              copyWebClientChatReadMarksOnce(useAppStore)
+            }
           })
           restoreStructuredLaunchSurfaces()
           recoverStrandedEditorDrafts()

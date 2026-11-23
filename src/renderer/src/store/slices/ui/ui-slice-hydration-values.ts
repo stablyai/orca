@@ -175,21 +175,14 @@ export function hydrateAgentReadState(
   | 'acknowledgedAgentsByPaneKey'
   | 'activityClearedAtByPaneKey'
   | 'manuallyUnreadTurnsByPaneKey'
-  | 'chatReadMarksCarriedFrom'
+  | 'chatReadMarksCopiedHere'
 > {
   return {
     acknowledgedAgentsByPaneKey: sanitizeAcknowledgedAgentsByPaneKey(
       ui.acknowledgedAgentsByPaneKey
     ),
-    activityClearedAtByPaneKey: sanitizeActivityClearedAtByPaneKey(
-      ui.activityClearedAtByPaneKey,
-      ui.chatReadMarksCarriedFrom ?? {}
-    ),
+    activityClearedAtByPaneKey: sanitizeActivityClearedAtByPaneKey(ui.activityClearedAtByPaneKey),
     manuallyUnreadTurnsByPaneKey: sanitizePaneKeyTimestampRecord(ui.manuallyUnreadTurnsByPaneKey),
-    // Never age-pruned: a forgotten entry would carry an old mark back over a later Mark unread.
-    chatReadMarksCarriedFrom: sanitizePaneKeyTimestampRecord(
-      ui.chatReadMarksCarriedFrom,
-      Number.POSITIVE_INFINITY
-    )
+    chatReadMarksCopiedHere: ui.chatReadMarksCopiedHere === true
   }
 }

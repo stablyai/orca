@@ -137,27 +137,32 @@ export const sanitizeAcknowledgedAgentsByPaneKey = sanitizePaneKeyTimestampRecor
 // Structured chat rows hydrate at any age, so cutoffs are never age-pruned; the newest clears bound growth instead.
 const ACTIVITY_CLEARED_AT_MAX_ENTRIES = 500
 
-/** `carriedFrom`: a cutoff kept under a chat tab's old key beside its conversation-keyed copy
- *  (chat-read-mark-carry.ts) is one clear, so it doesn't count against the limit. */
-export function sanitizeActivityClearedAtByPaneKey(
-  value: unknown,
-  carriedFrom: Readonly<Record<string, number>> = {}
-): Record<string, number> {
+/** A clear counts once against the limit: a chat's cutoff kept under its tab's old key beside the
+ *  conversation-keyed copy (chat-read-mark-copy.ts) shares that key's last part and its value. */
+export function sanitizeActivityClearedAtByPaneKey(value: unknown): Record<string, number> {
   const valid = sanitizePaneKeyTimestampRecord(value, Number.POSITIVE_INFINITY)
   const entries = Object.entries(valid)
   if (entries.length <= ACTIVITY_CLEARED_AT_MAX_ENTRIES) {
     return valid
   }
-  const compatCopies = entries.filter(
-    ([key, at]) => carriedFrom[`activityClearedAtByPaneKey ${key}`] === at
-  ).length
-  if (entries.length <= ACTIVITY_CLEARED_AT_MAX_ENTRIES + compatCopies) {
+  const clears = new Map<string, [string, number][]>()
+  for (const entry of entries) {
+    const clear = `${entry[0].slice(entry[0].lastIndexOf(':') + 1)}\0${entry[1]}`
+    const keys = clears.get(clear)
+    if (keys) {
+      keys.push(entry)
+    } else {
+      clears.set(clear, [entry])
+    }
+  }
+  if (clears.size <= ACTIVITY_CLEARED_AT_MAX_ENTRIES) {
     return valid
   }
   return Object.fromEntries(
-    entries
-      .toSorted(([, left], [, right]) => right - left)
-      .slice(0, ACTIVITY_CLEARED_AT_MAX_ENTRIES + compatCopies)
+    [...clears.values()]
+      .toSorted(([[, left]], [[, right]]) => right - left)
+      .slice(0, ACTIVITY_CLEARED_AT_MAX_ENTRIES)
+      .flat()
   )
 }
 

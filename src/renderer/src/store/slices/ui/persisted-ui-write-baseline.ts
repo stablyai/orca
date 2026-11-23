@@ -33,7 +33,7 @@ export type PersistedUIWriteBaseline = {
   acknowledgedAgentsByPaneKey: Record<string, number>
   activityClearedAtByPaneKey: Record<string, number>
   manuallyUnreadTurnsByPaneKey: Record<string, number>
-  chatReadMarksCarriedFrom: Record<string, number>
+  chatReadMarksCopiedHere: boolean
 }
 
 // Require exhaustive Record coverage; keyof arrays validate members but silently omit new fields, losing persistence (ui-state-schema-parity.ts).
@@ -67,7 +67,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   acknowledgedAgentsByPaneKey: true,
   activityClearedAtByPaneKey: true,
   manuallyUnreadTurnsByPaneKey: true,
-  chatReadMarksCarriedFrom: true
+  chatReadMarksCopiedHere: true
 } satisfies Record<keyof PersistedUIWriteBaseline, true>
 
 export const PERSISTED_UI_WRITE_BASELINE_FIELDS = Object.keys(
@@ -121,8 +121,7 @@ function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: u
     field === 'notificationsMutedByWorktree' ||
     field === 'acknowledgedAgentsByPaneKey' ||
     field === 'activityClearedAtByPaneKey' ||
-    field === 'manuallyUnreadTurnsByPaneKey' ||
-    field === 'chatReadMarksCarriedFrom'
+    field === 'manuallyUnreadTurnsByPaneKey'
   ) {
     return shallowRecordEqual(
       a as Record<string, unknown> | undefined,
