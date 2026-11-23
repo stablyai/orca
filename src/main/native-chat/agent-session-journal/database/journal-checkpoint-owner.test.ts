@@ -1,4 +1,3 @@
-import { once } from 'node:events'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -25,7 +24,7 @@ it('replaces a checkpoint worker that dies, and the replacement checkpoints the 
   cleanup.push(() => writer.close())
   writer.exec(`PRAGMA page_size=512; PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;
     CREATE TABLE writes(id INTEGER PRIMARY KEY, body BLOB);`)
-  const workers: { worker: Worker; ready: Promise<unknown> }[] = []
+  const workers: Worker[] = []
   const owner = new JournalCheckpointOwner(writer, filename, {
     restartDelayMs: 10,
     factory: () => {
@@ -33,25 +32,27 @@ it('replaces a checkpoint worker that dies, and the replacement checkpoints the 
         eval: true,
         workerData: { filename, frames: 1000, idleMs: 10 }
       })
-      workers.push({ worker, ready: once(worker, 'message') })
+      workers.push(worker)
       return worker
     }
   })
   cleanup.push(() => owner.close())
-  await workers[0]!.ready
-  await workers[0]!.worker.terminate()
+  // ~3000 frames each: past the worker's threshold, short of the writer's own autocheckpoint.
+  const checkpointedBy = async (id: number) => {
+    writer.prepare('INSERT INTO writes VALUES(?, zeroblob(1500000))').run(id)
+    owner.afterCommit()
+    await vi.waitFor(() => {
+      const state = writer.prepare('PRAGMA wal_checkpoint(NOOP)').get() as {
+        log: number
+        checkpointed: number
+      }
+      expect(state.log).toBeGreaterThan(1000)
+      expect(state.checkpointed).toBe(state.log)
+    })
+  }
+  await checkpointedBy(1)
+  await workers[0]!.terminate()
 
   await vi.waitFor(() => expect(workers).toHaveLength(2))
-  await workers[1]!.ready
-  // ~3000 frames: past the worker's threshold, short of the writer's own autocheckpoint.
-  writer.prepare('INSERT INTO writes VALUES(1, zeroblob(1500000))').run()
-  owner.afterCommit()
-  await vi.waitFor(() => {
-    const state = writer.prepare('PRAGMA wal_checkpoint(NOOP)').get() as {
-      log: number
-      checkpointed: number
-    }
-    expect(state.log).toBeGreaterThan(1000)
-    expect(state.checkpointed).toBe(state.log)
-  })
+  await checkpointedBy(2)
 })
