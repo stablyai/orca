@@ -20,7 +20,12 @@ import type { BotChangeKind } from '../../../../../shared/bots/bot-change-scope'
 import { botItemsNoticeParts } from '../../../../../shared/bots/bot-items-notice-parts'
 import { BotReadMoreFailed } from '../../../../../shared/bots/bot-read-more-failed'
 import { addBotReadAsk, botReadLoadAsk, type BotReadAsk } from '../bot-host-read-asks'
-import { createBotHostRead, useBotHostRead, type BotHostReadState } from '../use-bot-host-read'
+import {
+  createBotHostRead,
+  useBotHostRead,
+  type BotHostRead,
+  type BotHostReadState
+} from '../use-bot-host-read'
 import { useBotHostReadState } from '../use-bot-host-read-state'
 
 export type BotItemsRead = BotItemsListRead
@@ -47,7 +52,7 @@ function listCall(bot: BotRef, chatIds: readonly string[] | null): BotItemsListC
     })
 }
 
-const itemsRead = createBotHostRead<BotItemsRead>(
+const itemsRead: BotHostRead<BotItemsRead> = createBotHostRead<BotItemsRead>(
   'bots.items.owner.list',
   (result: BotItemsRead) => result,
   'Failed to read bot items:',
@@ -59,8 +64,15 @@ const itemsRead = createBotHostRead<BotItemsRead>(
   {
     partsOf: (scope, botId) => botItemsNoticeParts(scope, botId),
     maxParts: BOT_ITEM_LIMITS.listPageMax,
+    // The first read after a reopen builds on the kept list, whose deeper pages missed the notices while
+    // it was closed: it reads every loaded page again, not only once the first page moves.
     load: (bot, previous, ask, show, live, waiting) =>
-      loadBotItemsList(listCall(bot, null), previous, ask, { show, live, waiting })
+      loadBotItemsList(listCall(bot, null), previous, ask, {
+        show,
+        live,
+        waiting,
+        pageUnmoved: !itemsRead.landed(botRefKey(bot))
+      })
   }
 )
 
