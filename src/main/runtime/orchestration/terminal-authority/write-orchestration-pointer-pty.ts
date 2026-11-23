@@ -1,4 +1,5 @@
 import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-identity-read-context'
+import { unmountedSleptLeafHandle } from '../mailbox/routing/unmounted-slept-leaf'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness } from '../../terminal/lifecycle/floating-session-liveness'
 import { writeOrchestrationPointerWithSettlement } from '../mailbox/terminal-pointer/mailbox-pointer-pty-write'
@@ -112,7 +113,8 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
   ): RuntimeTerminalSummary {
     const worktree = worktreesById.get(leaf.worktreeId)
     const tab = this.tabs.get(leaf.tabId) ?? null
-    const handle = this.issueHandle(leaf)
+    // An unmounted slept agent's pane carries its saved name; minting one would bind a placeholder.
+    const handle = unmountedSleptLeafHandle(leaf) ?? this.issueHandle(leaf)
     // Agent Sleep's stopped process stands in for the idle agent it will resume.
     const sleptAgent = this.sleptAgentHandle(handle)
     const slept = sleptAgent ? (sleptAgent.pty ?? { lastOutputAt: null, preview: '' }) : null

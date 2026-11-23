@@ -325,6 +325,46 @@ describe('Agent-slept window pane wake', () => {
     db.close()
   })
 
+  it('keeps a slept agent reachable by its handle after a reload while another workspace shows', async () => {
+    const slept = await sleptPane()
+    saveSleepRecord(slept.runtime, slept.handle)
+    const waiting = slept.runtime.waitForTerminal(slept.handle, {
+      condition: 'exit',
+      timeoutMs: 5_000
+    })
+    const settled = vi.fn()
+    void waiting.then(settled, settled)
+
+    expect(slept.runtime.markRendererReloading(1)).not.toBeNull()
+    // The reloaded window shows another workspace, so it publishes none of this one's panes.
+    await slept.runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    slept.runtime.markGraphReady(1)
+    await Promise.resolve()
+
+    expect(settled).not.toHaveBeenCalled()
+    await expectListedThenWokenInPlace(slept)
+    slept.db.close()
+  })
+
+  it('keeps an agent that slept while its tab was unmounted reachable by its handle', async () => {
+    const db = createDatabase('orca-slept-wake-')
+    const slept: { db: typeof db; rows: AgentStatusIpcPayload[] } = { db, rows: [] }
+    const { runtime } = await createRuntime(db, { getAgentStatusSnapshotForPane: () => slept.rows })
+    await driveToLiveIdle(runtime)
+    // The user opens another workspace: the window unmounts the running agent's tab.
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const handle = runtime.getTerminalHandleForPaneKey(PANE_KEY)
+    expect(handle).toBeTruthy()
+    slept.rows = [statusRow({ receivedAt: 1, paneSleep: { ptyId: PTY_ID } })]
+    const settleStop = runtime.intentionalPtyStops.mark(PTY_ID, 'reversible', 'mailbox-incarnation')
+    await runtime.onPtyExit(PTY_ID, 0, 'mailbox-incarnation', { providerExitObserved: true })
+    settleStop(true)
+    saveSleepRecord(runtime, handle!)
+
+    await expectListedThenWokenInPlace(Object.assign(slept, { runtime, handle: handle! }))
+    db.close()
+  })
+
   it("waits on through Agent Sleep's stop when the exit wait began while the agent was awake", async () => {
     const db = createDatabase('orca-slept-wake-')
     const rows: AgentStatusIpcPayload[] = []
@@ -399,6 +439,75 @@ async function sleptPane(outputBeforeSleep?: string) {
   await runtime.syncWindowGraph(1, graph(null))
   expect(runtime.sleptAgentHandleForPane(PANE_KEY)).toBe(handle)
   return Object.assign(slept, { runtime, handle })
+}
+
+/** The sleep record the window saved for the pane, naming the handle it slept under. */
+function saveSleepRecord(
+  runtime: Awaited<ReturnType<typeof sleptPane>>['runtime'],
+  handle: string
+) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the window-owned harness has no session store; these are the members that load a host's records.
+  const internals = runtime as unknown as {
+    watchSleepingMail: () => void
+    sleepingRecordIndex: {
+      refresh: (host: string, records: Record<string, unknown>, changed: () => void) => void
+    }
+  }
+  internals.watchSleepingMail()
+  internals.sleepingRecordIndex.refresh(
+    'saved',
+    {
+      [PANE_KEY]: {
+        paneKey: PANE_KEY,
+        tabId: TAB_ID,
+        worktreeId: WORKTREE_ID,
+        agent: 'codex',
+        origin: 'worktree-sleep',
+        state: 'done',
+        prompt: '',
+        providerSession: { key: 'session_id', id: 'slept-session' },
+        capturedAt: 1,
+        updatedAt: 1,
+        terminalHandle: handle
+      }
+    },
+    () => {}
+  )
+}
+
+/** A slept agent the window has not mounted is listed and shown under its handle, and an act on it
+ *  resumes it once, in its own pane, under the same handle. */
+async function expectListedThenWokenInPlace(slept: Awaited<ReturnType<typeof sleptPane>>) {
+  const { runtime, handle } = slept
+  const listed = (await runtime.listTerminals()).terminals.filter((t) => t.handle === handle)
+  expect(listed).toEqual([
+    expect.objectContaining({ tabId: TAB_ID, leafId: LEAF_ID, connected: true, writable: true })
+  ])
+  await expect(runtime.showTerminal(handle)).resolves.toMatchObject({ handle, writable: true })
+  const spawnedAs: (string | null)[] = []
+  const resume = vi.fn(async () => {
+    const name = runtime.sleptPaneHandleForSpawn(PANE_KEY)
+    spawnedAs.push(name)
+    registerBoundPty(runtime, WOKEN_PTY_ID, WORKTREE_ID, null, {
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      incarnationId: 'woken-incarnation'
+    })
+    if (name) {
+      runtime.registerPreAllocatedHandleForPty(WOKEN_PTY_ID, name)
+    }
+    slept.rows = [statusRow({ receivedAt: 2 })]
+    await runtime.syncWindowGraph(1, graph(WOKEN_PTY_ID))
+    runtime.onPtyData(WOKEN_PTY_ID, '\x1b]0;Codex done\x07', 1)
+    await runtime.serializeMainTerminalBuffer(WOKEN_PTY_ID)
+    return true
+  })
+  runtime.setNotifier(wakeNotifier(resume))
+
+  await expect(runtime.wakeSleptAgentHandle(handle, { timeoutMs: 5_000 })).resolves.toBe(handle)
+  expect(resume).toHaveBeenCalledTimes(1)
+  expect(spawnedAs).toEqual([handle])
+  expect(runtime.getTerminalHandleForPaneKey(PANE_KEY)).toBe(handle)
 }
 
 /** A pane status row; the slept-pane paths read only paneKey, receivedAt and paneSleep from it. */

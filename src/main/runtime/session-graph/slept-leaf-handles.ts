@@ -280,16 +280,25 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     return leaf ? this.sleptLeafHandle(leaf) : null
   }
 
-  /** A slept agent's handle and its stopped process, whose kept output stands for the idle agent. */
+  /** A slept agent's handle and its stopped process, whose kept output stands for the idle agent.
+   *  The one lookup every terminal act takes: a pane whose tab the window hasn't mounted answers
+   *  through its saved sleep record. */
   protected sleptAgentHandle(
     handle: string
   ): { pty: RuntimePtyWorktreeRecord | null; leaf: RuntimeLeafRecord } | null {
     const record = this.handles.get(handle)
     const leaf = record ? this.leaves.get(this.getLeafKey(record.tabId, record.leafId)) : undefined
-    if (!record || !leaf || this.sleptAgentLeafHandle(leaf) !== handle) {
-      return null
+    const pty = (record?.ptyId && this.ptysById.get(record.ptyId)) || null
+    if (leaf) {
+      return this.sleptAgentLeafHandle(leaf) === handle ? { pty, leaf } : null
     }
-    return { pty: (record.ptyId && this.ptysById.get(record.ptyId)) || null, leaf }
+    const unmounted = this.unmountedSleptAgentLeaf(handle)
+    return unmounted ? { pty: pty?.connected ? null : pty, leaf: unmounted } : null
+  }
+
+  /** The pane a slept agent's saved record names when its tab isn't mounted; none until records load. */
+  protected unmountedSleptAgentLeaf(_handle: string): RuntimeLeafRecord | null {
+    return null
   }
 }
 

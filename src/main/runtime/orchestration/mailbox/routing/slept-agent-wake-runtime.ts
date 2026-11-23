@@ -1,50 +1,26 @@
 import { mailWakeObligation } from './mail-wake-obligation'
 import { queueTerminalWorkspaceCommand } from '../../../workspaces/lifecycle/workspace-lifecycle-commands'
-import { makePaneKey, parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitCondition
 } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
-import { RuntimeSleptMailboxWakes } from './slept-mailbox-runtime'
 import { joinWithin } from './slept-agent-wake-join'
 import { SleptAgentWaits } from './slept-agent-waits'
-import { LeafIdIndex } from './leaf-id-index'
+import { RuntimeUnmountedSleptAgents } from './unmounted-slept-agents'
 
 // Covers a cold agent resume; a caller's own deadline overrides it.
 const SLEPT_AGENT_WAKE_TIMEOUT_MS = 120_000
 const SLEPT_PANE_CLOSED = 'slept_pane_closed'
 
 /** An Agent-slept pane answers orchestration as an idle agent: terminal acts wake it in place. */
-export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
+export abstract class RuntimeSleptAgentWakes extends RuntimeUnmountedSleptAgents {
   /** One wake per slept handle, held until its agent is idle, so every act arriving meanwhile joins it. */
   private readonly sleptAgentWakes = new Map<string, { paneKey: string; woken: Promise<void> }>()
   /** Explicit wakes in progress per pane, so pane membership is a lookup. */
   private readonly sleptWakesByPane = new Map<string, number>()
   /** Pending wake waits by handle, so an identity write re-checks only the waits on what it touched. */
-  private readonly leavesByLeafId = new LeafIdIndex()
   private readonly sleptWaits = new SleptAgentWaits(() => this.terminalIdentity.handleTouches)
-
-  /** The pane an Agent-slept handle names: still on its stopped process, and not under the user's own Sleep. */
-  protected sleptAgentPaneForHandle(
-    handle: string
-  ): { paneKey: string; worktreeId: string } | null {
-    const record = this.handles.get(handle)
-    return record && this.sleptAgentHandle(handle)
-      ? { paneKey: makePaneKey(record.tabId, record.leafId), worktreeId: record.worktreeId }
-      : null
-  }
-
-  /** The handle of the slept agent in this pane, which takes input as an idle agent does; null when
-   *  the pane runs a process, never slept, or sleeps under the user's own Sleep. */
-  sleptAgentHandleForPane(paneKey: string | null | undefined): string | null {
-    const pane = paneKey ? parsePaneKey(paneKey) : null
-    const leaf = pane ? this.leaves.get(this.getLeafKey(pane.tabId, pane.leafId)) : undefined
-    if (!leaf) {
-      return null
-    }
-    const handle = this.sleptLeafHandle(leaf)
-    return handle && this.sleptAgentPaneForHandle(handle) ? handle : null
-  }
 
   /** The stopped process a slept agent's handle still names; its custody passes to the resume. */
   sleptAgentProcessIncarnation(handle: string): string | null {
@@ -111,7 +87,8 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
       signal?: AbortSignal
     } = {}
   ): Promise<RuntimeTerminalWait> | null {
-    if (!this.sleptAgentPaneForHandle(handle)) {
+    const pane = this.sleptAgentPaneForHandle(handle)
+    if (!pane) {
       return null
     }
     const condition = options.condition ?? 'exit'
@@ -126,7 +103,7 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     }
     const deadline =
       options.timeoutMs && options.timeoutMs > 0 ? Date.now() + options.timeoutMs : Infinity
-    return this.awaitWokenHandle(handle, deadline, options.signal).then(
+    return this.awaitWokenHandle(handle, pane.paneKey, deadline, options.signal).then(
       () =>
         this.waitForTerminal(handle, {
           ...options,
@@ -158,7 +135,7 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
 
   override markRendererReloadCancelled(
     windowId: number,
-    fence: Parameters<RuntimeSleptMailboxWakes['markRendererReloadCancelled']>[1]
+    fence: Parameters<RuntimeUnmountedSleptAgents['markRendererReloadCancelled']>[1]
   ): boolean {
     const wasReady = this.graphStatus === 'ready'
     const restored = super.markRendererReloadCancelled(windowId, fence)
@@ -183,7 +160,7 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     const deadline = Date.now() + SLEPT_AGENT_WAKE_TIMEOUT_MS
     await this.requestSleptPaneResume(pane)
     try {
-      await this.awaitWokenHandle(handle, deadline, undefined, parsePaneKey(pane.paneKey)?.leafId)
+      await this.awaitWokenHandle(handle, pane.paneKey, deadline)
     } catch (error) {
       throw error instanceof Error && error.message === SLEPT_PANE_CLOSED
         ? new Error('terminal_handle_stale')
@@ -219,12 +196,6 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     }
   }
 
-  /** The connected process a handle names; works for window panes, which own their handles. */
-  private wokenHandlePtyId(handle: string): string | null {
-    const ptyId = this.handles.get(handle)?.ptyId
-    return ptyId && this.ptysById.get(ptyId)?.connected === true ? ptyId : null
-  }
-
   /** Whether a slept handle's pane is still there: a move keeps its leaf id, a reload is not settled,
    *  and a window graph that went away leaves nothing to answer for it. */
   private sleptPaneState(
@@ -244,8 +215,16 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     }
     const leaf = this.leavesByLeafId.find(this.leaves, leafId)
     if (leaf) {
-      // A reload re-mints slept names lazily; another name in the pane means this one is gone.
-      return this.sleptLeafHandle(leaf) === handle ? 'open' : 'lost'
+      // A reload re-mints slept names lazily; another name in the pane means this one is gone. A pane
+      // mounted for its wake is unnamed until it resumes under the name its record saved.
+      const named = this.sleptLeafHandle(leaf)
+      return named === handle ||
+        (named === null &&
+          leaf.ptyId === null &&
+          paneKey !== null &&
+          this.sleepingRecords.get(paneKey)?.terminalHandle === handle)
+        ? 'open'
+        : 'lost'
     }
     // A reloading window can publish its panes late; only a closed tab also drops the sleep record.
     return paneKey && this.sleepingRecords.has(paneKey) ? 'open' : 'closed'
@@ -254,13 +233,11 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
   /** Resolves once the handle names a connected process again: graph sync binds it after the spawn. */
   private awaitWokenHandle(
     handle: string,
+    paneKey: string,
     deadline: number,
-    signal?: AbortSignal,
-    paneLeafId?: string
+    signal?: AbortSignal
   ): Promise<void> {
-    const record = this.handles.get(handle)
-    const leafId = paneLeafId ?? record?.leafId ?? null
-    const paneKey = record && leafId === record.leafId ? makePaneKey(record.tabId, leafId) : null
+    const leafId = parsePaneKey(paneKey)?.leafId ?? null
     return new Promise((resolve, reject) => {
       const settle = (error?: unknown): void => {
         this.sleptWaits.remove(handle, leafId, check)

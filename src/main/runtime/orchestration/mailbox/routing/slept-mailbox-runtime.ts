@@ -97,7 +97,7 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
   })
 
   private watchingSleepingMail = false
-  private readonly sleepingRecordIndex = new SleepingMailRecordIndex()
+  protected readonly sleepingRecordIndex = new SleepingMailRecordIndex()
   /** Persisted sleep records only; a mail wake's temporary custody lives in mailWakeAttempts. */
   protected readonly sleepingRecords = this.sleepingRecordIndex.records
   protected readonly mailWakeAttempts = new MailWakeAttempts({

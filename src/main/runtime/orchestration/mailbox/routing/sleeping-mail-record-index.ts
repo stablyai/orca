@@ -53,6 +53,8 @@ export class SleepingMailRecordIndex {
   readonly records = new Map<string, SleepingAgentSessionRecord>()
   /** A pane moved to another tab keeps its leaf id, so a Run or Dispatch's older key still finds it. */
   private readonly panesByLeaf = new Map<string, string>()
+  /** The pane whose saved record names each handle, so a slept agent's name finds its pane by key. */
+  private readonly panesByHandle = new Map<string, string>()
   /** Obligated panes per host, with the record each was indexed under. */
   private readonly hosts = new Map<string, Map<string, SleepingAgentSessionRecord>>()
   private readonly inputs = new Map<string, Readonly<Record<string, SleepingAgentSessionRecord>>>()
@@ -68,6 +70,21 @@ export class SleepingMailRecordIndex {
   currentPane(paneKey: string): string {
     const leafId = this.records.has(paneKey) ? undefined : parsePaneKey(paneKey)?.leafId
     return (leafId && this.panesByLeaf.get(leafId)) || paneKey
+  }
+
+  paneForHandle(handle: string): string | null {
+    return this.panesByHandle.get(handle) ?? null
+  }
+
+  private indexHandle(handle: string | undefined, pane: string, present: boolean): void {
+    if (!handle) {
+      return
+    }
+    if (present) {
+      this.panesByHandle.set(handle, pane)
+    } else if (this.panesByHandle.get(handle) === pane) {
+      this.panesByHandle.delete(handle)
+    }
   }
 
   private indexLeaf(pane: string, present: boolean): void {
@@ -112,6 +129,10 @@ export class SleepingMailRecordIndex {
       next.set(pane, record)
       this.records.set(pane, record)
       this.indexLeaf(pane, true)
+      if (before?.terminalHandle !== record.terminalHandle) {
+        this.indexHandle(before?.terminalHandle, pane, false)
+      }
+      this.indexHandle(record.terminalHandle, pane, true)
       if (!before || !sameWake(before, record)) {
         maintained.add(pane)
       }
@@ -124,6 +145,7 @@ export class SleepingMailRecordIndex {
         this.records.delete(pane)
         this.arrivals.delete(pane)
         this.indexLeaf(pane, false)
+        this.indexHandle(previous.get(pane)?.terminalHandle, pane, false)
         maintained.add(pane)
       }
     }

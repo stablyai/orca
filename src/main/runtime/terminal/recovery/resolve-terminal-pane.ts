@@ -199,7 +199,8 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
   }
 
   async showTerminal(handle: string): Promise<RuntimeTerminalShow> {
-    const pty = this.getLivePtyForHandle(handle)
+    // A slept agent whose tab isn't mounted shows as the idle agent its saved record names.
+    const pty = this.unmountedSleptAgentLeaf(handle) ? null : this.getLivePtyForHandle(handle)
     if (pty) {
       const worktreesById = await this.getResolvedWorktreeMap()
       const summary = this.buildPtyTerminalSummary(pty.pty, worktreesById)
@@ -221,7 +222,7 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     const graphEpoch = this.captureReadyGraphEpoch()
     const worktreesById = await this.getResolvedWorktreeMap()
     this.assertStableReadyGraph(graphEpoch)
-    const { leaf } = this.getLiveLeafForHandle(handle)
+    const leaf = this.unmountedSleptAgentLeaf(handle) ?? this.getLiveLeafForHandle(handle).leaf
     const summary = this.buildTerminalSummary(leaf, worktreesById)
     const preview = leaf.ptyId
       ? await this.visibleSnapshotPreview(leaf.ptyId, summary.preview)
