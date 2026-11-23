@@ -15,6 +15,8 @@ import type {
   CodexUsageSession
 } from './types'
 
+import { UsageScanReadBudget } from '../usage/source-input/usage-scan-read-budget'
+
 const YIELD_EVERY_FILES = 10
 
 const { finalizeSessions, mergeSessions, mergeDailyAggregates, sortDailyAggregates } =
@@ -49,6 +51,7 @@ export async function scanCodexUsageFiles(
       file.ownedEventKeys.length > 0
   )
 
+  const readBytesByPath = new Map<string, number>()
   const reusedByPath = new Map<string, CodexUsagePersistedFile>()
   const resumeByPath = new Map<string, CodexRolloutResumePlan>()
   const pathsToParse: string[] = []
@@ -92,6 +95,10 @@ export async function scanCodexUsageFiles(
         }
       }
       pathsToParse.push(filePath)
+      readBytesByPath.set(
+        filePath,
+        fileInfo.size - (resumeByPath.get(filePath)?.state.parsedBytes ?? 0)
+      )
     }
     onFilesScanned?.(1)
     if ((index + 1) % YIELD_EVERY_FILES === 0) {
@@ -112,6 +119,7 @@ export async function scanCodexUsageFiles(
   }
 
   const parsedByPath = new Map<string, CodexUsagePersistedFile>()
+  const readBudget = new UsageScanReadBudget()
   let lostOwnerKeys = lostOwnerPath
   const parseAndPublish = async (
     filePath: string,
@@ -143,6 +151,7 @@ export async function scanCodexUsageFiles(
 
   for (const [index, filePath] of pathsToParse.entries()) {
     await parseAndPublish(filePath, resumeByPath.get(filePath))
+    await readBudget.consume(readBytesByPath.get(filePath) ?? 0)
 
     // Yield so large histories do not monopolize the scan worker.
     onFilesScanned?.(1)
@@ -159,6 +168,7 @@ export async function scanCodexUsageFiles(
       if (current?.hasDeferredClaims) {
         await parseAndPublish(filePath)
         onFilesScanned?.(1)
+        await readBudget.consume(current.size)
       }
       if ((index + 1) % YIELD_EVERY_FILES === 0) {
         await yieldToEventLoop()

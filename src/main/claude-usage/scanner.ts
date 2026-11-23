@@ -25,12 +25,16 @@ import {
   type ClaudeUsageVerifiedSources
 } from './persisted-projection-validation'
 
+import { UsageScanReadBudget } from '../usage/source-input/usage-scan-read-budget'
+
 const FILE_SCAN_BATCH_SIZE = 4
 
 type ClaudeUsageFilePlan = {
   previous: ClaudeUsagePersistedFile | undefined
   reusable: boolean
   resume: ClaudeUsageParseResumeState | null
+  /** Bytes a changed file's read covers: its unread suffix when resumed. */
+  readBytes: number
 }
 
 async function planClaudeUsageFile(
@@ -60,10 +64,12 @@ async function planClaudeUsageFile(
     !reusable && validProjection && fileInfo.size > previous.size && resumable.has(previous)
       ? previous.parseResumeState
       : null
+  const resumeState = resume && previous?.parseResumeState ? previous.parseResumeState : null
   return {
     previous,
     reusable,
-    resume: resume && previous?.parseResumeState ? previous.parseResumeState : null
+    resume: resumeState,
+    readBytes: reusable ? 0 : fileInfo.size - (resumeState?.parsedBytes ?? 0)
   }
 }
 
@@ -152,6 +158,7 @@ export async function scanClaudeUsageFiles(
     projections.set(path, projected)
   }
   const changed = files.filter((path) => !plans.get(path)?.reusable)
+  const readBudget = new UsageScanReadBudget()
   for (let index = 0; index < changed.length; index += FILE_SCAN_BATCH_SIZE) {
     const batch = changed.slice(index, index + FILE_SCAN_BATCH_SIZE)
     const reads = await Promise.all(
@@ -161,6 +168,9 @@ export async function scanClaudeUsageFiles(
       await publishRead(path, reads[offset], plans.get(path)?.previous)
     }
     onFilesScanned?.(batch.length)
+    await readBudget.consume(
+      batch.reduce((sum, path) => sum + (plans.get(path)?.readBytes ?? 0), 0)
+    )
     if (index + batch.length < changed.length) {
       await yieldToEventLoop()
     }
@@ -175,6 +185,7 @@ export async function scanClaudeUsageFiles(
       }
       await publishRead(path, await readClaudeUsageScanFile(path), previous)
       onFilesScanned?.(1)
+      await readBudget.consume(previous.size)
     }
   }
   const processedFiles: ClaudeUsagePersistedFile[] = []

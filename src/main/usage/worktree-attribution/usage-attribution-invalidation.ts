@@ -1,0 +1,181 @@
+import { realpath } from 'node:fs/promises'
+import { z } from 'zod'
+import type { UsageScanWorktreeRef } from '../provider-lifecycle/usage-provider-contract'
+import { normalizeComparablePath, normalizeFsPath } from './usage-path-comparison'
+
+const worktreeRowSchema = z.object({
+  repoId: z.string(),
+  worktreeId: z.string(),
+  path: z.string(),
+  displayName: z.string()
+})
+const fingerprintSchema = z.array(z.string())
+
+function parseFingerprintRows(
+  fingerprint: string | null
+): Map<string, UsageScanWorktreeRef> | null {
+  if (fingerprint === null) {
+    return null
+  }
+  try {
+    const rows = fingerprintSchema.safeParse(JSON.parse(fingerprint))
+    if (!rows.success) {
+      return null
+    }
+    const parsed = new Map<string, UsageScanWorktreeRef>()
+    for (const row of rows.data) {
+      const worktree = worktreeRowSchema.safeParse(JSON.parse(row))
+      if (!worktree.success) {
+        return null
+      }
+      parsed.set(row, worktree.data)
+    }
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function comparable(pathValue: string): string {
+  return normalizeComparablePath(pathValue).replace(/\/+$/, '')
+}
+
+function contains(parent: string, child: string): boolean {
+  return child === parent || child.startsWith(`${parent}/`)
+}
+
+async function comparableForms(pathValue: string): Promise<string[]> {
+  const forms = new Set([comparable(pathValue), comparable(normalizeFsPath(pathValue))])
+  try {
+    forms.add(comparable(await realpath(pathValue)))
+  } catch {
+    // Missing paths keep their literal forms.
+  }
+  return [...forms]
+}
+
+const optionalString = z.string().optional().catch(undefined)
+const listOf = <T extends z.ZodType>(item: T) => z.array(item).catch([])
+// Every provider projects locations as `worktree:<id>`, `cwd:<path>` or `unscoped`.
+const sourceAttributionSchema = z
+  .object({
+    dailyAggregates: listOf(
+      z
+        .object({ projectKey: optionalString, worktreeId: optionalString })
+        .catch({ projectKey: undefined, worktreeId: undefined })
+    ),
+    sessions: listOf(
+      z
+        .object({
+          primaryWorktreeId: optionalString,
+          locationBreakdown: listOf(
+            z
+              .object({ locationKey: optionalString, worktreeId: optionalString })
+              .catch({ locationKey: undefined, worktreeId: undefined })
+          )
+        })
+        .catch({ primaryWorktreeId: undefined, locationBreakdown: [] })
+    )
+  })
+  .catch({ dailyAggregates: [], sessions: [] })
+
+function collectAttributionKeys(source: unknown): { keys: Set<string>; worktreeIds: Set<string> } {
+  const keys = new Set<string>()
+  const worktreeIds = new Set<string>()
+  const add = (key: string | undefined, worktreeId: string | undefined): void => {
+    if (key !== undefined) {
+      keys.add(key)
+    }
+    if (worktreeId !== undefined) {
+      worktreeIds.add(worktreeId)
+    }
+  }
+  const { dailyAggregates, sessions } = sourceAttributionSchema.parse(source)
+  for (const daily of dailyAggregates) {
+    add(daily.projectKey, daily.worktreeId)
+  }
+  for (const session of sessions) {
+    add(undefined, session.primaryWorktreeId)
+    for (const location of session.locationBreakdown) {
+      add(location.locationKey, location.worktreeId)
+    }
+  }
+  return { keys, worktreeIds }
+}
+
+/**
+ * A worktree add/remove/rename only moves usage located inside a changed worktree, so drop just
+ * those cached sources (they re-read) instead of re-reading every transcript. An unreadable
+ * cached fingerprint drops everything.
+ */
+export async function retainUsageSourcesForWorktrees<T>(
+  sources: readonly T[],
+  cachedFingerprint: string | null,
+  currentFingerprint: string | null
+): Promise<T[]> {
+  if (cachedFingerprint === currentFingerprint) {
+    return [...sources]
+  }
+  const before = parseFingerprintRows(cachedFingerprint)
+  const after = parseFingerprintRows(currentFingerprint)
+  if (!before || !after) {
+    return []
+  }
+  const changed = [
+    ...[...before].filter(([row]) => !after.has(row)),
+    ...[...after].filter(([row]) => !before.has(row))
+  ].map(([, worktree]) => worktree)
+  if (changed.length === 0) {
+    return [...sources]
+  }
+  const changedIds = new Set(changed.map((worktree) => worktree.worktreeId))
+  const changedPaths = (await Promise.all(changed.map((w) => comparableForms(w.path)))).flat()
+  const pathsById = new Map<string, string[]>()
+  for (const worktree of [...before.values(), ...after.values()]) {
+    const forms = await comparableForms(worktree.path)
+    pathsById.set(worktree.worktreeId, [...(pathsById.get(worktree.worktreeId) ?? []), ...forms])
+  }
+  // A new worktree nested inside an unchanged one takes over that subtree's usage.
+  const worktreeAffected = (worktreeId: string): boolean =>
+    changedIds.has(worktreeId) ||
+    (pathsById.get(worktreeId) ?? []).some((parent) =>
+      changedPaths.some((child) => contains(parent, child))
+    )
+  const cwdVerdicts = new Map<string, boolean>()
+  const cwdAffected = async (cwd: string): Promise<boolean> => {
+    let verdict = cwdVerdicts.get(cwd)
+    if (verdict === undefined) {
+      const forms = await comparableForms(cwd)
+      verdict = changedPaths.some((parent) => forms.some((child) => contains(parent, child)))
+      cwdVerdicts.set(cwd, verdict)
+    }
+    return verdict
+  }
+  const keyAffected = async (key: string): Promise<boolean> => {
+    if (key === 'unscoped') {
+      return false
+    }
+    if (key.startsWith('worktree:')) {
+      return worktreeAffected(key.slice('worktree:'.length))
+    }
+    if (key.startsWith('cwd:')) {
+      return cwdAffected(key.slice('cwd:'.length))
+    }
+    return true
+  }
+  const retained: T[] = []
+  for (const source of sources) {
+    const { keys, worktreeIds } = collectAttributionKeys(source)
+    let affected = [...worktreeIds].some(worktreeAffected)
+    for (const key of keys) {
+      if (affected) {
+        break
+      }
+      affected = await keyAffected(key)
+    }
+    if (!affected) {
+      retained.push(source)
+    }
+  }
+  return retained
+}
