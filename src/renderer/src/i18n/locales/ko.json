@@ -1706,11 +1706,11 @@
           "agent": {
             "action": {
               "plan": {
-                "3f0ea9aa0d": "agent 시작 명령을 만들 수 없습니다.",
+                "3f0ea9aa0d": "에이전트 시작 명령을 만들 수 없습니다.",
                 "46f1a2c9bd": "명령 입력이 비어 있습니다.",
-                "8eb541cc83": "선택한 agent가 이 워크스페이스 호스트에서 감지되지 않았습니다.",
-                "b96e091fc9": "선택한 agent는 설정에서 비활성화되어 있습니다.",
-                "a7ac8717c7": "시작하기 전에 agent를 선택하세요."
+                "8eb541cc83": "선택한 에이전트가 이 워크스페이스 호스트에서 감지되지 않았습니다.",
+                "b96e091fc9": "선택한 에이전트는 설정에서 비활성화되어 있습니다.",
+                "a7ac8717c7": "시작하기 전에 에이전트를 선택하세요."
               }
             }
           },
@@ -8005,7 +8005,7 @@
           "a5c16712c1": "여러 개의 원격이 감지되었습니다. 원격 이름을 입력하세요(예:",
           "9a14ec7400": "아래에서 기본 브랜치를 선택하세요.",
           "086ce7f369": "기본 브랜치를 따르는 중({{value0}})",
-          "2f3cda96f5": "이 repo에 고정됨",
+          "2f3cda96f5": "이 저장소에 고정됨",
           "ee110e1830": "기본 기준 참조 없음"
         },
         "BrowserDefaultZoomSetting": {
@@ -14077,14 +14077,14 @@
             "c76693e456": "이 워크스페이스에 대한 파일을 로드할 수 없습니다:"
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "아직 commits이 없습니다",
-            "d0fb0f4bf2": "commits 새로 고침",
-            "9f7535d22b": "Refs는 정확한 commit을 가리키는 브랜치 또는 태그 이름입니다. Git에 commit에 대한 명명된 참조가 있는 경우에만 나타납니다.",
+            "cf7cad58d2": "아직 커밋이 없습니다",
+            "d0fb0f4bf2": "커밋 새로 고침",
+            "9f7535d22b": "Refs는 정확한 커밋을 가리키는 브랜치 또는 태그 이름입니다. Git에 커밋에 대한 명명된 참조가 있는 경우에만 나타납니다.",
             "9289ba0cb9": "refs란 무엇인가요?",
             "d836037d02": "커밋",
-            "8232c8b2f2": "{{value0}} commit 열기: {{value1}}",
-            "e5e81e59a6": "commits 크기 조정",
-            "6d1e0a7c3b": "commit 파일을 로드하지 못했습니다"
+            "8232c8b2f2": "{{value0}} 커밋 열기: {{value1}}",
+            "e5e81e59a6": "커밋 크기 조정",
+            "6d1e0a7c3b": "커밋 파일을 로드하지 못했습니다"
           },
           "HostedReviewActions": {
             "9845a71e17": "추가 작업",
@@ -14245,21 +14245,21 @@
             "ed34038d0d": "브랜치 비교 새로 고침",
             "493f963029": "기본 참조 변경",
             "11b5dd8e41": "비교 대상",
-            "a9bf7c171a": "Commit 실패",
-            "011f9713fc": "Commit이 차단되었습니다.",
-            "cc199ccc5f": "더 많은 commit 및 원격 작업",
+            "a9bf7c171a": "커밋 실패",
+            "011f9713fc": "커밋이 차단되었습니다.",
+            "cc199ccc5f": "더 많은 커밋 및 원격 작업",
             "4d6e1fd7f3": "추가 작업",
-            "37a81f29ad": "commit 메시지를 생성하는 중입니다. 중지하려면 클릭하세요.",
-            "b94112eb9e": "Commit 메시지",
+            "37a81f29ad": "커밋 메시지를 생성하는 중입니다. 중지하려면 클릭하세요.",
+            "b94112eb9e": "커밋 메시지",
             "0d0a8359d3": "메시지",
-            "15b7f210d7": "agent를 선택하고 시작하기 전에 전체 명령 입력을 편집하세요.",
-            "054ead86b1": "AI로 Commit 실패 수정",
-            "9e5ccd00aa": "Commit 실패 컨텍스트를 사용할 수 없습니다.",
+            "15b7f210d7": "에이전트를 선택하고 시작하기 전에 전체 명령 입력을 편집하세요.",
+            "054ead86b1": "AI로 커밋 실패 수정",
+            "9e5ccd00aa": "커밋 실패 컨텍스트를 사용할 수 없습니다.",
             "f0a2dc9e46": "실행 사용자 정의...",
-            "ec7bfced55": "commit 실패를 해결하려면 agent를 선택하세요.",
-            "dd43c47089": "이 commit 실패에 대한 agent를 선택하세요.",
-            "30b8d4f181": "AI로 commit 실패 수정",
-            "4b37ae99b0": "이 commit 실패를 수정하려면 기본 AI agent를 시작하세요.",
+            "ec7bfced55": "커밋 실패를 해결하려면 에이전트를 선택하세요.",
+            "dd43c47089": "이 커밋 실패에 대한 에이전트를 선택하세요.",
+            "30b8d4f181": "AI로 커밋 실패 수정",
+            "4b37ae99b0": "이 커밋 실패를 수정하려면 기본 AI 에이전트를 시작하세요.",
             "ae743199cd": "{{value0}}을(를) 만들기 전에 다른 베이스 브랜치를 선택하세요.",
             "318e2a7f88": "AI 생성이 완료될 때까지 기다리세요.",
             "f76307c1f7": "베이스 브랜치를 선택하세요.",
@@ -14278,13 +14278,13 @@
             "e868cec4e1": "생성 중…",
             "b355e740b2": "{{value0}} 세부정보 생성 중지",
             "e1970d327d": "새 {{value0}}",
-            "f4c766f1ca": "이 실행을 위한 agent 및 명령 템플릿을 선택합니다.",
+            "f4c766f1ca": "이 실행을 위한 에이전트 및 명령 템플릿을 선택합니다.",
             "1a6a6e0bc5": "호스팅된 리뷰 세부 정보 생성",
-            "6b122529d4": "Commit 메시지 생성",
-            "e48caaf0dd": "충돌에 대한 AI agent를 시작했습니다.",
-            "901140f47d": "agent를 시작하기 전에 전체 명령 입력을 리뷰하고 편집하세요.",
+            "6b122529d4": "커밋 메시지 생성",
+            "e48caaf0dd": "충돌에 대한 AI 에이전트를 시작했습니다.",
+            "901140f47d": "에이전트를 시작하기 전에 전체 명령 입력을 리뷰하고 편집하세요.",
             "19652ddd76": "AI로 충돌 해결",
-            "c9ad22888e": "이 repos의 브랜치 비교 대상을 선택하세요.",
+            "c9ad22888e": "이 저장소의 브랜치 비교 대상을 선택하세요.",
             "574d2f4413": "메모 지우기",
             "05bb8f4a48": "취소",
             "48db37cca9": "모두 보기",
@@ -14293,7 +14293,7 @@
             "2fe2a67580": "더 많은 메모 작업",
             "eae2d051af": "모든 메모 복사",
             "cc474e0b8c": "메모",
-            "e131cd7128": "소스 제어는 Git 리포지토리에서만 사용할 수 있습니다.",
+            "e131cd7128": "소스 제어는 Git 저장소에서만 사용할 수 있습니다.",
             "c07b236287": "변경사항을 보려면 워크스페이스를 선택하세요.",
             "a5e5a11090": "모든 변경 사항 취소 실패 — 취소 전에 파일의 스테이징을 해제하지 못했습니다.",
             "8a5ba6a988": "커밋 차이점을 불러오지 못했습니다.",
@@ -14321,13 +14321,13 @@
             "97d8b03cdf": "브랜치 비교 실패",
             "834cb3f23d": "AI로 수정",
             "60bd988f0b": "AI 수정",
-            "461575b9bc": "AI로 commit 메시지 생성",
-            "b16b8f0e4b": "AI commit 메시지",
-            "ddc1fbd690": "commit 메시지 생성 중지",
+            "461575b9bc": "AI로 커밋 메시지 생성",
+            "b16b8f0e4b": "AI 커밋 메시지",
+            "ddc1fbd690": "커밋 메시지 생성 중지",
             "5acbcedc1a": "{{value0}} 만들기",
             "aaf1451654": "초안 {{value0}} 만들기",
             "26511c22b4": "만드는 중...",
-            "d7ae61269b": "브랜치에 Commit 됨",
+            "d7ae61269b": "브랜치에 커밋됨",
             "48a003c1b1": "스테이징된 변경 사항",
             "d4ef4bafc5": "변경 사항",
             "9339382454": "모두 언스테이징",
@@ -14351,36 +14351,36 @@
             "2c417432b7": "로컬에서 해결됨",
             "f3a8b2c1d0e5": "{{value0}} 제목을 입력하세요.",
             "e2b7a1c0d9f4": "{{value0}} 생성에 실패했습니다",
-            "hugeRepoIgnorePrompt": "이 repos에 활성 변경 사항이 너무 많습니다. \"{{value0}}\"을(를) .gitignore에 추가하시겠습니까?",
+            "hugeRepoIgnorePrompt": "이 저장소에 활성 변경 사항이 너무 많습니다. \"{{value0}}\"을(를) .gitignore에 추가하시겠습니까?",
             "hugeRepoIgnoreAction": ".gitignore에 추가",
             "tooManyChanges": "변경 사항이 너무 많이 감지되었습니다. 처음 {{value0}}개만 표시됩니다.",
             "submoduleTruncated": "추가 서브모듈 변경 사항이 생략되었습니다",
             "bf5082de46": "{{value0}}이(가) 복사됨",
             "c06193ef57": "{{value0}}을(를) 복사하지 못했습니다",
-            "d172a4f068": "Commit 해시",
-            "e283b50179": "Commit 메시지",
-            "f394c6128a": "이 commit을 설명할 agent가 없습니다",
-            "04a5d7239b": "이 repos에는 지원되는 웹 원격이 없습니다",
-            "15b6e834ac": "브라우저에서 commit을 열지 못했습니다",
+            "d172a4f068": "커밋 해시",
+            "e283b50179": "커밋 메시지",
+            "f394c6128a": "이 커밋을 설명할 에이전트가 없습니다",
+            "04a5d7239b": "이 저장소에는 지원되는 웹 원격이 없습니다",
+            "15b6e834ac": "브라우저에서 커밋을 열지 못했습니다",
             "d37e68f61d": "리뷰용 브랜치를 준비하는 중…",
-            "8d8f5c6c94": "commit 메시지를 생성하는 중…",
-            "fda060d6ce": "commit 메시지를 검토한 다음 Create PR을 다시 시도하세요.",
-            "b75cb1fd0c": "변경 사항을 Commit 하는 중…",
+            "8d8f5c6c94": "커밋 메시지를 생성하는 중…",
+            "fda060d6ce": "커밋 메시지를 검토한 다음 PR 만들기를 다시 시도하세요.",
+            "b75cb1fd0c": "변경 사항을 커밋하는 중…",
             "995c5e67ec": "검토 설정에 확인이 필요합니다.",
-            "d7492cafce": "Source Control을 새로 고칠 수 없습니다. Create PR을 다시 시도하세요.",
-            "473f18758e": "Source Control AI 설정",
-            "createPrIntentConfigureAi": "commit 메시지를 추가하거나 Source Control AI 설정을 구성하세요.",
-            "createPrIntentGenerateFailed": "commit 메시지를 생성할 수 없습니다. 메시지를 추가한 다음 다시 시도하세요.",
-            "createPrIntentCommitFailed": "변경 사항을 commit 할 수 없습니다. 문제를 수정한 다음 Create PR을 다시 시도하세요.",
+            "d7492cafce": "소스 제어를 새로 고칠 수 없습니다. PR 만들기를 다시 시도하세요.",
+            "473f18758e": "소스 제어 AI 설정",
+            "createPrIntentConfigureAi": "커밋 메시지를 추가하거나 소스 제어 AI 설정을 구성하세요.",
+            "createPrIntentGenerateFailed": "커밋 메시지를 생성할 수 없습니다. 메시지를 추가한 다음 다시 시도하세요.",
+            "createPrIntentCommitFailed": "변경 사항을 커밋할 수 없습니다. 문제를 수정한 다음 PR 만들기를 다시 시도하세요.",
             "createPrIntentNeedsSync": "리뷰를 만들기 전에 이 브랜치를 동기화하세요.",
             "createPrIntentBranchNotReady": "브랜치가 아직 리뷰를 만들 준비가 되지 않았습니다.",
             "createPrIntentPublishing": "브랜치를 게시하는 중…",
             "createPrIntentForcePushing": "lease로 강제 푸시하는 중…",
-            "createPrIntentPushing": "commits을 푸시하는 중…",
+            "createPrIntentPushing": "커밋을 푸시하는 중…",
             "createPrIntentFastForwarding": "브랜치를 업데이트하는 중…",
-            "createPrIntentRemoteFailed": "원격 브랜치를 업데이트할 수 없습니다. Create PR을 다시 시도하세요.",
+            "createPrIntentRemoteFailed": "원격 브랜치를 업데이트할 수 없습니다. PR 만들기를 다시 시도하세요.",
             "createPrIntentGeneratingDetails": "리뷰 세부 정보 생성 중…",
-            "createPrIntentBranchChangedDuringDetails": "리뷰 세부 정보를 생성하는 동안 브랜치가 변경되었습니다. Create PR을 다시 시도하세요.",
+            "createPrIntentBranchChangedDuringDetails": "리뷰 세부 정보를 생성하는 동안 브랜치가 변경되었습니다. PR 만들기를 다시 시도하세요.",
             "createPrIntentCreatingReview": "리뷰 생성 중…",
             "a91f8e2b01": "목록으로 보기",
             "b82e9f3c12": "트리로 보기",
@@ -14406,7 +14406,7 @@
               "834cb3f23d": "AI로 수정",
               "783a808870": "닫기"
             },
-            "97e7124eac": "Source Control을 새로 고칠 수 없습니다. 다시 시도하세요.",
+            "97e7124eac": "소스 제어를 새로 고칠 수 없습니다. 다시 시도하세요.",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "현재 브랜치: {{value0}}",
             "c7d4e2f801": "베이스 ref 변경: {{value0}}",
@@ -14459,11 +14459,11 @@
             "refreshAll": "모두 새로 고침"
           },
           "SourceControlAgentActionDialog": {
-            "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
+            "8e856842d1": "선택한 에이전트를 시작할 수 없습니다.",
             "c075d00de1": "워크스페이스 연결을 확인할 수 없습니다.",
-            "808cfe0a3b": "이 repos",
+            "808cfe0a3b": "이 저장소",
             "994cddd1f7": "저장하지 않음",
-            "38b899cc02": "모든 리포지토리",
+            "38b899cc02": "모든 저장소",
             "agentNotEnabledOrDetected": "{{agent}}: 이 워크스페이스 호스트에서 활성화되지 않았거나 감지되지 않았습니다.",
             "workspaceConnectionUnresolved": "워크스페이스 연결을 확인할 수 없습니다.",
             "noEnabledAgentsDetected": "이 워크스페이스 호스트에서 활성화된 에이전트가 감지되지 않았습니다.",
@@ -14474,23 +14474,23 @@
             "f4f3c9ca4a": "프롬프트 템플릿",
             "b99c33cec5": "설정",
             "15c5d85706": "에이전트",
-            "1d47db9bf0": "활성화된 agents가 없습니다.",
-            "c7ff8cef11": "agents 감지 중...",
+            "1d47db9bf0": "활성화된 에이전트가 없습니다.",
+            "c7ff8cef11": "에이전트 감지 중...",
             "013c9ac04a": "저장 대상",
-            "23280cbab1": "이 템플릿에는 {basePrompt}가 포함되어 있지 않아 agent가 Orca 기본 프롬프트를 받지 못합니다.",
-            "5421a96acb": "저장 후 agent 시작",
-            "6cefcdfba1": "나중에 Source Control AI 설정에서 변경할 수 있습니다.",
+            "23280cbab1": "이 템플릿에는 {basePrompt}가 포함되어 있지 않아 에이전트가 Orca 기본 프롬프트를 받지 못합니다.",
+            "5421a96acb": "저장 후 에이전트 시작",
+            "6cefcdfba1": "나중에 소스 제어 AI 설정에서 변경할 수 있습니다.",
             "c29f9cf266": "이 프롬프트를 저장하고 다음에는 이 리뷰를 표시하지 않기",
             "ea4788705e": "취소",
             "b0da3a4d3e": "실행 레시피가 이미 저장되었습니다",
-            "bff4795a6d": "저장된 레시피를 업데이트하려면 agent, 인수 또는 프롬프트 템플릿을 변경하세요.",
-            "5c75b24735": "Orca가 시작하기 전에 agent가 받을 내용을 사용자 지정합니다.",
+            "bff4795a6d": "저장된 레시피를 업데이트하려면 에이전트, 인수 또는 프롬프트 템플릿을 변경하세요.",
+            "5c75b24735": "Orca가 시작하기 전에 에이전트가 받을 내용을 사용자 지정합니다.",
             "repoAgentOverrideNote": "이 저장소는 전역 기본값({{global}})을 재정의하며 현재 {{effective}}을(를) 실행합니다. 이 저장소에서 실행할 항목을 바꾸려면 이 저장소에 저장하세요."
           },
           "SourceControlTextGenerationDialog": {
             "c5b7fa7cb6": "전역 기본값으로 저장",
-            "7f1ec309a4": "모든 repos에 대해 기본값으로 저장",
-            "5959da1e4d": "이 repos에만 저장",
+            "7f1ec309a4": "모든 저장소에 대해 기본값으로 저장",
+            "5959da1e4d": "이 저장소에만 저장",
             "d054d5e0a0": "설정이 로드되지 않았습니다."
           },
           "SourceControlTextGenerationDialogForm": {
@@ -14500,7 +14500,7 @@
             "551ffd111b": "--model sonnet",
             "4eab815004": "CLI 인수",
             "914c8f6ac2": "사용자 지정 명령",
-            "cce2cbd01d": "agent 선택",
+            "cce2cbd01d": "에이전트 선택",
             "9c14186dd2": "에이전트"
           },
           "activity": {
@@ -14881,17 +14881,17 @@
                   "7aad2c0240": "호스팅 리뷰 작업 진행 중…",
                   "9e779995dd": "{{value0}} 만들기",
                   "226b85a3a7": "가져오기",
-                  "323bb614aa": "Commit 및 동기화",
+                  "323bb614aa": "커밋 및 동기화",
                   "2b8e6595fd": "커밋",
                   "04d709801d": "병합하지 않고 원격에서 가져오기(fetch)",
-                  "titleCheckOutBranchToPush": "commits을 푸시하기 전에 브랜치를 체크아웃하세요",
+                  "titleCheckOutBranchToPush": "커밋을 푸시하기 전에 브랜치를 체크아웃하세요",
                   "titleLinkedReviewTargetUnavailable": "연결된 리뷰 브랜치 대상을 사용할 수 없습니다",
-                  "titlePublishBranchFirstToPush": "commits을 푸시하려면 먼저 브랜치를 게시하세요",
-                  "titleCommitAndForcePush": "스테이지된 변경 사항을 Commit 하고 lease로 강제 푸시",
-                  "titleCommitAndTryPush": "스테이지된 변경 사항을 Commit 하고 푸시 시도",
-                  "titleCommitAndPush": "스테이지된 변경 사항을 Commit 하고 푸시",
-                  "commitForcePush": "Commit 및 강제 푸시",
-                  "commitPush": "Commit 및 푸시",
+                  "titlePublishBranchFirstToPush": "커밋을 푸시하려면 먼저 브랜치를 게시하세요",
+                  "titleCommitAndForcePush": "스테이지된 변경 사항을 커밋하고 lease로 강제 푸시",
+                  "titleCommitAndTryPush": "스테이지된 변경 사항을 커밋하고 푸시 시도",
+                  "titleCommitAndPush": "스테이지된 변경 사항을 커밋하고 푸시",
+                  "commitForcePush": "커밋 및 강제 푸시",
+                  "commitPush": "커밋 및 푸시",
                   "titleOperationInProgress": "작업 진행 중…",
                   "titleAbortRebaseInProgress": "진행 중인 리베이스 중단",
                   "titleAbortMergeInProgress": "진행 중인 병합 중단",
@@ -14901,31 +14901,31 @@
                   "titleNothingToForcePush": "강제 푸시할 항목이 없습니다",
                   "titlePushAndSetUpstream": "이 브랜치를 푸시하고 필요하면 업스트림을 설정합니다",
                   "titleTryRegularPush": "일반 푸시를 시도합니다. git에서 강제 푸시가 필요할 수 있습니다",
-                  "titlePushMayNeedSync": "로컬 commits을 푸시합니다. git에서 먼저 동기화가 필요할 수 있습니다",
-                  "titleCheckOutBranchToForcePush": "commits을 강제 푸시하기 전에 브랜치를 체크아웃하세요",
-                  "titleCheckOutBranchToPull": "commits을 풀하기 전에 브랜치를 체크아웃하세요",
-                  "titlePublishBranchFirstToPull": "commits을 풀하려면 먼저 브랜치를 게시하세요",
-                  "titleNothingNewToPull": "풀할 새 항목이 없습니다 — 원격에는 로컬 commits의 이전 사본만 있습니다",
+                  "titlePushMayNeedSync": "로컬 커밋을 푸시합니다. git에서 먼저 동기화가 필요할 수 있습니다",
+                  "titleCheckOutBranchToForcePush": "커밋을 강제 푸시하기 전에 브랜치를 체크아웃하세요",
+                  "titleCheckOutBranchToPull": "커밋을 풀하기 전에 브랜치를 체크아웃하세요",
+                  "titlePublishBranchFirstToPull": "커밋을 풀하려면 먼저 브랜치를 게시하세요",
+                  "titleNothingNewToPull": "풀할 새 항목이 없습니다 — 원격에는 로컬 커밋의 이전 사본만 있습니다",
                   "titleNothingToPull": "풀할 항목이 없습니다",
                   "fastForward": "Fast-forward",
                   "titleCheckOutBranchToFastForward": "fast-forward하기 전에 브랜치를 체크아웃하세요",
                   "titlePublishBranchFirstToFastForward": "fast-forward하려면 먼저 브랜치를 게시하세요",
-                  "titleNothingNewToFastForward": "fast-forward할 새 항목이 없습니다 — 원격에는 로컬 commits의 이전 사본만 있습니다",
+                  "titleNothingNewToFastForward": "fast-forward 할 새 항목이 없습니다 — 원격에는 로컬 커밋의 이전 사본만 있습니다",
                   "titleNothingToFastForward": "fast-forward할 항목이 없습니다",
-                  "titleTryFastForwardPull": "fast-forward 풀을 시도합니다. git에서 로컬 commits을 거부할 수 있습니다",
-                  "titleUseForcePushToSync": "강제 푸시를 사용하세요 — 원격에는 로컬 commits의 이전 사본만 있습니다",
+                  "titleTryFastForwardPull": "fast-forward 풀을 시도합니다. git에서 로컬 커밋을 거부할 수 있습니다",
+                  "titleUseForcePushToSync": "강제 푸시를 사용하세요 — 원격에는 로컬 커밋의 이전 사본만 있습니다",
                   "titleBranchUpToDate": "브랜치가 최신 상태입니다",
                   "publishPrStatus": "PR 상태",
                   "publishLinkedReview": "연결된 리뷰",
                   "publishNoBranch": "브랜치 없음",
                   "titleLinkedReviewBranchExists": "연결된 리뷰 브랜치가 이미 있습니다",
-                  "titleCheckOutBranchToPublish": "commits을 게시하기 전에 브랜치를 체크아웃하세요",
+                  "titleCheckOutBranchToPublish": "커밋을 게시하기 전에 브랜치를 체크아웃하세요",
                   "titleBranchAlreadyPublished": "브랜치가 이미 게시되었습니다",
                   "titleCreateReviewForBranch": "이 브랜치에 대해 {{reviewLabel}} 만들기",
                   "forcePushBeforeReview": "강제 푸시 후 {{shortLabel}} 만들기",
                   "pushBeforeReview": "푸시 후 {{shortLabel}} 만들기",
                   "titleForcePushBeforeCreatingReview": "{{reviewLabel}}을(를) 만들기 전에 lease로 강제 푸시",
-                  "titlePushBeforeCreatingReview": "{{reviewLabel}}을(를) 만들기 전에 로컬 commits 푸시",
+                  "titlePushBeforeCreatingReview": "{{reviewLabel}}을(를) 만들기 전에 로컬 커밋 푸시",
                   "pushCount_one": "커밋 {{count}}개 푸시",
                   "pushCount_other": "커밋 {{count}}개 푸시",
                   "pullCount_one": "커밋 {{count}}개 풀",
@@ -14970,7 +14970,7 @@
                   "titlePrAlreadyMerged": "PR이 이미 병합되었습니다",
                   "titleCheckOutBranchToSync": "커밋을 동기화하기 전에 브랜치를 체크아웃하세요",
                   "titlePublishBranchFirst": "커밋을 동기화하려면 먼저 브랜치를 게시하세요",
-                  "titleUseForcePush": "Commit 및 강제 푸시를 사용하세요 — 원격에는 로컬 커밋의 이전 사본만 있습니다",
+                  "titleUseForcePush": "커밋 및 강제 푸시를 사용하세요 — 원격에는 로컬 커밋의 이전 사본만 있습니다",
                   "titleCommitThenPullPush": "커밋한 다음 풀 및 푸시",
                   "rebaseFromNamedBase": "{{baseRef}}에서 리베이스",
                   "rebaseFromBase": "베이스에서 리베이스",
@@ -15002,20 +15002,20 @@
                   "390abeab93": "강제 푸시",
                   "1884cf34af": "이 브랜치를 origin에 게시",
                   "7b4d02e6b8": "브랜치 게시",
-                  "3d5dccef0b": "commit 할 것이 없습니다. PR은 이미 병합되었습니다.",
+                  "3d5dccef0b": "커밋할 것이 없습니다. PR은 이미 병합되었습니다.",
                   "41d4bcf157": "PR 상태 확인 중…",
-                  "fa3bd4f40c": "commit 할 파일을 하나 이상 스테이지하세요",
+                  "fa3bd4f40c": "커밋할 파일을 하나 이상 스테이지하세요",
                   "5a477d80cb": "모든 변경 사항 스테이징",
                   "18a0fca877": "모두 스테이지",
-                  "f01f16d77f": "commit 하려면 commit 메시지를 입력하세요.",
-                  "ab41fb926b": "스테이지된 변경 사항 Commit",
-                  "a6457b46a7": "commit 하기 전에 충돌을 해결하세요.",
+                  "f01f16d77f": "커밋하려면 커밋 메시지를 입력하세요.",
+                  "ab41fb926b": "스테이지된 변경 사항 커밋",
+                  "a6457b46a7": "커밋하기 전에 충돌을 해결하세요.",
                   "484f45c439": "{{value0}} 진행 중…",
                   "6f7a8b9c0d": "원격 작업 진행 중…",
                   "7f8a9b0c1d": "원격 작업 진행 중 — 완료된 후 다시 시도하세요",
                   "74fc171e99": "강제 푸시 진행 중…",
-                  "16aee3a5c1": "Commit 진행 중…",
-                  "e61b0d7a3c": "commits을 게시하기 전에 브랜치를 체크아웃하세요.",
+                  "16aee3a5c1": "커밋 진행 중…",
+                  "e61b0d7a3c": "커밋을 게시하기 전에 브랜치를 체크아웃하세요.",
                   "1d47e850cf": "연결된 리뷰 브랜치에 업데이트 푸시",
                   "c39d0c75c3": "연결된 검토 브랜치 대상을 사용할 수 없습니다.",
                   "d37e68f61d": "리뷰를 위해 브랜치를 준비하는 중…",
@@ -15023,9 +15023,9 @@
                   "b8e4f2a901": "원격 작업이 끝날 때까지 기다리세요.",
                   "c9f3a1b802": "{{value0}}을(를) 만들기 전에 충돌을 해결하세요.",
                   "e3b9d5f814": "기본 브랜치에서는 {{value0}}을(를) 만들 수 없습니다.",
-                  "f4c0e6a925": "{{value0}}을(를) 만들기 전에 변경 사항을 Commit 하세요.",
-                  "a5d1f7b036": "{{value0}}을(를) 만들기 전에 commits을 게시하세요.",
-                  "b6e2a8c147": "{{value0}}을(를) 만들기 전에 commits을 푸시하세요.",
+                  "f4c0e6a925": "{{value0}}을(를) 만들기 전에 변경 사항을 커밋하세요.",
+                  "a5d1f7b036": "{{value0}}을(를) 만들기 전에 커밋을 게시하세요.",
+                  "b6e2a8c147": "{{value0}}을(를) 만들기 전에 커밋을 푸시하세요.",
                   "c7f3b9d258": "{{value0}}을(를) 만들기 전에 이 브랜치를 동기화하세요.",
                   "d8a4c0e369": "{{value0}}을(를) 만들기 전에 인증하세요.",
                   "e9b5d1f470": "{{value0}}을(를) 만들기 전에 브랜치를 체크아웃하세요.",
@@ -15326,31 +15326,31 @@
             "f8a2c4d1e0": "탐색기 검색 모드"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "이 commit에는 파일 변경 사항이 없습니다",
-            "c3d4e5f6a7": "commit 되지 않은 Diff 열기"
+            "b2c3d4e5f6": "이 커밋에는 파일 변경 사항이 없습니다",
+            "c3d4e5f6a7": "모든 변경 사항 열기"
           },
           "GitHistoryRow": {
-            "2f9c41ab07": "commit {{value0}}의 파일 표시: {{value1}}",
-            "4a8d9e0c1f": "commit {{value0}}의 파일 숨기기: {{value1}}"
+            "2f9c41ab07": "커밋 {{value0}}의 파일 표시: {{value1}}",
+            "4a8d9e0c1f": "커밋 {{value0}}의 파일 숨기기: {{value1}}"
           },
           "GitHistoryCommitContextMenu": {
-            "7b1c4e9a02": "브라우저에서 commit 열기",
-            "8c2d5fab13": "commit 해시 복사",
-            "9d3e60bc24": "commit 메시지 복사",
+            "7b1c4e9a02": "브라우저에서 커밋 열기",
+            "8c2d5fab13": "커밋 해시 복사",
+            "9d3e60bc24": "커밋 메시지 복사",
             "ae4f71cd35": "변경 사항 설명"
           },
           "pull": {
             "policy": {
               "notice": {
                 "merge": "병합",
-                "mergeDescription": "로컬과 원격이 모두 변경된 경우 병합 commit을 만듭니다.",
+                "mergeDescription": "로컬과 원격이 모두 변경된 경우 병합 커밋을 만듭니다.",
                 "rebase": "리베이스",
-                "rebaseDescription": "로컬 commits을 원격 브랜치 위에 다시 적용합니다.",
+                "rebaseDescription": "로컬 커밋을 원격 브랜치 위에 다시 적용합니다.",
                 "fastForwardOnly": "fast-forward만 허용",
                 "fastForwardOnlyDescription": "병합이나 리베이스가 필요 없을 때만 pull합니다.",
                 "title": "Pull 정책 필요",
                 "diverged": "분기됨",
-                "body": "이 브랜치에는 로컬 commits과 원격 commits이 모두 있습니다. 이 워크트리 또는 SSH 호스트에서 명령 하나를 실행한 다음 풀 또는 동기화를 다시 시도하세요.",
+                "body": "이 브랜치에는 로컬 커밋과 원격 커밋이 모두 있습니다. 이 워크트리 또는 SSH 호스트에서 명령 하나를 실행한 다음 풀 또는 동기화를 다시 시도하세요.",
                 "copyAria": "{{value0}} pull 정책 명령 복사",
                 "copied": "복사됨",
                 "copyCommand": "명령 복사"
@@ -23956,7 +23956,7 @@
       "withDetail": "{{shortLabel}} 생성에 실패했습니다: {{detail}}",
       "pushFailed": "푸시에 실패했습니다. 푸시 오류를 해결한 후 다시 시도하세요.",
       "stacked": {
-        "stackGithubOnly": "스택에 포함된 PR 생성은 GitHub 리포지토리에서만 가능합니다.",
+        "stackGithubOnly": "스택에 포함된 PR 생성은 GitHub 저장소에서만 가능합니다.",
         "stackGithubComOnly": "스택에 포함된 GitHub PR은 GitHub.com에서만 사용할 수 있습니다.",
         "stackSameParent": "스택에 포함할 PR을 만들기 전에 다른 상위 브랜치를 선택하세요.",
         "stackParentWithoutReview": "상위 브랜치 {{base}}에 열린 PR이 없습니다. 먼저 해당 PR을 만드세요.",
@@ -23966,11 +23966,11 @@
         "stackParentClosed": "선택한 상위 PR이 닫힌 스택에 속해 있습니다.",
         "stackParentNotTop": "다른 계층을 추가하기 전에 스택의 최상위 PR을 기본 브랜치로 선택하세요.",
         "stackConflict": "이 PR은 이미 다른 GitHub 스택에 속해 있습니다.",
-        "stacksUnavailable": "이 리포지토리에서는 GitHub의 스택에 포함된 PR을 사용할 수 없습니다.",
+        "stacksUnavailable": "이 저장소에서는 GitHub의 스택에 포함된 PR을 사용할 수 없습니다.",
         "stackParentUnverified": "Orca가 상위 PR을 확인하지 못했습니다. 잠시 후 다시 시도하세요.",
         "stackExistingReviewOtherBase": "이 브랜치에 열린 PR이 이미 있지만 선택한 상위 브랜치를 대상으로 하지 않습니다.",
         "stackCreationUnconfirmed": "PR 생성이 완료되었을 수 있습니다. 다시 시도하여 스택 등록을 완료하세요.",
-        "stackRegistrationUnavailable": "PR이 생성되었지만 이 리포지토리에서는 GitHub 스택을 사용할 수 없습니다.",
+        "stackRegistrationUnavailable": "PR이 생성되었지만 이 저장소에서는 GitHub 스택을 사용할 수 없습니다.",
         "stackRegistrationFailed": "PR이 생성되었지만 GitHub가 스택에 추가하지 못했습니다. 다시 시도하여 스택 등록을 완료하세요."
       },
       "baseHeadTitleRequired": "기본 브랜치, 헤드 브랜치, 제목이 필요합니다."
@@ -24009,7 +24009,7 @@
         "promptTooLargeForArgument": "{{label}} 프롬프트가 너무 커서 단일 명령줄 인수로 전달할 수 없습니다. 스테이징할 변경 사항을 줄이고 다시 시도하세요.",
         "agentCouldNotStart": "{{label}}을(를) 시작할 수 없습니다. 설정에서 에이전트 명령을 확인하고 다시 시도하세요.",
         "agentFailedToStart": "{{label}} 시작에 실패했습니다. 설정에서 에이전트 명령을 확인하고 다시 시도하세요.",
-        "agentBinaryNotFound": "PATH에서 {{binary}}을(를) 찾을 수 없습니다. AI commit 메시지를 사용하려면 {{label}}을(를) 설치하세요.",
+        "agentBinaryNotFound": "PATH에서 {{binary}}을(를) 찾을 수 없습니다. AI 커밋 메시지를 사용하려면 {{label}}을(를) 설치하세요.",
         "timedOut": "생성 제한 시간({{seconds}}초)을 초과했습니다.",
         "outputTooLarge": "{{label}} CLI 명령의 출력이 너무 많습니다. 에이전트 CLI 설정을 확인하고 다시 시도하세요.",
         "windowsBatchUnsafeArguments": "{{label}}은(는) 여러 줄 프롬프트를 인수로 받을 수 없는 Windows 배치 스크립트를 통해 실행됩니다. 설정에서 에이전트 실행 파일을 지정하거나, Orca가 프롬프트를 stdin으로 보내도록 {prompt}가 없는 사용자 지정 명령을 사용하세요.",
@@ -24024,7 +24024,7 @@
         "emptyPullRequestDetailsWithDetail": "{{label}}에서 빈 세부 정보를 반환했습니다. CLI 출력: {{detail}}",
         "emptyJiraSummary": "{{label}}에서 빈 요약을 반환했습니다.",
         "emptyJiraSummaryWithDetail": "{{label}}에서 빈 요약을 반환했습니다. CLI 출력: {{detail}}",
-        "commitMessageUnparseable": "생성된 commit 메시지를 구문 분석할 수 없습니다.",
+        "commitMessageUnparseable": "생성된 커밋 메시지를 구문 분석할 수 없습니다.",
         "pullRequestDetailsUnparseable": "생성된 PR 세부 정보를 구문 분석할 수 없습니다.",
         "jiraSummaryEmptyAfterSanitization": "생성된 요약이 정제 후 비어 있습니다.",
         "jiraDescriptionRequired": "설명은 필수입니다.",
@@ -24033,7 +24033,7 @@
         "stagedChangesReadFailed": "스테이징된 변경 사항을 읽을 수 없습니다.",
         "noStagedChanges": "요약할 스테이징된 변경 사항이 없습니다.",
         "noBranchChanges": "요약할 브랜치 변경 사항이 없습니다.",
-        "commandTemplateEmptyCommitMessage": "commit 메시지용 명령 템플릿이 비어 있습니다.",
+        "commandTemplateEmptyCommitMessage": "커밋 메시지용 명령 템플릿이 비어 있습니다.",
         "commandTemplateEmptyPullRequest": "PR 세부 정보용 명령 템플릿이 비어 있습니다.",
         "commandTemplateEmptyBranchName": "브랜치 이름용 명령 템플릿이 비어 있습니다.",
         "commandTemplateEmptyChatName": "채팅 이름용 명령 템플릿이 비어 있습니다.",
@@ -24041,13 +24041,13 @@
         "chatNameAgentUnsupported": "설정 -> 채팅 -> 채팅 이름에서 이 작업에 사용할 수 있는 채팅 이름 생성 에이전트를 선택하세요. 지원되는 에이전트: {{agents}} 또는 사용자 지정 명령.",
         "sourceControlCustomCommandEmpty": "사용자 지정 명령이 비어 있습니다. 설정 -> Git -> 소스 제어 AI에서 추가하세요.",
         "chatNameCustomCommandEmpty": "사용자 지정 명령이 비어 있습니다. 설정 -> 채팅 -> 채팅 이름에서 추가하세요.",
-        "agentCannotGenerateCommitMessage": "\"{{agent}}\" 에이전트는 소스 제어 AI의 commit 메시지를 지원하지 않습니다. 지원되는 에이전트: {{agents}} 또는 사용자 지정 명령.",
+        "agentCannotGenerateCommitMessage": "\"{{agent}}\" 에이전트는 소스 제어 AI의 커밋 메시지를 지원하지 않습니다. 지원되는 에이전트: {{agents}} 또는 사용자 지정 명령.",
         "agentCannotGeneratePullRequest": "\"{{agent}}\" 에이전트는 소스 제어 AI의 PR 세부 정보를 지원하지 않습니다. 지원되는 에이전트: {{agents}} 또는 사용자 지정 명령.",
         "agentCannotGenerateBranchName": "\"{{agent}}\" 에이전트는 소스 제어 AI의 브랜치 이름을 지원하지 않습니다. 지원되는 에이전트: {{agents}} 또는 사용자 지정 명령.",
         "agentCannotGenerateChatName": "\"{{agent}}\" 에이전트는 채팅 이름을 지원하지 않습니다. 지원되는 에이전트: {{agents}} 또는 사용자 지정 명령.",
         "noModelForAgent": "{{label}}에서 사용할 수 있는 모델이 없습니다.",
-        "planCustomCommandEmpty": "사용자 지정 명령이 비어 있습니다. 설정 → Git → AI commit 메시지에서 추가하세요.",
-        "planAgentUnsupported": "\"{{agent}}\" 에이전트는 AI commit 메시지를 지원하지 않습니다.",
+        "planCustomCommandEmpty": "사용자 지정 명령이 비어 있습니다. 설정 → Git → AI 커밋 메시지에서 추가하세요.",
+        "planAgentUnsupported": "\"{{agent}}\" 에이전트는 AI 커밋 메시지를 지원하지 않습니다.",
         "planModelUnavailable": "\"{{model}}\" 모델은 {{label}}에서 사용할 수 없습니다.",
         "planModelWithoutThinking": "\"{{model}}\" 모델은 사고 강도 설정을 지원하지 않습니다.",
         "planThinkingLevelInvalid": "{{model}}에서는 사고 강도 \"{{level}}\" 설정을 사용할 수 없습니다.",
@@ -26823,6 +26823,397 @@
       "category": {
         "support": "지원 및 분류",
         "personal": "개인 비서"
+      },
+      "pr-review": {
+        "name": "PR 리뷰",
+        "line": "리뷰를 요청받은 PR을 살펴보고 위험한 변경을 정리합니다.",
+        "firstChat": "어떤 저장소를 볼지 물어본 뒤, 내 리뷰를 기다리는 열린 PR을 리뷰하고 결과를 파일과 줄 번호와 함께 이 채팅에 올립니다. 허락하기 전에는 GitHub에 댓글을 달지 않습니다.",
+        "watches": "선택한 저장소에서 내 리뷰를 기다리는 PR",
+        "does": "PR을 하나씩 검토해 위험한 변경과 빠진 테스트를 파일과 줄 번호와 함께 정리합니다.",
+        "reports": "이 채팅에서, 리뷰가 요청될 때",
+        "example1": "#4121: 재시도 카운터가 초기화되지 않아 두 번째 장애부터는 재시도가 멈춥니다.",
+        "example2": "새 타임아웃 경로를 다루는 테스트가 없습니다.",
+        "events": {
+          "review-requested": {
+            "trigger": "PR 리뷰를 요청받을 때",
+            "action": "리뷰하고 이 채팅에 올리기"
+          }
+        }
+      },
+      "bug-investigation": {
+        "name": "버그 조사",
+        "line": "제보된 버그를 재현하고 원인 위치를 찾습니다.",
+        "firstChat": "버그 리포트나 이슈 링크를 건네 주세요. 새 워크스페이스에서 에이전트를 시작해 재현 방법을 기록한 뒤 원인을 보고합니다. 수정은 동의한 뒤에만 작성합니다.",
+        "watches": "건네 주신 버그 리포트와 내게 할당된 Linear 이슈",
+        "does": "새 워크스페이스에서 버그를 재현하고, 시작 지점을 찾아 수정안을 제안합니다.",
+        "reports": "이 채팅에서, 재현과 원인을 찾았을 때",
+        "example1": "Windows에서 ORC-640을 재현했습니다. 줄바꿈 없이 끝나는 텍스트를 붙여넣으면 마지막 줄이 사라집니다.",
+        "example2": "원인: 붙여넣기 종료 마커가 마지막 청크보다 먼저 전송됩니다. 수정을 시작할까요?",
+        "events": {
+          "linear-assigned": {
+            "trigger": "Linear 이슈가 나에게 할당될 때",
+            "action": "조사하기"
+          }
+        }
+      },
+      "dependency-updates": {
+        "name": "의존성 업데이트",
+        "line": "오래되었거나 취약한 패키지를 확인하고 업그레이드를 제안합니다.",
+        "firstChat": "선택한 저장소의 오래되었거나 취약한 패키지를 긴급한 순서대로 정리합니다. 동의하면 에이전트가 그룹별로 PR을 하나씩 엽니다.",
+        "watches": "선택한 저장소의 패키지",
+        "does": "보안 권고와 오래된 패키지를 긴급한 순서로 정리하고, 동의하면 그룹별로 PR 하나씩 업그레이드합니다.",
+        "reports": "이 채팅에서, 매주 월요일 오전 9시",
+        "example1": "권고 1건: http-client 6.19에 심각도 높음 취약점이 있으며 6.21에서 수정되었습니다.",
+        "example2": "마이너 업그레이드 4건은 PR 하나로 묶어 올릴 수 있습니다.",
+        "schedules": {
+          "weekly-check": {
+            "when": "매주 월요일 오전 9시",
+            "what": "새 보안 권고와 메이저 버전"
+          }
+        }
+      },
+      "unreviewed-work": {
+        "name": "검토 안 된 에이전트 작업",
+        "line": "아직 아무도 보지 않은 에이전트 작업 결과를 매일 정리한 목록입니다.",
+        "firstChat": "에이전트가 변경을 마쳤지만 검토하지 않았거나 PR로 만들지 않은 워크스페이스를 정리합니다. 에이전트가 내 응답을 기다릴 때는 Orca가 이미 알려 주므로, 이 봇은 이미 끝난 작업을 다룹니다.",
+        "watches": "내 Orca 워크스페이스",
+        "does": "에이전트가 변경을 마쳤지만 아무도 검토하지 않았거나 PR을 열지 않은 워크스페이스를 정리합니다.",
+        "reports": "이 채팅에서, 평일 오전 9시",
+        "example1": "mobile-pairing이 어제 340줄 변경으로 끝났고 PR이 없습니다.",
+        "example2": "이번 주에 2건이 더 완료되었습니다.",
+        "schedules": {
+          "daily-list": {
+            "when": "평일 오전 9시",
+            "what": "검토를 기다리는 완료된 작업"
+          }
+        }
+      },
+      "workspace-cleanup": {
+        "name": "워크스페이스 정리",
+        "line": "완료되었거나 방치된 워크스페이스를 찾아 삭제를 제안합니다.",
+        "firstChat": "PR이 병합되었거나 2주 동안 변경이 없는 워크스페이스를 커밋되지 않은 변경과 함께 정리합니다. 선택한 항목만 삭제합니다.",
+        "watches": "내 Orca 워크스페이스와 PR",
+        "does": "완료되었거나 방치된 워크스페이스를 커밋되지 않은 변경과 함께 정리하고, 선택한 항목만 삭제합니다.",
+        "reports": "이 채팅에서, 매주 금요일 오후 4시",
+        "example1": "워크스페이스 6개가 완료되었습니다. 이번 주에 PR이 병합되었습니다.",
+        "example2": "폴더 2개가 10월 20일 이후 변경이 없습니다.",
+        "schedules": {
+          "weekly-list": {
+            "when": "매주 금요일 오후 4시",
+            "what": "삭제할 수 있는 워크스페이스"
+          }
+        }
+      },
+      "security-check": {
+        "name": "보안 점검",
+        "line": "병합된 변경에서 유출된 시크릿과 위험한 코드를 찾습니다.",
+        "firstChat": "선택한 저장소에서 지난주에 병합된 PR을 검토하고, 다시 살펴볼 항목을 파일과 줄 번호와 함께 정리합니다.",
+        "watches": "선택한 저장소에서 병합된 PR",
+        "does": "시크릿 유출, 인젝션, 인증 누락, 안전하지 않은 기본값을 점검합니다.",
+        "reports": "이 채팅에서, 매주 월요일 오전 9시와 PR이 병합될 때",
+        "example1": "#4133이 인증 토큰을 포함한 요청 헤더 전체를 로그로 남깁니다.",
+        "example2": "이번 주에는 그 외 항목이 없습니다.",
+        "schedules": {
+          "weekly-review": {
+            "when": "매주 월요일 오전 9시",
+            "what": "이번 주에 병합된 변경"
+          }
+        },
+        "events": {
+          "pr-merged": {
+            "trigger": "PR이 병합될 때",
+            "action": "확인하기"
+          }
+        }
+      },
+      "release": {
+        "name": "릴리스 준비 상태",
+        "line": "다음 릴리스를 막는 요소를 추적합니다.",
+        "firstChat": "실패한 체크, 리뷰 대기 중인 PR, 열린 블로커를 담은 짧은 준비 상태 목록을 유지합니다.",
+        "watches": "PR, 체크, 워크스페이스",
+        "does": "실패한 체크, 리뷰 대기 중인 PR, 열린 블로커를 담은 짧은 준비 상태 목록을 유지합니다.",
+        "reports": "이 채팅에서, 평일 아침",
+        "example1": "1.5는 체크 1건 실패로 막혀 있습니다. #4121의 typecheck입니다.",
+        "example2": "아직 리뷰가 필요한 PR이 2건 있습니다: #4108, #4130.",
+        "schedules": {
+          "readiness-list": {
+            "when": "평일 오전 9시",
+            "what": "준비 상태 목록"
+          }
+        }
+      },
+      "release-notes": {
+        "name": "릴리스 노트",
+        "line": "병합된 PR로 다음 릴리스 노트 초안을 작성합니다.",
+        "firstChat": "마지막 릴리스 태그를 찾아 신규, 수정, 변경 세 그룹으로 노트 초안을 작성합니다. 편집은 이 채팅에서 하면 됩니다.",
+        "watches": "마지막 릴리스 이후 병합된 PR",
+        "does": "사용자용 릴리스 노트 초안을 신규, 수정, 변경 세 그룹으로 작성합니다.",
+        "reports": "이 채팅에서, 요청할 때",
+        "example1": "1.5 초안: 신규 4건, 수정 9건, 변경 2건.",
+        "example2": "가장 큰 변경: 봇끼리 스킬을 공유할 수 있습니다."
+      },
+      "ci-failures": {
+        "name": "CI 실패",
+        "line": "실패한 체크를 설명하고 불안정한 체크 목록을 관리합니다.",
+        "firstChat": "최근 2주간의 체크 실행 기록을 읽어 불안정한 체크를 정리한 뒤, 내 열린 PR에서 실패한 체크를 하나씩 설명합니다. 수정은 동의한 뒤에만 시작합니다.",
+        "watches": "선택한 저장소의 체크 실행 기록",
+        "does": "불안정한 체크와 진짜 실패를 구분하고, 실패마다 원인을 설명하며, 불안정한 체크 목록을 관리합니다.",
+        "reports": "이 채팅에서, 매주 월요일 오전 9시와 체크가 실패할 때",
+        "needsSetup": "GitHub는 아직 브랜치별로 실패를 필터링할 수 없어, 봇이 저장소의 모든 실패를 보고 중요하지 않은 것은 건너뜁니다. 실패마다 턴이 한 번씩 사용됩니다.",
+        "example1": "#4130 typecheck: export 이름이 바뀌었는데 호출 위치 2곳이 빠졌습니다. 수정은 커밋 1개입니다.",
+        "example2": "이번 주 가장 불안정한 항목: 터미널 크기 조절 테스트, 30회 중 4회 실패.",
+        "schedules": {
+          "flaky-list": {
+            "when": "매주 월요일 오전 9시",
+            "what": "불안정한 체크"
+          }
+        },
+        "events": {
+          "check-failed": {
+            "trigger": "체크가 실패할 때",
+            "action": "불안정한 체크인지 진짜 실패인지 알려 주기"
+          }
+        }
+      },
+      "deploy-watch": {
+        "name": "배포 모니터링",
+        "line": "배포마다 바뀐 내용을 올리고 실패한 배포를 알려 줍니다.",
+        "firstChat": "배포 도구가 호출할 자동화 주소를 알려 주고, 배포된 PR을 바탕으로 배포마다 요약합니다.",
+        "watches": "배포 도구의 호출",
+        "does": "배포된 PR을 바탕으로 배포마다 요약하고 실패한 배포를 알려 줍니다.",
+        "reports": "이 채팅에서, 배포가 끝날 때마다",
+        "needsSetup": "배포 도구 커넥터가 없어, 자동화 주소를 배포 도구에 직접 추가해야 합니다.",
+        "example1": "운영 배포 14:02: PR 5건, 릴레이 재시도 수정 포함.",
+        "example2": "스테이징 배포가 migrate 단계에서 실패했습니다: 컬럼이 이미 존재합니다.",
+        "events": {
+          "deploy-called": {
+            "trigger": "배포 도구가 호출할 때",
+            "action": "배포 요약하기"
+          }
+        }
+      },
+      "support": {
+        "name": "지원 분류",
+        "line": "아무도 답하지 않은 질문 목록을 관리합니다.",
+        "firstChat": "선택한 Slack 채널에서 답변이 없는 질문을 링크와 함께 정리하고, 이미 이슈가 있는 질문을 표시합니다.",
+        "watches": "선택한 Slack 채널",
+        "does": "답변이 없는 질문을 링크와 함께 정리하고, 이미 Linear 이슈가 있는 질문을 표시합니다.",
+        "reports": "이 채팅에서, 평일 2시간마다",
+        "example1": "오전 11시 이후 #help에 새 질문 3건. 가장 오래된 질문: SSH 원격 연결이 계속 끊김, 2시간 경과.",
+        "example2": "\"봇을 내보낼 수 있나요?\"는 이미 SUP-212가 있습니다.",
+        "schedules": {
+          "unanswered": {
+            "when": "평일 오전 9시~오후 5시, 2시간마다",
+            "what": "답변 없는 질문"
+          }
+        }
+      },
+      "feedback": {
+        "name": "피드백 요약",
+        "line": "피드백을 주간 주제 목록으로 정리합니다.",
+        "firstChat": "선택한 채널의 최근 한 달 피드백을 주제별로 묶어 개수와 인용문을 함께 정리합니다.",
+        "watches": "Slack 피드백 채널",
+        "does": "피드백을 주제별로 묶어 인용문과 개수를 정리하고, 이미 있는 Linear 이슈를 연결합니다.",
+        "reports": "이 채팅에서, 매주 월요일 오전 9시",
+        "example1": "가장 많은 주제: Windows 터미널에서 붙여넣기, 7명, ORC-640 연결됨.",
+        "example2": "이번 주 새 요청: 3명이 봇 내보내기를 요청했습니다.",
+        "schedules": {
+          "weekly-themes": {
+            "when": "매주 월요일 오전 9시",
+            "what": "이번 주 주제"
+          }
+        }
+      },
+      "bug-intake": {
+        "name": "버그 리포트 접수",
+        "line": "Slack의 버그 리포트를 재현 단계가 담긴 추적 가능한 이슈로 바꿉니다.",
+        "firstChat": "선택한 채널을 읽고 새 버그 리포트마다 이슈 초안을 작성합니다. 승인한 뒤에만 등록합니다.",
+        "watches": "버그가 제보되는 Slack 채널",
+        "does": "버그 리포트마다 재현 단계가 담긴 Linear 이슈 초안을 작성하고, 승인하면 등록합니다.",
+        "reports": "이 채팅에서, 버그가 제보될 때",
+        "example1": "초안 작성: \"macOS 27에서 절전 후 터미널이 멈춤\", 재현 단계는 스레드에서 가져왔습니다.",
+        "example2": "ORC-702와 중복일 수 있습니다.",
+        "events": {
+          "bug-posted": {
+            "trigger": "버그 채널에 누군가 글을 올릴 때",
+            "action": "이슈 초안 작성하기"
+          }
+        }
+      },
+      "issue-triage": {
+        "name": "GitHub 이슈 분류",
+        "line": "새 이슈에 라벨을 붙이고, 중복을 찾고, 빠진 정보를 요청합니다.",
+        "firstChat": "선택한 저장소의 지난주 새 이슈를 훑어보고 라벨과 중복 후보를 이 채팅에 제안합니다.",
+        "watches": "선택한 저장소의 새 이슈",
+        "does": "새 이슈마다 라벨과 중복 후보를 제안하고 빠진 정보를 정리합니다.",
+        "reports": "이 채팅에서, 이슈가 열릴 때",
+        "example1": "#2210: 버그, windows, #2188과 중복.",
+        "example2": "#2214에 버전과 재현 단계가 없습니다. 요청할까요?",
+        "events": {
+          "issue-opened": {
+            "trigger": "이슈가 열릴 때",
+            "action": "라벨과 중복 후보 제안하기"
+          }
+        }
+      },
+      "briefing": {
+        "name": "프로젝트 브리핑",
+        "line": "선택한 프로젝트의 주간 브리핑입니다.",
+        "firstChat": "선택한 프로젝트에서 바뀐 점, 막힌 점, 결정이 필요한 점을 정리합니다.",
+        "watches": "Linear 프로젝트와 GitHub 저장소",
+        "does": "바뀐 점, 막힌 점, 결정이 필요한 점을 정리합니다.",
+        "reports": "이 채팅에서, 매주 금요일 오후 3시",
+        "example1": "모바일 v2: 이슈 6건 완료, 2건은 디자인 대기 중입니다.",
+        "example2": "결정 필요: ORC-902, 푸시 권한 문구.",
+        "schedules": {
+          "weekly-brief": {
+            "when": "매주 금요일 오후 3시",
+            "what": "브리핑"
+          }
+        }
+      },
+      "docs-upkeep": {
+        "name": "문서 관리",
+        "line": "병합된 코드와 더 이상 맞지 않는 문서를 알려 줍니다.",
+        "firstChat": "지난주에 병합된 PR을 읽고, 이제 내용이 틀려진 문서 페이지를 정리합니다.",
+        "watches": "선택한 저장소의 병합된 PR과 문서",
+        "does": "병합된 내용과 맞지 않는 문서 페이지를 지금 틀린 줄과 함께 정리합니다.",
+        "reports": "이 채팅에서, 매주 수요일 오전 10시",
+        "example1": "docs/remote.md에는 SSH에 재시작이 필요하다고 되어 있지만, #4108에서 이미 없어졌습니다.",
+        "example2": "옛 설정 이름이 남은 페이지가 1개 더 있습니다.",
+        "schedules": {
+          "weekly-docs": {
+            "when": "매주 수요일 오전 10시",
+            "what": "수정할 문서"
+          }
+        }
+      },
+      "spec-drafts": {
+        "name": "스펙 초안 작성",
+        "line": "논의 내용을 공유할 수 있는 짧은 스펙으로 정리합니다.",
+        "firstChat": "Slack 스레드나 문서를 건네 주세요. 한 페이지 스펙 초안을 작성하고 정해지지 않은 부분은 질문합니다.",
+        "watches": "건네 주신 Slack 스레드와 문서",
+        "does": "문제, 결정, 범위, 열린 질문을 담은 한 페이지 스펙 초안을 작성합니다.",
+        "reports": "이 채팅에서, 요청할 때",
+        "example1": "초안: \"봇 공유 v2\". 결정 3건, 열린 질문 2건.",
+        "example2": "내 Drive에 문서로 저장했습니다."
+      },
+      "backlog-cleanup": {
+        "name": "백로그 정리",
+        "line": "오래된 이슈, 중복 이슈, 담당자 없는 이슈를 찾습니다.",
+        "firstChat": "선택한 팀에서 60일 동안 변동이 없는 이슈, 중복으로 보이는 이슈, 담당자가 없는 이슈를 정리합니다.",
+        "watches": "선택한 팀의 Linear 이슈",
+        "does": "오래된 이슈, 중복으로 보이는 이슈, 담당자 없는 이슈를 정리합니다.",
+        "reports": "이 채팅에서, 매월 1일",
+        "example1": "8월 이후 변동이 없는 이슈 14건.",
+        "example2": "ORC-511과 ORC-688은 같은 버그로 보입니다.",
+        "schedules": {
+          "monthly-list": {
+            "when": "매월 1일 오전 9시",
+            "what": "정리 목록"
+          }
+        }
+      },
+      "incident-notes": {
+        "name": "장애 기록",
+        "line": "장애 채널의 타임라인을 기록하고 회고 문서 초안을 작성합니다.",
+        "firstChat": "선택한 장애 채널과 스레드를 따라가며 시각이 찍힌 타임라인을 기록하고, 장애가 끝나면 비난 없는 회고 문서 초안을 작성합니다.",
+        "watches": "선택한 장애 채널과 그 스레드",
+        "does": "시각이 찍힌 타임라인을 기록한 뒤 비난 없는 회고 문서 초안을 작성합니다.",
+        "reports": "이 채팅에서, 장애 중과 장애 후",
+        "example1": "14:02 알림 발생, 14:09 롤백 시작, 14:21 오류 정상화.",
+        "example2": "회고 문서 초안이 준비되었습니다.",
+        "events": {
+          "incident-posted": {
+            "trigger": "장애 채널에 누군가 글을 올릴 때",
+            "action": "타임라인에 추가하기"
+          }
+        }
+      },
+      "oncall-handoff": {
+        "name": "온콜 인수인계",
+        "line": "알림, 장애, 남은 후속 조치를 주간으로 요약합니다.",
+        "firstChat": "지난주의 알림 채널과 장애 이슈를 읽고 인수인계 문서를 작성합니다.",
+        "watches": "내 알림 채널과 장애 이슈",
+        "does": "한 주의 알림과 장애를 요약하고 남은 후속 조치를 정리합니다.",
+        "reports": "이 채팅에서, 매주 금요일 오후 4시",
+        "needsSetup": "호출 도구 커넥터가 없어 Slack에 올라온 알림만 읽습니다.",
+        "example1": "알림 12건, 장애 2건. cell-3의 디스크 알림이 5번 발생했습니다.",
+        "example2": "후속 조치 3건이 아직 열려 있습니다.",
+        "schedules": {
+          "weekly-handoff": {
+            "when": "매주 금요일 오후 4시",
+            "what": "인수인계"
+          }
+        }
+      },
+      "followup": {
+        "name": "답장할 항목",
+        "line": "아직 답장하지 않은 항목을 알려 줍니다.",
+        "firstChat": "Slack 스레드와 이슈 댓글에서 아직 답하지 않은 나에게 온 질문과 내가 하겠다고 말한 일을 찾습니다.",
+        "watches": "Slack 스레드와 Linear 댓글",
+        "does": "아직 답하지 않은 나에게 온 질문과 내가 하겠다고 말한 일을 찾습니다.",
+        "reports": "이 채팅에서, 매일 오후 4시",
+        "example1": "2일 전 #design에서 팀원에게 \"내일 확인해 볼게요\"라고 말했습니다.",
+        "example2": "ORC-881에 어제 온 질문이 있습니다.",
+        "schedules": {
+          "daily-owed": {
+            "when": "매일 오후 4시",
+            "what": "아직 남은 답장"
+          }
+        }
+      },
+      "standup": {
+        "name": "데일리 스탠드업 노트",
+        "line": "어제 나와 에이전트가 한 일과 다음 할 일을 정리합니다.",
+        "firstChat": "내 워크스페이스, 병합된 PR, 상태가 바뀐 이슈를 바탕으로 어제 노트를 작성합니다. 팀이 보는 곳에는 직접 복사해 붙여넣으세요.",
+        "watches": "내 워크스페이스, PR, 이슈",
+        "does": "어제 노트와 오늘 계획을 작성합니다.",
+        "reports": "이 채팅에서, 평일 오전 9시",
+        "example1": "어제: #4121 병합(릴레이 재시도). 에이전트가 워크스페이스 2개를 완료했습니다.",
+        "example2": "오늘: ORC-702, #4130 리뷰.",
+        "schedules": {
+          "daily-notes": {
+            "when": "평일 오전 9시",
+            "what": "스탠드업 노트"
+          }
+        }
+      },
+      "email-digest": {
+        "name": "이메일 요약",
+        "line": "하루 두 번, 내 답장이 필요한 이메일을 알려 줍니다.",
+        "firstChat": "오늘 받은 편지함을 읽고 답장이 필요한 이메일을 최신순으로 정리합니다. 이메일은 절대 보내지 않습니다.",
+        "watches": "내 받은 편지함",
+        "does": "답장이 필요한 이메일을 최신순으로 정리합니다. 이메일은 보내지 않습니다.",
+        "reports": "이 채팅에서, 평일 오전 9시와 오후 2시",
+        "example1": "답장이 필요한 메일 2건: 보안 리뷰 일정, 청구서 문의.",
+        "example2": "뉴스레터 14건은 건너뛰었습니다.",
+        "schedules": {
+          "morning": {
+            "when": "평일 오전 9시",
+            "what": "내 답장이 필요한 이메일"
+          },
+          "afternoon": {
+            "when": "평일 오후 2시",
+            "what": "내 답장이 필요한 이메일"
+          }
+        }
+      },
+      "meeting-prep": {
+        "name": "미팅 준비",
+        "line": "미팅마다 관련된 이슈, PR, 문서를 미리 정리합니다.",
+        "firstChat": "오늘 캘린더를 보고 미팅마다 짧은 준비 노트를 작성합니다.",
+        "watches": "내 캘린더",
+        "does": "미팅 전에 관련된 이슈, PR, 문서를 정리합니다.",
+        "reports": "이 채팅에서, 각 미팅 전에",
+        "example1": "11시 모바일 싱크: ORC-902는 결정이 필요하고, #4130이 내 리뷰를 기다립니다.",
+        "example2": "문서: \"푸시 권한 문구\".",
+        "events": {
+          "meeting-soon": {
+            "trigger": "미팅 15분 전",
+            "action": "준비 노트"
+          }
+        }
       }
     },
     "new": {
@@ -27280,6 +27671,37 @@
       "groupMailNeverStarted": "이 메일은 턴을 시작하지 못했습니다.",
       "groupRemoteUnreachable": "{{host}}에 연결할 수 없었습니다. {{detail}}",
       "groupRemoteUnreachableRetry": "{{host}}에 연결할 수 없었습니다. {{detail}} 다시 시도하려면 다시 게시하세요."
+    },
+    "templateSkills": {
+      "nameWithFolder": "{{name}} ({{folder}})",
+      "prReviewChecklist": "PR 리뷰 체크리스트",
+      "bugReproduction": "버그 재현 절차",
+      "ciFailureTriage": "CI 실패 분류",
+      "releaseReadiness": "릴리스 준비 점검",
+      "releaseNotesStyle": "릴리스 노트 작성 규칙",
+      "dependencyUpgrade": "의존성 업그레이드",
+      "securityChecklist": "보안 체크리스트",
+      "issueTriage": "이슈 분류",
+      "feedbackThemes": "피드백 주제 정리",
+      "statusBrief": "상태 브리핑",
+      "specFormat": "스펙 형식",
+      "incidentTimeline": "장애 타임라인",
+      "workspaceHygiene": "워크스페이스 정리 규칙",
+      "lines": {
+        "pr-review-checklist": "diff에서 동작 변경, 빠진 테스트, 위험한 수정을 읽어내고 각 지적마다 근거를 제시합니다.",
+        "bug-reproduction": "원인을 찾기 전에 버그를 보여 주는 정확한 단계를 먼저 기록합니다.",
+        "ci-failure-triage": "불안정한 체크, 진짜 실패, 인프라 문제를 구분하고 문제가 시작된 커밋을 찾습니다.",
+        "release-readiness": "릴리스를 막는 요소와 목록 작성 방법: 체크, 리뷰, 열린 블로커.",
+        "release-notes-style": "사용자용 노트: 신규, 수정, 변경. 리팩터링과 코드명은 제외합니다.",
+        "dependency-upgrade": "한 번에 한 그룹씩 업그레이드하고, 변경 내역을 읽고, 테스트를 실행하고, 그룹마다 PR을 하나씩 만듭니다.",
+        "security-checklist": "변경에서 살펴볼 시크릿, 인젝션, 인증 확인, 안전하지 않은 기본값.",
+        "issue-triage": "라벨을 붙이고, 중복을 찾고, 빠진 재현 정보를 댓글 하나로 요청합니다.",
+        "feedback-themes": "피드백을 개수와 짧은 인용문이 있는 주제별로 묶고, 기존 이슈를 연결합니다.",
+        "status-brief": "바뀐 점, 막힌 점, 결정이 필요한 점을 열 줄 이내 브리핑으로 정리합니다.",
+        "spec-format": "한 페이지 스펙: 문제, 결정, 범위, 열린 질문.",
+        "incident-timeline": "시각이 찍힌 타임라인을 기록한 뒤 비난 없는 회고 문서 초안을 작성합니다.",
+        "workspace-hygiene": "워크스페이스가 완료되었거나 방치된 시점과, 삭제 전에 확인할 사항."
+      }
     },
     "google": {
       "signInRun": {
