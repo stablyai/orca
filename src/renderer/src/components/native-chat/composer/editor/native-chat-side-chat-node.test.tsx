@@ -3,6 +3,7 @@ import { createRef } from 'react'
 import { act, cleanup, render, waitFor, within } from '@testing-library/react'
 import { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
+import { closeHistory } from '@tiptap/pm/history'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
@@ -32,7 +33,8 @@ function setup({ scopeKey, initialValue = '' }: { scopeKey?: string; initialValu
   return {
     ...view,
     input: inputRef.current!,
-    editor
+    editor,
+    disableSideChat: () => view.rerender(<NativeChatPromptEditor {...props} sideChat={false} />)
   }
 }
 
@@ -53,6 +55,38 @@ function type(editor: Editor, text: string): void {
 const pill = (container: HTMLElement) => container.querySelector('[data-native-chat-side-chat]')
 // React node views mount after the transaction that inserts them.
 const pillShown = (container: HTMLElement) => waitFor(() => expect(pill(container)).not.toBeNull())
+// Read from the document: a removed or never-mounted node view looks the same in the DOM.
+const pillCount = (editor: Editor) =>
+  JSON.stringify(editor.getJSON()).split('"nativeChatSideChat"').length - 1
+
+// Once Send would no longer open a side chat, no history step may bring the pill back.
+describe('side chat pill availability', () => {
+  it('leaves no pill after undo and redo once side chat is unavailable', async () => {
+    const { input, editor, container, disableSideChat } = setup()
+    type(editor, '/btw why?')
+    await pillShown(container)
+    expect(pillCount(editor)).toBe(1)
+    act(() => {
+      editor.view.dispatch(closeHistory(editor.state.tr))
+      editor.commands.selectAll()
+      editor.commands.deleteSelection()
+    })
+    disableSideChat()
+    act(() => {
+      editor.commands.undo()
+    })
+    expect(input.value).toBe('/btw why?')
+    expect(pillCount(editor)).toBe(0)
+    act(() => {
+      editor.commands.undo()
+    })
+    act(() => {
+      editor.commands.redo()
+    })
+    expect(input.value).toBe('/btw why?')
+    expect(pillCount(editor)).toBe(0)
+  })
+})
 
 // The pill is display only: a saved draft must stay the typed text, so older builds and
 // editors without the node never lose or rewrite it.
@@ -85,7 +119,8 @@ describe('side chat pill drafts', () => {
       appendNativeChatDraftCache(scopeKey, 'question')
     })
     const { text } = readNativeChatComposerDraft(scopeKey)
-    expect(setup({ scopeKey, initialValue: text }).input.value).toBe(text)
+    expect(text).toBe('/btw \n\nquestion')
+    expect(setup({ scopeKey, initialValue: text }).input.value).toBe('/btw \n\nquestion')
   })
 
   it('shows a saved draft as the pill again, its text unchanged after text is appended', async () => {
