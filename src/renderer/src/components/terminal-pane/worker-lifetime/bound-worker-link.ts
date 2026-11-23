@@ -3,24 +3,45 @@ import { stripLeadingAgentTitleDecoration } from '../../../../../shared/agent-st
 import type { BoundWorker } from '../../../../../shared/orchestration/workers/worker-auto-close'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 
-type WorkerTab = TerminalTab
-
 export type BoundWorkerLink = {
   name: string
   /** The worker's tab while it is open, for its agent icon. */
-  tab?: WorkerTab
+  tab?: TerminalTab
   /** The worker's own pane to focus; null once its terminal is gone, so the name is plain text. */
   reveal: { worktreeId: string; paneKey: string } | null
+}
+
+/** The worker's open tab, looked up in its own workspace first; a store selector, so it returns the
+ *  stored tab itself and allocates nothing. */
+export function findBoundWorkerTab(
+  tabsByWorktree: Record<string, readonly TerminalTab[] | undefined>,
+  boundTo: BoundWorker
+): TerminalTab | undefined {
+  const tabId = parsePaneKey(boundTo.paneKey)?.tabId
+  if (!tabId) {
+    return undefined
+  }
+  const own = boundTo.worktreeId
+    ? tabsByWorktree[boundTo.worktreeId]?.find((tab) => tab.id === tabId)
+    : undefined
+  if (own) {
+    return own
+  }
+  for (const tabs of Object.values(tabsByWorktree)) {
+    const tab = tabs?.find((candidate) => candidate.id === tabId)
+    if (tab) {
+      return tab
+    }
+  }
+  return undefined
 }
 
 /** The worker a bound terminal closes with, named as its tab shows it. */
 export function boundWorkerLink(
   boundTo: BoundWorker,
-  tabsByWorktree: Record<string, readonly WorkerTab[] | undefined>,
+  tab: TerminalTab | undefined,
   fallbackName: string
 ): BoundWorkerLink {
-  const tabId = parsePaneKey(boundTo.paneKey)?.tabId
-  const tab = tabId ? findTab(tabsByWorktree, tabId, boundTo.worktreeId) : undefined
   if (!tab) {
     return { name: boundTo.name ?? fallbackName, reveal: null }
   }
@@ -29,18 +50,4 @@ export function boundWorkerLink(
     tab,
     reveal: { worktreeId: tab.worktreeId, paneKey: boundTo.paneKey }
   }
-}
-
-function findTab(
-  tabsByWorktree: Record<string, readonly WorkerTab[] | undefined>,
-  tabId: string,
-  worktreeId: string | null
-): WorkerTab | undefined {
-  const own = worktreeId ? tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId) : undefined
-  return (
-    own ??
-    Object.values(tabsByWorktree)
-      .flatMap((tabs) => tabs ?? [])
-      .find((tab) => tab.id === tabId)
-  )
 }

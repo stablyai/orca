@@ -7,7 +7,7 @@ import { revealWorkerPane } from '@/lib/open-orchestration-worker'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { BoundWorker } from '../../../../../shared/orchestration/workers/worker-auto-close'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
-import { boundWorkerLink } from './bound-worker-link'
+import { boundWorkerLink, findBoundWorkerTab } from './bound-worker-link'
 
 // Splits the translated line at the worker's name, so each language keeps its own word order.
 const NAME_SLOT = '\u0000'
@@ -22,10 +22,10 @@ export function BoundWorkerTitle({
   countdown: string | null
 }): React.JSX.Element {
   const t = useTranslate()
-  const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
+  const tab = useAppStore((state) => findBoundWorkerTab(state.tabsByWorktree, boundTo))
   const link = boundWorkerLink(
     boundTo,
-    tabsByWorktree,
+    tab,
     t('components.orchestration.workerAutoClose.boundFallbackName', 'its worker')
   )
   const line =
