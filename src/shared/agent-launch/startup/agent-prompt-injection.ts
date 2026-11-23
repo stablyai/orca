@@ -98,11 +98,23 @@ export function resolveWindowsAgentEnterWaitMs(
   )
 }
 
+/** resolveWindowsAgentEnterWaitMs for an agent that reads key events; null for any other, so a
+ *  sender with its own Enter timing keeps it. */
+export function resolveKeyEventAgentEnterWaitMs(
+  platform: NodeJS.Platform,
+  agent: TerminalAgent | null | undefined,
+  text: string
+): number | null {
+  return getWindowsInputRecordPasteBurstMs(platform, agent, text) > 0
+    ? resolveWindowsAgentEnterWaitMs(platform, agent, text)
+    : null
+}
+
 // Why: two Codex rechecks, so a key-event read slower than its estimate still gets an Enter.
 const HELD_PROMPT_MIN_WINDOW_AFTER_ENTER_WAIT_MS = 3000
 
 /** How long a held prompt may still need Enter: an input-record TUI's paste burst, or a composer
- *  not yet submit-ready. `waitedBeforeEnterMs` is how much of the burst the first Enter already waited out. */
+ *  not yet submit-ready. `waitedBeforeEnterMs` is the extra time the first Enter held for the burst. */
 export function getAgentPromptHeldSubmitBudgetMs(
   platform: NodeJS.Platform,
   agent: TerminalAgent | null | undefined,

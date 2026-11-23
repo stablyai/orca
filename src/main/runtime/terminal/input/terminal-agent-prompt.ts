@@ -20,9 +20,8 @@ import {
   getAgentPromptHeldSubmitBudgetMs,
   getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs,
-  getWindowsInputRecordPasteBurstMs,
   resolveAgentPromptSubmitDelayForAgent,
-  resolveWindowsAgentEnterWaitMs
+  resolveKeyEventAgentEnterWaitMs
 } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 
 import {
@@ -108,11 +107,12 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     let renderWait: RuntimeTerminalPromptSubmit['renderWait']
     let withheldFor: RuntimeTerminalPromptSubmitHold | null = null
     // Windows Codex reads a paste a key at a time and keeps an Enter that lands mid-read as a newline.
-    const keyEventAgent = this.getPtyAgent(ptyId)
-    const keyEventEnterWaitMs =
-      getWindowsInputRecordPasteBurstMs(writeHostPlatform, keyEventAgent, pastePayload) > 0
-        ? resolveWindowsAgentEnterWaitMs(writeHostPlatform, keyEventAgent, pastePayload)
-        : null
+    const keyEventEnterWaitMs = resolveKeyEventAgentEnterWaitMs(
+      writeHostPlatform,
+      this.getPtyAgent(ptyId),
+      pastePayload
+    )
+    let keyEventHeldMs = 0
     try {
       await beforeWrite(admissionSignal)
       assertWritable(admissionSignal)
@@ -162,7 +162,8 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
           await waitForAgentPromptDelay(submitDelayMs, deliverySignal)
         }
         if (keyEventEnterWaitMs !== null) {
-          await waitForAgentPromptDelay(pastedAt + keyEventEnterWaitMs - Date.now(), deliverySignal)
+          keyEventHeldMs = Math.max(0, pastedAt + keyEventEnterWaitMs - Date.now())
+          await waitForAgentPromptDelay(keyEventHeldMs, deliverySignal)
         }
         const lastWrite = (): Promise<void> =>
           beforeWrite(deliverySignal).catch((error: unknown) => {
@@ -215,7 +216,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
                 writeHostPlatform,
                 this.getPtyAgent(ptyId),
                 pastePayload,
-                keyEventEnterWaitMs !== null ? enteredAt - pastedAt : 0
+                keyEventHeldMs
               )
             }
           ))
