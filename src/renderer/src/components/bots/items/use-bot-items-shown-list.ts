@@ -1,5 +1,6 @@
 // The Items list as the filter shows it: the bot's read (or one chat's), Closed as deep as loaded,
 // filtered and grouped. Read above the list/item switch, so an open item walks the same list and Back finds it.
+import { translate } from '@/i18n/i18n'
 import { useCallback, useMemo } from 'react'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
@@ -60,7 +61,9 @@ export function useBotItemsShownList(
     const end = botItemCursorPlace(cursor)
     const after = await (filtered ? chatMore() : readMoreBotItems({ hostId, id }))
     if (!after) {
-      throw new Error('Reading more Closed items failed')
+      throw new Error(
+        translate('bots.items.readMoreClosedFailed', 'Reading more Closed items failed')
+      )
     }
     // The page: rows below the old end. One closed meanwhile lands at the top, not in the page.
     return {

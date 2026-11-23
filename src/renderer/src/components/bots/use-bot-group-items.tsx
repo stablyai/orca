@@ -4,7 +4,6 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBotHostOffline } from '@/lib/bot-host-views'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotItem } from '../../../../shared/bots/bot-items'
-import type { BotAutomationRow } from '../../../../shared/bots/bot-automation-rows'
 import {
   botItemsByDispatch,
   botNeedChat,
@@ -19,7 +18,9 @@ import { botAutomationCardRows, botNextRun } from './bot-automation-card'
 import { useBotActivity } from './use-bot-activity'
 import { useBotNeedsYouCount, useBotNow, type BotNeedView } from './use-bot-now'
 import type { BotHostReadState } from './use-bot-host-read'
-import { useBotItems, useBotItemsSeenMark } from './items/use-bot-items'
+import type { StoppedForSignIn } from './BotNeedRow'
+import { useBotItems } from './items/use-bot-items'
+import { useBotItemsSeenMark } from './items/use-bot-items-seen-mark'
 import {
   useBotItemsShownList,
   type BotItemsClosedPage,
@@ -38,7 +39,7 @@ type MemberRead = {
   list: BotItemsShownList
   /** Its asks in the filter's chats, keys made unique across members. */
   needs: readonly BotNeedView[]
-  stoppedForSignIn: readonly BotAutomationRow[]
+  stoppedForSignIn: readonly StoppedForSignIn[]
   /** Its whole Needs you count, as its own Items tab badge says it. */
   needsYou: number
   working: number
@@ -61,7 +62,7 @@ const MemberReader = memo(function MemberReader({
 }): null {
   const items = useBotItems(bot)
   const read = items.read
-  const seenEventId = useBotItemsSeenMark(read)
+  const seenEventId = useBotItemsSeenMark(bot, read, items.landed)
   const list = useBotItemsShownList(bot, read, filter, now, seenEventId ?? '')
   const botNow = useBotNow(bot)
   const needsYou = useBotNeedsYouCount(bot, botNow)
@@ -82,11 +83,18 @@ const MemberReader = memo(function MemberReader({
   const stoppedForSignIn = useMemo(
     () =>
       filter.chatIds === null
-        ? botNow.stoppedForSignIn.map((row) => ({ ...row, key: `${bot.id}:${row.key}` }))
+        ? botNow.stoppedForSignIn.map((row) => ({
+            ...row,
+            key: `${bot.id}:${row.key}`,
+            hostId: bot.hostId
+          }))
         : [],
-    [filter.chatIds, botNow.stoppedForSignIn, bot.id]
+    [filter.chatIds, botNow.stoppedForSignIn, bot.id, bot.hostId]
   )
-  const { state, retry } = items
+  const { retry } = items
+  // A kept list whose first refresh since opening failed counts as failed, so the group offers Retry as it
+  // did when nothing was kept.
+  const state = items.refreshFailed && !items.landed ? 'failed' : items.state
   const { working } = botNow
   // The list's parts, not the object the hook builds each render, so a report goes up only on change.
   const { read: listRead, items: listItems, shown, groups, staleDays } = list
@@ -206,7 +214,7 @@ export type BotGroupItems = {
   /** Loaded items, the filter's bots only; Needs you only applied. */
   shown: readonly BotItem[]
   needs: readonly BotNeedView[]
-  stoppedForSignIn: readonly BotAutomationRow[]
+  stoppedForSignIn: readonly StoppedForSignIn[]
   itemOf: (dispatchId: string) => BotItem | null
   needBot: (need: BotNeedView) => Bot
   botOf: (item: BotItem) => Bot
