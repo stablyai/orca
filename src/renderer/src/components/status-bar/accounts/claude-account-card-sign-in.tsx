@@ -22,18 +22,29 @@ export function useClaudeAccountSignIn(
     }
     signingInRef.current = true
     setSigningInId(accountId)
-    try {
-      if (await signInToClaudeAccount(accountId)) {
-        await loadAccounts()
-      }
-    } finally {
+    await signInThenReload(accountId, loadAccounts, () => {
       signingInRef.current = false
       if (mountedRef.current) {
         setSigningInId(null)
       }
-    }
+    })
   }
   return { signingInId, handleSignIn }
+}
+
+// Why module level: React Compiler skips a hook whose body has try/finally without catch.
+async function signInThenReload(
+  accountId: string,
+  loadAccounts: () => Promise<unknown>,
+  settle: () => void
+): Promise<void> {
+  try {
+    if (await signInToClaudeAccount(accountId)) {
+      await loadAccounts()
+    }
+  } finally {
+    settle()
+  }
 }
 
 /** Opens Settings on the Claude accounts section of the host these rows belong to. */

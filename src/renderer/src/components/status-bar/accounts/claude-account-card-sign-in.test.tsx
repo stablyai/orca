@@ -58,8 +58,7 @@ it('holds the button busy while that account signs in', () => {
       })}
     </>
   )
-  const button = screen.getByRole('button', { name: 'Signing in…' })
-  expect((button as HTMLButtonElement).disabled).toBe(true)
+  expect(screen.getByRole('button', { name: 'Signing in…' }).hasAttribute('disabled')).toBe(true)
 })
 
 it('shows nothing once usage reads, or when the card shows no account', () => {

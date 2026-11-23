@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "Yeniden oturum aç",
-      "usageSignInMessage": "Seçili Claude hesabında yeniden oturum açmanız gerekiyor. Ayarlar > Yapay Zeka Sağlayıcı Hesapları bölümünü açın veya Sistem varsayılanı seçeneğini seçin."
+      "usageSignInMessage": "Bu hesapta yeniden oturum açmanız gerekiyor."
     }
   },
   "agentHistory": {
