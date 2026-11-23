@@ -22770,6 +22770,17 @@
         "showName": "Show {{name}}",
         "startedAt": " · Started {{time}} · {{elapsed}} elapsed",
         "contactUnavailable": " · Last confirmed contact unavailable"
+      },
+      "webhookSetup": {
+        "heading": "Set up a webhook",
+        "keyAndSecret": "Key and signing secret",
+        "copiedReceipt": "✓ URL copied",
+        "signingSecret": "Signing secret",
+        "addSecret": "Add…",
+        "noSecret": "None",
+        "sampleCall": "Sample call",
+        "sampleNote": "Starts a real run",
+        "send": "Send"
       }
     },
     "tab": {
@@ -28251,7 +28262,8 @@
       "fallbackNamed": "Webhook “{{automation}}” is live. Copy its URL from Orca on a computer: Settings › Bots › {{bot}} › Webhooks. To pause or delete it, ask {{bot}} here.",
       "fallback": "This webhook is live. Copy its URL from Orca on a computer, in the bot’s settings under Webhooks. To pause or delete it, ask the bot here.",
       "copiedNoClear": "Clear your clipboard when you’re done; this browser can’t promise to clear it for you.",
-      "pausedSignedOut": "{{hooks}} · paused while signed out"
+      "pausedSignedOut": "{{hooks}} · paused while signed out",
+      "copied": "Copied"
     },
     "upNext": {
       "looked": "Looked {{time}}",
