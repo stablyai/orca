@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProviderRelaySpool } from '../provider-relay-spool'
 
 describe('provider relay spool', () => {
@@ -96,6 +96,41 @@ describe('provider relay spool', () => {
     spool.ack(5)
     await spool.detach()
     expect(pressure).toEqual([true, false])
+    await spool.dispose()
+  })
+
+  it('replays the whole memory tail even when an ack compacts memory mid-replay', async () => {
+    const delivered: number[] = []
+    let gate = false
+    let release: () => void = () => {}
+    const spool = new ProviderRelaySpool({
+      path: join(dir, 'r.ndjson'),
+      deliver: (record) => delivered.push(record.seq),
+      onPressureChanged: () => {},
+      drained: () =>
+        gate
+          ? new Promise<void>((resolve) => {
+              release = resolve
+            })
+          : Promise.resolve(),
+      memoryCapBytes: 1000
+    })
+    await spool.attach(0)
+    for (let i = 0; i < 4; i++) {
+      spool.append('x'.repeat(200))
+    }
+    delivered.length = 0
+    gate = true
+    spool.suspend()
+    const replay = spool.attach(0)
+    await vi.waitFor(() => expect(delivered).toEqual([1]))
+    release()
+    await vi.waitFor(() => expect(delivered).toEqual([1, 2]))
+    spool.ack(2)
+    gate = false
+    release()
+    await replay
+    expect(delivered).toEqual([1, 2, 3, 4])
     await spool.dispose()
   })
 })

@@ -38,6 +38,9 @@ function mayHideKey(line: string): boolean {
   return line.includes('\\u00') && ESCAPED_LETTER.test(line)
 }
 
+/** A held request and the record it was when its answer was seen. */
+type AnsweredRequest = { key: string; record: ProviderRelayRecord }
+
 function controlId(value: unknown): string | null {
   return typeof value === 'string' ? `c:${value}` : null
 }
@@ -140,18 +143,19 @@ export class ProviderRelayPendingRequests {
   }
 
   /**
-   * Client writes may split or join lines; only complete lines are classified. Returns the keys of
+   * Client writes may split or join lines; only complete lines are classified. Returns the held
    * requests this data answers; the owner releases them once the data has reached the agent.
    */
-  observeClientData(data: string): string[] {
-    const answered: string[] = []
+  observeClientData(data: string): AnsweredRequest[] {
+    const answered: AnsweredRequest[] = []
     let start = 0
     let newline = data.indexOf('\n')
     while (newline !== -1) {
       if (!this.skippingClientLine) {
         const key = this.observeClientLine(this.clientLinePartial + data.slice(start, newline))
-        if (key) {
-          answered.push(key)
+        const record = key ? this.pending.get(key) : undefined
+        if (key && record) {
+          answered.push({ key, record })
         }
       }
       this.clientLinePartial = ''
@@ -169,10 +173,12 @@ export class ProviderRelayPendingRequests {
     return answered
   }
 
-  /** The answers reached the agent's stdin, so their requests are no longer owed. */
-  releaseAnswered(keys: string[]): void {
-    for (const key of keys) {
-      this.release(key)
+  /** The answers reached the agent's stdin; a request re-sent under the same id since then stays held. */
+  releaseAnswered(answered: AnsweredRequest[]): void {
+    for (const { key, record } of answered) {
+      if (this.pending.get(key) === record) {
+        this.release(key)
+      }
     }
   }
 

@@ -163,15 +163,17 @@ export class ProviderRelaySpool {
     after = fileHighest
     // The memory tail waits for the client's socket too; an ack may compact memory meanwhile.
     let memory = this.memory
-    for (let index = this.memoryHead; index < this.memory.length; index++) {
+    let index = this.memoryHead
+    while (true) {
       if (memory !== this.memory) {
         memory = this.memory
-        index = this.memory.findIndex((record) => record.seq > after)
-        if (index === -1) {
-          break
-        }
+        const at = memory.findIndex((record) => record.seq > after)
+        index = at === -1 ? memory.length : at
       }
-      const record = this.memory[index]
+      if (index >= memory.length) {
+        break
+      }
+      const record = memory[index++]
       if (record.seq <= after) {
         continue
       }
@@ -189,7 +191,8 @@ export class ProviderRelaySpool {
 
   /** A takeover holds live records back until its own replay, so none reaches the new client twice. */
   suspend(): void {
-    if (this.mode === 'attached') {
+    // An earlier attach still replaying is superseded too, or it would keep sending to the new client.
+    if (this.mode !== 'detached') {
       this.mode = 'replaying'
       this.attachGeneration++
     }
