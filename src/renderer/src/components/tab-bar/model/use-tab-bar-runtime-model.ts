@@ -1,6 +1,6 @@
 import { shallow } from 'zustand/shallow'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store/index'
 import { buildStatusMap } from '../../../../../shared/git/status/git-path-decoration'
@@ -18,6 +18,7 @@ import {
 import type { WindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { shouldShowMobileEmulatorTabIntro } from '../../emulator-pane/tab-intro/mobile-emulator-tab-intro-visibility'
 import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
+import { isTabStripReturning } from '../strip/tab-strip-scroll-memory'
 import type { TabBarAgentProjections } from './tab-agent-types-by-tab-id'
 import { shouldShowWindowsShellMenu } from '../create-menu/windows-shell-menu-visibility'
 import { createUnifiedTabLookup } from './tab-bar-item-model'
@@ -140,12 +141,14 @@ export function useTabBarRuntimeModel({
     Boolean(activeRuntimeEnvironmentId?.trim()) ||
     isWebClient ||
     Boolean(worktreeConnectionId)
+  const [returningStrip] = useState(() => isTabStripReturning(groupId))
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldProbeWindowsShellCapabilities,
     false,
     windowsTerminalCapabilityOwnerKey,
     runtimeTarget,
-    worktreeConnectionId
+    worktreeConnectionId,
+    returningStrip
   )
   const shellMenuHostPlatform = worktreeConnectionId
     ? (worktreeRemotePlatform ?? windowsTerminalCapabilities.hostPlatform)

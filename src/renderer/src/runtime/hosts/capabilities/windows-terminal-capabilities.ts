@@ -194,7 +194,9 @@ export function useWindowsTerminalCapabilities(
   forceRefreshOnMount = false,
   ownerKey?: string,
   target: RuntimeClientTarget = { kind: 'local' },
-  sshConnectionId?: string | null
+  sshConnectionId?: string | null,
+  /** A strip remounting after its workspace released it; new mounts keep the cache TTL. */
+  reuseRecentAnswerOnMount = false
 ): WindowsTerminalCapabilities {
   const targetKind = target.kind
   const targetEnvironmentId = target.kind === 'environment' ? target.environmentId : null
@@ -236,12 +238,13 @@ export function useWindowsTerminalCapabilities(
     subscribersByOwnerKey.set(resolvedOwnerKey, subscribers)
     const reprobe: { stop: (() => void) | null } = { stop: null }
     const isLocalOwner = resolvedTarget.kind === 'local' && !sshConnectionIdKey
-    // A remounting tab strip reuses a recent answer while a mounted consumer's re-probe owns the host; a settled
-    // re-probe stops probing, so past its ceiling the mount refreshes as before.
+    // A returning tab strip reuses a recent answer while a mounted consumer's re-probe owns the host; a settled
+    // re-probe stops probing, so past its ceiling the return refreshes as before.
     const cacheAgeMs =
       Date.now() -
       (cachedCapabilitiesByOwnerKey.get(resolvedOwnerKey)?.loadedAt ?? Number.NEGATIVE_INFINITY)
     const ownedByLiveReprobe =
+      reuseRecentAnswerOnMount &&
       !forceRefreshOnMount &&
       isLocalOwner &&
       cacheAgeMs < REMOUNT_CAPABILITY_REUSE_MS &&
@@ -283,7 +286,14 @@ export function useWindowsTerminalCapabilities(
         subscribersByOwnerKey.delete(resolvedOwnerKey)
       }
     }
-  }, [enabled, forceRefreshOnMount, resolvedOwnerKey, resolvedTarget, sshConnectionIdKey])
+  }, [
+    enabled,
+    forceRefreshOnMount,
+    resolvedOwnerKey,
+    resolvedTarget,
+    sshConnectionIdKey,
+    reuseRecentAnswerOnMount
+  ])
 
   return selectWindowsTerminalCapabilitiesForOwner(state, enabled, resolvedOwnerKey)
 }
