@@ -75,7 +75,11 @@ export function observeClaudeReportedPermissionMode(
   message: Record<string, unknown>
 ): boolean {
   const mode = readClaudeReportedPermissionMode(message)
-  if (mode === undefined || mode === reports.reportedPermissionMode) {
+  if (mode === undefined) {
+    return false
+  }
+  reports.permissionModeReportSequence = (reports.permissionModeReportSequence ?? 0) + 1
+  if (mode === reports.reportedPermissionMode) {
     return false
   }
   reports.reportedPermissionMode = mode

@@ -7,6 +7,11 @@ import type {
   ClaudeSession
 } from '../claude-structured-session-state'
 
+export type ClaudeAutoUnsettled =
+  | { kind: 'time'; retryAt: number }
+  | { kind: 'model'; model: string | undefined }
+  | { kind: 'fast-mode'; fastMode: string | undefined }
+
 export type ClaudeBypassFacts = Partial<
   Pick<
     ClaudeSession,
@@ -23,6 +28,7 @@ export type ClaudeBypassFacts = Partial<
     | 'autoUnsettled'
     | 'appliedInputOptions'
     | 'permissionModeRequests'
+    | 'askAcknowledgedAtReport'
     | 'acknowledgedBuildPermissionMode'
   >
 >
@@ -142,24 +148,26 @@ export function claudeAutoRetryDue(session: ClaudeBypassFacts, now = Date.now())
 type ClaudeModeFacts = ClaudeBypassFacts &
   Pick<ClaudeSession, 'appliedInputOptions' | 'reportedOptions' | 'orderedPermissionMode'>
 
+export function claudeHasCurrentAskAcknowledgement(session: ClaudeModeFacts): boolean {
+  return (
+    session.askAcknowledgedAtReport === (session.reportedOptions.permissionModeReportSequence ?? 0)
+  )
+}
+
 /** Plan as chosen or as Claude runs it, in wire order where known. */
 export function claudeInPlan(session: ClaudeModeFacts): boolean {
-  const interaction = session.appliedInputOptions.get('interactionMode')
-  if (interaction === 'plan') {
+  if (session.appliedInputOptions.get('interactionMode') === 'plan') {
     return true
-  }
-  if (session.launchIntent?.permissionMode === 'auto' && interaction === 'default') {
-    const temporaryAsk =
-      session.autoUnansweredAskRequest !== undefined &&
-      session.autoUnansweredAskRequest === session.permissionModeRequests
-    if (session.acknowledgedBuildPermissionMode === 'default' || temporaryAsk) {
-      return false
-    }
   }
   const running = session.orderedPermissionMode
     ? session.orderedPermissionMode()
     : session.reportedOptions.reportedPermissionMode
-  return running === 'plan'
+  return (
+    running === 'plan' &&
+    !(
+      session.launchIntent?.permissionMode === 'auto' && claudeHasCurrentAskAcknowledgement(session)
+    )
+  )
 }
 
 function claudeRunsAsk(session: ClaudeModeFacts): boolean {

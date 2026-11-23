@@ -11,7 +11,7 @@ import {
   finishPermissionCatchUp,
   openPermissionTestSession,
   permissionTestSession
-} from './claude-permission-test-session'
+} from './__tests__/claude-permission.test-fixture'
 
 const intents: readonly ('auto' | 'bypassPermissions')[] = ['auto', 'bypassPermissions']
 

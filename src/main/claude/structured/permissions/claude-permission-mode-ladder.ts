@@ -2,11 +2,7 @@
 // me, and records what Claude accepted or refused for its process.
 
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
-import type {
-  ClaudeAutoUnsettled,
-  ClaudeBypassRefusal,
-  ClaudeSession
-} from '../claude-structured-session-state'
+import type { ClaudeBypassRefusal, ClaudeSession } from '../claude-structured-session-state'
 import {
   ClaudeControlRequestTimeoutError,
   isClaudeQueryClosed
@@ -16,6 +12,7 @@ import {
   claudeAutoFallbackReason,
   claudeAutoRetryDue,
   claudeBypassRefused,
+  type ClaudeAutoUnsettled,
   type ClaudeBypassFacts
 } from './claude-full-access-refusal'
 import { journalClaudeSessionPermissionNotice } from './claude-full-access-refusal-notice'
@@ -130,6 +127,7 @@ function claudePermissionModeLadder(
 /** Marks a new permission mode request; a pending fallback for an older one no longer writes. */
 export function claimClaudePermissionModeRequest(session: ClaudeBypassFacts): number {
   session.acknowledgedBuildPermissionMode = undefined
+  session.askAcknowledgedAtReport = undefined
   session.permissionModeRequests = (session.permissionModeRequests ?? 0) + 1
   return session.permissionModeRequests
 }
@@ -150,18 +148,49 @@ export class ClaudePermissionModeUnsettled extends Error {
  *  accepted or refused for this process. Claude rereads its settings, so bypass or auto it
  *  allowed earlier can be refused later; that refusal is followed by the fallback, and a
  *  refusal with no fallback left is the caller's error. */
-export async function setClaudeAllowedPermissionMode(
-  session: ClaudeBypassFacts & {
-    connection: Pick<ClaudeSession['connection'], 'setPermissionMode'>
-  },
+export function setClaudeAllowedPermissionMode(
+  session: ClaudeSession,
   mode: PermissionMode,
-  options?: { timeoutMs?: number },
-  refusedBefore: ReadonlySet<PermissionMode> = new Set(),
-  request = claimClaudePermissionModeRequest(session)
+  options?: { timeoutMs?: number }
 ): Promise<PermissionMode | undefined> {
+  const request = claimClaudePermissionModeRequest(session)
+  const pending = Promise.withResolvers<void>()
+  session.pendingPermissionModeRequest = pending.promise
+  return writeClaudePermissionMode(session, mode, options, request).finally(() => {
+    if (session.pendingPermissionModeRequest === pending.promise) {
+      session.pendingPermissionModeRequest = undefined
+    }
+    pending.resolve()
+  })
+}
+
+async function writeClaudePermissionMode(
+  session: ClaudeSession,
+  mode: PermissionMode,
+  options: { timeoutMs?: number } | undefined,
+  request: number,
+  refusedBefore?: ReadonlySet<PermissionMode>
+): Promise<PermissionMode | undefined> {
+  if (mode === 'plan') {
+    await session.connection.setPermissionMode(mode, options)
+    if (session.permissionModeRequests === request) {
+      session.appliedInputOptions.set('interactionMode', mode)
+      return mode
+    }
+    return undefined
+  }
   const ladder = claudePermissionModeLadder(session, mode)
   const writes = await Promise.allSettled(
-    ladder.map((step) => session.connection.setPermissionMode(step, options))
+    ladder.map(async (step) => {
+      await session.connection.setPermissionMode(step, options)
+      if (
+        step === 'default' &&
+        session.launchIntent?.permissionMode === 'auto' &&
+        session.permissionModeRequests === request
+      ) {
+        session.askAcknowledgedAtReport = session.reportedOptions.permissionModeReportSequence ?? 0
+      }
+    })
   )
   if (session.permissionModeRequests !== request) {
     return
@@ -207,7 +236,7 @@ export async function setClaudeAllowedPermissionMode(
       if (approveForMe && unanswered) {
         session.autoUnansweredAskRequest = request
         session.appliedInputOptions?.delete('buildPermissionMode')
-        return setClaudeAllowedPermissionMode(session, 'default', options, refused, request)
+        return writeClaudePermissionMode(session, 'default', options, request, refused)
       }
       if (fallbackAuto) {
         autoForNow = true
@@ -250,7 +279,7 @@ export async function setClaudeAllowedPermissionMode(
     throw lastRefusal
   }
   // Only a refusal of a mode allowed earlier gets here; each one is a new fact.
-  return setClaudeAllowedPermissionMode(session, mode, options, refused, request)
+  return writeClaudePermissionMode(session, mode, options, request, refused)
 }
 
 export function recordClaudeBuildPermissionMode(

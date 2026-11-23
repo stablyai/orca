@@ -4,6 +4,7 @@ import { isRootClaudeFrame } from '../turns/claude-turn-opening'
 import {
   claudeAutoFallbackReason,
   claudeBypassRefused,
+  claudeHasCurrentAskAcknowledgement,
   claudeOwesPermissionFallback
 } from './claude-full-access-refusal'
 import {
@@ -17,6 +18,7 @@ export function readClaudeRootInit(message: Record<string, unknown>): ClaudeRoot
   if (message.type === 'system' && message.subtype === 'init' && isRootClaudeFrame(message)) {
     return { permissionMode: readClaudeFrameString(message, 'permissionMode') }
   }
+  return undefined
 }
 
 function latchClaudeRootInit(
@@ -40,13 +42,21 @@ function latchClaudeRootInit(
 function settleClaudeAutoStartup(session: ClaudeSession, root: ClaudeRootInit): void {
   const opened = root.permissionMode
   if (
+    session.connection.closed ||
     root.source === 'unanswered-auto-ask' ||
     opened === null ||
     opened === 'auto' ||
     opened === 'plan' ||
-    claudeAutoFallbackReason(session) === null ||
-    !claudeOwesPermissionFallback(session)
+    claudeAutoFallbackReason(session) === null
   ) {
+    return
+  }
+  const pending = session.pendingPermissionModeRequest
+  if (pending) {
+    void pending.then(() => settleClaudeAutoStartup(session, root))
+    return
+  }
+  if (claudeHasCurrentAskAcknowledgement(session) || !claudeOwesPermissionFallback(session)) {
     return
   }
   if (opened === 'default') {

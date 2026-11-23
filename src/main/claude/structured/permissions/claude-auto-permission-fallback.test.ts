@@ -8,7 +8,7 @@ import {
   openPermissionTestSession,
   permissionTestSession,
   refuseClaudePermission
-} from './claude-permission-test-session'
+} from './__tests__/claude-permission.test-fixture'
 import { claimClaudePermissionModeRequest } from './claude-permission-mode-ladder'
 import { leaveClaudePlanModeOnApproval } from './claude-plan-approval-mode'
 

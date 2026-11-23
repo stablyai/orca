@@ -1,25 +1,25 @@
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
-import { ClaudeBackgroundTaskTracker } from '../../background-tasks/claude-background-task-tracker'
-import { ClaudeChildWorkDecoder } from '../../child-work/claude-child-work-decoder'
-import { ClaudeSlashCommandCatalog } from '../../command-catalog/claude-slash-command-catalog'
-import { runClaudeControl } from '../../sdk-transport/claude-agent-sdk-control-requests'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import type { ClaudeSession } from '../claude-structured-session-state'
-import { ClaudeJournalBoundDelivery } from '../journal/claude-journal-bound-delivery'
-import { createClaudeJournalTranslator } from '../journal/claude-structured-journal-translation'
-import { claudeProviderHandleLink } from '../lifecycle/claude-structured-owner-identity'
+import { ClaudeBackgroundTaskTracker } from '../../../background-tasks/claude-background-task-tracker'
+import { ClaudeChildWorkDecoder } from '../../../child-work/claude-child-work-decoder'
+import { ClaudeSlashCommandCatalog } from '../../../command-catalog/claude-slash-command-catalog'
+import { runClaudeControl } from '../../../sdk-transport/claude-agent-sdk-control-requests'
+import type { StructuredAgentSessionEventSink } from '../../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { ClaudeSession } from '../../claude-structured-session-state'
+import { ClaudeJournalBoundDelivery } from '../../journal/claude-journal-bound-delivery'
+import { createClaudeJournalTranslator } from '../../journal/claude-structured-journal-translation'
+import { claudeProviderHandleLink } from '../../lifecycle/claude-structured-owner-identity'
 import {
   createClaudeInitProof,
   observeClaudeReportedPermissionMode
-} from '../startup/claude-structured-init-proof'
-import { openClaudeSession } from '../startup/claude-structured-session-startup'
-import { createClaudeStartupOutcome } from '../startup/claude-structured-startup-outcome'
+} from '../../startup/claude-structured-init-proof'
+import { openClaudeSession } from '../../startup/claude-structured-session-startup'
+import { createClaudeStartupOutcome } from '../../startup/claude-structured-startup-outcome'
 import {
   claimClaudeFullAccessRefusalNotice,
   journalClaudeSessionPermissionNotice
-} from './claude-full-access-refusal-notice'
-import { observeClaudeRootInit, readClaudeRootInit } from './claude-permission-startup'
-import { ClaudePromptRegistry } from './claude-prompt-registry'
+} from '../claude-full-access-refusal-notice'
+import { observeClaudeRootInit, readClaudeRootInit } from '../claude-permission-startup'
+import { ClaudePromptRegistry } from '../claude-prompt-registry'
 
 export function permissionTestSession(
   permissionMode: 'auto' | 'bypassPermissions',

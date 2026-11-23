@@ -17,6 +17,7 @@ import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-r
 import type { StructuredLaunchRequest } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { ClaudeJournalTranslator } from './journal/claude-journal-translator-contract'
 import type { ClaudePromptRegistry } from './permissions/claude-prompt-registry'
+import type { ClaudeAutoUnsettled } from './permissions/claude-full-access-refusal'
 import { ClaudeJournalBoundDelivery } from './journal/claude-journal-bound-delivery'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import type { AgentSessionFastModeState } from '../../../shared/agent-session/agent-session-wire'
@@ -39,11 +40,6 @@ export type ClaudeBypassRefusal = 'settings' | 'restricted' | 'not-launched'
 /** Why a Full access chat runs another mode, for its warning. */
 export type ClaudeFullAccessRefusalReason = ClaudeBypassRefusal | 'started-outside'
 
-/** `retryAt` for refusals that pass with time; `model` / `fastMode` hold the choice Claude refused under. */
-export type ClaudeAutoUnsettled =
-  | { kind: 'time'; retryAt: number }
-  | { kind: 'model'; model: string | undefined }
-  | { kind: 'fast-mode'; fastMode: string | undefined }
 export type ClaudeStartedSend = { clientMessageId: string; requestedAt?: number }
 
 export type ClaudeLateDispatchOutcome =
@@ -143,6 +139,7 @@ export type ClaudeSession = {
     effort?: string
     fastMode?: boolean
     reportedPermissionMode?: string | null
+    permissionModeReportSequence?: number
   }
   /** CLI-resolved env/settings for the next request; lower priority than held options and turn reports. */
   appliedOptions?: { model?: string; effort?: string; ultracode?: boolean }
@@ -174,6 +171,8 @@ export type ClaudeSession = {
   /** Counts permission mode requests, so a fallback written after Claude answers never lands
    *  over a newer request. */
   permissionModeRequests?: number
+  pendingPermissionModeRequest?: Promise<void>
+  askAcknowledgedAtReport?: number
   acknowledgedBuildPermissionMode?: PermissionMode
   /** The startup `get_settings` read; settles once its facts are recorded, never rejects. */
   startupSettings?: Promise<void>

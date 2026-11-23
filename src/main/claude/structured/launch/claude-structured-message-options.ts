@@ -9,7 +9,6 @@ import {
   claudeOwesPermissionFallback
 } from '../permissions/claude-full-access-refusal'
 import {
-  claimClaudePermissionModeRequest,
   ClaudePermissionModeUnsettled,
   recordClaudeBuildPermissionMode,
   setClaudeAllowedPermissionMode
@@ -83,14 +82,10 @@ export async function applyClaudeMessageOptions(
   throwIfSignalAborted(signal)
   if (options.interactionMode !== undefined) {
     if (options.interactionMode === 'plan') {
-      const request = claimClaudePermissionModeRequest(session)
       await waitForPromiseWithSignal(
-        session.connection.setPermissionMode('plan', { timeoutMs }),
+        setClaudeAllowedPermissionMode(session, 'plan', { timeoutMs }),
         signal
       )
-      if (session.permissionModeRequests === request) {
-        session.appliedInputOptions.set('interactionMode', 'plan')
-      }
     } else {
       await waitForClaudeStartupSettings(session, signal)
       const leavingPlan = claudeInPlan(session)
