@@ -44,6 +44,7 @@ export function claudeModelTransitionRestart(
       requested !== undefined &&
       opened !== undefined &&
       opened !== null &&
+      session.firstRootInit?.source !== 'unanswered-auto-ask' &&
       opened !== requested
     )
   }

@@ -142,7 +142,10 @@ function applyClaudeInitializeFacts(session: ClaudeSession, facts: ClaudeInitial
   const { init, initialization } = facts
   const opened = readClaudeOpenedPermissionMode(initialization)
   if (opened && !session.firstRootInit) {
-    session.firstRootInit = { permissionMode: opened, source: 'initialize' }
+    session.firstRootInit =
+      session.launchIntent?.permissionMode === 'auto'
+        ? { permissionMode: opened, source: 'initialize' }
+        : { permissionMode: opened }
   }
   // Preserve a running model already reported by a turn's init frame.
   if (init?.model && session.reportedOptions.model === undefined) {

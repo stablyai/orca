@@ -258,6 +258,7 @@ export function recordClaudeBuildPermissionMode(
   mode: PermissionMode
 ): void {
   if (
+    session.autoDisabled !== true &&
     session.autoUnansweredAskRequest !== undefined &&
     session.autoUnansweredAskRequest === session.permissionModeRequests
   ) {
@@ -273,13 +274,13 @@ export function observeClaudeRootInit(
   session: ClaudeSession | null,
   firstRootInit: ClaudeSession['firstRootInit']
 ): void {
-  if (!session || !firstRootInit) {
+  if (!session) {
     return
   }
   const first = !session.firstRootInit || session.firstRootInit.source === 'initialize'
-  const opened = firstRootInit.permissionMode
+  const opened = firstRootInit?.permissionMode
   const unsettledAsk = opened === 'default' && session.autoUnansweredAskRequest !== undefined
-  if (first) {
+  if (first && firstRootInit) {
     session.firstRootInit = unsettledAsk
       ? { permissionMode: opened, source: 'unanswered-auto-ask' }
       : firstRootInit

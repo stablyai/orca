@@ -24,6 +24,10 @@ type ClaudeNoticeState = Pick<
   'fullAccessRefusalNoticeId' | 'fullAccessRefusalNotices'
 >
 
+type ClaudeAutoNoticeFacts = ClaudeBypassFacts &
+  Pick<ClaudeSession, 'startupSettings'> &
+  Partial<Pick<ClaudeSession, 'reportedOptions'>>
+
 export type ClaudeFullAccessRefusalNotice = { id: string; body: AgentJournalStatusItem }
 
 const CLAUDE_REFUSAL_NOTICE_PREFIX = 'full-access-refused:claude:'
@@ -100,16 +104,25 @@ function claudePermissionNoticeRow(
 }
 
 function claudeAutoRefusalNotice(
-  session: ClaudeBypassFacts & Pick<ClaudeSession, 'startupSettings'>
+  session: ClaudeAutoNoticeFacts
 ): ClaudeFullAccessRefusalNotice | null {
-  if (session.appliedInputOptions?.get('buildPermissionMode') !== 'default') {
-    return null
-  }
+  const applied = session.appliedInputOptions?.get('buildPermissionMode')
   const reason = claudeAutoFallbackReason(session)
   if (
     reason === null ||
     (reason === 'started-outside' && session.autoDisabled === undefined && session.startupSettings)
   ) {
+    return null
+  }
+  const reported = session.reportedOptions?.reportedPermissionMode
+  const settingsAsk =
+    reason === 'settings' &&
+    applied === undefined &&
+    (reported === 'ask' ||
+      (reported === undefined &&
+        session.permissionModeRequests === undefined &&
+        session.firstRootInit?.permissionMode === 'default'))
+  if (applied !== 'default' && !settingsAsk) {
     return null
   }
   const refusal =
@@ -209,9 +222,8 @@ export async function readClaudeEarlierRefusalNotice(
 }
 
 export function claimClaudeFullAccessRefusalNotice(
-  session: ClaudeBypassFacts &
-    ClaudeNoticeState &
-    Pick<ClaudeSession, 'startupSettings'> & {
+  session: ClaudeAutoNoticeFacts &
+    ClaudeNoticeState & {
       initialization: Pick<ClaudeSession['initialization'], 'startup'>
     }
 ): ClaudeFullAccessRefusalNotice | null {
