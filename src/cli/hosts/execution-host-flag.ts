@@ -289,9 +289,9 @@ function assertEnvironmentNameUnambiguous(
   )
 }
 
-/** A saved Orca server's id, from its id or name; the selector itself when none matches. */
-export async function resolveEnvironmentIdForStore(selector: string): Promise<string> {
-  return findEnvironmentByName(await readEnvironmentSummaries(), selector)?.id ?? selector
+/** A saved Orca server's id, from its id or name; null when none matches. */
+export async function resolveEnvironmentIdForStore(selector: string): Promise<string | null> {
+  return findEnvironmentByName(await readEnvironmentSummaries(), selector)?.id ?? null
 }
 
 // Resolve here so cross-host suggestions survive store errors that discard structured data.

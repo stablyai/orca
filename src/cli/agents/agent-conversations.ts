@@ -84,7 +84,8 @@ export const AGENT_CONVERSATION_HANDLERS: Record<string, CommandHandler> = {
         'Update Orca on that host to page agent reads.'
       )
     }
-    const connection = result.result.nextCursor ? await agentReadConnectionArgs(flags) : []
+    // Only text output prints a continuation command; --json never needs the saved servers.
+    const connection = !json && result.result.nextCursor ? await agentReadConnectionArgs(flags) : []
     printResult(result, json, (read) =>
       formatAgentRead(read, { limit, connection, cursorRead: cursor !== undefined })
     )
@@ -168,7 +169,7 @@ function formatTool(tool: AgentReadTool): string {
 
 function formatAgentRead(
   result: AgentReadResult,
-  call: { limit: number | undefined; connection: readonly string[]; cursorRead: boolean }
+  call: { limit: number | undefined; connection: readonly string[] | null; cursorRead: boolean }
 ): string {
   const lines = result.entries.map((entry) =>
     entry.shortened
