@@ -46,10 +46,6 @@ export function waitForBrowserGuestLoad(
     if (start) {
       void start().then(loaded, (error: unknown) => {
         if (error && typeof error === 'object' && 'errno' in error && error.errno === -3) {
-          // Superseded: wait for the navigation that replaced it. Stopped: nothing will load.
-          if (!guest.isDestroyed() && !guest.isLoadingMainFrame()) {
-            loaded()
-          }
           return
         }
         finish(error instanceof Error ? error : new Error('The browser page could not load'))

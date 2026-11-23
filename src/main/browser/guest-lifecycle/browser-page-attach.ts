@@ -3,10 +3,6 @@ import { randomUUID } from 'node:crypto'
 import { BrowserError } from '../browser-error'
 import { waitForBrowserGuestLoad } from './browser-guest-load'
 import {
-  loadPageWhenReady,
-  startHeldLoad
-} from '../extensions/profile-sessions/browser-page-held-first-load'
-import {
   claims,
   pages,
   retiredGuests,
@@ -145,12 +141,7 @@ export function associateBrowserPageAttach(guest: Electron.WebContents): boolean
 const pendingLoads = new WeakMap<Electron.WebContents, Attach>()
 
 /** Route pages call this only after their existing main-owned navigation grant. */
-/** `extensionsReady`: the page's profile's extensions still starting, which its first load waits for. */
-export function startBrowserPageAttach(
-  guest: Electron.WebContents,
-  url?: string,
-  extensionsReady?: Promise<void> | null
-): boolean {
+export function startBrowserPageAttach(guest: Electron.WebContents, url?: string): boolean {
   const attach = pendingLoads.get(guest)
   if (!attach) {
     return false
@@ -216,22 +207,10 @@ export function startBrowserPageAttach(
     guest.on('did-stop-loading', stopped)
     guest.once('destroyed', dispose)
   }
-  const load = (): Promise<void> =>
+  const promise = waitForBrowserGuestLoad(guest, () =>
     snapshot
       ? guest.navigationHistory.restore({ entries: snapshot.entries, index: snapshot.index })
       : guest.loadURL(url ?? attach.url)
-  // The 30 s load deadline counts from attach, as without a hold; a full 20 s hold leaves 10 s to load.
-  const promise = waitForBrowserGuestLoad(
-    guest,
-    extensionsReady
-      ? () =>
-          loadPageWhenReady(
-            guest,
-            extensionsReady,
-            (requested) => (requested ? startHeldLoad(guest, requested, snapshot) : load()),
-            { history: snapshot }
-          )
-      : load
   ).then(() => {
     if (pages.get(attach.pageId) !== page || page.guest !== guest) {
       throw new Error('Browser page replaced')

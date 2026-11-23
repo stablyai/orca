@@ -58,9 +58,28 @@ function hasRegisteredTabForWorktree(worktreeId: string): boolean {
   return false
 }
 
+const pagesWaitingForExtensions = new Map<string, Promise<void>>()
+
+/** A page whose guest waits for its profile's extensions to start: registration waits count from then. */
+export function noteBrowserPageWaitingForExtensions(
+  browserPageId: string,
+  wait: Promise<void>
+): void {
+  pagesWaitingForExtensions.set(browserPageId, wait)
+  void wait.finally(() => {
+    if (pagesWaitingForExtensions.get(browserPageId) === wait) {
+      pagesWaitingForExtensions.delete(browserPageId)
+    }
+  })
+}
+
 export function waitForTabRegistration(browserPageId: string, timeoutMs = 8_000): Promise<void> {
   if (isLiveBrowserWebContentsId(browserManager.getGuestWebContentsId(browserPageId))) {
     return Promise.resolve()
+  }
+  const extensions = pagesWaitingForExtensions.get(browserPageId)
+  if (extensions) {
+    return extensions.then(() => waitForTabRegistration(browserPageId, timeoutMs))
   }
   return waitForNextTabRegistration(browserPageId, timeoutMs)
 }
@@ -83,6 +102,11 @@ export function waitForWorktreeTabRegistration(
   worktreeId: string | undefined,
   timeoutMs = 8_000
 ): Promise<void> {
+  if (pagesWaitingForExtensions.size > 0) {
+    return Promise.all(pagesWaitingForExtensions.values()).then(() =>
+      waitForWorktreeTabRegistration(worktreeId, timeoutMs)
+    )
+  }
   if (!worktreeId) {
     return waitForAnyTabRegistration(timeoutMs)
   }

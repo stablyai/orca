@@ -18,8 +18,6 @@ import {
   type BrowserRouteGuestPopupDependencies
 } from './browser-route-guest-popups'
 import type { BrowserRouteGuestState } from './browser-route-webcontents-state'
-import { whenBrowserExtensionsReadyForPage } from '../../extensions/profile-sessions/browser-extension-page-start'
-import { untilAborted } from './browser-route-guest-initialization'
 
 export function createBrowserRouteGuestState(
   guest: WebContents,
@@ -105,60 +103,25 @@ export function isBrowserRouteGuestNavigationAllowed(
   }
 }
 
-// Each route navigation's turn, so one that waited for extensions yields to a newer one.
-const routeNavigationSequence = new WeakMap<WebContents, number>()
-
 export async function navigateBrowserRouteGuest(
   registration: BrowserRoutePageGuestIdentity,
   rawUrl: string,
   state: BrowserRouteGuestState | undefined,
-  isCurrent: () => boolean,
-  /** The command's cancellation: it ends the extension wait and blocks the load. */
-  signal?: AbortSignal
+  isCurrent: () => boolean
 ): Promise<boolean> {
   const normalized = normalizeBrowserNavigationUrl(rawUrl)
-  const allowed = (): boolean =>
-    Boolean(
-      isValidRoutePageRegistration(registration) &&
-      state?.registration &&
-      normalized &&
-      !normalized.startsWith('file:') &&
-      state.navigationGranted &&
-      browserRoutePageKey(state.registration) === browserRoutePageKey(registration) &&
-      !state.guest.isDestroyed() &&
-      isCurrent()
-    )
-  if (!state || !normalized || !allowed()) {
+  if (
+    !isValidRoutePageRegistration(registration) ||
+    !state?.registration ||
+    !normalized ||
+    normalized.startsWith('file:') ||
+    !state.navigationGranted ||
+    browserRoutePageKey(state.registration) !== browserRoutePageKey(registration) ||
+    !isCurrent()
+  ) {
     return false
   }
-  const sequence = (routeNavigationSequence.get(state.guest) ?? 0) + 1
-  routeNavigationSequence.set(state.guest, sequence)
   try {
-    // As in initialization: a route session's first request must not straddle an extension load.
-    const extensionsReady = whenBrowserExtensionsReadyForPage(state.guest)
-    if (extensionsReady) {
-      // A navigation started meanwhile (the user typing an address) is newer than this one.
-      let overtaken = false
-      const started = (
-        details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>
-      ): void => {
-        overtaken ||= details.isMainFrame && !details.isSameDocument
-      }
-      state.guest.on('did-start-navigation', started)
-      try {
-        await (signal ? untilAborted(extensionsReady, signal) : extensionsReady)
-      } finally {
-        state.guest.off('did-start-navigation', started)
-      }
-      // Authority can be revoked or the command cancelled while waiting.
-      if (signal?.aborted || !allowed()) {
-        return false
-      }
-      // Superseded by a newer navigation, which owns the page now; page metadata reports its URL.
-      if (overtaken || routeNavigationSequence.get(state.guest) !== sequence) {
-        return true
-      }
-    }
     await (startBrowserPageAttach(state.guest, normalized)
       ? waitForBrowserPageReady(registration.browserPageId, state.guest)
       : state.guest.loadURL(normalized))

@@ -105,9 +105,7 @@ export async function switchBrowserClientPageProfile(input: {
     })
     const url = old.inventory.currentUrl
     if (url && url !== 'about:blank') {
-      if (
-        !(await dependencies.routeWebContents.navigateGuest(staged.lifecycleClaim, url, signal))
-      ) {
+      if (!(await dependencies.routeWebContents.navigateGuest(staged.lifecycleClaim, url))) {
         throw new BrowserClientPageCommandError('browser_client_page_navigation_failed')
       }
       staged.inventory = updateBrowserClientPageInventoryCurrentUrl(staged.inventory, url)

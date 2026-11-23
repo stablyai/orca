@@ -7,7 +7,6 @@ import {
   whenBrowserExtensionProfileUnloaded
 } from './browser-extension-session-loader'
 import { whenBrowserExtensionsInSession } from './browser-extension-session-presence'
-import { loadPageWhenReady, startHeldLoad } from './browser-page-held-first-load'
 
 // Why bounded: slow restore hooks must not keep the page from loading.
 const FIRST_LOAD_WAIT_MS = 3_000
@@ -87,6 +86,33 @@ function whileExtensionsStart(profileId: string): Promise<void> | null {
   return wait
 }
 
+const heldFirstLoads = new WeakSet<Electron.WebContents>()
+
+/** Its first load is held for its profile's extensions, so it counts as loading already. */
+export function isBrowserPageFirstLoadHeld(contents: Electron.WebContents): boolean {
+  return heldFirstLoads.has(contents)
+}
+
+/** Loads `load` once `ready` settles, unless the page was navigated elsewhere meanwhile. */
+export function loadPageWhenReady(
+  contents: Electron.WebContents,
+  ready: Promise<unknown>,
+  load: () => Promise<void>
+): Promise<void> {
+  heldFirstLoads.add(contents)
+  let navigated = false
+  const noteNavigation = (): void => {
+    navigated = true
+    heldFirstLoads.delete(contents)
+  }
+  contents.once('did-start-navigation', noteNavigation)
+  return ready.then(() => {
+    heldFirstLoads.delete(contents)
+    contents.off('did-start-navigation', noteNavigation)
+    return navigated || contents.isDestroyed() ? undefined : load()
+  })
+}
+
 /** will-attach-webview for a tab that runs extensions: its first load waits for its profile's extensions. */
 export function holdWebviewFirstLoadForExtensions(
   embedder: Electron.WebContents,
@@ -94,8 +120,7 @@ export function holdWebviewFirstLoadForExtensions(
   params: Record<string, string>
 ): void {
   const src = params.src
-  // A blank bootstrap (route pages) sends no request and must finish within the mount deadline;
-  // the route's own first load waits for extensions instead.
+  // A blank bootstrap (route pages) sends no request and must finish within the mount deadline.
   if (!src || src === 'about:blank') {
     return
   }
@@ -109,10 +134,8 @@ export function holdWebviewFirstLoadForExtensions(
   const claim = (_event: Electron.Event, guest: Electron.WebContents): void => {
     app.off('web-contents-created', claim)
     // Why after attach too: the <webview> only hears the guest's navigation events once attached.
-    void loadPageWhenReady(
-      guest,
-      Promise.all([whenAttached(embedder, guest), ready]),
-      (requested) => (requested ? startHeldLoad(guest, requested, null) : guest.loadURL(src))
+    void loadPageWhenReady(guest, Promise.all([whenAttached(embedder, guest), ready]), () =>
+      guest.loadURL(src)
     ).catch(() => {})
   }
   app.on('web-contents-created', claim)

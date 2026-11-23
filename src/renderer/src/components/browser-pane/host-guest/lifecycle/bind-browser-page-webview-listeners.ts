@@ -222,20 +222,36 @@ export function bindBrowserPageWebviewListeners({
       normalizeBrowserGuestSrc(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
     lastKnownWebviewUrlRef.current = initialUrl
     webview.dataset.orcaAttachPending = 'true'
-    void window.api.browser
-      .preparePageAttach({
+    // Main answers once the profile's extensions have started; until then there is no guest to drive.
+    webview.dataset.orcaAttachWaiting = 'true'
+    const prepare = (url: string): Promise<string> =>
+      window.api.browser.preparePageAttach({
         browserPageId: browserTabId,
         partition: webview.getAttribute('partition') ?? '',
-        url: initialUrl
+        url
+      })
+    void prepare(initialUrl)
+      .then((marker) => {
+        // An address entered while waiting wins; extensions are up now, so this answers at once.
+        const latestUrl = normalizeBrowserGuestSrc(initialBrowserUrlRef.current) ?? initialUrl
+        if (latestUrl === initialUrl) {
+          return marker
+        }
+        lastKnownWebviewUrlRef.current = latestUrl
+        return prepare(latestUrl)
       })
       .then((marker) => {
+        delete webview.dataset.orcaAttachWaiting
         if (webviewRef.current === webview && webview.isConnected) {
           issueBrowserGuestNavigation(webview, () => {
             webview.src = marker
           })
         }
       })
-      .catch(() => guestRecovery.recoverRenderer())
+      .catch(() => {
+        delete webview.dataset.orcaAttachWaiting
+        guestRecovery.recoverRenderer()
+      })
   } else if (isPaintableRef.current) {
     if (isBrowserPageRendererRecoveryPending(browserTabId)) {
       guestRecovery.recoverRenderer()

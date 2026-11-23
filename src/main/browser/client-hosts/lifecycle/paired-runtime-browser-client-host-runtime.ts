@@ -52,6 +52,7 @@ import {
   browserRouteSessionRegistry,
   browserRouteWebContentsRegistry
 } from '../../routing/sessions/browser-route-session-runtime'
+import { whenBrowserPartitionReadyForPage } from '../../extensions/profile-sessions/browser-extension-page-readiness'
 
 export type ClientHostRouteIdentity = BrowserClientPageAuthorityIdentity & {
   orcaProfileId: string
@@ -109,6 +110,7 @@ const browserClientHosts =
             retainNetworkRoute,
             selectRenderer: selectBrowserClientPageRenderer,
             routeSessions: browserRouteSessionRegistry,
+            waitForPageExtensions: whenBrowserPartitionReadyForPage,
             routeWebContents: browserRouteWebContentsRegistry,
             guestBinding: createBrowserClientPageGuestBinding(browserManager),
             executeAutomation: executeBrowserClientPageAutomation,

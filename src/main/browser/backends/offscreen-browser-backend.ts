@@ -10,11 +10,10 @@ import type { AgentBrowserBridge } from '../agent-browser/agent-browser-bridge'
 import { BrowserError } from '../browser-error'
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import { installBrowserJavaScriptDialogs } from '../guest-lifecycle/prompts/browser-javascript-dialogs'
-import { whenBrowserExtensionsStartFor } from '../extensions/profile-sessions/browser-extension-page-start'
 import {
   loadPageWhenReady,
-  startHeldLoad
-} from '../extensions/profile-sessions/browser-page-held-first-load'
+  whenBrowserExtensionsStartFor
+} from '../extensions/profile-sessions/browser-extension-page-start'
 import type { ServeBrowserPageState } from '../../runtime/browser/headless/serve-browser-tab-layout'
 import { followPublicationLeasesWithFrameRate } from './offscreen-page-frame-rate'
 import { mustKeepOffscreenPage, OffscreenPageIdleClock } from './offscreen-page-idle-freeing'
@@ -180,13 +179,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
             )
         : loadOffscreenPageUrl(win, url)
     const loaded = extensionsReady
-      ? loadPageWhenReady(
-          win.webContents,
-          extensionsReady,
-          (requested) =>
-            requested ? startHeldLoad(win.webContents, requested, freed ?? null) : load(),
-          { history: freed }
-        )
+      ? loadPageWhenReady(win.webContents, extensionsReady, load)
       : load()
     void loaded.catch((error) => {
       console.warn(

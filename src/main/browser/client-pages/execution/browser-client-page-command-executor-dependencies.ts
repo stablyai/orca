@@ -39,6 +39,7 @@ export type BrowserClientPageCommandExecutorDependencies = BrowserClientPageAuth
   ): Promise<BrowserClientPageNetworkRoute>
   selectRenderer(): BrowserClientPageRenderer
   routeSessions: Pick<BrowserRouteSessionRegistry, 'preparePage'>
+  waitForPageExtensions?(partition: string, signal: AbortSignal): Promise<void>
   routeWebContents: BrowserClientPageLifecycleRegistry
   guestBinding: BrowserClientPageGuestBinding
   executeAutomation(

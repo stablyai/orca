@@ -37,10 +37,7 @@ import { parseChromeExtensionUrl } from '../../../shared/browser/extensions/brow
 import { getBrowserExtensionSessionForProfile } from '../../browser/extensions/profile-sessions/browser-extension-session-loader'
 import { isBrowserExtensionEnabledInProfile } from '../../browser/extensions/web-store/browser-extension-webstore-service'
 import { isBrowserExtensionSupportEnabled } from '../../browser/extensions/browser-extension-support'
-import {
-  holdWebviewFirstLoadForExtensions,
-  whenBrowserExtensionsReadyForPage
-} from '../../browser/extensions/profile-sessions/browser-extension-page-start'
+import { holdWebviewFirstLoadForExtensions } from '../../browser/extensions/profile-sessions/browser-extension-page-start'
 import { linkBrowserExtensionsToRouteSession } from '../../browser/extensions/profile-sessions/browser-extension-route-sessions'
 import { installBrowserJavaScriptDialogs } from '../../browser/guest-lifecycle/prompts/browser-javascript-dialogs'
 import { installNativeChatVisualGuestTheme } from '../../host/native-chat-visual-guest-theme'
@@ -247,8 +244,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     enforceLocalSshWebRtcPolicyForGuest(guest)
     attachBrowserPasswordGuest(guest)
     if (!routeGuest) {
-      // Why: a request in flight when the profile's first webRequest extension loads is dropped by Electron.
-      startBrowserPageAttach(guest, undefined, whenBrowserExtensionsReadyForPage(guest))
+      startBrowserPageAttach(guest)
     }
   })
 }
