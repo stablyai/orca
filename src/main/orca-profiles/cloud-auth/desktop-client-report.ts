@@ -2,6 +2,13 @@ import { hostname } from 'node:os'
 import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { getVersionChannel } from '../../../shared/updater/release-channel'
 import type { UpdateStatus } from '../../../shared/updater/update-status-types'
+import type { OrcaCloudCapabilities } from '../../../shared/orca-profiles/orca-cloud-capabilities'
+import {
+  getGoverningTeamCapabilities,
+  ORCA_CLOUD_DESKTOP_REPORTING
+} from '../../../shared/orca-profiles/orca-cloud-team-policy'
+import type { OrcaCloudSessionIdentity } from '../cloud-session/profile-cloud-session-store'
+import { getRequiredPluginFailureHeader } from '../../plugins/catalog/required-plugin-failures'
 
 let readUpdateStatus: (() => UpdateStatus) | undefined
 
@@ -42,9 +49,17 @@ function updateReportFields(status: UpdateStatus | undefined): string[] {
   return ['upd=idle']
 }
 
-export function getDesktopReportHeaders(): Record<string, string> {
-  if (!hasAppEnvironment()) {
-    return {}
+export function collectAuthorizedDesktopReport(
+  capabilities: OrcaCloudCapabilities,
+  identity: OrcaCloudSessionIdentity | undefined
+): Record<string, string> | undefined {
+  const policy = getGoverningTeamCapabilities(capabilities)?.teamPolicy
+  if (
+    capabilities.flags[ORCA_CLOUD_DESKTOP_REPORTING] !== true ||
+    !policy?.reportingOrgIds?.some((id) => policy.orgIds.includes(id)) ||
+    !hasAppEnvironment()
+  ) {
+    return undefined
   }
   const version = getAppEnvironment().getVersion()
   const channel = getVersionChannel(version)
@@ -57,5 +72,10 @@ export function getDesktopReportHeaders(): Record<string, string> {
   if (label) {
     fields.push(`label=${encodeURIComponent(label)}`)
   }
-  return { 'x-orca-client': fields.join('; '), 'x-orca-app-version': version }
+  const failures = getRequiredPluginFailureHeader(identity)
+  return {
+    'x-orca-client': fields.join('; '),
+    'x-orca-app-version': version,
+    ...(failures !== undefined ? { 'x-orca-required-plugin-failures': failures } : {})
+  }
 }

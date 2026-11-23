@@ -112,7 +112,7 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
   const connected = authStatus?.state === 'connected'
   const canConnect = authStatus?.configured === true
   const policy = getOrcaCloudTeamCapabilities(authStatus)?.teamPolicy
-  const reportingOrgIds = policy?.reportingOrgIds ?? policy?.orgIds ?? []
+  const reportingOrgIds = policy?.reportingOrgIds ?? []
   const reportingTeams =
     authStatus?.organizations
       ?.filter(({ orgId }) => reportingOrgIds.includes(orgId))

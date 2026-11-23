@@ -7,6 +7,7 @@ import type { OrcaCloudCapabilities } from './orca-cloud-capabilities'
 import type { OrcaProfileAuthStatus } from './orca-profiles'
 
 export const ORCA_CLOUD_TEAM_SETTINGS = 'team_settings'
+export const ORCA_CLOUD_DESKTOP_REPORTING = 'desktop.deviceReporting'
 
 export const ORCA_CLOUD_TEAM_POLICY_FLAGS = {
   mobileRelay: 'relay.use',
