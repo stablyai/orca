@@ -86,3 +86,16 @@ it('builds again rather than patch a row drawn as a work run', () => {
   )
   expect(withStreamedRows(run, saved, withReply(saved, 'Answer 199, and more'))).toBeNull()
 })
+
+it('caps a settled reply whose controls stay in flow as a full build does', () => {
+  const lines = (count: number) =>
+    Array.from({ length: count }, (_, line) => `Line ${line}`).join('\n')
+  const saved = withReply(history(), lines(72))
+  const settled = { ...inputFor(saved), isWorking: false, lifecycleWorking: false }
+  const build = (rows: readonly NativeChatMessage[]) =>
+    buildNativeChatTranscript({ ...settled, messages: rows }).slots
+  const current = withReply(saved, lines(73))
+  const streamed = withStreamedRows(build(saved), saved, current)!
+  expect(build(current).at(-1)?.estimatedHeight).toBe(1600)
+  expect(streamed.at(-1)?.estimatedHeight).toBe(1600)
+})

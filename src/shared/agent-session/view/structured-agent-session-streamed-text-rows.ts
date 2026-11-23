@@ -8,22 +8,44 @@ const textOnlyBases = new WeakMap<
   readonly AgentJournalRenderItem[]
 >()
 
-/** Everything but the text of a message's blocks, which streaming alone changes. */
-function shape(item: AgentJournalRenderItem): string | null {
+/** A reply or reasoning row minus its blocks and revision; streaming changes neither of these. */
+function rowBesideBlocks(item: AgentJournalRenderItem): string | null {
   const { body } = item
-  if (body.kind !== 'message' || body.role === 'user') {
+  if (body.kind !== 'message' || (body.role !== 'assistant' && body.role !== 'reasoning')) {
     return null
   }
-  const { revision: _revision, ...row } = item
-  return JSON.stringify({ ...row, body: { ...body, blocks: body.blocks.map((b) => b.type) } })
+  const { revision: _revision, body: _body, ...row } = item
+  const { blocks: _blocks, ...message } = body
+  return JSON.stringify({ row, message })
 }
 
+/** Whether only the text of reply or reasoning blocks changed: every other block, such as a
+ *  subagent's state, and every other field must be the same. */
 export function onlyStreamedTextChanged(
   prior: AgentJournalRenderItem,
   next: AgentJournalRenderItem
 ): boolean {
-  const before = shape(prior)
-  return before !== null && before === shape(next)
+  const before = rowBesideBlocks(prior)
+  if (before === null || before !== rowBesideBlocks(next)) {
+    return false
+  }
+  const priorBlocks = prior.body.kind === 'message' ? prior.body.blocks : []
+  const nextBlocks = next.body.kind === 'message' ? next.body.blocks : []
+  return (
+    priorBlocks.length === nextBlocks.length &&
+    priorBlocks.every((block, index) => {
+      const other = nextBlocks[index]!
+      if (block === other) {
+        return true
+      }
+      if (block.type === 'text' && other.type === 'text') {
+        const { text: _before, ...kept } = block
+        const { text: _after, ...next } = other
+        return JSON.stringify(kept) === JSON.stringify(next)
+      }
+      return JSON.stringify(block) === JSON.stringify(other)
+    })
+  )
 }
 
 export function noteStreamedTextRevision(

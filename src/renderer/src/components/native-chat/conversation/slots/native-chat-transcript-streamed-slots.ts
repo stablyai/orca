@@ -3,9 +3,15 @@ import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat
 import type { Translate } from '@/i18n/use-translate'
 import {
   buildNativeChatTranscript,
+  type NativeChatMessageSlot,
   type NativeChatTranscriptSlot
 } from './native-chat-transcript-slots'
 import { nativeChatMessageSlotHeight } from './native-chat-message-slot-height'
+import { NATIVE_CHAT_ACTIVITY_ROW_GAP_PX } from './native-chat-activity-row-joins'
+import {
+  NATIVE_CHAT_ROW_GAP_PX,
+  nativeChatRowHeightWithControlsInFlow
+} from '../../viewport/virtualization/native-chat-row-height-estimate'
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
 
 /** Where each row is drawn: a slot's own row by its index; a run or note cluster's rows as -1. */
@@ -56,6 +62,28 @@ function sameBesideText(saved: NativeChatMessage, current: NativeChatMessage): b
   )
 }
 
+/** The slot's estimate for its current text, as a full build gives it: its own estimate, with its
+ *  controls in flow (capped) when they were, less an activity join's pull. Null when the built
+ *  estimate can't be told apart that way. */
+function streamedSlotHeight(
+  slot: NativeChatMessageSlot,
+  before: NativeChatMessage,
+  current: NativeChatMessage,
+  typography: NativeChatTranscriptSlotsInput['typography']
+): number | null {
+  const pull = slot.followsActivity
+    ? (NATIVE_CHAT_ROW_GAP_PX - NATIVE_CHAT_ACTIVITY_ROW_GAP_PX) * (typography?.spacingScale ?? 1)
+    : 0
+  const own = nativeChatMessageSlotHeight(before, slot, typography)
+  const inFlow = nativeChatRowHeightWithControlsInFlow(own, typography) - pull
+  const controlsInFlow = slot.estimatedHeight === inFlow && inFlow !== own - pull
+  if (!controlsInFlow && slot.estimatedHeight !== own - pull) {
+    return null
+  }
+  const grown = nativeChatMessageSlotHeight(current, slot, typography)
+  return (controlsInFlow ? nativeChatRowHeightWithControlsInFlow(grown, typography) : grown) - pull
+}
+
 /**
  * Slots built from `built` with each streaming row's current message in its slot, so a live
  * window rebuilds no transcript structure. Null when a streamed row would draw differently (its
@@ -88,12 +116,12 @@ export function withStreamedRows(
     if (slot?.kind !== 'message' || slot.message !== before) {
       return null
     }
-    // Its own estimate moves with its text; joins and hanging controls only offset it.
-    const grown =
-      nativeChatMessageSlotHeight(current, slot, typography) -
-      nativeChatMessageSlotHeight(before, slot, typography)
+    const estimatedHeight = streamedSlotHeight(slot, before, current, typography)
+    if (estimatedHeight === null) {
+      return null
+    }
     next ??= slots.slice()
-    next[at] = { ...slot, message: current, estimatedHeight: slot.estimatedHeight + grown }
+    next[at] = { ...slot, message: current, estimatedHeight }
   }
   return next ?? (slots as NativeChatTranscriptSlot[])
 }
