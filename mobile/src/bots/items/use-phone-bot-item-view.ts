@@ -119,6 +119,17 @@ export function usePhoneBotItemView({
   }, [client, uid])
 
   const own = loaded?.uid === uid ? loaded : null
+  // The waiting question, and the oldest ask a later question left open, are read even when older
+  // than the loaded page: earlier pages load until they show.
+  const waitingOn = own ? (own.item.oldestOpenAsk ?? own.item.question?.eventId) : undefined
+  const waitingUnread =
+    waitingOn !== undefined && !own?.events.some((event) => event.id === waitingOn)
+  const earlierCursor = own?.earlierCursor ?? null
+  useEffect(() => {
+    if (waitingUnread && earlierCursor) {
+      loadEarlier()
+    }
+  }, [waitingUnread, earlierCursor, loadEarlier])
   const failed = failure?.uid === uid ? failure : null
   return {
     item: own?.item ?? null,

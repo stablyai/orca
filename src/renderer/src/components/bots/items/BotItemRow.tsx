@@ -87,6 +87,8 @@ const ITEM_FIELD_RULES: Record<keyof BotItem, ItemFieldEqual> = {
   question: (a, b) =>
     a.question?.eventId === b.question?.eventId &&
     Object.keys(a.question ?? {}).join() === Object.keys(b.question ?? {}).join(),
+  // The item's own view reads it; the row never shows it.
+  oldestOpenAsk: skipped,
   closeNote: (a, b) => a.closeNote === b.closeNote,
   links: (a, b) => itemLive(a) === itemLive(b),
   version: (a, b) => a.version === b.version,

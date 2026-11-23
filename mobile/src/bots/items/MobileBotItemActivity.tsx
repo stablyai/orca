@@ -19,6 +19,7 @@ import {
   botItemActivity,
   type BotItemActivityEntry
 } from '../../../../src/shared/bots/bot-item-activity'
+import { botItemQuestionPairing } from '../../../../src/shared/bots/bot-item-question-answers'
 import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-name'
 import { botItemStatusName } from '../../../../src/shared/bots/bot-item-status-name'
 import {
@@ -279,8 +280,32 @@ export function MobileBotItemActivity({
           })
         }
       : null
-  // A reply already sent answers the question, before the host's read says so.
-  const answered = pending.shown.some(({ failed }) => !failed)
+  // A reply already sent answers its question before the host's read says so: an ask waits on while a
+  // line of it is still open with the replies on their way read after the item's events.
+  const sent = pending.shown.flatMap(({ failed, event, questionId, plain }) =>
+    failed
+      ? []
+      : [
+          {
+            ...event,
+            data: {
+              ...event.data,
+              ...(questionId ? { answers: questionId } : {}),
+              ...(plain ? { plain: true } : {})
+            }
+          }
+        ]
+  )
+  const stillWaiting =
+    sent.length > 0 ? botItemQuestionPairing(item, [...events, ...sent]).questions : null
+  const answered = (entry: { key: string }): boolean => {
+    if (!stillWaiting) {
+      return false
+    }
+    const ask = stillWaiting.get(entry.key)
+    // A question asked in prose takes any reply.
+    return ask ? !ask.waiting : true
+  }
   return (
     <View>
       {entries.map((entry) =>
@@ -288,7 +313,7 @@ export function MobileBotItemActivity({
           <MobileBotItemCommentCard
             key={entry.key}
             item={item}
-            entry={answered ? { ...entry, waiting: false } : entry}
+            entry={entry.waiting && answered(entry) ? { ...entry, waiting: false } : entry}
             attachments={attachments}
             ref={(node) => {
               if (node) {

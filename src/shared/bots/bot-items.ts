@@ -213,6 +213,9 @@ export type BotItem = {
   /** Needs you: the agent's comment asking the owner. `gist`: its body's first line; `decisions`: its
    *  question lines (`--ask`) and their quick replies (`--option`). */
   question: { eventId: string; text: string; gist?: string; decisions?: BotItemDecision[] } | null
+  /** Needs you: the oldest ask still waiting on a line, which a later question can leave open; clients
+   *  read back to it. Absent from older hosts. */
+  oldestOpenAsk?: string
   closeNote: string | null
   links: BotItemLinkView[]
   version: number

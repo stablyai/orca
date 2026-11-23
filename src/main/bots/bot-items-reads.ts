@@ -1,8 +1,17 @@
 // Item reads beyond one row: a bot's list with exact counts, links by what they point at, and the rows
 // item views need in one round trip.
-import type { BotItemLinkKind, BotItemStatus } from '../../shared/bots/bot-items'
+import {
+  botItemEventId,
+  parseBotItemEventId,
+  type BotItemEvent,
+  type BotItemLinkKind,
+  type BotItemStatus
+} from '../../shared/bots/bot-items'
+import { botItemQuestionLine } from '../../shared/bots/bot-item-ask'
+import { botItemQuestionPairing } from '../../shared/bots/bot-item-question-answers'
 import {
   eventRecordOf,
+  eventViewOf,
   integer,
   itemRecordOf,
   linkRecordOf,
@@ -27,7 +36,43 @@ export type BotItemListQuery = {
   cursor?: { at: number; number: number }
 }
 
+/** The item's asks still waiting on a line, oldest first, with those lines, read from its events as
+ *  clients pair them, `reply` read last; `answered`: the asks `reply` answered a line of. */
+export function openBotItemAsks(
+  item: Pick<BotItemRecord, 'status'>,
+  events: readonly BotItemEvent[],
+  reply?: BotItemEvent
+): { asks: { id: number; lines: string[] }[]; answered: number[] } {
+  const { questions } = botItemQuestionPairing(item, reply ? [...events, reply] : events)
+  const id = (eventId: string): number => parseBotItemEventId(eventId) ?? 0
+  return {
+    asks: [...questions].flatMap(([eventId, { shape, answers, waiting }]) =>
+      waiting
+        ? [
+            {
+              id: id(eventId),
+              lines: shape.decisions.flatMap((decision, index) =>
+                answers[index] ? [] : [botItemQuestionLine(decision.question)]
+              )
+            }
+          ]
+        : []
+    ),
+    answered: [...questions].flatMap(([eventId, { answers }]) =>
+      reply && answers.includes(reply) ? [id(eventId)] : []
+    )
+  }
+}
+
 export class BotItemsReads extends BotItemsTables {
+  /** Every event of the item, oldest first, as clients read them. */
+  protected itemEvents(uid: string): BotItemEvent[] {
+    return this.db
+      .prepare('SELECT * FROM item_events WHERE item_uid = ? ORDER BY id')
+      .all(uid)
+      .map((row) => eventViewOf(eventRecordOf(row)))
+  }
+
   /** Links of a kind to any of these refs, across items. */
   linksTo(kind: BotItemLinkKind, refs: readonly string[]): BotItemLinkRecord[] {
     if (refs.length === 0) {
@@ -110,11 +155,17 @@ export class BotItemsReads extends BotItemsTables {
 
   /** What item views need, for many items in one round trip: rows, links, Needs you questions and
    *  the newest event anyone but the owner made. */
-  viewRows(uids: readonly string[]): {
+  viewRows(
+    uids: readonly string[],
+    /** Also each Needs you item's oldest open ask, which reads its events: for item views only. */
+    withOpenAsks = false
+  ): {
     items: BotItemRecord[]
     links: Record<string, BotItemLinkRecord[]>
     questions: Record<string, BotItemEventRecord>
     othersLast: Record<string, number>
+    /** Needs you items' oldest ask still waiting on a line: clients read back to it. */
+    oldestOpenAsks: Record<string, string>
   } {
     const ids = JSON.stringify(uids)
     const rows = this.db
@@ -148,6 +199,16 @@ export class BotItemsReads extends BotItemsTables {
       const event = eventRecordOf(row)
       questions[event.itemUid] = event
     }
-    return { items, links, questions, othersLast }
+    const oldestOpenAsks: Record<string, string> = {}
+    for (const item of items) {
+      const oldest =
+        withOpenAsks && item.status === 'needs_you'
+          ? openBotItemAsks(item, this.itemEvents(item.uid)).asks[0]
+          : null
+      if (oldest) {
+        oldestOpenAsks[item.uid] = botItemEventId(oldest.id)
+      }
+    }
+    return { items, links, questions, othersLast, oldestOpenAsks }
   }
 }

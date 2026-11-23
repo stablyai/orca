@@ -138,7 +138,7 @@ const SHOW = defineMethod({
       throw new BotItemError('invalid_argument', 'after and before take an event id such as e41.')
     }
     const limit = BOT_ITEM_LIMITS.eventsPage
-    const [item] = await botItems.views([record])
+    const [item] = await botItems.views([record], false, true)
     if (params.newest) {
       // The newest page; `earlierCursor` pages back from its oldest event.
       const events = await botItems.eventsBefore(record.uid, before, limit + 1)

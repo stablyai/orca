@@ -10,6 +10,7 @@ import {
 } from '../../shared/bots/bot-items'
 import { BOT_ITEM_SNOOZE_MAX_MS } from '../../shared/bots/bot-item-snooze'
 import { BotItemError } from './bot-item-error'
+import { openBotItemAsks } from './bot-items-reads'
 import { BotItemsWrites } from './bot-items-writes'
 import {
   assertBotItemText,
@@ -64,14 +65,15 @@ export class BotItemsOwner extends BotItemsWrites {
       if (made !== null) {
         return { uid, eventId: made }
       }
+      const needsYou = item.status === 'needs_you'
       const question =
-        item.status === 'needs_you' && item.questionEvent !== null
-          ? this.botQuestion(item.questionEvent)
-          : null
+        needsYou && item.questionEvent !== null ? this.botQuestion(item.questionEvent) : null
       // Asks a later question left waiting are answered too, oldest first.
-      const waiting = question ? this.openAsks(item).asks : []
+      const events = needsYou ? this.itemEvents(uid) : []
+      const waiting = needsYou ? openBotItemAsks(item, events).asks : []
+      const asking = question !== null || waiting.length > 0
       if (
-        question &&
+        asking &&
         questionEventId !== undefined &&
         !waiting.some(({ id }) => id === questionEventId)
       ) {
@@ -80,33 +82,40 @@ export class BotItemsOwner extends BotItemsWrites {
           `Item ${item.number} has a new question. Read it, then reply.`
         )
       }
-      // While the bot asks, a comment not sent as plain is the answer: it names the question (a quick
-      // reply's own, else the oldest still waiting), and the move it makes says so. A plain one leaves
-      // the item waiting on its question.
-      const answeringId =
-        question && !plain ? (questionEventId ?? waiting[0]?.id ?? question.id) : null
-      const answering =
-        answeringId === null
-          ? null
-          : answeringId === question?.id
-            ? question
-            : this.botQuestion(answeringId)
-      const answers = answering ? botItemEventId(answering.id) : undefined
-      // A question a conversation's turn asked is answered there too (bots-items-mail.ts reads it).
-      const askedIn = answering?.data.askedInConversation
-      const data = {
+      const comment = {
         text: commentText,
         ...(images.length > 0 ? { images } : {}),
         ...(requestId === undefined ? {} : { requestId }),
-        ...(answers === undefined ? {} : { answers }),
         ...(plain ? { plain: true } : {}),
-        ...(skills.length > 0 ? { skills } : {}),
-        ...(typeof askedIn === 'string' ? { askedInConversation: askedIn } : {})
+        ...(skills.length > 0 ? { skills } : {})
       }
-      // An answer to some of the ask's lines keeps the item asking the rest; its mail names them.
-      const reply = { id: '', kind: 'commented' as const, actor, data, at: now }
-      const left = answering ? this.openAsks(item, reply) : null
-      const open = left?.answered ? left.asks.flatMap(({ lines }) => lines) : []
+      // The answer names its question, and a conversation's turn that asked it is answered there too
+      // (bots-items-mail.ts reads it).
+      const answering = (id: number | undefined) => {
+        const ask = id === undefined ? null : id === question?.id ? question : this.botQuestion(id)
+        const askedIn = ask?.data.askedInConversation
+        return ask
+          ? {
+              ...comment,
+              answers: botItemEventId(ask.id),
+              ...(typeof askedIn === 'string' ? { askedInConversation: askedIn } : {})
+            }
+          : comment
+      }
+      // While the bot asks, a comment not sent as plain answers the question the box replies to: a
+      // quick reply's own, else the oldest still waiting. One sent as plain answers only lines it names.
+      const named = questionEventId ?? waiting[0]?.id ?? question?.id
+      let data: Record<string, unknown> = asking && !plain ? answering(named) : comment
+      const left = asking
+        ? openBotItemAsks(item, events, { id: '', kind: 'commented', actor, data, at: now })
+        : null
+      // Its lines answered another ask: it names that one.
+      const answered = left?.answered ?? []
+      if (answered.length > 0 && (plain || named === undefined || !answered.includes(named))) {
+        data = answering(answered[0])
+      }
+      // The item keeps asking while any line is open; its mail names them.
+      const open = left ? left.asks.flatMap(({ lines }) => lines) : []
       const eventId = this.appendEvent(
         uid,
         'commented',
@@ -116,10 +125,14 @@ export class BotItemsOwner extends BotItemsWrites {
         now
       )
       this.endSnooze(uid, actor, now)
-      // A reply hands the item back to the bot.
-      if (item.status === 'needs_you' && !(question && plain) && open.length === 0) {
+      // A reply hands the item back to the bot; a plain one that answered nothing leaves it asking.
+      if (needsYou && open.length === 0 && !(asking && plain && answered.length === 0)) {
         this.writeStatus(uid, 'working', null, actor, now)
-        const moved = { from: item.status, to: 'working', ...(answers ? { cause: 'answer' } : {}) }
+        const moved = {
+          from: item.status,
+          to: 'working',
+          ...(data.answers ? { cause: 'answer' } : {})
+        }
         this.appendEvent(uid, 'status', actor, moved, true, now)
       }
       return { uid, eventId }

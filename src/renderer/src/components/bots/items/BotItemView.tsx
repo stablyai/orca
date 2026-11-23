@@ -266,9 +266,9 @@ export function BotItemBody({
           },
     [deleted, comment, quick, steps, sent, waitingLine?.eventId]
   )
-  // The waiting question's comment, with its words and quick replies, is read even when it is older
-  // than the loaded page: earlier pages load until it shows.
-  const questionId = item.question?.eventId
+  // The waiting question's comment, and the oldest ask a later question left open, with their words
+  // and quick replies, are read even when older than the loaded page: earlier pages load until they show.
+  const questionId = item.oldestOpenAsk ?? item.question?.eventId
   const questionUnread =
     view.eventsRead &&
     questionId !== undefined &&

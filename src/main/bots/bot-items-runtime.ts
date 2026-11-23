@@ -213,12 +213,19 @@ export class BotItemsHost {
   }
 
   /** Items as the wire shows them, links joined in one batch; `summary` leaves out the long texts a
-   *  list doesn't show. */
-  async views(items: readonly BotItemRecord[], summary = false): Promise<BotItem[]> {
+   *  list doesn't show; `withOpenAsks` adds each Needs you item's oldest open ask, for its own view. */
+  async views(
+    items: readonly BotItemRecord[],
+    summary = false,
+    withOpenAsks = false
+  ): Promise<BotItem[]> {
     if (items.length === 0) {
       return []
     }
-    const rows = await this.store().viewRows(items.map((item) => item.uid))
+    const rows = await this.store().viewRows(
+      items.map((item) => item.uid),
+      withOpenAsks
+    )
     const refs = Object.values(rows.links)
       .flat()
       .flatMap((link) => (link.kind === 'dispatch' ? [link.ref] : []))
@@ -243,6 +250,7 @@ export class BotItemsHost {
           ? { botId: madeBy.botId, name: nameOf(madeBy.botId), chatId: madeBy.chatId }
           : null,
         question: question ? botItemQuestionView(botItemEventId(question.id), question.data) : null,
+        ...(rows.oldestOpenAsks[item.uid] ? { oldestOpenAsk: rows.oldestOpenAsks[item.uid] } : {}),
         closeNote: summary ? null : item.closeNote,
         links: (rows.links[item.uid] ?? []).map((link) =>
           this.join.linkView(link, workers.get(link.ref))

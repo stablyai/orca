@@ -77,19 +77,17 @@ type AnsweredLines = { ask: OpenAsk; lines: number[]; byOrder: boolean }
 /** The open asks' lines a reply answers. The host names the ask it answers (a quick reply's own, else
  *  the oldest waiting, the one the comment box replies to): a quick reply's words and a recorded answer
  *  answer only that ask, and a comment naming no line takes its first open line. "Question → answer"
- *  lines go to every open ask asking that question. */
+ *  lines go to every open ask asking that question, even from a comment sent as its own. */
 function answeredLines(
   open: readonly OpenAsk[],
   reply: BotItemEvent,
   asked: ReadonlySet<string>
 ): AnsweredLines[] {
-  // Sent as a comment of its own, with no question named in the box.
-  if (reply.data.plain === true) {
-    return []
-  }
+  // Sent as a comment of its own, with no question named in the box: only lines it names answer.
+  const plain = reply.data.plain === true
   const named = open.find(({ id }) => id === reply.data.answers)
   const asks = named ? [named, ...open.filter((ask) => ask !== named)] : open
-  if (Array.isArray(reply.data.decisions)) {
+  if (!plain && Array.isArray(reply.data.decisions)) {
     const lines = named ? recordedLines(reply.data, named.entry.shape.decisions.length) : null
     return named && lines ? [{ ask: named, lines, byOrder: false }] : []
   }
@@ -98,7 +96,7 @@ function answeredLines(
   const isOpen = ({ answers, byOrder }: BotItemQuestionAnswers, index: number): boolean =>
     !answers[index] || byOrder[index] === true
   // Bare quick-reply words answer only the ask the reply names; an older host's names its current one.
-  for (const ask of named ? [named] : open) {
+  for (const ask of plain ? [] : named ? [named] : open) {
     const { shape } = ask.entry
     const picked = shape.decisions.findIndex(
       (decision, index) =>
@@ -116,7 +114,7 @@ function answeredLines(
     )
     return lines.length > 0 ? [{ ask, lines, byOrder: false }] : []
   })
-  if (namedLines.length > 0 || answersAskedQuestions(text, asked)) {
+  if (namedLines.length > 0 || plain || answersAskedQuestions(text, asked)) {
     return namedLines
   }
   for (const ask of asks) {
@@ -141,6 +139,11 @@ export function botItemQuestionPairing(
   for (const event of events) {
     if (endsAsks(event)) {
       open = []
+      continue
+    }
+    if (event.kind === 'status' && event.data.cause === 'answer') {
+      // An answer moved the item on: an ask it left with no open line takes no later reply.
+      open = open.filter(({ entry }) => entry.answers.includes(null))
       continue
     }
     if (event.kind !== 'commented') {
