@@ -26,7 +26,8 @@ function attributed(current: LegacyAgentSessionAccountHome, reading: ProviderRat
       getRecord: () => ({
         provider: 'codex',
         location: { wslDistro: null },
-        launchedAccount: { fence: 3, accountHome: HIT }
+        launchedAccount: { fence: 3, accountHome: HIT },
+        lease: { runtimeFence: 3 }
       })
     },
     launchAccountHome: async () => current,

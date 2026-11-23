@@ -2,12 +2,12 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { BrowserWindow } from 'electron'
 import '../../../shared/orca-profiles/constants'
-import { ORCA_BROWSER_PARTITION } from '../../../shared/browser/browser-session-partition'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
 import { mapSettledWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import type { BrowserBackend, BrowserBackendCreateTab } from '../browser-backend'
 import type { BrowserManager } from '../guest-lifecycle/manager/browser-manager'
 import type { AgentBrowserBridge } from '../agent-browser/agent-browser-bridge'
+import { BrowserError } from '../browser-error'
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import { installBrowserJavaScriptDialogs } from '../guest-lifecycle/prompts/browser-javascript-dialogs'
 import {
@@ -26,6 +26,7 @@ import { loadOffscreenPageUrl } from './offscreen-page-load'
 const DEFAULT_VIEWPORT_WIDTH = 1280
 const DEFAULT_VIEWPORT_HEIGHT = 800
 const OWNER_RETIREMENT_CONCURRENCY = 4
+const requestedUrlByWindow = new WeakMap<BrowserWindow, string>()
 
 type FreedPage = { worktreeId: string; entries: Electron.NavigationEntry[]; index: number }
 
@@ -43,7 +44,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     private readonly options: {
       getAgentBrowserBridge?: () => Pick<
         AgentBrowserBridge,
-        'onPageClosed' | 'isRoutedPage' | 'holdsPageNetworkState'
+        'onPageClosed' | 'onProcessSwap' | 'isRoutedPage' | 'holdsPageNetworkState'
       > | null
       onPageNavigated?: (page: ServeBrowserPageState) => void
       /** Only pages whose tab is saved are freed, since their next use restores them from it. */
@@ -69,12 +70,17 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     const profile = params.profileId
       ? browserSessionRegistry.getProfile(params.profileId)
       : browserSessionRegistry.getDefaultProfile()
-    const partition = profile?.partition ?? ORCA_BROWSER_PARTITION
-    if (profile) {
-      // A server page starts its profile's extensions, as a desktop tab does.
-      browserSessionRegistry.attachExtensions(profile.id)
+    // A deleted profile must not fall back to Default's cookie jar, as on desktop.
+    if (!profile) {
+      throw new BrowserError(
+        'invalid_argument',
+        `Browser profile ${params.profileId} was not found`
+      )
     }
-    const extensionsReady = profile ? whenBrowserExtensionsStartFor(profile.id) : null
+    const { partition } = profile
+    // A server page starts its profile's extensions, as a desktop tab does.
+    browserSessionRegistry.attachExtensions(profile.id)
+    const extensionsReady = whenBrowserExtensionsStartFor(profile.id)
 
     const win = new BrowserWindow({
       show: false,
@@ -102,6 +108,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     win.webContents.setMaxListeners(WEB_CONTENTS_MAX_LISTENERS_PER_EVENT)
     followPublicationLeasesWithFrameRate(win.webContents)
     this.windowsByPageId.set(browserPageId, win)
+    requestedUrlByWindow.set(win, params.url)
     // Server pages have no window to ask in; agents and phones answer their dialogs.
     installBrowserJavaScriptDialogs(win.webContents, () => null)
 
@@ -109,7 +116,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     const registered = this.browserManager.registerOffscreenGuest({
       browserPageId,
       worktreeId: params.worktreeId,
-      sessionProfileId: profile?.id ?? null,
+      sessionProfileId: profile.id,
       webContentsId: win.webContents.id
     })
     if (!registered) {
@@ -134,13 +141,18 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     const { worktreeId } = params
     const { onPageNavigated } = this.options
     if (worktreeId && onPageNavigated) {
-      const report = (): void =>
+      const report = (): void => {
+        // A page replaced by a profile switch must not save its last address over the new one's.
+        if (this.windowsByPageId.get(browserPageId) !== win) {
+          return
+        }
         onPageNavigated({
           worktreeId,
           pageId: browserPageId,
           url: win.webContents.getURL(),
           title: win.webContents.getTitle()
         })
+      }
       // Persist at navigation milestones, avoiding writes for every dynamic title update.
       win.webContents.on('did-navigate-in-page', report)
       win.webContents.on('did-stop-loading', report)
@@ -177,6 +189,42 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     })
 
     return { browserPageId }
+  }
+
+  async setTabProfile(browserPageId: string, profileId: string): Promise<void> {
+    const win = this.windowsByPageId.get(browserPageId)
+    if (!win || win.isDestroyed()) {
+      throw new Error(`Browser page ${browserPageId} is not running`)
+    }
+    // Deleted while the switch waited: refuse it, or the page would reopen in the default session.
+    if (!browserSessionRegistry.getProfile(profileId)) {
+      throw new BrowserError('invalid_argument', `Browser profile ${profileId} was not found`)
+    }
+    const previousWebContentsId = win.webContents.id
+    const worktreeId = this.browserManager.getWorktreeIdForTab(browserPageId)
+    // A page still holding its first load for extensions has no URL yet.
+    const url = win.webContents.getURL() || (requestedUrlByWindow.get(win) ?? '')
+    // Hand the id over in one synchronous step so no command finds the page missing in between.
+    this.windowsByPageId.delete(browserPageId)
+    this.idleClock.untrack(browserPageId)
+    this.browserManager.unregisterGuest(browserPageId, 'guest-destroyed')
+    try {
+      const created = this.createTab({ browserPageId, url, worktreeId, profileId })
+      const nextWebContentsId = this.getWebContentsId(browserPageId)
+      if (nextWebContentsId !== null) {
+        // Keeps the agent's routes on the page, as a desktop webview's process swap does.
+        await this.options
+          .getAgentBrowserBridge?.()
+          ?.onProcessSwap(browserPageId, nextWebContentsId, previousWebContentsId)
+          .catch(() => {})
+      }
+      await created
+    } finally {
+      if (!win.isDestroyed()) {
+        endDebuggerSessions(win)
+        win.destroy()
+      }
+    }
   }
 
   async closeTab(browserPageId: string): Promise<void> {
@@ -246,6 +294,13 @@ export class OffscreenBrowserBackend implements BrowserBackend {
         win.destroy()
       }
     }
+  }
+
+  /** Running pages in this profile. */
+  pageIdsInProfile(profileId: string): string[] {
+    return [...this.windowsByPageId.keys()].filter(
+      (pageId) => this.browserManager.getSessionProfileIdForTab(pageId) === profileId
+    )
   }
 
   ownsTab(browserPageId: string): boolean {

@@ -1,17 +1,14 @@
 // The bot's Settings list in the desktop's order: its name and picture, then Agent, Schedule, Items,
 // Soul and memory, Access and Notifications, then Delete. Each group is one list; a page is one row here.
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import { View } from 'react-native'
-import type { BotTidyUpView } from '../../../src/shared/bots/bot-tidy-up'
-import { botTidyUp } from '../../../src/shared/bots/bot-tidy-up'
-import { botLookAround } from '../../../src/shared/bots/bot-look-around'
 import { BOT_ITEM_DEFAULT_STALE_DAYS } from '../../../src/shared/bots/bot-items'
 import {
   BOT_ITEMS_STALE_CHOICES,
   type BotItemsStale,
   type BotNotifications
 } from '../../../src/shared/bot-types'
-import { agentChatPermissionModeCopy } from '../../../src/shared/agent-session/options/permissions/structured-agent-session-permission-option'
+import { mobilePermissionModeCopy } from './mobile-permission-mode-copy'
 import { botStartingPermission } from '../../../src/shared/bots/bot-access-reach'
 import { ListRow } from '../components/list/ListGroup'
 import {
@@ -24,7 +21,6 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsNote, SettingsSection as Section } from '../settings/settings-screen-frame'
 import type { SheetBot } from './bot-sheet-operations'
 import type { ConnectorPage } from './connectors/connector-pages'
-import { lookAroundLine, tidyUpLine, whoCanAskLine } from './bot-settings-lines'
 import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
 import { MobileBotAvatar } from './MobileBotAvatar'
@@ -44,6 +40,16 @@ export type SettingsRootPage =
   | 'who-can-ask'
   | 'tools'
   | 'skills'
+
+/** A row a feature adds to the list: the group it sits in, in the desktop's order within it. */
+export type SettingsSlotRow = {
+  key: string
+  group: 'schedule' | 'soul-and-memory' | 'access' | 'sharing'
+  node: ReactNode
+}
+
+/** What a feature adds to Settings: its rows, and the page that replaces the list while one is open. */
+export type SettingsFeature = { rows: SettingsSlotRow[]; page: ReactNode }
 
 /** A Settings page to open on from outside Settings: one the list opens, or one of Connectors' pages. */
 export type BotSettingsTarget = SettingsRootPage | ConnectorPage
@@ -107,23 +113,14 @@ export function MobileBotSettingsRoot(props: {
   online: boolean
   /** A save is in flight, or the host is offline: switches wait. */
   locked: boolean
-  /** Look around and Memory upkeep, for an agent that can run them; null otherwise. */
-  schedule: { lastLookedAt: number | undefined; tidyView: BotTidyUpView | null } | null
-  accessRequests: number
-  /** Topic files in memory/, null until listed; Memory counts them with MEMORY.md. */
-  memoryTopics: number | null
   open: (page: SettingsRootPage) => void
   setActive: (active: boolean) => void
   setNotification: (key: keyof BotNotifications, on: boolean) => void
   onDelete: () => void
   /** Above the list, under the page's header. */
   header: ReactNode
-  /** Access's first row, as on the desktop: Connectors. */
-  connectorsRow: ReactNode
-  /** Rows under Who can ask in Access, such as Tools. */
-  accessRows?: ReactNode
-  /** The Sharing group, after Access as on the desktop. */
-  sharing?: ReactNode
+  /** The features' rows, each in its group. */
+  rows: SettingsSlotRow[]
 }) {
   const t = useMobileTranslation()
   const { bot } = props
@@ -133,8 +130,14 @@ export function MobileBotSettingsRoot(props: {
     : t('bots.settings.active', 'Active')
   const permission = botPermissionSetting(bot)
   const permissionCopy = permission.mode
-    ? agentChatPermissionModeCopy(bot.agent, permission.mode)
+    ? mobilePermissionModeCopy(bot.agent, permission.mode, t)
     : null
+  const rowsIn = (group: SettingsSlotRow['group']) =>
+    props.rows
+      .filter((row) => row.group === group)
+      .map((row) => <Fragment key={row.key}>{row.node}</Fragment>)
+  const schedule = rowsIn('schedule')
+  const sharing = rowsIn('sharing')
   const notification = (key: keyof BotNotifications, label: string, detail: string) => (
     <SwitchRow
       label={label}
@@ -202,21 +205,8 @@ export function MobileBotSettingsRoot(props: {
             onChange={props.setActive}
           />
         </Section>
-        {props.schedule ? (
-          <Section title={t('bots.settings.schedule', 'Schedule')}>
-            <DrillRow
-              label={t('bots.lookAround.title', 'Look around')}
-              value={lookAroundLine(botLookAround(bot), props.schedule.lastLookedAt)}
-              detail
-              onPress={() => props.open('look-around')}
-            />
-            <DrillRow
-              label={t('bots.tidyUp.title', 'Memory upkeep')}
-              value={tidyUpLine(botTidyUp(bot), props.schedule.tidyView?.last?.at)}
-              detail
-              onPress={() => props.open('tidy-up')}
-            />
-          </Section>
+        {schedule.length > 0 ? (
+          <Section title={t('bots.settings.schedule', 'Schedule')}>{schedule}</Section>
         ) : null}
         <Section title={t('bots.settings.items', 'Items')}>
           <DrillRow
@@ -226,36 +216,11 @@ export function MobileBotSettingsRoot(props: {
           />
         </Section>
         <Section title={t('bots.settings.soulAndMemory', 'Soul and memory')}>
-          <ListRow
-            title={t('bots.soul.title', 'Soul')}
-            navigates
-            onPress={() => props.open('soul')}
-          />
-          <ListRow
-            title={t('bots.memory.title', 'Memory')}
-            value={
-              props.memoryTopics === null
-                ? undefined
-                : t('bots.settings.memoryFiles', '{{count}} files', {
-                    count: props.memoryTopics + 1,
-                    defaultValue_one: '{{count}} file'
-                  })
-            }
-            navigates
-            onPress={() => props.open('memory')}
-          />
+          {rowsIn('soul-and-memory')}
         </Section>
-        <Section title={t('bots.settings.access', 'Access')}>
-          {props.connectorsRow}
-          <DrillRow
-            label={t('bots.settings.whoCanAsk', 'Who can ask')}
-            value={whoCanAskLine(bot.members, props.accessRequests)}
-            detail
-            onPress={() => props.open('who-can-ask')}
-          />
-          {props.accessRows}
-        </Section>
-        {props.sharing}
+        <Section title={t('bots.settings.access', 'Access')}>{rowsIn('access')}</Section>
+        {/* Its own group after Access, as on the desktop. */}
+        {sharing.length > 0 ? <Section>{sharing}</Section> : null}
         <Section title={t('bots.settings.notifications', 'Notifications')}>
           {notification(
             'needsPermission',

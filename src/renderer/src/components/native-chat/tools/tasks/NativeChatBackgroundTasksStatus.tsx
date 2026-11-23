@@ -1,47 +1,25 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { useTranslate } from '@/i18n/use-translate'
+import { workerDockKindLabel } from './dock/worker-dock-labels'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentSessionBackgroundTask } from '../../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type {
   AgentChildRowContext,
   AgentChildRowModel
 } from '../../../../../../shared/agent-status/presentation/agent-child-row-model'
 import type { AgentChildWorkView } from '../../../../../../shared/agent-status/child-work/agent-status-child-work-view'
-import { AgentChildRowContent } from '@/components/agent/status/AgentChildRowContent'
-import { agentChildRowName } from '@/components/agent/status/agent-child-row-text'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/class-names'
-import { useTranslate } from '@/i18n/use-translate'
-import { useNow } from '@/lib/window-activity/use-now'
 import {
-  backgroundTasksHeaderText,
-  NARROW_BACKGROUND_TASKS_STRIP_REM
-} from '../../../../../../shared/agent-status/presentation/background-tasks/background-task-header-content'
-import {
-  backgroundTaskRowMeta,
-  backgroundTaskRowStopId,
-  backgroundTasksStripTicks,
-  type BackgroundRosterTask,
-  type BackgroundTaskGroup
-} from '../../../../../../shared/agent-status/presentation/background-tasks/background-task-roster'
-import { backgroundTasksHeaderContent } from './background-task-header-content'
-import {
-  backgroundTaskGroupLabel,
-  structuredSessionBackgroundTaskGroups
-} from './background-task-roster'
-import { sayBackgroundTaskTranslated as say } from './background-task-words-text'
-import { crewStripHeader } from './background-task-crew-header'
-import { KIND_ICONS, kindIconTone } from './background-task-kind-icons'
-import { CrewStripHeaderLine, NarrowHeaderTip } from './NativeChatCrewStripHeader'
-import { NativeChatCrewSubagentRow } from './NativeChatCrewSubagentRow'
-import {
-  NativeChatCrewStripGroups,
-  StripGroup,
-  StripGroupHeading
-} from './NativeChatCrewStripGroups'
-import type { NativeChatCrew } from '../../../orchestration-crew/use-native-chat-crew'
+  agentChildRowName,
+  agentChildRowDetailText
+} from '@/components/agent/status/agent-child-row-text'
+import { compareWorkerDockEntries } from '../../../../../../shared/orchestration/dock/worker-dock'
+import { backgroundTaskRowStopId } from '../../../../../../shared/agent-status/presentation/background-tasks/background-task-roster'
+import { structuredSessionBackgroundTaskGroups } from './background-task-roster'
+import { useWorkerDockStructuralValue } from './dock/NativeChatWorkerDockFrame'
+import { WorkerDockRoster } from './dock/WorkerDockRoster'
+import type { WorkerDockRowView } from './dock/WorkerDockRow'
 
 /** Use strip width in rem so narrow splits behave like narrow windows even on wide monitors. */
-const NARROW_STRIP_REM = NARROW_BACKGROUND_TASKS_STRIP_REM
+const NARROW_STRIP_REM = 27.5
 
 function rootFontSizePx(): number {
   const parsed = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
@@ -49,126 +27,41 @@ function rootFontSizePx(): number {
 }
 
 /** Measure the strip itself; viewport width is only the initial fallback. */
-function useNarrowStrip(ref: React.RefObject<HTMLDivElement | null>): boolean {
-  const [narrow, setNarrow] = useState(() => window.innerWidth < NARROW_STRIP_REM * 16)
+function useStripLayout(ref: React.RefObject<HTMLDivElement | null>) {
+  const [layout, setLayout] = useState(() => ({
+    narrow: window.innerWidth < NARROW_STRIP_REM * 16,
+    compact: window.innerHeight < 520
+  }))
   useEffect(() => {
-    const element = ref.current
+    const root = ref.current
+    const element = root?.closest('[data-native-chat-worker-dock]') ?? root
+    const pane = root?.closest('[data-native-chat-root]')
     if (!element || typeof ResizeObserver === 'undefined') {
       return
     }
-    const observer = new ResizeObserver((observerEntries) => {
-      const width =
-        observerEntries[0]?.borderBoxSize?.[0]?.inlineSize ?? element.getBoundingClientRect().width
-      setNarrow(width < NARROW_STRIP_REM * rootFontSizePx())
-    })
-    observer.observe(element, { box: 'border-box' })
+    const measure = () => {
+      const narrow = element.getBoundingClientRect().width < NARROW_STRIP_REM * rootFontSizePx()
+      const compact = (pane?.getBoundingClientRect().height ?? window.innerHeight) < 520
+      setLayout((previous) =>
+        previous.narrow === narrow && previous.compact === compact ? previous : { narrow, compact }
+      )
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    if (pane) {
+      observer.observe(pane)
+    }
+    measure()
     return () => observer.disconnect()
   }, [ref])
-  return narrow
+  return layout
 }
 
-function BackgroundTaskRow(props: {
-  row: AgentChildRowModel
-  now: number
-  supportsTaskStop: boolean
-  stoppingTaskIds: ReadonlySet<string>
-  onStop: (taskId: string) => void
-  onShowAgent?: (providerId: string) => void
-  /** The agent whose view is open, marked current. */
-  currentAgentId?: string | null
-  /** Beside a crew's workers: a click puts the name in the message, and Open and Stop show on hover. */
-  onName?: (name: string) => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  const { row, now } = props
-  if (props.onName) {
-    return <NativeChatCrewSubagentRow {...props} onName={props.onName} />
-  }
-  const Icon = KIND_ICONS[row.kind]
-  const meta = backgroundTaskRowMeta(row, now)
-  const stopId = backgroundTaskRowStopId(row, props.supportsTaskStop)
-  // Only an agent's activity streams into the conversation, filed under the provider's id.
-  const shownId = row.kind === 'agent' && props.onShowAgent ? row.providerId : undefined
-  const content = (
-    <>
-      <Icon aria-hidden="true" className={`size-3.5 shrink-0 ${kindIconTone(row.kind, false)}`} />
-      {/* Every attention state states its reason on the row; `unverifiable` is never dropped. */}
-      <AgentChildRowContent
-        row={row}
-        now={now}
-        leadClassName="font-medium text-foreground"
-        trailClassName="text-muted-foreground"
-        separator=" · "
-        dotTitle={null}
-      />
-      {meta ? (
-        <span className="shrink-0 font-mono text-3xs tabular-nums text-muted-foreground">
-          {meta}
-        </span>
-      ) : null}
-    </>
-  )
-  return (
-    <>
-      <li className="flex h-6 min-w-0 items-center gap-2 text-foreground">
-        {shownId !== undefined ? (
-          <button
-            type="button"
-            data-native-chat-agent-row={shownId}
-            aria-current={props.currentAgentId === shownId ? 'true' : undefined}
-            className={cn(
-              '-mx-1 flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
-              props.currentAgentId === shownId && 'bg-accent'
-            )}
-            aria-label={t('components.native-chat.backgroundTasks.openAgent', 'Open {{value0}}', {
-              value0: agentChildRowName(row)
-            })}
-            onClick={() => props.onShowAgent?.(shownId)}
-          >
-            {content}
-          </button>
-        ) : (
-          content
-        )}
-        {stopId !== null ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            aria-label={say('stopTask', { value0: agentChildRowName(row) })}
-            disabled={props.stoppingTaskIds.has(stopId)}
-            onClick={() => props.onStop(stopId)}
-          >
-            {say('stop')}
-          </Button>
-        ) : null}
-      </li>
-      {row.owned.length > 0 ? (
-        // Work a child owns (its shell, a nested agent) reads beneath it, not in its kind's group.
-        <li>
-          <ul role="list" className="ml-5 space-y-0.5">
-            {row.owned.map((owned) => (
-              <BackgroundTaskRow
-                key={owned.id}
-                row={owned}
-                now={now}
-                supportsTaskStop={props.supportsTaskStop}
-                stoppingTaskIds={props.stoppingTaskIds}
-                onStop={props.onStop}
-                onShowAgent={props.onShowAgent}
-                currentAgentId={props.currentAgentId}
-              />
-            ))}
-          </ul>
-        </li>
-      ) : null}
-    </>
-  )
+function workerChildren(row: AgentChildRowModel): AgentChildRowModel[] {
+  return [row, ...row.owned.flatMap(workerChildren)]
 }
 
-const NO_TASKS: readonly BackgroundRosterTask[] = []
-
-export function NativeChatBackgroundTasksStatus(props: {
+export function NativeChatBackgroundTasksStatus(liveProps: {
   tasks: readonly AgentSessionBackgroundTask[]
   settledTasks: readonly AgentSessionBackgroundTask[]
   /** The host's child views, when it publishes them; rows then read these instead of the tasks. */
@@ -191,18 +84,29 @@ export function NativeChatBackgroundTasksStatus(props: {
   onStop: (taskId?: string) => void
   /** Open a listed agent's own view. */
   onShowAgent?: (providerId: string) => void
+  onShowProviderDetails?: (row: WorkerDockRowView, opener: HTMLElement) => void
   /** The agent whose view the pane shows. */
   currentAgentId?: string | null
-  /** This chat's orchestration crew, folded in beside its subagents; null when it has none. */
-  crew?: NativeChatCrew | null
+  workerRows?: ReadonlyMap<string, WorkerDockRowView>
+  workerIdentities?: readonly {
+    id: string
+    state: WorkerDockRowView['state']
+    changedAt: number | null
+    settlement: string | null
+    ownerActionsAvailable: boolean
+  }[]
+  ownerActionsAvailable?: boolean
+  sessionId?: string
+  onOpenWorker?: (row: WorkerDockRowView, opener: HTMLElement) => void
+  onWorkerAction?: (row: WorkerDockRowView, action: 'stop' | 'clear') => void
+  onClearAll?: () => void
+  loadWindow?: (anchor: string) => Promise<void>
 }): React.JSX.Element {
-  const expanded = props.expanded
-  const crew = props.crew ?? null
-  const taskListId = useId()
-  const stripRef = useRef<HTMLDivElement>(null)
-  const narrow = useNarrowStrip(stripRef)
-  // The 1 Hz elapsed tick must not re-group, re-sort and re-translate the whole roster.
-  const groups: BackgroundTaskGroup[] = useMemo(
+  const t = useTranslate()
+  const props = useWorkerDockStructuralValue(liveProps)
+  const root = useRef<HTMLDivElement>(null)
+  const { narrow, compact } = useStripLayout(root)
+  const groups = useMemo(
     () =>
       structuredSessionBackgroundTaskGroups(
         props.tasks,
@@ -210,177 +114,163 @@ export function NativeChatBackgroundTasksStatus(props: {
         props.childViews,
         props.childRowContext
       ),
-    [props.childViews, props.childRowContext, props.tasks, props.settledTasks]
+    [props.tasks, props.settledTasks, props.childViews, props.childRowContext]
   )
-  const now = useNow(1_000, props.isVisible && backgroundTasksStripTicks(groups, expanded))
-  const header = backgroundTasksHeaderContent(groups, { narrow, now })
-  const crewHeader = crew ? crewStripHeader(groups, crew.summary) : null
-  const headerText = crewHeader
-    ? crewHeader.map((segment) => segment.text).join(' · ')
-    : backgroundTasksHeaderText(header)
-  const crewOpen = expanded && crew !== null
-  const taskRow = (entry: BackgroundRosterTask, onName?: (name: string) => void) => (
-    <BackgroundTaskRow
-      key={entry.row.id}
-      row={entry.row}
-      now={now}
-      supportsTaskStop={props.supportsTaskStop}
-      stoppingTaskIds={props.stoppingTaskIds}
-      onStop={props.onStop}
-      onShowAgent={props.onShowAgent}
-      currentAgentId={props.currentAgentId}
-      onName={onName}
-    />
+  const holdingStructure = props !== liveProps
+  const countGroups = useMemo(
+    () =>
+      holdingStructure
+        ? structuredSessionBackgroundTaskGroups(
+            liveProps.tasks,
+            liveProps.settledTasks,
+            liveProps.childViews,
+            liveProps.childRowContext
+          )
+        : groups,
+    [
+      holdingStructure,
+      liveProps.tasks,
+      liveProps.settledTasks,
+      liveProps.childViews,
+      liveProps.childRowContext,
+      groups
+    ]
+  )
+  const countIdentities = useMemo(
+    () => [
+      ...(liveProps.workerIdentities ?? []),
+      ...countGroups.flatMap((group) =>
+        group.tasks
+          .flatMap(({ row }) => workerChildren(row))
+          .map((row) => ({
+            id: `${row.kind}:${row.id}`,
+            kind: row.kind,
+            state:
+              row.displayState === 'failed'
+                ? ('failed' as const)
+                : row.displayState === 'interrupted'
+                  ? ('unexpected' as const)
+                  : row.displayState === 'unverifiable'
+                    ? ('unavailable' as const)
+                    : ('running' as const)
+          }))
+      )
+    ],
+    [liveProps.workerIdentities, countGroups]
+  )
+  const providerRows = useMemo(() => {
+    const views = new Map(props.childViews?.map((view) => [view.id, view]))
+    return groups.flatMap((group) =>
+      group.tasks
+        .flatMap(({ row }) => workerChildren(row))
+        .map((row): WorkerDockRowView => {
+          const view = views.get(row.id)
+          const state =
+            row.displayState === 'failed'
+              ? 'failed'
+              : row.displayState === 'interrupted'
+                ? 'unexpected'
+                : row.displayState === 'idle'
+                  ? 'idle'
+                  : row.displayState === 'unverifiable'
+                    ? 'unavailable'
+                    : row.displayState === 'waiting' || row.displayState === 'blocked'
+                      ? 'coordinator'
+                      : 'running'
+          return {
+            id: JSON.stringify([
+              props.sessionId ?? '',
+              row.kind,
+              view
+                ? `${row.id}:${view.invocation.invocationId}:${view.invocation.generation}`
+                : row.id
+            ]),
+            dispatchId: row.id,
+            source: props.sessionId ?? '',
+            kind: row.kind,
+            name: view?.name ?? row.agentType ?? workerDockKindLabel(t, row.kind),
+            title:
+              view?.description ??
+              agentChildRowName(row) ??
+              agentChildRowDetailText(row, Date.now()),
+            model: row.model ?? null,
+            state,
+            changedAt: view?.settledAt ?? row.firstObservedAt ?? null,
+            startedAt: row.firstObservedAt || null,
+            reason:
+              state === 'failed' || state === 'unexpected' ? (view?.lastMessage ?? null) : null,
+            settlement: null,
+            resultId: null,
+            stoppable: backgroundTaskRowStopId(row, props.supportsTaskStop) !== null,
+            providerId: row.providerId,
+            ownerActionsAvailable: props.ownerActionsAvailable !== false
+          }
+        })
+    )
+  }, [
+    groups,
+    props.childViews,
+    props.sessionId,
+    props.supportsTaskStop,
+    props.ownerActionsAvailable,
+    t
+  ])
+  const rows = useMemo(
+    () =>
+      new Map([...(props.workerRows ?? []), ...providerRows.map((row) => [row.id, row] as const)]),
+    [props.workerRows, providerRows]
+  )
+  const identities = useMemo(
+    () => [...(props.workerIdentities ?? []), ...providerRows].sort(compareWorkerDockEntries),
+    [props.workerIdentities, providerRows]
   )
   return (
     <div
-      data-native-chat-background-tasks="true"
-      className="group/tasks shrink-0 bg-chat-pane px-3 pt-2 sm:px-4"
+      ref={root}
+      className="min-h-0 group-has-[[data-native-chat-worker-approvals]]/worker-dock:contents"
     >
-      {/* When the goal tab is the next sibling, take its width and share its top edge. */}
-      <div className="mx-auto w-full max-w-(--chat-content-max-width) [[data-native-chat-background-tasks]:has(+[data-native-chat-composer-tab-strip])_&]:px-2">
-        <div
-          ref={stripRef}
-          className="overflow-hidden rounded-lg border border-border bg-muted/50 text-xs text-muted-foreground shadow-xs [[data-native-chat-background-tasks]:has(+[data-native-chat-composer-tab-strip])_&]:rounded-b-none [[data-native-chat-background-tasks]:has(+[data-native-chat-composer-tab-strip])_&]:shadow-none"
-        >
-          <div className="flex h-8 items-center px-1.5">
-            <NarrowHeaderTip text={crewHeader && narrow ? headerText : null}>
-              <button
-                type="button"
-                className="group/task-header flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                aria-expanded={expanded}
-                aria-controls={taskListId}
-                aria-label={headerText}
-                onClick={() => props.onExpandedChange(!expanded)}
-              >
-                {crewHeader ? (
-                  <CrewStripHeaderLine
-                    segments={crewHeader}
-                    narrow={narrow}
-                    dimmed={!props.indicatorActive}
-                  />
-                ) : (
-                  <span className="min-w-0 truncate">
-                    {header.segments.map((segment, index) => {
-                      // A collapsed total spans kinds, so no single icon can stand for it.
-                      const kind = segment.kind
-                      const Icon = kind ? KIND_ICONS[kind] : null
-                      return (
-                        <span key={segment.kind ?? 'total'}>
-                          {/* Use text color; the border token is too faint for a readable separator. */}
-                          {index > 0 ? (
-                            <span className="text-muted-foreground group-hover/task-header:text-accent-foreground">
-                              {' · '}
-                            </span>
-                          ) : null}
-                          {Icon && kind ? (
-                            <Icon
-                              aria-hidden="true"
-                              // The turn owns the voice: same icons, dimmed until it ends.
-                              className={`mr-1 inline size-3 align-[-0.125em] ${kindIconTone(
-                                kind,
-                                !props.indicatorActive
-                              )}`}
-                            />
-                          ) : null}
-                          <span className="font-medium text-foreground group-hover/task-header:text-accent-foreground">
-                            {segment.text}
-                          </span>
-                        </span>
-                      )
-                    })}
-                    {header.detail ? (
-                      <span>
-                        {header.segments.length > 0 ? ' — ' : null}
-                        {header.detail}
-                      </span>
-                    ) : null}
-                  </span>
-                )}
-                <ChevronDown
-                  aria-hidden="true"
-                  className={`size-3 transition-transform motion-reduce:transition-none ${expanded ? 'rotate-180' : ''}`}
-                />
-              </button>
-            </NarrowHeaderTip>
-          </div>
-          {expanded ? (
-            <div
-              id={taskListId}
-              className={cn(
-                'scrollbar-sleek overflow-y-auto border-t border-border px-3 py-2',
-                crew ? 'max-h-60' : 'max-h-40'
-              )}
-            >
-              {crewOpen ? (
-                <>
-                  <NativeChatCrewStripGroups
-                    crew={crew}
-                    subagents={groups.find((group) => group.kind === 'agent')?.tasks ?? NO_TASKS}
-                    renderSubagent={(entry) =>
-                      taskRow(entry, crew.canMention ? crew.insertName : undefined)
-                    }
-                  />
-                  {groups
-                    .filter((group) => group.kind !== 'agent')
-                    .map((group) => (
-                      <StripGroup key={group.kind}>
-                        <StripGroupHeading
-                          label={backgroundTaskGroupLabel(group.kind)}
-                          count={group.tasks.length}
-                        />
-                        <ul
-                          role="list"
-                          aria-label={backgroundTaskGroupLabel(group.kind)}
-                          className="space-y-0.5"
-                        >
-                          {group.tasks.map((entry) => taskRow(entry))}
-                        </ul>
-                      </StripGroup>
-                    ))}
-                </>
-              ) : groups.length > 0 ? (
-                groups.map((group, index) => (
-                  <div
-                    key={group.kind}
-                    className={index > 0 ? 'mt-1.5 border-t border-border/60 pt-1.5' : ''}
-                  >
-                    <p className="px-0.5 pb-1 font-mono text-3xs uppercase tracking-wider text-muted-foreground">
-                      {backgroundTaskGroupLabel(group.kind)}
-                    </p>
-                    <ul
-                      role="list"
-                      aria-label={backgroundTaskGroupLabel(group.kind)}
-                      className="space-y-0.5"
-                    >
-                      {group.tasks.map((entry) => taskRow(entry))}
-                    </ul>
-                  </div>
-                ))
-              ) : (
-                <p>{say('detailsUnavailable')}</p>
-              )}
-              {props.incomplete && groups.length > 0 ? (
-                <p className="mt-1.5">{say('detailsUnavailable')}</p>
-              ) : null}
-              {props.offersStopAll ? (
-                <div className={groups.length > 0 ? 'mt-2 border-t border-border pt-2' : 'mt-2'}>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    aria-label={say('stopAll')}
-                    disabled={props.stoppingAll}
-                    onClick={() => props.onStop()}
-                  >
-                    {say('stop')}
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      </div>
+      <WorkerDockRoster
+        rows={rows}
+        identities={identities}
+        countIdentities={countIdentities}
+        narrow={narrow}
+        compact={compact}
+        visible={props.isVisible}
+        incomplete={props.incomplete}
+        stopAll={
+          props.offersStopAll
+            ? { pending: props.stoppingAll, onStop: () => props.onStop() }
+            : undefined
+        }
+        expanded={props.expanded}
+        onExpandedChange={props.onExpandedChange}
+        pending={
+          new Set([
+            ...props.stoppingTaskIds,
+            ...[...rows.values()]
+              .filter((row) => row.providerId && props.stoppingTaskIds.has(row.providerId))
+              .map((row) => row.id)
+          ])
+        }
+        onOpen={(row, opener) => {
+          if (row.kind === 'worker') {
+            props.onOpenWorker?.(row, opener)
+          } else if (row.kind === 'command' || row.settlement) {
+            props.onShowProviderDetails?.(row, opener)
+          } else if (row.providerId) {
+            props.onShowAgent?.(row.providerId)
+          }
+        }}
+        onAction={(row, action) => {
+          if (row.kind === 'worker' || action === 'clear') {
+            props.onWorkerAction?.(row, action)
+          } else if (action === 'stop' && row.providerId) {
+            props.onStop(row.providerId)
+          }
+        }}
+        onClearAll={() => props.onClearAll?.()}
+        loadWindow={props.loadWindow}
+      />
     </div>
   )
 }
