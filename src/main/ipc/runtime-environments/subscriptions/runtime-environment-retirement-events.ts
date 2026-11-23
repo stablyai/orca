@@ -42,7 +42,7 @@ type Ready = {
   receiver?: RemoteLegacyJournalRetirement
 }
 
-export async function subscribeRuntimeEnvironmentWithRetirementEvents(
+export function subscribeRuntimeEnvironmentWithRetirementEvents(
   isCurrent: () => boolean,
   ...args: Parameters<typeof subscribeRemoteRuntimeSharedControlRequest>
 ) {
@@ -55,7 +55,7 @@ export async function subscribeRuntimeEnvironmentWithRetirementEvents(
     connection,
     () => !signal?.aborted && isCurrent()
   )
-  const subscription = await subscribeRemoteRuntimeSharedControlRequest(
+  return subscribeRemoteRuntimeSharedControlRequest(
     environmentId,
     connection,
     method,
@@ -75,20 +75,13 @@ export async function subscribeRuntimeEnvironmentWithRetirementEvents(
         retirement.close()
         callbacks.onError(error)
       },
-      onClose: () => {
+      onDispose: () => {
         retirement.close()
-        callbacks.onClose?.()
+        callbacks.onDispose?.()
       }
     },
     signal
   )
-  return {
-    ...subscription,
-    close: () => {
-      retirement.close()
-      subscription.close()
-    }
-  }
 }
 
 function observeRemoteLegacyJournalRetirement(

@@ -85,6 +85,11 @@ export function finishSharedControlSubscription(
   }
   subscription.closed = true
   subscriptions.delete(subscription.requestId)
+  try {
+    subscription.callbacks.onDispose?.()
+  } catch {
+    // An optional resource cleanup cannot interrupt subscription retirement.
+  }
   if (error) {
     subscription.callbacks.onError(error)
   }
