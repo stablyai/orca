@@ -4,7 +4,8 @@ import { CrewParty } from '../orchestration-crew'
 export const WorkerDockSource = z.object({ party: CrewParty })
 export const WorkerDockSubscribe = WorkerDockSource.extend({
   includeRows: z.boolean().optional(),
-  activeOnly: z.boolean().optional()
+  /** Only current work: live workers and recent, unresolved failures (see workerDockCurrentSql). */
+  currentOnly: z.boolean().optional()
 })
 export const WorkerDockState = z.enum([
   'starting',

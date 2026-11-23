@@ -59,6 +59,40 @@ it('filters settled workers from the roster returned by an older host', async ()
   ])
 })
 
+it("keeps an older host's recent failures, newest four, and drops the stale ones", async () => {
+  const presence = { revision: 'feed-legacy-failures:1', open: true }
+  const hook = renderHook(() =>
+    useWorkerDockFeed({ kind: 'local' }, '44444444-4444-4444-8444-444444444444', true, presence)
+  )
+  const now = Date.now()
+  const failure = (id: string, minutesAgo: number) => ({
+    id,
+    dispatchId: id,
+    state: 'failed' as const,
+    changedAt: now - minutesAgo * 60_000,
+    ownerActionsAvailable: true,
+    settlement: `settled:${id}`,
+    hasModel: false
+  })
+  const identities = [
+    failure('old', 5 * 60),
+    failure('f1', 1),
+    failure('f2', 2),
+    failure('f3', 3),
+    failure('f4', 4),
+    failure('f5', 5)
+  ]
+  await act(async () => {
+    rpc.event({ revision: 1, expired: false, identities, rows: [], results: [], anchor: null })
+  })
+  expect(hook.result.current.snapshot?.identities.map((row) => row.id)).toEqual([
+    'f1',
+    'f2',
+    'f3',
+    'f4'
+  ])
+})
+
 it('keeps a newer streamed settlement when an older detail window arrives later', async () => {
   const target = { kind: 'local' } as const
   const presence = { revision: 'feed-test:1', open: true }

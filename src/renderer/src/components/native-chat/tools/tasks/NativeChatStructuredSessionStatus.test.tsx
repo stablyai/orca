@@ -95,12 +95,12 @@ it.each([
   expect(onStop).toHaveBeenCalledWith('shell-7')
 })
 
-it("keeps a remote chat's orchestration worker Stop on the computer it runs on", () => {
+it("keeps a remote chat's orchestration worker Open-only: no Stop that would do nothing", () => {
   hoisted.workers = [worker]
   const onStop = renderStrip(REMOTE)
-  const button = screen.getByRole('button', { name: /^Stop Verifier · Review journal unavailable/ })
-  expect(button).toHaveAttribute('aria-disabled', 'true')
-  fireEvent.click(button)
+  expect(screen.queryByRole('button', { name: /^Stop Verifier/ })).toBeNull()
+  const open = screen.getByRole('button', { name: /^Verifier · Review journal/ })
+  expect(open).toHaveAccessibleName(/from the computer it runs on/)
   expect(onStop).not.toHaveBeenCalled()
   expect(hoisted.rpc).not.toHaveBeenCalledWith(
     expect.anything(),

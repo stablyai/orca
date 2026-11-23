@@ -45,6 +45,7 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
     );
     CREATE INDEX IF NOT EXISTS worker_dock_result_time ON worker_dock_facts(source, changed_at DESC, dispatch_id) WHERE report_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS worker_dock_source_state ON worker_dock_facts(source, state);
+    CREATE INDEX IF NOT EXISTS worker_dock_source_state_time ON worker_dock_facts(source, state, changed_at);
     CREATE INDEX IF NOT EXISTS worker_dock_eligible ON worker_dock_facts(source)
       WHERE state <> 'succeeded' OR report_id IS NULL;
     CREATE TABLE IF NOT EXISTS worker_dock_acknowledgments (

@@ -153,7 +153,7 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
     permission: 'workspace',
     access: { kind: 'localOnly', targets: { party: 'party' } },
     params: WorkerDockSubscribe,
-    handler: ({ party, includeRows, activeOnly }, { runtime, signal, connectionId }, emit) =>
+    handler: ({ party, includeRows, currentOnly }, { runtime, signal, connectionId }, emit) =>
       new Promise<void>((resolve) => {
         if (signal?.aborted) {
           resolve()
@@ -168,7 +168,7 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
           emit,
           workerDockActivitySource(db, party, runtime),
           includeRows !== false,
-          activeOnly
+          currentOnly
         )
         runtime.registerSubscriptionCleanup(
           key,

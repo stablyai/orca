@@ -24,8 +24,30 @@ type State = {
 }
 const EMPTY: State = { snapshot: null, available: true, rows: new Map() }
 
-function activeOnOlderHosts({ state }: Pick<WorkerDockEntry, 'state'>): boolean {
-  return state !== 'failed' && state !== 'unexpected' && state !== 'saving'
+const FAILURE_MS = 4 * 60 * 60_000
+const FAILURE_LIMIT = 4
+
+/** The current-work rule as far as a snapshot can tell: hosts predating currentOnly send every
+ *  eligible record, so finished and older failures are dropped here; a current host's rows pass. */
+function currentOnOlderHosts(
+  identities: readonly Pick<WorkerDockEntry, 'id' | 'state' | 'changedAt'>[],
+  now: number
+): Set<string> {
+  const failures = identities
+    .filter(
+      (row) =>
+        (row.state === 'failed' || row.state === 'unexpected') &&
+        row.changedAt !== null &&
+        row.changedAt > now - FAILURE_MS
+    )
+    .sort((a, b) => (b.changedAt ?? 0) - (a.changedAt ?? 0))
+    .slice(0, FAILURE_LIMIT)
+  return new Set([
+    ...identities
+      .filter((row) => row.state !== 'failed' && row.state !== 'unexpected' && row.state !== 'saving')
+      .map((row) => row.id),
+    ...failures.map((row) => row.id)
+  ])
 }
 
 class WorkerDockFeed {
@@ -49,10 +71,13 @@ class WorkerDockFeed {
     if (snapshot && this.state.snapshot && snapshot.revision < this.state.snapshot.revision) {
       return
     }
-    // Hosts predating activeOnly still include settled entries in the same snapshot.
-    if (snapshot && !snapshot.identities.every(activeOnOlderHosts)) {
-      snapshot.identities = snapshot.identities.filter(activeOnOlderHosts)
-      snapshot.rows = snapshot.rows.filter(activeOnOlderHosts)
+    // Hosts predating currentOnly still include settled entries in the same snapshot.
+    if (snapshot) {
+      const kept = currentOnOlderHosts(snapshot.identities, Date.now())
+      if (kept.size !== snapshot.identities.length) {
+        snapshot.identities = snapshot.identities.filter((row) => kept.has(row.id))
+        snapshot.rows = snapshot.rows.filter((row) => kept.has(row.id))
+      }
     }
     const rows = new Map(this.state.rows)
     for (const row of snapshot?.rows ?? []) {
@@ -112,7 +137,7 @@ class WorkerDockFeed {
     void subscribeRuntimeRpc(
       this.target,
       'orchestration.workerDockSubscribe',
-      { party: this.party, includeRows: this.detailed, activeOnly: true },
+      { party: this.party, includeRows: this.detailed, currentOnly: true },
       {
         onEvent: (value) => {
           if (!live()) {
@@ -182,7 +207,7 @@ class WorkerDockFeed {
         party: this.party,
         revision,
         anchor,
-        activeOnly: true
+        currentOnly: true
       })
       if (generation === this.generation && this.listeners.size) {
         this.publish(WorkerDockSnapshot.parse(result), true)
@@ -291,7 +316,7 @@ export function useWorkerDockColdSeed(
         party: formatOrcaSessionAddress(sessionId),
         seed: true,
         includeRows: false,
-        activeOnly: true
+        currentOnly: true
       })
         .then(() => {
           seededSources.add(key)

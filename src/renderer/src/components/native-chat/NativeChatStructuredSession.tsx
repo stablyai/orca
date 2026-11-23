@@ -74,8 +74,10 @@ import { useStructuredAgentSessionStartFailureFacts } from '@/components/native-
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import { NativeChatHostSetupContext } from '@/components/native-chat/host-access/native-chat-host-setup'
 import type { NativeChatComposerHandle } from './composer/native-chat-composer-types'
-import { nativeChatWorkerApprovalParty } from './worker-approvals/NativeChatWorkerApprovals'
-import { NativeChatWorkerTimeline } from './tools/tasks/dock/NativeChatWorkerResultTimeline'
+import {
+  NativeChatWorkerApprovalTimeline,
+  nativeChatWorkerApprovalParty
+} from './worker-approvals/NativeChatWorkerApprovals'
 
 export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
   const { ownerWorktreeId, turnBot, bot: chatBot } = useBotChatOwner(props)
@@ -293,12 +295,9 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                       view={continuation.view}
                     >
                       <NativeChatHostSetupContext.Provider value={setup}>
-                        <NativeChatWorkerTimeline
-                          approvalParty={workerApprovalParty}
-                          workerDock={controller.backgroundTasks.workerDock}
+                        <NativeChatWorkerApprovalTimeline
+                          party={workerApprovalParty}
                           target={props.target}
-                          sessionId={props.sessionId}
-                          isVisible={props.isVisible}
                         >
                           {(timedRows) => (
                             <NativeChatSubagentTranscripts
@@ -329,7 +328,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                               timedRows={timedRows}
                             />
                           )}
-                        </NativeChatWorkerTimeline>
+                        </NativeChatWorkerApprovalTimeline>
                       </NativeChatHostSetupContext.Provider>
                     </NativeChatUsageLimitActionsProvider>
                   </NativeChatRowActionsProvider>

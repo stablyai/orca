@@ -20,7 +20,14 @@ import {
   readProviderFailureIdentities,
   readProviderFailureRows
 } from './worker-dock-provider-failures'
-import { workerDockActiveSql, workerDockEligibleSql } from '../db/worker-dock-eligibility'
+import {
+  WORKER_DOCK_FAILURE_LIMIT,
+  WORKER_DOCK_FAILURE_MS,
+  WORKER_DOCK_UNKNOWN_MS,
+  WORKER_DOCK_UNVERIFIED_READY_MS,
+  workerDockCurrentSql,
+  workerDockEligibleSql
+} from '../db/worker-dock-eligibility'
 import { readWorkerDockActivity, workerDockActivityRevision } from './worker-dock-activity'
 
 const stateSql = `CASE f.state
@@ -75,11 +82,14 @@ export function readWorkerDock(
         .parse(db.db.prepare('SELECT revision FROM worker_dock_revision WHERE id = 1').get())
         .revision + workerDockActivityRevision(db)
     const activity = readWorkerDockActivity(db, source)
-    const index = request.activeOnly ? 'worker_dock_source_state' : 'worker_dock_eligible'
-    const eligible = request.activeOnly ? workerDockActiveSql : workerDockEligibleSql
-    const attentionOrder = request.activeOnly
+    const current = request.currentOnly === true
+    const now = Date.now()
+    const index = current ? 'worker_dock_source_state_time' : 'worker_dock_eligible'
+    const eligible = current ? workerDockCurrentSql : workerDockEligibleSql
+    const attentionOrder = current
       ? ''
       : "CASE WHEN f.state IN ('failed', 'stopped', 'abandoned') THEN 0 ELSE 1 END, "
+    let failures = 0
     const identities: WorkerDockSnapshot['identities'] = db.db
       .prepare(`SELECT ${identitySql} AS id, f.dispatch_id AS dispatchId,
       ${stateSql} AS state, f.changed_at AS changedAt, f.settlement, (f.model IS NOT NULL AND length(trim(f.model)) > 0) AS hasModel,
@@ -87,14 +97,38 @@ export function readWorkerDock(
       f.state = 'ready' AS ready FROM worker_dock_facts f INDEXED BY ${index}
       WHERE ${eligible}
       ORDER BY ${attentionOrder}changedAt IS NULL, changedAt DESC, ${identitySql} COLLATE BINARY`)
-      .all(source)
-      .map((row) => {
+      .all(
+        ...(current
+          ? [source, now - WORKER_DOCK_UNKNOWN_MS, now - WORKER_DOCK_FAILURE_MS]
+          : [source])
+      )
+      .flatMap((row) => {
         const identity = Metadata.parse(row)
         // A ready worker shows the activity its agent status gives it, kept in memory.
         const live = row.ready === 1 ? activity?.get(identity.dispatchId) : undefined
-        return live ? { ...identity, state: live.state, changedAt: live.changedAt } : identity
+        if (current) {
+          // Newest first, so the failures past the limit are the oldest ones.
+          if (identity.state === 'failed' || identity.state === 'unexpected') {
+            failures += 1
+            if (failures > WORKER_DOCK_FAILURE_LIMIT) {
+              return []
+            }
+          }
+          // A ready worker with no fresh status ages out; with no activity read yet, it stays.
+          const unverified = row.ready === 1 && activity && (!live || live.state === 'unavailable')
+          if (
+            unverified &&
+            (identity.changedAt ?? 0) <= now - WORKER_DOCK_UNVERIFIED_READY_MS
+          ) {
+            return []
+          }
+        }
+        return [live ? { ...identity, state: live.state, changedAt: live.changedAt } : identity]
       })
-    const providerFailures = request.activeOnly ? null : readProviderFailureIdentities(db, source)
+    if (current) {
+      identities.sort(compareWorkerDockEntries)
+    }
+    const providerFailures = current ? null : readProviderFailureIdentities(db, source)
     if (providerFailures?.length) {
       identities.push(...providerFailures)
     }
