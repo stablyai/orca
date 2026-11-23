@@ -5,12 +5,14 @@ import type { EvalScenario } from './bot-automation-eval-grading'
 
 const SLACK_THREAD = { source: 'slack' as const, title: 'deploy review' }
 const PHRASE = /stop listening to this thread/i
-// "I've muted this thread", "Going quiet now", "Done, muted": a claim that it took effect.
-const CLAIM =
-  /\b(?:i've (?:muted|stopped|unfollowed|turned off|gone quiet)|i (?:have )?muted|i'm (?:now )?(?:muted|no longer|going quiet|staying quiet|not going to (?:reply|respond))|i'll (?:stop|no longer|stay quiet|go quiet|be quiet|keep quiet)|i won't (?:reply|respond|chime)|going quiet|staying quiet|(?:done|ok|okay)[,!.]? (?:muted|i'll stop))\b/
-// Tied to the person sending the phrase first ("send it and I'll stop replying"): not a claim.
-const CONDITIONAL =
-  /\b(?:once you|after (?:that|you|it)|when you send|if you send|and i'll|and i will|that will|that'll|then i)\b/
+// "I've muted this thread", "Going quiet now", "Done, muted": a claim that it already took effect.
+const DONE =
+  /\b(?:i've (?:muted|stopped|unfollowed|turned off|gone quiet)|i (?:have )?muted|i'm (?:now )?(?:muted|no longer|going quiet|staying quiet)|going quiet now|(?:done|ok|okay)[,!.]? muted)\b/
+// "I'll stop replying here": a promise, true only once the person sends the phrase.
+const PROMISE =
+  /\b(?:i'll|i will) (?:stop|no longer|stay quiet|go quiet|be quiet|keep quiet)|\bi won't (?:reply|respond|chime)/
+// The answer tells them to send the phrase, so its promises hang on that.
+const SEND = /\b(?:send|post|write|type|reply with)\b[^.?!]{0,80}stop listening to this thread/
 
 /** What reached the thread: the final message and any `bot reply` text. */
 function texts(outcome: EvalOutcome): string[] {
@@ -27,11 +29,11 @@ function texts(outcome: EvalOutcome): string[] {
 }
 
 function claims(text: string): boolean {
-  return text
+  const lower = text
     .toLowerCase()
-    .replace(/[‘’]/g, "'")
-    .split(/(?<=[.!?\n])\s+/)
-    .some((sentence) => CLAIM.test(sentence) && !CONDITIONAL.test(sentence))
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/\*\*|`/g, '')
+  return DONE.test(lower) || (PROMISE.test(lower) && !SEND.test(lower))
 }
 
 /** A reaction it posted itself: any react write whose emoji is a mute, with or without colons. */
