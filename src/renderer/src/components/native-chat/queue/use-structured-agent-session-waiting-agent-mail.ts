@@ -37,7 +37,7 @@ export function useStructuredAgentSessionWaitingAgentMail(args: {
     [rowsOf, queuedMessages, submissions, transcriptShown]
   )
   // Agent mail waits in the transcript; only one being edited joins the queue, in its editor.
-  const { cards, agentMail, mailLeads } = useMemo(
+  const { cards, agentMail } = useMemo(
     () => composerQueuedCards(allCards, waiting, editingMessageId),
     [allCards, waiting, editingMessageId]
   )
@@ -61,5 +61,10 @@ export function useStructuredAgentSessionWaitingAgentMail(args: {
     (messageId: string): boolean => editableIds.has(messageId),
     [editableIds]
   )
-  return { cards, agentMail, mailLeads, pause, holds, agentMailEditable }
+  // Mail shown in the transcript; mail being edited is a card in the editor instead.
+  const waitingIds = useMemo(
+    () => new Set(agentMail.map((row) => row.queuedMessageId)),
+    [agentMail]
+  )
+  return { cards, agentMail, waitingIds, pause, holds, agentMailEditable }
 }

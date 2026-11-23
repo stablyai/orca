@@ -156,13 +156,15 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   const { cards, pause } = mail
   const reordered = useStructuredAgentSessionQueuedReorder(
     cards,
+    allCards,
     args.editTransport,
     capturePresentation
   )
-  const cardsRef = useRef(cards)
+  // Clear all takes every message the host holds, waiting agent mail included, as it did as cards.
+  const heldRef = useRef(allCards)
   useEffect(() => {
-    cardsRef.current = cards
-  }, [cards])
+    heldRef.current = allCards
+  }, [allCards])
 
   // Refs close same-frame double-click/chord races before disabled state renders.
   const inFlightRef = useRef(new Map<string, QueuedMessagesPendingAction>())
@@ -221,7 +223,9 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     [capturePresentation, mutate, run]
   )
 
-  const steerOrder = mail.mailLeads ? allCards : reordered.cards
+  // The host's whole queue, in the order a pending drag will leave it: its head is what the shortcut sends.
+  const steerOrder = reordered.held
+  const mailLeads = steerOrder[0] !== undefined && mail.waitingIds.has(steerOrder[0].messageId)
   const steerHead = useCallback((): boolean => {
     if (!enabled) {
       return false
@@ -258,11 +262,11 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     [inFlight]
   )
 
-  const clearCapable = !cards.some(
+  const clearCapable = !allCards.some(
     (card) => card.hold === 'sending' || inFlight.has(card.messageId)
   )
   const clear = useCallback(async (): Promise<boolean> => {
-    const messageIds = cardsRef.current
+    const messageIds = heldRef.current
       .filter((card) => card.hold !== 'sending')
       .map((card) => card.messageId)
     if (!clearCapable || messageIds.length === 0) {
@@ -329,6 +333,6 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     stopping: args.stopping,
     agentMail: mail.agentMail,
     agentMailEditable: mail.agentMailEditable,
-    mailLeads: mail.mailLeads
+    mailLeads
   }
 }

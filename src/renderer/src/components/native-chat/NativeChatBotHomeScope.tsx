@@ -75,8 +75,9 @@ export function NativeChatBotHomeScope({
             </NativeChatWaitingAgentMailContext.Provider>
           </div>
           {firstScreen ? <BotFirstScreen firstScreen={firstScreen} isVisible={isVisible} /> : null}
-          {firstScreen ? (
-            <div className="absolute inset-x-0 bottom-0 mx-auto flex max-h-1/2 w-full max-w-(--chat-content-max-width) scrollbar-sleek flex-col gap-2 overflow-y-auto px-4 pb-2">
+          {firstScreen && mail && mail.rows.length > 0 ? (
+            // Opaque, so the setup it covers never shows through the rows.
+            <div className="absolute inset-x-0 bottom-0 mx-auto flex max-h-1/2 w-full max-w-(--chat-content-max-width) scrollbar-sleek flex-col gap-2 overflow-y-auto bg-chat-pane px-4 pt-2 pb-2">
               <NativeChatWaitingAgentMailRows />
             </div>
           ) : null}

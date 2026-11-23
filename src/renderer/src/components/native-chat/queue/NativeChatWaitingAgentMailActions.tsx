@@ -12,8 +12,10 @@ import type { StructuredAgentSessionQueuedMessagesController } from './use-struc
 /** Other agents' waiting mail and what a person can do with it before the agent takes it. */
 export type NativeChatWaitingAgentMail = Pick<
   StructuredAgentSessionQueuedMessagesController,
-  'steer' | 'remove' | 'pending' | 'isWorking' | 'stopping' | 'edit'
+  'steer' | 'remove' | 'pending' | 'isWorking' | 'edit'
 > & {
+  /** Stopping, or the host can't take a send now: Steer is greyed, as on the queue's cards. */
+  steerHeld: boolean
   rows: readonly NativeChatMessage[]
   /** Whether a row offers Edit, which opens it in the queue's editor above the composer. */
   editable: (messageId: string) => boolean
@@ -52,7 +54,7 @@ export function NativeChatWaitingAgentMailActions({
             type="button"
             variant="ghost"
             size="xs"
-            disabled={actions.stopping || busy}
+            disabled={actions.steerHeld || busy}
             onClick={() => refocusAfter(actions.steer(queuedMessageId))}
           >
             <NativeChatPendingIcon pending={pending === 'send'} className="size-3">

@@ -194,7 +194,7 @@ export function MobileNativeChatQueuedMessages({
   // A paused queue keeps a header for Resume and Clear all; an unpaused one offers Clear all in each menu.
   const headerActions = pause ? (
     <>
-      {onClearAll && cards.length > 0 ? (
+      {onClearAll ? (
         <MobilePendingButton
           label={t('chat.queuedMessages.deleteAll', 'Delete all')}
           icon={<Trash2 size={12} color={colors.textPrimary} strokeWidth={2} />}

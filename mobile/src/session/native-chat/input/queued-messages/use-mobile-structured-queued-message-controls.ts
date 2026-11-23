@@ -58,6 +58,7 @@ export type MobileStructuredQueuedMessageControls = {
 }
 
 const NO_ITEMS: readonly AgentJournalRenderItem[] = []
+const NO_ROWS: readonly NativeChatMessage[] = []
 
 export function useMobileStructuredQueuedMessageControls(args: {
   sessionKey: string
@@ -72,6 +73,8 @@ export function useMobileStructuredQueuedMessageControls(args: {
   reorderCapable?: boolean
   agentName?: string
   journalItems?: readonly AgentJournalRenderItem[]
+  /** The chat draws a transcript; an empty or loading one keeps agent mail as cards, with their controls. */
+  transcriptShown: boolean
   queuedMessages: readonly AgentSessionQueuedMessage[] | null
   queuePause: AgentSessionQueuePause | null
   submissions: readonly AgentJournalSubmission[]
@@ -136,8 +139,8 @@ export function useMobileStructuredQueuedMessageControls(args: {
   })
   const agentMailRowsOf = useMemo(() => createWaitingAgentMailRows(), [])
   const waitingAgentMail = useMemo(
-    () => agentMailRowsOf(queuedMessages, submissions),
-    [agentMailRowsOf, queuedMessages, submissions]
+    () => (args.transcriptShown ? agentMailRowsOf(queuedMessages, submissions) : NO_ROWS),
+    [agentMailRowsOf, args.transcriptShown, queuedMessages, submissions]
   )
   // Agent mail waits in the transcript; only one being edited joins the queue, in its editor.
   const { cards, agentMail, mailLeads } = useMemo(
@@ -285,13 +288,21 @@ export function useMobileStructuredQueuedMessageControls(args: {
     (messageId: string): boolean => allCards.some((card) => card.messageId === messageId),
     [allCards]
   )
+  // Delete all also takes the waiting agent mail the transcript draws, as it did when that was a card.
+  const clearHeld = useCallback(
+    (messageIds: string[]): Promise<boolean> => {
+      const mailIds = agentMail.flatMap((row) => (row.queuedMessageId ? [row.queuedMessageId] : []))
+      return clear([...new Set([...messageIds, ...mailIds])])
+    },
+    [agentMail, clear]
+  )
 
   return {
     cards,
     steerOrder: mailLeads ? allCards : cards,
     send,
     delete: deleteDraft,
-    clear,
+    clear: clearHeld,
     edit: args.editCapable === null ? undefined : edit,
     editor,
     move: composerActions.move,

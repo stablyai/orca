@@ -35,28 +35,30 @@ function textOverflow(element: HTMLElement): number {
   return range.getBoundingClientRect().width - box
 }
 
-/** Whether the first line is cut now, or would be once the time shows on hover or focus: the line
- *  fits only if the row has room left for the time's hidden width. */
+/** The width a part hidden until hover or focus takes once it shows: its content, and the gap it
+ *  pulls back with a negative margin meanwhile. */
+function hiddenWidth(part: HTMLElement | null): number {
+  const cut = part ? textOverflow(part) : 0
+  return part && cut > 0.01 ? cut - (Number.parseFloat(getComputedStyle(part).marginLeft) || 0) : 0
+}
+
+/** Whether the first line is cut now, or would be once the time and actions show on hover or focus:
+ *  the line fits only if the row has room left for their hidden width. */
 function previewCutShort(
   preview: HTMLElement,
   row: HTMLElement,
-  time: HTMLElement | null
+  revealed: readonly (HTMLElement | null)[]
 ): boolean {
   if (textOverflow(preview) > 0.01) {
     return true
   }
-  // A hidden time also pulls its gap back with a negative margin; both come back when it shows.
-  const timeCut = time ? textOverflow(time) : 0
-  const hiddenTime =
-    time && timeCut > 0.01
-      ? timeCut - (Number.parseFloat(getComputedStyle(time).marginLeft) || 0)
-      : 0
+  const hidden = revealed.reduce((sum, part) => sum + hiddenWidth(part), 0)
   const container = row.parentElement
   // The row may reach past its container by its own 0.25rem bleed on each side.
   const free = container
     ? container.getBoundingClientRect().width + 8 - row.getBoundingClientRect().width
     : 0
-  return hiddenTime > free + 0.01
+  return hidden > free + 0.01
 }
 
 /**
@@ -114,6 +116,7 @@ export function NativeChatAgentMessageRow({
   const rowRef = useRef<HTMLDivElement | null>(null)
   const previewRef = useRef<HTMLSpanElement | null>(null)
   const timeRef = useRef<HTMLSpanElement | null>(null)
+  const actionRef = useRef<HTMLSpanElement | null>(null)
   const [previewCut, setPreviewCut] = useState(false)
   const expandable = details !== null
   const open = disclosure.open
@@ -127,7 +130,8 @@ export function NativeChatAgentMessageRow({
     if (!measures || !node || !row) {
       return
     }
-    const measure = () => setPreviewCut(previewCutShort(node, row, timeRef.current))
+    const measure = () =>
+      setPreviewCut(previewCutShort(node, row, [timeRef.current, actionRef.current]))
     measure()
     // A narrower chat cuts the line; a wider one can show it whole again.
     const observer = new ResizeObserver(measure)
@@ -231,7 +235,9 @@ export function NativeChatAgentMessageRow({
         ) : null}
         {action ? (
           // Width-revealed rather than faded, so the hidden buttons never cover the row's own button.
-          <span className={cn(content, REVEAL, 'flex items-center')}>{action}</span>
+          <span ref={actionRef} className={cn(content, REVEAL, 'flex items-center')}>
+            {action}
+          </span>
         ) : null}
         {timestamp !== null ? (
           <span ref={timeRef} aria-hidden className={cn(content, TIME)}>

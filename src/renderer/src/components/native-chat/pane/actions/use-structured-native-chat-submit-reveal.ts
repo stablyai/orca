@@ -105,7 +105,7 @@ export function useStructuredNativeChatSubmitReveal(
       remove,
       pending,
       isWorking,
-      stopping,
+      steerHeld: stopping || startsHeld,
       editable: agentMailEditable,
       edit,
       focusComposer
@@ -117,6 +117,7 @@ export function useStructuredNativeChatSubmitReveal(
       pending,
       isWorking,
       stopping,
+      startsHeld,
       agentMailEditable,
       edit,
       focusComposer

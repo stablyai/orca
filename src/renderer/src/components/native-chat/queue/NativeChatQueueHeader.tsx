@@ -77,20 +77,18 @@ export function NativeChatQueueHeader({
       {pause ? (
         <>
           {/* Each greys during the other: a Resume would send the cards a Clear is deleting. */}
-          {count > 0 ? (
-            <Button
-              type="button"
-              variant="chat-tool"
-              size="xs"
-              disabled={!clearCapable || queuePending !== null}
-              onClick={onClearAll}
-            >
-              <NativeChatPendingIcon pending={queuePending === 'clear'} className="size-3">
-                <Trash2 className="size-3" />
-              </NativeChatPendingIcon>
-              {t('components.native-chat.queuedMessages.clearAll', 'Clear all')}
-            </Button>
-          ) : null}
+          <Button
+            type="button"
+            variant="chat-tool"
+            size="xs"
+            disabled={!clearCapable || queuePending !== null}
+            onClick={onClearAll}
+          >
+            <NativeChatPendingIcon pending={queuePending === 'clear'} className="size-3">
+              <Trash2 className="size-3" />
+            </NativeChatPendingIcon>
+            {t('components.native-chat.queuedMessages.clearAll', 'Clear all')}
+          </Button>
           <Button
             type="button"
             variant="default"
