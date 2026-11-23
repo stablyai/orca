@@ -9,9 +9,11 @@ import {
   type BotItemPullRequest,
   type BotItemWorkerState
 } from '../../shared/bots/bot-items'
+import type { Automation } from '../../shared/automations/automation-definition'
 import type { IssueInfo, PRInfo } from '../../shared/github/pull-requests/pull-request-types'
 import type { BotItemLinkRecord } from './bot-items-schema'
 import type { BotWorkWorker } from './bot-work-types'
+import { readWorkerDockReasons } from '../runtime/orchestration/dock/worker-dock-read'
 import { readWorkers, readWorkspace, type BotWorkRuntime } from './bot-work-runtime'
 import {
   createScopedWorktreeReads,
@@ -21,6 +23,9 @@ import {
 type CacheRecord<T> = Readonly<Record<string, { data: T | null; fetchedAt: number }>>
 
 export type BotItemGitHubCache = () => { pr: CacheRecord<PRInfo>; issue: CacheRecord<IssueInfo> }
+
+/** The host's automations, read on use. */
+export type BotItemAutomations = () => readonly Pick<Automation, 'id' | 'name' | 'enabled'>[]
 
 type CacheEntry<T> = { data: T; fetchedAt: number }
 
@@ -50,12 +55,15 @@ export type WorkerRead = {
   worker: BotWorkWorker | null
   pr: BotItemPullRequest | null
   report: { subject: string; body: string | null } | null
+  /** Why it ended, as the chat's worker strip shows it. */
+  reason?: string | null
 }
 
 export class BotItemLinkJoin {
   constructor(
     private readonly workRuntime: BotWorkRuntime,
-    private readonly githubCache: BotItemGitHubCache
+    private readonly githubCache: BotItemGitHubCache,
+    private readonly automations: BotItemAutomations = () => []
   ) {}
 
   /** Each linked Dispatch's worker in one batch, so a follow-up still shows on the item. */
@@ -66,8 +74,13 @@ export class BotItemLinkJoin {
       return reads
     }
     let workers: Map<string, BotWorkWorker | null>
+    let reasons: Map<string, string>
     try {
       workers = await readWorkers(this.workRuntime, unique)
+      reasons = readWorkerDockReasons(
+        this.workRuntime.getOrchestrationDb(),
+        [...workers.values()].flatMap((worker) => worker?.dispatchId ?? [])
+      )
     } catch (error) {
       // Orchestration unreadable: every link reads `unknown`, never success or failure.
       console.warn('[bots] items: could not read linked workers', error)
@@ -95,7 +108,8 @@ export class BotItemLinkJoin {
         }
         // A server worker shows no report, even when a local retry of its Task has one.
         const report = worker.host === 'local' ? (reports.get(worker.taskId) ?? null) : null
-        reads.set(ref, { worker, pr: await pr, report })
+        const reason = reasons.get(worker.dispatchId) ?? null
+        reads.set(ref, { worker, pr: await pr, report, reason })
       })
     )
     return reads
@@ -184,10 +198,15 @@ export class BotItemLinkJoin {
           latest: worker && worker.dispatchId !== link.ref ? worker.dispatchId : null,
           title: worker?.title ?? null,
           state: read ? workerState(worker) : 'unknown',
+          // A paired server's released worker also has no handle, though it ran.
+          ...(worker?.startFailed && worker.host === 'local'
+            ? { neverStarted: true as const }
+            : {}),
           host: worker?.hostName ?? (worker && worker.host !== 'local' ? worker.host : null),
           startedAt: worker?.startedAt ?? null,
           settledAt: worker?.settledAt ?? null,
           report: read?.report ?? null,
+          reason: read?.reason ?? null,
           pr: read?.pr ?? null
         }
       }
@@ -204,6 +223,16 @@ export class BotItemLinkJoin {
       }
       case 'file':
         return { kind: link.kind, ref: link.ref }
+      case 'automation': {
+        // A wait is deleted once it has run, so a gone one wakes nobody.
+        const automation = this.automations().find((entry) => entry.id === link.ref)
+        return {
+          kind: 'automation',
+          ref: link.ref,
+          name: automation?.name ?? null,
+          active: automation?.enabled === true
+        }
+      }
     }
   }
 }

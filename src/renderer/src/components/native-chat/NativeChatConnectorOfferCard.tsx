@@ -119,7 +119,11 @@ function OfferCard({
     )
   ) : (
     <NativeChatOfferActions offer={answering}>
-      <Button type="button" size="sm" onClick={() => setup.start(offer.source)}>
+      <Button
+        type="button"
+        size="sm"
+        onClick={() => setup.start(offer.source, { workspace: offer.workspace })}
+      >
         {actionLabel}
       </Button>
     </NativeChatOfferActions>

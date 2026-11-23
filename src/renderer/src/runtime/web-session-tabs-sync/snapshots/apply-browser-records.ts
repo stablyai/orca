@@ -12,6 +12,7 @@ import {
 import { writableWebSessionTabsRecord } from './state-equality-core'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from '../state'
 import { markWebSessionBrowserPlacementAdopted } from '../../browser/placement/web-session-browser-placement'
+import { mirrorBrowserAgentPageActive } from '@/components/browser-pane/agent-cursor/browser-agent-activity-state'
 
 type BrowserRecordContext = ReturnType<typeof applyTerminalRecordUpdates>
 
@@ -66,6 +67,7 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
           continue
         }
         revokeBrowserPageLoadingOwner(page)
+        mirrorBrowserAgentPageActive(page.id, false, worktreeId)
         nextBrowserAudiblePageIds = withAudioFlag(
           state,
           batchContext,
@@ -108,6 +110,7 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
     certificateFailure,
     audible,
     audioMuted,
+    agentDriving,
     remotePageId,
     browserProfileId,
     placement,
@@ -189,6 +192,8 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
         page.workspaceId,
         audioMuted
       )
+      // Agents drive it on its host, whose row is the only source of the tab's agent mark.
+      mirrorBrowserAgentPageActive(page.id, agentDriving, worktreeId)
     }
   }
 

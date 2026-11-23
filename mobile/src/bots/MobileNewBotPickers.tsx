@@ -112,36 +112,47 @@ export function NewBotRunsOn(props: {
   )
 }
 
-/** Agent: the chosen agent, which opens the computer's choices. */
+/** Agent: the chosen agent, which opens the computer's choices; null when the computer has none. */
 export function NewBotAgentRow(props: {
-  agent: BotAgent
+  agent: BotAgent | null
+  hostLabel: string
   /** The computer hasn't said which agents it has yet: the row waits, as the desktop's picker does. */
   loading: boolean
   onPick: () => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const label = botAgentLabel(props.agent)
+  const { agent } = props
+  const label = agent ? botAgentLabel(agent) : t('bots.new.noAgent', 'None')
   return (
-    <ListGroup style={styles.agent}>
-      <ListRow
-        key="agent"
-        title={t('bots.new.agent', 'Agent')}
-        accessory={
-          <View style={styles.value}>
-            {props.loading ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
-            <MobileAgentIcon agentId={props.agent} size={14} />
-            <Text style={styles.valueText} numberOfLines={1}>
-              {label}
-            </Text>
-          </View>
-        }
-        navigates
-        busy={props.loading}
-        onPress={props.onPick}
-        accessibilityLabel={`${t('bots.new.agent', 'Agent')}, ${label}`}
-      />
-    </ListGroup>
+    <>
+      <ListGroup style={styles.agent}>
+        <ListRow
+          key="agent"
+          title={t('bots.new.agent', 'Agent')}
+          accessory={
+            <View style={styles.value}>
+              {props.loading ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
+              {agent ? <MobileAgentIcon agentId={agent} size={14} /> : null}
+              <Text style={styles.valueText} numberOfLines={1}>
+                {label}
+              </Text>
+            </View>
+          }
+          navigates={agent !== null}
+          busy={props.loading}
+          {...(agent ? { onPress: props.onPick } : {})}
+          accessibilityLabel={`${t('bots.new.agent', 'Agent')}, ${label}`}
+        />
+      </ListGroup>
+      {agent ? null : (
+        <Text style={styles.note}>
+          {t('bots.new.noChatAgents', 'No chat agents available on {{host}}.', {
+            host: props.hostLabel
+          })}
+        </Text>
+      )}
+    </>
   )
 }
 

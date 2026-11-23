@@ -26,6 +26,10 @@ import {
 import { notifyInstalledAgentSkillsChanged } from '../discovery/installed-agent-skill-discovery'
 import { useActiveProjectSkillRuntime } from '../runtime/useActiveProjectSkillRuntime'
 import { useMountedRef } from '../../useMountedRef'
+import {
+  skillBackupHost,
+  type SkillBackupHost
+} from '@/components/skills/freshness/skill-backup-location'
 
 export type BundledSkillInstallState =
   | { kind: 'idle' }
@@ -35,6 +39,8 @@ export type BundledSkillInstallState =
       result: BundledSkillInstallResult
       summary: BundledSkillResultSummary
       changes?: BundledSkillSetupChanges
+      /** The host this run wrote on, so its backup paths say where they are. */
+      backupHost?: SkillBackupHost
     }
   /** An older server ("Update Orca on the server"), or an SSH host no server serves yet. */
   | { kind: 'unsupported'; reason: BundledSkillUnsupportedReason }
@@ -124,7 +130,8 @@ export function useBundledSkillInstall(
             kind: 'done',
             result,
             summary: summarizeBundledSkillOutcomes(result),
-            changes: bundledSkillSetupChanges(planned.plan, result)
+            changes: bundledSkillSetupChanges(planned.plan, result),
+            backupHost: skillBackupHost(target)
           }
         }
       } catch (error) {

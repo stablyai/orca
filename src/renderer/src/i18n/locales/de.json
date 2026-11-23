@@ -853,8 +853,6 @@
       }
     },
     "agents": {
-      "installedRegion": "Installierte Agenten",
-      "availableRegion": "Zur Installation verfügbare Agenten",
       "permissionsTitle": "Berechtigungen",
       "permissionsChoiceExplanation": "Legt fest, was alle Agenten ohne Rückfrage tun dürfen. Einzelne Agenten können unten abweichend eingestellt werden.",
       "permissionEachOwn": "Eigene Einstellungen je Agent",
@@ -5931,7 +5929,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Eine andere Installation läuft noch",
-          "edited": "Skill außerhalb von Orca bearbeitet",
           "install": "Installieren",
           "installFor": "Für {{value0}} installieren",
           "installed": "Installiert",
@@ -12998,12 +12995,13 @@
           "thisComputer": "Dieser Computer",
           "defaultHostHelp": "Bestehende Projekte bleiben an ihrem bisherigen Speicherort.",
           "defaultHostWebHelp": "Dieser Browser öffnet neue Projekte auf dem ausgewählten Server.",
-          "updateAll": "Alle aktualisieren ({{count}})",
+          "updateAll": "Alle aktualisieren",
+          "updatesCount_other": "{{count}} Aktualisierungen verfügbar",
+          "updatesCount_one": "{{count}} Aktualisierungen verfügbar",
           "addServer": "Server hinzufügen",
           "moreWaysToAdd": "Weitere Möglichkeiten zum Hinzufügen eines Servers",
           "pasteAccessLink": "Zugriffslink einfügen",
           "checkForUpdates": "Nach Updates suchen",
-          "emptyDescription": "Einen Entwicklungsrechner, einen Cloud-Rechner oder einen Desktop-Computer zu Hause koppeln. Seine Sitzungen laufen dort weiter, wenn dieser Computer im Ruhezustand ist.",
           "movePaused": "Verschieben pausiert",
           "shareTitle": "Diesen Computer freigeben",
           "done": "Abschließen",
@@ -13079,7 +13077,6 @@
           "attentionUnwritable": "Handlungsbedarf · Orca kann nicht in {{folder}} schreiben",
           "attentionBusy": "Handlungsbedarf · Eine andere Skill-Installation wird hier noch abgeschlossen",
           "attentionUnreadable": "Handlungsbedarf · Orca kann nicht alle Dateien in dieser Kopie lesen",
-          "attentionEdited": "Handlungsbedarf · Diese Kopie wurde bearbeitet",
           "attentionOther": "Handlungsbedarf · Ein anderer Skill verwendet bereits diesen Namen",
           "attentionSharedNotCurrent": "Handlungsbedarf · Die von diesem Ordner verwendete gemeinsame Kopie stammt nicht von Orca",
           "resultUpdateSkippedPlaces": "{{result}} · Aktualisierung an {{places}} Stellen übersprungen: {{reason}}",
@@ -19254,6 +19251,8 @@
         "agentCommandFailed": "Der Befehl für {{agent}} unter Einstellungen → Agenten hat {{agent}} nicht gestartet: {{detail}}. Den Befehl ändern oder zurücksetzen.",
         "runtimeNotInstalled": "{{agent}} ist auf dem Computer, auf dem dieser Chat läuft, nicht installiert. Die Installation über den Chat in einer aktuellen Orca-Version durchführen.",
         "fullAccessAsRoot": "{{agent}} verwendet keinen Vollzugriff, solange die Ausführung als root erfolgt. Unter Einstellungen → Agenten für den Computer, auf dem dieser Chat läuft, eine andere Berechtigung für {{agent}} auswählen und anschließend einen neuen Chat starten.",
+        "botToolsNeedStatusHooks": "{{agent}}-Bots brauchen Agentenstatus-Hooks: Über sie handeln die Werkzeuge eines Bots als dieser Bot. Aktiviere sie für {{agent}} unter Einstellungen → Agenten und starte dann einen neuen Chat.",
+        "botToolsGatewayOutdated": "Das Gateway von {{agent}} läuft noch mit einer älteren Version des Orca-Plugins, daher können die Werkzeuge dieses Bots nicht als der Bot handeln. Führe `hermes gateway stop` aus und starte dann einen neuen Chat.",
         "launchPreparationFailed": "Orca konnte den Start von {{agent}} auf dem Computer, auf dem dieser Chat läuft, nicht vorbereiten.",
         "conversationOpenElsewhere": "Codex hält diese Unterhaltung noch offen. In einem Moment erneut versuchen oder andere Codex-Terminals schließen.",
         "conversationOpenInTerminal": "{{agent}} führt diese Unterhaltung bereits in einem anderen Terminal aus. Dort {{agent}} beenden oder das Terminal schließen, um hier fortzufahren.",
@@ -19994,7 +19993,6 @@
         "steerHint": "Jetzt senden, während der Agent weiterarbeitet",
         "sendHint": "Diese Nachricht jetzt senden",
         "delete": "Löschen",
-        "moreActions": "Weitere Aktionen",
         "moveChanged": "Die Warteschlange hat sich vor dem Verschieben geändert. Erneut versuchen, die Nachricht zu ziehen.",
         "reorderHint": "Zum Umsortieren ziehen oder die Pfeiltasten Up und Down verwenden.",
         "reorderMessage": "Nachricht umsortieren",
@@ -20548,6 +20546,7 @@
           "selectionWithheldCount_other": "{{count}} ausgewählte Arbeitsbereiche werden durch die aktuellen Filter ausgeblendet und wurden abgewählt.",
           "selectAllSafetyChecked_one": "{{count}} sicherheitsgeprüften Arbeitsbereich auswählen",
           "selectAllSafetyChecked_other": "Alle {{count}} sicherheitsgeprüften Arbeitsbereiche auswählen",
+          "clearSelection": "Auswahl aufheben",
           "lastActive": "Zuletzt aktiv: {{value0}}"
         },
         "scan": {
@@ -21040,8 +21039,7 @@
         "finished": "Temporärer Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
         "keepOpen": "Offen halten",
         "bannerRunning": "Orchestrierungs-Worker · Wird 2 Minuten nach Abschluss geschlossen",
-        "bannerFinished": "Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
-        "temporaryBadge": "Temporär"
+        "bannerFinished": "Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}"
       }
     },
     "wslHostMark": {
@@ -21973,6 +21971,11 @@
       "learnMore": "Mehr erfahren",
       "dontShowAgain": "Nicht mehr anzeigen",
       "dismiss": "Ausblenden"
+    },
+    "fileDrop": {
+      "copyUploadedPaths": "Pfade kopieren",
+      "copyUploadedPathsFailed": "Die Pfade der hochgeladenen Dateien konnten nicht kopiert werden.",
+      "uploadedWithoutPaste": "Upload abgeschlossen, aber die Pfade konnten nicht in das Terminal eingefügt werden."
     },
     "newerDaemonBanner": {
       "failedTitle": "Dieses Terminal konnte nicht erneut geöffnet werden",
@@ -24325,6 +24328,7 @@
       "toolClaudePrepareFailed": "{{name}} konnte in Claude Code nicht vorbereitet werden. Prüfe die Tool-Konfiguration.",
       "toolNameTaken": "Dieser Bot hat bereits ein Tool namens {{name}}.",
       "toolNameTakenByAgent": "Dein {{agent}} hat bereits ein Tool namens {{name}}, das dieser Bot ebenfalls bekommt. Wähle mit --name einen anderen Namen.",
+      "toolNameTakenByCodexStdio": "Dein Codex hat bereits ein lokales Tool namens {{name}}, daher kann {{name}} dieses Bots nicht laufen. Benenne das Tool dieses Bots um.",
       "toolNotUpdated": "Das Tool wurde nicht aktualisiert.",
       "toolSignInAddressIncomplete": "Füge die vollständige Adresse ein, auf der die Anmeldeseite geendet hat.",
       "toolSignInAddressWrong": "Das ist nicht die Adresse, auf der diese Anmeldung endet. Starte sie mit Verbinden neu, melde dich an und füge dann die Adresse aus deinem Browser ein.",

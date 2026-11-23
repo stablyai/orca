@@ -48,9 +48,14 @@ export function MobileBotItemRow({
   owner?: { name: string; avatar: MobileBotAvatarSource }
 }) {
   const t = useMobileTranslation()
-  // Only Needs you has a second line, the bot's question; In progress's spinner is its live signal.
+  // Only Needs you and Waiting have a second line, the bot's question or what it waits on; In
+  // progress's spinner is its live signal.
   const question =
-    !stale && !snoozed && item.status === 'needs_you' ? item.question?.text : undefined
+    !stale && !snoozed && item.status === 'needs_you'
+      ? item.question?.text
+      : !snoozed && item.status === 'waiting'
+        ? item.wait?.text
+        : undefined
   const Check = checked ? CircleCheck : Circle
   return (
     <ListRow

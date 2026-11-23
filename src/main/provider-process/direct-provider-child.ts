@@ -31,6 +31,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   connected = true
   groupVerdict: 'exited' | 'live' | 'unverifiable' = 'unverifiable'
   writerPid?: number
+  watcherPid?: number
   pid?: number
   private publication?: Promise<Ownership>
   private ownership?: Ownership
@@ -143,6 +144,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     }
     const { leaderPid, watcherPid } = await bootstrap.initial
     this.writerPid = leaderPid
+    this.watcherPid = watcherPid
     if (this.canceled || this.outcome !== undefined) {
       throw new Error('Provider launch canceled before registration')
     }

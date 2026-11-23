@@ -1,12 +1,8 @@
 import { getBrowserPageIdleDiscard } from './browser-page-idle-discard'
-import { readBrowserGuestCurrentFormData } from './manager/registration/browser-page-state-form-data'
 import { BrowserError } from '../browser-error'
 import { isAgentRpcCaller } from '../../runtime/rpc/callers/rpc-caller-identity'
 import { getActiveRpcCaller } from '../../runtime/rpc/callers/active-call'
-import {
-  noteBrowserGuestFormData,
-  readBrowserGuestDiscardProtection
-} from './manager/registration/browser-guest-discard-protection'
+import { readBrowserGuestDiscardProtection } from './manager/registration/browser-guest-discard-protection'
 import { waitForBrowserGuestLoad } from './browser-guest-load'
 import {
   claims,
@@ -17,6 +13,7 @@ import {
   type Claim
 } from './browser-page-memory-state'
 import { forgetBrowserPageAttach, guestLoads } from './browser-page-attach'
+import { browserGuestShowsFormPost, canFreeBrowserGuest } from './browser-guest-freeing'
 export {
   prepareBrowserPageAttach,
   admitBrowserPageAttach,
@@ -58,20 +55,22 @@ export function clearBrowserPageMemoryInvalidation(pageId: string, guestId: numb
   }
 }
 
+/** `freedByOwner`: a This-device guest, which its executor frees without a page-memory entry. */
 export function readBrowserMemoryPageDiscardProtection(
   pageId: string,
   guest: Electron.WebContents,
-  rendererId: number | undefined
+  rendererId: number | undefined,
+  freedByOwner = false
 ): ReturnType<typeof readBrowserGuestDiscardProtection> {
   const protection = readBrowserGuestDiscardProtection(guest)
   if (protection.protection !== 'discardable') {
     return protection
   }
   const page = pages.get(pageId)
-  if (!page || page.guest !== guest || page.rendererId !== rendererId) {
+  if (!freedByOwner && (!page || page.guest !== guest || page.rendererId !== rendererId)) {
     return { ...protection, protection: 'unknown', reason: 'observer' }
   }
-  if (page.claim.held) {
+  if (page?.claim.held) {
     return { ...protection, protection: 'protected', reason: 'held' }
   }
   try {
@@ -181,11 +180,7 @@ export function canReserveBrowserPageDiscard(pageId: string, guest: Electron.Web
     page.claim.operations ||
     page.restoring ||
     page.retired.size ||
-    guest.isDestroyed() ||
-    guest.isLoading() ||
-    guest.isDevToolsOpened() ||
-    guest.debugger.isAttached() ||
-    readBrowserGuestDiscardProtection(guest).protection !== 'discardable'
+    !canFreeBrowserGuest(guest)
   )
 }
 
@@ -196,11 +191,7 @@ export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebCon
   }
   let history: History
   try {
-    // A restore reloads with GET; only a page Chromium records as no form POST is discarded.
-    // Read from the current entry alone, so a refusal never exports the whole history.
-    const formData = readBrowserGuestCurrentFormData(guest)
-    noteBrowserGuestFormData(guest, formData)
-    if (formData !== 'none') {
+    if (browserGuestShowsFormPost(guest)) {
       return false
     }
     // pageState restores scroll and form contents; it can hold typed secrets, so it stays in memory only.

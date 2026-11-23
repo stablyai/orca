@@ -74,8 +74,10 @@ import { useStructuredAgentSessionStartFailureFacts } from '@/components/native-
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import { NativeChatHostSetupContext } from '@/components/native-chat/host-access/native-chat-host-setup'
 import type { NativeChatComposerHandle } from './composer/native-chat-composer-types'
-import { nativeChatWorkerApprovalParty } from './worker-approvals/NativeChatWorkerApprovals'
-import { NativeChatWorkerTimeline } from './tools/tasks/dock/NativeChatWorkerResultTimeline'
+import {
+  NativeChatWorkerApprovalTimeline,
+  nativeChatWorkerApprovalParty
+} from './worker-approvals/NativeChatWorkerApprovals'
 
 export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
   const { ownerWorktreeId, turnBot, bot: chatBot } = useBotChatOwner(props)
@@ -293,12 +295,9 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                   >
                     <NativeChatRowActionsProvider pane={props} chat={controller} forks={forks}>
                       <NativeChatHostSetupContext.Provider value={setup}>
-                        <NativeChatWorkerTimeline
-                          approvalParty={workerApprovalParty}
-                          workerDock={controller.backgroundTasks.workerDock}
+                        <NativeChatWorkerApprovalTimeline
+                          party={workerApprovalParty}
                           target={props.target}
-                          sessionId={props.sessionId}
-                          isVisible={props.isVisible}
                         >
                           {(timedRows) => (
                             <NativeChatSubagentTranscripts
@@ -329,15 +328,18 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                               timedRows={timedRows}
                             />
                           )}
-                        </NativeChatWorkerTimeline>
+                        </NativeChatWorkerApprovalTimeline>
                       </NativeChatHostSetupContext.Provider>
                     </NativeChatRowActionsProvider>
                   </NativeChatUsageLimitActionsProvider>
                 )}
               </NativeChatContextClearFade>
             </NativeChatDockTranscript>
-            <NativeChatDock shown={!readFailure?.final}>
-              {composerShown ? null : subagents.dock}
+            <NativeChatDock
+              shown={!readFailure?.final}
+              keepFloatingTerminalTriggerClear={props.isVisible}
+            >
+              {subagents.dock}
               {subagents.pairedAsks}
               {prompt || subagentOpen ? null : (
                 <NativeChatStructuredComposerTabStrips
@@ -356,16 +358,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               {composerShown || subagentOpen ? null : (
                 <NativeChatPromptSlotNotices notices={notices} />
               )}
-              {/* A tab on whichever input surface comes next: the prompt card, an async question or the composer. */}
-              <NativeChatQueuedMessageList
-                controller={submits.queuedMessages}
-                chatWorktreeId={ownerWorktreeId ?? null}
-                agentName={agentLabel}
-                statedFailures={startFailures}
-                steerHeld={bot.stopControls.stopping || hostHeld}
-                focusComposer={focusComposer}
-                editAttachTo={{ terminalTabId: props.tabId, agent: props.agent, transport }}
-              />
               <NativeChatStructuredPromptCard
                 key={prompt ? `${prompt.itemId}:${prompt.revision}` : undefined}
                 prompt={prompt}
@@ -375,6 +367,15 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                 answerInputRef={questionAnswerInputRef}
               />
               {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits)}
+              <NativeChatQueuedMessageList
+                controller={submits.queuedMessages}
+                chatWorktreeId={ownerWorktreeId ?? null}
+                agentName={agentLabel}
+                statedFailures={startFailures}
+                steerHeld={bot.stopControls.stopping || hostHeld}
+                focusComposer={focusComposer}
+                editAttachTo={{ terminalTabId: props.tabId, agent: props.agent, transport }}
+              />
               {botServerDown && hostOutage ? (
                 <BotServerOutageCard key={hostOutage.environmentId} outage={hostOutage} />
               ) : null}
@@ -389,7 +390,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               {composerShown ? (
                 <NativeChatComposer
                   ref={composerRef}
-                  dock={subagents.dock}
                   terminalTabId={props.tabId}
                   paneKey={paneKey}
                   draftScopeKey={structuredAgentSessionDraftScopeKey(props.sessionId)}

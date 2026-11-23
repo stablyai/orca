@@ -32,7 +32,7 @@ export class DeviceRegistryStore {
     this.load()
   }
 
-  /** Fires when a save or an adopted external edit adds, removes, relabels or flips usesLegacyE2EE on a listed phone; lastSeen-only changes stay silent. */
+  /** Fires when a save or an adopted external edit changes a listed phone or runtime grant. */
   setOnPairedDevicesChanged(listener: (() => void) | null): void {
     this.onPairedDevicesChanged = listener
   }
@@ -64,7 +64,6 @@ export class DeviceRegistryStore {
       const adopted = this.writer.adoptExternalEdits(this.devices, options)
       if (adopted) {
         this.devices = adopted
-        // Another process removed or added a phone; open lists refetch as they do after a save.
         this.publishPairedDevicesChange(adopted)
       }
     }
@@ -141,6 +140,12 @@ export class DeviceRegistryStore {
 // Leaves out lastSeenAt: reconnect bookkeeping saves must not push a renderer refetch.
 function pairedDevicesKeyOf(devices: readonly DeviceEntry[]): string {
   return JSON.stringify(
-    devices.filter(isPairedMobileDevice).map((d) => [d.deviceId, d.name, usesLegacyE2EE(d)])
+    devices
+      .filter((device) => device.scope === 'runtime' || isPairedMobileDevice(device))
+      .map((device) =>
+        device.scope === 'runtime'
+          ? device.deviceId
+          : [device.deviceId, device.name, usesLegacyE2EE(device)]
+      )
   )
 }

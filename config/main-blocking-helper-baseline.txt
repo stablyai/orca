@@ -460,6 +460,7 @@
 1 src/main/daemon/server/daemon-session-background-routing.ts
 1 src/main/daemon/server/daemon-terminal-admission.ts
 7 src/main/daemon/shell-readiness/shell-ready.ts
+2 src/main/daemon/terminal-host/foreground-agent-identity-check.ts # one-shot: both Windows helpers reach the addon file read once on first load (cached); the per-watch check then opens one process (microseconds)
 1 src/main/daemon/terminal-host/terminal-host-session-create.ts
 1 src/main/daemon/terminal-host/terminal-host-session-process.ts
 2 src/main/daemon/terminal-host/terminal-host-session-publish.ts

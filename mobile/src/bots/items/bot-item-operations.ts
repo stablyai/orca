@@ -16,6 +16,7 @@ import type {
 } from '../../../../src/shared/bots/bot-items'
 import { readHostMethodReply } from '../../host-screen/sidebar-feed/host-sidebar-feed-operations'
 import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
+import { RpcRefusedError } from '../../transport/rpc/rpc-refused-error'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
@@ -146,7 +147,7 @@ export function markBotItemsOpened(client: RpcClient, botId: string): void {
 /** How an owner write went: `unknown` when the connection dropped after sending, so it may have landed. */
 export type BotItemWriteOutcome =
   | { kind: 'done'; result?: unknown }
-  | { kind: 'refused'; message: string }
+  | { kind: 'refused'; message: string; code?: string }
   | { kind: 'unknown' }
   | { kind: 'not-sent' }
 
@@ -158,7 +159,11 @@ async function write(send: () => Promise<unknown>): Promise<BotItemWriteOutcome>
     return isRpcDeliveryUnknown(error) ? { kind: 'unknown' } : { kind: 'not-sent' }
   }
   return reply instanceof Error
-    ? { kind: 'refused', message: botFailureMessage(reply) ?? reply.message }
+    ? {
+        kind: 'refused',
+        message: botFailureMessage(reply) ?? reply.message,
+        ...(reply instanceof RpcRefusedError ? { code: reply.code } : {})
+      }
     : { kind: 'done', result: reply }
 }
 
@@ -172,6 +177,9 @@ export function commentOnBotItem(
     images?: readonly string[]
     requestId?: string
     skills?: readonly BotItemCommentSkill[]
+    /** The ask the comment answers; `plain`: it answers none. */
+    questionId?: string
+    plain?: boolean
   } = {}
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
@@ -182,7 +190,9 @@ export function commentOnBotItem(
         text,
         ...(extra.images?.length ? { images: [...extra.images] } : {}),
         ...(extra.requestId ? { requestId: extra.requestId } : {}),
-        ...(extra.skills?.length ? { skills: [...extra.skills] } : {})
+        ...(extra.skills?.length ? { skills: [...extra.skills] } : {}),
+        ...(extra.questionId ? { questionId: extra.questionId } : {}),
+        ...(extra.plain ? { plain: true } : {})
       },
       { failWhenDisconnected: true }
     )
@@ -194,12 +204,13 @@ export function commentOnBotItem(
   })
 }
 
-/** One status for any number of items: one mail per chat, so one turn for the bot. */
+/** One status for any number of items: one mail per chat, so one turn for the bot. `note`: Cancel's
+ *  reason, or what Waiting waits on. */
 export function setBotItemsStatus(
   client: RpcClient,
   uids: readonly string[],
   status: BotItemStatus,
-  reason?: string
+  note?: string
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
     const reply = await itemsStatus.request(
@@ -207,7 +218,7 @@ export function setBotItemsStatus(
       {
         items: [...uids],
         status,
-        ...(reason ? { reason } : {})
+        ...(note ? (status === 'waiting' ? { note } : { reason: note }) : {})
       },
       { failWhenDisconnected: true }
     )

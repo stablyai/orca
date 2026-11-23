@@ -37,8 +37,8 @@ export type ReviewContext = {
   review: PhoneShareReview
   spots: BotShareFlagSpot[]
   open: (page: ReviewPage) => void
-  toolIds: string[]
-  setToolIds: (ids: string[]) => void
+  /** The tools ticked to contact; null for an original only looked at, where nothing is chosen. */
+  consent: { toolIds: string[]; setToolIds: (ids: string[]) => void } | null
 }
 
 export function reviewListTitle(list: ReviewList, t: ReturnType<typeof useMobileTranslation>) {
@@ -97,14 +97,17 @@ export function FlagMark({ flag }: { flag: 'secret' | 'warning' | null }) {
 /** The review's first view: hero, safety line, one row per part, then Create bot…. */
 export function MobileBotShareReviewOverview(props: {
   ctx: ReviewContext
-  /** The sharer moved the link since this review: Create would write a version not shown. */
-  updated: boolean
-  onCreate: () => void
-  onReviewAgain: () => void
+  /** Null for an original only looked at: no Create bot…. */
+  choosing: {
+    /** The sharer moved the link since this review: Create would write a version not shown. */
+    updated: boolean
+    onCreate: () => void
+    onReviewAgain: () => void
+  } | null
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const { ctx } = props
+  const { ctx, choosing } = props
   const { review, spots } = ctx
   const { bot } = review
   const list = (name: ReviewList) => () => ctx.open({ kind: 'list', list: name })
@@ -242,26 +245,28 @@ export function MobileBotShareReviewOverview(props: {
             )
           : null}
       </SettingsSection>
-      <View style={styles.foot}>
-        {props.updated ? (
-          <Text style={styles.hint}>
-            {t('bots.share.review.updated', '{{who}} updated this bot. Review it again.', {
-              who: review.publisher ?? t('bots.share.review.theSharer', 'The sharer')
-            })}
-          </Text>
-        ) : null}
-        {props.updated ? (
-          <SheetPrimaryButton
-            label={t('bots.share.review.reviewAgain', 'Review again')}
-            onPress={props.onReviewAgain}
-          />
-        ) : (
-          <SheetPrimaryButton
-            label={t('bots.share.review.createBot', 'Create bot…')}
-            onPress={props.onCreate}
-          />
-        )}
-      </View>
+      {choosing ? (
+        <View style={styles.foot}>
+          {choosing.updated ? (
+            <Text style={styles.hint}>
+              {t('bots.share.review.updated', '{{who}} updated this bot. Review it again.', {
+                who: review.publisher ?? t('bots.share.review.theSharer', 'The sharer')
+              })}
+            </Text>
+          ) : null}
+          {choosing.updated ? (
+            <SheetPrimaryButton
+              label={t('bots.share.review.reviewAgain', 'Review again')}
+              onPress={choosing.onReviewAgain}
+            />
+          ) : (
+            <SheetPrimaryButton
+              label={t('bots.share.review.createBot', 'Create bot…')}
+              onPress={choosing.onCreate}
+            />
+          )}
+        </View>
+      ) : null}
     </>
   )
 }
