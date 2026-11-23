@@ -282,7 +282,7 @@ export function AgentCatalogRow({
           </DropdownMenu>
           <Button
             type="button"
-            variant="ghost-on-accent"
+            variant="muted-field-icon"
             size="icon-xs"
             onClick={toggleOpen}
             aria-expanded={cmdOpen}
@@ -293,7 +293,6 @@ export function AgentCatalogRow({
                 ? t('settings.agents.hideDetails', 'Hide details')
                 : t('settings.agents.showDetails', 'Show details')
             }
-            className="text-muted-foreground hover:text-foreground"
           >
             <ChevronRight
               className={cn(
