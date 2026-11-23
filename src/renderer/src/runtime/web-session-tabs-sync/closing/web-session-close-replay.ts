@@ -212,11 +212,12 @@ export function takeDueWebSessionCloseReplays(
   return due
 }
 
-/** 'gave-up' means the host kept refusing the close; its tab is shown again. */
+/** 'gave-up' means the host refused the close; its live tab is shown again. */
 export function settleWebSessionCloseReplay(
   store: PairedTerminalTabCloseIntentStore,
   replay: WebSessionCloseReplay,
-  delivered: boolean
+  delivered: boolean,
+  hostRefused = false
 ): 'done' | 'retry' | 'gave-up' {
   const { environmentId } = replay.owner
   const key = attemptKey(environmentId, replay.intentKey)
@@ -234,9 +235,9 @@ export function settleWebSessionCloseReplay(
       store,
       environmentId,
       () => store.clear(environmentId, [replay.intentKey]),
-      delivered ? new Set([replay.intentKey]) : undefined
+      delivered && !hostRefused ? new Set([replay.intentKey]) : undefined
     )
-    return delivered ? 'done' : 'gave-up'
+    return delivered && !hostRefused ? 'done' : 'gave-up'
   }
   return 'retry'
 }

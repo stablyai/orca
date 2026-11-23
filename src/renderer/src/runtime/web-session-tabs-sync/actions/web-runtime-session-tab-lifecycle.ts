@@ -124,13 +124,13 @@ export async function replayWebSessionTabCloses(
     const settled = settleWebSessionCloseReplay(
       appPairedTerminalTabCloseIntentStore,
       replay,
-      outcome !== 'failed'
+      outcome !== 'failed',
+      outcome === 'refused'
     )
     if (settled === 'retry') {
       scheduleWebSessionCloseReplayRelist(environmentId, replay.worktreeId)
-      continue
     }
-    if (settled === 'done') {
+    if (settled !== 'gave-up') {
       continue
     }
     // The host kept failing the close and its tab is shown again rather than hidden forever.
@@ -288,7 +288,7 @@ async function callWebRuntimeSessionTabMethod(
         expectedEnvironmentPairingRevision: intentOwner.pairingRevision
       })
     }
-    return 'applied'
+    return isClose && result?.refused === true ? 'refused' : 'applied'
   } catch (error) {
     if (activationHostTabId) {
       clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, activationHostTabId)
