@@ -67,6 +67,30 @@ it.each(approveForMeTemporaryRefusalCodes)(
 )
 
 it.each([
+  {
+    message: 'Cannot set permission mode to auto: auto mode unavailable for this model',
+    warning: temporaryWarning
+  },
+  {
+    message: 'Cannot set permission mode to auto: auto mode disabled by settings',
+    warning: settingsWarning
+  }
+])('keeps Ask after an untagged refusal: $message', async ({ message, warning }) => {
+  const { session, rows, writes, frame } = permissionTestSession('auto', async (mode) => {
+    if (mode === 'auto') {
+      await refuseClaudePermission(undefined, message)
+    }
+  })
+  frame('init', 'auto')
+  finishPermissionCatchUp(session)
+  await applyClaudeMessageOptions(session, { interactionMode: 'default' }, undefined)
+  expect(rows).toEqual([warning])
+
+  await applyClaudeMessageOptions(session, { interactionMode: 'default' }, undefined)
+  expect(writes).toEqual(['auto', 'default'])
+})
+
+it.each([
   { code: 'auto_mode_circuit_breaker', interval: 60_000 },
   { code: 'internal_error', interval: 10_000 }
 ])('retains the Full access fallback retry after $code', async ({ code, interval }) => {

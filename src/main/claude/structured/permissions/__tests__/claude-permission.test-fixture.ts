@@ -156,11 +156,14 @@ export function finishPermissionCatchUp(session: ClaudeSession): void {
   journalClaudeSessionPermissionNotice(session, { kind: 'thread' })
 }
 
-export function refuseClaudePermission(code: string): Promise<void> {
+export function refuseClaudePermission(
+  code: string | undefined,
+  message = 'Claude refused the permission write'
+): Promise<void> {
   return runClaudeControl(
     'set_permission_mode',
     async () => {
-      throw Object.assign(new Error('Claude refused the permission write'), {
+      throw Object.assign(new Error(message), {
         errorClass: 'control_request_failed',
         errorCode: code
       })

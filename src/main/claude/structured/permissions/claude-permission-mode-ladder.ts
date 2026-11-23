@@ -69,16 +69,17 @@ function claudeRefusal(error: unknown, approveForMe: boolean): ClaudeRefusal | n
       return { kind: 'bypass', reason }
     }
   }
+  const matchAutoText = !approveForMe || code === undefined
   if (
     code === 'auto_mode_settings' ||
-    (!approveForMe && CLAUDE_AUTO_SETTINGS_REFUSAL.test(error.message))
+    (matchAutoText && CLAUDE_AUTO_SETTINGS_REFUSAL.test(error.message))
   ) {
     return { kind: 'auto-settings' }
   }
   const autoCode =
     typeof code === 'string' &&
     (approveForMe ? CLAUDE_AUTO_FOR_NOW_CODES.has(code) : code.startsWith('auto_mode'))
-  return autoCode || (!approveForMe && CLAUDE_AUTO_REFUSAL.test(error.message))
+  return autoCode || (matchAutoText && CLAUDE_AUTO_REFUSAL.test(error.message))
     ? { kind: 'auto-for-now', code }
     : null
 }
