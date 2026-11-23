@@ -1,4 +1,4 @@
-import type { TagOrderBy } from '../../ui-chrome-types'
+import type { TagOrderBy } from '../../ui-chrome/ui-chrome-types'
 import { getManualTagRanks } from '../../worktree/metadata/manual-tag-order'
 import {
   compareWorktreeTags,

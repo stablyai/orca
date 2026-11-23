@@ -1,5 +1,5 @@
 import React from 'react'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { useTranslate } from '@/i18n/use-translate'
 import { useWorkspaceTagCommands } from '../../workspace-tags/use-workspace-tag-commands'
 import { openTagRenameDialog } from '../../workspace-tags/TagRenameDialogHost'

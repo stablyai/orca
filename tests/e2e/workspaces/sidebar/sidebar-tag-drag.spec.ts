@@ -1,6 +1,11 @@
 import type { Page } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
-import { getAllWorktreeIds, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { expect } from '@stablyai/playwright-test'
+import { test } from '../../desktop/electron-fixtures/orca-app'
+import {
+  getAllWorktreeIds,
+  waitForActiveWorktree,
+  waitForSessionReady
+} from '../../desktop/renderer-probes/store'
 import { worktreeRow } from './worktree-row-locators'
 
 async function dragRowOnto(

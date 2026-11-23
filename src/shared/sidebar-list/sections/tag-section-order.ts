@@ -1,4 +1,4 @@
-import type { TagOrderBy } from '../../ui-chrome-types'
+import type { TagOrderBy } from '../../ui-chrome/ui-chrome-types'
 
 /** The user's tag-section order, passed as one value through the row builders. */
 export type TagSectionOrder = {

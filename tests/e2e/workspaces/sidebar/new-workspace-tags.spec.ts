@@ -1,6 +1,7 @@
-import { openSidebarWorkspaceComposer } from './helpers/sidebar-project-dialog'
-import { test, expect } from './helpers/orca-app'
-import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { openSidebarWorkspaceComposer } from './sidebar-project-dialog'
+import { expect } from '@stablyai/playwright-test'
+import { test } from '../../desktop/electron-fixtures/orca-app'
+import { waitForActiveWorktree, waitForSessionReady } from '../../desktop/renderer-probes/store'
 import { worktreeRow } from './worktree-row-locators'
 
 test.use({ orcaAppExtraEnv: { ORCA_BACKGROUND_LAUNCH: '1' } })
