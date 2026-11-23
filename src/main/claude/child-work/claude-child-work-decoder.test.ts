@@ -171,4 +171,60 @@ describe('a child ending wakes a finished subagent it was launched from', () => 
     observe(decoder, notification(CHILD, 'toolu_child', 'completed', OWNER))
     expect(decoder.wakeExpiryAt()).toBeUndefined()
   })
+
+  it('keeps the saved kind and name when a running report revives the owner', () => {
+    const decoder = new ClaudeChildWorkDecoder()
+    observe(decoder, start(OWNER, PARENT))
+    observe(decoder, {
+      type: 'system',
+      subtype: 'task_updated',
+      task_id: OWNER,
+      tool_use_id: PARENT,
+      patch: { name: 'explorer', task_type: 'local_agent' }
+    })
+    observe(decoder, start(CHILD, 'toolu_child'))
+    observe(decoder, notification(OWNER, PARENT, 'completed'))
+    observe(decoder, notification(CHILD, 'toolu_child', 'completed', OWNER))
+    decoder.drain(Date.now() + CLAUDE_CHILD_WAKE_LEASE_MS)
+    // The owner's live record is gone, so the revival must read the saved task rather than the
+    // roster entry, which carries only its id and status.
+    const evidence = observe(decoder, {
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      tasks: [{ task_id: OWNER, tool_use_id: PARENT, status: 'running' }]
+    })
+    const live = evidence.find((edge) => edge.type === 'live' && edge.child.handle.id === OWNER)
+    expect(live?.type === 'live' && live.child.kind).toBe('agent')
+    expect(live?.type === 'live' && live.child.name).toBe('explorer')
+  })
+
+  it('does not revive an expired owner from a metadata-only update', () => {
+    const decoder = new ClaudeChildWorkDecoder()
+    finishOwnerThenChildEnds(decoder)
+    decoder.drain(Date.now() + CLAUDE_CHILD_WAKE_LEASE_MS)
+    // No running evidence: a description patch says nothing about the provider resuming the owner.
+    const evidence = observe(decoder, {
+      type: 'system',
+      subtype: 'task_updated',
+      task_id: OWNER,
+      tool_use_id: PARENT,
+      patch: { status: 'completed', error: 'late metadata' }
+    })
+    expect(states(evidence)).not.toContainEqual([OWNER, 'working'])
+    expect(decoder.wakeExpiryAt()).toBeUndefined()
+  })
+
+  it('revives an expired owner from an update that reports it running', () => {
+    const decoder = new ClaudeChildWorkDecoder()
+    finishOwnerThenChildEnds(decoder)
+    decoder.drain(Date.now() + CLAUDE_CHILD_WAKE_LEASE_MS)
+    const evidence = observe(decoder, {
+      type: 'system',
+      subtype: 'task_updated',
+      task_id: OWNER,
+      tool_use_id: PARENT,
+      patch: { status: 'running' }
+    })
+    expect(states(evidence)).toContainEqual([OWNER, 'working'])
+  })
 })

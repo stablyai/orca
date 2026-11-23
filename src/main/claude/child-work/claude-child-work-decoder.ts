@@ -34,8 +34,8 @@ type ClaudeToolOwner = (toolUseId: string) => string | null
 type PendingEdge = (observedAt: number) => AgentChildWorkEvidence
 
 /** A roster-shaped start for an owner the provider confirms running; no spawn call of its own. */
-function rosterStart(id: string): Record<string, unknown> {
-  return { type: 'system', subtype: 'task_started', task_id: id, status: 'running' }
+function rosterStart(id: string, task: Record<string, unknown>): Record<string, unknown> {
+  return { ...task, type: 'system', subtype: 'task_started', task_id: id, status: 'running' }
 }
 
 export class ClaudeChildWorkDecoder {
@@ -51,7 +51,7 @@ export class ClaudeChildWorkDecoder {
     endedOwner: (id) => this.ended.get(id),
     showWorking: (id, task) => this.upsert(id, { ...task, running: true }, {}, true),
     restore: (id, owner) => this.settleWake(id, owner),
-    revive: (id) => this.started(id, rosterStart(id), true)
+    revive: (id, runningFrame) => this.started(id, rosterStart(id, runningFrame), true)
   })
   /** `ownerOf` names the subagent that made a child tool call; an ending task wakes it. */
   constructor(readonly taskInvocations = new ClaudeTaskInvocations()) {}
@@ -68,9 +68,10 @@ export class ClaudeChildWorkDecoder {
     if (message.subtype === 'background_tasks_changed') {
       if (Array.isArray(message.tasks)) {
         for (const entry of claudeRosterEntries(message.tasks)) {
-          // A roster entry that reports the owner running proves the provider resumes it.
+          // A roster entry that reports the owner running proves the provider resumes it. One that
+          // does not says nothing about the resume, so it must not revive an owner the lease settled.
           if (entry.live) {
-            this.wake.confirmRunning(entry.id)
+            this.wake.confirmRunning(entry.id, entry.task)
           }
           if (
             !this.ended.has(entry.id) &&
@@ -92,7 +93,10 @@ export class ClaudeChildWorkDecoder {
     }
     // Only a frame the decoder admits proves the provider runs this owner; a historical alias
     // that is ignored above would otherwise clear the lease and leave the row working for good.
-    this.wake.confirmRunning(id)
+    // A frame that does not report running (a metadata-only update) says nothing about a resume.
+    if (liveClaudeTaskRunState(message.status) !== null) {
+      this.wake.confirmRunning(id, message)
+    }
     switch (message.subtype) {
       case 'task_started':
         this.started(id, message)
@@ -162,29 +166,26 @@ export class ClaudeChildWorkDecoder {
     const awaitsAgents = this.agentWaits.take(toolUseId)
     const existing = this.live.get(id)
     const ended = existing ? undefined : this.ended.get(id)
+    const saved = ended?.task
     const restart = ended !== undefined
     // Only successful runs can wake under the same spawn call; other starts are late frames.
     if (ended?.run !== undefined && ended.run === toolUseId && ended.outcome !== 'succeeded') {
       return
     }
-    this.wake.confirmRunning(id)
+    this.wake.confirmRunning(id, message)
     const kind = claudeStartedTaskKind(message)
     this.upsert(
       id,
       {
-        kind: kind !== 'unknown' ? kind : (existing?.kind ?? 'unknown'),
+        kind: kind !== 'unknown' ? kind : (saved?.kind ?? 'unknown'),
         backgrounded:
-          roster ||
-          message.is_backgrounded === true ||
-          kind === 'workflow' ||
-          kind === 'monitor' ||
-          existing?.backgrounded === true,
-        running: liveClaudeTaskRunState(message.status) !== null || existing?.running === true,
-        name: taskName(message) ?? existing?.name,
-        description: taskDescription(message.description) ?? existing?.description,
-        toolUseId: toolUseId ?? existing?.toolUseId,
+          roster || message.is_backgrounded === true || kind === 'workflow' || kind === 'monitor',
+        running: liveClaudeTaskRunState(message.status) !== null || saved?.running === true,
+        name: taskName(message) ?? saved?.name,
+        description: taskDescription(message.description) ?? saved?.description,
+        toolUseId: toolUseId ?? saved?.toolUseId,
         parentTaskId: invocation.parentTaskId,
-        ...(awaitsAgents || existing?.awaitsAgents ? { awaitsAgents: true as const } : {})
+        ...(awaitsAgents || saved?.awaitsAgents ? { awaitsAgents: true as const } : {})
       },
       {},
       restart,
@@ -233,10 +234,10 @@ export class ClaudeChildWorkDecoder {
       return
     }
     if (!existing && this.ended.has(id)) {
-      // An owner whose wake already ran out may still be reported running; any other ended task stays done.
-      if (this.wake.confirmedRunning(id)) {
-        this.started(id, rosterStart(id), true)
-        this.upsert(id, { ...this.live.get(id)!, running: true }, {}, true)
+      // An owner whose wake already ran out may still be reported running; any other ended task
+      // stays done, and a frame that does not report running proves nothing about the resume.
+      if (liveClaudeTaskRunState(patch.status) !== null && this.wake.confirmedRunning(id)) {
+        this.started(id, rosterStart(id, patch), true)
       }
       return
     }
@@ -314,7 +315,7 @@ export class ClaudeChildWorkDecoder {
   ): void {
     const task = this.live.get(id)
     this.taskInvocations.settle(id, status, reported.runId ?? task?.toolUseId)
-    this.childrenByOwner.forget(id, this.live.get(id))
+    this.childrenByOwner.forget(id, task)
     this.live.delete(id)
     const outcome = claudeChildWorkOutcome(status)
     this.ended.set(id, {

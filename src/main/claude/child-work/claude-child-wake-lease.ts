@@ -17,8 +17,8 @@ export type ClaudeChildWakeHost = {
   showWorking(id: string, task: DecodedClaudeTask): void
   /** The guess was wrong: put the owner back to the ending it guessed past. */
   restore(id: string, owner: EndedClaudeTask): void
-  /** The provider confirmed the owner, so it is live again and must be re-admitted. */
-  revive(id: string): void
+  /** The provider confirmed the owner running, so it is live again and must be re-admitted. */
+  revive(id: string, runningFrame: Record<string, unknown>): void
 }
 
 /** Wakes by owner id, each with the moment it stops guessing, and the ones already spent. */
@@ -54,10 +54,10 @@ export class ClaudeChildWake {
   }
 
   /** The provider says this owner runs: the guess was right, or an expired wake is undone and re-admitted. */
-  confirmRunning(id: string): void {
+  confirmRunning(id: string, runningFrame: Record<string, unknown>): void {
     this.wakes.delete(id)
     if (this.expired.delete(id)) {
-      this.host.revive(id)
+      this.host.revive(id, runningFrame)
     }
   }
 
