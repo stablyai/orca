@@ -1,5 +1,8 @@
 import { defineFixture } from '../../../../../component-fixtures/component-fixture'
-import { nativeChatAppearanceStyle } from '../../../appearance/native-chat-appearance-style'
+import {
+  nativeChatAppearanceStyle,
+  nativeChatTranscriptOuterClass
+} from '../../../appearance/native-chat-appearance-style'
 import { NativeChatBackgroundTasksStatus } from '../NativeChatBackgroundTasksStatus'
 import { NativeChatWorkerDockFrame } from './NativeChatWorkerDockFrame'
 import type { WorkerDockRowView } from './WorkerDockRow'
@@ -147,7 +150,10 @@ function composerChat(expanded: boolean) {
       className="native-chat-appearance flex h-[calc(100vh-2rem)] flex-col bg-chat-canvas"
       style={nativeChatAppearanceStyle({})}
     >
-      <div className="scrollbar-sleek min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+      <div
+        data-fixture-worker-dock-transcript=""
+        className={`scrollbar-sleek min-h-0 flex-1 space-y-2 overflow-y-auto ${nativeChatTranscriptOuterClass(false)}`}
+      >
         <p className="text-xs text-muted-foreground">Perf Issue · Home Chat</p>
         <p className="text-sm text-chat-foreground">
           Both fix workers are running in parallel; ORCA-20 needs your approval.
@@ -226,6 +232,14 @@ async function scrollMidway(frame: HTMLElement) {
   await new Promise((resolve) => setTimeout(resolve, 400))
 }
 
+function scrollTranscriptToEnd(frame: HTMLElement) {
+  const transcript = frame.querySelector<HTMLElement>('[data-fixture-worker-dock-transcript]')
+  if (!transcript) {
+    throw new Error('Worker dock transcript not found')
+  }
+  transcript.scrollTop = transcript.scrollHeight
+}
+
 export const botHomeChatFolded = defineFixture({ width: 720, render: () => botChat(false) })
 
 export const botHomeChatOpen = defineFixture({ width: 720, render: () => botChat(true) })
@@ -269,6 +283,13 @@ export const composerFolded390 = defineFixture({
   width: 390,
   setup: forgetSavedPosition,
   render: () => composerChat(false)
+})
+
+export const composerExpandedTranscriptClear390 = defineFixture({
+  width: 390,
+  setup: forgetSavedPosition,
+  render: () => composerChat(true),
+  interact: scrollTranscriptToEnd
 })
 
 export const composerOverSend390 = defineFixture({
