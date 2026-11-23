@@ -203,7 +203,9 @@ const iconFailed = (width: number) =>
         </div>
       </ConfirmationDialogProvider>
     ),
-    interact: () => settle(300)
+    interact: async () => {
+      await settle(300)
+    }
   })
 
 export const panel350IconFailed = iconFailed(350)
