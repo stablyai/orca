@@ -1,5 +1,5 @@
-// The sends an operation window reads: every one, or for a window through its anchored turns only
-// those it can hold, each found by index.
+// The sends an operation window reads: every one, or for a window through its anchored turns or of
+// its newest turns only those it can hold, each found by index.
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalDomainQueueRow } from './journal-domain-queue-rows'
 import type { JournalOperationWindowAnchors } from './journal-domain-operation-window'
@@ -168,6 +168,33 @@ export function sendHeads(
         )
       }
     })
+}
+
+/** Anchored by its newest turns and nothing else, so only sends placed in it or unsettled count. */
+export function newestTurnsOnly(anchors: JournalOperationWindowAnchors): boolean {
+  return (
+    anchors.latestTurns !== undefined &&
+    !anchors.operationIds?.length &&
+    !anchors.itemIds?.length &&
+    !anchors.turnIds?.length &&
+    !anchors.latestEndedTurn &&
+    anchors.afterSequence === undefined &&
+    anchors.observedSince === undefined
+  )
+}
+
+/** Every send still handed over and unanswered, wherever it sits, found by its own index. */
+export function unsettledSends(scope: JournalSqlScope): Send[] {
+  return withSends(
+    scope,
+    [],
+    sendHeads(
+      scope,
+      "AND dispatch_state IN ('pending','unknown')",
+      [],
+      'journal_submission_unsettled'
+    )
+  )
 }
 
 export function readSend(scope: JournalSqlScope, messageId: string): AgentJournalSubmission {

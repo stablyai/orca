@@ -41,7 +41,12 @@ const facts = {
 }
 
 /** A chat of `turns` finished turns, each opened by its own send. */
-function chat(turns: number, linkedAt: (index: number) => boolean = () => true): Database {
+function chat(
+  turns: number,
+  linkedAt: (index: number) => boolean = () => true,
+  /** This send is handed over and never answered: no dispatch, no turn. */
+  unansweredAt?: number
+): Database {
   const directory = mkdtempSync(join(tmpdir(), 'orca-operation-window-'))
   directories.push(directory)
   const db = new Database(join(directory, 'journal.sqlite'))
@@ -85,6 +90,9 @@ function chat(turns: number, linkedAt: (index: number) => boolean = () => true):
         now++
       )
     )
+    if (index === unansweredAt) {
+      continue
+    }
     transaction(() =>
       applyJournalDomainDispatch(
         db,
@@ -187,4 +195,36 @@ it('keeps every anchored turn when one send names its turn and another is placed
     item.body.kind === 'turn' ? [item.body.turnId] : []
   )
   expect(turnIds).toEqual(expect.arrayContaining(['turn-0', 'turn-5']))
+})
+
+// Whom a bot's newest turn acts for is read from a window of its newest turns, on every bot request,
+// Slack post and item add. Guards that read: its work stays fixed however long the chat ran before.
+it('reads the newest turns with the same work however many turns came before them', () => {
+  const read = (turns: number) => {
+    const db = chat(turns)
+    const scope = new JournalSqlScope(db, 'chat', 'epoch')
+    const { snapshot } = readJournalDomainOperationWindow(scope, {
+      latestTurns: 8,
+      turnShape: true
+    })
+    db.close()
+    return {
+      examined: scope.work.rows,
+      sends: snapshot.submissions.map((send) => send.clientMessageId),
+      turns: snapshot.items.flatMap((item) => (item.body.kind === 'turn' ? [item.body.turnId] : []))
+    }
+  }
+  const short = read(50)
+  const long = read(500)
+  expect(long.examined).toBe(short.examined)
+  expect(long.sends).toEqual(Array.from({ length: 9 }, (_, index) => `m${491 + index}`))
+  expect(long.turns).toEqual(Array.from({ length: 9 }, (_, index) => `turn-${491 + index}`))
+  // A send still unanswered anywhere is the turn still to be attributed: kept, as the whole read does.
+  const db = chat(50, () => true, 0)
+  const { snapshot } = readJournalDomainOperationWindow(new JournalSqlScope(db, 'chat', 'epoch'), {
+    latestTurns: 8,
+    turnShape: true
+  })
+  db.close()
+  expect(snapshot.submissions.map((send) => send.clientMessageId)).toContain('m0')
 })

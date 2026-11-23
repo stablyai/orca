@@ -11,9 +11,11 @@ import { readOperationWindowItems } from './journal-operation-window-rows'
 import { marginAfter } from './journal-operation-window-end'
 import {
   type Send,
+  newestTurnsOnly,
   operationSends,
   readSend,
   sendHeads,
+  unsettledSends,
   windowSends,
   withSends
 } from './journal-operation-window-sends'
@@ -83,7 +85,15 @@ export function readJournalDomainOperationWindow(
   ) {
     throw new Error('a window through its anchored turns is anchored by operation ids alone')
   }
-  let sends = bounded ? operationSends(scope, anchors) : sendHeads(scope)
+  // A window of the newest turns alone reads the sends placed in it and the unsettled ones, each by
+  // index, so reading whom the newest turn acts for costs the same however long the chat ran before.
+  const recent = !bounded && newestTurnsOnly(anchors)
+  const indexed = bounded || recent
+  let sends = bounded
+    ? operationSends(scope, anchors)
+    : recent
+      ? unsettledSends(scope)
+      : sendHeads(scope)
   const operations = resolveOperations(scope, sends, anchors)
   // Where each anchored send's own turn may reach: past the first turn after it when it names its
   // turn (a turn row naming it, or its answeredInTurn), past the second when it doesn't (an older
@@ -111,7 +121,7 @@ export function readJournalDomainOperationWindow(
   let start =
     earliest === null ? null : anchors.withoutTurnAhead ? earliest : marginBefore(scope, earliest)
   const end = earliest !== null && bounded ? windowEnd(scope, reaches) : null
-  if (bounded && start !== null) {
+  if (indexed && start !== null) {
     sends = withSends(scope, sends, windowSends(scope, start, end ?? Number.MAX_SAFE_INTEGER))
   }
   let kept: Send[] = []
@@ -127,7 +137,7 @@ export function readJournalDomainOperationWindow(
     if (next === null || (start !== null && next >= start)) {
       break
     }
-    if (bounded && start !== null) {
+    if (indexed && start !== null) {
       // The sends placed in the stretch the window just took on.
       sends = withSends(scope, sends, windowSends(scope, next, start))
     }
