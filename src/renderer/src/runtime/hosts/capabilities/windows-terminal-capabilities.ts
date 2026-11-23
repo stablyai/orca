@@ -233,7 +233,12 @@ export function useWindowsTerminalCapabilities(
     const reprobe: { stop: (() => void) | null } = { stop: null }
     const isLocalOwner = resolvedTarget.kind === 'local' && !sshConnectionIdKey
     // On main a released strip stayed mounted and never re-probed; returning reads the shared answer the same way.
-    const reuseCachedAnswer = reuseCachedAnswerOnMount && !forceRefreshOnMount && hasOwnerCache
+    // A failed probe's placeholder isn't an answer, so it still reloads (remote owners have no re-probe runner).
+    const reuseCachedAnswer =
+      reuseCachedAnswerOnMount &&
+      !forceRefreshOnMount &&
+      hasOwnerCache &&
+      cached !== UNAVAILABLE_CAPABILITIES
     const mountLoad = reuseCachedAnswer
       ? Promise.resolve(cached)
       : loadWindowsTerminalCapabilities({

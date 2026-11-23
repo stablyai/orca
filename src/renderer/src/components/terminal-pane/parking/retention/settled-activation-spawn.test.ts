@@ -68,4 +68,24 @@ describe('restored terminal tabs and hidden-workspace parking', () => {
       })
     ).toBe(false)
   })
+  it('keeps a restored split mounted while a pane has no saved binding yet', () => {
+    expect(
+      canPark({
+        ptyIdsByTabId: { 'tab-1': [`${worktreeId}@@a1`] },
+        terminalLayoutsByTabId: {
+          'tab-1': {
+            root: {
+              type: 'split',
+              direction: 'vertical',
+              first: { type: 'leaf', leafId: 'leaf-a' },
+              second: { type: 'leaf', leafId: 'leaf-b' }
+            },
+            activeLeafId: null,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { 'leaf-a': `${worktreeId}@@a1` }
+          }
+        }
+      })
+    ).toBe(false)
+  })
 })
