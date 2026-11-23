@@ -1,10 +1,17 @@
-import { StringDecoder } from 'node:string_decoder'
 import { isRootClaudeFrame } from '../turns/claude-turn-opening'
 import {
   readClaudeFrameString,
   readClaudeReportedPermissionMode
 } from '../startup/claude-structured-init-proof'
+import {
+  readClaudePermissionControlPrefix,
+  scanClaudePermissionReport
+} from './claude-oversized-permission-frame'
 import type { ClaudePermissionNoticeMode } from './claude-permission-notice-mode'
+
+const CLAUDE_STDOUT_PREFIX_BYTES = 64 * 1024
+const STDOUT_STRING_BATCH_CHARS = 16 * 1024
+const LEADING_FRAME_TYPE = /^[ \t\r]*\{[ \t\r]*"type"[ \t\r]*:[ \t\r]*"([\w-]+)"/
 
 export type ClaudeFullAccessPolicy = {
   /** Each raw stdout chunk, no later than the SDK reads it. */
@@ -14,7 +21,7 @@ export type ClaudeFullAccessPolicy = {
   /** Claude's latest reported mode in wire order, decoded; undefined before its first report. */
   mode: () => string | null | undefined
   close: () => void
-  retained: () => { partialChars: number; requests: number }
+  retained: () => { partialChars: number; partialBytes: number; requests: number }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -30,13 +37,16 @@ export function createClaudeFullAccessPolicy(
   authorizeFullAccess = true,
   noticeMode?: ClaudePermissionNoticeMode
 ): ClaudeFullAccessPolicy {
-  const decoder = new StringDecoder('utf8')
   // Kept until the SDK hands the request to canUseTool or the process ends; a cancel still
   // reaches the callback as an abort, so dropping its entry early would apply a later mode.
   const modeAtRequest = authorizeFullAccess ? new Map<string, boolean>() : null
   let mode: string | null | undefined
   let closed = false
-  let partial = ''
+  let prefix: Buffer | undefined
+  let prefixBytes = 0
+  let oversized = false
+  let reportScan: ReturnType<typeof scanClaudePermissionReport> | undefined
+  let trailingHighSurrogate = ''
 
   const remember = (request: unknown): void => {
     if (
@@ -52,6 +62,33 @@ export function createClaudeFullAccessPolicy(
     // A redelivered id keeps its first position.
     if (requestId && !modeAtRequest.has(requestId)) {
       modeAtRequest.set(requestId, mode === undefined || mode === 'full-access')
+    }
+  }
+
+  const rememberPending = (response: unknown): void => {
+    // Initialize's reply resends requests still waiting for an answer.
+    const pending = isRecord(response) ? response.pending_permission_requests : null
+    for (const request of Array.isArray(pending) ? pending : []) {
+      remember(request)
+    }
+  }
+
+  const observeReport = (frame: Record<string, unknown>): void => {
+    if (
+      readClaudeFrameString(frame, 'session_id') !== providerSessionId ||
+      !isRootClaudeFrame(frame)
+    ) {
+      return
+    }
+    // Absent keeps the last report; plan, ask, dontAsk and unknown modes all suspend Full access.
+    const reported = readClaudeReportedPermissionMode(frame)
+    if (reported !== undefined) {
+      if (authorizeFullAccess) {
+        mode = reported
+      }
+      if (noticeMode && typeof frame.permissionMode === 'string') {
+        noticeMode.report(frame.permissionMode)
+      }
     }
   }
 
@@ -73,34 +110,109 @@ export function createClaudeFullAccessPolicy(
     }
     if (frame.type === 'control_request') {
       remember(frame)
-      return
-    }
-    if (frame.type === 'control_response') {
+    } else if (frame.type === 'control_response') {
       if (report || tool) {
-        // Initialize's reply resends requests still waiting for an answer.
-        const pending = isRecord(frame.response) ? frame.response.pending_permission_requests : null
-        for (const request of Array.isArray(pending) ? pending : []) {
-          remember(request)
-        }
+        rememberPending(frame.response)
       }
       noticeMode?.reply(frame.response)
+    } else {
+      observeReport(frame)
+    }
+  }
+
+  const clearLine = (): void => {
+    prefix = undefined
+    prefixBytes = 0
+    oversized = false
+    reportScan = undefined
+  }
+
+  const appendPrefix = (chunk: Buffer, start: number, end: number): void => {
+    const required = prefixBytes + end - start
+    if (!prefix || required > prefix.length) {
+      const capacity = Math.min(
+        CLAUDE_STDOUT_PREFIX_BYTES,
+        Math.max(1024, (prefix?.length ?? 0) * 2, required)
+      )
+      const next = Buffer.allocUnsafe(capacity)
+      prefix?.copy(next, 0, 0, prefixBytes)
+      prefix = next
+    }
+    chunk.copy(prefix, prefixBytes, start, end)
+    prefixBytes = required
+  }
+
+  const startOversizedLine = (): void => {
+    oversized = true
+    if (!prefix) {
       return
+    }
+    const type = LEADING_FRAME_TYPE.exec(
+      prefix.toString('utf8', 0, Math.min(1024, prefixBytes))
+    )?.[1]
+    // The CLI leads with type. Scan through LF for reports since a child marker can follow the mode.
+    if (type === undefined || type === 'system') {
+      reportScan = scanClaudePermissionReport()
+      reportScan.write(prefix, 0, prefixBytes)
     }
     if (
-      readClaudeFrameString(frame, 'session_id') !== providerSessionId ||
-      !isRootClaudeFrame(frame)
+      (type !== undefined && type !== 'control_request' && type !== 'control_response') ||
+      (!authorizeFullAccess && (type === 'control_request' || !noticeMode?.awaitingReply()))
     ) {
+      prefix = undefined
+      prefixBytes = 0
+    }
+  }
+
+  const finishLine = (): void => {
+    if (!oversized) {
+      const line = prefix?.toString('utf8', 0, prefixBytes) ?? ''
+      clearLine()
+      observeLine(line)
       return
     }
-    // Absent keeps the last report; plan, ask, dontAsk and unknown modes all suspend Full access.
-    const reported = readClaudeReportedPermissionMode(frame)
-    if (reported !== undefined) {
-      if (authorizeFullAccess) {
-        mode = reported
+    const report = reportScan?.finish()
+    const control = prefix && readClaudePermissionControlPrefix(prefix, prefixBytes)
+    clearLine()
+    if (report?.type === 'system') {
+      observeReport(report)
+    } else if (control?.type === 'control_request') {
+      remember(control)
+    } else if (control?.type === 'control_response') {
+      rememberPending(control.response)
+      noticeMode?.reply(control.response)
+    }
+  }
+
+  const observeBytes = (chunk: Buffer): void => {
+    let start = 0
+    while (!closed && start < chunk.length) {
+      const newline = chunk.indexOf(0x0a, start)
+      const end = newline === -1 ? chunk.length : newline
+      if (
+        !oversized &&
+        prefixBytes === 0 &&
+        newline !== -1 &&
+        end - start <= CLAUDE_STDOUT_PREFIX_BYTES
+      ) {
+        observeLine(chunk.toString('utf8', start, end))
+      } else {
+        if (!oversized) {
+          const prefixEnd = Math.min(end, start + CLAUDE_STDOUT_PREFIX_BYTES - prefixBytes)
+          if (prefixEnd > start) {
+            appendPrefix(chunk, start, prefixEnd)
+            start = prefixEnd
+          }
+          if (start < end) {
+            startOversizedLine()
+          }
+        }
+        reportScan?.write(chunk, start, end)
+        if (newline !== -1) {
+          finishLine()
+        }
       }
-      if (noticeMode && typeof frame.permissionMode === 'string') {
-        noticeMode.report(frame.permissionMode)
-      }
+      start = end + 1
     }
   }
 
@@ -109,15 +221,21 @@ export function createClaudeFullAccessPolicy(
       if (closed) {
         return
       }
-      const text = typeof chunk === 'string' ? chunk : decoder.write(chunk)
-      // Scan only the new text, so a line spanning many chunks costs its length once.
-      let start = 0
-      for (let end = text.indexOf('\n'); end !== -1; end = text.indexOf('\n', start)) {
-        observeLine(partial + text.slice(start, end))
-        partial = ''
-        start = end + 1
+      if (typeof chunk !== 'string') {
+        if (trailingHighSurrogate) {
+          observeBytes(Buffer.from(trailingHighSurrogate))
+          trailingHighSurrogate = ''
+        }
+        observeBytes(chunk)
+        return
       }
-      partial += text.slice(start)
+      for (let start = 0; !closed && start < chunk.length; start += STDOUT_STRING_BATCH_CHARS) {
+        const text = trailingHighSurrogate + chunk.slice(start, start + STDOUT_STRING_BATCH_CHARS)
+        const last = text.charCodeAt(text.length - 1)
+        const splitSurrogate = last >= 0xd800 && last <= 0xdbff
+        trailingHighSurrogate = splitSurrogate ? (text.at(-1) ?? '') : ''
+        observeBytes(Buffer.from(splitSurrogate ? text.slice(0, -1) : text))
+      }
     },
     allows: (requestId) => {
       const atRequest = modeAtRequest?.get(requestId)
@@ -128,10 +246,15 @@ export function createClaudeFullAccessPolicy(
     mode: () => mode,
     close: () => {
       closed = true
-      partial = ''
+      clearLine()
+      trailingHighSurrogate = ''
       modeAtRequest?.clear()
       noticeMode?.close()
     },
-    retained: () => ({ partialChars: partial.length, requests: modeAtRequest?.size ?? 0 })
+    retained: () => ({
+      partialChars: prefix?.toString('utf8', 0, prefixBytes).length ?? 0,
+      partialBytes: prefix?.length ?? 0,
+      requests: modeAtRequest?.size ?? 0
+    })
   }
 }

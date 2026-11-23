@@ -13,11 +13,15 @@ import {
   bindClaudeJournalReadingControl,
   createClaudePermissionNoticeRecheck
 } from '../journal/claude-structured-session-journal-control'
+import { createClaudeFullAccessPolicy } from './claude-full-access-policy'
 import {
   seedClaudePermissionNotice,
   type ClaudePermissionNoticeSession
 } from './claude-full-access-refusal-notice'
-import type { ClaudePermissionNoticeIntent } from './claude-permission-notice-mode'
+import {
+  createClaudePermissionNoticeMode,
+  type ClaudePermissionNoticeIntent
+} from './claude-permission-notice-mode'
 import { ClaudePromptRegistry } from './claude-prompt-registry'
 import { claudeLaunchPermissions } from './claude-structured-inbound-control'
 
@@ -318,6 +322,64 @@ it('keeps overlapping mode replies and Full access tool authorization in wire or
     'Claude uses Plan mode.'
   ])
   claude.retire()
+})
+
+it('keeps permission evidence in wire order across oversized stdout frames', () => {
+  const noticeMode = createClaudePermissionNoticeMode(() => {})
+  const policy = createClaudeFullAccessPolicy(PROVIDER_SESSION, true, noticeMode)
+  const feed = (text: string): void => {
+    const bytes = Buffer.from(text, 'utf8')
+    for (let offset = 0; offset < bytes.length; offset += 16_381) {
+      policy.observe(bytes.subarray(offset, offset + 16_381))
+      const { partialChars, partialBytes } = policy.retained()
+      expect(partialChars).toBeLessThanOrEqual(65_536)
+      expect(partialBytes).toBeLessThanOrEqual(65_536)
+    }
+  }
+  const content = '🦀'.repeat(600_000)
+  const largeWrite = (id: string) => {
+    const request = toolRequest(id)
+    return {
+      ...request,
+      request: { ...request.request, tool_name: 'Write', input: { content } }
+    }
+  }
+  const writeId = 'split-"write"-🦀'
+  policy.observe(wireLine(report('bypassPermissions')))
+  feed(JSON.stringify(largeWrite(writeId)))
+  expect(policy.retained().requests).toBe(0)
+  policy.observe('\n')
+
+  const redelivery = JSON.stringify({
+    type: 'control_response',
+    response: {
+      ...reply('initialize').response,
+      pending_permission_requests: [largeWrite('redelivered'), toolRequest('past-prefix')]
+    }
+  })
+  feed(`${redelivery}\n`)
+  expect(policy.allows('redelivered')).toBe(true)
+  expect(policy.allows('past-prefix')).toBe(false)
+
+  const { permissionMode, ...header } = report('default', 'init')
+  const init = JSON.stringify({
+    ...header,
+    tools: [{ name: content, permissionMode: 'auto', parent_tool_use_id: 'nested' }]
+  }).slice(0, -1)
+  feed(`${init},"permiss`)
+  policy.observe(`ionMode":"${permissionMode}"`)
+  expect(noticeMode.running()).toBe('bypassPermissions')
+  policy.observe(`}\n${wireLine(toolRequest(writeId))}${wireLine(toolRequest('after-init'))}`)
+
+  expect(noticeMode.running()).toBe('default')
+  expect(policy.mode()).toBe('ask')
+  expect(policy.allows(writeId)).toBe(true)
+  expect(policy.allows('after-init')).toBe(false)
+
+  feed(`${init},"permissionMode":"bypassPermissions","parent_tool_use_id":"child"}\n`)
+  expect(noticeMode.running()).toBe('default')
+  expect(policy.retained()).toEqual({ partialChars: 0, partialBytes: 0, requests: 0 })
+  policy.close()
 })
 
 it('waits for the retried history read through a completed resumed turn and skips retired delivery', async () => {
