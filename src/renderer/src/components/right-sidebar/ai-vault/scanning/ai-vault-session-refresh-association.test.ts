@@ -43,7 +43,7 @@ const EMPTY_RESULT: AiVaultListResult = {
   issues: [],
   scannedAt: '2026-07-01T00:00:00.000Z'
 }
-const listSessionsMock = vi.fn<(args: AiVaultListArgs) => Promise<AiVaultListResult>>()
+const listSessionsMock = vi.fn<(args?: AiVaultListArgs) => Promise<AiVaultListResult>>()
 const initialAppState = useAppStore.getInitialState()
 const roots: Root[] = []
 let latest: ReturnType<typeof useAiVaultSessionRefresh> | null = null
@@ -132,14 +132,19 @@ beforeEach(() => {
   association.revision = 0
   association.listeners.clear()
   listSessionsMock.mockReset().mockResolvedValue(EMPTY_RESULT)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only window.api shim
-  ;(window as any).api = {
+  const api = {
     aiVault: {
       listSessions: listSessionsMock,
       cancelListSessions: vi.fn(async () => {}),
       onWindowFocused: () => () => {}
     }
+  } satisfies {
+    aiVault: Pick<
+      Window['api']['aiVault'],
+      'listSessions' | 'cancelListSessions' | 'onWindowFocused'
+    >
   }
+  Reflect.set(window, 'api', api)
   useAppStore.setState(initialAppState, true)
 })
 
