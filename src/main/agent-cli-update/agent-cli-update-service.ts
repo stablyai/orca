@@ -82,8 +82,12 @@ function planCommand(cli: OwnAgentCli, plan: AgentCliUpdatePlan): string {
   return plan.runnable ? [cli.command, ...plan.args].join(' ') : plan.command
 }
 
-function latestRelease(agent: AgentCliUpdateAgent, installed: string): Promise<string | null> {
-  return latestAgentCliRelease(agentCliUpdateDefinition(agent).latest(installed))
+function latestRelease(
+  agent: AgentCliUpdateAgent,
+  installed: string,
+  realPath: string
+): Promise<string | null> {
+  return latestAgentCliRelease(agentCliUpdateDefinition(agent).latest(installed, realPath))
 }
 
 async function behindRelease(
@@ -93,7 +97,7 @@ async function behindRelease(
 ): Promise<{ version: string; latest: string } | null> {
   const version = await installedVersion(agent, cli, recheck)
   // Which release line is latest can depend on the installed major.
-  const latest = version ? await latestRelease(agent, version) : null
+  const latest = version ? await latestRelease(agent, version, cli.realPath) : null
   return version && latest && compareAppVersions(version, latest) < 0 ? { version, latest } : null
 }
 
@@ -236,7 +240,7 @@ async function updateAgentCli(
   if (result.code !== 0 || result.timedOut) {
     return { ok: false, output, command }
   }
-  const latest = after ? await latestRelease(agent, after) : null
+  const latest = after ? await latestRelease(agent, after, updated.realPath) : null
   // A package manager behind the release (e.g. Homebrew) exits cleanly on the old version.
   if (after && latest && compareAppVersions(after, latest) < 0) {
     return { ok: false, output, command }
