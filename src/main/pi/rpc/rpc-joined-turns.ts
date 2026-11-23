@@ -12,8 +12,8 @@ export class PiRpcJoinedTurns {
   ) {}
 
   /** Before Pi opens a turn for the send: a turn already running is the one it joins. */
-  accepting(clientMessageId: string): void {
-    const running = this.turns.working ? this.lane.openTurnIdentity : null
+  accepting(clientMessageId: string, opener: boolean): void {
+    const running = this.turns.working && !opener ? this.lane.openTurnIdentity : null
     if (running) {
       this.joined.set(clientMessageId, running)
     }

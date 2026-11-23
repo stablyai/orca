@@ -94,7 +94,7 @@ export class PiRpcSession {
           this.startup.reportOptions(generation, current)
         ),
       settled: (id, outcome) => this.settle(id, outcome),
-      accepting: (id) => this.joinedTurns.accepting(id),
+      accepting: (id, opener) => this.joinedTurns.accepting(id, opener),
       idle: () => this.dialogs.cancelAll(),
       turnEnded: () => this.history.turnEnded(),
       failed: (error) => this.fail(error),

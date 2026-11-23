@@ -320,7 +320,7 @@ it('a Pi run steered into a turn waits for it, and fails when that turn fails', 
     send: async () => {},
     request: () => new Promise(() => {}),
     settled: () => {},
-    accepting: (id) => joined!.accepting(id),
+    accepting: (id, opener) => joined!.accepting(id, opener),
     idle: () => {},
     failed: (error) => {
       throw error
@@ -344,6 +344,8 @@ it('a Pi run steered into a turn waits for it, and fails when that turn fails', 
     }
   }
   expect(turn).not.toBeNull()
+  // The idle send opened the turn; only the one sent while it ran joined it.
+  expect(accepted.get('person')?.answeredInTurn).toBeUndefined()
   expect(accepted.get('run')).toMatchObject({ answeredInTurn: { turn, via: 'steer' } })
   await steeredRunEndsWithFailedTurn(chatJournal('pi', turn!), {
     person: accepted.get('person')!,
