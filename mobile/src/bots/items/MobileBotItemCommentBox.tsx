@@ -47,14 +47,15 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { BotItemCommentMicContext } from './bot-item-comment-mic'
 import { MobileBotItemReplyQuote } from './MobileBotItemReplyQuote'
 import { useBotItemCommentImages } from './use-bot-item-comment-images'
+import {
+  botItemCommentDraftKey,
+  botItemCommentDrafts as drafts,
+  shownBotItemCommentDrafts as shownDrafts
+} from './bot-item-comment-drafts'
 
-// Each item's unsent text, for this app session.
-const drafts = new Map<string, string>()
 // Skills picked into each item's draft, by the file the comment's mail names.
 const pickedSkills = new Map<string, readonly BotItemCommentSkill[]>()
 const NO_SKILLS: readonly BotItemCommentSkill[] = []
-// The open box of each item, so a late photo's [Image #N] change reaches the field it shows in.
-const shownDrafts = new Map<string, (next: string) => void>()
 const NO_FILES: readonly never[] = []
 
 export type BotItemCommentBoxHandle = {
@@ -106,8 +107,7 @@ export function MobileBotItemCommentBox({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const mic = useContext(BotItemCommentMicContext)
-  // Keyed by host too: two hosts can hold the same item ids.
-  const key = `${hostId}\0${item.uid}`
+  const key = botItemCommentDraftKey(hostId, item.uid)
   const [text, setTextState] = useState(() => drafts.get(key) ?? '')
   // The question whose "Replying to" the owner closed.
   const [unmarked, setUnmarked] = useState<string | null>(null)
