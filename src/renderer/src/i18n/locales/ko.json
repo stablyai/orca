@@ -27004,7 +27004,7 @@
       "hitTip": "{{agent}} 사용 한도 도달 · {{time}}에 초기화"
     },
     "section": {
-      "title": "봇",
+      "title": "Bots",
       "startFromScratch": "처음부터 시작"
     },
     "errors": {
