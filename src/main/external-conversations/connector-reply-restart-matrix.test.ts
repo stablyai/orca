@@ -771,17 +771,18 @@ describe('no positional "answered together" across a restart', () => {
 describe('a send rejected before it ran', () => {
   it('reads it as stopped only when a person’s Stop took it back', async () => {
     const p = start()
-    const failed = (head: string, category: string) => ({ outcome: 'failed', head, category })
+    // Each send is made at 1 and rejected at 2; the Stop is saved at `at`.
+    const failed = (head: string) => ({ outcome: 'failed', head, category: 'agent_error' })
     const cases = [
-      ['d1', 'user-stop', 'cancelled', { outcome: 'withdrawn', head: 'd1' }],
-      ['d2', 'host-stop', 'cancelled', failed('d2', 'agent_error')], // Orca's own stop: an error
-      ['d3', 'user-stop', 'notSignedIn', failed('d3', 'signed_out')]
+      ['d1', 'user-stop', 2, { outcome: 'withdrawn', head: 'd1' }],
+      ['d2', 'host-stop', 2, failed('d2')], // Orca's own stop rejects with the same kind
+      ['d3', 'user-stop', 10, failed('d3')] // a person's Stop after it was rejected
     ] as const
-    for (const [id, reason, kind, expected] of cases) {
+    for (const [id, reason, at, expected] of cases) {
       admit(p.db, id, asked(id))
-      const rejection = agentSessionFailureFact(kind)
+      const rejection = agentSessionFailureFact('cancelled')
       p.show([p.message(id)], [submissionOf(id, { dispatchState: 'rejected', rejection })])
-      p.stopped({ reason, at: 2 }) // after the send, made at 1
+      p.stopped({ reason, at })
       expect(await p.recovery.boot().then(() => p.outcomes()[id])).toEqual(expected)
     }
   })

@@ -20,8 +20,12 @@ import {
   readAgentJournalTurnOutcome
 } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { ConnectorFailure } from '../../shared/connectors/connector-cloud-contract'
-import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
-import { personStopTookBack, savedStop, type SavedStop } from './external-conversation-failure'
+import {
+  personStopTookBack,
+  savedStop,
+  stopMayHaveRejected,
+  type SavedStop
+} from './external-conversation-failure'
 import type { ReplyRecoveryChat } from './external-conversation-reply-recovery'
 import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../native-chat/agent-session-journal/projection/journal-dispatch-doubt-reasons'
 
@@ -44,8 +48,7 @@ function rejectedVerdict(
   stop: SavedStop,
   rejectionOf: (submission: AgentJournalSubmission) => { failure?: ConnectorFailure }
 ): ReplyRecoveryVerdict {
-  const fact = readAgentSessionFailureFact(submission.rejection)
-  return personStopTookBack(fact, submission.submittedAt, stop)
+  return personStopTookBack(submission, stop)
     ? { outcome: 'withdrawn' }
     : { outcome: 'failed', ...rejectionOf(submission) }
 }
@@ -88,7 +91,12 @@ export async function readReplyEvidence(
     ],
     withoutToolOutput: true
   })
-  const stop = await savedStop(chat, sessionId)
+  // Read only when a rejection could be a Stop's: most passes have none.
+  const stop = snapshot.submissions.some(
+    (send) => send.dispatchState === 'rejected' && stopMayHaveRejected(send)
+  )
+    ? await savedStop(chat, sessionId)
+    : null
   const rejected = (submission: AgentJournalSubmission) =>
     rejectedVerdict(submission, stop, rejectionOf)
   // A row's message by the stamp it carries: a queued card's handed-off message carries it too.
