@@ -66,6 +66,25 @@ async function worktreePathForms(pathValue: string): Promise<string[]> {
   }
 }
 
+const CWD_PROBE_TIMEOUT_MS = 2_000
+
+/** Null when the path did not answer in time, so the caller re-reads conservatively. */
+async function resolvedCwdForms(cwd: string): Promise<string[] | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timedOut = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), CWD_PROBE_TIMEOUT_MS)
+  })
+  const resolved = realpath(cwd).then(
+    (real) => spelledForms([real]),
+    () => spelledForms([cwd])
+  )
+  try {
+    return await Promise.race([resolved, timedOut])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 function fieldOf<K extends string>(record: unknown, field: K): unknown {
   return typeof record === 'object' && record !== null && field in record
     ? record[field]
@@ -123,7 +142,8 @@ function markForReread<T>(source: T): T {
 export async function reattributeUsageSourcesForWorktrees<T>(
   sources: readonly T[],
   cachedFingerprint: string | null,
-  currentFingerprint: string | null
+  currentFingerprint: string | null,
+  options: { attributionResolvesCwd?: boolean } = {}
 ): Promise<T[]> {
   if (cachedFingerprint === currentFingerprint) {
     return [...sources]
@@ -162,13 +182,18 @@ export async function reattributeUsageSourcesForWorktrees<T>(
     }
     return verdict
   }
-  // Transcript cwds are never probed: an old network mount must not stall the scan.
-  const cwdVerdicts = new Map<string, boolean>()
-  const cwdAffected = (cwd: string): boolean => {
+  // Probe a cwd only for providers whose attribution resolves it, and never wait on a dead mount.
+  const cwdVerdicts = new Map<string, Promise<boolean>>()
+  const cwdAffected = (cwd: string): Promise<boolean> => {
     let verdict = cwdVerdicts.get(cwd)
     if (verdict === undefined) {
-      const forms = spelledForms([cwd])
-      verdict = changedPaths.some((parent) => forms.some((child) => contains(parent, child)))
+      const inside = (forms: readonly string[]) =>
+        changedPaths.some((parent) => forms.some((child) => contains(parent, child)))
+      const literal = inside(spelledForms([cwd]))
+      verdict =
+        literal || !options.attributionResolvesCwd
+          ? Promise.resolve(literal)
+          : resolvedCwdForms(cwd).then((forms) => forms === null || inside(forms))
       cwdVerdicts.set(cwd, verdict)
     }
     return verdict

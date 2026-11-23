@@ -54,7 +54,9 @@ export async function readClaudeUsageSourceCache(
     const sources = await reattributeUsageSourcesForWorktrees(
       parsed.sources,
       typeof parsed.worktreeFingerprint === 'string' ? parsed.worktreeFingerprint : null,
-      cacheRef.worktreeFingerprint
+      cacheRef.worktreeFingerprint,
+      // Claude attribution resolves transcript cwds through realpath.
+      { attributionResolvesCwd: true }
     )
     if (verified) {
       const normalized = normalizeClaudeUsageSourceFiles(sources, new WeakSet(sources))

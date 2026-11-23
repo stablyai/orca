@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { reattributeUsageSourcesForWorktrees } from './usage-attribution-invalidation'
 import { getUsageWorktreeFingerprint } from './usage-worktree-refs'
@@ -75,5 +78,28 @@ describe('reattributeUsageSourcesForWorktrees', () => {
     ])
     const retained = await reattributeUsageSourcesForWorktrees(alias, fingerprint([main]), added)
     expect(retained[0]).toMatchObject({ mtimeMs: process.platform === 'darwin' ? -1 : undefined })
+  })
+
+  it('follows a symlinked cwd only for providers whose attribution resolves it', async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'orca-attribution-link-')))
+    try {
+      await mkdir(join(root, 'real', 'src'), { recursive: true })
+      await symlink(join(root, 'real'), join(root, 'link'), 'junction')
+      const linked = [source('linked', `cwd:${join(root, 'link', 'src')}`)]
+      const added = fingerprint([
+        main,
+        { worktreeId: `repo::${join(root, 'real')}`, path: join(root, 'real'), displayName: 'r' }
+      ])
+      const marked = async (attributionResolvesCwd: boolean) =>
+        (
+          await reattributeUsageSourcesForWorktrees(linked, fingerprint([main]), added, {
+            attributionResolvesCwd
+          })
+        )[0]
+      expect(await marked(true)).toMatchObject({ mtimeMs: -1 })
+      expect(await marked(false)).not.toHaveProperty('mtimeMs')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 })
