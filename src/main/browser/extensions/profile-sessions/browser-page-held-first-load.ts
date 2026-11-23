@@ -5,6 +5,16 @@ export function isBrowserPageFirstLoadHeld(contents: Electron.WebContents): bool
   return heldFirstLoads.has(contents)
 }
 
+const stoppedListeners = new Set<(contents: Electron.WebContents) => void>()
+
+/** A held first load was stopped: the page no longer counts as loading. */
+export function onBrowserPageFirstLoadStopped(
+  listener: (contents: Electron.WebContents) => void
+): () => void {
+  stoppedListeners.add(listener)
+  return () => stoppedListeners.delete(listener)
+}
+
 type HeldLoad = { url: string; options: Electron.LoadURLOptions | undefined }
 
 /**
@@ -19,14 +29,26 @@ export function loadPageWhenReady(
 ): Promise<void> {
   heldFirstLoads.add(contents)
   let requested: (HeldLoad & { settle: (outcome: Promise<void>) => void }) | null = null
+  let stopped = false
   const hold = (url: string, options?: Electron.LoadURLOptions): Promise<void> =>
     new Promise<void>((resolve, reject) => {
       requested?.settle(Promise.reject(supersededLoadError()))
       requested = { url, options, settle: (outcome) => outcome.then(resolve, reject) }
+      stopped = false
+      heldFirstLoads.add(contents)
     })
+  // Stop (toolbar, agent) cancels what is held, as it would cancel a load in flight.
+  const stop = (): void => {
+    requested?.settle(Promise.reject(supersededLoadError()))
+    requested = null
+    stopped = true
+    heldFirstLoads.delete(contents)
+    stoppedListeners.forEach((listener) => listener(contents))
+  }
   // Why an instance override: Electron starts a navigation synchronously inside loadURL, with no
   // hook to defer it, and a navigation that commits first makes a history restore impossible.
   Object.defineProperty(contents, 'loadURL', { value: hold, configurable: true, writable: true })
+  Object.defineProperty(contents, 'stop', { value: stop, configurable: true, writable: true })
   // A navigation started another way (script, CDP) supersedes the hold, as before it existed.
   let navigatedElsewhere = false
   const navigated = (
@@ -50,6 +72,7 @@ export function loadPageWhenReady(
     contents.off('did-start-navigation', navigated)
     heldFirstLoads.delete(contents)
     Reflect.deleteProperty(contents, 'loadURL')
+    Reflect.deleteProperty(contents, 'stop')
     const queued = requested
     const outcome = finishHeldLoad()
     queued?.settle(outcome)
@@ -60,6 +83,9 @@ export function loadPageWhenReady(
         return queued
           ? Promise.reject(new Error('The browser page closed while loading'))
           : Promise.resolve()
+      }
+      if (stopped) {
+        return Promise.reject(supersededLoadError())
       }
       if (!navigatedElsewhere) {
         return load(queued ? { url: queued.url, options: queued.options } : null)

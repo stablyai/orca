@@ -2,7 +2,10 @@ import type { BrowserLoadError } from '../../../../shared/browser/workspaces/bro
 import type { BrowserGuestMetadata } from '../../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import { readGuestNavigationState } from './browser-guest-navigation-state'
 import { isChromiumInternalErrorUrl } from '../manager/navigation/browser-main-frame-navigation'
-import { isBrowserPageFirstLoadHeld } from '../../extensions/profile-sessions/browser-page-held-first-load'
+import {
+  isBrowserPageFirstLoadHeld,
+  onBrowserPageFirstLoadStopped
+} from '../../extensions/profile-sessions/browser-page-held-first-load'
 
 const projections = new WeakMap<
   Electron.WebContents,
@@ -19,6 +22,11 @@ export function readBrowserGuestMetadata(guest: Electron.WebContents): BrowserGu
 export function publishBrowserGuestMetadata(guest: Electron.WebContents): void {
   projections.get(guest)?.publish()
 }
+
+// A held first load that was stopped emits no load event, so its loading state is read again here.
+onBrowserPageFirstLoadStopped((guest) => {
+  projections.get(guest)?.read()
+})
 
 export function installBrowserGuestMetadata({
   guest,

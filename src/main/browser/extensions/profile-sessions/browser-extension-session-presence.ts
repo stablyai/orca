@@ -17,23 +17,17 @@ export function whenBrowserExtensionsInSession(
   sess: Electron.Session,
   loadEnded: Promise<unknown>
 ): Promise<void> {
-  const extensionIds = startingBySession.get(sess) ?? []
-  return Promise.all(extensionIds.map((id) => whenInSession(sess, id, loadEnded))).then(
-    () => undefined
+  const missing = new Set(
+    (startingBySession.get(sess) ?? []).filter((id) => !sess.extensions.getExtension(id))
   )
-}
-
-function whenInSession(
-  sess: Electron.Session,
-  extensionId: string,
-  loadEnded: Promise<unknown>
-): Promise<void> {
-  if (sess.extensions.getExtension(extensionId)) {
+  if (missing.size === 0) {
     return Promise.resolve()
   }
+  // One listener for all of them, so each load event costs one lookup, not one per extension.
   return new Promise<void>((resolve) => {
     const loaded = (_event: Electron.Event, extension: Electron.Extension): void => {
-      if (extension.id === extensionId) {
+      missing.delete(extension.id)
+      if (missing.size === 0) {
         done()
       }
     }

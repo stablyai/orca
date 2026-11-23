@@ -16,6 +16,7 @@ class FakePage extends EventEmitter {
   isDestroyed(): boolean {
     return this.destroyed
   }
+  stop(): void {}
 }
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
@@ -33,6 +34,18 @@ function hold(page: FakePage, ready: Promise<void>): Promise<void> {
 }
 
 describe('a held first load', () => {
+  it('Stop cancels the queued load, and nothing loads after the wait', async () => {
+    const page = new FakePage()
+    const ready = deferred()
+    const held = hold(page, ready.promise)
+    const queued = page.loadURL('https://a.test/')
+    page.stop()
+    await expect(queued).rejects.toMatchObject({ errno: -3 })
+    ready.resolve()
+    await expect(held).rejects.toMatchObject({ errno: -3 })
+    expect(page.started).toEqual([])
+  })
+
   it('starts nothing until ready, then only the newest load asked for meanwhile', async () => {
     const page = new FakePage()
     const ready = deferred()
@@ -77,6 +90,7 @@ describe('extensions in the session', () => {
     let inSession = false
     noteBrowserExtensionsStarting(sess, ['one', 'two'])
     void whenBrowserExtensionsInSession(sess, deferred().promise).then(() => (inSession = true))
+    expect(extensions.listenerCount('extension-loaded')).toBe(1)
     extensions.emit('extension-loaded', {}, { id: 'one' })
     await settle()
     expect(inSession).toBe(false)
