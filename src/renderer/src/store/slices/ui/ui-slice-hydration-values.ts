@@ -10,6 +10,7 @@ import { normalizeFeatureInteractions } from '../../../../../shared/feature-educ
 import { normalizeContextualTourIds } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import type { UISlice } from './ui-slice-contract'
 import { sanitizePaneKeyTimestampRecord } from './ui-slice-hydration-sanitizers'
+import { keepCopiedReadMarkKeys } from '../agent-status/structured-sessions/chat-read-mark-web-copy'
 
 const VALID_TASK_PRESETS = new Set<TaskViewPresetId>([
   'all',
@@ -162,31 +163,6 @@ export function hydrateOneShotNoticesSeen(
     worktreeCardsIntroNoticeSeen: ui.worktreeCardsIntroNoticeSeen === true,
     claudeDiffPanelNoticeSeen: ui.claudeDiffPanelNoticeSeen === true
   }
-}
-
-/**
- * The copied-key ledger is bounded by the marks it names and never capped on its own: a key dropped
- * while its original survives would copy again and undo a later clear. A key whose original is gone
- * can never copy again. Any number of ledgers (saved, and this device's live one) merge here.
- */
-export function keepCopiedReadMarkKeys(
-  records: Pick<UISlice, 'activityClearedAtByPaneKey' | 'manuallyUnreadTurnsByPaneKey'>,
-  ...ledgers: Readonly<Record<string, unknown>>[]
-): Record<string, number> {
-  const kept: Record<string, number> = {}
-  for (const ledger of ledgers) {
-    for (const [key, at] of Object.entries(ledger)) {
-      if (
-        typeof at === 'number' &&
-        kept[key] === undefined &&
-        (records.activityClearedAtByPaneKey[key] !== undefined ||
-          records.manuallyUnreadTurnsByPaneKey[key] !== undefined)
-      ) {
-        kept[key] = at
-      }
-    }
-  }
-  return kept
 }
 
 /** The hydrated ledger joined with this device's live one, keeping the live object when unchanged. */

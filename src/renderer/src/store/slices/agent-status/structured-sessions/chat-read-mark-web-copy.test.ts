@@ -3,10 +3,11 @@ import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/t
 import { copyWebClientChatReadMarks } from './chat-read-mark-web-copy'
 
 const LEAF = '2b8ea975-8113-41ae-a25c-feb50cbe084a'
-const TAB_KEY = `agent-chat-tab-v1-abc:${LEAF}`
+const OLD_TAB_KEY = `agent-chat-tab-v1-abc:${LEAF}`
+const OTHER_OLD_TAB_KEY = `structured-agent-session-old:${LEAF}`
 const CONVERSATION_KEY = `structured-agent-session-sess-2:${LEAF}`
-const TAB: Tab = {
-  id: 'agent-chat-tab-v1-abc',
+const chatTab = (id: string): Tab => ({
+  id,
   entityId: 'sess-2',
   groupId: 'g',
   worktreeId: 'wt',
@@ -16,27 +17,34 @@ const TAB: Tab = {
   color: null,
   sortOrder: 0,
   createdAt: 0
-}
+})
 
-it('copies a tab-keyed mark at most once, however often its tab is delivered', () => {
+it('copies a conversation’s tab-keyed marks once, whatever tab ids or order its tabs arrive with', () => {
   let state: Record<
     'activityClearedAtByPaneKey' | 'manuallyUnreadTurnsByPaneKey' | 'chatReadMarkKeysCopiedHere',
     Record<string, number>
   > = {
-    activityClearedAtByPaneKey: { [TAB_KEY]: 50 },
-    manuallyUnreadTurnsByPaneKey: { [TAB_KEY]: 70 },
+    activityClearedAtByPaneKey: { [OLD_TAB_KEY]: 50, [OTHER_OLD_TAB_KEY]: 60 },
+    manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70 },
     chatReadMarkKeysCopiedHere: {}
   }
-  expect(copyWebClientChatReadMarks(state, [])).toBeNull()
-  state = { ...state, ...copyWebClientChatReadMarks(state, [TAB]) }
-  expect(state.activityClearedAtByPaneKey).toEqual({ [TAB_KEY]: 50, [CONVERSATION_KEY]: 50 })
-  expect(state.manuallyUnreadTurnsByPaneKey).toEqual({ [TAB_KEY]: 70, [CONVERSATION_KEY]: 70 })
-
-  // The user clears both; a later delivery of the same tab must not fill them back.
+  // After a reload the browser names the tab by the conversation, not the old tab id.
   state = {
     ...state,
-    activityClearedAtByPaneKey: { [TAB_KEY]: 50 },
-    manuallyUnreadTurnsByPaneKey: { [TAB_KEY]: 70 }
+    ...copyWebClientChatReadMarks(state, [chatTab('structured-agent-session-sess-2')])
   }
-  expect(copyWebClientChatReadMarks(state, [TAB])).toBeNull()
+  expect(state.activityClearedAtByPaneKey).toEqual({
+    [OLD_TAB_KEY]: 50,
+    [OTHER_OLD_TAB_KEY]: 60,
+    [CONVERSATION_KEY]: 60
+  })
+  expect(state.manuallyUnreadTurnsByPaneKey).toEqual({ [OLD_TAB_KEY]: 70, [CONVERSATION_KEY]: 70 })
+
+  // The user clears both; another tab on the same chat arriving later must not fill them back.
+  state = {
+    ...state,
+    activityClearedAtByPaneKey: { [OLD_TAB_KEY]: 50, [OTHER_OLD_TAB_KEY]: 60 },
+    manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70 }
+  }
+  expect(copyWebClientChatReadMarks(state, [chatTab('agent-chat-tab-v1-abc')])).toBeNull()
 })

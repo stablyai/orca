@@ -5,7 +5,7 @@ type ChatTab = Pick<Tab, 'id' | 'contentType' | 'entityId'>
 
 /** The key a chat tab's read marks were saved under before pane keys followed the conversation, or
  *  null when that key is already the conversation's. */
-export function chatTabReadMarkKey(tab: ChatTab): string | null {
+function chatTabReadMarkKey(tab: ChatTab): string | null {
   if (tab.contentType !== 'agent-session') {
     return null
   }
