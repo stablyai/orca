@@ -3,6 +3,7 @@ import { browserSessionRegistry } from '../sessions/profiles/browser-session-reg
 import { session, type Cookies } from 'electron'
 import type { GoogleCookieClearResult } from '../../../shared/browser/cookies/browser-google-cookie-clear'
 import { withCookieMutationLock } from './mutation/cookie-mutation-lock'
+import { persistBrowserCookieClear } from './session-restore/browser-session-cookie-clear'
 import { cookieRemovalUrl } from './storage/cookie-removal-url'
 import { isNonTransplantableCookieDomain } from './policy/cookie-import-exclusions'
 import { normalizeCookieDomain } from './policy/cookie-domain'
@@ -44,11 +45,16 @@ export async function clearGoogleCookies(
   })
 }
 
-export function clearGoogleCookiesFromPartition(
+export async function clearGoogleCookiesFromPartition(
   partition: string,
   validate?: () => void
 ): Promise<GoogleCookieClearResult> {
-  return clearGoogleCookies(session.fromPartition(partition), validate)
+  const target = session.fromPartition(partition)
+  const result = await clearGoogleCookies(target, validate)
+  await persistBrowserCookieClear(target, (cookie) =>
+    isNonTransplantableCookieDomain(cookie.domain ?? '')
+  )
+  return result
 }
 
 export function clearGoogleCookiesForRuntimeProfile(
