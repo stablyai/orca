@@ -67,19 +67,21 @@ function sessionCookie(name: string, domain: string): CdpCookie {
 const PARTITION = 'persist:browser-profile-default'
 let directory: string
 
-async function launch() {
+async function launch(options: { clearWhileRestoring?: boolean } = {}) {
   vi.resetModules()
-  sessions.set(PARTITION, fakeSession())
+  const jar = fakeSession()
+  sessions.set(PARTITION, jar)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every Session member this code path calls.
+  const target = jar as unknown as Session
   const snapshots = await import('./browser-session-cookie-snapshot-file')
   snapshots.configureBrowserSessionCookieSnapshots(directory)
   const restore = await import('./browser-session-cookie-restore')
   const clear = await import('./browser-session-cookie-clear')
-  await restore.restoreBrowserSessionCookies([
+  const restored = restore.restoreBrowserSessionCookies([
     { id: 'default', scope: 'default', partition: PARTITION, label: 'Default', source: null }
   ])
-  const jar = sessions.get(PARTITION)!
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every Session member this code path calls.
-  return { jar, target: jar as unknown as Session, clear, snapshots }
+  await Promise.all([restored, options.clearWhileRestoring && clear.clearBrowserCookieJar(target)])
+  return { jar, target, clear, snapshots }
 }
 
 beforeEach(() => {
@@ -113,6 +115,14 @@ describe('session cookie snapshot after a cookie clear', () => {
     await clear.clearBrowserCookieJar(target)
 
     // Orca dies here, before the 30 s save.
+    expect((await launch()).jar.names()).toEqual([])
+  })
+
+  it('a clear made while launch is still restoring is not undone by that restore', async () => {
+    await signedIn()
+    const cleared = await launch({ clearWhileRestoring: true })
+    expect(cleared.jar.names()).toEqual([])
+
     expect((await launch()).jar.names()).toEqual([])
   })
 
