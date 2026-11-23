@@ -137,6 +137,8 @@ export class BotSlackIcons {
       root: () => string
       /** Throws for an unknown bot. */
       bot: (botId: string) => Bot
+      /** Off, bots take no drawings and ask for none. */
+      enabled: () => boolean
       /** The bots' write queue, so a look check and its write never interleave with an edit. */
       serialize: <T>(work: () => Promise<T>) => Promise<T>
     }
@@ -144,7 +146,7 @@ export class BotSlackIcons {
 
   async wanted(botId: string, look: string): Promise<BotSlackIconWant> {
     const bot = this.deps.bot(botId)
-    if (botSlackIconLook(bot) !== look) {
+    if (!this.deps.enabled() || botSlackIconLook(bot) !== look) {
       return { wanted: false, current: false }
     }
     // A file already found whole, unchanged since, is not read and decoded again (each reconnect asks).
@@ -173,7 +175,7 @@ export class BotSlackIcons {
     }
     const stored = await this.deps.serialize(async () => {
       const bot = this.deps.bot(botId)
-      if (botSlackIconLook(bot) !== look) {
+      if (!this.deps.enabled() || botSlackIconLook(bot) !== look) {
         return 'refused'
       }
       // Another window drew it first: kept as it is, and the cloud is not sent it again.

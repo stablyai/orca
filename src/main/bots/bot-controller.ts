@@ -117,6 +117,7 @@ export class BotController {
         }
         return bot
       },
+      enabled: () => this.enabled(),
       serialize: (work) => this.serialize(work)
     })
   }

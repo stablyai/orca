@@ -65,6 +65,11 @@ async function publish(bot: Bot, look: string, attempt: number): Promise<void> {
   if (handled.get(botRefKey(bot))?.attempt !== attempt) {
     return
   }
+  // Bots turned off while it waited: nothing more is drawn or sent.
+  if (!readBotsEnabled()) {
+    forget(bot, attempt)
+    return
+  }
   if (readBotHostState(bot.hostId) !== 'live') {
     forget(bot, attempt)
     return
@@ -85,7 +90,7 @@ async function publish(bot: Bot, look: string, attempt: number): Promise<void> {
       bot.avatarColor ?? null,
       wornBotOutfit(bot.avatarOutfit)
     )
-    if (!png) {
+    if (!png || !readBotsEnabled()) {
       forget(bot, attempt)
       return
     }
@@ -160,6 +165,11 @@ function publishLooks(): void {
   seenLive = live
   for (const bot of bots) {
     if (liveChanged || !seen.has(bot) || (retry.size > 0 && retry.delete(botRefKey(bot)))) {
+      // A changed record may follow edits this window never saw (another client's look replacing this
+      // one's icon), so its host is asked again: one check per changed bot, never the whole roster.
+      if (!seen.has(bot)) {
+        handled.delete(botRefKey(bot))
+      }
       seen.add(bot)
       publishBotSlackIcon(bot)
     }
