@@ -53,11 +53,11 @@ afterEach(() => {
   }
 })
 
-function fixture(route: 'direct' | 'hosted-review' | 'ssh-repository', enabled = true) {
+async function fixture(route: 'direct' | 'hosted-review' | 'ssh-repository', enabled = true) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-member-gh-retry-'))
   directories.push(directory)
   const registry = new GitHubParticipantRegistry(directory, () => ({}))
-  const participant = registry.createParticipant({
+  const participant = await registry.createParticipant({
     name: 'Alice',
     deviceIds: ['alice-device'],
     allowedAccounts: [aliceAccount, bobAccount]
@@ -67,9 +67,9 @@ function fixture(route: 'direct' | 'hosted-review' | 'ssh-repository', enabled =
     path: directory,
     ghAccount: { host: 'github.com', user: 'server-owner' }
   })
-  registry.setRepoEnabled(repo.id, true)
-  registry.selectAccount(repo.id, 'alice-device', aliceAccount)
-  registry.setRepoEnabled(repo.id, enabled)
+  await registry.setRepoEnabled(repo.id, true)
+  await registry.selectAccount(repo.id, 'alice-device', aliceAccount)
+  await registry.setRepoEnabled(repo.id, enabled)
   const store = participantRuntimeStore()
   const options = runWithActiveRpcCaller(
     { kind: 'paired-device', deviceId: 'alice-device' },
@@ -105,7 +105,7 @@ function transientThenSuccess(): void {
 it.each(['direct', 'hosted-review', 'ssh-repository'] as const)(
   'refuses another external attempt when a member grant is revoked during backoff (%s)',
   async (route) => {
-    const { registry, participant, options } = fixture(route)
+    const { registry, participant, options } = await fixture(route)
     transientThenSuccess()
     const outcome = ghExecFileAsync(['api', 'user'], options).then(
       () => 'unexpected success',
@@ -113,7 +113,7 @@ it.each(['direct', 'hosted-review', 'ssh-repository'] as const)(
     )
     await vi.advanceTimersByTimeAsync(0)
     expect(spawnMock).toHaveBeenCalledOnce()
-    registry.updateParticipant(participant.id, { allowedAccounts: [bobAccount] })
+    await registry.updateParticipant(participant.id, { allowedAccounts: [bobAccount] })
     await vi.advanceTimersByTimeAsync(250)
     await expect(outcome).resolves.toBe('github_participant_account_not_allowed')
     expect(spawnMock).toHaveBeenCalledOnce()
@@ -121,18 +121,18 @@ it.each(['direct', 'hosted-review', 'ssh-repository'] as const)(
 )
 
 it('keeps the accepted account on retry when only the member selection changes', async () => {
-  const { registry, options } = fixture('direct')
+  const { registry, options } = await fixture('direct')
   transientThenSuccess()
   const result = ghExecFileAsync(['api', 'user'], options)
   await vi.advanceTimersByTimeAsync(0)
-  registry.selectAccount('repo', 'alice-device', bobAccount)
+  await registry.selectAccount('repo', 'alice-device', bobAccount)
   await vi.advanceTimersByTimeAsync(250)
   await expect(result).resolves.toMatchObject({ stdout: JSON.stringify({ login: 'alice' }) })
   expect(spawnMock).toHaveBeenCalledTimes(2)
 })
 
 it('checks authorization again after credentials resolve before spawning an API command', async () => {
-  const { registry, participant, options } = fixture('direct')
+  const { registry, participant, options } = await fixture('direct')
   const credentials = Promise.withResolvers<NodeJS.ProcessEnv>()
   boundEnvMock.mockReturnValueOnce(credentials.promise)
   transientThenSuccess()
@@ -141,7 +141,7 @@ it('checks authorization again after credentials resolve before spawning an API 
     (error: unknown) => (error instanceof Error ? error.message : String(error))
   )
   await vi.advanceTimersByTimeAsync(0)
-  registry.updateParticipant(participant.id, { allowedAccounts: [bobAccount] })
+  await registry.updateParticipant(participant.id, { allowedAccounts: [bobAccount] })
   credentials.resolve({ ORCA_TEST_GH_ACCOUNT: 'alice' })
   await vi.advanceTimersByTimeAsync(1_250)
   await expect(outcome).resolves.toBe('github_participant_account_not_allowed')
@@ -149,7 +149,7 @@ it('checks authorization again after credentials resolve before spawning an API 
 })
 
 it('preserves an existing eligibility refusal while resolving hosted-review accounts', async () => {
-  const { options } = fixture('hosted-review')
+  const { options } = await fixture('hosted-review')
   const ghOptions = resolveHostedReviewGitHubOptions({
     localGitExecOptions: {
       ...options,
@@ -169,7 +169,7 @@ describe.each(['direct', 'hosted-review', 'ssh-repository'] as const)(
     it.each(['backoff', 'credentials'] as const)(
       'refuses the captured owner account after participant mode is enabled during %s',
       async (wait) => {
-        const { registry, options } = fixture(route, false)
+        const { registry, options } = await fixture(route, false)
         expect(options.ghAccount?.user).toBe('server-owner')
         const credentials = Promise.withResolvers<NodeJS.ProcessEnv>()
         if (wait === 'credentials') {
@@ -182,8 +182,8 @@ describe.each(['direct', 'hosted-review', 'ssh-repository'] as const)(
         )
         await vi.advanceTimersByTimeAsync(0)
         expect(spawnMock).toHaveBeenCalledTimes(wait === 'backoff' ? 1 : 0)
-        registry.setRepoEnabled('repo', true)
-        registry.selectAccount('repo', 'alice-device', aliceAccount)
+        await registry.setRepoEnabled('repo', true)
+        await registry.selectAccount('repo', 'alice-device', aliceAccount)
         credentials.resolve({ ORCA_TEST_GH_ACCOUNT: 'server-owner' })
         await vi.advanceTimersByTimeAsync(250)
         await expect(outcome).resolves.toBe('github_participant_account_changed')

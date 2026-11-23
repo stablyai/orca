@@ -11,11 +11,13 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 
 export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRuntimeWithStructuredSessionCliWriterHost {
   async bindStructuredSessionGitHubParticipant(worktree: string, sessionId: string): Promise<void> {
-    if (!this.getGitHubParticipantRegistry()?.hasEnabledRepos()) {
+    const registry = this.getGitHubParticipantRegistry()
+    await registry?.ready()
+    if (!registry?.hasEnabledRepos()) {
       return
     }
     const target = await this.resolveRuntimeFileTarget(worktree)
-    bindGitHubParticipantSession(
+    await bindGitHubParticipantSession(
       this.requireStore(),
       target.worktree.repoId,
       target.worktree.id,

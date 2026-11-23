@@ -23,22 +23,23 @@ afterEach(() => {
 })
 
 describe('accepted GitHub job launch binding', () => {
-  it('captures the accepting member, persists across reload and refuses claimed legacy sessions', () => {
+  it('captures the accepting member, persists across reload and refuses claimed legacy sessions', async () => {
     const path = mkdtempSync(join(tmpdir(), 'orca-job-binding-'))
     directories.push(path)
     const store = participantRuntimeStore({ getProfileStorageDirectory: () => path })
     configureStoreGitHubParticipantDevices(store, () => ({}))
     const registry = getStoreGitHubParticipants(store)!
+    await registry.ready()
     for (const user of ['alice', 'bob']) {
-      registry.createParticipant({
+      await registry.createParticipant({
         name: user,
         deviceIds: [user],
         allowedAccounts: [{ host: 'github.com', user }]
       })
     }
-    registry.setRepoEnabled('repo', true)
+    await registry.setRepoEnabled('repo', true)
     for (const user of ['alice', 'bob']) {
-      registry.selectAccount('repo', user, { host: 'github.com', user })
+      await registry.selectAccount('repo', user, { host: 'github.com', user })
     }
     const repo: Repo = {
       id: 'repo',
@@ -47,26 +48,27 @@ describe('accepted GitHub job launch binding', () => {
       badgeColor: 'blue',
       addedAt: 1
     }
-    runWithActiveRpcCaller({ kind: 'paired-device', deviceId: 'alice' }, () => {
-      bindParticipantLaunch(store, { repo, id: 'workspace' }, 'pane', 'launch')
-      bindGitHubParticipantSession(store, 'repo', 'workspace', 'session-new', false)
-      bindGitHubParticipantSession(store, 'repo', 'workspace', 'session-preexisting', true)
+    await runWithActiveRpcCaller({ kind: 'paired-device', deviceId: 'alice' }, async () => {
+      await bindParticipantLaunch(store, { repo, id: 'workspace' }, 'pane', 'launch')
+      await bindGitHubParticipantSession(store, 'repo', 'workspace', 'session-new', false)
+      await bindGitHubParticipantSession(store, 'repo', 'workspace', 'session-preexisting', true)
     })
     const reopened = new GitHubParticipantJobs(path)
+    await reopened.ready()
     expect(reopened.terminal('pane', 'workspace', 'launch')?.account.user).toBe('alice')
     expect(reopened.session('session-new', 'workspace')?.account.user).toBe('alice')
     expect(reopened.session('session-preexisting', 'workspace')).toBeUndefined()
-    expect(() =>
+    await expect(
       runWithActiveRpcCaller({ kind: 'paired-device', deviceId: 'bob' }, () =>
         bindGitHubParticipantSession(store, 'repo', 'workspace', 'session-new', true)
       )
-    ).toThrow('github_participant_owner_mismatch')
-    expect(() =>
+    ).rejects.toThrow('github_participant_owner_mismatch')
+    await expect(
       runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
         runWithGitHubJobRequest(true, () =>
           bindParticipantLaunch(store, { repo, id: 'workspace' }, 'pane-forged', 'forged')
         )
       )
-    ).toThrow('github_participant_identity_required')
+    ).rejects.toThrow('github_participant_identity_required')
   })
 })

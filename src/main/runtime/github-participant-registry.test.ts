@@ -28,27 +28,70 @@ function fixture() {
     registry,
     directory,
     devices,
-    reload: () => new GitHubParticipantRegistry(directory, lookup)
+    reload: async () => {
+      const restored = new GitHubParticipantRegistry(directory, lookup)
+      await restored.ready()
+      return restored
+    }
   }
 }
 
 describe('GitHubParticipantRegistry', () => {
-  it('persists independent participant selections without enabling other repos', () => {
+  it('withholds authorization until initialization finishes', async () => {
+    const { registry } = fixture()
+    expect(registry.hasEnabledRepos()).toBe(true)
+    expect(() => registry.isRepoEnabled('repo')).toThrow('github_participant_registry_unavailable')
+    await registry.ready()
+    expect(registry.hasEnabledRepos()).toBe(false)
+  })
+
+  it('serializes concurrent membership changes before persisting their combined state', async () => {
     const { registry, reload } = fixture()
-    const alice = registry.createParticipant({
+    const results = await Promise.allSettled([
+      registry.createParticipant({
+        name: 'Alice',
+        deviceIds: ['alice-desktop'],
+        allowedAccounts: [aliceAccount]
+      }),
+      registry.createParticipant({
+        name: 'Bob',
+        deviceIds: ['bob-desktop'],
+        allowedAccounts: [bobAccount]
+      }),
+      registry.createParticipant({
+        name: 'Impersonator',
+        deviceIds: ['alice-desktop'],
+        allowedAccounts: [aliceAccount]
+      })
+    ])
+    expect(results.map((result) => result.status)).toEqual(['fulfilled', 'fulfilled', 'rejected'])
+    expect(results[2]).toMatchObject({
+      status: 'rejected',
+      reason: new Error('github_participant_device_already_assigned')
+    })
+    const restored = await reload()
+    expect(restored.listParticipants().map((participant) => participant.name)).toEqual([
+      'Alice',
+      'Bob'
+    ])
+  })
+
+  it('persists independent participant selections without enabling other repos', async () => {
+    const { registry, reload } = fixture()
+    const alice = await registry.createParticipant({
       name: 'Alice',
       deviceIds: ['alice-desktop'],
       allowedAccounts: [aliceAccount]
     })
-    registry.createParticipant({
+    await registry.createParticipant({
       name: 'Bob',
       deviceIds: ['bob-desktop'],
       allowedAccounts: [bobAccount]
     })
-    registry.setRepoEnabled('repo', true)
-    registry.selectAccount('repo', 'alice-desktop', aliceAccount)
-    registry.selectAccount('repo', 'bob-desktop', bobAccount)
-    const restored = reload()
+    await registry.setRepoEnabled('repo', true)
+    await registry.selectAccount('repo', 'alice-desktop', aliceAccount)
+    await registry.selectAccount('repo', 'bob-desktop', bobAccount)
+    const restored = await reload()
     expect(restored.resolveAccount('repo', 'alice-phone')).toEqual({
       participantId: alice.id,
       account: aliceAccount
@@ -58,143 +101,144 @@ describe('GitHubParticipantRegistry', () => {
     expect(restored.getSelf('repo', 'alice-desktop').allowedAccounts).toEqual([aliceAccount])
   })
 
-  it('rejects unknown devices, delegated-device assignments and duplicate membership', () => {
+  it('rejects unknown devices, delegated-device assignments and duplicate membership', async () => {
     const { registry } = fixture()
-    registry.createParticipant({
+    await registry.createParticipant({
       name: 'Alice',
       deviceIds: ['alice-desktop'],
       allowedAccounts: [aliceAccount]
     })
     for (const deviceId of ['unknown', 'alice-phone', 'alice-desktop']) {
-      expect(() =>
+      await expect(
         registry.createParticipant({ name: 'Other', deviceIds: [deviceId], allowedAccounts: [] })
-      ).toThrow()
+      ).rejects.toThrow()
     }
     expect(registry.listParticipants()).toHaveLength(1)
   })
 
-  it('never falls back when membership, selection or account authorization is absent', () => {
+  it('never falls back when membership, selection or account authorization is absent', async () => {
     const { registry, devices } = fixture()
-    const alice = registry.createParticipant({
+    const alice = await registry.createParticipant({
       name: 'Alice',
       deviceIds: ['alice-desktop'],
       allowedAccounts: [aliceAccount]
     })
-    registry.setRepoEnabled('repo', true)
+    await registry.setRepoEnabled('repo', true)
     expect(() => registry.resolveAccount('repo', 'bob-desktop')).toThrow(
       'github_participant_missing'
     )
     expect(() => registry.resolveAccount('repo', 'alice-desktop')).toThrow(
       'github_participant_account_missing'
     )
-    expect(() => registry.selectAccount('repo', 'alice-desktop', bobAccount)).toThrow(
+    await expect(registry.selectAccount('repo', 'alice-desktop', bobAccount)).rejects.toThrow(
       'github_participant_account_not_allowed'
     )
-    registry.selectAccount('repo', 'alice-desktop', aliceAccount)
+    await registry.selectAccount('repo', 'alice-desktop', aliceAccount)
     devices.delete('alice-desktop')
     expect(() => registry.resolveAccount('repo', 'alice-phone')).toThrow(
       'github_participant_device_revoked'
     )
-    registry.updateParticipant(alice.id, { allowedAccounts: [] })
+    await registry.updateParticipant(alice.id, { allowedAccounts: [] })
     expect(() => registry.resolveParticipantAccount('repo', alice.id, aliceAccount)).toThrow()
   })
 
-  it('pins accepted account snapshots and refuses retargeting or removed owners', () => {
+  it('pins accepted account snapshots and refuses retargeting or removed owners', async () => {
     const { registry } = fixture()
-    const alice = registry.createParticipant({
+    const alice = await registry.createParticipant({
       name: 'Alice',
       deviceIds: ['alice-desktop'],
       allowedAccounts: [aliceAccount, bobAccount]
     })
-    registry.setRepoEnabled('repo', true)
-    registry.selectAccount('repo', 'alice-desktop', aliceAccount)
+    await registry.setRepoEnabled('repo', true)
+    await registry.selectAccount('repo', 'alice-desktop', aliceAccount)
     const accepted = registry.resolveAccount('repo', 'alice-desktop')!
     expect(Object.isFrozen(accepted)).toBe(true)
     expect(Object.isFrozen(accepted.account)).toBe(true)
-    registry.selectAccount('repo', 'alice-desktop', bobAccount)
+    await registry.selectAccount('repo', 'alice-desktop', bobAccount)
     expect(registry.resolveParticipantAccount('repo', alice.id, accepted.account)).toEqual(accepted)
     expect(accepted.account).toEqual(aliceAccount)
-    registry.removeParticipant(alice.id)
+    await registry.removeParticipant(alice.id)
     expect(() => registry.resolveParticipantAccount('repo', alice.id, accepted.account)).toThrow(
       'github_participant_missing'
     )
   })
 
-  it('clears selections when disabling and requires fresh selection when re-enabled', () => {
+  it('clears selections when disabling and requires fresh selection when re-enabled', async () => {
     const { registry } = fixture()
-    const alice = registry.createParticipant({
+    const alice = await registry.createParticipant({
       name: 'Alice',
       deviceIds: ['alice-desktop'],
       allowedAccounts: [aliceAccount]
     })
-    registry.setRepoEnabled('repo', true)
-    registry.selectAccount('repo', 'alice-desktop', aliceAccount)
-    registry.setRepoEnabled('repo', false)
+    await registry.setRepoEnabled('repo', true)
+    await registry.selectAccount('repo', 'alice-desktop', aliceAccount)
+    await registry.setRepoEnabled('repo', false)
     expect(registry.resolveAccount('repo', 'alice-desktop')).toBeNull()
     expect(() => registry.resolveParticipantAccount('repo', alice.id, aliceAccount)).toThrow(
       'github_participant_repo_disabled'
     )
-    registry.setRepoEnabled('repo', true)
+    await registry.setRepoEnabled('repo', true)
     expect(() => registry.resolveAccount('repo', 'alice-desktop')).toThrow(
       'github_participant_account_missing'
     )
   })
 
-  it('revokes device assignments immediately and isolates returned account lists', () => {
+  it('revokes device assignments immediately and isolates returned account lists', async () => {
     const { registry } = fixture()
-    const alice = registry.createParticipant({
+    const alice = await registry.createParticipant({
       name: 'Alice',
       deviceIds: ['alice-desktop'],
       allowedAccounts: [aliceAccount]
     })
-    registry.setRepoEnabled('repo', true)
-    registry.selectAccount('repo', 'alice-desktop', aliceAccount)
+    await registry.setRepoEnabled('repo', true)
+    await registry.selectAccount('repo', 'alice-desktop', aliceAccount)
     const status = registry.getSelf('repo', 'alice-phone')
     status.allowedAccounts.push(bobAccount)
     registry.listParticipants()[0].deviceIds.push('bob-desktop')
-    expect(() => registry.selectAccount('repo', 'alice-desktop', bobAccount)).toThrow(
+    await expect(registry.selectAccount('repo', 'alice-desktop', bobAccount)).rejects.toThrow(
       'github_participant_account_not_allowed'
     )
     expect(() => registry.resolveAccount('repo', 'bob-desktop')).toThrow(
       'github_participant_missing'
     )
-    registry.updateParticipant(alice.id, { deviceIds: [] })
+    await registry.updateParticipant(alice.id, { deviceIds: [] })
     expect(() => registry.resolveAccount('repo', 'alice-phone')).toThrow(
       'github_participant_missing'
     )
   })
 
-  it('stops authorization after a failed durable update instead of using stale grants', () => {
+  it('stops authorization after a failed durable update instead of using stale grants', async () => {
     const { registry, directory } = fixture()
-    const alice = registry.createParticipant({
+    const alice = await registry.createParticipant({
       name: 'Alice',
       deviceIds: ['alice-desktop'],
       allowedAccounts: [aliceAccount]
     })
-    registry.setRepoEnabled('repo', true)
-    registry.selectAccount('repo', 'alice-desktop', aliceAccount)
+    await registry.setRepoEnabled('repo', true)
+    await registry.selectAccount('repo', 'alice-desktop', aliceAccount)
     const path = join(directory, 'github-participants.json')
     rmSync(path)
     mkdirSync(path)
-    expect(() => registry.updateParticipant(alice.id, { allowedAccounts: [] })).toThrow()
+    await expect(registry.updateParticipant(alice.id, { allowedAccounts: [] })).rejects.toThrow()
     expect(() => registry.resolveAccount('repo', 'alice-desktop')).toThrow(
       'github_participant_registry_unavailable'
     )
   })
 
-  it('fails closed on malformed storage and never overwrites it', () => {
+  it('fails closed on malformed storage and never overwrites it', async () => {
     const { directory, reload } = fixture()
     const path = join(directory, 'github-participants.json')
     writeFileSync(path, '{broken')
-    const registry = reload()
+    const registry = await reload()
+    await expect(registry.ready()).resolves.toBeUndefined()
     expect(() => registry.isRepoEnabled('repo')).toThrow('github_participant_registry_unavailable')
-    expect(() => registry.setRepoEnabled('repo', true)).toThrow(
+    await expect(registry.setRepoEnabled('repo', true)).rejects.toThrow(
       'github_participant_registry_unavailable'
     )
     expect(readFileSync(path, 'utf8')).toBe('{broken')
   })
 
-  it('rejects stored selections without a matching participant grant', () => {
+  it('rejects stored selections without a matching participant grant', async () => {
     const { directory, reload } = fixture()
     writeFileSync(
       join(directory, 'github-participants.json'),
@@ -212,7 +256,8 @@ describe('GitHubParticipantRegistry', () => {
         selections: [{ repoId: 'repo', participantId: 'alice', account: bobAccount }]
       })
     )
-    expect(() => reload().resolveAccount('repo', 'alice-desktop')).toThrow(
+    const restored = await reload()
+    expect(() => restored.resolveAccount('repo', 'alice-desktop')).toThrow(
       'github_participant_registry_unavailable'
     )
   })

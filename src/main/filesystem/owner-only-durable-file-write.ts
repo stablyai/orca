@@ -5,7 +5,7 @@ import {
   restrictWindowsDirectory,
   restrictWindowsFile
 } from '../../shared/secure-storage/secure-path-windows-acl'
-import { loadWindowsSecurity } from '../../shared/secure-storage/windows-security-addon'
+import { loadWindowsSecurityAsync } from '../../shared/secure-storage/windows-security-addon'
 import { durableWriteTempPath, syncDirectory } from './durable-file-write'
 
 // Windows stages here: its owner-only DACL is inherited the moment a file is created, so no other
@@ -36,7 +36,7 @@ export async function writeOwnerOnlyFileDurable(
       await handle.close()
     }
     // Protected before it is published, so a later change to the parent's inheritance never reaches it.
-    if (windows && !(await restrictWindowsFile(tmpPath)) && windowsSecurityLoaded()) {
+    if (windows && !(await restrictWindowsFile(tmpPath)) && (await windowsSecurityLoaded())) {
       throw new Error(`Could not restrict ${tmpPath} to its owner`)
     }
     await renameFileWithWindowsRetryAsync(tmpPath, finalPath)
@@ -63,7 +63,7 @@ function windowsStaging(directory: string): Promise<string> {
 
 async function prepareWindowsStaging(staging: string): Promise<string> {
   await mkdir(staging, { recursive: true })
-  if (!(await restrictWindowsDirectory(staging)) && windowsSecurityLoaded()) {
+  if (!(await restrictWindowsDirectory(staging)) && (await windowsSecurityLoaded())) {
     throw new Error(`Could not restrict ${staging} to its owner`)
   }
   await removeStaleOwnerOnlyStaging(dirname(staging))
@@ -82,4 +82,5 @@ export async function removeStaleOwnerOnlyStaging(directory: string): Promise<vo
   }
 }
 
-const windowsSecurityLoaded = (): boolean => !('error' in loadWindowsSecurity())
+const windowsSecurityLoaded = async (): Promise<boolean> =>
+  !('error' in (await loadWindowsSecurityAsync()))

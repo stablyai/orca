@@ -4,19 +4,18 @@ import { getStoreGitHubParticipants } from './github-participant-store'
 import { getStoreGitHubParticipantJobs } from './github-participant-jobs'
 import { captureGitHubExecutionIdentity } from './github-participant-execution'
 
-export function bindParticipantLaunch(
+export async function bindParticipantLaunch(
   store: RuntimeStore | null,
   workspace: Pick<TerminalWorkspaceLaunchScope, 'repo' | 'id'>,
   paneKey: string,
   launchToken: string | undefined
-): void {
+): Promise<void> {
   if (!launchToken || !store || !workspace.repo) {
     return
   }
-  const identity = captureGitHubExecutionIdentity(
-    getStoreGitHubParticipants(store),
-    workspace.repo.id
-  )
+  const registry = getStoreGitHubParticipants(store)
+  await registry?.ready()
+  const identity = captureGitHubExecutionIdentity(registry, workspace.repo.id)
   if (!identity) {
     return
   }
@@ -24,17 +23,18 @@ export function bindParticipantLaunch(
   if (!jobs) {
     throw new Error('github_participant_jobs_unavailable')
   }
-  jobs.bindTerminal(paneKey, workspace.id, launchToken, identity)
+  await jobs.bindTerminal(paneKey, workspace.id, launchToken, identity)
 }
 
-export function bindGitHubParticipantSession(
+export async function bindGitHubParticipantSession(
   store: RuntimeStore,
   repoId: string,
   workspaceId: string,
   sessionId: string,
   priorRecord: boolean
-): void {
+): Promise<void> {
   const registry = getStoreGitHubParticipants(store)
+  await registry?.ready()
   const identity = captureGitHubExecutionIdentity(registry, repoId)
   if (!identity) {
     return
@@ -43,9 +43,10 @@ export function bindGitHubParticipantSession(
   if (!jobs) {
     throw new Error('github_participant_jobs_unavailable')
   }
+  await jobs.ready()
   if (priorRecord && !jobs.session(sessionId, workspaceId)) {
     return
   }
-  const bound = jobs.bindSession(sessionId, workspaceId, identity)
+  const bound = await jobs.bindSession(sessionId, workspaceId, identity)
   registry?.resolveParticipantAccount(bound.repoId, bound.participantId, bound.account)
 }

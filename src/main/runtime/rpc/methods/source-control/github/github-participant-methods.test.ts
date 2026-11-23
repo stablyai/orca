@@ -18,13 +18,17 @@ afterEach(() => {
   }
 })
 
-function fixture() {
+async function fixture() {
   const path = mkdtempSync(join(tmpdir(), 'orca-participant-rpc-'))
   directories.push(path)
   const account = { host: 'github.com', user: 'alice' }
   const registry = new GitHubParticipantRegistry(path, (id) => (id === 'device-a' ? {} : null))
-  registry.createParticipant({ name: 'Alice', deviceIds: ['device-a'], allowedAccounts: [account] })
-  registry.setRepoEnabled('repo', true)
+  await registry.createParticipant({
+    name: 'Alice',
+    deviceIds: ['device-a'],
+    allowedAccounts: [account]
+  })
+  await registry.setRepoEnabled('repo', true)
   const update = vi.fn()
   const validate = vi.fn(async () => ({ ok: true, binding: account }))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These handlers use only the runtime methods supplied by this focused fixture.
@@ -100,8 +104,8 @@ describe('GitHub participant RPC authority', () => {
   ])(
     'does not promote an unbound job to owner with mode $enabled: $evidence',
     async ({ enabled, evidence }) => {
-      const { ownerCall, registry } = fixture()
-      registry.setRepoEnabled('repo', enabled)
+      const { ownerCall, registry } = await fixture()
+      await registry.setRepoEnabled('repo', enabled)
       expect(await ownerCall(evidence)).toMatchObject({
         ok: false,
         error: { code: 'github_participant_owner_required' }
@@ -112,7 +116,7 @@ describe('GitHub participant RPC authority', () => {
     }
   )
   it('retains member restrictions for a verified job on the local socket', async () => {
-    const { jobCall, registry, update, validate } = fixture()
+    const { jobCall, registry, update, validate } = await fixture()
     expect(
       (await jobCall('github.participants.setEnabled', { repo: 'repo', enabled: false })).ok
     ).toBe(false)
@@ -140,14 +144,14 @@ describe('GitHub participant RPC authority', () => {
     expect(validate).not.toHaveBeenCalled()
   })
   it('denies participant administration to a paired client before registry changes', async () => {
-    const { call, registry } = fixture()
+    const { call, registry } = await fixture()
     const response = await call('github.participants.setEnabled', { repo: 'repo', enabled: false })
     expect(response.ok).toBe(false)
     expect(registry.isRepoEnabled('repo')).toBe(true)
   })
 
   it('blocks legacy paired-client writes to the shared account when member mode is enabled', async () => {
-    const { call, update } = fixture()
+    const { call, update } = await fixture()
     const response = await call('repo.update', {
       repo: 'repo',
       updates: { ghAccount: { host: 'github.com', user: 'bob' } }
@@ -157,7 +161,7 @@ describe('GitHub participant RPC authority', () => {
   })
 
   it('lists only assigned accounts and refuses probing an unassigned account', async () => {
-    const { call, validate } = fixture()
+    const { call, validate } = await fixture()
     const listed = await call('github.listBindableAccounts', { repo: 'repo' })
     expect(listed).toMatchObject({ ok: true, result: { accounts: [{ user: 'alice' }] } })
     const result = await call('github.validateAccountBinding', {
@@ -170,7 +174,7 @@ describe('GitHub participant RPC authority', () => {
   })
 
   it('rejects claimed participant identity and resolves self from authenticated device', async () => {
-    const { call, registry } = fixture()
+    const { call, registry } = await fixture()
     const spoof = await call('github.participants.select', {
       repo: 'repo',
       participantId: 'bob',

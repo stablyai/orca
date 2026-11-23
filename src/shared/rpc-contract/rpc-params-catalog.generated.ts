@@ -435,9 +435,6 @@ import {
   TerminalArtifactFileChunk,
   TerminalArtifactFileWrite
 } from './filesystem/files-terminal-artifact-params'
-import { BindableAccounts, ValidateAccountBinding } from './github/github-account-binding-params'
-import { UploadGitHubAttachment } from './github/github-attachment-params'
-import { CreateIssue, Issue, IssueComment, UpdateIssue } from './github/github-issue-params'
 import {
   GitHubParticipantMode,
   GitHubParticipantRemove,
@@ -445,6 +442,9 @@ import {
   GitHubParticipantSelect,
   GitHubParticipantStatus
 } from './github-participant-params'
+import { BindableAccounts, ValidateAccountBinding } from './github/github-account-binding-params'
+import { UploadGitHubAttachment } from './github/github-attachment-params'
+import { CreateIssue, Issue, IssueComment, UpdateIssue } from './github/github-issue-params'
 import {
   ClearProjectItemField,
   GithubProjectListAccessibleParams,

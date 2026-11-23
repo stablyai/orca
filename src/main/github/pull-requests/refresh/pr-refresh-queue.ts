@@ -1,3 +1,4 @@
+import { refreshKey } from '../../client/lookup/pr-read-identity'
 import { REVIEW_REFRESH_COOLDOWN_MS } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
 import type { HostedPRReadJob } from './hosted-pr-read-jobs'
 import type { PRWatchPlan } from './pr-refresh-watch-jobs'
@@ -13,7 +14,6 @@ import {
   freshRetryAt,
   POST_PUSH_DELAY_MS,
   foregroundExposureAgeMs,
-  refreshKey,
   sameAliasRequestIdentity,
   shouldSkipFresh
 } from './pr-refresh-candidate-policy'

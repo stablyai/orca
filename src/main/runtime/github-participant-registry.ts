@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { writeDurableSecureJsonFile } from '../../shared/secure-storage/secure-file'
+import { writeOwnerOnlyFileDurable } from '../filesystem/owner-only-durable-file-write'
+import { withSidecarSnapshotQueue } from '../filesystem/sidecar-snapshot-file'
 import {
   ghAccountBindingsEqual,
   normalizeGhAccountBinding,
@@ -71,17 +72,27 @@ export class GitHubParticipantRegistry {
     selections: []
   }
   private unavailable = false
+  private loaded = false
+  private readonly initialization: Promise<void>
 
   constructor(
     storageDirectory: string,
     private readonly lookupDevice: DeviceLookup
   ) {
     this.path = join(storageDirectory, 'github-participants.json')
-    try {
-      this.state = stateSchema.parse(JSON.parse(readFileSync(this.path, 'utf8')))
-    } catch (error) {
-      this.unavailable = !(error instanceof Error && 'code' in error && error.code === 'ENOENT')
-    }
+    this.initialization = withSidecarSnapshotQueue(this.path, async () => {
+      try {
+        this.state = stateSchema.parse(JSON.parse(await readFile(this.path, 'utf8')))
+      } catch (error) {
+        this.unavailable = !(error instanceof Error && 'code' in error && error.code === 'ENOENT')
+      } finally {
+        this.loaded = true
+      }
+    })
+  }
+
+  ready(): Promise<void> {
+    return this.initialization
   }
 
   listParticipants(): GitHubParticipant[] {
@@ -89,50 +100,61 @@ export class GitHubParticipantRegistry {
     return structuredClone(this.state.participants)
   }
 
-  createParticipant(input: ParticipantInput): GitHubParticipant {
-    const participant = participantSchema.parse({ ...input, id: randomUUID() })
-    this.validateDevices(participant)
-    this.save({ ...this.state, participants: [...this.state.participants, participant] })
-    return structuredClone(participant)
-  }
-
-  updateParticipant(id: string, updates: Partial<ParticipantInput>): GitHubParticipant {
-    const participant = participantSchema.parse({ ...this.requireParticipant(id), ...updates, id })
-    if (updates.deviceIds !== undefined) {
+  createParticipant(input: ParticipantInput): Promise<GitHubParticipant> {
+    return this.mutate(async () => {
+      const participant = participantSchema.parse({ ...input, id: randomUUID() })
       this.validateDevices(participant)
-    }
-    this.save({
-      ...this.state,
-      participants: this.state.participants.map((p) => (p.id === id ? participant : p)),
-      selections: this.state.selections.filter(
-        (s) =>
-          s.participantId !== id ||
-          participant.allowedAccounts.some((a) => ghAccountBindingsEqual(a, s.account))
-      )
-    })
-    return structuredClone(participant)
-  }
-
-  removeParticipant(id: string): void {
-    this.requireParticipant(id)
-    this.save({
-      ...this.state,
-      participants: this.state.participants.filter((p) => p.id !== id),
-      selections: this.state.selections.filter((s) => s.participantId !== id)
+      await this.save({ ...this.state, participants: [...this.state.participants, participant] })
+      return structuredClone(participant)
     })
   }
 
-  setRepoEnabled(repoId: string, enabled: boolean): void {
-    this.requireAvailable()
-    identifier.parse(repoId)
-    this.save({
-      ...this.state,
-      enabledRepoIds: enabled
-        ? [...new Set([...this.state.enabledRepoIds, repoId])]
-        : this.state.enabledRepoIds.filter((id) => id !== repoId),
-      selections: enabled
-        ? this.state.selections
-        : this.state.selections.filter((s) => s.repoId !== repoId)
+  updateParticipant(id: string, updates: Partial<ParticipantInput>): Promise<GitHubParticipant> {
+    return this.mutate(async () => {
+      const participant = participantSchema.parse({
+        ...this.requireParticipant(id),
+        ...updates,
+        id
+      })
+      if (updates.deviceIds !== undefined) {
+        this.validateDevices(participant)
+      }
+      await this.save({
+        ...this.state,
+        participants: this.state.participants.map((p) => (p.id === id ? participant : p)),
+        selections: this.state.selections.filter(
+          (s) =>
+            s.participantId !== id ||
+            participant.allowedAccounts.some((a) => ghAccountBindingsEqual(a, s.account))
+        )
+      })
+      return structuredClone(participant)
+    })
+  }
+
+  removeParticipant(id: string): Promise<void> {
+    return this.mutate(async () => {
+      this.requireParticipant(id)
+      await this.save({
+        ...this.state,
+        participants: this.state.participants.filter((p) => p.id !== id),
+        selections: this.state.selections.filter((s) => s.participantId !== id)
+      })
+    })
+  }
+
+  setRepoEnabled(repoId: string, enabled: boolean): Promise<void> {
+    return this.mutate(async () => {
+      identifier.parse(repoId)
+      await this.save({
+        ...this.state,
+        enabledRepoIds: enabled
+          ? [...new Set([...this.state.enabledRepoIds, repoId])]
+          : this.state.enabledRepoIds.filter((id) => id !== repoId),
+        selections: enabled
+          ? this.state.selections
+          : this.state.selections.filter((s) => s.repoId !== repoId)
+      })
     })
   }
 
@@ -142,6 +164,9 @@ export class GitHubParticipantRegistry {
   }
 
   hasEnabledRepos(): boolean {
+    if (!this.loaded) {
+      return true
+    }
     this.requireAvailable()
     return this.state.enabledRepoIds.length > 0
   }
@@ -163,18 +188,20 @@ export class GitHubParticipantRegistry {
     }
   }
 
-  selectAccount(repoId: string, deviceId: string, account: GhAccountBinding | null): void {
-    this.requireEnabled(repoId)
-    const participant = this.requireDeviceParticipant(deviceId)
-    const normalized = account === null ? null : this.requireAllowed(participant, account)
-    this.save({
-      ...this.state,
-      selections: [
-        ...this.state.selections.filter(
-          (s) => s.repoId !== repoId || s.participantId !== participant.id
-        ),
-        ...(normalized ? [{ repoId, participantId: participant.id, account: normalized }] : [])
-      ]
+  selectAccount(repoId: string, deviceId: string, account: GhAccountBinding | null): Promise<void> {
+    return this.mutate(async () => {
+      this.requireEnabled(repoId)
+      const participant = this.requireDeviceParticipant(deviceId)
+      const normalized = account === null ? null : this.requireAllowed(participant, account)
+      await this.save({
+        ...this.state,
+        selections: [
+          ...this.state.selections.filter(
+            (s) => s.repoId !== repoId || s.participantId !== participant.id
+          ),
+          ...(normalized ? [{ repoId, participantId: participant.id, account: normalized }] : [])
+        ]
+      })
     })
   }
 
@@ -270,18 +297,24 @@ export class GitHubParticipantRegistry {
   }
 
   private requireAvailable(): void {
-    if (this.unavailable) {
+    if (!this.loaded || this.unavailable) {
       throw new Error('github_participant_registry_unavailable')
     }
   }
 
-  private save(next: RegistryState): void {
+  private mutate<T>(change: () => Promise<T>): Promise<T> {
+    return withSidecarSnapshotQueue(this.path, async () => {
+      await this.ready()
+      this.requireAvailable()
+      return change()
+    })
+  }
+
+  private async save(next: RegistryState): Promise<void> {
     this.requireAvailable()
     const parsed = stateSchema.parse(next)
     try {
-      if (!writeDurableSecureJsonFile(this.path, parsed)) {
-        throw new Error('github_participant_registry_permissions')
-      }
+      await writeOwnerOnlyFileDurable(this.path, JSON.stringify(parsed))
       this.state = parsed
     } catch (error) {
       // A failed durable write may have published; never authorize from an older in-memory grant.

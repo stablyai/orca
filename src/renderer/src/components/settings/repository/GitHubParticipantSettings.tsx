@@ -12,7 +12,7 @@ import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-tar
 import { useAppStore } from '@/store'
 import { subscribeGitHubParticipantAccountsChanged } from '@/runtime/github-participant-account-changes'
 import { invalidateGitHubParticipantReads } from '@/runtime/github-participant-read-fencing'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { Switch } from '../../ui/switch'
 import { Label } from '../../ui/label'
@@ -30,6 +30,17 @@ type ParticipantMutationParams =
   | { id: string }
   | (Omit<GitHubParticipant, 'id'> & { id?: string })
   | { account: GhAccountBinding | null }
+
+async function runParticipantSettingsMutation(
+  run: () => Promise<boolean>,
+  finish: () => void
+): Promise<boolean> {
+  try {
+    return await run()
+  } finally {
+    finish()
+  }
+}
 
 export function GitHubParticipantSettings({
   repoId,
@@ -65,6 +76,7 @@ function ParticipantSettingsForHost({
   inventory,
   children
 }: Parameters<typeof GitHubParticipantSettings>[0]): React.JSX.Element {
+  const t = useTranslate()
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   const [revision, setRevision] = useState(0)
   const [saving, setSaving] = useState(false)
@@ -169,30 +181,35 @@ function ParticipantSettingsForHost({
     const generation = accountChangeGeneration.current
     setSaving(true)
     setError(null)
-    try {
-      const status = await callRuntimeRpc<GitHubParticipantSettingsStatus>(
-        runtimeTarget,
-        `github.participants.${method}`,
-        { repo: repoId, ...params }
-      )
-      if (!active.current) {
-        return false
+    return runParticipantSettingsMutation(
+      async () => {
+        try {
+          const status = await callRuntimeRpc<GitHubParticipantSettingsStatus>(
+            runtimeTarget,
+            `github.participants.${method}`,
+            { repo: repoId, ...params }
+          )
+          if (!active.current) {
+            return false
+          }
+          if (generation === accountChangeGeneration.current) {
+            applyStatus(status)
+          }
+          return true
+        } catch (cause) {
+          if (active.current) {
+            setError(cause instanceof Error ? cause.message : String(cause))
+          }
+          return false
+        }
+      },
+      () => {
+        busy.current = false
+        if (active.current) {
+          setSaving(false)
+        }
       }
-      if (generation === accountChangeGeneration.current) {
-        applyStatus(status)
-      }
-      return true
-    } catch (cause) {
-      if (active.current) {
-        setError(cause instanceof Error ? cause.message : String(cause))
-      }
-      return false
-    } finally {
-      busy.current = false
-      if (active.current) {
-        setSaving(false)
-      }
-    }
+    )
   }
 
   if (state.kind === 'legacy') {
@@ -201,7 +218,7 @@ function ParticipantSettingsForHost({
   if (state.kind === 'loading') {
     return (
       <p className="text-xs text-muted-foreground" role="status">
-        {translate('settings.githubParticipants.loading', 'Checking GitHub account access…')}
+        {t('settings.githubParticipants.loading', 'Checking GitHub account access…')}
       </p>
     )
   }
@@ -212,7 +229,7 @@ function ParticipantSettingsForHost({
           {state.message}
         </p>
         <Button size="sm" variant="outline" onClick={() => setRevision((value) => value + 1)}>
-          {translate('settings.githubParticipants.retry', 'Retry')}
+          {t('settings.githubParticipants.retry', 'Retry')}
         </Button>
       </div>
     )
@@ -227,13 +244,13 @@ function ParticipantSettingsForHost({
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-1">
               <Label htmlFor={toggleId}>
-                {translate(
+                {t(
                   'settings.githubParticipants.enable',
                   'Use separate GitHub accounts for members'
                 )}
               </Label>
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'settings.githubParticipants.description',
                   'Assign paired devices and allowed accounts to each member on this server. Members choose their own account for this project.'
                 )}
@@ -248,7 +265,7 @@ function ParticipantSettingsForHost({
           </div>
           {status.enabled ? (
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'settings.githubParticipants.enforcement',
                 'Devices without a member or a selected account cannot make project GitHub calls. The server owner continues using the account below.'
               )}
@@ -268,7 +285,7 @@ function ParticipantSettingsForHost({
                     setError(null)
                   }}
                 >
-                  {translate('settings.githubParticipants.edit', 'Edit')}
+                  {t('settings.githubParticipants.edit', 'Edit')}
                 </Button>
                 <Button
                   size="sm"
@@ -279,7 +296,7 @@ function ParticipantSettingsForHost({
                     setEditor(null)
                   }}
                 >
-                  {translate('settings.githubParticipants.remove', 'Remove')}
+                  {t('settings.githubParticipants.remove', 'Remove')}
                 </Button>
               </div>
             </div>
@@ -287,7 +304,7 @@ function ParticipantSettingsForHost({
           {removing ? (
             <div className="space-y-2 rounded-md border p-3">
               <p className="text-xs">
-                {translate(
+                {t(
                   'settings.githubParticipants.removePrompt',
                   'Remove {{name}} from this server? Their devices will lose member access.',
                   { name: removing.name }
@@ -306,7 +323,7 @@ function ParticipantSettingsForHost({
                     })
                   }
                 >
-                  {translate('settings.githubParticipants.confirmRemove', 'Remove member')}
+                  {t('settings.githubParticipants.confirmRemove', 'Remove member')}
                 </Button>
                 <Button
                   size="sm"
@@ -314,7 +331,7 @@ function ParticipantSettingsForHost({
                   disabled={saving}
                   onClick={() => setRemoving(null)}
                 >
-                  {translate('settings.githubParticipants.cancel', 'Cancel')}
+                  {t('settings.githubParticipants.cancel', 'Cancel')}
                 </Button>
               </div>
             </div>
@@ -346,7 +363,7 @@ function ParticipantSettingsForHost({
                 setRemoving(null)
               }}
             >
-              {translate('settings.githubParticipants.add', 'Add member')}
+              {t('settings.githubParticipants.add', 'Add member')}
             </Button>
           )}
         </div>
@@ -362,14 +379,11 @@ function ParticipantSettingsForHost({
         <>
           {status.enabled ? (
             <p className="text-xs font-semibold">
-              {translate(
-                'settings.githubParticipants.ownerAccount',
-                'Server owner’s project account'
-              )}
+              {t('settings.githubParticipants.ownerAccount', 'Server owner’s project account')}
             </p>
           ) : (
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'settings.githubParticipants.sharedAccount',
                 'This account binding is shared by clients using this project on this server.'
               )}

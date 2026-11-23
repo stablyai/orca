@@ -100,6 +100,18 @@ export function trackGitHubMutationCacheWrite(key: string): {
   }
 }
 
+export async function runWithGitHubMutationCacheWrite<T>(
+  key: string | null,
+  run: (write: Pick<ReturnType<typeof trackGitHubMutationCacheWrite>, 'isCurrent'>) => Promise<T>
+): Promise<T> {
+  const write = key === null ? null : trackGitHubMutationCacheWrite(key)
+  try {
+    return await run({ isCurrent: () => write?.isCurrent() !== false })
+  } finally {
+    write?.dispose()
+  }
+}
+
 let providerRequestSequence = 0
 
 /** Stamp identifying one provider request, captured before it awaits so it can recheck ownership after. */

@@ -22,6 +22,7 @@ export async function resolveGitHubParticipantJobProof(
   caller: RpcCallerIdentity | undefined,
   evidence: OrchestrationCompatibilityEvidence | undefined
 ): Promise<GitHubExecutionIdentity | undefined> {
+  await Promise.all([deps.registry.ready(), deps.jobs.ready()])
   if (caller?.kind !== 'local-cli' || !evidence) {
     return undefined
   }

@@ -32,20 +32,20 @@ afterEach(() => {
   }
 })
 
-function fixture() {
+async function fixture() {
   const directory = mkdtempSync(join(tmpdir(), 'orca-github-routing-'))
   directories.push(directory)
   const registry = new GitHubParticipantRegistry(directory, () => ({}))
   for (const id of ['alice', 'bob']) {
-    registry.createParticipant({
+    await registry.createParticipant({
       name: id,
       deviceIds: [id],
       allowedAccounts: [{ host: 'github.com', user: id }]
     })
   }
-  registry.setRepoEnabled('repo', true)
+  await registry.setRepoEnabled('repo', true)
   for (const id of ['alice', 'bob']) {
-    registry.selectAccount('repo', id, { host: 'github.com', user: id })
+    await registry.selectAccount('repo', id, { host: 'github.com', user: id })
   }
   const repo: Repo = {
     id: 'repo',
@@ -78,7 +78,7 @@ function fixture() {
 
 describe('runtime GitHub participant routing', () => {
   it('routes simultaneous real RPC mutations through each participant account', async () => {
-    const { dispatcher, repo } = fixture()
+    const { dispatcher, repo } = await fixture()
     const responses = await Promise.all(
       ['alice', 'bob'].map((deviceId) =>
         dispatcher.dispatch(
@@ -105,7 +105,7 @@ describe('runtime GitHub participant routing', () => {
   })
 
   it('refuses unknown callers before mutation while plain Git remains usable', async () => {
-    const { dispatcher, runtime } = fixture()
+    const { dispatcher, runtime } = await fixture()
     const response = await dispatcher.dispatch(
       {
         id: 'unknown',
@@ -123,9 +123,9 @@ describe('runtime GitHub participant routing', () => {
   })
 
   it('replays host-recorded terminal ownership and ignores job claims from another paired member', async () => {
-    const { runtime, dispatcher, registry, directory } = fixture()
+    const { runtime, dispatcher, registry, directory } = await fixture()
     const selected = registry.resolveAccount('repo', 'alice')!
-    new GitHubParticipantJobs(directory).bindTerminal('pane', 'workspace', 'launch', {
+    await new GitHubParticipantJobs(directory).bindTerminal('pane', 'workspace', 'launch', {
       repoId: 'repo',
       ...selected
     })
@@ -167,7 +167,7 @@ describe('runtime GitHub participant routing', () => {
     expect(createIssueMock.mock.calls.at(-1)?.at(-1)).toMatchObject({
       ghAccount: { host: 'github.com', user: 'bob' }
     })
-    registry.updateParticipant(selected.participantId, { allowedAccounts: [] })
+    await registry.updateParticipant(selected.participantId, { allowedAccounts: [] })
     expect(await dispatcher.dispatch(request, { caller: { kind: 'local-cli' } })).toMatchObject({
       ok: false,
       error: { code: 'github_participant_account_not_allowed' }
@@ -176,7 +176,7 @@ describe('runtime GitHub participant routing', () => {
   })
 
   it('rejects repo-less GitHub operations before ambient execution', async () => {
-    const { runtime } = fixture()
+    const { runtime } = await fixture()
     expect(() =>
       runWithActiveRpcCaller({ kind: 'paired-device', deviceId: 'alice' }, () =>
         runtime.getGitHubRateLimit()

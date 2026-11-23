@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -23,14 +23,52 @@ function fixture() {
 }
 
 describe('durable participant job bindings', () => {
-  it('reloads launch-bound identity without persisting the launch token', () => {
+  it('latches malformed storage without rejecting readiness or overwriting the file', async () => {
     const { path, jobs } = fixture()
-    jobs.bindTerminal('pane', 'workspace', 'launch-secret', alice)
-    jobs.bindTerminal('pane', 'workspace', 'launch-secret', { ...alice, account: bob.account })
-    expect(() => jobs.bindTerminal('pane', 'workspace', 'launch-secret', bob)).toThrow(
+    await jobs.ready()
+    const file = join(path, 'github-participant-jobs.json')
+    writeFileSync(file, '{broken')
+    const reopened = new GitHubParticipantJobs(path)
+    await expect(reopened.ready()).resolves.toBeUndefined()
+    expect(() => reopened.session('session', 'workspace')).toThrow(
+      'github_participant_jobs_unavailable'
+    )
+    await expect(reopened.bindSession('session', 'workspace', alice)).rejects.toThrow(
+      'github_participant_jobs_unavailable'
+    )
+    expect(readFileSync(file, 'utf8')).toBe('{broken')
+  })
+
+  it('serializes concurrent bindings without losing accepted owners', async () => {
+    const { path, jobs } = fixture()
+    const results = await Promise.allSettled([
+      jobs.bindSession('session', 'workspace', alice),
+      jobs.bindSession('session', 'workspace', bob),
+      jobs.bindSession('other-session', 'workspace', bob)
+    ])
+    expect(results.map((result) => result.status)).toEqual(['fulfilled', 'rejected', 'fulfilled'])
+    expect(results[1]).toMatchObject({
+      status: 'rejected',
+      reason: new Error('github_participant_owner_mismatch')
+    })
+    const reopened = new GitHubParticipantJobs(path)
+    await reopened.ready()
+    expect(reopened.session('session', 'workspace')).toEqual(alice)
+    expect(reopened.session('other-session', 'workspace')).toEqual(bob)
+  })
+
+  it('reloads launch-bound identity without persisting the launch token', async () => {
+    const { path, jobs } = fixture()
+    await jobs.bindTerminal('pane', 'workspace', 'launch-secret', alice)
+    await jobs.bindTerminal('pane', 'workspace', 'launch-secret', {
+      ...alice,
+      account: bob.account
+    })
+    await expect(jobs.bindTerminal('pane', 'workspace', 'launch-secret', bob)).rejects.toThrow(
       'github_participant_owner_mismatch'
     )
     const reopened = new GitHubParticipantJobs(path)
+    await reopened.ready()
     expect(reopened.terminal('pane', 'workspace', 'launch-secret')).toEqual(alice)
     expect(reopened.terminal('pane', 'workspace', 'other-secret')).toBeUndefined()
     expect(reopened.terminal('pane', 'other-workspace', 'launch-secret')).toBeUndefined()
@@ -39,17 +77,18 @@ describe('durable participant job bindings', () => {
     )
   })
 
-  it('keeps the accepted session identity and rejects another member claiming the id', () => {
+  it('keeps the accepted session identity and rejects another member claiming the id', async () => {
     const { path, jobs } = fixture()
-    jobs.bindSession('session', 'workspace', alice)
+    await jobs.bindSession('session', 'workspace', alice)
     const reopened = new GitHubParticipantJobs(path)
-    expect(
+    await reopened.ready()
+    await expect(
       reopened.bindSession('session', 'workspace', { ...alice, account: bob.account })
-    ).toEqual(alice)
-    expect(() => reopened.bindSession('session', 'workspace', bob)).toThrow(
+    ).resolves.toEqual(alice)
+    await expect(reopened.bindSession('session', 'workspace', bob)).rejects.toThrow(
       'github_participant_owner_mismatch'
     )
-    expect(() => reopened.bindSession('session', 'other-workspace', alice)).toThrow(
+    await expect(reopened.bindSession('session', 'other-workspace', alice)).rejects.toThrow(
       'github_participant_owner_mismatch'
     )
     expect(reopened.session('session', 'workspace')).toEqual(alice)

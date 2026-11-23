@@ -29,13 +29,14 @@ describe('GitHub participant execution options', () => {
     const release = installGitHubProjectAccounts({ getRepos: () => [repo] })
     try {
       const registry = new GitHubParticipantRegistry(directory, () => ({}))
-      const member = registry.createParticipant({
+      await registry.ready()
+      const member = await registry.createParticipant({
         name: 'Alice',
         deviceIds: ['device'],
         allowedAccounts: [account]
       })
-      registry.setRepoEnabled(repo.id, true)
-      registry.selectAccount(repo.id, 'device', account)
+      await registry.setRepoEnabled(repo.id, true)
+      await registry.selectAccount(repo.id, 'device', account)
       const resolveGitHubAccount = runWithActiveRpcCaller(
         { kind: 'paired-device', deviceId: 'device' },
         () => createGitHubExecutionAccountResolver(registry, repo.id, repo.ghAccount)
@@ -48,7 +49,7 @@ describe('GitHub participant execution options', () => {
         const nested = ghRepoExecOptions(githubRepoContext(repo.path))
         expect(nested.ghAccount).toEqual(account)
         expect(nested.canStart?.()).toBe(true)
-        registry.updateParticipant(member.id, { allowedAccounts: [] })
+        await registry.updateParticipant(member.id, { allowedAccounts: [] })
         expect(() => nested.canStart?.()).toThrow('github_participant_account_not_allowed')
       })
     } finally {

@@ -1,9 +1,9 @@
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { Page } from '@stablyai/playwright-test'
+import { expect, type Page } from '@stablyai/playwright-test'
 import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
-import { expect, test as base } from './desktop/electron-fixtures/orca-app'
+import { test as base } from './desktop/electron-fixtures/orca-app'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedElectronClient,

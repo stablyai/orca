@@ -73,7 +73,9 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     )
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
-    const identity = captureGitHubExecutionIdentity(this.getGitHubParticipantRegistry(), repo.id)
+    const registry = this.getGitHubParticipantRegistry()
+    await registry?.ready()
+    const identity = captureGitHubExecutionIdentity(registry, repo.id)
     return runWithGitHubExecutionIdentity(identity, () =>
       withProjectWorktreeCreate(repo, async () => {
         const request = await applyWorkspaceCreatePluginHook(args, repo)

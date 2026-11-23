@@ -1,3 +1,4 @@
+import type { Repo } from '../../../shared/repository/repo-types'
 import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
 import { invalidateGitHubParticipantReads } from './github-participant-read-fencing'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -57,7 +58,7 @@ it('handles another device changing the shared member while Settings is closed',
 })
 
 it('changes Tasks owner bindings when a participant account changes without editing the shared repo binding', () => {
-  const repo = {
+  const repo: Repo = {
     id: 'repo',
     path: '/repo',
     displayName: 'Repo',
@@ -66,7 +67,7 @@ it('changes Tasks owner bindings when a participant account changes without edit
     executionHostId: 'runtime:account-owner',
     ghAccount: { host: 'github.com', user: 'shared' }
   }
-  const unrelated = { ...repo, executionHostId: 'runtime:other-owner' }
+  const unrelated: Repo = { ...repo, executionHostId: 'runtime:other-owner' }
   const before = githubTaskBinding(repo)
   const otherBefore = githubTaskBinding(unrelated)
   invalidateGitHubParticipantReads({ kind: 'environment', environmentId: 'account-owner' })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { refreshKey } from './pull-requests/refresh/pr-refresh-candidate-policy'
+import { refreshKey } from './client/lookup/pr-read-identity'
 
 const candidate = { repoPath: '/repo', branch: 'feature', linkedPRNumber: 42 }
 

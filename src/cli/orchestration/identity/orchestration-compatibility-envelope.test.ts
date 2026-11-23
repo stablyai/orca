@@ -19,13 +19,15 @@ describe('structured session job evidence', () => {
       ORCA_AGENT_SESSION_PROOF: 'spawn-proof'
     })
     const request = { remote: false, mutation: false, requestId: undefined }
-    expect(requests.envelopeFor('github.createIssue', request)).toEqual({
-      orchestrationCompatibilityEvidence: {
-        agentSessionId: 'session',
-        agentSessionSpawnToken: 'spawn-proof'
-      }
-    })
-    expect(requests.envelopeFor('github.createIssue', { ...request, remote: true })).toEqual({})
+    for (const method of ['github.createIssue', 'terminal.create', 'terminal.split']) {
+      expect(requests.envelopeFor(method, request)).toEqual({
+        orchestrationCompatibilityEvidence: {
+          agentSessionId: 'session',
+          agentSessionSpawnToken: 'spawn-proof'
+        }
+      })
+      expect(requests.envelopeFor(method, { ...request, remote: true })).toEqual({})
+    }
     expect(
       requests.envelopeFor('orchestration.status', { ...request, remote: true })
         .orchestrationCompatibilityEvidence

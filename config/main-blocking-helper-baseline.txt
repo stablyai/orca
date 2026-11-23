@@ -94,7 +94,6 @@
 1 src/main/bots/bot-group-store.ts # createBotGroupTables at store open (one-shot startup); its SQL is in main-blocking-sqlite-baseline
 1 src/main/bots/bot-items-link-join.ts
 1 src/main/bots/bot-look-around-store.ts
-1 src/main/bots/bot-memory-history.ts
 1 src/main/bots/bot-package-apply.ts
 2 src/main/bots/bot-structured-session-wiring.ts
 14 src/main/bots/bot-tool-credentials.ts
@@ -378,7 +377,6 @@
 1 src/main/connector-cloud/connector-cloud.ts
 3 src/main/connector-cloud/connector-host-install.ts
 7 src/main/connector-cloud/connector-token-mint.ts
-1 src/main/connector-cloud/connector-turn-outbox-file.ts # Windows only: the addon load (realpathSync, once per process) and a sync DACL read per staged file, plus a second after a failed check; I/O is async
 6 src/main/copilot/hook-service.ts
 6 src/main/core-desktop/desktop-core-composition.ts # moved unchanged from main-process-ready-runtime.ts (one-shot startup composition)
 1 src/main/core-desktop/desktop-core-shutdown.ts # moved unchanged from main-process-quit.ts (one-shot quit metadata clear)
@@ -508,7 +506,6 @@
 23 src/main/filesystem/atomic-file-publication.ts
 5 src/main/filesystem/durable-file-write.ts
 2 src/main/filesystem/local-file-io/filesystem-path-containment.ts
-7 src/main/filesystem/owner-only-durable-file-write.ts # Windows only: the addon load (realpathSync, once per process) and a sync DACL read per staged file, plus a second after a failed check; I/O is async
 4 src/main/filesystem/rolling-file-backup.ts # stageRollingFileBackup + commit (same sync copy and rename); the staged-copy rmSync moved into removeFileWithWindowsRetry so Windows AV locks are retried
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 5 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
@@ -875,7 +872,7 @@
 1 src/main/orcad/browser-providers/orcad-browser-startup.ts
 1 src/main/orcad/browser-providers/orcad-sidecar-runtime-client.ts
 7 src/main/orcad/credentials/orcad-plaintext-credential-migration.ts
-7 src/main/orcad/credentials/orcad-secret-key-record.ts
+6 src/main/orcad/credentials/orcad-secret-key-record.ts
 10 src/main/orcad/credentials/orcad-secret-key-resolution.ts
 2 src/main/orcad/credentials/orcad-secret-store-startup.ts
 3 src/main/orcad/credentials/orcad-secret-store.ts
@@ -1133,7 +1130,6 @@
 1 src/main/runtime/files/file-target.ts
 1 src/main/runtime/files/paths/orca-runtime-read-kitty-file.ts
 1 src/main/runtime/files/staged-file-save-commands.ts
-1 src/main/runtime/files/staged-file-saves.ts
 2 src/main/runtime/files/watch/file-watches.ts
 16 src/main/runtime/host-instance-identity.ts
 3 src/main/runtime/hosts/platform-probe/host-descriptor.ts
@@ -1570,8 +1566,8 @@
 2 src/shared/remote-runtime/serve-supervisor/serve-user-data-path.ts
 1 src/shared/secure-storage/bounded-secure-json-file.ts
 1 src/shared/secure-storage/secure-file-async-write.ts # Windows only: the ACL addon creates restricted files synchronously, so the async writer falls back to writeSecureFile there
-19 src/shared/secure-storage/secure-file.ts
-6 src/shared/secure-storage/secure-path-windows-acl.ts
+18 src/shared/secure-storage/secure-file.ts
+4 src/shared/secure-storage/secure-path-windows-acl.ts
 2 src/shared/secure-storage/windows-security-addon.ts
 3 src/shared/shell/command-resolution/cli-fs-reads.ts # sync runner for CLI lookups; isNativeExecutable moved here from node-cli-command-resolution (16 -> 13) so withCliRuntimeOnPath has an async form
 13 src/shared/shell/command-resolution/node-cli-command-resolution.ts

@@ -46,6 +46,7 @@ export class GitHubParticipantSettingsController {
     repoSelector: string,
     caller: RpcCallerIdentity | undefined
   ): Promise<GitHubParticipantSettingsStatus> {
+    await this.deps.registry.ready()
     const repo = await this.deps.resolveRepo(repoSelector)
     const enabled = this.deps.registry.isRepoEnabled(repo.id)
     if (isGitHubParticipantOwner(caller)) {
@@ -115,12 +116,10 @@ export class GitHubParticipantSettingsController {
       await this.validate(repo, account)
     }
     const { id, ...participant } = input
-    this.change(() => {
-      if (id) {
-        this.deps.registry.updateParticipant(id, participant)
-      } else {
-        this.deps.registry.createParticipant(participant)
-      }
+    await this.change(async () => {
+      await (id
+        ? this.deps.registry.updateParticipant(id, participant)
+        : this.deps.registry.createParticipant(participant))
     })
     return this.status(repo, caller)
   }
@@ -132,7 +131,7 @@ export class GitHubParticipantSettingsController {
   ): Promise<GitHubParticipantSettingsStatus> {
     requireOwner(caller)
     await this.deps.resolveRepo(repo)
-    this.change(() => this.deps.registry.removeParticipant(id))
+    await this.change(() => this.deps.registry.removeParticipant(id))
     return this.status(repo, caller)
   }
 
@@ -143,7 +142,7 @@ export class GitHubParticipantSettingsController {
   ): Promise<GitHubParticipantSettingsStatus> {
     requireOwner(caller)
     const repo = await this.deps.resolveRepo(repoSelector)
-    this.change(() => this.deps.registry.setRepoEnabled(repo.id, enabled))
+    await this.change(() => this.deps.registry.setRepoEnabled(repo.id, enabled))
     return this.status(repoSelector, caller)
   }
 
@@ -153,6 +152,7 @@ export class GitHubParticipantSettingsController {
     input: GhAccountBinding | null
   ): Promise<GitHubParticipantSettingsStatus> {
     const deviceId = requireDevice(caller)
+    await this.deps.registry.ready()
     const repo = await this.deps.resolveRepo(repoSelector)
     const self = this.deps.registry.getSelf(repo.id, deviceId)
     if (!self.enabled) {
@@ -169,7 +169,7 @@ export class GitHubParticipantSettingsController {
     if (account) {
       await this.validate(repoSelector, account)
     }
-    this.change(() => this.deps.registry.selectAccount(repo.id, deviceId, account))
+    await this.change(() => this.deps.registry.selectAccount(repo.id, deviceId, account))
     return this.status(repoSelector, caller)
   }
 
@@ -182,9 +182,9 @@ export class GitHubParticipantSettingsController {
     }
   }
 
-  private change(write: () => void): void {
+  private async change(write: () => Promise<void>): Promise<void> {
     try {
-      write()
+      await write()
     } finally {
       // A failed durable write can already have published; retire cached authority either way.
       this.deps.onChanged?.()

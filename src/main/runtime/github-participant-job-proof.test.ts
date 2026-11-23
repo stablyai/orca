@@ -12,28 +12,30 @@ afterEach(() => {
     rmSync(path, { recursive: true, force: true })
   }
 })
-function fixture() {
+async function fixture() {
   const path = mkdtempSync(join(tmpdir(), 'orca-job-proof-'))
   directories.push(path)
   const registry = new GitHubParticipantRegistry(path, () => ({}))
+  await registry.ready()
   const account = { host: 'github.com', user: 'alice' }
-  const participant = registry.createParticipant({
+  const participant = await registry.createParticipant({
     name: 'Alice',
     deviceIds: ['alice'],
     allowedAccounts: [account]
   })
-  registry.setRepoEnabled('repo', true)
-  registry.selectAccount('repo', 'alice', account)
+  await registry.setRepoEnabled('repo', true)
+  await registry.selectAccount('repo', 'alice', account)
   const identity = { repoId: 'repo', participantId: participant.id, account }
   const jobs = new GitHubParticipantJobs(path)
+  await jobs.ready()
   const record = agentSessionRecordFixture()
-  jobs.bindSession(record.sessionId, record.location.workspaceId, identity)
+  await jobs.bindSession(record.sessionId, record.location.workspaceId, identity)
   return { path, registry, jobs, identity, record }
 }
 
 describe('participant job proof', () => {
   it('replays a persisted session snapshot using the current host lease token', async () => {
-    const { path, registry, identity, record } = fixture()
+    const { path, registry, identity, record } = await fixture()
     const deps = {
       registry,
       jobs: new GitHubParticipantJobs(path),
@@ -65,14 +67,14 @@ describe('participant job proof', () => {
         evidence
       )
     ).toBeUndefined()
-    registry.updateParticipant(identity.participantId, { allowedAccounts: [] })
+    await registry.updateParticipant(identity.participantId, { allowedAccounts: [] })
     await expect(
       resolveGitHubParticipantJobProof(deps, { kind: 'local-cli' }, evidence)
     ).rejects.toThrow('github_participant_account_not_allowed')
   })
 
   it('refuses retired and relocated structured owners', async () => {
-    const { registry, jobs, record } = fixture()
+    const { registry, jobs, record } = await fixture()
     const evidence = { agentSessionId: record.sessionId, agentSessionSpawnToken: 'spawn-owner' }
     const deps = { registry, jobs, readSession: async () => record, verifyTerminal: () => null }
     record.lease.unreconciled = true
@@ -87,8 +89,8 @@ describe('participant job proof', () => {
   })
 
   it('uses terminal proof and an exact stored launch binding, never a workspace claim', async () => {
-    const { registry, jobs, identity } = fixture()
-    jobs.bindTerminal('pane', 'workspace', 'launch', identity)
+    const { registry, jobs, identity } = await fixture()
+    await jobs.bindTerminal('pane', 'workspace', 'launch', identity)
     const evidence = { terminalHandle: 'term', paneKey: 'pane', launchToken: 'launch' }
     const deps = {
       registry,

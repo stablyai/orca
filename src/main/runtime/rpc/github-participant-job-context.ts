@@ -7,7 +7,22 @@ import {
 } from '../github-participant-execution'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { RpcCallerIdentity } from './callers/rpc-caller-identity'
-import type { RpcRequest } from './core'
+import type { RpcContext, RpcRequest } from './core'
+import { runWithActiveRpcCaller } from './callers/active-call'
+
+export function runWithGitHubParticipantCall<T>(
+  runtime: OrcaRuntimeService,
+  request: RpcRequest,
+  context: Pick<RpcContext, 'caller' | 'deviceSelf'>,
+  run: () => T
+): Promise<Awaited<T>> {
+  return runWithActiveRpcCaller(
+    context.caller,
+    () => runWithGitHubParticipantJobContext(runtime, request, context.caller, run),
+    request.orchestrationCompatibilityEvidence?.agentSessionId,
+    context.deviceSelf?.clientInstanceId()
+  )
+}
 
 export async function runWithGitHubParticipantJobContext<T>(
   runtime: OrcaRuntimeService,
@@ -30,6 +45,7 @@ async function resolveJobContext<T>(
   run: () => T
 ): Promise<Awaited<T>> {
   const registry = runtime.getGitHubParticipantRegistry?.()
+  await registry?.ready()
   if (
     caller?.kind !== 'local-cli' ||
     !request.orchestrationCompatibilityEvidence ||

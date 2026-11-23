@@ -1,3 +1,5 @@
+import { normalizeGhAccountBinding } from '../../../../shared/github/accounts/account-binding'
+import type { PRBranchReadRequest } from './pr-branch-read-resources'
 import { ghRepoExecOptions, githubRepoContext } from '../../repositories/github-repository-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
@@ -161,4 +163,24 @@ export function cachedPRBranchOutcome(
   ...request: Parameters<typeof prBranchReadKeys>
 ): ReturnType<typeof readTimedPROutcome> {
   return readTimedPROutcome(...prBranchReadKeys(...request))
+}
+
+export function refreshKey(candidate: PRBranchReadRequest): string {
+  const connectionScope = candidate.connectionId ?? 'local'
+  const runtimeScope = candidate.connectionId
+    ? 'remote'
+    : `runtime:${candidate.localGitOptions?.wslDistro ? `wsl:${candidate.localGitOptions.wslDistro}` : 'host'}`
+  const binding = candidate.localGitOptions?.ghAccount
+  const accountScope = binding
+    ? `::account:${githubReadExecutionScope(
+        { ghAccount: normalizeGhAccountBinding(binding) ?? binding },
+        {}
+      )}`
+    : ''
+  if (typeof candidate.linkedPRNumber === 'number') {
+    // The same number names different PRs in a fork and its parent.
+    const url = candidate.linkedPRUrl ? `::${candidate.linkedPRUrl}` : ''
+    return `${connectionScope}::${runtimeScope}${accountScope}::${candidate.repoPath}::pr::${candidate.linkedPRNumber}${url}`
+  }
+  return `${connectionScope}::${runtimeScope}${accountScope}::${candidate.repoPath}::branch::${candidate.branch}`
 }

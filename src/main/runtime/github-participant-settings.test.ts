@@ -20,19 +20,23 @@ afterEach(() => {
   }
 })
 
-function fixture() {
+async function fixture() {
   const directory = mkdtempSync(join(tmpdir(), 'orca-github-participant-settings-'))
   directories.push(directory)
   const registry = new GitHubParticipantRegistry(directory, (id) =>
     id === 'alice-device' || id === 'bob-device' ? {} : null
   )
-  const member = registry.createParticipant({
+  const member = await registry.createParticipant({
     name: 'Alice',
     deviceIds: ['alice-device'],
     allowedAccounts: [alice]
   })
-  registry.createParticipant({ name: 'Bob', deviceIds: ['bob-device'], allowedAccounts: [bob] })
-  registry.setRepoEnabled('repo', true)
+  await registry.createParticipant({
+    name: 'Bob',
+    deviceIds: ['bob-device'],
+    allowedAccounts: [bob]
+  })
+  await registry.setRepoEnabled('repo', true)
   const validate = vi.fn(
     async (
       _repo: string,
@@ -53,7 +57,7 @@ function fixture() {
 
 describe('GitHub participant settings', () => {
   it('keeps an attested member job from receiving local CLI owner powers', async () => {
-    const { controller, registry, member } = fixture()
+    const { controller, registry, member } = await fixture()
     const identity = { repoId: 'repo', participantId: member.id, account: alice }
     await runWithGitHubExecutionIdentity(identity, async () => {
       const job = { kind: 'local-cli' } as const
@@ -68,7 +72,7 @@ describe('GitHub participant settings', () => {
     expect(registry.isRepoEnabled('repo')).toBe(true)
   })
   it('exposes only self accounts and keeps member selection separate from shared binding', async () => {
-    const { controller, registry } = fixture()
+    const { controller, registry } = await fixture()
     const status = await controller.status('repo', caller)
     expect(status).toMatchObject({
       enabled: true,
@@ -84,7 +88,7 @@ describe('GitHub participant settings', () => {
   })
 
   it('refuses a member granting accounts, assigning devices, removing members or disabling mode', async () => {
-    const { controller, registry, member } = fixture()
+    const { controller, registry, member } = await fixture()
     await expect(
       controller.save('repo', caller, {
         id: member.id,
@@ -102,7 +106,7 @@ describe('GitHub participant settings', () => {
   })
 
   it('refuses unassigned account before credential lookup and refuses unavailable credentials before saving', async () => {
-    const { controller, registry, validate } = fixture()
+    const { controller, registry, validate } = await fixture()
     await expect(controller.select('repo', caller, bob)).rejects.toThrow('account_not_allowed')
     expect(validate).not.toHaveBeenCalled()
     validate.mockResolvedValue({ ok: false, error: 'gh_bound_account_unavailable' })
@@ -111,7 +115,7 @@ describe('GitHub participant settings', () => {
   })
 
   it('reports missing membership without exposing or falling back to shared account', async () => {
-    const { controller } = fixture()
+    const { controller } = await fixture()
     const result = await controller.status('repo', { kind: 'paired-device', deviceId: 'unknown' })
     expect(result).toMatchObject({ enabled: true, isOwner: false, allowedAccounts: [] })
     expect(result.error).toBeTruthy()
@@ -119,7 +123,7 @@ describe('GitHub participant settings', () => {
   })
 
   it('lets owner administer members and returns confirmed persisted state', async () => {
-    const { controller, registry, member } = fixture()
+    const { controller, registry, member } = await fixture()
     await controller.save('repo', owner, {
       id: member.id,
       name: 'Alice renamed',

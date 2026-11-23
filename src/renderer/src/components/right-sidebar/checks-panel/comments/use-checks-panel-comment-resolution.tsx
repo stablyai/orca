@@ -1,4 +1,4 @@
-import { trackGitHubMutationCacheWrite } from '@/store/github/requests/request-coordination'
+import { runWithGitHubMutationCacheWrite } from '@/store/github/requests/request-coordination'
 import { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
 import { useAgentDetectionTargetForWorktree } from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
 import { resolveChecksActionAgent } from '@/lib/source-control/ai/source-control-agent-picker'
@@ -129,8 +129,7 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
         pr?.prRepo,
         pr?.headSha
       )
-      const cacheWrite = trackGitHubMutationCacheWrite(prCacheKey)
-      try {
+      return runWithGitHubMutationCacheWrite(prCacheKey, async (cacheWrite) => {
         let previousThreadComments: PRComment[] = []
         let ok: boolean
         try {
@@ -169,9 +168,7 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
           }
         }
         return ok
-      } finally {
-        cacheWrite.dispose()
-      }
+      })
     },
     [
       activeGitLabReview,

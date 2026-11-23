@@ -1,3 +1,4 @@
+import { refreshKey } from '../../client/lookup/pr-read-identity'
 import { sharedPromiseSettlementWaiters } from '../../../../shared/concurrency/promise-settlement-waiters'
 import { runImmediatePRRefresh } from './pr-refresh-immediate-read'
 import type {
@@ -11,7 +12,6 @@ import type { PreparedPRBranchRead } from '../../client/lookup/pr-for-branch-out
 import {
   aliasFromCandidate,
   isBudgetedBackground,
-  refreshKey,
   validateCandidate
 } from './pr-refresh-candidate-policy'
 import {

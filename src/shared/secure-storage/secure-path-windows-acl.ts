@@ -1,6 +1,10 @@
 import { writeFileSync } from 'node:fs'
 import { reportSecurePathHardening as report } from './secure-path-hardening-report'
-import { loadWindowsSecurity, type WindowsSecurity } from './windows-security-addon'
+import {
+  loadWindowsSecurity,
+  loadWindowsSecurityAsync,
+  type WindowsSecurity
+} from './windows-security-addon'
 import {
   findPrivateDaclViolation,
   findSecureDaclViolation,
@@ -8,9 +12,9 @@ import {
 } from './windows-secure-dacl'
 
 /** Restrict directories off-thread because propagation walks all descendants; report failures and resolve false for retry. */
-export function restrictWindowsDirectory(dirPath: string): Promise<boolean> {
-  const security = securityFor(dirPath)
-  return security ? restrictAsync(security, dirPath, true) : Promise.resolve(false)
+export async function restrictWindowsDirectory(dirPath: string): Promise<boolean> {
+  const security = usableSecurity(dirPath, await loadWindowsSecurityAsync())
+  return security ? restrictAsync(security, dirPath, true) : false
 }
 
 async function restrictAsync(
@@ -35,9 +39,9 @@ async function restrictAsync(
 }
 
 /** Restricts one file on the thread pool; never rejects, resolves whether the DACL holds. */
-export function restrictWindowsFile(filePath: string): Promise<boolean> {
-  const security = securityFor(filePath)
-  return security ? restrictAsync(security, filePath, false) : Promise.resolve(false)
+export async function restrictWindowsFile(filePath: string): Promise<boolean> {
+  const security = usableSecurity(filePath, await loadWindowsSecurityAsync())
+  return security ? restrictAsync(security, filePath, false) : false
 }
 
 /** Verifies and, only when that fails, rewrites the DACL on the calling thread. */
@@ -143,7 +147,13 @@ function violationOf(
 let reportedLoadFailure = false
 
 function securityFor(targetPath: string): WindowsSecurity | null {
-  const loaded = loadWindowsSecurity()
+  return usableSecurity(targetPath, loadWindowsSecurity())
+}
+
+function usableSecurity(
+  targetPath: string,
+  loaded: WindowsSecurity | { error: string }
+): WindowsSecurity | null {
   if ('error' in loaded) {
     // Once per process: a missing addon is a packaging fault, and every secure write would repeat it.
     if (!reportedLoadFailure) {

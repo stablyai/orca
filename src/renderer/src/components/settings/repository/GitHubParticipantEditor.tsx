@@ -6,7 +6,7 @@ import { Button } from '../../ui/button'
 import { Checkbox } from '../../ui/checkbox'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function GitHubParticipantEditor({
   participant,
@@ -25,6 +25,7 @@ export function GitHubParticipantEditor({
   onSave: (value: Omit<GitHubParticipant, 'id'> & { id?: string }) => Promise<void>
   onCancel: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const nameId = useId()
   const [name, setName] = useState(participant?.name ?? '')
   const [deviceIds, setDeviceIds] = useState(participant?.deviceIds ?? [])
@@ -58,9 +59,7 @@ export function GitHubParticipantEditor({
       }}
     >
       <div className="space-y-1">
-        <Label htmlFor={nameId}>
-          {translate('settings.githubParticipants.memberName', 'Member name')}
-        </Label>
+        <Label htmlFor={nameId}>{t('settings.githubParticipants.memberName', 'Member name')}</Label>
         <Input
           id={nameId}
           value={name}
@@ -72,11 +71,11 @@ export function GitHubParticipantEditor({
       </div>
       <fieldset className="space-y-2" disabled={saving}>
         <legend className="text-xs font-semibold">
-          {translate('settings.githubParticipants.devices', 'Paired devices')}
+          {t('settings.githubParticipants.devices', 'Paired devices')}
         </legend>
         {knownDevices.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'settings.githubParticipants.noDevices',
               'Pair a device with this server before assigning it to a member.'
             )}
@@ -110,11 +109,11 @@ export function GitHubParticipantEditor({
       </fieldset>
       <fieldset className="space-y-2" disabled={saving}>
         <legend className="text-xs font-semibold">
-          {translate('settings.githubParticipants.allowedAccounts', 'Allowed GitHub accounts')}
+          {t('settings.githubParticipants.allowedAccounts', 'Allowed GitHub accounts')}
         </legend>
         {knownAccounts.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'settings.githubParticipants.noAccounts',
               'Sign in to GitHub CLI on this server, then refresh accounts.'
             )}
@@ -145,10 +144,10 @@ export function GitHubParticipantEditor({
       </fieldset>
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={saving || !name.trim()}>
-          {translate('settings.githubParticipants.save', 'Save member')}
+          {t('settings.githubParticipants.save', 'Save member')}
         </Button>
         <Button type="button" size="sm" variant="ghost" disabled={saving} onClick={onCancel}>
-          {translate('settings.githubParticipants.cancel', 'Cancel')}
+          {t('settings.githubParticipants.cancel', 'Cancel')}
         </Button>
       </div>
     </form>
