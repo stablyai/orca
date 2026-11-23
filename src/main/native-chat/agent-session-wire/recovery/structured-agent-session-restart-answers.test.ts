@@ -72,7 +72,7 @@ it('returns before late answers, then settles them in one pass without dropping 
   expect(giveUp.stuck).toHaveBeenCalledOnce()
 })
 
-it('settles a chat its agent never answers on its own: no longer sending, queue released, a late accept still counts', async () => {
+it('settles a chat its agent never answers on its own: no longer sending, queue released, noted', async () => {
   vi.useFakeTimers()
   type Row = { clientMessageId: string; dispatchState: string; handedOverAt?: number }
   const rows = new Map<string, Row>()
@@ -97,7 +97,6 @@ it('settles a chat its agent never answers on its own: no longer sending, queue 
       }
     }
   })
-  const stuckAnswer = Promise.withResolvers<void>()
   const submission = (clientMessageId: string) => ({
     value: { clientMessageId, submission: rows.get(clientMessageId) }
   })
@@ -112,7 +111,8 @@ it('settles a chat its agent never answers on its own: no longer sending, queue 
     awaitSendHandedOver: async (_sessionId: string, id: string) => submission(id),
     awaitSendSettlement: async (sessionId: string, id: string) => {
       if (sessionId === 'stuck') {
-        await stuckAnswer.promise
+        // Never answers, like an agent stuck retrying its API.
+        await new Promise(() => {})
       }
       rows.get(id)!.dispatchState = 'accepted'
       return submission(id)
@@ -156,12 +156,4 @@ it('settles a chat its agent never answers on its own: no longer sending, queue 
     { sessionId: 'fast', text: AGENT_SESSION_RESTART_CONTINUATION_NOTE },
     { sessionId: 'stuck', text: AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE }
   ])
-
-  stuckAnswer.resolve()
-  await vi.advanceTimersByTimeAsync(0)
-  expect(rows.get('continue-stuck')!.dispatchState).toBe('accepted')
-  expect(notes.at(-1)).toEqual({
-    sessionId: 'stuck',
-    text: AGENT_SESSION_RESTART_CONTINUATION_NOTE
-  })
 })

@@ -68,16 +68,22 @@ export function createRestartAnswers() {
     const filedEarly = new Set(await settleChats((sessionId) => !waiting.has(sessionId), false))
     // One deadline for the whole action, not a timer per chat.
     const settled = withTimeout(
-      Promise.all([...waiting].map((sessionId) => answers.get(sessionId)?.answered)),
+      Promise.all(
+        [...waiting].map((sessionId) => answers.get(sessionId)?.answered ?? Promise.resolve())
+      ),
       RESTART_ANSWER_WAIT_MS,
       undefined
     )
       .then(async () => {
         // Each unanswered chat settles on its own: its row, its queue and its note.
         const unanswered = [...waiting].filter((sessionId) => !outcomeOf(sessionId))
-        await Promise.all(unanswered.map((sessionId) => answers.get(sessionId)?.giveUp()))
+        await Promise.all(
+          unanswered.map((sessionId) => answers.get(sessionId)?.giveUp() ?? Promise.resolve())
+        )
       })
-      .then(() => settleChats((sessionId) => !filedEarly.has(sessionId), true))
+      .then(async () => {
+        await settleChats((sessionId) => !filedEarly.has(sessionId), true)
+      })
       .catch(() => {
         logger.warn('settling late restart continuations failed', {
           scope: 'restart-offer-settle',
@@ -90,7 +96,8 @@ export function createRestartAnswers() {
   return {
     continued,
     /** A chat whose continuation was handed over; `answer` resolves with its agent's answer and
-     *  `giveUp` settles it as unconfirmed when the action's deadline passes first. */
+     *  `giveUp` settles it as unconfirmed when the action's deadline passes first. The agent may
+     *  still take it later; that updates the message's delivery, not the note. */
     handedOver(
       sessionId: string,
       answer: Promise<StructuredAgentSessionContinuationOutcome>,
