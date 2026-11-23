@@ -52,6 +52,9 @@ export function createBotMemoryJournal(deps: {
       })
     }
     // Only after the lines are written: a failed write leaves them for the next pass.
+    if (!deps.bots().some(({ id }) => id === bot.id)) {
+      return
+    }
     const mark = Math.max(from, ...closed.map((item) => item.closedAt))
     const atMark = closed.flatMap((item) => (item.closedAt === mark ? [item.number] : []))
     atSince.set(bot.id, new Set([...(mark === from ? written : []), ...atMark]))
@@ -77,6 +80,14 @@ export function createBotMemoryJournal(deps: {
   return {
     itemsChanged: (botIds) => {
       const wanted = new Set(botIds)
+      const live = new Set(deps.bots().map(({ id }) => id))
+      // A deleted bot's watermark goes with it.
+      for (const id of since.keys()) {
+        if (!live.has(id)) {
+          since.delete(id)
+          atSince.delete(id)
+        }
+      }
       for (const bot of deps.bots()) {
         if (wanted.has(bot.id)) {
           run(bot)
