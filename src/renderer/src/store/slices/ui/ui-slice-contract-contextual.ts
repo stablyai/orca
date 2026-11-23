@@ -43,6 +43,7 @@ export type UISliceContextual = {
     | 'forget-ssh-workspace'
     | 'confirm-add-project-from-folder'
     | 'confirm-non-git-folder'
+    | 'agent-task-group-name'
     | 'confirm-remove-folder'
     | 'confirm-sleep-twin'
     | 'add-repo'

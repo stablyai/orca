@@ -1,3 +1,4 @@
+import { normalizeAgentTaskGroupsByWorkspace } from '../../../shared/agent-task-groups/agent-task-groups'
 import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
 import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-listing/file-explorer-display-root'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
@@ -216,6 +217,11 @@ export function updatePersistedUI(
       sanitizedUpdates.notificationsMutedByWorktree !== undefined
         ? normalizeNotificationsMutedByWorktree(sanitizedUpdates.notificationsMutedByWorktree)
         : normalizeNotificationsMutedByWorktree(operations.state.ui?.notificationsMutedByWorktree),
+    agentTaskGroupsByWorkspace: normalizeAgentTaskGroupsByWorkspace(
+      sanitizedUpdates.agentTaskGroupsByWorkspace !== undefined
+        ? sanitizedUpdates.agentTaskGroupsByWorkspace
+        : operations.state.ui?.agentTaskGroupsByWorkspace
+    ),
     // Union dismissals so stale clients cannot revive one-time tips.
     featureTipsSeenIds:
       sanitizedUpdates.featureTipsSeenIds !== undefined

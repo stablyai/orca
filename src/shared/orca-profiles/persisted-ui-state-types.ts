@@ -1,3 +1,4 @@
+import type { AgentTaskGroupsByWorkspace } from '../agent-task-groups/agent-task-groups'
 import type { GitHistoryRefs } from '../git/history/git-history-types'
 import type { BotChatFold } from '../bots/bot-chat-tree'
 import type { JiraQuickFilterState } from '../jira/jira-quick-filters'
@@ -100,6 +101,8 @@ export type PersistedUIState = {
   showDotfilesByWorktree?: Record<string, boolean>
   /** Per-worktree notification mute. Missing entries inherit the default: not muted. */
   notificationsMutedByWorktree?: Record<string, boolean>
+  /** Sidebar task groups for agent conversations, by host-qualified workspace identity. Absent means none. */
+  agentTaskGroupsByWorkspace?: AgentTaskGroupsByWorkspace
   filterRepoIds: string[]
   /** Agents host scope stays separate from navigation filters; null means all hosts. */
   agentsVisibleHostIds?: VisibleWorkspaceHostIds

@@ -1,3 +1,4 @@
+import { normalizeAgentTaskGroupsByWorkspace } from '../../../../../shared/agent-task-groups/agent-task-groups'
 import { isProjectGroupHookTrustKey } from '../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { normalizeExplorerDisplayRootByWorktree } from '../../../../../shared/file-listing/file-explorer-display-root'
 import type { AppState } from '../../types'
@@ -254,7 +255,10 @@ export function sanitizePerWorktreePreferences(
   ui: PersistedUIState
 ): Pick<
   AppState,
-  'explorerDisplayRootByWorktree' | 'showDotfilesByWorktree' | 'notificationsMutedByWorktree'
+  | 'explorerDisplayRootByWorktree'
+  | 'showDotfilesByWorktree'
+  | 'notificationsMutedByWorktree'
+  | 'agentTaskGroupsByWorkspace'
 > {
   return {
     explorerDisplayRootByWorktree: normalizeExplorerDisplayRootByWorktree(
@@ -262,7 +266,8 @@ export function sanitizePerWorktreePreferences(
     ),
     showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
     // Same persisted shape as the dotfile map: a per-worktree boolean opt-in record.
-    notificationsMutedByWorktree: sanitizeShowDotfilesByWorktree(ui.notificationsMutedByWorktree)
+    notificationsMutedByWorktree: sanitizeShowDotfilesByWorktree(ui.notificationsMutedByWorktree),
+    agentTaskGroupsByWorkspace: normalizeAgentTaskGroupsByWorkspace(ui.agentTaskGroupsByWorkspace)
   }
 }
 

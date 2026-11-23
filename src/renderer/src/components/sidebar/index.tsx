@@ -62,6 +62,9 @@ const WorktreeVisibilityDialog = lazyWithRetry(
 const OrcaYamlTrustDialog = lazyWithRetry(
   () => import('./workspace-creation/hook-trust/OrcaYamlTrustDialog')
 )
+const AgentTaskGroupNameDialog = lazyWithRetry(
+  () => import('./workspace-card/task-groups/AgentTaskGroupNameDialog')
+)
 const ForgetSshWorkspaceDialog = lazyWithRetry(
   () => import('./workspace-actions/deletion/ForgetSshWorkspaceDialog')
 )
@@ -380,6 +383,7 @@ function Sidebar({
         {activeModal === 'worktree-visibility' ? <WorktreeVisibilityDialog /> : null}
         {activeModal === 'confirm-orca-yaml-hooks' ? <OrcaYamlTrustDialog /> : null}
         {activeModal === 'forget-ssh-workspace' ? <ForgetSshWorkspaceDialog /> : null}
+        {activeModal === 'agent-task-group-name' ? <AgentTaskGroupNameDialog /> : null}
       </React.Suspense>
       {sidebarOpen ? (
         <WorkspaceKanbanDrawer

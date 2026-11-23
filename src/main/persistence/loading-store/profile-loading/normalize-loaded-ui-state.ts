@@ -1,3 +1,4 @@
+import { normalizeAgentTaskGroupsByWorkspace } from '../../../../shared/agent-task-groups/agent-task-groups'
 import { applyDefaultOnStatusBarItems } from '../../../../shared/status-bar/status-bar-defaults'
 import { normalizeGitGraphFilters } from '../../../../shared/git/history/git-graph-filters'
 import { resolveStatusBarCompactChangeNoticeDismissed } from '../../../../shared/status-bar/status-bar-compact-change-notice'
@@ -235,6 +236,9 @@ export function normalizeLoadedUiState(
     showDotfilesByWorktree: normalizeShowDotfilesByWorktree(parsed.ui?.showDotfilesByWorktree),
     notificationsMutedByWorktree: normalizeNotificationsMutedByWorktree(
       parsed.ui?.notificationsMutedByWorktree
+    ),
+    agentTaskGroupsByWorkspace: normalizeAgentTaskGroupsByWorkspace(
+      parsed.ui?.agentTaskGroupsByWorkspace
     ),
     workspaceStatuses,
     _workspaceStatusesDefaultOrderMigrated: true,

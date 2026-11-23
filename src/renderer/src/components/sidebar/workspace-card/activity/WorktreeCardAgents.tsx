@@ -32,6 +32,7 @@ import { opensClaudeParentConversation } from '@/lib/agent-session/navigation/cl
 import { IdleChildAgentGroupRow } from './worktree-card-idle-child-agents'
 import type { AgentChildren } from '@/store/slices/agent-status/projection/agent-row-display-model'
 import type { DashboardAgentRow as AgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
+import * as TaskGroups from '../task-groups/TaskGroupedAgentList'
 
 const stopBubble = (event: React.SyntheticEvent) => event.stopPropagation()
 type Props = {
@@ -51,7 +52,7 @@ export default React.memo(function WorktreeCardAgents({
     useCallback((p) => p.display.roots(worktreeId), [worktreeId])
   )
   const roots = useHostRootKeys(worktreeId, executionHostId, allRoots)
-  return roots.length ? (
+  return TaskGroups.useHasAgentTaskGroups(worktreeId, executionHostId) || roots.length ? (
     <WorktreeCardAgentsBody
       worktreeId={worktreeId}
       executionHostId={executionHostId}
@@ -149,8 +150,9 @@ function WorktreeCardAgentsBody({
       now
     ]
   )
+  const taskGroups = TaskGroups.useTaskGroupedRoots(worktreeId, executionHostId, roots)
   const compact = display.agentActivityDisplayMode === 'compact',
-    summary = compact && roots.length > 1 && !targets
+    summary = compact && roots.length > 1 && !targets && !taskGroups
   const rootRef = useRef<HTMLDivElement | null>(null),
     previousExpanded = useRef(expansion.compactRootListExpanded)
   useLayoutEffect(() => {
@@ -175,7 +177,11 @@ function WorktreeCardAgentsBody({
       aria-label={t('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
       data-compact-agent-list={compact || undefined}
     >
-      {summary ? (
+      {taskGroups ? (
+        <TaskGroups.TaskGroupedAgentList
+          {...{ worktreeId, executionHostId, taskGroups, context, Branches: AgentBranches }}
+        />
+      ) : summary ? (
         <div
           className={cn(
             'compact-agent-summary-panel',
@@ -309,7 +315,10 @@ const AgentBranch = React.memo(function AgentBranch({
     />
   )
   return (
-    <div className={compact ? cn('min-w-0', root && 'ms-2') : undefined}>
+    <div
+      {...{ [TaskGroups.AGENT_ROW_TAB_ID_ATTR]: row.tab.id }}
+      className={compact ? cn('min-w-0', root && 'ms-2') : undefined}
+    >
       {compact ? (
         <CompactAgentRow
           {...common}

@@ -1,3 +1,4 @@
+import { normalizeAgentTaskGroupsByWorkspace } from '../../../shared/agent-task-groups/agent-task-groups'
 import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
 import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-listing/file-explorer-display-root'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
@@ -81,6 +82,9 @@ export function getPersistedUI(
     showDotfilesByWorktree: normalizeShowDotfilesByWorktree(state.ui?.showDotfilesByWorktree),
     notificationsMutedByWorktree: normalizeNotificationsMutedByWorktree(
       state.ui?.notificationsMutedByWorktree
+    ),
+    agentTaskGroupsByWorkspace: normalizeAgentTaskGroupsByWorkspace(
+      state.ui?.agentTaskGroupsByWorkspace
     ),
     featureTipsSeenIds: normalizeFeatureTipIds(state.ui?.featureTipsSeenIds),
     contextualToursSeenIds: normalizeContextualTourIds(state.ui?.contextualToursSeenIds),

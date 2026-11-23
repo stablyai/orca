@@ -1,3 +1,4 @@
+import type { AgentTaskGroupsByWorkspace } from '../../../../../shared/agent-task-groups/agent-task-groups'
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type { ActivityBarPosition } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { persistedUIValuesEqual } from '../../../../../shared/collections/persisted-ui-equality'
@@ -32,6 +33,7 @@ export type PersistedUIWriteBaseline = {
   explorerDisplayRootByWorktree: Record<string, string>
   showDotfilesByWorktree: Record<string, boolean>
   notificationsMutedByWorktree: Record<string, boolean>
+  agentTaskGroupsByWorkspace: AgentTaskGroupsByWorkspace
   filterRepoIds: readonly string[]
   acknowledgedAgentsByPaneKey: Record<string, number>
   activityClearedAtByPaneKey: Record<string, number>
@@ -68,6 +70,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   explorerDisplayRootByWorktree: true,
   showDotfilesByWorktree: true,
   notificationsMutedByWorktree: true,
+  agentTaskGroupsByWorkspace: true,
   filterRepoIds: true,
   acknowledgedAgentsByPaneKey: true,
   activityClearedAtByPaneKey: true,

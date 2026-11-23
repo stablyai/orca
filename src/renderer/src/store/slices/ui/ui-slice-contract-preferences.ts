@@ -1,3 +1,4 @@
+import type { AgentTaskGroupsByWorkspace } from '../../../../../shared/agent-task-groups/agent-task-groups'
 import type { RetainedUpdateTarget } from './retained-update-target'
 import type { StatusBarUsageFormat } from '../../../../../shared/status-bar/status-bar-usage-format'
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
@@ -84,6 +85,15 @@ export type UISlicePreferences = {
   /** Per-worktree notification mute. Missing entries inherit the default: not muted. */
   notificationsMutedByWorktree: Record<string, boolean>
   toggleWorktreeNotificationsMuted: (worktreeId: string) => void
+  /** Sidebar task groups for agent conversations, keyed by host-qualified workspace identity. */
+  agentTaskGroupsByWorkspace: AgentTaskGroupsByWorkspace
+  /** Returns the new group's id, or null when the name or limit rejects it. */
+  createAgentTaskGroup: (workspaceKey: string, name: string) => string | null
+  renameAgentTaskGroup: (workspaceKey: string, groupId: string, name: string) => void
+  deleteAgentTaskGroup: (workspaceKey: string, groupId: string) => void
+  moveAgentTaskGroup: (workspaceKey: string, groupId: string, offset: -1 | 1) => void
+  setAgentTaskGroupCollapsed: (workspaceKey: string, groupId: string, collapsed: boolean) => void
+  assignTabToAgentTaskGroup: (workspaceKey: string, tabId: string, groupId: string | null) => void
   filterRepoIds: readonly string[]
   setFilterRepoIds: (ids: readonly string[]) => void
   /** Agents-view scope filters, independent from workspace navigation filters. */

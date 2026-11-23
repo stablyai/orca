@@ -7322,7 +7322,10 @@
           "9a766f33ac": "This path was checked on the SSH host.",
           "79fd02cf5f": "This path was checked on {{hostName}}.",
           "8851b77327": "This path was checked locally.",
-          "sshConnectionUnavailable": "SSH connection \"{{connection}}\" not found or not connected"
+          "sshConnectionUnavailable": "SSH connection \"{{connection}}\" not found or not connected",
+          "childOfRepository": "This folder is inside a Git repository. Open just this folder as its own project, or open the whole repository. Opening the folder creates no branch, worktree, or .git directory.",
+          "repositoryRoot": "Repository: {{path}}",
+          "openRepository": "Open Repository"
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "Run hooks",
@@ -8602,6 +8605,31 @@
           "browseFolder": "Browse folder…",
           "cloneFromUrl": "Clone from URL…",
           "createNewProject": "Create new project…"
+        },
+        "AgentTaskGroupMenuItems": {
+          "newGroup": "New Task Group…",
+          "moveTo": "Move to Task Group",
+          "ungroup": "Remove from Group"
+        },
+        "AgentTaskGroupNameDialog": {
+          "renameTitle": "Rename Task Group",
+          "createTitle": "New Task Group",
+          "description": "Task groups organize conversations in this workspace. They share its files and create no branch or worktree.",
+          "defaultName": "New Task Group",
+          "rename": "Rename",
+          "create": "Create"
+        },
+        "AgentTaskGroupSection": {
+          "newConversation": "New Conversation",
+          "expand": "Expand {{name}}",
+          "collapse": "Collapse {{name}}",
+          "actions": "Task group actions",
+          "rename": "Rename…",
+          "moveUp": "Move Up",
+          "moveDown": "Move Down",
+          "delete": "Remove Group",
+          "chatCount_one": "{{count}} chat",
+          "chatCount_other": "{{count}} chats"
         }
       },
       "shared": {

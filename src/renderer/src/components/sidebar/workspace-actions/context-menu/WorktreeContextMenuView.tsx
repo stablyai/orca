@@ -20,6 +20,8 @@ import { WorktreeStatusMenuItems } from '../../workspace-status/presentation/Wor
 import { WorktreeWslHostStartMenuItem } from '../../workspace-card/host/WorktreeWslHostStartMenuItem'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
 import { WorktreeNotificationMuteMenuItem } from './WorktreeNotificationMuteMenuItem'
+import { AgentTaskGroupMenuItems } from '../../workspace-card/task-groups/AgentTaskGroupMenuItems'
+import { agentRowTabIdFromEvent } from '../../workspace-card/task-groups/agent-task-group-workspace-key'
 import { WslMovedWorkspaceUseHereMenuItem } from '@/components/wsl-move/WslMovedUseHereMenuItem'
 import { WslMoveFolderWorkspaceMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
 import { WorktreeContextMenuDeleteItems } from './WorktreeContextMenuDeleteItems'
@@ -84,6 +86,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
   const t = useTranslate()
   const portalScope = useId()
   const [openedFromAgentRow, setOpenedFromAgentRow] = useState(false)
+  const [agentRowTabId, setAgentRowTabId] = useState<string | null>(null)
   const sleepItems = (
     <WorkspaceSleepMenuItems
       isMultiContext={isMultiContext}
@@ -100,7 +103,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     contextMenuOpenedAtRef.current = Date.now()
     window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
     setDeveloperMenuRevealed(event.altKey)
-    setOpenedFromAgentRow(fromPortal || isFromWorkspaceAgentRow(event.currentTarget, event.target))
+    const fromAgentRow = fromPortal || isFromWorkspaceAgentRow(event.currentTarget, event.target)
+    setOpenedFromAgentRow(fromAgentRow)
+    setAgentRowTabId(fromAgentRow ? agentRowTabIdFromEvent(event.target) : null)
     setContextWorktrees(
       fromPortal ? [worktree] : (onContextMenuSelect?.(event) ?? effectiveSelectedWorktrees)
     )
@@ -200,6 +205,14 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           )}
           {!isMultiContext && (
             <WorktreeNotificationMuteMenuItem worktreeId={worktree.id} disabled={isDeleting} />
+          )}
+          {!isMultiContext && (
+            <AgentTaskGroupMenuItems
+              worktreeId={worktree.id}
+              executionHostId={worktree.hostId}
+              agentTabId={agentRowTabId}
+              disabled={isDeleting}
+            />
           )}
           {!openedFromAgentRow && (
             <>

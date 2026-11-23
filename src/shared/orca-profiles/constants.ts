@@ -153,6 +153,7 @@ export function getDefaultUIState(): PersistedUIState {
     explorerDisplayRootByWorktree: {},
     showDotfilesByWorktree: {},
     notificationsMutedByWorktree: {},
+    agentTaskGroupsByWorkspace: {},
     filterRepoIds: [],
     agentsVisibleHostIds: null,
     agentsFilterRepoIds: [],
