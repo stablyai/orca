@@ -3864,7 +3864,11 @@
         "handedTo": "Handed to",
         "paused": "{{bot}} is paused.",
         "botsOff": "Bots are off.",
-        "couldNotTake": "{{bot}} couldn't take it."
+        "couldNotTake": "{{bot}} couldn't take it.",
+        "pairedComputer": "Paired computer",
+        "notConnected": "Wasn’t connected",
+        "declined": "Declined",
+        "waitingOn": "Waiting for approval on {{computer}}"
       },
       "offer": {
         "unknownAgent": "{{bot}} runs an agent this app doesn’t know. Edit to pick one.",
@@ -6541,7 +6545,9 @@
       "connector": "{{name}} needs you to sign in again or fix it.",
       "fixConnector": "Open {{name}}",
       "runSignIn": "Couldn’t run until you sign in.",
-      "openRun": "Open run"
+      "openRun": "Open run",
+      "pairedAsk": "{{from}} wants to message {{name}}",
+      "pairedAskDetail": "Permission · Message {{name}}"
     },
     "chat": {
       "nothingToReport": "Nothing to report",
@@ -7828,6 +7834,13 @@
       "groupMailNeverStarted": "This mail never started a turn.",
       "groupRemoteUnreachable": "Couldn't reach {{host}}. {{detail}}",
       "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry."
+    },
+    "pairedServers": {
+      "heading": "Paired servers",
+      "remove": "Remove",
+      "removeServer": "Remove {{server}}",
+      "tooltip": "Bots and agents on these servers can ask {{name}} without asking you each time.",
+      "unnamed": "Paired server"
     }
   },
   "mobileWebShell": {
