@@ -10,6 +10,7 @@ type Caller = Parameters<typeof forwardedChatLineage>[3]
 
 const server = { environmentId: 'env-1', name: 'server', peerFingerprint: 'peer-1' }
 // No --from: the creator resolves to none, so only the flag itself could make this a lineage.
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lineage read and the option filter read only these fields.
 const params = { spec: 'work', on: 'server', chatLineage: true } as Params
 
 /** Reads the agent-home list and answers the server's status probe; nothing else of the runtime. */
