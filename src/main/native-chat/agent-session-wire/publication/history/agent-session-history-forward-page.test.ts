@@ -53,7 +53,9 @@ function readStampOnly(budgetBytes: number) {
       }),
       canonicalItemId: (itemId) => itemId,
       hasSubmission: () => true,
-      reset: (reset) => ({ ok: false, reset })
+      reset: (reset) => {
+        throw new Error(reset)
+      }
     },
     snapshot,
     { epoch: 'e', sequence: 4 },
@@ -66,7 +68,7 @@ function readStampOnly(budgetBytes: number) {
 describe('forward history after a writtenAt stamp', () => {
   // The stamped submission travels without its message, so its bytes must still count against the page.
   it('never admits a stamp-only submission larger than the page budget', () => {
-    expect(readStampOnly(50)).toEqual({ ok: false, reset: 'cursor_compacted' })
+    expect(() => readStampOnly(50)).toThrow('cursor_compacted')
   })
 
   // Subscribers already hold the message; only the submission changed.
