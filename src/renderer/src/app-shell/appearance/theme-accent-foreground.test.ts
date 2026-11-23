@@ -74,6 +74,14 @@ describe('safePluginThemeTokens: the accent label', () => {
     expect(out['--theme-accent-foreground']).toBe('#fafafa')
   })
 
+  it('drops an accent that neither near-black nor white reads on, keeping the built-in accent', () => {
+    const grey = '#767676'
+    expect(accentInkContrast(hexToRgb(grey))).toBeLessThan(MIN)
+    const out = run({ '--text-link': grey })
+    expect(out).not.toHaveProperty('--text-link')
+    expect(out).not.toHaveProperty('--theme-accent-foreground')
+  })
+
   it('adds no label when the theme sets no accent or label', () => {
     expect(run({})).not.toHaveProperty('--theme-accent-foreground')
   })

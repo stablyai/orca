@@ -13,7 +13,7 @@ import {
 } from './plugin-theme-contrast-rules'
 
 import { contrastRatio, mix, over, type Rgba } from '../../../../shared/color/rgba-contrast'
-import { accentInkHex } from '../../../../shared/color/accent-ink'
+import { accentInkContrast, accentInkHex } from '../../../../shared/color/accent-ink'
 
 const THEME_ACCENT = '--text-link'
 const THEME_ACCENT_FOREGROUND = '--theme-accent-foreground'
@@ -141,6 +141,12 @@ export function safePluginThemeTokens(
         changed = drop(ring) || changed
       }
     }
+  }
+  // Why: an accent that neither near-black nor white reads on can't carry a label at 4.5:1, so it is
+  // dropped like any other failing color and the built-in accent stands.
+  const ownAccent = accepted.get(THEME_ACCENT)
+  if (ownAccent?.[3] === 1 && accentInkContrast(ownAccent) < MIN_TEXT_CONTRAST) {
+    accepted.delete(THEME_ACCENT)
   }
   // Why: the label follows the accent it sits on. Once the rules settle, a theme that sets an accent
   // (or a label) gets the ink that reads on that accent; an explicit label that doesn't is replaced.
