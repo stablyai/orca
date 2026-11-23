@@ -222,11 +222,8 @@ export class BotController {
       // Any picture, color or outfit choice counts, even one that sets the same value again. Every other edit
       // keeps the highest revision seen, so rewriting bot.json from a record that lost it can't lower it.
       const revision = await this.avatarRevision(bot, botHomeFolder(bot, this.deps.botsRoot()))
-      if (
-        updates.avatar !== undefined ||
-        updates.avatarColor !== undefined ||
-        updates.avatarOutfit !== undefined
-      ) {
+      const look = [updates.avatar, updates.avatarColor, updates.avatarOutfit]
+      if (look.some((value) => value !== undefined)) {
         updated.avatarRevision = revision + 1
       } else if (revision > 0) {
         updated.avatarRevision = revision

@@ -62,11 +62,8 @@ export function splitBotsByOlderBuildSupport(bots: readonly Bot[]): {
   const readable: Bot[] = []
   const newer: Bot[] = []
   for (const bot of bots) {
-    if (BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent)) {
-      readable.push(bot)
-    } else {
-      newer.push(bot)
-    }
+    const side = BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent) ? readable : newer
+    side.push(bot)
   }
   return { readable, newer }
 }

@@ -42,7 +42,11 @@ import { useBotCreateHost } from './bot-create-hosts'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { useBotAgentSetup } from './use-bot-agent-setup'
 import { useNewBotHostLooks, useNewBotPicture } from './use-new-bot-picture'
-import { draftPictureTake, useNewBotGenerateFace } from './use-new-bot-generate-face'
+import {
+  draftPictureTake,
+  followedByPicture,
+  useNewBotGenerateFace
+} from './use-new-bot-generate-face'
 
 export type ImportPick = { source: BotImportSource; bot: BotImportCandidate }
 
@@ -154,23 +158,19 @@ export function ImportBotDialog({
       return
     }
     setCreating(true)
-    // The picture is taken now; a run still going, unless a newer choice was made, follows the bot.
-    const handOff = face.handOff({ hostId, name: trimmedName })
+    const follow = followedByPicture(face, { hostId, name: trimmedName })
     try {
-      const made = await createBot(hostId, {
-        name: trimmedName,
-        ...agentSetup.setup,
-        avatar: picture.avatar,
-        avatarColor: picture.avatarColor,
-        avatarOutfit: picture.avatarOutfit,
-        importFrom
-      }).catch((error: unknown) => {
-        handOff?.failed()
-        throw error
-      })
-      const bot = await picture.saveUpload(made)
-      // The bot exists from here, whatever opening it does.
-      handOff?.created(bot)
+      // The bot exists once this resolves, whatever opening it does.
+      const bot = await follow(
+        createBot(hostId, {
+          name: trimmedName,
+          ...agentSetup.setup,
+          avatar: picture.avatar,
+          avatarColor: picture.avatarColor,
+          avatarOutfit: picture.avatarOutfit,
+          importFrom
+        }).then(picture.saveUpload)
+      )
       const opened = await openCreatedBot(bot)
       close()
       if (opened) {

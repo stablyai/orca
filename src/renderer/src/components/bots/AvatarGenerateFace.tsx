@@ -184,7 +184,7 @@ export function GenerateFaceTile({ face }: { face: GenerateFace }): React.JSX.El
             // Closing the picker doesn't stop the run; the picture lands on its own.
             <span
               className={cn(
-                '-mt-1 text-[11px] leading-4 whitespace-nowrap text-muted-foreground',
+                '-mt-1 max-w-full px-2 text-center text-[11px] leading-4 text-balance text-muted-foreground',
                 AT_REST
               )}
             >

@@ -1,5 +1,5 @@
 // One ledger, per picture owner, of what this window is doing to its picture: the choices made (a pick,
-// an upload, a paste, a color, an undo), the saves and decodes still in flight, and the revisions those
+// an upload, a paste, a color or outfit, an undo), the saves and decodes still in flight, and the revisions those
 // saves were acknowledged at. The owner is a bot (its `botRefKey`) or a dialog's bot not yet made. Every
 // picture setting for a bot (the settings root, the panel header, the settings-wide paste) writes here,
 // so a picture still being generated can tell whether it is still the latest thing asked for, and
@@ -46,7 +46,7 @@ export function subscribeBotPictureEvents(listener: (event: BotPictureEvent) => 
   }
 }
 
-/** A picture or color choice for the owner: newer than anything asked for before it. */
+/** A picture, color or outfit choice for the owner: newer than anything asked for before it. */
 export function noteBotPictureChoice(key: string): void {
   emit({ kind: 'choice', key })
 }
@@ -75,14 +75,23 @@ export function botPictureOpsOpen(key: string): boolean {
   return (entries.get(key)?.open ?? 0) > 0
 }
 
-/** A save of the bot's picture or color was acknowledged at this revision (absent on an older host: 0). */
+/** A save of the bot's picture, color or outfit was acknowledged at this revision (absent on an older host: 0). */
 export function noteBotPictureAck(key: string, revision: number | undefined): void {
   emit({ kind: 'ack', key, revision: revision ?? 0 })
 }
 
-/** A save of the bot's picture or color was refused or failed: its revision is unknown. */
+/** A save of the bot's picture, color or outfit was refused or failed: its revision is unknown. */
 export function noteBotPictureFailure(key: string): void {
   emit({ kind: 'failed', key })
+}
+
+/** A save of the bot's picture, color or outfit settled: the bot it returned, or null when it failed. */
+export function noteBotPictureSaved(key: string, saved: { avatarRevision?: number } | null): void {
+  if (saved) {
+    noteBotPictureAck(key, saved.avatarRevision)
+  } else {
+    noteBotPictureFailure(key)
+  }
 }
 
 /** A generated picture's upload for the bot is in flight: a choice of the picture already saved is

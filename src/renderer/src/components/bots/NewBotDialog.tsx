@@ -29,8 +29,7 @@ import { BotImportNudge } from './BotImportNudge'
 import { openCreatedBot } from './bot-create-open'
 import { NewBotPictureButton } from './NewBotPictureButton'
 import { useNewBotHostLooks, useNewBotPicture } from './use-new-bot-picture'
-import { useBotAvatarIntakeState } from './use-bot-avatar-intake'
-import { draftPictureTake, useNewBotGenerateFace } from './use-new-bot-generate-face'
+import { followedByPicture, useNewBotDialogPicture } from './use-new-bot-generate-face'
 import { useBotAgentMenu } from './use-bot-agent-choices'
 import { useBotCreateHost } from './bot-create-hosts'
 import {
@@ -153,15 +152,7 @@ export function NewBotDialog({
     fromShare && sharedPicturePng(fromShare.review),
     fromShare && sharedLook(fromShare.review)
   )
-  // Pasted, dropped and uploaded pictures, from the dialog and the picture popover alike; none while
-  // Create runs, which has taken the picture.
-  const intake = useBotAvatarIntakeState({
-    onPicture: picture.placeUpload,
-    undoable: false,
-    onTake: draftPictureTake(picture.choiceKey),
-    disabled: creating
-  })
-  const face = useNewBotGenerateFace(picture, intake)
+  const { intake, face } = useNewBotDialogPicture(picture, creating)
   const shownIdentity = shownTemplateIdentity(proposal, t)
   const identityTooLong = templateIdentityTooLong(proposal, draft.purpose, t)
   const nameInvalid = submitted && !trimmedName
@@ -210,44 +201,40 @@ export function NewBotDialog({
     }
     createInFlight.current = true
     setCreating(true)
-    // The picture is taken now; a run still going, unless a newer choice was made, follows the bot.
-    const handOff = face.handOff({ hostId, name: trimmedName })
+    const follow = followedByPicture(face, { hostId, name: trimmedName })
     let bot: Bot | null
     try {
       if (fromShare) {
         const { setup, intent } = agentSetup
-        bot = await createNewBotFromShare(
-          fromShare,
-          hostId,
-          { name: trimmedName, setup, intent },
-          picture
+        bot = await follow(
+          createNewBotFromShare(fromShare, hostId, { name: trimmedName, setup, intent }, picture)
         )
       } else {
         const made = editedProposal(proposal, draft, trimmedName, t)
         const offerHere = hostId === (offerHostId ?? LOCAL_EXECUTION_HOST_ID)
-        bot = await createBot(hostId, {
-          ...(made
-            ? proposalCreateParams(
-                offerHere ? made : { ...made, worktrees: undefined },
-                agentSetup.setup.agent,
-                {
-                  templatePackages,
-                  skills: [...kept],
-                  templateNameShown: template ? botTemplateWord(template, 'name', t) : undefined,
-                  fromOffer: offerHere ? fromOffer : undefined
-                }
-              )
-            : { name: trimmedName }),
-          ...agentSetup.setup,
-          avatar: picture.avatar,
-          avatarColor: picture.avatarColor,
-          avatarOutfit: picture.avatarOutfit,
-          ...(takingOver ? { takingOver } : {})
-        })
-        bot = await picture.saveUpload(bot)
+        bot = await follow(
+          createBot(hostId, {
+            ...(made
+              ? proposalCreateParams(
+                  offerHere ? made : { ...made, worktrees: undefined },
+                  agentSetup.setup.agent,
+                  {
+                    templatePackages,
+                    skills: [...kept],
+                    templateNameShown: template ? botTemplateWord(template, 'name', t) : undefined,
+                    fromOffer: offerHere ? fromOffer : undefined
+                  }
+                )
+              : { name: trimmedName }),
+            ...agentSetup.setup,
+            avatar: picture.avatar,
+            avatarColor: picture.avatarColor,
+            avatarOutfit: picture.avatarOutfit,
+            ...(takingOver ? { takingOver } : {})
+          }).then(picture.saveUpload)
+        )
       }
     } catch (error) {
-      handOff?.failed()
       createInFlight.current = false
       setCreating(false)
       toast.error(fromShare ? botShareErrorMessage(error) : botErrorMessage(error))
@@ -256,10 +243,8 @@ export function NewBotDialog({
     createInFlight.current = false
     setCreating(false)
     if (!bot) {
-      handOff?.failed()
       return
     }
-    handOff?.created(bot)
     // Closes once the bot exists, as a new workspace's composer does; its page opens next and shows
     // its agent starting.
     createdBot.current = true
@@ -272,6 +257,7 @@ export function NewBotDialog({
   }
 
   const shownOrigin = useShareOrigin(fromShare) ?? origin
+  const pictureButton = { picture, intake, submitted, generate: face, disabled: creating }
   const showTemplateLink = !proposal && !fromShare && !fromTemplates && !name && !draft.purpose
   // A mascot's band is its tile color; a picture's is its background's, read when it was taken in.
   const band = picture.shownUpload
@@ -349,13 +335,7 @@ export function NewBotDialog({
               />
             ) : null}
             <div className="space-y-3 pt-1">
-              <NewBotPictureButton
-                picture={picture}
-                intake={intake}
-                submitted={submitted}
-                generate={face}
-                disabled={creating}
-              >
+              <NewBotPictureButton {...pictureButton}>
                 <ImeInput
                   ref={nameRef}
                   className={cn(

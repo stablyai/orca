@@ -142,6 +142,13 @@
   {
     "filePath": "src/renderer/src/component-fixtures/fixture-bot-picture.tsx",
     "kind": "object-property:error",
+    "text": "unavailable",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/component-fixtures/fixture-bot-picture.tsx",
+    "kind": "object-property:error",
     "text": "usage-limit",
     "dynamic": false,
     "count": 1

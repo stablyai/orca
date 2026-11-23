@@ -9,9 +9,7 @@ import { botRefKey } from '@/lib/bot-hosts'
 import {
   automaticBotPictureUploadInFlight,
   beginBotPictureOp,
-  noteBotPictureAck,
   noteBotPictureChoice,
-  noteBotPictureFailure,
   subscribeBotPictureEvents
 } from '@/components/bots/bot-picture-ops'
 import {
@@ -21,9 +19,8 @@ import {
 import { isUploadAvatar, parseBotAvatar } from '../../../../../shared/bot-avatar'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
-import { wornBotOutfit, type BotAvatarOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
-import { beginBotHostUpdate } from '@/lib/bot-host-refresh'
-import { useBotLookSave, type BotLookUpdate } from './use-bot-look-save'
+import type { BotAvatarOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
+import { useBotPictureLook } from './use-bot-picture-look'
 import { useSaveOnClose } from './use-save-on-close'
 import { sendBotPicture } from './bot-picture-setting-send'
 import {
@@ -251,18 +248,7 @@ export function useBotPictureSetting(
     })
   }
 
-  const hold = () => beginBotHostUpdate(bot.hostId)
-  // Each look save's revision goes to the ledger, so a picture generated meanwhile requires it.
-  const saveLook = (updates: BotLookUpdate): Promise<Bot | null> =>
-    update(updates).then((saved) => {
-      if (saved) {
-        noteBotPictureAck(key, saved.avatarRevision)
-      } else {
-        noteBotPictureFailure(key)
-      }
-      return saved
-    })
-  const look = useBotLookSave(key, saveLook, BOT_PICTURE_SAVE_DELAY_MS, hold, bot)
+  const look = useBotPictureLook(bot, update)
 
   useSaveOnClose(() => {
     commit()
@@ -338,16 +324,10 @@ export function useBotPictureSetting(
     pick,
     upload,
     undo,
-    color:
-      look.picked && 'avatarColor' in look.picked
-        ? (look.picked.avatarColor ?? null)
-        : (bot.avatarColor ?? null),
-    pickColor: (color) => look.pick({ avatarColor: color }),
-    outfit:
-      look.picked && 'avatarOutfit' in look.picked
-        ? wornBotOutfit(look.picked.avatarOutfit)
-        : wornBotOutfit(bot.avatarOutfit),
-    pickOutfit: (outfit) => look.pick({ avatarOutfit: outfit }),
+    color: look.color,
+    pickColor: look.pickColor,
+    outfit: look.outfit,
+    pickOutfit: look.pickOutfit,
     beginIntake: () => {
       noteBotPictureChoice(key)
       return beginBotPictureOp(key).end

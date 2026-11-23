@@ -5,7 +5,7 @@ import type { BotPictureValue } from '@/components/bots/BotPicturePicker'
 import { botErrorMessage } from '@/components/bots/bot-presentation'
 import { uploadBotAvatar } from '@/lib/bot-catalog'
 import { botRefKey } from '@/lib/bot-hosts'
-import { noteBotPictureAck, noteBotPictureFailure } from '@/components/bots/bot-picture-ops'
+import { noteBotPictureFailure, noteBotPictureSaved } from '@/components/bots/bot-picture-ops'
 import {
   keepSavedPictureDescription,
   savedPictureDescription
@@ -32,13 +32,7 @@ export async function sendBotPicture(
   { bot, live, update, setKept }: SendContext
 ): Promise<boolean> {
   const key = botRefKey(bot)
-  const acked = (saved: Bot | null): void => {
-    if (saved) {
-      noteBotPictureAck(key, saved.avatarRevision)
-    } else {
-      noteBotPictureFailure(key)
-    }
-  }
+  const acked = (saved: Bot | null): void => noteBotPictureSaved(key, saved)
   if (choice.kind === 'mascot') {
     const saved = await update({ avatar: choiceKey(choice, null) })
     acked(saved)

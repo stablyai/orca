@@ -104,7 +104,7 @@ export function tryApply(request: Request, finish: (request: Request) => void): 
   request.status = 'applying'
   const { png, description } = request.made
   const automatic = beginAutomaticBotPictureUpload(botRefKey(ref))
-  void uploadBotAvatar(ref, png, { expectedAvatarRevision: anchor.revision })
+  void uploadBotAvatar(ref, png, anchor.revision)
     .then(
       (saved) => {
         keepSavedPictureDescription(saved, png, description, { prefer: 'known' })
