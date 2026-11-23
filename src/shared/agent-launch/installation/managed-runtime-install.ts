@@ -20,8 +20,14 @@ export type ManagedRuntimeOperation = {
   error?: string
 }
 
+/** `cli`: Orca's copy of the agent's own CLI, which signs itself in. `server`: an ACP server that
+ *  Orca signs in. */
+export type ManagedRuntimeProgram = 'cli' | 'server'
+
 export type ManagedRuntimeInstallState = {
   agent: string
+  /** Which program this describes; absent from older hosts, which describe a `server`. */
+  program?: ManagedRuntimeProgram
   /** Rises with every change the host publishes, across operations. */
   revision: number
   /** The host has a pinned release; otherwise no Install is offered. */

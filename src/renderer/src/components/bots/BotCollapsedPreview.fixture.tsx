@@ -1,5 +1,6 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { defineFixture } from '../../component-fixtures/component-fixture'
+import { stubBots } from '../../component-fixtures/fixture-bots'
 import { publishBots } from '@/lib/bot-catalog-snapshot'
 import { publishBotGroups } from '@/lib/bot-group-catalog-snapshot'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
@@ -11,6 +12,8 @@ import { mascotAvatar, type BotMascotId } from '../../../../shared/bot-avatar'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import { SidebarBotsSection } from './SidebarBotsSection'
+import { setRendererUiLanguage } from '@/i18n/i18n'
+import type { SupportedUiLocale } from '../../../../shared/i18n/ui-locale'
 
 function bot(
   id: string,
@@ -81,15 +84,77 @@ export const foldedHeader = defineFixture({
       [chat(BOTS[1]!, 'waiting'), chat(BOTS[2]!, 'working')].map((entry) => [entry.paneKey, entry])
     )
   },
-  setup: () => publishBots(BOTS, { threadReplies: false, webhooks: undefined, waits: {} }),
+  setup: () => stubBots(BOTS),
   render: () => (
     <ConfirmationDialogProvider>
-      <div className="flex flex-col bg-sidebar pb-2 text-sidebar-foreground">
+      <div className="flex flex-col bg-worktree-sidebar pb-2 text-worktree-sidebar-foreground">
         <SidebarBotsSection onOpenBot={() => {}} />
       </div>
     </ConfirmationDialogProvider>
   )
 })
+
+function localizedHeader(
+  locale: SupportedUiLocale,
+  width = 252,
+  owners = BOTS,
+  readAccessibleLabels = false
+) {
+  return defineFixture({
+    ...foldedHeader,
+    width,
+    store: {
+      ...foldedHeader.store,
+      folderWorkspaces: owners.map((owner) =>
+        makeFolderWorkspace({
+          id: owner.folderWorkspaceId,
+          projectGroupId: 'bots',
+          name: owner.name,
+          folderPath: `/home/me/.orca/bots/${owner.folder}`
+        })
+      ),
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        owners.map((owner) => chat(owner, 'waiting')).map((entry) => [entry.paneKey, entry])
+      )
+    },
+    setup: () => stubBots(owners),
+    interact: async (frame) => {
+      await setRendererUiLanguage(locale)
+      if (readAccessibleLabels) {
+        const readout = document.createElement('pre')
+        readout.className = 'mt-2 whitespace-pre-wrap text-xs'
+        readout.textContent = [...frame.querySelectorAll('[aria-label]')]
+          .map((element) => element.getAttribute('aria-label'))
+          .filter(Boolean)
+          .join('\n')
+        frame.append(readout)
+      }
+    }
+  })
+}
+
+export const chineseHeader = localizedHeader('zh')
+export const traditionalChineseHeader = localizedHeader('zh-Hant')
+export const germanHeader = localizedHeader('de')
+export const spanishHeader = localizedHeader('es')
+export const frenchHeader = localizedHeader('fr')
+export const japaneseHeader = localizedHeader('ja')
+export const koreanHeader = localizedHeader('ko')
+export const portugueseHeader = localizedHeader('pt')
+export const russianHeader = localizedHeader('ru')
+export const turkishHeader = localizedHeader('tr')
+export const chineseNormalHeader = localizedHeader('zh', 352)
+export const traditionalChineseNormalHeader = localizedHeader('zh-Hant', 352)
+export const germanNormalHeader = localizedHeader('de', 352)
+export const spanishNormalHeader = localizedHeader('es', 352)
+export const frenchNormalHeader = localizedHeader('fr', 352)
+export const japaneseNormalHeader = localizedHeader('ja', 352)
+export const koreanNormalHeader = localizedHeader('ko', 352)
+export const portugueseNormalHeader = localizedHeader('pt', 352)
+export const russianNormalHeader = localizedHeader('ru', 352)
+export const turkishNormalHeader = localizedHeader('tr', 352)
+export const chineseOneBotLabel = localizedHeader('zh', 252, BOTS.slice(0, 1), true)
+export const chineseOneHiddenBotLabel = localizedHeader('zh', 352, BOTS.slice(0, 6), true)
 
 const HOMES = (owners: readonly Pick<Bot, 'folderWorkspaceId' | 'name' | 'folder'>[]) =>
   owners.map((owner) =>
@@ -100,6 +165,18 @@ const HOMES = (owners: readonly Pick<Bot, 'folderWorkspaceId' | 'name' | 'folder
       folderPath: `/home/me/.orca/bots/${owner.folder}`
     })
   )
+
+export const foldedEmptyHeader = defineFixture({
+  ...foldedHeader,
+  store: { collapsedGroups: new Set(['bots']) },
+  setup: () => stubBots([])
+})
+
+export const foldedTwoBotsHeader = defineFixture({
+  ...foldedHeader,
+  store: { collapsedGroups: new Set(['bots']), folderWorkspaces: HOMES(BOTS.slice(0, 2)) },
+  setup: () => stubBots(BOTS.slice(0, 2))
+})
 
 // Three bots a drag placed, then "New bot" and a group made after the drag.
 const PLACED_AND_NEW = [...BOTS.slice(0, 3), bot('fresh', 'New bot', 'A1', undefined, 2)]
@@ -136,23 +213,7 @@ export const newBotOnTop = defineFixture({
 export const plusMenu = defineFixture({
   width: 320,
   store: { folderWorkspaces: HOMES(BOTS.slice(0, 3)) },
-  setup: () => {
-    const shown = BOTS.slice(0, 3)
-    publishBots(shown, { threadReplies: false, webhooks: undefined, waits: {} })
-    // The section lists bots and groups again as it mounts; answer as a host with these three.
-    const answers: Record<string, unknown> = {
-      'bots.list': { bots: shown },
-      'bots.groups.list': { groups: [] }
-    }
-    const runtime = window.api.runtime
-    Reflect.set(window.api, 'runtime', {
-      ...runtime,
-      call: (args: Parameters<typeof runtime.call>[0]) =>
-        args.method in answers
-          ? Promise.resolve({ ok: true, result: answers[args.method] })
-          : runtime.call(args)
-    })
-  },
+  setup: () => stubBots(BOTS.slice(0, 3)),
   render: () => (
     <ConfirmationDialogProvider>
       <div className="flex flex-col bg-sidebar pb-2 text-sidebar-foreground">

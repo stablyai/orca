@@ -3,6 +3,7 @@ import {
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
 } from '../../agent-accounts/claude/claude-profile-routing'
 import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
+import { agentSessionRefusalAgentInstallation } from './agent-session-write-failure'
 import type { AgentCliInstallationProblem } from '../../agent-launch/catalog/agent-cli-installation-problem'
 import { tuiAgentDisplayName } from '../../agent-launch/catalog/tui-agent-display-names'
 // Share whole English sentence pieces: the host interpolates them; desktop translates each with the same fallback.
@@ -93,10 +94,16 @@ export const AGENT_SESSION_FAILURE_COPY = {
   claudeAccountSetupFailed: CLAUDE_PROFILE_SETUP_FAILED_MESSAGE,
   agentCommandNotRunnable:
     "{{agent}}'s Command in Settings → Agents must start with a program Orca can find. Variables, pipes and other shell syntax aren't supported; use the Environment setting for variables. Change it or reset it.",
+  agentCommandFailed:
+    "{{agent}}'s Command in Settings → Agents didn't start {{agent}}: {{detail}}. Change it or reset it.",
   runtimeNotInstalled:
     "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
   fullAccessAsRoot:
     "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
+  botToolsNeedStatusHooks:
+    "{{agent}} bots need Agent status hooks: they are how a bot's tools act as the bot. Turn them on for {{agent}} in Settings → Agents, then start a new chat.",
+  botToolsGatewayOutdated:
+    "{{agent}}'s gateway is still running an older copy of Orca's plugin, so this bot's tools can't act as the bot. Run `hermes gateway stop`, then start a new chat.",
   launchPreparationFailed:
     "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
   conversationOpenElsewhere:
@@ -260,13 +267,12 @@ export function agentCliInstallationFailureWords(
   say: AgentSessionFailureSay,
   host?: string
 ): string | null {
-  if (refusal?.code !== 'agent_session_operation_invalid') {
-    return null
-  }
-  const { agentInstallation, codexInstallation } = refusal.details ?? {}
+  const agentInstallation = agentSessionRefusalAgentInstallation(refusal)
   if (agentInstallation) {
     return agentCliTooOldWords(agentInstallation, say, host)
   }
+  const codexInstallation =
+    refusal?.code === 'agent_session_operation_invalid' ? refusal.details?.codexInstallation : null
   if (!codexInstallation) {
     return null
   }

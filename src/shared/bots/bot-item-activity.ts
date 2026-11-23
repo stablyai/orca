@@ -1,22 +1,21 @@
 // An item's Activity in time order: its own events, plus each linked worker's start and finish read
 // from the worker's own record (never stored on the item). A worker's link event is its start.
 // A Needs you question and its status move come in one write: the comment carries both.
-// The owner's answer names its question (`answers`), and the move it caused (`cause: 'answer'`) is not
-// shown while the question is loaded: a reply quotes it instead, and a recorded answer (one carrying its
-// `decisions`) is drawn with its question. Answers written before that record are still inferred.
+// The owner's reply quotes the question line it answers (bot-item-question-answers.ts); the move the
+// first one caused (`cause: 'answer'`) is not shown while the question is loaded. Answers recorded by
+// older hosts are replies like any other.
+import { botItemCommentFiles } from './bot-item-comment-files'
+import { botItemNamedAnswers } from './bot-item-answer-lines'
 import {
+  botItemCommentImages,
   botItemLinksOnePerChain,
   type BotItem,
   type BotItemEvent,
   type BotItemLinkView
 } from './bot-items'
+import { botItemQuestionPairing, type BotItemQuestionPairing } from './bot-item-question-answers'
 
 type DispatchLink = Extract<BotItemLinkView, { kind: 'dispatch' }>
-
-/** Open: the item's current question. Answered: a recorded answer names it, or, for a question asked
- *  before hosts recorded answers, the owner commented before the agent asked again. Asked: a question
- *  that closed with no answer (asked again, or the item moved on). */
-export type BotItemQuestionState = 'open' | 'answered' | 'asked'
 
 export type BotItemActivityEntry =
   | { kind: 'event'; key: string; at: number; event: BotItemEvent }
@@ -25,18 +24,20 @@ export type BotItemActivityEntry =
       key: string
       at: number
       event: BotItemEvent
-      question: BotItemQuestionState | null
-      /** On an answered question: the reply or recorded answer that answered it. */
-      answer?: BotItemEvent
+      /** The agent waits on this question (an ask: on its open lines): its mark and quick replies show. */
+      waiting: boolean
+      /** On an ask: per question line, the owner comment that answered it. */
+      answers?: (BotItemEvent | null)[]
+      /** On an ask: per line, answered only by order (a comment naming no line). */
+      byOrder?: boolean[]
       /** On the owner's reply to a question: the question it answers, by its first line. */
       replyTo?: { eventId: string; text: string }
+      /** The owner's answer reads in full on its ask's lines ("Question → answer"): no card of its own. */
+      onAsk?: true
     }
-  /** A recorded answer whose question is not in the loaded page: its own text says what it answered. */
-  | { kind: 'answer'; key: string; at: number; event: BotItemEvent }
   | { kind: 'worker'; key: string; at: number; phase: 'started' | 'finished'; link: DispatchLink }
 
-/** The question an owner's comment answers (`answers`): a reply written while the agent asked, or a
- *  recorded answer. Null for any other event. */
+/** The question an owner's comment answers (`answers`), or null for any other event. */
 function answeredQuestion(event: BotItemEvent): string | null {
   return event.kind === 'commented' &&
     event.actor.kind === 'owner' &&
@@ -45,10 +46,31 @@ function answeredQuestion(event: BotItemEvent): string | null {
     : null
 }
 
-/** The question a recorded answer names, or null for any other event. Only an answer that carries its
- *  decisions is recorded; a plain reply, even one linked to its question, never is. */
-export function botItemAnsweredQuestion(event: BotItemEvent): string | null {
-  return Array.isArray(event.data.decisions) ? answeredQuestion(event) : null
+/** An answer the ask's lines show whole: words only, no recorded picks, images or files, and where it
+ *  names its lines, nothing but those lines. */
+function readsOnAsk(event: BotItemEvent, pairing: BotItemQuestionPairing): boolean {
+  const text = typeof event.data.text === 'string' ? event.data.text : ''
+  const paired = pairing.replies.get(event.id)
+  const ask = paired ? pairing.questions.get(paired.questionId) : undefined
+  if (!ask) {
+    return false
+  }
+  const { shape } = ask
+  // With several questions, a comment that named no line is a comment of its own.
+  if (
+    shape.decisions.length > 1 &&
+    ask.answers.some((answer, index) => answer?.id === event.id && ask.byOrder[index])
+  ) {
+    return false
+  }
+  const lines = text.split('\n').filter((line) => line.trim())
+  const named = botItemNamedAnswers(shape, text).filter((words) => words !== null).length
+  return (
+    (named === 0 || named === lines.length) &&
+    !Array.isArray(event.data.decisions) &&
+    botItemCommentImages(event.data).length === 0 &&
+    botItemCommentFiles(text).files.length === 0
+  )
 }
 
 function linksOnlyWorkers(event: BotItemEvent): boolean {
@@ -73,85 +95,6 @@ function isSnoozeMark(event: BotItemEvent): boolean {
   return event.kind === 'snoozed' || event.kind === 'unsnoozed'
 }
 
-function isAsk(event: BotItemEvent): boolean {
-  return event.kind === 'status' && event.data.to === 'needs_you'
-}
-
-/** The owner's comment and their move from Needs you to In progress, written together: a reply that
- *  handed the item back. */
-function isOwnerReplyMove(comment: BotItemEvent, move: BotItemEvent | undefined): boolean {
-  return (
-    comment.kind === 'commented' &&
-    comment.actor.kind === 'owner' &&
-    botItemAnsweredQuestion(comment) === null &&
-    move?.kind === 'status' &&
-    move.actor.kind === 'owner' &&
-    move.data.from === 'needs_you' &&
-    move.data.to === 'working' &&
-    move.at === comment.at
-  )
-}
-
-/** The owner's move to In progress written with an answer: the receipt already says it. */
-function movedWithAnswer(previous: BotItemEvent | undefined, event: BotItemEvent): boolean {
-  return (
-    previous !== undefined &&
-    botItemAnsweredQuestion(previous) !== null &&
-    event.kind === 'status' &&
-    event.actor.kind === 'owner' &&
-    event.at === previous.at
-  )
-}
-
-/** What happened from each event up to the next Needs you move (the agent asking again ends a question's
- *  window): whether the owner commented, and whether an owner reply handed the item back. One backward
- *  pass over the events with snooze marks set aside, so it stays linear however many questions. */
-function questionWindows(events: readonly BotItemEvent[]): {
-  prev: (index: number) => BotItemEvent | undefined
-  next: (index: number) => BotItemEvent | undefined
-  window: (index: number) => { ownerCommented: boolean; ownerReplied: boolean }
-} {
-  const kept: number[] = []
-  const place = Array.from({ length: events.length }, () => -1)
-  for (let index = 0; index < events.length; index += 1) {
-    if (!isSnoozeMark(events[index]!)) {
-      place[index] = kept.length
-      kept.push(index)
-    }
-  }
-  const at = (k: number): BotItemEvent | undefined =>
-    k >= 0 && k < kept.length ? events[kept[k]!] : undefined
-  // Per kept event: the window that starts right after it.
-  const commentedAfter = Array.from({ length: kept.length }, () => false)
-  const repliedAfter = Array.from({ length: kept.length }, () => false)
-  let commented = false
-  let replied = false
-  for (let k = kept.length - 1; k >= 0; k -= 1) {
-    commentedAfter[k] = commented
-    repliedAfter[k] = replied
-    const event = at(k)!
-    if (isAsk(event)) {
-      commented = false
-      replied = false
-      continue
-    }
-    if (event.kind === 'commented' && event.actor.kind === 'owner') {
-      commented = true
-      replied ||= isOwnerReplyMove(event, at(k + 1))
-    }
-  }
-  return {
-    prev: (index) => at(place[index]! - 1),
-    next: (index) => at(place[index]! + 1),
-    // A question's window starts after its own Needs you move when that move is next to it.
-    window: (index) => {
-      const k = place[index]!
-      const from = at(k + 1) && isAsk(at(k + 1)!) ? k + 1 : k
-      return { ownerCommented: commentedAfter[from]!, ownerReplied: repliedAfter[from]! }
-    }
-  }
-}
-
 /** The question's first line, as a reply quotes it: Markdown marks dropped, one line. */
 export function botItemQuestionFirstLine(text: string): string {
   const line = text.split('\n').find((part) => part.trim()) ?? ''
@@ -162,89 +105,88 @@ export function botItemQuestionFirstLine(text: string): string {
     .trim()
 }
 
+/** What a reply quotes: the ask's line it answered, else its loaded question's first line, else the
+ *  question an older host kept with a recorded answer (`asked`). */
+function replyQuote(
+  event: BotItemEvent,
+  comments: ReadonlyMap<string, BotItemEvent>,
+  pairing: BotItemQuestionPairing
+): { eventId: string; text: string } | undefined {
+  const paired = pairing.replies.get(event.id)
+  if (paired) {
+    return { eventId: paired.questionId, text: botItemQuestionFirstLine(paired.decision.question) }
+  }
+  const eventId = answeredQuestion(event)
+  if (eventId === null) {
+    return undefined
+  }
+  const asked = comments.get(eventId)?.data.text ?? event.data.asked
+  const text = typeof asked === 'string' ? botItemQuestionFirstLine(asked) : ''
+  return text ? { eventId, text } : undefined
+}
+
 function eventEntries(
-  item: Pick<BotItem, 'question'>,
+  item: Pick<BotItem, 'question' | 'status' | 'waitingAsk'>,
   events: readonly BotItemEvent[]
 ): BotItemActivityEntry[] {
   const entries: BotItemActivityEntry[] = []
-  const loaded = new Set(events.map((event) => event.id))
-  const answers = new Map<string, BotItemEvent>()
   const comments = new Map<string, BotItemEvent>()
   for (const event of events) {
-    const question = answeredQuestion(event)
-    // The first answer is the one that took the question.
-    if (question !== null && !answers.has(question)) {
-      answers.set(question, event)
-    }
     if (event.kind === 'commented') {
       comments.set(event.id, event)
     }
   }
-  const { prev, next, window } = questionWindows(events)
-  events.forEach((event, index) => {
+  const pairing = botItemQuestionPairing(item, events)
+  // An ask waits, read or still on an earlier page.
+  const askWaiting =
+    [...pairing.questions.values()].some(({ waiting }) => waiting) ||
+    (item.waitingAsk !== undefined && !pairing.questions.has(item.waitingAsk))
+  const kept = events.filter((event) => !isSnoozeMark(event))
+  const place = new Map(kept.map((event, index) => [event, index]))
+  const prev = (event: BotItemEvent): BotItemEvent | undefined => {
+    const index = place.get(event)
+    return index === undefined ? undefined : kept[index - 1]
+  }
+  for (const event of events) {
     if (event.kind === 'linked' && linksOnlyWorkers(event)) {
-      return
+      continue
     }
-    if (
-      !isSnoozeMark(event) &&
-      (asksWith(prev(index), event) || movedWithAnswer(prev(index), event))
-    ) {
-      return
-    }
-    const recorded = botItemAnsweredQuestion(event)
-    if (recorded !== null) {
-      if (!loaded.has(recorded)) {
-        entries.push({ kind: 'answer', key: event.id, at: event.at, event })
-      }
-      return
+    if (!isSnoozeMark(event) && asksWith(prev(event), event)) {
+      continue
     }
     if (event.kind === 'status' && event.data.cause === 'answer') {
-      // Its answer is the owner's comment of the same write (an early unsnooze can come between);
-      // with its question on an earlier page the move stays.
-      const reply = prev(index)
+      // Its reply is the owner's comment of the same write (an early unsnooze can come between),
+      // which quotes the question; with the question on an earlier page the move stays.
+      const reply = prev(event)
       if (reply?.at === event.at && comments.has(answeredQuestion(reply) ?? '')) {
-        return
+        continue
       }
     }
     if (event.kind !== 'commented') {
       entries.push({ kind: 'event', key: event.id, at: event.at, event })
-      return
+      continue
     }
-    const answer = answers.get(event.id)
-    // A marked question, or one an answer names, is a question whatever its status move carried (a
-    // note included): an answer or the owner's reply closed it, else it went unanswered. An unmarked
-    // one is known by sitting with its Needs you move, and any owner comment after it counts.
-    const question =
-      event.id === item.question?.eventId
-        ? 'open'
-        : event.data.answerable === true || answer
-          ? answer || window(index).ownerReplied
-            ? 'answered'
-            : 'asked'
-          : asksWith(event, next(index))
-            ? window(index).ownerCommented
-              ? 'answered'
-              : 'asked'
-            : null
-    const asked = comments.get(answeredQuestion(event) ?? '')
-    const replyTo = asked
-      ? { eventId: asked.id, text: botItemQuestionFirstLine(String(asked.data.text ?? '')) }
-      : undefined
+    const replyTo = replyQuote(event, comments, pairing)
+    const asked = pairing.questions.get(event.id)
     entries.push({
       kind: 'comment',
       key: event.id,
       at: event.at,
       event,
-      question,
-      ...(answer && question === 'answered' ? { answer } : {}),
-      ...(replyTo?.text ? { replyTo } : {})
+      // A question asked in prose waits while it is the item's question and no ask waits before it.
+      waiting: asked
+        ? asked.waiting
+        : event.id === item.question?.eventId && event.actor.kind !== 'owner' && !askWaiting,
+      ...(asked ? { answers: asked.answers, byOrder: asked.byOrder } : {}),
+      ...(replyTo ? { replyTo } : {}),
+      ...(readsOnAsk(event, pairing) ? { onAsk: true as const } : {})
     })
-  })
+  }
   return entries
 }
 
 export function botItemActivity(
-  item: Pick<BotItem, 'links' | 'question'>,
+  item: Pick<BotItem, 'links' | 'question' | 'status' | 'waitingAsk'>,
   events: readonly BotItemEvent[]
 ): BotItemActivityEntry[] {
   const entries = eventEntries(item, events)
@@ -272,4 +214,17 @@ export function botItemActivity(
     }
   }
   return entries.sort((a, b) => a.at - b.at)
+}
+
+/** The move a Waiting item's card, last in Activity, stands in for: its latest status event, while
+ *  that set Waiting. */
+export function botItemWaitEntryKey(
+  item: Pick<BotItem, 'status' | 'wait'>,
+  entries: readonly BotItemActivityEntry[]
+): string | null {
+  if (item.status !== 'waiting' || !item.wait) {
+    return null
+  }
+  const last = entries.findLast((entry) => entry.kind === 'event' && entry.event.kind === 'status')
+  return last?.kind === 'event' && last.event.data.to === 'waiting' ? last.key : null
 }

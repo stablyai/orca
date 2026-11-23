@@ -52,11 +52,22 @@ export const ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY =
 /** Peer mail also reaches its bots (`bot:`, `--chat`, questions), admitted as its own bot mail is. */
 export const ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY =
   'orchestration.peer-bot-mail.v1' as const
+/** Peer mail about a bot's item also carries files uploaded here for that item's chat. */
+export const ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY =
+  'orchestration.peer-mail-files.v1' as const
 /** Runs the workers a paired Orca places here as its own, coordinated from that Orca (wire v1). */
 export const ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY =
   'orchestration.remote-owned-workers.v1' as const
+/** A paired Orca's chat-lineage start (`chatLineage`) starts here as a chat, and so do the workers it starts. */
+export const ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY =
+  'orchestration.chat-lineage.v1' as const
+/** Its agents can message agents on a paired computer that pulls with `clientAsks`
+ *  (`send --on-client`); replies come back by `peerMailReturn`. */
+export const ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY =
+  'orchestration.client-agent-asks.v1' as const
 
 export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
+  ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
@@ -77,5 +88,7 @@ export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
   ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,
-  ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY
+  ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY,
+  ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY,
+  ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY
 ] as const

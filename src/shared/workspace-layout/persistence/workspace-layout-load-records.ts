@@ -9,7 +9,10 @@ import type { WorkspaceLoadArgs } from './workspace-layout-load-types'
 import type { LayoutBrowserTab, LayoutEditorFile, LayoutTab } from '../workspace-layout-model'
 
 /** Resolve disagreeing worktree IDs by record majority, falling back to the workspace key. */
-export function resolveWorktreeId({ session, key }: WorkspaceLoadArgs): string {
+export function resolveWorktreeId({
+  session,
+  key
+}: Pick<WorkspaceLoadArgs, 'session' | 'key'>): string {
   const named: { worktreeId: string }[] = [
     ...(session.tabsByWorktree?.[key] ?? []),
     ...(session.unifiedTabs?.[key] ?? []),

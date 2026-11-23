@@ -190,15 +190,6 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
     }
   }
 
-  protected finishDelayedForegroundSnapshot(ptyId: string, changed: boolean): void {
-    if (this.mobileSessionTabListeners.size > 0) {
-      this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
-    }
-    if (!changed) {
-      this.touchMobileSessionSnapshotsForPty(ptyId)
-    }
-  }
-
   protected touchMobileSessionSnapshotsForPty(
     ptyId: string,
     options: { immediate?: boolean } = {}

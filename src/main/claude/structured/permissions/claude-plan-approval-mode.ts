@@ -1,8 +1,13 @@
 import type { PermissionMode, PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 import type { ClaudePendingPrompt } from './claude-prompt-registry'
 import type { ClaudeSession } from '../claude-structured-session-state'
+import { claudeBypassRefused } from './claude-full-access-refusal'
+import {
+  ClaudePermissionModeUnsettled,
+  setClaudeAllowedPermissionMode
+} from './claude-permission-mode-ladder'
 
-/** This process's requested mode, else its first init's; anything else asks for each edit. */
+/** This process's requested mode, else the mode it opened in; anything else asks for each edit. */
 export function claudePlanApprovalMode(
   session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit'>
 ): PermissionMode {
@@ -20,10 +25,16 @@ export function claudePlanApprovalMode(
   }
 }
 
-/** Keep a provider's startup restriction until an approved plan successfully restores the requested policy. */
+/** Keep a provider's startup restriction until an approved plan successfully restores the requested
+ *  policy. A refused Full access chat asks for Full access each time, so Claude's answer picks the
+ *  fallback rather than an earlier one that was only for now. */
 export function claudeBuildPermissionMode(
-  session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'appliedInputOptions'>
+  session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'appliedInputOptions'> &
+    Partial<Pick<ClaudeSession, 'bypassDisabled'>>
 ): PermissionMode {
+  if (claudeBypassRefused(session)) {
+    return claudePlanApprovalMode(session)
+  }
   const opened = session.firstRootInit?.permissionMode
   return claudePlanApprovalMode({
     launchIntent: {
@@ -51,7 +62,7 @@ export function leaveClaudePlanModeOnApproval(
     ClaudeSession,
     'launchIntent' | 'firstRootInit' | 'reportedOptions' | 'orderedPermissionMode'
   > &
-    Partial<Pick<ClaudeSession, 'appliedInputOptions'>> & {
+    Partial<Pick<ClaudeSession, 'appliedInputOptions' | 'bypassDisabled' | 'autoDisabled'>> & {
       connection: Pick<ClaudeSession['connection'], 'setPermissionMode'>
     },
   prompt: Pick<ClaudePendingPrompt, 'toolName'>,
@@ -64,11 +75,21 @@ export function leaveClaudePlanModeOnApproval(
     return
   }
   try {
-    const restored = claudePlanApprovalMode(session)
-    session.connection.setPermissionMode(restored).then(() => {
-      session.appliedInputOptions?.set('interactionMode', 'default')
-      session.appliedInputOptions?.set('buildPermissionMode', restored)
-    }, logPlanExitFailure)
+    setClaudeAllowedPermissionMode(session, claudePlanApprovalMode(session)).then(
+      (restored) => {
+        session.appliedInputOptions?.set('interactionMode', 'default')
+        session.appliedInputOptions?.set('buildPermissionMode', restored)
+      },
+      (error: unknown) => {
+        // Claude accepted a step out of Plan before a later one went unanswered: the chat has
+        // left Plan, and its fallback is owed again.
+        if (error instanceof ClaudePermissionModeUnsettled) {
+          session.appliedInputOptions?.set('interactionMode', 'default')
+          session.appliedInputOptions?.delete('buildPermissionMode')
+        }
+        logPlanExitFailure(error)
+      }
+    )
   } catch (error) {
     logPlanExitFailure(error)
   }

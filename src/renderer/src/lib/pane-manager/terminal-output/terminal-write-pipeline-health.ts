@@ -196,16 +196,3 @@ export function settleTerminalWriteStallWatch(terminal: WriteTarget): void {
 export function failTerminalWriteStallWatch(terminal: WriteTarget): void {
   certifyTerminalWritePipelineDead(terminal)
 }
-
-export function _resetWritePipelineHealthForTests(terminal?: WriteTarget): void {
-  if (terminal) {
-    const watch = stallWatchByTerminal.get(terminal)
-    if (watch) {
-      clearTimeout(watch.timer)
-    }
-    stallWatchByTerminal.delete(terminal)
-    handlersByTerminal.delete(terminal)
-    certifiedDeadTerminals.delete(terminal)
-    parseProgressGenerationByTerminal.delete(terminal)
-  }
-}

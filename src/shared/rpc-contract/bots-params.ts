@@ -24,6 +24,7 @@ import {
 } from '../bot-types'
 import { isSettableBotAvatar, MAX_BOT_AVATAR_BYTES } from '../bot-avatar'
 import { BotAvatarColorSchema } from '../bots/bot-avatar-color'
+import { BotStoredOutfitSchema } from '../bots/bot-avatar-outfit'
 import { botMembersFullError, planBotMemberAdds } from '../bots/bot-member-capacity'
 import { HANDED_WORKSPACES_MAX, HandedWorkspaceSchema } from '../bots/bot-made-for-workspaces'
 import { BotProposalSchema, BotProposalSeedSchema } from '../bots/bot-proposal'
@@ -67,6 +68,8 @@ export const BotCreate = z.object({
   avatar: SettableBotAvatar.optional(),
   /** Absent, the mascot's own sky blue. */
   avatarColor: BotAvatarColorSchema.optional(),
+  /** Absent, the mascot wears nothing. Any well-formed id, so a newer client's outfit is kept for it. */
+  avatarOutfit: BotStoredOutfitSchema.optional(),
   /** Workspaces the owner made it for: its first turn offers to take them over. */
   handOff: HandedWorkspaces.optional(),
   /** Made in Hand to bot: its first turn is the hand-over (`bots.takeOver`), sent once the workspace moved. */
@@ -83,13 +86,19 @@ export const BotCreate = z.object({
       skills: z.array(z.string().min(1).max(64)).max(32)
     })
     .optional(),
+  /** With `fromTemplate`: the template's name as the client showed it, in its own language. A bot
+   *  still named that gets the folder the template's English name makes; older hosts ignore it. */
+  templateNameShown: BotNameSchema.optional(),
   /** A shared link the owner reviewed: the bot is made from exactly that version, or nothing is made.
    *  `toolIds` are the tools the owner ticked. */
   fromShare: z
     .object({
       /** The review the owner opened; main holds what it showed. */
       reviewId: z.uuid(),
-      toolIds: z.array(z.string().min(1).max(64)).max(32)
+      toolIds: z.array(z.string().min(1).max(64)).max(32),
+      /** Set by a client that sends the shared mascot's look as it shows it, none included; from an
+       *  older client the host takes the package's. */
+      lookSent: z.literal(true).optional()
     })
     .optional(),
   /** A bot in another app to bring over: its first turn imports it instead of the usual setup. */
@@ -128,6 +137,8 @@ export const BotUpdate = z.object({
       avatar: SettableBotAvatar.optional(),
       /** null puts back the mascot's own sky blue. */
       avatarColor: BotAvatarColorSchema.nullable().optional(),
+      /** null takes the outfit off; any well-formed id is kept, as on create. */
+      avatarOutfit: BotStoredOutfitSchema.nullable().optional(),
       paused: z.boolean().optional(),
       sidebarOrder: z.number().int().nonnegative().optional(),
       /** null clears the override. */
@@ -168,7 +179,9 @@ export const BotUpdate = z.object({
 
 /** Projects' skills as a bot would load them; ids that name no project read as missing. */
 export const BotSkillProjectsScan = z.object({
-  repoIds: z.array(z.string().min(1)).max(500)
+  repoIds: z.array(z.string().min(1)).max(500),
+  /** Adds this bot's own skills (`own`); older hosts ignore it. */
+  botId: z.string().min(1).optional()
 })
 
 /** Grant or Decline one waiting Request access ask for a bot on this host. */

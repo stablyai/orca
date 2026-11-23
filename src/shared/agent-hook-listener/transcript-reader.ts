@@ -1,5 +1,6 @@
 import { closeSync, openSync, readSync } from 'node:fs'
 import { parseAgentHookJson } from './request-body'
+import { CopilotReplyLineReader } from './providers/copilot/copilot-transcript-reply'
 import { extractAssistantTextFromLine } from './transcript-entry-text'
 import { scanFileRegionsBackward, scanFileRegionsBackwardAsync } from './reverse-file-region-scan'
 
@@ -37,8 +38,20 @@ export function readFirstTranscriptRecord(transcriptPath: string): unknown {
   return undefined
 }
 
-export function readLastAssistantFromTranscriptOnce(transcriptPath: string): string | undefined {
-  return readLastTextFromTranscriptOnce(transcriptPath, extractAssistantTextFromLine)
+/** Copilot's events.jsonl has its own turn records; every other transcript reads with the shared rules. */
+export type AssistantTranscriptFormat = 'shared' | 'copilot'
+
+export function readLastAssistantFromTranscriptOnce(
+  transcriptPath: string,
+  format: AssistantTranscriptFormat = 'shared'
+): string | undefined {
+  return readLastTextFromTranscriptOnce(transcriptPath, assistantLineExtractor(format)) || undefined
+}
+
+function assistantLineExtractor(
+  format: AssistantTranscriptFormat
+): (line: string) => string | undefined {
+  return format === 'copilot' ? new CopilotReplyLineReader().extract : extractAssistantTextFromLine
 }
 
 export function readLastTextFromTranscriptOnce(
@@ -53,21 +66,23 @@ export function readLastTextFromTranscriptOnce(
 }
 
 /** For event-loop callers: the same scan as readLastAssistantFromTranscriptOnce, without blocking. */
-export function readLastAssistantFromTranscriptAsync(
+export async function readLastAssistantFromTranscriptAsync(
   transcriptPath: string,
   keepReading?: () => boolean,
   /** A retry passes the size its last scan saw: only lines reaching past it are searched again. */
   floor?: number,
-  onError?: () => void
+  onError?: () => void,
+  format: AssistantTranscriptFormat = 'shared'
 ): Promise<string | undefined> {
-  return scanFileRegionsBackwardAsync(
+  const extractLineText = assistantLineExtractor(format)
+  const text = await scanFileRegionsBackwardAsync(
     transcriptPath,
     { chunkBytes: TRANSCRIPT_CHUNK_BYTES, maxScanBytes: TRANSCRIPT_MAX_SCAN_BYTES, floor },
-    (region) =>
-      findLastExtractedTranscriptLineText(region.toString('utf8'), extractAssistantTextFromLine),
+    (region) => findLastExtractedTranscriptLineText(region.toString('utf8'), extractLineText),
     keepReading,
     onError
   )
+  return text || undefined
 }
 
 export function findLastExtractedTranscriptLineText(

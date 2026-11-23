@@ -180,7 +180,7 @@ export function AutomationListLocalRow({
 
   const setupReview = pendingAutomationSetupReviewFromSummary(automation, row.usageSummary)
   const reviewContent = onReviewSetup && allows(row, 'save') ? setupReview?.content : null
-  const reviewSetupLabel = t('automations.setupTrust.reviewAction', 'Review and approve setup')
+  const reviewSetupLabel = t('automations.setupTrust.reviewAction', 'Review setup')
 
   const dropdownRunItem = (
     <DropdownMenuItem

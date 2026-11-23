@@ -1,8 +1,5 @@
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
-import type {
-  RuntimePtyTitleTrackerEntry,
-  RuntimePtyWorktreeRecord
-} from '../records/runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { OrcaRuntimeWithGetUnpersistedTrackedTitleForPty } from './terminal-title-tracker'
 import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
@@ -11,7 +8,6 @@ import type { ClaudeTerminalEvidence } from '../../../../shared/agent-hook-liste
 import { agentStatusTakesTypedInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 import { hermesNativeTitleStatus } from '../../../../shared/agent-status/title/providers/hermes-terminal-title'
 import { jcodePaneTitleStatus } from '../../../../shared/agent-status/title/providers/jcode-terminal-title'
-import { commandCodePaneTitleStatus } from '../../../../shared/agent-status/title/providers/command-code-terminal-title'
 
 /** Claude fires PermissionRequest just before it reports the block; older wait hooks belong to other prompts. */
 const PERMISSION_HOOK_LEAD_MS = 5_000
@@ -63,12 +59,10 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
    *  reports one, else what the title glyph says. */
   protected classifyPtyTitleStatus(ptyId: string, rawTitle: string): AgentStatus | null {
     const agent = this.getPaneTerminalAgent(ptyId)
-    const entry = this.ptyTitleTrackersByPtyId.get(ptyId)
     return (
-      entry?.programActivity ??
+      this.ptyTitleTrackersByPtyId.get(ptyId)?.programActivity ??
       hermesNativeTitleStatus(rawTitle, agent) ??
       jcodePaneTitleStatus(rawTitle, agent) ??
-      commandCodePaneTitleStatus(rawTitle, agent, entry?.commandCodeComposer === 'idle') ??
       detectAgentStatusFromTitle(rawTitle)
     )
   }
@@ -87,15 +81,10 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       const { programAtRest: _ended, ...status } = pty.lastExplicitAgentStatus
       pty.lastExplicitAgentStatus = status
     }
-    this.reclassifyTrackedPtyTitle(ptyId, entry)
-  }
-
-  /** Re-classifies the PTY's last title after status evidence other than the title changed. */
-  protected reclassifyTrackedPtyTitle(ptyId: string, entry: RuntimePtyTitleTrackerEntry): void {
     // A stale-spinner clear stands for the title it replaced, so a dead spinner is not revived.
     // Programs that never set a title still report their status here.
     const title = entry.lastTitle ?? { raw: '', normalized: '' }
-    const raw = this.ptysById.get(ptyId)?.titleDisplayClear?.title ?? title.raw
+    const raw = pty?.titleDisplayClear?.title ?? title.raw
     const changed = this.applyTrackedPtyTitle(ptyId, raw, title.normalized, undefined, {
       statusOnly: true
     })
@@ -176,6 +165,13 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       }
       if (prevStatus !== agentStatus) {
         pty.lastAgentStatusStartedAtEpochMs = observedAtEpochMs
+        // Blocked or statusless titles mid-turn keep the turn; only an idle title means at rest.
+        if (prevStatus === 'working' || prevStatus === 'idle') {
+          pty.lastAgentStatusEndedTurn = prevStatus === 'working'
+        }
+        if (agentStatus === 'working') {
+          pty.lastAgentStatusWorkingStartedAtEpochMs = observedAtEpochMs
+        }
       }
       if (prevStatus !== agentStatus || retiresDisplayClear) {
         this.onTitleAgentStatusChanged()
@@ -308,6 +304,8 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       // so the seed a same-id restore applies must not inherit its authority.
       pty.lastAgentStatusObservedLive = false
       pty.lastAgentStatusStartedAtEpochMs = null
+      pty.lastAgentStatusWorkingStartedAtEpochMs = null
+      pty.lastAgentStatusEndedTurn = false
       pty.lastAgentStatusRichInvalidatedAtEpochMs = Date.now()
       pty.providerGenerationResetAtEpochMs = pty.lastAgentStatusRichInvalidatedAtEpochMs
       pty.managementTitle = null

@@ -1,3 +1,4 @@
+import { MobileBotFirstScreen, useMobileBotFirstScreen } from './MobileBotFirstScreen'
 import { MobileBotCardSendContext } from './transcript/bot-cards/mobile-bot-card-host'
 import { mobileNativeChatOtherBotCard } from './transcript/bot-cards/mobile-native-chat-bot-cards'
 import { MobileMarkdownBotCardContext } from '../../components/markdown/blocks/mobile-markdown-bot-card-context'
@@ -76,6 +77,7 @@ export function MobileNativeChatView({
   workingStartedAt,
   settledTurns,
   turnJournal = null,
+  transcriptLoading = false,
   receipts = null,
   actionablePromptIds,
   onStop,
@@ -111,6 +113,7 @@ export function MobileNativeChatView({
   onDismissSendError,
   filePaths,
   onNeedFiles,
+  fileReference,
   skillDiscovery,
   onNeedSkills,
   sessionOptions,
@@ -207,6 +210,11 @@ export function MobileNativeChatView({
   )
 
   const turnBot = useContext(MobileNativeChatBotIdentityContext)
+  const firstScreen = useMobileBotFirstScreen(
+    messages,
+    transcriptLoading ? null : turnJournal,
+    agentWorking === true
+  )
   const turns = useMobileNativeChatTurnDisclosure({
     messages: data,
     enabled: true,
@@ -338,7 +346,7 @@ export function MobileNativeChatView({
           {...offlineQueue.composerLock}
           sendDisabled={expandedPromptOwnsSend}
           placeholder={composerPlaceholder}
-          {...{ filePaths, onNeedFiles, skillDiscovery, onNeedSkills }}
+          {...{ filePaths, onNeedFiles, fileReference, skillDiscovery, onNeedSkills }}
           stop={canStop ? { onStop, held: turnIndicator?.stopRequestInFlight === true } : null}
         />
       </View>
@@ -357,6 +365,8 @@ export function MobileNativeChatView({
             loading
             title={t('session.nativeChatView.loading', 'Loading conversation…')}
           />
+        ) : firstScreen ? (
+          <MobileBotFirstScreen firstScreen={firstScreen} />
         ) : (
           <GestureHandlerRootView style={styles.listWrap}>
             <MobileNativeChatDisclosureContext.Provider value={disclosures}>

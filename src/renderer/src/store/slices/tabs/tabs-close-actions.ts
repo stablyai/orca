@@ -1,4 +1,5 @@
 import { editorTabRetirement } from '../editor/tabs/editor-tab-retirement'
+import { structuredAgentSessionAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   landsOnEmptiedWorktree,
   emptiedWorktreeLandingPatch,
@@ -72,7 +73,16 @@ export function createTabsCloseActions(
       const dedupedGroupOrder = dedupeTabOrder(groupOrder)
       const remainingOrder = dedupeTabOrder(dedupedGroupOrder.filter((id) => id !== tabId))
       const wasLastTab = remainingOrder.length === 0
-      if (tab.contentType === 'agent-session') {
+      const retainedChatView =
+        opts?.preserveAgentSession &&
+        (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
+          (other) =>
+            other.id !== tab.id &&
+            other.contentType === 'agent-session' &&
+            other.entityId === tab.entityId &&
+            other.executionHostId === tab.executionHostId
+        )
+      if (tab.contentType === 'agent-session' && !retainedChatView) {
         const provisional =
           shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId) ||
           hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, tab.entityId)
@@ -227,7 +237,14 @@ export function createTabsCloseActions(
                   settleAttentionRemovedBy(
                     set,
                     get,
-                    () => set((current) => removeTabsAttention(current, [tabId])),
+                    // The tab is gone by now, so its chat's pane address is named here.
+                    () =>
+                      set((current) =>
+                        removeTabsAttention(current, [
+                          tabId,
+                          structuredAgentSessionAddressTabId(tabId, tab.entityId)
+                        ])
+                      ),
                     { tabsBefore: state }
                   )
               }

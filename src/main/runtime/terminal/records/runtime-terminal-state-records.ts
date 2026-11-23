@@ -121,6 +121,10 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
     programSignInRequiredSince?: number
   } | null
   lastAgentStatusStartedAtEpochMs: number | null
+  /** When lastAgentStatus last turned working: a later title turn starts after an earlier Done. */
+  lastAgentStatusWorkingStartedAtEpochMs?: number | null
+  /** Whether a working status ended since the agent was last idle, so the current status is no start at rest. */
+  lastAgentStatusEndedTurn?: boolean
   lastAgentStatusRichInvalidatedAtEpochMs: number | null
   /** While lastAgentStatus is permission: a waiting/blocked hook observed after this raised the block. */
   permissionWaitHookedAfterEpochMs?: number
@@ -156,8 +160,6 @@ export type RuntimePtyTabCloseAuthority = {
   worktreeId: string
 }
 
-export type CommandCodeComposerState = 'idle' | 'exited' | null
-
 export type RuntimePtyTitleTrackerEntry = {
   tracker: TerminalTitleTracker
   applyingChunk: boolean
@@ -169,9 +171,6 @@ export type RuntimePtyTitleTrackerEntry = {
   /** Run once this chunk's facts are emitted: status that readers must see after them. */
   afterFacts: (() => void)[]
   commandCodeDetector: { observe: (data: string) => boolean } | null
-  /** Command Code's composer, which its title cannot show: 'idle' when shown with no turn since,
-   *  'exited' from its command finishing until its next turn. */
-  commandCodeComposer: CommandCodeComposerState
   /** The program's OSC 7501 activity; while set it, not the title glyph, is the PTY's status. */
   programActivity: AgentStatus | null
   /** The last observed title, so a program's activity change can re-classify it. */

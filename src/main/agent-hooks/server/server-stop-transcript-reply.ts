@@ -1,36 +1,47 @@
 import { stat } from 'node:fs/promises'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import {
-  droidVerdictFields,
-  readDroidTurnVerdictAsync,
-  type DroidTurnVerdict
-} from '../../../shared/agent-hook-listener/providers/droid/droid-turn-outcome'
-import { readLastAssistantFromTranscriptAsync } from '../../../shared/agent-hook-listener/transcript-reader'
+import { droidVerdictFields } from '../../../shared/agent-hook-listener/providers/droid/droid-turn-outcome'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
+import { retainClaudeLeadModel } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-roster-state'
+import { claudeReplyModelChange } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-transcript-reply-model'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
-import { ASSISTANT_MESSAGE_RETRY_ATTEMPTS, ASSISTANT_MESSAGE_RETRY_MS } from './server-constants'
+import {
+  replyModelRead,
+  replyRead,
+  verdictRead,
+  type StopTranscriptFind,
+  type StopTranscriptRead
+} from './server-stop-transcript-reads'
 import { AgentHookServerStatusRetries } from './server-status-retries'
 import type { EnrichedAgentHookEventPayload, NormalizedLocalHook } from './server-types'
 
-/** The identity of one Stop's pending reply read, the transcript size its last scan saw, and what
- *  it found so far: a Droid Stop also waits for the turn verdict Droid appends after it. */
+/** One Stop's pending transcript reads. Each retries on its own timer and publishes its find at
+ *  once; any later hook that changes the row ends them all. */
 type StopReplyClaim = {
   readonly paneKey: string
-  scannedSize?: number
-  text?: string
-  textApplied?: boolean
-  verdict?: DroidTurnVerdict | null
+  readonly token: string
+  readonly generation: number
+  /** The Stop's row as last published; each read adds to it only while the pane still holds it. */
+  row: EnrichedAgentHookEventPayload
+  pendingReads: number
+  readonly timers: Set<ReturnType<typeof setTimeout>>
+  /** A statusline report since the Stop is newer than the reply's model. */
+  replyModelSuperseded?: boolean
 }
 
-/** A Stop that came without its reply gets it from the transcript, read off the event loop. */
+/** A Stop that came without its reply gets it from the transcript, and a Droid Stop its turn
+ *  verdict, read off the event loop. */
 export abstract class AgentHookServerStopTranscriptReply extends AgentHookServerStatusRetries {
   /** One per pane with a read in flight; any later hook that changes the row ends it. */
   private readonly stopReplyClaims = new Map<string, StopReplyClaim>()
 
-  /** Whatever cancels a pending reply retry also ends the pane's pending read. */
+  /** Whatever cancels a pending reply retry also ends the pane's pending reads. */
   protected override clearAssistantMessageRetry(paneKey: string): void {
     super.clearAssistantMessageRetry(paneKey)
-    this.stopReplyClaims.delete(paneKey)
+    const claim = this.stopReplyClaims.get(paneKey)
+    if (claim) {
+      this.endStopReplyClaim(claim)
+    }
   }
 
   /** Server stop or status hooks off: every pending reply retry and read ends. */
@@ -39,10 +50,12 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
       clearTimeout(timer)
     }
     this.assistantMessageRetryTimers.clear()
-    this.stopReplyClaims.clear()
+    for (const claim of this.stopReplyClaims.values()) {
+      this.endStopReplyClaim(claim)
+    }
   }
 
-  /** Applies a live hook, then follows up on the reply text it did not carry. */
+  /** Applies a live hook, then reads the reply text it did not carry and a Droid Stop's verdict. */
   protected applyLocalHookAndReply(
     source: AgentHookSource,
     body: unknown,
@@ -58,7 +71,7 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
     if (enriched !== rowBefore && !normalized.stopTranscriptPath) {
       this.scheduleAssistantMessageRetry(source, body, enriched)
     }
-    this.followStopReply(rowBefore, enriched, normalized.stopTranscriptPath)
+    this.followStopReply(rowBefore, enriched, normalized)
     return enriched
   }
 
@@ -71,145 +84,194 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
     const rowBefore = this.state.lastStatusByPaneKey.get(event.paneKey)
     const enriched = this.applyObservedLocalHook(event, normalized.onAccepted, receivedAt)
     if (enriched) {
-      this.followStopReply(rowBefore, enriched, normalized.stopTranscriptPath)
+      this.followStopReply(rowBefore, enriched, normalized)
     }
     return enriched
   }
 
-  /** After every applied live hook: it ends the pane's pending read, or starts one for its Stop. */
+  /** After every applied live hook: it ends the pane's pending reads, or starts them for its Stop. */
   protected followStopReply(
     rowBefore: AgentHookEventPayload | undefined,
     enriched: EnrichedAgentHookEventPayload,
-    transcriptPath: string | undefined
+    { stopTranscriptPath, droidVerdictTranscriptPath }: NormalizedLocalHook
   ): void {
-    // A refused hook leaves the row it lost to: it neither ends that row's read nor starts one.
+    // A refused hook leaves the row it lost to: it neither ends that row's reads nor starts any.
     if (enriched === rowBefore) {
       return
     }
-    this.stopReplyClaims.delete(enriched.paneKey)
+    const previousClaim = this.stopReplyClaims.get(enriched.paneKey)
+    if (previousClaim) {
+      this.endStopReplyClaim(previousClaim)
+    }
     // A child's held permission card is not the lead's Stop row; restating it would drop the card.
-    if (transcriptPath && enriched.toolAgentId === undefined) {
-      const claim: StopReplyClaim = { paneKey: enriched.paneKey }
-      this.stopReplyClaims.set(enriched.paneKey, claim)
-      this.readStopTextFromTranscript(enriched, transcriptPath, claim)
+    if (enriched.toolAgentId !== undefined) {
+      return
+    }
+    const reads: [string, StopTranscriptRead][] = []
+    if (stopTranscriptPath) {
+      const format = enriched.payload.agentType === 'copilot' ? 'copilot' : 'shared'
+      reads.push([stopTranscriptPath, replyRead(stopTranscriptPath, format)])
+    }
+    if (droidVerdictTranscriptPath) {
+      reads.push([droidVerdictTranscriptPath, verdictRead(droidVerdictTranscriptPath)])
+    }
+    // Claude hooks name the model only at SessionStart; each Stop's reply names the one /model set.
+    const replyModelPath =
+      enriched.payload.agentType === 'claude' && enriched.hookEventName === 'Stop'
+        ? enriched.providerSession?.transcriptPath
+        : undefined
+    if (replyModelPath) {
+      reads.push([replyModelPath, replyModelRead(replyModelPath)])
+    }
+    if (reads.length === 0) {
+      return
+    }
+    const claim: StopReplyClaim = {
+      paneKey: enriched.paneKey,
+      token: this.token,
+      generation: this.statusHookGeneration,
+      row: enriched,
+      pendingReads: reads.length,
+      timers: new Set()
+    }
+    this.stopReplyClaims.set(enriched.paneKey, claim)
+    // A slow or stalled read never holds back the other's find.
+    for (const [transcriptPath, read] of reads) {
+      this.readStopTranscript(claim, transcriptPath, read)
     }
   }
 
-  /**
-   * The Stop already applied in hook order without its text; read it off the event loop and add
-   * it to that Stop's row. The claim ends with any later hook, even one in the same millisecond;
-   * the receipt check rejects rows Orca rebuilt meanwhile (a pane sleeping, an exited agent's
-   * resume row) while an identity settling keeps it.
-   */
-  private readStopTextFromTranscript(
-    original: EnrichedAgentHookEventPayload,
-    transcriptPath: string,
-    claim: StopReplyClaim,
-    attempt = 1
-  ): void {
-    const token = this.token
-    const generation = this.statusHookGeneration
-    const current = (): AgentHookEventPayload | undefined => {
-      const row = this.state.lastStatusByPaneKey.get(original.paneKey)
-      return this.statusHooksEnabled &&
-        this.token === token &&
-        this.statusHookGeneration === generation &&
-        this.stopReplyClaims.get(original.paneKey) === claim &&
-        row &&
-        !('paneSleep' in row && row.paneSleep) &&
-        !('providerSessionOnly' in row && row.providerSessionOnly) &&
-        'receivedAt' in row &&
-        row.receivedAt === original.receivedAt &&
-        'stateStartedAt' in row &&
-        row.stateStartedAt === original.stateStartedAt &&
-        row.payload.state === original.payload.state &&
-        row.payload.prompt === original.payload.prompt
-        ? row
-        : undefined
+  /** Claude's statusline names the live model, even an unchanged one, so it wins over a pending
+   *  Stop read of the model that wrote the reply. */
+  protected supersedeStopReplyModel(paneKey: string): void {
+    const claim = this.stopReplyClaims.get(paneKey)
+    if (claim) {
+      claim.replyModelSuperseded = true
     }
-    const awaitsVerdict = original.payload.agentType === 'droid'
-    const scan = async (): Promise<void> => {
+  }
+
+  private endStopReplyClaim(claim: StopReplyClaim): void {
+    for (const timer of claim.timers) {
+      clearTimeout(timer)
+    }
+    claim.timers.clear()
+    if (this.stopReplyClaims.get(claim.paneKey) === claim) {
+      this.stopReplyClaims.delete(claim.paneKey)
+    }
+  }
+
+  /** The pane's row while it is still this claim's Stop. The claim ends with any later hook, even
+   *  one in the same millisecond; the receipt check rejects rows Orca rebuilt meanwhile (a pane
+   *  sleeping, an exited agent's resume row) while an identity settling keeps it. */
+  private currentStopRow(claim: StopReplyClaim): AgentHookEventPayload | undefined {
+    const row = this.state.lastStatusByPaneKey.get(claim.paneKey)
+    const stop = claim.row
+    return this.statusHooksEnabled &&
+      this.token === claim.token &&
+      this.statusHookGeneration === claim.generation &&
+      this.stopReplyClaims.get(claim.paneKey) === claim &&
+      row &&
+      !('paneSleep' in row && row.paneSleep) &&
+      !('providerSessionOnly' in row && row.providerSessionOnly) &&
+      'receivedAt' in row &&
+      row.receivedAt === stop.receivedAt &&
+      'stateStartedAt' in row &&
+      row.stateStartedAt === stop.stateStartedAt &&
+      row.payload.state === stop.payload.state &&
+      row.payload.prompt === stop.payload.prompt
+      ? row
+      : undefined
+  }
+
+  /** The Stop already applied in hook order; one read off the event loop retries on its own budget
+   *  until it finds what it reads, then adds that to the Stop's row. */
+  private readStopTranscript(
+    claim: StopReplyClaim,
+    transcriptPath: string,
+    read: StopTranscriptRead,
+    attempt = 1,
+    progress: { scannedSize?: number } = {}
+  ): void {
+    const scan = async (): Promise<StopTranscriptFind | undefined> => {
       const size = await stat(transcriptPath).then(
         (stats) => stats.size,
         () => undefined
       )
       // A retry reads only lines reaching past its last scan's size, and nothing if the file hasn't grown.
-      const previous = claim.scannedSize
+      const previous = progress.scannedSize
       if (size !== undefined && size === previous) {
-        return
+        return undefined
       }
-      claim.scannedSize = size
-      const keepReading = () => current() !== undefined
-      claim.text ??= await readLastAssistantFromTranscriptAsync(
-        transcriptPath,
-        keepReading,
+      progress.scannedSize = size
+      return read.scan(
+        () => this.currentStopRow(claim) !== undefined,
         size !== undefined && previous !== undefined && size > previous ? previous : undefined,
         // A failed read saw nothing; the next retry reads in full even at the same size.
         () => {
-          claim.scannedSize = undefined
+          progress.scannedSize = undefined
         }
       )
-      if (awaitsVerdict && claim.verdict === undefined) {
-        claim.verdict = await readDroidTurnVerdictAsync(transcriptPath, keepReading, () => {
-          claim.scannedSize = undefined
-        })
-      }
     }
-    void scan().then(() => {
-      const row = current()
-      const { text, verdict } = claim
-      // The reply lands as soon as it is read; a Droid verdict read after it restates the same row.
-      const restated =
-        row && ((text && !claim.textApplied) || verdict)
-          ? this.restateStopRow(original, row, claim.textApplied ? undefined : text, verdict)
-          : undefined
-      claim.textApplied ||= text !== undefined
-      // Droid writes its verdict last, so once it is read no reply text can follow.
-      const pending = awaitsVerdict ? verdict === undefined : !text
-      if (row && pending && attempt < ASSISTANT_MESSAGE_RETRY_ATTEMPTS) {
-        // The text restate ends the claim like any row change; this Stop's verdict read goes on
-        // against the restated row.
-        this.stopReplyClaims.set(original.paneKey, claim)
-        // Stop can precede the transcript flush.
-        super.clearAssistantMessageRetry(original.paneKey)
-        const timer = setTimeout(() => {
-          this.assistantMessageRetryTimers.delete(original.paneKey)
-          this.readStopTextFromTranscript(restated ?? original, transcriptPath, claim, attempt + 1)
-        }, ASSISTANT_MESSAGE_RETRY_MS)
-        timer.unref?.()
-        this.assistantMessageRetryTimers.set(original.paneKey, timer)
+    void scan().then((found) => {
+      const row = this.currentStopRow(claim)
+      if (!row) {
+        this.endStopReplyClaim(claim)
         return
       }
-      if (this.stopReplyClaims.get(original.paneKey) === claim) {
-        this.stopReplyClaims.delete(original.paneKey)
+      const delay = found ? undefined : read.retryDelayMs(attempt)
+      if (delay !== undefined) {
+        // Stop can precede the transcript flush.
+        const timer = setTimeout(() => {
+          claim.timers.delete(timer)
+          this.readStopTranscript(claim, transcriptPath, read, attempt + 1, progress)
+        }, delay)
+        timer.unref?.()
+        claim.timers.add(timer)
+        return
+      }
+      if (found) {
+        this.restateStopRow(claim, row, found)
+      }
+      claim.pendingReads -= 1
+      if (claim.pendingReads === 0) {
+        this.endStopReplyClaim(claim)
       }
     })
   }
 
   private restateStopRow(
-    original: EnrichedAgentHookEventPayload,
+    claim: StopReplyClaim,
     row: AgentHookEventPayload,
-    text: string | undefined,
-    verdict: DroidTurnVerdict | null | undefined
-  ): EnrichedAgentHookEventPayload | undefined {
+    { text, verdict, model }: StopTranscriptFind
+  ): void {
+    const newModel =
+      model && !claim.replyModelSuperseded
+        ? claudeReplyModelChange(row.payload.model, model)
+        : undefined
+    if (!text && !verdict && !newModel) {
+      return
+    }
     const payload = normalizeAgentStatusPayload({
       ...row.payload,
+      ...(newModel ? { model: newModel } : {}),
       ...(text ? { lastAssistantMessage: text, lastAssistantMessageIsToolOutput: undefined } : {}),
-      ...(verdict ? droidVerdictFields(verdict, original.stateStartedAt) : {})
+      ...(verdict ? droidVerdictFields(verdict, claim.row.stateStartedAt) : {})
     })
     if (!payload) {
-      return undefined
+      return
     }
-    const tool = text ? this.state.lastToolByPaneKey.get(original.paneKey) : undefined
+    const tool = text ? this.state.lastToolByPaneKey.get(claim.paneKey) : undefined
     if (tool) {
       // Later rebuilds of this turn's row read the snapshot, not the row.
-      this.state.lastToolByPaneKey.set(original.paneKey, {
+      this.state.lastToolByPaneKey.set(claim.paneKey, {
         ...tool,
         lastAssistantMessage: payload.lastAssistantMessage,
         lastAssistantMessageIsToolOutput: undefined
       })
     }
-    return this.applyRestatedStatus({
+    // The restate is this Stop's own row change: it must not end the Stop's other read.
+    this.stopReplyClaims.delete(claim.paneKey)
+    const restated = this.applyRestatedStatus({
       ...row,
       payload,
       // The whole reply answers the lead's turn; the row keeps only its capped preview.
@@ -217,5 +279,11 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
       hookEventName: undefined,
       hasExplicitPrompt: undefined
     })
+    if (restated && newModel) {
+      // Later lead events rebuild the row from this record.
+      retainClaudeLeadModel(this.state, claim.paneKey, newModel)
+    }
+    claim.row = restated ?? claim.row
+    this.stopReplyClaims.set(claim.paneKey, claim)
   }
 }

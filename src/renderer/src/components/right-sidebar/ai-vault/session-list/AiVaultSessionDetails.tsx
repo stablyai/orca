@@ -167,7 +167,7 @@ export function SessionInlineDetails({
             >
               <Play className="size-3.5" />
               {referenceSession
-                ? t('aiVault.continueInCliNewTab', 'Continue in CLI in New Tab')
+                ? t('aiVault.continueInCliNewTab', 'Continue in CLI tab')
                 : t(
                     'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',
                     'Resume in New Tab'
@@ -214,10 +214,7 @@ export function SessionInlineDetails({
               className="h-7 shrink-0 px-2.5 text-[11px]"
             >
               <MessageSquarePlus className="size-3.5" />
-              {t(
-                'components.agentSessionContinuation.handOffToAnotherAgent',
-                'Hand Off to Another Agent'
-              )}
+              {t('components.agentSessionContinuation.handOffToAnotherAgent', 'Hand off to agent')}
             </Button>
           ) : null}
           {onOpenLog ? (

@@ -10,10 +10,6 @@ import type { AgentStatus } from '../../../../shared/agent-status/title/agent-ti
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal/links/terminal-github-pr-link-detector'
 
 export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntimeWithEmitDaemonPtyTransientFact {
-  protected abstract recheckHookAgentPresenceForPty(
-    ptyId: string,
-    exitedSince?: number
-  ): Promise<'live' | 'unverifiable' | 'exited' | null>
   protected abstract applyTrackedPtyTitle(
     ptyId: string,
     rawTitle: string,
@@ -167,7 +163,6 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
         onCommandFinished: (exitCode: number | null) => {
           void this.recheckHookAgentPresenceForPty(ptyId)
           this.retirePtyAgentLaunchAuthority(ptyId, true)
-          this.setCommandCodeComposer(ptyId, 'exited')
           this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
           this.openCodeRunLifetime.onCommandFinished(ptyId, exitCode)
         },
@@ -197,7 +192,6 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
       pendingFacts: [],
       afterFacts: [],
       commandCodeDetector: this.createTerminalSideEffectCommandCodeDetector(ptyId),
-      commandCodeComposer: null,
       programActivity: null,
       // The persisted title is already normalized, so it stands for both forms.
       lastTitle: initialTitle !== null ? { raw: initialTitle, normalized: initialTitle } : null

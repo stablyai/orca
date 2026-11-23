@@ -15,6 +15,8 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   opencode: 'OpenCode',
   opencode2: 'OpenCode 2',
   'mimo-code': 'MiMo Code',
+  kilo: 'Kilocode',
+  cline: 'Cline',
   cursor: 'Cursor',
   aider: 'Aider',
   pi: 'Pi',
@@ -24,6 +26,7 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   'command-code': 'Command Code',
   grok: 'Grok',
   hermes: 'Hermes',
+  goose: 'Goose',
   devin: 'Devin',
   ante: 'Ante',
   trae: 'Trae',
@@ -32,7 +35,8 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   zcode: 'ZCode',
   dsh: 'DeepSeek Harness',
   dsb: 'DeepSeek Build',
-  jcode: 'Jcode'
+  jcode: 'Jcode',
+  kiro: 'Kiro'
 }
 
 export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {

@@ -118,7 +118,7 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Try Again': '다시 시도',
     'Restart now': '지금 재시작',
     'Restart Orca': 'Orca 재시작',
-    'Hide sleeping': '슬립 중인 항목 숨기기',
+    'Hide sleeping': '절전 중인 항목 숨기기',
     'Open Linear tasks': 'Linear 작업 열기',
     New: '새로 만들기',
     Waiting: '대기 중',

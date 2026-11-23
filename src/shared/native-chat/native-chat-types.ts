@@ -36,7 +36,7 @@ import type { WaitEnding } from '../automation-once'
 import type { AgentMessageSource } from '../agent-session/journal/agent-session-message-source'
 import type { ConnectorMessageAsker } from '../connector-message-asker'
 import type { OtherPersonTypist } from '../agent-session/journal/agent-journal-typed-by'
-import type { BotItemNoteView } from '../bots/bot-item-note'
+import type { BotItemNoteItem, BotItemNoteView } from '../bots/bot-item-note'
 import type { BotContextNote } from '../bots/bot-context-note'
 import type { AutomationResultNote } from '../bots/bot-automation-result-note'
 
@@ -238,6 +238,8 @@ export type NativeChatBlock =
 
 /** Structured rows preserve journal producer linkage; terminal-backed rows omit it. */
 export type NativeChatMessage = AgentJournalProducerLinkage & {
+  /** Client projection: this answer preceded a goal check grouped into its goal row. */
+  goalCheckAnswer?: true
   /** Stable dedup/list identity across re-reads and appends. */
   id: string
   role: NativeChatRole
@@ -291,6 +293,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   /** Projected creation fact, never a user turn or provider input. */
   agentStartDispatchId?: string
   agentStart?: true
+  /** Display-only: the items the chat's link line next to this start tied the worker to. */
+  agentStartItems?: readonly BotItemNoteItem[]
   /** Projected fact: this chat's agent created or edited an automation; drawn as its card. */
   automationSaved?: Omit<AgentJournalAutomationSavedItem, 'kind'>
   /** On a wait's creation row: how it ended, read from its run or ended card in this chat. */

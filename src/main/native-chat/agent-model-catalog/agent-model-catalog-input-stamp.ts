@@ -2,7 +2,10 @@ import { createHash } from 'node:crypto'
 import { access, readFile, realpath, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { basename, delimiter, isAbsolute, resolve } from 'node:path'
-import { getExecutableNames } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
+import {
+  getExecutableNames,
+  normalizePathEntry
+} from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { agentModelCatalogScriptEntry } from './agent-model-catalog-script-entry'
 
 // Config files are small; anything larger keeps the cheaper file-identity stamp.
@@ -43,7 +46,8 @@ export async function agentModelCatalogInputStamp(input: {
   const pathEnv = input.env.PATH ?? input.env.Path ?? ''
   let executable = resolve(input.cwd, input.command)
   if (!isAbsolute(input.command) && !/[\\/]/.test(input.command)) {
-    search: for (const directory of pathEnv.split(delimiter)) {
+    search: for (const entry of pathEnv.split(delimiter)) {
+      const directory = normalizePathEntry(process.platform, entry)
       for (const name of getExecutableNames(process.platform, input.command)) {
         const candidate = resolve(input.cwd, directory, name)
         try {

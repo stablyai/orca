@@ -24,11 +24,10 @@ import {
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
 import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-listener/providers/claude/background-tasks/claude-owed-notification-expiry-timers'
-import { AgentHookDroidVerdictReads } from './agent-hook-droid-verdict-reads'
-import {
-  ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
-  ASSISTANT_MESSAGE_RETRY_MS
-} from './agent-hook-result-retry-budget'
+import { AgentHookStopTranscriptReads } from './agent-hook-stop-transcript-reads'
+
+const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
+const ASSISTANT_MESSAGE_RETRY_MS = 50
 const CODEX_SUBAGENT_POLL_MS = 1_000
 
 type TranscriptPoll = {
@@ -59,11 +58,14 @@ export class AgentHookResultRetryScheduler {
   private host: AgentHookResultRetryHost
   private readonly claudeHelperKills: ClaudeHelperKillPoller
   private claudeOwedNotificationExpiry: ClaudeOwedNotificationExpiryTimers
-  private readonly droidVerdictReads: AgentHookDroidVerdictReads
+  readonly stopTranscriptReads: AgentHookStopTranscriptReads
 
   constructor(host: AgentHookResultRetryHost) {
     this.host = host
-    this.droidVerdictReads = new AgentHookDroidVerdictReads(host, this.assistantMessageRetryTimers)
+    this.stopTranscriptReads = new AgentHookStopTranscriptReads(
+      host,
+      this.assistantMessageRetryTimers
+    )
     this.claudeHelperKills = new ClaudeHelperKillPoller(host.state, {
       current: (paneKey) => host.state.lastStatusByPaneKey.get(paneKey),
       publish: (event) => {
@@ -83,6 +85,7 @@ export class AgentHookResultRetryScheduler {
       clearTimeout(timer)
     }
     this.assistantMessageRetryTimers.clear()
+    this.stopTranscriptReads.clearAll()
     this.transcriptPollScheduler.clearAll()
     this.claudeHelperKills.clearAll()
     this.claudeOwedNotificationExpiry.clearAll()
@@ -105,10 +108,6 @@ export class AgentHookResultRetryScheduler {
   clearAssistantMessageRetry(paneKey: string): void {
     clearTimeout(this.assistantMessageRetryTimers.get(paneKey))
     this.assistantMessageRetryTimers.delete(paneKey)
-  }
-
-  scheduleDroidVerdictRead(...args: Parameters<AgentHookDroidVerdictReads['schedule']>): void {
-    this.droidVerdictReads.schedule(...args)
   }
 
   clearTranscriptPoll(paneKey: string): void {
@@ -288,7 +287,9 @@ export class AgentHookResultRetryScheduler {
       }
     }, ASSISTANT_MESSAGE_RETRY_MS)
     this.assistantMessageRetryTimers.set(original.paneKey, timer)
-    timer.unref?.()
+    if (typeof timer.unref === 'function') {
+      timer.unref()
+    }
   }
 
   private applyAssistantMessageRetry(

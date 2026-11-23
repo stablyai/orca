@@ -1,45 +1,30 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useId } from 'react'
 import { openBotSettings } from './bot-settings-open'
-import { ChevronDown, Copy, House, Pause, Play, Server, Settings, Trash2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { ChevronDown, Copy, Pause, Play, Server, Settings, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
-import { useWorktreeActivityStatus } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-status'
-import { useWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/useWorktreeAgentRows'
 import { useTranslate } from '@/i18n/use-translate'
 import { openBotHome, updateBot } from '@/lib/bot-catalog'
-import { useBotHostOffline } from '@/lib/bot-host-views'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useBotUpNextUnseen } from '@/lib/bot-up-next-unseen'
-import { formatAgentToolPreview } from '../../../../shared/agent-status/presentation/agent-row-tool-preview'
-import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
 import { cn } from '@/lib/class-names'
+import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
 import type { Bot } from '../../../../shared/bot-types'
-import { getLocalExecutionHostLabel } from '../../../../shared/execution-host/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
-import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { botErrorMessage } from './bot-presentation'
-import { foldBotStatus, type BotRowStatus } from '../../../../shared/bots/bot-row-status'
 import {
   botFoldLiveStatus,
   type BotWorkspaceLiveCounts
 } from '../../../../shared/bots/bot-sidebar-workspaces'
 import { BotAvatar } from './BotAvatar'
 import { FOLD_TOGGLE_CLASS } from './BotChatRowControls'
-import { useBotSoulDescription } from './bot-soul-description'
-import {
-  botRowLineAge,
-  BotHoverLatestLine,
-  BotRowLineView,
-  useBotRowLine
-} from './BotRowActivityLine'
+import { botRowLineAge, BotRowLineView } from './BotRowActivityLine'
 import { BotSidebarRow } from './BotSidebarRow'
-import { BotHoverNeedsYou, revealBotHome } from './BotHoverNeedsYou'
+import { revealBotHome } from './BotHoverNeedsYou'
+import { BotHoverDetails, useBotRowDetails } from './BotHoverDetails'
 import { usageLimitStopTip } from './BotUsageLimitMark'
 import { BotUpNextCount } from './BotUpNextCount'
-import { useBotHostLabel } from './use-bot-host-label'
 import { revealBotUpNext } from './bot-up-next-reveal'
 import { useDeleteBot } from './use-delete-bot'
 import { setBotPurpose } from './bot-purpose-cache'
@@ -72,19 +57,12 @@ export function BotRow({
   dragHandle = false
 }: BotRowProps): React.JSX.Element {
   const t = useTranslate()
-  const workspaceId = folderWorkspaceKey(home.id)
-  // The bot's own turn only; its workspaces' work shows in the fold's count.
-  const status = foldBotStatus(useWorktreeActivityStatus(workspaceId), bot.paused)
-  const hostLabel = useBotHostLabel(bot.hostId)
-  // Its server is down: the row stays from the last read, dimmed, with its actions off.
-  const offline = useBotHostOffline(bot.hostId)
+  const details = useBotRowDetails(bot, home)
+  const { workspaceId, status, hostLabel, offline, description, line, limit, now } = details
   const isUnread = home.isUnread && !offline
   const upNextNew = useBotUpNextUnseen(bot)
-  const { line, limit, now } = useBotRowLine(bot, home)
   const age = offline ? null : botRowLineAge(line, now)
   const hostPill = hostLabel ? <BotRowHostIcon label={hostLabel} /> : null
-  // With no recent activity the line falls back to what the bot is for, so the row never shows a blank line.
-  const description = useBotSoulDescription({ bot, folderPath: home.folderPath })
   // The Bots search matches purposes from what each listed row shows; it never reads SOUL.md.
   const purposeKey = botSidebarEntryKey(bot)
   useEffect(() => {
@@ -102,16 +80,9 @@ export function BotRow({
     work.catch((error: unknown) => toast.error(botErrorMessage(error)))
   }
   const handleDelete = useDeleteBot(bot)
-  // The bot's page with its Home tab showing and focused: where its Needs you leads.
-  const openHomePanel = (): void => {
-    if (openBotFromSidebar(bot, onOpen)) {
-      revealBotHome()
-    }
-  }
-
   return (
     <BotSidebarRow
-      avatar={<BotAvatar bot={bot} className="size-9 rounded-md text-sm" />}
+      avatar={<BotAvatar bot={bot} className="size-8 rounded-md text-sm" />}
       name={bot.name}
       workspaceId={workspaceId}
       hostId={bot.hostId}
@@ -158,23 +129,20 @@ export function BotRow({
           />
         ) : null
       }
-      trailing={fold ? <BotRowFoldToggle botName={bot.name} fold={fold} /> : null}
+      trailing={
+        fold ? (
+          <BotRowFoldToggle
+            botName={bot.name}
+            fold={fold}
+            working={!offline && status === 'working'}
+          />
+        ) : null
+      }
       hoverDetails={() => (
         <BotHoverDetails
           bot={bot}
-          workspaceId={workspaceId}
-          description={description}
-          onOpenHome={openHomePanel}
-          status={status}
-          hostLabel={hostLabel}
-          offline={offline}
-          // Needs you names its asks below, so the bare count line would only repeat it.
-          latest={
-            line?.kind === 'needYouElsewhere' ? null : <BotHoverLatestLine line={line} now={now} />
-          }
-          needsYou={
-            offline || bot.paused ? null : <BotHoverNeedsYou bot={bot} onReview={openHomePanel} />
-          }
+          details={details}
+          onOpenHome={() => openBotHomePanelFromSidebar(bot, onOpen)}
         />
       )}
       menuItems={
@@ -223,6 +191,12 @@ export function openBotFromSidebar(bot: Bot, onOpened: () => void): boolean {
   return true
 }
 
+export function openBotHomePanelFromSidebar(bot: Bot, onOpened: () => void): void {
+  if (openBotFromSidebar(bot, onOpened)) {
+    revealBotHome()
+  }
+}
+
 /** A paired server's bot: a glyph on its second line, the server's name in its tooltip, so the
  *  line keeps its width for what the bot is doing. */
 function BotRowHostIcon({ label }: { label: string }): React.JSX.Element {
@@ -242,14 +216,20 @@ function BotRowHostIcon({ label }: { label: string }): React.JSX.Element {
 
 function BotRowFoldToggle({
   botName,
-  fold
+  fold,
+  working
 }: {
   botName: string
   fold: BotRowFold
+  /** The bot itself is working: the row's working mark sits here, on the strip. */
+  working: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const statusId = useId()
   const { folded, counts } = fold
-  const live = botFoldLiveStatus(counts)
+  const live = folded ? botFoldLiveStatus(counts) : null
+  // One mark: a folded workspace's ask outranks the bot's own work, which outranks the rest.
+  const mark = live === 'permission' ? live : working ? 'working' : live
   const label = folded
     ? t('bots.chats.unfold', 'Unfold {{name}}', { name: botName })
     : t('bots.chats.fold', 'Fold {{name}}', { name: botName })
@@ -264,16 +244,13 @@ function BotRowFoldToggle({
         // edge; the row's rounded overflow clips its corners.
         '-mt-1.25 -mr-1.5 -mb-1.25 min-w-10 gap-0.5 self-stretch rounded-none px-1.5 text-xs tabular-nums',
         'focus-visible:ring-2 focus-visible:ring-inset',
-        // A narrow row keeps its width for the name and time where a pointer can hover: at rest the
-        // strip shrinks to what it shows (nothing while unfolded), and widens on row hover or its own
-        // focus. Touch keeps the full strip, since nothing would reveal it.
-        'can-hover:pointer-fine:@max-[15rem]/bot-row:mr-0 can-hover:pointer-fine:@max-[15rem]/bot-row:min-w-0 can-hover:pointer-fine:@max-[15rem]/bot-row:px-0',
-        'can-hover:pointer-fine:@max-[15rem]/bot-row:group-hover/bot-row:-mr-1.5 can-hover:pointer-fine:@max-[15rem]/bot-row:group-hover/bot-row:min-w-10 can-hover:pointer-fine:@max-[15rem]/bot-row:group-hover/bot-row:px-1.5',
-        'can-hover:pointer-fine:@max-[15rem]/bot-row:focus-visible:-mr-1.5 can-hover:pointer-fine:@max-[15rem]/bot-row:focus-visible:min-w-10 can-hover:pointer-fine:@max-[15rem]/bot-row:focus-visible:px-1.5',
-        !folded &&
-          'can-hover:pointer-fine:@max-[15rem]/bot-row:-ml-1 can-hover:pointer-fine:@max-[15rem]/bot-row:w-0 can-hover:pointer-fine:@max-[15rem]/bot-row:overflow-hidden can-hover:pointer-fine:@max-[15rem]/bot-row:group-hover/bot-row:ml-0 can-hover:pointer-fine:@max-[15rem]/bot-row:group-hover/bot-row:w-auto can-hover:pointer-fine:@max-[15rem]/bot-row:focus-visible:ml-0 can-hover:pointer-fine:@max-[15rem]/bot-row:focus-visible:w-auto'
+        // A narrow row keeps more width for the name and time where a pointer can hover: a compact
+        // strip, still a 24px target, whose size never changes, so hover and focus never move the
+        // row's text. Touch keeps the full strip.
+        'can-hover:pointer-fine:@max-[15rem]/bot-row:min-w-6 can-hover:pointer-fine:@max-[15rem]/bot-row:px-1'
       )}
       aria-label={label}
+      aria-describedby={mark === 'working' ? statusId : undefined}
       aria-expanded={!folded}
       onClick={(event) => {
         event.stopPropagation()
@@ -282,10 +259,15 @@ function BotRowFoldToggle({
       onKeyDown={(event) => event.stopPropagation()}
     >
       {/* Folded, only its most urgent live workspace's status: a bare count of every workspace it
-          ever made said nothing at a glance. */}
-      {folded && live ? (
+          ever made said nothing at a glance. Folded or not, the bot's own work shows here too. */}
+      {mark === 'working' ? (
+        <span id={statusId} className="sr-only">
+          {getWorktreeStatusLabel(mark)}
+        </span>
+      ) : null}
+      {mark ? (
         <span className="flex items-center">
-          <StatusIndicator status={live} showTooltip={false} />
+          <StatusIndicator status={mark} showTooltip={false} />
         </span>
       ) : null}
       <span className="flex size-4 items-center justify-center">
@@ -299,109 +281,5 @@ function BotRowFoldToggle({
         />
       </span>
     </button>
-  )
-}
-
-function BotHoverDetails({
-  bot,
-  workspaceId,
-  status,
-  hostLabel,
-  offline,
-  description,
-  latest,
-  needsYou,
-  onOpenHome
-}: {
-  bot: Bot
-  workspaceId: string
-  /** The row's dot, rolled up from its workspaces. */
-  status: BotRowStatus
-  /** Its paired server's name; null for this computer. */
-  hostLabel: string | null
-  offline: boolean
-  /** What the bot is for, from SOUL.md: in the name's tooltip, so the card leads with its state. */
-  description: string | null
-  /** The row's second line, whole. */
-  latest: React.ReactNode
-  /** What needs the owner, named, with a way to answer. */
-  needsYou: React.ReactNode
-  onOpenHome: () => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  const current = useWorktreeAgentRows(workspaceId).find((row) => row.state === 'working')
-  const action = current
-    ? formatAgentToolPreview(current.entry, current.state) || getAgentRowPrimaryText(current.entry)
-    : ''
-  const working = !offline && !bot.paused && action !== ''
-  const homeLabel = t('bots.hover.openHome', 'Open {{name}}’s Home', { name: bot.name })
-  const state = offline
-    ? t('bots.row.hostDisconnected', '{{host}} disconnected', {
-        host: hostLabel ?? getLocalExecutionHostLabel()
-      })
-    : bot.paused
-      ? t('bots.row.paused', 'Paused')
-      : action ||
-        (status === 'active' ? t('bots.row.idle', 'Idle') : getWorktreeStatusLabel(status))
-  return (
-    <div className="flex flex-col">
-      <div className="flex items-start gap-3">
-        <BotAvatar bot={bot} className="size-14 rounded-lg text-xl" />
-        <div className="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="truncate text-[13px] font-semibold leading-snug text-foreground">
-                {bot.name}
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-72 whitespace-pre-line">
-              {description ? `${bot.name}\n${description}` : bot.name}
-            </TooltipContent>
-          </Tooltip>
-          {/* One line whatever the agent is running; a command reads as work by the spinner before it,
-              and the tooltip has it whole. */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                {working ? <StatusIndicator status="working" showTooltip={false} /> : null}
-                <span className="min-w-0 truncate">{state}</span>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-80 break-words">
-              {state}
-            </TooltipContent>
-          </Tooltip>
-          {/* A paired server's bot says where it runs; a disconnected one already named it. */}
-          {hostLabel && !offline ? (
-            <div className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-              <Server className="size-3 shrink-0" aria-hidden="true" />
-              <span className="truncate">
-                {t('bots.row.runsOn', 'Runs on {{host}}', { host: hostLabel })}
-              </span>
-            </div>
-          ) : null}
-        </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="-mt-0.5 -mr-1 shrink-0"
-              aria-label={homeLabel}
-              onClick={(event) => {
-                event.stopPropagation()
-                onOpenHome()
-              }}
-            >
-              <House className="size-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">{homeLabel}</TooltipContent>
-        </Tooltip>
-      </div>
-      {latest}
-      {needsYou}
-    </div>
   )
 }
