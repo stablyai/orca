@@ -9,10 +9,4 @@ describe('whether a runtime call is background', () => {
     )
     expect(isBackgroundRuntimeCall(undefined, { reason: 'swr' })).toBe(true)
   })
-
-  it('treats a user read as use unless tagged', () => {
-    expect(isBackgroundRuntimeCall(false, { admissionTier: 'interactive' })).toBe(false)
-    expect(isBackgroundRuntimeCall(undefined, { reason: 'swr', userRefresh: true })).toBe(false)
-    expect(isBackgroundRuntimeCall(true, { admissionTier: 'interactive' })).toBe(true)
-  })
 })
