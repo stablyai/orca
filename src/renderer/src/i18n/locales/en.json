@@ -30876,7 +30876,8 @@
     "navigationLabel": "App navigation",
     "toolsLabel": "App tools",
     "workspaces": "Workspaces",
-    "more": "More"
+    "more": "More",
+    "pageRegion": "Page"
   },
   "chats": {
     "delete": {

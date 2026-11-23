@@ -40,7 +40,11 @@ import { PROJECTS_SECTION_GROUP_KEY } from '../../../../shared/sidebar-list/sect
 import { useBotsEnabled } from '@/lib/bot-catalog'
 import { StartupWorktreeRefreshStatus } from './worktree-list/listing/StartupWorktreeRefreshStatus'
 import { WorktreeCardsIntroNotice } from './workspace-card/template/WorktreeCardsIntroNotice'
-import { WORKSPACE_LIST_REGION_ID } from '@/components/app-rail/app-rail-layout'
+import {
+  selectWorkspaceListOpen,
+  WORKSPACE_LIST_REGION_ID
+} from '@/components/app-rail/app-rail-layout'
+import { RailPageListFocusProbe } from '@/components/app-rail/rail-page-list-focus-loss'
 import { setWorkspaceListRegionPresent } from '@/components/app-rail/workspace-list-region-presence'
 import { WorktreeCardsUpdateNotice } from './workspace-card/template/WorktreeCardsUpdateNotice'
 
@@ -102,7 +106,8 @@ function Sidebar({
   worktreeScrollOffsetRef,
   worktreeScrollAnchorRef
 }: SidebarProps): React.JSX.Element {
-  const sidebarOpen = useAppStore((s) => s.sidebarOpen)
+  // Collapsed on a rail page (rail on) while the saved choice stays; this root stays mounted for its dialogs and board.
+  const sidebarOpen = useAppStore(selectWorkspaceListOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
   const repos = useAppStore((s) => s.repos)
@@ -301,6 +306,8 @@ function Sidebar({
         >
           {sidebarOpen && (
             <>
+              {/* First, so its cleanup sees focus before the rows below leave the DOM. */}
+              <RailPageListFocusProbe />
               <DndContext
                 sensors={sidebarSectionDragSensors}
                 modifiers={sidebarSectionDragModifiers}
