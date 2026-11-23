@@ -140,6 +140,20 @@
     "count": 1
   },
   {
+    "filePath": "src/renderer/src/component-fixtures/fixture-bot-picture.tsx",
+    "kind": "object-property:error",
+    "text": "usage-limit",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/component-fixtures/fixture-bot-picture.tsx",
+    "kind": "object-property:error",
+    "text": "timed-out",
+    "dynamic": false,
+    "count": 1
+  },
+  {
     "filePath": "src/renderer/src/components/settings/appearance/chat/ChatFontFamilySetting.tsx",
     "kind": "jsx-text",
     "text": "fontFamily",

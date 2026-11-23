@@ -6,6 +6,7 @@ import {
   ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
 } from '../../../../../shared/updater/updater-renderer-events'
 import { registerWindowCloseGuard } from '../../../app-shell/shutdown/window-close-request-coordinator'
+import { beginBotPictureOp, noteBotPictureChoice } from '@/components/bots/bot-picture-ops'
 
 export type BotLookUpdate = Pick<BotUpdateParams['updates'], 'avatarColor' | 'avatarOutfit'>
 
@@ -99,6 +100,8 @@ export function saveBotLook(
   lookSaves.set(key, saves)
   sendOnLeave()
   const release = hold?.()
+  // Open in the picture ledger until the last save lands, so a picture asked for meanwhile waits for it.
+  const op = beginBotPictureOp(key)
   void (async () => {
     while (saves.waiting) {
       const next = saves.waiting
@@ -113,6 +116,7 @@ export function saveBotLook(
       }
     }
     release?.()
+    op.end()
     for (const listener of saves.drained) {
       listener()
     }
@@ -146,6 +150,7 @@ export function useBotLookSave(
     timer: ReturnType<typeof setTimeout>
     save: () => void
     look: BotLookUpdate
+    op: { end: () => void }
   } | null>(null)
   // One listener per editor, however many of its picks join a drain.
   const drained = useRef(() => {
@@ -165,6 +170,8 @@ export function useBotLookSave(
     }
   }, [key])
   const pick = (change: BotLookUpdate): void => {
+    // Newer than a picture still being generated, even a pick of the look already saved.
+    noteBotPictureChoice(key)
     if (!timer.current && !lookSaves.has(key) && shows(saved, change)) {
       return
     }
@@ -174,6 +181,8 @@ export function useBotLookSave(
       clearTimeout(timer.current.timer)
       pausedPicks.delete(timer.current.save)
     }
+    // The pause is open in the ledger too, handed to the save queue's own op once it is sent.
+    const op = timer.current?.op ?? beginBotPictureOp(key)
     const save = (): void => {
       if (timer.current?.save === save) {
         clearTimeout(timer.current.timer)
@@ -181,8 +190,9 @@ export function useBotLookSave(
       }
       pausedPicks.delete(save)
       saveBotLook(key, look, update, open.current ? drained.current : undefined, hold)
+      op.end()
     }
-    timer.current = { timer: setTimeout(save, delayMs), save, look }
+    timer.current = { timer: setTimeout(save, delayMs), save, look, op }
     pausedPicks.add(save)
     sendOnLeave()
   }

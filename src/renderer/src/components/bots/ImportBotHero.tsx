@@ -1,12 +1,13 @@
 // Import's picture: the old bot, an arrow, and the new bot (its picture changes like New bot's), or the bot an
 // earlier import made. The old face pops in when it changes, as New group's faces do.
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../shared/bot-types'
 import { BotAvatar, BotAvatarTile } from './BotAvatar'
 import { BotPicturePicker } from './BotPicturePicker'
+import type { GenerateFace } from './AvatarGenerateFace'
 import { popIn } from './BotPickList'
 import type { NewBotPicture } from './use-new-bot-picture'
 
@@ -26,15 +27,26 @@ function Face({ label, children }: { label: string; children: React.ReactNode })
 export function ImportBotHero({
   old,
   picture,
-  existing
+  existing,
+  generate,
+  disabled = false,
+  onIntakeStart
 }: {
   /** The old bot: its initial, or null while there is none yet. `key` changes pop it in. */
   old: { key: string; initial: string | null; label: string }
   picture: NewBotPicture
   /** The bot an earlier import made, shown instead of the new one. */
   existing?: Bot | null
+  /** The dialog's Generate face, which places a picture with `picture.onUpload`. */
+  generate?: GenerateFace
+  /** While Create runs: the picture it took stays as it is. */
+  disabled?: boolean
+  /** See BotPicturePicker. */
+  onIntakeStart?: () => () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const [open, setOpen] = useState(false)
+  const running = generate?.run.kind === 'running'
   const oldRef = useRef<HTMLSpanElement>(null)
   useEffect(() => {
     popIn(oldRef.current, FACE_POP_MS)
@@ -63,18 +75,21 @@ export function ImportBotHero({
         </Face>
       ) : (
         <Face label={t('bots.import.newBotLabel', 'New bot')}>
-          <Popover>
+          <Popover open={open && !disabled} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
               <button
                 type="button"
+                disabled={disabled}
                 aria-label={t('bots.import.changePicture', 'Change picture')}
-                className="rounded-2xl outline-none hover:opacity-90 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                className="rounded-2xl outline-none hover:opacity-90 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:hover:opacity-100"
               >
+                {/* A picture still being made, picker open or closed; it lands on its own. */}
                 <BotAvatarTile
                   src={picture.src}
                   outfit={picture.outfitArt}
                   fallback=""
                   className="size-24 rounded-2xl"
+                  generating={running}
                 />
               </button>
             </PopoverTrigger>
@@ -90,6 +105,8 @@ export function ImportBotHero({
                   onColorChange={picture.onColorChange}
                   outfit={picture.outfit}
                   onOutfitChange={picture.onOutfitChange}
+                  generate={generate}
+                  onIntakeStart={onIntakeStart}
                 />
               </div>
             </PopoverContent>

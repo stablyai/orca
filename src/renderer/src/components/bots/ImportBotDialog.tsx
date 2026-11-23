@@ -42,6 +42,7 @@ import { useBotCreateHost } from './bot-create-hosts'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { useBotAgentSetup } from './use-bot-agent-setup'
 import { useNewBotHostLooks, useNewBotPicture } from './use-new-bot-picture'
+import { draftPictureTake, useNewBotGenerateFace } from './use-new-bot-generate-face'
 
 export type ImportPick = { source: BotImportSource; bot: BotImportCandidate }
 
@@ -71,6 +72,9 @@ export function ImportBotDialog({
   const agentSetup = useBotAgentSetup(choices, hostId)
   const picture = useNewBotPicture(useNewBotHostLooks(hostId))
   const [creating, setCreating] = useState(false)
+  // Kept by the dialog, not its hero, so a run outlives the popover and the hero swapping to a bot an
+  // earlier import made while the name is cleared; only dismissing the dialog ends it.
+  const face = useNewBotGenerateFace(picture)
 
   const picks =
     read.status === 'ready'
@@ -124,6 +128,8 @@ export function ImportBotDialog({
     setExported(NO_EXPORT)
     setTypedName(null)
     picture.reset()
+    // A run handed to the bot made goes on; any other ends here.
+    face.reset()
     agentSetup.reset()
     hostChoice.reset()
     onOpenChange(false)
@@ -148,6 +154,8 @@ export function ImportBotDialog({
       return
     }
     setCreating(true)
+    // The picture is taken now; a run still going, unless a newer choice was made, follows the bot.
+    const handOff = face.handOff({ hostId, name: trimmedName })
     try {
       const made = await createBot(hostId, {
         name: trimmedName,
@@ -156,8 +164,13 @@ export function ImportBotDialog({
         avatarColor: picture.avatarColor,
         avatarOutfit: picture.avatarOutfit,
         importFrom
+      }).catch((error: unknown) => {
+        handOff?.failed()
+        throw error
       })
       const bot = await picture.saveUpload(made)
+      // The bot exists from here, whatever opening it does.
+      handOff?.created(bot)
       const opened = await openCreatedBot(bot)
       close()
       if (opened) {
@@ -214,7 +227,14 @@ export function ImportBotDialog({
               : t('bots.import.description', 'Your new bot reads the old one and sets itself up.')}
           </DialogDescription>
         </DialogHeader>
-        <ImportBotHero old={old} picture={picture} existing={existing} />
+        <ImportBotHero
+          old={old}
+          picture={picture}
+          existing={existing}
+          generate={face}
+          disabled={creating}
+          onIntakeStart={draftPictureTake(picture.choiceKey)}
+        />
         <div>
           <Label htmlFor={nameId} className="sr-only">
             {t('bots.new.name', 'Name')}

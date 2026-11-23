@@ -77,6 +77,11 @@ export const BOTS_ITEM_WAITING_CAPABILITY = 'bots.item-waiting.v1' as const
 // refuses one, so a client sends it a plain reason (botItemStatusFields).
 export const BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY = 'bots.item-cancel-no-reason.v1' as const
 
+// Host bumps a bot's `avatarRevision` on every picture, color or outfit write and refuses a bots.avatar.upload whose
+// `expectedAvatarRevision` no longer matches; an older host drops the field, so a client uploads a picture
+// on its own (one generated while the picker was closed) only where this is advertised.
+export const BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY = 'bots.avatar-revision.v1' as const
+
 export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,
   BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY,
@@ -98,5 +103,6 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY,
   BOTS_HOME_PIN_RUNTIME_CAPABILITY,
   BOTS_ITEM_WAITING_CAPABILITY,
-  BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY
+  BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY,
+  BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY
 ] as const
