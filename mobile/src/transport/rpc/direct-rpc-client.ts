@@ -204,17 +204,14 @@ export class DirectRpcClient implements RpcClient {
     const state = this.getState()
     const dialing = this.socketSession
     const dialAgeMs = Date.now() - this.socketFactory.getDialStartedAt()
-    if (reason !== 'focus' && !this.reconnect.canRetryAutomatically(dialAgeMs)) {
+    if (!this.reconnect.canRetryFromHint(reason, dialAgeMs)) {
       return
     }
     if (reason !== 'focus' && dialing && isStaleForegroundDial(state, dialAgeMs, followUp)) {
       this.socketClose.forceClose(dialing)
     }
     if (this.getState() === 'reconnecting') {
-      this.reconnect.redialNow(
-        reason === 'app-resume' && state === 'reconnecting',
-        reason === 'network-change' && !followUp
-      )
+      this.reconnect.redialNow(reason, state === 'reconnecting', followUp)
     }
   }
 
