@@ -131,6 +131,14 @@ it('keeps the Slack reply link and memory with its execution until that work fin
   writeChatLink(store, key, first)
   const firstMemory = opened[0]!.memory
   await firstMemory.remember('First requester preference', '2026-11-22')
+  for (const user of ['U1', 'U2']) {
+    expect(await route({ ...message(user), resume: true })).toEqual({
+      outcome: 'refused',
+      reason: 'agent_not_reachable'
+    })
+  }
+  expect(opened).toHaveLength(1)
+  expect(findLink(store, key)?.link.sessionId).toBe(first.sessionId)
   expect(findLink(store, key)?.link.isolatedSlack).toBe(true)
   expect(await new GoneChats({ store, released: () => {} }).linkedChatOf({}, key)).toBeNull()
   expect(

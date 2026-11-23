@@ -1,6 +1,6 @@
 # Slack requester memory implementation status
 
-The public host accepts an optional `asker.slackRequester` stamp on connector starts and sends. It carries a Slack installation workspace ID and the direct human author's Slack user ID. The host checks that the user ID agrees with the asker, excludes apps and delegated bot posts, and checks the workspace against the receiving bot's configured Slack apps before writing the stamp to the journal. An old or ambiguous delivery still reaches the bot without the stamp. Every message carried into a stamped batch must name the same verified requester.
+The public host accepts an optional `asker.slackRequester` stamp on connector starts and sends. It carries a Slack installation workspace ID and the direct human author's Slack user ID. The host checks that the user ID agrees with the asker, excludes apps and delegated bot posts, and requires the workspace to match both the receiving Slack conversation and a configured Slack app for that bot before writing the stamp to the journal. An old or ambiguous delivery still reaches the bot without the stamp. Every message carried into a stamped batch must name the same verified requester.
 
 ## Implemented in the public host
 
@@ -8,6 +8,7 @@ The public host accepts an optional `asker.slackRequester` stamp on connector st
 - Native send admission requires both the original operation and an in-process connector capability. Owner text, mail, creation messages, fork or adoption into the scope, prompt responses, thread goals, and conversation commands cannot enter through their ordinary admission paths. Each admitted delivery retains its original Slack destination in the durable reply outbox. Only dormant isolated links qualify to be replaced after the host checks their open work and unfilled replies. Existing legacy links stay on their previous chat.
 - Codex's scoped memory tool handles read, remember, and forget. It accepts calls from the active turn on the acquired provider thread and takes its scope from the launch binding. Its arguments accept no bot, workspace, requester, or path. An ambiguous requester gets no memory text and no memory tool. Index and topic writes are serialized per file and use owner-only durable writes.
 - The isolated link disables Slack prompt publication, Slack prompt answers, mirroring, and the legacy reply-text path. Production still uses the ordinary launcher. The scoped launcher has no production selector or user setting.
+- The isolated path refuses the Slack Resume action before opening a replacement execution. Continuing a failed turn would require a new admission and reply authorization bound to its original execution and verified requester. Host recovery of an existing provider context uses the original durable binding.
 
 ## Local provider validation
 

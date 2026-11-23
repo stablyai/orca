@@ -5,6 +5,7 @@ import type {
   ExternalConversationBot,
   ExternalConversationLink
 } from '../../shared/connectors/external-conversation-link'
+import { slackPlaceOf } from '../../shared/connectors/slack-mirror-state'
 import { linkedChat, type LinkableChat } from './external-conversation-chat-delivery'
 import { currentChat } from './external-conversation-chat'
 import type {
@@ -52,6 +53,7 @@ export function bindSlackRequester<T extends ConnectorMessage>(
   }
   const { slackRequester, ...asker } = message.asker
   return key.source === 'slack' &&
+    slackPlaceOf(key.externalId.replace(/^slack:/, ''))?.teamId === slackRequester.teamId &&
     bot &&
     directSlackRequester(message.asker) &&
     bots?.hasSlackWorkspace?.(bot.botId, slackRequester.teamId) &&

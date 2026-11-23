@@ -44,6 +44,10 @@ export async function freshSlackExecution(input: {
   linked: () => LinkedConversation | null
   replacementReady: SlackExecutionRequest['replacementReady']
 }): Promise<LinkableChat | Delivery> {
+  // A Slack Resume would need new authority and a reply route on the original scoped session.
+  if (input.message.resume) {
+    return refused('agent_not_reachable')
+  }
   if (input.key.source !== 'slack' || !input.message.reply) {
     return refused('agent_not_reachable')
   }

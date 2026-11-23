@@ -58,7 +58,7 @@ function send(
     expiresAt: 1,
     conversation: {
       source: options.source ?? 'slack',
-      externalId: options.thread ?? 'opaque-thread'
+      externalId: options.thread ?? 'T123:C123:100.001'
     },
     text: directAsker.text,
     asker
@@ -96,21 +96,46 @@ it('keeps the authenticated requester in durable message metadata across separat
       prompt: directAsker.text
     })?.slackRequester
   ).toEqual({ teamId: 'T123', userId: 'U123' })
-  expect(roundTrip(send('two', directAsker, { thread: 'another-thread' }))?.slackRequester).toEqual(
-    { teamId: 'T123', userId: 'U123' }
-  )
+  expect(
+    roundTrip(send('two', directAsker, { thread: 'T123:C123:200.001:UBOT' }))?.slackRequester
+  ).toEqual({ teamId: 'T123', userId: 'U123' })
 })
 
 it('accepts the bot’s other bound workspace and drops an unbound one', () => {
   expect(
-    roundTrip(send('one', { ...directAsker, slackRequester: { teamId: 'T456', userId: 'U123' } }))
-      ?.slackRequester
+    roundTrip(
+      send(
+        'one',
+        { ...directAsker, slackRequester: { teamId: 'T456', userId: 'U123' } },
+        { thread: 'T456:D123:D123:UBOT' }
+      )
+    )?.slackRequester
   ).toEqual({ teamId: 'T456', userId: 'U123' })
   expect(
-    roundTrip(send('two', { ...directAsker, slackRequester: { teamId: 'T999', userId: 'U123' } }))
-      ?.slackRequester
+    roundTrip(
+      send(
+        'two',
+        { ...directAsker, slackRequester: { teamId: 'T999', userId: 'U123' } },
+        { thread: 'T999:C123:100.001' }
+      )
+    )?.slackRequester
   ).toBeUndefined()
 })
+
+it('binds a prefixed Slack route to its receiving workspace', () => {
+  expect(
+    roundTrip(send('one', directAsker, { thread: 'slack:T123:C123:100.001' }))?.slackRequester
+  ).toEqual(requester)
+})
+
+it.each(['T456:C123:100.001:UBOT', 'slack:T456:C123:100.001', 'opaque-thread'])(
+  'drops a configured requester stamp when the route cannot prove that workspace: %s',
+  (thread) => {
+    const asker = roundTrip(send('one', directAsker, { thread }))
+    expect(asker?.userId).toBe('U123')
+    expect(asker?.slackRequester).toBeUndefined()
+  }
+)
 
 it.each([
   { slackRequester: undefined, role: 'owner' },
