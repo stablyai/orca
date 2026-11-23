@@ -264,9 +264,6 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
 export async function reattachKeptProviderProcess(
   relay: ProviderRelayLaunch
 ): Promise<RelayedProviderProcess | null> {
-  if (!route) {
-    return null
-  }
   await listProviderRelaysAtLaunch()
   return reattachListed(relay)
 }

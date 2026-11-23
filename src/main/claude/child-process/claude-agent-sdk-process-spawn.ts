@@ -14,6 +14,11 @@ import {
 } from '../../provider-relay/app-provider-relays'
 import { CLAUDE_RELAY_WORK_MARKERS } from '../relay/claude-relay-markers'
 import { ClaudeRelaySpawnStandIn } from '../relay/claude-relay-spawn-stand-in'
+import { relayedClaudeChildTree } from '../relay/claude-relayed-child-tree'
+import {
+  createClaudeChildTreeReaper,
+  type ClaudeChildTreeReaper
+} from './claude-agent-sdk-exit-proof'
 
 export type ClaudeCodeProcessSpawn = {
   /** SDK spawn hook; Orca retains process ownership. */
@@ -29,6 +34,8 @@ export type ClaudeCodeProcessSpawn = {
   readonly bound: Promise<void>
   /** The terminal daemon owns the agent (and reaps its group). */
   readonly relayed: boolean
+  /** Descendant evidence for the close ladder; the daemon's own exit proof when relayed. */
+  treeReaper: (exited: () => boolean) => ClaudeChildTreeReaper
 }
 
 function definedEnv(env: Record<string, string | undefined>): Record<string, string> {
@@ -62,11 +69,15 @@ function observeStdoutWithReader(
 export function createClaudeCodeProcessSpawn(
   spawnImpl: ProviderProcessSpawner = spawnProcess,
   platform: NodeJS.Platform = process.platform,
-  launch?: { pathToClaudeCodeExecutable: string; prefixArgs?: readonly string[] },
-  onStdout?: (chunk: Buffer | string) => void,
-  /** The chat whose agent should run under the terminal daemon, so it outlives a restart. */
-  relayChatKey?: string
+  launch?: {
+    pathToClaudeCodeExecutable: string
+    prefixArgs?: readonly string[]
+    /** The chat whose agent should run under the terminal daemon, so it outlives a restart. */
+    relayChatKey?: string
+  },
+  onStdout?: (chunk: Buffer | string) => void
 ): ClaudeCodeProcessSpawn {
+  const relayChatKey = launch?.relayChatKey
   let managed: ManagedProviderProcess | null = null
   let relayed = false
   let bound: Promise<void> = Promise.resolve()
@@ -145,6 +156,16 @@ export function createClaudeCodeProcessSpawn(
     },
     get relayed() {
       return relayed
+    },
+    treeReaper: (exited) => {
+      if (relayed || !managed) {
+        return relayedClaudeChildTree(exited)
+      }
+      return createClaudeChildTreeReaper(managed.child, {
+        site: 'claude-structured-child-close',
+        exited,
+        supervised: managed.supervised
+      })
     }
   }
 }

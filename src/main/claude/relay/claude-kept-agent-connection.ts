@@ -1,8 +1,9 @@
 import { finished } from 'node:stream/promises'
-import type {
-  ClaudeStreamJsonConnection,
-  ClaudeStreamJsonConnectionHandlers,
-  ClaudeStreamJsonLaunch
+import {
+  openClaudeStreamJsonConnection,
+  type ClaudeStreamJsonConnection,
+  type ClaudeStreamJsonConnectionHandlers,
+  type ClaudeStreamJsonLaunch
 } from '../claude-stream-json-connection'
 import { reattachKeptProviderProcess } from '../../provider-relay/app-provider-relays'
 import { CLAUDE_RELAY_WORK_MARKERS } from './claude-relay-markers'
@@ -53,6 +54,22 @@ function keptInitialization(line: string | null): unknown {
   } catch {
     return {}
   }
+}
+
+/**
+ * Opens a chat's Claude connection: the agent kept running while Orca was closed, else a new one
+ * (under the terminal daemon where it can, so it outlives the next restart).
+ */
+export function claudeChatConnectionOpener(
+  chatKey: string,
+  open: typeof openClaudeStreamJsonConnection = openClaudeStreamJsonConnection
+): (
+  launch: ClaudeStreamJsonLaunch,
+  handlers: ClaudeStreamJsonConnectionHandlers
+) => Promise<ClaudeStreamJsonConnection> {
+  return async (launch, handlers) =>
+    (await openKeptClaudeAgentConnection(chatKey, launch, handlers)) ??
+    open({ ...launch, relayChatKey: chatKey }, handlers)
 }
 
 /** Lines the SDK consumes itself and never yields as messages. */
