@@ -5,7 +5,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
 import { type BotHome, readBotHomeFile } from '../../settings/bots/bot-home-files'
 import { openBotHomeFileTab } from '../../settings/bots/bot-home-file-open'
-import { BOT_MEMORY_ARCHIVE, useBotMemoryTopics } from '../../settings/bots/use-bot-memory-topics'
+import { BOT_MEMORY_ARCHIVE } from '../../../../../shared/bots/bot-memory-archive'
+import { useBotMemoryTopics } from '../../settings/bots/use-bot-memory-topics'
 import { SettingsInsetGroup, SettingsInsetRow } from './BotSettingsRows'
 
 const memoryPath = (name: string): string => `memory/${name}`

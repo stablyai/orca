@@ -50,6 +50,9 @@ export function recordWorkerStage(
     this.db.exec('RELEASE worker_stage_transition')
     throw error
   }
+  if (params.lastError !== undefined && params.lastError !== current.last_error) {
+    this.workerDockSources?.changedDispatch(params.dispatchId)
+  }
   return this.getWorkerDispatch(params.dispatchId) as WorkerDispatchRow
 }
 

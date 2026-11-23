@@ -9,7 +9,6 @@ import {
   type DocPreviewFileChunk
 } from '../../../shared/document-preview/doc-preview-file-access'
 import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
-import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../providers/ssh-host-not-served-error'
 import {
   getDocPreviewGrant,
   resolveDocPreviewAuthorityPaths,
@@ -200,9 +199,6 @@ function runtimeWorkspaceReadParams(
   grant: DocPreviewGrant,
   absolutePath: string
 ): RuntimeDocPreviewReadParams | null {
-  if (grant.owner.kind !== 'runtime') {
-    return null
-  }
   const { worktreeRoot, worktreeSelector } = grant.owner
   const worktreeRelativePath = toRuntimeWorktreeRelativePath(worktreeRoot, absolutePath)
   const authority = resolveDocPreviewAuthorityPaths(grant)
@@ -249,9 +245,6 @@ export async function readDocPreviewFile(
   const contentType = docPreviewContentType(relativePath)
   const media = isDocPreviewMediaPath(relativePath)
   try {
-    if (grant.owner.kind === 'ssh') {
-      return notFoundOutcome(SSH_HOST_NOT_SERVED_MESSAGE)
-    }
     const runtimeOwner = grant.owner
     const terminalRead =
       runtimeOwner.fileAccess === 'terminal-artifact'

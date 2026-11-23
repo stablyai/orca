@@ -4,7 +4,7 @@ import {
 } from '../../../shared/execution-host/execution-host'
 import {
   botChangeConcerns,
-  readBotChangeScope,
+  readBotChangeScopeWithItems,
   type BotChangeInterest,
   type BotChangeScope
 } from '../../../shared/bots/bot-change-scope'
@@ -48,7 +48,7 @@ export function onBotsChanged(
     }
     const scope =
       detail && typeof detail === 'object' && 'scope' in detail
-        ? readBotChangeScope(detail.scope)
+        ? readBotChangeScopeWithItems(detail.scope)
         : undefined
     if (!interest || botChangeConcerns(scope, interest)) {
       listener(changed, scope)

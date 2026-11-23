@@ -113,11 +113,14 @@ export function WorktreeCardIdentityHover({
   card,
   branchName,
   workspaceTitle,
+  closed = false,
   children
 }: {
   card: WorktreeCardController
   branchName: string | undefined
   workspaceTitle: string | undefined
+  /** Drops open requests, e.g. while the title is being renamed, without unmounting the title. */
+  closed?: boolean
   children: React.ReactElement<React.RefAttributes<HTMLElement>>
 }): React.JSX.Element {
   const { worktree, repo, affiliateListMode, hoverIssue, hoverReview, workspacePorts } = card
@@ -143,7 +146,14 @@ export function WorktreeCardIdentityHover({
       detailsAfter={
         card.compactLine || workspacePorts.length > 0 ? (
           <>
-            {card.compactLine ? <WorktreeCardLineActivity worktreeId={worktree.id} /> : null}
+            {card.compactLine ? (
+              <WorktreeCardLineActivity
+                worktreeId={worktree.id}
+                executionHostId={worktree.hostId ?? 'local'}
+                runtimeOwnerEnvironmentId={worktree.runtimeOwnerEnvironmentId}
+                workspaceMenuEnabled={!affiliateListMode}
+              />
+            ) : null}
             {workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
           </>
         ) : null
@@ -152,6 +162,9 @@ export function WorktreeCardIdentityHover({
       hoverControl={{
         ...hoverControl,
         handleHoverOpenChange: (open) => {
+          if (open && closed) {
+            return
+          }
           if (
             !open ||
             !identityRef.current?.querySelector(

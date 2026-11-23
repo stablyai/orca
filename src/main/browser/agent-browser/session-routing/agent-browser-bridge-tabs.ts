@@ -132,6 +132,9 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
   ): { loading: boolean; canGoBack: boolean; canGoForward: boolean } | null {
     return this.browserManager.getBrowserPageNavigationState(browserPageId)
   }
+  getPageAudioRowFields(browserPageId: string): { audible?: true; audioMuted?: true } {
+    return this.browserManager.getBrowserPageAudioRowFields(browserPageId)
+  }
   onTabChanged(webContentsId: number, worktreeId?: string): void {
     this.selectForPerson(webContentsId, worktreeId)
     this.options.onTabsChanged?.(worktreeId)
