@@ -146,17 +146,17 @@ describe("the journal's attribution of each close", () => {
       () => CLOSED + 1_000
     )
     const journal = [
-        '# Journal 2026-11',
-        '- 2026-11-21 | item #1000 | done | Errand of owner-typed',
-        '- 2026-11-21 | item #1001 | done | Errand of owner-connector',
-        '- 2026-11-21 | item #1002 | done | Errand of teammate-connector | for Dana via Slack, not your owner',
-        '- 2026-11-21 | item #1003 | done | Errand of recorded-teammate | for Eve / done via Slack, not your owner',
-        '- 2026-11-21 | item #1004 | done | Errand of never-messaged | asker unknown, not known to be your owner',
-        '- 2026-11-21 | item #1005 | done | Errand of deleted | asker unknown, not known to be your owner',
-        '- 2026-11-21 | item #1006 | done | Errand of teammate-connector',
-        '- 2026-11-21 | item #1007 | done | Errand of owner-typed | for Dana via Slack, not your owner',
-        ''
-      ].join('\n')
+      '# Journal 2026-11',
+      '- 2026-11-21 | item #1000 | done | Errand of owner-typed',
+      '- 2026-11-21 | item #1001 | done | Errand of owner-connector',
+      '- 2026-11-21 | item #1002 | done | Errand of teammate-connector | for Dana via Slack, not your owner',
+      '- 2026-11-21 | item #1003 | done | Errand of recorded-teammate | for Eve / done via Slack, not your owner',
+      '- 2026-11-21 | item #1004 | done | Errand of never-messaged | asker unknown, not known to be your owner',
+      '- 2026-11-21 | item #1005 | done | Errand of deleted | asker unknown, not known to be your owner',
+      '- 2026-11-21 | item #1006 | done | Errand of teammate-connector',
+      '- 2026-11-21 | item #1007 | done | Errand of owner-typed | for Dana via Slack, not your owner',
+      ''
+    ].join('\n')
     expect(await pass()).toBe(journal)
     // A pass with no new close reads no chat again.
     const read = reads.length

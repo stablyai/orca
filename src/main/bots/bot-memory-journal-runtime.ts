@@ -96,7 +96,7 @@ export function createBotMemoryJournal(deps: {
     }
     const items: JournalItem[] = []
     for (const candidate of closed) {
-      const { uid, chatId, ...item } = candidate
+      const { uid: _uid, chatId: _chatId, ...item } = candidate
       items.push({ ...item, closedFor: await closedFor(candidate) })
     }
     const lines = items.toSorted((a, b) => a.closedAt - b.closedAt).flatMap(journalLines)
