@@ -12,6 +12,7 @@ import {
   paneLiveSessions
 } from '../orchestration/workers/restart-resume/pane-runs-conversation'
 import { reopenWorkerTerminal } from '../rpc/methods/orchestration/worker/follow-up/worker-follow-up-placement'
+import { workerStartAccount } from '../rpc/methods/orchestration/worker/follow-up/worker-earlier-work'
 import { OrcaRuntimeWithWindowlessTerminalActivity } from '../sidebar-inputs/temporal/orca-runtime-windowless-terminal-activity'
 
 type RestartResumeRuntime = Pick<
@@ -79,8 +80,19 @@ function createTerminalWorkerRestartResume(
     getDb: () => runtime.getExistingOrchestrationDb(),
     closeTerminal: (handle) => runtime.closeTerminal(handle),
     setTimer: unrefTimer,
-    reopen: (worktreeId, session, mutationId) =>
-      reopenWorkerTerminal(runtime, worktreeId, session, mutationId),
+    // Why the origin start's account: the resume recipe drops it, another account lacks the
+    // conversation, and an in-place follow-up that owns the terminal now records none.
+    reopen: (worktreeId, session, mutationId, dispatchId) => {
+      const db = runtime.getExistingOrchestrationDb()
+      const origin = db?.getWorkerTerminalResourceByOwner(dispatchId)?.origin_dispatch_id
+      return reopenWorkerTerminal(
+        runtime,
+        worktreeId,
+        session,
+        mutationId,
+        workerStartAccount(db, origin ?? dispatchId)
+      )
+    },
     terminalAuthority: (handle) => {
       const authority = runtime.getOrchestrationDispatchAuthority(handle)
       const paneKey = authority?.paneKey ?? runtime.getTerminalPaneKey(handle)

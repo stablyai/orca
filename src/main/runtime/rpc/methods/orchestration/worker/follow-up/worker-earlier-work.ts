@@ -56,6 +56,15 @@ export function parseStartOptions(raw: string): {
   }
 }
 
+/** A resumed conversation lives in the Claude account its worker started on. */
+export function workerStartAccount(
+  db: OrchestrationDb | null,
+  dispatchId: string
+): string | undefined {
+  const startOptions = db?.getWorkerDispatch(dispatchId)?.start_options
+  return startOptions ? parseStartOptions(startOptions).account : undefined
+}
+
 /** The earlier task and report, for a fresh agent that cannot reopen the conversation. */
 export function earlierWork(db: OrchestrationDb, latest: DispatchContextRow): string {
   const task = db.getTask(latest.task_id)

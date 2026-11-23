@@ -8,6 +8,7 @@ import type { OrchestrationDb } from '../../../../../orchestration/db/orchestrat
 import { readWorkerResumeSession } from '../../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { userTabHoldingSession } from './worker-follow-up-choice'
 import { reopenWorkerTerminal } from './worker-follow-up-placement'
+import { workerStartAccount } from './worker-earlier-work'
 
 // A resume that failed may still have spawned; its retry keeps the request id so it reconciles that pane.
 // Taken before any await, so opens that overlap (desktop and phone) share one request and get one terminal.
@@ -39,7 +40,13 @@ export async function openClosedWorkerTerminal(
     uncertain.delete(resource.id)
     return { kind: 'terminal', handle: held }
   }
-  const reopened = await reopenWorkerTerminal(runtime, resource.worktree_id, session, mutationId)
+  const reopened = await reopenWorkerTerminal(
+    runtime,
+    resource.worktree_id,
+    session,
+    mutationId,
+    workerStartAccount(db, resource.origin_dispatch_id)
+  )
   uncertain.delete(resource.id)
   return reopened ? { kind: 'terminal', handle: reopened.handle } : null
 }

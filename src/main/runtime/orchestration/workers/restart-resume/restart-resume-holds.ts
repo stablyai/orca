@@ -23,7 +23,8 @@ export type TerminalWorkerRestartResumeDeps = {
   reopen: (
     worktreeId: string,
     session: WorkerResumeSession,
-    mutationId: string
+    mutationId: string,
+    dispatchId: string
   ) => Promise<{ handle: string } | null>
   terminalAuthority: (
     handle: string
@@ -127,7 +128,12 @@ export abstract class RestartResumeHolds {
       return Promise.resolve(false)
     }
     const { worktreeId, session } = worker.claim
-    const reopened = this.deps.reopen(worktreeId, session, `${dispatchId}:restart-resume`)
+    const reopened = this.deps.reopen(
+      worktreeId,
+      session,
+      `${dispatchId}:restart-resume`,
+      dispatchId
+    )
     let timedOut: (() => void) | undefined
     const timer = this.deps.setTimer(() => {
       console.warn('[orchestration] resuming a terminal worker after a restart timed out', {
