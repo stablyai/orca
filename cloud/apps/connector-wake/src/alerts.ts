@@ -29,11 +29,13 @@ async function window(env: WakeAlertsEnv, fromMin: number, toMin: number): Promi
 }
 
 async function post(env: WakeAlertsEnv, text: string): Promise<void> {
-  await fetch(env.ALERT_WEBHOOK_URL, {
+  const response = await fetch(env.ALERT_WEBHOOK_URL, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ text: `[connector-wake ${env.ENVIRONMENT}] ${text}` })
   })
+  // Stateless, so a rejected post is not retried; the Worker's logs keep it.
+  if (!response.ok) { console.error(`connector-wake alerts: webhook answered ${response.status}: ${text}`) }
 }
 
 async function probes(env: WakeAlertsEnv): Promise<string[]> {
