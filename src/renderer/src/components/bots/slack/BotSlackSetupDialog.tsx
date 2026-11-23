@@ -138,7 +138,7 @@ function BotSlackSetupFlow({
         return (
           <SlackSetupWorking
             settingUp={step.kind === 'setting-up'}
-            handOff={step.kind === 'setting-up' && step.handOff}
+            handOff={step.kind === 'setting-up' && step.handOff === true}
             email={ownEmail}
             hostName={hostName}
           />

@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
 import { SlackCopyLink } from './slack-hand-off-parts'
+import type { SlackInstallLink } from './slack-install-link'
 
 export function SlackSetupWaiting({
   botName,
@@ -16,10 +17,10 @@ export function SlackSetupWaiting({
 }: {
   botName: string
   hostName: string | null
-  link: string | null
+  link: SlackInstallLink | null
   copied: boolean
   teamId: string
-  onCopy: () => void
+  onCopy: () => Promise<void>
   onClose: () => void
   onInstallAgain: (teamId: string) => void
 }): React.JSX.Element {
