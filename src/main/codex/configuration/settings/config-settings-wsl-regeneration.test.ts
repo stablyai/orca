@@ -7,6 +7,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -136,6 +137,24 @@ describe('managed Codex config for a WSL distro config', () => {
     expect(readRuntimeConfig()).toContain('[mcp_servers.docs]')
     expect(readRuntimeConfig()).not.toContain('ponytail')
     expect(readRuntimeConfig()).toMatch(/^daemon_auto_start = false # orca:/m)
+  })
+
+  it('leaves an unchanged managed copy untouched on regeneration', () => {
+    writeSystemConfig(
+      'model = "gpt-5"\n\n[hooks.state."/home/u/.codex/hooks.json:stop:0:0"]\ntrusted_hash = "sha256:abc"\n\n[projects."/home/u/repo"]\ntrust_level = "trusted"\n'
+    )
+    wslTestState.wslPath = systemConfigPath()
+    wslTestState.daemonGuard = true
+    syncSystemConfigIntoManagedCodexHome()
+    syncSystemConfigIntoManagedCodexHome()
+    const before = statSync(runtimeConfigPath())
+
+    syncSystemConfigIntoManagedCodexHome()
+    syncSystemConfigIntoManagedCodexHome()
+
+    const after = statSync(runtimeConfigPath())
+    expect(after.ino).toBe(before.ino)
+    expect(after.mtimeMs).toBe(before.mtimeMs)
   })
 
   it('leaves the managed copy whole when a regeneration write fails partway', () => {
