@@ -198,6 +198,17 @@ export function useNativeChatPacedText(
       return
     }
     if (drawsWhole) {
+      // A save is taken in a render before its text is the reveal's source (a turn's end lands in
+      // that render too), so an arrival not yet stepped counts from here; else a slow render spends
+      // its whole reveal and it draws in one step where main draws two.
+      const startsAt = performance.now()
+      const from = pace.current.shown
+      pace.current = {
+        ...pace.current,
+        arrivals: pace.current.arrivals.map((arrival) =>
+          arrival.at < startsAt && arrival.from >= from ? { ...arrival, at: startsAt } : arrival
+        )
+      }
       // Main's own reveal of each save, on every display frame.
       return playNativeChatTextReveal(
         () => pace.current,
