@@ -45,7 +45,11 @@ export const BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY = 'browser.stop-hard-re
 // Older hosts have no browser.findInPage, so streamed panes answer Cmd+F with a notice instead of the find bar.
 export const BROWSER_FIND_IN_PAGE_RUNTIME_CAPABILITY = 'browser.find-in-page.v1' as const
 
-// Headless, identity, certificate trust, page zoom, site display, stop/hard reload and find in page are host-conditional, so getStatus adds them itself.
+// Headless hosts that rebuild a page in place for browser.tabSetProfile; streamed panes show ⋯ › Profile only with this.
+export const BROWSER_TAB_PROFILE_SWITCH_RUNTIME_CAPABILITY =
+  'browser.tab-profile-switch.v1' as const
+
+// Headless, identity, certificate trust, page zoom, site display, stop/hard reload, find in page and profile switch are host-conditional, so getStatus adds them itself.
 export const BROWSER_RUNTIME_CAPABILITIES = [
   BROWSER_EXPECT_URL_RUNTIME_CAPABILITY,
   BROWSER_TAB_HISTORY_STATE_RUNTIME_CAPABILITY,

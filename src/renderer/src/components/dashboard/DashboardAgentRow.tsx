@@ -36,6 +36,7 @@ import {
   agentMainAgentVerdict,
   agentVerdictDisplayMark
 } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { agentToolDisplayName } from '../../../../shared/agent-status/presentation/agent-tool-preview'
 import { agentVerdictStatusLine } from '../../../../shared/agent-status/presentation/agent-verdict-status-line'
 import type { DashboardAgentRow as DashboardAgentRowData } from './rows/dashboard-agent-row'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
@@ -187,7 +188,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state, t)
   const showsTool = showsAgentToolPreview(agent.state) && !isMonitoring && stoppingLabel === null
   const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
-  const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
+  const toolName = showsTool ? agentToolDisplayName(agent.entry.toolName) : ''
   // Why the fallback: a hook-owned row without a tool line still shows what the program says it does.
   const toolInput = showsTool
     ? agentRowToolInput(agent.entry, agent.state) || presentation.message || ''

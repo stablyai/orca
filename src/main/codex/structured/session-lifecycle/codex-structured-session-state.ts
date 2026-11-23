@@ -108,7 +108,11 @@ export type CodexStructuredSessionAdapterDeps = {
   /** The provider's exact receipt or explicit refusal for a send admitted earlier. */
   onDispatchSettledLate?: (
     input: { sessionId: string; clientMessageId: string } & (
-      | { providerIdentity: AgentJournalItemIdentity }
+      | {
+          providerIdentity: AgentJournalItemIdentity
+          /** The running turn it joined, which another send opened. */
+          answeredInTurn?: AgentJournalAnsweredTurnIdentity
+        }
       | ({
           state: 'rejected'
           answeredInTurn?: AgentJournalAnsweredTurnIdentity

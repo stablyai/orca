@@ -1,5 +1,5 @@
 // An agent's ask of several questions on the item page: one line at a time, picks held until the
-// last line or Send now, and words typed in the comment box sent at once.
+// last line or "send anyway", and words typed in the comment box sent at once.
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
@@ -81,7 +81,7 @@ const severalView = {
 }
 
 // An ask of four questions, two picked: one line at a time, the picks held above until the last or
-// Send now.
+// "send anyway".
 export const severalQuestions = defineFixture({
   width: 900,
   render: () => (
