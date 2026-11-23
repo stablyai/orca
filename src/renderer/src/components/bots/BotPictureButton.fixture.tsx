@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { Bot } from '../../../../shared/bot-types'
 import type { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
+import { mascotAvatar, PICKABLE_BOT_MASCOT_IDS } from '../../../../shared/bot-avatar'
 import { BotPictureButton } from './BotPictureButton'
 import type { BotPictureCustom, BotPictureValue } from './BotPicturePicker'
 
@@ -34,6 +35,12 @@ const UPLOAD: BotPictureCustom = {
 }
 
 function Picture({ initial }: { initial: BotPictureValue }): React.JSX.Element {
+  // The saved avatar matches the selection, as after it was applied.
+  const shown: Bot = {
+    ...bot,
+    avatar:
+      initial.kind === 'mascot' ? mascotAvatar(PICKABLE_BOT_MASCOT_IDS[initial.index]) : 'upload:1'
+  }
   const [value, setValue] = useState(initial)
   const [color, setColor] = useState<string | null>(null)
   const picture: ReturnType<typeof useBotPictureSetting> = {
@@ -49,7 +56,11 @@ function Picture({ initial }: { initial: BotPictureValue }): React.JSX.Element {
   }
   return (
     <div className="flex h-[380px] items-start gap-4 p-6">
-      <BotPictureButton bot={bot} picture={picture} avatarClassName="size-12 rounded-lg text-xl" />
+      <BotPictureButton
+        bot={shown}
+        picture={picture}
+        avatarClassName="size-12 rounded-lg text-xl"
+      />
       <div className="pt-3 text-lg font-semibold">{bot.name}</div>
     </div>
   )
