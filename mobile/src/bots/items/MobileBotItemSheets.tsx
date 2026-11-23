@@ -63,7 +63,8 @@ function statusActions(
     // Canceled and Waiting open their note sheet once this one has gone.
     closeBeforePress: status === 'canceled' || status === 'waiting',
     onPress: () => {
-      if (status !== current) {
+      // Waiting again edits what it waits on.
+      if (status !== current || status === 'waiting') {
         pick(status)
       }
     }
@@ -278,7 +279,9 @@ function StatusNoteSheet({
   if (items !== shown) {
     setShown(items)
     if (items !== null) {
-      setNote('')
+      // Waiting again on one Waiting item starts from what it waits on.
+      const [only] = items
+      setNote((to === 'waiting' && items.length === 1 && only?.wait?.text) || '')
     }
   }
   const count = items?.length ?? 0

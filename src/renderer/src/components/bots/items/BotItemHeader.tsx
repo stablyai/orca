@@ -174,7 +174,8 @@ function StatusMenu({
         {botItemPickerStatuses(waiting).map((status) => (
           <DropdownMenuItem
             key={status}
-            disabled={status === item.status}
+            // Waiting again edits what it waits on.
+            disabled={status === item.status && status !== 'waiting'}
             onSelect={() => onStatus(status)}
           >
             <span className="flex w-4 justify-center">

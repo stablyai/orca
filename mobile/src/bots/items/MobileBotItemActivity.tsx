@@ -322,7 +322,7 @@ export function MobileBotItemActivity({
           </View>
         )
       )}
-      {waitKey && item.wait ? (
+      {item.status === 'waiting' && item.wait ? (
         <MobileBotItemWaitCard text={item.wait.text} at={item.wait.at} />
       ) : null}
       {pending.shown.map(({ event, failed, mayHaveArrived }) => (

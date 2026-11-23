@@ -20,8 +20,8 @@ import {
 
 export type BotItemNotedStatus = 'canceled' | 'waiting'
 
-/** A move asking for its line, and the items it moves. */
-export type BotItemNoting = { to: BotItemNotedStatus; items: readonly BotItem[] }
+/** A move asking for its line, the items it moves, and the line to start from (a wait being edited). */
+export type BotItemNoting = { to: BotItemNotedStatus; items: readonly BotItem[]; text?: string }
 
 /** A move to any status: Canceled and Waiting ask for their line first, in the returned dialog. */
 export function useBotItemStatusNotes(
@@ -29,8 +29,16 @@ export function useBotItemStatusNotes(
 ): { move: (items: readonly BotItem[], to: BotItemStatus) => void; dialog: React.JSX.Element } {
   const [noting, setNoting] = useState<BotItemNoting | null>(null)
   return {
-    move: (items, to) =>
-      to === 'canceled' || to === 'waiting' ? setNoting({ to, items }) : move(items, to),
+    move: (items, to) => {
+      if (to !== 'canceled' && to !== 'waiting') {
+        move(items, to)
+        return
+      }
+      // Waiting again on one Waiting item edits what it waits on.
+      const [only] = items
+      const text = to === 'waiting' && items.length === 1 ? only?.wait?.text : undefined
+      setNoting({ to, items, ...(text ? { text } : {}) })
+    },
     dialog: (
       <BotItemStatusNoteDialog
         noting={noting}
@@ -56,9 +64,15 @@ function BotItemStatusNoteDialog({
 }): React.JSX.Element {
   const t = useTranslate()
   const [note, setNote] = useState('')
-  const to = noting?.to ?? 'canceled'
-  const count = noting?.items.length ?? 0
-  const words = copy(to, t, count, noting?.items[0]?.title ?? '')
+  // Each opening starts from its own line, never what an earlier one left; closing keeps its words.
+  const [shown, setShown] = useState<BotItemNoting | null>(null)
+  if (noting !== null && noting !== shown) {
+    setShown(noting)
+    setNote(noting.text ?? '')
+  }
+  const to = shown?.to ?? 'canceled'
+  const count = shown?.items.length ?? 0
+  const words = copy(to, t, count, shown?.items[0]?.title ?? '')
   const submit = (): void => {
     if (noting && note.trim()) {
       onDone(noting, note.trim())

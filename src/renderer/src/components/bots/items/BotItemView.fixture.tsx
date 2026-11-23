@@ -357,15 +357,15 @@ export const waitingOn = defineFixture({
   )
 })
 
-// Waiting… from the status picker asks what it waits on.
+// Waiting… on a Waiting item edits what it waits on; its card shows though its move isn't loaded.
 export const waitingPick = defineFixture({
   width: 360,
   render: () => (
     <div className="flex h-[520px] flex-col bg-sidebar">
       <BotItemBody
         bot={{ ...fixtureCos, name: 'Designer' }}
-        item={item}
-        view={{ ...waitingView, item }}
+        item={waitingItem}
+        view={{ ...waitingView, events: waitingView.events.slice(0, 2) }}
       />
     </div>
   ),

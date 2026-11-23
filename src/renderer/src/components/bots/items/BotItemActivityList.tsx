@@ -329,7 +329,9 @@ export function BotItemActivityList({
             </div>
           )
         })}
-        {waitKey && item.wait ? <BotItemWaitCard text={item.wait.text} at={item.wait.at} /> : null}
+        {item.status === 'waiting' && item.wait ? (
+          <BotItemWaitCard text={item.wait.text} at={item.wait.at} />
+        ) : null}
         {/* Last, as sent: never placed by this machine's clock among the host's events. */}
         {pending?.shown.map(({ event, failed }) =>
           // Answers posted as one comment show on their lines already.
