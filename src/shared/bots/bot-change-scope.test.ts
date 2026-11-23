@@ -32,6 +32,9 @@ it('re-reads only the rooms a window named, and every room once a change names n
   expect(rooms(notice({ kinds: ['groups'] }, { kinds: ['groups'], groupIds: ['room-a'] }))).toEqual(
     ['room-a', 'room-b', 'room-c']
   )
+  expect(
+    rooms(notice({ kinds: ['groups'], groupIds: [] }, { kinds: ['groups'], groupIds: ['room-a'] }))
+  ).toHaveLength(3)
   // A change of every kind, an older host's bare notice, and a kind this build doesn't know all reach
   // every room; another kind alone reaches none.
   expect(rooms(notice({ kinds: ['groups'], groupIds: ['room-a'] }, {}))).toHaveLength(3)

@@ -157,7 +157,8 @@ export function addBotChange(pending: PendingBotChanges, scope: BotChangeScope):
   const kinds: readonly (BotChangeKind | typeof ANY_KIND)[] =
     scope.kinds && scope.kinds.length > 0 ? scope.kinds : [ANY_KIND]
   if (kinds.includes('groups') || kinds.includes(ANY_KIND)) {
-    if (!scope.groupIds || pending.groupIds === null) {
+    // A change naming no room (no list, or an empty one) reaches every room.
+    if (!scope.groupIds?.length || pending.groupIds === null) {
       pending.groupIds = null
     } else {
       pending.groupIds ??= new Set()
