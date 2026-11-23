@@ -236,7 +236,7 @@ describe('replacing a chat carries its unsent queued messages', () => {
     expect(rig!.store.getConversation(next)?.provider).toBe(newChatAgent)
     const { journal } = await rig!.host.conversation(next)
     expect((await journal.queuedMessages.get('plan'))?.deliveryMode).not.toBe('steer')
-    let sent: Parameters<typeof rig.dispatch>[0] | undefined
+    let sent: Parameters<QueuedMessageTestRig['dispatch']>[0] | undefined
     await eventually(() => {
       sent = rig!.dispatch.mock.calls.find(([input]) => input.sessionId === next)?.[0]
       expect(sent).toBeDefined()
