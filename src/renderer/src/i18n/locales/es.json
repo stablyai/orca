@@ -5482,7 +5482,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Otra instalación sigue en curso",
-          "edited": "Skill modificada fuera de Orca",
           "install": "Instalar",
           "installFor": "Instalar para {{value0}}",
           "installed": "Instalada",
@@ -12752,7 +12751,6 @@
           "attentionUnwritable": "Requiere atención · Orca no puede escribir en {{folder}}",
           "attentionBusy": "Requiere atención · Otra instalación de habilidades aún está terminando aquí",
           "attentionUnreadable": "Requiere atención · Orca no puede leer todos los archivos de esta copia",
-          "attentionEdited": "Requiere atención · Editaste esta copia",
           "attentionOther": "Requiere atención · Otra habilidad ya usa este nombre",
           "attentionSharedNotCurrent": "Requiere atención · La copia compartida que usa esta carpeta no es de Orca",
           "resultUpdateSkippedPlaces": "{{result}} · Actualización omitida en {{places}} ubicaciones: {{reason}}",
@@ -22190,6 +22188,11 @@
       "dialogTitle": "Por qué claude aquí no usa la cuenta seleccionada",
       "dialogDescription": "Ahora Orca guarda cada cuenta de Claude en su propia carpeta, y claude en una terminal nueva sigue la cuenta que selecciones.",
       "dialogCause": "Las terminales abiertas antes de esta actualización no lo hacen, así que claude aquí inicia sesión con el inicio de sesión de Predeterminado del sistema. Abre una terminal nueva para usar la cuenta seleccionada."
+    },
+    "fileDrop": {
+      "copyUploadedPaths": "Copiar rutas",
+      "copyUploadedPathsFailed": "No se pudieron copiar las rutas de los archivos subidos.",
+      "uploadedWithoutPaste": "Subida completada, pero no se pudieron pegar las rutas en el terminal."
     },
     "newerDaemonBanner": {
       "failedTitle": "No se pudo volver a abrir esta terminal",

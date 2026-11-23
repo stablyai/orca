@@ -27,7 +27,8 @@ export function usePhoneBotItemPendingComments({
   uid,
   events,
   hostName,
-  showToast
+  showToast,
+  returnText
 }: {
   client: RpcClient | null
   /** One item on one host. */
@@ -36,6 +37,8 @@ export function usePhoneBotItemPendingComments({
   events: readonly BotItemEvent[]
   hostName: string
   showToast: (message: string) => void
+  /** A replaced question's reply, dropped: its words back to the comment box if it is empty. */
+  returnText: (text: string) => void
 }) {
   const t = useMobileTranslation()
   const requestIds = useRouteCapability(BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY)
@@ -73,6 +76,7 @@ export function usePhoneBotItemPendingComments({
             ? error.message
             : String(error)
       ),
+    returnText,
     requestIds,
     questionIds,
     plain,

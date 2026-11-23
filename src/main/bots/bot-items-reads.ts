@@ -3,14 +3,11 @@
 import {
   botItemEventId,
   isOpenBotItemStatus,
-  parseBotItemEventId,
   type BotItemLinkKind,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
-import { botItemWaitingAsk } from '../../shared/bots/bot-item-question-answers'
 import {
   eventRecordOf,
-  eventViewOf,
   integer,
   itemRecordOf,
   linkRecordOf,
@@ -36,17 +33,6 @@ export type BotItemListQuery = {
 }
 
 export class BotItemsReads extends BotItemsTables {
-  /** The item's ask waiting on the owner, which a later question can leave open: read from all its
-   *  events as clients pair them. */
-  protected waitingAsk(item: Pick<BotItemRecord, 'uid' | 'status'>): number | null {
-    const events = this.db
-      .prepare('SELECT * FROM item_events WHERE item_uid = ? ORDER BY id')
-      .all(item.uid)
-      .map((row) => eventViewOf(eventRecordOf(row)))
-    const ask = botItemWaitingAsk(item, events)
-    return ask ? parseBotItemEventId(ask.askId) : null
-  }
-
   /** Links of a kind to any of these refs, across items. */
   linksTo(kind: BotItemLinkKind, refs: readonly string[]): BotItemLinkRecord[] {
     if (refs.length === 0) {

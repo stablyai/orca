@@ -427,6 +427,9 @@
       "usageSignInLabel": "Sign in again",
       "usageSignInMessage": "The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default."
     },
+    "codex": {
+      "usageSignInLabel": "Signed out"
+    },
     "usage": {
       "percentLeft": "{{value}}% left"
     }
@@ -4130,6 +4133,21 @@
         "custody": "Your app sign-ins are held by Composio.",
         "browseOnComputer": "Browse more apps from the bot’s Tools in Orca on your computer.",
         "browse": "Browse more apps"
+      },
+      "webhookSetup": {
+        "heading": "Set up a webhook",
+        "on": "On",
+        "hint": "Point your service at this URL",
+        "gettingUrl": "Getting the URL…",
+        "keyAndSecret": "Key and signing secret",
+        "headerKey": "Header key",
+        "copy": "Copy",
+        "signingSecret": "Signing secret",
+        "noSecret": "None",
+        "sampleCall": "Sample call",
+        "sampleNote": "Starts a real run",
+        "send": "Send",
+        "copiedReceipt": "✓ URL copied"
       }
     },
     "eventRow": {
@@ -6797,7 +6815,8 @@
         "failed": "Failed",
         "unverifiable": "Unverifiable",
         "unverifiableDetail": "{{bot}}’s computer can’t be reached"
-      }
+      },
+      "copiedKey": "Key copied"
     },
     "errors": {
       "generic": "Something went wrong. Try again."
@@ -7991,6 +8010,7 @@
       },
       "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs.",
       "botsOff": "Bots are turned off in Settings, so Orca skipped this run.",
+      "botsOffByTeam": "Bots are turned off by your team, so Orca skipped this run.",
       "botMissing": "The bot this automation runs as no longer exists.",
       "botFolderMissing": "The bot's folder is no longer available.",
       "botPaused": "{{bot}} is paused, so Orca skipped this run."

@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { afterEach, expect, it } from 'vitest'
 import {
   BOT_ITEM_EVENT_KINDS,
@@ -9,6 +13,7 @@ import {
   botItemQuestionPairing,
   botItemWaitingLine
 } from '../../shared/bots/bot-item-question-answers'
+import { waitingAskChange } from './bot-item-waiting-ask-keep'
 import type { BotItemBotActor, BotItemOwnerActor } from './bot-items-input'
 import { BotItemsStore } from './bot-items-store'
 
@@ -20,10 +25,12 @@ const GO = 'Go ahead without a separate OK?'
 const MERGE = 'Merge it?'
 
 const stores: BotItemsStore[] = []
+// Second connections a test opens on its store's file, closed even when an assertion fails.
+const files: DatabaseSync[] = []
 afterEach(() => stores.splice(0).forEach((store) => store.dispose()))
 
-function item() {
-  const store = BotItemsStore.open(':memory:')
+function item(path = ':memory:') {
+  const store = BotItemsStore.open(path)
   stores.push(store)
   const { uid } = store.add(
     {
@@ -201,4 +208,127 @@ it('keeps a reply that names one set out of another set with the same choices', 
   const { asks } = view()
   expect(asks.get(botItemEventId(first))?.answers.map(Boolean)).toEqual([true, false])
   expect(asks.get(botItemEventId(second))?.answers.map(Boolean)).toEqual([false])
+})
+
+it('works out the waiting ask from the events when none is kept or an older Orca wrote after it', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'bot-items-'))
+  try {
+    const path = join(dir, 'items.sqlite')
+    const { store, uid, ask, comment } = item(path)
+    const first = ask([HOSTS, GO])
+    comment(`${HOSTS} → Yes`, first)
+    ask([MERGE])
+    const kept = store.viewRows([uid], true).waitingAsks[uid]
+    expect(kept).toBe(botItemEventId(first))
+    const file = new DatabaseSync(path)
+    files.push(file)
+    file.prepare('DELETE FROM item_waiting_asks').run()
+    expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(kept)
+    expect(file.prepare('SELECT ask FROM item_waiting_asks').get()).toEqual({ ask: first })
+    // Kept by other pairing rules (another build): not trusted, even when no event came since.
+    file.prepare("UPDATE item_waiting_asks SET ask = 0, rules = 'another build'").run()
+    expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(kept)
+    // An older Orca's move by hand, which ends every ask, knows nothing of the kept one.
+    const moved = file
+      .prepare(
+        `INSERT INTO item_events (item_uid, kind, actor, data, mail, action, created_at)
+         VALUES (?, 'status', '{"kind":"owner"}', '{"from":"needs_you","to":"working"}', NULL, 0, ?)`
+      )
+      .run(uid, NOW)
+    file.prepare('UPDATE items SET last_event_id = ?').run(moved.lastInsertRowid)
+    expect(store.viewRows([uid], true).waitingAsks[uid]).toBeUndefined()
+  } finally {
+    files.splice(0).forEach((file) => file.close())
+    stores.splice(0).forEach((store) => store.dispose())
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+it('answers as pairing every event does, reading only the events since the kept ask when they ask nothing', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'bot-items-'))
+  try {
+    const path = join(dir, 'items.sqlite')
+    const { store, uid, ask, comment } = item(path)
+    const file = new DatabaseSync(path)
+    files.push(file)
+    const keptAt = (): unknown => file.prepare('SELECT at FROM item_waiting_asks').get()?.at
+    const lastEvent = (): unknown =>
+      file.prepare('SELECT last_event_id FROM items').get()?.last_event_id
+    // What an open answers, then what pairing every event answers once nothing is kept.
+    const opened = (): [string | undefined, string | undefined] => {
+      const kept = store.viewRows([uid], true).waitingAsks[uid]
+      file.prepare('DELETE FROM item_waiting_asks').run()
+      return [kept, store.viewRows([uid], true).waitingAsks[uid]]
+    }
+    expect(opened()).toEqual([undefined, undefined])
+    const before = keptAt()
+    store.comment(uid, 'Still building.', AGENT, [], NOW)
+    expect(store.viewRows([uid], true).waitingAsks[uid]).toBeUndefined()
+    expect(keptAt()).toBe(before)
+    expect(opened()).toEqual([undefined, undefined])
+    const asked = ask([MERGE])
+    expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(botItemEventId(asked))
+    expect(keptAt()).toBe(lastEvent())
+    expect(opened()).toEqual([botItemEventId(asked), botItemEventId(asked)])
+    const waiting = keptAt()
+    store.comment(uid, 'Waiting on you.', AGENT, [], NOW)
+    expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(botItemEventId(asked))
+    expect(keptAt()).toBe(waiting)
+    expect(opened()).toEqual([botItemEventId(asked), botItemEventId(asked)])
+    comment('Yes', asked)
+    expect(opened()).toEqual([undefined, undefined])
+  } finally {
+    files.splice(0).forEach((file) => file.close())
+    stores.splice(0).forEach((store) => store.dispose())
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+it('passes over only events that pair nothing, and keeps "none" only past events that cannot ask', () => {
+  const { store, uid, ask, comment } = item()
+  const views = (): BotItemEvent[] =>
+    store.events(uid, 0, 200).map(({ id, kind, actor, data, createdAt }) => ({
+      id: botItemEventId(id),
+      kind: BOT_ITEM_EVENT_KINDS.find((known) => known === kind) ?? 'edited',
+      actor,
+      data,
+      at: createdAt
+    }))
+  const waitingOf = (events: readonly BotItemEvent[]): string | undefined =>
+    [...botItemQuestionPairing({ status: 'working' }, events).questions].find(
+      ([, entry]) => entry.waiting
+    )?.[0]
+  const event = (
+    kind: BotItemEvent['kind'],
+    actor: BotItemEvent['actor'],
+    data: Record<string, unknown>
+  ): BotItemEvent => ({ id: botItemEventId(1_000_000), kind, actor, data, at: NOW })
+  const first = ask([HOSTS, GO])
+  comment(`${HOSTS} → Yes`, first)
+  ask([MERGE])
+  const waiting = views()
+  expect(waitingOf(waiting)).toBe(botItemEventId(first))
+  const ignored = [
+    ...BOT_ITEM_EVENT_KINDS.filter((kind) => kind !== 'commented' && kind !== 'status').map(
+      (kind) => event(kind, AGENT, {})
+    ),
+    event('commented', AGENT, { text: 'Still building.' }),
+    event('status', AGENT, { from: 'working', to: 'needs_you' })
+  ]
+  for (const passed of ignored) {
+    expect(waitingAskChange(passed.kind, passed.actor, passed.data)).toBeNull()
+    expect(waitingOf([...waiting, passed])).toBe(waitingOf(waiting))
+  }
+  store.set(uid, { status: 'working' }, AGENT, NOW)
+  const none = views()
+  expect(waitingOf(none)).toBeUndefined()
+  const answering = [
+    event('commented', OWNER, { text: 'Yes' }),
+    event('status', OWNER, { from: 'working', to: 'done' }),
+    event('status', AGENT, { from: 'needs_you', to: 'working', cause: 'answer' })
+  ]
+  for (const passed of answering) {
+    expect(waitingAskChange(passed.kind, passed.actor, passed.data)).toBe('answers')
+    expect(waitingOf([...none, passed])).toBeUndefined()
+  }
 })

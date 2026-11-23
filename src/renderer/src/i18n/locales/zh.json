@@ -6255,7 +6255,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "另一个安装仍在运行",
-          "edited": "技能已在 Orca 外部编辑",
           "install": "安装",
           "installFor": "为 {{value0}} 安装",
           "installed": "已安装",
@@ -6416,7 +6415,6 @@
           "74fc00776f": "错误详情",
           "ca3b225195": "分支自动命名失败",
           "couldNotGenerateBranchName": "Orca 无法根据智能体的第一条消息为 <name>{{name}}</name> 生成分支名称",
-          "dismiss": "清除",
           "tryAgain": "重试",
           "namingBranch": "正在命名分支…",
           "errorDetailsAt": "错误详情 · {{time}}",
@@ -6433,8 +6431,7 @@
           "reasonFirstMessageUnavailable": "Orca 找不到此工作区的第一条消息",
           "reasonAlreadyNamed": "此工作区已被重命名",
           "reasonUnavailable": "Orca 无法再为此分支命名",
-          "branchNameKept": "已保留分支名称",
-          "dismissing": "正在清除…"
+          "branchNameKept": "已保留分支名称"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "选择父文件夹...",
@@ -13620,7 +13617,6 @@
           "attentionUnwritable": "需要处理 · Orca 无法写入 {{folder}}",
           "attentionBusy": "需要处理 · 此处的另一个技能安装仍未完成",
           "attentionUnreadable": "需要处理 · Orca 无法读取此副本中的所有文件",
-          "attentionEdited": "需要处理 · 你编辑过此副本",
           "attentionOther": "需要处理 · 另一个技能已使用此名称",
           "attentionSharedNotCurrent": "需要处理 · 此文件夹使用的共享副本不是 Orca 的副本",
           "resultUpdateSkippedPlaces": "{{result}} · 已跳过 {{places}} 个位置的更新：{{reason}}",
@@ -24715,6 +24711,11 @@
       "dialogDescription": "Orca 现在将每个 Claude 账户保存在各自的文件夹中，新终端中的 claude 会遵循您选择的账户",
       "dialogCause": "在此更新之前打开的终端不会如此，因此这里的 claude 使用系统默认的登录信息登录，请打开新终端以使用所选账户"
     },
+    "fileDrop": {
+      "copyUploadedPaths": "复制路径",
+      "copyUploadedPathsFailed": "无法复制已上传文件的路径。",
+      "uploadedWithoutPaste": "上传完成，但无法将路径粘贴到终端。"
+    },
     "newerDaemonBanner": {
       "failedTitle": "无法重新打开此终端",
       "title": "此终端是在较新版本的 Orca 中打开的",
@@ -29036,7 +29037,8 @@
         "removeConfirm": "移除",
         "finishSetup": "完成设置",
         "orgDescription": "{{repos}} · 已以 @{{login}} 身份登录",
-        "addAccount": "添加另一个 GitHub 账户"
+        "addAccount": "添加另一个 GitHub 账户",
+        "refresh": "刷新"
       },
       "setup": {
         "install": "安装 Orca 应用",

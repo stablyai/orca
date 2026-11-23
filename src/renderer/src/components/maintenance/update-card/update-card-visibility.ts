@@ -19,6 +19,12 @@ export function isUpdateCardVisible({
   collapsed?: boolean
 }): boolean {
   const isUserInitiated = 'userInitiated' in status && Boolean(status.userInitiated)
+  if (status.state === 'downloaded' && status.requiredByTeam) {
+    return status.teamRestart?.phase !== 'snoozed'
+  }
+  if (status.state === 'error' && status.requiredByTeam) {
+    return true
+  }
 
   if (status.state === 'checking' && !isUserInitiated) {
     return false

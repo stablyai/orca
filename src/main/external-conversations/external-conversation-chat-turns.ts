@@ -23,7 +23,7 @@ import {
   legacyTurnWords,
   readOnce,
   turnFailure,
-  botTurnReply,
+  turnReply,
   type ChatTurnEnd,
   type ChatTurnReplies,
   type SlackMirrorTurn
@@ -296,7 +296,7 @@ export class ChatTurns {
     }
     // A synced Orca-typed turn the thread didn't hear posts its reply too.
     if (mirrored && !heard) {
-      return endMirroredTurn(end, mirrored, linked.link)
+      return endMirroredTurn(end, mirrored)
     }
     // Someone in the thread spoke during it: the thread mirrors the chat, so it gets the answer
     // whatever opened the turn.
@@ -308,10 +308,10 @@ export class ChatTurns {
       return
     }
     void news.readTurn().then(async (turn) => {
-      const reply = botTurnReply(end, linked.link, turn, heard && origin === 'delivery')
+      const reply = turnReply(linked.link, turn)
       const links = readOnce(() => this.toldLinks.next(paneKey, linked.link))
       const fill = this.deps.replyFill?.()
-      const replied = await endRepliedTurn(end, turn, linked.link, links, fill, reply)
+      const replied = await endRepliedTurn(end, turn, linked.link, links, fill)
       if (replied === 'told') {
         return
       }
