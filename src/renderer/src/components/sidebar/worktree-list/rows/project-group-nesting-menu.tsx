@@ -31,7 +31,7 @@ export function ProjectGroupNestingMenuItems({
   const t = useTranslate()
   const hostGroups = getSameHostProjectGroups(projectGroups, hostId)
   const group = hostGroups.find((candidate) => candidate.id === groupId)
-  const moveTargets = hostGroups.filter(
+  const moveDestinations = hostGroups.filter(
     (candidate) =>
       candidate.id !== group?.parentGroupId &&
       canMoveProjectGroup(hostGroups, groupId, candidate.id)
@@ -45,7 +45,7 @@ export function ProjectGroupNestingMenuItems({
       >
         {t('auto.components.sidebar.WorktreeList.newSubgroup', 'New subgroup…')}
       </DropdownMenuItem>
-      {canMoveToTopLevel || moveTargets.length > 0 ? (
+      {canMoveToTopLevel || moveDestinations.length > 0 ? (
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             {t('auto.components.sidebar.WorktreeList.moveGroupTo', 'Move group to')}
@@ -58,12 +58,12 @@ export function ProjectGroupNestingMenuItems({
                 {t('auto.components.sidebar.WorktreeList.groupTopLevel', 'Top level')}
               </DropdownMenuItem>
             ) : null}
-            {moveTargets.map((target) => (
+            {moveDestinations.map((destination) => (
               <DropdownMenuItem
-                key={target.id}
-                onSelect={() => void moveProjectGroupToParent(groupId, target.id, hostId)}
+                key={destination.id}
+                onSelect={() => void moveProjectGroupToParent(groupId, destination.id, hostId)}
               >
-                {target.name}
+                {destination.name}
               </DropdownMenuItem>
             ))}
           </DropdownMenuSubContent>
