@@ -2,6 +2,7 @@
 // folder per bot, one file per look, the older looks' files let go.
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
+import { crc32 } from 'node:zlib'
 import { isBotAvatarImage } from '../../shared/bot-avatar'
 import type { Bot } from '../../shared/bot-types'
 import {
@@ -13,11 +14,35 @@ import type { BotHomeFilesystem } from './bot-home'
 
 type LookedBot = Pick<Bot, 'id' | 'avatar' | 'avatarColor' | 'avatarOutfit'>
 
-const PNG_END = Buffer.from([0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82])
+const PNG_SIGNATURE_BYTES = 8
 
-// A write cut short (a crash, a full disk) leaves a file without the PNG's end, read as none so it is drawn again.
+// Every chunk whole with its checksum, image data present, and nothing after the end: a write cut short
+// (a crash, a full disk) or a PNG without pixels reads as none, so it is drawn again.
+function hasWholeChunks(png: Uint8Array): boolean {
+  const bytes = Buffer.from(png.buffer, png.byteOffset, png.byteLength)
+  let at = PNG_SIGNATURE_BYTES
+  let data = false
+  while (at + 12 <= bytes.length) {
+    const length = bytes.readUInt32BE(at)
+    const end = at + 12 + length
+    if (end > bytes.length) {
+      return false
+    }
+    const type = bytes.toString('latin1', at + 4, at + 8)
+    if (crc32(bytes.subarray(at + 4, at + 8 + length)) !== bytes.readUInt32BE(at + 8 + length)) {
+      return false
+    }
+    data ||= type === 'IDAT' && length > 0
+    if (type === 'IEND') {
+      return data && end === bytes.length
+    }
+    at = end
+  }
+  return false
+}
+
 function isWholeIcon(png: Uint8Array): boolean {
-  return isBotAvatarImage(png) && Buffer.from(png.subarray(-PNG_END.length)).equals(PNG_END)
+  return isBotAvatarImage(png) && hasWholeChunks(png)
 }
 
 // Named by a hash of the id, so no id can name a path outside the root.

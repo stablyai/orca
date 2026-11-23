@@ -72,7 +72,7 @@ export function SidebarBotsSection({
 }): React.JSX.Element {
   const t = useTranslate()
   const bots = useBots()
-  useBotSlackIcons(bots)
+  useBotSlackIcons()
   const savedCollapsed = useAppStore((s) => s.collapsedGroups.has(BOTS_GROUP_KEY))
   const toggleCollapsedGroup = useAppStore((s) => s.toggleCollapsedGroup)
   const activeWorkspaceId = useAppStore((s) =>

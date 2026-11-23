@@ -2,9 +2,9 @@
 // icon. Until a window draws it (a host with none open, a look set from a phone or the CLI), the host sends
 // the plain mascot; two windows drawing the same look send the same picture.
 import { useEffect } from 'react'
-import { botSlackIconWanted, uploadBotSlackIcon } from '@/lib/bot-catalog'
+import { readBots, subscribeToBotChanges } from '@/lib/bot-catalog'
 import { readBotHostState } from '@/lib/bot-catalog-snapshot'
-import { botRefKey } from '@/lib/bot-hosts'
+import { botRefKey, callBotRpc, type BotRef } from '@/lib/bot-hosts'
 import { botHostHas } from '@/lib/bot-host-status'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
@@ -20,6 +20,24 @@ const queues = new Map<string, Promise<void>>()
 // Hosts seen offline: their looks are asked about again once they are back, as another client may have
 // replaced the icon meanwhile.
 const offline = new Set<string>()
+
+// Whether the host wants `look` drawn, and whether `look` is the bot's look there yet.
+function botSlackIconWanted(
+  bot: BotRef,
+  look: string
+): Promise<{ wanted: boolean; current: boolean }> {
+  return callBotRpc(bot, 'bots.avatar.slackIcon.wanted', { botId: bot.id, look })
+}
+
+// False when the host's look changed since and it dropped the drawing.
+async function uploadBotSlackIcon(bot: BotRef, look: string, png: string): Promise<boolean> {
+  const { stored } = await callBotRpc<{ stored: boolean }>(bot, 'bots.avatar.slackIcon.upload', {
+    botId: bot.id,
+    look,
+    png
+  })
+  return stored
+}
 
 function forget(bot: Bot, look: string): void {
   if (handled.get(botRefKey(bot)) === look) {
@@ -56,7 +74,10 @@ async function publish(bot: Bot, look: string): Promise<void> {
       forget(bot, look)
       return
     }
-    await uploadBotSlackIcon(bot, look, png)
+    if (!(await uploadBotSlackIcon(bot, look, png))) {
+      // The look changed on the host meanwhile: picking it again asks again.
+      forget(bot, look)
+    }
   } catch (error) {
     forget(bot, look)
     console.warn('[bots] could not draw the Slack icon', error)
@@ -119,7 +140,12 @@ function publishLooks(bots: readonly Bot[]): void {
   }
 }
 
-/** Run where the bots are already listed (the sidebar's Bots), so it never reads them on its own. */
-export function useBotSlackIcons(bots: readonly Bot[]): void {
-  useEffect(() => publishLooks(bots), [bots])
+/** Run where the bots are already listed (the sidebar's Bots), so it never loads them on its own. Each
+ *  bots notice runs it, a host's reconnect too, which keeps the same bots list. */
+export function useBotSlackIcons(): void {
+  useEffect(() => {
+    const run = (): void => publishLooks(readBots())
+    run()
+    return subscribeToBotChanges(run)
+  }, [])
 }

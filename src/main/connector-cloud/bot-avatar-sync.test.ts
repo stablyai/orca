@@ -1,5 +1,6 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { crc32, deflateSync } from 'node:zlib'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import type * as z from 'zod'
@@ -12,18 +13,26 @@ import { BotAvatarSync } from './bot-avatar-sync'
 
 let home: string | null = null
 
-// A PNG's signature, header and end: enough for the store to read it as a whole 512 px icon.
+function chunk(type: string, data: Buffer): Buffer {
+  const body = Buffer.concat([Buffer.from(type, 'latin1'), data])
+  const framed = Buffer.alloc(12 + data.length)
+  framed.writeUInt32BE(data.length, 0)
+  body.copy(framed, 4)
+  framed.writeUInt32BE(crc32(body), 8 + data.length)
+  return framed
+}
+
+// A real, blank square PNG: what a window's drawing is to the store.
 function squarePng(size: number): Buffer {
-  const header = Buffer.alloc(25)
-  header.writeUInt32BE(13, 0)
-  header.write('IHDR', 4, 'latin1')
-  header.writeUInt32BE(size, 8)
-  header.writeUInt32BE(size, 12)
-  header.set([8, 6, 0, 0, 0], 16)
+  const header = Buffer.alloc(13)
+  header.writeUInt32BE(size, 0)
+  header.writeUInt32BE(size, 4)
+  header.set([8, 6, 0, 0, 0], 8)
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    header,
-    Buffer.from([0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82])
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(Buffer.alloc(size * (1 + size * 4)))),
+    chunk('IEND', Buffer.alloc(0))
   ])
 }
 
@@ -96,6 +105,10 @@ it('reads an icon cut short by a crash as none, so it is drawn again', async () 
     look,
     squarePng(512).subarray(0, 40)
   )
+  expect(await readBotSlackIcon(localBotHomeFilesystem, home, bot)).toBeNull()
+  const png = squarePng(512)
+  const noPixels = Buffer.concat([png.subarray(0, 33), png.subarray(-12)])
+  await writeBotSlackIcon(localBotHomeFilesystem, home, bot.id, look, noPixels)
   expect(await readBotSlackIcon(localBotHomeFilesystem, home, bot)).toBeNull()
   await writeBotSlackIcon(localBotHomeFilesystem, home, bot.id, look, squarePng(512))
   expect(await readBotSlackIcon(localBotHomeFilesystem, home, bot)).not.toBeNull()
