@@ -2,6 +2,7 @@ import { expect, it } from 'vitest'
 import { journalOpenRefusal } from './journal-open-failure'
 import { journalSqlFailure, restoreJournalSqlFailure } from '../journal-sql-failure'
 import { JournalSqlBatchError } from '../journal-sql-batch'
+import { agentSessionReadHistoryRefusalParts } from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
 
 const sqliteError = (message: string, errcode: number) =>
   Object.assign(new Error(message), { code: 'ERR_SQLITE_ERROR', errcode })
@@ -15,7 +16,8 @@ it('an open the disk refused asks for space, and damage still reads as damage', 
     expect.objectContaining({
       code: 'agent_session_journal_unreadable',
       details: { reason: 'journalStorageFull' },
-      message: 'Your disk is almost full. Free up disk space, then try again.'
+      message:
+        'The disk on the computer running this chat is full. Free up space on it, then try again.'
     })
   )
   expect(
@@ -26,4 +28,9 @@ it('an open the disk refused asks for space, and damage still reads as damage', 
     reason: 'journalCorrupt'
   })
   expect(journalOpenRefusal(new Error('busy')).details).toEqual({ reason: 'journalUnavailable' })
+  // Desktop shows a Retry beside history notices; the step to free space must stay with it.
+  const refusal = journalOpenRefusal(fromWriter(sqliteError('database or disk is full', 13)))
+  expect(
+    agentSessionReadHistoryRefusalParts(refusal.code, refusal.details, { retryControl: true })
+  ).toContain('freeDiskSpace')
 })

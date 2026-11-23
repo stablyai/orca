@@ -190,7 +190,8 @@ const REASON_WORDS = {
     journalCorrupt: causeWords('historyUnusable', 'hostFinding'),
     // Says its step despite 'retry' unless a Retry stands beside it: the phone often has none.
     journalUnavailable: causeWords('historyUnavailable', 'retry', 'tryAgain'),
-    journalStorageFull: causeWords('diskFull', 'retry', 'freeDiskSpace'),
+    // The step stays beside a Retry: retrying before space is freed fails again.
+    journalStorageFull: causeWords('diskFull', 'actFirst', 'freeDiskSpace'),
     // Writes meet newer/read-only databases; reads meet this chat, opened only by an update.
     journalWrittenByNewerOrca: {
       ...causeWords('savedByNewerOrca', 'updateOrca', 'updateOrcaToKeepUsing'),
