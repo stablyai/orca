@@ -95,7 +95,7 @@ export function SettingsSection({
             className={cn(
               'flex flex-wrap items-center gap-2 text-2xl font-semibold leading-tight text-foreground',
               fullWidthDescriptionOnNarrow &&
-                '@max-lg/settings-section:text-xl @max-xs/settings-section:text-settings-heading wrap-anywhere'
+                '@max-lg/settings-section:text-xl @max-xs/settings-section:text-settings-heading @max-[14rem]/settings-section:text-sm wrap-anywhere'
             )}
             onClick={onTitleClick}
           >

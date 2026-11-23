@@ -65,19 +65,16 @@ export function RuntimeShareComputerSection(): React.JSX.Element {
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <div data-settings-section="share-computer" className="scroll-mt-8 space-y-2">
-        <h3 className="text-settings-heading font-semibold">
+        <h3 className="text-xs font-medium text-muted-foreground">
           {t('auto.components.settings.serverList.thisComputer', 'This computer')}
         </h3>
-        <div className="@container/share-computer rounded-lg border border-border bg-card">
-          <div className="grid min-h-14 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 px-4 py-2.5 @max-xs/share-computer:gap-y-1">
-            <Laptop
-              aria-hidden
-              className="col-start-1 row-start-1 size-4 text-muted-foreground @xs/share-computer:row-span-2"
-            />
-            <div className="col-start-2 row-start-1 truncate text-sm font-medium @max-xs/share-computer:col-span-2">
+        <div className="flex min-h-14 items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5">
+          <Laptop aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-medium">
               {t('auto.components.settings.serverList.shareTitle', 'Share this computer')}
             </div>
-            <div className="col-start-2 row-start-2 truncate text-xs text-muted-foreground">
+            <div className="truncate text-xs text-muted-foreground">
               {activeLinksLabel ??
                 (activeLinkCount === 0
                   ? t(
@@ -86,19 +83,14 @@ export function RuntimeShareComputerSection(): React.JSX.Element {
                     )
                   : null)}
             </div>
-            <DialogTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="col-start-3 row-start-2 justify-self-end @xs/share-computer:row-span-2 @xs/share-computer:row-start-1"
-              >
-                {activeLinksLabel
-                  ? t('auto.components.settings.serverList.manageShare', 'Manage')
-                  : t('auto.components.settings.serverList.share', 'Share')}
-              </Button>
-            </DialogTrigger>
           </div>
+          <DialogTrigger asChild>
+            <Button type="button" variant="outline" size="xs">
+              {activeLinksLabel
+                ? t('auto.components.settings.serverList.manageShare', 'Manage')
+                : t('auto.components.settings.serverList.share', 'Share')}
+            </Button>
+          </DialogTrigger>
         </div>
       </div>
       <DialogContent className="sm:max-w-xl" scrollable>

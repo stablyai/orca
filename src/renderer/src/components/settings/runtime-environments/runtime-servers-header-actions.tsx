@@ -57,7 +57,7 @@ export function RuntimeServersHeaderActions(): React.JSX.Element {
         size="responsive-sm"
         onClick={(event) => setDialog('add', event.currentTarget)}
       >
-        <Plus className="@max-xs/settings-section:hidden" />
+        <Plus className="size-4 @max-xs/settings-section:size-3" />
         {t('auto.components.settings.serverList.addServer', 'Add server')}
       </Button>
       <DropdownMenu modal={false}>

@@ -88,16 +88,8 @@ export function RuntimeServerList({
         <span className="flex size-10 items-center justify-center rounded-lg bg-accent text-muted-foreground">
           <Server className="size-5" />
         </span>
-        <div className="space-y-1">
-          <div className="text-sm font-medium">
-            {t('auto.components.settings.serverList.noSavedServers', 'No saved servers')}
-          </div>
-          <p className="max-w-sm text-xs text-muted-foreground">
-            {t(
-              'auto.components.settings.serverList.emptyDescription',
-              'Pair a dev box, a cloud machine, or a desktop at home. Its sessions keep running there when this computer sleeps.'
-            )}
-          </p>
+        <div className="text-sm font-medium">
+          {t('auto.components.settings.serverList.noSavedServers', 'No saved servers')}
         </div>
         <Button
           type="button"

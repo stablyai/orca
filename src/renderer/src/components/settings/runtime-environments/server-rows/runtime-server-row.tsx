@@ -188,6 +188,10 @@ export function RuntimeServerRow({
     (managed?.status?.availableUpdate
       ? t('auto.components.settings.RemoteServerUpdateStatus.available', 'Update available')
       : null)
+  const availableVersion =
+    remoteUpdate?.phase === 'available'
+      ? getRuntimeServerVersionText(undefined, remoteUpdate.targetVersion, t)
+      : null
   const infoParts = [sshRoute ?? address, versionText].filter(Boolean)
   const newerThanAppText = getRuntimeServerNewerThanAppText(remoteUpdate, t)
 
@@ -200,15 +204,34 @@ export function RuntimeServerRow({
       <ServerRowDetailsToggle expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
     </>
   ) : (
-    <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2">
+    <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 @max-[18rem]/server-row:gap-x-1 @max-[14rem]/server-row:gap-x-0.5 @max-[14rem]/server-row:text-2xs">
       {infoParts.length > 0 ? (
         <span className="max-w-full truncate">{infoParts.join(' · ')}</span>
       ) : null}
       {availableText ? (
-        <span className="max-w-full truncate text-status-warning">{availableText}</span>
+        <span className="max-w-full truncate text-status-warning">
+          {availableVersion ? (
+            <>
+              <span className="@max-[18rem]/server-row:hidden">{availableText}</span>
+              <span className="@[18rem]/server-row:hidden">
+                {infoParts.length > 0 ? (
+                  <span
+                    aria-hidden
+                    className="me-1 text-muted-foreground @max-[14rem]/server-row:me-0.5"
+                  >
+                    ·
+                  </span>
+                ) : null}
+                {availableVersion}
+              </span>
+            </>
+          ) : (
+            availableText
+          )}
+        </span>
       ) : null}
       {newerThanAppText ? (
-        <span className="max-w-full wrap-anywhere">{newerThanAppText}</span>
+        <span className="max-w-full wrap-anywhere text-xs">{newerThanAppText}</span>
       ) : null}
     </span>
   )
