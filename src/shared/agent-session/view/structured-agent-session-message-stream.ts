@@ -83,7 +83,12 @@ function reuseMessages(
   items: readonly AgentJournalRenderItem[],
   projectItems: StructuredAgentSessionItemProjector
 ): MessageStream | null {
-  if (previous.hasStoppedSends || items.length < previous.items.length) {
+  // Stopped sends are placed among the rows, so only a revision in place (a reply's streamed text)
+  // keeps them where they were; any other change places them again.
+  if (
+    items.length < previous.items.length ||
+    (previous.hasStoppedSends && items.length !== previous.items.length)
+  ) {
     return null
   }
   let output: NativeChatMessage[] | null = null
