@@ -87,6 +87,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerStatusFi
     const fingerprint = this.currentAuthorityFingerprint()
     const turnOnly =
       !flush &&
+      this.restoredStateEdges.turnKeys.size > 0 &&
       fingerprint === this.lastPersistedAuthorityFingerprint &&
       now < this.lastFullStatusPersistStartedAt + STATUS_PERSIST_MIN_INTERVAL_MS &&
       now >= this.lastFullStatusPersistStartedAt
@@ -94,6 +95,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerStatusFi
     if (turnOnly) {
       return this.runTurnEdgePersist(store, busyTimeoutMs)
     }
+    const previousFullAt = this.lastFullStatusPersistStartedAt
     this.lastFullStatusPersistStartedAt = now
     try {
       const keys = new Set([
@@ -136,6 +138,8 @@ export abstract class AgentHookServerPersistence extends AgentHookServerStatusFi
       this.persistedExitRevision = this.agentExitedAtByPaneKey.revision
       this.restoredStateEdges.turnKeys.clear()
     } catch (err) {
+      // The retry is still the batch, not a turn-edge save.
+      this.lastFullStatusPersistStartedAt = previousFullAt
       return this.retryStatusPersist(err)
     }
     // Only a committed save can stand in for the authority it carries.
@@ -193,6 +197,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerStatusFi
   }
 
   private clearStatusPersistDebt(): void {
+    this.restoredStateEdges.turnKeys.clear()
     this.statusPersistDirtyKeys.clear()
     this.statusPersistRemovedKeys.clear()
     this.hydratedLaunchTokenHashByPaneKey.dirtyKeys.clear()

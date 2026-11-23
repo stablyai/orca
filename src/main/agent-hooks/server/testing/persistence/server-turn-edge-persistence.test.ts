@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
 import { GOOD_PANE, PANE } from '../server.test-fixtures'
-import { readSavedStatus } from './last-status.test-fixtures'
+import { holdSavedStatusLock, readSavedStatus } from './last-status.test-fixtures'
 
 vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../../telemetry/cohort-classifier', () => ({
@@ -71,5 +71,24 @@ describe('saved agent status between batched saves', () => {
       vi.advanceTimersByTime(1_000)
     }
     expect(saved(GOOD_PANE).prompt).toBe('pending for the batch')
+  })
+
+  it('retries a failed batched save as a batch', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    report(PANE, 'working', 'turn one')
+    report(GOOD_PANE, 'working', 'first')
+    vi.advanceTimersByTime(0)
+    report(GOOD_PANE, 'working', 'pending for the batch')
+    report(PANE, 'done', 'turn one')
+    vi.advanceTimersByTime(1_000)
+    const release = holdSavedStatusLock(lastStatusPath())
+    report(GOOD_PANE, 'working', 'still pending')
+    vi.advanceTimersByTime(180_000)
+    release()
+    // A turn edge before the retry must not shrink it: the retry writes the whole batch.
+    report(PANE, 'working', 'turn two')
+    vi.advanceTimersByTime(2_000)
+    expect(saved(GOOD_PANE).prompt).toBe('still pending')
+    vi.restoreAllMocks()
   })
 })
