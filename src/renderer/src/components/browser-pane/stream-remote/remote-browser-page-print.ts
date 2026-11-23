@@ -3,6 +3,7 @@ import type { BrowserReadPrintPdfResult } from '../../../../../shared/browser/ru
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
+import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { streamDownloadedFile } from '@/runtime/files/reads/runtime-remote-file-download'
 import type { RemoteBrowserDialogPage } from './remote-browser-javascript-dialog'
@@ -15,13 +16,18 @@ export async function saveRemoteBrowserPagePrint(
   page: RemoteBrowserDialogPage,
   { printId, title }: { printId: string; title: string }
 ): Promise<void> {
+  // A print id names a PDF only on the pairing that sent it; a re-paired host must not answer for it.
+  const expectedEnvironmentPairingRevision =
+    page.target.kind === 'environment'
+      ? captureRuntimeEnvironmentRequestRevision(page.target.environmentId)
+      : undefined
   // A print this pane won't read is released, so the page can print again.
   const release = (): void => {
     void callRuntimeRpc(
       page.target,
       'browser.releasePrintPdf',
       { printId },
-      { suppressFeatureInteraction: true, background: true }
+      { suppressFeatureInteraction: true, background: true, expectedEnvironmentPairingRevision }
     ).catch(() => {})
   }
   const key = `${JSON.stringify(page.target)}\n${page.pageId}`
@@ -37,7 +43,7 @@ export async function saveRemoteBrowserPagePrint(
         page.target,
         'browser.readPrintPdf',
         { printId, offset },
-        { timeoutMs: 60_000, suppressFeatureInteraction: true }
+        { timeoutMs: 60_000, suppressFeatureInteraction: true, expectedEnvironmentPairingRevision }
       )
     )
     if (saved.canceled) {
