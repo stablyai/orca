@@ -2,10 +2,11 @@
 // plugin marks each process it loads in (`.loaded-<pid>`, holding its generation); the gateway's
 // control socket reloads plugins in place, so a gateway that predates an update needs no restart.
 import { createHash } from 'node:crypto'
-import { readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { connect } from 'node:net'
 import { basename, dirname, join, resolve } from 'node:path'
 import { compareAppVersions } from '../../shared/app-lifecycle/identity/app-version'
+import { SHARED_TOOL_PROCESS_BOT_FIELD } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import {
   getPluginInitSource,
   getPluginManifest,
@@ -111,13 +112,14 @@ function isAlive(pid: number): boolean {
   }
 }
 
-/** Also drops the marks of processes that ended, so they don't pile up. */
+/** Also drops the marks of processes that ended and old closed-bot marks, so they don't pile up. */
 async function runsCurrentPlugin(home: string, gatewayPid: number): Promise<boolean> {
   const dir = join(home, HERMES_SESSION_ENV_DIR)
   const names = await readdir(dir).catch((): string[] => [])
   let current = false
   for (const name of names) {
     if (!name.startsWith(HERMES_PLUGIN_LOADED_PREFIX)) {
+      await dropOldClosedBotMark(join(dir, name))
       continue
     }
     const pid = Number(name.slice(HERMES_PLUGIN_LOADED_PREFIX.length))
@@ -129,6 +131,23 @@ async function runsCurrentPlugin(home: string, gatewayPid: number): Promise<bool
     }
   }
   return current
+}
+
+const CLOSED_BOT_MARK_DAYS = 7
+
+/** A closed bot chat's token-free mark refuses a shell that outlived it; after a week none is left. */
+async function dropOldClosedBotMark(file: string): Promise<void> {
+  if (!file.endsWith('.json')) {
+    return
+  }
+  const info = await stat(file).catch(() => null)
+  if (!info || Date.now() - info.mtimeMs < CLOSED_BOT_MARK_DAYS * 86_400_000) {
+    return
+  }
+  const text = await readFile(file, 'utf-8').catch(() => null)
+  if (text === JSON.stringify({ [SHARED_TOOL_PROCESS_BOT_FIELD]: '1' })) {
+    await rm(file, { force: true }).catch(() => undefined)
+  }
 }
 
 async function pluginFilesCurrent(home: string): Promise<boolean> {

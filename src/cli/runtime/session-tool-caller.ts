@@ -67,7 +67,7 @@ export async function adoptSessionToolCaller(
     if (await publishedBotSession(env)) {
       throw new RuntimeClientError(
         'session_tool_caller_missing',
-        "This bot's tool ran without its Orca identity (Orca's plugin stopped serving it), so it ran nothing. Start a new chat with the bot."
+        "This bot's tool ran without its Orca identity (its chat closed, or Orca's plugin stopped serving it), so it ran nothing. Start a new chat with the bot."
       )
     }
     return
