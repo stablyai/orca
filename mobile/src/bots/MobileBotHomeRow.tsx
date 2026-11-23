@@ -49,9 +49,11 @@ export function MobileBotHomeRow({
   // The line names who waits on an access answer, since nothing else on the row says it.
   const preview = down
     ? ''
-    : asking && bot.askedForAccess
-      ? `${lineText} · ${t('bots.needs.access', '{{person}} asked for access', { person: bot.askedForAccess })}`
-      : lineText
+    : bot.searchPurpose
+      ? bot.searchPurpose
+      : asking && bot.askedForAccess
+        ? `${lineText} · ${t('bots.needs.access', '{{person}} asked for access', { person: bot.askedForAccess })}`
+        : lineText
   const age =
     !down && line?.kind === 'activity' && line.at !== null ? formatTimeAgo(line.at, now) : null
   // The desktop's mark before a thread's label, which leads an activity line.

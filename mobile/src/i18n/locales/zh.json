@@ -2469,7 +2469,7 @@
       "workspaceOptions": "工作区选项",
       "activeFilters_one": "工作区选项（已启用 {{count}} 个筛选条件）",
       "activeFilters_other": "工作区选项（已启用 {{count}} 个筛选条件）",
-      "searchWorkspaces": "搜索工作区",
+      "search": "搜索",
       "newWorkspace": "新建工作区"
     },
     "identity": {

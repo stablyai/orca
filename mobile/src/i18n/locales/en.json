@@ -996,7 +996,7 @@
       "workspaceOptions": "Workspace options",
       "activeFilters_one": "Workspace options ({{count}} filter active)",
       "activeFilters_other": "Workspace options ({{count}} filters active)",
-      "searchWorkspaces": "Search workspaces",
+      "search": "Search",
       "newWorkspace": "New workspace"
     },
     "identity": {

@@ -1971,7 +1971,7 @@
       "workspaceOptions": "Opções do espaço de trabalho",
       "activeFilters_one": "Opções do espaço de trabalho ({{count}} filtro ativo)",
       "activeFilters_other": "Opções do espaço de trabalho ({{count}} filtros ativos)",
-      "searchWorkspaces": "Buscar espaços de trabalho",
+      "search": "Buscar",
       "newWorkspace": "Novo espaço de trabalho",
       "activeFilters_many": "Opções do espaço de trabalho ({{count}} filtros ativos)"
     },

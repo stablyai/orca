@@ -146,6 +146,10 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
     ({ drawn: entry }) => entry.activity
   ).map(({ drawn: entry }) => entry)
   const searching = inputs.search.trim().length > 0
+  // Nothing matches: the section goes, so the list's no-match view shows when no workspace matches either.
+  if (searching && arranged.length === 0) {
+    return { sections: [], listedIdentities }
+  }
   const lines = searching
     ? []
     : [
@@ -159,8 +163,8 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
       {
         key: BOTS_GROUP_KEY,
         title: translate('bots.section.title', 'Bots'),
-        // Paused bots the options hide leave the count too, as on the desktop.
-        count: view.hidePausedBots ? shownTotal : total,
+        // Paused bots the options hide leave the count too, as on the desktop; a search counts its matches.
+        count: searching ? arranged.length : view.hidePausedBots ? shownTotal : total,
         ...(newBotHostId ? { newBotHostId } : {}),
         // Groups are this computer's: New group counts its bots alone, whatever the search hides.
         botCount: local?.kind === 'listed' ? local.bots.length : 0,
