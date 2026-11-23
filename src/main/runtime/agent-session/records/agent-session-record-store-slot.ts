@@ -2,6 +2,7 @@ import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
 // Launch admission opens the single-writer store before chat-host installation; both must reuse this instance.
 
 import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import {
   journalDatabasePath,
   journalDomainDatabasePath
@@ -185,4 +186,22 @@ export function hasPersistedStructuredAgentSessionStore(
     // A database that cannot be read cannot say it is empty.
     return true
   }
+}
+
+/** Non-blocking existence check so async callers skip spawning journal workers on empty profiles. */
+export async function hasPersistedStructuredAgentSessionDatabaseFile(
+  stateDirectory: string
+): Promise<boolean> {
+  for (const candidate of [
+    journalDomainDatabasePath(stateDirectory),
+    journalDatabasePath(stateDirectory)
+  ]) {
+    try {
+      await access(candidate)
+      return true
+    } catch {
+      // Absent file; check the next candidate.
+    }
+  }
+  return false
 }
