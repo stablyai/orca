@@ -56,7 +56,7 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
         }
       : {}),
     eventsOnly: !scheduled,
-    // Why: a preset with a dropped part (e.g. INTERVAL=2) opens as the cadence that runs, but still warns (#45519).
+    // Why: a preset with a dropped part (e.g. COUNT=3) opens as the cadence that runs, but still warns (#45519).
     scheduleWarning:
       !scheduled || hasCustomSchedule || (schedule && isValidAutomationSchedule(automation.rrule))
         ? null

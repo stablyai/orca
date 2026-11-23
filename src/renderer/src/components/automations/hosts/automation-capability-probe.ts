@@ -8,8 +8,11 @@ import {
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
-  AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY
+  AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
+  AUTOMATION_SCHEDULE_RULES_RUNTIME_CAPABILITY,
+  AUTOMATION_SCHEDULE_RULES_UPDATE_REQUIRED_MESSAGE
 } from '../../../../../shared/automations/automation-runtime-capabilities'
+import { needsScheduleRulesCapability } from '../../../../../shared/automations/scheduling/automation-schedule-occurrences'
 import { getRuntimeEnvironmentStatus } from '@/runtime/rpc/compatibility/runtime-compatibility-probe'
 import type { AutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
@@ -189,6 +192,26 @@ export async function assertEnvironmentSupportsExtraAgentArgs(
   }
 }
 
+/** Older hosts ignore INTERVAL and would run a biweekly rule every week. */
+export async function assertScheduleRulesSupported(
+  authority: AutomationAuthorityRef,
+  rrule: string | undefined
+): Promise<void> {
+  if (rrule === undefined || !needsScheduleRulesCapability(rrule)) {
+    return
+  }
+  await assertAuthorityCapability(
+    authority,
+    AUTOMATION_SCHEDULE_RULES_RUNTIME_CAPABILITY,
+    translate(
+      'automations.scheduleRules.hostUpdateRequired',
+      AUTOMATION_SCHEDULE_RULES_UPDATE_REQUIRED_MESSAGE
+    ),
+    // Why: a host replaced under the same pairing revision would otherwise pass on a stale confirmation.
+    { cacheConfirmation: false }
+  )
+}
+
 /** Old hosts keep their terminal contract; an explicit chat must refuse before a move creates anything. */
 export async function prepareAutomationLaunchSetup<
   T extends AutomationCreateInput | AutomationUpdateInput
@@ -196,6 +219,7 @@ export async function prepareAutomationLaunchSetup<
   authority: AutomationAuthorityRef,
   input: T
 ): Promise<Omit<T, 'launchSetupPatch'> & Pick<AutomationCreateInput, 'launchSetupPatch'>> {
+  await assertScheduleRulesSupported(authority, input.rrule)
   const { launchSetupPatch, ...legacy } = input
   if (launchSetupPatch === undefined) {
     await assertExtraAgentArgsSupported(authority, input.extraAgentArgs)

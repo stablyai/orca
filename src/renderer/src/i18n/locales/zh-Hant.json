@@ -23409,6 +23409,9 @@
       },
       "hostUpdateRequired": "請更新此主機上的 Orca 以使用額外引數。"
     },
+    "scheduleRules": {
+      "hostUpdateRequired": "此主機上的 Orca 版本過舊，無法使用此排程。請更新該主機上的 Orca。"
+    },
     "setupTrust": {
       "reviewTitle": "要核准此自動化的新設定命令嗎？",
       "reviewBody": "由於分支的 <code>orca.yaml</code> 設定命令已變更，某次執行略過了設定。核准後，之後的執行將使用這些命令。僅在你信任 <repo/> 時核准。",

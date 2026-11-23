@@ -1,5 +1,6 @@
 import type { AutomationSchedulePreset } from '../automation-definition'
 import { cronHasPossibleOccurrence } from './automation-cron-occurrence'
+import { readRruleInterval } from './automation-rrule-interval'
 import {
   formatScheduleRefusal,
   type AutomationScheduleRefusalHints
@@ -18,6 +19,8 @@ export const AUTOMATION_CRON_EXPRESSION_MAX_BYTES = 2 * 1024
 export type ParsedRrule = {
   kind: 'rrule'
   freq: 'HOURLY' | 'DAILY' | 'WEEKLY'
+  /** Runs every Nth hour, day or week, counted from dtstart. */
+  interval: number
   byDay: string[]
   byHour: number
   byMinute: number
@@ -44,16 +47,12 @@ export type { CronParseOptions }
 const DAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as const
 const WEEKDAY_CODES = ['MO', 'TU', 'WE', 'TH', 'FR'] as const
 const RRULE_PARTS_BY_FREQ = {
-  HOURLY: ['FREQ', 'BYMINUTE'],
-  DAILY: ['FREQ', 'BYHOUR', 'BYMINUTE'],
-  WEEKLY: ['FREQ', 'BYDAY', 'BYHOUR', 'BYMINUTE']
+  HOURLY: ['FREQ', 'INTERVAL', 'BYMINUTE'],
+  DAILY: ['FREQ', 'INTERVAL', 'BYHOUR', 'BYMINUTE'],
+  WEEKLY: ['FREQ', 'INTERVAL', 'BYDAY', 'BYHOUR', 'BYMINUTE']
 } as const
 // Parts that match what the scheduler already does, so dropping them changes nothing.
-const NO_OP_RRULE_PARTS = new Set([
-  'INTERVAL=1',
-  'BYSECOND=0',
-  ...DAY_CODES.map((day) => `WKST=${day}`)
-])
+const NO_OP_RRULE_PARTS = new Set(['BYSECOND=0', ...DAY_CODES.map((day) => `WKST=${day}`)])
 
 function parseRrule(rrule: string): ParsedRrule {
   const entries = new Map<string, string>()
@@ -89,6 +88,8 @@ function parseRrule(rrule: string): ParsedRrule {
       }
     }
   }
+  const { interval, ignoredPart: intervalPart } = readRruleInterval(freq, entries)
+  ignoredPart ??= intervalPart
   const byHour = Number(entries.get('BYHOUR') ?? '9')
   const byMinute = Number(entries.get('BYMINUTE') ?? '0')
   if (!Number.isInteger(byHour) || byHour < 0 || byHour > 23) {
@@ -105,7 +106,7 @@ function parseRrule(rrule: string): ParsedRrule {
   ) {
     throw new Error('Invalid recurrence day.')
   }
-  return { kind: 'rrule', freq, byDay, byHour, byMinute, ignoredPart }
+  return { kind: 'rrule', freq, interval, byDay, byHour, byMinute, ignoredPart }
 }
 
 export function parseCronExpression(
@@ -262,6 +263,7 @@ export function withoutIgnoredRruleParts(schedule: string): string {
     }
     return [
       `FREQ=${rule.freq}`,
+      ...(rule.interval > 1 ? [`INTERVAL=${rule.interval}`] : []),
       ...(rule.freq === 'WEEKLY' ? [`BYDAY=${rule.byDay.join(',')}`] : []),
       ...(rule.freq === 'HOURLY' ? [] : [`BYHOUR=${rule.byHour}`]),
       `BYMINUTE=${rule.byMinute}`
@@ -291,6 +293,10 @@ export function parseAutomationRrule(rrule: string): {
   dayOfWeek: number
 } {
   const rule = parseRrule(rrule)
+  // An interval rule has no preset; describing it as one would hide that it skips periods.
+  if (rule.interval > 1) {
+    throw new Error('No preset for this recurrence.')
+  }
   if (rule.freq === 'HOURLY') {
     return { preset: 'hourly', hour: rule.byHour, minute: rule.byMinute, dayOfWeek: 1 }
   }

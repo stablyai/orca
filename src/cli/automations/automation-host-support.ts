@@ -1,7 +1,10 @@
 import {
   AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
+  AUTOMATION_SCHEDULE_RULES_RUNTIME_CAPABILITY,
+  AUTOMATION_SCHEDULE_RULES_UPDATE_REQUIRED_MESSAGE,
   AUTOMATION_SETUP_CHOICE_RUNTIME_CAPABILITY
 } from '../../shared/automations/automation-runtime-capabilities'
+import { needsScheduleRulesCapability } from '../../shared/automations/scheduling/automation-schedule-occurrences'
 import {
   EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED,
   hasExtraAgentArgs
@@ -16,10 +19,13 @@ const SETUP_CHOICE_HOST_UPDATE_REQUIRED =
 // Older runtimes silently strip these fields and would run without the requested arguments or setup choice.
 export async function assertAutomationFieldsSupported(
   client: RuntimeClient,
-  fields: { extraAgentArgs?: string; setupDecision?: 'run' | 'skip' }
+  fields: { extraAgentArgs?: string; setupDecision?: 'run' | 'skip'; rrule?: string }
 ): Promise<void> {
   const needsExtraAgentArgs = hasExtraAgentArgs(fields.extraAgentArgs)
-  if (!needsExtraAgentArgs && fields.setupDecision === undefined) {
+  // The local runtime ships with this CLI, so only a remote host can be too old for the rule.
+  const needsScheduleRules =
+    client.isRemote && fields.rrule !== undefined && needsScheduleRulesCapability(fields.rrule)
+  if (!needsExtraAgentArgs && fields.setupDecision === undefined && !needsScheduleRules) {
     return
   }
   const capabilities = (await client.call<RuntimeStatus>('status.get')).result.capabilities ?? []
@@ -34,5 +40,11 @@ export async function assertAutomationFieldsSupported(
     !capabilities.includes(AUTOMATION_SETUP_CHOICE_RUNTIME_CAPABILITY)
   ) {
     throw new RuntimeClientError('incompatible_runtime', SETUP_CHOICE_HOST_UPDATE_REQUIRED)
+  }
+  if (needsScheduleRules && !capabilities.includes(AUTOMATION_SCHEDULE_RULES_RUNTIME_CAPABILITY)) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      AUTOMATION_SCHEDULE_RULES_UPDATE_REQUIRED_MESSAGE
+    )
   }
 }

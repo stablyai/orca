@@ -24394,6 +24394,9 @@
       },
       "hostUpdateRequired": "Actualiza Orca en este host para usar argumentos adicionales."
     },
+    "scheduleRules": {
+      "hostUpdateRequired": "La versión de Orca de este host es demasiado antigua para esta programación. Actualiza Orca en ese host."
+    },
     "setupTrust": {
       "reviewTitle": "¿Aprobar los nuevos comandos de configuración de esta automatización?",
       "reviewBody": "Una ejecución omitió la configuración porque cambiaron los comandos de configuración de <code>orca.yaml</code> de su rama. Si los apruebas, las ejecuciones posteriores usarán estos comandos. Apruébalos solo si confías en <repo/>.",

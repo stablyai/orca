@@ -23916,6 +23916,9 @@
       },
       "hostUpdateRequired": "Orca auf diesem Host aktualisieren, um zusätzliche Argumente zu verwenden."
     },
+    "scheduleRules": {
+      "hostUpdateRequired": "Die Orca-Version auf diesem Host ist für diesen Zeitplan zu alt. Aktualisiere Orca auf diesem Host."
+    },
     "setupTrust": {
       "reviewTitle": "Neue Einrichtungsbefehle für diese Automatisierung genehmigen?",
       "reviewBody": "Eine Ausführung hat die Einrichtung übersprungen, weil sich die Einrichtungsbefehle in der <code>orca.yaml</code> ihres Branches geändert haben. Nach der Genehmigung verwenden spätere Ausführungen diese Befehle. Genehmige nur, wenn du <repo/> vertraust.",

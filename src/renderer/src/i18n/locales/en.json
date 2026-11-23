@@ -27021,6 +27021,9 @@
       },
       "hostUpdateRequired": "Update Orca on this host to use extra arguments."
     },
+    "scheduleRules": {
+      "hostUpdateRequired": "This host's Orca is too old for this schedule. Update Orca on that host."
+    },
     "setupTrust": {
       "reviewTitle": "Approve the new setup commands for this automation?",
       "reviewBody": "A run skipped setup because its branch's <code>orca.yaml</code> setup commands changed. Approving lets later runs use these commands. Only approve if you trust <repo/>.",

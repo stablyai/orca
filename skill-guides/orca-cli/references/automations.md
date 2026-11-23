@@ -14,7 +14,7 @@ ORCA automations runs --id <automationId> --json
 ORCA automations remove <automationId> --json   # or: automations delete
 ```
 
-Schedules accept `hourly`, `daily`, `weekdays`, `weekly`, 5-field cron, or an RRULE built from FREQ=HOURLY|DAILY|WEEKLY, BYDAY (weekly only), BYHOUR (daily/weekly) and BYMINUTE. Use `--time <HH:MM>` with `daily`/`weekdays`/`weekly`, and `--day <0-6>` only with `weekly` where Sunday is `0`.
+Schedules accept `hourly`, `daily`, `weekdays`, `weekly`, 5-field cron, or an RRULE built from FREQ=HOURLY|DAILY|WEEKLY, BYDAY (weekly only), BYHOUR (daily/weekly), BYMINUTE and INTERVAL (1-52, e.g. FREQ=WEEKLY;INTERVAL=2;BYDAY=WE for every other Wednesday). Use `--time <HH:MM>` with `daily`/`weekdays`/`weekly`, and `--day <0-6>` only with `weekly` where Sunday is `0`.
 
 Use `--precheck <command>` to run a shell command only before scheduled runs. Exit code `0` continues; any other exit, error, or timeout skips the run. Set the time limit with `--precheck-timeout <seconds>` (default `60`). Skips appear in Orca run history and `ORCA automations runs --id <automationId> --json` with status `skipped_precheck`.
 

@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { describeAutomationSchedule, formatAutomationSchedule } from './automation-schedules'
 import {
   latestAutomationOccurrenceAtOrBefore,
+  needsScheduleRulesCapability,
   nextAutomationOccurrenceAfter
 } from './automation-schedule-occurrences'
 import {
   getAutomationScheduleInputError,
   isRunnableAutomationSchedule,
   isValidAutomationSchedule,
+  tryParseAutomationRrule,
   withoutIgnoredRruleParts
 } from './automation-schedule-parsing'
 
@@ -66,11 +68,14 @@ describe('automation schedules', () => {
 })
 
 // New input refuses RRULE parts the scheduler would drop; stored rules keep running with their cadence label (#45519).
+// INTERVAL runs every Nth period, so it is no longer dropped.
 describe('RRULE parts the scheduler drops', () => {
   const everyOtherWednesday = 'FREQ=WEEKLY;INTERVAL=2;BYDAY=WE;BYHOUR=11;BYMINUTE=0'
 
   it.each([
-    [everyOtherWednesday, 'INTERVAL=2'],
+    ['FREQ=DAILY;INTERVAL=53', 'INTERVAL=53'],
+    ['FREQ=DAILY;INTERVAL=2.5', 'INTERVAL=2.5'],
+    ['FREQ=WEEKLY;INTERVAL=2;WKST=SU;BYDAY=WE', 'WKST=SU'],
     ['FREQ=DAILY;BYDAY=MO;BYHOUR=9;BYMINUTE=0', 'BYDAY=MO'],
     ['FREQ=HOURLY;BYHOUR=9;BYMINUTE=0', 'BYHOUR=9'],
     ['FREQ=WEEKLY;BYDAY=MO;BYDAY=WE;BYHOUR=9', 'BYDAY=MO'],
@@ -82,6 +87,9 @@ describe('RRULE parts the scheduler drops', () => {
   })
 
   it.each([
+    everyOtherWednesday,
+    'FREQ=WEEKLY;INTERVAL=2;WKST=MO;BYDAY=WE',
+    'FREQ=DAILY;INTERVAL=3;WKST=SU',
     'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYHOUR=9;BYMINUTE=0;',
     'FREQ=WEEKLY;INTERVAL=1;WKST=MO;BYDAY=MO;BYHOUR=9;BYMINUTE=0;BYSECOND=0'
   ])('accepts %s', (rule) => {
@@ -90,10 +98,10 @@ describe('RRULE parts the scheduler drops', () => {
 
   // A move re-creates the automation on another host, whose create check refuses dropped parts.
   it.each([
-    [everyOtherWednesday, 'FREQ=WEEKLY;BYDAY=WE;BYHOUR=11;BYMINUTE=0'],
+    [`${everyOtherWednesday};COUNT=3`, everyOtherWednesday],
     ['FREQ=WEEKLY;BYDAY=MO;BYDAY=WE;BYHOUR=9;COUNT=3', 'FREQ=WEEKLY;BYDAY=WE;BYHOUR=9;BYMINUTE=0'],
     ['FREQ=DAILY;BYDAY=MO;BYHOUR=9=10;UNTIL=20270101T000000Z', 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0'],
-    ['FREQ=HOURLY;BYHOUR=9;BYMINUTE=15;INTERVAL=3', 'FREQ=HOURLY;BYMINUTE=15']
+    ['FREQ=HOURLY;BYHOUR=9;BYMINUTE=15;INTERVAL=3', 'FREQ=HOURLY;INTERVAL=3;BYMINUTE=15']
   ])('rebuilds stored %s for a move with the same runs', (stored, rebuilt) => {
     expect(withoutIgnoredRruleParts(stored)).toBe(rebuilt)
     expect(getAutomationScheduleInputError(rebuilt)).toBeNull()
@@ -107,17 +115,30 @@ describe('RRULE parts the scheduler drops', () => {
     }
   })
 
-  it.each(['FREQ=WEEKLY;INTERVAL=1;BYDAY=MO;BYHOUR=9;BYMINUTE=0', '0 9 * * 1-5', 'not a rule'])(
-    'keeps %s for a move when nothing is dropped',
-    (stored) => {
-      expect(withoutIgnoredRruleParts(stored)).toBe(stored)
-    }
-  )
+  it.each([
+    'FREQ=WEEKLY;INTERVAL=1;BYDAY=MO;BYHOUR=9;BYMINUTE=0',
+    everyOtherWednesday,
+    '0 9 * * 1-5',
+    'not a rule'
+  ])('keeps %s for a move when nothing is dropped', (stored) => {
+    expect(withoutIgnoredRruleParts(stored)).toBe(stored)
+  })
+
+  it('gives an interval rule no preset, and only it needs the host capability', () => {
+    expect(tryParseAutomationRrule(everyOtherWednesday)).toBeNull()
+    expect(describeAutomationSchedule(everyOtherWednesday)).toEqual({
+      kind: 'custom',
+      expression: everyOtherWednesday
+    })
+    expect(needsScheduleRulesCapability(everyOtherWednesday)).toBe(true)
+    expect(needsScheduleRulesCapability('FREQ=WEEKLY;INTERVAL=1;BYDAY=WE')).toBe(false)
+    expect(needsScheduleRulesCapability('0 9 * * 1')).toBe(false)
+  })
 })
 
 describe('schedule refusal text', () => {
   const accepted =
-    'Use hourly, a 5-field cron expression such as "*/10 * * * *" (every 10 minutes), or an RRULE of FREQ=HOURLY with BYMINUTE, FREQ=DAILY with BYHOUR and BYMINUTE, or FREQ=WEEKLY with BYDAY, BYHOUR and BYMINUTE.'
+    'Use hourly, a 5-field cron expression such as "*/10 * * * *" (every 10 minutes), or an RRULE of FREQ=HOURLY with BYMINUTE, FREQ=DAILY with BYHOUR and BYMINUTE, or FREQ=WEEKLY with BYDAY, BYHOUR and BYMINUTE, each with an optional INTERVAL of 1 to 52.'
   const hints = { extraForms: 'hourly', oneTimeRun: 'For a single run, use --once.' }
   const limits = 'Schedules repeat until removed, so DTSTART, UNTIL and COUNT are not supported.'
 
@@ -132,7 +153,7 @@ describe('schedule refusal text', () => {
       'FREQ=DAILY;COUNT=1',
       `Bad. RRULE part "COUNT=1" is not supported. ${limits} For a single run, use --once. ${accepted}`
     ],
-    ['FREQ=DAILY;INTERVAL=2', `Bad. RRULE part "INTERVAL=2" is not supported. ${accepted}`]
+    ['FREQ=DAILY;INTERVAL=0', `Bad. RRULE part "INTERVAL=0" is not supported. ${accepted}`]
   ])('refuses %j naming what is accepted', (schedule, message) => {
     expect(getAutomationScheduleInputError(schedule, 'Bad.', hints)).toBe(message)
   })

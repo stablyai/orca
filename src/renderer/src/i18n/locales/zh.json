@@ -26322,6 +26322,9 @@
       },
       "hostUpdateRequired": "请更新此主机上的 Orca 以使用额外参数"
     },
+    "scheduleRules": {
+      "hostUpdateRequired": "此主机上的 Orca 版本过旧，无法使用此计划。请更新该主机上的 Orca。"
+    },
     "setupTrust": {
       "reviewTitle": "要批准此自动化的新设置命令吗？",
       "reviewBody": "由于分支的 <code>orca.yaml</code> 设置命令已更改，某次运行跳过了设置。批准后，之后的运行将使用这些命令。仅在你信任 <repo/> 时批准。",

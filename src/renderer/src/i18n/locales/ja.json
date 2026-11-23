@@ -25087,6 +25087,9 @@
       },
       "hostUpdateRequired": "追加の引数を使用するには、このホストの Orca を更新してください。"
     },
+    "scheduleRules": {
+      "hostUpdateRequired": "このホストの Orca はこのスケジュールに対応していません。ホストの Orca を更新してください。"
+    },
     "setupTrust": {
       "reviewTitle": "このオートメーションの新しいセットアップコマンドを承認しますか？",
       "reviewBody": "ブランチの <code>orca.yaml</code> のセットアップコマンドが変更されたため、実行でセットアップがスキップされました。承認すると、以降の実行でこれらのコマンドが使われます。<repo/> を信頼できる場合のみ承認してください。",

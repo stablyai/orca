@@ -26724,6 +26724,9 @@
       },
       "hostUpdateRequired": "추가 인수를 사용하려면 이 호스트의 Orca를 업데이트하세요."
     },
+    "scheduleRules": {
+      "hostUpdateRequired": "이 호스트의 Orca 버전이 너무 오래되어 이 일정을 사용할 수 없습니다. 해당 호스트의 Orca를 업데이트하세요."
+    },
     "setupTrust": {
       "reviewTitle": "이 자동화의 새 설정 명령을 승인할까요?",
       "reviewBody": "브랜치의 <code>orca.yaml</code> 설정 명령이 변경되어 실행에서 설정을 건너뛰었습니다. 승인하면 이후 실행에서 이 명령을 사용합니다. <repo/>을(를) 신뢰하는 경우에만 승인하세요.",

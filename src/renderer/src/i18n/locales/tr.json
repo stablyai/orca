@@ -23865,6 +23865,9 @@
       },
       "hostUpdateRequired": "Ek argümanları kullanmak için bu ana makinedeki Orca'yı güncelleyin."
     },
+    "scheduleRules": {
+      "hostUpdateRequired": "Bu ana makinedeki Orca bu zamanlama için çok eski. O ana makinedeki Orca'yı güncelleyin."
+    },
     "setupTrust": {
       "reviewTitle": "Bu otomasyonun yeni kurulum komutları onaylansın mı?",
       "reviewBody": "Dalının <code>orca.yaml</code> kurulum komutları değiştiği için bir çalıştırma kurulumu atladı. Onaylarsanız sonraki çalıştırmalar bu komutları kullanır. Yalnızca <repo/> deposuna güveniyorsanız onaylayın.",
