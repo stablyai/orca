@@ -289,6 +289,8 @@ export function registerRuntimeWindowLifecycle(
   })
   mainWebContents.on('did-finish-load', () => {
     rendererNotifications.onMainFrameLoadFinished()
+    // Sleeping-mail changes sent while the page loaded were dropped.
+    runtime.resendSleepingMailWorktrees()
   })
   mainWebContents.on('render-process-gone', () => {
     rendererNotifications.onRendererProcessGone()

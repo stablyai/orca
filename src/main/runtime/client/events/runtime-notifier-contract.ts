@@ -181,7 +181,8 @@ export type RuntimeNotifier = {
   /** A sleep main runs, for the window to follow; optional as only the real bridge wires it. */
   workspaceSleepChanged?(notice: WorkspaceSleepNotice): void
   // Only the host renderer owns slept-agent wake records; phones request navigation-free wake through this optional bridge.
-  sleepingMailChanged?(change: SleepingMailChange): void
+  /** False when the window could not take it (reloading, gone); the next send is then the whole set. */
+  sleepingMailChanged?(change: SleepingMailChange): boolean | void
   resumeSleepingAgents?(
     worktreeId: string,
     paneKey?: string,

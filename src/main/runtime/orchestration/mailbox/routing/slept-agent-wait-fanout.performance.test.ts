@@ -301,7 +301,7 @@ it.each([100, 1_000])(
     vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] })
     const burst = 50
     const { db, runtime, internals, records } = mount(held + burst, true, held)
-    const bell = vi.fn<(change: SleepingMailChange) => void>()
+    const bell = vi.fn<(change: SleepingMailChange) => boolean | void>()
     try {
       runtime.setNotifier(notifier({ sleepingMailChanged: bell }))
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
@@ -344,6 +344,26 @@ it.each([100, 1_000])(
       expect(bell.mock.calls.map(([change]) => change)).toEqual([
         { held: [], released: [records[held].worktreeId] }
       ])
+
+      // A change the window dropped (it was reloading) makes the next send the whole set.
+      const consume = async (mailbox: string) => {
+        db.markAsRead(
+          db.getUndeliveredUnreadMessages(mailbox).map((row) => row.id),
+          { kind: 'orca' }
+        )
+        await flush()
+      }
+      bell.mockClear()
+      bell.mockReturnValueOnce(false)
+      await consume(owed[1])
+      await consume(owed[2])
+      expect(bell.mock.calls[1]?.[0]).toEqual({
+        worktreeIds: records
+          .slice(0, held + burst)
+          .filter((_, index) => index < held || index > held + 2)
+          .map((record) => record.worktreeId)
+          .sort()
+      })
     } finally {
       runtime.setNotifier(null)
       db.close()

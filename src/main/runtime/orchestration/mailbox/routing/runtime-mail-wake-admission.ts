@@ -146,10 +146,13 @@ export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobil
     }
     this.publishedHeldVersion = wake.heldVersion
     const change = wake.heldWorkspaces.takeChanges()
-    if (full) {
-      this.notifier?.sleepingMailChanged?.({ worktreeIds: wake.heldWorktrees() })
-    } else if (change.held.length > 0 || change.released.length > 0) {
-      this.notifier?.sleepingMailChanged?.(change)
+    const changed = change.held.length > 0 || change.released.length > 0
+    const delivered = full
+      ? this.notifier?.sleepingMailChanged?.({ worktreeIds: wake.heldWorktrees() })
+      : changed && this.notifier?.sleepingMailChanged?.(change)
+    if (delivered === false && (full || changed)) {
+      // The window dropped it, so a later change alone would leave the window's set wrong.
+      this.publishedHeldVersion = -1
     }
   }
 
