@@ -56,7 +56,9 @@ function formatCheck({ matched, unmatched, unknown, ignored = 0 }: WebhookCheckR
   const untold = [
     ...(ignored > 0
       ? [
-          `${ignored} were ignored by the hook's filters when they came in (Orca keeps no body for an ignored call, so they can't be checked)`
+          ignored === 1
+            ? "1 was ignored by the hook's filters when it came in (Orca keeps no body for an ignored call, so it can't be checked)"
+            : `${ignored} were ignored by the hook's filters when they came in (Orca keeps no body for an ignored call, so they can't be checked)`
         ]
       : []),
     ...(unknown > ignored
