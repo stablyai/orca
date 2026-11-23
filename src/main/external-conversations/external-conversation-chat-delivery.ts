@@ -86,7 +86,9 @@ export class ChatDeliveries {
           this.origin(news.sessionId, null)
         }
       },
-      'external-conversations-unwatched'
+      'external-conversations-unwatched',
+      // Unwatched, a held end isn't taken: the watch that comes back hears that turn's end.
+      false
     )
   }
 
