@@ -21,12 +21,16 @@ const MAX_DIRECTIVE_WORDS = 8
 // question mark, quote, backtick, `>`, `<`, `@`, emoji or newline in any script never passes.
 const PLAIN = /^[\p{L} ,]+[.!]?$/u
 
+// Longer than any phrase with a bot's name, "please" and "thanks": never a directive, and never
+// scanned further, so a long reply costs nothing here.
+const MAX_DIRECTIVE_LENGTH = 200
+
+// A leading word that turns the phrase around is never taken as the bot's name ("Never mute this
+// thread", to a bot named Never).
+const NEGATIONS = new Set(['never', 'not', 'no', 'dont', 'nobody', 'nope'])
+
 function words(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/\s*,\s*/g, ', ')
-    .replace(/ +/g, ' ')
-    .trim()
+  return text.toLowerCase().replace(/ +/g, ' ').replace(/ ?, ?/g, ', ').trim()
 }
 
 function isPhrase(rest: string): boolean {
@@ -42,7 +46,7 @@ export function isThreadMuteDirective(
   botNames: readonly string[] | 'any'
 ): boolean {
   const trimmed = spoken?.trim() ?? ''
-  if (!PLAIN.test(trimmed)) {
+  if (trimmed.length > MAX_DIRECTIVE_LENGTH || !PLAIN.test(trimmed)) {
     return false
   }
   const rest = words(trimmed.replace(/[.!]$/, ''))
@@ -61,6 +65,11 @@ export function isThreadMuteDirective(
   }
   return botNames.some((name) => {
     const named = words(name)
-    return named !== '' && rest.startsWith(`${named} `) && isPhrase(rest.slice(named.length + 1))
+    return (
+      named !== '' &&
+      !NEGATIONS.has(named) &&
+      rest.startsWith(`${named} `) &&
+      isPhrase(rest.slice(named.length + 1))
+    )
   })
 }

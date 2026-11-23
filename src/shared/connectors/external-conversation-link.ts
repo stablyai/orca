@@ -93,8 +93,8 @@ export type ExternalConversationLink = {
   /** When the owner first opened a bot thread's chat; null until then. Absent on links an older Orca
    *  wrote and on non-bot links, which count as seen. */
   seenAt?: number | null
-  /** Slack bot threads: someone said "mute" there, so replies that don't mention the bot never reach
-   *  it. Main-process data: clients ignore it. */
+  /** Slack bot threads: someone told the bot to stop listening there, so replies that don't mention
+   *  it never reach it. Main-process data: clients ignore it. */
   muted?: true
   createdAt: number
 }

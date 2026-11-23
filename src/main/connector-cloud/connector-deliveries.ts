@@ -14,6 +14,7 @@ import type { ExternalConversationHost } from '../external-conversations/externa
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import { placeLaunchTarget } from './connector-places'
 import type { ConnectorMachine } from './connector-machine'
+import { withoutAutomations } from './connector-thread-mute'
 import type { TurnAutomations } from './connector-turn-automations'
 
 export type DispatchedDelivery = {
@@ -197,7 +198,8 @@ export function dispatchDelivery(
       ? seam.receipts.heldByMute(delivery.conversation, deliveryId, [delivery.text])
       : null
   if (heldByMute) {
-    return { deliveryId, received: false, done: settle(() => heldByMute) }
+    const done = settle(async () => withoutAutomations(delivery, await heldByMute))
+    return { deliveryId, received: false, done }
   }
   if (delivery.kind === 'send' && !seam.receipts.known(delivery.conversation, deliveryId)) {
     // Before the seam: a mute command or a muted thread's reply never reaches the agent. Done alone,
@@ -227,7 +229,7 @@ export function dispatchDelivery(
             return { outcome: 'accepted' }
           }
           if (result !== 'send') {
-            return result
+            return withoutAutomations(delivery, result)
           }
           const sent = dispatchDelivery(seam, host, alone, delivery, msLeft, later, outboxAccount)
           carried(sent?.received === true)

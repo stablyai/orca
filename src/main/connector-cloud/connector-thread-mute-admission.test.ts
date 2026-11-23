@@ -138,6 +138,19 @@ describe('a muted bot thread', () => {
     const quiet = send(FIRST, 'fyi, the build is green')
     expect(await deliver(quiet)).toEqual({ outcome: 'accepted' })
     expect(await deliver(quiet)).toEqual({ outcome: 'accepted' })
+    // Nor do the automations it matched: the cloud is told they were taken, so it starts none.
+    const automations = [
+      {
+        automationId: 'auto-1',
+        triggerId: 't1',
+        botId: 'bot1',
+        event: { key: THREAD, actorId: 'U1', occurredAt: 1_800_000_000_000, text: 'deploy done' }
+      }
+    ]
+    const matched = send(FIRST, 'deploy done', { automations })
+    const taken = { outcome: 'accepted', inTurn: true }
+    expect(await deliver(matched)).toEqual(taken)
+    expect(await deliver(matched)).toEqual(taken)
     expect(turns).toEqual([])
 
     // The mention was stripped from its words: only the flag says it was there.
@@ -175,6 +188,7 @@ describe('a muted bot thread', () => {
 })
 
 describe('a mute whose save fails', () => {
+  // Refused, so the thread offers Send again; nothing is confirmed until a save lands.
   it('is refused with nothing confirmed, and mutes when it is sent again', async () => {
     const store = await botHome({})
     const { deliver, reacted } = connector(store)

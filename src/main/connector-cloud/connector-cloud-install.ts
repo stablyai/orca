@@ -213,7 +213,7 @@ function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore)
       Promise.resolve(work?.()).then(() => undefined),
     botNames: (botId) => {
       const bot = store.getBots?.().find((entry) => entry.id === botId)
-      return bot ? [bot.name, bot.folder] : []
+      return bot ? [bot.name] : []
     },
     react: async (botId, conversation, ref, emoji) => {
       const cloud = runtime.getConnectorCloud()

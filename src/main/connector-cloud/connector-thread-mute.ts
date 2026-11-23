@@ -3,6 +3,7 @@
 // @mentions it. The bot's own posts (a background run's result, an automation) still go out.
 import type {
   ConnectorConversation,
+  ConnectorDelivery,
   ConnectorDeliveryResult
 } from '../../shared/connectors/connector-cloud-contract'
 import type { SendDelivery } from './connector-deliveries'
@@ -44,11 +45,24 @@ export function mayBeThreadMuteDirective(delivery: { asker?: { text: string } })
   return isThreadMuteDirective(delivery.asker?.text, 'any')
 }
 
-/** The bot's Slack user from a thread id (`T:C:ts:UBOT`); null for a DM (`T:D:D:UBOT`), which has
- *  no thread to mute. */
+/** The bot's Slack user from a thread id (`T:C:ts:UBOT`); null for a DM (`T:D…`), which has no
+ *  thread to mute. */
 export function slackThreadBotUser(externalId: string): string | null {
-  const [, , thread, userId] = externalId.split(':')
-  return thread && /^\d+(?:\.\d+)?$/.test(thread) && userId ? userId : null
+  const [, channel, thread, userId] = externalId.split(':')
+  return channel && !channel.startsWith('D') && thread && /^\d+(?:\.\d+)?$/.test(thread) && userId
+    ? userId
+    : null
+}
+
+/** A send the thread's mute handled starts no turn, and so none of its automations: the cloud is told
+ *  they were taken, so it never starts them on their own. */
+export function withoutAutomations(
+  delivery: ConnectorDelivery,
+  result: ConnectorDeliveryResult
+): ConnectorDeliveryResult {
+  return result.outcome === 'accepted' && delivery.kind === 'send' && delivery.automations?.length
+    ? { ...result, inTurn: true }
+    : result
 }
 
 export const MUTED_EMOJI = ':mute:'

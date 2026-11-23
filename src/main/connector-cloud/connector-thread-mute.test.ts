@@ -3,7 +3,12 @@ import type { ExternalConversationHost } from '../external-conversations/externa
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import { ConversationChain } from '../external-conversations/external-conversation-chain'
 import { dispatchBatch } from './connector-delivery-batches'
-import { handleThreadMute, threadMuteStep, type ThreadMuteDeps } from './connector-thread-mute'
+import {
+  handleThreadMute,
+  slackThreadBotUser,
+  threadMuteStep,
+  type ThreadMuteDeps
+} from './connector-thread-mute'
 import { isThreadMuteDirective } from './connector-thread-mute-phrases'
 
 const conversation = { source: 'slack', externalId: 'T1:C1:1800000000.000100:U0BOT' }
@@ -63,6 +68,11 @@ describe('a directive to stop listening', () => {
     expect(mutes.filter((text) => !isThreadMuteDirective(text, names))).toEqual([])
     expect(never.filter((text) => isThreadMuteDirective(text, names))).toEqual([])
     expect(isThreadMuteDirective(undefined, names)).toBe(false)
+    // A bot named for a negation still never takes "Never mute this thread" as its own.
+    expect(isThreadMuteDirective('Never mute this thread.', ['Never'])).toBe(false)
+    // Far longer than any directive: rejected before it is scanned.
+    expect(isThreadMuteDirective(`a${' '.repeat(40_000)}b`, 'any')).toBe(false)
+    expect(isThreadMuteDirective(`${'please '.repeat(40)}stop listening here`, 'any')).toBe(false)
   })
 
   it('mutes a muted or unmuted thread, and only a mention unmutes one', () => {
@@ -84,6 +94,10 @@ describe('a directive to stop listening', () => {
     // mutes; Resume leaves the mute as it was.
     expect(threadMuteStep(false, {}, [])).toBe('send')
     expect(threadMuteStep(true, { ...directive, resume: { turnId: 1 } }, [])).toBe('send')
+    // A DM has no thread to mute, even when its id carries a thread's timestamp.
+    expect(slackThreadBotUser('T1:C1:1800000000.000100:U0BOT')).toBe('U0BOT')
+    expect(slackThreadBotUser('T1:D1:1800000000.000100:U0BOT')).toBeNull()
+    expect(slackThreadBotUser('T1:D1:D1:U0BOT')).toBeNull()
   })
 })
 
