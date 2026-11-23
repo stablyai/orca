@@ -39,7 +39,8 @@ type SendBrowserRequest = (
 type MobileBrowserInteractionArgs = {
   clearLongPressTimer: () => void
   client: RpcClient | null
-  dialogRef: { current: { dialogType: string; message: string } | null }
+  /** True while a dialog or prompt card covers the page, so touches never reach the page under it. */
+  pageCoveredRef: { current: boolean }
   frameGeometry: BrowserFrameGeometry | null
   frameMetadataRef: { current: BrowserScreencastFrameMetadata | null }
   keyboardValue: string
@@ -65,7 +66,7 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
   const {
     clearLongPressTimer,
     client,
-    dialogRef,
+    pageCoveredRef,
     frameGeometry,
     frameMetadataRef,
     keyboardValue,
@@ -268,8 +269,8 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => dialogRef.current === null,
-        onMoveShouldSetPanResponder: () => dialogRef.current === null,
+        onStartShouldSetPanResponder: () => !pageCoveredRef.current,
+        onMoveShouldSetPanResponder: () => !pageCoveredRef.current,
         onPanResponderGrant: handleResponderGrant,
         onPanResponderMove: handleResponderMove,
         onPanResponderRelease: handleResponderRelease,

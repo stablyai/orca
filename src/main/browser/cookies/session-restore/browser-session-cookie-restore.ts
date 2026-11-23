@@ -27,7 +27,13 @@ import {
   snapshotPath,
   writeSessionCookieSnapshot
 } from './browser-session-cookie-snapshot-file'
-import { cancelPendingSave, type SessionCookieTracker } from './browser-session-cookie-tracker'
+import {
+  cancelPendingSave,
+  queueSnapshotWrite,
+  sessionCookieTrackers as trackers,
+  stopTrackingSessionCookies,
+  type SessionCookieTracker
+} from './browser-session-cookie-tracker'
 
 // Chromium commits its own cookie store this often.
 const SAVE_DELAY_MS = 30_000
@@ -39,8 +45,6 @@ const RESTORE_PRIORITY = 0
 const SAVE_PRIORITY = 1
 
 let quitting = false
-// Why keyed by file path: the same browser profile id ('default') exists in every Orca profile.
-const trackers = new Map<string, SessionCookieTracker>()
 const routeRestores = new Map<string, Promise<void>>()
 
 type SnapshotTarget = { label: string; filePath: string; partition: string }
@@ -49,13 +53,20 @@ type SnapshotTarget = { label: string; filePath: string; partition: string }
 export async function restoreBrowserSessionCookies(
   profiles: readonly BrowserSessionProfile[]
 ): Promise<void> {
-  await restoreSnapshotTargets(
-    profiles.map((profile) => ({
-      label: profile.id,
-      filePath: snapshotPath(profile.id),
-      partition: profile.partition
-    }))
-  )
+  const targets = profiles.map((profile) => ({
+    label: profile.id,
+    filePath: snapshotPath(profile.id),
+    partition: profile.partition
+  }))
+  const restore = restoreSnapshotTargets(targets)
+  const restored = restore.catch(() => {})
+  for (const { filePath } of targets) {
+    const tracker = trackers.get(filePath)
+    if (tracker) {
+      tracker.restored = restored
+    }
+  }
+  await restore
 }
 
 /**
@@ -82,7 +93,7 @@ export async function forgetBrowserRoutePartitionSessionCookies(partition: strin
     return
   }
   const filePath = routeSnapshotPath(partition)
-  stopTracking(filePath)
+  stopTrackingSessionCookies(filePath)
   try {
     // File first: any restore that starts from here on reads nothing.
     await removeSessionCookieSnapshot(filePath)
@@ -168,6 +179,16 @@ async function restoreSnapshotTargets(targets: readonly SnapshotTarget[]): Promi
   )
 }
 
+/** Writes the file, then records what it holds: a failed write must leave the next save something to write. */
+export async function writeTrackedSnapshot(
+  tracker: SessionCookieTracker,
+  cookies: CdpCookie[]
+): Promise<void> {
+  await writeSessionCookieSnapshot(tracker.filePath, cookies)
+  tracker.saved = groupByScope(cookies, cdpCookieScopeKey)
+  tracker.savedStale = false
+}
+
 /** For a profile created after launch: nothing to restore yet. */
 export function trackBrowserSessionCookies(profile: BrowserSessionProfile): void {
   track(snapshotPath(profile.id), session.fromPartition(profile.partition))
@@ -187,6 +208,8 @@ function track(filePath: string, target: Session): SessionCookieTracker {
     changedScopes: new Map(),
     changedDuringSave: null,
     timer: null,
+    saving: null,
+    restored: null,
     onChanged: (_event, cookie, cause, removed) => {
       // The insert that follows an overwrite says whether the value really changed.
       if (
@@ -220,9 +243,12 @@ function track(filePath: string, target: Session): SessionCookieTracker {
   return tracker
 }
 
-function scheduleSave(tracker: SessionCookieTracker): void {
+export function scheduleSave(tracker: SessionCookieTracker): void {
   if (!tracker.timer && !tracker.changedDuringSave && !tracker.reading) {
-    tracker.timer = setTimeout(() => void saveSessionCookies(tracker), SAVE_DELAY_MS)
+    tracker.timer = setTimeout(
+      () => void queueSnapshotWrite(tracker, () => saveSessionCookies(tracker)),
+      SAVE_DELAY_MS
+    )
   }
 }
 
@@ -237,10 +263,7 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
       const saved = groupByScope(cookies, cdpCookieScopeKey)
       // Sites often re-set a session cookie to the value it already had; skip the sealed write.
       if (tracker.savedStale || !sameSavedCookies(tracker.saved, saved)) {
-        await writeSessionCookieSnapshot(tracker.filePath, cookies)
-        // Only after the write: a failed one must leave the next save something to write.
-        tracker.saved = saved
-        tracker.savedStale = false
+        await writeTrackedSnapshot(tracker, cookies)
       }
       tracker.changedScopes = changedDuringSave
     }
@@ -319,21 +342,12 @@ export async function flushBrowserSessionCookiesOnQuit(): Promise<void> {
 export function forgetBrowserSessionCookies(profileId: string): void {
   try {
     const filePath = snapshotPath(profileId)
-    stopTracking(filePath)
+    stopTrackingSessionCookies(filePath)
     void removeSessionCookieSnapshot(filePath).catch((error: unknown) =>
       warnForgetFailed(profileId, error)
     )
   } catch (error) {
     warnForgetFailed(profileId, error)
-  }
-}
-
-function stopTracking(filePath: string): void {
-  const tracker = trackers.get(filePath)
-  if (tracker) {
-    cancelPendingSave(tracker)
-    tracker.target.cookies.off('changed', tracker.onChanged)
-    trackers.delete(filePath)
   }
 }
 
