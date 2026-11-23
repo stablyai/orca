@@ -26,6 +26,8 @@ import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../..
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { checkedWorkerOrigin } from '../../bots-items-worker-origin'
 import { decideStartMode, noteTerminalFallbackOnItem } from './start/worker-chat-lineage'
+import { withKeepOpenDefault } from './start/worker-keep-open-default'
+import { withTerminalUsage } from './start/worker-start-terminal-usage'
 import {
   linkWorkerToQuestion,
   openQuestionReminder,
@@ -112,9 +114,8 @@ export async function startWorker(
       callerSession: orchestrationCaller
     })
     await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
-    return withLink(
-      withRun(receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt)
-    )
+    const placed = receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt
+    return withLink(withRun(withKeepOpenDefault(runtime, params.worktree, placed)))
   }
   const receipt = await startLocalWorker({
     params: {
@@ -137,7 +138,8 @@ export async function startWorker(
   await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
   const note = { itemUid: checked?.itemUid, chatLineage, terminal: params.terminal }
   void noteTerminalFallbackOnItem(runtime, note, receipt).catch(warnItemNote)
-  const started = withLink(withRun(withWorkerStartNext(receipt)))
+  const next = withKeepOpenDefault(runtime, params.worktree, withWorkerStartNext(receipt))
+  const started = withTerminalUsage(runtime, withLink(withRun(next)))
   return checked && started && typeof started === 'object'
     ? { ...started, linkedItem: checked.linkedItem }
     : started

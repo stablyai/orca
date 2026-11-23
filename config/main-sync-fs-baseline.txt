@@ -33,7 +33,6 @@
 1 src/main/bots/bot-tools-claude.ts
 1 src/main/bots/bot-tools-host.ts
 2 src/main/bots/bot-work-runtime.ts
-1 src/main/bots/bot-work-store.ts
 1 src/main/browser-passwords/browser-password-chromium-import.ts
 2 src/main/browser-passwords/browser-password-vault-file.ts
 2 src/main/browser/agent-browser/helper-process/agent-browser-binary.ts
@@ -125,7 +124,7 @@
 23 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-sync.ts
 2 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-wsl-core.ts
 2 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-auth-migration.ts
-19 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
+18 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
 1 src/main/codex-accounts/runtime-home/routing/runtime-home-service-managed-home.ts
 14 src/main/codex-accounts/runtime-home/runtime-home-service-paths.ts
 1 src/main/codex-accounts/runtime-home/runtime-home-service-sync.ts

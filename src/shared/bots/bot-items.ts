@@ -131,6 +131,8 @@ export type BotItemLinkView =
       settledAt: number | null
       /** The report the worker ended with: its result. */
       report: { subject: string; body: string | null } | null
+      /** Why it ended, as the chat's worker strip shows it. Absent from older hosts. */
+      reason?: string | null
       pr: BotItemPullRequest | null
     }
   | { kind: 'pr'; ref: string; pr: BotItemPullRequest | null }
@@ -238,6 +240,10 @@ export type BotItem = {
   /** Needs you: the agent's comment asking the owner. `gist`: its body's first line; `decisions`: its
    *  question lines (`--ask`) and their quick replies (`--option`). */
   question: { eventId: string; text: string; gist?: string; decisions?: BotItemDecision[] } | null
+  /** The ask waiting on the owner, which can be older than `question` when a later question left it
+   *  open, and can outlast the Needs you another ask's answer ended; the item's view reads back to it.
+   *  Absent from older hosts and from lists. */
+  waitingAsk?: string
   closeNote: string | null
   /** Waiting: what it waits on, and when that was set. */
   wait: { text: string; at: number } | null

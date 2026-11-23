@@ -1,4 +1,8 @@
 import { formatTerminalStartFailure } from '../../../../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
+import {
+  describeTerminalHostCapRefusal,
+  readTerminalHostCapRefusal
+} from '../../../../../../../shared/terminal/pty/lifecycle/terminal-host-cap-refusal'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type { WorkerDispatchRow } from '../../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
@@ -6,6 +10,8 @@ import { tearDownFailedWorkerStart } from './readiness/failed-worker-start-teard
 import { reportFailedWorkerStart } from '../../../../../orchestration/workers/turn-stops/failed-worker-start-report'
 import {
   isUnknownWorkerStartOutcome,
+  monitorWorkerSetup,
+  type WorkerEffect,
   type createStructuredWorkerSessionForWorktree,
   type WorkerSetupReceipt
 } from './placement/worker-placement-topology'
@@ -78,10 +84,12 @@ export async function failWorkerStartWithReceipt(args: WorkerStartFailureArgs): 
 }
 
 function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
+  const hostCap = readTerminalHostCapRefusal(args.error)
   // A launch's printed output can echo its injected capability or other secrets; the receipt must never carry them.
   const reason = redactString(
     replaceDispatchCapabilities(
-      formatTerminalStartFailure(args.error) ??
+      (hostCap && describeTerminalHostCapRefusal(hostCap, "the worker's terminal")) ??
+        formatTerminalStartFailure(args.error) ??
         (args.error instanceof Error ? args.error.message : String(args.error))
     ).value
   )
@@ -99,6 +107,18 @@ function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
       args.runtime.notifyMessageArrived(handle, type)
     )
   }
+  if (!unknown) {
+    // Its setup may still fail; that outcome keeps the setup terminal open after release.
+    monitorWorkerSetup({
+      runtime: args.runtime,
+      db: args.db,
+      runId: args.runId,
+      dispatchId: args.dispatchId,
+      setupReceipt: args.setup,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this host wrote these effects from WorkerEffect[].
+      effects: JSON.parse(worker.effects) as WorkerEffect[]
+    })
+  }
   // Offer cleanup for this start's still-owned resource, including a chat retaining its refused task.
   const residual = unknown ? undefined : args.db.getWorkerTerminalResourceByOwner(args.dispatchId)
   const releasable = residual?.ownership_state === 'owned'
@@ -110,6 +130,7 @@ function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
     stage: worker.stage,
     failedStage: args.failedStage,
     lastError: reason,
+    ...(hostCap ? { blockedReason: hostCap.code } : {}),
     setup: args.setup,
     launch: args.launch,
     mode: args.mode,
@@ -127,6 +148,8 @@ function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
             `orca orchestration worker-abandon --dispatch ${args.dispatchId} --json`
           ]
         }
-      : {})
+      : hostCap
+        ? { nextCommands: ['orca orchestration worker-list --terminal-state reclaimable --json'] }
+        : {})
   }
 }

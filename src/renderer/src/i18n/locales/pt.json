@@ -1411,10 +1411,12 @@
         "imported_many": "{{count}} cookies importados para {{domains}}. Recarregue a página para usá-los.",
         "failed": "Não foi possível importar cookies: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Navegadores neste dispositivo",
         "destination": "Importa para o navegador de {{host}}.",
-        "hostAgents": "Os agentes em {{host}} podem usar esses logins, mas não podem ler os cookies.",
+        "hostAgents": "Os agentes em {{host}} podem usar esses logins, mas não podem ler os cookies."
+      },
+      "sshPage": {
         "stored": "Salvo no navegador de {{host}}.",
         "googleCookiesSkipped": "Os cookies do Google não foram importados. Abra uma página que navegue por {{host}} e entre no Google."
       }
@@ -1839,8 +1841,6 @@
       }
     },
     "agents": {
-      "installedRegion": "Agentes instalados",
-      "availableRegion": "Agentes disponíveis para instalar",
       "codexTerminalServerIsolation": {
         "title": "Executar cada terminal do Codex em seu próprio servidor",
         "description": "Mantém o status do Orca e o fechamento de abas funcionando corretamente. Desative para usar o servidor compartilhado do Codex e sua visão geral dos agentes. Aplica-se a novos terminais."
@@ -3120,6 +3120,7 @@
         "gone": "Este chat não está mais neste host, então não pode ser reaberto aqui.",
         "hostCannotOpen": "Este chat não pode ser reaberto até que o Orca seja atualizado.",
         "worktreeDeleted": "A worktree foi excluída.",
+        "projectRemoved": "O projeto foi removido do Orca.",
         "folderWorkspaceRemoved": "O espaço de trabalho de pasta foi removido."
       },
       "ephemeralVmWorktreeCreation": {
@@ -9713,7 +9714,6 @@
           "attentionUnwritable": "Atenção necessária · O Orca não consegue gravar em {{folder}}",
           "attentionBusy": "Atenção necessária · Outra instalação de habilidade ainda está sendo concluída aqui",
           "attentionUnreadable": "Atenção necessária · O Orca não consegue ler todos os arquivos desta cópia",
-          "attentionEdited": "Atenção necessária · Você editou esta cópia",
           "attentionOther": "Atenção necessária · Outra habilidade já usa este nome",
           "attentionSharedNotCurrent": "Atenção necessária · A cópia compartilhada usada por esta pasta não é do Orca",
           "resultUpdateSkippedPlaces": "{{result}} · Atualização ignorada em {{places}} locais: {{reason}}",
@@ -12812,8 +12812,7 @@
           "a23b22d16f": "Copiado",
           "74fc00776f": "Detalhes do erro",
           "ca3b225195": "Falha na renomeação automática da branch",
-          "couldNotGenerateBranchName": "O Orca não conseguiu gerar um nome de branch para <name>{{name}}</name> a partir da primeira mensagem do agente.",
-          "dismissing": "Descartando…"
+          "couldNotGenerateBranchName": "O Orca não conseguiu gerar um nome de branch para <name>{{name}}</name> a partir da primeira mensagem do agente."
         },
         "CreateProjectLocationField": {
           "95548e33bf": "Escolher pasta pai...",
@@ -14676,7 +14675,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Outra instalação ainda está em andamento",
-          "edited": "Skill editada fora do Orca",
           "install": "Instalar",
           "installFor": "Instalar para {{value0}}",
           "installed": "Instalada",
@@ -20135,9 +20133,7 @@
         "streamBrowserUnavailable": "O navegador remoto está indisponível. Verifique sua configuração no servidor."
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Navegadores neste dispositivo",
         "remoteLabel": "Navegadores em {{value0}}",
-        "clientNoteLocalStorage": "As importações leem os navegadores deste dispositivo. Os cookies são armazenados localmente.",
         "remoteNoteRemoteStorage": "As importações leem navegadores em {{value0}}. Os cookies são armazenados nessa máquina, e um prompt de permissão pode aparecer na tela dela."
       },
       "NewWorkspaceComposerModal": {
@@ -21354,6 +21350,8 @@
         "historyUnreadable": "O Orca não conseguiu ler o histórico salvo deste chat.",
         "historyUnusable": "Não foi possível carregar este chat.",
         "historyUnavailable": "O Orca não conseguiu abrir o histórico deste chat agora.",
+        "diskFull": "O disco do computador que executa este chat está cheio.",
+        "freeDiskSpace": "Libere espaço nesse disco e tente novamente.",
         "savedInOtherFolder": "Esta conversa foi salva em outra pasta.",
         "savedByNewerOrca": "Os chats foram salvos por uma versão mais recente do Orca.",
         "updateOrcaToKeepUsing": "Atualize o Orca para continuar usando-os.",
@@ -21606,6 +21604,9 @@
       "imagePreview": {
         "fileActions": "Ações do arquivo",
         "linkActions": "Ações do link"
+      },
+      "imageGallery": {
+        "loadFailed": "Não foi possível carregar {{name}}"
       },
       "goalControl": {
         "settingsRejected": "O Codex não conseguiu aplicar o modelo e o esforço selecionados. Esta alteração de objetivo não foi enviada. Confira a seleção e tente novamente.",
@@ -22126,6 +22127,7 @@
           "selectionWithheldCount_many": "{{count}} espaços de trabalho selecionados estão ocultos pelos filtros atuais e foram desmarcados.",
           "selectAllSafetyChecked_one": "Selecionar {{count}} espaço de trabalho com segurança verificada",
           "selectAllSafetyChecked_other": "Selecionar todos os {{count}} espaços de trabalho com segurança verificada",
+          "clearSelection": "Limpar seleção",
           "selectAllSafetyChecked_many": "Selecionar todos os {{count}} espaços de trabalho com segurança verificada",
           "lastActive": "Última atividade: {{value0}}",
           "projectNamed": "Projeto: {{value0}}",
@@ -22656,12 +22658,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Worker temporário de orquestração · Fecha 2 minutos após terminar",
-        "finished": "Worker temporário de orquestração concluído · Fecha em {{countdown}}",
         "keepOpen": "Manter aberto",
         "bannerRunning": "Worker de orquestração · Fecha 2 minutos após terminar",
         "bannerFinished": "Worker de orquestração concluído · Fecha em {{countdown}}",
-        "temporaryBadge": "Temporário"
+        "bannerFinishedStatus": "Worker de orquestração concluído · Fecha em breve"
       }
     },
     "wslHostMark": {
@@ -22923,6 +22923,11 @@
       "dontShowAgain": "Não mostrar novamente",
       "dismiss": "Dispensar"
     },
+    "fileDrop": {
+      "copyUploadedPaths": "Copiar caminhos",
+      "copyUploadedPathsFailed": "Não foi possível copiar os caminhos dos arquivos enviados.",
+      "uploadedWithoutPaste": "Envio concluído, mas não foi possível colar os caminhos no terminal."
+    },
     "newerDaemonBanner": {
       "failedTitle": "Não foi possível reabrir este terminal",
       "title": "Este terminal foi aberto em uma versão mais recente do Orca",
@@ -23083,7 +23088,7 @@
       "signInRequired": "Entre novamente para usar esta conta",
       "signInAgain": "Entrar novamente",
       "usageSignInLabel": "Entrar novamente",
-      "usageSignInMessage": "A conta do Claude selecionada precisa de um novo login. Abra Configurações > Contas de provedores de IA ou escolha Padrão do sistema.",
+      "usageSignInMessage": "Esta conta precisa de um novo login.",
       "signIn": "Entrar",
       "moreSignInOptions": "Mais opções de login",
       "copySignInLink": "Copiar link de login",
@@ -25188,7 +25193,8 @@
       },
       "ask": {
         "notSentYet": "ainda não enviado",
-        "replaced": "O agente fez uma nova pergunta. Leia e responda."
+        "replaced": "O agente fez uma nova pergunta. Leia e responda.",
+        "replacedByNewer": "Substituída por uma pergunta mais recente"
       },
       "chat": {
         "moreItems": "+{{count}} a mais"
@@ -25348,6 +25354,8 @@
       "nudgeOne": "Encontramos um bot no {{app}}."
     },
     "section": {
+      "scrollLeft": "Rolar para a esquerda · {{amount}} ocultos",
+      "scrollRight": "Rolar para a direita · {{amount}} ocultos",
       "startFromScratch": "Começar do zero",
       "title": "Bots"
     },
@@ -25444,6 +25452,7 @@
       "toolClaudePrepareFailed": "Não foi possível preparar {{name}} no Claude Code. Verifique a configuração da ferramenta.",
       "toolNameTaken": "Este bot já tem uma ferramenta chamada {{name}}.",
       "toolNameTakenByAgent": "Seu {{agent}} já tem uma ferramenta chamada {{name}}, que este bot também recebe. Escolha outro nome com --name.",
+      "toolNameTakenByCodexStdio": "Seu Codex já tem uma ferramenta local chamada {{name}}, então {{name}} deste bot não pode ser executada. Renomeie a ferramenta deste bot.",
       "toolNotUpdated": "A ferramenta não foi atualizada.",
       "toolSignInAddressIncomplete": "Cole o endereço completo em que a página de login terminou.",
       "toolSignInAddressWrong": "Esse não é o endereço em que este login termina. Comece de novo com Conectar, faça login e cole o endereço que o navegador mostra.",

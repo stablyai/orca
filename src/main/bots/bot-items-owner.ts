@@ -72,15 +72,32 @@ export class BotItemsOwner extends BotItemsWrites {
         item.status === 'needs_you' && item.questionEvent !== null
           ? this.botQuestion(item.questionEvent)
           : null
-      if (question && questionEventId !== undefined && question.id !== questionEventId) {
+      // The latest ask waits even when a later Needs you comment asks nothing, or an answer moved the
+      // item on with a line still open: replies go to it.
+      const waitingAsk = isOpenBotItemStatus(item.status) ? this.waitingAsk(item) : null
+      const asking = question !== null || waitingAsk !== null
+      if (
+        asking &&
+        questionEventId !== undefined &&
+        question?.id !== questionEventId &&
+        waitingAsk !== questionEventId
+      ) {
         throw new BotItemError(
           'item_changed',
           `Item ${item.number} has a new question. Read it, then reply.`
         )
       }
-      // While the bot asks, a comment not sent as plain is the answer: it names the question, and the
-      // move it makes says so. A plain one leaves the item waiting on its question.
-      const answering = question && !plain ? question : null
+      // While the bot asks, a comment not sent as plain is the answer: it names the question (a quick
+      // reply's own, else the ask waiting), and the move it makes says so. A plain one leaves the item
+      // waiting on its question.
+      const answeringId =
+        asking && !plain ? (questionEventId ?? waitingAsk ?? question?.id ?? null) : null
+      const answering =
+        answeringId === null
+          ? null
+          : answeringId === question?.id
+            ? question
+            : this.botQuestion(answeringId)
       const answers = answering ? botItemEventId(answering.id) : undefined
       // A question a conversation's turn asked is answered there too (bots-items-mail.ts reads it).
       const askedIn = answering?.data.askedInConversation

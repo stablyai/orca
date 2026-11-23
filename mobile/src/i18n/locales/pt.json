@@ -22,7 +22,7 @@
     },
     "claude": {
       "usageSignInLabel": "Entrar novamente",
-      "usageSignInMessage": "A conta do Claude selecionada precisa de um novo login. Abra Configurações > Contas de provedores de IA ou escolha Padrão do sistema."
+      "usageSignInMessage": "Esta conta precisa de um novo login."
     }
   },
   "agentHistory": {
@@ -1971,7 +1971,7 @@
       "workspaceOptions": "Opções do espaço de trabalho",
       "activeFilters_one": "Opções do espaço de trabalho ({{count}} filtro ativo)",
       "activeFilters_other": "Opções do espaço de trabalho ({{count}} filtros ativos)",
-      "searchWorkspaces": "Buscar espaços de trabalho",
+      "search": "Buscar",
       "newWorkspace": "Novo espaço de trabalho",
       "activeFilters_many": "Opções do espaço de trabalho ({{count}} filtros ativos)"
     },
@@ -3188,6 +3188,8 @@
       "conversationCleared": "Esta conversa foi limpa.",
       "goalsUnsupported": "Este agente não aceita objetivos.",
       "historyUnavailable": "O Orca não conseguiu abrir o histórico deste chat agora.",
+      "diskFull": "O disco do computador que executa este chat está cheio.",
+      "freeDiskSpace": "Libere espaço nesse disco e tente novamente.",
       "savedInOtherFolder": "Esta conversa foi salva em outra pasta.",
       "historyUnreadable": "O Orca não conseguiu ler o histórico salvo deste chat.",
       "historyUnusable": "Não foi possível carregar este chat.",
@@ -3288,6 +3290,7 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "A worktree foi excluída.",
+      "projectRemoved": "O projeto foi removido do Orca.",
       "folderWorkspaceRemoved": "O espaço de trabalho de pasta foi removido.",
       "goneGeneric": "O chat do agente não está mais neste host, portanto não pode ser reaberto aqui.",
       "unknownGeneric": "Não foi possível encontrar o bate-papo do agente neste host. Reconecte-se ao computador e tente novamente.",
@@ -4795,7 +4798,6 @@
       "extraAgentArguments": "Argumentos extras do agente",
       "allAutomations": "Todas as automações",
       "schedule": "Programação",
-      "nextRun": "Próxima execução",
       "agent": "Agente",
       "project": "Projeto",
       "unavailable": "Indisponível",
@@ -4845,7 +4847,6 @@
       "newWorkspacePerRun": "Novo espaço de trabalho por execução",
       "instructions": "Instruções",
       "runNow": "Executar agora",
-      "viewAllRuns": "Ver todas as execuções",
       "savedAgent": "{{agent}} (salvo)",
       "chooseAProjectSetUpOnThisHost": "Escolha um projeto configurado neste host.",
       "newAutomation": "Nova automação",
@@ -4869,9 +4870,6 @@
       "letYourAgentsWorkOnASchedule": "Deixe seus agentes trabalharem em horários programados",
       "createAnAutomationToRunATaskOnThisHost": "Crie uma automação para executar uma tarefa neste host.",
       "nextDate": "Próxima: {{date}}",
-      "lastResult": "Última: {{status}} · {{date}}",
-      "latestResultNotReported": "Último resultado não informado",
-      "sshTarget": " · SSH {{target}}",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Reconecte a este host para atualizar ou fazer alterações. As informações salvas continuam disponíveis abaixo.",
       "recentRuns": "Execuções recentes",
       "outcome": "Resultado",
@@ -4894,7 +4892,6 @@
       "fullOutputUnavailable": "Não foi possível carregar a saída completa.",
       "retryFullOutput": "Tentar novamente",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "Nenhuma execução correspondente no histórico carregado. Carregue mais para continuar.",
-      "noMatchingRunsYet": "Ainda não há execuções correspondentes.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
       "scheduled": "Agendada",
       "loadMoreRuns": "Carregar mais execuções",
@@ -5121,6 +5118,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "Rolar para a esquerda · {{amount}} ocultos",
+      "scrollRight": "Rolar para a direita · {{amount}} ocultos"
+    },
     "link": {
       "pairTitle": "Emparelhar um computador",
       "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",
@@ -5300,15 +5301,17 @@
         "next": "Próximo item",
         "subWhere": "Item {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "Agora não"
-      },
       "write": {
         "offline": "{{host}} está offline."
       },
       "thisComputer": "O computador",
       "readFailedClosedPage": "Não foi possível ler mais itens fechados.",
-      "skillLimit": "Mensagem não enviada. Selecione no máximo {{limit}} arquivos de habilidade e tente novamente."
+      "skillLimit": "Mensagem não enviada. Selecione no máximo {{limit}} arquivos de habilidade e tente novamente.",
+      "ask": {
+        "notSentYet": "ainda não enviado",
+        "replaced": "O agente fez uma nova pergunta. Leia e responda.",
+        "replacedByNewer": "Substituída por uma pergunta mais recente"
+      }
     },
     "needs": {
       "chat": "Seu chat com {{name}}",
@@ -5740,6 +5743,7 @@
       "toolClaudePrepareFailed": "Não foi possível preparar {{name}} no Claude Code. Verifique a configuração da ferramenta.",
       "toolNameTaken": "Este bot já tem uma ferramenta chamada {{name}}.",
       "toolNameTakenByAgent": "Seu {{agent}} já tem uma ferramenta chamada {{name}}, que este bot também recebe. Escolha outro nome com --name.",
+      "toolNameTakenByCodexStdio": "Seu Codex já tem uma ferramenta local chamada {{name}}, então {{name}} deste bot não pode ser executada. Renomeie a ferramenta deste bot.",
       "toolNotUpdated": "A ferramenta não foi atualizada.",
       "toolSignInAddressIncomplete": "Cole o endereço completo em que a página de login terminou.",
       "toolSignInAddressWrong": "Esse não é o endereço em que este login termina. Comece de novo com Conectar, faça login e cole o endereço que o navegador mostra.",
@@ -5856,6 +5860,10 @@
       "today": "hoje",
       "yesterday": "ontem",
       "lastTidied": "última arrumação {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Continua às {{time}}",
+      "hitLimit": "Limite atingido · reinicia às {{time}}"
     }
   },
   "sidebar": {

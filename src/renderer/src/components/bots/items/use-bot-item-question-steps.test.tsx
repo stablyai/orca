@@ -68,12 +68,14 @@ const bot: Bot = {
 // The item view's hook over `ask`, with every comment it posts to the host: each one wakes the agent.
 function steps(uid: string, own = asking, shown = item) {
   const posted: { text: string; paths: readonly string[] }[] = []
-  const send = (text: string, paths: readonly string[] = []): void => {
+  const answering: (string | undefined)[] = []
+  const send = (text: string, paths: readonly string[] = [], questionId?: string): void => {
     posted.push({ text, paths })
+    answering.push(questionId)
   }
   // Its own item, so answers held on this device by another case don't carry over.
   const hook = renderHook(() => useBotItemQuestionSteps(bot, { ...shown, uid }, [own], send, []))
-  return { hook, posted }
+  return { hook, posted, answering }
 }
 
 it('holds a typed answer to one of several questions until the last is answered', () => {
@@ -110,10 +112,10 @@ it('sends the held answers when the owner sends them sooner', () => {
   expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → the internal ones`])
 })
 
-it('posts a typed answer to a single question at once', () => {
+it('posts a typed answer to a single question at once, naming the question it answers', () => {
   const single = { questions: [ask.questions[0]!] }
   const own: BotItemEvent = { ...asking, data: { text: botItemAskText(single), ask: single } }
-  const { hook, posted } = steps('single', own, {
+  const { hook, posted, answering } = steps('single', own, {
     ...item,
     question: { eventId: 'e2', text: botItemAskText(single) }
   })
@@ -121,4 +123,6 @@ it('posts a typed answer to a single question at once', () => {
   const line = hook.result.current.waitingLine!
   act(() => hook.result.current.fromBox('the internal ones', [], line.id))
   expect(posted.map(({ text }) => text)).toEqual(['the internal ones'])
+  // The host refuses it if the agent asked anew meanwhile.
+  expect(answering).toEqual(['e2'])
 })

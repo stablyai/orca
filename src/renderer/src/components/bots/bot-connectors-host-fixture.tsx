@@ -183,7 +183,16 @@ export function stub(options: StubOptions): void {
             : []),
           { installationId: '1', accountLogin: 'stablyai', repositories: null }
         ],
-        defaultBotId: null
+        defaultBotId: null,
+        accounts: [
+          {
+            userId: '42',
+            login: 'cos-orca',
+            installations: [...(options.sameService ? ['2'] : []), '1'],
+            defaultBotId: null,
+            linkedAccounts: []
+          }
+        ]
       }
     }),
     users: notAnswered,

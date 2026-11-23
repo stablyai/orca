@@ -1,3 +1,5 @@
+import { coordinatorKeepOpenByDefault } from '../../../rpc/methods/orchestration/worker/start/worker-keep-open-default'
+import { botOfSession } from '../../../../bots/bot-session-tabs'
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
@@ -136,10 +138,8 @@ export async function startRemoteOwnedWorker(
       { effectsApplied: false }
     )
   }
-  const { coordinator, bindRun, taskDeps, existingTask, withRun } = await prepareWorkerStart(
-    params,
-    ctx
-  )
+  const { coordinator, bindRun, helperCreator, taskDeps, existingTask, withRun } =
+    await prepareWorkerStart(params, ctx)
   const db = runtime.getOrchestrationDb()
   const server = await runtime.resolveOrchestrationWorkerServer(params.on!)
   // This caller's workspace is here, so a server's new-child nests under it across machines.
@@ -178,6 +178,17 @@ export async function startRemoteOwnedWorker(
   // Its queue has a reader from the start, so mail sent before the answer still comes home.
   runtime.ensureOrchestrationFederationRelay(run.id)
   const options = serverStartOptions(params)
+  // Read before the wait: the server cannot tell a bot's worker from a person's, and the
+  // coordinator's own Dispatch may settle while the server starts this one.
+  const keepOpenByDefault = coordinatorKeepOpenByDefault(
+    db,
+    params.worktree,
+    {
+      orcaSessionId: coordinator?.orcaSessionId ?? null,
+      creatorDispatchId: helperCreator?.id ?? null
+    },
+    (sessionId) => botOfSession(runtime.bots, sessionId) !== null
+  )
   const startCard = prepareWorkerStartCard(runtime, ctx.orchestrationCaller)
   let receipt: unknown
   try {
@@ -246,6 +257,7 @@ export async function startRemoteOwnedWorker(
           taskId,
           runId: run.id,
           runCreated: bindRun().created,
+          keepOpenByDefault,
           ...(started.data?.run ? { serverRunId: started.data.run.id } : {})
         }
       : answer

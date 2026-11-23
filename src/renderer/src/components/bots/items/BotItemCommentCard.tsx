@@ -2,7 +2,9 @@
 // the text as Markdown, its images and its file links. An agent's Needs you question is a comment too:
 // its body and attachments, then its question footer (BotItemQuestionLines). A reply to a question quotes it, and leads back to it.
 // While the item waits on it, the asking comment stands out, shown whole: a Needs you tag by its time
-// and its question ruled off from the body. Answered, it reads as any other comment.
+// and its question ruled off from the body. Answered, it reads as any other comment, but stays whole
+// until the item is closed, so answering never folds what was just read.
+import { useState } from 'react'
 import { CornerDownRight } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -79,7 +81,7 @@ function Avatar({
 
 type CommentEntry = Pick<
   Extract<BotItemActivityEntry, { kind: 'comment' }>,
-  'event' | 'replyTo' | 'answers' | 'byOrder'
+  'event' | 'replyTo' | 'answers' | 'byOrder' | 'replaced'
 > & { waiting?: boolean }
 
 export function BotItemCommentCard({
@@ -103,6 +105,11 @@ export function BotItemCommentCard({
   const t = useTranslate()
   const { event, replyTo } = entry
   const waiting = entry.waiting === true
+  // Waited on while shown: whole until this view unmounts (Show less still folds it).
+  const [askedHere, setAskedHere] = useState(waiting)
+  if (waiting && !askedHere) {
+    setAskedHere(true)
+  }
   const images = botItemCommentImages(event.data)
   const shape = botItemQuestionShape(event.data)
   // Its images show after the words, so the [Image #N] its send wrote go, as in chat's sent messages.
@@ -178,6 +185,7 @@ export function BotItemCommentCard({
               clampClassName="max-h-[152px]"
               fade
               quietToggle={shape.decisions.length > 0}
+              startOpen={askedHere}
             />
           )}
           <BotItemCommentImages images={images} />
@@ -194,6 +202,7 @@ export function BotItemCommentCard({
               waiting={waiting}
               answers={entry.answers}
               byOrder={entry.byOrder}
+              replaced={entry.replaced === true}
               actions={quickReplies}
               // Ruled off only below something: a question with no body stays under the name.
               className={waiting && shape.body.trim() ? QUESTION_RULE : undefined}

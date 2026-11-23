@@ -1,4 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   WorkerDockResult,
@@ -25,8 +27,11 @@ export function useWorkerDockOwnerActions(
   target: RuntimeClientTarget,
   party: string | null | undefined,
   identities: WorkerDockSnapshot['identities'] | undefined,
-  workerOpen: (row: WorkerDockRowView) => void
+  workerOpen: (row: WorkerDockRowView) => void,
+  /** Read just before each Stop request, so a Stop or Retry is never sent once its row can't stop. */
+  stopAvailable?: (dispatchId: string) => boolean
 ) {
+  const t = useTranslate()
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
   const [failure, setFailure] = useState<WorkerDockFailure | null>(null)
   const [dialog, setDialog] = useState<WorkerDockResultDialogState | null>(null)
@@ -95,6 +100,25 @@ export function useWorkerDockOwnerActions(
     }
     attempt()
   }, [])
+  const clear = useCallback(
+    async (settlements: Parameters<typeof acknowledge>[0]) => {
+      await acknowledge(settlements)
+      toast.message(
+        t('components.native-chat.workerDock.cleared', 'Cleared {{count}} workers', {
+          count: settlements.length,
+          defaultValue_one: 'Cleared 1 worker'
+        }),
+        {
+          action: {
+            label: t('components.native-chat.workerDock.restore', 'Show in dock again'),
+            onClick: () =>
+              void acknowledge(settlements, false).catch((error) => toast.error(message(error)))
+          }
+        }
+      )
+    },
+    [acknowledge, t]
+  )
   const action = useCallback(
     (row: WorkerDockRowView, kind: 'stop' | 'clear') => {
       // Clear only acknowledges; a row with no settlement has nothing to clear and must not Stop.
@@ -105,15 +129,21 @@ export function useWorkerDockOwnerActions(
       const settlement = kind === 'clear' ? row.settlement : null
       track(new Set([row.id]), () =>
         settlement
-          ? acknowledge([{ dispatchId: row.dispatchId, settlement }])
-          : callRuntimeRpc(target, 'orchestration.workerDockStop', {
-              party,
-              dispatch: row.dispatchId,
-              requestId
-            })
+          ? clear([{ dispatchId: row.dispatchId, settlement }])
+          : stopAvailable && !stopAvailable(row.dispatchId)
+            ? Promise.reject(
+                new Error(
+                  t('components.native-chat.workerDock.unavailable', 'Worker status unavailable')
+                )
+              )
+            : callRuntimeRpc(target, 'orchestration.workerDockStop', {
+                party,
+                dispatch: row.dispatchId,
+                requestId
+              })
       )
     },
-    [acknowledge, party, target, track]
+    [clear, party, stopAvailable, t, target, track]
   )
   const clearAll = useCallback(() => {
     const captured = (identities ?? []).flatMap((row) =>
@@ -125,8 +155,10 @@ export function useWorkerDockOwnerActions(
         .filter((row) => capturedDispatches.has(row.dispatchId))
         .map((row) => row.id)
     )
-    track(capturedIds, () => acknowledge(captured))
-  }, [acknowledge, identities, track])
+    if (captured.length) {
+      track(capturedIds, () => clear(captured))
+    }
+  }, [clear, identities, track])
   const restore = useCallback(() => {
     const shown = dialog?.result
     if (!dialog || !shown || shown.dispatchId !== dialog.row.dispatchId) {

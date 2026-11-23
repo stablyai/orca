@@ -1,5 +1,5 @@
 // A tool's words on the phone: its name, and its sign-in face as the desktop's botToolSignInWords
-// line and button.
+// line, Needs you line and button.
 import type { AgentType } from '../../../../src/shared/agent-status/contracts/agent-status-types'
 import { BOT_MCP_APPS } from '../../../../src/shared/bots/bot-mcp-apps'
 import { botToolTitle } from '../../../../src/shared/bots/bot-tool-labels'
@@ -37,6 +37,19 @@ export function botToolSignInLine(
     case null:
       return null
   }
+}
+
+/** What Needs you says the face asks of the owner; null when it isn't a sign-in to ask for. */
+export function botToolSignInNeed(
+  face: BotToolSignInFace | null,
+  t: Translate,
+  name: string
+): string | null {
+  return face === 'needs-sign-in'
+    ? t('bots.needs.signIn', '{{name}} needs you to sign in.', { name })
+    : face === 'sign-in-again'
+      ? t('bots.needs.signInAgain', '{{name}} needs you to sign in again.', { name })
+      : null
 }
 
 /** The button that starts a sign-in, when the face calls for one. */

@@ -482,10 +482,12 @@
         "imported_other": "已為 {{domains}} 匯入 {{count}} 個 Cookie。請重新載入頁面以使用這些 Cookie。",
         "failed": "Cookie 匯入失敗：{{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "此裝置上的瀏覽器",
         "destination": "匯入到 {{host}} 的瀏覽器。",
-        "hostAgents": "{{host}} 上的代理程式可以使用這些登入狀態，但無法讀取 Cookie。",
+        "hostAgents": "{{host}} 上的代理程式可以使用這些登入狀態，但無法讀取 Cookie。"
+      },
+      "sshPage": {
         "stored": "已儲存到 {{host}} 的瀏覽器。",
         "googleCookiesSkipped": "未匯入 Google Cookie。請開啟一個透過 {{host}} 瀏覽的頁面，然後登入 Google。"
       }
@@ -816,8 +818,6 @@
       }
     },
     "agents": {
-      "installedRegion": "已安裝的智慧體",
-      "availableRegion": "可安裝的智慧體",
       "permissionsTitle": "權限",
       "permissionsChoiceExplanation": "每個代理程式無須詢問即可執行的操作。可在下方為個別代理程式另行設定。",
       "permissionEachOwn": "各代理程式自身的設定",
@@ -1887,6 +1887,7 @@
         "gone": "此聊天不再在此主機上，因此無法在此處重新開啟。",
         "hostCannotOpen": "在 Orca 更新之前，無法重新開啟此聊天。",
         "worktreeDeleted": "工作樹已刪除。",
+        "projectRemoved": "專案已從 Orca 移除。",
         "folderWorkspaceRemoved": "資料夾工作區已移除。"
       },
       "ephemeralVmWorktreeCreation": {
@@ -5797,7 +5798,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "另一項安裝仍在進行中",
-          "edited": "技能已在 Orca 外部編輯",
           "install": "安裝",
           "installFor": "為 {{value0}} 安裝",
           "installed": "已安裝",
@@ -12908,7 +12908,6 @@
           "attentionUnwritable": "需要處理 · Orca 無法寫入 {{folder}}",
           "attentionBusy": "需要處理 · 此處的另一項技能安裝作業尚未完成",
           "attentionUnreadable": "需要處理 · Orca 無法讀取此副本中的所有檔案",
-          "attentionEdited": "需要處理 · 已編輯過此副本",
           "attentionOther": "需要處理 · 其他技能已使用此名稱",
           "attentionSharedNotCurrent": "需要處理 · 此資料夾使用的共用副本並非 Orca 的副本",
           "resultUpdateSkippedPlaces": "{{result}} · 已略過 {{places}} 處的更新：{{reason}}",
@@ -18465,9 +18464,7 @@
         "typeHtml": "HTML"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "此裝置上的瀏覽器",
         "remoteLabel": "{{value0}} 上的瀏覽器",
-        "clientNoteLocalStorage": "匯入作業會讀取此裝置的瀏覽器。Cookie 會儲存在本機。",
         "remoteNoteRemoteStorage": "匯入作業會讀取 {{value0}} 上的瀏覽器。Cookie 會儲存在該電腦上，其螢幕上可能會出現權限提示。"
       },
       "native": {
@@ -19105,6 +19102,8 @@
         "historyUnreadable": "Orca 無法讀取此聊天的已儲存歷史記錄。",
         "historyUnusable": "無法載入此聊天。",
         "historyUnavailable": "Orca 目前無法開啟此聊天的歷史記錄。",
+        "diskFull": "執行此聊天的電腦磁碟已滿。",
+        "freeDiskSpace": "請釋放該磁碟空間後重試。",
         "savedInOtherFolder": "此對話儲存在另一個資料夾中。",
         "savedByNewerOrca": "這些聊天由更新版本的 Orca 儲存。",
         "updateOrcaToKeepUsing": "請更新 Orca 以繼續使用這些聊天。",
@@ -19768,6 +19767,9 @@
         "fileActions": "檔案操作",
         "linkActions": "連結操作"
       },
+      "imageGallery": {
+        "loadFailed": "無法載入 {{name}}"
+      },
       "goalControl": {
         "settingsRejected": "Codex 無法套用所選的模型與推理強度。此次目標變更未送出。請檢查選項後再試一次。",
         "settingsUnconfirmed": "Codex 未確認所選的模型與推理強度。此次目標變更未送出。請查看聊天後再試一次。",
@@ -20235,6 +20237,7 @@
           "selectionVanishedCount_other": "所選的 {{count}} 個工作區已不存在。",
           "selectionWithheldCount_other": "所選的 {{count}} 個工作區已被目前的篩選條件隱藏，因此已取消選取。",
           "selectAllSafetyChecked_other": "選取全部 {{count}} 個已通過安全檢查的工作區",
+          "clearSelection": "清除選取",
           "lastActive": "上次活動時間：{{value0}}"
         },
         "scan": {
@@ -20720,12 +20723,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "暫時的協作工作者 · 完成後 2 分鐘關閉",
-        "finished": "暫時的協作工作者已完成 · {{countdown}}後關閉",
         "keepOpen": "保持開啟",
         "bannerRunning": "協作工作者 · 完成後 2 分鐘關閉",
         "bannerFinished": "協作工作者已完成 · {{countdown}}後關閉",
-        "temporaryBadge": "暫時"
+        "bannerFinishedStatus": "協作工作者已完成 · 即將關閉"
       }
     },
     "wslHostMark": {
@@ -21651,6 +21652,11 @@
       "dontShowAgain": "不再顯示",
       "dismiss": "關閉"
     },
+    "fileDrop": {
+      "copyUploadedPaths": "複製路徑",
+      "copyUploadedPathsFailed": "無法複製已上傳檔案的路徑。",
+      "uploadedWithoutPaste": "上傳完成，但無法將路徑貼上到終端機。"
+    },
     "newerDaemonBanner": {
       "failedTitle": "無法重新開啟此終端機",
       "title": "此終端機是在較新版本的 Orca 中開啟的",
@@ -21806,7 +21812,7 @@
       "signInRequired": "請重新登入以使用此帳戶",
       "signInAgain": "重新登入",
       "usageSignInLabel": "重新登入",
-      "usageSignInMessage": "所選 Claude 帳戶需要您重新登入。請開啟設定 > AI 供應商帳戶，或選擇系統預設。",
+      "usageSignInMessage": "此帳戶需要您重新登入。",
       "signIn": "登入",
       "moreSignInOptions": "更多登入選項",
       "copySignInLink": "改為複製登入連結",
@@ -23764,7 +23770,8 @@
       },
       "ask": {
         "notSentYet": "尚未傳送",
-        "replaced": "代理程式提出了新問題。請先閱讀，再回覆。"
+        "replaced": "代理程式提出了新問題。請先閱讀，再回覆。",
+        "replacedByNewer": "已由較新的問題取代"
       },
       "readMoreClosedFailed": "無法讀取更多已關閉的項目"
     },
@@ -23811,6 +23818,8 @@
       "hitTip": "{{agent}} 已達使用上限 · {{time}} 重設"
     },
     "section": {
+      "scrollLeft": "向左捲動 · 隱藏 {{amount}} 個",
+      "scrollRight": "向右捲動 · 隱藏 {{amount}} 個",
       "title": "Bots",
       "startFromScratch": "從頭開始"
     },
@@ -23989,6 +23998,7 @@
       "toolClaudePrepareFailed": "無法在 Claude Code 中準備 {{name}}。請檢查工具設定。",
       "toolNameTaken": "這個機器人已經有名為 {{name}} 的工具。",
       "toolNameTakenByAgent": "你的 {{agent}} 已經有名為 {{name}} 的工具，這個機器人也會取得它。請用 --name 換一個名稱。",
+      "toolNameTakenByCodexStdio": "你的 Codex 已經有名為 {{name}} 的本機工具，所以這個機器人的 {{name}} 無法執行。請重新命名這個機器人的工具。",
       "toolNotUpdated": "工具沒有更新。",
       "toolSignInAddressIncomplete": "請貼上登入頁面最後停留的完整位址。",
       "toolSignInAddressWrong": "這不是本次登入結束時的位址。請用「連線」重新開始，登入後貼上瀏覽器顯示的位址。",
