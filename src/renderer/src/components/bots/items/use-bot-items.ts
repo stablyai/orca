@@ -30,6 +30,9 @@ const ITEMS_MIN_READ_GAP_MS = 500
 
 const ITEMS_KINDS: readonly BotChangeKind[] = ['items', 'workers']
 
+/** Bots whose last Items list stays after their tabs close. */
+const KEPT_ITEM_LISTS = 20
+
 /** Rows need no description, done means or close note: the opened item reads its own. */
 const SUMMARY = { summary: true }
 
@@ -50,8 +53,9 @@ const itemsRead = createBotHostRead<BotItemsRead>(
   'Failed to read bot items:',
   ITEMS_KINDS,
   ITEMS_MIN_READ_GAP_MS,
-  // Reopening shows the last list at once while it re-reads (a big bot's read takes seconds).
-  true,
+  // Reopening shows the last list at once while it re-reads (a big bot's read takes seconds), for the
+  // bots read most recently.
+  KEPT_ITEM_LISTS,
   {
     partsOf: (scope, botId) => botItemsNoticeParts(scope, botId),
     maxParts: BOT_ITEM_LIMITS.listPageMax,

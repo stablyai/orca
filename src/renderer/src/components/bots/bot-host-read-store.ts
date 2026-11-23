@@ -57,9 +57,6 @@ export type BotHostRead<T> = {
 
 export type BotHostReadState = 'loading' | 'ready' | 'failed'
 
-/** Bots whose last value a `keepLast` read keeps after their surfaces close. */
-const KEPT_BOTS = 20
-
 export function createBotHostRead<T>(
   method: string,
   pick: (result: never) => T,
@@ -67,8 +64,9 @@ export function createBotHostRead<T>(
   kinds: readonly BotChangeKind[],
   /** The least time between two reads' starts; asks in between share the one after it. */
   minIntervalMs = 0,
-  /** Keep each bot's last value after its last surface closes, shown at once when one opens again while it re-reads. */
-  keepLast = false,
+  /** Keep each bot's last value after its last surface closes, shown at once when one opens again while it re-reads.
+   *  A number keeps only that many bots', the least recently read dropped first. */
+  keepLast: boolean | number = false,
   options?: BotHostReadOptions<T>
 ): BotHostRead<T> {
   const entries = new Map<string, BotReadEntry<T>>()
@@ -130,10 +128,11 @@ export function createBotHostRead<T>(
         entry.value = value
         entry.failure = null
         if (keepLast && value) {
-          // Newest last, the oldest dropped past the bound: however many bots a session opens or deletes.
+          // Newest last, the oldest dropped past a bound: however many bots a session opens or deletes.
           lastValues.delete(key)
           lastValues.set(key, value)
-          const oldest = lastValues.size > KEPT_BOTS ? lastValues.keys().next().value : undefined
+          const bound = typeof keepLast === 'number' ? keepLast : Infinity
+          const oldest = lastValues.size > bound ? lastValues.keys().next().value : undefined
           if (oldest !== undefined) {
             lastValues.delete(oldest)
           }
