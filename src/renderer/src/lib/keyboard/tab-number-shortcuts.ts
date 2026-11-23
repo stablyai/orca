@@ -50,6 +50,23 @@ export function resolveTabNumberShortcutTarget(
   return tabById.get(orderedIds[index] ?? '') ?? null
 }
 
+/** The 1–9 digit whose tab shortcut reaches this tab (unified or entity id), if any. */
+export function tabNumberShortcutDigit(
+  state: TabNumberShortcutState,
+  tabId: string
+): string | undefined {
+  for (let index = 0; index < 9; index += 1) {
+    const target = resolveTabNumberShortcutTarget(state, index)
+    if (!target) {
+      return undefined
+    }
+    if (target.id === tabId || target.entityId === tabId) {
+      return String(index + 1)
+    }
+  }
+  return undefined
+}
+
 export function activateTabNumberShortcut(index: number): boolean {
   const store = useAppStore.getState()
   const target = resolveTabNumberShortcutTarget(store, index)

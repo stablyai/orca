@@ -10,6 +10,8 @@ import type { WorktreeCardController } from '../controller/use-worktree-card-con
 import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from '../template/default-workspace-card'
 import { renderWorkspaceCardTemplate } from '../template/render-workspace-card-template'
 import { WorktreeCardTitleStatusProvider } from './worktree-card-title-status'
+import { IndexShortcutBadge } from '@/components/ui/IndexShortcutBadge'
+import { useWorktreeShortcutDigit } from '../../worktree-list/listing/use-worktree-shortcut-digit'
 
 /** Shape, inset and transitions every sidebar card row shares; inactive rows add `worktree-sidebar-card-hover`. */
 export const WORKTREE_CARD_SURFACE_CLASS_NAME =
@@ -50,6 +52,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     contentIndent
   } = card
   const isSleeping = useIsSleepingWorktree(worktree.id)
+  const shortcutDigit = useWorktreeShortcutDigit(worktree.id)
   const geometryFor = (statusLane: boolean) =>
     getWorktreeCardFrameGeometry({ flushSurface, contentIndent, statusLane })
   const { content: templateContent, frame } = renderWorkspaceCardTemplate(
@@ -114,6 +117,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       aria-busy={isDeleting}
       style={cardStyle}
     >
+      <IndexShortcutBadge digit={shortcutDigit} />
       {isDeleting && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/50 backdrop-blur-[1px]">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-[11px] font-medium text-foreground shadow-sm border border-border/50">

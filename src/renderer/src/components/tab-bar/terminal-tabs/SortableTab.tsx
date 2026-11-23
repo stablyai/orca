@@ -43,6 +43,7 @@ import {
 } from '../session-actions/NativeChatNamingFailure'
 import { ForkMarkedName } from '../../native-chat/fork/ForkMarkedName'
 import { BOT_HOME_TAB_LABEL_CLASSES, BotHomeTabAccent } from '../../bots/home-chat/BotHomeTabAccent'
+import { TabShortcutDigitBadge } from '../strip/TabShortcutDigitBadge'
 
 export default function SortableTab({
   tab,
@@ -330,6 +331,7 @@ export default function SortableTab({
             }
           }}
         >
+          <TabShortcutDigitBadge tabId={tab.id} />
           {isEditing || menuOpen ? (
             tabRoot
           ) : (

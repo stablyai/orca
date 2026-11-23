@@ -1,5 +1,6 @@
 import { cn } from '@/lib/class-names'
 import { useTabDragActive } from '../../tab-group/drag/tab-drag-context'
+import { useTabShortcutDigit } from './use-tab-shortcut-digit'
 import {
   TERMINAL_TAB_CONTAINER_WIDTH_CLASSES,
   CONTENT_TAB_CONTAINER_WIDTH_CLASSES
@@ -19,6 +20,7 @@ export function useTabStripSlotProps(
 ): TabStripSlotProps {
   const isTabDragActive = useTabDragActive()
   const docks = isActive && !isTabDragActive
+  const showsShortcutDigit = useTabShortcutDigit(tabId) !== undefined
   return {
     className: cn(
       sizing === 'terminal'
@@ -26,7 +28,9 @@ export function useTabStripSlotProps(
         : CONTENT_TAB_CONTAINER_WIDTH_CLASSES,
       // Reserve a stable editing width without measuring or storing layout in React.
       'has-[[data-tab-rename-input]]:w-[300px] has-[[data-tab-rename-input]]:flex-none',
-      docks && 'sticky inset-x-0 z-10'
+      docks && 'sticky inset-x-0 z-10',
+      // Positions the digit badge; a docked slot is already sticky, which positions it too.
+      showsShortcutDigit && !docks && 'relative'
     ),
     'data-tab-strip-slot': tabId,
     'data-active-tab-dock': docks ? '' : undefined
