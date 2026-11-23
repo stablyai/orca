@@ -14,6 +14,7 @@ import { GoogleSignInWaiting } from '../bots/google/GoogleSignInWaiting'
 import { GoogleSignInFailed } from '../bots/google/GoogleSignInTrouble'
 import { GoogleUseAnotherAccountMenu } from '../bots/google/GoogleUseAnotherAccountMenu'
 import { startGoogleSetupInChat } from '../bots/google/setup-cards/google-setup-run-store'
+import { useGoogleNewApp } from '../bots/google/use-google-new-app'
 import { useGoogleSignIn } from '../bots/google/use-google-sign-in'
 import { useTurnOnBotGoogle } from '../bots/google/use-turn-on-bot-google'
 import type { Bot } from '../../../../shared/bot-types'
@@ -68,12 +69,11 @@ export function NativeChatGoogleOfferCard({
     }
   }
 
-  const newApp = (): void => {
-    signIn.cancel()
+  const { newApp, updateNotice } = useGoogleNewApp(botTarget(bot), signIn, () => {
     void startGoogleSetupInChat(bot, 'chat', { newApp: true }).catch((error: unknown) =>
       toast.error(error instanceof Error ? error.message : String(error))
     )
-  }
+  })
 
   const waiting = signIn.state.kind === 'waiting'
   const footer = waiting ? undefined : face.kind === 'connected' ? (
@@ -158,6 +158,7 @@ export function NativeChatGoogleOfferCard({
       ) : signIn.state.kind === 'failed' ? (
         <GoogleSignInFailed className="mt-0.5" error={signIn.state.error} onNewApp={newApp} />
       ) : null}
+      {updateNotice ? <div className="mt-1">{updateNotice}</div> : null}
       {setup.dialogs}
     </NativeChatCardFrame>
   )

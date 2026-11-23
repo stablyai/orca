@@ -28725,7 +28725,8 @@
       "useAnother": "Use another account",
       "useAnotherSignIn": "Sign in with Google",
       "useAnotherSignInDetail": "Uses your current Google app",
-      "setUpNewAppDetail": "If your current app doesn’t work for this account or organization"
+      "setUpNewAppDetail": "If your current app doesn’t work for this account or organization",
+      "updateToSetUpNewApp": "Update Orca on {{host}} to set up a new Google app."
     },
     "googleSetup": {
       "receipt": {

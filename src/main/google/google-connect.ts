@@ -5,6 +5,7 @@ import { googleClientFile, parseGoogleClientFile } from './google-client-file'
 import {
   GOOGLE_CONNECT_RUNTIME_CAPABILITY,
   GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
+  GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY,
   type GoogleAccountView,
   type GoogleClientKeyState,
   type GoogleSignInPrompt,
@@ -307,5 +308,11 @@ export function getGoogleConnect(): GoogleConnect | null {
 }
 
 export function googleRuntimeCapabilities(): string[] {
-  return installed ? [GOOGLE_CONNECT_RUNTIME_CAPABILITY, GOOGLE_TRIGGERS_RUNTIME_CAPABILITY] : []
+  return installed
+    ? [
+        GOOGLE_CONNECT_RUNTIME_CAPABILITY,
+        GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
+        GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY
+      ]
+    : []
 }

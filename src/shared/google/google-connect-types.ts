@@ -6,6 +6,8 @@ import type { GoogleService } from './google-scopes'
 export const GOOGLE_CONNECT_RUNTIME_CAPABILITY = 'google.connect.v1' as const
 /** The host checks Gmail and Calendar automation rules itself. */
 export const GOOGLE_TRIGGERS_RUNTIME_CAPABILITY = 'google.triggers.v1' as const
+/** The host starts a Google setup that makes a new app beside the one it has. */
+export const GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY = 'google.setupNewApp.v1' as const
 /** A paired window that draws Google setup's Connect card, so a server posts it instead of a line. */
 export const GOOGLE_SETUP_CARDS_CLIENT_CAPABILITY = 'google.setupCards.v1' as const
 

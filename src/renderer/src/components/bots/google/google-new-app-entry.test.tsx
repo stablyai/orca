@@ -6,6 +6,12 @@ import { GOOGLE_SIGN_IN_EXPIRED } from '../../../../../shared/google/google-conn
 import { GoogleSignInFailed } from './GoogleSignInTrouble'
 import { GoogleSignInWaiting } from './GoogleSignInWaiting'
 import { GoogleUseAnotherAccountMenu } from './GoogleUseAnotherAccountMenu'
+import { useGoogleNewApp } from './use-google-new-app'
+
+const capability = vi.hoisted(() => ({ supported: true }))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: async () => capability.supported
+}))
 
 const LINE = 'Seeing ‘Access blocked’?'
 const NEW_APP = 'Set up a new Google app'
@@ -70,5 +76,37 @@ describe('the Access blocked line', () => {
 
     rerender(<GoogleSignInFailed error="The Google sign-in failed." onNewApp={onNewApp} />)
     expect(screen.queryByText(LINE)).toBeNull()
+  })
+})
+
+describe('Set up a new Google app on a paired server', () => {
+  function NewApp({ cancel, start }: { cancel: () => void; start: () => void }): React.JSX.Element {
+    const { newApp, updateNotice } = useGoogleNewApp(
+      { kind: 'environment', environmentId: 'server-1' },
+      { cancel },
+      start
+    )
+    return (
+      <>
+        <button onClick={newApp}>{NEW_APP}</button>
+        {updateNotice}
+      </>
+    )
+  }
+
+  it('starts when the server can, and asks to update it when it can’t', async () => {
+    for (const supported of [true, false]) {
+      capability.supported = supported
+      const cancel = vi.fn()
+      const start = vi.fn()
+      render(<NewApp cancel={cancel} start={start} />)
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: NEW_APP })))
+      expect(start).toHaveBeenCalledTimes(supported ? 1 : 0)
+      expect(cancel).toHaveBeenCalledTimes(supported ? 1 : 0)
+      expect(Boolean(screen.queryByText(/^Update Orca on .+ to set up a new Google app\.$/))).toBe(
+        !supported
+      )
+      cleanup()
+    }
   })
 })

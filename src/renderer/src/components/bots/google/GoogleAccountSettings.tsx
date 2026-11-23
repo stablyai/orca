@@ -4,7 +4,6 @@ import { GoogleIcon } from '@/components/icons/GoogleIcon'
 import { Button } from '@/components/ui/button'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
-import { useAppStore } from '@/store'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { GoogleStatusView } from '../../../../../shared/google/google-connect-types'
 import type { GoogleServiceChoice } from '../../../../../shared/google/google-scopes'
@@ -16,6 +15,8 @@ import { GoogleSignInWaiting } from './GoogleSignInWaiting'
 import { GoogleSignInFailed } from './GoogleSignInTrouble'
 import { GoogleUseAnotherAccountMenu } from './GoogleUseAnotherAccountMenu'
 import { useGoogleSetupStart } from './use-google-setup-start'
+import { useGoogleHostLabel } from './use-google-host-label'
+import { useGoogleNewApp } from './use-google-new-app'
 import {
   importGoogleApp,
   refreshGoogle,
@@ -78,18 +79,23 @@ function NoApp({
   )
 }
 
-/** Set up a new Google app, from this panel's sign-in; the panel's own sign-in stops first. */
+/** Set up a new Google app from this panel, in the host's last-visited agent's chat. */
 function useNewAppSetup(
   target: RuntimeClientTarget,
   signIn: ReturnType<typeof useGoogleSignIn>
-): { newApp: () => void; dialog: React.ReactNode } {
+): { newApp: () => void; notices: React.ReactNode } {
   const setup = useGoogleSetupStart(getRuntimeTargetHostId(target))
+  const { newApp, updateNotice } = useGoogleNewApp(target, signIn, () =>
+    setup.start({ newApp: true })
+  )
   return {
-    newApp: () => {
-      signIn.cancel()
-      setup.start({ newApp: true })
-    },
-    dialog: setup.dialog
+    newApp,
+    notices: (
+      <>
+        {updateNotice}
+        {setup.dialog}
+      </>
+    )
   }
 }
 
@@ -125,7 +131,7 @@ function ConnectPanel({ target }: { target: RuntimeClientTarget }): React.JSX.El
           </Button>
         </div>
       )}
-      {setup.dialog}
+      {setup.notices}
     </div>
   )
 }
@@ -211,22 +217,9 @@ function AccountList({
             })
           : t('bots.google.turnOnForBot', 'Turn Google on for a bot from the bot’s Connectors.')}
       </p>
-      {setup.dialog}
+      {setup.notices}
     </div>
   )
-}
-
-/** Where the Google sign-ins live: this computer, or the paired server Settings points at. */
-function useHostLabel(target: RuntimeClientTarget): string {
-  const t = useTranslate()
-  const name = useAppStore((state) =>
-    target.kind === 'environment'
-      ? (state.runtimeEnvironments.find((entry) => entry.id === target.environmentId)?.name ?? null)
-      : null
-  )
-  return target.kind === 'local'
-    ? t('bots.google.thisComputer', 'this computer')
-    : (name ?? t('bots.google.thisServer', 'this server'))
 }
 
 /** Settings › Bots › Google: the team's app on this host, the accounts signed in, and their services. */
@@ -237,7 +230,7 @@ export function GoogleAccountSettings({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const view = useGoogleHost(target)
-  const host = useHostLabel(target)
+  const host = useGoogleHostLabel(target)
   const file = useGoogleClientFile(async (text) => {
     await importGoogleApp(target, text)
   })
