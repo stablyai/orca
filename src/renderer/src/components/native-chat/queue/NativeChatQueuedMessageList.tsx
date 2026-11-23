@@ -212,7 +212,10 @@ export function NativeChatQueuedMessageList({
             <ul
               ref={listRef}
               id={listId}
-              onFocus={() => setListFocused(true)}
+              // A tap or click on a row's text focuses the row itself (to reveal its tools on touch); only a control holds the list open.
+              onFocus={(event) => {
+                setListFocused(!(event.target instanceof HTMLLIElement))
+              }}
               onBlur={leaveList}
               // Hidden, not unmounted: an open edit keeps its typing while the list is collapsed.
               hidden={!expanded}
