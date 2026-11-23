@@ -47,7 +47,10 @@ export class ProviderRelaySpool {
   private memoryBytes = 0
   private mode: SpoolMode = 'detached'
   private file: FileHandle | null = null
-  private fileBytes = 0
+  /** Packed [seq, bytes] per file record, so back-pressure counts only what is still unacked. */
+  private fileIndex: number[] = []
+  private fileIndexHead = 0
+  private fileUnackedBytes = 0
   private fileLastSeq = 0
   /** The not-yet-started write, so appends coalesce without reordering around a removal. */
   private queuedWrite: { chunk: string } | null = null
@@ -116,6 +119,20 @@ export class ProviderRelaySpool {
       this.ackedHeldBytes = 0
       this.memory = this.memory.slice(this.memoryHead)
       this.memoryHead = 0
+    }
+    while (
+      this.fileIndexHead < this.fileIndex.length &&
+      this.fileIndex[this.fileIndexHead] <= this.acked
+    ) {
+      this.fileUnackedBytes -= this.fileIndex[this.fileIndexHead + 1]
+      this.fileIndexHead += 2
+    }
+    if (
+      this.fileIndexHead >= 2 * MEMORY_COMPACT_MIN &&
+      this.fileIndexHead * 2 >= this.fileIndex.length
+    ) {
+      this.fileIndex = this.fileIndex.slice(this.fileIndexHead)
+      this.fileIndexHead = 0
     }
     if (this.fileLastSeq > 0 && this.acked >= this.fileLastSeq) {
       this.removeFile()
@@ -194,7 +211,9 @@ export class ProviderRelaySpool {
   /** Pause at the cap, resume below half of it, so acks near the cap don't flap the agent's stdout. */
   private updatePressure(): void {
     const [held, cap] =
-      this.mode === 'detached' ? [this.fileBytes, this.fileCap] : [this.memoryBytes, this.memoryCap]
+      this.mode === 'detached'
+        ? [this.fileUnackedBytes, this.fileCap]
+        : [this.memoryBytes, this.memoryCap]
     const paused = !this.disposed && (this.paused ? held >= cap / 2 : held >= cap)
     if (paused !== this.paused) {
       this.paused = paused
@@ -207,7 +226,9 @@ export class ProviderRelaySpool {
       return
     }
     const encoded = `${JSON.stringify(record)}\n`
-    this.fileBytes += Buffer.byteLength(encoded)
+    const bytes = Buffer.byteLength(encoded)
+    this.fileUnackedBytes += bytes
+    this.fileIndex.push(record.seq, bytes)
     this.fileLastSeq = record.seq
     if (this.queuedWrite) {
       this.queuedWrite.chunk += encoded
@@ -300,7 +321,9 @@ export class ProviderRelaySpool {
       this.queuedWrite.chunk = ''
       this.queuedWrite = null
     }
-    this.fileBytes = 0
+    this.fileUnackedBytes = 0
+    this.fileIndex = []
+    this.fileIndexHead = 0
     this.fileLastSeq = 0
     this.io = this.io
       .then(async () => {

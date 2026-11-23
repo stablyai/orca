@@ -19,7 +19,8 @@ type RelayOptions = {
   chatKey: string
   managed: ManagedProviderProcess
   spoolPath: string
-  onExit: () => void
+  /** The agent exited or its stdout ended: the record may now be finished or expire. */
+  onSettled: () => void
   /** No client is attached anymore; an ended relay may now expire. */
   onDetached: () => void
 }
@@ -51,7 +52,7 @@ export class ProviderRelay {
   private stdoutEnded = false
   private exitAnnounced = false
   private spoolPaused = false
-  private pendingPaused = false
+  private readingPaused = false
 
   constructor(private readonly options: RelayOptions) {
     this.relayId = options.relayId
@@ -75,12 +76,16 @@ export class ProviderRelay {
       if (!this.live && !this.attachment) {
         this.spool.closeHandle()
       }
+      // Exit usually lands first; the ended relay is only settled once its output has ended too.
+      options.onSettled()
     })
     stdout.on('error', () => {})
     options.managed.child.stdin.on('error', () => {})
     options.managed.onExit((exit) => {
       this.exitStatus = { code: exit.code, signal: exit.signal }
       this.pending.clear()
+      // Held requests no longer hold output back; the tail and stdout end must still drain.
+      this.updateReading()
       // A processless or lost-outcome exit may never end stdout; it has nothing more to say.
       if (exit.processless) {
         this.stdoutEnded = true
@@ -89,7 +94,7 @@ export class ProviderRelay {
       if (!this.attachment) {
         this.spool.closeHandle()
       }
-      options.onExit()
+      options.onSettled()
     })
   }
 
@@ -119,13 +124,18 @@ export class ProviderRelay {
     }
     this.attachment = attachment
     stream.socket.once('close', attachment.onClose)
+    // Held requests go first, as events, so no reply line has to carry them all at once.
+    const pending = this.pending.records()
+    for (const record of pending) {
+      this.sendLine('relayPending', record)
+    }
     const replayThroughSeq = await this.spool.attach(fromSeq)
     if (this.attachment === attachment && this.exitAnnounced) {
       this.sendExit()
     }
     return {
       replayThroughSeq,
-      pending: this.pending.records(),
+      pending: pending.map((record) => record.seq),
       maxClientRequestId: this.pending.maxClientRequestId,
       initializeResult: this.pending.initializeResult,
       stderrTail: this.options.managed.stderrTail(),
@@ -220,11 +230,9 @@ export class ProviderRelay {
 
   /** Stdout pauses while the spool is at its cap or the agent is owed too many answers. */
   private updateReading(): void {
-    const pendingPaused = this.pending.full
-    const wasPaused = this.spoolPaused || this.pendingPaused
-    this.pendingPaused = pendingPaused
-    const paused = this.spoolPaused || pendingPaused
-    if (paused !== wasPaused) {
+    const paused = this.spoolPaused || this.pending.full
+    if (paused !== this.readingPaused) {
+      this.readingPaused = paused
       const { stdout } = this.options.managed.child
       if (paused) {
         stdout.pause()
@@ -263,21 +271,24 @@ export class ProviderRelay {
   }
 
   private deliver(record: ProviderRelayRecord): void {
-    const { seq, line } = record
+    this.sendLine('relayData', record)
+  }
+
+  private sendLine(event: 'relayData' | 'relayPending', { seq, line }: ProviderRelayRecord): void {
     if (line.length <= EVENT_PIECE_CHARS) {
-      this.send(this.dataEvent(seq, line))
+      this.send(this.lineEvent(event, seq, line))
       return
     }
     for (let offset = 0; offset < line.length; offset += EVENT_PIECE_CHARS) {
       const end = offset + EVENT_PIECE_CHARS
-      this.send(this.dataEvent(seq, line.slice(offset, end), end < line.length))
+      this.send(this.lineEvent(event, seq, line.slice(offset, end), end < line.length))
     }
   }
 
-  private dataEvent(seq: number, line: string, more = false) {
+  private lineEvent(event: 'relayData' | 'relayPending', seq: number, line: string, more = false) {
     return {
       type: 'event',
-      event: 'relayData',
+      event,
       sessionId: this.relayId,
       payload: more ? { seq, line, more: true } : { seq, line }
     }

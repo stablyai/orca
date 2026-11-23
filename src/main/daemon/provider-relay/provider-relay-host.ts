@@ -121,7 +121,7 @@ export class ProviderRelayHost {
       chatKey,
       managed,
       spoolPath: join(directory, `${relayId}.ndjson`),
-      onExit: () => {
+      onSettled: () => {
         this.removeIfFinished(relay)
         this.expireWhenAbandoned(relay)
         this.options.onLiveCountChanged()
@@ -132,8 +132,7 @@ export class ProviderRelayHost {
     await managed.child.ready?.catch(() => {})
     const pid = managed.child.pid
     if (pid === undefined) {
-      this.relays.delete(relayId)
-      await relay.dispose()
+      this.remove(relay)
       const { error } = failure
       return {
         spawnError: {

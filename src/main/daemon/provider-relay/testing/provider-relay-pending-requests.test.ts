@@ -16,11 +16,18 @@ function fakeManaged(): {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ProviderRelay reads only these members of the managed process.
   const managed = {
     child: { stdout, stdin, pid: 4242 },
-    onExit: () => {},
+    onExit: (listener: typeof onExit) => {
+      onExit = listener
+    },
     stderrTail: () => '',
     close: async () => ({ root: 'exited', tree: null })
   } as unknown as ManagedProviderProcess
-  return { managed, stdout, stdin }
+  return {
+    managed,
+    stdout,
+    stdin,
+    exit: () => onExit({ code: 0, signal: null, processless: false })
+  }
 }
 
 const tick = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
@@ -41,7 +48,7 @@ describe('provider relay pending requests', () => {
       chatKey: 'chat',
       managed,
       spoolPath: join(dir, 'r-1.ndjson'),
-      onExit: () => {},
+      onSettled: () => {},
       onDetached: () => {}
     })
     const stream = { socket: new PassThrough() }
@@ -59,13 +66,57 @@ describe('provider relay pending requests', () => {
     await relay.detach()
 
     const reattached = await relay.attach('app-2', stream, 3)
-    expect(reattached.pending.map((record) => record.seq)).toEqual([2, 3])
+    expect(reattached.pending).toEqual([2, 3])
     expect(reattached.maxClientRequestId).toBe(41)
 
-    relay.write('{"id":0,"result":{"decision":"accept"}}\n')
+    stdout.write('{"method":"serverRequest/resolved","params":{"threadId":"t","requestId":0}}\n')
+    await tick()
+    expect(relay.info().pendingCount).toBe(1)
     relay.write(
       '{"type":"control_response","response":{"subtype":"success","request_id":"perm-1"}}\n'
     )
     expect(relay.info().pendingCount).toBe(0)
+  })
+
+  it('pauses an agent owed 256 answers, and still drains its tail once it exits', async () => {
+    const { managed, stdout, exit } = fakeManaged()
+    const relay = new ProviderRelay({
+      relayId: 'r-2',
+      chatKey: 'chat',
+      managed,
+      spoolPath: join(dir, 'r-2.ndjson'),
+      onSettled: () => {},
+      onDetached: () => {}
+    })
+    await relay.attach('app-1', { socket: new PassThrough() }, 0)
+    for (let id = 0; id < 256; id++) {
+      stdout.write(`{"id":${id},"method":"session/request_permission","params":{}}\n`)
+    }
+    await tick()
+    expect(relay.info().pendingCount).toBe(256)
+    expect(stdout.isPaused()).toBe(true)
+
+    exit()
+    expect(stdout.isPaused()).toBe(false)
+  })
+
+  it('pauses the agent once a megabyte sits unacked, and resumes once acked', async () => {
+    const { managed, stdout } = fakeManaged()
+    const relay = new ProviderRelay({
+      relayId: 'r-3',
+      chatKey: 'chat',
+      managed,
+      spoolPath: join(dir, 'r-3.ndjson'),
+      onSettled: () => {},
+      onDetached: () => {}
+    })
+    await relay.attach('app-1', { socket: new PassThrough() }, 0)
+    for (let i = 0; i < 1100; i++) {
+      stdout.write(`${'x'.repeat(1000)}\n`)
+    }
+    await tick()
+    expect(stdout.isPaused()).toBe(true)
+    relay.ack(relay.info().nextSeq - 1)
+    expect(stdout.isPaused()).toBe(false)
   })
 })

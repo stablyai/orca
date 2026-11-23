@@ -40,7 +40,8 @@ export type ProviderRelayRecord = { seq: number; line: string }
 export type ProviderRelayAttachResult = {
   /** Spool records after `fromSeq` arrive as `relayData` events up to and including this seq. */
   replayThroughSeq: number
-  pending: ProviderRelayRecord[]
+  /** Seqs of unanswered agent requests; their lines arrive first as `relayPending` events. */
+  pending: number[]
   maxClientRequestId: number | null
   initializeResult: string | null
   stderrTail: string
@@ -64,7 +65,8 @@ export type ProviderRelayListResult = { relays: ProviderRelayInfo[] }
 /** A line longer than one frame piece arrives as consecutive pieces of one seq; `more` marks all but the last. */
 export type ProviderRelayDataEvent = {
   type: 'event'
-  event: 'relayData'
+  /** `relayPending` re-sends a held request on attach; `relayData` is the spool, in seq order. */
+  event: 'relayData' | 'relayPending'
   sessionId: string
   payload: { seq: number; line: string; more?: true }
 }

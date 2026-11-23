@@ -26,6 +26,8 @@ const MAX_PENDING_REQUESTS = 256
 const MAX_PENDING_CHARS = 8 * 1024 * 1024
 /** An initialize answer comes first; past this many agent lines nothing more is parsed for it. */
 const INITIALIZE_WINDOW_LINES = 256
+/** Codex resolves a server request elsewhere (another client, a timeout) and says so with this. */
+const RESOLVED_METHOD = 'serverRequest/resolved'
 
 function controlId(value: unknown): string | null {
   return typeof value === 'string' ? `c:${value}` : null
@@ -80,7 +82,8 @@ export class ProviderRelayPendingRequests {
 
   observeAgentLine(record: ProviderRelayRecord): void {
     const { line } = record
-    const maybeRpcRequest = line.includes('"method"') && line.includes('"id"')
+    const maybeRpcRequest =
+      line.includes('"method"') && (line.includes('"id"') || line.includes(RESOLVED_METHOD))
     const maybeControl = line.includes('control_')
     const awaitingInitialize =
       this.initializeKey !== null &&
@@ -91,6 +94,13 @@ export class ProviderRelayPendingRequests {
     }
     const message = parseObject(line)
     if (!message) {
+      return
+    }
+    if (message.method === RESOLVED_METHOD) {
+      const key = isObject(message.params) ? rpcId(message.params.requestId) : null
+      if (key) {
+        this.release(key)
+      }
       return
     }
     if (typeof message.method === 'string') {
