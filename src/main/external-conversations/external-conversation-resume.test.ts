@@ -1,9 +1,3 @@
-import { readdirSync } from 'node:fs'
-import { join } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
-import SyncDatabase from '../sqlite/sync-database'
-import { readJournalDomainQueueFailure } from '../native-chat/agent-session-journal/journal-domain-queue-failures'
-import { readJournalDomainQueuePauseContext } from '../native-chat/agent-session-journal/journal-domain-queue-pauses'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   HOST_TEST_SESSION as SESSION,
@@ -36,77 +30,6 @@ const resume = (chat: QueuedMessageTestRig, installed = true) =>
   resumeRefusal({ resume: true }, hostOf(chat, installed), SESSION)
 const NOT_FAILED = { outcome: 'refused', reason: 'not_failed' }
 
-// TEMP CI debug: the journal rows the failure-holds read uses.
-function journalRows(root: string): unknown {
-  const files: string[] = []
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const path = join(dir, entry.name)
-      if (entry.isDirectory()) {
-        walk(path)
-      } else if (/\.(sqlite|db)$/.test(entry.name)) {
-        files.push(path)
-      }
-    }
-  }
-  walk(root)
-  return files.map((file) => {
-    try {
-      const db = new DatabaseSync(file, { readOnly: true })
-      const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all()
-      if (!tables.some((t) => t.name === 'journal_items')) {
-        db.close()
-        return { file: file.slice(root.length) }
-      }
-      const items = db
-        .prepare(
-          `SELECT epoch, item_id, sequence, sequence_index, turn_marker, hidden, queue_command_turn,
-             queue_failed_outcome, queue_failed_at, queue_failure_witnessed_through,
-             queue_failure_report_turn_item_id FROM journal_items ORDER BY sequence, sequence_index`
-        )
-        .all()
-      const head = db.prepare('SELECT * FROM journal_chat_state').all()
-      const version = db.prepare('SELECT sqlite_version() AS v').get()
-      db.close()
-      const sync = new SyncDatabase(file, { readonly: true })
-      const target = { sessionId: SESSION, epoch: String(head[0]?.epoch) }
-      const product = {
-        failedAt: readJournalDomainQueueFailure(sync, target),
-        pauses: readJournalDomainQueuePauseContext(sync, target, null, []).pauses
-      }
-      sync.close()
-      return { file: file.slice(root.length), version, product, items, head }
-    } catch (error) {
-      return { file: file.slice(root.length), error: String(error) }
-    }
-  })
-}
-
-// What the chat holds, for a failure message.
-async function seen(chat: QueuedMessageTestRig): Promise<string> {
-  const holds = await (
-    await chat.host.conversation(SESSION)
-  ).journal.queuedMessages
-    .failureHolds()
-    .catch((error: unknown) => String(error))
-  const work = await chat.host.currentWork(SESSION)
-  const pauses = await (
-    await chat.host.conversation(SESSION)
-  ).journal.queuedMessages
-    .pauses()
-    .catch((error: unknown) => String(error))
-  const page = await chat.host.history({ sessionId: SESSION, direction: 'tail' })
-  return JSON.stringify({
-    rows: process.env.CI ? journalRows(chat.root) : undefined,
-    now: Date.now(),
-    holds,
-    pauses,
-    working: work?.working(),
-    prompt: work?.hasActionablePrompt(),
-    items: page.ok ? page.page.items.map((item) => item.body) : page
-  })
-}
-
 async function failedTurn(chat: QueuedMessageTestRig): Promise<void> {
   const id = await chat.workingSend()
   const turnId = `turn-${id}`
@@ -121,7 +44,7 @@ async function failedTurn(chat: QueuedMessageTestRig): Promise<void> {
   chat.providerEvents().publish()
   // The queue's failure read is the journal database's: let the turn's write land there first.
   await chat.providerEvents().written?.()
-  await eventually(async () => expect(await resume(chat), await seen(chat)).toBeNull())
+  await eventually(async () => expect(await resume(chat)).toBeNull())
 }
 
 describe('resumeRefusal', () => {

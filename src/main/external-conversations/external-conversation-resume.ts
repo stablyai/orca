@@ -18,7 +18,9 @@ export async function chatAwaitsResume(
     if (work && (work.working() || work.hasActionablePrompt())) {
       return false
     }
-    return await (await chat.conversation(sessionId)).journal.queuedMessages.failureHolds()
+    // Any failed pause, including one that lets other agents' mail run past it (#47220).
+    const pauses = await (await chat.conversation(sessionId)).journal.queuedMessages.pauses()
+    return pauses.some((pause) => pause.reason === 'failed')
   } catch {
     return false
   }
