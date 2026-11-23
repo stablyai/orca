@@ -20,6 +20,8 @@ export class ClaudeTurnLaunches {
   /** Root inputs the stream showed mid-turn, and how many of those the host named as steers. */
   private inputsSeen = 0
   private steersNamed = 0
+  /** A prompt was answered: from Slack or Orca, the adapter can't tell, so it's no one's input. */
+  private answered = false
   /** Runs this turn launched: their finish is its own work, not an input. */
   private readonly launched = new Set<string>()
 
@@ -30,7 +32,14 @@ export class ClaudeTurnLaunches {
     this.unnamed = this.sends.length + this.runs.length === 0
     this.inputsSeen = 0
     this.steersNamed = 0
+    this.answered = false
     this.launched.clear()
+  }
+
+  /** Someone answered the turn's question or approval. */
+  promptAnswered(): void {
+    this.answered = true
+    this.unnamed = true
   }
 
   /** The host matched a send Claude read into the running turn. */
@@ -45,7 +54,7 @@ export class ClaudeTurnLaunches {
 
   /** A message was read into the turn: a wake-up then is no longer only its runs'. */
   get messaged(): boolean {
-    return this.sends.length > 0 || this.inputsSeen > 0 || this.steersNamed > 0
+    return this.sends.length > 0 || this.inputsSeen > 0 || this.steersNamed > 0 || this.answered
   }
 
   /** One provider frame inside the open turn; true when it records a launch on `turn`. */
@@ -63,10 +72,7 @@ export class ClaudeTurnLaunches {
       frame.type === 'system' && taskId(frame) ? taskAliasId(frame.tool_use_id) : undefined
     // A subagent's own task reports to it; any other finish, named or not, is the root's input.
     if (frame.type === 'system' && frame.subtype === 'task_notification' && taskId(frame)) {
-      if (!run || calls.childOwnerRef(run) === null) {
-        this.finished(run)
-      }
-      return false
+      return !run || calls.childOwnerRef(run) === null ? this.finished(run, turn) : false
     }
     if (frame.subtype !== 'task_started' || !run || !calls.has(run)) {
       return false
@@ -80,16 +86,28 @@ export class ClaudeTurnLaunches {
     return true
   }
 
-  /** A run finished into the open turn: an input, unless the turn launched it itself. */
-  private finished(run: string | undefined): void {
-    if (run && (this.launched.has(run) || this.runs.includes(run))) {
-      return
+  /** A run finished into the open turn: an input, unless the turn launched it itself (then no
+   *  wake-up will come for it, so its launch leaves the record). True when it changed `turn`. */
+  private finished(run: string | undefined, turn: { launches?: Launch[] }): boolean {
+    if (run && this.launched.has(run)) {
+      const launches = turn.launches?.filter((launch) => launch.run !== run)
+      const changed = launches?.length !== turn.launches?.length
+      if (launches?.length) {
+        turn.launches = launches
+      } else {
+        delete turn.launches
+      }
+      return changed
+    }
+    if (run && this.runs.includes(run)) {
+      return false
     }
     if (run && this.runs.length < MAX_INPUTS) {
       this.runs.push(run)
     } else {
       this.unnamed = true
     }
+    return false
   }
 }
 

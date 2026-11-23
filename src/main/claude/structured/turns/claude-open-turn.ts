@@ -69,7 +69,7 @@ export class ClaudeOpenTurn {
   /** The ending of a step a steer cut short, until the steer's own cycle starts. */
   private steerHandoffEnd: ClaudeTurnEnd | null = null
   private startedSend: ClaudeStartedSend | null = null
-  readonly inputs = new ClaudeTurnInputs()
+  readonly inputs = new ClaudeTurnInputs((turn) => this.publish(turn))
   private readonly opener: (
     frame: Record<string, unknown>,
     source: ClaudeTurnSource | null,
@@ -166,11 +166,14 @@ export class ClaudeOpenTurn {
     }
   }
 
+  /** Someone answered the running turn's question or approval. */
+  promptAnswered(): void {
+    this.inputs.promptAnswered(this.current)
+  }
+
   /** The host matched a send Claude read into the running turn. */
   steered(clientMessageId: string | undefined): void {
-    if (this.inputs.steered(clientMessageId, this.current)) {
-      this.publish(this.current!)
-    }
+    this.inputs.steered(clientMessageId, this.current)
   }
 
   /** Supersede the previous turn before opening another; a missing result must not leave old work live. */

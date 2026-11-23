@@ -61,6 +61,7 @@ export type ClaudeJournalTranslator = {
     | 'confirmProviderCycle'
     | 'identity'
     | 'steered'
+    | 'promptAnswered'
   >
   readonly openTurnHasInputWork: boolean
   flush: () => void

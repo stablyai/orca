@@ -184,3 +184,47 @@ it('drops a wake-up’s names when an image someone sent reaches it', () => {
   const turns = replay({ 18: (send) => send(image) })
   expect(turns.at(-1)?.wokenBy).toBeUndefined()
 })
+
+/** A task finishing, as the SDK reports it. */
+const finish = (taskId: string, run: string): Record<string, unknown> => ({
+  type: 'system',
+  subtype: 'task_notification',
+  task_id: taskId,
+  tool_use_id: run,
+  status: 'completed',
+  session_id: SESSION,
+  uuid: `finish-${run}`
+})
+
+it('stamps nothing after a prompt is answered, and a wake-up whose prompt is answered names nothing', () => {
+  const launched = replay({ 3: (_send, t) => t.turnCycle.promptAnswered() })
+  expect(launched.some((row) => row.launches)).toBe(false)
+  const woken = replay({ 18: (_send, t) => t.turnCycle.promptAnswered() })
+  expect(woken.at(-1)?.wokenBy).toBeUndefined()
+})
+
+it('drops a launch whose run finishes inside the turn that launched it', () => {
+  const turns = replay({ 4: (send) => send(finish('abf3e75543ca0d2a2', RUN)) })
+  const launching = turns.find((row) => row.launches)?.turnId
+  expect(launching).toBeDefined()
+  expect(turns.findLast((row) => row.turnId === launching)?.launches).toBeUndefined()
+})
+
+it('keeps a subagent’s own finish out of a wake-up’s names', () => {
+  const turns = replay({
+    5: (send) =>
+      send({
+        type: 'assistant',
+        message: {
+          id: 'msg_child',
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'toolu_child', name: 'Bash', input: { command: 'ls' } }]
+        },
+        parent_tool_use_id: RUN,
+        session_id: SESSION,
+        uuid: 'child-assistant'
+      }),
+    18: (send) => send(finish('bchild1', 'toolu_child'))
+  })
+  expect(turns.at(-1)?.wokenBy).toEqual([RUN])
+})

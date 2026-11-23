@@ -3,6 +3,7 @@
 // names those runs, and a run that finishes into that turn joins them, so a wake-up that folds in
 // another run's finish stops counting as the first run's alone.
 import { taskAliasId, taskId } from '../../background-tasks/claude-background-task-frames'
+import type { ClaudeToolOriginRegistry } from '../../subagents/claude-tool-origin-registry'
 
 const MAX_WOKEN_BY = 16
 
@@ -16,7 +17,11 @@ export class ClaudeTurnWakes {
 
   /** Reads one provider frame; true when it changed the open turn's names (it names none once a
    *  finish into it can't be named). */
-  observe(frame: Record<string, unknown>, turn: { wokenBy?: string[] } | null): boolean {
+  observe(
+    frame: Record<string, unknown>,
+    turn: { wokenBy?: string[] } | null,
+    calls: Pick<ClaudeToolOriginRegistry, 'childOwnerRef'>
+  ): boolean {
     if (frame.type !== 'system' || !taskId(frame)) {
       return false
     }
@@ -32,7 +37,9 @@ export class ClaudeTurnWakes {
       return false
     }
     const { wokenBy } = turn
-    if (!wokenBy || (run && (wokenBy.includes(run) || this.startedInTurn.has(run)))) {
+    // A subagent's own task reports to it, not to the root's wake-up.
+    const ownRun = run && (wokenBy?.includes(run) || this.startedInTurn.has(run))
+    if (!wokenBy || ownRun || (run && calls.childOwnerRef(run) !== null)) {
       return false
     }
     if (run && wokenBy.length < MAX_WOKEN_BY) {

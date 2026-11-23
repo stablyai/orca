@@ -11,6 +11,9 @@ export class ClaudeTurnInputs {
   private readonly wakes = new ClaudeTurnWakes()
   private readonly launches = new ClaudeTurnLaunches()
 
+  /** `republish` rewrites an open turn's row this changed outside a frame. */
+  constructor(private readonly republish: (turn: ClaudeCurrentTurn) => void) {}
+
   /** The turn about to open, naming the runs that woke it when Claude opened it, not a send. */
   opening(turn: ClaudeCurrentTurn, send: string | undefined): ClaudeCurrentTurn {
     return { ...turn, ...this.wakes.take(!send), ...(send ? { openedBy: send } : {}) }
@@ -27,15 +30,25 @@ export class ClaudeTurnInputs {
     if (!turn && !opensTurn && isRootInput(frame)) {
       this.wakes.messaged()
     }
-    const named = this.wakes.observe(frame, turn)
+    const named = this.wakes.observe(frame, turn, this.toolOrigins)
     const launched = !!turn && this.launches.observe(frame, opensTurn, this.toolOrigins, turn)
     return !!turn && (named || launched || this.unwoken(turn))
   }
 
-  /** The host matched a send Claude read into the running turn; true when it changed its row. */
-  steered(clientMessageId: string | undefined, turn: ClaudeCurrentTurn | null): boolean {
+  /** The host matched a send Claude read into the running turn. */
+  steered(clientMessageId: string | undefined, turn: ClaudeCurrentTurn | null): void {
     this.launches.steered(clientMessageId)
-    return !!turn && this.unwoken(turn)
+    if (turn && this.unwoken(turn)) {
+      this.republish(turn)
+    }
+  }
+
+  /** Someone answered the turn's question or approval. */
+  promptAnswered(turn: ClaudeCurrentTurn | null): void {
+    this.launches.promptAnswered()
+    if (turn && this.unwoken(turn)) {
+      this.republish(turn)
+    }
   }
 
   /** A message read into a wake-up: it names no runs from then on. */

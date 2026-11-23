@@ -137,6 +137,7 @@ export async function answerClaudePrompt(
     throw new Error(`claude is no longer waiting on ${claim.itemId}`)
   }
   session.prompts.forget(claim.found.prompt)
+  session.translator?.turnCycle.promptAnswered()
   claim.found.prompt.settle(reply)
   session.translator?.journalPrompts.resolve(claim.found.prompt.promptKey)
 }
