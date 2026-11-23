@@ -92,6 +92,8 @@ export const BotTidyUpViewSchema = z.object({
   running: z.boolean(),
   /** Why it turned itself off, when it did after failing too often; null otherwise. */
   turnedOff: z.string().nullable(),
+  /** `turnedOff` by code; read with `readBotFailure`. */
+  turnedOffFailure: z.unknown().optional(),
   /** The last run's failure, when it failed. */
   error: z.string().nullable(),
   /** `error` by code, for clients to translate; read with `readBotFailure`. */

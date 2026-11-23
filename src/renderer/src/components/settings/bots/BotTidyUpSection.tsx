@@ -75,7 +75,7 @@ export function BotTidyUpSection({
             ? t(
                 'settings.bots.tidyUp.turnedOff',
                 'Turned off after 10 tidy-ups in a row failed. Last: {{error}}',
-                { error: view.turnedOff }
+                { error: botCodedText(view.turnedOff, view.turnedOffFailure, t) }
               )
             : t(
                 'settings.bots.tidyUp.onDescription',

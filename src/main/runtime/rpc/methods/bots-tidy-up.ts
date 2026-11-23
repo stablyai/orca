@@ -41,11 +41,13 @@ export function botTidyUpView(context: RpcContext, botId: string): BotTidyUpView
     undone = known === true
   }
   const error = lastRun?.endedAt !== undefined ? (lastRun.error ?? null) : null
+  const turnedOff = tidyUpTurnedOff(state, bot)
   return {
     setting,
     last: state.last ? { ...state.last, undone } : null,
     running: lastRun !== undefined && lastRun.endedAt === undefined,
-    turnedOff: tidyUpTurnedOff(state, bot),
+    turnedOff,
+    ...(turnedOff ? { turnedOffFailure: botRunFailure(turnedOff) } : {}),
     error,
     ...(error ? { failure: botRunFailure(error) } : {})
   }
