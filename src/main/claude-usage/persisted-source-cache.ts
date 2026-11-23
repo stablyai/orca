@@ -17,7 +17,7 @@ import {
   type UsageCacheSplitResult,
   type UsageSourceCacheRef
 } from '../usage/cache/usage-source-cache-file'
-import { retainUsageSourcesForWorktrees } from '../usage/worktree-attribution/usage-attribution-invalidation'
+import { reattributeUsageSourcesForWorktrees } from '../usage/worktree-attribution/usage-attribution-invalidation'
 
 const SOURCE_DOMAIN = 'claude-usage-sources-v1'
 
@@ -51,7 +51,7 @@ export async function readClaudeUsageSourceCache(
       return { sources: [] }
     }
     const sameWorktrees = parsed.worktreeFingerprint === cacheRef.worktreeFingerprint
-    const sources = await retainUsageSourcesForWorktrees(
+    const sources = await reattributeUsageSourcesForWorktrees(
       parsed.sources,
       typeof parsed.worktreeFingerprint === 'string' ? parsed.worktreeFingerprint : null,
       cacheRef.worktreeFingerprint

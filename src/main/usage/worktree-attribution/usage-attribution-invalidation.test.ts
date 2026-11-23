@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { retainUsageSourcesForWorktrees } from './usage-attribution-invalidation'
+import { reattributeUsageSourcesForWorktrees } from './usage-attribution-invalidation'
 import { getUsageWorktreeFingerprint } from './usage-worktree-refs'
 
 const fingerprint = (worktrees: { worktreeId: string; path: string; displayName: string }[]) =>
@@ -11,7 +11,7 @@ const source = (name: string, projectKey: string, worktreeId: string | null = nu
   sessions: [{ locationBreakdown: [{ locationKey: projectKey, worktreeId }] }]
 })
 
-describe('retainUsageSourcesForWorktrees', () => {
+describe('reattributeUsageSourcesForWorktrees', () => {
   const main = { worktreeId: 'repo::/r', path: '/r', displayName: 'r' }
   const feature = { worktreeId: 'repo::/w/feature', path: '/w/feature', displayName: 'feature' }
   const sources = [
@@ -22,7 +22,11 @@ describe('retainUsageSourcesForWorktrees', () => {
     source('outside', 'cwd:/elsewhere'),
     source('none', 'unscoped')
   ]
-  const names = (retained: typeof sources) => retained.map((s) => s.path)
+  // Affected sources stay (ownership checks need them) but are marked to be re-read.
+  const names = (retained: typeof sources) => {
+    expect(retained.map((s) => s.path)).toEqual(sources.map((s) => s.path))
+    return retained.filter((s) => !('mtimeMs' in s && s.mtimeMs === -1)).map((s) => s.path)
+  }
 
   it('re-reads only sources a worktree change can re-attribute', async () => {
     const before = fingerprint([main, feature])
@@ -31,7 +35,7 @@ describe('retainUsageSourcesForWorktrees', () => {
       feature,
       { worktreeId: 'repo::/w/new', path: '/w/new', displayName: 'new' }
     ])
-    expect(names(await retainUsageSourcesForWorktrees(sources, before, added))).toEqual([
+    expect(names(await reattributeUsageSourcesForWorktrees(sources, before, added))).toEqual([
       'main',
       'feature',
       'sibling',
@@ -39,7 +43,7 @@ describe('retainUsageSourcesForWorktrees', () => {
       'none'
     ])
     const renamed = fingerprint([main, { ...feature, displayName: 'renamed' }])
-    expect(names(await retainUsageSourcesForWorktrees(sources, before, renamed))).toEqual([
+    expect(names(await reattributeUsageSourcesForWorktrees(sources, before, renamed))).toEqual([
       'main',
       'inside-new',
       'sibling',
@@ -51,15 +55,15 @@ describe('retainUsageSourcesForWorktrees', () => {
       feature,
       { worktreeId: 'repo::/r/sub', path: '/r/sub', displayName: 'sub' }
     ])
-    expect(names(await retainUsageSourcesForWorktrees(sources, before, nested))).not.toContain(
+    expect(names(await reattributeUsageSourcesForWorktrees(sources, before, nested))).not.toContain(
       'main'
     )
   })
 
   it('drops every source when the cached fingerprint is unreadable', async () => {
     const current = fingerprint([main])
-    expect(await retainUsageSourcesForWorktrees(sources, null, current)).toEqual([])
-    expect(await retainUsageSourcesForWorktrees(sources, 'not json', current)).toEqual([])
-    expect(await retainUsageSourcesForWorktrees(sources, current, current)).toHaveLength(6)
+    expect(await reattributeUsageSourcesForWorktrees(sources, null, current)).toEqual([])
+    expect(await reattributeUsageSourcesForWorktrees(sources, 'not json', current)).toEqual([])
+    expect(await reattributeUsageSourcesForWorktrees(sources, current, current)).toHaveLength(6)
   })
 })

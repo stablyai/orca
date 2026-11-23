@@ -94,12 +94,21 @@ function collectAttributionKeys(source: unknown): { keys: Set<string>; worktreeI
   return { keys, worktreeIds }
 }
 
+// No real stat matches this, so every scanner re-reads the source from its first byte.
+const REREAD_MTIME_MS = -1
+
+/** Keeps the record, so ownership and deleted-owner checks still see it, but forces a full re-read. */
+function markForReread<T>(source: T): T {
+  return typeof source === 'object' && source !== null
+    ? { ...source, mtimeMs: REREAD_MTIME_MS, parseResumeState: null }
+    : source
+}
+
 /**
- * A worktree add/remove/rename only moves usage located inside a changed worktree, so drop just
- * those cached sources (they re-read) instead of re-reading every transcript. An unreadable
- * cached fingerprint drops everything.
+ * A worktree add/remove/rename only moves usage located inside a changed worktree, so re-read just
+ * those cached sources instead of every transcript. An unreadable cached fingerprint drops everything.
  */
-export async function retainUsageSourcesForWorktrees<T>(
+export async function reattributeUsageSourcesForWorktrees<T>(
   sources: readonly T[],
   cachedFingerprint: string | null,
   currentFingerprint: string | null
@@ -179,9 +188,7 @@ export async function retainUsageSourcesForWorktrees<T>(
       }
       affected = await keyAffected(key)
     }
-    if (!affected) {
-      retained.push(source)
-    }
+    retained.push(affected ? markForReread(source) : source)
   }
   return retained
 }

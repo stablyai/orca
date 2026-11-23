@@ -102,7 +102,8 @@ export async function scanCodexUsageFiles(
       pathsToParse.push(filePath)
       readBytesByPath.set(
         filePath,
-        fileInfo.size - (resumeByPath.get(filePath)?.state.parsedBytes ?? 0)
+        fileInfo.size -
+          Math.max(resumeByPath.get(filePath)?.state.parsedBytes ?? 0, legacySourceSkipBytes)
       )
     }
     onFilesScanned?.(1)

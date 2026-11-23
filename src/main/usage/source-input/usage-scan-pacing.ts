@@ -2,10 +2,12 @@
 export const USAGE_SCAN_MAX_READ_BYTES_PER_SECOND = 32 * 1024 * 1024
 // Below this lead, sleeping costs more wakeups than it saves disk time.
 const MIN_PAUSE_MS = 50
+// Stays far inside the scan worker's no-progress deadline; debt beyond it is forgiven.
+const MAX_PAUSE_MS = 5_000
 
 /** Paces transcript reads to an average rate; small incremental scans never wait. */
 export class UsageScanReadBudget {
-  private readonly startedAt = Date.now()
+  private startedAt = Date.now()
   private bytes = 0
 
   constructor(private readonly bytesPerSecond = USAGE_SCAN_MAX_READ_BYTES_PER_SECOND) {}
@@ -16,8 +18,13 @@ export class UsageScanReadBudget {
     }
     this.bytes += bytes
     const dueMs = (this.bytes / this.bytesPerSecond) * 1000 - (Date.now() - this.startedAt)
-    if (dueMs >= MIN_PAUSE_MS) {
-      await new Promise((resolve) => setTimeout(resolve, dueMs))
+    if (dueMs > MAX_PAUSE_MS) {
+      // One huge read has already happened; pausing for it longer only stalls the scan.
+      this.startedAt -= dueMs - MAX_PAUSE_MS
+    }
+    const pauseMs = Math.min(dueMs, MAX_PAUSE_MS)
+    if (pauseMs >= MIN_PAUSE_MS) {
+      await new Promise((resolve) => setTimeout(resolve, pauseMs))
     }
   }
 }

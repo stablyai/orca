@@ -9,7 +9,7 @@ import {
 } from '../../filesystem/durable-file-write'
 import { encodeUsageCacheJson, parseUsageCacheJson, readUsageCacheJson } from './usage-cache-json'
 import { decodedUsageCacheText, publishGzipUsageCache } from './usage-cache-gzip'
-import { retainUsageSourcesForWorktrees } from '../worktree-attribution/usage-attribution-invalidation'
+import { reattributeUsageSourcesForWorktrees } from '../worktree-attribution/usage-attribution-invalidation'
 
 // Only scans need bulky per-source records; worker-owned sidecars keep them off main.
 
@@ -44,7 +44,7 @@ export async function readUsageSourceCache<T>(ref: UsageSourceCacheRef): Promise
       return []
     }
     // The sidecar can commit before its report, so validate attribution against its own fingerprint.
-    return await retainUsageSourcesForWorktrees(
+    return await reattributeUsageSourcesForWorktrees(
       parsed.sources.filter(isSourceRecord),
       typeof parsed.worktreeFingerprint === 'string' ? parsed.worktreeFingerprint : null,
       ref.worktreeFingerprint
