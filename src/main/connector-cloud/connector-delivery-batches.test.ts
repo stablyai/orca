@@ -24,7 +24,9 @@ describe('connectorDeliveryUnits', () => {
       units.map((unit) =>
         'batch' in unit
           ? unit.batch.map((delivery) => delivery.deliveryId)
-          : (unit.raw as { deliveryId: string }).deliveryId
+          : typeof unit.raw === 'object' && unit.raw !== null && 'deliveryId' in unit.raw
+            ? unit.raw.deliveryId
+            : null
       )
     ).toEqual([['a'], 'r', ['b']])
   })

@@ -30,7 +30,8 @@ async function failedTurn(chat: QueuedMessageTestRig): Promise<void> {
       { turnScope: { kind: 'thread' } }
     )
   chat.providerEvents().publish()
-  await eventually(async () => expect(chat.host.publishedWork(SESSION)?.working).toBe(false))
+  // The failure reaches the journal after the provider event; wait for the chat to show it.
+  await eventually(async () => expect(await chatAwaitsResume(chat.host, SESSION)).toBe(true))
 }
 
 describe('chatAwaitsResume', () => {
