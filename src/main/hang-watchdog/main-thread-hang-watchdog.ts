@@ -66,7 +66,12 @@ export function installMainThreadHangWatchdog(options: {
   try {
     worker = spawnWorkerThread(workerPath, {
       name: 'orca-main-thread-hang-watchdog',
-      workerData
+      workerData,
+      resourceLimits: {
+        codeRangeSizeMb: 16,
+        maxYoungGenerationSizeMb: 2,
+        maxOldGenerationSizeMb: 32
+      }
     })
   } catch (error) {
     console.error('[hang-watchdog] failed to start watchdog worker:', error)

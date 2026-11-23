@@ -17,8 +17,8 @@ import type {
 
 // #27362: Windows code-integrity hashing can block CreateProcessW for seconds on the calling loop. Spawn in a worker and fail closed if unavailable (#11161).
 
-// Amortize worker startup across nearby probes.
-export const IDLE_TEARDOWN_MS = 2 * 60_000
+// Amortize worker startup across nearby probes while releasing idle isolates promptly.
+export const IDLE_TEARDOWN_MS = 15_000
 
 const WORKER_ENTRY_FILENAME = 'worker-thread-child-process-entry.js'
 // Node reports a negative errno as the exit code of a child that never started.
