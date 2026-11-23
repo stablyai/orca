@@ -21,7 +21,7 @@ import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-typ
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   getStructuredAgentSessionTabs,
-  getStructuredAgentSessionTabsByPaneKey,
+  structuredTabsShowingConversation,
   type StructuredTab
 } from '../native-chat/session/status/structured-agent-session-tabs'
 
@@ -82,7 +82,7 @@ function botSessionStandIn(
     // A tab in any workspace shows it, so that tab, not a stand-in, carries its status.
     if (
       tabbed.has(sessionId) ||
-      getStructuredAgentSessionTabsByPaneKey(unifiedTabsByWorktree).has(chatPaneKey(sessionId))
+      structuredTabsShowingConversation(unifiedTabsByWorktree, chatPaneKey(sessionId)).size > 0
     ) {
       return null
     }
