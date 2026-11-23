@@ -51,6 +51,7 @@ import { getBrowserExtensionDnrStore } from './declarative-net-request/session/b
 import { dropBrowserExtensionIdleState } from './profile-sessions/browser-extension-idle-kept-state'
 import { notifyChromeWebStoreUninstalled } from './web-store/browser-extension-webstore-events'
 import {
+  browserExtensionSourceProfileId,
   loadBrowserExtensionWhereProfileRuns,
   unloadBrowserExtensionFromRouteProfilesOf
 } from './profile-sessions/browser-extension-route-profiles'
@@ -99,10 +100,12 @@ export async function listBrowserExtensionsForProfile(
 }
 
 export function setBrowserExtensionEnabled(
-  browserProfileId: string,
+  callerProfileId: string,
   extensionId: string,
   enabled: boolean
 ): Promise<BrowserExtensionActionResult> {
+  // chrome.management on an SSH or This-device page changes its local profile's list.
+  const browserProfileId = browserExtensionSourceProfileId(callerProfileId)
   return settle(async () => {
     if (!browserSessionRegistry.getProfile(browserProfileId)) {
       throw new Error('Browser profile not found')
@@ -122,10 +125,11 @@ export function setBrowserExtensionEnabled(
       }
       await startBrowserExtensionsForSettings(browserProfileId)
       await loadBrowserExtensionIntoProfile(browserProfileId, installed)
-      await loadBrowserExtensionWhereProfileRuns(browserProfileId, installed)
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, browserProfileId, extensionId, true)
       )
+      // Why after saving: a Disable meanwhile cancels these loads and its save must win.
+      await loadBrowserExtensionWhereProfileRuns(browserProfileId, installed)
     })
   })
 }
@@ -262,10 +266,10 @@ export function addUnpackedBrowserExtension(
         throw error
       }
       const saved = store.save({ ...record, version: loaded.version })
-      await loadBrowserExtensionWhereProfileRuns(browserProfileId, saved)
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, browserProfileId, loaded.id, true)
       )
+      await loadBrowserExtensionWhereProfileRuns(browserProfileId, saved)
       if (!existing) {
         recordBrowserExtensionInstalled('unpacked')
       }

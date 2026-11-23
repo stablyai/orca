@@ -32,10 +32,10 @@ export function browserRoutePartitionStorageDependencies(
     isPartitionLive,
     clearPartitionStorage: async (partition) => {
       await forgetBrowserRoutePartitionSessionCookies(partition)
+      // Why before the wipe: a running extension would write to storage again after it.
+      await retireBrowserExtensionRouteProfile(partition)
       // Why not when cold: `fromPartition` would load the session and lock the folder it deletes.
       if (mode === 'live') {
-        // Why first: a running extension would write to storage again after the wipe.
-        await retireBrowserExtensionRouteProfile(partition)
         const partitionSession = session.fromPartition(partition)
         await partitionSession.clearStorageData()
         await partitionSession.clearCache()

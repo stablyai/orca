@@ -1,6 +1,5 @@
 import { session } from 'electron'
 import { holdBrowserSessionRequestGate } from '../../sessions/requests/browser-session-request-gate'
-import { forgetBrowserExtensionActionProfile } from '../actions/browser-extension-action-registry'
 import {
   registerBrowserSessionFramePreload,
   unregisterBrowserSessionFramePreload
@@ -9,10 +8,8 @@ import type { BrowserSessionProfile } from '../../../../shared/browser/workspace
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
-import { getBrowserExtensionProfileStateStore } from '../profile-storage/browser-extension-profile-state-store'
-import { getBrowserExtensionSyncStorageStore } from '../profile-storage/browser-extension-sync-storage-store'
-import { getBrowserExtensionDnrStore } from '../declarative-net-request/session/browser-extension-dnr-store'
 import { retireBrowserExtensionProfileStorage } from '../profile-storage/browser-extension-retired-profile-storage'
+import { forgetBrowserExtensionProfileData } from '../profile-storage/browser-extension-profile-data-forget'
 import {
   attachBrowserExtensionApiHostToSession,
   forgetBrowserExtensionContexts
@@ -56,7 +53,8 @@ export type BrowserExtensionSessionHooks = {
   ) => Promise<void>
   /** Extensions turned off: undo what `attached` added to the request path. */
   detached: (sess: Electron.Session) => void
-  uninstalled: (profileId: string, extensionIds: ReadonlySet<string>) => void
+  /** Extensions uninstalled since this session last ran; returns the ones it turned off. */
+  uninstalled: (profileId: string, extensionIds: ReadonlySet<string>) => ReadonlySet<string>
 }
 
 let sessionHooks: BrowserExtensionSessionHooks | null = null
@@ -103,19 +101,23 @@ export function attachBrowserExtensionsToProfileSession(
   const kindFor = idleKeptState.settleKeptStateOnAttach(profile.id, enabledExtensionIds)
   const store = getBrowserExtensionInstallStore()
   const loads = new BrowserExtensionProfileLoads()
+  // Why not every stale one: a remote page's session clears an old install's data but still loads a reinstall its local profile has on.
+  let turnedOff: ReadonlySet<string> = new Set()
   const swept = removeUninstalledBrowserExtensionData(
     sess,
     profile.id,
     new Set(store.list().map((extension) => extension.id)),
-    (stale) => sessionHooks?.uninstalled(profile.id, stale)
+    (stale) => {
+      turnedOff = sessionHooks?.uninstalled(profile.id, stale) ?? stale
+    }
   )
   const startupLoads = enabledExtensionIds.map((extensionId) =>
     loads
       .track(extensionId, async (load) => {
-        const stale = await swept
+        await swept
         const installed = store.get(extensionId)
         throwIfBrowserExtensionLoadCancelled(load)
-        if (!installed || stale.has(extensionId)) {
+        if (!installed || turnedOff.has(extensionId)) {
           return
         }
         const loaded = await loadInstalledBrowserExtensionIntoSession(
@@ -192,13 +194,7 @@ export async function detachBrowserExtensionsFromProfileSession(
       await unloadProfileSession(state)
     }
   } finally {
-    idleKeptState.dropBrowserExtensionIdleState({ profileId: profile.id, forgetProfile: true })
-    forgetBrowserExtensionActionProfile(profile.id)
-    getBrowserExtensionProfileStateStore().forgetProfile(profile.id)
-    await Promise.all([
-      getBrowserExtensionSyncStorageStore().forgetProfile(profile.id),
-      getBrowserExtensionDnrStore().forgetProfile(profile.id)
-    ])
+    await forgetBrowserExtensionProfileData(profile.id)
   }
 }
 

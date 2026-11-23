@@ -2,11 +2,13 @@ import type { InstalledBrowserExtension } from '../../../../shared/browser/exten
 import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { isBrowserRoutePartition } from '../../routing/partitions/browser-route-identity'
 import {
-  detachBrowserExtensionsFromProfileSession,
   getBrowserExtensionSessionForProfile,
   loadBrowserExtensionIntoProfile,
-  unloadBrowserExtensionFromProfile
+  unloadBrowserExtensionFromProfile,
+  unloadBrowserExtensionsFromIdleProfile,
+  whenBrowserExtensionProfileUnloaded
 } from './browser-extension-session-loader'
+import { forgetBrowserExtensionProfileData } from '../profile-storage/browser-extension-profile-data-forget'
 
 /**
  * An SSH or This-device page's session runs its local profile's extensions as a separate
@@ -48,15 +50,18 @@ export function browserExtensionRouteSessionProfile(
   return routeProfilesById.get(profileId)?.profile ?? null
 }
 
-/** Before a remote page's storage is wiped: stop its extensions and forget their saved state. */
+/**
+ * Before a remote page's storage is wiped: stop its extensions and forget the state Orca keeps for
+ * them outside the partition, also when they didn't run this launch. Never opens the session.
+ */
 export async function retireBrowserExtensionRouteProfile(partition: string): Promise<void> {
   const profileId = browserExtensionRouteProfileId(partition)
-  const route = routeProfilesById.get(profileId)
-  // Why only linked: a session that never ran extensions this launch has none running to stop.
-  if (route) {
-    routeProfilesById.delete(profileId)
-    await detachBrowserExtensionsFromProfileSession(route.profile)
-  }
+  routeProfilesById.delete(profileId)
+  // Why not detach: the whole partition folder goes, so Chromium's storage needs no retiring.
+  await unloadBrowserExtensionsFromIdleProfile(profileId, () => {})
+  // An idle unload already under way returned above at once.
+  await whenBrowserExtensionProfileUnloaded(profileId)
+  await forgetBrowserExtensionProfileData(profileId)
 }
 
 /** The local profile whose enabled list and pins apply; itself for a local profile. */

@@ -1,6 +1,7 @@
 import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { BrowserExtensionApiError } from '../api-runtime/browser-extension-namespace-registry'
 import { browserExtensionSourceProfileId } from '../profile-sessions/browser-extension-route-profiles'
+import { assertBrowserExtensionProfilePresent } from '../profile-sessions/browser-extension-profile-presence'
 
 type BrowserExtensionTabTarget = {
   worktreeId: string | undefined
@@ -19,6 +20,8 @@ export function browserExtensionTabTarget(
   placement: { worktreeId?: string },
   recentWorktreeId: (profileId: string) => string | undefined
 ): BrowserExtensionTabTarget {
+  // After the window wait: a profile deleted meanwhile would mount the tab in a retired partition.
+  assertBrowserExtensionProfilePresent(profile.id)
   const sourceProfileId = browserExtensionSourceProfileId(profile.id)
   const fallbackWorktreeId = recentWorktreeId(profile.id)
   if (sourceProfileId === profile.id) {
@@ -29,13 +32,10 @@ export function browserExtensionTabTarget(
       fallbackWorktreeId
     }
   }
-  if (!fallbackWorktreeId) {
+  // An agent's placement names its own page's workspace; otherwise the one this session's pages are in.
+  const worktreeId = placement.worktreeId ?? fallbackWorktreeId
+  if (!worktreeId) {
     throw new BrowserExtensionApiError("Extensions on This-device pages can't open tabs yet")
   }
-  return {
-    worktreeId: fallbackWorktreeId,
-    profileId: sourceProfileId,
-    partition: undefined,
-    fallbackWorktreeId
-  }
+  return { worktreeId, profileId: sourceProfileId, partition: undefined, fallbackWorktreeId }
 }

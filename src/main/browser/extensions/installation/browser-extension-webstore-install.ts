@@ -171,10 +171,10 @@ export async function commitStagedWebStoreExtension(
       const sourceProfileId = browserExtensionSourceProfileId(enableInProfileId)
       await startBrowserExtensionsForSettings(enableInProfileId)
       await loadBrowserExtensionIntoProfile(enableInProfileId, record)
-      await loadBrowserExtensionWhereProfileRuns(sourceProfileId, record)
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, sourceProfileId, extensionId, true)
       )
+      await loadBrowserExtensionWhereProfileRuns(sourceProfileId, record)
     }
   } catch (error) {
     if (replaced) {

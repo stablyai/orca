@@ -39,7 +39,6 @@ import { isBrowserExtensionEnabledInProfile } from '../../browser/extensions/web
 import { isBrowserExtensionSupportEnabled } from '../../browser/extensions/browser-extension-support'
 import { holdWebviewFirstLoadForExtensions } from '../../browser/extensions/profile-sessions/browser-extension-page-start'
 import { linkBrowserExtensionsToRouteSession } from '../../browser/extensions/profile-sessions/browser-extension-route-sessions'
-import { browserExtensionRouteProfileId } from '../../browser/extensions/profile-sessions/browser-extension-route-profiles'
 import { installBrowserJavaScriptDialogs } from '../../browser/guest-lifecycle/prompts/browser-javascript-dialogs'
 import { installNativeChatVisualGuestTheme } from '../../host/native-chat-visual-guest-theme'
 import {
@@ -152,8 +151,14 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
       }
     }
     const isDocPreviewAttach = isAdmissibleDocPreviewAttach(partition, src)
+    // SSH and This-device pages run their local profile's extensions in their own session.
+    const extensionProfileId =
+      profileId ??
+      (isRoutePartition || isLocalSshPartition
+        ? linkBrowserExtensionsToRouteSession(session.fromPartition(partition))
+        : null)
     const isExtensionPageAttach = isAdmissibleExtensionPageAttach(
-      profileId ?? (isLocalSshPartition ? browserExtensionRouteProfileId(partition) : null),
+      isRoutePartition ? null : extensionProfileId,
       src
     )
     // Why a main-minted marker: main must know a panel guest before it loads, and picks its page.
@@ -206,12 +211,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     Object.assign(webPreferences, ORCA_BROWSER_GUEST_WEB_PREFERENCES)
     // Preserve only the registry-validated partition so isolated profiles keep their storage.
     webPreferences.partition = partition
-    // A profile starts its extensions with its first tab, not at launch; SSH and This-device pages run their local profile's.
-    const extensionProfileId =
-      profileId ??
-      (isRoutePartition || isLocalSshPartition
-        ? linkBrowserExtensionsToRouteSession(session.fromPartition(partition))
-        : null)
+    // A profile starts its extensions with its first tab, not at launch.
     if (extensionProfileId) {
       browserSessionRegistry.attachExtensions(extensionProfileId)
       holdWebviewFirstLoadForExtensions(mainWindow.webContents, extensionProfileId, params)
