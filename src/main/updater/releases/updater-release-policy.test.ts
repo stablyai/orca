@@ -2,10 +2,18 @@ import { expect, it } from 'vitest'
 import {
   applyEmergencyUpdateFloor,
   releaseSelectionPolicy,
+  requiredMinimumVersion,
   requiresTeamRelease,
   teamAllowsUpdate,
   type TeamUpdateApproval
 } from './updater-release-policy'
+
+it('applies the same prerelease precedence to required releases and the installed version', () => {
+  const policy = { orgIds: ['org_a'], minimumVersion: '2.1.0-rc.a.9' }
+  const current = '2.1.0-rc.A.10'
+  expect(requiredMinimumVersion(policy, current)).toBe(policy.minimumVersion)
+  expect(requiresTeamRelease(policy, current, policy.minimumVersion)).toBe(true)
+})
 
 it('requires a release offer to match the team, channel, and delay applied at installation', () => {
   const policy = { orgIds: ['org_a', 'org_b'], updateChannel: 'rc', updateDelayDays: 7 } as const

@@ -171,13 +171,13 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
               {showReporting
                 ? reportingTeams.length === reportingOrgIds.length
                   ? t(
-                      'auto.components.settings.orcaAccount.managedWithNamedReporting',
-                      'Some settings are managed by your team. Owners and admins at {{teams}} can see your Orca version.',
+                      'auto.components.settings.orcaAccount.managedWithNamedDeviceReporting',
+                      'Your team manages some Orca settings. Owners and admins at {{teams}} can view reports from this device.',
                       { teams: new Intl.ListFormat(locale).format(reportingTeams) }
                     )
                   : t(
-                      'auto.components.settings.orcaAccount.managedWithReporting',
-                      'Your team manages some settings. Team owners and admins can see your Orca version.'
+                      'auto.components.settings.orcaAccount.managedWithDeviceReporting',
+                      'Your team manages some Orca settings. Team owners and admins can view reports from this device.'
                     )
                 : t(
                     'auto.components.settings.orcaAccount.managed',

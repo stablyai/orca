@@ -1,3 +1,4 @@
+import { parse } from 'semver'
 import type { UpdateStatus } from '../../../shared/updater/update-status-types'
 import {
   compareAppVersions,
@@ -5,7 +6,19 @@ import {
   isValidAppVersion
 } from '../../../shared/app-lifecycle/identity/app-version'
 
-export const compareVersions = compareAppVersions
+function parseComparableSemver(value: string) {
+  const parsed = parse(value.trim().replace(/^V/, 'v'))
+  // Keep numeric identifiers outside the safe integer range exact.
+  return parsed?.prerelease.some((id) => typeof id === 'string' && /^\d+$/.test(id)) ? null : parsed
+}
+
+export function compareVersions(left: string, right: string): number {
+  const leftSemver = parseComparableSemver(left)
+  const rightSemver = parseComparableSemver(right)
+  return leftSemver && rightSemver
+    ? leftSemver.compare(rightSemver)
+    : compareAppVersions(left, right)
+}
 export const isPrereleaseVersion = isPrereleaseAppVersion
 export const isValidVersion = isValidAppVersion
 
