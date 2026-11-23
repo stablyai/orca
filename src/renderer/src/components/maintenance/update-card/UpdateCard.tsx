@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import type { ChangelogData } from '../../../../../shared/updater/update-status-types'
+import type { ChangelogData, UpdateStatus } from '../../../../../shared/updater/update-status-types'
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { useAppStore } from '../../../store/index'
 import { Card } from '../../ui/card'
@@ -27,7 +27,11 @@ export function UpdateCard(): React.JSX.Element | null {
   const collapseAnimationTimerRef = useRef<number | null>(null)
   const [mediaFailed, setMediaFailed] = useState(false)
   const [mediaLoaded, setMediaLoaded] = useState(false)
-  const [installError, setInstallError] = useState<string | null>(null)
+  const [installFailure, setInstallFailure] = useState<{
+    status: UpdateStatus
+    message: string
+  } | null>(null)
+  const installError = installFailure?.status === status ? installFailure.message : null
   const [compatibilityRelaunching, setCompatibilityRelaunching] = useState(false)
   const [compatibilitySetupError, setCompatibilitySetupError] = useState<string | null>(null)
   const [autoDismissed, setAutoDismissed] = useState(false)
@@ -49,14 +53,10 @@ export function UpdateCard(): React.JSX.Element | null {
     hasStartedDownload.current = false
     setMediaFailed(false)
     setMediaLoaded(false)
-    setInstallError(null)
   }
-  const prevStatusRef = useRef(status)
-  if (status !== prevStatusRef.current) {
-    prevStatusRef.current = status
-    if (installError) {
-      setInstallError(null)
-    }
+  const prevStateRef = useRef(status.state)
+  if (status.state !== prevStateRef.current) {
+    prevStateRef.current = status.state
     if (autoDismissed) {
       setAutoDismissed(false)
     }
@@ -75,19 +75,19 @@ export function UpdateCard(): React.JSX.Element | null {
     return () => window.clearTimeout(timer)
   }, [shouldAutoDismissLatest])
   const installRequestPending = useRef(false)
-  const handleInstallRetry = useCallback((): void => {
+  const requestInstall = useCallback((target: UpdateStatus): void => {
     if (installRequestPending.current) {
       return
     }
     installRequestPending.current = true
-    const version = versionRef.current
-    setInstallError(null)
+    setInstallFailure(null)
     void window.api.updater
       .quitAndInstall()
       .catch((error: unknown) => {
-        if (versionRef.current === version) {
-          setInstallError(error instanceof Error ? error.message : String(error))
-        }
+        setInstallFailure({
+          status: target,
+          message: error instanceof Error ? error.message : String(error)
+        })
       })
       .finally(() => {
         installRequestPending.current = false
@@ -96,9 +96,9 @@ export function UpdateCard(): React.JSX.Element | null {
   useEffect(() => {
     if (status.state === 'downloaded' && !status.automaticDownload && hasStartedDownload.current) {
       hasStartedDownload.current = false
-      handleInstallRetry()
+      requestInstall(status)
     }
-  }, [status.state, status.automaticDownload, handleInstallRetry])
+  }, [status, requestInstall])
 
   const prefersReducedMotion = usePrefersReducedMotion()
   const clearAnimationTimers = useCallback(() => {
@@ -165,6 +165,7 @@ export function UpdateCard(): React.JSX.Element | null {
         setCompatibilityRelaunching(false)
       })
   }
+  const handleInstallRetry = (): void => requestInstall(status)
   const quitToInstallStagedUpdate = window.api.updater.quitToInstallStagedUpdate
   const errorCard = buildUpdateCardErrorModel(
     {
@@ -182,9 +183,10 @@ export function UpdateCard(): React.JSX.Element | null {
       onQuitToInstall: quitToInstallStagedUpdate
         ? (version) => {
             void quitToInstallStagedUpdate(version).catch((error: unknown) => {
-              if (versionRef.current === version) {
-                setInstallError(error instanceof Error ? error.message : String(error))
-              }
+              setInstallFailure({
+                status,
+                message: error instanceof Error ? error.message : String(error)
+              })
             })
           }
         : undefined
