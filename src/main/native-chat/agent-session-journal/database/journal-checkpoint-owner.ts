@@ -146,8 +146,7 @@ export class JournalCheckpointOwner {
   /** A worker inside a long checkpoint is not dead, but writes stop waiting on it, as on main. */
   private stalled(): boolean {
     return (
-      this.asking &&
-      performance.now() - this.askedAt >= (this.options.stallMs ?? WORKER_STALL_MS)
+      this.asking && performance.now() - this.askedAt >= (this.options.stallMs ?? WORKER_STALL_MS)
     )
   }
 
