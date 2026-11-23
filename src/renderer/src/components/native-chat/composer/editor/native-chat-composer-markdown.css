@@ -1,0 +1,70 @@
+/* Styles markdown in the composer's draft by decoration only: the characters typed stay as typed. */
+.native-chat-md-marker,
+.native-chat-md-list-marker {
+  color: var(--chat-foreground-faint);
+}
+
+.native-chat-md-list-marker {
+  font-weight: 600;
+}
+
+.native-chat-md-bold {
+  font-weight: 600;
+}
+
+.native-chat-md-italic {
+  font-style: italic;
+}
+
+.native-chat-md-strike {
+  text-decoration: line-through;
+}
+
+.native-chat-md-code {
+  font-family: var(--font-mono);
+  border-radius: var(--radius-sm, 0.375rem);
+  background: var(--chat-inline-code-surface);
+  color: var(--chat-inline-code-foreground, var(--chat-code-foreground));
+}
+
+.native-chat-md-heading {
+  font-weight: 600;
+}
+
+.native-chat-md-h1 {
+  font-size: 1.2857142857em;
+}
+
+.native-chat-md-h2 {
+  font-size: 1.1428571429em;
+}
+
+.native-chat-md-h3 {
+  font-size: 1.0714285714em;
+}
+
+.native-chat-md-quote {
+  border-left: 2px solid var(--chat-code-border);
+  padding-left: 0.5rem;
+  color: var(--chat-foreground-faint);
+}
+
+.native-chat-md-code-line,
+.native-chat-md-fence {
+  background: var(--chat-code-surface);
+  padding-inline: 0.5rem;
+}
+
+.native-chat-md-fence {
+  font-family: var(--font-mono);
+}
+
+.native-chat-md-code-line {
+  font-family: var(--font-mono);
+  color: var(--chat-code-foreground);
+}
+
+.native-chat-md-rule {
+  border-bottom: 1px solid var(--chat-code-border);
+  color: var(--chat-foreground-faint);
+}
