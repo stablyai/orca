@@ -236,3 +236,42 @@ it('works out the waiting ask from the events when none is kept or an older Orca
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+it('keeps the answer pairing every event gives, carrying it without a read when a write asks nothing', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'bot-items-'))
+  try {
+    const path = join(dir, 'items.sqlite')
+    const { store, uid, ask, comment } = item(path)
+    const file = new DatabaseSync(path)
+    const held = (): boolean =>
+      Boolean(
+        file
+          .prepare(
+            `SELECT 1 FROM item_waiting_asks kept JOIN items ON items.uid = kept.item_uid
+              WHERE kept.at = items.last_event_id`
+          )
+          .get()
+      )
+    // What an open answers, and what pairing every event answers once nothing is kept.
+    const opened = (): [string | undefined, string | undefined] => {
+      const kept = store.viewRows([uid], true).waitingAsks[uid]
+      file.prepare('DELETE FROM item_waiting_asks').run()
+      return [kept, store.viewRows([uid], true).waitingAsks[uid]]
+    }
+    expect(opened()).toEqual([undefined, undefined])
+    store.comment(uid, 'Still building.', AGENT, [], NOW)
+    expect(held()).toBe(true)
+    expect(opened()).toEqual([undefined, undefined])
+    const asked = ask([MERGE])
+    expect(held()).toBe(false)
+    expect(opened()).toEqual([botItemEventId(asked), botItemEventId(asked)])
+    store.comment(uid, 'Waiting on you.', AGENT, [], NOW)
+    expect(opened()).toEqual([botItemEventId(asked), botItemEventId(asked)])
+    comment('Yes', asked)
+    expect(opened()).toEqual([undefined, undefined])
+    file.close()
+  } finally {
+    stores.splice(0).forEach((store) => store.dispose())
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

@@ -2,15 +2,28 @@
 // table, not a migration step, so older builds keep writing the file; their events leave a kept ask stale.
 import type SyncDatabase from '../sqlite/sync-database'
 import { botItemWaitingAsk } from '../../shared/bots/bot-item-question-answers'
-import { parseBotItemEventId } from '../../shared/bots/bot-items'
+import { botItemQuestionShape } from '../../shared/bots/bot-item-ask'
+import { parseBotItemEventId, type BotItemActor } from '../../shared/bots/bot-items'
 import { eventRecordOf, eventViewOf, optionalInteger } from './bot-items-rows'
 
 /** An ask (0: none) as pairing the item's events up to `at` found it. */
 export type PairedWaitingAsk = { ask: number | null; at: number }
 
-/** Only comments and moves pair asks with answers. */
-export function pairsWaitingAsks(kind: string): boolean {
-  return kind === 'commented' || kind === 'status'
+/** What one event can do to a kept ask: an ask by anyone but the owner can make one wait; any other
+ *  comment or move can only answer or end one, so a kept "none" still holds after it. */
+export function waitingAskChange(
+  kind: string,
+  actor: BotItemActor,
+  data: Record<string, unknown>
+): 'asks' | 'answers' | null {
+  if (
+    kind === 'commented' &&
+    actor.kind !== 'owner' &&
+    botItemQuestionShape(data).decisions.length > 0
+  ) {
+    return 'asks'
+  }
+  return kind === 'commented' || kind === 'status' ? 'answers' : null
 }
 
 /** Makes the table on a file this build may write; false when the disk refuses. */
@@ -68,14 +81,31 @@ function keepWaitingAsk(db: SyncDatabase, uid: string, paired: PairedWaitingAsk)
   ).run(uid, paired.ask ?? 0, paired.at, uid, paired.at)
 }
 
-/** What one write did to an item: its newest event before it and after it, and whether any of its
- *  events pair asks. */
-export type TouchedItem = { before: number; last: number; pairs: boolean }
+/** What one write did to an item: its newest event before it and after it, and the most any of its events
+ *  can change a kept ask. */
+export type TouchedItem = { before: number; last: number; change: 'asks' | 'answers' | null }
+
+/** The item as a write left it once it added event `id`; `before` counts only for its first event. */
+export function touchedBy(
+  item: TouchedItem | undefined,
+  before: number,
+  id: number,
+  change: TouchedItem['change']
+): TouchedItem {
+  const was = item?.change ?? null
+  return {
+    before: item?.before ?? before,
+    last: id,
+    change: was === 'asks' || change === 'asks' ? 'asks' : (was ?? change)
+  }
+}
 
 export function lastEventOf(db: SyncDatabase, uid: string): number {
   const row = db.prepare('SELECT last_event_id FROM items WHERE uid = ?').get(uid)
   return row ? (optionalInteger(row, 'last_event_id') ?? 0) : 0
 }
+
+let keepFailureTold = false
 
 /** Outside any transaction and never waiting on another writer; a keep that fails (busy, a full disk)
  *  leaves the kept ask stale, so a later open pairs the events again. */
@@ -85,24 +115,28 @@ function quietly(db: SyncDatabase, keep: () => void): void {
   try {
     keep()
   } catch (error) {
-    console.warn('[bots] items: keeping a waiting ask failed', error)
+    // Once per run: a file the disk won't let us write fails every keep, and each open still reads right.
+    if (!keepFailureTold) {
+      keepFailureTold = true
+      console.warn('[bots] items: keeping a waiting ask failed', error)
+    }
   } finally {
     db.pragma(`busy_timeout = ${timeout}`)
   }
 }
 
-/** After a write: pair again when it added a comment or move, else carry a kept ask that held before
- *  it to its newest event. Either holds only while no later write has landed. */
+/** After a write, in constant time: carry a kept ask that held before it to its newest event when the write
+ *  can't have changed it. Otherwise the kept ask goes stale and the next open pairs the events once. */
 export function keepAfterWrite(db: SyncDatabase, uid: string, item: TouchedItem): void {
+  if (item.change === 'asks') {
+    return
+  }
   quietly(db, () => {
-    if (item.pairs) {
-      keepWaitingAsk(db, uid, pairWaitingAsk(db, uid))
-      return
-    }
     db.prepare(
       `UPDATE item_waiting_asks SET at = ?
-        WHERE item_uid = ? AND at = ? AND (SELECT last_event_id FROM items WHERE uid = ?) = ?`
-    ).run(item.last, uid, item.before, uid, item.last)
+        WHERE item_uid = ? AND at = ? AND (? OR ask = 0)
+          AND (SELECT last_event_id FROM items WHERE uid = ?) = ?`
+    ).run(item.last, uid, item.before, Number(item.change === null), uid, item.last)
   })
 }
 

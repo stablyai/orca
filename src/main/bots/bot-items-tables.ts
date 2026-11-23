@@ -13,7 +13,8 @@ import {
   hasKeptWaitingAsks,
   keepAfterWrite,
   lastEventOf,
-  pairsWaitingAsks,
+  touchedBy,
+  waitingAskChange,
   waitingAskOf,
   type TouchedItem
 } from './bot-item-waiting-ask-keep'
@@ -137,9 +138,8 @@ export class BotItemsTables {
       )
       .run(id, now, now, Number(actor.kind !== 'owner'), id, uid)
     if (keeps) {
-      const item = this.touched?.get(uid) ?? { before, last: id, pairs: false }
-      item.last = id
-      item.pairs ||= pairsWaitingAsks(kind)
+      const change = waitingAskChange(kind, actor, data)
+      const item = touchedBy(this.touched?.get(uid), before, id, change)
       if (this.touched) {
         this.touched.set(uid, item)
       } else {
@@ -150,9 +150,8 @@ export class BotItemsTables {
   }
 
   /** The item's ask waiting on the owner, which a later question can leave open: the kept one while it
-   *  paired the item's newest event, else worked out from all its events (and kept for the next open). */
+   *  holds, else worked out from all its events (and kept for the next open, unless a write is running). */
   protected waitingAsk(item: Pick<BotItemRecord, 'uid'>): number | null {
-    // Inside a write, only its own commit keeps asks.
     return waitingAskOf(this.db, item.uid, this.keepsWaitingAsks(), this.touched === null)
   }
 
