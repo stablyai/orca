@@ -29,9 +29,13 @@ export const BOT_CONNECT_METHODS = [
     name: 'bots.connect.start',
     permission: 'accounts-admin',
     params: ConnectorConnectStart,
-    handler: async ({ source, switchAccount }, context) =>
+    handler: async ({ source, switchAccount, addAccess }, context) =>
       withHostCloudClient(context, (client) =>
-        startConnectorTrip(source, client, { switchAccount, keepLogin: keepLogin(source) })
+        startConnectorTrip(source, client, {
+          switchAccount,
+          keepLogin: keepLogin(source),
+          ...(source === 'github' && addAccess ? { addAccess } : {})
+        })
       )
   }),
   defineMethod({

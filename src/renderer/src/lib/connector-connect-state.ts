@@ -136,6 +136,10 @@ export async function startConnectorConnect(
     owner?: string
     /** Where the page opened, e.g. so a dialog in front of Orca's browser can step aside. */
     onOpened?: (destination: HttpLinkDestination) => void
+    /** GitHub: the trip adds access, for `workspace` if named (see ConnectorConnectStartRequest). */
+    addAccess?: { workspace?: string }
+    /** A host too old to add access: the trip is dropped before its page opens. */
+    onOlderHost?: () => void
   } = {}
 ): Promise<void> {
   const trip = tripOf(hostId, source)
@@ -143,9 +147,15 @@ export async function startConnectorConnect(
   trip.owner = options.owner ?? null
   set(trip, { status: 'waiting' })
   const calls = connectorTripCalls(hostId, source)
-  const started = await calls.start(options.switchAccount === true)
+  const started = await calls.start(options.switchAccount === true, options.addAccess)
   if (!started.ok) {
     await settle(hostId, source, request, started)
+    return
+  }
+  if (options.addAccess && started.value.addAccess !== true) {
+    void calls.cancel()
+    await settle(hostId, source, request, { ok: false, error: CANCELLED })
+    options.onOlderHost?.()
     return
   }
   const opened = openBotHostPage(hostId, started.value.authorizeUrl, {
