@@ -36,18 +36,19 @@ export function slackApprovalOutcome(
 }
 
 /**
- * The approval outcome for `teamId` (null: no live link), following the shared state until it is
- * in. Ready counts too: its link may have gone to another device without Copy link (a selection
- * paste). Read from the store useBotSlack subscribes to, so polling stops once the outcome is in.
+ * The approval outcome for `teamId` (null: no link), following the shared state while `follow` and
+ * the outcome isn't in. Read even after the link expires: an approval that landed still wins. Ready
+ * counts too: its link may have gone to another device without Copy link (a selection paste).
  */
 export function useSlackApprovalOutcome(
   bot: Bot,
   teamId: string | null,
+  follow: boolean,
   returnUrl: string | null
 ): { installed: boolean; otherUser: boolean } {
   const outcome = teamId
     ? slackApprovalOutcome(readBotSlack(bot), teamId)
     : { installed: false, otherUser: false }
-  useBotSlack(bot, teamId !== null && !outcome.installed && !outcome.otherUser, returnUrl)
+  useBotSlack(bot, teamId !== null && follow && !outcome.installed && !outcome.otherUser, returnUrl)
   return outcome
 }

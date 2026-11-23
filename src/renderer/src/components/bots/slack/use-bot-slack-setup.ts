@@ -324,7 +324,8 @@ export function useBotSlackSetup(
   const expired = useSlackLinkExpired(linkStep?.link?.expiresAt ?? null)
   const { installed, otherUser } = useSlackApprovalOutcome(
     bot,
-    linkStep && !expired ? linkStep.teamId : null,
+    linkStep ? linkStep.teamId : null,
+    !expired,
     step.kind === 'waiting' ? step.returnUrl : null
   )
   // One object per outcome: callers keep the shown step across renders (the outage hook's state).
