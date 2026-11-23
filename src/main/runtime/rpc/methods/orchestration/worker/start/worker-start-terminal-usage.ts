@@ -7,9 +7,8 @@ import type { HostTerminalUsage } from '../../../../../../../shared/terminal/run
 type SpawnUsageReader = { getSpawnHostTerminalUsage(handle: string): HostTerminalUsage | undefined }
 
 /** The agent terminal this start opened; a reused one's spawn belongs to an earlier start. */
-function createdAgentTerminal(receipt: object): string | undefined {
-  const effects = 'effects' in receipt && Array.isArray(receipt.effects) ? receipt.effects : []
-  for (const effect of effects) {
+function createdAgentTerminal(effects: unknown): string | undefined {
+  for (const effect of Array.isArray(effects) ? effects : []) {
     if (
       typeof effect === 'object' &&
       effect !== null &&
@@ -33,7 +32,7 @@ export function withTerminalUsage(runtime: SpawnUsageReader, receipt: unknown): 
   if ('blockedReason' in receipt && receipt.blockedReason === TERMINAL_HOST_CAP_CODE) {
     return receipt
   }
-  const handle = createdAgentTerminal(receipt)
+  const handle = createdAgentTerminal('effects' in receipt ? receipt.effects : undefined)
   const terminals = terminalUsageNotice(
     handle ? runtime.getSpawnHostTerminalUsage(handle) : undefined
   )
