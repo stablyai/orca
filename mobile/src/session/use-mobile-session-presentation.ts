@@ -16,11 +16,13 @@ import { useCalmConnectionState } from '../transport/connection/calm-connection-
 // The toast rises this far as it fades in; Reduce Motion keeps the fade alone.
 const TOAST_RISE_PX = 8
 
+// A branch prefix ("user/") on a name-derived branch still just repeats the title.
 function sessionPlaceLabel(name: string, branch: string | null, repo: string | null) {
-  if (branch && branch !== name) {
-    return branch
+  const project = repo && repo !== name ? repo : null
+  if (branch && branch !== name && !branch.endsWith(`/${name}`)) {
+    return project ? `${project} · ${branch}` : branch
   }
-  return repo && repo !== name ? repo : branch
+  return project ?? branch
 }
 
 export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel) {
