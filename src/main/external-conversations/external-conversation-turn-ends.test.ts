@@ -20,7 +20,14 @@ const stamped = (externalId: string): Pick<EndedChatTurn, 'stamps'> => ({
   stamps: [{ account: 'a', conversation: { source: 'slack', externalId }, deliveryId: 'd' }]
 })
 
-async function told(mergedTurnCount: number | undefined, merged?: Pick<EndedChatTurn, 'stamps'>[]) {
+const reads: string[] = []
+
+async function told(
+  mergedTurnCount: number | undefined,
+  merged?: Pick<EndedChatTurn, 'stamps'>[],
+  requested = true
+) {
+  reads.length = 0
   const end: ChatTurnEnd = {
     ended: {
       kind: 'turn-ended',
@@ -36,7 +43,17 @@ async function told(mergedTurnCount: number | undefined, merged?: Pick<EndedChat
       sessionId: 'chat-1',
       outcome: 'success',
       ...(mergedTurnCount === undefined ? {} : { mergedTurnCount }),
-      ...(merged ? { readMergedAttributions: async () => merged } : {}),
+      ...(merged
+        ? {
+            mergedAnswers: {
+              turnIds: merged.map((_, index) => `t${index}`),
+              read: async (turnId: string) => {
+                reads.push(turnId)
+                return merged[Number(turnId.slice(1))] ?? {}
+              }
+            }
+          }
+        : {}),
       readTurn: async () => quiet,
       at: 0
     },
@@ -46,7 +63,7 @@ async function told(mergedTurnCount: number | undefined, merged?: Pick<EndedChat
     workersChecked: async () => undefined,
     current: () => true
   }
-  return threadBotTurnReply(end, link, quiet, true)
+  return threadBotTurnReply(end, link, quiet, requested)
 }
 
 it('warns on a merged quiet end only when a merged answer may not have reached the thread', async () => {
@@ -55,7 +72,11 @@ it('warns on a merged quiet end only when a merged answer may not have reached t
   expect(await told(2, [stamped('thread')])).toBeUndefined()
   // An answer no delivery stamped (or one to another thread) has no row here: it would be lost.
   expect(await told(2, [{}])).toBe(WARNING)
-  expect(await told(3, [stamped('thread'), stamped('other')])).toBe(WARNING)
+  expect(await told(3, [stamped('other'), stamped('thread')])).toBe(WARNING)
+  expect(reads).toEqual(['t0'])
+  // An end that posts no stand-in anyway reads nothing.
+  expect(await told(2, [stamped('thread')], false)).toBeUndefined()
+  expect(reads).toEqual([])
   // Merged answers unknown (older host, or a full window): keep the warning.
   expect(await told(2)).toBe(WARNING)
 })

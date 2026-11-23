@@ -105,25 +105,29 @@ export async function endedTurnAttribution(
   return { opener: read.opener, stamps: read.stamps }
 }
 
-/** How many turns merged into a completion's end, and whom each answering one acts for when the
- *  end names them all. */
+/** How many turns merged into a completion's end, and the answering ones when the end names them
+ *  all, each read by index only when asked. */
 export function mergedTurnNews(
   chat: ConversationChat,
   completion: AgentSessionTurnCompletion
-): {
-  mergedTurnCount?: number
-  readMergedAttributions?: () => Promise<Pick<EndedChatTurn, 'stamps'>[]>
-} {
-  const { sessionId, journalCursor, mergedTurnCount, mergedAnsweredTurnIds: ids } = completion
+): { mergedTurnCount?: number; mergedAnswers?: MergedAnswers } {
+  const { sessionId, journalCursor, mergedTurnCount, mergedAnsweredTurnIds: turnIds } = completion
   return {
     ...(mergedTurnCount !== undefined ? { mergedTurnCount } : {}),
-    ...(ids
+    ...(turnIds
       ? {
-          readMergedAttributions: () =>
-            Promise.all(ids.map((id) => endedTurnAttribution(chat, sessionId, id, journalCursor)))
+          mergedAnswers: {
+            turnIds,
+            read: (turnId: string) => endedTurnAttribution(chat, sessionId, turnId, journalCursor)
+          }
         }
       : {})
   }
+}
+
+export type MergedAnswers = {
+  turnIds: readonly string[]
+  read: (turnId: string) => Promise<Pick<EndedChatTurn, 'stamps'>>
 }
 
 /** What the reply outbox reads of the turn: its row's journal key, the deliveries it answered, and
