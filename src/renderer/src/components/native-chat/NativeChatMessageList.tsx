@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import type { BotChatIdentity } from '../bots/use-bot-chat-identity'
 import { nativeChatTranscriptOuterClass } from './appearance/native-chat-appearance-style'
 import { NativeChatTranscriptViewport } from './NativeChatTranscriptViewport'
@@ -184,11 +185,13 @@ export function NativeChatMessageList({
   const turnDiffs = useNativeChatTurnDiffs(showTurnDiffs && !turnBot ? turns : null, rowsInOrder)
   const openedPullRequests = useNativeChatTurnOpenedPullRequests(turns, rowsInOrder)
   // Only real tail reasoning counts as thinking; an in-flight request with no output does not.
+  // Reads roles and lifecycles, never reply text, so it holds while a reply streams.
+  const structureItems = journalItems && rowsBesideStreamedText(journalItems)
   const thinking = useMemo(
     () =>
       subagentId === null &&
-      isStructuredAgentSessionThinking({ items: journalItems ?? [], latestTurn }),
-    [journalItems, latestTurn, subagentId]
+      isStructuredAgentSessionThinking({ items: structureItems ?? [], latestTurn }),
+    [structureItems, latestTurn, subagentId]
   )
   // The clock starts once the opening message lands, not while it still says "Sending…".
   const turnWorking =
