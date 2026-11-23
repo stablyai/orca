@@ -26,6 +26,8 @@ import {
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { TurnEndedVerdict } from '../../../../../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { StructuredAgentSessionRequestFailure } from '../../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
+import { requireStructuredHost } from '../../../../../bots/bot-chat-session'
+import { botRequestsTurnAnswered } from '../../../../../bots/bot-turn-answered-requests'
 import { readChatRequestError } from '../../../../orchestration/workers/turn-stops/chat-request-error-read'
 import { redactFailure } from '../../../../orchestration/workers/turn-stops/worker-turn-stop-wording'
 
@@ -135,10 +137,11 @@ export async function noteBotRequestPost(
 export async function settleBotRequestTurn(
   runtime: OrcaRuntimeService,
   sessionId: string,
+  turnId: string,
   ended?: TurnEndedVerdict
 ): Promise<void> {
   if (ended?.outcome !== 'failure') {
-    await settleBotRequests(runtime, sessionId, 'ended')
+    await settleBotRequests(runtime, sessionId, turnId, 'ended')
   }
 }
 
@@ -155,12 +158,13 @@ export async function settleBotRequestFailure(
   // The reason is mailed to other agents and paired computers, so redact it as worker escalations do.
   const reason = error ? redactFailure(error.text) : undefined
   noteBotQuestionFailure(failure.sessionId, { requestId: failure.id, why, reason })
-  await settleBotRequests(runtime, failure.sessionId, why, reason)
+  await settleBotRequests(runtime, failure.sessionId, failure.id, why, reason)
 }
 
 async function settleBotRequests(
   runtime: OrcaRuntimeService,
   sessionId: string,
+  turnId: string,
   why: 'ended' | 'failed' | 'failed-continues',
   reason?: string
 ): Promise<void> {
@@ -169,9 +173,14 @@ async function settleBotRequests(
     return
   }
   const db = runtime.getOrchestrationDb()
-  const { turn } = await readBotTurn(runtime, db, sessionId)
+  const requestIds = await botRequestsTurnAnswered(
+    await (await requireStructuredHost(runtime)).journalReads(sessionId),
+    turnId,
+    (messageId) => db.getBotRequest(messageId) !== undefined,
+    async () => (await readBotTurn(runtime, db, sessionId)).turn.requestIds
+  )
   // Questions are decided by the question reconciler (mailbox/questions), from who took them.
-  const open = turn.requestIds.filter(
+  const open = requestIds.filter(
     (id) => db.getBotRequest(id)?.purpose === 'handoff' && db.getBotRequestOutcome(id) === null
   )
   if (open.length === 0) {
