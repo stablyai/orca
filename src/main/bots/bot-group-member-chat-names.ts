@@ -12,9 +12,10 @@ export function botGroupRoomTitle(group: BotGroup, threadId: string | undefined)
 }
 
 /** Names every member chat of `groups` (all rooms when omitted) after its room as saved when each
- *  name is written, so an older pass never writes over a newer one. A changed room renames its
- *  chats; `kept` leaves a chat someone renamed alone, for the pass that names chats made before
- *  this rule. Naming is metadata: a chat that cannot be renamed blocks nothing. */
+ *  name is written, so an older pass never writes over a newer one. The room owns its member chats'
+ *  names: a room save sets them, over any rename. `kept` is for the one pass on load that names
+ *  chats made before this rule: it leaves a chat already given a name by hand alone. Naming is
+ *  metadata: a chat that cannot be renamed blocks nothing. */
 export async function nameBotGroupMemberChats(
   botGroups: BotGroupRuntime,
   groups: readonly BotGroup[] = botGroups.store.list(),
