@@ -26,9 +26,18 @@ const MAX_REFUSED_WAIT_MS = 30 * 60_000
 // Sends in flight at once, so a large roster never fans out into one request per bot.
 const MAX_CONCURRENT_SENDS = 4
 
+// Per bot record (records are replaced on write, never changed in place): its key, so a retry pass over
+// unchanged bots derives no look again.
+const pictureKeys = new WeakMap<SyncedBot, string>()
+
 // What the cloud is sent for a bot: its picture and, for a colored or dressed mascot, its look.
 function pictureKey(bot: SyncedBot): string {
-  return `${bot.avatar ?? ''}|${botSlackIconLook(bot) ?? ''}`
+  let key = pictureKeys.get(bot)
+  if (key === undefined) {
+    key = `${bot.avatar ?? ''}|${botSlackIconLook(bot) ?? ''}`
+    pictureKeys.set(bot, key)
+  }
+  return key
 }
 
 export class BotAvatarSync {

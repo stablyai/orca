@@ -45,7 +45,7 @@ afterEach(async () => {
 it('sends a drawn icon only for the look the bot has now, else the plain mascot', async () => {
   home = await mkdtemp(join(tmpdir(), 'bot-slack-icon-'))
   const folder = home
-  const bot: Pick<
+  let bot: Pick<
     Bot,
     'id' | 'folderWorkspaceId' | 'avatar' | 'avatarColor' | 'avatarOutfit' | 'slack' | 'github'
   > = {
@@ -88,7 +88,7 @@ it('sends a drawn icon only for the look the bot has now, else the plain mascot'
   expect(sent[1]).toMatchObject({ v: 1, kind: 'upload', png: drawn.toString('base64') })
 
   // A new outfit set where no window draws it (a phone, the CLI): the old look's icon is not reused.
-  bot.avatarOutfit = 'party'
+  bot = { ...bot, avatarOutfit: 'party' }
   sync.changed()
   await vi.waitFor(() => expect(sent).toHaveLength(3))
   expect(sent[2]).toEqual({ v: 1, kind: 'mascot', id: 'A1' })
