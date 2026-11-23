@@ -23,7 +23,8 @@ export function writeLinkFact(
   fact:
     | Pick<ExternalConversationLink, 'place'>
     | Pick<ExternalConversationLink, 'lastTurn'>
-    | Pick<ExternalConversationLink, 'adoptedTurn'>,
+    | Pick<ExternalConversationLink, 'adoptedTurn'>
+    | Pick<ExternalConversationLink, 'wakeAnswers'>,
   workspace?: AgentPaneWorkspace
 ): boolean {
   const kept = workspace && readLinks(store, workspace).find((link) => sameConversation(link, key))
@@ -33,15 +34,34 @@ export function writeLinkFact(
     !next ||
     (next.place === linked.link.place &&
       next.lastTurn === linked.link.lastTurn &&
-      next.adoptedTurn === linked.link.adoptedTurn)
+      next.adoptedTurn === linked.link.adoptedTurn &&
+      next.wakeAnswers === linked.link.wakeAnswers)
   ) {
     return false
   }
   if (next.adoptedTurn === undefined) {
     delete next.adoptedTurn
   }
+  if (next.wakeAnswers === undefined) {
+    delete next.wakeAnswers
+  }
   writeLink(store, linked.workspace, next)
   return true
+}
+
+/** writeLinkFact for a turn's fact: a failed write is logged, never thrown into the turn's end. */
+export function keepLinkFact(
+  store: ExternalConversationLinkStore,
+  { link, workspace }: LinkedConversation,
+  fact:
+    | Pick<ExternalConversationLink, 'adoptedTurn'>
+    | Pick<ExternalConversationLink, 'wakeAnswers'>
+): void {
+  try {
+    writeLinkFact(store, link, fact, workspace)
+  } catch (error) {
+    console.warn('[connector] could not keep a turn fact on its link', error)
+  }
 }
 
 /** Marks a bot thread seen at its chat's first open, wherever it is opened; false when no unseen

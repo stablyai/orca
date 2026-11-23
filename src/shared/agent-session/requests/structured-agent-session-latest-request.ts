@@ -110,9 +110,7 @@ export function structuredAgentSessionRequestFromItem(
       turnState: turn.state,
       outcome: readAgentJournalTurnOutcome(turn),
       settledAt: turn.state === 'running' ? undefined : turnEndedAt(item, turn),
-      ...(turn.userItemId === item.itemId && !steered(item.itemId)
-        ? { selfStarted: true as const }
-        : {})
+      ...(isSelfStartedTurnRow(item, steered) ? { selfStarted: true as const } : {})
     }
   }
   if (
@@ -132,7 +130,19 @@ export function structuredAgentSessionRequestFromItem(
 }
 
 /** A user message steered into a turn the agent started makes it the user's turn too. */
-function steeredInto(submissions: readonly AgentJournalSubmission[], turnItemId: string): boolean {
+/** A turn row the agent opened itself (a background task's wake-up), with nothing steered into it. */
+export function isSelfStartedTurnRow(
+  item: Pick<AgentJournalRenderItem, 'itemId' | 'body'>,
+  steered: (turnItemId: string) => boolean
+): boolean {
+  return readAgentJournalTurn(item.body)?.userItemId === item.itemId && !steered(item.itemId)
+}
+
+/** Whether a send was steered into the turn row `turnItemId`. */
+export function steeredInto(
+  submissions: readonly AgentJournalSubmission[],
+  turnItemId: string
+): boolean {
   return submissions.some(
     ({ answeredInTurn }) =>
       answeredInTurn?.via === 'steer' && answeredInTurn.turnItemId === turnItemId

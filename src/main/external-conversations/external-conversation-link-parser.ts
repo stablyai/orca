@@ -19,6 +19,10 @@ const ExternalConversationLinkSchema = z.object({
   place: z.string().optional(),
   lastTurn: z.enum(['conversation', 'orca']).optional(),
   adoptedTurn: z.object({ itemId: z.string().min(1), at: z.number().positive() }).optional(),
+  wakeAnswers: z
+    .object({ at: z.number().positive(), work: z.string().min(1).max(64) })
+    .optional()
+    .catch(undefined),
   seenAt: z.number().nullable().optional(),
   // Mirror facts read loosely: a malformed one is dropped alone, never the link.
   opener: z

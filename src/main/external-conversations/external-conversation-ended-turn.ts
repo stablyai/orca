@@ -9,8 +9,10 @@ import {
 } from '../../shared/agent-session/journal/journal-connector-reply-turn'
 import type { AgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import {
+  isSelfStartedTurnRow,
   latestStructuredAgentSessionAssistantMessage,
   latestStructuredAgentSessionFailure,
+  steeredInto,
   structuredAgentSessionTurnAssistantMessage
 } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
 import type { ConversationChat } from './external-conversation-chat'
@@ -34,6 +36,8 @@ export type EndedChatTurn = {
   turnItemId?: string
   stamps?: ConnectorReplyStamp[]
   turnProse?: string
+  /** The agent opened the turn itself (a background task's wake-up) and no one steered into it. */
+  selfStarted?: true
 }
 
 export async function endedTurn(
@@ -70,7 +74,10 @@ export async function endedTurn(
   const opener = await readEndedChatTurnOpener(() => chat.journalReads(sessionId), items, turnId)
   const lastAssistantMessage = latestStructuredAgentSessionAssistantMessage(items)
   const failure = latestStructuredAgentSessionFailure(items, journal.submissions)
+  const row = endedChatTurnRow(items, turnId)
+  const selfStarted = row && isSelfStartedTurnRow(row, (id) => steeredInto(journal.submissions, id))
   return {
+    ...(selfStarted ? { selfStarted: true as const } : {}),
     ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
     ...(failure ? { failure } : {}),
     latestOpener: latestTurnOpener(items),

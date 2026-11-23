@@ -5,11 +5,8 @@ import type {
 import type { AdmittedMessage } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import { nameLinkedPlace } from './external-conversation-place'
 import { isBotAgent } from '../../shared/bot-types'
-import {
-  type ConversationChatHost,
-  chatTurnFacts,
-  watchChatNews
-} from './external-conversation-chat'
+import { type ConversationChatHost, watchChatNews } from './external-conversation-chat'
+import { chatTurnFacts } from './external-conversation-turn-facts'
 import { answerConversation } from './external-conversation-answer'
 import { chatPromptFacts } from './external-conversation-chat-prompts'
 import { botChatFor } from './external-conversation-bots'
