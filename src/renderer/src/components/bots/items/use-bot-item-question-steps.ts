@@ -65,7 +65,7 @@ export type BotItemQuestionSteps = {
   answer: (index: number, words: string) => void
   /** How many open lines hold an answer here, not sent yet. */
   heldCount: number
-  /** Send now: the held answers post as one comment; the other lines stay open. */
+  /** "send anyway": the held answers post as one comment; the other lines stay open. */
   sendHeld: () => void
 }
 

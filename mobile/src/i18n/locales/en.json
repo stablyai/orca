@@ -6274,7 +6274,8 @@
           "linkedMany": "{{chat}} linked {{count}} links to {{items}}",
           "linked": "{{chat}} linked {{link}} to {{items}}"
         },
-        "anotherChat": "Another chat"
+        "anotherChat": "Another chat",
+        "anotherAgent": "Another agent"
       },
       "status": {
         "planned": "Planned",

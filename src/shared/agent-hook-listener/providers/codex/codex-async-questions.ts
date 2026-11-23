@@ -23,11 +23,11 @@ export type CodexAsyncQuestions = {
   calls: Map<string, CodexAsyncQuestionCall>
   /** The calls started since, by id, and what each would ask approval as. */
   running: Map<string, string>
-  /** Approvals that may still be open, newest last. */
-  approvals: { asksAs: string; shown: ToolSnapshot }[]
+  /** Approvals that may still be open, newest last; `callRuns` when a running call could have raised it. */
+  approvals: { asksAs: string; shown: ToolSnapshot; callRuns: boolean }[]
 }
 
-// These take Codex's exclusive tool lock, so their start proves every earlier approval is over.
+// These take Codex's exclusive tool lock, so their start proves every running call, and the approvals it raised, is over.
 const STARTS_AFTER_APPROVALS: ReadonlySet<string> = new Set([
   CODEX_ASYNC_QUESTION_TOOL,
   'apply_patch',
@@ -114,7 +114,11 @@ export function codexWaitBesideQuestion(
       state.lastToolByPaneKey.set(paneKey, shown)
       return shown
     }
-    open.approvals.push({ asksAs, shown: { toolName, toolInput, interactivePrompt } })
+    open.approvals.push({
+      asksAs,
+      shown: { toolName, toolInput, interactivePrompt },
+      callRuns: approvalCallRuns(open, asksAs, hookPayload['tool_input'])
+    })
     // One call can ask again, for a sandbox retry or network access.
     dropEndedApprovals(open, asksAs, 1)
     return undefined
@@ -130,8 +134,12 @@ export function codexWaitBesideQuestion(
     const twins = [...open.running.values()].filter((asked) => asked === startedAs).length
     dropEndedApprovals(open, asksAs, twins)
   } else {
-    if (eventName !== 'PreToolUse' || STARTS_AFTER_APPROVALS.has(toolName ?? '')) {
+    if (eventName !== 'PreToolUse') {
       open.approvals = []
+      open.running.clear()
+    } else if (STARTS_AFTER_APPROVALS.has(toolName ?? '')) {
+      // A yielded command's network request outlives its call and the lock, so only its own end settles it.
+      open.approvals = open.approvals.filter((approval) => !approval.callRuns)
       open.running.clear()
     }
     if (eventName === 'PreToolUse' && callId) {
@@ -175,6 +183,24 @@ function approvalAskedAs(
   rawInput: unknown
 ): string {
   return JSON.stringify([toolName, toolName?.startsWith('mcp__') ? rawInput : toolInput])
+}
+
+// Codex raises an approval inside its own call's dispatch, which the lock settles; only a yielded
+// command's network request outlives its call, so it counts as owned only while that exact command runs.
+function approvalCallRuns(open: CodexAsyncQuestions, asksAs: string, rawInput: unknown): boolean {
+  const description =
+    rawInput && typeof rawInput === 'object' && 'description' in rawInput
+      ? rawInput.description
+      : undefined
+  if (typeof description !== 'string' || !description.startsWith('network-access ')) {
+    return true
+  }
+  for (const asked of open.running.values()) {
+    if (asked === asksAs) {
+      return true
+    }
+  }
+  return false
 }
 
 // An approval names no call, so as many can wait as calls that could have asked for them still run.

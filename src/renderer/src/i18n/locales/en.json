@@ -29763,6 +29763,7 @@
         "reopened": "reopened this",
         "workerFailed": "Worker stopped:",
         "workerFinished": "Worker finished:",
+        "anotherAgent": "Another agent",
         "workerStarted": "Worker started:",
         "you": "You",
         "snoozed": "snoozed this until {{when}}",
@@ -29816,7 +29817,8 @@
           "linkedMany": "{{chat}} linked {{count}} links to {{items}}",
           "linked": "{{chat}} linked {{link}} to {{items}}"
         },
-        "anotherChat": "Another chat"
+        "anotherChat": "Another chat",
+        "anotherAgent": "Another agent"
       },
       "chatFallback": "Chat",
       "comment": {
@@ -29949,11 +29951,10 @@
         "pickCustom": "Custom time"
       },
       "ask": {
-        "heldCount_one": "{{count}} answer not sent yet",
-        "heldCount_other": "{{count}} answers not sent yet",
+        "heldCount_one": "{{count}} answer not sent yet, <send>send anyway</send>",
+        "heldCount_other": "{{count}} answers not sent yet, <send>send anyway</send>",
         "next": "Next question",
         "notSentYet": "not sent yet",
-        "sendHeld": "Send now",
         "previous": "Previous question",
         "recommended": "Recommended",
         "step": "{{n}} of {{total}}",
