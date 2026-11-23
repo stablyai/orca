@@ -117,7 +117,8 @@ export function telemetryAtLaunch(
     return null
   }
   const on = resolveConsent(settings).effective === 'enabled'
-  if (on === !telemetry.sharingWasOff) {
+  // Unset after an upgrade: earlier launches may have had sharing off, so stamp once.
+  if (telemetry.sharingWasOff !== undefined && on === !telemetry.sharingWasOff) {
     return null
   }
   return on

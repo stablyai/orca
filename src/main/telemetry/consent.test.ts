@@ -34,6 +34,9 @@ describe('sharing resumed day', () => {
       installId: 'i',
       existedBeforeTelemetryRelease: false
     }
+    // After an upgrade, earlier launches may have had sharing off, so the first launch stamps.
+    t = telemetryAtLaunch(settings(t), noon(19)) ?? t
+    expect(t.sharingResumedDay).toBe('2026-11-19')
     expect(telemetryAtLaunch(settings(t), noon(19))).toBeNull()
 
     vi.stubEnv('DO_NOT_TRACK', '1')
