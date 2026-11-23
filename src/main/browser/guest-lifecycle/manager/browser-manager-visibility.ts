@@ -186,12 +186,13 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     origin: string
   ): void {
     const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
-    // Viewer input waits behind a running agent command, so a print during one is the agent's.
+    // The credit is the tab's, shared with its popups, so a print while an agent command runs on
+    // any of them may be that agent's script.
     const pairedDeviceId =
       ownerTabId &&
       frame &&
       this.isListedAsServerPage(guestWebContentsId) &&
-      !this.isAgentCommandRunning(guestWebContentsId)
+      !this.isAgentCommandRunningInTab(ownerTabId)
         ? this.pageInputCredit.peek(ownerTabId)
         : null
     if (pairedDeviceId && frame) {
@@ -210,6 +211,18 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
         this.pageEvents.emit(pageId, { kind: 'print', origin })
       }
     }
+  }
+
+  private isAgentCommandRunningInTab(browserTabId: string): boolean {
+    if (this.agentActivity.isExecuting(browserTabId)) {
+      return true
+    }
+    for (const [popupId, owner] of this.popupOwnerContextByGuestId) {
+      if (owner.browserTabId === browserTabId && this.isAgentCommandRunning(popupId)) {
+        return true
+      }
+    }
+    return false
   }
 
   private pageIdForGuest(guestWebContentsId: number): string {
