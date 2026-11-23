@@ -22739,7 +22739,6 @@
       },
       "googleOffer": {
         "useAccount": "Use {{email}} for Google.",
-        "useAnother": "Use another account",
         "reconnect": "Reconnect {{email}}",
         "use": "Use {{email}}",
         "staysDefault": "{{email}} stays the default"

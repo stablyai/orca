@@ -13,21 +13,23 @@ import { startGoogleSetupInChat } from './setup-cards/google-setup-run-store'
 function useLastVisitedBot(hostId: ExecutionHostId): Bot | null {
   // That host's Google setup, so only its own bots.
   const bots = useHostBots(hostId)
-  const visits = useAppStore((state) => state.lastVisitedAtByWorktreeId)
-  let last: Bot | null = null
-  let lastAt = -1
-  for (const bot of bots) {
-    const at =
-      getWorktreeVisitTimestamp(visits, {
-        id: folderWorkspaceKey(bot.folderWorkspaceId),
-        hostId: bot.hostId
-      }) ?? 0
-    if (at > lastAt) {
-      last = bot
-      lastAt = at
+  const lastId = useAppStore((state) => {
+    let last: string | null = null
+    let lastAt = -1
+    for (const bot of bots) {
+      const at =
+        getWorktreeVisitTimestamp(state.lastVisitedAtByWorktreeId, {
+          id: folderWorkspaceKey(bot.folderWorkspaceId),
+          hostId: bot.hostId
+        }) ?? 0
+      if (at > lastAt) {
+        last = bot.id
+        lastAt = at
+      }
     }
-  }
-  return last
+    return last
+  })
+  return bots.find((bot) => bot.id === lastId) ?? null
 }
 
 /** Settings' Google setup: it runs in the chat of the host's last-visited bot, or a new one's. */

@@ -13,7 +13,7 @@ function Choice({ title, detail }: { title: string; detail: string }): React.JSX
   return (
     <span className="flex flex-col items-start gap-0.5 py-0.5">
       <span className="text-xs font-medium text-foreground">{title}</span>
-      <span className="text-[11px] text-muted-foreground">{detail}</span>
+      <span className="text-[11px] whitespace-nowrap text-muted-foreground">{detail}</span>
     </span>
   )
 }
@@ -39,7 +39,7 @@ export function GoogleUseAnotherAccountMenu({
           <ChevronDown />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-72">
+      <DropdownMenuContent align="start">
         <DropdownMenuItem onSelect={onSignIn}>
           <Choice
             title={t('bots.google.useAnotherSignIn', 'Sign in with Google')}
