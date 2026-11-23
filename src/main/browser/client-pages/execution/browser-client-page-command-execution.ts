@@ -37,7 +37,7 @@ export async function navigateBrowserClientPageCommand(
   if (!normalized || normalized.startsWith('file:')) {
     throw new BrowserClientPageCommandError('browser_client_page_navigation_invalid')
   }
-  const navigated = await routeWebContents.navigateGuest(page.lifecycleClaim, normalized)
+  const navigated = await routeWebContents.navigateGuest(page.lifecycleClaim, normalized, signal)
   if (!navigated) {
     throw new BrowserClientPageCommandError('browser_client_page_navigation_failed')
   }

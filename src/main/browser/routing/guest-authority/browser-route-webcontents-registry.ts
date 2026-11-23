@@ -179,7 +179,11 @@ export class BrowserRouteWebContentsRegistry {
     })
   }
 
-  async navigateGuest(claim: BrowserRouteGuestLifecycleClaim, rawUrl: string): Promise<boolean> {
+  async navigateGuest(
+    claim: BrowserRouteGuestLifecycleClaim,
+    rawUrl: string,
+    signal?: AbortSignal
+  ): Promise<boolean> {
     const registration = claim.registration
     const state = this.guests.get(registration.webContentsId)
     // Live: navigation may wait for extensions, and authority can be revoked meanwhile.
@@ -191,7 +195,7 @@ export class BrowserRouteWebContentsRegistry {
         this.registrationMatchesGuest(state, registration) &&
         this.hasLivePageAuthority(state)
       )
-    return navigateBrowserRouteGuest(registration, rawUrl, state, isCurrent)
+    return navigateBrowserRouteGuest(registration, rawUrl, state, isCurrent, signal)
   }
 
   initializeGuest(

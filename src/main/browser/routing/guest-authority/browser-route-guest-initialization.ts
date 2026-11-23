@@ -124,7 +124,7 @@ export function initializeClaimedBrowserRouteGuest(
 }
 
 // A cancelled initialization must not wait out the extension hold; the next step sees the abort.
-function untilAborted(wait: Promise<void>, signal: AbortSignal): Promise<void> {
+export function untilAborted(wait: Promise<void>, signal: AbortSignal): Promise<void> {
   if (signal.aborted) {
     return Promise.resolve()
   }

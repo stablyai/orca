@@ -19,6 +19,7 @@ import {
 } from './browser-route-guest-popups'
 import type { BrowserRouteGuestState } from './browser-route-webcontents-state'
 import { whenBrowserExtensionsReadyForPage } from '../../extensions/profile-sessions/browser-extension-page-start'
+import { untilAborted } from './browser-route-guest-initialization'
 
 export function createBrowserRouteGuestState(
   guest: WebContents,
@@ -108,7 +109,9 @@ export async function navigateBrowserRouteGuest(
   registration: BrowserRoutePageGuestIdentity,
   rawUrl: string,
   state: BrowserRouteGuestState | undefined,
-  isCurrent: () => boolean
+  isCurrent: () => boolean,
+  /** The command's cancellation: it ends the extension wait and blocks the load. */
+  signal?: AbortSignal
 ): Promise<boolean> {
   const normalized = normalizeBrowserNavigationUrl(rawUrl)
   const allowed = (): boolean =>
@@ -129,9 +132,9 @@ export async function navigateBrowserRouteGuest(
     // As in initialization: a route session's first request must not straddle an extension load.
     const extensionsReady = whenBrowserExtensionsReadyForPage(state.guest)
     if (extensionsReady) {
-      await extensionsReady
-      // Authority can be revoked while waiting.
-      if (!allowed()) {
+      await (signal ? untilAborted(extensionsReady, signal) : extensionsReady)
+      // Authority can be revoked, or the command cancelled, while waiting.
+      if (signal?.aborted || !allowed()) {
         return false
       }
     }
