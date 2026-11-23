@@ -79,7 +79,7 @@ export function telemetryEventSampleRate(
     return stringProp(props, 'outcome') === 'ready' ? 0.01 : 1
   }
   if (name === 'codex_trust_grant') {
-    // A cached repeat of an earlier result; real errors keep their own reasons.
+    // A retry deferred to an earlier cached result or a pending backfill; real errors keep their own reasons.
     return stringProp(props, 'fallback_reason') === 'retry-cached' ? 0.01 : 1
   }
   if (name === 'agent_hook_unattributed') {
