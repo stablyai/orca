@@ -272,5 +272,10 @@ export async function dispatchCodexTurn(
       answeredAt ?? session.dispatchEchoes.tick()
     )
   }
-  return { state: 'admitted', written: true, ranOptions: { ...session.appliedTurnOptions } }
+  // A steer joined a running turn: only its echo clears "Sending…", not the write.
+  return {
+    state: 'admitted',
+    ...(answer.via === 'steer' ? {} : { written: true as const }),
+    ranOptions: { ...session.appliedTurnOptions }
+  }
 }
