@@ -16,8 +16,8 @@
   },
   "app": {
     "saving": {
-      "delayedTitle": "프로필 저장소 작업에 평소보다 오래 걸리고 있습니다",
-      "delayedDescription": "이 작업이 완료될 때까지 이후 저장이 지연될 수 있습니다."
+      "unsavedTitle": "Orca가 지금 변경 사항을 저장할 수 없습니다",
+      "unsavedDescription": "종료하면 설정, 프로젝트, 작업 공간, 열린 탭, 봇, 자동화에 대한 최근 변경 사항이 사라질 수 있습니다. Orca는 계속 다시 시도합니다. 디스크가 가득 찼다면 공간을 확보하세요."
     },
     "recoverableError": {
       "rootTitle": "Orca에 렌더러 오류가 발생했습니다.",

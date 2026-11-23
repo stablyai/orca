@@ -16,8 +16,8 @@
   },
   "app": {
     "saving": {
-      "delayedTitle": "配置存储操作耗时比平时更长",
-      "delayedDescription": "在此操作完成前，后续保存可能会延迟"
+      "unsavedTitle": "Orca 现在无法保存你的更改",
+      "unsavedDescription": "如果你退出，最近对设置、项目、工作区、打开的标签页、机器人和自动化所做的更改可能会丢失。Orca 会继续尝试。如果磁盘已满，请释放一些空间。"
     },
     "recoverableError": {
       "rootTitle": "Orca 遇到渲染器错误",

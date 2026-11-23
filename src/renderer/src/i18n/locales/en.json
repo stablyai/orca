@@ -323,8 +323,8 @@
   },
   "app": {
     "saving": {
-      "delayedTitle": "Profile storage is taking longer than usual",
-      "delayedDescription": "Further saves may be delayed while this operation finishes."
+      "unsavedTitle": "Orca can't save your changes right now",
+      "unsavedDescription": "Recent changes to settings, projects, workspaces, open tabs, bots, and automations could be lost if you quit. Orca keeps trying. If your disk is full, free up some space."
     },
     "recoverableError": {
       "rootTitle": "Orca hit a renderer error.",

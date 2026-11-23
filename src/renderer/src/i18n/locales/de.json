@@ -268,8 +268,8 @@
   },
   "app": {
     "saving": {
-      "delayedTitle": "Das Speichern des Profils dauert länger als üblich",
-      "delayedDescription": "Weitere Speichervorgänge können sich verzögern, bis dieser Vorgang abgeschlossen ist."
+      "unsavedTitle": "Orca kann deine Änderungen gerade nicht speichern",
+      "unsavedDescription": "Letzte Änderungen an Einstellungen, Projekten, Workspaces, offenen Tabs, Bots und Automatisierungen können verloren gehen, wenn du Orca beendest. Orca versucht es weiter. Wenn dein Speicherplatz voll ist, gib etwas Platz frei."
     },
     "recoverableError": {
       "rootTitle": "In Orca ist ein Renderer-Fehler aufgetreten.",

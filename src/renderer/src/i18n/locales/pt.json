@@ -455,8 +455,8 @@
       "webDescription": "Tente novamente no cliente web ou reconecte-se ao runtime pareado."
     },
     "saving": {
-      "delayedTitle": "O armazenamento do perfil está demorando mais que o normal",
-      "delayedDescription": "Outros salvamentos podem demorar enquanto esta operação termina."
+      "unsavedTitle": "O Orca não consegue salvar suas alterações agora",
+      "unsavedDescription": "Alterações recentes em configurações, projetos, espaços de trabalho, abas abertas, bots e automações podem ser perdidas se você sair. O Orca continua tentando. Se o seu disco estiver cheio, libere algum espaço."
     }
   },
   "sidebar": {
