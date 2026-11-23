@@ -11,6 +11,11 @@ import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type { RemoteBrowserOperationToken } from './remote-browser-stream-tokens'
 import type { RemoteBrowserHostContextMenus } from './remote-browser-host-context-menus'
+import { openRemoteBrowserLinkInNewTab } from './remote-browser-page-open-link-tab'
+import {
+  remoteBrowserPageMenuActions,
+  type RemoteBrowserPageMenuActionDeps
+} from './remote-browser-page-menu-actions'
 import {
   buildRemoteContextMenuExpression,
   readRemoteContextMenuResult,
@@ -171,12 +176,17 @@ export function RemoteBrowserPageContextMenu({
   contextMenu,
   onDismiss,
   history,
-  actions
+  actions,
+  linkTab,
+  pageMenuDeps
 }: {
   contextMenu: RemoteBrowserPageContextMenuState
   onDismiss: () => void
   history: { canGoBack: boolean; canGoForward: boolean }
-  actions: BrowserPageContextMenuActions
+  actions: Omit<BrowserPageContextMenuActions, 'openInNewTab'>
+  /** The pane's tab, beside which Open Link and Open Image open theirs. */
+  linkTab: { browserPageId: string; worktreeId: string; runtimeEnvironmentId: string }
+  pageMenuDeps: RemoteBrowserPageMenuActionDeps
 }): React.JSX.Element {
   const contextMenuRef = useRef<HTMLDivElement>(null)
 
@@ -216,7 +226,17 @@ export function RemoteBrowserPageContextMenu({
           menu={contextMenu}
           canGoBack={history.canGoBack}
           canGoForward={history.canGoForward}
-          actions={actions}
+          actions={{
+            ...actions,
+            openInNewTab: (url, activate) =>
+              openRemoteBrowserLinkInNewTab({
+                ...linkTab,
+                url,
+                activate,
+                setPaneNotice: pageMenuDeps.setPaneNotice
+              }),
+            ...remoteBrowserPageMenuActions(pageMenuDeps, contextMenu)
+          }}
           onClose={onDismiss}
         />
       </div>

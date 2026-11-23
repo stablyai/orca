@@ -19,7 +19,7 @@ import type { RemoteBrowserPageContextMenuState } from './remote-browser-page-co
 
 const RPC_OPTIONS = { timeoutMs: 15_000, suppressFeatureInteraction: true }
 
-type RemoteBrowserPageMenuActionDeps = {
+export type RemoteBrowserPageMenuActionDeps = {
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
   lifecycle: RemoteBrowserStreamLifecycle
   runtimeWorktree: string
