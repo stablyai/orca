@@ -61,7 +61,6 @@ export function NativeChatResolvedView({
   terminalTabId,
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
-  readTerminalScreen,
   readTerminalDraft,
   contextMenuActions
 }: NativeChatResolvedViewProps): React.JSX.Element {

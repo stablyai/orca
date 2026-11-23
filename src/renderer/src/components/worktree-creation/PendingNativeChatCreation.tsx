@@ -31,9 +31,8 @@ import WorktreeCreationTabStrip from './WorktreeCreationTabStrip'
 import { WorktreeSetupSteps } from './WorktreeSetupSteps'
 import { deriveWorktreeSetupSteps } from './worktree-setup-steps'
 import { useWorktreeCreationClock } from './worktree-creation-clock'
-import { getRepoMainWorktreeId } from '../../../../shared/worktree/id'
+import { pendingChatAccountOwner } from '@/lib/workspace/ownership/visible-account-surface'
 import type { NativeChatComposerDraftImage } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { usePendingNativeChatOptions } from './use-pending-native-chat-options'
 
 const NO_COMMAND_CAUSES = {
@@ -64,18 +63,12 @@ export default function PendingNativeChatCreation({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
-  const sourceWorktreeId = useAppStore((s) => {
-    const repo = s.repos.find((repo) => repo.id === entry?.request.repoId)
-    return repo ? getRepoMainWorktreeId(repo) : undefined
-  })
-  const executionHostId = useAppStore((s) => {
-    const repo = s.repos.find((repo) => repo.id === entry?.request.repoId)
-    return (
-      entry?.request.executionHostId ??
-      entry?.request.workspaceRunContext?.hostId ??
-      (repo ? getRepoExecutionHostId(repo) : undefined)
-    )
-  })
+  const sourceWorktreeId = useAppStore(
+    (s) => pendingChatAccountOwner(s, creationId).sourceWorktreeId
+  )
+  const executionHostId = useAppStore(
+    (s) => pendingChatAccountOwner(s, creationId).hostId ?? undefined
+  )
   const options = usePendingNativeChatOptions(entry, executionHostId, sourceWorktreeId)
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
   const composerRef = React.useRef<NativeChatComposerHandle>(null)
@@ -139,6 +132,7 @@ export default function PendingNativeChatCreation({
       ...(sendBlockedReason ? { sendBlockedReason } : {}),
       optionsSurface: options.surface,
       optionSnapshot: options.snapshot,
+      pendingCreationId: creationId,
       worktreeId: sourceWorktreeId,
       attachmentStagingScope: pendingCreationChatDraftScopeKey(creationId),
       onError: reportComposerError,

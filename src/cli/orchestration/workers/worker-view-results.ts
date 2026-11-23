@@ -6,7 +6,8 @@ export type WorkerProjection = {
   provider?: { id: string; model: string | null } | null
   host: { id: string }
   workspace?: { id: string } | null
-  stage: { activity: string }
+  /** `backgroundWait`: its turn ended while its own background tasks still run (absent from older hosts). */
+  stage: { activity: string; backgroundWait?: { since: number; commands: string[] } }
   liveness: { verdict: string; detail?: string }
   evidence?: { lastObservedAt: number | null }
   nextAction: { argv: string[] }

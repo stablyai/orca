@@ -16,6 +16,10 @@ import {
 } from '../../../../shared/bots/bot-tool-added-card-view'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { NativeChatEventRow } from './messages/events/NativeChatEventRow'
+import {
+  NATIVE_CHAT_INLINE_NAME,
+  NATIVE_CHAT_ROW_SHARE
+} from './messages/events/native-chat-inline-chip'
 
 type ToolAdded = NonNullable<NativeChatMessage['toolAdded']>
 
@@ -99,8 +103,15 @@ export function NativeChatToolAddedCard({
           ) : null
         }
       >
-        {lead} <span className="text-chat-foreground">{title}</span>
-        {after.map((part) => ` · ${part}`).join('')}
+        <span className="shrink-0">{lead}</span>
+        <span className={NATIVE_CHAT_INLINE_NAME} title={title}>
+          {title}
+        </span>
+        {after.length > 0 ? (
+          <span className={NATIVE_CHAT_ROW_SHARE} title={after.join(' · ')}>
+            {after.map((part) => `· ${part}`).join(' ')}
+          </span>
+        ) : null}
       </NativeChatEventRow>
       {present && signIn.pasteBack ? (
         <div className="ml-5">

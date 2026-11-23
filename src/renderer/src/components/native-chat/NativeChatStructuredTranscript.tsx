@@ -1,5 +1,5 @@
+import { NativeChatWorkerTimeline } from './tools/tasks/dock/NativeChatWorkerResultTimeline'
 import {
-  NativeChatWorkerApprovalTimeline,
   NativeChatPartyWorkerApprovalStack,
   nativeChatWorkerApprovalParty
 } from './worker-approvals/NativeChatWorkerApprovals'
@@ -64,9 +64,12 @@ export function NativeChatStructuredTranscript({
         view={continuation}
       >
         <NativeChatHostSetupContext.Provider value={setup}>
-          <NativeChatWorkerApprovalTimeline
-            party={nativeChatWorkerApprovalParty(pane)}
+          <NativeChatWorkerTimeline
+            approvalParty={nativeChatWorkerApprovalParty(pane)}
+            workerDock={controller.backgroundTasks.workerDock}
             target={pane.target}
+            sessionId={pane.sessionId}
+            isVisible={props.isVisible}
           >
             {(timedRows) => (
               <NativeChatSubagentTranscripts
@@ -88,7 +91,7 @@ export function NativeChatStructuredTranscript({
                 turnActivity={controller.turnActivity}
               />
             )}
-          </NativeChatWorkerApprovalTimeline>
+          </NativeChatWorkerTimeline>
         </NativeChatHostSetupContext.Provider>
       </NativeChatUsageLimitActionsProvider>
     </NativeChatRowActionsProvider>

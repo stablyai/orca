@@ -12,6 +12,7 @@ export type StructuredSessionBackgroundTasksView = {
   show: boolean
   /** Idle-only monitoring/command gate; a running turn owns the indicator, but background rows remain visible. */
   isMonitoring: boolean
+  workerDock?: AgentSessionBackgroundTaskState['workerDock']
   tasks: AgentSessionBackgroundTask[]
   settledTasks: AgentSessionBackgroundTask[]
   /** The host's child records, when it publishes them; the rows then read these. */
@@ -75,9 +76,10 @@ export function structuredSessionBackgroundTasksView(
     supportsStop,
     // Missing supportsStopAll is legacy support; only explicit false means no untargeted Stop.
     offersStopAll:
-      (!supportsStop && liveWork && backgroundTasks?.supportsStopAll !== false) ||
+      ((liveWork || incomplete) && !supportsStop && backgroundTasks?.supportsStopAll !== false) ||
       (incomplete && turnId === null),
-    incomplete
+    incomplete,
+    ...(backgroundTasks?.workerDock ? { workerDock: backgroundTasks.workerDock } : {})
   }
 }
 

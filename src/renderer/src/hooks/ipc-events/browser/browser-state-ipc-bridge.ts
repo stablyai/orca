@@ -120,6 +120,19 @@ export function registerBrowserStateIpcBridge(
   if (unsubscribeAudioState) {
     unsubs.push(unsubscribeAudioState)
   }
+  // A paired viewer's mute lands in this window's tab state, so the strip and the published row agree.
+  const unsubscribeAudioMuted = window.api.browser.onAudioMutedChanged?.(
+    ({ browserPageId, muted }) => {
+      const store = useAppStore.getState()
+      const tabId = findPage(store.browserPagesByWorkspace, browserPageId)?.workspaceId
+      if (tabId) {
+        store.setBrowserTabAudioMuted(tabId, muted)
+      }
+    }
+  )
+  if (unsubscribeAudioMuted) {
+    unsubs.push(unsubscribeAudioMuted)
+  }
   unsubs.push(
     window.api.browser.onNavigationUpdate(({ browserPageId, url, title }) => {
       if (isRuntimeEnvironmentActive()) {

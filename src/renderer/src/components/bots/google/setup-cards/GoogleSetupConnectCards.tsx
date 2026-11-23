@@ -11,7 +11,7 @@ import {
   googleSetupBlockerIsConnect
 } from '../../../../../../shared/google/google-setup-card-view'
 import { useTurnOnBotGoogle } from '../use-turn-on-bot-google'
-import { googleAccountChoices, googleReadinessFixer } from '../GoogleAccountReadiness'
+import { googleAccountChoices, googleReadinessFixer } from '../google-account-readiness'
 import { googleChoiceLogos, GoogleLogoStack } from '../GoogleServicePicker'
 import { GoogleAddServiceDialog } from '../GoogleAddServiceDialog'
 import { GoogleSignInWaiting } from '../GoogleSignInWaiting'
@@ -37,7 +37,7 @@ export function GoogleSetupConnectCard({
   newest: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const signIn = useGoogleSignIn(botTarget(bot))
+  const signIn = useGoogleSignIn(botTarget(bot), bot)
   const host = useBotHostLabel(bot.hostId)
   const turnOn = useTurnOnBotGoogle()
   const done = run.steps.connect?.status === 'done'
@@ -140,7 +140,7 @@ export function GoogleSetupConnectedCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const host = useGoogleHost(botTarget(bot))
-  const signIn = useGoogleSignIn(botTarget(bot))
+  const signIn = useGoogleSignIn(botTarget(bot), bot)
   const google = host.status === 'ready' ? host.google : null
   const account =
     google?.accounts.find((entry) => entry.email === run.account) ?? google?.accounts[0] ?? null

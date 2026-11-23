@@ -20,8 +20,9 @@ import { endedPresenceOf } from './agent-exit-evidence'
 
 export type EndedProcessReconciliationOptions = {
   endedPresence?: AgentProcessPresence
-  /** The pane's shell is back: a process-less owner ended. */
-  confirmedExit?: boolean
+  /** The pane's shell is back: a process-less owner ended. 'proven' when the host's process
+   *  table found the shell alone, not only a command mark standing. */
+  confirmedExit?: boolean | 'proven'
   /** Keep resume identity when the pane survives the agent. */
   preserveResumeIdentity?: boolean
   /** One pane's identity, already read while its row stayed unchanged. */
@@ -275,7 +276,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
         } else if (deleted.payload.agentType === 'claude') {
           this.state.claudeSubagentRosterByPaneKey.delete(paneKey)
           this.state.claudeLeadStateByPaneKey.delete(paneKey)
-          this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+          this.state.claudeRunningNonAgentTasksByPaneKey.delete(paneKey)
           this.state.claudeActiveSessionCronPaneKeys.delete(paneKey)
           this.state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
           this.state.claudeSessionOwnerByPaneKey.delete(paneKey)

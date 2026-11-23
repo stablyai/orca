@@ -59,9 +59,3 @@ export function readWindowsPathRegistry(): WindowsPathRegistryRead[] | null {
     readRegistryPath(registry, registry.HK.CU, USER_ENVIRONMENT_KEY)
   ]
 }
-
-export function __setWindowsPathRegistryLoaderForTests(
-  loader?: () => WindowsNativeRegistryModule
-): void {
-  windowsRegistryLoader = loader ?? loadWindowsNativeRegistry
-}

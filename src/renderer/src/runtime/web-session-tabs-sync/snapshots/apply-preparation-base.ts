@@ -34,7 +34,7 @@ import {
   collectHostRetiredTerminals,
   isTerminalRowRetiredByHost
 } from '../tab-projection/host-retired-terminal-rows'
-import { hostSnapshotAffirmsWorktreeContents } from '../hydration/host-session-snapshot-authority'
+import { hostSnapshotAffirmsWorktreeContents } from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import { logHostTerminalTabsShrunk } from '../tab-projection/host-terminal-tab-drop-log'
 
 export function prepareWebSessionTabsSnapshotBase(
