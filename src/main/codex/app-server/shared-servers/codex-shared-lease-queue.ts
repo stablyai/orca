@@ -63,6 +63,7 @@ export class CodexSharedLeaseQueue {
     }
     this.draining = true
     let budget = DRAIN_CHUNK_BYTES
+    let drained = 0
     try {
       while (budget > 0 && this.pending > 0 && this.owner.canDispatch()) {
         const { frame, bytes } = this.frames[this.head]!
@@ -70,10 +71,14 @@ export class CodexSharedLeaseQueue {
         this.head += 1
         this.heldBytes -= bytes
         budget -= bytes
-        this.owner.backlog(-bytes)
+        drained += bytes
         this.owner.dispatch(frame)
       }
     } finally {
+      // One report per batch: the server's backlog weighs every chat on each report.
+      if (drained > 0) {
+        this.owner.backlog(-drained)
+      }
       if (this.head * 2 >= this.frames.length) {
         this.frames.splice(0, this.head)
         this.head = 0

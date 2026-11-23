@@ -39,9 +39,6 @@ export class CodexSharedServerBacklog {
   private graceSince: number | null = null
   /** The chat each test last matched, checked first so a queued frame doesn't walk every chat. */
   private readonly witnesses = new Map<(lease: BacklogLease) => boolean, BacklogLease>()
-  /** Tests no chat matched in this synchronous run (one drain batch). A chat's state changes
-   *  between runs, or through change() here, which forgets any miss that chat now matches. */
-  private readonly misses = new Set<(lease: BacklogLease) => boolean>()
 
   constructor(
     private readonly reader: () => Pick<
@@ -67,11 +64,6 @@ export class CodexSharedServerBacklog {
     } else {
       this.waiters.delete(lease)
     }
-    for (const test of this.misses) {
-      if (deltaBytes === 0 || test(lease)) {
-        this.misses.delete(test)
-      }
-    }
     if (!this.shedding) {
       this.settle(false)
     }
@@ -84,7 +76,6 @@ export class CodexSharedServerBacklog {
     this.bytes.clear()
     this.waiters.clear()
     this.witnesses.clear()
-    this.misses.clear()
     this.total = 0
     this.paused = false
   }
@@ -133,9 +124,6 @@ export class CodexSharedServerBacklog {
     test: (lease: BacklogLease) => boolean,
     ...groups: ReadonlySet<BacklogLease>[]
   ): boolean {
-    if (this.misses.has(test)) {
-      return false
-    }
     const witness = this.witnesses.get(test)
     if (witness && test(witness) && groups.some((group) => group.has(witness))) {
       return true
@@ -149,10 +137,6 @@ export class CodexSharedServerBacklog {
       }
     }
     this.witnesses.delete(test)
-    if (this.misses.size === 0) {
-      queueMicrotask(() => this.misses.clear())
-    }
-    this.misses.add(test)
     return false
   }
 

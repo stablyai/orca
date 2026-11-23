@@ -8,10 +8,13 @@ afterEach(() => {
 describe('shared Codex lease queue', () => {
   it('drains a long backlog moving each held slot a bounded number of times', () => {
     let reading = false
+    let reports = 0
     const queue = new CodexSharedLeaseQueue({
       canDispatch: () => reading,
       dispatch: () => {},
-      backlog: () => {},
+      backlog: () => {
+        reports += 1
+      },
       refuse: () => {}
     })
     const frames = 20_000
@@ -30,10 +33,15 @@ describe('shared Codex lease queue', () => {
       return splice.apply(this, args)
     })
     reading = true
+    reports = 0
+    let batches = 0
     while (queue.pending > 0) {
       queue.drain()
+      batches += 1
     }
     // One splice per 64 KiB batch would shift about 3 million slots here.
     expect(shifted).toBeLessThanOrEqual(2 * frames)
+    // The server's backlog walks every chat per report, so a drain reports once per batch.
+    expect(reports).toBe(batches)
   })
 })
