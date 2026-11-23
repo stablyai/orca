@@ -160,7 +160,8 @@ it('closes the questions an answer skips, so the set is finished and its mail na
   const { store, uid, ask, comment, view, lastComment } = item()
   const asked = ask([HOSTS, GO, MERGE])
   // "send anyway" with only the first answered.
-  comment(`${HOSTS} → Yes`, asked, [1, 2])
+  // A line the answer names is never recorded as skipped.
+  comment(`${HOSTS} → Yes`, asked, [0, 1, 2])
   expect(lastComment().data.skipped).toEqual([GO, MERGE])
   expect(store.get(uid)?.status).toBe('working')
   expect(store.viewRows([uid], true).waitingAsks[uid]).toBeUndefined()

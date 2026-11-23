@@ -11,6 +11,7 @@ import {
 } from '../../shared/bots/bot-items'
 import { BOT_ITEM_SNOOZE_MAX_MS } from '../../shared/bots/bot-item-snooze'
 import { botItemQuestionLine, botItemQuestionShape } from '../../shared/bots/bot-item-ask'
+import { botItemNamedAnswers } from '../../shared/bots/bot-item-answer-lines'
 import { BotItemError } from './bot-item-error'
 import { BotItemsWrites } from './bot-items-writes'
 import {
@@ -24,12 +25,18 @@ import type { BotItemEventRecord, BotItemMail, BotItemRecord } from './bot-items
 
 const OWED_MAIL_PAGE = 50
 
-/** The ask's questions, by their first line, at the skipped indices it has: the mail names them. */
-function skippedQuestions(ask: BotItemEventRecord, skipped: readonly number[]): string[] {
-  const { decisions } = botItemQuestionShape(ask.data)
+/** The ask's questions, by their first line, at the skipped indices it has and the answer doesn't
+ *  name: the mail names them. */
+function skippedQuestions(
+  ask: BotItemEventRecord,
+  skipped: readonly number[],
+  answerText: string
+): string[] {
+  const shape = botItemQuestionShape(ask.data)
+  const named = botItemNamedAnswers(shape, answerText)
   return [...new Set(skipped)].flatMap((index) => {
-    const decision = decisions[index]
-    return decision ? [botItemQuestionLine(decision.question)] : []
+    const decision = shape.decisions[index]
+    return decision && named[index] === null ? [botItemQuestionLine(decision.question)] : []
   })
 }
 
@@ -124,7 +131,10 @@ export class BotItemsOwner extends BotItemsWrites {
         plain,
         skills,
         typeof askedIn === 'string' ? askedIn : undefined,
-        answering ? skippedQuestions(answering, skipped) : []
+        // Only an answer naming its ask skips: a delayed one never closes a newer ask.
+        answering && questionEventId !== undefined
+          ? skippedQuestions(answering, skipped, commentText)
+          : []
       )
       this.endSnooze(uid, actor, now)
       // A reply hands the item back to the bot.
