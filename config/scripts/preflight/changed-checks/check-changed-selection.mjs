@@ -4,7 +4,11 @@ import {
   classifyPrJobs,
   isDocsOnlyPath
 } from '../../workflow/source-routing/pr-code-change-scope.mjs'
-import { listRatchetScripts } from '../../static-analysis/ratchet-runner/run-ratchets.mjs'
+import {
+  listRatchetScripts,
+  MAIN_BLOCKING_RATCHETS,
+  MAIN_BLOCKING_RUNNER
+} from '../../static-analysis/ratchet-runner/run-ratchets.mjs'
 
 // Any of these can change what every check reports, so they select all of them.
 const SELECT_ALL_FILES = new Set(['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'])
@@ -389,6 +393,7 @@ export function selectTypecheckProjects(files) {
 
 // Shared analysis modules select every ratchet built on them.
 const RATCHET_SHARED_MODULES = {
+  [`config/scripts/${MAIN_BLOCKING_RUNNER.split(path.sep).join('/')}`]: [...MAIN_BLOCKING_RATCHETS],
   'config/scripts/static-analysis/process-boundaries/gated-call-use-collector.mjs': [
     'check-main-blocking-api-ratchet.mjs',
     'check-main-blocking-helper-ratchet.mjs',
@@ -477,6 +482,22 @@ export function splitUnitTestInputs(files, listDirectory = () => []) {
   return { related, colocated: [...colocated].sort() }
 }
 
+function reuseMainBlockingGraph(checks) {
+  const grouped = checks.filter((check) =>
+    MAIN_BLOCKING_RATCHETS.has(path.basename(check.args?.[0] ?? ''))
+  )
+  if (grouped.length !== MAIN_BLOCKING_RATCHETS.size) {
+    return checks
+  }
+  return [
+    {
+      name: 'main blocking ratchets',
+      args: [path.join('config', 'scripts', MAIN_BLOCKING_RUNNER)]
+    },
+    ...checks.filter((check) => !grouped.includes(check))
+  ]
+}
+
 /** Decides which checks a set of changed paths needs; CI's classifier gates the expensive jobs. */
 export function planChangedChecks(files, { scriptsDir, listDirectory, readVersions }) {
   const jobs = classifyPrJobs(files)
@@ -491,7 +512,9 @@ export function planChangedChecks(files, { scriptsDir, listDirectory, readVersio
       ? splitUnitTestInputs(files, listDirectory)
       : { related: [], colocated: [] },
     checks: jobs.static_analysis
-      ? checks.filter((check) => selectAll || isSelected(check, files, { readVersions }))
+      ? reuseMainBlockingGraph(
+          checks.filter((check) => selectAll || isSelected(check, files, { readVersions }))
+        )
       : []
   }
 }
