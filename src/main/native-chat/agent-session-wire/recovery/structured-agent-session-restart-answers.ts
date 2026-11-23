@@ -11,13 +11,13 @@ import {
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-restart-resume-runner'
 import type { StructuredAgentSessionResumeCandidate } from './structured-agent-session-restart-resume-set'
 
-/** How long a handed-over chat's answer may take before it is filed as unconfirmed. Under a burst
- *  of starts agents can take minutes; an answer the provider accepts later retires that record. */
+/** How long an action's handed-over chats may take to answer before the rest are settled as
+ *  unconfirmed. Under a burst of starts agents can take minutes; a later answer still applies. */
 const RESTART_ANSWER_WAIT_MS = 150_000
 
 export function createRestartAnswers() {
-  /** Handed-over chats, each settling once its agent answers or its wait runs out. */
-  const answers = new Map<string, Promise<void>>()
+  /** Handed-over chats: `answered` settles once the agent answers (or the verdict fails). */
+  const answers = new Map<string, { answered: Promise<void>; giveUp: () => Promise<void> }>()
   /** Every answer so far, including those that arrive after the action returned. */
   const continued: StructuredAgentSessionContinuationOutcome[] = []
 
@@ -65,9 +65,17 @@ export function createRestartAnswers() {
       return { waiting, settled: Promise.resolve() }
     }
     await settleChats((sessionId) => !waiting.has(sessionId), false)
-    const settled = Promise.all(
-      [...waiting].map((sessionId) => answers.get(sessionId) ?? Promise.resolve())
+    // One deadline for the whole action, not a timer per chat.
+    const settled = withTimeout(
+      Promise.all([...waiting].map((sessionId) => answers.get(sessionId)?.answered)),
+      RESTART_ANSWER_WAIT_MS,
+      undefined
     )
+      .then(async () => {
+        // Each unanswered chat settles on its own: its row, its queue and its note.
+        const unanswered = [...waiting].filter((sessionId) => !outcomeOf(sessionId))
+        await Promise.all(unanswered.map((sessionId) => answers.get(sessionId)?.giveUp()))
+      })
       .then(() => settleChats((sessionId) => waiting.has(sessionId), true))
       .catch(() => {
         logger.warn('settling late restart continuations failed', {
@@ -80,12 +88,20 @@ export function createRestartAnswers() {
 
   return {
     continued,
-    /** A chat whose continuation was handed over; `answer` resolves with its agent's answer. */
-    handedOver(sessionId: string, answer: Promise<StructuredAgentSessionContinuationOutcome>) {
-      const recorded = answer.then((outcome) => {
-        continued.push(outcome)
-      })
-      answers.set(sessionId, withTimeout(recorded, RESTART_ANSWER_WAIT_MS, undefined))
+    /** A chat whose continuation was handed over; `answer` resolves with its agent's answer and
+     *  `giveUp` settles it as unconfirmed when the action's deadline passes first. */
+    handedOver(
+      sessionId: string,
+      answer: Promise<StructuredAgentSessionContinuationOutcome>,
+      giveUp: () => Promise<void>
+    ) {
+      const answered = answer.then(
+        (outcome) => {
+          continued.push(outcome)
+        },
+        () => {}
+      )
+      answers.set(sessionId, { answered, giveUp })
     },
     settle
   }

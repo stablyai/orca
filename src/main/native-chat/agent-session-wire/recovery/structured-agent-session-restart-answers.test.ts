@@ -1,6 +1,14 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { createRestartAnswers } from './structured-agent-session-restart-answers'
-import type { StructuredAgentSessionContinuationOutcome } from './structured-agent-session-restart-continuation'
+import {
+  continuationDeps,
+  startStructuredAgentSessionContinuation,
+  type StructuredAgentSessionContinuationOutcome
+} from './structured-agent-session-restart-continuation'
+import {
+  AGENT_SESSION_RESTART_CONTINUATION_NOTE,
+  AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE
+} from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 
 const logger: StructuredAgentSessionLogger = { warn: vi.fn(), error: vi.fn() }
@@ -18,10 +26,15 @@ it('returns before late answers, then settles them in one pass without dropping 
   }
   const answers = createRestartAnswers()
   const late = Promise.withResolvers<StructuredAgentSessionContinuationOutcome>()
-  answers.handedOver('fast', Promise.resolve({ sessionId: 'fast', outcome: 'continued' }))
-  answers.handedOver('refused', late.promise)
+  const giveUp = { fast: vi.fn(), refused: vi.fn(), stuck: vi.fn() }
+  answers.handedOver(
+    'fast',
+    Promise.resolve({ sessionId: 'fast', outcome: 'continued' }),
+    giveUp.fast
+  )
+  answers.handedOver('refused', late.promise, giveUp.refused)
   // Never answers, like an agent stuck retrying its API.
-  answers.handedOver('stuck', new Promise(() => {}))
+  answers.handedOver('stuck', new Promise(() => {}), giveUp.stuck)
   await Promise.resolve()
 
   const { waiting, settled: later } = await answers.settle(
@@ -53,4 +66,100 @@ it('returns before late answers, then settles them in one pass without dropping 
     { ids: ['fast'], last: false, failure: [null] },
     { ids: ['refused', 'stuck'], last: true, failure: ['refused', 'unconfirmed'] }
   ])
+  expect([giveUp.fast.mock.calls.length, giveUp.refused.mock.calls.length]).toEqual([0, 0])
+  expect(giveUp.stuck).toHaveBeenCalledOnce()
+})
+
+it('settles a chat its agent never answers on its own: no longer sending, queue released, a late accept still counts', async () => {
+  vi.useFakeTimers()
+  type Row = { clientMessageId: string; dispatchState: string; handedOverAt?: number }
+  const rows = new Map<string, Row>()
+  const released: string[] = []
+  const notes: { sessionId: string; text: string }[] = []
+  const journalFor = (sessionId: string) => ({
+    reads: { submission: async (id: string) => rows.get(id) },
+    resolveDispatch: async (input: { clientMessageId: string; state: string }) => {
+      const row = rows.get(input.clientMessageId)
+      // Accepted and rejected are final, as in the journal reducer.
+      if (row && row.dispatchState !== 'accepted' && row.dispatchState !== 'rejected') {
+        row.dispatchState = input.state
+      }
+      return null
+    },
+    appendItem: async (_attribution: unknown, body: { text: string }) => {
+      notes.push({ sessionId, text: body.text })
+    },
+    write: async (command: { kind: string }) => {
+      if (command.kind === 'queue-resume') {
+        released.push(sessionId)
+      }
+    }
+  })
+  const stuckAnswer = Promise.withResolvers<void>()
+  const submission = (clientMessageId: string) => ({
+    value: { clientMessageId, submission: rows.get(clientMessageId) }
+  })
+  const host = {
+    sessions: new Map(['fast', 'stuck'].map((id) => [id, { journal: journalFor(id) }])),
+    conversationFence: () => 1,
+    send: async ({ envelope }: { envelope: { clientOperationId: string } }) => {
+      const id = envelope.clientOperationId
+      rows.set(id, { clientMessageId: id, dispatchState: 'pending', handedOverAt: 1 })
+      return { ok: true, ...submission(id) }
+    },
+    awaitSendHandedOver: async (_sessionId: string, id: string) => submission(id),
+    awaitSendSettlement: async (sessionId: string, id: string) => {
+      if (sessionId === 'stuck') {
+        await stuckAnswer.promise
+      }
+      rows.get(id)!.dispatchState = 'accepted'
+      return submission(id)
+    },
+    awaitSendDispatched: async () => undefined,
+    logger,
+    now: () => 0
+  }
+  const answers = createRestartAnswers()
+  for (const sessionId of ['fast', 'stuck']) {
+    const started = await startStructuredAgentSessionContinuation(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an in-memory journal with only the reads and writes a continuation makes.
+      continuationDeps(host as unknown as Parameters<typeof continuationDeps>[0], async () => true),
+      sessionId,
+      {},
+      `continue-${sessionId}`
+    )
+    if (!('verdict' in started)) {
+      throw new Error('expected a handed-over continuation')
+    }
+    answers.handedOver(sessionId, started.verdict(), started.giveUp)
+  }
+  await vi.advanceTimersByTimeAsync(0)
+  const { settled } = await answers.settle(
+    {
+      operationId: 'op',
+      outcomes: ['fast', 'stuck'].map((sessionId) => ({ sessionId, outcome: 'resumed' as const })),
+      candidates: [],
+      markers: new Map()
+    },
+    { settle: vi.fn(async () => {}) },
+    logger
+  )
+  await vi.advanceTimersByTimeAsync(150_000)
+  await settled
+
+  // Before: the stuck chat stayed "Sending…" and its queued messages stayed held behind it.
+  expect(rows.get('continue-stuck')!.dispatchState).toBe('unknown')
+  expect(released.toSorted()).toEqual(['fast', 'stuck'])
+  expect(notes).toEqual([
+    { sessionId: 'fast', text: AGENT_SESSION_RESTART_CONTINUATION_NOTE },
+    { sessionId: 'stuck', text: AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE }
+  ])
+
+  stuckAnswer.resolve()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(rows.get('continue-stuck')!.dispatchState).toBe('accepted')
+  expect(notes.at(-1)).toEqual({
+    sessionId: 'stuck',
+    text: AGENT_SESSION_RESTART_CONTINUATION_NOTE
+  })
 })

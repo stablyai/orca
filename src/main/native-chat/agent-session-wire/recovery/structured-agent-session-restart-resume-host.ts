@@ -256,7 +256,8 @@ export function createStructuredAgentSessionRestartResume(
             started.verdict().then((outcome) => {
               progress.verdict(outcome)
               return outcome
-            })
+            }),
+            started.giveUp
           )
         },
         progress,

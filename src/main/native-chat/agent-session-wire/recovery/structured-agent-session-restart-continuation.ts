@@ -102,6 +102,27 @@ export function continuationDeps(
       ),
     logger: host.logger,
     note: restartNoteWriter(host),
+    settleUnanswered: async (sessionId, clientMessageId) => {
+      const session = host.sessions.get(sessionId)
+      const fence = host.conversationFence(sessionId)
+      const submission = await session?.journal.reads.submission(clientMessageId)
+      // Only a handed-over send: a host-held one is still the host's to deliver.
+      if (
+        !session ||
+        fence === null ||
+        submission?.dispatchState !== 'pending' ||
+        submission.handedOverAt === undefined
+      ) {
+        return
+      }
+      // Unknown is not final: the provider's later accept or reject still applies.
+      await session.journal.resolveDispatch({
+        clientMessageId,
+        state: 'unknown',
+        reason: RESTART_CONTINUATION_UNANSWERED,
+        fence
+      })
+    },
     liftRestartHold: async (sessionId) => {
       const session = host.sessions.get(sessionId)
       const fence = host.conversationFence(sessionId)
@@ -140,6 +161,7 @@ const OWNERSHIP_REFUSALS = new Set([
 ])
 
 export const RESTART_CONTINUATION_SUPERSEDED = 'agent_session_restart_work_superseded'
+export const RESTART_CONTINUATION_UNANSWERED = 'agent_session_restart_continuation_unanswered'
 
 /** Pre-dispatch proof that supersession delivered nothing. */
 export class RestartContinuationSupersededError extends AgentSessionPreDispatchError {
@@ -177,8 +199,10 @@ export type StructuredAgentSessionContinuationDeps = {
   ) => Promise<ContinuationSubmission | undefined>
   /** Attribute host continuation/failure; older clients render tone as plain text. */
   note: (sessionId: string, text: string, tone?: 'error' | 'warning') => Promise<void>
-  /** Release cards held only by the restart once the person's continuation is accepted. */
+  /** Release cards held only by the restart once the continuation has an outcome, so they never wait on it forever. */
   liftRestartHold: (sessionId: string) => Promise<void>
+  /** Settle a handed-over continuation its agent never answered, so it stops showing as sending. */
+  settleUnanswered?: (sessionId: string, clientMessageId: string) => Promise<void>
   /** Required to report best-effort note failures. */
   logger: StructuredAgentSessionLogger
   /** Answer at acceptance; caller reports pre-acceptance refusal without duplicate retry notes. */
@@ -187,7 +211,11 @@ export type StructuredAgentSessionContinuationDeps = {
 
 export type StartedStructuredAgentSessionContinuation =
   | { done: StructuredAgentSessionContinuationOutcome }
-  | { verdict: () => Promise<StructuredAgentSessionContinuationOutcome> }
+  | {
+      verdict: () => Promise<StructuredAgentSessionContinuationOutcome>
+      /** Settle this chat now as unconfirmed when its agent hasn't answered; no-op once it has. */
+      giveUp: () => Promise<void>
+    }
 
 /** Return at handover/start failure, or optional acceptance; await provider verdict separately from batch slots. */
 export async function startStructuredAgentSessionContinuation(
@@ -196,7 +224,7 @@ export async function startStructuredAgentSessionContinuation(
   marker: Pick<AgentSessionResumeMarker, 'activity'>,
   continuationId: string
 ): Promise<StartedStructuredAgentSessionContinuation> {
-  let started: StartedStructuredAgentSessionContinuation
+  let started: SentContinuation
   try {
     started = await sendContinuation(deps, sessionId, marker, continuationId)
   } catch (error) {
@@ -212,12 +240,33 @@ export async function startStructuredAgentSessionContinuation(
     }
     return started
   }
-  const { verdict } = started
+  const { verdict, clientMessageId } = started
+  let answered = false
+  let gaveUp = false
   return {
     verdict: async () => {
       const outcome = await verdict()
-      await noteOutcome(deps, sessionId, outcome)
+      answered = true
+      // After giving up, only a real answer earns a second note.
+      if (!gaveUp || outcome.outcome === 'continued' || outcome.outcome === 'refused') {
+        await noteOutcome(deps, sessionId, outcome)
+      }
       return outcome
+    },
+    giveUp: async () => {
+      if (answered || gaveUp) {
+        return
+      }
+      gaveUp = true
+      try {
+        await deps.settleUnanswered?.(sessionId, clientMessageId)
+      } catch {
+        deps.logger.warn('settling an unanswered restart continuation failed', {
+          scope: 'restart-continuation-unanswered',
+          sessionId
+        })
+      }
+      await noteOutcome(deps, sessionId, { sessionId, outcome: 'unknown' })
     }
   }
 }
@@ -227,15 +276,16 @@ async function noteOutcome(
   sessionId: string,
   result: StructuredAgentSessionContinuationOutcome
 ): Promise<void> {
+  // Any outcome ends the restart's claim on the queue; holding cards on a lost continuation strands them.
+  try {
+    await deps.liftRestartHold(sessionId)
+  } catch {
+    deps.logger.warn('releasing queued messages after a restart continuation failed', {
+      scope: 'restart-continuation-queue',
+      sessionId
+    })
+  }
   if (result.outcome === 'continued') {
-    try {
-      await deps.liftRestartHold(sessionId)
-    } catch {
-      deps.logger.warn('releasing queued messages after a restart continuation failed', {
-        scope: 'restart-continuation-queue',
-        sessionId
-      })
-    }
     // Attribute only accepted dispatch; note failure must not turn delivered work into failure.
     try {
       await deps.note(sessionId, AGENT_SESSION_RESTART_CONTINUATION_NOTE)
@@ -276,12 +326,16 @@ async function noteNotContinued(
   }
 }
 
+type SentContinuation =
+  | { done: StructuredAgentSessionContinuationOutcome }
+  | { verdict: () => Promise<StructuredAgentSessionContinuationOutcome>; clientMessageId: string }
+
 async function sendContinuation(
   deps: StructuredAgentSessionContinuationDeps,
   sessionId: string,
   marker: Pick<AgentSessionResumeMarker, 'activity'>,
   continuationId: string
-): Promise<StartedStructuredAgentSessionContinuation> {
+): Promise<SentContinuation> {
   const fence = deps.currentFence(sessionId)
   if (fence === null) {
     return { done: { sessionId, outcome: 'refused', reason: 'agent_session_not_attached' } }
@@ -317,13 +371,13 @@ async function sendContinuation(
     settledVerdict(deps, sessionId, clientMessageId, handedOver ?? sent.value?.submission)
   if (deps.answerAtAcceptance) {
     // Startup may outlast the client’s wait; verdict notes report later refusal.
-    return { verdict: async () => settle(await handOver()) }
+    return { verdict: async () => settle(await handOver()), clientMessageId }
   }
   const handedOver = await handOver()
   if (handedOver?.dispatchState === 'rejected') {
     return { done: refusedBy(sessionId, handedOver) }
   }
-  return { verdict: () => settle(handedOver) }
+  return { verdict: () => settle(handedOver), clientMessageId }
 }
 
 /** Omit errors that may contain private recovery payloads. */
