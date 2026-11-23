@@ -54,6 +54,7 @@ import { useBotCollapseAll } from './use-bot-collapse-all'
 import { useBotSidebarSearch } from './use-bot-sidebar-search'
 import { BotsCollapseAllButton } from './BotsCollapseAllButton'
 import { useBotsSidebarReveal } from './bots-sidebar-reveal'
+import { useBotSlackIcons } from './use-bot-slack-icons'
 import { BotsRevealProvider } from './bots-sidebar-reveal-context'
 import { SidebarBotsEmptyState } from './SidebarBotsEmptyState'
 import { BotSidebarVirtualRows } from './BotSidebarVirtualRows'
@@ -71,6 +72,7 @@ export function SidebarBotsSection({
 }): React.JSX.Element {
   const t = useTranslate()
   const bots = useBots()
+  useBotSlackIcons(bots)
   const savedCollapsed = useAppStore((s) => s.collapsedGroups.has(BOTS_GROUP_KEY))
   const toggleCollapsedGroup = useAppStore((s) => s.toggleCollapsedGroup)
   const activeWorkspaceId = useAppStore((s) =>

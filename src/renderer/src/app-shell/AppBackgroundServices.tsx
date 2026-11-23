@@ -13,8 +13,6 @@ import { StructuredAgentSessionAttentionBridge } from '../components/native-chat
 import { StructuredAgentSessionStatusBridge } from '../components/native-chat/session/status/StructuredAgentSessionStatusBridge'
 import { NativeChatVisualGuestThemePublisher } from '../components/native-chat/media/visuals/NativeChatVisualGuestThemePublisher'
 import { usePairedMobileDevices } from '../components/mobile/paired-mobile-devices'
-import { BotSlackIconPublisher } from '../components/bots/BotSlackIconPublisher'
-import { useBotsEnabled } from '../lib/bot-catalog'
 
 const DashboardPopoutBridge = lazy(
   () => import('../components/dashboard/popout-bridge/DashboardPopoutBridge')
@@ -32,7 +30,6 @@ export function AppBackgroundServices(): React.JSX.Element {
   const canPublishAgentList = Boolean(window.api.agentStatus?.publishListVerdicts)
   // The list builds on every agent update, so only a desktop with a paired phone pays for it.
   const { hasPairedDevice } = usePairedMobileDevices({ enabled: canPublishAgentList })
-  const botsEnabled = useBotsEnabled()
 
   return (
     <>
@@ -59,8 +56,6 @@ export function AppBackgroundServices(): React.JSX.Element {
         </Suspense>
       ) : null}
       <StructuredAgentSessionStatusBridge />
-      {/* A Slack-linked bot's colored or dressed mascot is drawn here, where its outfit art can load. */}
-      {botsEnabled ? <BotSlackIconPublisher /> : null}
       {/* Background chats have no mounted pane but still need completion attention. */}
       <StructuredAgentSessionAttentionBridge />
     </>
