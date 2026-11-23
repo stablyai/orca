@@ -1,4 +1,4 @@
-import { memo, useContext, useEffect, useRef, useState } from 'react'
+import { Fragment, memo, useContext, useEffect, useRef, useState } from 'react'
 import { ChevronRight, Package, RotateCcw } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -239,9 +239,16 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
   }, [selectedIndex, mention.files, drilled, chats?.drill.activeIndex])
 
   // A bot's chats are read once its row has been highlighted or hovered a moment.
+  const members = room
+    ? [
+        ...room.mentions,
+        ...(room.agents ?? []),
+        ...(room.hostChats ?? []),
+        ...(room.hostTerminals ?? [])
+      ]
+    : []
   const memberOf = (value: string) =>
-    room?.mentions.find((mention) => nativeChatMentionValue(mention) === value) ??
-    room?.agents?.find((mention) => nativeChatMentionValue(mention) === value)
+    members.find((mention) => nativeChatMentionValue(mention) === value)
   const matchOf = (value: string) => room?.matches?.find((match) => match.value === value)
   const [hovered, setHovered] = useState<string | null>(null)
   const highlighted = memberOf(files[selectedIndex] ?? '')?.id ?? null
@@ -282,6 +289,8 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
     )
   }
 
+  // Only bots or members make a room; crew agents, chats and terminals alone do not.
+  const botRoom = (room?.mentions.length ?? 0) > 0
   const statusText =
     files.length > 0
       ? null
@@ -291,20 +300,22 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
           ? t('components.native-chat.composer.filesLoadFailed', "Couldn't load files")
           : room?.withFiles && room.unavailable.length > 0
             ? null
-            : nativeChatMentionEmptyText(room !== null, room?.query)
-  // The room's bots lead, then this chat's crew agents, then files, each under its heading.
-  const { bots, agentCount, listed } = groupNativeChatMentionValues(
+            : nativeChatMentionEmptyText(botRoom, room?.query)
+  // The room's bots lead, then this chat's crew agents, the host's chats and terminals, then files.
+  const { bots, agentCount, chatCount, terminalCount, listed } = groupNativeChatMentionValues(
     files,
     room?.mentions,
-    room?.agents
+    room?.agents,
+    room?.hostChats,
+    room?.hostTerminals
   )
   const recent = Math.min(room?.recentCount ?? 0, bots)
   const fileCount = files.length - listed
   const grouped = room?.withFiles === true && bots + room.unavailable.length > 0
-  const botsHeaded = grouped || agentCount > 0 || recent > 0
+  const botsHeaded = grouped || listed > bots || recent > 0
   // Paused bots are listed in the Bots group too, so they keep its heading when no other bot matches.
   const pausedListed = grouped && (room?.unavailable.length ?? 0) > 0
-  const headed = grouped || agentCount > 0
+  const headed = grouped || listed > bots
   const option = (path: string, index: number) => {
     const member = room ? memberOf(path) : undefined
     const selected = index === selectedIndex
@@ -318,7 +329,7 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
         onChoose={() => onChoose(path)}
         onHover={room && onHover ? () => onHover(index) : undefined}
         onPointerEnter={member?.id ? () => setHovered(member.id ?? null) : undefined}
-        title={room ? nativeChatMentionTitle(path, room.mentions) : undefined}
+        title={room ? nativeChatMentionTitle(path, members) : undefined}
         // Room for the Chats action; important, as the row's own px-2 comes later in the CSS.
         className={cn(member && 'items-center', opens && '!pr-20')}
       >
@@ -368,10 +379,22 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
         {files.slice(recent, bots).map((path, index) => option(path, index + recent))}
       </div>
       {grouped ? <NativeChatUnavailableMentions room={room} /> : null}
-      {agentCount > 0 ? <PickerGroupHeading kind="agents" /> : null}
-      <div className="flex flex-col gap-0.5">
-        {files.slice(bots, listed).map((path, index) => option(path, index + bots))}
-      </div>
+      {(
+        [
+          ['agents', bots, agentCount],
+          ['chats', bots + agentCount, chatCount],
+          ['terminals', bots + agentCount + chatCount, terminalCount]
+        ] as const
+      ).map(([kind, from, count]) =>
+        count > 0 ? (
+          <Fragment key={kind}>
+            <PickerGroupHeading kind={kind} />
+            <div className="flex flex-col gap-0.5">
+              {files.slice(from, from + count).map((path, index) => option(path, index + from))}
+            </div>
+          </Fragment>
+        ) : null
+      )}
       {headed && files.length > listed ? <PickerGroupHeading kind="files" /> : null}
       <div className="flex flex-col gap-0.5">
         {files.slice(listed).map((path, index) => option(path, index + listed))}
@@ -384,7 +407,7 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
       ) : null}
       <div aria-live="polite" className="sr-only">
         {nativeChatMentionAnnouncement(
-          room?.withFiles,
+          botRoom ? room?.withFiles : undefined,
           bots,
           fileCount,
           statusText,

@@ -46,7 +46,12 @@ export function serializeNativeChatAgentReferences(
       if (typeof label !== 'string' || typeof address !== 'string' || typeof hostKey !== 'string') {
         return ''
       }
-      const reference = { label, address, hostKey, kind: isAgentReferenceKind(kind) ? kind : undefined }
+      const reference = {
+        label,
+        address,
+        hostKey,
+        kind: isAgentReferenceKind(kind) ? kind : undefined
+      }
       const literal = agentReferenceToken(reference)
       if (isPublicOrchestrationAddress(address)) {
         const key = JSON.stringify([hostKey, address])

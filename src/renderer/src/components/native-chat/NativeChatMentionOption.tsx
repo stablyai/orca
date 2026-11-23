@@ -261,16 +261,19 @@ export function nativeChatMentionAnnouncement(
 export function groupNativeChatMentionValues(
   files: readonly string[],
   mentions: readonly NativeChatRoomMention[] | undefined,
-  agents: readonly NativeChatRoomMention[] | undefined
+  agents: readonly NativeChatRoomMention[] | undefined,
+  chats?: readonly NativeChatRoomMention[],
+  terminals?: readonly NativeChatRoomMention[]
 ) {
-  const botValues = new Set(mentions?.map(nativeChatMentionValue))
-  const agentValues = new Set(agents?.map(nativeChatMentionValue))
-  const leading = (from: number, matches: (value: string) => boolean) => {
-    const end = files.findIndex((value, index) => index >= from && !matches(value))
+  const leading = (from: number, group: readonly NativeChatRoomMention[] | undefined) => {
+    const values = new Set(group?.map(nativeChatMentionValue))
+    const end = files.findIndex((value, index) => index >= from && !values.has(value))
     return (end === -1 ? files.length : end) - from
   }
-  const bots = leading(0, (value) => botValues.has(value))
-  const agentCount = leading(bots, (value) => agentValues.has(value))
-  const listed = bots + agentCount
-  return { bots, agentCount, listed }
+  const bots = leading(0, mentions)
+  const agentCount = leading(bots, agents)
+  const chatCount = leading(bots + agentCount, chats)
+  const terminalCount = leading(bots + agentCount + chatCount, terminals)
+  const listed = bots + agentCount + chatCount + terminalCount
+  return { bots, agentCount, chatCount, terminalCount, listed }
 }

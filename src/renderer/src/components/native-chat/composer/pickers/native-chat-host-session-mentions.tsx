@@ -2,11 +2,8 @@ import { SquareTerminal } from 'lucide-react'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import type { AgentConversationRow } from '../../../../../../shared/agent-conversations/agent-conversation-contracts'
 import type { RuntimeTerminalSummary } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/agent-session/identity/orca-session-address-prefix'
+import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { OrchestrationAgentReference } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import type { NativeChatRoomMention } from '../native-chat-composer-types'
 
@@ -22,36 +19,45 @@ export const NO_HOST_SESSION_MENTIONS: HostSessionMentions = Object.freeze({
   references: new Map()
 })
 
-/** The composer's own chat or terminal, which `@` leaves out. */
-export type HostSessionSelf = { sessionId?: string; ptyId?: string | null }
+/** What one host lists when `@` opens. */
+export type HostSessionLists = {
+  hostKey: string
+  agents: readonly AgentConversationRow[]
+  terminals: readonly RuntimeTerminalSummary[]
+  /** A bot's home: the bot's row names its chats. */
+  isBotHome: (worktreeId: string) => boolean
+}
 
-/** The other chats and terminals of one host, as `@` rows and the chips they insert. */
+/** The composer's own chat or terminal, which `@` leaves out. */
+export type HostSessionSelf = { paneKey: string; sessionId?: string; ptyId: string | null }
+
+/** The host's other chats and terminals as `@` rows and the chips they insert. Addresses in
+ *  `listed` (the crew agents) and chats in a bot's home are left out, so no row shows twice. */
 export function hostSessionMentions(
-  agents: readonly AgentConversationRow[],
-  terminals: readonly RuntimeTerminalSummary[],
-  hostKey: string,
-  self: HostSessionSelf
+  { hostKey, agents, terminals, isBotHome }: HostSessionLists,
+  self: HostSessionSelf,
+  listed: ReadonlySet<string>
 ): HostSessionMentions {
   const references = new Map<string, OrchestrationAgentReference>()
-  const selfPane = self.sessionId
-    ? structuredAgentSessionPaneKey(structuredAgentSessionTabId(self.sessionId), self.sessionId)
-    : null
   const chats = agents.flatMap((row): NativeChatRoomMention[] => {
     const id = row.orcaSessionId
-    // The pane key names the running session, which differs from the ID after a /clear.
-    if (row.kind !== 'chat' || !id || id === self.sessionId || row.paneKey === selfPane) {
+    const key = `host-chat:${id}`
+    const address = `${ORCA_SESSION_ADDRESS_PREFIX}${id}`
+    if (
+      row.kind !== 'chat' ||
+      !id ||
+      references.has(key) ||
+      listed.has(address) ||
+      isBotHome(row.worktreeId) ||
+      // The pane key names the running session, which differs from the ID after a /clear.
+      row.paneKey === self.paneKey ||
+      id === self.sessionId
+    ) {
       return []
     }
-    const key = `host-chat:${id}`
     const label = row.title || row.agent || id
     const agentType = row.agent ?? undefined
-    references.set(key, {
-      label,
-      address: `${ORCA_SESSION_ADDRESS_PREFIX}${id}`,
-      hostKey,
-      kind: 'chat',
-      agentType
-    })
+    references.set(key, { label, address, hostKey, kind: 'chat', agentType })
     return [
       {
         key,
@@ -61,8 +67,14 @@ export function hostSessionMentions(
       }
     ]
   })
+  // A remote pane's PTY id wraps the host's terminal handle.
+  const ownPty = self.ptyId && (parseRemoteRuntimePtyId(self.ptyId)?.handle ?? self.ptyId)
   const shells = terminals.flatMap((terminal): NativeChatRoomMention[] => {
-    if (terminal.orphaned || (self.ptyId && terminal.ptyId === self.ptyId)) {
+    if (
+      terminal.orphaned ||
+      listed.has(terminal.handle) ||
+      (ownPty && (terminal.ptyId === ownPty || terminal.handle === ownPty))
+    ) {
       return []
     }
     const key = `host-terminal:${terminal.handle}`

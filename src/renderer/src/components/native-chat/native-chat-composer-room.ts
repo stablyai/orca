@@ -45,8 +45,12 @@ import {
   NO_CREW_AGENT_MENTIONS
 } from '../orchestration-crew/native-chat-crew-mentions'
 import type { NativeChatMentionToken } from './composer/editor/native-chat-composer-input'
-import { useNativeChatHostSessionMentions } from './composer/pickers/use-native-chat-host-session-mentions'
-import type { HostSessionSelf } from './composer/pickers/native-chat-host-session-mentions'
+import { useNativeChatHostSessionLists } from './composer/pickers/use-native-chat-host-session-lists'
+import {
+  hostSessionMentions,
+  NO_HOST_SESSION_MENTIONS,
+  type HostSessionSelf
+} from './composer/pickers/native-chat-host-session-mentions'
 
 const memberOf = (room: NativeChatComposerRoom | undefined, value: string) =>
   room?.mentions.find((mention) => nativeChatMentionValue(mention) === value)
@@ -149,11 +153,19 @@ export function useNativeChatComposerMentions(
     [crewAgents, query]
   )
   // A group room's `@` names its members only.
-  const hostSessions = useNativeChatHostSessionMentions({
-    open: menuOpen,
-    self: ownRoom ? undefined : self,
-    ...files
-  })
+  const listsHost = menuOpen && self !== undefined && !ownRoom
+  const hostLists = useNativeChatHostSessionLists({ open: listsHost, ...files })
+  const hostSessions = useMemo(
+    () =>
+      hostLists && self
+        ? hostSessionMentions(
+            hostLists,
+            self,
+            new Set([...crewAgents.references.values()].map((agent) => agent.address))
+          )
+        : NO_HOST_SESSION_MENTIONS,
+    [hostLists, self, crewAgents]
+  )
   const sessions = useMemo(
     () =>
       query !== null
