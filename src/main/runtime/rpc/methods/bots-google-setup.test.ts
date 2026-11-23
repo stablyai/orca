@@ -93,10 +93,20 @@ describe('bots.googleSetup.write start with an app already here', () => {
     })
   })
 
-  it('replaces an ordinary run already going with a new-app run', async () => {
-    const ordinary = runs.apply(BOT.id, 'owner', { action: 'start' })
+  it('keeps a running setup as is with --new-app, only marking it', async () => {
+    runs.apply(BOT.id, 'owner', { action: 'start' })
+    const answered = runs.apply(BOT.id, 'owner', {
+      action: 'answer',
+      card: 'path',
+      values: ['do-it-for-me']
+    })
     await write.handler({ botToken: 't', change: { action: 'start', newApp: true } }, context)
-    expect(runs.get(BOT.id)).toMatchObject({ state: 'running', newApp: true, steps: {} })
-    expect(runs.get(BOT.id)?.id).not.toBe(ordinary.id)
+    expect(runs.get(BOT.id)).toMatchObject({
+      id: answered.id,
+      mode: answered.mode,
+      answers: answered.answers,
+      startedAt: answered.startedAt,
+      newApp: true
+    })
   })
 })

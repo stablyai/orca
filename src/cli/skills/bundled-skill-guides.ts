@@ -1213,7 +1213,7 @@ const ORCA_CLI_GOOGLE_SETUP_REFERENCE_MARKDOWN = [
   "",
   "The Google app is the Google Cloud app Orca signs in through. A computer saves one, and every new account signs in through it; accounts already connected keep their own. Once one is saved, `start` shows the Connect card instead of a setup, which is right for adding another account the current app works for.",
   "",
-  "Run `ORCA bot google-setup start --new-app` to set up another app when your owner asks you to set up Google for another account or company, when Google refused a sign-in because the company blocks outside apps or the app is limited to another company, or when your owner wants a work account to sign in without Google's unverified-app warning. Its key becomes the app new sign-ins use.",
+  "Run `ORCA bot google-setup start --new-app` only to make a new app: when your owner asks for Google set up for another company, when Google refused a sign-in through the current app (the company blocks outside apps, or the app is limited to another company), or when your owner wants a work account to sign in without Google's unverified-app warning. Its key becomes the app new sign-ins use. Not for adding another account the current app works for: that's the Connect card.",
   "",
   "## Flow",
   "",

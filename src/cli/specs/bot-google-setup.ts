@@ -27,7 +27,7 @@ export const BOT_GOOGLE_SETUP_COMMAND_SPECS: CommandSpec[] = [
     booleanFlags: ['new-app'],
     notes: [
       FROM_CHAT,
-      '--new-app sets up another Google app when this computer already has one (without it, start shows the Connect card): for another account or company, or when Google refused a sign-in through the current app. New sign-ins then use the new app; accounts already connected keep theirs.',
+      '--new-app makes a new Google app when this computer already has one (without it, start shows the Connect card): for another company, when Google refused a sign-in through the current app, or for a work account without the unverified-app warning. Not for adding another account the current app works for. New sign-ins then use the new app; accounts already connected keep theirs.',
       'Until your owner picks a path on the card, you only read pages (Guide me here); --mode guide-browser when they asked to use their own browser. --page names the browser page the setup runs in.'
     ]
   },

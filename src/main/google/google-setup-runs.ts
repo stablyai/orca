@@ -117,10 +117,12 @@ export class GoogleSetupRuns {
     const now = this.now()
     const current = this.get(botId)
     if (change.action === 'start') {
-      // A bot resumes a running setup rather than restarting it, which could lift Guide me here. A
-      // new-app start replaces an ordinary run: that start never picks Do it for me.
-      if (current?.state === 'running' && actor === 'bot' && (!change.newApp || current.newApp)) {
-        return current
+      // A bot resumes a running setup rather than restarting it, which could lift Guide me here.
+      // --new-app only marks it: a running setup already makes its own app, and a key saved during it counts.
+      if (current?.state === 'running' && actor === 'bot') {
+        return change.newApp && !current.newApp
+          ? this.save({ ...current, newApp: true, updatedAt: now, revision: current.revision + 1 })
+          : current
       }
       return this.save({
         id: randomUUID(),
