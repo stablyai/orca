@@ -19,8 +19,11 @@ export async function chatAwaitsResume(
   }
   try {
     // Live work, not the published view: a send admitted a moment ago already holds the chat.
-    const work = await chat.currentWork(sessionId)
-    if (work && (work.working() || work.hasActionablePrompt())) {
+    const busy = async () => {
+      const work = await chat.currentWork(sessionId)
+      return Boolean(work && (work.working() || work.hasActionablePrompt()))
+    }
+    if (await busy()) {
       return false
     }
     const { journal } = await chat.conversation(sessionId)
@@ -31,11 +34,14 @@ export async function chatAwaitsResume(
     }
     // Or its newest turn an Orca quit, crash or update cut, which its conversation reads as failed.
     const cut = await journal.reads.orcaStopCut()
-    return (
-      cut !== null &&
-      (!conversation ||
-        conversationHeardTurn(conversation, await turnOpenerOf(chat, sessionId, cut.turnItemId)))
-    )
+    if (!cut || !conversation) {
+      return cut !== null
+    }
+    if (!conversationHeardTurn(conversation, await turnOpenerOf(chat, sessionId, cut.turnItemId))) {
+      return false
+    }
+    // A send admitted during that read moved the chat on.
+    return !(await busy()) && (await journal.reads.orcaStopCut())?.turnItemId === cut.turnItemId
   } catch {
     return false
   }
