@@ -14,7 +14,8 @@ import type { IssueInfo, PRInfo } from '../../shared/github/pull-requests/pull-r
 import type { BotItemLinkRecord } from './bot-items-schema'
 import type { BotWorkWorker } from './bot-work-types'
 import { readWorkerDockReasons } from '../runtime/orchestration/dock/worker-dock-read'
-import { readWorkers, workspaceReader, type BotWorkRuntime } from './bot-work-runtime'
+import { workspaceReader, type BotWorkRuntime } from './bot-work-runtime'
+import { readWorkers } from './bot-work-workers-read'
 
 type CacheRecord<T> = Readonly<Record<string, { data: T | null; fetchedAt: number }>>
 
