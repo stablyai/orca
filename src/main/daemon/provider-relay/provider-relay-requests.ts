@@ -32,7 +32,7 @@ export function answerProviderRelayRequest(
   const relayId = payload.relayId
   switch (request.type) {
     case 'relaySpawn':
-      return relays.spawn(request.payload?.spec, request.payload?.chatKey)
+      return relays.spawn(request.payload?.spec, request.payload?.chatKey, payload.policy)
     case 'relayAttach':
       if (!client.streamSocket) {
         return Promise.reject(new Error('Daemon client connection is incomplete; reconnect'))
@@ -41,7 +41,8 @@ export function answerProviderRelayRequest(
         clientId,
         { socket: client.streamSocket, framing: client.streamFraming },
         relayId,
-        payload.fromSeq
+        payload.fromSeq,
+        payload.policy
       )
     case 'relayWrite':
       // A notification can't hear a refusal, so a refused write would vanish; only requests may write.
@@ -58,6 +59,6 @@ export function answerProviderRelayRequest(
     case 'relayList':
       return Promise.resolve(relays.list())
     case 'relayDetach':
-      return relays.detach(clientId, relayId).then(() => ({}))
+      return relays.detach(clientId, relayId, payload.policy).then(() => ({}))
   }
 }

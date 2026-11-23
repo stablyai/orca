@@ -15,8 +15,16 @@ export type ProviderRelaySpawnSpec = {
 }
 
 export type ProviderRelayRequest =
-  | { id: string; type: 'relaySpawn'; payload: { spec: ProviderRelaySpawnSpec; chatKey: string } }
-  | { id: string; type: 'relayAttach'; payload: { relayId: string; fromSeq: number } }
+  | {
+      id: string
+      type: 'relaySpawn'
+      payload: { spec: ProviderRelaySpawnSpec; chatKey: string; policy?: ProviderRelayDetachPolicy }
+    }
+  | {
+      id: string
+      type: 'relayAttach'
+      payload: { relayId: string; fromSeq: number; policy?: ProviderRelayDetachPolicy }
+    }
   /**
    * Must be a request, never a notification: a full agent input refuses it, and only a reply can say
    * so. Data over `RELAY_WRITE_CHUNK_CHARS` (a large image prompt) is sent as consecutive writes of
@@ -27,7 +35,11 @@ export type ProviderRelayRequest =
   | { id: string; type: 'relayAck'; payload: { relayId: string; seq: number } }
   | { id: string; type: 'relayClose'; payload: { relayId: string; grace?: 'brief' } }
   | { id: string; type: 'relayList' }
-  | { id: string; type: 'relayDetach'; payload: { relayId: string } }
+  | {
+      id: string
+      type: 'relayDetach'
+      payload: { relayId: string; policy?: ProviderRelayDetachPolicy }
+    }
 
 export const PROVIDER_RELAY_REQUEST_TYPES: ReadonlySet<string> = new Set<
   ProviderRelayRequest['type']
@@ -37,6 +49,20 @@ export type ProviderRelaySpawnResult =
   | { relayId: string; pid: number }
   | { spawnError: { code: string; message: string } }
   | { refused: 'stale-bundle' | 'unavailable' }
+
+/**
+ * How the daemon may end a detached agent nobody is using: the app's own native-chat idle stop,
+ * applied only while no app is attached. Daemons before it ignore the field and keep the agent.
+ */
+export type ProviderRelayDetachPolicy = {
+  /** Quiet time before the agent is stopped; null never stops it. */
+  idleStopMs: number | null
+  /** The chat was mid-turn at detach; it stays working until a `workEnds` line arrives. */
+  working: boolean
+  /** JSON-RPC `method`s or message `type`s that start and end the agent's work. */
+  workStarts: string[]
+  workEnds: string[]
+}
 
 /** Why the daemon ended an agent itself; output stopped, so the chat says so instead of hanging. */
 export type ProviderRelayFailure =
@@ -50,6 +76,8 @@ export type ProviderRelayExit = {
   code: number | null
   signal: string | null
   error?: ProviderRelayFailure
+  /** The agent's last stderr, so the chat can say why it ended (absent from older daemons). */
+  stderrTail?: string
 }
 
 /** One stdout line; `pending` entries are agent requests still unanswered, kept apart from the spool. */

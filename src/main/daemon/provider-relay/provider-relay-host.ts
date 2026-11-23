@@ -11,6 +11,7 @@ import type {
 import { ProviderRelay } from './provider-relay'
 import type { ProviderRelayStream } from './provider-relay-attachment'
 import { waitAtMost } from './provider-relay-bounded-wait'
+import { readProviderRelayDetachPolicy } from './provider-relay-idle-stop'
 
 type SpawnManaged = typeof spawnManagedProviderProcess
 
@@ -99,7 +100,8 @@ export class ProviderRelayHost {
 
   async spawn(
     spec: ProviderRelaySpawnSpec | undefined,
-    chatKey: unknown
+    chatKey: unknown,
+    policy?: unknown
   ): Promise<ProviderRelaySpawnResult> {
     if (!this.supported || this.disposed || !this.options.acceptsWork()) {
       return { refused: 'unavailable' }
@@ -142,6 +144,7 @@ export class ProviderRelayHost {
       },
       onDetached: () => this.expireWhenAbandoned(relay)
     })
+    relay.idleStopPolicy.configure(readProviderRelayDetachPolicy(policy))
     this.relays.set(relayId, relay)
     await managed.child.ready?.catch(() => {})
     // Shutdown during the launch closes this agent; the caller must not be told it runs.
@@ -169,10 +172,12 @@ export class ProviderRelayHost {
     clientId: string,
     stream: ProviderRelayStream,
     relayId: unknown,
-    fromSeq: unknown
+    fromSeq: unknown,
+    policy?: unknown
   ): Promise<ProviderRelayAttachResult> {
     // An ended relay's expiry keeps running through attaches: it lives at most a day after it ends.
     const relay = this.requireRelay(relayId)
+    relay.idleStopPolicy.configure(readProviderRelayDetachPolicy(policy))
     const result = await relay.attach(clientId, stream, typeof fromSeq === 'number' ? fromSeq : 0)
     // An ended relay with nothing left to ack is done once a client has seen its outcome.
     this.removeIfFinished(relay)
@@ -201,8 +206,8 @@ export class ProviderRelayHost {
     }
   }
 
-  async detach(clientId: string, relayId: unknown): Promise<void> {
-    await this.requireRelay(relayId).detach(clientId)
+  async detach(clientId: string, relayId: unknown, policy?: unknown): Promise<void> {
+    await this.requireRelay(relayId).detach(clientId, readProviderRelayDetachPolicy(policy))
   }
 
   list(): ProviderRelayListResult {
