@@ -344,7 +344,7 @@ export class ExternalConversationSeam {
       : linkedChat(workspace.worktreeId, link)
     return 'outcome' in chat
       ? chat
-      : ((await resumeRefusal(message, host.chat, chat.sessionId)) ??
+      : ((await resumeRefusal(message, host.chat, chat.sessionId, { workspace, link })) ??
           this.deliverToChat(host, key, chat, message, signal))
   }
 }

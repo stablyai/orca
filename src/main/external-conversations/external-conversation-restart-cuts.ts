@@ -77,8 +77,9 @@ export async function restartCutTurnEnds(deps: RestartCutTurnEndsDeps): Promise<
   for (const sessionId of linked) {
     await deps.open(sessionId)
     const cut = await deps.cutOf(sessionId, offered)
-    // An agent that may still be running may still end its own turn.
-    if (!cut || cut.exitUnproven || cut.continuationUnconfirmed) {
+    // An agent that may still be running may still end its own turn; a lead that finished already
+    // told its conversation how it went, though its background work was cut.
+    if (!cut || cut.exitUnproven || cut.continuationUnconfirmed || cut.leadDone) {
       continue
     }
     const opener = await deps.openerOf(sessionId, cut.turnId)

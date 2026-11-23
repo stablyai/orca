@@ -95,4 +95,9 @@ describe('restartCutTurnEnds', () => {
     expect(await ends({ cutOf: async () => ({ ...CUT, exitUnproven: true }) })).toEqual([])
     expect(await ends({ openerOf: async () => undefined })).toEqual([])
   })
+
+  // Its answer already reached the conversation; Resume there would be refused as not failed.
+  it('ends nothing for a turn that finished while only its background work was cut', async () => {
+    expect(await ends({ cutOf: async () => ({ ...CUT, leadDone: true }) })).toEqual([])
+  })
 })
