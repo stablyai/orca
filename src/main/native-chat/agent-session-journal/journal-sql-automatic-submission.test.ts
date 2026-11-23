@@ -171,6 +171,7 @@ it('claims mail past a person card while the chat waits for an account move, the
     },
     child: null,
     steering: { kind: 'codex-unavailable' },
+    mailJoinsTurn: true,
     ...(awaitsAccountMove ? { awaitsAccountMove: true as const } : {})
   })
   const claim = (id: string, awaitsAccountMove: boolean) =>
