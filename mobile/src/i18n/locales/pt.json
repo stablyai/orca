@@ -5863,5 +5863,19 @@
     "cardSlot": {
       "working": "Trabalhando"
     }
+  },
+  "liveActivities": {
+    "enable": "Atividades ao Vivo",
+    "showNames": "Mostrar nomes das sessões",
+    "description": "Acompanhe sessões abertas neste iPhone na tela bloqueada e na Dynamic Island. Os nomes ficam ocultos até você ativá-los.",
+    "systemDisabled": "As Atividades ao Vivo estão indisponíveis ou desativadas nos Ajustes do iOS para o Orca.",
+    "rebuild": "Instale uma versão para iOS com suporte a Atividades ao Vivo. O Expo Go não é compatível.",
+    "saveFailed": "Não foi possível atualizar as Atividades ao Vivo. Tente novamente.",
+    "deliveryFailed": "Não foi possível registrar as atualizações das Atividades ao Vivo. Atualize o host pareado e o serviço de push e abra uma sessão em andamento para tentar novamente.",
+    "working": "Trabalhando",
+    "attention": "Precisa de atenção",
+    "done": "Concluído",
+    "failed": "Falha",
+    "unavailable": "Estado indisponível"
   }
 }

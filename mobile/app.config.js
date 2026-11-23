@@ -10,6 +10,10 @@ module.exports = ({ config }) => ({
   buildCacheProvider: { plugin: './scripts/native-build-cache.cjs' },
   ios: {
     ...config.ios,
+    infoPlist: {
+      ...config.ios?.infoPlist,
+      OrcaActivityAPNsEnvironment: APS_ENVIRONMENT === 'production' ? 'production' : 'sandbox'
+    },
     entitlements: { ...config.ios?.entitlements, 'aps-environment': APS_ENVIRONMENT }
   },
   plugins: (config.plugins ?? []).map((plugin) =>

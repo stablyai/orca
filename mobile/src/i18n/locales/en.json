@@ -8540,5 +8540,19 @@
       "home": "A managed agent's Home Chat can't be deleted",
       "workerOwed": "An orchestration still waits on this chat"
     }
+  },
+  "liveActivities": {
+    "enable": "Live Activities",
+    "showNames": "Show session names",
+    "description": "Follow sessions opened on this iPhone on the Lock Screen and Dynamic Island. Names stay hidden unless you enable them.",
+    "systemDisabled": "Live Activities are unavailable or disabled in iOS Settings for Orca.",
+    "rebuild": "Install an iOS build with Live Activities support. Expo Go is not supported.",
+    "saveFailed": "Could not update Live Activities. Try again.",
+    "working": "Working",
+    "attention": "Needs attention",
+    "done": "Completed",
+    "failed": "Failed",
+    "unavailable": "Status unavailable",
+    "deliveryFailed": "Live Activity updates could not be registered. Update the paired host and its push service, then open a working session to retry."
   }
 }

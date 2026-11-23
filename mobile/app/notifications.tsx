@@ -1,3 +1,4 @@
+import { LiveActivitySettings } from '../src/live-activities/live-activity-settings'
 import { NotificationDisplayTest } from '../src/settings/notification-display-test'
 import { NativeNotificationDeliverySettings } from '../src/settings/native-notification-delivery-settings'
 import { useRouter } from 'expo-router'
@@ -20,6 +21,7 @@ export default function NativeNotificationsRoute() {
       {(enabled) => (
         <>
           <NativeNotificationDeliverySettings enabled={enabled} />
+          <LiveActivitySettings />
           <NotificationDisplayTest onTroubleshoot={() => router.push('/troubleshoot')} />
         </>
       )}

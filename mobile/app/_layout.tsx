@@ -1,3 +1,5 @@
+import { useLiveActivityLinks } from '../src/live-activities/use-live-activity-links'
+import { startLiveActivitySync } from '../src/live-activities/live-activity-sync'
 import { startAndroidForegroundPushPresentation } from '../src/notifications/foreground-delivery/android-foreground-push'
 import { registerPushDismissalTask } from '../src/notifications/dismissal/push-background-dismissal'
 import { readNativeNotificationData } from '../src/notifications/payload-identity/native-notification-data'
@@ -89,6 +91,7 @@ export default function RootLayout() {
   }, [pathname, hostId, worktreeId, executionHost])
   const openNotificationRoute = useOpenNotificationRoute()
   usePairingLinks()
+  useLiveActivityLinks()
 
   useEffect(() => {
     // Reconcile the crash-persistent pairing journal before another scan can replace it.
@@ -97,6 +100,7 @@ export default function RootLayout() {
 
   // Re-register rolled APNs/FCM tokens with every paired host or delivery silently stops.
   useEffect(() => startPushTokenSync(), [])
+  useEffect(() => startLiveActivitySync(), [])
   // Cold start, then foreground and timer checks on the desktop updater's cadence.
   useEffect(() => appUpdateChecker.start(), [])
   useEffect(() => startAndroidForegroundPushPresentation(), [])
@@ -229,6 +233,7 @@ export default function RootLayout() {
                 <Stack.Screen name="native-chat-settings" options={{ headerShown: false }} />
                 <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
                 <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
+                <Stack.Screen name="live-activity" options={{ headerShown: false }} />
                 <Stack.Screen name="notifications" options={{ headerShown: false }} />
                 <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
                 <Stack.Screen name="connection-log" options={{ headerShown: false }} />

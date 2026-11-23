@@ -123,6 +123,7 @@
       "./plugins/android-retired-app-name.js",
       "./plugins/ios-pod-deployment-target-floor.js",
       "./plugins/ios-scene-lifecycle.js",
+      "./plugins/ios-live-activities.js",
       "./plugins/ios-bundle-phase-quoted-script-path.js",
       [
         "expo-splash-screen",

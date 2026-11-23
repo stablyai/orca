@@ -40,6 +40,7 @@ import {
   type TokenDeviceEntry
 } from './device-entry'
 import type { MobilePushRegistration } from '../../../../../shared/notifications/mobile-push-contract'
+import type { SavedLiveActivity } from '../../../../../shared/notifications/live-activity-contract'
 
 export class DeviceRegistry extends DeviceRegistrySightings {
   addDevice(
@@ -194,6 +195,13 @@ export class DeviceRegistry extends DeviceRegistrySightings {
         const { pushRegistration: _dropped, ...rest } = device
         return registration ? { ...rest, pushRegistration: registration } : rest
       })
+    )
+  }
+
+  setLiveActivities(deviceId: string, liveActivities: SavedLiveActivity[]): boolean {
+    return (
+      this.getDevice(deviceId)?.scope === 'mobile' &&
+      this.replaceRow(deviceId, (device) => ({ ...device, liveActivities }))
     )
   }
 

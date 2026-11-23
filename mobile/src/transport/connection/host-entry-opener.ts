@@ -1,3 +1,4 @@
+import { attachLiveActivityHost } from '../../live-activities/live-activity-sync'
 import { attachPushRegistration } from '../../notifications/push-registration'
 import { recordHostDescriptorFromStatus } from '../../host-descriptors/host-descriptor-recorder'
 import { startRuntimeStatusProbe } from './runtime-status-probe'
@@ -117,11 +118,15 @@ export async function openHostClientEntry(
       client.close()
       return state.store.get(hostId) ?? null
     }
+    let detachLiveActivityHost: (() => void) | null = null
     let detachPushRegistration: (() => void) | null = null
     const syncPushRegistration = (next: ConnectionState): void => {
       if (next === 'connected') {
+        detachLiveActivityHost ??= attachLiveActivityHost(hostId, client)
         detachPushRegistration ??= attachPushRegistration(hostId, client)
       } else {
+        detachLiveActivityHost?.()
+        detachLiveActivityHost = null
         detachPushRegistration?.()
         detachPushRegistration = null
       }
@@ -165,6 +170,8 @@ export async function openHostClientEntry(
       refCount: state.pendingAcquisitions.get(hostId) ?? 0,
       unsubState: () => {
         unsubscribeState()
+        detachLiveActivityHost?.()
+        detachLiveActivityHost = null
         detachPushRegistration?.()
         detachPushRegistration = null
         stopDescriptorProbe?.()

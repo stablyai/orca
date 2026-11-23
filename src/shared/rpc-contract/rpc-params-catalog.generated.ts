@@ -46,6 +46,10 @@ import {
 } from '../browser/client-hosting/desktop-browser-bridge-protocol'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
 import { MobileWebBundleLocaleCatalogParamsSchema } from '../mobile-web-bundle/locale-catalog-contract'
+import {
+  LiveActivityRegistrationParams,
+  LiveActivityRemovalParams
+} from '../notifications/live-activity-contract'
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
 import {
@@ -1878,10 +1882,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'network.browserTunnel': BrowserNetworkTunnelAttachParams,
   'notifications.getMissedSince': NotificationGetMissedSinceParams,
   'notifications.pushCoverage': NotificationPushCoverageParams,
+  'notifications.registerLiveActivity': LiveActivityRegistrationParams,
   'notifications.registerPush': NotificationRegisterPushParams,
   'notifications.reportDesktopPresence': NotificationReportDesktopPresenceParams,
   'notifications.subscribe': NotificationsSubscribeParams,
   'notifications.testPush': null,
+  'notifications.unregisterLiveActivity': LiveActivityRemovalParams,
   'notifications.unregisterPush': null,
   'notifications.unsubscribe': NotificationUnsubscribeParams,
   'orcaAccount.selectOrg': OrcaAccountSelectOrgParams,

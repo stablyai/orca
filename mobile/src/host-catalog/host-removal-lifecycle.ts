@@ -1,3 +1,4 @@
+import { forgetHostLiveActivities } from '../live-activities/live-activity-sync'
 import type { QueryClient } from '@tanstack/react-query'
 import { discardConnectionLogs } from '../diagnostics/connection/persisted-connection-log-store'
 import { wipeHostStore } from '../device-store/device-store'
@@ -26,6 +27,7 @@ export async function removeHostAndCloseClient(
     restorePushRegistration()
     throw error
   }
+  await forgetHostLiveActivities(hostId)
   forgetHostClient(hostId)
   forgetHostDescriptor(hostId)
   // Before the wipe, so nothing this world still holds is written back after it.

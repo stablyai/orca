@@ -118,6 +118,25 @@ The mobile terminal has a dedicated **Terminal settings** screen (Settings → T
 - **Text size** — a 50%–200% baseline zoom the WebView applies on top of fit-to-width. Pinch-to-zoom in the terminal snaps to the same presets and persists. The setting is per-device and doesn't change the desktop terminal.
 - **Autocomplete & autocorrect** — off by default so the OS never rewrites commands, flags, or paths in the command bar. Turn it on for phone-style typing; the live keyboard-capture input still streams raw keystrokes either way.
 
+## iPhone Live Activities
+
+In a native iOS build with Live Activities support, enable **Settings → Notifications →
+Live Activities** to follow working sessions you open on the phone. The Lock Screen and
+Dynamic Island show working, attention, completed and failed states, with elapsed time.
+Tap a card to return to its session, including sessions on remote servers.
+
+Names are hidden by default. **Show session names** separately enables their display
+on the Lock Screen and sends those titles through Orca's push service and Apple. Prompts,
+commands, terminal output and error details are not included. Changing either setting
+removes existing cards; a later turn can start a new one. iOS's Live Activities setting
+must also allow Orca to use this feature.
+
+Updates after the app is suspended require the paired host to stay running and its push
+service to support ActivityKit delivery. If updates stop, the card becomes unavailable.
+Opening the app creates activities; tasks started while it is suspended do not create
+new cards. iOS limits their duration to eight hours. Devices without Dynamic Island can
+still show the Lock Screen card. Expo Go and older native builds do not support it.
+
 ## Troubleshooting
 
 ### Firewalls and Orca Relay

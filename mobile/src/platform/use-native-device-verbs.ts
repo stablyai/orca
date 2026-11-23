@@ -1,3 +1,4 @@
+import { trackLiveActivity } from '../live-activities/live-activity-sync'
 import { useEffect, useMemo } from 'react'
 import type { BridgeNativeVerb } from '../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
 import type { BRIDGE_STORE_VERB } from '../mobile-web-shell/bridge/native-capabilities/bridge-store-verb'
@@ -21,7 +22,8 @@ export type NativeDeviceVerb = Exclude<
 
 // Tie stateful audio/media handlers to the page session so replacement documents cannot inherit abandoned microphones or staged handles.
 export function useNativeDeviceVerbs(
-  sessionId: string | null
+  sessionId: string | null,
+  hostId: string
 ): (verb: NativeDeviceVerb, params: unknown) => Promise<unknown> {
   const registry = useMediaHandleRegistry({ sessionId, discard: discardStagedMedia })
   const serveMedia = useMemo(
@@ -35,6 +37,9 @@ export function useNativeDeviceVerbs(
   useEffect(() => () => speech.dispose(), [speech])
   return useMemo(
     () => (verb, params) => {
+      if (verb === 'native.liveActivity.track') {
+        return trackLiveActivity(hostId, params)
+      }
       if (verb === 'native.clipboard.write' || verb === 'native.clipboard.read') {
         return serveNativeClipboardVerb(verb, params)
       }
@@ -57,6 +62,6 @@ export function useNativeDeviceVerbs(
       }
       return verb.startsWith('native.audio.') ? audio.serve(verb, params) : serveMedia(verb, params)
     },
-    [audio, serveMedia, speech]
+    [audio, serveMedia, speech, hostId]
   )
 }

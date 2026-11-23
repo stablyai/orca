@@ -1,5 +1,6 @@
+import { HostLiveActivities } from './live-activities/host-live-activities'
+import type { LiveActivityRegistration } from '../../../shared/notifications/live-activity-contract'
 // Push authenticates with host keys, independent of cloud sign-in; retain gateway registrations and durable cleanup for accountless hosts too.
-import { randomUUID } from 'node:crypto'
 import type {
   MobilePushTestResult,
   MobilePushRegisterInput,
@@ -13,7 +14,7 @@ import { PushDispatcher, type PushCoverageRequest } from './push-dispatcher'
 import { PushBadgeSync } from './push-badge-sync'
 import type { ExecutionHostPushCoverage } from './push-burst-slots'
 import { mobilePushTokenDigest } from './push-token-digest'
-import { pushTestResult, unregisteredTestResult } from './push-test-result'
+import { sendPushTest } from './push-test-result'
 import { PushGatewayClient } from './push-gateway-client'
 import { PushRegisterThrottle } from './push-register-throttle'
 import {
@@ -42,6 +43,7 @@ type DesktopPushServiceOptions = {
 }
 
 export class DesktopPushService {
+  private readonly liveActivities: HostLiveActivities
   private readonly runtime: OrcaRuntimeService
   private readonly runtimeRpc: OrcaRuntimeRpcServer
   private readonly registry: DeviceRegistry
@@ -65,6 +67,7 @@ export class DesktopPushService {
     registry: DeviceRegistry,
     client: PushGatewayClient
   ) {
+    this.liveActivities = new HostLiveActivities(options.runtime, registry, client)
     this.runtime = options.runtime
     this.runtimeRpc = options.runtimeRpc
     this.registry = registry
@@ -103,6 +106,9 @@ export class DesktopPushService {
     this.stopped = false
     this.dispatcher.start()
     this.runtime.setMobilePushRegistrar(this)
+    if (this.deliveryMode !== 'disabled') {
+      this.liveActivities.restore()
+    }
     this.unsubscribe = this.runtime.onNotificationDispatched((event) => {
       this.dispatcher.enqueue(event)
     })
@@ -119,6 +125,7 @@ export class DesktopPushService {
 
   stop(): void {
     this.stopped = true
+    this.liveActivities.stop()
     this.dispatcher.stop()
     this.unsubscribe?.()
     this.unsubscribe = null
@@ -127,32 +134,19 @@ export class DesktopPushService {
     this.runtime.setMobilePushRegistrar(null)
   }
 
-  async test(deviceId: string): Promise<MobilePushTestResult> {
-    const device = this.registry.getDevice(deviceId)
-    const registration = device?.pushRegistration
-    if (device?.scope !== 'mobile' || !registration || registration.expiresAt <= Date.now()) {
-      const live = !this.stopped && this.deliveryMode !== 'disabled'
-      return unregisteredTestResult(live ? await this.client.currentClockSkewMs() : null)
-    }
+  async registerLiveActivity(deviceId: string, input: LiveActivityRegistration) {
     if (this.stopped || this.deliveryMode === 'disabled') {
-      return { accepted: false, reason: 'unavailable' }
+      return { registered: false }
     }
-    // Explicit tests target only the caller and bypass automatic activity filters.
-    const result = await this.client.send({
-      registrationIds: [registration.registrationId],
-      notification: {
-        source: 'terminal-bell',
-        agentState: null,
-        title: 'Test notification',
-        body: '',
-        notificationId: randomUUID(),
-        notificationEpoch: randomUUID(),
-        notificationSeq: 0,
-        expiresAt: Date.now() + 300_000,
-        sound: registration.filter.sound !== false
-      }
-    })
-    return pushTestResult(result, registration.registrationId)
+    return this.liveActivities.register(deviceId, input)
+  }
+
+  unregisterLiveActivity(deviceId: string, activityId: string): void {
+    this.liveActivities.unregister(deviceId, activityId)
+  }
+
+  async test(deviceId: string): Promise<MobilePushTestResult> {
+    return sendPushTest(this.client, this.registry, deviceId, this.stopped, this.deliveryMode)
   }
 
   async register(input: MobilePushRegisterInput): Promise<MobilePushRegisterResult> {

@@ -39,6 +39,7 @@ import { PushObservability } from './push-observability.js'
 import { reserveRequestConnection } from './database/push-background-database.js'
 import { createPushReadiness } from './http/push-readiness.js'
 import { PushRequestDrain } from './http/push-request-drain.js'
+import { LiveActivitySendSchema } from '@orca-cloud/push-contract/live-activity-messages'
 
 export type PushServerOptions = {
   now?: () => number
@@ -79,6 +80,9 @@ export function createPushServer(
     reserveRequestConnection(database, config.databasePoolMax)
   )
   const apnsTransport = options.apnsTransport ?? (config.apns ? createApnsHttp2Transport() : null)
+  const liveActivityApns = config.apns && apnsTransport
+    ? new ApnsClient({ topic: config.apnsTopic, credentials: config.apns, transport: apnsTransport, now })
+    : null
   const dispatcher = new PushDispatcher({
     devices,
     badges,
@@ -192,6 +196,15 @@ export function createPushServer(
   // bare path would run both middlewares twice on it.
   app.use('/v1/devices/*', limitAuthenticatedIp, bearerSession)
   app.use('/v1/send', limitAuthenticatedIp, bearerSession)
+  app.use('/v1/live-activities/send', limitAuthenticatedIp, bearerSession)
+
+  app.post('/v1/live-activities/send', limitBody, async (context) => {
+    const body = LiveActivitySendSchema.safeParse(await context.req.json().catch(() => null))
+    if (!body.success) return context.json({ error: 'invalid_request' }, 400)
+    if (!liveActivityApns) return context.json({ error: 'apns_not_configured' }, 503)
+    const outcome = await liveActivityApns.sendLiveActivity(body.data)
+    return context.json({ status: outcome.status })
+  })
 
   app.post('/v1/host/challenge', limitUnauthenticatedIp, limitBody, async (context) => {
     const body = PushHostChallengeRequestSchema.safeParse(

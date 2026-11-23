@@ -38,6 +38,8 @@ export function withStructuredChatStatus(
     ...(row.workingMode ? { workingMode: row.workingMode } : {}),
     ...agentVerdictFields(row),
     updatedAt: row.receivedAt,
+    stateStartedAt: row.stateStartedAt,
+    ...(row.turnStartedAt !== undefined ? { turnStartedAt: row.turnStartedAt } : {}),
     ...(row.evidenceObservedAt !== undefined ? { evidenceObservedAt: row.evidenceObservedAt } : {}),
     ...(row.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {})
   }

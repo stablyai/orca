@@ -1,3 +1,4 @@
+import type { LiveActivityTrackParams } from '../../../live-activities/live-activity-track-contract'
 import { useMemo } from 'react'
 import * as z from 'zod'
 import { usePageBridgeClient } from '../../../transport/connection/client-context.web'
@@ -41,6 +42,7 @@ import {
 
 // Use ordinary request frames/caps, served only on-device. Refuse ungranted verbs before posting and parse results because the installed shell can differ from this page build.
 export type NativeVerbs = {
+  trackLiveActivity: (params: LiveActivityTrackParams) => Promise<boolean>
   granted: boolean
   // Check clipboard grants per verb; a read-only route must not appear unable to read because the combined read/write flag is false.
   canWriteClipboardText: boolean
@@ -186,6 +188,13 @@ export function useNativeVerbs(): NativeVerbs {
         call('native.audio.start', { sampleRate }, audioStartResultSchema),
       readAudio: (maxBytes) => call('native.audio.read', { maxBytes }, audioReadResultSchema),
       stopAudio: () => call('native.audio.stop', {}, audioStopResultSchema),
+      trackLiveActivity: async (params) => {
+        if (!has('native.liveActivity.track')) {
+          return false
+        }
+        return (await call('native.liveActivity.track', params, z.object({ tracked: z.boolean() })))
+          .tracked
+      },
       canOpenPdf: has('native.pdf.view'),
       openPdf: async (params) => {
         await call('native.pdf.view', { action: 'open', ...params }, pdfViewResultSchema)

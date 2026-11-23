@@ -26,6 +26,10 @@
       "types": "./dist/push-limits.d.ts",
       "default": "./dist/push-limits.js"
     },
+    "./live-activity-messages": {
+      "types": "./dist/live-activity-messages.d.ts",
+      "default": "./dist/live-activity-messages.js"
+    },
     "./send-messages": {
       "types": "./dist/send-messages.d.ts",
       "default": "./dist/send-messages.js"
