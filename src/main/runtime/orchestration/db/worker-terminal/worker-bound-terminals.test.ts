@@ -84,6 +84,7 @@ describe('terminals bound to a worker', () => {
         ? structuredWorkerProcessIncarnation(session)
         : 'pty-live:22222222-2222-4222-8222-222222222222',
       worktreeId: 'repo::/worktrees/child',
+      hostScope: JSON.stringify({ kind: 'local', hostId: 'local' }),
       setupState,
       effects: [],
       terminalOwnership: 'created'
@@ -295,6 +296,23 @@ describe('terminals bound to a worker', () => {
 
     await closeWorkerBoundTerminals(runtime, db, worker.dispatchId)
     expect(closed).toEqual([worker.setup.terminalHandle, worker.tab.terminalHandle, 'term_opened'])
+  })
+
+  it('a terminal a chat worker opens closes with it', async () => {
+    const worker = startWorker(botChat, 'running', undefined, true)
+    const { runtime, closed } = host(worker)
+    // A chat names itself by its session, which leads to its worker's record.
+    bindTerminalToCallingWorker(
+      runtime,
+      {
+        caller: { kind: 'local-cli' },
+        orchestrationCompatibilityEvidence: { agentSessionId: worker.session }
+      },
+      'term_opened',
+      false
+    )
+    await closeStoppedWorkerTerminals(runtime, db, worker.dispatchId)
+    expect(closed).toContain('term_opened')
   })
 
   it('a worker whose shell outlived an Orca restart still owns what it opens', async () => {
