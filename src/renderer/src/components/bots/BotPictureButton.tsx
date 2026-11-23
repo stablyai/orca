@@ -12,7 +12,7 @@ import type { Bot } from '../../../../shared/bot-types'
 import type { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
 import { BotAvatar } from './BotAvatar'
 import { BOT_EDIT_HINT } from './bot-edit-hint'
-import { BOT_PICTURE_DROP_OUTLINE, BotPicturePicker } from './BotPicturePicker'
+import { BOT_PICTURE_DROP_OUTLINE, BotPicturePicker, pictureTakesLook } from './BotPicturePicker'
 
 export function BotPictureButton({
   bot,
@@ -31,6 +31,8 @@ export function BotPictureButton({
   const t = useTranslate()
   const colors = useBotHostHas(bot.hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY)
   const outfits = useBotHostHas(bot.hostId, BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY)
+  // An image has no color or outfit, so the note says only that Slack gets it.
+  const look = pictureTakesLook(picture.value, picture.custom)
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -81,12 +83,12 @@ export function BotPictureButton({
           />
           {bot.slack ? (
             <p className="text-center text-xs text-muted-foreground">
-              {outfits
+              {look && outfits
                 ? t(
                     'settings.bots.avatarSlackNote',
                     'Slack gets the picture, not the color or outfit.'
                   )
-                : colors
+                : look && colors
                   ? t(
                       'settings.bots.avatarSlackNoteColor',
                       'Slack gets the picture, not the color.'

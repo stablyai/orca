@@ -75,6 +75,11 @@ export function pictureMascotIndex(
   return value.kind === 'mascot' ? value.index : Math.max(0, custom?.after ?? 0)
 }
 
+/** Whether the color and outfit apply: a mascot does, and so does a retired one; an image does not. */
+export function pictureTakesLook(value: BotPictureValue, custom: BotPictureCustom | null): boolean {
+  return value.kind === 'mascot' || custom === null || Boolean(custom.mascot)
+}
+
 /** A bot's picture: a carousel of the mascots (plus any custom picture); upload, paste or drop your own. */
 export function BotPicturePicker({
   value,
@@ -304,7 +309,7 @@ export function BotPicturePicker({
         {/* On Generate the description field takes the swatches' place; the rows cross-fade. */}
         <BotPictureRowFold open={!generating}>
           {onColorChange || onOutfitChange ? (
-            <BotPictureRowFold open={!showingCustom || Boolean(custom.mascot)}>
+            <BotPictureRowFold open={pictureTakesLook(value, custom)}>
               <BotPictureLook
                 id={
                   (showingCustom ? custom.mascot : undefined) ??
