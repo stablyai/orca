@@ -237,13 +237,13 @@ export function CommitMessageAiPane({
       <span className="space-y-0.5">
         <span className="block text-xs font-medium text-foreground">
           {t(
-            'auto.components.settings.CommitMessageAiPane.post-comment-acks',
+            'auto.components.settings.source.control.CommitMessageAiPane.b8e75abfc2',
             'Post "Fixing" replies on GitHub'
           )}
         </span>
         <span className="block text-[11px] text-muted-foreground">
           {t(
-            'auto.components.settings.CommitMessageAiPane.post-comment-acks-desc',
+            'auto.components.settings.source.control.CommitMessageAiPane.cac24e4a18',
             'Reply "Fixing" on review threads when you send them to an agent. Turn off to only resolve threads.'
           )}
         </span>

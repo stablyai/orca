@@ -9135,9 +9135,7 @@
           "1df7d71313": "binary",
           "407d28bde6": "cli",
           "54038660e0": "command",
-          "25350d670f": "custom",
-          "post-comment-acks": "Post \"Fixing\" replies on GitHub",
-          "post-comment-acks-desc": "Reply \"Fixing\" on review threads when you send them to an agent. Turn off to only resolve threads."
+          "25350d670f": "custom"
         },
         "ComputerUsePane": {
           "1735461723": "Enables agents to inspect and operate local desktop apps.",
@@ -12668,6 +12666,10 @@
                   "commitMessageSharedModel": "Pull request details, Branch name and Chat name can also use this model when they don’t pick their own; their “Same as default” option shows which model they use."
                 }
               }
+            },
+            "CommitMessageAiPane": {
+              "b8e75abfc2": "Post \"Fixing\" replies on GitHub",
+              "cac24e4a18": "Reply \"Fixing\" on review threads when you send them to an agent. Turn off to only resolve threads."
             }
           }
         },
