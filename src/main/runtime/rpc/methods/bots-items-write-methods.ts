@@ -172,9 +172,13 @@ export async function linkItem(
     item.ownerBotId === writer.bot.id ? {} : startersOf(db, requested, context.runtime.bots.list())
   // Every worker named is checked, one already linked too, so a mixed call fails whole.
   assertBotItemAttach(item, writer.actor, requested, (id) => startedBy[id] ?? null)
-  // A step of a follow-up chain the item already links is that worker again: no second link.
   const held = await store.links(item.uid)
-  const links = linksOutsideLinkedChains(db, held, requested)
+  // A link the item already holds is settled before walking any worker's follow-up chain.
+  const fresh = requested.filter(
+    (link) => !held.some((had) => had.kind === link.kind && had.ref === link.ref)
+  )
+  // A step of a follow-up chain the item already links is that worker again: no second link.
+  const links = fresh.length === 0 ? [] : linksOutsideLinkedChains(db, held, fresh)
   if (params.check) {
     // A check answers for the write too: an item with no room for them refuses now.
     assertBotItemLinkRoom(held.length, links.length)
