@@ -1,4 +1,4 @@
-import { open } from 'node:fs/promises'
+import { open, type FileHandle } from 'node:fs/promises'
 import { setImmediate } from 'node:timers/promises'
 import { claudeRecord } from '../structured/journal/claude-structured-item-translation'
 import { mainChainAsync } from './claude-transcript-chain'
@@ -92,12 +92,18 @@ export async function readClaudeTranscriptFrontier(input: {
 export const CLAUDE_TRANSCRIPT_WINDOW_MAX_BYTES = 20 * 1024 * 1024
 const WINDOW_RAW_MAX_BYTES = 64 * 1024 * 1024
 
-export async function readClaudeTranscriptWindow(input: {
-  filePath: string
-  check: () => void
-  maxBytes?: number
-  visit?: (row: Record<string, unknown>) => boolean
-}): Promise<{
+type TranscriptSource = { filePath: string } | { handle: FileHandle }
+type TranscriptRowVisitor = (row: Record<string, unknown>, recordEnd: number) => boolean
+
+export async function readClaudeTranscriptWindow(
+  input: TranscriptSource & {
+    check: () => void
+    endBytes?: number
+    maxBytes?: number
+    visit?: TranscriptRowVisitor
+    select?: (recordEnd: number) => boolean
+  }
+): Promise<{
   rows: Record<string, unknown>[]
   bytesRead: number
   decodedBytes: number
@@ -108,26 +114,28 @@ export async function readClaudeTranscriptWindow(input: {
   skippedRecords: number
 }> {
   const newestFirst: Record<string, unknown>[] = []
+  const cap = input.visit ? WINDOW_RAW_MAX_BYTES : CLAUDE_TRANSCRIPT_WINDOW_MAX_BYTES
   const result = await visitClaudeTranscriptTail(
     {
       ...input,
-      maxBytes:
-        input.maxBytes ?? (input.visit ? WINDOW_RAW_MAX_BYTES : CLAUDE_TRANSCRIPT_WINDOW_MAX_BYTES)
+      maxBytes: Math.min(input.maxBytes ?? cap, cap)
     },
-    (row) => {
+    (row, recordEnd) => {
       if (input.visit) {
-        return input.visit(row)
+        return input.visit(row, recordEnd)
       }
       newestFirst.push(row)
       return false
-    }
+    },
+    input.select
   )
   return { ...result, rows: newestFirst.toReversed() }
 }
 
 async function visitClaudeTranscriptTail(
-  input: { filePath: string; endBytes?: number; maxBytes?: number; check: () => void },
-  visit: (row: Record<string, unknown>) => boolean
+  input: TranscriptSource & { endBytes?: number; maxBytes?: number; check: () => void },
+  visit: TranscriptRowVisitor,
+  select?: (recordEnd: number) => boolean
 ): Promise<{
   outcome: 'found' | 'absent' | 'capacity'
   bytesRead: number
@@ -139,7 +147,7 @@ async function visitClaudeTranscriptTail(
   skippedRecords: number
 }> {
   const maxBytes = input.maxBytes ?? CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES
-  const handle = await open(input.filePath, 'r')
+  const handle = 'handle' in input ? input.handle : await open(input.filePath, 'r')
   try {
     input.check()
     const { size, mtimeMs } = await handle.stat()
@@ -166,26 +174,30 @@ async function visitClaudeTranscriptTail(
     let bytesSinceYield = 0
     // A last line without its newline is a write still landing; it is left for the next read.
     let complete = false
+    let recordEnd = endBytes
+    let selected = false
     const append = (piece: Buffer) => {
       recordBytes += piece.length
       if (recordBytes > MAX_RECORD_BYTES) {
         pieces = []
         skipped = true
-      } else if (!skipped) {
+      } else if (selected) {
         pieces.push(piece)
       }
     }
-    const endLine = async (): Promise<boolean> => {
-      const bytes = complete && !skipped ? Buffer.concat(pieces.toReversed()) : null
+    const endLine = async (nextRecordEnd: number): Promise<boolean> => {
+      const bytes = selected && !skipped ? Buffer.concat(pieces.toReversed()) : null
       skippedRecords += complete && skipped ? 1 : 0
       decodedBytes += bytes?.length ?? 0
       const row = bytes ? parseRow(bytes) : null
+      const found = row !== null && visit(row, recordEnd)
+      bytesSinceYield += recordBytes
       pieces = []
       recordBytes = 0
       skipped = false
       complete = true
-      const found = row !== null && visit(row)
-      bytesSinceYield += bytes?.length ?? 0
+      recordEnd = nextRecordEnd
+      selected = select?.(recordEnd) ?? true
       if (++rowsSinceYield >= 256 || bytesSinceYield >= 1024 * 1024) {
         await setImmediate()
         input.check()
@@ -220,15 +232,17 @@ async function visitClaudeTranscriptTail(
         }
         append(chunk.subarray(index + 1, end))
         end = index
-        if (await endLine()) {
+        if (await endLine(position + index)) {
           return result('found')
         }
       }
       append(chunk.subarray(0, end))
     }
-    return result((await endLine()) ? 'found' : 'absent')
+    return result((await endLine(0)) ? 'found' : 'absent')
   } finally {
-    await handle.close()
+    if ('filePath' in input) {
+      await handle.close()
+    }
   }
 }
 

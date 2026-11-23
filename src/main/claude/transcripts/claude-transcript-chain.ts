@@ -4,6 +4,7 @@ import { claudeRecord } from '../structured/journal/claude-structured-item-trans
 import type { ClaudeTranscriptTail } from './claude-transcript-tail'
 
 type Row = Record<string, unknown>
+type Chain<T extends Row> = { rows: T[]; rewound: boolean }
 
 export function mainChain(
   rows: Row[],
@@ -18,12 +19,12 @@ export function mainChain(
   return step.value
 }
 
-export async function mainChainAsync(
-  rows: Row[],
+export async function mainChainAsync<T extends Row>(
+  rows: T[],
   check: () => void,
   leafUuid = '',
   chainBoundaries: readonly string[] = []
-): Promise<ClaudeTranscriptTail> {
+): Promise<Chain<T>> {
   const walk = walkMainChain(rows, leafUuid, chainBoundaries)
   let count = 0
   let step = walk.next()
@@ -38,16 +39,16 @@ export async function mainChainAsync(
   return step.value
 }
 
-function* walkMainChain(
-  rows: Row[],
+function* walkMainChain<T extends Row>(
+  rows: T[],
   leafUuid: string,
   chainBoundaries: readonly string[]
-): Generator<void, ClaudeTranscriptTail> {
-  const byUuid = new Map<string, Row>()
-  const assistants = new Map<string, Row[]>()
-  const results = new Map<string, Row[]>()
-  let newest: Row | null = null
-  const index = (map: Map<string, Row[]>, key: unknown, row: Row) => {
+): Generator<void, Chain<T>> {
+  const byUuid = new Map<string, T>()
+  const assistants = new Map<string, T[]>()
+  const results = new Map<string, T[]>()
+  let newest: T | null = null
+  const index = (map: Map<string, T[]>, key: unknown, row: T) => {
     if (typeof key === 'string' && key) {
       const group = map.get(key) ?? []
       group.push(row)
@@ -81,7 +82,7 @@ function* walkMainChain(
       }
     }
   }
-  const kept = new Set<Row>()
+  const kept = new Set<T>()
   let rewound = false
   for (let row = newest; row && !kept.has(row);) {
     yield
@@ -122,7 +123,7 @@ function* walkMainChain(
       }
     }
   }
-  const selected: Row[] = []
+  const selected: T[] = []
   for (const row of rows) {
     yield
     if (kept.has(row)) {
