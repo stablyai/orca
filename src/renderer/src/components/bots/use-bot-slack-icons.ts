@@ -30,9 +30,14 @@ const running = new Set<string>()
 // Per bot, the look its last try failed at: not tried again until a real step clears it.
 const failures = new Map<string, { look: string }>()
 // Per host, its bots as last looked at: a notice that left a host's list as it was (a Needs You count, a
-// detail of the list) costs one compare for that host. Each bot record is looked at once.
+// detail of the list) costs one compare for that host. Per bot, its record as last looked at, by its save
+// time, look and links: a list rebuilt around a deleted bot asks nothing about the bots it only moved.
 const seenHosts = new Map<ExecutionHostId, readonly Bot[]>()
-const seen = new WeakSet<Bot>()
+const seen = new Map<string, string>()
+
+function recordSeen(bot: Bot): string {
+  return `${bot.updatedAt}|${botSlackIconLook(bot) ?? ''}|${Boolean(bot.slack || bot.github)}`
+}
 
 // Ends an attempt that can't go on; a `failed` one waits for a real step.
 function forget(bot: Bot, attempt: number, failed = false): void {
@@ -154,7 +159,10 @@ export function withSlackIconPublish<T>(
   return async (updates) => {
     const saved = await save(updates)
     if (saved) {
-      askAgain({ ...saved, hostId })
+      const bot = { ...saved, hostId }
+      // Its list notice for this same save then asks nothing more.
+      seen.set(botRefKey(bot), recordSeen(bot))
+      askAgain(bot)
     }
     return saved
   }
@@ -164,7 +172,7 @@ export function withSlackIconPublish<T>(
 function prune(hostId: ExecutionHostId, bots: readonly Bot[]): void {
   const prefix = botRefKey({ hostId, id: '' })
   const listed = new Set(bots.map(botRefKey))
-  for (const kept of [handled, failures]) {
+  for (const kept of [handled, failures, seen]) {
     for (const key of kept.keys()) {
       if (key.startsWith(prefix) && !listed.has(key)) {
         kept.delete(key)
@@ -193,8 +201,10 @@ function publishLooks(all = false): void {
     seenHosts.set(hostId, bots)
     prune(hostId, bots)
     for (const bot of bots) {
-      if (all || !seen.has(bot)) {
-        seen.add(bot)
+      const record = recordSeen(bot)
+      const key = botRefKey(bot)
+      if (all || seen.get(key) !== record) {
+        seen.set(key, record)
         askAgain(bot)
       }
     }
@@ -249,6 +259,7 @@ export function useBotSlackIcons(): void {
       window.removeEventListener('focus', retryFailed)
       // Off, nothing here is kept: no lists, no waiting attempts, and the one running stops at its next check.
       seenHosts.clear()
+      seen.clear()
       handled.clear()
       failures.clear()
       pending.clear()
