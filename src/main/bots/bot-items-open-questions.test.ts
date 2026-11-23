@@ -13,6 +13,7 @@ import {
   botItemQuestionPairing,
   botItemWaitingLine
 } from '../../shared/bots/bot-item-question-answers'
+import { waitingAskChange } from './bot-item-waiting-ask-keep'
 import type { BotItemBotActor, BotItemOwnerActor } from './bot-items-input'
 import { BotItemsStore } from './bot-items-store'
 
@@ -221,6 +222,9 @@ it('works out the waiting ask from the events when none is kept or an older Orca
     file.prepare('DELETE FROM item_waiting_asks').run()
     expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(kept)
     expect(file.prepare('SELECT ask FROM item_waiting_asks').get()).toEqual({ ask: first })
+    // Kept by other pairing rules (another build): not trusted, even when no event came since.
+    file.prepare('UPDATE item_waiting_asks SET ask = 0, rules = rules + 1').run()
+    expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(kept)
     // An older Orca's move by hand, which ends every ask, knows nothing of the kept one.
     const moved = file
       .prepare(
@@ -273,5 +277,54 @@ it('answers as pairing every event does, reading only the events since the kept 
   } finally {
     stores.splice(0).forEach((store) => store.dispose())
     rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+it('passes over only events that pair nothing, and keeps "none" only past events that cannot ask', () => {
+  const { store, uid, ask, comment } = item()
+  const views = (): BotItemEvent[] =>
+    store.events(uid, 0, 200).map(({ id, kind, actor, data, createdAt }) => ({
+      id: botItemEventId(id),
+      kind: BOT_ITEM_EVENT_KINDS.find((known) => known === kind) ?? 'edited',
+      actor,
+      data,
+      at: createdAt
+    }))
+  const waitingOf = (events: readonly BotItemEvent[]): string | undefined =>
+    [...botItemQuestionPairing({ status: 'working' }, events).questions].find(
+      ([, entry]) => entry.waiting
+    )?.[0]
+  const event = (
+    kind: BotItemEvent['kind'],
+    actor: BotItemEvent['actor'],
+    data: Record<string, unknown>
+  ): BotItemEvent => ({ id: botItemEventId(1_000_000), kind, actor, data, at: NOW })
+  const first = ask([HOSTS, GO])
+  comment(`${HOSTS} → Yes`, first)
+  ask([MERGE])
+  const waiting = views()
+  expect(waitingOf(waiting)).toBe(botItemEventId(first))
+  const ignored = [
+    ...BOT_ITEM_EVENT_KINDS.filter((kind) => kind !== 'commented' && kind !== 'status').map(
+      (kind) => event(kind, AGENT, {})
+    ),
+    event('commented', AGENT, { text: 'Still building.' }),
+    event('status', AGENT, { from: 'working', to: 'needs_you' })
+  ]
+  for (const passed of ignored) {
+    expect(waitingAskChange(passed.kind, passed.actor, passed.data)).toBeNull()
+    expect(waitingOf([...waiting, passed])).toBe(waitingOf(waiting))
+  }
+  store.set(uid, { status: 'working' }, AGENT, NOW)
+  const none = views()
+  expect(waitingOf(none)).toBeUndefined()
+  const answering = [
+    event('commented', OWNER, { text: 'Yes' }),
+    event('status', OWNER, { from: 'working', to: 'done' }),
+    event('status', AGENT, { from: 'needs_you', to: 'working', cause: 'answer' })
+  ]
+  for (const passed of answering) {
+    expect(waitingAskChange(passed.kind, passed.actor, passed.data)).toBe('answers')
+    expect(waitingOf([...none, passed])).toBeUndefined()
   }
 })

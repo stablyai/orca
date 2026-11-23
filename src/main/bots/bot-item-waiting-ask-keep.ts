@@ -8,6 +8,11 @@ import { botItemQuestionShape } from '../../shared/bots/bot-item-ask'
 import { parseBotItemEventId, type BotItemActor } from '../../shared/bots/bot-items'
 import { eventRecordOf, eventViewOf, optionalInteger } from './bot-items-rows'
 
+/** The pairing rules a kept ask was worked out by; bump it with any change to what
+ *  `botItemQuestionPairing` pairs, so asks kept by other rules (an upgrade or a downgrade) are worked out
+ *  again rather than trusted. */
+export const WAITING_ASK_RULES = 1
+
 /** An ask (0: none) as pairing the item's events up to `at` found it. */
 export type PairedWaitingAsk = { ask: number | null; at: number }
 
@@ -38,7 +43,8 @@ export function ensureKeptWaitingAsks(db: SyncDatabase): boolean {
     db.exec(`CREATE TABLE IF NOT EXISTS item_waiting_asks (
       item_uid TEXT PRIMARY KEY,
       ask INTEGER NOT NULL,
-      at INTEGER NOT NULL
+      at INTEGER NOT NULL,
+      rules INTEGER NOT NULL
     ) WITHOUT ROWID`)
     return true
   } catch (error) {
@@ -69,10 +75,10 @@ export function pairWaitingAsk(db: SyncDatabase, uid: string): PairedWaitingAsk 
 /** Keeps a pairing only while it read the item's newest event: one a write landed after stays unkept. */
 function keepWaitingAsk(db: SyncDatabase, uid: string, paired: PairedWaitingAsk): void {
   db.prepare(
-    `INSERT INTO item_waiting_asks (item_uid, ask, at)
-       SELECT ?, ?, ? WHERE (SELECT last_event_id FROM items WHERE uid = ?) = ?
-     ON CONFLICT(item_uid) DO UPDATE SET ask = excluded.ask, at = excluded.at`
-  ).run(uid, paired.ask ?? 0, paired.at, uid, paired.at)
+    `INSERT INTO item_waiting_asks (item_uid, ask, at, rules)
+       SELECT ?, ?, ?, ? WHERE (SELECT last_event_id FROM items WHERE uid = ?) = ?
+     ON CONFLICT(item_uid) DO UPDATE SET ask = excluded.ask, at = excluded.at, rules = excluded.rules`
+  ).run(uid, paired.ask ?? 0, paired.at, WAITING_ASK_RULES, uid, paired.at)
 }
 
 let keepFailureTold = false
@@ -109,7 +115,9 @@ export function waitingAskOf(
   store: boolean
 ): number | null {
   const kept = keeps
-    ? db.prepare('SELECT ask, at FROM item_waiting_asks WHERE item_uid = ?').get(uid)
+    ? db
+        .prepare('SELECT ask, at FROM item_waiting_asks WHERE item_uid = ? AND rules = ?')
+        .get(uid, WAITING_ASK_RULES)
     : undefined
   if (kept) {
     const ask = optionalInteger(kept, 'ask') ?? 0
