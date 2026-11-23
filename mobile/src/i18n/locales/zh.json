@@ -5353,6 +5353,7 @@
   "webShell": {
     "shellStateScreen": {
       "checkingHost": "正在检查主机",
+      "screenNeedsUpdate": "此页面需要更新版本的 Orca。请更新 Orca Mobile 和此主机上的 Orca，然后重试",
       "connectToDownload": "连接到此主机以下载最新版本的应用",
       "documentLoadFailed": "无法打开已下载的应用",
       "downloadFailed": "无法从此主机下载最新版本的应用",
@@ -6650,6 +6651,10 @@
       "undoStale": "此后又运行了一次更新的整理。请先查看再撤销",
       "backToTidyUp": "返回记忆维护"
     },
+    "search": {
+      "pausedMatches_one": "{{count}} 个已暂停的匹配项",
+      "pausedMatches_other": "{{count}} 个已暂停的匹配项"
+    },
     "list": {
       "updateOrcaOn": "更新 {{host}} 上的 Orca",
       "cantReach": "无法连接到 {{host}}。它恢复连接后会显示其 bots",
@@ -7298,7 +7303,7 @@
       "outfitTie": "领带",
       "outfitDetective": "侦探",
       "outfitHardHat": "安全帽",
-      "outfitReviewer": "审阅者",
+      "outfitReviewer": "评审人",
       "outfitNightShift": "夜班",
       "outfitArtist": "艺术家",
       "outfitScientist": "科学家",
@@ -7540,7 +7545,9 @@
           "you": "你",
           "askPlain": "@{{name}} 总结一下这个话题",
           "reply": "收到，马上处理"
-        }
+        },
+        "pick": "选择一个 Slack 工作区",
+        "another": "连接其他工作区"
       },
       "connection": {
         "installedBy": "由 {{installer}} 安装",
@@ -7571,6 +7578,19 @@
         "paste": "粘贴",
         "accessPasted": "这是 Access Token。请复制它旁边的 Refresh Token",
         "kept": "Orca Cloud 会加密保存此令牌，之后在此工作区添加 bots 只需点击一下"
+      },
+      "problem": {
+        "otherUser": "另一个 Slack 账号批准了此连接",
+        "otherUserNext": "登录了另一个 Slack 账号的人批准了 Slack 链接，因此 {{bot}} 无法以你的身份操作。请获取新链接，并在登录你自己的 Slack 账号后批准",
+        "expired": "Slack 登录未完成",
+        "expiredNext": "Slack 链接在有人批准连接前已过期"
+      },
+      "reconnect": {
+        "whyHost": "每台电脑各自保存 Slack 令牌。Slack 已不再接受 {{host}} 使用的令牌",
+        "paste": "粘贴新令牌以重新连接",
+        "whyNeeded": "Orca 没有此工作区可用的 Slack 令牌",
+        "pasteNeeded": "粘贴令牌以继续",
+        "continue": "继续"
       }
     },
     "cloudSignIn": {
@@ -8170,6 +8190,7 @@
       "opensOnHost": "将在 Orca 中 {{host}} 的浏览器里打开",
       "signedInAs": "已以 {{who}} 身份登录",
       "continueOn": "在 {{host}} 上继续",
+      "openSignInPage": "打开登录页面",
       "cancel": "取消"
     },
     "google": {
