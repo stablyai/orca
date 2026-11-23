@@ -61,6 +61,7 @@ export function MobileWebhookSetupCard({
   // The last action's outcome, said under the card: a refusal, or that a sample went out.
   const [note, setNote] = useState<{ text: string; failed: boolean } | null>(null)
   const [open, setOpen] = useState(false)
+  const [readFailed, setReadFailed] = useState(false)
   const called = hook?.state === 'live' && hook.lastCall !== null
   // "Last call 4m ago" moves on only once there is a call.
   const now = useNow(60_000, called)
@@ -81,22 +82,28 @@ export function MobileWebhookSetupCard({
     let live = true
     let replied = false
     const read = (): void => {
-      void webhookCardRead.request(client, { hookId }).then(
-        (reply) => {
-          replied = true
-          const answer = webhookCardRead.interpret(reply)
-          if (live) {
-            setHook({
-              state: answer.state,
-              adapter: answer.adapter ?? null,
-              lastCall: answer.lastCall ?? null
-            })
+      void webhookCardRead
+        .request(client, { hookId })
+        .then((reply) => webhookCardRead.interpret(reply))
+        .then(
+          (answer) => {
+            replied = true
+            if (live) {
+              setReadFailed(false)
+              setHook({
+                state: answer.state,
+                adapter: answer.adapter ?? null,
+                lastCall: answer.lastCall ?? null
+              })
+            }
+          },
+          // A failed read leaves Copy URL on, whose tap says why; the refresh keeps trying meanwhile.
+          () => {
+            if (live) {
+              setReadFailed(true)
+            }
           }
-        },
-        () => {
-          replied = true
-        }
-      )
+        )
     }
     const stop = startHostBotRefresh({
       client,
@@ -162,7 +169,7 @@ export function MobileWebhookSetupCard({
     )
   }
 
-  const pending = hook === null || hook.state === 'pending'
+  const pending = hook === null ? !readFailed : hook.state === 'pending'
   const status = called
     ? { label: t('chat.botCards.webhookSetup.on', 'On'), on: true }
     : hook && hook.state !== 'live'
@@ -204,7 +211,7 @@ export function MobileWebhookSetupCard({
             disabled={pending || busy || !client}
             onPress={() => copy('url')}
           />
-          {pending ? null : (
+          {pending || !hook ? null : (
             <MobileNativeChatNoticePill
               label={t('chat.botCards.webhookSetup.keyAndSecret', 'Key and signing secret')}
               Icon={open ? ChevronDown : ChevronRight}

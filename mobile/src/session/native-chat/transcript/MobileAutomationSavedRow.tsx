@@ -80,7 +80,8 @@ export function MobileAutomationSavedMessage({
       : say('paused')
   const at = waitState ? waitRowTime(waitState, message.timestamp) : message.timestamp
   const meta = scaledType(typography.metaSize, fontScale, 4)
-  const hookId = message.automationSaved ? automationHookId(automation) : null
+  // A wait keeps its row: its state and deadline matter more than a URL it can also start on.
+  const hookId = message.automationSaved && !waitState ? automationHookId(automation) : null
   if (hookId) {
     // Its URL is what the user needs next, so a webhook automation is a card, not a folded row.
     return (

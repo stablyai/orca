@@ -141,3 +141,15 @@ it('reads a setting-up hook again until it is live, so Copy URL turns on by itse
   expect(client.requests[1]?.method).toBe('webhooks.card')
   expect(pill('Copy URL')?.props.disabled).toBe(false)
 })
+
+it('turns Copy URL on when the hook cannot be read, with no key panel to open', async () => {
+  const client = mount('wh_PhoneCardTest004')
+  client.requests[0]?.resolve({
+    id: 'rpc-card',
+    ok: false,
+    error: { code: 'webhook_not_found', message: 'gone' }
+  })
+  await flush()
+  expect(pill('Copy URL')?.props.disabled).toBe(false)
+  expect(pill('Key and signing secret')).toBeUndefined()
+})
