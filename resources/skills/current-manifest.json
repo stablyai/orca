@@ -52,16 +52,16 @@
     {
       "name": "orca-azure-devops-pr",
       "sourcePath": "skills/orca-azure-devops-pr",
-      "packageDigest": "7370a9d8ec14f751a2306620667ce46bad717d20d5189a753063409d081c3029",
+      "packageDigest": "cedd05255303614ee3646389b9a5c2f4574445b26b6df9c8fb8f339341c46fa0",
       "files": [
         {
           "path": "SKILL.md",
-          "size": 2683,
+          "size": 2753,
           "executable": false,
           "classification": "text",
-          "exactSha256": "8e71f7ca5a28a569aad27b49db54c9dd991b465b993f3b12bae178934ed0b733",
-          "textNormalizedSha256": "8e71f7ca5a28a569aad27b49db54c9dd991b465b993f3b12bae178934ed0b733",
-          "identitySha256": "8e71f7ca5a28a569aad27b49db54c9dd991b465b993f3b12bae178934ed0b733"
+          "exactSha256": "4780bb95be266a0c3e2d5881167a02a4261872df81ad9b0aaf92138a9268fea1",
+          "textNormalizedSha256": "4780bb95be266a0c3e2d5881167a02a4261872df81ad9b0aaf92138a9268fea1",
+          "identitySha256": "4780bb95be266a0c3e2d5881167a02a4261872df81ad9b0aaf92138a9268fea1"
         }
       ]
     },
