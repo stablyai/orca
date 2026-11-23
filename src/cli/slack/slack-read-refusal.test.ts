@@ -9,7 +9,9 @@ describe('Slack read refusals', () => {
         ok: true,
         result: {
           ok: false,
-          refusal: 'slack_history_scope_missing',
+          refusal: 'refused',
+          reason: 'slack_history_scope_missing',
+          scope: 'channels:history',
           message: 'Slack API rejected the request.'
         }
       })

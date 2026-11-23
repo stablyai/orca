@@ -133,7 +133,9 @@ export const ConnectorActionResponse = z.discriminatedUnion('ok', [
   z.object({
     ok: z.literal(false),
     refusal: z.string().min(1),
-    message: z.string()
+    message: z.string(),
+    reason: z.string().min(1).optional(),
+    scope: z.string().min(1).optional()
   })
 ])
 export type ConnectorActionResponse = z.infer<typeof ConnectorActionResponse>

@@ -62,7 +62,7 @@ function refOf(
 
 type ActResponse =
   | { ok: true; result: ActionResult }
-  | { ok: false; refusal: string; message: string }
+  | { ok: false; refusal: string; message: string; reason?: string; scope?: string }
 
 function sessionOf(): string {
   const sessionId = readInjectedAgentSessionId()
@@ -87,7 +87,9 @@ export async function callAct(
     })
   if (!answer.result.ok) {
     const slackMessage =
-      params.verb === 'read' ? slackReadRefusalMessage(answer.result.refusal) : null
+      params.verb === 'read'
+        ? slackReadRefusalMessage(answer.result.reason, answer.result.scope)
+        : null
     throw new RuntimeClientError(answer.result.refusal, slackMessage ?? answer.result.message)
   }
   return { ...answer, result: answer.result.result }
