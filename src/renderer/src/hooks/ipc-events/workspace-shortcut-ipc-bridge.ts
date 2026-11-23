@@ -6,6 +6,7 @@ import { getVisibleWorktreeShortcutTargets } from '@/components/sidebar/visible-
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { deleteHoveredWorkspaceImmediately } from '@/components/sidebar/hovered-workspace-delete'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
+import { shouldShowWorktreeHistoryControls } from '@/lib/titlebar-worktree-history-controls'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { useAppStore } from '../../store'
 import { toggleAgentDashboardFromShortcut } from './agent-dashboard-command'
@@ -114,8 +115,8 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
 
   const navigateWorktreeHistory = (direction: 'back' | 'forward'): void => {
     const store = useAppStore.getState()
-    // Why: mirror button visibility — worktree history nav is only meaningful in the terminal view, so no-op elsewhere.
-    if (store.activeView !== 'terminal') {
+    // Why: mirror the title-bar arrows, which also step through page entries (tasks, automations, …).
+    if (!shouldShowWorktreeHistoryControls(store.activeView)) {
       return
     }
     if (direction === 'back') {

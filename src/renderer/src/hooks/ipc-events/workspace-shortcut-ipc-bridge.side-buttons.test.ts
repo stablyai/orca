@@ -43,6 +43,12 @@ describe('mouse side buttons over Orca UI', () => {
     expect(store.goForwardWorktree).toHaveBeenCalledTimes(1)
   })
 
+  it('steps history from a page view that shows the history arrows', () => {
+    store.activeView = 'tasks'
+    release(3)
+    expect(store.goBackWorktree).toHaveBeenCalledTimes(1)
+  })
+
   it('ignores other buttons and views without the history arrows', () => {
     release(0)
     store.activeView = 'settings'
