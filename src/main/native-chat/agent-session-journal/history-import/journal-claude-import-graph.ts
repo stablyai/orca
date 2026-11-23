@@ -40,9 +40,15 @@ export function createClaudeImportGraph() {
   const insert = db.prepare(`INSERT INTO rows
     (position, line_index, uuid, parent_uuid, logical_parent_uuid, type, assistant_id, candidate, raw_payload)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-  const insertUse = db.prepare('INSERT OR IGNORE INTO tool_uses (tool_id, position) VALUES (?, ?)')
-  const insertResult = db.prepare('INSERT OR IGNORE INTO tool_results (tool_id, position) VALUES (?, ?)')
-  const latest = db.prepare('SELECT position, parent_uuid, logical_parent_uuid FROM rows WHERE uuid = ? ORDER BY position DESC LIMIT 1')
+  const insertUse = db.prepare(
+    'INSERT OR IGNORE INTO tool_uses (tool_id, position) VALUES (?, ?)'
+  )
+  const insertResult = db.prepare(
+    'INSERT OR IGNORE INTO tool_results (tool_id, position) VALUES (?, ?)'
+  )
+  const latest = db.prepare(
+    'SELECT position, parent_uuid, logical_parent_uuid FROM rows WHERE uuid = ? ORDER BY position DESC LIMIT 1'
+  )
   const add = db.prepare('INSERT OR IGNORE INTO selected (position) VALUES (?)')
   const seen = db.prepare('INSERT OR IGNORE INTO walked_uuid (uuid) VALUES (?)')
   let recorded = 0
@@ -70,9 +76,11 @@ export function createClaudeImportGraph() {
       if (Array.isArray(message?.content)) {
         for (const value of message.content) {
           const part = claudeRecord(value)
-          if (part?.type === 'tool_use' && text(part.id)) insertUse.run(text(part.id), position)
-          if (type === 'user' && part?.type === 'tool_result' && text(part.tool_use_id)) {
-            insertResult.run(text(part.tool_use_id), position)
+          const toolUseId = text(part?.id)
+          const toolResultId = text(part?.tool_use_id)
+          if (part?.type === 'tool_use' && toolUseId) insertUse.run(toolUseId, position)
+          if (type === 'user' && part?.type === 'tool_result' && toolResultId) {
+            insertResult.run(toolResultId, position)
           }
         }
       }
@@ -80,7 +88,9 @@ export function createClaudeImportGraph() {
     },
     async select(check: () => void): Promise<void> {
       db.exec('COMMIT')
-      const newest = db.prepare('SELECT position, uuid FROM rows WHERE candidate = 1 ORDER BY position DESC LIMIT 1').get()
+      const newest = db
+        .prepare('SELECT position, uuid FROM rows WHERE candidate = 1 ORDER BY position DESC LIMIT 1')
+        .get()
       if (typeof newest?.position === 'number') {
         let uuid = typeof newest.uuid === 'string' ? newest.uuid : null
         if (uuid === null) add.run(newest.position)
@@ -91,7 +101,12 @@ export function createClaudeImportGraph() {
           const row = latest.get(uuid)
           if (!row || typeof row.position !== 'number') break
           add.run(row.position)
-          uuid = typeof row.parent_uuid === 'string' ? row.parent_uuid : typeof row.logical_parent_uuid === 'string' ? row.logical_parent_uuid : null
+          uuid =
+            typeof row.parent_uuid === 'string'
+              ? row.parent_uuid
+              : typeof row.logical_parent_uuid === 'string'
+                ? row.logical_parent_uuid
+                : null
         }
       }
       // Preserve UUID-less candidate rows; they have no graph identity to walk.
@@ -109,9 +124,13 @@ export function createClaudeImportGraph() {
         if (!row || typeof row.position !== 'number') break
         mark.run(row.position)
         if (typeof row.assistant_id === 'string') {
-          for (const sibling of siblings.iterate(row.assistant_id)) if (typeof sibling.position === 'number') add.run(sibling.position)
+          for (const sibling of siblings.iterate(row.assistant_id)) {
+            if (typeof sibling.position === 'number') add.run(sibling.position)
+          }
         }
-        for (const result of results.iterate(row.position)) if (typeof result.position === 'number') add.run(result.position)
+        for (const result of results.iterate(row.position)) {
+          if (typeof result.position === 'number') add.run(result.position)
+        }
         if (++count % 256 === 0) await setImmediate()
       }
     },
@@ -119,7 +138,11 @@ export function createClaudeImportGraph() {
       const selected = db.prepare(`SELECT r.raw_payload, r.line_index, r.position FROM selected s
         JOIN rows r ON r.position = s.position WHERE r.raw_payload IS NOT NULL ORDER BY r.position`)
       for (const row of selected.iterate()) {
-        if (typeof row.raw_payload === 'string' && typeof row.line_index === 'number' && typeof row.position === 'number') {
+        if (
+          typeof row.raw_payload === 'string' &&
+          typeof row.line_index === 'number' &&
+          typeof row.position === 'number'
+        ) {
           yield { raw: row.raw_payload, lineIndex: row.line_index, position: row.position }
         }
       }

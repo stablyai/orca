@@ -53,7 +53,7 @@ type ImportResult = {
 
 type Row = Record<string, unknown>
 type ImportScan = {
-  record: (row: Row | null, position: number, lineIndex?: number, end?: number) => void
+  record: (row: Row | null, position: number, lineIndex?: number) => void
   select: () => Promise<void>
   item: (row: Row, index: number, fallbackId: string) => JournalReplacementItem | undefined
   check: () => void
@@ -65,7 +65,7 @@ export async function importClaudeTranscript(input: ImportInput): Promise<Import
   const check = () => input.signal?.throwIfAborted()
   const scan: ImportScan = {
     check,
-    record(row, position, lineIndex = -1, end = position) {
+    record(row, position, lineIndex = -1) {
       check()
       conversation ||= mayBeClaudeConversationEntry(row)
       if (row) {
@@ -180,7 +180,7 @@ async function importClaudeFile(
   const sourceConsumedBytes = await visitClaudeFile(input, snapshot.size, scan.check, {
     observe,
     visit(row, index, offset, record) {
-      scan.record(row, offset, index, offset + record.byteLength)
+      scan.record(row, offset, index)
       // The backward frontier probe needs the delimiter before a row, unless it starts at BOF.
       const withinProbe = offset > frontierCutoff || (offset === 0 && frontierCutoff === 0)
       if (record.terminated && withinProbe && typeof row?.uuid === 'string' && row.uuid) {
