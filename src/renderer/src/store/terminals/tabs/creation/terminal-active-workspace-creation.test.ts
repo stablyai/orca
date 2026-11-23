@@ -4,8 +4,6 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspac
 import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
 import { makeWorktree } from '../../../slices/worktrees/worktree.test-fixture'
 
-import { createStoreCascadesMockApi } from '../../../testing/app-store-cascade-api.test-fixture'
-
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
@@ -28,7 +26,13 @@ vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOri
   }
 })
 
-createStoreCascadesMockApi()
+const mockApi = {
+  worktrees: { updateMeta: vi.fn().mockResolvedValue({}) },
+  pty: { kill: vi.fn().mockResolvedValue(undefined) },
+  runtimeEnvironments: { call: vi.fn().mockResolvedValue({ ok: true, result: {} }) }
+}
+// @ts-expect-error -- minimal window.api stub for the store under test
+globalThis.window = { api: mockApi }
 
 describe('createTab beside a lone pane', () => {
   const wt = 'repo1::/path/wt1'

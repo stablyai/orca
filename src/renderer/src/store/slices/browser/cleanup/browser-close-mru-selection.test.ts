@@ -3,7 +3,6 @@ import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree
 import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
 
 import { makeWorktree } from '../../worktrees/worktree.test-fixture'
-import { createStoreCascadesMockApi } from '../../../testing/app-store-cascade-api.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
@@ -42,7 +41,13 @@ vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (import
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
-const mockApi = createStoreCascadesMockApi()
+const mockApi = {
+  worktrees: { updateMeta: vi.fn().mockResolvedValue({}) },
+  pty: { kill: vi.fn().mockResolvedValue(undefined) },
+  runtimeEnvironments: { call: vi.fn().mockResolvedValue({ ok: true, result: {} }) }
+}
+// @ts-expect-error -- minimal window.api stub for the store under test
+globalThis.window = { api: mockApi }
 
 let main: TabsDrawnFromMain | undefined
 afterEach(() => {

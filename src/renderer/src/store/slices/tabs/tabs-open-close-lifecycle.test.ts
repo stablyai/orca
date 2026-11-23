@@ -1,10 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import '../../../../../shared/orca-profiles/constants'
-import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 import { seedThreePaneLayout } from './three-pane-layout.test-fixture'
-
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
@@ -27,7 +25,13 @@ vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOri
   }
 })
 
-createTabsSliceMockApi()
+const mockApi = {
+  worktrees: { updateMeta: vi.fn().mockResolvedValue({}) },
+  pty: { kill: vi.fn().mockResolvedValue(undefined) },
+  runtimeEnvironments: { call: vi.fn().mockResolvedValue({ ok: true, result: {} }) }
+}
+// @ts-expect-error -- minimal window.api stub for the store under test
+globalThis.window = { api: mockApi }
 
 const WT = 'repo1::/tmp/feature'
 
