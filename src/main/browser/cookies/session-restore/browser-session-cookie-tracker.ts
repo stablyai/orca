@@ -16,6 +16,8 @@ export type SessionCookieTracker = {
   /** Set while a save reads: scopes that changed meanwhile, which the read may have missed. */
   changedDuringSave: Map<string, ScopeChange> | null
   timer: ReturnType<typeof setTimeout> | null
+  /** The snapshot writes (saves and clears) queued for the file, if any. */
+  saving: Promise<void> | null
   onChanged: (event: Electron.Event, cookie: Cookie, cause: string, removed: boolean) => void
 }
 
@@ -24,4 +26,21 @@ export function cancelPendingSave(tracker: SessionCookieTracker): void {
     clearTimeout(tracker.timer)
     tracker.timer = null
   }
+}
+
+/** Runs a snapshot write after those already queued, so an older one can't land last. */
+export function queueSnapshotWrite(
+  tracker: SessionCookieTracker,
+  write: () => Promise<void>
+): Promise<void> {
+  const run = (tracker.saving ?? Promise.resolve()).then(write)
+  const settled: Promise<void> = run
+    .catch(() => {})
+    .then(() => {
+      if (tracker.saving === settled) {
+        tracker.saving = null
+      }
+    })
+  tracker.saving = settled
+  return run
 }

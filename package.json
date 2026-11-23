@@ -197,7 +197,6 @@
     "win-crash-survival-e2e": "node tests/tools/win-crash-survival-e2e/run.mjs",
     "smoke:windows-pty-native-capability": "node tests/tools/windows-pty-native-capability-smoke/run.mjs",
     "test:e2e:headful": "pnpm run ensure:electron-runtime && npx playwright test --config tests/playwright.config.ts --project electron-headful",
-    "test:e2e:terminal-ime-native": "node config/scripts/runtime-verification/terminal-e2e/run-terminal-ibus-hangul-e2e.mjs",
     "test:e2e:computer": "vitest run --config tests/e2e/vitest.config.ts",
     "bench:idle-cpu": "pnpm run ensure:electron-runtime && node config/scripts/performance/idle-cpu/run-idle-cpu-benchmark.mjs",
     "bench:spinners": "pnpm run ensure:electron-runtime && node tests/tools/benchmarks/spinner-rendering/run.mjs",

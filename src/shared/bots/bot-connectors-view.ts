@@ -41,11 +41,13 @@ export const LINEAR_NO_KEY =
 // linear: a Linear API key or a Connect Linear login on this computer.
 // google: the Google accounts connected on this computer; absent from hosts that report none.
 // googleApp: whether this computer has a Google app (client) to sign in with.
+// googleDefault: the account a call without --account uses.
 export type LocalSignIns = {
   gh: 'signed-in' | 'signed-out' | 'missing'
   linear: boolean
   google?: readonly GoogleAccountView[]
   googleApp?: boolean
+  googleDefault?: string | null
 }
 
 const OFFER_GOOGLE = '`orca bot connectors --offer google`'
@@ -67,7 +69,8 @@ const GOOGLE_STATES: Record<GoogleServiceReadiness['state'], string> = {
 function googleService(
   bot: Pick<Bot, 'google'>,
   accounts: readonly GoogleAccountView[],
-  app: boolean
+  app: boolean,
+  defaultAccount: string | null
 ): BotConnectorService {
   const connected = accounts.filter((account) => account.status === 'connected')
   const { allowed, host } = googleBotConnectState({
@@ -80,17 +83,24 @@ function googleService(
     : host === 'connected'
       ? undefined
       : GOOGLE_HOST_GAPS[host]
-  const detail = connected
-    .map(
+  // A signed-out default stays listed: calls without --account still go to it, and fail.
+  const signedOutDefault = accounts.find(
+    (account) => account.email === defaultAccount && account.status !== 'connected'
+  )
+  const detail = [
+    ...(signedOutDefault
+      ? [`${signedOutDefault.email} (default): signed out, needs reconnecting`]
+      : []),
+    ...connected.map(
       (account) =>
-        `${account.email}: ${account.services
+        `${account.email}${account.email === defaultAccount ? ' (default)' : ''}: ${account.services
           .map(
             (service) =>
               `${GOOGLE_SERVICE_INFO[service.service].label} ${GOOGLE_STATES[service.state]}`
           )
           .join(', ')}`
     )
-    .join('; ')
+  ].join('; ')
   return {
     source: 'google',
     tool: 'orca gmail|calendar|contacts',
@@ -150,7 +160,9 @@ export function botConnectorServices(
       wakes: slack,
       ...(cloudSlack?.approveUrl ? { approveUrl: cloudSlack.approveUrl } : {})
     },
-    ...(local.google ? [googleService(bot, local.google, local.googleApp === true)] : [])
+    ...(local.google
+      ? [googleService(bot, local.google, local.googleApp === true, local.googleDefault ?? null)]
+      : [])
   ]
 }
 

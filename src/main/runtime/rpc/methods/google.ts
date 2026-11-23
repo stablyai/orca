@@ -5,6 +5,7 @@ import { botOfToken } from '../../../bots/bot-of-caller'
 import { getGoogleConnect, type GoogleConnect } from '../../../google/google-connect'
 import type { GoogleStatusView } from '../../../../shared/google/google-connect-types'
 import {
+  botAskerKeys,
   botOtherAskers,
   googleWhoCanAskWarning
 } from '../../../../shared/google/google-who-can-ask-warning'
@@ -12,6 +13,7 @@ import {
   GoogleBotAccessSetParams,
   GoogleClientExportParams,
   GoogleClientImportParams,
+  GoogleDefaultSetParams,
   GoogleDisconnectParams,
   GoogleFinishSignInParams,
   GoogleSignInFlowParams,
@@ -76,6 +78,18 @@ async function pickAccount(connect: GoogleConnect, wanted: string | undefined): 
 }
 
 // `workspace`: anyone who can run commands here could run the sign-in in a terminal anyway.
+const GOOGLE_ASKERS_CHANGED =
+  'Who can ask changed while you were confirming. Review it and turn Google on again.'
+
+function sameAskers(shown: readonly string[], current: readonly string[]): boolean {
+  const sortedShown = [...shown].sort()
+  const sortedCurrent = [...current].sort()
+  return (
+    sortedShown.length === sortedCurrent.length &&
+    sortedShown.every((key, index) => key === sortedCurrent[index])
+  )
+}
+
 export const GOOGLE_METHODS = [
   defineMethod({
     name: 'google.status',
@@ -89,6 +103,7 @@ export const GOOGLE_METHODS = [
       return {
         ...(await statusView(runtime, connect)),
         accounts,
+        defaultAccount: await connect.defaultAccount(),
         ...(clientKey ? { clientKey } : {})
       }
     }
@@ -158,13 +173,27 @@ export const GOOGLE_METHODS = [
     }
   }),
   defineMethod({
+    name: 'google.default.set',
+    permission: 'workspace',
+    params: GoogleDefaultSetParams,
+    handler: async ({ botToken, account }, ctx) => {
+      refuseFromBot(botToken, ctx)
+      return { defaultAccount: await google().setDefaultAccount(account) }
+    }
+  }),
+  defineMethod({
     name: 'google.bot.set',
     permission: 'workspace',
     params: GoogleBotAccessSetParams,
-    handler: async ({ botToken, botId, on }, ctx) => {
+    handler: async ({ botToken, botId, on, confirmedAskers }, ctx) => {
       refuseFromBot(botToken, ctx)
       ctx.runtime.bots.assertEnabled()
-      const bot = await ctx.runtime.bots.update(botId, { google: on })
+      const bot = await ctx.runtime.bots.update(botId, (current) => {
+        if (on && confirmedAskers && !sameAskers(confirmedAskers, botAskerKeys(current))) {
+          throw new InvalidArgumentError(GOOGLE_ASKERS_CHANGED)
+        }
+        return { google: on }
+      })
       // Settings confirms this before turning Google on; the CLI prints it.
       const warning = on ? googleWhoCanAskWarning(bot.name, botOtherAskers(bot)) : null
       return {

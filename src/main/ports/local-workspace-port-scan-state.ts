@@ -67,15 +67,6 @@ export function recordWorkspacePortScanTimeout(): void {
   commandTimeoutBackoff.recordTimeout()
 }
 
-export function resetWorkspacePortScanTimeoutBackoffForTests(): void {
-  commandTimeoutBackoff.reset()
-  loggedWorkerUnavailable = false
-  skippedMetadataOnLastScan = false
-  lastListenerMetadata = new Map()
-  metadataScanSequence = 0
-  reusedListenerKeys = new Set()
-}
-
 export function shouldSkipMetadataCommands(
   spawnMs: number,
   options: WorkspacePortScanOptions

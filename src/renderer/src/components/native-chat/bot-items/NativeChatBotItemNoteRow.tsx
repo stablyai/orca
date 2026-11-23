@@ -1,8 +1,8 @@
 // Item changes in a bot chat: the shared status row for every change, item names as chips that open
 // the item in the Items tab (a one-item line opens it from anywhere on the line); the owner's comment
 // is their own message, headed by the item's chip. A run of the owner's quick changes to one item
-// folds into one row that opens into each change; a long line clamps to two lines and opens whole,
-// and a bulk line shows a few chips then "+N more".
+// folds into one row that opens into each change; a line stays on one line (chips and a worker's name
+// cut short, a cut-short note opens whole), and a bulk line shows a few chips then "+N more".
 import { useEffect, useRef, useState } from 'react'
 import { ListTodo, MessageSquare } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -19,15 +19,23 @@ import { readBots } from '@/lib/bot-catalog'
 import type { BotItemNoteItem, BotItemNoteView } from '../../../../../shared/bots/bot-item-note'
 import { stripSentImagePromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { NativeChatEventRow } from '../messages/events/NativeChatEventRow'
-import { NATIVE_CHAT_INLINE_CHIP } from '../messages/events/native-chat-inline-chip'
+import {
+  NATIVE_CHAT_INLINE_CHIP,
+  NATIVE_CHAT_ROW_SHARE
+} from '../messages/events/native-chat-inline-chip'
 import { NativeChatUserBubble } from '../messages/rows/NativeChatUserBubble'
 import { useBotItemChipPreview } from './bot-item-chip-preview'
 import {
   botItemNoteLines,
   botItemNoteRunLine,
   type BotItemNoteLine,
-  type BotItemNoteLineChat
+  type BotItemNoteLineChat,
+  type BotItemNoteLineLink
 } from '../../../../../shared/bots/bot-item-note-lines'
+import type { AgentMessageSender } from '../../../../../shared/agent-session/journal/agent-session-message-source'
+import { SenderChip } from '../messages/agent-senders/NativeChatAgentMessageSenders'
+import { useNativeChatVisualOwner } from '../media/visuals/native-chat-visual-owner'
+import { useNativeChatWorkers } from '../native-chat-workers-context'
 
 /** The chat's bot is the one whose home it is in. */
 function openChipItem(uid: string): void {
@@ -49,7 +57,13 @@ function ChipPreview({ item }: { item: BotItemNoteItem }): React.JSX.Element {
   )
 }
 
-function ItemChip({ item }: { item: BotItemNoteItem }): React.JSX.Element {
+export function ItemChip({
+  item,
+  className
+}: {
+  item: BotItemNoteItem
+  className?: string
+}): React.JSX.Element {
   const t = useTranslate()
   // The preview, and its live read, exist only while the tooltip is open.
   const [open, setOpen] = useState(false)
@@ -63,7 +77,7 @@ function ItemChip({ item }: { item: BotItemNoteItem }): React.JSX.Element {
             title: item.title,
             status: botItemStatusName(item.status, t)
           })}
-          className={NATIVE_CHAT_INLINE_CHIP}
+          className={cn(NATIVE_CHAT_INLINE_CHIP, className)}
           onClick={() => openChipItem(item.uid)}
         >
           <BotItemStatusIcon status={item.status} />
@@ -102,48 +116,86 @@ function ChatChip({ chat }: { chat: BotItemNoteLineChat }): React.JSX.Element {
 /** Chips a bulk line shows before "+N more". */
 const CHIPS_SHOWN = 3
 
+/** A linked worker this chat started as the Started row draws it: its chip, opening the worker.
+ *  Any other link's name cuts short as a chip does, whole on hover. */
+function LinkName({ link }: { link: BotItemNoteLineLink }): React.JSX.Element {
+  const owner = useNativeChatVisualOwner()
+  const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
+  const worker = useNativeChatWorkers().find((each) => each.dispatchId === link.dispatchId)
+  if (worker?.address) {
+    const sender: AgentMessageSender = {
+      party: {
+        address: worker.address,
+        terminalHandle: worker.address.startsWith('term_') ? worker.address : null,
+        orcaSessionId: null
+      },
+      name: link.name
+    }
+    return (
+      <SenderChip
+        from={{ kind: 'agent', senders: [sender], orchestration: null }}
+        sender={sender}
+        chatWorktreeId={owner?.worktreeId ?? activeWorktreeId}
+        target={owner?.target}
+        dispatchId={worker.dispatchId}
+      />
+    )
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className={NATIVE_CHAT_ROW_SHARE}>{link.name}</span>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {link.name}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+/** The line's parts, each its own piece of the one-line row (which spaces them). */
 function LineWords({
   line,
   allChips,
-  onAllChips
+  onAllChips,
+  detailRef
 }: {
   line: BotItemNoteLine & { kind: 'line' }
   allChips: boolean
   onAllChips: () => void
+  detailRef?: React.Ref<HTMLSpanElement>
 }): React.JSX.Element {
   const t = useTranslate()
   const chips = allChips ? line.items : line.items.slice(0, CHIPS_SHOWN)
   const hiddenChips = line.items.length - chips.length
+  const after = line.link?.after ?? line.chat?.after
   return (
     <>
-      {line.lead}
-      {line.chat ? (
-        <>
-          {line.lead ? ' ' : null}
-          <ChatChip chat={line.chat} />
-          {line.chat.after ? ` ${line.chat.after}` : null}
-        </>
+      {line.lead ? <span className="shrink-0">{line.lead}</span> : null}
+      {line.chat ? <ChatChip chat={line.chat} /> : null}
+      {line.chat && line.link && line.chat.after ? (
+        <span className="shrink-0">{line.chat.after}</span>
       ) : null}
-      {chips.map((item, index) => (
-        <span key={item.uid}>
-          {line.lead || line.chat || index > 0 ? ' ' : null}
-          <ItemChip item={item} />
-        </span>
+      {line.link ? <LinkName link={line.link} /> : null}
+      {after ? <span className="shrink-0">{after}</span> : null}
+      {chips.map((item) => (
+        <ItemChip key={item.uid} item={item} />
       ))}
       {hiddenChips > 0 ? (
-        <>
-          {' '}
-          <button
-            type="button"
-            className="text-xs text-chat-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={onAllChips}
-          >
-            {t('bots.items.chat.moreItems', '+{{count}} more', { count: hiddenChips })}
-          </button>
-        </>
+        <button
+          type="button"
+          className="shrink-0 text-xs text-chat-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={onAllChips}
+        >
+          {t('bots.items.chat.moreItems', '+{{count}} more', { count: hiddenChips })}
+        </button>
       ) : null}
-      {line.tail ? ` ${line.tail}` : null}
-      {line.detail ? <span className="text-chat-foreground">: {line.detail}</span> : null}
+      {line.tail || line.detail ? (
+        <span ref={detailRef} className={line.detail ? NATIVE_CHAT_ROW_SHARE : 'shrink-0'}>
+          {line.tail}
+          {line.detail ? <span className="text-chat-foreground">: {line.detail}</span> : null}
+        </span>
+      ) : null}
     </>
   )
 }
@@ -153,6 +205,7 @@ function lineLabel(line: BotItemNoteLine & { kind: 'line' }): string {
   return [
     line.lead,
     line.chat && [line.chat.name, line.chat.after].filter(Boolean).join(' '),
+    line.link && [line.link.name, line.link.after].filter(Boolean).join(' '),
     line.items.map((item) => item.title).join(', '),
     line.tail
   ]
@@ -161,7 +214,7 @@ function lineLabel(line: BotItemNoteLine & { kind: 'line' }): string {
     .concat(line.detail ? `: ${line.detail}` : '')
 }
 
-/** One item change on the shared status row; a line cut at two lines opens whole under it. */
+/** One item change on the shared status row; a note cut short opens whole under it. */
 function QuietLine({
   line,
   at
@@ -170,24 +223,20 @@ function QuietLine({
   at?: number
 }): React.JSX.Element {
   const [allChips, setAllChips] = useState(false)
-  const [clamped, setClamped] = useState(false)
-  const measuredClamped = useRef(false)
-  const text = useRef<HTMLSpanElement | null>(null)
+  const [cut, setCut] = useState(false)
+  const measuredCut = useRef(false)
+  const detail = useRef<HTMLSpanElement | null>(null)
   useEffect(() => {
-    const node = text.current
-    if (!node) {
+    const node = detail.current
+    if (!node || !line.detail) {
       return
     }
     // A fresh observer reports the initial size after the transcript's synchronous commits.
     const observer = new ResizeObserver(() => {
-      const height = node.clientHeight
-      if (height === 0) {
-        return
-      }
-      const next = node.scrollHeight > height + 1
-      if (next !== measuredClamped.current) {
-        measuredClamped.current = next
-        setClamped(next)
+      const next = node.scrollWidth > node.clientWidth + 1
+      if (next !== measuredCut.current) {
+        measuredCut.current = next
+        setCut(next)
       }
     })
     observer.observe(node)
@@ -195,7 +244,6 @@ function QuietLine({
   }, [line, allChips])
   // A one-item line opens its item anywhere on it; the chip stays the keyboard target.
   const opens = line.items.length === 1 ? line.items[0]!.uid : undefined
-  const words = <LineWords line={line} allChips={allChips} onAllChips={() => setAllChips(true)} />
   return (
     <div
       className={cn(opens && 'cursor-pointer')}
@@ -213,24 +261,35 @@ function QuietLine({
         icon={<ListTodo className="size-3.5" aria-hidden />}
         label={lineLabel(line)}
         timestamp={at}
-        details={clamped ? words : undefined}
+        details={cut ? <p className="whitespace-pre-wrap">{line.detail}</p> : undefined}
       >
-        <span ref={text} className="line-clamp-2">
-          {words}
-        </span>
+        <LineWords
+          line={line}
+          allChips={allChips}
+          onAllChips={() => setAllChips(true)}
+          detailRef={detail}
+        />
       </NativeChatEventRow>
     </div>
   )
 }
 
-function CommentRow({ line }: { line: BotItemNoteLine & { kind: 'comment' } }) {
+function CommentRow({
+  line,
+  belowAnother
+}: {
+  line: BotItemNoteLine & { kind: 'comment' }
+  belowAnother: boolean
+}) {
   const text = stripSentImagePromptMarkers(line.text, line.images?.length ?? 0)
   return (
-    <div className="flex flex-col items-end gap-1">
-      {line.images ? <BotItemCommentImages images={line.images} /> : null}
+    // A message, so a full row gap (gap-5) below what the note drew above it, not the lines' gap-1.5.
+    <div className={cn('flex flex-col items-end gap-1', belowAnother && 'mt-3.5')}>
+      {line.images ? <BotItemCommentImages images={line.images} inChat /> : null}
       {/* The item heads the bubble, as on the phone. */}
       <NativeChatUserBubble className="flex flex-col items-start gap-1.5">
-        <ItemChip item={line.item} />
+        {/* A bubble's head, not a row's share: it fits the bubble instead. */}
+        <ItemChip item={line.item} className="max-w-full flex-none" />
         {text.trim() ? <div className="whitespace-pre-wrap">{text}</div> : null}
       </NativeChatUserBubble>
     </div>
@@ -241,9 +300,9 @@ function Lines({ note, at }: { note: BotItemNoteView; at?: number }): React.JSX.
   const t = useTranslate()
   return (
     <>
-      {botItemNoteLines(note, t).map((line) =>
+      {botItemNoteLines(note, t).map((line, index) =>
         line.kind === 'comment' ? (
-          <CommentRow key={`comment:${line.item.uid}`} line={line} />
+          <CommentRow key={`comment:${line.item.uid}`} line={line} belowAnother={index > 0} />
         ) : (
           <QuietLine key={`line:${line.items[0]!.uid}`} line={line} at={at} />
         )
@@ -262,7 +321,7 @@ export function NativeChatBotItemNoteRow({
   const t = useTranslate()
   if (!note.run) {
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         <Lines note={note} at={note.at ?? timestamp} />
       </div>
     )

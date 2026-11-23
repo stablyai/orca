@@ -152,9 +152,11 @@ function applyClaudeInitializeFacts(session: ClaudeSession, facts: ClaudeInitial
     session.fastModeState = fastModeFacts.state
   }
   session.capabilities = readClaudeCapabilities(session.capabilities, initialization, init?.message)
-  // Streamed catalog updates take precedence over initialize.
+  // Streamed catalog updates take precedence; a late initialize only respells and describes them.
   if (session.commands.commands === undefined) {
     session.commands = new ClaudeSlashCommandCatalog(init?.message, initialization)
+  } else {
+    session.commands.adoptInitialization(initialization)
   }
   session.events?.publish()
 }

@@ -36,7 +36,11 @@ export const AUTOMATION_RUN_FAILURE_COPY = {
   agentInterrupted: 'The agent was interrupted before it finished this run.',
   watchTimedOut: 'Orca stopped watching this run after 6h without a completion signal.',
   wslDistroStopped:
-    'The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs.'
+    'The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs.',
+  botsOff: 'Bots are turned off in Settings, so Orca skipped this run.',
+  botMissing: 'The bot this automation runs as no longer exists.',
+  botFolderMissing: "The bot's folder is no longer available.",
+  botPaused: '{{bot}} is paused, so Orca skipped this run.'
 } as const
 
 export type AutomationRunFailureCode = keyof typeof AUTOMATION_RUN_FAILURE_COPY
@@ -52,7 +56,7 @@ export type AutomationRunFailure = { error: string } & AutomationRunFailureCodeF
 export function automationRunFailure(
   errorCode: Exclude<
     AutomationRunFailureCode,
-    'projectSetupNotReady' | 'wslDistroStopped' | 'managedHostServer'
+    'projectSetupNotReady' | 'wslDistroStopped' | 'managedHostServer' | 'botPaused'
   >
 ): AutomationRunFailure
 export function automationRunFailure(
@@ -66,6 +70,10 @@ export function automationRunFailure(
 export function automationRunFailure(
   errorCode: 'managedHostServer',
   params: { host: string }
+): AutomationRunFailure
+export function automationRunFailure(
+  errorCode: 'botPaused',
+  params: { bot: string }
 ): AutomationRunFailure
 export function automationRunFailure(
   errorCode: AutomationRunFailureCode,

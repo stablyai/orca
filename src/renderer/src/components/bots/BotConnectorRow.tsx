@@ -143,6 +143,7 @@ export function BotConnectorRow(props: {
   people: BotWhoCanAskService
   defaultOpen?: boolean
   add?: BotConnectorActions['add']
+  addAccount?: BotConnectorActions['addAccount']
   /** The connector's own page, in the row's menu. */
   link?: BotConnectorActions['link']
   update?: BotConnectorActions['update']
@@ -176,7 +177,7 @@ export function BotConnectorRow(props: {
           </span>
         ) : null
       }
-      actions={{ add, link, update: props.update, remove }}
+      actions={{ add, addAccount: props.addAccount, link, update: props.update, remove }}
       narrowSpans={props.body !== undefined}
     >
       {props.body ?? (

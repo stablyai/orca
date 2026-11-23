@@ -12,6 +12,7 @@ import {
 } from '../../shared/connectors/slack-mirror-state'
 import {
   allLinks,
+  findLinksForSession,
   writeLink,
   type ExternalConversationLinkStore,
   type LinkedConversation
@@ -131,11 +132,10 @@ export class SlackMirrorLinks {
 
   /** The chat's own Slack thread link; a bot's Chat (which answers DMs) has none. */
   protected linkOfSession(sessionId: string): LinkedConversation | null {
-    for (const linked of allLinks(this.deps.store)) {
-      if (linked.link.sessionId === sessionId && slackMirrorAvailable(linked.link)) {
-        return linked
-      }
-    }
-    return null
+    return (
+      findLinksForSession(this.deps.store, sessionId).find(({ link }) =>
+        slackMirrorAvailable(link)
+      ) ?? null
+    )
   }
 }
