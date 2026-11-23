@@ -94,11 +94,20 @@ export function rankNativeChatCrewMentions(
   query: string
 ): string[] {
   const needle = query.toLocaleLowerCase()
-  const has = (text: string | undefined) => text?.toLocaleLowerCase().includes(needle) === true
-  const starts = members.filter((member) => member.name.toLocaleLowerCase().startsWith(needle))
-  const named = members.filter((member) => !starts.includes(member) && has(member.name))
-  const described = members.filter(
-    (member) => !starts.includes(member) && !named.includes(member) && has(member.detail)
-  )
-  return [...starts, ...named, ...described].map((member) => member.key ?? member.name)
+  // One pass: a host can list thousands of terminals.
+  const starts: string[] = []
+  const named: string[] = []
+  const described: string[] = []
+  for (const member of members) {
+    const key = member.key ?? member.name
+    const name = member.name.toLocaleLowerCase()
+    if (name.startsWith(needle)) {
+      starts.push(key)
+    } else if (name.includes(needle)) {
+      named.push(key)
+    } else if (member.detail?.toLocaleLowerCase().includes(needle)) {
+      described.push(key)
+    }
+  }
+  return [...starts, ...named, ...described]
 }
