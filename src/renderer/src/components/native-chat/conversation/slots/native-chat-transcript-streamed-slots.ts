@@ -1,7 +1,10 @@
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import type { Translate } from '@/i18n/use-translate'
-import { positionsRevisedFrom } from '../../../../../../shared/agent-session/view/revised-in-place-lists'
+import {
+  noteRevisedInPlace,
+  positionsRevisedFrom
+} from '../../../../../../shared/agent-session/view/revised-in-place-lists'
 import { noteStreamedTextStage } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import {
   buildNativeChatTranscript,
@@ -143,6 +146,7 @@ export function withStreamedRows(
     return null
   }
   let next: NativeChatTranscriptSlot[] | undefined
+  const patchedAt: number[] = []
   for (const index of revisedAt ?? rows.keys()) {
     const current = rows[index]!
     const before = built[index]!
@@ -169,6 +173,7 @@ export function withStreamedRows(
       }
       next ??= slots.slice()
       next[at] = run
+      patchedAt.push(at)
       continue
     }
     if (slot.message !== before) {
@@ -180,6 +185,7 @@ export function withStreamedRows(
     }
     next ??= slots.slice()
     next[at] = { ...slot, message: current, estimatedHeight }
+    patchedAt.push(at)
   }
   if (!next) {
     return slots
@@ -187,6 +193,7 @@ export function withStreamedRows(
   // A patch moves no slot, so its index holds; key readers keep what they built for `slots`.
   slotIndexes.set(next, slotIndexById(slots))
   noteStreamedTextStage(next, slots)
+  noteRevisedInPlace(next, slots, patchedAt)
   return next
 }
 

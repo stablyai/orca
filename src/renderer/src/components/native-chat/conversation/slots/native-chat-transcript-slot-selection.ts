@@ -4,7 +4,9 @@ import type {
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../../../shared/native-chat/transcript/turns/native-chat-messages-waiting-behind-live-turn'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
+import { positionsRevisedFrom } from '../../../../../../shared/agent-session/view/revised-in-place-lists'
 import {
+  noteStreamedTextStage,
   rowsBesideStreamedText,
   stageBesideStreamedText
 } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
@@ -51,24 +53,54 @@ export function nativeChatSlotIndexOf(
 
 type WaitingInputs = readonly unknown[]
 
-// Per laid-out slot list, the slots waiting behind the live turn and the inputs that placed them.
-const waitingKeys = new WeakMap<
+type WaitingSplit = {
+  slots: readonly NativeChatTranscriptSlot[]
+  waitingSlots: readonly NativeChatTranscriptSlot[]
+}
+
+const NOTHING_WAITING: readonly NativeChatTranscriptSlot[] = []
+
+// Per laid-out slot list: the inputs that placed its waiting slots, their keys, and, once a slot
+// waits, the laid-out split, each slot's place in its transcript slots (-1 waiting), and the split
+// last given for a streamed revision of it.
+const waitingSplits = new WeakMap<
   readonly NativeChatTranscriptSlot[],
-  { inputs: WaitingInputs; keys: ReadonlySet<string> }
+  {
+    inputs: WaitingInputs
+    keys: ReadonlySet<string>
+    split?: WaitingSplit
+    placeOf?: readonly number[]
+    last?: { slots: readonly NativeChatTranscriptSlot[]; split: WaitingSplit }
+  }
 >()
 
+function splitByKeys(
+  slots: readonly NativeChatTranscriptSlot[],
+  keys: ReadonlySet<string>
+): WaitingSplit & { placeOf: number[] } {
+  const waitingSlots: NativeChatTranscriptSlot[] = []
+  const transcriptSlots: NativeChatTranscriptSlot[] = []
+  const placeOf = slots.map((slot) => {
+    if (keys.has(nativeChatSlotKey(slot))) {
+      waitingSlots.push(slot)
+      return -1
+    }
+    transcriptSlots.push(slot)
+    return transcriptSlots.length - 1
+  })
+  return { slots: transcriptSlots, waitingSlots, placeOf }
+}
+
 /** Place queued and unjournaled not-sent messages after live activity, outside its turn. A
- *  streamed text revision waits as its base did, so it is placed without a scan. */
+ *  streamed text revision waits as its base did, so it is placed without a scan: its transcript
+ *  slots replace only the revised ones and stay linked to the laid-out split. */
 export function splitNativeChatSlotsWaitingBehindLiveTurn(
   slots: readonly NativeChatTranscriptSlot[],
   journalItems: readonly AgentJournalRenderItem[] | undefined,
   stopping = false,
   journalSubmissions?: readonly AgentJournalSubmission[],
   host: Parameters<typeof nativeChatMessagesWaitingBehindLiveTurn>[4] = {}
-): {
-  slots: readonly NativeChatTranscriptSlot[]
-  waitingSlots: NativeChatTranscriptSlot[]
-} {
+): WaitingSplit {
   const laidOut = stageBesideStreamedText(slots)
   const inputs: WaitingInputs = [
     journalItems && rowsBesideStreamedText(journalItems),
@@ -77,13 +109,12 @@ export function splitNativeChatSlotsWaitingBehindLiveTurn(
     host.latestTurn,
     host.working
   ]
-  const cached = waitingKeys.get(laidOut)
-  let keys =
-    cached?.inputs.length === inputs.length &&
-    cached.inputs.every((input, index) => input === inputs[index])
-      ? cached.keys
-      : undefined
-  if (!keys) {
+  let entry = waitingSplits.get(laidOut)
+  if (
+    !entry ||
+    entry.inputs.length !== inputs.length ||
+    !entry.inputs.every((input, index) => input === inputs[index])
+  ) {
     const waiting = nativeChatMessagesWaitingBehindLiveTurn(
       laidOut.flatMap((slot) => (slot.kind === 'message' ? [slot.message] : [])),
       journalItems,
@@ -91,7 +122,7 @@ export function splitNativeChatSlotsWaitingBehindLiveTurn(
       journalSubmissions,
       host
     )
-    keys = new Set(
+    const keys = new Set(
       laidOut
         .filter(
           (slot) =>
@@ -101,19 +132,36 @@ export function splitNativeChatSlotsWaitingBehindLiveTurn(
         )
         .map(nativeChatSlotKey)
     )
-    waitingKeys.set(laidOut, { inputs, keys })
+    entry = { inputs, keys }
+    waitingSplits.set(laidOut, entry)
   }
   // Nothing waiting keeps the list itself, so a streamed text revision stays linked to its base.
-  if (keys.size === 0) {
-    return { slots, waitingSlots: [] }
+  if (entry.keys.size === 0) {
+    return { slots, waitingSlots: NOTHING_WAITING }
   }
-  const waitingSlots: NativeChatTranscriptSlot[] = []
-  const transcriptSlots = slots.filter((slot) => {
-    if (keys.has(nativeChatSlotKey(slot))) {
-      waitingSlots.push(slot)
-      return false
+  if (!entry.split || !entry.placeOf) {
+    const { placeOf, ...split } = splitByKeys(laidOut, entry.keys)
+    entry.split = split
+    entry.placeOf = placeOf
+  }
+  if (slots === laidOut) {
+    return entry.split
+  }
+  const last = entry.last ?? { slots: laidOut, split: entry.split }
+  const revisedAt = positionsRevisedFrom(slots, last.slots)
+  let split: WaitingSplit | undefined
+  if (revisedAt && revisedAt.every((index) => entry.placeOf![index] !== -1)) {
+    const transcriptSlots = last.split.slots.slice()
+    for (const index of revisedAt) {
+      transcriptSlots[entry.placeOf[index]!] = slots[index]!
     }
-    return true
-  })
-  return { slots: transcriptSlots, waitingSlots }
+    split = { slots: transcriptSlots, waitingSlots: last.split.waitingSlots }
+  } else {
+    // A waiting slot itself revised, or the revision is not known: place every slot again.
+    const { placeOf: _placeOf, ...placed } = splitByKeys(slots, entry.keys)
+    split = placed
+  }
+  noteStreamedTextStage(split.slots, entry.split.slots)
+  entry.last = { slots, split }
+  return split
 }
