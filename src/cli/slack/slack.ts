@@ -87,9 +87,7 @@ export async function callAct(
     })
   if (!answer.result.ok) {
     const slackMessage =
-      params.verb === 'read'
-        ? slackReadRefusalMessage(`${answer.result.refusal} ${answer.result.message}`)
-        : null
+      params.verb === 'read' ? slackReadRefusalMessage(answer.result.refusal) : null
     throw new RuntimeClientError(answer.result.refusal, slackMessage ?? answer.result.message)
   }
   return { ...answer, result: answer.result.result }
