@@ -24847,6 +24847,8 @@
       "sessionCount_other": "{{count}} sessions",
       "sessionsShownOfLoaded_one": "{{shown}} of {{count}} session",
       "sessionsShownOfLoaded_other": "{{shown}} of {{count}} sessions",
+      "collapseAllGroups": "Collapse all groups",
+      "expandAllGroups": "Expand all groups",
       "hostSkipReason": {
         "indexChanged": "index changed",
         "searchOff": "search off",

@@ -23,6 +23,34 @@ function toggleCollapsedGroup(current: ReadonlySet<string>, key: string): Readon
   return next
 }
 
+/** Collapse or expand every key in `keys` at once, within the same cap as a single toggle. */
+function setCollapsedGroupKeys(
+  current: ReadonlySet<string>,
+  keys: readonly string[],
+  collapsed: boolean
+): ReadonlySet<string> {
+  const next = new Set(current)
+  for (const key of keys) {
+    // Why: re-inserting makes the listed keys the newest, so the cap drops older folds first.
+    next.delete(key)
+    if (collapsed) {
+      next.add(key)
+    }
+  }
+  if (!collapsed) {
+    return next
+  }
+  // Why: a listing longer than the cap must still fold whole.
+  const limit = Math.max(MAX_COLLAPSED_GROUPS, keys.length)
+  for (const oldest of next) {
+    if (next.size <= limit) {
+      break
+    }
+    next.delete(oldest)
+  }
+  return next
+}
+
 function createPanelState() {
   let snapshot: AiVaultPanelTransientState = {
     preferredScope: DEFAULT_AI_VAULT_SCOPE,
@@ -47,7 +75,12 @@ function createPanelState() {
       }
     },
     toggleGroup: (key: string) =>
-      update({ ...snapshot, collapsedGroups: toggleCollapsedGroup(snapshot.collapsedGroups, key) })
+      update({ ...snapshot, collapsedGroups: toggleCollapsedGroup(snapshot.collapsedGroups, key) }),
+    setGroupsCollapsed: (keys: readonly string[], collapsed: boolean) =>
+      update({
+        ...snapshot,
+        collapsedGroups: setCollapsedGroupKeys(snapshot.collapsedGroups, keys, collapsed)
+      })
   }
 }
 
@@ -60,6 +93,7 @@ export function useAiVaultPanelTransientState(local = false) {
   return {
     ...snapshot,
     selectScope: state.selectScope,
-    toggleGroup: state.toggleGroup
+    toggleGroup: state.toggleGroup,
+    setGroupsCollapsed: state.setGroupsCollapsed
   }
 }
