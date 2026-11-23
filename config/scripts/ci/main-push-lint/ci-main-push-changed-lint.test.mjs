@@ -64,6 +64,41 @@ describe('main-push changed-file lint', () => {
     ])
   })
 
+  it('keeps fileless errors with no location', () => {
+    expect(
+      parseGithubDiagnostics('::error title=oxlint::Failed to parse configuration file.')
+    ).toEqual([
+      {
+        severity: 'error',
+        file: null,
+        line: null,
+        col: null,
+        rule: 'oxlint',
+        message: 'Failed to parse configuration file.'
+      }
+    ])
+  })
+
+  it('lists a fileless error in the summary without attribution', () => {
+    const summary = renderSummary({
+      base: '67ca2655a7b7d0000',
+      head: '465241f6d0738aaaa',
+      files: ['a.ts'],
+      diagnostics: [
+        {
+          severity: 'error',
+          file: null,
+          line: null,
+          col: null,
+          rule: 'oxlint',
+          message: 'Bad config.'
+        }
+      ],
+      introducers: new Map()
+    })
+    expect(summary).toContain('| `(no file)` | `oxlint` | Bad config. | n/a |')
+  })
+
   it('reads the squash-merge PR number from a commit subject', () => {
     expect(
       pullNumberFromSubject(

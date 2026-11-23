@@ -58,17 +58,23 @@ export function parseGithubDiagnostics(output) {
       })
     )
     const text = unescapeAnnotation(match[3])
-    const prefix = `${properties.file}:${properties.line}:${properties.col}: `
+    // Fileless errors, such as a config problem, carry no file, line or col.
+    const file = properties.file ?? null
+    const prefix = file ? `${file}:${properties.line}:${properties.col}: ` : null
     diagnostics.push({
       severity: match[1],
-      file: properties.file,
-      line: Number(properties.line),
-      col: Number(properties.col),
+      file,
+      line: file ? Number(properties.line) : null,
+      col: file ? Number(properties.col) : null,
       rule: properties.title ?? 'oxlint',
-      message: text.startsWith(prefix) ? text.slice(prefix.length) : text
+      message: prefix && text.startsWith(prefix) ? text.slice(prefix.length) : text
     })
   }
   return diagnostics
+}
+
+function describeLocation(diagnostic) {
+  return diagnostic.file ? `${diagnostic.file}:${diagnostic.line}` : '(no file)'
 }
 
 export function pullNumberFromSubject(subject) {
@@ -105,7 +111,7 @@ export function renderSummary({ base, head, files, diagnostics, introducers }) {
   }
   const rows = diagnostics.map(
     (diagnostic) =>
-      `| \`${diagnostic.file}:${diagnostic.line}\` | \`${diagnostic.rule}\` | ${diagnostic.message.replaceAll('|', '\\|')} | ${describeIntroducers(introducers.get(diagnostic.file))} |`
+      `| \`${describeLocation(diagnostic)}\` | \`${diagnostic.rule}\` | ${diagnostic.message.replaceAll('|', '\\|')} | ${diagnostic.file ? describeIntroducers(introducers.get(diagnostic.file)) : 'n/a'} |`
   )
   return [
     '### Main-push lint failed',
@@ -331,21 +337,24 @@ export async function main({ env = process.env, root = process.cwd() } = {}) {
   // Log the errors before attribution, so they survive even if the lookups are cut short.
   for (const diagnostic of diagnostics) {
     process.stdout.write(
-      `${diagnostic.file}:${diagnostic.line}:${diagnostic.col} ${diagnostic.rule} ${diagnostic.message}\n`
+      `${describeLocation(diagnostic)} ${diagnostic.rule} ${diagnostic.message}\n`
     )
   }
   const introducers = await findIntroducers(
-    [...new Set(diagnostics.map((diagnostic) => diagnostic.file))],
+    [...new Set(diagnostics.map((diagnostic) => diagnostic.file).filter(Boolean))],
     base,
     head,
     env
   )
   for (const diagnostic of diagnostics) {
+    const title = `title=${escapeAnnotationProperty(diagnostic.rule)}`
+    if (!diagnostic.file) {
+      process.stdout.write(`::error ${title}::${escapeAnnotationData(diagnostic.message)}\n`)
+      continue
+    }
     const location = `file=${escapeAnnotationProperty(diagnostic.file)},line=${diagnostic.line},col=${diagnostic.col}`
     const text = `${diagnostic.message} Introduced by ${describeIntroducers(introducers.get(diagnostic.file))}.`
-    process.stdout.write(
-      `::error ${location},title=${escapeAnnotationProperty(diagnostic.rule)}::${escapeAnnotationData(text)}\n`
-    )
+    process.stdout.write(`::error ${location},${title}::${escapeAnnotationData(text)}\n`)
   }
   const summary = renderSummary({ base, head, files, diagnostics, introducers })
   process.stdout.write(summary)
