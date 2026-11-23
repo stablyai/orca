@@ -66,9 +66,10 @@ export function RemoteBrowserPagePane({
 }): React.JSX.Element {
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
+  const keyboardProxyRef = useRef<HTMLTextAreaElement | null>(null)
   const remoteViewportRef = useRef<HTMLDivElement | null>(null)
-  // Before the first frame creates the image, the viewport is the only guest-focus target.
-  const guestFocus = useElementGuestFocus(imageRef, remoteViewportRef)
+  // Before the first frame mounts the keyboard proxy, the viewport is the only guest-focus target.
+  const guestFocus = useElementGuestFocus(keyboardProxyRef, remoteViewportRef)
   const { startAddressBarFocusGrab } = useBrowserPageChromeFocus({
     browserTabId: browserTab.id,
     workspaceId,
@@ -263,6 +264,7 @@ export function RemoteBrowserPagePane({
     handleRemotePointerMove,
     handleRemoteScreenshotKeyDown,
     handleRemoteScreenshotPaste,
+    handleRemoteKeyboardProxyText,
     runRemoteEditCommand,
     selectPopupElement
   } = useRemoteBrowserPageInput({
@@ -273,6 +275,7 @@ export function RemoteBrowserPagePane({
     hostContextMenus: lifecycle.hostContextMenus,
     inputQueue,
     imageRef,
+    keyboardProxyRef,
     remoteViewportRef,
     remoteCssViewportSizeRef,
     remoteViewportSizeRef,
@@ -384,6 +387,7 @@ export function RemoteBrowserPagePane({
         remoteViewportRef={remoteViewportRef}
         attachFileDrop={attachFileDrop}
         imageRef={imageRef}
+        keyboardProxyRef={keyboardProxyRef}
         feedbackBadgeRef={zoom.feedbackBadgeRef}
         find={find}
         frameUrl={frameUrl}
@@ -411,6 +415,7 @@ export function RemoteBrowserPagePane({
         handleRemoteContextMenu={handleRemoteContextMenu}
         handleRemoteScreenshotKeyDown={handleRemoteScreenshotKeyDown}
         handleRemoteScreenshotPaste={handleRemoteScreenshotPaste}
+        handleRemoteKeyboardProxyText={handleRemoteKeyboardProxyText}
         handleRemotePointerMove={handleRemotePointerMove}
         annotateOverlays={annotateOverlays}
       />

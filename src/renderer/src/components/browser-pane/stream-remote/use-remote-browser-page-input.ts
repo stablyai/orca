@@ -45,8 +45,9 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
   handleRemotePointerDown: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerMove: (event: React.PointerEvent<HTMLImageElement>) => void
-  handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
-  handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
+  handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void
+  handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLTextAreaElement>) => void
+  handleRemoteKeyboardProxyText: (event: React.SyntheticEvent<HTMLTextAreaElement>) => void
   runRemoteEditCommand: (command: BrowserPageEditCommand) => void
   selectPopupElement: React.JSX.Element | null
 } {
@@ -57,6 +58,7 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     hostContextMenus,
     inputQueue,
     imageRef,
+    keyboardProxyRef,
     remoteViewportRef,
     remoteCssViewportSizeRef,
     remoteViewportSizeRef,
@@ -131,7 +133,14 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     }
     const modifiers = readRemoteBrowserMouseModifiers(event, target)
     event.preventDefault()
-    image.focus()
+    const keyboardProxy = keyboardProxyRef.current
+    // A press commits the composition into the field it was typed for, as on a local page.
+    if (keyboardProxy && 'composing' in keyboardProxy.dataset) {
+      keyboardProxy.blur()
+    }
+    if (document.activeElement !== keyboardProxy) {
+      ;(keyboardProxy ?? image).focus({ preventScroll: true })
+    }
     // Why: a release over the letterbox gutter or outside the pane must still send mouseUp, or
     // the host page keeps the button held.
     if (typeof image.setPointerCapture === 'function') {
@@ -249,20 +258,24 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     })
   }
 
-  const { handleRemoteScreenshotKeyDown, handleRemoteScreenshotPaste, runRemoteEditCommand } =
-    useRemoteBrowserPageKeyboard({
-      pickerAvailable,
-      runtimeTarget,
-      lifecycle,
-      runtimeWorktree,
-      enqueueRemoteInput,
-      createRemoteOperationToken,
-      isCurrentRemoteOperationToken,
-      closeMissingRemotePage,
-      scheduleRemoteTabInfoRefresh,
-      setPaneNotice,
-      closeSelectPopupForPageInput
-    })
+  const {
+    handleRemoteScreenshotKeyDown,
+    handleRemoteScreenshotPaste,
+    handleRemoteKeyboardProxyText,
+    runRemoteEditCommand
+  } = useRemoteBrowserPageKeyboard({
+    pickerAvailable,
+    runtimeTarget,
+    lifecycle,
+    runtimeWorktree,
+    enqueueRemoteInput,
+    createRemoteOperationToken,
+    isCurrentRemoteOperationToken,
+    closeMissingRemotePage,
+    scheduleRemoteTabInfoRefresh,
+    setPaneNotice,
+    closeSelectPopupForPageInput
+  })
 
   const handleRemotePointerMove = useRemoteBrowserPageHover({
     busy,
@@ -282,6 +295,7 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     handleRemotePointerMove,
     handleRemoteScreenshotKeyDown,
     handleRemoteScreenshotPaste,
+    handleRemoteKeyboardProxyText,
     runRemoteEditCommand,
     selectPopupElement
   }

@@ -14,7 +14,9 @@ import { useAppStore } from '@/store'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import {
   getRemoteBrowserKeyboardShortcut,
-  getRemoteBrowserKeypressKey
+  getRemoteBrowserKeypressKey,
+  isRemoteBrowserProxyTextKey,
+  takeRemoteBrowserProxyText
 } from './remote-browser-keyboard'
 import {
   isRemoteBrowserInputOpenedDialogError,
@@ -37,9 +39,12 @@ import type {
 import type { BrowserPageEditCommand } from '../assemble-chrome/context-menu/browser-page-context-menu-items'
 
 type CopyWrite = { text: string }
+type ProxyTextEvent = React.SyntheticEvent<HTMLTextAreaElement>
 
 type RemoteKeyboardInput =
   | { method: 'browser.keypress'; key: string }
+  /** Text the input method committed or the layout typed, which no key on the host types. */
+  | { method: 'typedText'; text: string }
   | {
       method: 'browser.keyboardInsertText'
       /** Null reads this machine's clipboard in turn, as a menu Paste has no paste event. */
@@ -79,8 +84,9 @@ export function useRemoteBrowserPageKeyboard({
   setPaneNotice: (notice: RemoteBrowserPaneNotice | null) => void
   closeSelectPopupForPageInput: () => void
 }): {
-  handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
-  handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
+  handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void
+  handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLTextAreaElement>) => void
+  handleRemoteKeyboardProxyText: (event: ProxyTextEvent) => void
   runRemoteEditCommand: (command: BrowserPageEditCommand) => void
 } {
   const t = useTranslate()
@@ -146,12 +152,25 @@ export function useRemoteBrowserPageKeyboard({
     const params = { worktree: runtimeWorktree, page: pageId }
     const rpcOptions = { timeoutMs: 15_000, suppressFeatureInteraction: true }
     setPaneNotice(null)
+    const insertRemoteText = async (insertText: string): Promise<void> => {
+      // Why chunks: one request carrying a large paste would exceed the runtime socket's frame cap.
+      for (const text of iterateBrowserTextInsertionChunks(insertText)) {
+        if (!isCurrentRemoteOperationToken(operationToken)) {
+          return
+        }
+        await callRuntimeRpc(target, 'browser.keyboardInsertText', { ...params, text }, rpcOptions)
+      }
+    }
     enqueueRemoteInput(async () => {
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return
       }
       closeSelectPopupForPageInput()
       try {
+        if (input.method === 'typedText') {
+          await insertRemoteText(input.text)
+          return
+        }
         if (input.method === 'browser.keyboardInsertText') {
           // Why: a paste pressed before our queued copy finished carries the clipboard from before it.
           const lastCopyWrite = lastCopyWriteRef.current
@@ -160,18 +179,7 @@ export function useRemoteBrowserPageKeyboard({
               ? lastCopyWrite.text
               : (input.text ?? (await window.api.ui.readClipboardText()))
           await assertClipboardTextWithinLimitWithYield(pasteText)
-          // Why chunks: one request carrying a large paste would exceed the runtime socket's frame cap.
-          for (const text of iterateBrowserTextInsertionChunks(pasteText)) {
-            if (!isCurrentRemoteOperationToken(operationToken)) {
-              return
-            }
-            await callRuntimeRpc(
-              target,
-              'browser.keyboardInsertText',
-              { ...params, text },
-              rpcOptions
-            )
-          }
+          await insertRemoteText(pasteText)
           return
         }
         if (!isCurrentRemoteOperationToken(operationToken)) {
@@ -218,8 +226,9 @@ export function useRemoteBrowserPageKeyboard({
     return true
   }
 
-  const handleRemoteScreenshotKeyDown = (event: React.KeyboardEvent<HTMLImageElement>): void => {
-    if (isEditableKeyboardTarget(event.target)) {
+  const handleRemoteScreenshotKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+    // Keys the input method composes with, and Option or AltGr characters, reach the proxy as text.
+    if (isEditableKeyboardTarget(event.target) || isRemoteBrowserProxyTextKey(event.nativeEvent)) {
       return
     }
     // The annotate chord arms the picker here; typing it into the page too would double-act.
@@ -266,7 +275,14 @@ export function useRemoteBrowserPageKeyboard({
     }
   }
 
-  const handleRemoteScreenshotPaste = (event: React.ClipboardEvent<HTMLImageElement>): void => {
+  const handleRemoteKeyboardProxyText = (event: ProxyTextEvent): void => {
+    const text = takeRemoteBrowserProxyText(event)
+    if (text) {
+      enqueueRemoteKeyboardInput({ method: 'typedText', text })
+    }
+  }
+
+  const handleRemoteScreenshotPaste = (event: React.ClipboardEvent<HTMLTextAreaElement>): void => {
     // Why text only: markup and files would be staged in the page over several requests, and a page
     // that navigated meanwhile could receive them; they wait for a host-bound delivery.
     const text = getClipboardEventText(event.nativeEvent)
@@ -301,5 +317,10 @@ export function useRemoteBrowserPageKeyboard({
     enqueueRemoteKeyboardInput({ method: 'execCommand', command })
   }
 
-  return { handleRemoteScreenshotKeyDown, handleRemoteScreenshotPaste, runRemoteEditCommand }
+  return {
+    handleRemoteScreenshotKeyDown,
+    handleRemoteScreenshotPaste,
+    handleRemoteKeyboardProxyText,
+    runRemoteEditCommand
+  }
 }
