@@ -12,12 +12,18 @@ import {
   type GoogleSetupCard,
   type GoogleSetupRun
 } from '../../../../../../shared/google/google-setup-run'
-import type { GoogleServiceChoice } from '../../../../../../shared/google/google-scopes'
+import type {
+  GoogleAccess,
+  GoogleServiceChoice
+} from '../../../../../../shared/google/google-scopes'
 import {
   googleSetupAnsweredServices,
-  googleSetupChoiceChangeable
+  googleSetupChoiceChangeable,
+  googleSetupServicesAnswer
 } from '../../../../../../shared/google/google-setup-card-view'
-import { importGoogleApp } from '../google-connect-client'
+import { importGoogleApp, useGoogleHost } from '../google-connect-client'
+import { googleAccessLabel } from '../google-copy'
+import { GoogleAccessPicker, googleOffersReadDraft } from '../GoogleAccessPicker'
 import { GoogleServicePicker } from '../GoogleServicePicker'
 import { useGoogleClientFile } from '../use-google-client-file'
 import {
@@ -219,6 +225,13 @@ export function GoogleSetupServicesCard({
   const locked = answered !== null && !reopened
   const [picked, setPicked] = useState<GoogleServiceChoice[]>(answered ?? ['gmail'])
   const shown = locked && answered ? answered : picked
+  const [access, setAccess] = useState<GoogleAccess>(run.access ?? 'full')
+  const host = useGoogleHost(botTarget(bot))
+  const offersReadDraft = host.status === 'ready' && googleOffersReadDraft(host.google)
+  const servicesReceipt = (chosen: readonly GoogleServiceChoice[]): string =>
+    run.access === 'read-draft'
+      ? `${googleSetupServicesList(chosen)} · ${googleAccessLabel('read-draft')}`
+      : googleSetupServicesList(chosen)
   return (
     <div>
       <GoogleSetupCardFrame heading={HEADING()} trailing={googleSetupOwnerStep(2)}>
@@ -227,6 +240,14 @@ export function GoogleSetupServicesCard({
         </div>
         <fieldset disabled={locked || busy} className="mt-2 disabled:opacity-60">
           <GoogleServicePicker value={shown} onChange={setPicked} />
+          {offersReadDraft ? (
+            <div className="mt-2">
+              <GoogleAccessPicker
+                value={locked ? (run.access ?? 'full') : access}
+                onChange={setAccess}
+              />
+            </div>
+          ) : null}
         </fieldset>
         <p className="mt-2 text-2xs text-muted-foreground">
           {t(
@@ -239,7 +260,9 @@ export function GoogleSetupServicesCard({
             <Button
               size="xs"
               disabled={picked.length === 0 || busy}
-              onClick={() => void answer(picked)}
+              onClick={() =>
+                void answer(googleSetupServicesAnswer(picked, offersReadDraft ? access : 'full'))
+              }
             >
               {t('bots.googleSetup.continue', 'Continue')}
             </Button>
@@ -248,7 +271,7 @@ export function GoogleSetupServicesCard({
       </GoogleSetupCardFrame>
       {locked && answered ? (
         <GoogleSetupReceipt
-          text={googleSetupReceiptChose(googleSetupServicesList(answered))}
+          text={googleSetupReceiptChose(servicesReceipt(answered))}
           onChange={googleSetupChoiceChangeable(run) ? reopen : undefined}
         />
       ) : null}

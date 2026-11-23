@@ -27715,6 +27715,15 @@
         "noAccount": "Google에 로그인했지만 호스트가 계정을 보내지 않았습니다.",
         "alreadyRunning": "Google 로그인이 이미 진행 중입니다. 먼저 완료하거나 취소하세요.",
         "notWaiting": "대기 중인 Google 로그인이 없습니다. 다시 시작하세요."
+      },
+      "access": {
+        "title": "액세스",
+        "switchFull": "전체 액세스로 전환…",
+        "switchReadDraft": "읽기 전용 + Gmail 임시보관함으로 전환…",
+        "readDraft": "읽기 전용 + Gmail 임시보관함",
+        "full": "전체 액세스",
+        "readDraftDescription": "메일, 일정, 파일을 읽고 Gmail 임시보관 메일을 작성합니다. 보내기, 변경, 삭제는 Google이 거부합니다.",
+        "fullDescription": "위 서비스에서 허용하는 읽기, 보내기, 만들기, 변경"
       }
     },
     "notices": {

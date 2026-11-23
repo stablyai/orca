@@ -3,7 +3,7 @@ import type {
   GoogleAccountView,
   GoogleSignInPrompt
 } from '../../../../../shared/google/google-connect-types'
-import type { GoogleServiceChoice } from '../../../../../shared/google/google-scopes'
+import type { GoogleAccess, GoogleServiceChoice } from '../../../../../shared/google/google-scopes'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { BotRef } from '@/lib/bot-hosts'
 import { cancelGoogleSignIn, connectGoogle, type GoogleSignInWay } from './google-connect-client'
@@ -23,7 +23,8 @@ export function useGoogleSignIn(
   state: GoogleSignInState
   connect: (
     services: readonly GoogleServiceChoice[],
-    account?: string
+    account?: string,
+    access?: GoogleAccess
   ) => Promise<GoogleAccountView | null>
   cancel: () => void
 } {
@@ -43,13 +44,18 @@ export function useGoogleSignIn(
   // A cancelled run's rejection is what the person asked for, not a failure to show.
   const runs = useRef(0)
   const connect = useCallback(
-    async (services: readonly GoogleServiceChoice[], account?: string) => {
+    async (services: readonly GoogleServiceChoice[], account?: string, access?: GoogleAccess) => {
       const run = ++runs.current
       show({ kind: 'waiting', prompt: null })
       try {
         const connected = await connectGoogle(
           target,
-          { services, ...(account ? { account } : {}), ...(bot ? { bot } : {}) },
+          {
+            services,
+            ...(account ? { account } : {}),
+            ...(access ? { access } : {}),
+            ...(bot ? { bot } : {})
+          },
           (prompt, way) => show({ kind: 'waiting', prompt, way })
         )
         show({ kind: 'idle' })

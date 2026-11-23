@@ -776,6 +776,16 @@
         "needsAuth_many": "{{count}} requieren iniciar sesión"
       },
       "pasteHint": "Cuando el navegador llegue a una página que no se carga, copia su dirección y pégala aquí."
+    },
+    "botCards": {
+      "google": {
+        "access": {
+          "readDraft": "Solo lectura + borradores de Gmail",
+          "full": "Acceso completo",
+          "readDraftDescription": "Leer correo, eventos y archivos, y escribir borradores de Gmail. Google rechaza envíos, cambios y eliminaciones.",
+          "fullDescription": "Leer, enviar, crear y cambiar lo que permiten los servicios de arriba"
+        }
+      }
     }
   },
   "common": {
@@ -5283,6 +5293,12 @@
     "usageLimit": {
       "continuesAt": "Continúa a las {{time}}",
       "hitLimit": "Límite alcanzado · se restablece a las {{time}}"
+    },
+    "google": {
+      "access": {
+        "readDraft": "Solo lectura + borradores de Gmail",
+        "readDraftNote": "Google rechaza envíos, cambios y eliminaciones."
+      }
     }
   },
   "sidebar": {

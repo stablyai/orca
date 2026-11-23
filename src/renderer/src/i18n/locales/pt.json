@@ -25505,6 +25505,15 @@
         "noAccount": "O Google fez o login, mas o host não enviou nenhuma conta.",
         "alreadyRunning": "Já há um login do Google em andamento. Conclua ou cancele-o primeiro.",
         "notWaiting": "Nenhum login do Google está aguardando. Comece de novo."
+      },
+      "access": {
+        "title": "Acesso",
+        "switchFull": "Mudar para acesso total…",
+        "switchReadDraft": "Mudar para somente leitura + rascunhos do Gmail…",
+        "readDraft": "Somente leitura + rascunhos do Gmail",
+        "full": "Acesso total",
+        "readDraftDescription": "Ler e-mails, eventos e arquivos, e escrever rascunhos do Gmail. O Google recusa envios, alterações e exclusões.",
+        "fullDescription": "Ler, enviar, criar e alterar o que os serviços acima permitem"
       }
     },
     "notices": {

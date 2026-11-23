@@ -13,18 +13,15 @@ import type { Bot } from '../../../../../shared/bot-types'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { GoogleStatusView } from '../../../../../shared/google/google-connect-types'
-import type { GoogleServiceChoice } from '../../../../../shared/google/google-scopes'
+import type { GoogleAccess, GoogleServiceChoice } from '../../../../../shared/google/google-scopes'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { googleSignInChoices } from './google-account-readiness'
 import { GoogleAccountRow } from './GoogleAccountRow'
+import { GoogleAccessPicker, googleOffersReadDraft } from './GoogleAccessPicker'
 import { GoogleServicePicker } from './GoogleServicePicker'
 import { GoogleSignInWaiting } from './GoogleSignInWaiting'
-import {
-  importGoogleApp,
-  refreshGoogle,
-  shareGoogleApp,
-  useGoogleHost
-} from './google-connect-client'
+import { importGoogleApp, refreshGoogle, useGoogleHost } from './google-connect-client'
+import { shareGoogleApp } from './google-app-share'
 import { useGoogleClientFile } from './use-google-client-file'
 import { useGoogleSignIn } from './use-google-sign-in'
 import { NewBotDialog } from '../NewBotDialog'
@@ -121,9 +118,16 @@ function NoApp({
 }
 
 /** The app is here and nobody is signed in: pick services, then Connect Google. */
-function ConnectPanel({ target }: { target: RuntimeClientTarget }): React.JSX.Element {
+function ConnectPanel({
+  target,
+  google
+}: {
+  target: RuntimeClientTarget
+  google: GoogleStatusView
+}): React.JSX.Element {
   const t = useTranslate()
   const [choices, setChoices] = useState<GoogleServiceChoice[]>(['gmail'])
+  const [access, setAccess] = useState<GoogleAccess>('full')
   const signIn = useGoogleSignIn(target)
   return (
     <div className="space-y-3">
@@ -131,6 +135,9 @@ function ConnectPanel({ target }: { target: RuntimeClientTarget }): React.JSX.El
         {t('bots.google.appAdded', 'Your team’s Google app is added')}
       </p>
       <GoogleServicePicker value={choices} onChange={setChoices} />
+      {googleOffersReadDraft(google) ? (
+        <GoogleAccessPicker value={access} onChange={setAccess} />
+      ) : null}
       {signIn.state.kind === 'waiting' ? (
         <GoogleSignInWaiting state={signIn.state} onCancel={signIn.cancel} />
       ) : (
@@ -143,7 +150,7 @@ function ConnectPanel({ target }: { target: RuntimeClientTarget }): React.JSX.El
           <Button
             size="sm"
             disabled={choices.length === 0}
-            onClick={() => void signIn.connect(choices)}
+            onClick={() => void signIn.connect(choices, undefined, access)}
           >
             {t('bots.google.connect', 'Connect Google')}
           </Button>
@@ -172,8 +179,11 @@ function AccountList({
   const canAdd = defaultAccount !== undefined
   const fallback = google.accounts.find((account) => account.email === defaultAccount)
   const nextDefault = google.accounts.find((account) => account.email !== defaultAccount)
-  const connect = (services: readonly GoogleServiceChoice[], account?: string): void =>
-    void signIn.connect(services, account)
+  const connect = (
+    services: readonly GoogleServiceChoice[],
+    account?: string,
+    access?: GoogleAccess
+  ): void => void signIn.connect(services, account, access)
   return (
     <div className="space-y-3">
       <div className="divide-y divide-border rounded-md border border-border">
@@ -308,7 +318,7 @@ export function GoogleAccountSettings({
   } else if (!view.google.client) {
     body = <NoApp hostId={getRuntimeTargetHostId(target)} file={file} />
   } else if (view.google.accounts.length === 0) {
-    body = <ConnectPanel target={target} />
+    body = <ConnectPanel target={target} google={view.google} />
   } else {
     body = <AccountList target={target} google={view.google} host={host} />
   }

@@ -167,6 +167,12 @@ export function recordAnswer(
       break
     case 'services':
       run.services = values.filter(isService)
+      // A bot's typed answer may narrow the owner's pick to read-draft but never widen it.
+      if (values.includes('read-draft')) {
+        run.access = 'read-draft'
+      } else if (actor === 'owner') {
+        delete run.access
+      }
       break
   }
   run.answers[card] = { values, at: now, ...(actor === 'bot' ? { typed: true as const } : {}) }

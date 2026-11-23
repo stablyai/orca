@@ -15,7 +15,8 @@ import { googleAccountChoices, googleReadinessFixer } from '../google-account-re
 import { googleChoiceLogos, GoogleLogoStack } from '../GoogleServicePicker'
 import { GoogleAddServiceDialog } from '../GoogleAddServiceDialog'
 import { GoogleSignInWaiting } from '../GoogleSignInWaiting'
-import { shareGoogleApp, useGoogleHost } from '../google-connect-client'
+import { shareGoogleApp } from '../google-app-share'
+import { useGoogleHost } from '../google-connect-client'
 import { googleFixLabel, googleReadinessFace, googleReadinessRows } from '../google-copy'
 import { useGoogleSignIn } from '../use-google-sign-in'
 import { useBotHostLabel } from '../../use-bot-host-label'
@@ -44,7 +45,7 @@ export function GoogleSetupConnectCard({
   const blocker = useGoogleSetupBlocker(bot)
   const stuck = blocker && googleSetupBlockerIsConnect(blocker) ? blocker : null
   const connect = async (): Promise<void> => {
-    const account = await signIn.connect(run.services ?? ['gmail'], run.account)
+    const account = await signIn.connect(run.services ?? ['gmail'], run.account, run.access)
     if (!account) {
       return
     }

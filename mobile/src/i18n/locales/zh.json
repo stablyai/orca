@@ -1084,7 +1084,13 @@
           "checkFailed": "Orca 无法检查 {{services}}"
         },
         "ownerStep": "第 {{step}} 步，共 3 步",
-        "adminRequest": "请在 Google 管理控制台（安全性 › API 控件 › 管理第三方应用访问权限）中将此 Google 应用标记为“可信”：{{clientId}}"
+        "adminRequest": "请在 Google 管理控制台（安全性 › API 控件 › 管理第三方应用访问权限）中将此 Google 应用标记为“可信”：{{clientId}}",
+        "access": {
+          "readDraft": "只读 + Gmail 草稿",
+          "full": "完全访问",
+          "readDraftDescription": "读取邮件、日程和文件，并撰写 Gmail 草稿。Google 会拒绝发送、更改和删除。",
+          "fullDescription": "读取、发送、创建和更改上述服务允许的内容"
+        }
       },
       "importDone": {
         "heading": "导入完成",
@@ -8180,6 +8186,10 @@
         "confirm": "断开连接",
         "removeFromHost": "从 {{host}} 移除",
         "revoke": "移除并在 Google 撤销授权"
+      },
+      "access": {
+        "readDraft": "只读 + Gmail 草稿",
+        "readDraftNote": "Google 会拒绝发送、更改和删除。"
       }
     },
     "saveFailed": "无法保存",

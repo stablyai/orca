@@ -28706,6 +28706,15 @@
         "noAccount": "Google signed in, but the host sent no account.",
         "alreadyRunning": "A Google sign-in is already running. Finish or cancel it first.",
         "notWaiting": "No Google sign-in is waiting. Start again."
+      },
+      "access": {
+        "title": "Access",
+        "switchFull": "Switch to full access…",
+        "switchReadDraft": "Switch to read-only + Gmail drafts…",
+        "readDraft": "Read-only + Gmail drafts",
+        "full": "Full access",
+        "readDraftDescription": "Read mail, events and files, and write Gmail drafts. Google refuses sending, changes and deletes.",
+        "fullDescription": "Read, send, create and change what the services above allow"
       }
     },
     "googleSetup": {

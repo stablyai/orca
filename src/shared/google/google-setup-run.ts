@@ -3,7 +3,7 @@
 // `orca bot google-setup`; the setup cards draw from it, so they show the same on every client and
 // after a restart.
 import * as z from 'zod'
-import { GOOGLE_SERVICE_CHOICES } from './google-scopes'
+import { GOOGLE_ACCESS_LEVELS, GOOGLE_SERVICE_CHOICES } from './google-scopes'
 
 /** The setup's steps, in order. */
 export const GOOGLE_SETUP_STEPS = [
@@ -87,6 +87,8 @@ export const GoogleSetupRunSchema = z.object({
   accounts: z.array(Text(320)).max(10).optional(),
   kind: z.enum(['work', 'personal']).optional(),
   services: z.array(z.enum(GOOGLE_SERVICE_CHOICES)).optional(),
+  /** The owner's pick on the services card; absent: full. Only the owner widens it. */
+  access: z.enum(GOOGLE_ACCESS_LEVELS).optional(),
   projectId: Text(120).optional(),
   /** The browser page the setup runs in; while the person clicks, the bot only reads it. */
   browserPageId: Text(200).optional(),

@@ -52,6 +52,9 @@ export type GoogleStatusView = {
    * too old to keep one, where a second account would break those calls.
    */
   defaultAccount?: string | null
+  /** The access levels a sign-in here can ask for. Absent from a host too old for read-draft, which
+   *  would drop the choice and grant full access. */
+  accessLevels?: GoogleAccess[]
   /** The bots on this host whose Google toggle is on. */
   bots: { id: string; name: string }[]
 }

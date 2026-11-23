@@ -4,6 +4,7 @@ import { GOOGLE_OWNER_ONLY } from '../../../bots/bot-google-access'
 import { botOfToken } from '../../../bots/bot-of-caller'
 import { getGoogleConnect, type GoogleConnect } from '../../../google/google-connect'
 import type { GoogleStatusView } from '../../../../shared/google/google-connect-types'
+import { GOOGLE_ACCESS_LEVELS } from '../../../../shared/google/google-scopes'
 import {
   botAskerKeys,
   botOtherAskers,
@@ -53,6 +54,7 @@ async function statusView(
 ): Promise<Omit<GoogleStatusView, 'accounts'>> {
   return {
     client: await connect.client(),
+    accessLevels: [...GOOGLE_ACCESS_LEVELS],
     bots: runtime.bots.enabled()
       ? runtime.bots
           .list()

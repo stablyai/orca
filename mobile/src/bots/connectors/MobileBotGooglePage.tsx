@@ -290,6 +290,16 @@ export function MobileBotGooglePage(props: {
             }
           >
             <ListRow title={headline} wrapTitle strong />
+            {account.access === 'read-draft' ? (
+              <ListRow
+                title={t('bots.google.access.readDraft', 'Read-only + Gmail drafts')}
+                subtitle={t(
+                  'bots.google.access.readDraftNote',
+                  'Google refuses sending, changes and deletes.'
+                )}
+                wrapTitle
+              />
+            ) : null}
             {several && defaultAccount !== undefined ? (
               account.email === defaultAccount ? (
                 <ListRow title={t('bots.google.defaultBadge', 'Default')} selected />

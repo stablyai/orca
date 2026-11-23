@@ -8,6 +8,7 @@ import type { GoogleConsoleStep } from '../../../../../shared/google/google-cons
 import {
   GOOGLE_CHOICE_SERVICES,
   GOOGLE_SERVICE_INFO,
+  type GoogleAccess,
   type GoogleService,
   type GoogleServiceChoice
 } from '../../../../../shared/google/google-scopes'
@@ -35,6 +36,24 @@ export function googleChoiceDescription(choice: GoogleServiceChoice): string {
     case 'files':
       return translate('bots.google.choice.filesDescription', 'Find, read and edit files')
   }
+}
+
+export function googleAccessLabel(access: GoogleAccess): string {
+  return access === 'read-draft'
+    ? translate('bots.google.access.readDraft', 'Read-only + Gmail drafts')
+    : translate('bots.google.access.full', 'Full access')
+}
+
+export function googleAccessDescription(access: GoogleAccess): string {
+  return access === 'read-draft'
+    ? translate(
+        'bots.google.access.readDraftDescription',
+        'Read mail, events and files, and write Gmail drafts. Google refuses sending, changes and deletes.'
+      )
+    : translate(
+        'bots.google.access.fullDescription',
+        'Read, send, create and change what the services above allow'
+      )
 }
 
 export function googleServiceLabel(service: GoogleService): string {
