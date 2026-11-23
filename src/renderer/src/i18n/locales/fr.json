@@ -24702,7 +24702,8 @@
       },
       "ask": {
         "notSentYet": "pas encore envoyée",
-        "replaced": "L’agent a posé une nouvelle question. Lisez-la, puis répondez."
+        "replaced": "L’agent a posé une nouvelle question. Lisez-la, puis répondez.",
+        "replacedByNewer": "Remplacée par une question plus récente"
       },
       "readMoreClosedFailed": "Impossible de lire plus d’éléments fermés"
     },

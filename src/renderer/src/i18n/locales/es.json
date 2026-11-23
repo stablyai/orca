@@ -24681,7 +24681,8 @@
       },
       "ask": {
         "notSentYet": "aún no enviado",
-        "replaced": "El agente ha hecho una nueva pregunta. Léela y luego responde."
+        "replaced": "El agente ha hecho una nueva pregunta. Léela y luego responde.",
+        "replacedByNewer": "Sustituida por una pregunta más reciente"
       },
       "readMoreClosedFailed": "No se pudieron leer más elementos cerrados"
     },

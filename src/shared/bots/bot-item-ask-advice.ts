@@ -28,7 +28,8 @@ const TIPS: Record<BotItemAskAdviceCode, string> = {
   prose_choices: 'Give the choices as --option values after --ask, so they show as quick replies.',
   no_question: 'Lead with the question itself, ending in a question mark.',
   long_question: 'Keep the question to one line under 140 characters; put the why in --comment.',
-  long_context: 'Keep --comment to 5 short lines or a link.',
+  long_context:
+    'Keep --comment to 5 short lines or a link; more context goes in the same call with --comment-file, never in a separate comment.',
   jargon: 'Say in plain words what each hash or ID is, or link it instead.'
 }
 

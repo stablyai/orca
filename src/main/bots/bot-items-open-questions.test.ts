@@ -106,108 +106,57 @@ it('offers no reply target for a Needs you comment that asks nothing after the q
   expect(view().replyingTo).toBeNull()
 })
 
-it('keeps an earlier set of questions answerable after a second set is asked', () => {
-  const { ask, comment, view } = item()
-  const first = ask([HOSTS, GO])
-  const second = ask([MERGE])
-  expect(view().replyingTo).toMatchObject({ eventId: botItemEventId(first), line: HOSTS })
-
-  // The first set's held answers post together, naming their ask while the second is the item's
-  // question; the second set is next.
-  comment(`${HOSTS} → Yes\n${GO} → No`, first)
-  expect(view().asks.get(botItemEventId(first))?.answers.every(Boolean)).toBe(true)
-  expect(view().replyingTo).toMatchObject({ eventId: botItemEventId(second), line: MERGE })
-
-  // A comment box reply to it names no question and still answers it.
-  comment('Yes')
-  expect(view().asks.get(botItemEventId(second))?.answers.every(Boolean)).toBe(true)
-  expect(view().replyingTo).toBeNull()
-})
-
-it('shows an open question left by an earlier set after a Needs you comment that asks nothing', () => {
+it('replaces an earlier set of questions when a later set is asked', () => {
   const { store, uid, ask, comment, view } = item()
   const first = ask([HOSTS, GO])
-  // One question answered on its own (an older build, or sent sooner): the item moved on with it.
+  // Answered before the later set: it stands.
+  comment(`${HOSTS} → Yes`, first)
+  const second = ask([MERGE])
+  const { asks, replyingTo, waitingComments } = view()
+  expect(asks.get(botItemEventId(first))).toMatchObject({ waiting: false, replaced: true })
+  expect(asks.get(botItemEventId(first))?.answers.map(Boolean)).toEqual([true, false])
+  expect(asks.get(botItemEventId(second))).toMatchObject({ waiting: true, replaced: false })
+  expect(replyingTo).toMatchObject({ eventId: botItemEventId(second), line: MERGE })
+  expect(waitingComments).toEqual([botItemEventId(second)])
+  expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(botItemEventId(second))
+  // A reply to the replaced set is refused.
+  expect(() => comment(`${GO} → No`, first)).toThrow(/new question/)
+  // Words that name no question go to the later set.
+  comment('Yes')
+  expect(view().asks.get(botItemEventId(first))?.answers.map(Boolean)).toEqual([true, false])
+  expect(view().asks.get(botItemEventId(second))?.answers.every(Boolean)).toBe(true)
+})
+
+it('holds the latest set until every question in it is answered', () => {
+  const { store, uid, ask, comment, view } = item()
+  ask([MERGE])
+  const second = ask([HOSTS, GO])
+  comment(`${HOSTS} → Yes`, second)
+  expect(view().replyingTo).toMatchObject({ eventId: botItemEventId(second), line: GO })
+  comment(`${GO} → No`, second)
+  expect(view().replyingTo).toBeNull()
+  expect(view().asks.get(botItemEventId(second))?.answers.every(Boolean)).toBe(true)
+  expect(store.get(uid)?.status).toBe('working')
+})
+
+it('never replies to a replaced question after a Needs you comment that asks nothing', () => {
+  const { store, uid, ask, comment, view } = item()
+  const first = ask([HOSTS, GO])
   comment(`${HOSTS} → Yes`, first)
   const second = ask([MERGE])
   comment('Yes', second)
   store.set(uid, { status: 'needs_you', comment: 'Only one question is left.' }, AGENT, NOW)
-  expect(view().replyingTo).toMatchObject({ eventId: botItemEventId(first), line: GO })
-  expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(botItemEventId(first))
+  expect(view().replyingTo).toBeNull()
+  expect(store.viewRows([uid], true).waitingAsks[uid]).toBeUndefined()
 })
 
-it('ends every open set when the item is moved by hand after another set was answered', () => {
+it('ends the open set when the item is moved by hand', () => {
   const { store, uid, ask, comment, view } = item()
-  const first = ask([HOSTS, GO])
-  ask([MERGE])
-  comment(`${HOSTS} → Yes\n${GO} → No`, first)
-  expect(view().replyingTo?.line).toBe(MERGE)
+  const asked = ask([HOSTS, GO])
+  comment(`${HOSTS} → Yes`, asked)
+  expect(view().replyingTo?.line).toBe(GO)
   store.ownerStatus({ uids: [uid], to: 'planned' }, OWNER, NOW)
   expect(view().replyingTo).toBeNull()
-})
-
-it('keeps an answer to a question asked again in a later set with the set it was given in', () => {
-  const { ask, comment, view, lastComment } = item()
-  const first = ask([HOSTS, GO])
-  const second = ask([HOSTS, MERGE])
-  comment(`${HOSTS} → Yes\n${GO} → No`, first)
-  const reply = botItemEventId(lastComment().id)
-  const { asks, quotes } = view()
-  expect(asks.get(botItemEventId(first))?.answers.every(Boolean)).toBe(true)
-  expect(asks.get(botItemEventId(second))?.answers.map(Boolean)).toEqual([false, false])
-  expect(quotes.get(reply)?.questionId).toBe(botItemEventId(first))
-})
-
-it('records a reply to the set still waiting as its answer once another set moved the item on', () => {
-  const { store, uid, ask, comment, lastComment } = item()
-  const first = ask([HOSTS, GO])
-  const second = ask([MERGE])
-  comment(`${HOSTS} → Yes\n${GO} → No`, first)
-  expect(store.get(uid)?.status).toBe('working')
-  comment('Yes')
-  expect(lastComment().data.answers).toBe(botItemEventId(second))
-})
-
-// An earlier set left open, a later set answered, then a Needs you comment that asks nothing.
-function leftOpen() {
-  const made = item()
-  const first = made.ask([HOSTS, GO])
-  made.comment(`${HOSTS} → Yes`, first)
-  // The later set's quick reply, naming its ask.
-  const second = made.ask([MERGE])
-  made.comment('Yes', second)
-  made.store.set(
-    made.uid,
-    { status: 'needs_you', comment: 'Only one question is left.' },
-    AGENT,
-    NOW
-  )
-  return { ...made, first }
-}
-
-it('shows only the set still waiting as waiting, not also the comment that asks nothing', () => {
-  const { view, first } = leftOpen()
-  expect(view().waitingComments).toEqual([botItemEventId(first)])
-})
-
-it('waits on no set while the one waiting is still on an earlier page', () => {
-  const { ask, view } = item()
-  const first = ask([HOSTS, GO])
-  ask([MERGE])
-  expect(view().replyingTo?.line).toBe(HOSTS)
-  // Only the events after the first set are loaded: the later set doesn't stand in for it.
-  expect(view(first).replyingTo).toBeNull()
-})
-
-it('keeps a reply that names one set out of another set with the same choices', () => {
-  const { ask, comment, view } = item()
-  const first = ask([HOSTS, GO])
-  const second = ask([MERGE])
-  // Words that name no question, sent while the first set waits.
-  comment('Yes')
-  const { asks } = view()
-  expect(asks.get(botItemEventId(first))?.answers.map(Boolean)).toEqual([true, false])
-  expect(asks.get(botItemEventId(second))?.answers.map(Boolean)).toEqual([false])
 })
 
 it('works out the waiting ask from the events when none is kept or an older Orca wrote after it', () => {
@@ -217,14 +166,14 @@ it('works out the waiting ask from the events when none is kept or an older Orca
     const { store, uid, ask, comment } = item(path)
     const first = ask([HOSTS, GO])
     comment(`${HOSTS} → Yes`, first)
-    ask([MERGE])
+    const second = ask([MERGE])
     const kept = store.viewRows([uid], true).waitingAsks[uid]
-    expect(kept).toBe(botItemEventId(first))
+    expect(kept).toBe(botItemEventId(second))
     const file = new DatabaseSync(path)
     files.push(file)
     file.prepare('DELETE FROM item_waiting_asks').run()
     expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(kept)
-    expect(file.prepare('SELECT ask FROM item_waiting_asks').get()).toEqual({ ask: first })
+    expect(file.prepare('SELECT ask FROM item_waiting_asks').get()).toEqual({ ask: second })
     // Kept by other pairing rules (another build): not trusted, even when no event came since.
     file.prepare("UPDATE item_waiting_asks SET ask = 0, rules = 'another build'").run()
     expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(kept)
@@ -305,9 +254,9 @@ it('passes over only events that pair nothing, and keeps "none" only past events
   ): BotItemEvent => ({ id: botItemEventId(1_000_000), kind, actor, data, at: NOW })
   const first = ask([HOSTS, GO])
   comment(`${HOSTS} → Yes`, first)
-  ask([MERGE])
+  const second = ask([MERGE])
   const waiting = views()
-  expect(waitingOf(waiting)).toBe(botItemEventId(first))
+  expect(waitingOf(waiting)).toBe(botItemEventId(second))
   const ignored = [
     ...BOT_ITEM_EVENT_KINDS.filter((kind) => kind !== 'commented' && kind !== 'status').map(
       (kind) => event(kind, AGENT, {})
