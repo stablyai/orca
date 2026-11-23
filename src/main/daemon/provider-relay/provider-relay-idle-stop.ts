@@ -1,6 +1,6 @@
 import type { ProviderRelayDetachPolicy } from '../protocol/daemon-provider-relay-protocol'
-import { basename } from 'node:path'
-import { readTerminalPs } from '../../pty/process-retirement/terminal-process-rows'
+import { readFreshProcessTable } from '../../pty/process-retirement/pty-descendant-fresh-table'
+import type { ProcessTableRow } from '../../pty/process-retirement/pty-process-table-parser'
 
 const MAX_POLICY_MARKERS = 16
 const MAX_MARKER_CHARS = 128
@@ -42,59 +42,50 @@ export function readProviderRelayDetachPolicy(value: unknown): ProviderRelayDeta
   }
 }
 
-/** Orca's own owner helper sits under the agent for its whole life; it is not the agent's work.
- *  Linux reports at most 15 characters of a process name. */
-const OWNER_HELPER = 'orca-provider-exec'.slice(0, 15)
+/** The busy recheck's cadence: one table read serves every detached relay checking meanwhile. */
+const SHARED_TABLE_MS = 60_000
+let sharedTable: { readAt: number; rows: Promise<ProcessTableRow[] | null> } | null = null
 
-/** One process-table read serves every relay checking within this window. */
-const SHARED_TABLE_MS = 5_000
-let sharedTable: { readAt: number; parents: Promise<Map<number, number> | null> } | null = null
-
-/** Live pid → parent pid, without Orca's own helpers; null when the table can't be read. */
-function processParents(): Promise<Map<number, number> | null> {
+function processRows(): Promise<ProcessTableRow[] | null> {
   if (sharedTable && Date.now() - sharedTable.readAt < SHARED_TABLE_MS) {
-    return sharedTable.parents
+    return sharedTable.rows
   }
-  const parents = readTerminalPs(['-A', '-o', 'pid=,ppid=,comm=']).then((table) => {
-    if (table === null) {
-      return null
-    }
-    const map = new Map<number, number>()
-    for (const row of table.split('\n')) {
-      const match = /^\s*(\d+)\s+(\d+)\s+(.+)$/.exec(row)
-      if (match && !basename(match[3].trim()).startsWith(OWNER_HELPER)) {
-        map.set(Number(match[1]), Number(match[2]))
-      }
-    }
-    return map
-  })
-  sharedTable = { readAt: Date.now(), parents }
-  return parents
+  const rows = readFreshProcessTable().then(
+    (capture) => capture.rows,
+    () => null
+  )
+  sharedTable = { readAt: Date.now(), rows }
+  return rows
 }
 
-/** True when any process other than Orca's own helper names `pid` as its parent; null when unreadable. */
-export async function hasLiveChildProcess(pid: number): Promise<boolean | null> {
-  const parents = await processParents()
-  if (parents === null) {
+/**
+ * True when a process other than the ones in `ignore` (Orca's own owner helper, which sits under
+ * the agent for its whole life) names `pid` as its parent; null when the table can't be read.
+ */
+export async function hasLiveChildProcess(
+  pid: number,
+  ignore: ReadonlySet<number> = new Set()
+): Promise<boolean | null> {
+  const rows = await processRows()
+  if (rows === null) {
     return null
   }
-  for (const [child, parent] of parents) {
-    if (parent === pid && child !== pid) {
-      return true
-    }
-  }
-  return false
+  return rows.some(
+    (row) => row.ppid === pid && row.pid !== pid && !ignore.has(row.pid) && !row.zombie
+  )
 }
 
 type IdleStopHost = {
   /** The agent's CLI pid; its children are its background shells, subagents and MCP servers. */
   pid: () => number | undefined
+  /** Orca's own processes under the agent (its owner helper), which are not the agent's work. */
+  helperPids?: () => ReadonlySet<number>
   attached: () => boolean
   live: () => boolean
   pendingCount: () => number
   stop: () => void
   log?: (event: string, details?: Record<string, unknown>) => void
-  hasChildren?: (pid: number) => Promise<boolean | null>
+  hasChildren?: (pid: number, ignore?: ReadonlySet<number>) => Promise<boolean | null>
 }
 
 /**
@@ -121,12 +112,16 @@ export class ProviderRelayIdleStop {
     },
     options: {
       relayId: string
-      managed: { child: { pid?: number } }
+      managed: { child: { pid?: number; watcherPid?: number; writerPid?: number } }
       log?: (event: string, details?: Record<string, unknown>) => void
     }
   ): ProviderRelayIdleStop {
     return new ProviderRelayIdleStop({
       pid: () => options.managed.child.pid,
+      helperPids: () => {
+        const { watcherPid } = options.managed.child
+        return new Set(watcherPid === undefined ? [] : [watcherPid])
+      },
       attached: () => relay.attachedClientId !== null,
       live: () => relay.live,
       pendingCount: () => relay.pending.size,
@@ -218,7 +213,9 @@ export class ProviderRelayIdleStop {
     const pid = this.host.pid()
     this.checking = true
     const children =
-      pid === undefined ? null : await (this.host.hasChildren ?? hasLiveChildProcess)(pid)
+      pid === undefined
+        ? null
+        : await (this.host.hasChildren ?? hasLiveChildProcess)(pid, this.host.helperPids?.())
     this.checking = false
     // Anything that changed during the read (attach, output, a new turn) wins over the stop.
     if (
