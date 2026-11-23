@@ -23,21 +23,23 @@ function readServerState() {
   }
 }
 
-async function probeServer(state) {
-  return Boolean(state) && (await readServerHealth(state))?.pid === state.pid
-}
-
-async function readServerHealth(state) {
+async function readServerHealth(state, timeoutMs = STARTUP_TIMEOUT_MS) {
   if (!state?.url) {
     return null
   }
+  const signal = AbortSignal.timeout(timeoutMs)
   try {
     const response = await fetch(`${state.url}/__fixtures/health`, {
-      signal: AbortSignal.timeout(2000)
+      signal
     })
     const body = await response.json()
     return body.ok === true ? body : null
-  } catch {
+  } catch (error) {
+    if (signal.aborted) {
+      throw new Error('Timed out waiting for the existing fixture server to answer.', {
+        cause: error
+      })
+    }
     return null
   }
 }
@@ -83,39 +85,63 @@ function readLogTail() {
 
 /** Returns the running fixture server, starting a detached one if needed. */
 export async function ensureFixtureServer({ onStart } = {}) {
-  const existing = readServerState()
-  const health = await readServerHealth(existing)
-  if (health && health.pid === existing?.pid) {
-    if (health.codeStamp === fixtureServerCodeStamp()) {
-      return { url: existing.url, started: false }
-    }
-    await callFixtureServer(existing.url, 'stop', {}).catch(() => {})
-    await delay(300)
-  }
-  await mkdir(fixtureCacheDir, { recursive: true })
-  let exited = false
-  if (tryAcquireStartLock()) {
-    onStart?.()
-    startServerProcess().once('exit', () => {
-      exited = true
-    })
-  }
   const deadline = Date.now() + STARTUP_TIMEOUT_MS
+  const codeStamp = fixtureServerCodeStamp()
+  let child
+  let waited = false
   while (Date.now() < deadline) {
     const state = readServerState()
-    if (state && state.pid !== existing?.pid && (await probeServer(state))) {
-      return { url: state.url, started: true }
+    const health = await readServerHealth(state, Math.max(1, deadline - Date.now()))
+    const identified = health && health.pid === state.pid
+    if (identified && health.codeStamp === codeStamp) {
+      return { url: state.url, started: waited }
     }
-    if (exited) {
+    if (child && (child.exitCode !== null || child.signalCode !== null)) {
       throw new Error(`Fixture server exited during startup:\n${readLogTail()}`)
     }
+    if (!waited) {
+      await mkdir(fixtureCacheDir, { recursive: true })
+    }
+    if (!child && tryAcquireStartLock()) {
+      const published = readServerState()
+      if (published?.pid !== state?.pid || published?.url !== state?.url) {
+        // Recheck the server published by a concurrent starter.
+        unlinkSync(serverLockPath)
+        continue
+      }
+      try {
+        if (identified) {
+          await callFixtureServer(
+            state.url,
+            'stop',
+            {},
+            AbortSignal.timeout(Math.max(1, deadline - Date.now()))
+          )
+          while (
+            (await readServerHealth(state, Math.max(1, deadline - Date.now())))?.pid === state.pid
+          ) {
+            if (Date.now() >= deadline) {
+              throw new Error('Timed out waiting for the previous fixture server to stop.')
+            }
+            await delay(150)
+          }
+        }
+        onStart?.()
+        child = startServerProcess()
+      } catch (error) {
+        unlinkSync(serverLockPath)
+        throw error
+      }
+    }
+    waited = true
     await delay(150)
   }
   throw new Error(`Fixture server did not start in time. Log tail:\n${readLogTail()}`)
 }
 
-export async function callFixtureServer(url, endpoint, body) {
+export async function callFixtureServer(url, endpoint, body, signal) {
   const response = await fetch(`${url}/__fixtures/${endpoint}`, {
+    signal,
     method: body === undefined ? 'GET' : 'POST',
     headers: body === undefined ? undefined : { 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body)
@@ -129,7 +155,8 @@ export async function callFixtureServer(url, endpoint, body) {
 
 export async function stopFixtureServer() {
   const state = readServerState()
-  if (!(await probeServer(state))) {
+  const health = await readServerHealth(state)
+  if (!health || health.pid !== state?.pid) {
     return false
   }
   await callFixtureServer(state.url, 'stop', {})
