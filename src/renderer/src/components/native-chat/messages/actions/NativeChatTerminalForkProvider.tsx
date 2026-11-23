@@ -29,10 +29,12 @@ export function NativeChatTerminalForkProvider({
 }): React.JSX.Element {
   const worktreeId = useNativeChatTabOwnerWorktreeId(terminalTabId)
   const target = useWorktreeRuntimeTarget(worktreeId)
-  const cutHost = useStructuredAgentSessionHostCapabilityState(
+  const hostCut = useStructuredAgentSessionHostCapabilityState(
     target ?? { kind: 'local' },
     AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY
   )
+  // A direct-SSH workspace has no runtime target; this computer's cut support says nothing about it.
+  const cutHost = worktreeId && !target ? 'unsupported' : hostCut
   const fork = useNativeChatTerminalFork({
     agent,
     worktreeId,

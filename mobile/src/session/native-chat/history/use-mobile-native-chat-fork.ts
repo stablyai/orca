@@ -40,8 +40,8 @@ export type MobileNativeChatForkRun = (
   forkFrom: StructuredAgentSessionForkSource
 ) => Promise<void>
 
-/** A copy of the chat's own history, or another agent's recap of it. */
-export type MobileNativeChatForkKind = 'copy' | 'recap'
+/** A copy of the chat's own history here, its transcript relayed to another host, or a recap of it. */
+export type MobileNativeChatForkKind = 'copy' | 'relay' | 'recap'
 
 /** What `/fork` did: opened a fork, waited on one already opening, or found no response to copy. */
 export type MobileNativeChatForkLatestOutcome = 'started' | 'pending' | 'working' | 'none'
@@ -84,7 +84,7 @@ export type MobileNativeChatForkContextValue = MobileNativeChatFork & {
   openSheet: (message: NativeChatMessage, preset?: ChatForkPreset) => void
 }
 
-// A recap is built from the transcript itself, so any finished reply can start one.
+// A recap or a relay is built from the transcript itself, so any finished reply can start one.
 const RECAP_SUPPORT: NativeChatForkSupport = { kind: 'known', fork: 'checkpoint' }
 
 export const MobileNativeChatForkContext = createContext<MobileNativeChatForkContextValue | null>(
@@ -174,7 +174,7 @@ export function useMobileNativeChatFork(input: {
               : 'available'
       }
       const turnKey = turns.keyById.get(message.id)
-      const rowSupport = kind === 'recap' ? RECAP_SUPPORT : support
+      const rowSupport = kind === 'copy' ? support : RECAP_SUPPORT
       const offered =
         !!sessionId &&
         isTuiAgent(agent ?? '') &&

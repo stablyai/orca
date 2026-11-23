@@ -127,7 +127,8 @@ export function useMobileChatForkSheet(input: {
       if (!message || busyRef.current || !agent || !isTuiAgent(agent)) {
         return
       }
-      const kind = target.path === 'recap' ? 'recap' : 'copy'
+      // A relay exports the transcript, so it needs no local copy support.
+      const kind = target.path === 'recap' ? 'recap' : target.path === 'relay' ? 'relay' : 'copy'
       const started = fork.forkWith(
         message,
         (_agent, forkFrom) => runHere(agent, target, forkFrom),
