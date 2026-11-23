@@ -1731,7 +1731,7 @@
         "shortcut": {
           "capture": {
             "notification": {
-              "b0536028c9": "바로가기 열기",
+              "b0536028c9": "단축키 열기",
               "141ad6c004": "터미널 단축키 처리됨"
             }
           }
@@ -3774,7 +3774,7 @@
           "f0cf6dd591": "꺼짐",
           "1e9b5244f2": "켜짐",
           "b930de7194": "초안만",
-          "e0002f1eba": "선택된",
+          "e0002f1eba": "선택됨",
           "2b2f019091": "모든 상태",
           "0fd3249e2e": "닫힘",
           "d78b60b5c2": "열림",
@@ -5589,7 +5589,7 @@
               "sessionCount_one": "세션 {{formatted}}개",
               "statusScanning": "스캐닝",
               "statusEnabled": "활성화됨",
-              "statusOff": "끄다",
+              "statusOff": "꺼짐",
               "sessionsAndActivity": "{{sessions}} - {{activity}}",
               "tokenTotal": "토큰 {{tokens}}개",
               "sessionCount_other": "세션 {{formatted}}개",
@@ -5921,7 +5921,7 @@
         "SkillBundleInstallOutcome": {
           "01c5a12e01": "설치됨",
           "01c5a12e02": "업데이트됨",
-          "01c5a12e03": "변하지 않은",
+          "01c5a12e03": "변경 없음",
           "01c5a12e04": "로컬로 유지",
           "01c5a12e07": "번들 설치에 주의가 필요합니다.",
           "01c5a12e08": "스킬이 설치되고 검증되었습니다.",
@@ -6059,7 +6059,7 @@
           "reasonStale": "목록이 로드된 이후 이 스킬이 변경되었습니다. 새로고침하고 다시 시도하세요.",
           "blockedLine": "{{count}} × {{reason}}",
           "resultLine": "{{count}} × {{label}}",
-          "statusSkipped": "건너뛰었습니다.",
+          "statusSkipped": "건너뜀",
           "statusBusy": "사용 중 — 다른 스킬 작업이 진행 중입니다.",
           "statusPartial": "부분적으로 제거됨 — 일부 파일이 여전히 숨겨진 이름으로 디스크에 있습니다.",
           "statusFailed": "실패 — 변경된 사항 없음",
@@ -8140,8 +8140,8 @@
           "e001734396": "작성기에서 변경하지 않는 한 호스팅된 리뷰를 초안으로 생성합니다.",
           "6ba48f07a4": "기본적으로 초안",
           "15b60d54b2": "예: ollama run llama3.1 {prompt}",
-          "3f1b26cc91": "명령 입력을 인수로 전달합니다. 그렇지 않으면 Orca가 이를 stdin에 파이프합니다.",
-          "4f722a5f53": "사용자 지정 명령을 선택하는 커밋 메시지, PR 및 브랜치 이름 레시피에서 사용됩니다. 사용",
+          "3f1b26cc91": "자리표시자를 넣으세요. 넣지 않으면 Orca가 입력을 stdin으로 전달합니다.",
+          "4f722a5f53": "사용자 지정 명령을 선택하는 커밋 메시지, PR 및 브랜치 이름 레시피에서 사용됩니다. 명령 입력을 인수로 넘기려면 명령에",
           "47e45cbd5a": "사용자 지정 명령",
           "1ef29f8c29": "텍스트 레시피에서 '사용자 지정 명령'을 사용할 때 Orca가 실행할 명령줄입니다.",
           "2339a89104": "해당 작업에 대한 명령 템플릿을 사용하여 선택한 에이전트를 실행하는 AI 버튼을 추가합니다.",
@@ -8187,7 +8187,7 @@
           "6b5a2cd3a5": "접근성",
           "6b17602073": "액세스 재설정",
           "506f2acf7a": "액세스 재설정 중...",
-          "statusGranted": "부여된",
+          "statusGranted": "허용됨",
           "statusUnsupported": "macOS만 해당",
           "statusNotEnabled": "활성화되지 않음",
           "794807aa21": "macOS 개인정보 보호 및 보안을 대기열에 추가했습니다. 더 새로운 요청이나 재설정으로 대체될 수 있습니다"
@@ -8218,10 +8218,10 @@
           "16381e040a": "마이크",
           "dac08ec03e": "작업 중...",
           "actionRequest": "권한 요청",
-          "statusGranted": "부여된",
+          "statusGranted": "허용됨",
           "statusDenied": "거부됨",
           "statusNotRequested": "요청되지 않음",
-          "statusRestricted": "제한된",
+          "statusRestricted": "제한됨",
           "statusUnsupported": "macOS만 해당",
           "statusEntitled": "자격 있음",
           "statusCheckManually": "수동으로 확인",
@@ -8792,8 +8792,8 @@
           "a2b3505c77": "검토 파일을 만들었습니다"
         },
         "PrivacyPane": {
-          "36e0e2e63b": "환경 변수. 다시 활성화하려면 설정을 해제하고 다시 시작하세요.",
-          "79a0f3c16c": "텔레메트리는 다음에 의해 비활성화됩니다.",
+          "36e0e2e63b": "환경 변수 때문에 비활성화되어 있습니다. 다시 활성화하려면 변수 설정을 해제하고 다시 시작하세요.",
+          "79a0f3c16c": "텔레메트리가",
           "e3970bbbf5": "CI 환경 변수가 설정되었기 때문에 텔레메트리가 비활성화되었습니다. 설정을 해제하고 다시 시작하세요.",
           "fe904ac984": "익명의 사용 데이터 공유",
           "77410e0566": "개인 정보 보호 정책",
@@ -8851,13 +8851,13 @@
           "8c2893fae0": "단일 셸 스크립트로 실행됩니다. 이 컴퓨터에 저장되었습니다.",
           "40a446ae16": "- 이 기기에서 나만 사용",
           "2d03a514db": "로컬",
-          "7e4427b4a2": "변경합니다.",
-          "b113344b6a": "편집",
+          "7e4427b4a2": "파일을 편집하세요.",
+          "b113344b6a": "바꾸려면",
           "f828e1de19": "- 팀과 공유",
           "673a7fd10e": "확인 중...",
           "5426ecbdcb": "로컬 스크립트가 실행되지 않습니다.",
           "95a0411b3e": "템플릿",
-          "175daba180": "예",
+          "175daba180": "예시",
           "623e0c9f31": "`orca.yaml`을 구문 분석할 수 없습니다",
           "07ba35bc68": "`scripts:` 아래의 들여쓰기를 확인하세요. 후크 키는 두 칸, 명령 줄은 네 칸을 사용해야 합니다.",
           "787ca433ef": "지원되는 키만 정의하세요: `scripts`, `setup`, `archive`, `issueCommand`.",
@@ -9275,28 +9275,28 @@
         },
         "ShortcutFilterRail": {
           "28b63545bf": "상태",
-          "8a1e78c14b": "바로가기 상태 필터",
-          "df8466f3fc": "바로가기 검색 지우기",
+          "8a1e78c14b": "단축키 상태 필터",
+          "df8466f3fc": "단축키 검색 지우기",
           "f733c4b89f": "명령 또는 키 검색",
-          "02dc7d4251": "바로가기 검색",
-          "1d5634ba31": "{{value0}} 바로가기",
+          "02dc7d4251": "단축키 검색",
+          "1d5634ba31": "{{value0}} 단축키",
           "filterAll": "모두",
           "filterUnassigned": "할당되지 않음",
           "filterConflicts": "충돌"
         },
         "ShortcutRowsList": {
-          "4ce3cd24d9": "해당 필터와 일치하는 바로가기가 없습니다."
+          "4ce3cd24d9": "해당 필터와 일치하는 단축키가 없습니다."
         },
         "ShortcutTerminalPolicyControl": {
           "0762983d13": "터미널 우선",
           "63308571d8": "Orca 먼저",
-          "c43c7ff5f9": "바로가기를 누가 먼저 가로챌지 결정",
+          "c43c7ff5f9": "단축키를 누가 먼저 가로챌지 결정",
           "0f55c6f15c": "단축키가 겹칠 때 Orca와 포커스된 터미널 중 어느 쪽이 우선할지 선택합니다.",
           "7d81bebd89": "터미널의 단축키"
         },
         "ShortcutsPane": {
-          "4b7ae34062": "직접.",
-          "38e86e206a": "바로가기를 시각적으로 사용자 정의하거나 편집하세요",
+          "4b7ae34062": "파일을 직접 편집하세요.",
+          "38e86e206a": "단축키를 화면에서 바꾸거나",
           "f0b35b0b2e": "터미널 또는 TUI에 키보드 포커스가 있는 동안에는 비활성화됩니다.",
           "5c65d5db9d": "터미널 우선",
           "dfa8ff612f": "터미널이나 TUI에 키보드 포커스가 있는 동안에도 실행됩니다.",
@@ -11234,7 +11234,7 @@
             "7e3fc707aa": "터미널",
             "0ecba9aa5f": "키보드",
             "ebd7d81e1d": "단축키가 겹칠 때 Orca와 포커스된 터미널 중 어느 쪽이 우선할지 선택합니다.",
-            "groupShortcut": "{{value0}} 바로가기",
+            "groupShortcut": "{{value0}} 단축키",
             "d6b5c7dd6d": "터미널의 단축키"
           }
         },
@@ -11762,7 +11762,7 @@
                   "23cb5a0dee": "PR, 이슈 및 검사를 활성화하려면 GitHub CLI를 설치하세요.",
                   "6f30fc4216": "이 런타임에서는 아직 GitHub CLI 상태를 사용할 수 없습니다.",
                   "6b2cfb52b4": "gh",
-                  "b4d900e7f1": "PR, 이슈 및 검사는 다음을 통해 이루어집니다.",
+                  "b4d900e7f1": "PR, 이슈, 검사를 지원하는",
                   "account_scope_prefix": "계정 범위",
                   "statusConnected": "연결됨",
                   "statusUnavailable": "사용할 수 없음",
@@ -11817,23 +11817,23 @@
                   "793a06e899": "다시 확인",
                   "1a9475dace": "자세히 알아보기",
                   "19fb419c12": "Gitea 자격 증명이 구성되어 있지만 인증할 수 없습니다. 토큰, API 기본 URL, 저장소 권한을 확인하고, 환경 변수가 변경되었다면 Orca를 다시 시작하세요.",
-                  "60708f23da": "Orca가 원격에서 API URL을 추론할 수 없는 경우에만 사용하세요.",
+                  "60708f23da": "환경 변수를 설정하세요.",
                   "709057ad91": "ORCA_GITEA_API_BASE_URL",
-                  "6da9dfa5de": "비공개 저장소의 경우, 그리고",
+                  "6da9dfa5de": "환경 변수를 설정하고, Orca가 원격에서 API URL을 추론할 수 없는 경우에만",
                   "6d5c2a3005": "ORCA_GITEA_TOKEN",
-                  "fcbe0469fd": "공개 저장소는 Git 원격에서 감지됩니다. 설정하세요",
+                  "fcbe0469fd": "공개 저장소는 Git 원격에서 감지됩니다. 비공개 저장소에는",
                   "0613928cb3": "이 런타임에서는 아직 Gitea 상태를 사용할 수 없습니다.",
                   "05863d2599": "Gitea REST API를 통한 PR 및 커밋 상태입니다.",
                   "52f75876be": "감지된 저장소의 PR 및 커밋 상태",
                   "0b5242f8a2": "{{value0}} · PR 및 커밋 상태",
                   "40f678df73": "Azure DevOps 자격 증명이 구성되어 있지만 인증할 수 없습니다. 토큰, API 기본 URL, 저장소 권한을 확인하고, 환경 변수가 변경되었다면 Orca를 다시 시작하세요.",
-                  "7bd345e3f6": "Orca가 Git 원격에서 API 기본 URL을 추론할 수 없는 경우에만 사용하세요.",
+                  "7bd345e3f6": "환경 변수를 설정하세요.",
                   "186a6689df": "ORCA_AZURE_DEVOPS_API_BASE_URL",
-                  "b8a10b07c1": ". 설정하세요",
+                  "b8a10b07c1": ". Orca가 Git 원격에서 API 기본 URL을 추론할 수 없는 경우에만",
                   "fbfd237f5e": "ORCA_AZURE_DEVOPS_ACCESS_TOKEN",
-                  "087feb92f1": ", 또는 설정",
+                  "087feb92f1": ",",
                   "48842720d2": "ORCA_AZURE_DEVOPS_TOKEN",
-                  "7bbc9c64f0": "설정",
+                  "7bbc9c64f0": "다음 환경 변수 중 하나를 설정하세요:",
                   "f3f47dc7de": "이 런타임에서는 아직 Azure DevOps 상태를 사용할 수 없습니다.",
                   "0eb50d5593": "Azure DevOps REST API 토큰을 통한 PR 및 빌드 상태입니다.",
                   "54636c65d4": "감지된 Azure Repos의 PR 및 빌드 상태",
@@ -11991,7 +11991,7 @@
           "f5ed5dcbf6": "키를 누르세요…"
         },
         "ShortcutRemoveButton": {
-          "9e29aff18b": "{{value0}} 바로가기 {{value1}} 제거",
+          "9e29aff18b": "{{value0}} 단축키 {{value1}} 제거",
           "2a9588b1c2": "이 바인딩 제거"
         },
         "BrowserLocalhostWorktreeLabelsSetting": {
@@ -12947,7 +12947,7 @@
           "offDescription": "흐린 텍스트와 Powerline 구분 기호를 포함해 프로그램 색상을 그대로 유지합니다.",
           "customDescription": "텍스트와 배경 사이의 대비를 얼마나 높일지 선택합니다.",
           "auto": "자동",
-          "off": "끄다",
+          "off": "꺼짐",
           "custom": "사용자 지정",
           "targetDescription": "가능한 경우 값이 높을수록 대비가 증가합니다. 배경색은 변경되지 않습니다.",
           "subtle": "미묘한",
@@ -13019,7 +13019,7 @@
           "siteDescription": "Coding Plan이 속한 콘솔을 선택하세요. 국제 사이트는 Z.AI, 중국 본토 사이트는 Zhipu BigModel입니다.",
           "keyTitle": "API 키",
           "keyDescription": "선택한 콘솔의 API 키 페이지에서 API 키를 붙여넣습니다. 로컬에 저장되고 OS가 지원할 때 암호화되며 사용량 새로 고침을 위해 해당 사이트로만 전송됩니다.",
-          "saved": "저장했습니다",
+          "saved": "저장됨",
           "notSaved": "저장 안 됨",
           "keyPlaceholder": "GLM Coding Plan API 키를 붙여넣으세요",
           "replace": "교체",
@@ -14165,7 +14165,7 @@
             "31e80cff2d": "원격 포트를 로컬 시스템으로 전달합니다.",
             "10360598a4": "포트 전달 구성을 업데이트합니다.",
             "80206251c8": "포트 전달 편집",
-            "3e13cb63ee": "알려지지 않은",
+            "3e13cb63ee": "알 수 없음",
             "472054d94c": "포트 :{{value0}}",
             "d32820d3e2": "외부",
             "4db4b5e435": "기타 워크스페이스",
@@ -14230,7 +14230,7 @@
             "b656381c18": "메모 삭제",
             "c085946bda": "{{value0}}행의 메모 복사",
             "1623bf4e19": "메모 복사",
-            "655633c08a": "전송된",
+            "655633c08a": "전송됨",
             "3eb9b2805e": "{{value0}}에서 메모 열기",
             "0d963bf982": "{{value0}} 열기",
             "59654650d3": "{{value0}}에 대한 메모 지우기",
@@ -16650,7 +16650,7 @@
           "39b6b9e4e4": "브랜치에 커밋됨"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "전송된",
+          "1da745c551": "전송됨",
           "84898c548d": "지우기",
           "88b70d0ef5": "복사",
           "bb84b4c374": "AI 노트",
@@ -16716,7 +16716,7 @@
           "99496bab6e": "파일",
           "496e28a932": "없어짐",
           "8528a5eaf5": "해결됨",
-          "69d4e210bb": "해결되지 않은"
+          "69d4e210bb": "미해결"
         },
         "CsvViewer": {
           "a233d55b77": "빈 파일",
@@ -18552,7 +18552,7 @@
             "connectingDescription": "이 호스트에 연결하는 중입니다.",
             "disconnected": "연결되지 않음",
             "disconnectedDescription": "연결이 복원될 때까지 이 호스트의 자동화를 실행할 수 없습니다.",
-            "unavailable": "없는",
+            "unavailable": "사용할 수 없음",
             "unavailableDescription": "이 실행 대상은 더 이상 사용할 수 없습니다.",
             "unknown": "알 수 없는 연결",
             "unknownDescription": "이 호스트의 연결 상태가 아직 로드되지 않았습니다."
@@ -19357,9 +19357,7 @@
         "streamBrowserUnavailable": "원격 브라우저를 사용할 수 없습니다. 서버에서 설정을 확인하세요."
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "이 기기의 브라우저",
         "remoteLabel": "{{value0}}의 브라우저",
-        "clientNoteLocalStorage": "가져오기는 이 기기의 브라우저를 읽습니다. 쿠키는 로컬에 저장됩니다.",
         "remoteNoteRemoteStorage": "{{value0}}에서 읽기 브라우저를 가져옵니다. 쿠키는 해당 컴퓨터에 저장되며 화면에 권한 메시지가 나타날 수 있습니다."
       },
       "native": {
@@ -20140,6 +20138,8 @@
         "historyUnreadable": "Orca가 이 채팅의 저장된 기록을 읽지 못했습니다.",
         "historyUnusable": "이 채팅을 불러올 수 없습니다.",
         "historyUnavailable": "Orca가 지금 이 채팅의 기록을 열지 못했습니다.",
+        "diskFull": "이 채팅을 실행 중인 컴퓨터의 디스크가 가득 찼습니다.",
+        "freeDiskSpace": "해당 디스크의 공간을 확보한 후 다시 시도하세요.",
         "savedInOtherFolder": "이 대화는 다른 폴더에 저장되었습니다.",
         "savedByNewerOrca": "채팅이 최신 버전의 Orca에서 저장되었습니다.",
         "updateOrcaToKeepUsing": "계속 사용하려면 Orca를 업데이트하세요.",
@@ -20689,12 +20689,12 @@
         "stateWorking": "작업 중",
         "stateMonitoring": "모니터링",
         "stateWaiting": "대기 중",
-        "stateBlocked": "막힌",
+        "stateBlocked": "차단됨",
         "stateDone": "완료",
         "stateIdle": "중지됨",
         "stateUnverifiable": "상태를 확인할 수 없음",
         "reasonWaiting": "승인이 필요합니다",
-        "reasonBlocked": "실패한",
+        "reasonBlocked": "실패",
         "groupAgents": "에이전트",
         "groupShell": "셸",
         "groupMonitors": "모니터",
@@ -20757,7 +20757,7 @@
           "completed": "완료됨",
           "working": "작업 중",
           "idle": "유휴",
-          "failed": "실패한",
+          "failed": "실패",
           "stopped": "중지됨",
           "unverifiable": "상태를 확인할 수 없음",
           "workingCount_one": "{{count}}개 작업 중",
@@ -20980,6 +20980,9 @@
       "imagePreview": {
         "fileActions": "파일 작업",
         "linkActions": "링크 작업"
+      },
+      "imageGallery": {
+        "loadFailed": "{{name}} 이미지를 불러올 수 없습니다"
       },
       "hostPermission": {
         "checkAgain": "다시 확인",
@@ -21575,6 +21578,81 @@
       },
       "dock": {
         "label": "메시지 상자와 프롬프트"
+      },
+      "workerDock": {
+        "commandOutputPending": "명령 출력이 아직 없습니다.",
+        "notNow": "나중에",
+        "retry": "다시 시도",
+        "dismiss": "닫기",
+        "openWorker": "워커 열기",
+        "remoteOwner": "이 워커가 실행 중인 컴퓨터에서 중지하거나 지우세요",
+        "restore": "목록에 다시 표시",
+        "unavailable": "워커 상태를 확인할 수 없음",
+        "empty": "워커 0개",
+        "clearAllLabel_one": "실패한 워커 지우기",
+        "clearAllLabel_other": "실패한 워커 {{count}}개 모두 지우기",
+        "clearAll": "모두 지우기",
+        "attention": "확인 필요",
+        "openWork": "진행 중인 작업",
+        "orderHeld": "순서 고정됨",
+        "statusChanged": "상태 변경됨",
+        "loadingWorker": "워커 로드 중…",
+        "resultUnavailable": "워커 결과를 확인할 수 없음",
+        "showLatest": "최신 항목 보기",
+        "workersRegion": "워커",
+        "timeUnavailable": "상태 시각을 확인할 수 없음",
+        "doneResult": "완료 · 결과 열기",
+        "clearName": "{{name}} 지우기",
+        "stopUnavailable": "{{name}} · {{title}} 중지할 수 없음 · {{reason}}",
+        "stopName": "{{name}} · {{title}} 중지",
+        "stopping": "중지 중…",
+        "clear": "지우기",
+        "stop": "중지",
+        "coordinator": "코디네이터 대기 중",
+        "starting": "시작 중",
+        "running": "실행 중",
+        "idle": "유휴",
+        "saving": "결과 저장 중…",
+        "failed": "실패",
+        "unexpected": "예기치 않게 중지됨",
+        "unavailableState": "상태를 확인할 수 없음",
+        "needsYou": "사용자 대기 중",
+        "worker": "워커",
+        "agent": "에이전트",
+        "command": "명령",
+        "workflow": "워크플로",
+        "monitor": "모니터",
+        "task": "작업",
+        "taskCount_one": "작업 {{count}}개",
+        "taskCount_other": "작업 {{count}}개",
+        "workerCount_one": "워커 {{count}}개",
+        "workerCount_other": "워커 {{count}}개",
+        "commandCount_one": "명령 {{count}}개",
+        "commandCount_other": "명령 {{count}}개",
+        "workflowCount_one": "워크플로 {{count}}개",
+        "workflowCount_other": "워크플로 {{count}}개",
+        "monitorCount_one": "모니터 {{count}}개",
+        "monitorCount_other": "모니터 {{count}}개",
+        "agentCount_one": "에이전트 {{count}}개",
+        "agentCount_other": "에이전트 {{count}}개",
+        "stoppedByYou": "사용자가 중지함",
+        "finished": "완료",
+        "failedCount": "{{count}}개 실패",
+        "needsYouCount": "확인 필요 {{count}}개",
+        "newQuestions_one": "사용자 응답을 기다리는 새 워커 질문 {{count}}개",
+        "newQuestions_other": "사용자 응답을 기다리는 새 워커 질문 {{count}}개",
+        "waitingOnYouName": "{{name}} · 사용자 대기 중",
+        "moreQuestions": "사용자 대기 중 {{count}}개 더",
+        "questions": "사용자 대기 중 {{count}}개",
+        "queuedQuestions": "대기 중인 워커 질문",
+        "showQuestion": "{{name}} 질문 표시",
+        "show": "표시",
+        "showName": "{{name}} 표시",
+        "startedAt": " · {{time}}에 시작 · {{elapsed}} 경과",
+        "contactUnavailable": " · 마지막 연결 확인 시각을 알 수 없음",
+        "runningCount": "{{count}}개 실행 중",
+        "cleared_one": "워커 1개를 지웠습니다",
+        "cleared_other": "워커 {{count}}개를 지웠습니다"
       },
       "automationSaved": {
         "resultsInRuns": "실행할 때마다 결과 표시",
@@ -22314,7 +22392,7 @@
           "consent": {
             "goesToKnown": "이 컴퓨터의 {{agent}}을(를) 통해 {{company}}(으)로 전송됩니다. {{plan}} 플랜 사용량에 포함됩니다.",
             "goesToAgent": "이 컴퓨터의 {{agent}}이(가) 프롬프트를 보내도록 설정된 곳으로 전송됩니다.",
-            "sentLabel": "전송된",
+            "sentLabel": "전송됨",
             "sent": "받아쓴 텍스트, 어휘, 지침.",
             "notSentLabel": "전송되지 않음",
             "notSent": "오디오, 파일, 화면에 표시된 내용.",
@@ -22843,11 +22921,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "임시 오케스트레이션 워커 · 완료 2분 후 닫힘",
-        "finished": "임시 오케스트레이션 워커 완료 · {{countdown}} 후 닫힘",
         "keepOpen": "열어 두기",
         "bannerRunning": "오케스트레이션 워커 · 완료 2분 후 닫힘",
-        "bannerFinished": "오케스트레이션 워커 완료 · {{countdown}} 후 닫힘"
+        "bannerFinished": "오케스트레이션 워커 완료 · {{countdown}} 후 닫힘",
+        "bannerFinishedStatus": "오케스트레이션 워커 완료 · 곧 닫힘"
       }
     },
     "wslHostMark": {
@@ -23323,10 +23400,12 @@
         "imported_other": "{{domains}}의 쿠키 {{count}}개를 가져왔습니다. 사용하려면 페이지를 새로고침하세요.",
         "failed": "쿠키를 가져오지 못했습니다: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "이 기기의 브라우저",
         "destination": "{{host}}용 브라우저로 가져옵니다.",
-        "hostAgents": "{{host}}의 에이전트는 이 로그인을 사용할 수 있지만 쿠키를 읽을 수는 없습니다.",
+        "hostAgents": "{{host}}의 에이전트는 이 로그인을 사용할 수 있지만 쿠키를 읽을 수는 없습니다."
+      },
+      "sshPage": {
         "stored": "{{host}}용 브라우저에 저장했습니다.",
         "googleCookiesSkipped": "Google 쿠키는 가져오지 않았습니다. {{host}}를 통해 탐색하는 페이지를 열고 Google에 로그인하세요."
       }
@@ -23705,7 +23784,7 @@
   },
   "featureTips": {
     "voice": {
-      "unassignedInstruction": "초점이 맞춰진 창에서 음성 받아쓰기를 시작하기 전에 받아쓰기 바로가기를 할당하세요.",
+      "unassignedInstruction": "초점이 맞춰진 창에서 음성 받아쓰기를 시작하기 전에 받아쓰기 단축키를 할당하세요.",
       "shortcutInstruction": "터미널, 편집기 또는 에이전트 프롬프트에 포커스를 두고 <shortcut/> 키를 눌러 음성 받아쓰기를 시작하세요. 중지하려면 <shortcut/> 키를 다시 누르세요.",
       "changeInSettings": "<link>설정 → 음성</link>에서 언제든 모델, 받아쓰기 모드 또는 단축키를 변경할 수 있습니다.",
       "title": "어떤 창에서든 받아쓰기",

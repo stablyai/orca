@@ -8,6 +8,7 @@ import type {
 import type { AgentMessageSender } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import { WORKER_AGENT_STARTING_STAGE } from '../../db/worker-dispatch/worker-awaiting-agent-stage'
 import {
   sessionCallerOf,
   type OrchestrationEntryCaller
@@ -149,8 +150,15 @@ export function recordWorkerStartOutcome(
   }
 ): void {
   const state = outcome && typeof outcome === 'object' && 'state' in outcome ? outcome.state : null
+  const stage = outcome && typeof outcome === 'object' && 'stage' in outcome ? outcome.stage : null
   const { reusedTerminal, workerAddress, ...card } = started
-  if (!reusedTerminal && workerAddress && (state === 'ready' || state === 'outcome_unknown')) {
+  // A structured worker holding its brief for a still-starting agent is a worker already.
+  const holdsBrief = state === 'starting' && stage === WORKER_AGENT_STARTING_STAGE
+  if (
+    !reusedTerminal &&
+    workerAddress &&
+    (state === 'ready' || state === 'outcome_unknown' || holdsBrief)
+  ) {
     record({ ...card, workerAddress, ready: state === 'ready' })
   }
 }

@@ -1809,7 +1809,7 @@
     "ko": "키 지우기"
   },
   "auto.components.settings.PrivacyPane.79a0f3c16c": {
-    "ko": "텔레메트리는 다음에 의해 비활성화됩니다."
+    "ko": "텔레메트리가"
   },
   "auto.components.settings.PrivacyPane.e3970bbbf5": {
     "ko": "CI 환경 변수가 설정되었기 때문에 텔레메트리가 비활성화되었습니다. 설정을 해제하고 다시 시작하세요."
@@ -1879,6 +1879,9 @@
   },
   "auto.components.settings.RepositoryHooksSection.a3fc966677": {
     "ko": "# 예: pnpm install cp \"$ORCA_ROOT_PATH/.env\" \"$ORCA_WORKTREE_PATH/.env\""
+  },
+  "auto.components.settings.RepositoryHooksSection.b113344b6a": {
+    "ko": "바꾸려면"
   },
   "auto.components.settings.RepositoryHooksSection.c5a55a2d2e": {
     "ko": "고급"
@@ -2043,7 +2046,7 @@
     "ko": "단축키가 겹칠 때 Orca와 포커스된 터미널 중 어느 쪽이 우선할지 선택합니다."
   },
   "auto.components.settings.ShortcutsPane.4b7ae34062": {
-    "ko": "직접."
+    "ko": "파일을 직접 편집하세요."
   },
   "auto.components.settings.SourceControlAiActionRecipeDefaults.2037c78a6f": {
     "ko": "템플릿"
@@ -3225,7 +3228,7 @@
     "ko": "이 런타임에서는 아직 Gitea 상태를 사용할 수 없습니다."
   },
   "auto.components.settings.token.source.control.integration.cards.087feb92f1": {
-    "ko": ", 또는 설정"
+    "ko": ","
   },
   "auto.components.settings.token.source.control.integration.cards.0b5242f8a2": {
     "ko": "{{value0}} · PR 및 커밋 상태"
@@ -3255,22 +3258,25 @@
     "ko": "감지된 Azure Repos의 PR 및 빌드 상태"
   },
   "auto.components.settings.token.source.control.integration.cards.60708f23da": {
-    "ko": "Orca가 원격에서 API URL을 추론할 수 없는 경우에만 사용하세요."
+    "ko": "환경 변수를 설정하세요."
   },
   "auto.components.settings.token.source.control.integration.cards.6154b02093": {
     "ko": "Bitbucket 자격 증명이 구성되어 있지만 인증할 수 없습니다. 토큰과 저장소 권한을 확인하고, 환경 변수가 변경되었다면 Orca를 다시 시작하세요."
   },
   "auto.components.settings.token.source.control.integration.cards.6da9dfa5de": {
-    "ko": "비공개 저장소의 경우, 그리고"
+    "ko": "환경 변수를 설정하고, Orca가 원격에서 API URL을 추론할 수 없는 경우에만"
   },
   "auto.components.settings.token.source.control.integration.cards.793a06e899": {
     "ko": "다시 확인"
   },
+  "auto.components.settings.token.source.control.integration.cards.7bbc9c64f0": {
+    "ko": "다음 환경 변수 중 하나를 설정하세요:"
+  },
   "auto.components.settings.token.source.control.integration.cards.7bd345e3f6": {
-    "ko": "Orca가 Git 원격에서 API 기본 URL을 추론할 수 없는 경우에만 사용하세요."
+    "ko": "환경 변수를 설정하세요."
   },
   "auto.components.settings.token.source.control.integration.cards.b8a10b07c1": {
-    "ko": ". 설정하세요"
+    "ko": ". Orca가 Git 원격에서 API 기본 URL을 추론할 수 없는 경우에만"
   },
   "auto.components.settings.token.source.control.integration.cards.ea204f5e03": {
     "ko": "{{value0}} · PR 및 빌드 상태"
@@ -3279,7 +3285,7 @@
     "ko": "이 런타임에서는 아직 Azure DevOps 상태를 사용할 수 없습니다."
   },
   "auto.components.settings.token.source.control.integration.cards.fcbe0469fd": {
-    "ko": "공개 저장소는 Git 원격에서 감지됩니다. 설정하세요"
+    "ko": "공개 저장소는 Git 원격에서 감지됩니다. 비공개 저장소에는"
   },
   "auto.components.settings.useWarpThemeImport.import_failed": {
     "ko": "테마를 가져오지 못했습니다."
@@ -5529,10 +5535,10 @@
     "ko": "이 워크스페이스와 모든 하위 워크스페이스의 활성 패널을 닫아 메모리와 CPU 사용량을 줄입니다."
   },
   "auto.components.stats.usage.overview.sections.statusOff": {
-    "ko": "비활성"
+    "ko": "꺼짐"
   },
   "auto.components.settings.contrast.off": {
-    "ko": "끔"
+    "ko": "꺼짐"
   },
   "auto.components.TaskPage.labelCountSingular": {
     "ko": "라벨 {{count}}개"

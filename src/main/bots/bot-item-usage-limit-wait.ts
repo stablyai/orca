@@ -68,7 +68,9 @@ export async function moveItemsOnUsageLimits(
   moved: (items: readonly BotItemRecord[]) => void
 ): Promise<void> {
   const refs = await store.linkedDispatchRefs()
-  const workers = refs.length > 0 ? await join.readLinkedWorkers(refs) : new Map()
+  // Only each worker's state counts here, never its workspace or PR.
+  const workers =
+    refs.length > 0 ? await join.readLinkedWorkers(refs, { pullRequests: false }) : new Map()
   // Orca's own waits too, so one whose stopped worker was unlinked goes back.
   const uids = [
     ...new Set([

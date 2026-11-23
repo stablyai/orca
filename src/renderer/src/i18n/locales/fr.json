@@ -262,10 +262,12 @@
         "imported_many": "{{count}} cookies importés pour {{domains}}. Rechargez la page pour les utiliser.",
         "failed": "Impossible d'importer les cookies : {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Navigateurs sur cet appareil",
         "destination": "Importe dans le navigateur de {{host}}.",
-        "hostAgents": "Les agents sur {{host}} peuvent utiliser ces connexions, mais ne peuvent pas lire les cookies.",
+        "hostAgents": "Les agents sur {{host}} peuvent utiliser ces connexions, mais ne peuvent pas lire les cookies."
+      },
+      "sshPage": {
         "stored": "Enregistré dans le navigateur de {{host}}.",
         "googleCookiesSkipped": "Les cookies Google n’ont pas été importés. Ouvrez une page qui navigue via {{host}}, puis connectez-vous à Google."
       }
@@ -18741,9 +18743,7 @@
         "labelsAtIdLimit": "Filtrer le maximum que cela peut contenir : étiquettes d'équipe {{value0}}. Les lignes sélectionnées sont laissées de côté."
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Navigateurs sur cet appareil",
         "remoteLabel": "Navigateurs sur {{value0}}",
-        "clientNoteLocalStorage": "Les importations lisent les navigateurs de cet appareil. Les cookies sont stockés localement.",
         "remoteNoteRemoteStorage": "Importe les navigateurs de lecture sur {{value0}}. Les cookies sont stockés sur cette machine et une invite d'autorisation peut apparaître sur son écran."
       },
       "native": {
@@ -19181,6 +19181,9 @@
         "fileActions": "Actions sur le fichier",
         "linkActions": "Actions sur le lien"
       },
+      "imageGallery": {
+        "loadFailed": "Impossible de charger {{name}}"
+      },
       "install": {
         "checking": "Vérification que {{agent}} est prêt sur cet hôte…",
         "cliInstall": "Installer",
@@ -19339,6 +19342,8 @@
         "historyUnreadable": "Orca n'a pas pu lire l'historique enregistré de ce chat.",
         "historyUnusable": "Impossible de charger ce chat.",
         "historyUnavailable": "Orca n'a pas pu ouvrir l'historique de ce chat pour le moment.",
+        "diskFull": "Le disque de l'ordinateur qui exécute ce chat est plein.",
+        "freeDiskSpace": "Libérez de l'espace sur ce disque, puis réessayez.",
         "savedInOtherFolder": "Cette conversation a été enregistrée dans un autre dossier.",
         "savedByNewerOrca": "Les chats ont été enregistrés par une version plus récente d'Orca.",
         "updateOrcaToKeepUsing": "Mettez à jour Orca pour continuer à les utiliser.",
@@ -21159,11 +21164,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Worker temporaire d’orchestration · Se ferme 2 minutes après sa fin",
-        "finished": "Worker temporaire d’orchestration terminé · Fermeture dans {{countdown}}",
         "keepOpen": "Garder ouvert",
         "bannerRunning": "Worker d’orchestration · Se ferme 2 minutes après sa fin",
-        "bannerFinished": "Worker d’orchestration terminé · Fermeture dans {{countdown}}"
+        "bannerFinished": "Worker d’orchestration terminé · Fermeture dans {{countdown}}",
+        "bannerFinishedStatus": "Worker d’orchestration terminé · Fermeture prochaine"
       }
     },
     "wslHostMark": {

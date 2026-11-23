@@ -18869,9 +18869,7 @@
         "streamBrowserUnavailable": "リモートブラウザを利用できません。サーバーでのセットアップを確認してください。"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "このデバイス上のブラウザ",
         "remoteLabel": "{{value0}} のブラウザ",
-        "clientNoteLocalStorage": "インポートはこのデバイスのブラウザを読み取ります。 Cookie はローカルに保存されます。",
         "remoteNoteRemoteStorage": "{{value0}} に読み取りブラウザをインポートします。 Cookie はそのマシンに保存され、画面に許可のプロンプトが表示される場合があります。"
       },
       "native": {
@@ -19633,6 +19631,8 @@
         "historyUnreadable": "Orca はこのチャットの保存済み履歴を読み取れませんでした。",
         "historyUnusable": "このチャットを読み込めません。",
         "historyUnavailable": "Orca は現在このチャットの履歴を開けませんでした。",
+        "diskFull": "このチャットを実行しているコンピューターのディスクがいっぱいです。",
+        "freeDiskSpace": "そのディスクの空き容量を増やしてから、もう一度お試しください。",
         "savedInOtherFolder": "この会話は別のフォルダーに保存されています。",
         "savedByNewerOrca": "チャットは新しいバージョンの Orca で保存されました。",
         "updateOrcaToKeepUsing": "引き続き使用するには、Orca を更新してください。",
@@ -20356,6 +20356,9 @@
       "imagePreview": {
         "fileActions": "ファイル操作",
         "linkActions": "リンク操作"
+      },
+      "imageGallery": {
+        "loadFailed": "{{name}} を読み込めませんでした"
       },
       "hostPermission": {
         "checkAgain": "再確認",
@@ -21566,11 +21569,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "一時的なオーケストレーションワーカー · 完了の2分後に閉じます",
-        "finished": "一時的なオーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
         "keepOpen": "開いたままにする",
         "bannerRunning": "オーケストレーションワーカー · 完了の2分後に閉じます",
-        "bannerFinished": "オーケストレーションワーカーが完了 · {{countdown}}後に閉じます"
+        "bannerFinished": "オーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
+        "bannerFinishedStatus": "オーケストレーションワーカーが完了 · まもなく閉じます"
       }
     },
     "wslHostMark": {
@@ -22043,10 +22045,12 @@
         "imported_other": "{{domains}} 用に Cookie を {{count}} 個インポートしました。使用するにはページを再読み込みしてください。",
         "failed": "Cookie をインポートできませんでした: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "このデバイスのブラウザ",
         "destination": "{{host}} 用のブラウザにインポートします。",
-        "hostAgents": "{{host}} の Agent はこれらのサインインを使用できますが、Cookie を読み取ることはできません。",
+        "hostAgents": "{{host}} の Agent はこれらのサインインを使用できますが、Cookie を読み取ることはできません。"
+      },
+      "sshPage": {
         "stored": "{{host}} 用のブラウザに保存しました。",
         "googleCookiesSkipped": "Google の Cookie はインポートされませんでした。{{host}} 経由で閲覧するページを開き、Google にサインインしてください。"
       }
