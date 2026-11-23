@@ -4,18 +4,11 @@ import type { AgentJournalMessageItem } from '../../shared/agent-session/journal
 import type { BotWorkerSummary } from '../../shared/bots/bot-work-list'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { ownPullRequest } from './bot-work-pr-match'
-import { botItemPrRefOfUrl, parseBotItemPrRef } from '../../shared/bots/bot-items'
 import type { BotWorkPullRequest } from '../../shared/bots/bot-work-pull-request'
 import type { BotWorkAddress, BotWorkHost, BotWorkRow } from './bot-work-store'
-import type { BotWorkRemote } from './bot-work-ops'
 import { botWorkTurnNote, cleanBotWorkText } from './bot-work-turn-note'
-import { readBotWorkRow } from './bot-work-row-read'
-import type {
-  BotTurnAddress,
-  BotWorkCheck,
-  BotWorkRecordDeps,
-  BotWorkWorkspace
-} from './bot-work-types'
+import { readBotWorkRows } from './bot-work-row-read'
+import type { BotTurnAddress, BotWorkCheck, BotWorkRecordDeps } from './bot-work-types'
 
 export type {
   BotTurnAddress,
@@ -31,8 +24,6 @@ export const BOT_WORK_NOTE_TIMEOUT_MS = 1_500
 export class BotWorkRecord {
   // Each session's current turn, as its handover named it; cleared when the turn ends.
   private readonly turns = new Map<string, Promise<BotTurnAddress | null>>()
-  // PRs this process saved, so a read of a row whose PR is saved writes nothing.
-  private readonly savedPrs = new Set<string>()
 
   constructor(private readonly deps: BotWorkRecordDeps) {}
 
@@ -66,14 +57,15 @@ export class BotWorkRecord {
     const bind = { ...turn, ...start }
     const store = this.deps.store()
     const rows = await store.addressRows(turn.botId, turn.address)
-    for (const row of rows) {
-      const latest =
-        row.dispatchId === start.dispatchId
-          ? start.dispatchId
-          : (await this.deps.worker(row.dispatchId).catch(() => null))?.dispatchId
-      if (latest === start.dispatchId) {
-        return
-      }
+    if (rows.some((row) => row.dispatchId === start.dispatchId)) {
+      return
+    }
+    const workers =
+      rows.length > 0
+        ? await this.deps.workers(rows.map((row) => row.dispatchId)).catch(() => null)
+        : null
+    if (rows.some((row) => workers?.get(row.dispatchId)?.dispatchId === start.dispatchId)) {
+      return
     }
     // Another start, or a close, may land during the reads; storage then refuses this write, and
     // one more try against what is there now makes this, the newest, current.
@@ -90,17 +82,26 @@ export class BotWorkRecord {
 
   /** Validates a live row, closing it on proof; null once it is closed, by this or anyone. */
   async check(row: BotWorkRow): Promise<BotWorkCheck | null> {
-    const read = await readBotWorkRow(this.deps, row)
-    if ('closeReason' in read) {
-      await this.deps.store().close(row, read.closeReason)
-      return null
+    for await (const checked of this.checkAll([row])) {
+      return checked
     }
-    // The reads await, and a close may have landed meanwhile.
-    if (!(await this.deps.store().isOpen(row))) {
-      return null
+    return null
+  }
+
+  /** Validates live rows with one worker read per host, closing each on proof; yields those still live. */
+  async *checkAll(rows: readonly BotWorkRow[]): AsyncGenerator<BotWorkCheck> {
+    for await (const read of readBotWorkRows(this.deps, rows)) {
+      if ('closeReason' in read) {
+        // A failed close leaves the row live for the next read; the other rows still count.
+        await this.deps
+          .store()
+          .close(read.row, read.closeReason)
+          .catch(() => {})
+      } else if (await this.deps.store().isOpen(read.row)) {
+        // The reads await, and a close may have landed meanwhile.
+        yield read
+      }
     }
-    await this.savePullRequest(row, read.workspace)
-    return read
   }
 
   /** What a turn from a conversation with live work is told: which worker to send follow-ups to. */
@@ -114,6 +115,7 @@ export class BotWorkRecord {
       const live = turn && (await this.deps.store().live(turn.botId, turn.address))
       return live ? this.check(live) : null
     }
+    // The store's read is within the wait too: a stalled worker never holds the turn back.
     const checked = turn && (await withTimeout(read(), BOT_WORK_NOTE_TIMEOUT_MS, null))
     return checked ? botWorkTurnNote(checked) : null
   }
@@ -121,12 +123,9 @@ export class BotWorkRecord {
   /** The work a bot started that is still its conversations', newest first. */
   async list(botId: string): Promise<BotWorkerSummary[]> {
     const items: BotWorkerSummary[] = []
-    for (const row of await this.deps.store().liveRows(botId)) {
-      const checked = await this.check(row)
-      if (!checked) {
-        continue
-      }
-      const { worker, workspace } = checked
+    for await (const { row, worker, workspace } of this.checkAll(
+      await this.deps.store().liveRows(botId)
+    )) {
       // A chat's own name; a connector conversation's only when its connector asked.
       const linked =
         row.askedInApp && row.address.source !== 'chat'
@@ -162,8 +161,9 @@ export class BotWorkRecord {
   ): Promise<BotWorkPullRequest[]> {
     const found: BotWorkPullRequest[] = []
     const read = async () => {
-      for (const row of await this.deps.store().addressRows(botId, address)) {
-        const workspace = (await this.check(row))?.workspace
+      for await (const { workspace } of this.checkAll(
+        await this.deps.store().addressRows(botId, address)
+      )) {
         const pr = workspace && ownPullRequest(workspace)
         if (pr && found.length < max) {
           found.push(pr)
@@ -184,11 +184,6 @@ export class BotWorkRecord {
     return closed.some(Boolean)
   }
 
-  /** This profile's store, as the own-PR check reads it. */
-  store(): BotWorkRemote {
-    return this.deps.store()
-  }
-
   /** A deleted bot's rows; never rejects, so its caller needn't wait. Rows a failure leaves open
    *  name a bot no lookup lists, so nothing reads them. */
   async forgetBot(botId: string): Promise<void> {
@@ -200,23 +195,5 @@ export class BotWorkRecord {
     } catch (error) {
       console.warn('[bots] closing a deleted bot work failed', error)
     }
-  }
-
-  /** Saves the PR the workspace's row shows as the row's, once per process: whatever renames its
-   *  branch later, the PR stays the work's. */
-  private async savePullRequest(
-    row: BotWorkRow,
-    workspace: BotWorkWorkspace | null
-  ): Promise<void> {
-    const pr = workspace && ownPullRequest(workspace)
-    const ref = pr && parseBotItemPrRef(botItemPrRefOfUrl(pr.url) ?? '')
-    const key = ref && `${row.rowId}\0${ref.repo.toLowerCase()}\0${ref.number}`
-    if (!ref || !key || this.savedPrs.has(key)) {
-      return
-    }
-    await this.deps
-      .store()
-      .savePullRequest(row, { repo: ref.repo, repoId: null, number: ref.number })
-    this.savedPrs.add(key)
   }
 }

@@ -390,6 +390,11 @@
       "title": "Browser page stopped",
       "failed": "The browser page stopped unexpectedly. Retry to restore it."
     },
+    "serverPage": {
+      "download": {
+        "started": "Downloading to {{path}} on {{host}}"
+      }
+    },
     "clientHosted": {
       "preparationFailed": "Couldn't start the remote browser on this desktop. Check the paired connection and try again.",
       "unavailableTitle": "Client-hosted browser unavailable",
@@ -567,10 +572,12 @@
         "imported_other": "Imported {{count}} cookies for {{domains}}. Reload the page to use them.",
         "failed": "Cookie import failed: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Browsers on this device",
         "destination": "Imports into the browser for {{host}}.",
-        "hostAgents": "Agents on {{host}} can use these sign-ins, but can’t read the cookies.",
+        "hostAgents": "Agents on {{host}} can use these sign-ins, but can’t read the cookies."
+      },
+      "sshPage": {
         "stored": "Stored in the browser for {{host}}.",
         "googleCookiesSkipped": "Google cookies were not imported. Open a page that browses through {{host}}, then sign into Google."
       }
@@ -1212,7 +1219,7 @@
     "followSymlinkedDirectories": "Follow symlinked directories",
     "followSymlinkedDirectoriesDescription": "Search linked folders in Quick Open and expand local linked folders in File Explorer.",
     "accounts": {
-      "codexRemoveHome": "Orca deletes this account's Codex folder on {{host}}, including its sign-in, MCP logins and any Codex history stored only in that folder. This cannot be undone. If it is selected, the next Codex you start uses System default.",
+      "codexRemoveHome": "Orca deletes this account's Codex folder on {{host}}, including its sign-in and MCP logins. This cannot be undone. If it is selected, the next Codex you start uses System default.",
       "claudeRemoveProfile": "Orca deletes this account's own Claude folder and the sign-in saved in it on {{host}}. Your System default login and chat history shared with it stay. If it is selected, the next Claude you start uses System default."
     },
     "sourceControl": {
@@ -2812,6 +2819,7 @@
         "notLocatedNamed": "Orca can't find where {{agent}} is running, so it can't open it.",
         "notLocated": "Orca can't find where this agent is running, so it can't open it.",
         "worktreeDeleted": "The worktree was deleted.",
+        "projectRemoved": "The project was removed from Orca.",
         "folderWorkspaceRemoved": "The folder workspace was removed."
       },
       "ephemeralVmWorktreeCreation": {
@@ -7013,7 +7021,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Another install is still running",
-          "edited": "Skill edited outside Orca",
           "install": "Install",
           "installFor": "Install for {{value0}}",
           "installed": "Installed",
@@ -7039,7 +7046,16 @@
           "repairAvailable": "Repair available",
           "installAvailable": "Install available",
           "otherBuild": "Installed by another Orca version",
-          "otherBuildKept": "Kept: written by another Orca version"
+          "otherBuildKept": "Kept: written by another Orca version",
+          "differsFromOrca": "This copy differs from Orca's",
+          "replaceMovesFolder": "Replacing moves the whole folder, including any extra files, to {{folder}}.",
+          "replaceMovesFolderOnHost": "Replacing moves the whole folder, including any extra files, to {{folder}} on {{host}}.",
+          "replaceMovesLink": "Replacing moves this link to {{folder}}.",
+          "replaceMovesLinkOnHost": "Replacing moves this link to {{folder}} on {{host}}.",
+          "replaceMovesFile": "Replacing moves this file to {{folder}}.",
+          "replaceMovesFileOnHost": "Replacing moves this file to {{folder}} on {{host}}.",
+          "replaceMovesCopy": "Replacing moves this copy to {{folder}}.",
+          "replaceMovesCopyOnHost": "Replacing moves this copy to {{folder}} on {{host}}."
         },
         "installResult": {
           "installed": "Installed and verified.",
@@ -7062,6 +7078,11 @@
           "preservedDescription": "Orca updated the skill and saved your edits to {{value0}}.",
           "uncertainTitle": "Orca couldn't confirm the skill update on {{value0}}",
           "uncertainDescription": "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}."
+        },
+        "SkillBackupPathLine": {
+          "movedTo": "Old copy moved to:",
+          "movedToOnHost": "Old copy moved to {{host}}:",
+          "showFolder": "Show folder"
         }
       },
       "sidebar": {
@@ -7202,14 +7223,12 @@
           "cloneFolderNotEmpty": "\"{{value0}}\" already exists in this folder, so this clone needs its own folder."
         },
         "AutoRenameFailedDialog": {
-          "dismissing": "Dismissing…",
           "aed1623b1e": "Close",
           "eab8b45238": "Copy error",
           "a23b22d16f": "Copied",
           "74fc00776f": "Error details",
           "ca3b225195": "Branch auto-name failed",
           "couldNotGenerateBranchName": "Orca couldn't generate a branch name for <name>{{name}}</name> from the first agent message.",
-          "dismiss": "Dismiss",
           "tryAgain": "Try again",
           "namingBranch": "Naming branch…",
           "errorDetailsAt": "Error details · {{time}}",
@@ -14387,11 +14406,14 @@
           "attentionUnwritable": "Needs attention · Orca can't write to {{folder}}",
           "attentionBusy": "Needs attention · Another skill install is still finishing here",
           "attentionUnreadable": "Needs attention · Orca can't read every file in this copy",
-          "attentionEdited": "Needs attention · You edited this copy",
           "attentionOther": "Needs attention · A different skill already uses this name",
           "attentionSharedNotCurrent": "Needs attention · The shared copy this folder uses is not Orca’s",
           "resultUpdateSkippedPlaces": "{{result}} · Update skipped in {{places}} places: {{reason}}",
-          "resultUpdateSkippedAgent": "{{result}} · Update skipped in {{agent}}: {{reason}}"
+          "resultUpdateSkippedAgent": "{{result}} · Update skipped in {{agent}}: {{reason}}",
+          "attentionDiffersFromOrca": "Needs attention · This copy differs from Orca's",
+          "replaceMovesCopyToBackup": "Replacing moves the current copy, including any extra files, to a backup.",
+          "replaceMovesCopyToFolder": "Replacing moves the current copy, including any extra files, to {{folder}}.",
+          "replaceMovesCopyToFolderOnHost": "Replacing moves the current copy, including any extra files, to {{folder}} on {{host}}."
         },
         "recoverServer": {
           "checking": "Checking the lock…",
@@ -20294,9 +20316,7 @@
         "typeHtml": "HTML"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Browsers on this device",
         "remoteLabel": "Browsers on {{value0}}",
-        "clientNoteLocalStorage": "Imports read this device’s browsers. Cookies are stored locally.",
         "remoteNoteRemoteStorage": "Imports read browsers on {{value0}}. Cookies are stored on that machine, and a permission prompt may appear on its screen."
       },
       "native": {
@@ -21089,6 +21109,8 @@
         "historyUnreadable": "Orca couldn't read this chat's saved history.",
         "historyUnusable": "Unable to load this chat.",
         "historyUnavailable": "Orca couldn't open this chat's history right now.",
+        "diskFull": "The disk on the computer running this chat is full.",
+        "freeDiskSpace": "Free up space on that disk, then try again.",
         "savedInOtherFolder": "This conversation was saved in another folder.",
         "savedByNewerOrca": "Chats were saved by a newer Orca.",
         "updateOrcaToKeepUsing": "Update Orca to keep using them.",
@@ -21961,6 +21983,17 @@
         "fileActions": "File actions",
         "linkActions": "Link actions"
       },
+      "imageGallery": {
+        "scopeHelp": "Images near this part of the chat when you opened the preview. Images further up or down aren't included. Close and reopen to update.",
+        "description": "Images in this view: {{position}} of {{count}}. {{help}}",
+        "stepAnnouncement": "Image {{position}} of {{count}} in this view: {{title}}.",
+        "firstImage": "First image.",
+        "lastImage": "Last image.",
+        "loading": "Loading image…",
+        "loadFailed": "Couldn't load {{name}}",
+        "closedImageChanged": "Preview closed because an image changed. Open a thumbnail to capture the current set.",
+        "closedChatChanged": "Preview closed because the chat changed. Open a thumbnail to capture the current set."
+      },
       "goalControl": {
         "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
         "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
@@ -22428,6 +22461,8 @@
       "sideChat": {
         "description": "Ask a side question in a fork beside this chat",
         "argumentHint": "<question>",
+        "pill": "Side chat",
+        "placeholder": "Ask a side question",
         "notReady": "Side chats are not ready yet. Try again in a moment.",
         "replyRunning": "Available when this reply finishes.",
         "noReply": "Available after the first reply.",
@@ -22717,11 +22752,8 @@
         "openWorker": "Open worker",
         "remoteOwner": "Stop or clear this from the computer it runs on",
         "restore": "Show in dock again",
-        "loadingResult": "Loading result…",
-        "olderResults": "Older worker results",
         "unavailable": "Worker status unavailable",
         "empty": "0 workers",
-        "partial": " · {{count}} shown · total unavailable",
         "clearAllLabel_one": "Clear failed worker",
         "clearAllLabel_other": "Clear all {{count}} failed workers",
         "clearAll": "Clear all",
@@ -22732,14 +22764,11 @@
         "loadingWorker": "Loading worker…",
         "resultUnavailable": "Worker result unavailable",
         "showLatest": "Show latest",
-        "workersMore": "Workers · more workers below",
         "workersRegion": "Workers",
-        "moreBelow": "More below",
         "timeUnavailable": "Status time unavailable",
         "doneResult": "Done · open result",
         "clearName": "Clear {{name}}",
         "stopUnavailable": "Stop {{name}} · {{title}} unavailable · {{reason}}",
-        "resultReady": "result ready",
         "stopName": "Stop {{name}} · {{title}}",
         "stopping": "Stopping…",
         "clear": "Clear",
@@ -22774,9 +22803,7 @@
         "stoppedByYou": "Stopped by you",
         "finished": "Finished",
         "failedCount": "{{count}} failed",
-        "totalCount": "{{count}} total",
         "needsYouCount": "{{count}} needs you",
-        "unavailableCount": "{{count}} unavailable",
         "newQuestions_one": "{{count}} new worker question waiting on you",
         "newQuestions_other": "{{count}} new worker questions waiting on you",
         "waitingOnYouName": "{{name}} · Waiting on you",
@@ -22787,7 +22814,10 @@
         "show": "Show",
         "showName": "Show {{name}}",
         "startedAt": " · Started {{time}} · {{elapsed}} elapsed",
-        "contactUnavailable": " · Last confirmed contact unavailable"
+        "contactUnavailable": " · Last confirmed contact unavailable",
+        "runningCount": "{{count}} running",
+        "cleared_one": "Cleared 1 worker",
+        "cleared_other": "Cleared {{count}} workers"
       },
       "webhookSetup": {
         "heading": "Set up a webhook",
@@ -23968,11 +23998,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Temporary orchestration worker · Closes 2 minutes after it finishes",
-        "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
         "keepOpen": "Keep open",
         "bannerRunning": "Orchestration worker · Closes 2 minutes after it finishes",
         "bannerFinished": "Orchestration worker finished · Closes in {{countdown}}",
+        "bannerFinishedStatus": "Orchestration worker finished · Closes soon",
         "boundRunning": "Closes with {{worker}}",
         "boundFinished": "{{worker}} finished · Closes in {{countdown}}",
         "boundFallbackName": "its worker"
@@ -25328,6 +25357,11 @@
       "organizationSuffix": "Organization ···{{suffix}}",
       "personalOrganization": "Personal"
     },
+    "codex": {
+      "usageSignInLabel": "Signed out",
+      "usageSignInMessage": "Sign in to see usage.",
+      "usageSignInSettingsMessage": "Open Settings → Accounts to sign in."
+    },
     "managedData": {
       "description": "Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.",
       "copied": "Copied",
@@ -25705,9 +25739,10 @@
   },
   "updates": {
     "installOnQuit": {
-      "title": "Restart Orca manually",
-      "summary": "Orca couldn’t restart automatically. Quit Orca and let the update install before reopening it.",
-      "keepWorking": "Keep Working"
+      "title": "Update ready to install",
+      "summary": "Quit Orca. Reopen after installation.",
+      "quit": "Quit Orca",
+      "later": "Later"
     },
     "installBlock": {
       "instancesLabel": "Instances using Orca",
@@ -26192,8 +26227,12 @@
       "orca": "Orca",
       "agents": "Agents",
       "otherTerminals": "Other terminals",
-      "privateBytes": "Committed by Orca and terminals"
-    }
+      "privateBytes": "Committed by Orca, agents and terminals"
+    },
+    "chatRow": {
+      "tooltip": "{{agent}} chat, including the processes running under it"
+    },
+    "sharedAgentProcesses": "Shared agent processes"
   },
   "browserExtensions": {
     "permission": {
@@ -27426,6 +27465,8 @@
       "identityReports": "Reports {{what}}"
     },
     "section": {
+      "scrollLeft": "Scroll left · {{amount}} hidden",
+      "scrollRight": "Scroll right · {{amount}} hidden",
       "title": "Bots",
       "newBot": "New bot",
       "startFromScratch": "Start from scratch",
@@ -27434,8 +27475,6 @@
       "expand": "Expand Bots",
       "collapse": "Collapse Bots",
       "summary": "{{action}}, {{total}} bots, {{attention}} need you, {{unread}} unread, {{working}} working",
-      "showMore_one": "Show {{count}} more bot",
-      "showMore_other": "Show {{count}} more bots",
       "new": "New bot or group",
       "expandAll": "Expand all bots",
       "collapseAll": "Collapse all bots"

@@ -97,12 +97,15 @@ export type ChatNews =
 export function watchChatNews(
   chats: ConversationChatHost,
   listener: (news: ChatNews) => void,
-  id = 'external-conversations'
+  id = 'external-conversations',
+  // A turn's words go out with that turn, even when its workers hold its end.
+  includeHeld = true
 ): () => void {
   const subscribe = (chat: ConversationChat | null): (() => void) =>
     chat?.subscribeTurnCompletions({
       id,
       includePrompts: true,
+      includeHeld,
       onClosed: (sessionId) => listener({ kind: 'closed', sessionId }),
       emit: (event) => {
         if (event.type === 'prompt') {

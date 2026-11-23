@@ -3,7 +3,10 @@ import { webContents } from 'electron'
 import path from 'node:path'
 import { BrowserError } from '../../../browser-error'
 import { browserDownloadDestinationReservations } from '../../../downloads/browser-download-destination'
-import { routeBrowserClientDownload } from '../../../client-hosts/file-transfers/browser-client-download-routing'
+import {
+  routeBrowserClientDownload,
+  takeClaimedBrowserDownloadRoute
+} from '../../../client-hosts/file-transfers/browser-client-download-routing'
 import { safeOrigin } from '../../browser-event-origin'
 import type { ActiveDownload, BrowserDownloadDoneState } from './browser-active-download'
 import type { BrowserDownloadFinishedEvent } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
@@ -30,7 +33,8 @@ export type StandingDownloadClaimResolver = (download: {
 
 type PendingDownloadClaim = {
   clickedGuestWebContentsId: number
-  savePath: string
+  /** null: the page's host saves it, through the download relay. */
+  savePath: string | null
   start: (started: boolean) => void
   finish: (event: BrowserDownloadFinishedEvent) => void
 }
@@ -39,8 +43,8 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
   private unownedDownloadOwnerResolver: ((webContentsId: number) => string | null) | null = null
   private readonly requestedFilenames = new WeakMap<Electron.DownloadItem, string>()
   private readonly requestedSavePaths = new WeakMap<Electron.DownloadItem, string>()
-  private readonly extensionDownloads = new WeakSet<Electron.DownloadItem>()
-  private readonly downloadClaimsByGuestId = new Map<number, PendingDownloadClaim>()
+  protected readonly extensionDownloads = new WeakSet<Electron.DownloadItem>()
+  protected readonly downloadClaimsByGuestId = new Map<number, PendingDownloadClaim>()
   private standingDownloadClaim: StandingDownloadClaimResolver | null = null
 
   /** Takes a tab's unclaimed downloads, however the page was clicked; an agent's own claim wins. */
@@ -71,8 +75,9 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     this.requestedSavePaths.set(item, savePath)
   }
 
-  /** Agent `download`: saves the next download this tab (or its popups) starts to `savePath`. */
-  claimNextDownload(guestWebContentsId: number, savePath: string): BrowserDownloadClaim {
+  /** Agent `download`: saves the next download this tab (or its popups) starts to `savePath`, or,
+   *  on a page another host owns, marks it as the agent's for that host to save. */
+  claimNextDownload(guestWebContentsId: number, savePath: string | null): BrowserDownloadClaim {
     // Claims live on the tab's root guest, where will-download and the popup policy look them up.
     const rootGuestWebContentsId =
       this.resolvePopupOwnerContext(guestWebContentsId)?.rootGuestWebContentsId ??
@@ -155,21 +160,24 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
       ownerContext?.rootGuestWebContentsId ??
       (adoptedTabId ? this.getGuestWebContentsId(adoptedTabId) : null) ??
       guestWebContentsId
+    // Extension pages and chrome.downloads start their own downloads, never the agent's click.
+    const isExtensionDownload = adoptedTabId !== null || this.extensionDownloads.has(item)
+    const pending = isExtensionDownload
+      ? null
+      : this.downloadClaimsByGuestId.get(ownerGuestWebContentsId)
     const decision = routeBrowserClientDownload({
       guestWebContentsId: ownerGuestWebContentsId,
       filename: requestedFilename,
-      documentUrl: webContents.fromId(guestWebContentsId)?.getURL() ?? ''
+      documentUrl: webContents.fromId(guestWebContentsId)?.getURL() ?? '',
+      agentDownload: pending?.savePath === null
     })
-    const clientRoute = decision.kind === 'remote' ? decision.route : null
-    // Extension pages and chrome.downloads start their own downloads, never the agent's click.
-    const isExtensionDownload = adoptedTabId !== null || this.extensionDownloads.has(item)
     const claim =
-      decision.kind === 'local' && !isExtensionDownload
-        ? this.downloadClaimsByGuestId.get(ownerGuestWebContentsId)
-        : null
+      pending && decision.kind === (pending.savePath === null ? 'remote' : 'local') ? pending : null
     if (claim) {
       this.downloadClaimsByGuestId.delete(ownerGuestWebContentsId)
     }
+    const clientRoute =
+      decision.kind === 'remote' ? decision.route : takeClaimedBrowserDownloadRoute(claim?.savePath)
     const standing =
       !claim && decision.kind === 'local' && !isExtensionDownload && ownerContext
         ? (this.standingDownloadClaim?.({
@@ -268,6 +276,9 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
 
     const updatedHandler = (_event: Electron.Event, state: 'progressing' | 'interrupted'): void => {
       download.receivedBytes = this.getDownloadReceivedBytes(download.item)
+      if (this.stopOversizedRemoteDownload(download)) {
+        return
+      }
       if (state === 'interrupted' && this.isAwaitingManualResume(download.item)) {
         // Orca offers no manual resume; defer cancellation to avoid nested native observer updates.
         setImmediate(() => {
@@ -327,14 +338,5 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     } catch {
       return false
     }
-  }
-
-  cancelDownload(args: { downloadId: string; senderWebContentsId: number }): boolean {
-    const download = this.downloadsById.get(args.downloadId)
-    if (!download || download.rendererWebContentsId !== args.senderWebContentsId) {
-      return false
-    }
-    this.cancelDownloadInternal(args.downloadId, 'Canceled.')
-    return true
   }
 }

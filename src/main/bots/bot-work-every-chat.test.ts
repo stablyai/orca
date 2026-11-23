@@ -60,8 +60,8 @@ describe('the work record across a bot chats', () => {
     const store = work.store
     const record = new BotWorkRecord({
       store: () => store,
-      worker: async (dispatchId) => worker(dispatchId),
-      workspace: async () => null,
+      workers: async (ids) => new Map(ids.map((id) => [id, worker(id)])),
+      workspaces: () => async () => null,
       conversationTitle: (address) =>
         address.source === 'chat' ? (CHAT_NAMES[address.externalId] ?? null) : 'Slack thread',
       turnAddress: async (_sessionId, message) =>
@@ -139,8 +139,8 @@ describe('the work record across a bot chats', () => {
     const store = work.store
     const record = new BotWorkRecord({
       store: () => store,
-      worker: async (dispatchId) => worker(dispatchId),
-      workspace: async () => null,
+      workers: async (ids) => new Map(ids.map((id) => [id, worker(id)])),
+      workspaces: () => async () => null,
       conversationTitle: () => null,
       turnAddress: async () => null
     })

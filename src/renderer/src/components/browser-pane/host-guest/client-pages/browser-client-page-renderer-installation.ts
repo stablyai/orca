@@ -1,3 +1,4 @@
+import type { BrowserGuestIdleDiscardToken } from '../../../../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 import type {
   BrowserClientPageRendererOutcome,
   BrowserClientPageRendererRequest
@@ -5,6 +6,15 @@ import type {
 import { BrowserClientPageRetainedRegistry } from './browser-client-page-retained-registry'
 import type { BrowserClientPageRendererMemoryProfile } from './browser-client-page-retained-memory-profile'
 import type { BrowserClientPageVisibleAttachment } from './browser-client-page-visible-attachment'
+import {
+  markBrowserClientPageFreed,
+  noteBrowserClientPageMounted
+} from './browser-client-page-freed-pages'
+
+type PageKey = Pick<
+  BrowserClientPageRendererRequest['page'],
+  'browserPageId' | 'pageHostGeneration'
+>
 
 type RendererPageRegistry = {
   attachPage?(
@@ -13,6 +23,7 @@ type RendererPageRegistry = {
   ): BrowserClientPageVisibleAttachment
   dispose(): void
   findAttachedWebview?(browserPageId: string): Electron.WebviewTag | null
+  hasAttachedPage?(page: PageKey): boolean
   getMemoryProfile(): BrowserClientPageRendererMemoryProfile
   mountPage(page: BrowserClientPageRendererRequest['page']): Promise<{ webContentsId: number }>
   rekeyPage(
@@ -23,6 +34,7 @@ type RendererPageRegistry = {
 }
 
 let activeRendererPageRegistry: RendererPageRegistry | null = null
+const mountedListeners = new Set<(page: PageKey) => void>()
 
 export function attachBrowserClientPageToViewport(
   page: Pick<BrowserClientPageRendererRequest['page'], 'browserPageId' | 'pageHostGeneration'>,
@@ -34,6 +46,64 @@ export function attachBrowserClientPageToViewport(
 /** The retained guest of a This-device page; these never enter the pane webview registry. */
 export function findBrowserClientPageWebview(browserPageId: string): Electron.WebviewTag | null {
   return activeRendererPageRegistry?.findAttachedWebview?.(browserPageId) ?? null
+}
+
+/** Hands a hidden This-device page to main, which retires its guest while the server keeps it. */
+export function freeBrowserClientPage(
+  browserPageId: string,
+  webview: Electron.WebviewTag,
+  webContentsId: number,
+  policyToken: BrowserGuestIdleDiscardToken
+): boolean {
+  const freed =
+    findBrowserClientPageWebview(browserPageId) === webview &&
+    window.api.browser.reserveGuestDiscard({ browserPageId, webContentsId, policyToken })
+  if (freed) {
+    markBrowserClientPageFreed(browserPageId)
+  }
+  return freed
+}
+
+/** Asks main to remake a page Memory Saver freed and calls back once that guest is mounted again. */
+export function wakeBrowserClientPage(
+  page: PageKey,
+  onMounted: () => void,
+  onUnavailable: () => void
+): () => void {
+  let active = true
+  const stop = (): void => {
+    active = false
+    mountedListeners.delete(listener)
+  }
+  const listener = (mounted: PageKey): void => {
+    if (
+      active &&
+      mounted.browserPageId === page.browserPageId &&
+      mounted.pageHostGeneration === page.pageHostGeneration
+    ) {
+      stop()
+      onMounted()
+    }
+  }
+  mountedListeners.add(listener)
+  void (
+    window.api?.browser.wakeClientPage?.({ browserPageId: page.browserPageId }) ??
+    Promise.resolve(false)
+  )
+    .catch(() => false)
+    .then((woken) => {
+      if (!active || woken) {
+        return
+      }
+      // An agent command may have remade it before the pane looked; a later mount still attaches.
+      if (activeRendererPageRegistry?.hasAttachedPage?.(page)) {
+        stop()
+        onMounted()
+      } else {
+        onUnavailable()
+      }
+    })
+  return stop
 }
 
 type RendererRequestSubscriber = (
@@ -70,7 +140,15 @@ export function installBrowserClientPageRenderer(
   }
   const registry =
     options.registry ??
-    new BrowserClientPageRetainedRegistry({ document: options.document ?? document })
+    new BrowserClientPageRetainedRegistry({
+      document: options.document ?? document,
+      onPageMounted: (page) => {
+        noteBrowserClientPageMounted(page.browserPageId)
+        for (const listener of mountedListeners) {
+          listener(page)
+        }
+      }
+    })
   const unsubscribe = subscribe((request) => handleRequest(registry, request))
   activeRendererPageRegistry = registry
   let disposed = false

@@ -1,6 +1,8 @@
 // The owner's answers to an ask of several questions, as one comment: one line per question, each
 // written as a quick reply of several questions writes it ("Question → answer"). Older clients post
 // each line as its own comment; both read the same way.
+// Hosts keep the waiting ask that pairing works out from what this file reads, writes or limits: any change
+// to it bumps WAITING_ASK_RULES (src/main/bots/bot-item-waiting-ask-keep.ts).
 import {
   botItemPickedReplies,
   botItemQuestionLine,

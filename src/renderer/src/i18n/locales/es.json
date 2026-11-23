@@ -1426,6 +1426,7 @@
         "gone": "Este chat ya no está en este anfitrión, por lo que no se puede volver a abrir aquí.",
         "hostCannotOpen": "Este chat no se puede volver a abrir hasta que se actualice Orca.",
         "worktreeDeleted": "El worktree se eliminó.",
+        "projectRemoved": "Se quitó el proyecto de Orca.",
         "folderWorkspaceRemoved": "Se quitó el espacio de trabajo de carpeta."
       },
       "ephemeralVmWorktreeCreation": {
@@ -5482,7 +5483,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Otra instalación sigue en curso",
-          "edited": "Skill modificada fuera de Orca",
           "install": "Instalar",
           "installFor": "Instalar para {{value0}}",
           "installed": "Instalada",
@@ -12752,7 +12752,6 @@
           "attentionUnwritable": "Requiere atención · Orca no puede escribir en {{folder}}",
           "attentionBusy": "Requiere atención · Otra instalación de habilidades aún está terminando aquí",
           "attentionUnreadable": "Requiere atención · Orca no puede leer todos los archivos de esta copia",
-          "attentionEdited": "Requiere atención · Editaste esta copia",
           "attentionOther": "Requiere atención · Otra habilidad ya usa este nombre",
           "attentionSharedNotCurrent": "Requiere atención · La copia compartida que usa esta carpeta no es de Orca",
           "resultUpdateSkippedPlaces": "{{result}} · Actualización omitida en {{places}} ubicaciones: {{reason}}",
@@ -18572,9 +18571,7 @@
         "streamBrowserUnavailable": "El navegador remoto no está disponible. Comprueba su configuración en el servidor."
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Navegadores en este dispositivo",
         "remoteLabel": "Navegadores en {{value0}}",
-        "clientNoteLocalStorage": "Las importaciones leen los navegadores de este dispositivo. Las cookies se guardan localmente.",
         "remoteNoteRemoteStorage": "Las importaciones leen los navegadores en {{value0}}. Las cookies se guardan en esa máquina y puede aparecer un aviso de permiso en su pantalla."
       },
       "HostedReviewUnlinkMenuItem": {
@@ -18902,6 +18899,9 @@
         "fileActions": "Acciones de archivo",
         "linkActions": "Acciones de enlace"
       },
+      "imageGallery": {
+        "loadFailed": "No se pudo cargar {{name}}"
+      },
       "install": {
         "checking": "Comprobando si {{agent}} está listo en este host…",
         "cliInstall": "Instalar",
@@ -19060,6 +19060,8 @@
         "historyUnreadable": "Orca no pudo leer el historial guardado de este chat.",
         "historyUnusable": "No se puede cargar este chat.",
         "historyUnavailable": "Orca no pudo abrir el historial de este chat en este momento.",
+        "diskFull": "El disco del equipo que ejecuta este chat está lleno.",
+        "freeDiskSpace": "Libere espacio en ese disco y vuelva a intentarlo.",
         "savedInOtherFolder": "Esta conversación se guardó en otra carpeta.",
         "savedByNewerOrca": "Los chats se guardaron con una versión más reciente de Orca.",
         "updateOrcaToKeepUsing": "Actualice Orca para seguir usándolos.",
@@ -20880,11 +20882,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Trabajador temporal de orquestación · Se cierra 2 minutos después de terminar",
-        "finished": "Trabajador temporal de orquestación finalizado · Se cierra en {{countdown}}",
         "keepOpen": "Mantener abierto",
         "bannerRunning": "Trabajador de orquestación · Se cierra 2 minutos después de terminar",
-        "bannerFinished": "Trabajador de orquestación finalizado · Se cierra en {{countdown}}"
+        "bannerFinished": "Trabajador de orquestación finalizado · Se cierra en {{countdown}}",
+        "bannerFinishedStatus": "Trabajador de orquestación finalizado · Se cerrará pronto"
       }
     },
     "wslHostMark": {
@@ -21286,10 +21287,12 @@
         "imported_many": "Se importaron {{count}} cookies para {{domains}}. Recarga la página para usarlas.",
         "failed": "No se pudieron importar las cookies: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Navegadores en este dispositivo",
         "destination": "Importa al navegador de {{host}}.",
-        "hostAgents": "Los agentes en {{host}} pueden usar estos inicios de sesión, pero no pueden leer las cookies.",
+        "hostAgents": "Los agentes en {{host}} pueden usar estos inicios de sesión, pero no pueden leer las cookies."
+      },
+      "sshPage": {
         "stored": "Guardado en el navegador de {{host}}.",
         "googleCookiesSkipped": "No se importaron las cookies de Google. Abre una página que navegue a través de {{host}} e inicia sesión en Google."
       }
@@ -24730,6 +24733,8 @@
       "hitTip": "{{agent}} alcanzó su límite de uso · se restablece a las {{time}}"
     },
     "section": {
+      "scrollLeft": "Desplazar a la izquierda · {{amount}} ocultos",
+      "scrollRight": "Desplazar a la derecha · {{amount}} ocultos",
       "title": "Bots",
       "startFromScratch": "Empezar de cero"
     },

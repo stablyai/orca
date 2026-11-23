@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import {
+  COMMIT_ID_SET_RETENTION,
   MergedReviewMembershipMemo,
   type MergedReviewCommitMembership
 } from '../../source-control/merged-review-membership-memo'
@@ -13,13 +14,7 @@ import type { ProjectRef } from '../projects/project-ref-parser'
 import { encodedProject } from '../projects/project-path-encoding'
 import { mergedReviewHeadIsEquivalent } from '../../source-control/merged-review-head-equivalence'
 
-const membershipMemo = new MergedReviewMembershipMemo<ReadonlySet<string>>({
-  weight: (ids) => 1024 + 256 * ids.size,
-  maxWeight: 16 * 1024 * 1024,
-  failureWeight: 1024,
-  lru: true,
-  ttl: () => 6 * 60 * 60_000
-})
+const membershipMemo = new MergedReviewMembershipMemo(COMMIT_ID_SET_RETENTION)
 const viewers: CoalescedProbes<number | null> = new Map()
 const digest = (parts: unknown[]) =>
   createHash('sha256').update(JSON.stringify(parts)).digest('hex')

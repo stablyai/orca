@@ -48,6 +48,8 @@ export function connectMobileRelayRpcSession(args: {
   createSocket?: (url: string) => WebSocket
   onHostCloseReason?: (reason: RelayHostCloseReason) => void
   onLog?: ConnectionLogSink
+  /** The paired host, so the capabilities its loaded page declares are advertised too. */
+  hostId?: string
 }): MobileRelayRpcSession {
   const requestTimeoutMs = args.requestTimeoutMs ?? 30_000
   const pending = new RelayPendingRequests()
@@ -214,8 +216,9 @@ export function connectMobileRelayRpcSession(args: {
       resumeExpiresAt = result.resumeConfirmation.resumeExpiresAt
       lastConnectedAt = Date.now()
       // Why: an unanswered advisory must not keep a slow relay from ever reaching connected.
-      await settleMobileRuntimeCapabilities((method, params) =>
-        sendRpc(method, params, requestTimeoutMs, true)
+      await settleMobileRuntimeCapabilities(
+        (method, params) => sendRpc(method, params, requestTimeoutMs, true),
+        args.hostId
       )
       livenessWatchdog.start(livenessIdentity)
       publishState('connected')

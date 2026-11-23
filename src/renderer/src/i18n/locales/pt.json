@@ -1411,10 +1411,12 @@
         "imported_many": "{{count}} cookies importados para {{domains}}. Recarregue a página para usá-los.",
         "failed": "Não foi possível importar cookies: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Navegadores neste dispositivo",
         "destination": "Importa para o navegador de {{host}}.",
-        "hostAgents": "Os agentes em {{host}} podem usar esses logins, mas não podem ler os cookies.",
+        "hostAgents": "Os agentes em {{host}} podem usar esses logins, mas não podem ler os cookies."
+      },
+      "sshPage": {
         "stored": "Salvo no navegador de {{host}}.",
         "googleCookiesSkipped": "Os cookies do Google não foram importados. Abra uma página que navegue por {{host}} e entre no Google."
       }
@@ -3118,6 +3120,7 @@
         "gone": "Este chat não está mais neste host, então não pode ser reaberto aqui.",
         "hostCannotOpen": "Este chat não pode ser reaberto até que o Orca seja atualizado.",
         "worktreeDeleted": "A worktree foi excluída.",
+        "projectRemoved": "O projeto foi removido do Orca.",
         "folderWorkspaceRemoved": "O espaço de trabalho de pasta foi removido."
       },
       "ephemeralVmWorktreeCreation": {
@@ -9711,7 +9714,6 @@
           "attentionUnwritable": "Atenção necessária · O Orca não consegue gravar em {{folder}}",
           "attentionBusy": "Atenção necessária · Outra instalação de habilidade ainda está sendo concluída aqui",
           "attentionUnreadable": "Atenção necessária · O Orca não consegue ler todos os arquivos desta cópia",
-          "attentionEdited": "Atenção necessária · Você editou esta cópia",
           "attentionOther": "Atenção necessária · Outra habilidade já usa este nome",
           "attentionSharedNotCurrent": "Atenção necessária · A cópia compartilhada usada por esta pasta não é do Orca",
           "resultUpdateSkippedPlaces": "{{result}} · Atualização ignorada em {{places}} locais: {{reason}}",
@@ -12810,8 +12812,7 @@
           "a23b22d16f": "Copiado",
           "74fc00776f": "Detalhes do erro",
           "ca3b225195": "Falha na renomeação automática da branch",
-          "couldNotGenerateBranchName": "O Orca não conseguiu gerar um nome de branch para <name>{{name}}</name> a partir da primeira mensagem do agente.",
-          "dismissing": "Descartando…"
+          "couldNotGenerateBranchName": "O Orca não conseguiu gerar um nome de branch para <name>{{name}}</name> a partir da primeira mensagem do agente."
         },
         "CreateProjectLocationField": {
           "95548e33bf": "Escolher pasta pai...",
@@ -14674,7 +14675,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Outra instalação ainda está em andamento",
-          "edited": "Skill editada fora do Orca",
           "install": "Instalar",
           "installFor": "Instalar para {{value0}}",
           "installed": "Instalada",
@@ -20133,9 +20133,7 @@
         "streamBrowserUnavailable": "O navegador remoto está indisponível. Verifique sua configuração no servidor."
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Navegadores neste dispositivo",
         "remoteLabel": "Navegadores em {{value0}}",
-        "clientNoteLocalStorage": "As importações leem os navegadores deste dispositivo. Os cookies são armazenados localmente.",
         "remoteNoteRemoteStorage": "As importações leem navegadores em {{value0}}. Os cookies são armazenados nessa máquina, e um prompt de permissão pode aparecer na tela dela."
       },
       "NewWorkspaceComposerModal": {
@@ -21352,6 +21350,8 @@
         "historyUnreadable": "O Orca não conseguiu ler o histórico salvo deste chat.",
         "historyUnusable": "Não foi possível carregar este chat.",
         "historyUnavailable": "O Orca não conseguiu abrir o histórico deste chat agora.",
+        "diskFull": "O disco do computador que executa este chat está cheio.",
+        "freeDiskSpace": "Libere espaço nesse disco e tente novamente.",
         "savedInOtherFolder": "Esta conversa foi salva em outra pasta.",
         "savedByNewerOrca": "Os chats foram salvos por uma versão mais recente do Orca.",
         "updateOrcaToKeepUsing": "Atualize o Orca para continuar usando-os.",
@@ -21604,6 +21604,9 @@
       "imagePreview": {
         "fileActions": "Ações do arquivo",
         "linkActions": "Ações do link"
+      },
+      "imageGallery": {
+        "loadFailed": "Não foi possível carregar {{name}}"
       },
       "goalControl": {
         "settingsRejected": "O Codex não conseguiu aplicar o modelo e o esforço selecionados. Esta alteração de objetivo não foi enviada. Confira a seleção e tente novamente.",
@@ -22655,11 +22658,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Worker temporário de orquestração · Fecha 2 minutos após terminar",
-        "finished": "Worker temporário de orquestração concluído · Fecha em {{countdown}}",
         "keepOpen": "Manter aberto",
         "bannerRunning": "Worker de orquestração · Fecha 2 minutos após terminar",
-        "bannerFinished": "Worker de orquestração concluído · Fecha em {{countdown}}"
+        "bannerFinished": "Worker de orquestração concluído · Fecha em {{countdown}}",
+        "bannerFinishedStatus": "Worker de orquestração concluído · Fecha em breve"
       }
     },
     "wslHostMark": {
@@ -25351,6 +25353,8 @@
       "nudgeOne": "Encontramos um bot no {{app}}."
     },
     "section": {
+      "scrollLeft": "Rolar para a esquerda · {{amount}} ocultos",
+      "scrollRight": "Rolar para a direita · {{amount}} ocultos",
       "startFromScratch": "Começar do zero",
       "title": "Bots"
     },

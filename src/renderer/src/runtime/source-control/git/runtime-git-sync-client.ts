@@ -47,7 +47,8 @@ export async function abortRuntimeGitRebase(context: RuntimeGitContext): Promise
 
 export async function getRuntimeGitUpstreamStatus(
   context: RuntimeGitContext,
-  pushTarget?: GitPushTarget
+  pushTarget?: GitPushTarget,
+  options?: { background?: boolean }
 ): Promise<GitUpstreamStatus> {
   const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
@@ -64,7 +65,7 @@ export async function getRuntimeGitUpstreamStatus(
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       ...(pushTarget ? { pushTarget } : {})
     },
-    { timeoutMs: 15_000 }
+    { timeoutMs: 15_000, background: options?.background }
   )
 }
 

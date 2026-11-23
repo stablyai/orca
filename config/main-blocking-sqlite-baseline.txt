@@ -32,6 +32,7 @@
 7 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # worker-only: +1 is the reply outbox table migration, run on the journal SQL worker
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 5 src/main/native-chat/agent-session-journal/database/journal-retire-pending.ts # worker-only: retired-epoch pending table, triggers and settle, run on the journal SQL worker
+1 src/main/native-chat/agent-session-journal/database/journal-submission-window-indexes.ts # worker-only: creates the operation-window send indexes (IF NOT EXISTS, one-shot at store open) on the journal SQL worker
 5 src/main/native-chat/agent-session-journal/database/journal-text-tail-schema.ts
 12 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 18 src/main/native-chat/agent-session-journal/history-import/journal-pi-active-branch.ts

@@ -2895,6 +2895,8 @@
       "conversationCleared": "Этот разговор очищен.",
       "goalsUnsupported": "Этот агент не поддерживает цели.",
       "historyUnavailable": "Сейчас Orca не удалось открыть историю чата.",
+      "diskFull": "Диск на компьютере, где работает этот чат, заполнен.",
+      "freeDiskSpace": "Освободите место на этом диске и повторите попытку.",
       "savedInOtherFolder": "Этот разговор сохранён в другой папке.",
       "historyUnreadable": "Orca не удалось прочитать сохранённую историю чата.",
       "historyUnusable": "Не удалось загрузить этот чат.",
@@ -2994,6 +2996,7 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "Рабочее дерево удалено.",
+      "projectRemoved": "Проект удалён из Orca.",
       "folderWorkspaceRemoved": "Рабочее пространство папки удалено."
     },
     "nativeChatView": {
@@ -4323,7 +4326,6 @@
       "extraAgentArguments": "Дополнительные аргументы агента",
       "allAutomations": "Все автоматизации",
       "schedule": "Расписание",
-      "nextRun": "Следующий запуск",
       "agent": "Агент",
       "project": "Проект",
       "unavailable": "Недоступно",
@@ -4374,7 +4376,6 @@
       "newWorkspacePerRun": "Новая рабочая область для каждого запуска",
       "instructions": "Инструкции",
       "runNow": "Запустить сейчас",
-      "viewAllRuns": "Показать все запуски",
       "savedAgent": "{{agent}} (сохранён)",
       "chooseAProjectSetUpOnThisHost": "Выберите проект, настроенный на этом хосте.",
       "newAutomation": "Новая автоматизация",
@@ -4398,9 +4399,6 @@
       "letYourAgentsWorkOnASchedule": "Пусть агенты работают по расписанию",
       "createAnAutomationToRunATaskOnThisHost": "Создайте автоматизацию для выполнения задачи на этом хосте.",
       "nextDate": "Следующий: {{date}}",
-      "lastResult": "Последний: {{status}} · {{date}}",
-      "latestResultNotReported": "Последний результат не сообщён",
-      "sshTarget": " · SSH {{target}}",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Подключитесь к хосту заново для обновления или изменений. Сохранённая информация доступна ниже.",
       "recentRuns": "Недавние запуски",
       "outcome": "Результат",
@@ -4423,7 +4421,6 @@
       "fullOutputUnavailable": "Не удалось загрузить полный вывод.",
       "retryFullOutput": "Повторить",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "В загруженной истории нет подходящих запусков. Загрузите ещё, чтобы продолжить.",
-      "noMatchingRunsYet": "Подходящих запусков пока нет.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
       "scheduled": "По расписанию",
       "loadMoreRuns": "Загрузить ещё запуски",
@@ -5393,6 +5390,10 @@
       "today": "сегодня",
       "yesterday": "вчера",
       "lastTidied": "последняя уборка {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Продолжит в {{time}}",
+      "hitLimit": "Лимит исчерпан · сброс в {{time}}"
     }
   },
   "sidebar": {

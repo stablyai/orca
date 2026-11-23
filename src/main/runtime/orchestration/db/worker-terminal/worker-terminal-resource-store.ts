@@ -108,8 +108,12 @@ export function getWorkerTerminalResourceByOwner(
   this: OrchestrationDb,
   dispatchId: string
 ): WorkerTerminalResourceRow | undefined {
+  // Explicit projection so SyncDatabase caches this per-lineage-step statement; `SELECT *` never is.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
   return this.db
-    .prepare('SELECT * FROM worker_terminal_resources WHERE owner_dispatch_id = ?')
+    .prepare(
+      `SELECT ${WORKER_TERMINAL_RESOURCE_COLUMN_LIST} FROM worker_terminal_resources WHERE owner_dispatch_id = ?`
+    )
     .get(dispatchId) as WorkerTerminalResourceRow | undefined
 }
 
@@ -146,10 +150,11 @@ export function getWorkerTerminalResourceFormerlyOwnedBy(
 ): WorkerTerminalResourceRow | undefined {
   const row = this.db
     .prepare(
-      `SELECT * FROM worker_terminal_resources WHERE id = ${formerlyOwnedResourceIdSql('?')}`
+      `SELECT ${WORKER_TERMINAL_RESOURCE_COLUMN_LIST} FROM worker_terminal_resources
+        WHERE id = ${formerlyOwnedResourceIdSql('?')}`
     )
     .get(dispatchId)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns the row shape its schema and row type define, like every row cast in db/.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
   return row as WorkerTerminalResourceRow | undefined
 }
 

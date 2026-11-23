@@ -13,7 +13,11 @@ import {
 } from './repo-owner-index'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
 import type { AppState } from '@/store/types'
-import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import {
+  toVisibleTabType,
+  type Tab,
+  type TabGroup
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 
 export type VisibleAccountSurfaceState = WorktreeRuntimeOwnerState &
@@ -69,30 +73,74 @@ export function pendingChatAccountOwner(
   }
 }
 
+/** The shown creation panel; one that opens a chat draws the chat itself (see AppWorkspaceShell). */
+function shownCreation(
+  state: VisibleAccountSurfaceState
+): { creationId: string; opensChat: boolean } | undefined {
+  const creationId = state.activePendingCreationId
+  if (!creationId || !selectWorktreeCreationSurfaceShown(state)) {
+    return undefined
+  }
+  const entry = state.pendingWorktreeCreations[creationId]
+  return { creationId, opensChat: !!entry && pendingCreationOpensNativeChat(entry) }
+}
+
+function focusedWorkspaceTab<T extends Pick<Tab, 'id'>>(
+  state: VisibleAccountSurfaceState,
+  tabsByWorktree: Record<string, readonly T[]> | undefined,
+  workspaceId: string
+): T | undefined {
+  if (state.activeView !== 'terminal') {
+    return undefined
+  }
+  const groupId = state.activeGroupIdByWorktree?.[workspaceId]
+  const group = focusedGroup(state.groupsByWorktree?.[workspaceId], groupId)
+  return group?.activeTabId
+    ? workspaceTabById(tabsByWorktree?.[workspaceId], group.activeTabId)
+    : undefined
+}
+
 /** Undefined means no visible workspace; null means visible but ownership is unproven. */
 export function visibleAccountHostId(
   state: VisibleAccountSurfaceState
 ): ExecutionHostId | null | undefined {
-  const creationId = state.activePendingCreationId
-  if (creationId && selectWorktreeCreationSurfaceShown(state)) {
-    const entry = state.pendingWorktreeCreations[creationId]
-    if (entry && pendingCreationOpensNativeChat(entry)) {
-      return pendingChatAccountOwner(state, creationId).hostId
-    }
+  const creation = shownCreation(state)
+  if (creation?.opensChat) {
+    return pendingChatAccountOwner(state, creation.creationId).hostId
   }
   const workspaceId = state.activeWorktreeId
   if (!workspaceId) {
     return undefined
   }
-  if (state.activeView === 'terminal') {
-    const groupId = state.activeGroupIdByWorktree?.[workspaceId]
-    const group = focusedGroup(state.groupsByWorktree?.[workspaceId], groupId)
-    const tab = group?.activeTabId
-      ? workspaceTabById(state.unifiedTabsByWorktree?.[workspaceId], group.activeTabId)
-      : undefined
-    if (tab?.executionHostId) {
-      return tab.executionHostId
-    }
+  const tabHostId = focusedWorkspaceTab(
+    state,
+    state.unifiedTabsByWorktree,
+    workspaceId
+  )?.executionHostId
+  if (tabHostId) {
+    return tabHostId
   }
   return getResolvedExecutionHostIdForWorktree(state, workspaceId)
+}
+
+/** True when the focused surface is a chat (agent chat, room or terminal in chat view), pending or open. */
+export function nativeChatSurfaceVisible(
+  state: VisibleAccountSurfaceState & {
+    unifiedTabsByWorktree?: Record<string, readonly Pick<Tab, 'id' | 'contentType' | 'viewMode'>[]>
+  }
+): boolean {
+  // A creation panel covers the selected tab, so a chat left selected under it is not visible.
+  const creation = shownCreation(state)
+  if (creation) {
+    return creation.opensChat
+  }
+  const workspaceId = state.activeWorktreeId
+  const tab = workspaceId
+    ? focusedWorkspaceTab(state, state.unifiedTabsByWorktree, workspaceId)
+    : undefined
+  return (
+    !!tab &&
+    (toVisibleTabType(tab.contentType) === 'agent-session' ||
+      (tab.contentType === 'terminal' && tab.viewMode === 'chat'))
+  )
 }

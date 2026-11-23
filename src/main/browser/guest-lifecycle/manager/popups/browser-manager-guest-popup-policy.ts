@@ -77,6 +77,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       const externalUrl = normalizeExternalBrowserUrl(url)
 
       // A server page's popup reaches its viewers as a tab, never the server's own screen.
+      // Hidden, not offscreen: Electron never sizes or paints an offscreen window.open child (electron/electron#55565).
       const shownToViewers = this.isListedAsServerPage(guest.id)
       // Native popups must not target local files.
       const canOpenAsChild = normalizeBrowserPopupUrl(url) !== null

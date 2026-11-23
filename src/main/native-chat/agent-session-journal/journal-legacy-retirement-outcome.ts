@@ -5,7 +5,7 @@ import {
   type LEGACY_JOURNAL_RETIREMENT_DURATION_BUCKETS,
   type legacyJournalRetirementSchema
 } from '../../../shared/telemetry/schemas/telemetry-legacy-journal-retirement-schema'
-import { LEGACY_PROOF_LAYOUT, type LegacyProofCounts } from './journal-legacy-retirement-state'
+import { LEGACY_SOURCE_INVENTORY, type LegacyProofCounts } from './journal-legacy-retirement-state'
 import { isSqliteCorruption, isSqliteStorageFailure } from '../../sqlite/sqlite-read-failure'
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 
@@ -44,7 +44,7 @@ export function legacyJournalRetirementEvent(
   const { counts, cumulative: _cumulative, sourceBytes, activeMs, elapsedMs, ...fields } = outcome
   return {
     ...fields,
-    inventory_revision: LEGACY_PROOF_LAYOUT,
+    inventory_revision: LEGACY_SOURCE_INVENTORY,
     chats_bucket: countBucket(counts?.chats),
     already_converted_bucket: countBucket(counts?.alreadyConverted),
     newly_converted_bucket: countBucket(counts?.newlyConverted),
@@ -298,6 +298,9 @@ function legacyProofErrorKind(error: unknown): LegacyJournalRetirementEvent['err
     return 'interrupted'
   }
   if (error.message.includes('conversion')) {
+    if (error.name === 'JournalConversionStorageError') {
+      return 'storage'
+    }
     return 'conversion'
   }
   return isSqliteStorageFailure(error) || isSqliteCorruption(error) ? 'storage' : 'other'
