@@ -63,7 +63,7 @@ export type JournalSqlPointRead = {
     | { kind: 'history-source-items'; clientMessageIds: readonly string[] }
     | { kind: 'provider-turn-in-namespace'; namespace: string; sinceFence?: number }
     | { kind: 'saved-item-ids'; itemIds: readonly string[] }
-    /** The newest visible item whose id starts with `prefix`, for one identity family. */
+    /** The greatest visible item id starting with `prefix`: the newest, for a family whose ids lead with a time. */
     | { kind: 'newest-item-id'; prefix: string }
     | JournalAcpHistoryRead
     | JournalAcpHistoryItemsRead

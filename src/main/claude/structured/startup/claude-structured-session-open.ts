@@ -97,7 +97,10 @@ async function openStartingClaudeSession(
   const history = session.initialization.history
   const leafUuid = history.leafUuid
   const events = session.events
-  void readClaudeEarlierRefusalNotice(session, events?.journalHistory?.()?.reads).catch(() => {})
+  // Before any turn, so the first frame in the chat's choice can say so.
+  await readClaudeEarlierRefusalNotice(session, events?.journalHistory?.()?.reads).catch(
+    (error: unknown) => console.warn('[claude] reading the last permission warning failed:', error)
+  )
   const origin = usableJournalHistoryOrigin(
     (await events?.journalHistory?.()?.reads.historyOrigin()) ?? null
   )

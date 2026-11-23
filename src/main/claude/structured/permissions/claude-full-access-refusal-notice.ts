@@ -20,6 +20,10 @@ import {
   type ClaudeBypassFacts
 } from './claude-full-access-refusal'
 
+const CLAUDE_REFUSAL_NOTICE_PREFIX = 'full-access-refused:claude:'
+// An earlier process's warning that no row since has answered.
+const EARLIER_PROCESS_WARNING = 'earlier-process'
+
 type ClaudeNoticeFacts = ClaudeBypassFacts &
   Partial<Pick<ClaudeSession, 'appliedInputOptions' | 'reportedOptions'>>
 
@@ -146,8 +150,13 @@ export function claimClaudeFullAccessRefusalNotice(
   session: ClaudeNoticeFacts &
     Pick<ClaudeSession, 'fullAccessRefusalNoticeId' | 'fullAccessRefusalNotices'>
 ): ClaudeFullAccessRefusalNotice | null {
-  const applied = session.appliedInputOptions?.get('buildPermissionMode')
   const previous = session.fullAccessRefusalNoticeId
+  // After an earlier process's warning, Claude starting in the chat's choice is running it too.
+  const applied =
+    session.appliedInputOptions?.get('buildPermissionMode') ??
+    (previous === EARLIER_PROCESS_WARNING
+      ? (session.firstRootInit?.permissionMode ?? undefined)
+      : undefined)
   const restored =
     applied !== undefined &&
     applied === session.launchIntent?.permissionMode &&
@@ -160,14 +169,16 @@ export function claimClaudeFullAccessRefusalNotice(
   const notices = (session.fullAccessRefusalNotices ??= { process: randomUUID(), count: 0 })
   notices.count += 1
   return {
-    id: `${notices.process}:${notices.count}:${id}`,
+    id: `${claudeRefusalNoticeTime()}:${notices.process}:${String(notices.count).padStart(6, '0')}:${id}`,
     body: restored ? claudeChoiceRestoredRow(applied) : claudeFullAccessRefusalRow(session, applied)
   }
 }
 
-const CLAUDE_REFUSAL_NOTICE_PREFIX = 'full-access-refused:claude:'
-// An earlier process's warning that no row since has answered.
-const EARLIER_PROCESS_WARNING = 'earlier-process'
+/** Leads each row id so the chat's newest row has the greatest id; it sorts after older rows
+ *  whose ids led with a hex process id. */
+function claudeRefusalNoticeTime(): string {
+  return `t${Date.now().toString(36).padStart(10, '0')}`
+}
 
 /** Reads the chat's newest warning row once per process start: when an earlier process's warning
  *  for this mode is still the newest, a run in the chat's choice says so in a new row. */
@@ -187,8 +198,9 @@ export async function readClaudeEarlierRefusalNotice(
   if (itemId === null) {
     return
   }
-  // `<process>:<count>:<warning id>`
-  const id = decodeURIComponent(itemId.slice(prefix.length)).split(':').slice(2).join(':')
+  // `t<time>:<process>:<count>:<warning id>`, or `<process>:<count>:<warning id>` before times led
+  const parts = decodeURIComponent(itemId.slice(prefix.length)).split(':')
+  const id = parts.slice(parts[0]?.startsWith('t') ? 3 : 2).join(':')
   const forThisMode = id.startsWith('auto-') === (intent === 'auto')
   if (forThisMode && !id.startsWith('restored:')) {
     session.fullAccessRefusalNoticeId ??= EARLIER_PROCESS_WARNING
