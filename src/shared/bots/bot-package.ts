@@ -5,6 +5,8 @@ import type { AutomationBotResultsTo } from '../automation-bot-target'
 import { AUTOMATION_EVENT_KINDS } from '../automation-event-triggers'
 import { GOOGLE_EVENT_SOURCES } from '../automation-google-triggers'
 import { BOT_MASCOT_IDS, BOT_AVATAR_FILE, mascotAvatar } from '../bot-avatar'
+import { BotAvatarColorSchema } from './bot-avatar-color'
+import { BotStoredOutfitSchema } from './bot-avatar-outfit'
 import { BOT_TOOL_HEADER_NAME_PATTERN, BOT_TOOL_NAME_PATTERN, BotToolUrl } from '../bot-tools'
 import { BOT_AGENTS, BotNameSchema, type BotAgent } from '../bot-types'
 import { validateSkillPackageName } from '../skills/packages/skill-package-manifest'
@@ -56,10 +58,15 @@ const EventSuggestionSchema = z
 export const BotPackageV1Schema = z.object({
   schemaVersion: z.literal(BOT_PACKAGE_SCHEMA_VERSION),
   name: BotNameSchema,
-  /** A mascot by id, or the archive's avatar.png; absent, the recipient's default mascot. */
+  /** A mascot by id, with its tile color and outfit, or the archive's avatar.png; absent, the recipient's
+   *  default mascot. An older importer drops the color and outfit and lists them as not included. */
   avatar: z
     .union([
-      z.object({ mascot: z.enum(BOT_MASCOT_IDS) }),
+      z.object({
+        mascot: z.enum(BOT_MASCOT_IDS),
+        color: BotAvatarColorSchema.optional().catch(undefined),
+        outfit: BotStoredOutfitSchema.optional().catch(undefined)
+      }),
       z.object({ image: z.literal(BOT_PACKAGE_AVATAR_PATH) })
     ])
     .optional(),
@@ -212,6 +219,17 @@ export type BotPackagePlan = {
   eventSuggestions: BotPackageV1['eventSuggestions']
   connectors: BotPackageConnector[]
   setupNote: string | null
+}
+
+/** What a shared mascot carries of the sharer's look: its tile color and outfit. */
+export function packagedMascotLook(bot: {
+  avatarColor?: string | null
+  avatarOutfit?: string | null
+}): { color?: string; outfit?: string } {
+  return {
+    ...(bot.avatarColor ? { color: bot.avatarColor } : {}),
+    ...(bot.avatarOutfit ? { outfit: bot.avatarOutfit } : {})
+  }
 }
 
 /** The bot a package creates, and where each of its files goes. `inventory` is the archive's files;

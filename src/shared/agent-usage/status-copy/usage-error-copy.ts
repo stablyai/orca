@@ -2,6 +2,7 @@ import type { ProviderRateLimits, UsageRateLimitMetadata } from '../rate-limits/
 import { getProviderDisplayName } from '../display/usage-provider-windows'
 import { describeOwnerNotSetUp, getOwnerNotSetUpLabel } from './owner-not-set-up-copy'
 import { formatRateLimitUserFacingError } from './rate-limit-user-facing-error'
+import { isCodexUsageSignInRequired } from '../../agent-accounts/codex/codex-auth-errors'
 import type { UsageCopyTranslate } from './usage-copy-translate'
 
 /** The fields the copy reads; strings stay open so a phone can pass a newer host's kind, which gets the generic copy. */
@@ -121,6 +122,10 @@ export function getProviderUsageStatusLabel(
   if (p.usageMetadata?.failureKind === 'network') {
     return t('auto.components.status.bar.tooltip.f8f0f9d8cc', 'Network issue')
   }
+  // Why before the rate-limit check: Codex wraps a revoked login as "failed to fetch codex rate limits".
+  if (isCodexUsageSignInRequired(p)) {
+    return t('accounts.codex.usageSignInLabel', 'Signed out')
+  }
   // MiniMax signals credential expiry in its payload, so generic refresh-failure copy is misleading.
   if (p.provider === 'minimax' && p.usageMetadata?.failureKind === 'stale-token') {
     return t('auto.components.status.bar.tooltip.minimax.expired.label', 'Sign-in expired')
@@ -223,6 +228,9 @@ export function getProviderUsageErrorMessage(
       case undefined:
         break
     }
+  }
+  if (isCodexUsageSignInRequired(p)) {
+    return getProviderUsageStatusLabel(p, t)
   }
   if (isUsageRateLimitError(p)) {
     return formatRateLimitUserFacingError(p.error, t) || p.error

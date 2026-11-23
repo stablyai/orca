@@ -8,6 +8,8 @@ import {
   installPluginFromLocalPath
 } from '../../plugins/installation/plugin-install'
 import { uninstallInstalledPlugin } from '../../plugins/installation/plugin-uninstall'
+import { takeRequiredPluginFailures } from '../../plugins/catalog/required-plugin-failures'
+import { assertTeamAllowsUncatalogedPlugin } from '../../plugins/installation/plugin-team-install-policy'
 import {
   applyPluginConsent,
   applyPluginEnablement
@@ -99,6 +101,7 @@ export function registerPluginHandlers(
 ): void {
   // All handlers must await startup discovery to avoid returning a pre-discovery empty list.
   ipcMain.handle('plugins:list', async () => listPluginsForClients(pluginService))
+  ipcMain.handle('plugins:takeRequiredPluginFailures', () => takeRequiredPluginFailures())
   ipcMain.handle('plugins:getInstalledManifest', async (_event, args: unknown) => {
     const { pluginKey } = logsArgsSchema.parse(args)
     return readInstalledPluginManifest(pluginService, pluginKey)
@@ -216,12 +219,15 @@ export function registerPluginHandlers(
   )
 
   ipcMain.handle('plugins:install', async (_event, args: unknown) => {
+    assertTeamAllowsUncatalogedPlugin()
     await pluginService.whenReady()
     const parsed = parsePluginInstallArgs(args)
     const pluginsDir = getUserPluginsDir(pluginService.options.userDataPath)
     const hostVersion = pluginService.options.hostVersion
-    const blockedPluginReason = (pluginKey: string): string | null =>
-      pluginService.options.getPluginKillListEntry?.(pluginKey)?.reason ?? null
+    const blockedPluginReason = (pluginKey: string): string | null => {
+      const block = pluginService.options.getPluginKillListEntry?.(pluginKey)
+      return block?.team ? null : (block?.reason ?? null)
+    }
     const result =
       parsed.kind === 'local-path'
         ? await installPluginFromLocalPath({

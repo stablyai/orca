@@ -121,6 +121,7 @@ export const pluginsApi = {
   },
   answerViewRequest: (reply) => ipcRenderer.send(PLUGIN_VIEW_REPLY_CHANNEL, reply),
   getAutoUpdateState: () => ipcRenderer.invoke('plugins:getAutoUpdateState'),
+  takeRequiredPluginFailures: () => ipcRenderer.invoke('plugins:takeRequiredPluginFailures'),
   takeUpdateReviewNotices: () => ipcRenderer.invoke('plugins:takeUpdateReviewNotices'),
   getInstallCounts: () => ipcRenderer.invoke('plugins:getInstallCounts'),
   onInstallCountsChanged: (callback): (() => void) => {

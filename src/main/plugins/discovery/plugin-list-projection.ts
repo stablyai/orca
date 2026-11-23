@@ -29,6 +29,8 @@ import {
   customEditorFrame
 } from '../../../shared/plugins/contributions/plugin-custom-editor-contribution'
 import { pluginExecutionProfile } from '../../../shared/plugins/contributions/plugin-execution-profile'
+import { isRequiredTeamPluginInstall } from '../installation/plugin-team-install-policy'
+import { installedPluginReleasePolicyError } from '../activation/plugin-activation-policy'
 
 const PLUGIN_LIST_PROJECTION_CONCURRENCY = 4
 
@@ -109,6 +111,7 @@ export async function buildPluginList(
           publisher: '',
           status: 'invalid' as const,
           needsReconsent: false,
+          ...(isRequiredTeamPluginInstall(lockEntry) ? { requiredByTeam: true as const } : {}),
           error: plugin.error,
           isDev: plugin.isDev,
           ...devChangeCountOf(plugin),
@@ -130,6 +133,10 @@ export async function buildPluginList(
       const worker = service.workerState(plugin.pluginKey)
       const activationError = service.activationError(plugin.pluginKey)
       const killListEntry = service.options.getPluginKillListEntry?.(plugin.pluginKey) ?? null
+      const releasePolicyError =
+        activation === 'disabled' && !killListEntry
+          ? installedPluginReleasePolicyError(plugin)
+          : null
       let status: PluginHostStatus
       if (activation === 'disabled') {
         status = 'disabled'
@@ -157,6 +164,10 @@ export async function buildPluginList(
           ? { icon: pluginInstalledImageUrl(plugin.pluginKey, plugin.contentHash ?? 'dev', slot) }
           : {}
       const bundled = lockEntry?.source.kind === 'bundled'
+      const managedByTeams =
+        lockEntry?.source.kind === 'marketplace'
+          ? service.options.getCatalogManagingTeams?.(lockEntry.source.marketplace)
+          : undefined
       const official =
         bundled ||
         (lockEntry?.source.kind === 'marketplace' &&
@@ -168,6 +179,7 @@ export async function buildPluginList(
         name: plugin.manifest.name,
         version: plugin.manifest.version,
         publisher: splitQualifiedPluginKey(plugin.pluginKey)?.publisher ?? '',
+        ...(managedByTeams ? { managedByTeams } : {}),
         ...(plugin.manifest.description ? { description: plugin.manifest.description } : {}),
         execution: pluginExecutionProfile(plugin.manifest),
         types: pluginCatalogTypes(plugin.manifest),
@@ -179,6 +191,7 @@ export async function buildPluginList(
         ...(plugin.manifest.repository ? { repository: plugin.manifest.repository } : {}),
         status,
         needsReconsent: needsReconsent(plugin.pluginKey, plugin.consentFingerprint, consents),
+        ...(isRequiredTeamPluginInstall(lockEntry) ? { requiredByTeam: true as const } : {}),
         ...(status === 'errored'
           ? { error: activationError ?? 'plugin worker crashed repeatedly' }
           : {}),
@@ -253,15 +266,24 @@ export async function buildPluginList(
           ? {
               blockedByKillList: {
                 reason: killListEntry.reason,
+                ...(killListEntry.team ? { team: true as const } : {}),
                 ...(killListEntry.advisoryUrl ? { advisoryUrl: killListEntry.advisoryUrl } : {})
               }
             }
-          : {}),
+          : releasePolicyError
+            ? { blockedByKillList: { reason: releasePolicyError, team: true as const } }
+            : {}),
         ...lockEntrySource(lockEntry)
       }
     }
   )
-  return markCommandReplacementOwners(entries, lock, (pluginKey, line) =>
+  const orderedEntries = entries.toSorted(
+    (a, b) =>
+      (lock.plugins[a.pluginKey]?.installedAt ?? Infinity) -
+        (lock.plugins[b.pluginKey]?.installedAt ?? Infinity) ||
+      (a.pluginKey < b.pluginKey ? -1 : a.pluginKey > b.pluginKey ? 1 : 0)
+  )
+  return markCommandReplacementOwners(orderedEntries, lock, (pluginKey, line) =>
     service.captureLog(pluginKey)('warn', line)
   )
 }

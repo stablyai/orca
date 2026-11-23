@@ -3,7 +3,7 @@
 // hook, state, key generation or account discards it.
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { useTranslate } from '@/i18n/use-translate'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { WebhookKey, WebhookSummary } from '../../../../../shared/rpc-contract/webhooks-params'
@@ -18,7 +18,8 @@ export type WebhookKeyControls = {
   busy: boolean
   reveal: () => void
   hide: () => void
-  copy: (what: WebhookKeyCopy) => void
+  /** Resolves whether it copied; `quiet` leaves the confirmation to the caller. */
+  copy: (what: WebhookKeyCopy, options?: { quiet?: boolean }) => Promise<boolean>
 }
 
 /** Everything a shown key belongs to; the key fields remount, dropping it, when this changes. */
@@ -32,13 +33,50 @@ export function useWebhookKeyScope(target: RuntimeClientTarget, summary: Webhook
   return [host, summary.hookId, summary.state, summary.keyGeneration, account].join('|')
 }
 
-export function useWebhookKey(options: {
-  target: RuntimeClientTarget
-  hookId: string
-  botName: string
-}): WebhookKeyControls {
-  const t = useTranslate()
-  const { target, hookId, botName } = options
+/** The hook a copy reads its key from: its execution host, and the bot named in errors. */
+export type WebhookKeySource = { target: RuntimeClientTarget; hookId: string; botName: string }
+
+/** The hook's key and key-bearing URL from its host; a failure toasts unless `wanted` says it's stale. */
+async function revealWebhookKey(
+  { target, hookId, botName }: WebhookKeySource,
+  wanted: () => boolean = () => true
+): Promise<WebhookKey | null> {
+  try {
+    const key = await callWebhookHost(target, 'webhooks.reveal', { hookId })
+    return wanted() ? key : null
+  } catch (error) {
+    if (wanted()) {
+      toast.error(webhookErrorMessage(webhookErrorCode(error), botName, target))
+    }
+    return null
+  }
+}
+
+function writeWebhookKey(
+  what: WebhookKeyCopy,
+  key: WebhookKey,
+  options?: { quiet?: boolean }
+): Promise<boolean> {
+  return copyWebhookSecret(
+    what === 'url' ? key.url : key.key,
+    what === 'url'
+      ? translate('bots.webhooks.copiedUrl', 'URL copied')
+      : translate('bots.webhooks.copiedKey', 'Key copied'),
+    options
+  )
+}
+
+/** Every "Copy URL": fetches the hook's whole URL, key included, from its host and copies it without
+ *  showing it. `quiet` leaves the confirmation to the caller. Resolves whether it copied. */
+export async function copyWebhookUrl(
+  source: WebhookKeySource,
+  options?: { quiet?: boolean }
+): Promise<boolean> {
+  const key = await revealWebhookKey(source)
+  return key ? writeWebhookKey('url', key, options) : false
+}
+
+export function useWebhookKey(source: WebhookKeySource): WebhookKeyControls {
   const [revealed, setRevealed] = useState<WebhookKey | null>(null)
   const [busy, setBusy] = useState(false)
   // Raised by every click, hide and unmount: an answer from an older generation is dropped.
@@ -55,25 +93,11 @@ export function useWebhookKey(options: {
     const request = ++generation.current
     setBusy(true)
     try {
-      const key = await callWebhookHost(target, 'webhooks.reveal', { hookId })
-      return request === generation.current ? key : null
-    } catch (error) {
-      if (request === generation.current) {
-        toast.error(webhookErrorMessage(webhookErrorCode(error), botName, target))
-      }
-      return null
+      return await revealWebhookKey(source, () => request === generation.current)
     } finally {
       setBusy(false)
     }
   }
-
-  const write = (what: WebhookKeyCopy, key: WebhookKey): void =>
-    copyWebhookSecret(
-      what === 'url' ? key.url : key.key,
-      what === 'url'
-        ? t('bots.webhooks.copiedUrl', 'URL copied')
-        : t('bots.webhooks.copiedKey', 'Key copied')
-    )
 
   return {
     revealed,
@@ -85,13 +109,12 @@ export function useWebhookKey(options: {
       generation.current += 1
       setRevealed(null)
     },
-    copy: (what) => {
+    copy: (what, options) => {
       // Copy never puts the key on screen; a shown key is copied as is.
       if (revealed) {
-        write(what, revealed)
-        return
+        return writeWebhookKey(what, revealed, options)
       }
-      void fetchKey().then((key) => key && write(what, key))
+      return fetchKey().then((key) => (key ? writeWebhookKey(what, key, options) : false))
     }
   }
 }

@@ -191,6 +191,8 @@ async function launchServeMode(
         idleFreeMs: () => memorySaverIdleMs(state.store?.getSettings())
       })
     )
+    // Tabs saved under a profile an older build deleted would otherwise stay listed but never load.
+    void runtime.browserCloseServerPagesOfMissingProfiles()
   }
   publishHeadlessRuntimeGraph(runtime)
   // Register SSH before binding RPC so the first paired client sees targets.
@@ -215,7 +217,7 @@ async function launchServeMode(
   await printServeReady(serveOptions)
   chatJournalHostServing()
   const store = state.store!
-  setupHeadlessServeAutoUpdater(state.nativeSettings!, {
+  setupHeadlessServeAutoUpdater(state.nativeSettings!, runtime, {
     onBeforeUpdateQuit: () =>
       preserveStateBeforeUpdateRestart({ codexRuntimeHome: state.core.codexRuntimeHome, store }),
     onBeforeUpdateQuitFailure: 'abort',

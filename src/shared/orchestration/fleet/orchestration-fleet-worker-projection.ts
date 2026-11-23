@@ -262,7 +262,11 @@ export function projectOrchestrationFleetWorker(
       worker: worker.workerState,
       dispatch: worker.dispatchStatus,
       detail: worker.workerStage,
-      activity: fresh && activity ? activity.state : 'unknown'
+      activity: fresh && activity ? activity.state : 'unknown',
+      // A stale row still names the wait it last saw; an exit ends it.
+      ...(activity?.backgroundWait && liveness.verdict !== 'exited'
+        ? { backgroundWait: activity.backgroundWait }
+        : {})
     },
     outcome,
     liveness,

@@ -1,11 +1,13 @@
 // Connect GitHub as a page inside the bot's settings: the desktop's BotGitHubSetupDialog. The account link
-// returns to 127.0.0.1 on the host, so it opens in Orca's browser there and the phone waits; GitHub's
-// install page works in any browser, so it opens in the phone's, and the host notices the install.
+// returns to 127.0.0.1 on the host, so it opens in Orca's browser there (shown here as that tab) and the
+// phone waits; GitHub's install page works in any browser, so it opens in the phone's, and the host
+// notices the install.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { ArrowUpRight, ExternalLink } from 'lucide-react-native'
 import {
   BOT_GITHUB_OFF,
+  GITHUB_BOT_MENTION,
   type ConnectorGitHubInstallation
 } from '../../../../src/shared/connector-bot-github-contract'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
@@ -19,10 +21,13 @@ import { SettingsNote, SettingsSection } from '../../settings/settings-screen-fr
 import { spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { mobileBotAvatarSource } from '../host-bot-row-facts'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileConnectorSourceIcon } from '../MobileConnectorSourceIcon'
 import { ConnectorHandoff, useFollowHost } from './MobileConnectorAccountParts'
 import { connectorAccountErrorMessage } from './mobile-connector-account-copy'
+import { MobileConnectorTryIt } from './MobileConnectorTryIt'
+import type { ConnectorPage } from './connector-pages'
 import type { PhoneGitHubView } from './use-phone-connector-account'
 import { usePhoneConnectTrip } from './use-phone-connect-trip'
 
@@ -43,23 +48,26 @@ export function MobileBotGitHubSetup(props: {
   hostName: string
   online: boolean
   banner: ReactNode
+  showToast: (message: string) => void
   save: (updates: { github: Record<string, never> }) => Promise<boolean>
+  /** This page, reopened once a sign-in shown on the phone ends. */
+  page: ConnectorPage
   onClose: () => void
-  /** On GitHub: its page takes over. */
+  /** On GitHub, after Try it: its page takes over. */
   onDone: () => void
 }) {
   const t = useMobileTranslation()
   const { bot, github, hostName } = props
   const [saving, setSaving] = useState(false)
   const [opened, setOpened] = useState(false)
-  const { trip, start, cancel } = usePhoneConnectTrip(
-    props.client,
-    'github',
-    bot.folderWorkspaceId,
-    github.refresh
-  )
+  const [done, setDone] = useState(false)
+  const { trip, start, cancel, showSignIn } = usePhoneConnectTrip('github', github.refresh)
   useBackClaim(() => {
-    props.onClose()
+    if (done) {
+      props.onDone()
+    } else {
+      props.onClose()
+    }
     return true
   })
   const state = github.view.status === 'ready' ? github.view.value : null
@@ -82,7 +90,7 @@ export function MobileBotGitHubSetup(props: {
     const saved = bot.github !== null || (await props.save({ github: {} }))
     setSaving(false)
     if (saved) {
-      props.onDone()
+      setDone(true)
     }
   }
   // The sign-in was for turning the bot on: once it links with Orca installed, it turns on.
@@ -94,6 +102,40 @@ export function MobileBotGitHubSetup(props: {
     }
   })
 
+  if (done) {
+    const command = `${GITHUB_BOT_MENTION} ${bot.folder}`
+    return (
+      <MobileConnectorTryIt
+        connector="github"
+        subtitle={t('bots.github.setup.isOn', '{{name}} is on GitHub', { name: bot.name })}
+        heading={t('bots.github.setup.tryIt', 'Try it on any issue or PR')}
+        ways={[
+          {
+            key: 'ask',
+            from: 'person',
+            title: state?.account?.login ?? '',
+            subtitle: `${command} ${t('bots.github.setup.preview.ask', 'review this PR')}`,
+            copy: command
+          },
+          {
+            key: 'reply',
+            from: 'bot',
+            title: bot.name,
+            subtitle: t('bots.github.setup.preview.reply', 'On it.')
+          }
+        ]}
+        note={t(
+          'bots.github.setup.pushesOnHost',
+          '{{name}} pushes code from {{host}} with its git login.',
+          { name: bot.name, host: hostName }
+        )}
+        avatar={mobileBotAvatarSource(bot)}
+        banner={props.banner}
+        showToast={props.showToast}
+        onDone={props.onDone}
+      />
+    )
+  }
   const mark = <MobileConnectorSourceIcon source="github" size={28} />
   const error = (code: string) => connectorAccountErrorMessage('github', code, hostName, t)
   const openInstall = () => {
@@ -168,6 +210,7 @@ export function MobileBotGitHubSetup(props: {
                 host: hostName
               }
             )}
+            onOpenPage={showSignIn ? () => showSignIn(props.page) : null}
             onCancel={cancel}
           />
         )

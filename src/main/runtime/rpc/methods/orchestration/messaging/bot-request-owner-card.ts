@@ -1,7 +1,8 @@
-// The card a bot's request leaves in its owner's own chat: Orca's line of what was sent and to whom,
-// or why it wasn't, never the bot's. Teammates' and workers' requests, group rooms and status mail get none.
+// The card a bot's request leaves in the chat that sent it: Orca's line of what was sent and to whom,
+// or why it wasn't, never the bot's. Connector conversations' turns, workers' requests, group rooms
+// and status mail get none.
 import { writeInChat } from '../../../../../bots/bot-chat-status-line'
-import { askedInOwnersChat } from '../../../../../bots/bot-request-view'
+import { answeredOnCard, type BotRequestRecord } from '../../../../../bots/bot-request-view'
 import { isBotRequestPurpose } from '../../../../../bots/bot-request-policy'
 import {
   botRequestCardBody,
@@ -13,7 +14,8 @@ import { toOtherChat, type ActingSender, type ReceivingBot } from './bot-recipie
 export function ownerChatCard(
   acting: ActingSender,
   receiving: ReceivingBot,
-  params: { type?: string; subject: string }
+  params: { type?: string; subject: string },
+  asked: Pick<BotRequestRecord, 'askedInConversation'>
 ): {
   write: (fields: Pick<BotRequestCard, 'messageId' | 'refusal'>) => void
   refused: (error: unknown) => void
@@ -26,7 +28,7 @@ export function ownerChatCard(
     acting.sessionId &&
     !acting.sessionId.startsWith('bot-group-member-') &&
     (target.id !== acting.bot.id || toOtherChat(receiving, acting.sessionId)) &&
-    askedInOwnersChat({ askers: acting.turn.askers, askedBy: acting.turn.askedBy })
+    answeredOnCard(asked)
       ? acting.sessionId
       : null
   const write = (fields: Pick<BotRequestCard, 'messageId' | 'refusal'>): void => {
