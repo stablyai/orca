@@ -1,5 +1,6 @@
 import { createReadStream } from 'node:fs'
 import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-protocol'
+import type { SpoolFileIndex } from './provider-relay-spool-file-index'
 
 const REPLAY_READ_CHUNK_BYTES = 64 * 1024
 
@@ -78,8 +79,11 @@ export async function replaySpoolFile(replay: SpoolReplay): Promise<SpoolReplayO
 }
 
 type SpoolFileReplay = SpoolReplay & {
-  /** How many records after `after` the file must hold; fewer means some were cut or corrupted. */
-  expected: number
+  /**
+   * What the file must hold whole. Fewer indexed records than it lists means some were cut or
+   * corrupted; rows a failed append left behind are not indexed, and their memory copies are sent.
+   */
+  index: Pick<SpoolFileIndex, 'has' | 'countAfter'>
 }
 
 /**
@@ -94,12 +98,16 @@ export async function replaySpoolFileRecords(
   const outcome = await replaySpoolFile({
     ...replay,
     deliver: (record) => {
+      if (!replay.index.has(record.seq)) {
+        return
+      }
       highest = Math.max(highest, record.seq)
       delivered++
       replay.deliver(record)
     }
   })
-  if (outcome === 'failed' || (outcome === 'done' && delivered < replay.expected)) {
+  const expected = replay.index.countAfter(replay.after)
+  if (outcome === 'failed' || (outcome === 'done' && delivered < expected)) {
     return { outcome: 'lost', highest }
   }
   return { outcome, highest }

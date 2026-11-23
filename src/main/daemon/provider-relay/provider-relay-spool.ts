@@ -40,6 +40,8 @@ type SpoolWrite = { chunk: string; records: HeldRecord[] }
 export class ProviderRelaySpool {
   private nextSeqValue = 1
   private acked = 0
+  /** Records a lost spool file held; never sendable, so they don't hold the relay open. */
+  private lostThrough = 0
   private memory: HeldRecord[] = []
   private memoryHead = 0
   private ackedHeldBytes = 0
@@ -74,7 +76,7 @@ export class ProviderRelaySpool {
   }
 
   get drained(): boolean {
-    return this.acked >= this.nextSeqValue - 1
+    return Math.max(this.acked, this.lostThrough) >= this.nextSeqValue - 1
   }
 
   /** Replay is done and new records go straight to the client. */
@@ -146,16 +148,15 @@ export class ProviderRelaySpool {
         ? await replaySpoolFileRecords({
             path: this.options.path,
             after,
-            expected: this.fileIndex.countAfter(after),
+            index: this.fileIndex,
             current,
             deliver: this.options.deliver,
             drained: this.options.drained
           })
         : { outcome: 'done', highest: after }
     if (file.outcome === 'lost' && current()) {
-      // Retrying would fail the same way and keep the agent paused; the loss is named instead,
-      // and the lost records count as acked so nobody waits on output that can never arrive.
-      this.acked = Math.max(this.acked, fileLast)
+      // Retrying would fail the same way, so the loss is named; lost records are never claimed as sent.
+      this.lostThrough = Math.max(this.lostThrough, fileLast)
       this.removeFile()
       this.options.onFileLost?.()
     } else if (file.outcome !== 'done' || !current()) {

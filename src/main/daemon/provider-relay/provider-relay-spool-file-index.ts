@@ -42,6 +42,25 @@ export class SpoolFileIndex {
     this.lastSeq = kept.at(-2) ?? 0
   }
 
+  /** Whether the file must hold this record whole; entries are in seq order, so this is a binary search. */
+  has(seq: number): boolean {
+    let low = this.head / 2
+    let high = this.entries.length / 2 - 1
+    while (low <= high) {
+      const mid = (low + high) >> 1
+      const at = this.entries[mid * 2]
+      if (at === seq) {
+        return true
+      }
+      if (at < seq) {
+        low = mid + 1
+      } else {
+        high = mid - 1
+      }
+    }
+    return false
+  }
+
   /** How many records after `seq` the file must still hold whole. */
   countAfter(seq: number): number {
     let count = 0
