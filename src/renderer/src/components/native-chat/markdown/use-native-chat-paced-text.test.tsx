@@ -64,7 +64,9 @@ it('shows a reply redrawn whole only at its saves, revealed as main reveals them
         initialProps: { text: 'one', revision: 1 },
         wrapper: ({ children }: { children: ReactNode }) => (
           <NativeChatReplyRevealsContext.Provider value={reveals}>
-            {children}
+            <NativeChatSaveFallbackContext.Provider value>
+              {children}
+            </NativeChatSaveFallbackContext.Provider>
           </NativeChatReplyRevealsContext.Provider>
         )
       }
@@ -196,7 +198,9 @@ it('keeps a reply that shows only its saves on its last save through a catch-up'
         wrapper: ({ children }: { children: ReactNode }) => (
           <NativeChatReplyRevealsContext.Provider value={reveals}>
             <NativeChatHeldTextSessionContext.Provider value="chat-saves">
-              {children}
+              <NativeChatSaveFallbackContext.Provider value>
+                {children}
+              </NativeChatSaveFallbackContext.Provider>
             </NativeChatHeldTextSessionContext.Provider>
           </NativeChatReplyRevealsContext.Provider>
         )

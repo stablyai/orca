@@ -47,7 +47,7 @@ export function NativeChatTranscriptItems({
   return (
     <NativeChatReplyRevealsContext.Provider value={replyReveals}>
       <NativeChatHeldTextSessionContext.Provider value={context.heldTextSession}>
-        <NativeChatSaveFallbackContext.Provider value={context.savesAsRepliesGrow ?? true}>
+        <NativeChatSaveFallbackContext.Provider value={context.savesAsRepliesGrow ?? false}>
           <div ref={window.sizerRef} data-native-chat-window className="relative w-full">
             {window.virtualItems.map((item, position) => {
               const slot = slots[item.index]

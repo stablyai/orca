@@ -91,7 +91,7 @@ export function NativeChatTurnActivityLine({
         <CollapsibleContent>
           <NativeChatReplyRevealsContext.Provider value={heldReveals}>
             <NativeChatHeldTextSessionContext.Provider value={context?.heldTextSession}>
-              <NativeChatSaveFallbackContext.Provider value={context?.savesAsRepliesGrow ?? true}>
+              <NativeChatSaveFallbackContext.Provider value={context?.savesAsRepliesGrow ?? false}>
                 <NativeChatReasoningBody
                   rowKey={disclosureKey}
                   markdown={reasoning.markdown}

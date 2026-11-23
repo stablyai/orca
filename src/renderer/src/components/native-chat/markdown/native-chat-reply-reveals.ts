@@ -9,10 +9,10 @@ import {
 /** The chat a transcript shows, so its replies draw at once only text their own chat held. */
 export const NativeChatHeldTextSessionContext = createContext<string | undefined>(undefined)
 
-/** Whether a reply that redraws whole may fall back to its saves: only agents whose saves follow
- *  the reply's growth (Claude, Codex). A provider timeline saves only at block ends, so its
- *  replies keep showing live text. */
-export const NativeChatSaveFallbackContext = createContext(true)
+/** Whether a reply that redraws whole may fall back to its saves: only rows that name an agent
+ *  whose saves follow the reply's growth (Claude, Codex). Others (provider timelines save only at
+ *  block ends; group turns name no agent) keep showing live text. */
+export const NativeChatSaveFallbackContext = createContext(false)
 
 /** Absent outside a transcript: such a row neither begins nor is remembered. */
 export const NativeChatReplyRevealsContext = createContext<NativeChatReplyReveals | null>(null)
