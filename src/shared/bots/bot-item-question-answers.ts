@@ -37,15 +37,13 @@ function isClose(event: BotItemEvent): boolean {
   return event.kind === 'status' && (event.data.to === 'done' || event.data.to === 'canceled')
 }
 
-/** A move out of Needs you that no answer made (a close, or the owner's or agent's own move) ends
- *  every ask's wait; an answer's move does not, so an ask asked before another keeps its open lines. */
+/** A move that no answer made, to anything but Needs you (a close, or the owner's or agent's own
+ *  move), ends every ask's wait; an answer's move does not, so an ask asked before another keeps its
+ *  open lines. */
 function endsAsks(event: BotItemEvent): boolean {
   return (
     isClose(event) ||
-    (event.kind === 'status' &&
-      event.data.from === 'needs_you' &&
-      event.data.to !== 'needs_you' &&
-      event.data.cause !== 'answer')
+    (event.kind === 'status' && event.data.to !== 'needs_you' && event.data.cause !== 'answer')
   )
 }
 
@@ -107,14 +105,18 @@ function answeredLines(
     }
   }
   // Several questions answered in one comment, a line each; or a quick reply edited before sending.
-  const namedLines = asks.flatMap((ask) => {
+  // They belong to one ask: the one it names first, so a question asked again in a later ask keeps
+  // its own line open.
+  for (const ask of asks) {
     const lines = botItemNamedAnswers(ask.entry.shape, text).flatMap((words, index) =>
       words !== null && isOpen(ask.entry, index) ? [index] : []
     )
-    return lines.length > 0 ? [{ ask, lines, byOrder: false }] : []
-  })
-  if (namedLines.length > 0 || answersAskedQuestions(text, asked)) {
-    return namedLines
+    if (lines.length > 0) {
+      return [{ ask, lines, byOrder: false }]
+    }
+  }
+  if (answersAskedQuestions(text, asked)) {
+    return []
   }
   for (const ask of asks) {
     const next = ask.entry.answers.indexOf(null)
@@ -126,7 +128,7 @@ function answeredLines(
 }
 
 export function botItemQuestionPairing(
-  item: Pick<BotItem, 'status'>,
+  item: Pick<BotItem, 'status' | 'waitingAsk'>,
   events: readonly BotItemEvent[]
 ): BotItemQuestionPairing {
   const questions = new Map<string, BotItemQuestionAnswers>()
@@ -185,8 +187,10 @@ export function botItemQuestionPairing(
     }
   }
   // One ask waits at a time, the oldest with a line open, so each answer has one question to go to.
+  // The host names it; while it is still on an earlier page, none waits.
   const waiting = open.find(({ entry }) => entry.answers.includes(null))
-  if (waiting && item.status !== 'done' && item.status !== 'canceled') {
+  const unread = item.waitingAsk !== undefined && !questions.has(item.waitingAsk)
+  if (waiting && !unread && item.status !== 'done' && item.status !== 'canceled') {
     waiting.entry.waiting = true
   }
   return { questions, replies }
@@ -208,7 +212,7 @@ function quotedLine(
 
 /** The ask the agent waits on, by its event id, with its lines' answers so far. */
 export function botItemWaitingAsk(
-  item: Pick<BotItem, 'status'>,
+  item: Pick<BotItem, 'status' | 'waitingAsk'>,
   events: readonly BotItemEvent[]
 ): ({ askId: string } & BotItemQuestionAnswers) | null {
   for (const [askId, entry] of botItemQuestionPairing(item, events).questions) {
@@ -226,7 +230,7 @@ export type BotItemWaitingLine = { id: string; eventId: string; line: string; re
  *  `replies` when that line has quick replies. The item's own question stands in until its event is
  *  read. A Needs you comment that asks no question has nothing to reply to. */
 export function botItemWaitingLine(
-  item: Pick<BotItem, 'question' | 'status'>,
+  item: Pick<BotItem, 'question' | 'status' | 'waitingAsk'>,
   events: readonly BotItemEvent[]
 ): BotItemWaitingLine | null {
   for (const [questionId, entry] of botItemQuestionPairing(item, events).questions) {

@@ -4,6 +4,7 @@ import {
   botItemEventId,
   type BotItemEvent
 } from '../../shared/bots/bot-items'
+import { botItemActivity } from '../../shared/bots/bot-item-activity'
 import {
   botItemQuestionPairing,
   botItemWaitingLine
@@ -44,16 +45,23 @@ function item() {
   }
   const comment = (text: string, questionEventId?: number) =>
     store.ownerComment(uid, text, OWNER, [], NOW, undefined, questionEventId)
-  // What the item's view reads: the line its comment box replies to, and each ask's answers.
-  const view = () => {
+  // What the item's view reads, from the host's item and the events loaded after `after`: the line
+  // its comment box replies to, each ask's answers, which ask each reply quotes, and the comments
+  // shown waiting.
+  const view = (after = 0) => {
     const row = store.get(uid)!
+    const waitingAsk = store.viewRows([uid], true).waitingAsks[uid]
     const shown = {
       status: row.status,
       question:
-        row.questionEvent === null ? null : { eventId: botItemEventId(row.questionEvent), text: '' }
+        row.questionEvent === null
+          ? null
+          : { eventId: botItemEventId(row.questionEvent), text: '' },
+      links: [],
+      ...(waitingAsk ? { waitingAsk } : {})
     }
     const events = store
-      .events(uid, 0, 200)
+      .events(uid, after, 200)
       .map(({ id, kind, actor, data, createdAt }): BotItemEvent => ({
         id: botItemEventId(id),
         kind: BOT_ITEM_EVENT_KINDS.find((known) => known === kind) ?? 'edited',
@@ -61,12 +69,19 @@ function item() {
         data,
         at: createdAt
       }))
+    const pairing = botItemQuestionPairing(shown, events)
     return {
       replyingTo: botItemWaitingLine(shown, events),
-      asks: botItemQuestionPairing(shown, events).questions
+      asks: pairing.questions,
+      quotes: pairing.replies,
+      waitingComments: botItemActivity(shown, events).flatMap((entry) =>
+        entry.kind === 'comment' && entry.waiting ? [entry.event.id] : []
+      )
     }
   }
-  return { store, uid, ask, comment, view }
+  const lastComment = () =>
+    store.events(uid, 0, 200).findLast((event) => event.kind === 'commented')!
+  return { store, uid, ask, comment, view, lastComment }
 }
 
 it('offers no reply target for a Needs you comment that asks nothing after the questions were answered', () => {
@@ -112,4 +127,66 @@ it('shows an open question left by an earlier set after a Needs you comment that
   store.set(uid, { status: 'needs_you', comment: 'Only one question is left.' }, AGENT, NOW)
   expect(view().replyingTo).toMatchObject({ eventId: botItemEventId(first), line: GO })
   expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(botItemEventId(first))
+})
+
+it('ends every open set when the item is moved by hand after another set was answered', () => {
+  const { store, uid, ask, comment, view } = item()
+  const first = ask([HOSTS, GO])
+  ask([MERGE])
+  comment(`${HOSTS} → Yes\n${GO} → No`, first)
+  expect(view().replyingTo?.line).toBe(MERGE)
+  store.ownerStatus({ uids: [uid], to: 'planned' }, OWNER, NOW)
+  expect(view().replyingTo).toBeNull()
+})
+
+it('keeps an answer to a question asked again in a later set with the set it was given in', () => {
+  const { ask, comment, view, lastComment } = item()
+  const first = ask([HOSTS, GO])
+  const second = ask([HOSTS, MERGE])
+  comment(`${HOSTS} → Yes\n${GO} → No`, first)
+  const reply = botItemEventId(lastComment().id)
+  const { asks, quotes } = view()
+  expect(asks.get(botItemEventId(first))?.answers.every(Boolean)).toBe(true)
+  expect(asks.get(botItemEventId(second))?.answers.map(Boolean)).toEqual([false, false])
+  expect(quotes.get(reply)?.questionId).toBe(botItemEventId(first))
+})
+
+it('records a reply to the set still waiting as its answer once another set moved the item on', () => {
+  const { store, uid, ask, comment, lastComment } = item()
+  const first = ask([HOSTS, GO])
+  const second = ask([MERGE])
+  comment(`${HOSTS} → Yes\n${GO} → No`, first)
+  expect(store.get(uid)?.status).toBe('working')
+  comment('Yes')
+  expect(lastComment().data.answers).toBe(botItemEventId(second))
+})
+
+// An earlier set left open, a later set answered, then a Needs you comment that asks nothing.
+function leftOpen() {
+  const made = item()
+  const first = made.ask([HOSTS, GO])
+  made.comment(`${HOSTS} → Yes`, first)
+  made.ask([MERGE])
+  made.comment('Yes')
+  made.store.set(
+    made.uid,
+    { status: 'needs_you', comment: 'Only one question is left.' },
+    AGENT,
+    NOW
+  )
+  return { ...made, first }
+}
+
+it('shows only the set still waiting as waiting, not also the comment that asks nothing', () => {
+  const { view, first } = leftOpen()
+  expect(view().waitingComments).toEqual([botItemEventId(first)])
+})
+
+it('waits on no set while the one waiting is still on an earlier page', () => {
+  const { ask, view } = item()
+  const first = ask([HOSTS, GO])
+  ask([MERGE])
+  expect(view().replyingTo?.line).toBe(HOSTS)
+  // Only the events after the first set are loaded: the later set doesn't stand in for it.
+  expect(view(first).replyingTo).toBeNull()
 })

@@ -72,12 +72,14 @@ export class BotItemsOwner extends BotItemsWrites {
         item.status === 'needs_you' && item.questionEvent !== null
           ? this.botQuestion(item.questionEvent)
           : null
-      // An ask a later question left open waits first: replies go to it.
-      const waitingAsk = question ? this.waitingAsk(item) : null
+      // An ask a later question left open waits first, even once another ask's answer moved the item
+      // on: replies go to it.
+      const waitingAsk = isOpenBotItemStatus(item.status) ? this.waitingAsk(item) : null
+      const asking = question !== null || waitingAsk !== null
       if (
-        question &&
+        asking &&
         questionEventId !== undefined &&
-        question.id !== questionEventId &&
+        question?.id !== questionEventId &&
         waitingAsk !== questionEventId
       ) {
         throw new BotItemError(
@@ -88,13 +90,14 @@ export class BotItemsOwner extends BotItemsWrites {
       // While the bot asks, a comment not sent as plain is the answer: it names the question (a quick
       // reply's own, else the ask waiting), and the move it makes says so. A plain one leaves the item
       // waiting on its question.
-      const answeringId = question && !plain ? (questionEventId ?? waitingAsk ?? question.id) : null
+      const answeringId =
+        asking && !plain ? (questionEventId ?? waitingAsk ?? question?.id ?? null) : null
       const answering =
-        answeringId === null || answeringId === question?.id
-          ? question && !plain
+        answeringId === null
+          ? null
+          : answeringId === question?.id
             ? question
-            : null
-          : this.botQuestion(answeringId)
+            : this.botQuestion(answeringId)
       const answers = answering ? botItemEventId(answering.id) : undefined
       // A question a conversation's turn asked is answered there too (bots-items-mail.ts reads it).
       const askedIn = answering?.data.askedInConversation

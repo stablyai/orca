@@ -2,6 +2,7 @@
 // item views need in one round trip.
 import {
   botItemEventId,
+  isOpenBotItemStatus,
   parseBotItemEventId,
   type BotItemLinkKind,
   type BotItemStatus
@@ -130,7 +131,7 @@ export class BotItemsReads extends BotItemsTables {
    *  and the newest event anyone but the owner made. */
   viewRows(
     uids: readonly string[],
-    /** Also each Needs you item's waiting ask, which reads its events: for its own view only. */
+    /** Also each open item's waiting ask, which reads its events: for its own view only. */
     withWaitingAsks = false
   ): {
     items: BotItemRecord[]
@@ -179,7 +180,7 @@ export class BotItemsReads extends BotItemsTables {
     }
     const waitingAsks: Record<string, string> = {}
     for (const item of withWaitingAsks ? items : []) {
-      const ask = item.status === 'needs_you' ? this.waitingAsk(item) : null
+      const ask = isOpenBotItemStatus(item.status) ? this.waitingAsk(item) : null
       if (ask !== null) {
         waitingAsks[item.uid] = botItemEventId(ask)
       }
