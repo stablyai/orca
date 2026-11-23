@@ -49,7 +49,7 @@ export function readTerminalHostCapRefusal(error: unknown): TerminalHostCapRefus
 }
 
 // From this share of the cap, agents are told how many terminals are in use.
-const USAGE_NOTICE_RATIO = 0.8
+const USAGE_NOTICE_RATIO = 0.9
 
 /** How close this computer is to its terminal cap, once that is worth an agent telling the user. */
 export function terminalUsageNotice(

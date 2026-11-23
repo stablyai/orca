@@ -3,7 +3,7 @@ import { withTerminalUsage } from './worker-start-terminal-usage'
 
 // Each terminal's own spawn reply, as the runtime records it on that terminal.
 const spawnUsage: Record<string, { terminalsInUse: number; maxTerminals: number }> = {
-  term_local_agent: { terminalsInUse: 205, maxTerminals: 256 },
+  term_local_agent: { terminalsInUse: 231, maxTerminals: 256 },
   term_local_other: { terminalsInUse: 250, maxTerminals: 256 }
 }
 const runtime = { getSpawnHostTerminalUsage: (handle: string) => spawnUsage[handle] }
@@ -19,7 +19,7 @@ describe('worker-start terminal usage', () => {
     expect(
       withTerminalUsage(runtime, receipt({ id: 'term_local_agent', action: 'created' }))
     ).toMatchObject({
-      terminals: expect.stringContaining('205 of 256 in use')
+      terminals: expect.stringContaining('231 of 256 in use')
     })
     // An SSH host's terminal reported no count: this computer's terminals say nothing about it.
     expect(
