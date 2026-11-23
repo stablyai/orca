@@ -108,7 +108,6 @@ function connector(
     waiting: new Map<string, Promise<unknown>>(),
     read: (key: ConnectorConversation) => readThreadMute(store, key),
     write: threadMuteSaves(store),
-    botNames: (botId: string) => (botId === 'bot1' ? ['Reviewer'] : ['Builder']),
     queued: (_key: ConnectorConversation, work?: () => Promise<unknown>) =>
       Promise.resolve(work?.()).then(() => undefined),
     react: async (_bot: string, _key: ConnectorConversation, ref: string, emoji: string) => {
@@ -175,7 +174,7 @@ describe('a muted bot thread', () => {
     const store = await botHome({})
     const { deliver, turns, reacted } = connector(store)
 
-    const directive = send(SECOND, 'Builder stop listening to this thread.')
+    const directive = send(SECOND, 'Stop listening to this thread.')
     expect(await deliver(directive)).toEqual({ outcome: 'accepted' })
     expect(await deliver(directive)).toEqual({ outcome: 'accepted' })
     expect(reacted).toEqual([`${directive.asker.messageRef} :mute:`])

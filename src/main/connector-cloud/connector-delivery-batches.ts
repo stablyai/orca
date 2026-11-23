@@ -16,7 +16,7 @@ import {
   type SendDelivery,
   type ThreadDelivery
 } from './connector-deliveries'
-import { mayBeThreadMuteDirective, slackThreadBotUser } from './connector-thread-mute'
+import { isThreadMuteSend, slackThreadBotUser } from './connector-thread-mute'
 
 /** A start or send and the sends queued right behind it in the same poll: the same person's, run
  *  as one turn. Anything else, and a send that is its own bare mention, goes on its own. */
@@ -66,7 +66,7 @@ export function connectorDeliveryUnits(
       !(
         delivery.conversation.source === 'slack' &&
         slackThreadBotUser(delivery.conversation.externalId) !== null &&
-        mayBeThreadMuteDirective(delivery)
+        isThreadMuteSend(delivery)
       ) &&
       askerOf(delivery) === askerOf(batch[0])
     ) {

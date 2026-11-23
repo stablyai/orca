@@ -211,10 +211,6 @@ function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore)
     queued: (key, work) =>
       runtime.getExternalConversationSeam()?.queued(key, work) ??
       Promise.resolve(work?.()).then(() => undefined),
-    botNames: (botId) => {
-      const bot = store.getBots?.().find((entry) => entry.id === botId)
-      return bot ? [bot.name] : []
-    },
     react: async (botId, conversation, ref, emoji) => {
       const cloud = runtime.getConnectorCloud()
       if (!cloud?.cloudFeatures()?.has('actions' satisfies ConnectorCloudFeature)) {

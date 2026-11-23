@@ -18,11 +18,7 @@ type MuteFacts = Pick<SendDelivery, 'bareMention' | 'mentioned' | 'resume'> & {
   asker?: { text: string }
 }
 
-export function threadMuteStep(
-  muted: boolean,
-  delivery: MuteFacts,
-  botNames: readonly string[]
-): ThreadMuteStep {
+export function threadMuteStep(muted: boolean, delivery: MuteFacts): ThreadMuteStep {
   // Resume is pressed on the bot's own failed turn: it goes on, and may still be refused, so it
   // leaves the mute as it was.
   if (delivery.resume) {
@@ -30,7 +26,7 @@ export function threadMuteStep(
   }
   // Only the sender's own words, never the thread context sent with them; "@Bot stop listening
   // here" mutes, as its mention is stripped.
-  if (isThreadMuteDirective(delivery.asker?.text, botNames)) {
+  if (isThreadMuteDirective(delivery.asker?.text)) {
     return 'mute'
   }
   if (!muted) {
@@ -39,10 +35,10 @@ export function threadMuteStep(
   return delivery.mentioned || delivery.bareMention ? 'unmute_and_send' : 'silence'
 }
 
-/** Whether a send may be a directive to stop listening, kept out of batches so it is never carried
- *  into the turn before it as words. */
-export function mayBeThreadMuteDirective(delivery: { asker?: { text: string } }): boolean {
-  return isThreadMuteDirective(delivery.asker?.text, 'any')
+/** Whether a send is a directive to stop listening, kept out of batches so it is never carried into
+ *  the turn before it as words. */
+export function isThreadMuteSend(delivery: { asker?: { text: string } }): boolean {
+  return isThreadMuteDirective(delivery.asker?.text)
 }
 
 /** The bot's Slack user from a thread id (`T:C:ts:UBOT`); null for a DM (`T:D…`), which has no
@@ -77,8 +73,6 @@ export type ThreadMuteDeps = {
   /** Settles once the mute is on disk, and rejects with the previous value kept when it can't be,
    *  so a mute is never confirmed and then lost to a crash. */
   write: (key: ConnectorConversation, muted: boolean) => Promise<void>
-  /** The names the bot goes by ("Reviewer stop listening here", on a Slack app several bots share). */
-  botNames: (botId: string) => string[]
   /** Runs `work` in the thread's queue after its queued deliveries (a start in the same poll
    *  writes its link there); a Stop settles it unrun. */
   queued: (
@@ -140,16 +134,14 @@ export function handleThreadMute(
     return null
   }
   if (thread) {
-    // Most replies to a thread that isn't muted are no directive: they skip the bot's names.
+    // Most replies to a thread that isn't muted are no directive: they go on at once.
     const applied =
-      thread.muted || mayBeThreadMuteDirective(delivery)
-        ? applyStep(deps, delivery, record, thread)
-        : null
+      thread.muted || isThreadMuteSend(delivery) ? applyStep(deps, delivery, record, thread) : null
     return applied && { decided: hold(deps, id, applied.decided) }
   }
-  // No link yet: a start in the same poll is still writing it. A likely directive waits for it and
+  // No link yet: a start in the same poll is still writing it. A directive waits for it and
   // is then decided as any other; the rest go on now, batched as ever.
-  if (!mayBeThreadMuteDirective(delivery)) {
+  if (!isThreadMuteSend(delivery)) {
     return null
   }
   const linkedAt = deps.queued(key)
@@ -202,12 +194,7 @@ function applyStep(
   thread: { botId: string; muted: boolean }
 ): ThreadMuteOutcome | null {
   const key = delivery.conversation
-  const step = threadMuteStep(
-    thread.muted,
-    delivery,
-    // Most of a muted thread's replies are no directive and need no names.
-    mayBeThreadMuteDirective(delivery) ? deps.botNames(thread.botId) : []
-  )
+  const step = threadMuteStep(thread.muted, delivery)
   if (step === 'send') {
     return null
   }
