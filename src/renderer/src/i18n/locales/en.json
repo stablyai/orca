@@ -27574,7 +27574,11 @@
         "mine": "This computer’s token expired. Paste a new one.",
         "paste": "Paste a new token to reconnect.",
         "expiredOnTitle": "Slack sign-in expired on {{host}}",
-        "signInAgain": "Sign in again"
+        "signInAgain": "Sign in again",
+        "neededTitle": "Slack needs a token for this workspace",
+        "whyNeeded": "Orca has no working Slack token for this workspace.",
+        "pasteNeeded": "Paste a token to continue.",
+        "continue": "Continue"
       },
       "problem": {
         "reconnecting": "Waiting for {{host}} to reconnect…",
