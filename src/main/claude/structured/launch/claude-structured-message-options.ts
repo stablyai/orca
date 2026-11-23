@@ -138,11 +138,15 @@ async function waitForClaudeStartupSettings(
   signal: AbortSignal | undefined
 ): Promise<void> {
   const intent = session.launchIntent?.permissionMode
-  // Claude's startup mode can't say why it isn't auto; only the settings read can.
+  const opened = session.firstRootInit?.permissionMode
+  // A start outside auto can't say why; only the settings read can.
   const unread =
     intent === 'bypassPermissions'
       ? session.bypassDisabled === undefined && !session.firstRootInit
-      : intent === 'auto' && session.autoDisabled === undefined
+      : intent === 'auto' &&
+        session.autoDisabled === undefined &&
+        opened !== 'auto' &&
+        opened !== 'plan'
   const pending = session.startupSettings
   if (!unread || !pending) {
     return
@@ -167,6 +171,10 @@ export async function applyClaudeFullAccessFallback(
   timeoutMs: number | undefined,
   signal: AbortSignal | undefined
 ): Promise<void> {
+  // Plan owes no fallback, so its inputs never wait on the settings read.
+  if (claudeInPlan(session)) {
+    return
+  }
   await waitForClaudeStartupSettings(session, signal)
   if (!claudeOwesFullAccessFallback(session)) {
     return
