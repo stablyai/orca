@@ -790,7 +790,7 @@ describe('shared Codex app-servers', () => {
   })
 
   describe('on Windows', () => {
-    it('starts no fallback server for a chat cancelled while its shared server failed containment', async () => {
+    it('starts no fallback server for a chat stopped while its shared server failed containment', async () => {
       const pool = {
         open: () => Promise.reject(new CodexSharedServerUncontainedError())
       }
@@ -798,7 +798,7 @@ describe('shared Codex app-servers', () => {
         { sharedServers: () => true },
         's',
         {},
-        { cancelled: true },
+        { signal: AbortSignal.abort() },
         'win32',
         () => true,
         () => pool

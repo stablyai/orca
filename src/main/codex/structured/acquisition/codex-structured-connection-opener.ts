@@ -29,8 +29,8 @@ export function codexConnectionOpener(
     CodexStructuredLaunch,
     'visuals' | 'linkedSkillsRoot' | 'codexVersion' | 'customCommand'
   >,
-  /** Set once the chat's acquisition was cancelled or superseded. */
-  acquisition: { readonly cancelled?: boolean } = {},
+  /** The chat's start: cancelled or superseded, or its Stop aborted the signal. */
+  startup: { attempt?: { readonly cancelled: boolean }; signal?: AbortSignal | undefined } = {},
   platform: NodeJS.Platform = process.platform,
   windowsSharing: () => boolean = windowsSharedServersAvailable,
   pool: () => Pick<ReturnType<typeof sharedCodexServerPool>, 'open'> = sharedCodexServerPool
@@ -57,7 +57,8 @@ export function codexConnectionOpener(
       })
       .catch((error: unknown) => {
         // A chat nobody waits for any more gets no server of its own.
-        if (error instanceof CodexSharedServerUncontainedError && !acquisition.cancelled) {
+        const stopped = startup.attempt?.cancelled === true || startup.signal?.aborted === true
+        if (error instanceof CodexSharedServerUncontainedError && !stopped) {
           // The chat's own server from here: recovery may signal it.
           sharedOpeners.delete(open)
           return spawnCodexAppServerConnection(connectionLaunch, handlers)

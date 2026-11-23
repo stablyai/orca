@@ -58,6 +58,10 @@ export class CodexSharedServerBacklog {
         this.bytes.delete(lease)
       }
       this.total += deltaBytes
+      if (this.total === 0) {
+        // Nothing held: forget the chats last matched, so a closed one isn't kept alive.
+        this.witnesses.clear()
+      }
     }
     if (lease.waiting) {
       this.waiters.add(lease)
