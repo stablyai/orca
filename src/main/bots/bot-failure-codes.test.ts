@@ -13,9 +13,8 @@ import { LOOK_FAILURES, LOOK_FAILURE_CODES } from './bot-look-around-runner'
 import { TIDY_UP_FAILURES, TIDY_UP_FAILURE_CODES } from './bot-memory-tidy-up'
 import { botRunFailure } from './bot-run-failure-code'
 import { BOT_OWNER_NOTICE_COPY, botOwnerNoticeText } from './bot-owner-notice-copy'
-import { resolveBotAutomationRunTarget } from '../automations/bot-run-target'
+import { automationRunFailure } from '../../shared/automations/history/automation-run-failure-copy'
 import { RemoteComputerRefusal, refusedAsk } from './bot-group-remote-refusal'
-import type { Bot } from '../../shared/bot-types'
 
 const ROOT = join(__dirname, '..', '..', '..')
 const english = (_key: string, fallback: string, values?: Record<string, unknown>) =>
@@ -85,18 +84,14 @@ describe('bot failure codes', () => {
     expect(new BotFailureError('groupReplierNotMember').message).toBe(
       'Choose a current room member in Room replies.'
     )
-    const bot = { id: 'b1', name: 'Ada', paused: true } as Bot
-    const store = {
-      getSettings: () => ({ botsEnabled: true }),
-      getBots: () => [bot],
-      getFolderWorkspaces: () => []
-    }
-    expect(resolveBotAutomationRunTarget(store, { botId: 'b1' } as never)).toEqual({
-      ok: false,
+    expect(automationRunFailure('botPaused', { bot: 'Ada' })).toEqual({
       error: 'Ada is paused, so Orca skipped this run.',
       errorCode: 'botPaused',
       errorParams: { bot: 'Ada' }
     })
+    expect(automationRunFailure('botsOff').error).toBe(
+      'Bots are turned off in Settings, so Orca skipped this run.'
+    )
   })
 
   it('translates what the wire carries back to the same English', () => {
