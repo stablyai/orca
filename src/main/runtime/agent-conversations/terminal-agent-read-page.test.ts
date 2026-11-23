@@ -5,7 +5,9 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  statSync,
   truncateSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -146,23 +148,29 @@ describe('readTerminalAgentPage', () => {
     ])
   })
 
-  it('refuses a cursor as stale once the file is replaced or shortened', async () => {
-    const ids = Array.from({ length: 10 }, (_, index) => `e${index}`)
-    const replaced = transcriptFile(ids.map((id) => message(id)))
-    const cursor = (await readPage(replaced, 3)).nextCursor!
-    const copy = `${replaced}.copy`
-    writeFileSync(copy, readFileSync(replaced))
-    renameSync(copy, replaced)
-    await expect(readPage(replaced, 3, cursor)).rejects.toMatchObject({
-      code: 'agent_cursor_stale'
-    })
+  it.each([
+    [
+      'replaced',
+      (path: string) => {
+        writeFileSync(`${path}.copy`, readFileSync(path))
+        renameSync(`${path}.copy`, path)
+      }
+    ],
+    ['shortened below the cursor', (path: string) => truncateSync(path, 40)],
+    ['shortened above the cursor', (path: string) => truncateSync(path, statSync(path).size - 10)],
+    [
+      'rewritten in place to the same size',
+      (path: string) => {
+        writeFileSync(path, readFileSync(path, 'utf8').replace('"e1"', '"x1"'))
+        utimesSync(path, 0, 2_000_000_000)
+      }
+    ]
+  ])('refuses a cursor as stale once the file is %s', async (_change, change) => {
+    const path = transcriptFile(Array.from({ length: 10 }, (_, index) => message(`e${index}`)))
+    const cursor = (await readPage(path, 3)).nextCursor!
+    change(path)
 
-    const shortened = transcriptFile(ids.map((id) => message(id)))
-    const older = (await readPage(shortened, 3)).nextCursor!
-    truncateSync(shortened, 40)
-    await expect(readPage(shortened, 3, older)).rejects.toMatchObject({
-      code: 'agent_cursor_stale'
-    })
+    await expect(readPage(path, 3, cursor)).rejects.toMatchObject({ code: 'agent_cursor_stale' })
   })
 
   it('refuses a cursor that was never valid for this agent', async () => {

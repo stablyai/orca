@@ -36,7 +36,15 @@ export async function readTailLocalWorkerTranscriptPage(
     return { ok: false, reason: 'transcript_unreadable', warnings: [] }
   }
   const endingAt = args.backward?.endingAt
-  if (endingAt && before.size < endingAt.offset) {
+  // A same-size rewrite or a shrink since issuance keeps the inode but not the older bytes.
+  if (
+    endingAt &&
+    workerTranscriptSourceChanged(
+      { ...before, size: endingAt.sourceSize, mtimeMs: endingAt.sourceMtimeMs },
+      before,
+      endingAt.offset
+    )
+  ) {
     return sourceChanged()
   }
   const page = await readNativeChatTranscriptTailFile(
@@ -84,7 +92,12 @@ export async function readTailLocalWorkerTranscriptPage(
     if (!checkpoint) {
       return sourceChanged()
     }
-    older = { ...olderEdge, boundaryCheckpoint: checkpoint }
+    older = {
+      ...olderEdge,
+      boundaryCheckpoint: checkpoint,
+      sourceSize: before.size,
+      sourceMtimeMs: before.mtimeMs
+    }
   }
   const turn =
     page.malformedRecordCount || page.oversizedRecordCount

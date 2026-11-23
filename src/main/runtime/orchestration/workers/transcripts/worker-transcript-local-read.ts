@@ -44,6 +44,10 @@ export type WorkerTranscriptOlderBoundary = {
   offset: number
   insideRecord?: true
   boundaryCheckpoint: string
+  /** The file's size and mtime when the boundary was issued: an append-only file never shrinks or
+   *  changes in place. */
+  sourceSize: number
+  sourceMtimeMs: number
 }
 
 type LocalTranscriptPage = Omit<LocalTranscriptReadSuccess, 'boundaryCheckpoint'>

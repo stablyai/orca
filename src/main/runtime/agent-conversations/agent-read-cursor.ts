@@ -47,6 +47,8 @@ type TerminalCursorPayload = CursorOwner & {
   r?: 1
   f: string
   c: string
+  s: number
+  m: number
 }
 
 export function encodeTerminalAgentReadCursor(
@@ -60,7 +62,9 @@ export function encodeTerminalAgentReadCursor(
     p: position.offset,
     ...(position.insideRecord ? { r: 1 as const } : {}),
     f: position.sourceFingerprint,
-    c: position.boundaryCheckpoint
+    c: position.boundaryCheckpoint,
+    s: position.sourceSize,
+    m: position.sourceMtimeMs
   }
   return encodeCursor(payload)
 }
@@ -74,7 +78,10 @@ export function decodeTerminalAgentReadCursor(
     !isPositiveSafeInteger(payload.p) ||
     (payload.r !== undefined && payload.r !== 1) ||
     !isBoundedString(payload.f) ||
-    !isBoundedString(payload.c)
+    !isBoundedString(payload.c) ||
+    !isCount(payload.s) ||
+    payload.s < payload.p ||
+    !isCount(payload.m)
   ) {
     throw invalidAgentReadCursor(orcaSessionId)
   }
@@ -82,7 +89,9 @@ export function decodeTerminalAgentReadCursor(
     offset: payload.p,
     ...(payload.r === 1 ? { insideRecord: true } : {}),
     sourceFingerprint: payload.f,
-    boundaryCheckpoint: payload.c
+    boundaryCheckpoint: payload.c,
+    sourceSize: payload.s,
+    sourceMtimeMs: payload.m
   }
 }
 
