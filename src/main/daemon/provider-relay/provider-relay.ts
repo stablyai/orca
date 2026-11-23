@@ -129,9 +129,12 @@ export class ProviderRelay {
     stream.socket.once('close', attachment.onClose)
     // Held requests go first, as events, so no reply line has to carry them all at once.
     const pending = this.pending.records()
-    for (const record of pending) {
-      this.sendLine('relayPending', record)
-      await this.drained()
+    for (const { seq, line } of pending) {
+      for (let offset = 0; offset < line.length || offset === 0; offset += EVENT_PIECE_CHARS) {
+        const end = offset + EVENT_PIECE_CHARS
+        this.send(this.lineEvent('relayPending', seq, line.slice(offset, end), end < line.length))
+        await this.drained()
+      }
     }
     const replayThroughSeq = await this.spool.attach(fromSeq)
     if (this.attachment === attachment && this.exitAnnounced) {

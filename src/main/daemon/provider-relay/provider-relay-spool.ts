@@ -247,7 +247,8 @@ export class ProviderRelaySpool {
           }
           try {
             this.file ??= await open(this.options.path, 'a', 0o600)
-            await this.file.write(write.chunk)
+            // appendFile keeps writing until every byte lands; a bare write may stop short.
+            await this.file.appendFile(write.chunk)
           } catch {
             this.fileFailed = true
             this.keepInMemory(write)
