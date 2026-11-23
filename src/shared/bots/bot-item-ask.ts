@@ -57,6 +57,8 @@ export const BotItemAskSchema = z.object({
 
 export type BotItemAsk = z.infer<typeof BotItemAskSchema>
 
+// Hosts keep the waiting ask pairing works out with this: a change to what it reads bumps WAITING_ASK_RULES
+// (src/main/bots/bot-item-waiting-ask-keep.ts).
 /** A question's first line as plain words, for a one-line row: no `**`, `#`, list marks, code ticks
  *  or link syntax, so a question the agent wrote in Markdown reads cleanly there. */
 export function botItemQuestionLine(text: string): string {
