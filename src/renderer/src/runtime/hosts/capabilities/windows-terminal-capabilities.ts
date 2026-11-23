@@ -98,14 +98,17 @@ function pruneExpiredCapabilityOwners(now: number): void {
 }
 
 function trimCapabilityOwnerCaches(): void {
-  while (cachedCapabilitiesByOwnerKey.size > CAPABILITY_OWNER_CACHE_MAX) {
-    const oldest = cachedCapabilitiesByOwnerKey.keys().next().value
-    if (oldest === undefined) {
+  // Held owners (a released strip's host) stay; they are bounded by live released groups, not by this cap.
+  for (const ownerKey of cachedCapabilitiesByOwnerKey.keys()) {
+    if (cachedCapabilitiesByOwnerKey.size <= CAPABILITY_OWNER_CACHE_MAX) {
       break
     }
-    cachedCapabilitiesByOwnerKey.delete(oldest)
-    if (!pendingCapabilitiesByOwnerKey.has(oldest) && !subscribersByOwnerKey.has(oldest)) {
-      latestCapabilityRequestIdByOwnerKey.delete(oldest)
+    if (isWindowsTerminalCapabilityOwnerHeld(ownerKey)) {
+      continue
+    }
+    cachedCapabilitiesByOwnerKey.delete(ownerKey)
+    if (!pendingCapabilitiesByOwnerKey.has(ownerKey) && !subscribersByOwnerKey.has(ownerKey)) {
+      latestCapabilityRequestIdByOwnerKey.delete(ownerKey)
     }
   }
 }

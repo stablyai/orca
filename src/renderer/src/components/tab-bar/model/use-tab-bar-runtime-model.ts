@@ -16,13 +16,14 @@ import {
   useWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import {
+  hasWindowsTerminalCapabilityHold,
   holdWindowsTerminalCapabilitiesForReleasedStrip,
-  releaseWindowsTerminalCapabilityHold
+  takeWindowsTerminalCapabilityHold
 } from '@/runtime/hosts/capabilities/windows-terminal-capability-holds'
 import type { WindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { shouldShowMobileEmulatorTabIntro } from '../../emulator-pane/tab-intro/mobile-emulator-tab-intro-visibility'
 import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
-import { isTabStripGroupOpen, isTabStripReturning } from '../strip/tab-strip-scroll-memory'
+import { isTabStripGroupOpen } from '../strip/tab-strip-scroll-memory'
 import type { TabBarAgentProjections } from './tab-agent-types-by-tab-id'
 import { shouldShowWindowsShellMenu } from '../create-menu/windows-shell-menu-visibility'
 import { createUnifiedTabLookup } from './tab-bar-item-model'
@@ -145,16 +146,23 @@ export function useTabBarRuntimeModel({
     Boolean(activeRuntimeEnvironmentId?.trim()) ||
     isWebClient ||
     Boolean(worktreeConnectionId)
-  const [returningStrip] = useState(() => isTabStripReturning(groupId))
+  const [returningStrip] = useState(
+    () => groupId !== undefined && hasWindowsTerminalCapabilityHold(worktreeId, groupId)
+  )
   useEffect(() => {
     if (!groupId || !shouldProbeWindowsShellCapabilities) {
       return
     }
-    releaseWindowsTerminalCapabilityHold(groupId)
+    takeWindowsTerminalCapabilityHold(worktreeId, groupId)
     return () => {
       // Unmounting with the group still open means its workspace released the layout; keep the answer for the return.
       if (isTabStripGroupOpen(worktreeId, groupId)) {
-        holdWindowsTerminalCapabilitiesForReleasedStrip(groupId, windowsTerminalCapabilityOwnerKey)
+        holdWindowsTerminalCapabilitiesForReleasedStrip(
+          worktreeId,
+          groupId,
+          windowsTerminalCapabilityOwnerKey,
+          isTabStripGroupOpen
+        )
       }
     }
   }, [groupId, worktreeId, shouldProbeWindowsShellCapabilities, windowsTerminalCapabilityOwnerKey])

@@ -27,11 +27,6 @@ function rememberTabStripScroll(
   }
 }
 
-/** The strip unmounted earlier with its group still open (its workspace released the layout). */
-export function isTabStripReturning(key: string | undefined): boolean {
-  return key !== undefined && offsetByStripKey.has(key)
-}
-
 /** Call after the strip navigation hook so this restore lands after its mount-time reveal. */
 export function useTabStripScrollMemory(
   key: string | undefined,

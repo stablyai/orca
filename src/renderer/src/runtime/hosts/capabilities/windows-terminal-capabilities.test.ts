@@ -12,25 +12,18 @@ vi.mock('./windows-terminal-capability-read', () => ({ readWindowsTerminalCapabi
 
 const { hasCachedWindowsTerminalCapabilities, loadWindowsTerminalCapabilities } =
   await import('./windows-terminal-capabilities')
-const { holdWindowsTerminalCapabilitiesForReleasedStrip, releaseWindowsTerminalCapabilityHold } =
+const { holdWindowsTerminalCapabilitiesForReleasedStrip } =
   await import('./windows-terminal-capability-holds')
 
-describe('capability answers held by released tab strips', () => {
-  it('survive expiry while a released strip holds them, and expire once the last hold is dropped', async () => {
+describe('a released tab strip returning to its workspace', () => {
+  it('still finds its host answer after the cache expires and fills with other hosts', async () => {
     await loadWindowsTerminalCapabilities({ ownerKey: 'host-a', now: 0 })
-    holdWindowsTerminalCapabilitiesForReleasedStrip('group-1', 'host-a')
-    holdWindowsTerminalCapabilitiesForReleasedStrip('group-2', 'host-a')
+    holdWindowsTerminalCapabilitiesForReleasedStrip('wt-1', 'group-1', 'host-a', () => true)
 
-    // Another owner's load runs the expiry sweep 60 s later.
-    await loadWindowsTerminalCapabilities({ ownerKey: 'host-b', now: 60_000 })
+    for (let host = 0; host < 40; host += 1) {
+      await loadWindowsTerminalCapabilities({ ownerKey: `host-${host}`, now: 60_000 })
+    }
+
     expect(hasCachedWindowsTerminalCapabilities('host-a')).toBe(true)
-
-    releaseWindowsTerminalCapabilityHold('group-1')
-    await loadWindowsTerminalCapabilities({ ownerKey: 'host-b', now: 120_000, force: true })
-    expect(hasCachedWindowsTerminalCapabilities('host-a')).toBe(true)
-
-    releaseWindowsTerminalCapabilityHold('group-2')
-    await loadWindowsTerminalCapabilities({ ownerKey: 'host-b', now: 180_000, force: true })
-    expect(hasCachedWindowsTerminalCapabilities('host-a')).toBe(false)
   })
 })
