@@ -6,6 +6,7 @@ import type {
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_PERMISSION_FLOW_RESOLVER } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-resolver'
 import { cancelledJournalPromptBody } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import type {
   StructuredAgentSessionEventSink,
@@ -35,6 +36,14 @@ type ClaudeJournalPromptEntry = {
   /** Waiting status requires a durable prompt card. */
   written: boolean
   landed?: Promise<void>
+  /** A tool permission's call: if it runs after Claude withdraws the card, something allowed it. */
+  toolUseId?: string
+}
+
+type ClaudeWithdrawnApproval = {
+  promptKey: string
+  entry: ClaudeJournalPromptEntry
+  prompt: ClaudeJournalPrompt
 }
 
 export type ClaudeOpenPromptCard = { promptKey: string; asker: string }
@@ -51,6 +60,8 @@ function cancelledPromptBody(
 
 export class ClaudeJournalPrompts {
   private readonly items = new Map<string, ClaudeJournalPromptEntry>()
+  /** By tool call: approvals Claude withdrew whose call has not reported a result yet. */
+  private readonly withdrawn = new Map<string, ClaudeWithdrawnApproval>()
   private pendingCancellationTotal = 0
 
   get size(): number {
@@ -82,6 +93,7 @@ export class ClaudeJournalPrompts {
     const items: ClaudeJournalPrompt[] = []
     const turnScope = this.deps.turnScope()
     let admitted = true
+    let toolUseId: string | undefined
     const append = (identity: AgentJournalItemIdentity, body: ClaudeJournalPrompt['body']) => {
       const options = { ...producer, turnScope }
       if (this.deps.sink.tryAppendItem) {
@@ -106,6 +118,8 @@ export class ClaudeJournalPrompts {
         promptKey: event.prompt.promptKey
       })
       const body = claudeApprovalItem(event.prompt)
+      // A plan review is not a tool permission.
+      toolUseId = body.subject ? undefined : event.prompt.toolUseId
       items.push({ identity, body, turnScope })
       append(identity, body)
       this.deps.bindPromptItemId?.(agentJournalItemKey(identity), event.prompt.promptKey)
@@ -115,7 +129,8 @@ export class ClaudeJournalPrompts {
       items,
       cancellationPending: false,
       ...(producer.agentId ? { asker: producer.agentId } : {}),
-      written: false
+      written: false,
+      ...(toolUseId ? { toolUseId } : {})
     }
     this.items.set(event.prompt.promptKey, entry)
     this.deps.sink.publish()
@@ -171,24 +186,34 @@ export class ClaudeJournalPrompts {
       if (!item) {
         return ADMITTED
       }
-      const body = cancelledPromptBody(item.body)
-      const options = { lifecycle: true, turnScope: item.turnScope }
-      admission = this.deps.sink.tryAppendItem
-        ? this.deps.sink.tryAppendItem(item.identity, body, options)
-        : (this.deps.sink.appendItem(item.identity, body, options), ADMITTED)
+      admission = this.appendLifecycleItem(item, cancelledPromptBody(item.body))
     } else {
       return { accepted: false, reason: 'failed' }
     }
     if (!admission.accepted) {
       return admission
     }
-    const published = this.deps.sink.tryPublish
-      ? this.deps.sink.tryPublish({ lifecycle: true })
-      : (this.deps.sink.publish({ lifecycle: true }), ADMITTED)
+    const published = this.publishLifecycle()
     if (published.accepted) {
       this.deletePrompt(promptKey)
     }
     return published
+  }
+
+  private appendLifecycleItem(
+    prompt: ClaudeJournalPrompt,
+    body: ClaudeJournalPrompt['body']
+  ): StructuredAgentSessionSinkAdmission {
+    const options = { lifecycle: true, turnScope: prompt.turnScope }
+    return this.deps.sink.tryAppendItem
+      ? this.deps.sink.tryAppendItem(prompt.identity, body, options)
+      : (this.deps.sink.appendItem(prompt.identity, body, options), ADMITTED)
+  }
+
+  private publishLifecycle(): StructuredAgentSessionSinkAdmission {
+    return this.deps.sink.tryPublish
+      ? this.deps.sink.tryPublish({ lifecycle: true })
+      : (this.deps.sink.publish({ lifecycle: true }), ADMITTED)
   }
 
   private deletePrompt(promptKey: string): void {
@@ -208,12 +233,45 @@ export class ClaudeJournalPrompts {
   }
 
   cancel(promptKey: string): StructuredAgentSessionSinkAdmission {
+    const cancelled = this.items.get(promptKey)
+    const prompt = cancelled?.items[0]
+    if (cancelled?.toolUseId && prompt) {
+      this.withdrawn.set(cancelled.toolUseId, { promptKey, entry: cancelled, prompt })
+    }
     const admission = this.admitCancellation(promptKey)
     const entry = this.items.get(promptKey)
     if (entry) {
       this.setCancellationPending(entry, !admission.accepted && admission.reason === 'backpressure')
     }
     return admission
+  }
+
+  /** Claude withdraws its stdio request when a PermissionRequest hook answers first; a call that
+   *  then succeeds was allowed, so its card reads allowed. A failed one may have been denied. */
+  observeToolResult(toolUseId: string, failed: boolean, observedAt: number): void {
+    const withdrawn = this.withdrawn.get(toolUseId)
+    if (!withdrawn) {
+      return
+    }
+    this.withdrawn.delete(toolUseId)
+    const { prompt } = withdrawn
+    const allow = prompt.body.options.find((option) => option.intent === 'allow_once')
+    if (failed || !allow) {
+      return
+    }
+    if (this.items.get(withdrawn.promptKey) === withdrawn.entry) {
+      // A cancellation still held by backpressure would overwrite this answer.
+      this.deletePrompt(withdrawn.promptKey)
+    }
+    const resolution = {
+      state: 'resolved' as const,
+      selectedOptionId: allow.id,
+      resolvedBy: AGENT_PERMISSION_FLOW_RESOLVER,
+      resolvedAt: observedAt
+    }
+    if (this.appendLifecycleItem(prompt, { ...prompt.body, resolution }).accepted) {
+      this.publishLifecycle()
+    }
   }
 
   retryPendingCancellations(): StructuredAgentSessionSinkAdmission {
@@ -263,6 +321,7 @@ export class ClaudeJournalPrompts {
 
   clear(): void {
     this.items.clear()
+    this.withdrawn.clear()
     this.pendingCancellationTotal = 0
   }
 }

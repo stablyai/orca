@@ -6,10 +6,12 @@ import { subscribeForRedrive } from '../../mailbox/structured-pointer/structured
 import { structuredMailboxCustody } from '../../mailbox/routing/structured-session-mail-target'
 import type { WorkerTurnStopReportDeps } from '../turn-stops/worker-turn-stop-report'
 import {
+  allowedByAgentPermissionFlow,
   chatApprovalCloseOutcome,
   readChatWorkerPrompt,
   type ChatWorkerPromptReader
 } from './chat-worker-approval-prompt'
+import { CLOSE_EVIDENCE_MS } from './terminal-worker-approval-book'
 import {
   TERMINAL_APPROVAL_ID_PREFIX,
   approvalReportId,
@@ -28,7 +30,12 @@ const watchHostJournal: ChatJournalWatch = (sessionId, onChange, relevant) => {
   return host ? subscribeForRedrive(host, sessionId, onChange, relevant) : () => {}
 }
 
-type WatchedSession = { approvals: Map<string, Set<string>>; stop: () => void }
+type WatchedSession = {
+  approvals: Map<string, Set<string>>
+  /** Closed when the agent withdrew them: the agent rewrites one it then allowed, as when a hook did. */
+  withdrawn: Map<string, Set<string>>
+  stop: () => void
+}
 
 export class ChatWorkerApprovalWatch {
   private readonly sessions = new Map<string, WatchedSession>()
@@ -38,6 +45,7 @@ export class ChatWorkerApprovalWatch {
       readPrompt?: ChatWorkerPromptReader
       watchJournal?: ChatJournalWatch
       signal: AbortSignal
+      setTimer: (run: () => void, delayMs: number) => void
     }
   ) {
     deps.signal.addEventListener(
@@ -59,15 +67,19 @@ export class ChatWorkerApprovalWatch {
     let session = this.sessions.get(sessionId)
     if (!session) {
       const approvals = new Map<string, Set<string>>()
+      const withdrawn = new Map<string, Set<string>>()
       const watch = this.deps.watchJournal ?? watchHostJournal
       session = {
         approvals,
+        withdrawn,
         stop: watch(
           sessionId,
           () => void this.check(sessionId),
           (publication) =>
             !publication.commit ||
-            publication.commit.items.some((item) => approvals.has(item.itemId))
+            publication.commit.items.some(
+              (item) => approvals.has(item.itemId) || withdrawn.has(item.itemId)
+            )
         )
       }
       if (this.deps.signal.aborted) {
@@ -105,6 +117,9 @@ export class ChatWorkerApprovalWatch {
         continue
       }
       if (outcome && db) {
+        if (prompt?.body.resolution.state === 'cancelled') {
+          this.awaitAgentAnswer(sessionId, session, approvalId, new Set(dispatchIds))
+        }
         for (const dispatchId of dispatchIds) {
           if (this.deps.signal.aborted) {
             return
@@ -119,7 +134,54 @@ export class ChatWorkerApprovalWatch {
         session.approvals.delete(approvalId)
       }
     }
-    if (session.approvals.size === 0 && this.sessions.get(sessionId) === session) {
+    for (const [approvalId, dispatchIds] of session.withdrawn) {
+      const prompt = await (this.deps.readPrompt ?? readChatWorkerPrompt)(
+        sessionId,
+        approvalId
+      ).catch(() => undefined)
+      const db = this.deps.getDb()
+      if (this.deps.signal.aborted) {
+        return
+      }
+      if (!prompt || !db || !allowedByAgentPermissionFlow(prompt)) {
+        continue
+      }
+      // Its closing line named no answer; the second names it without waking the coordinator.
+      const outcome = chatApprovalCloseOutcome(prompt)
+      for (const dispatchId of dispatchIds) {
+        const dispatch = db.getDispatchContextById(dispatchId)
+        if (dispatch && outcome) {
+          closeReportedApproval(db, dispatch, approvalId, outcome, this.deps, true)
+        }
+      }
+      session.withdrawn.delete(approvalId)
+    }
+    this.stopIfIdle(sessionId, session)
+  }
+
+  /** Keeps a withdrawn prompt's closing line refinable while its call may still run, as long as a
+   *  terminal prompt waits for its tool. */
+  private awaitAgentAnswer(
+    sessionId: string,
+    session: WatchedSession,
+    approvalId: string,
+    dispatchIds: Set<string>
+  ): void {
+    session.withdrawn.set(approvalId, dispatchIds)
+    this.deps.setTimer(() => {
+      if (session.withdrawn.get(approvalId) === dispatchIds) {
+        session.withdrawn.delete(approvalId)
+        this.stopIfIdle(sessionId, session)
+      }
+    }, CLOSE_EVIDENCE_MS)
+  }
+
+  private stopIfIdle(sessionId: string, session: WatchedSession): void {
+    if (
+      session.approvals.size === 0 &&
+      session.withdrawn.size === 0 &&
+      this.sessions.get(sessionId) === session
+    ) {
       session.stop()
       this.sessions.delete(sessionId)
     }

@@ -10,7 +10,7 @@ import {
 } from './terminal-worker-approval-hold'
 
 // A closed prompt waits this long for its tool's result before its closing line says no more than "closed".
-const CLOSE_EVIDENCE_MS = 10 * 60_000
+export const CLOSE_EVIDENCE_MS = 10 * 60_000
 
 type Hold = TerminalWorkerApprovalHold
 type CloseHow = TerminalWorkerApprovalCloseHow

@@ -80,13 +80,15 @@ export function recentOpenApprovalReports(
 }
 
 /** Closes an approval Orca reported, from its stored escalation; a no-op once a close exists.
- *  True once a closing line is on record, or there is nothing Orca reported to close. */
+ *  True once a closing line is on record, or there is nothing Orca reported to close. With
+ *  `refines`, the closed one's second line, naming how it closed. */
 export function closeReportedApproval(
   db: OrchestrationDb,
   dispatch: DispatchContextRow,
   approvalId: string,
   outcome: WorkerApprovalOutcome,
-  deps: Pick<WorkerTurnStopReportDeps, 'notify'>
+  deps: Pick<WorkerTurnStopReportDeps, 'notify'>,
+  refines = false
 ): boolean {
   const row = db.getMessageById(approvalReportId(dispatch.id, approvalId, 'open'))
   const open = row ? readApprovalReport(row) : null
@@ -97,9 +99,11 @@ export function closeReportedApproval(
     db,
     dispatch,
     { from: row.from_handle, approval: closedApproval(open, outcome) },
-    deps
+    deps,
+    refines
   )
-  return db.getMessageById(approvalReportId(dispatch.id, approvalId, 'closed')) !== undefined
+  const kind = refines ? 'refined' : 'closed'
+  return db.getMessageById(approvalReportId(dispatch.id, approvalId, kind)) !== undefined
 }
 
 function parseJson(text: string | null): unknown {

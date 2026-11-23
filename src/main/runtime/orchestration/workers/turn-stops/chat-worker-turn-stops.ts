@@ -87,7 +87,8 @@ export function chatWorkerTurnStopReporter(
     ...deps,
     readPrompt,
     watchJournal,
-    signal: lifetime.signal
+    signal: lifetime.signal,
+    setTimer: schedule
   })
   const onTurnAttention = (
     event: AgentSessionTurnCompletionEvent,
