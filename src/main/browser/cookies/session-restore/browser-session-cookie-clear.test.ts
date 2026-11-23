@@ -66,8 +66,10 @@ function sessionCookie(name: string, domain: string): CdpCookie {
 
 const PARTITION = 'persist:browser-profile-default'
 let directory: string
+// Set while a launch reads its file: the read fails as it does when the OS keychain refuses.
+let decryptFails = false
 
-async function launch(options: { clearWhileRestoring?: boolean } = {}) {
+async function launch(options: { clearWhileRestoring?: boolean; unreadable?: boolean } = {}) {
   vi.resetModules()
   const jar = fakeSession()
   sessions.set(PARTITION, jar)
@@ -77,19 +79,33 @@ async function launch(options: { clearWhileRestoring?: boolean } = {}) {
   snapshots.configureBrowserSessionCookieSnapshots(directory)
   const restore = await import('./browser-session-cookie-restore')
   const clear = await import('./browser-session-cookie-clear')
+  decryptFails = options.unreadable ?? false
   const restored = restore.restoreBrowserSessionCookies([
     { id: 'default', scope: 'default', partition: PARTITION, label: 'Default', source: null }
   ])
-  await Promise.all([restored, options.clearWhileRestoring && clear.clearBrowserCookieJar(target)])
-  return { jar, target, clear, snapshots }
+  try {
+    await Promise.all([
+      restored,
+      options.clearWhileRestoring && clear.clearBrowserCookieJar(target)
+    ])
+  } finally {
+    decryptFails = false
+  }
+  return { jar, target, clear, restore, snapshots }
 }
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'orca-session-cookie-restore-'))
+  decryptFails = false
   setSecretStore({
     isEncryptionAvailable: () => true,
     encryptString: (text) => Buffer.from(text, 'utf8'),
-    decryptString: (cipher) => cipher.toString('utf8'),
+    decryptString: (cipher) => {
+      if (decryptFails) {
+        throw new Error('keychain refused')
+      }
+      return cipher.toString('utf8')
+    },
     describeProtectionGap: () => null
   })
 })
@@ -132,5 +148,49 @@ describe('session cookie snapshot after a cookie clear', () => {
     await clear.persistBrowserCookieClear(target, (cookie) => cookie.domain === 'google.com')
 
     expect((await launch()).jar.names()).toEqual(['sid'])
+  })
+})
+
+describe('session cookie snapshot that a launch could not read', () => {
+  async function savedButUnread() {
+    const first = await launch()
+    await first.snapshots.writeSessionCookieSnapshot(first.snapshots.snapshotPath('default'), [
+      sessionCookie('sid', 'example.com'),
+      sessionCookie('SID', 'google.com')
+    ])
+    const unread = await launch({ unreadable: true })
+    expect(unread.jar.names()).toEqual([])
+    return unread
+  }
+
+  it('a Google-only clear leaves the file for every other site in place', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    try {
+      const { target, clear } = await savedButUnread()
+      await clear.persistBrowserCookieClear(target, (cookie) => cookie.domain === 'google.com')
+      // Past the 30 s save, too.
+      await vi.advanceTimersByTimeAsync(60_000)
+    } finally {
+      vi.useRealTimers()
+    }
+
+    // It could not take only Google's cookies out of a file it could not read.
+    expect((await launch()).jar.names()).toEqual(['SID', 'sid'])
+  })
+
+  it('a full clear still removes the file', async () => {
+    const { target, clear } = await savedButUnread()
+    await clear.clearBrowserCookieJar(target)
+
+    expect((await launch()).jar.names()).toEqual([])
+  })
+
+  it('the quit save does not replace the file with nothing', async () => {
+    const { jar, restore } = await savedButUnread()
+    await jar.cookies.set({ url: 'https://example.org/', name: 'new' })
+    await new Promise((resolve) => setImmediate(resolve))
+    await restore.flushBrowserSessionCookiesOnQuit()
+
+    expect((await launch()).jar.names()).toEqual(['SID', 'sid'])
   })
 })

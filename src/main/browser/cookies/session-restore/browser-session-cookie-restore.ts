@@ -119,7 +119,7 @@ async function restoreSnapshotTargets(targets: readonly SnapshotTarget[]): Promi
       const snapshot = await readSessionCookieSnapshot(snapshotTarget.filePath)
       const saved = snapshot ?? []
       tracker.saved = groupByScope(saved, cdpCookieScopeKey)
-      tracker.savedStale = snapshot === null
+      tracker.savedFile = snapshot === null ? 'unread' : 'same'
       tracker.reading = false
       if (tracker.changedScopes.size > 0) {
         scheduleSave(tracker)
@@ -186,7 +186,7 @@ export async function writeTrackedSnapshot(
 ): Promise<void> {
   await writeSessionCookieSnapshot(tracker.filePath, cookies)
   tracker.saved = groupByScope(cookies, cdpCookieScopeKey)
-  tracker.savedStale = false
+  tracker.savedFile = 'same'
 }
 
 /** For a profile created after launch: nothing to restore yet. */
@@ -203,7 +203,7 @@ function track(filePath: string, target: Session): SessionCookieTracker {
     target,
     filePath,
     saved: new Map(),
-    savedStale: false,
+    savedFile: 'same',
     reading: false,
     changedScopes: new Map(),
     changedDuringSave: null,
@@ -261,8 +261,13 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
     // After quit or deletion the file belongs to the quit prune or is gone.
     if (cookies && !quitting && trackers.get(tracker.filePath) === tracker) {
       const saved = groupByScope(cookies, cdpCookieScopeKey)
-      // Sites often re-set a session cookie to the value it already had; skip the sealed write.
-      if (tracker.savedStale || !sameSavedCookies(tracker.saved, saved)) {
+      // An unread file is replaced only after a change made this read the live jar, never with
+      // the empty stand-in for it. Sites often re-set a session cookie to the value it already had;
+      // skip the sealed write.
+      const mustRewrite =
+        tracker.savedFile === 'stale' ||
+        (tracker.savedFile === 'unread' && tracker.changedScopes.size > 0)
+      if (mustRewrite || !sameSavedCookies(tracker.saved, saved)) {
         await writeTrackedSnapshot(tracker, cookies)
       }
       tracker.changedScopes = changedDuringSave
@@ -321,8 +326,9 @@ export async function flushBrowserSessionCookiesOnQuit(): Promise<void> {
   await Promise.all(
     [...trackers.values()].map(async (tracker) => {
       cancelPendingSave(tracker)
-      // A file still being read is left as it is, not replaced with what this launch saw.
-      if (tracker.changedScopes.size === 0 || tracker.reading) {
+      // A file still being read, or that could not be read, is left as it is: this keeps only
+      // saved scopes, so it would replace that file with nothing.
+      if (tracker.changedScopes.size === 0 || tracker.reading || tracker.savedFile === 'unread') {
         return
       }
       try {

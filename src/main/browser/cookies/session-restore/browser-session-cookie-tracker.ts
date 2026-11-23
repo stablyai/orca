@@ -5,10 +5,14 @@ import type { ScopeChange } from './browser-session-cookie-scopes'
 export type SessionCookieTracker = {
   target: Session
   filePath: string
-  /** What the file holds now, by scope. */
+  /** What the file holds now, by scope (unless `savedFile` says otherwise). */
   saved: Map<string, CdpCookie[]>
-  /** The file may hold cookies `saved` lacks (it could not be read), so the next save must rewrite it. */
-  savedStale: boolean
+  /**
+   * 'same': the file holds `saved`. 'stale': a clear's write failed, so it may still hold cookies
+   * `saved` dropped, and the next save must rewrite it. 'unread': launch could not read it, so
+   * `saved` is empty and says nothing of what it holds; only live cookies or a full clear replace it.
+   */
+  savedFile: 'same' | 'stale' | 'unread'
   /** Set until the file has been read: a save before then would compare against nothing. */
   reading: boolean
   /** Scopes whose cookies changed since `saved` was read. */
