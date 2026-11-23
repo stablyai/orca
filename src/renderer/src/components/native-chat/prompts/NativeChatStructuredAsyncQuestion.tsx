@@ -17,6 +17,7 @@ import type { NativeChatStructuredComposerTransport } from '../composer/submit/n
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import type { NativeChatLiveSession } from '../session/terminal/read/native-chat-live-session-contract'
 import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'
+import { projectionBesideStreamedText } from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import {
   useStructuredAgentSessionAsyncQuestionSkip,
   type StructuredAgentSessionAsyncQuestionSkip
@@ -65,6 +66,12 @@ export function NativeChatStructuredAsyncQuestion({
     queuedTexts,
     skip
   })
+  // A send's evidence is its own row or submission, never a streamed reply's text.
+  const structure = projectionBesideStreamedText(session.messages)
+  const operationPending = useMemo(
+    () => nativeChatAnswerOperationPending(operation, structure, submissions),
+    [operation, structure, submissions]
+  )
   if (!prompt) {
     return null
   }
@@ -73,14 +80,7 @@ export function NativeChatStructuredAsyncQuestion({
     <NativeChatQuestionCard
       key={promptKey}
       prompt={prompt}
-      isSubmitting={
-        answerPending ||
-        nativeChatAnswerOperationPending(
-          operation?.promptKey === promptKey ? operation : null,
-          session.messages,
-          submissions
-        )
-      }
+      isSubmitting={answerPending || (operation?.promptKey === promptKey && operationPending)}
       onAnswer={(selections) => {
         const current: PromptAnswerOperation = { promptKey, inFlight: true }
         const sent = send(formatAskAnswer(prompt, selections), [], {
