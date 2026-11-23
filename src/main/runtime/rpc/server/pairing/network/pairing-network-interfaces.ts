@@ -37,14 +37,6 @@ export async function getPairingNetworkInterfaces(
   const result: NetworkInterface[] = []
   const interfaces = networkInterfaces()
   const hasHyperVInterface = Object.keys(interfaces).some((name) => /^vEthernet /i.test(name))
-  // Unknown default route cannot attest vEthernet reachability.
-  const defaultRouteInterfaceNames = hasHyperVInterface
-    ? await getDefaultRouteInterfaceNames()
-    : new Set<string>()
-  const normalizedDefaultRouteInterfaceNames =
-    defaultRouteInterfaceNames === null
-      ? null
-      : new Set([...defaultRouteInterfaceNames].map((name) => name.toLowerCase()))
 
   for (const [name, addrs] of Object.entries(interfaces)) {
     for (const addr of addrs ?? []) {
@@ -62,14 +54,27 @@ export async function getPairingNetworkInterfaces(
       }
       result.push({
         name,
-        address: addr.address,
-        ...(normalizedDefaultRouteInterfaceNames?.has(name.toLowerCase())
-          ? { hasDefaultRoute: true }
-          : {})
+        address: addr.address
       })
     }
   }
-  return result.sort((a, b) => rankInterface(a) - rankInterface(b))
+  // A tie between candidates needs the default-route tie-break; unknown route cannot attest vEthernet reachability.
+  const defaultRouteInterfaceNames =
+    hasHyperVInterface || result.length > 1
+      ? await getDefaultRouteInterfaceNames()
+      : new Set<string>()
+  const normalizedDefaultRouteInterfaceNames =
+    defaultRouteInterfaceNames === null
+      ? null
+      : new Set([...defaultRouteInterfaceNames].map((name) => name.toLowerCase()))
+
+  return result
+    .map((iface) =>
+      normalizedDefaultRouteInterfaceNames?.has(iface.name.toLowerCase())
+        ? { ...iface, hasDefaultRoute: true }
+        : iface
+    )
+    .sort((a, b) => rankInterface(a) - rankInterface(b))
 }
 
 function rankInterface({ name, address, hasDefaultRoute }: NetworkInterface): number {
