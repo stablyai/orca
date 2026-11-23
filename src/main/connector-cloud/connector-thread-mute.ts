@@ -165,6 +165,10 @@ export function threadMuteStep(
   if (!muted) {
     return 'send'
   }
+  // A command for someone else (another bot behind the same Slack app) leaves this one muted.
+  if (mayBeThreadMuteCommand(delivery.text)) {
+    return 'silence'
+  }
   // `mentioned` comes only from a newer connector service; until then the bot's own mention in the
   // text counts.
   return delivery.mentioned || delivery.bareMention || mentionsBot(delivery.text, bot)
@@ -302,7 +306,9 @@ function applyStep(
     return null
   }
   if (step === 'silence') {
-    return record(async () => ACCEPTED)
+    // One carrying automations keeps no receipt: a resend's replay would count them as run in a
+    // turn that never was, so it is decided again instead and the cloud runs them itself.
+    return delivery.automations?.length ? Promise.resolve(ACCEPTED) : record(async () => ACCEPTED)
   }
   if (step === 'unmute_and_send') {
     // Sent on at once so it keeps its batch's follow-ups as one turn; its save starts first and is

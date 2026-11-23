@@ -208,8 +208,10 @@ function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore)
     waiting: new Map(),
     read: (key) => readThreadMute(store, key),
     write: async (key, muted) => {
-      writeLinkFact(store, key, { muted: muted ? true : undefined })
-      await store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
+      // Already so: nothing to save.
+      if (writeLinkFact(store, key, { muted: muted ? true : undefined })) {
+        await store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
+      }
     },
     queued: (key) => runtime.getExternalConversationSeam()?.queued(key) ?? Promise.resolve(),
     botNames: (botId) => {

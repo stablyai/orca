@@ -104,6 +104,8 @@ describe('a muted thread', () => {
     await deliver(send('ping @reviewer'))
     await deliver(send('mute'))
     await deliver(send('<@UOTHER> unmute'))
+    // Another bot behind the same Slack app: its mute is no mention of this one.
+    await deliver(send('<@U0BOT> reviewer-2 mute'))
     await deliver(send('still muted'))
     await deliver(send('unmute'))
     await deliver(send('back'))
