@@ -21,11 +21,68 @@ function renderIcon(iconName: string | undefined, iconPath?: unknown) {
   return render(createElement(Icon, { size: 18 })).container
 }
 
-it('uses the system text color for path icons in forced colors', () => {
-  const stylesheet = readFileSync('src/renderer/src/assets/main.css', 'utf8')
-  expect(stylesheet).toMatch(
-    /@media\s*\(forced-colors:\s*active\)\s*\{\s*\.plugin-panel-icon\s*\{\s*color:\s*CanvasText\s*;/
+type CssBlock = { prelude: string; body: string; parents: string[] }
+
+/** Every `prelude { body }` block in the stylesheet, comments removed, with the preludes of the
+ *  blocks around it, outermost first. */
+function cssBlocks(css: string): CssBlock[] {
+  const source = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const blocks: CssBlock[] = []
+  const open: { prelude: string; start: number }[] = []
+  let preludeStart = 0
+  for (let index = 0; index < source.length; index++) {
+    const char = source[index]
+    if (char === '{') {
+      open.push({ prelude: source.slice(preludeStart, index).trim(), start: index + 1 })
+      preludeStart = index + 1
+    } else if (char === '}') {
+      const block = open.pop()
+      if (block) {
+        blocks.push({
+          prelude: block.prelude,
+          body: source.slice(block.start, index),
+          parents: open.map((parent) => parent.prelude)
+        })
+      }
+      preludeStart = index + 1
+    } else if (char === ';') {
+      preludeStart = index + 1
+    }
+  }
+  return blocks
+}
+
+function declarations(body: string): Record<string, string> {
+  return Object.fromEntries(
+    body
+      .split(';')
+      .map((part) => part.split(':').map((side) => side.trim()))
+      .filter((pair): pair is [string, string] => pair.length === 2 && pair[0] !== '')
   )
+}
+
+it('uses the system text color for path icons in forced colors', () => {
+  const blocks = cssBlocks(readFileSync('src/renderer/src/assets/main.css', 'utf8'))
+  const iconRules = blocks.filter(
+    (block) => !block.prelude.startsWith('@') && block.prelude.includes('.plugin-panel-icon')
+  )
+  // Why exact: one rule, directly in a top-level forced-colors query, sets only the color, and
+  // no other rule anywhere in the stylesheet styles the icon.
+  expect(iconRules).toHaveLength(1)
+  const [rule] = iconRules
+  expect(rule?.prelude).toBe('.plugin-panel-icon')
+  expect(rule?.parents).toHaveLength(1)
+  expect(rule?.parents[0]).toMatch(/^@media\s*\(\s*forced-colors\s*:\s*active\s*\)$/)
+  expect(declarations(rule?.body ?? '')).toEqual({ color: 'CanvasText' })
+
+  // The rule only takes effect when the icon opts out of forced colors and draws in currentColor.
+  for (const mode of ['stroke', 'fill']) {
+    const svg = renderIcon(undefined, { path: 'M4 4h16v16H4z', mode }).querySelector('svg')
+    expect(svg?.classList.contains('plugin-panel-icon')).toBe(true)
+    expect(svg?.getAttribute('style')).toMatch(/forced-color-adjust:\s*none/)
+    expect(svg?.getAttribute(mode)).toBe('currentColor')
+    cleanup()
+  }
 })
 
 it('draws a stroke path icon with Lucide-style attributes', () => {
@@ -65,6 +122,8 @@ it('falls back to the built-in glyph or puzzle when a host sends an invalid path
   const puzzle = renderIcon(undefined).innerHTML
   expect(renderIcon(undefined, { path: 'M0 0"/><script/>' }).innerHTML).toBe(puzzle)
   expect(renderIcon(undefined, 'M0 0').innerHTML).toBe(puzzle)
+  expect(renderIcon(undefined, { path: 'M1. 2.L-.5-1.5' }).innerHTML).toBe(puzzle)
+  expect(renderIcon(undefined, { path: 'M0 0L1e39 1' }).innerHTML).toBe(puzzle)
   expect(renderIcon('database', { path: 'nope' }).innerHTML).toBe(renderIcon('database').innerHTML)
   expect(renderIcon('database').innerHTML).not.toBe(puzzle)
 })
