@@ -46,9 +46,12 @@ const {
 })
 
 const unreachable = (): Error =>
-  Object.assign(new Error('Could not connect to the remote Orca runtime.'), {
-    code: 'remote_runtime_unavailable'
-  })
+  Object.assign(
+    new Error("Could not connect to the remote Orca runtime. terminal_gone isn't answering."),
+    {
+      code: 'remote_runtime_unavailable'
+    }
+  )
 
 function sentText(): string {
   return subscriptionSendBinary.mock.calls

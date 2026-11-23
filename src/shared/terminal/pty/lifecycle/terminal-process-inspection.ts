@@ -71,6 +71,17 @@ export function classifyTerminalProcessInspectionFailure(
       ? String((error as { code?: unknown }).code)
       : ''
   if (
+    code === 'CONNECTION_LOST' ||
+    code === 'DISPOSED' ||
+    code === 'socket_closed' ||
+    code === 'connection_closed' ||
+    code === 'transport_closed' ||
+    code === 'runtime_unavailable' ||
+    code === 'remote_runtime_unavailable'
+  ) {
+    return 'transport_loss'
+  }
+  if (
     code === 'terminal_handle_stale' ||
     code === 'terminal_exited' ||
     code === 'terminal_gone' ||
@@ -101,13 +112,6 @@ export function classifyTerminalProcessInspectionFailure(
     return 'old_host'
   }
   if (
-    code === 'CONNECTION_LOST' ||
-    code === 'DISPOSED' ||
-    code === 'socket_closed' ||
-    code === 'connection_closed' ||
-    code === 'transport_closed' ||
-    code === 'runtime_unavailable' ||
-    code === 'remote_runtime_unavailable' ||
     /(?:connection\s+(?:lost|closed)|socket\s+(?:closed|lost)|terminal\s+closed|runtime\s+unavailable|reconnecting|multiplexer\s+disposed|request\s+closed)/i.test(
       message
     )

@@ -234,7 +234,11 @@ function isRecoverablePaneBindingError(error: unknown): boolean {
   )
 }
 
-function isRemoteTerminalGoneMessage(message: string): boolean {
+function isRemoteTerminalGoneError(error: unknown): boolean {
+  if (toRemoteRuntimeClientErrorLike(error)?.code === 'remote_runtime_unavailable') {
+    return false
+  }
+  const message = runtimeTerminalErrorMessage(error)
   return (
     message.includes('terminal_exited') ||
     message.includes('terminal_gone') ||
@@ -2715,7 +2719,7 @@ export function createRemoteRuntimePtyTransport(
       }
       return
     }
-    if (isRemoteTerminalGoneMessage(message)) {
+    if (isRemoteTerminalGoneError(error)) {
       // Why: an explicit terminal-gone response is lifecycle evidence, unlike a replaceable stale handle seen during reconnect.
       retireRemoteTerminalId()
       return
@@ -4025,7 +4029,7 @@ export function createRemoteRuntimePtyTransport(
           recovery.cancel()
           emitRecoveryState()
           storedCallbacks.onSpawnDeferred?.(deferral)
-        } else if (isRemoteTerminalGoneMessage(message)) {
+        } else if (isRemoteTerminalGoneError(error)) {
           recovery.cancel()
           handleRemoteTerminalError(error)
         } else if (isSshSignInPendingTerminalError(message)) {
