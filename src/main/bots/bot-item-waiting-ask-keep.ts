@@ -1,5 +1,7 @@
-// The ask waiting on each item's owner, kept beside the items so an open reads none of its history. A side
-// table, not a migration step, so older builds keep writing the file; their events leave a kept ask stale.
+// The ask waiting on each item's owner, kept beside the items so an open reads only the events since it.
+// Writes never touch it, so it costs them nothing; a side table, not a migration step, so older builds keep
+// writing the file, and their events are checked like any other.
+import { isTransientSqliteContention } from '../sqlite/sqlite-read-failure'
 import type SyncDatabase from '../sqlite/sync-database'
 import { botItemWaitingAsk } from '../../shared/bots/bot-item-question-answers'
 import { botItemQuestionShape } from '../../shared/bots/bot-item-ask'
@@ -64,18 +66,6 @@ export function pairWaitingAsk(db: SyncDatabase, uid: string): PairedWaitingAsk 
   return { ask: ask ? parseBotItemEventId(ask.askId) : null, at: records.at(-1)?.id ?? 0 }
 }
 
-/** The kept ask while it paired the item's newest event; undefined when none holds. */
-export function keptWaitingAsk(db: SyncDatabase, uid: string): number | null | undefined {
-  const row = db
-    .prepare(
-      `SELECT kept.ask FROM item_waiting_asks kept JOIN items ON items.uid = kept.item_uid
-        WHERE kept.item_uid = ? AND kept.at = items.last_event_id`
-    )
-    .get(uid)
-  const ask = row ? optionalInteger(row, 'ask') : null
-  return ask === null ? undefined : ask === 0 ? null : ask
-}
-
 /** Keeps a pairing only while it read the item's newest event: one a write landed after stays unkept. */
 function keepWaitingAsk(db: SyncDatabase, uid: string, paired: PairedWaitingAsk): void {
   db.prepare(
@@ -85,42 +75,19 @@ function keepWaitingAsk(db: SyncDatabase, uid: string, paired: PairedWaitingAsk)
   ).run(uid, paired.ask ?? 0, paired.at, uid, paired.at)
 }
 
-/** What one write did to an item: its newest event before it and after it, and the most any of its events
- *  can change a kept ask. */
-export type TouchedItem = { before: number; last: number; change: 'asks' | 'answers' | null }
-
-/** The item as a write left it once it added event `id`; `before` counts only for its first event. */
-export function touchedBy(
-  item: TouchedItem | undefined,
-  before: number,
-  id: number,
-  change: TouchedItem['change']
-): TouchedItem {
-  const was = item?.change ?? null
-  return {
-    before: item?.before ?? before,
-    last: id,
-    change: was === 'asks' || change === 'asks' ? 'asks' : (was ?? change)
-  }
-}
-
-export function lastEventOf(db: SyncDatabase, uid: string): number {
-  const row = db.prepare('SELECT last_event_id FROM items WHERE uid = ?').get(uid)
-  return row ? (optionalInteger(row, 'last_event_id') ?? 0) : 0
-}
-
 let keepFailureTold = false
 
-/** Outside any transaction and never waiting on another writer; a keep that fails (busy, a full disk)
- *  leaves the kept ask stale, so a later open pairs the events again. */
+/** Outside any write and never waiting on another writer; a keep that fails (busy, a full disk) leaves the
+ *  last kept ask, and a later open checks or pairs again. */
 function quietly(db: SyncDatabase, keep: () => void): void {
   const timeout = Number(db.pragma('busy_timeout', { simple: true }) ?? 0)
   db.pragma('busy_timeout = 0')
   try {
     keep()
   } catch (error) {
-    // Once per run: a file the disk won't let us write fails every keep, and each open still reads right.
-    if (!keepFailureTold) {
+    // Another writer is routine. Anything else is told once per run: a file the disk won't let us write
+    // fails every keep, and each open still reads right.
+    if (!isTransientSqliteContention(error) && !keepFailureTold) {
       keepFailureTold = true
       console.warn('[bots] items: keeping a waiting ask failed', error)
     }
@@ -129,45 +96,37 @@ function quietly(db: SyncDatabase, keep: () => void): void {
   }
 }
 
-/** After a write, in one transaction of constant-time updates: carry each kept ask that held before it to
- *  the item's newest event when the write can't have changed it. Any other kept ask goes stale and the next
- *  open pairs the events once. */
-export function keepAfterWrite(db: SyncDatabase, touched: ReadonlyMap<string, TouchedItem>): void {
-  const carried = [...touched].filter(([, item]) => item.change !== 'asks')
-  if (carried.length === 0) {
-    return
-  }
-  quietly(db, () => {
-    // Outside the try: a BEGIN that fails leaves no transaction of ours to roll back.
-    db.exec('BEGIN IMMEDIATE')
-    try {
-      const carry = db.prepare(
-        `UPDATE item_waiting_asks SET at = ?
-          WHERE item_uid = ? AND at = ? AND (? OR ask = 0)
-            AND (SELECT last_event_id FROM items WHERE uid = ?) = ?`
-      )
-      for (const [uid, item] of carried) {
-        carry.run(item.last, uid, item.before, Number(item.change === null), uid, item.last)
-      }
-      db.exec('COMMIT')
-    } catch (error) {
-      db.exec('ROLLBACK')
-      throw error
-    }
-  })
-}
+/** Events after a kept ask that an open checks before pairing every event again. Past it the open pairs
+ *  them all and keeps the result, so the next open's check is short again. */
+const CHECKED_EVENTS = 64
 
-/** The kept ask while it holds, else paired from all the item's events, and kept for the next open when
- *  `store` (outside any write). */
+/** The kept ask while no event since it can change it, else paired from all the item's events and kept for
+ *  the next open when `store` (outside any write). */
 export function waitingAskOf(
   db: SyncDatabase,
   uid: string,
   keeps: boolean,
   store: boolean
 ): number | null {
-  const kept = keeps ? keptWaitingAsk(db, uid) : undefined
-  if (kept !== undefined) {
-    return kept
+  const kept = keeps
+    ? db.prepare('SELECT ask, at FROM item_waiting_asks WHERE item_uid = ?').get(uid)
+    : undefined
+  if (kept) {
+    const ask = optionalInteger(kept, 'ask') ?? 0
+    const since = db
+      .prepare('SELECT * FROM item_events WHERE item_uid = ? AND id > ? ORDER BY id LIMIT ?')
+      .all(uid, optionalInteger(kept, 'at') ?? 0, CHECKED_EVENTS + 1)
+      .map(eventRecordOf)
+    const changes = new Set(
+      since.map((event) => waitingAskChange(event.kind, event.actor, event.data))
+    )
+    if (
+      since.length <= CHECKED_EVENTS &&
+      !changes.has('asks') &&
+      (ask === 0 || !changes.has('answers'))
+    ) {
+      return ask === 0 ? null : ask
+    }
   }
   const paired = pairWaitingAsk(db, uid)
   if (keeps && store) {

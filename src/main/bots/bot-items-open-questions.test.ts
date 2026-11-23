@@ -237,37 +237,35 @@ it('works out the waiting ask from the events when none is kept or an older Orca
   }
 })
 
-it('keeps the answer pairing every event gives, carrying it without a read when a write asks nothing', () => {
+it('answers as pairing every event does, reading only the events since the kept ask when they ask nothing', () => {
   const dir = mkdtempSync(join(tmpdir(), 'bot-items-'))
   try {
     const path = join(dir, 'items.sqlite')
     const { store, uid, ask, comment } = item(path)
     const file = new DatabaseSync(path)
-    const held = (): boolean =>
-      Boolean(
-        file
-          .prepare(
-            `SELECT 1 FROM item_waiting_asks kept JOIN items ON items.uid = kept.item_uid
-              WHERE kept.at = items.last_event_id`
-          )
-          .get()
-      )
-    // What an open answers, and what pairing every event answers once nothing is kept.
+    const keptAt = (): unknown => file.prepare('SELECT at FROM item_waiting_asks').get()?.at
+    const lastEvent = (): unknown =>
+      file.prepare('SELECT last_event_id FROM items').get()?.last_event_id
+    // What an open answers, then what pairing every event answers once nothing is kept.
     const opened = (): [string | undefined, string | undefined] => {
       const kept = store.viewRows([uid], true).waitingAsks[uid]
       file.prepare('DELETE FROM item_waiting_asks').run()
       return [kept, store.viewRows([uid], true).waitingAsks[uid]]
     }
     expect(opened()).toEqual([undefined, undefined])
+    const before = keptAt()
     store.comment(uid, 'Still building.', AGENT, [], NOW)
-    expect(held()).toBe(true)
+    expect(store.viewRows([uid], true).waitingAsks[uid]).toBeUndefined()
+    expect(keptAt()).toBe(before)
     expect(opened()).toEqual([undefined, undefined])
     const asked = ask([MERGE])
-    expect(held()).toBe(false)
+    expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(botItemEventId(asked))
+    expect(keptAt()).toBe(lastEvent())
     expect(opened()).toEqual([botItemEventId(asked), botItemEventId(asked)])
-    store.viewRows([uid], true)
+    const waiting = keptAt()
     store.comment(uid, 'Waiting on you.', AGENT, [], NOW)
-    expect(held()).toBe(true)
+    expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(botItemEventId(asked))
+    expect(keptAt()).toBe(waiting)
     expect(opened()).toEqual([botItemEventId(asked), botItemEventId(asked)])
     comment('Yes', asked)
     expect(opened()).toEqual([undefined, undefined])
