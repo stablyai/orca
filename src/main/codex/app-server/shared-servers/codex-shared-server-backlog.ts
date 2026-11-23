@@ -84,9 +84,7 @@ export class CodexSharedServerBacklog {
     const half = CODEX_SHARED_SERVER_BACKLOG_BYTES / 2
     // No chat can take a frame and none waits on one: Codex holds the rest, as on a paused pipe.
     const stalled =
-      this.total > 0 &&
-      this.waiters.size === 0 &&
-      !this.anyLease(takesFrames, this.leases)
+      this.total > 0 && this.waiters.size === 0 && !this.anyLease(takesFrames, this.leases)
     if (stalled) {
       this.setPaused(true)
     }
