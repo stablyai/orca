@@ -20,6 +20,8 @@ type Attach = {
   admitted: boolean
   /** Asked for after the first prepare (an address entered while the page waited to exist). */
   requested?: boolean
+  /** Reopening a tab from the saved session. */
+  restored?: boolean
 }
 const attachments = new Map<string, Attach>()
 export const guestLoads = new WeakMap<Electron.WebContents, Promise<void>>()
@@ -31,7 +33,8 @@ export function prepareBrowserPageAttach(
   pageId: string,
   rendererId: number,
   partition: string,
-  url: string
+  url: string,
+  restored = false
 ): string {
   let page = pages.get(pageId)
   if (page && (page.rendererId !== rendererId || page.partition !== partition)) {
@@ -74,7 +77,7 @@ export function prepareBrowserPageAttach(
   const token = randomUUID()
   page.token = token
   const requested = previous !== undefined && !previous.admitted && previous.url !== url
-  attachments.set(token, { pageId, page, url, token, admitted: false, requested })
+  attachments.set(token, { pageId, page, url, token, admitted: false, requested, restored })
   return MARKER + token
 }
 
@@ -236,16 +239,19 @@ export function startBrowserPageAttach(
     void restore().catch(() => {})
     return guest.loadURL(attach.url)
   }
-  if (lateExtensions) {
-    // A restored history is already in the guest, so its retry reloads the active entry.
-    const retry = (): Promise<void> => {
-      if (snapshot && !attach.requested) {
-        guest.reload()
-        return Promise.resolve()
-      }
-      return guest.loadURL(snapshot ? attach.url : (url ?? attach.url))
-    }
-    retryFirstLoadIfStalled(guest, lateExtensions, retry, snapshot && attach.requested ? 2 : 1)
+  // Only restores load again: a reopened saved tab, or a woken page's history (reloading its
+  // entry), as restoring means. A fresh address is never re-sent; a one-time link may not survive it.
+  const retry =
+    snapshot && !attach.requested
+      ? (): Promise<void> => {
+          guest.reload()
+          return Promise.resolve()
+        }
+      : !snapshot && attach.restored && !attach.requested
+        ? (): Promise<void> => guest.loadURL(url ?? attach.url)
+        : null
+  if (lateExtensions && retry) {
+    retryFirstLoadIfStalled(guest, lateExtensions, retry)
   }
   const promise = waitForBrowserGuestLoad(guest, firstLoad).then(() => {
     if (pages.get(attach.pageId) !== page || page.guest !== guest) {

@@ -28,10 +28,6 @@ import type {
 import type { MutableRefObject } from 'react'
 import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
 import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
-import {
-  cancelBrowserPageAttachStop,
-  openStoppedBrowserPageAttach
-} from '../host-guest/lifecycle/browser-page-deferred-attach'
 
 export type NavigateBrowserPageToUrlArgs = {
   url: string
@@ -90,9 +86,6 @@ export function navigateBrowserPageToUrl({
     if (webview.dataset.orcaAttachWaiting) {
       // No page yet: it opens with this once its profile's extensions are ready (unredacted).
       webview.dataset.orcaAttachRequestedUrl = targetUrl
-      cancelBrowserPageAttachStop(webview)
-    } else if (openStoppedBrowserPageAttach(webview, targetUrl, lastKnownWebviewUrlRef)) {
-      return
     }
     issueBrowserGuestNavigation(webview, () => {
       webview.src = targetUrl

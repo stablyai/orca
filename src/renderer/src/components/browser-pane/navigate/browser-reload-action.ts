@@ -4,7 +4,6 @@ import {
 } from '../host-guest/metadata/browser-guest-metadata-cache'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/recovery/browser-page-guest-recovery'
 import { browserGuestHasNothingToReload } from '../../../../../shared/browser/guest-lifecycle/browser-guest-reloadability'
-import { cancelBrowserPageAttachStop } from '../host-guest/lifecycle/browser-page-deferred-attach'
 
 export type BrowserReloadTrigger = 'button' | 'reload' | 'hard-reload'
 
@@ -49,8 +48,6 @@ export function reloadBrowserPageWebview(
 ): BrowserPageWebviewReloadResult {
   // No page yet while it waits for its profile's extensions; it loads once they are ready.
   if (webview.dataset.orcaAttachWaiting) {
-    // A Reload (toolbar, keyboard or menu) undoes a Stop made while it waits.
-    cancelBrowserPageAttachStop(webview)
     return 'not-ready'
   }
   try {

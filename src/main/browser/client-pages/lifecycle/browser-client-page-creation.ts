@@ -29,10 +29,6 @@ type BrowserClientPageCreationDependencies = BrowserClientPageAuthorityIdentity 
   retireSupersededExecutionHostPages(route: RetainedNetworkRoute): Promise<void>
   selectRenderer(): BrowserClientPageRenderer
   routeSessions: Pick<BrowserRouteSessionRegistry, 'preparePage'>
-  /** Until the page's session has started its extensions: the guest must not exist before then. */
-  waitForPageExtensions?(partition: string, signal: AbortSignal): Promise<void>
-  /** Creation failed before a guest existed: extensions started for it stop unless another page uses them. */
-  releasePageExtensions?(partition: string): void
   routeWebContents: BrowserClientPageLifecycleRegistry
   guestBinding: BrowserClientPageGuestBinding
   retainFailedCleanup?: (cleanup: () => Promise<void>) => void
@@ -97,13 +93,6 @@ export async function createReservedBrowserClientPage(
     assertBrowserClientPageCommandNotAborted(signal)
     assertAvailable()
     assertCurrentBrowserClientPageRenderer(renderer)
-    // Before mount, so the renderer's mount deadline and route authority never span this wait.
-    if (dependencies.waitForPageExtensions) {
-      await dependencies.waitForPageExtensions(routeSession.partition, signal)
-      assertBrowserClientPageCommandNotAborted(signal)
-      assertAvailable()
-      assertCurrentBrowserClientPageRenderer(renderer)
-    }
     const page = browserClientPageIdentity(event, routeSession.partition)
     mountAttempted = true
     const mounted = await renderer.mountPage(page, signal)
@@ -151,10 +140,6 @@ export async function createReservedBrowserClientPage(
     commit(retainedPage)
     return retainedPage
   } catch (error) {
-    // No guest was made (a refused mount included): nothing else will let its extensions stop.
-    if (routeSession && !registration) {
-      dependencies.releasePageExtensions?.(routeSession.partition)
-    }
     if (guestBound && registration) {
       dependencies.guestBinding.release(registration)
     }

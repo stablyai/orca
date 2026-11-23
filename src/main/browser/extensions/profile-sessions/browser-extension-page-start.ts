@@ -9,7 +9,7 @@ import {
 import { whenBrowserExtensionsInSession } from './browser-extension-session-presence'
 
 // Why bounded: slow restore hooks must not keep the page from loading.
-const FIRST_LOAD_WAIT_MS = 3_000
+export const FIRST_LOAD_WAIT_MS = 3_000
 // Why this bound: inside the 8 s tab registration and 15 s recovery deadlines that wrap a page's
 // creation; a page opened at it whose first load stalls loads once more when they are ready.
 const IN_SESSION_WAIT_LIMIT_MS = 5_000
@@ -29,16 +29,24 @@ export function whenBrowserExtensionsStartFor(profileId: string): Promise<void> 
  * starting. It ends early if the page closes, so callers must check it is still open.
  */
 export function whenBrowserExtensionsReadyForPage(
-  contents: Electron.WebContents
+  contents: Electron.WebContents,
+  /** A caller holding a shared slot while it waits keeps main's shorter bound. */
+  maxWaitMs?: number
 ): Promise<void> | null {
   const profileId = getBrowserExtensionProfileIdForSession(contents.session)
   const wait = profileId ? whileExtensionsStart(profileId) : null
-  return wait && untilClosed(contents, wait)
+  return wait && untilClosed(contents, wait, maxWaitMs)
 }
 
-function untilClosed(contents: Electron.WebContents, wait: Promise<void>): Promise<void> {
+function untilClosed(
+  contents: Electron.WebContents,
+  wait: Promise<void>,
+  maxWaitMs: number | undefined
+): Promise<void> {
   return new Promise<void>((resolve) => {
+    const timer = maxWaitMs === undefined ? undefined : setTimeout(() => done(), maxWaitMs)
     const done = (): void => {
+      clearTimeout(timer)
       contents.off('destroyed', done)
       resolve()
     }

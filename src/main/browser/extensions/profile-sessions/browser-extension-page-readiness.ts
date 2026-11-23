@@ -6,28 +6,21 @@ import { linkBrowserExtensionsToRouteSession } from './browser-extension-route-s
 import { whenBrowserExtensionsStartFor } from './browser-extension-page-start'
 import { getAttachedBrowserExtensionProfileId } from './browser-extension-session-loader'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
-import {
-  noteBrowserPageClosed,
-  noteBrowserPageOpened
-} from '../../guest-lifecycle/browser-page-partition-presence'
 
 /**
  * Starts the extensions a page in this partition runs and resolves once a page there may be
  * created, as a browser restores tabs only after the profile's extensions load: a request in flight
  * when a webRequest extension loads is dropped by Electron, so the page must not exist before then.
- * Resolves at once when nothing is starting, and early when `signal` aborts.
+ * Resolves at once when nothing is starting.
  */
-export function whenBrowserPartitionReadyForPage(
-  partition: string,
-  signal?: AbortSignal
-): Promise<void> {
+export function whenBrowserPartitionReadyForPage(partition: string): Promise<void> {
   if (!isBrowserExtensionSupportEnabled()) {
     return Promise.resolve()
   }
   // Attached already (every page but a profile's first): no lookup over every saved profile.
   const attached = getAttachedBrowserExtensionProfileId(partition)
   if (attached) {
-    return untilReady(whenBrowserExtensionsStartFor(attached), signal)
+    return whenBrowserExtensionsStartFor(attached) ?? Promise.resolve()
   }
   const profileId =
     browserSessionRegistry.profileIdForPartition(partition) ??
@@ -39,28 +32,5 @@ export function whenBrowserPartitionReadyForPage(
     return Promise.resolve()
   }
   browserSessionRegistry.attachExtensions(profileId)
-  return untilReady(whenBrowserExtensionsStartFor(profileId), signal)
-}
-
-function untilReady(ready: Promise<void> | null, signal: AbortSignal | undefined): Promise<void> {
-  if (!ready || !signal) {
-    return ready ?? Promise.resolve()
-  }
-  if (signal.aborted) {
-    return Promise.resolve()
-  }
-  return new Promise<void>((resolve) => {
-    const done = (): void => {
-      signal.removeEventListener('abort', done)
-      resolve()
-    }
-    signal.addEventListener('abort', done, { once: true })
-    void ready.then(done)
-  })
-}
-
-/** A page that waited here was never created: its extensions stop if no other page uses them. */
-export function releaseBrowserPartitionIfIdle(partition: string): void {
-  noteBrowserPageOpened(partition)
-  noteBrowserPageClosed(partition)
+  return whenBrowserExtensionsStartFor(profileId) ?? Promise.resolve()
 }

@@ -4,27 +4,36 @@ import { issueBrowserGuestNavigation } from '../metadata/browser-guest-metadata-
 /**
  * Attaches a new tab's page once main answers, which it does when the page's profile has started
  * its extensions: until then there is no guest, so nothing can make a request an extension loading
- * would drop. An address entered meanwhile (kept unredacted) is the one the page opens with.
+ * would drop, and Stop and Reload have nothing to act on (at most 5 s). An address entered
+ * meanwhile (kept unredacted) is the one the page opens with.
  */
 export function startBrowserPageDeferredAttach({
   webview,
   browserTabId,
   initialUrl,
+  restored,
   lastKnownWebviewUrlRef,
   onFailed
 }: {
   webview: Electron.WebviewTag
   browserTabId: string
   initialUrl: string
+  /** Reopening a tab saved from an earlier session, which main may load again if it stalls. */
+  restored: boolean
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
   onFailed: () => void
 }): void {
   webview.dataset.orcaAttachWaiting = 'true'
-  webview.dataset.orcaAttachPageId = browserTabId
-  const prepare = (url: string): Promise<string> => prepareBrowserPageAttach(webview, url)
+  const prepare = (url: string, isRestore = false): Promise<string> =>
+    window.api.browser.preparePageAttach({
+      browserPageId: browserTabId,
+      partition: webview.getAttribute('partition') ?? '',
+      url,
+      ...(isRestore ? { restored: true } : {})
+    })
   // Extensions are up after the first answer, so a re-prepare for a newer address answers at once.
   const prepareLatest = async (): Promise<string> => {
-    let marker = await prepare(initialUrl)
+    let marker = await prepare(initialUrl, restored)
     let preparedUrl = initialUrl
     for (
       let requestedUrl = webview.dataset.orcaAttachRequestedUrl;
@@ -42,11 +51,6 @@ export function startBrowserPageDeferredAttach({
   void prepareLatest()
     .then((marker) => {
       delete webview.dataset.orcaAttachWaiting
-      if (webview.dataset.orcaAttachStopped) {
-        // Stopped while waiting: it opens on the next Reload.
-        webview.dataset.orcaAttachStopped = marker
-        return
-      }
       // Why not the component's ref: a workspace switch remounts this tab onto the same webview.
       if (webview.isConnected) {
         issueBrowserGuestNavigation(webview, () => {
@@ -90,67 +94,4 @@ export function settleParkedBrowserPageAttach(webview: Electron.WebviewTag): voi
   } catch {
     // No guest attached yet.
   }
-}
-
-function prepareBrowserPageAttach(webview: Electron.WebviewTag, url: string): Promise<string> {
-  return window.api.browser.preparePageAttach({
-    browserPageId: webview.dataset.orcaAttachPageId ?? '',
-    partition: webview.getAttribute('partition') ?? '',
-    url
-  })
-}
-
-/** Reload or a new address while it waits undoes an earlier Stop: it opens once ready. */
-export function cancelBrowserPageAttachStop(webview: Electron.WebviewTag): void {
-  delete webview.dataset.orcaAttachStopped
-}
-
-/**
- * A new address for a page that was stopped while it waited and never opened: it opens with that
- * address, through main, so the page stays the one main tracks. True when this handled it.
- */
-export function openStoppedBrowserPageAttach(
-  webview: Electron.WebviewTag,
-  url: string,
-  lastKnownWebviewUrlRef: MutableRefObject<string | null>
-): boolean {
-  const marker = webview.dataset.orcaAttachStopped
-  const browserTabId = webview.dataset.orcaAttachPageId
-  if (!marker || marker === 'true' || !browserTabId) {
-    return false
-  }
-  delete webview.dataset.orcaAttachStopped
-  startBrowserPageDeferredAttach({
-    webview,
-    browserTabId,
-    initialUrl: url,
-    lastKnownWebviewUrlRef,
-    // Nothing to recover yet: the tab simply stays unopened, and Reload retries.
-    onFailed: () => {
-      webview.dataset.orcaAttachStopped = 'true'
-    }
-  })
-  return true
-}
-
-/** Stop while it waits: once ready it stays unopened until a Reload. */
-export function stopBrowserPageDeferredAttach(webview: Electron.WebviewTag): void {
-  webview.dataset.orcaAttachStopped = 'true'
-}
-
-/** Reload after such a Stop: opens it (once ready). True when this handled the Reload. */
-export function resumeStoppedBrowserPageAttach(webview: Electron.WebviewTag): boolean {
-  const marker = webview.dataset.orcaAttachStopped
-  if (!marker) {
-    return false
-  }
-  delete webview.dataset.orcaAttachStopped
-  // Still 'true': the wait failed after the Stop, so the ordinary Reload (recovery) takes over.
-  if (marker === 'true') {
-    return false
-  }
-  issueBrowserGuestNavigation(webview, () => {
-    webview.src = marker
-  })
-  return true
 }

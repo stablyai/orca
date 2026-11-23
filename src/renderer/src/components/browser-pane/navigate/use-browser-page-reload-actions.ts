@@ -10,11 +10,6 @@ import {
 } from './browser-reload-action'
 import { retryBrowserTabLoad } from '../describe-page/browser-page-url-display'
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
-import {
-  cancelBrowserPageAttachStop,
-  resumeStoppedBrowserPageAttach,
-  stopBrowserPageDeferredAttach
-} from '../host-guest/lifecycle/browser-page-deferred-attach'
 
 export function useBrowserPageReloadActions({
   browserTab,
@@ -81,24 +76,7 @@ export function useBrowserPageReloadActions({
       if (!webview) {
         return
       }
-      const intent = resolveBrowserReloadIntent(trigger, reloadState)
-      // No page yet while it waits for its profile's extensions: Stop keeps it from opening then,
-      // and a later Reload opens it.
-      if (webview.dataset.orcaAttachWaiting) {
-        if (intent === 'stop') {
-          stopBrowserPageDeferredAttach(webview)
-          onUpdatePageStateRef.current(browserTab.id, { loading: false })
-        } else {
-          cancelBrowserPageAttachStop(webview)
-          onUpdatePageStateRef.current(browserTab.id, { loading: true })
-        }
-        return
-      }
-      if (intent !== 'stop' && resumeStoppedBrowserPageAttach(webview)) {
-        onUpdatePageStateRef.current(browserTab.id, { loading: true })
-        return
-      }
-      switch (intent) {
+      switch (resolveBrowserReloadIntent(trigger, reloadState)) {
         case 'stop':
           webview.stop()
           break

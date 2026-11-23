@@ -62,7 +62,10 @@ export function registerBrowserGuestDiscardHandlers(): void {
   ipcMain.removeHandler('browser:preparePageAttach')
   ipcMain.handle(
     'browser:preparePageAttach',
-    async (event, args: { browserPageId?: unknown; partition?: unknown; url?: unknown }) => {
+    async (
+      event,
+      args: { browserPageId?: unknown; partition?: unknown; url?: unknown; restored?: unknown }
+    ) => {
       if (
         !isTrustedBrowserRenderer(event.sender) ||
         typeof args?.browserPageId !== 'string' ||
@@ -79,7 +82,8 @@ export function registerBrowserGuestDiscardHandlers(): void {
         args.browserPageId,
         event.sender.id,
         args.partition,
-        url
+        url,
+        args.restored === true
       )
       // The guest is created only once the profile's extensions have started (see the readiness).
       await whenBrowserPartitionReadyForPage(args.partition)

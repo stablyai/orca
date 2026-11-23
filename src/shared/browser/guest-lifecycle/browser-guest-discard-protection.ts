@@ -36,6 +36,8 @@ export type BrowserGuestDiscardApi = {
     browserPageId: string
     partition: string
     url: string
+    /** A tab reopened from the saved session, so loading it again is what restoring means. */
+    restored?: boolean
   }) => Promise<string>
   reserveGuestDiscard: (args: {
     browserPageId: string
