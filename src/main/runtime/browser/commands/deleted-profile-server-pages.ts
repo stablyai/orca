@@ -1,5 +1,6 @@
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 import type { RuntimeBrowserTabClose } from '../tabs/browser-tab-close'
+import type { RuntimeBrowserScreencasts } from '../screencast/browser-screencasts'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 
 /** A window's tabs of a deleted profile load nowhere; a server's would stay in its wiped session or reopen in Default, so they close. */
@@ -9,6 +10,7 @@ export async function closeServerPagesInDeletedProfile(
     'getOffscreenBrowserBackend' | 'getAvailableAuthoritativeWindowId' | 'serveBrowserTabs'
   >,
   close: Pick<RuntimeBrowserTabClose, 'browserTabClose'>,
+  guestSwaps: Pick<RuntimeBrowserScreencasts['guestSwaps'], 'replace'>,
   profileId: string
 ): Promise<void> {
   const offscreen = host.getOffscreenBrowserBackend()
@@ -27,17 +29,21 @@ export async function closeServerPagesInDeletedProfile(
     }
   }
   for (const [page, worktreeId] of pages) {
-    // A page switched to another profile while earlier closes ran is no longer this profile's.
-    const stillInProfile = offscreen.ownsTab(page)
-      ? browserManager.getSessionProfileIdForTab(page) === profileId
-      : (host.serveBrowserTabs?.pagesInProfile(profileId) ?? []).some(
-          (saved) => saved.pageId === page
-        )
-    if (!stillInProfile) {
-      continue
-    }
-    await close
-      .browserTabClose({ page, ...(worktreeId ? { worktree: `id:${worktreeId}` } : {}) })
+    // Inside the page's swap fence, so a switch to another profile either finished first or waits.
+    await guestSwaps
+      .replace(page, async () => {
+        const stillInProfile = offscreen.ownsTab(page)
+          ? browserManager.getSessionProfileIdForTab(page) === profileId
+          : (host.serveBrowserTabs?.pagesInProfile(profileId) ?? []).some(
+              (saved) => saved.pageId === page
+            )
+        if (stillInProfile) {
+          await close.browserTabClose({
+            page,
+            ...(worktreeId ? { worktree: `id:${worktreeId}` } : {})
+          })
+        }
+      })
       .catch((error) => {
         console.warn('[browser-profiles] Failed to close a page of a deleted profile', error)
       })

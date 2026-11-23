@@ -239,7 +239,12 @@ export class RuntimeBrowserProfiles {
   async browserProfileDelete(params: { profileId: string }): Promise<BrowserProfileDeleteResult> {
     const deleted = await browserSessionRegistry.deleteProfile(params.profileId)
     if (deleted) {
-      await closeServerPagesInDeletedProfile(this.host, this.close, params.profileId)
+      await closeServerPagesInDeletedProfile(
+        this.host,
+        this.close,
+        this.pageGuestSwaps,
+        params.profileId
+      )
     }
     return { deleted, profileId: params.profileId }
   }
