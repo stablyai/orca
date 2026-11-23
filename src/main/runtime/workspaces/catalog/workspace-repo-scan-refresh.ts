@@ -199,10 +199,9 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
     this.emitClientEvent({ type: 'worktreesChanged', repoId })
   }
 
-  /** A background refresh found new rows; readers re-list without invalidating the scan that found them. */
+  /** Only the sidebar reads stale-while-revalidate; it re-lists without invalidating the scan that just published. */
   protected notifyWorktreeCatalogRevalidated(repoId: string): void {
-    this.invalidateResolvedWorktreeCache()
-    this.notifyWorktreesChanged(repoId, { invalidateGitScans: false })
+    this.notifier?.worktreesChanged(repoId, undefined, { invalidateGitScans: false })
   }
 
   notifyFolderWorkspaceChanged(): void {

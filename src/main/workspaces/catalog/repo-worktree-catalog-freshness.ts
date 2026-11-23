@@ -1,21 +1,20 @@
 import type {
   WorktreeCatalogObservation,
-  WorktreeCatalogRequirement,
-  WorktreeCatalogVerifier
+  WorktreeCatalogRequirement
 } from './repo-worktree-catalog-observation'
-import { sameWorktreeCatalogStructure } from './worktree-catalog-structure'
 
 export type RevalidationSlot = {
   timer: ReturnType<typeof setTimeout> | null
-  /** Rows readers were handed past their window; whichever scan publishes next settles them. */
-  served: WorktreeCatalogObservation | null
+  queued: boolean
+  /** Readers were told to keep their rows; whichever scan publishes next owes them a re-list. */
+  served: boolean
 }
 
 type RevalidationOwner = {
   repoId: string
   slot: RevalidationSlot
   flightRunning: () => boolean
-  /** The served rows are still the owner's current publication. */
+  /** The rows readers were told to keep are still the owner's current publication. */
   stillServed: () => boolean
   start: () => Promise<unknown>
 }
@@ -23,10 +22,10 @@ type RevalidationOwner = {
 const revalidationListeners = new Set<(repoId: string) => void>()
 // Stale reads release the renderer's per-repo request slots, so background scans need their own host-wide bound.
 const MAX_BACKGROUND_REVALIDATIONS = 2
-const BACKGROUND_RETRY_MS = 1_000
 let activeBackgroundRevalidations = 0
+const waitingRevalidations: (() => void)[] = []
 
-/** A background refresh published rows whose structure differs from the ones readers were served. */
+/** A scan published after readers were told to keep their rows; they should list again. */
 export function onWorktreeCatalogRevalidated(listener: (repoId: string) => void): () => void {
   revalidationListeners.add(listener)
   return () => revalidationListeners.delete(listener)
@@ -69,64 +68,51 @@ export function revalidateInBackground(
   stale: WorktreeCatalogObservation,
   now: number
 ): void {
-  owner.slot.served ??= stale
-  if (owner.flightRunning() || owner.slot.timer) {
+  owner.slot.served = true
+  if (owner.flightRunning() || owner.slot.timer || owner.slot.queued) {
     return
   }
-  const arm = (delayMs: number): void => {
-    // Converge without depending on a later read; a newer publication cancels this.
-    owner.slot.timer = setTimeout(() => {
-      owner.slot.timer = null
-      if (!owner.flightRunning() && owner.stillServed()) {
-        run()
-      }
-    }, delayMs)
-    owner.slot.timer.unref?.()
-  }
   const run = (): void => {
+    owner.slot.queued = false
+    if (owner.flightRunning() || !owner.stillServed()) {
+      return
+    }
     if (activeBackgroundRevalidations >= MAX_BACKGROUND_REVALIDATIONS) {
-      arm(BACKGROUND_RETRY_MS)
+      owner.slot.queued = true
+      waitingRevalidations.push(run)
       return
     }
     activeBackgroundRevalidations += 1
-    owner
-      .start()
+    Promise.resolve()
+      .then(owner.start)
       .catch((error: unknown) => {
         console.warn('[worktrees] background catalog refresh failed:', error)
       })
       .finally(() => {
         activeBackgroundRevalidations -= 1
+        waitingRevalidations.shift()?.()
       })
   }
   const idleMs = stale.completedAt + (stale.completedAt - stale.startedAt) - now
-  if (idleMs > 0) {
-    arm(idleMs)
-  } else {
+  if (idleMs <= 0) {
     run()
-  }
-}
-
-/** Fingerprint a background scan only when the rows it replaces carried one, so verifier readers keep reusing them. */
-export function backgroundProbe(
-  verifierProbe: WorktreeCatalogVerifier['probe'] | null,
-  stale: WorktreeCatalogObservation
-): Promise<string | null> | null {
-  const probe = stale.adminFingerprint ? (verifierProbe?.() ?? null) : null
-  return probe === 'in-flight' ? null : probe
-}
-
-/** Any scan's current publication tells readers that were served stale rows when the structure moved. */
-export function settleServedStale(
-  slot: RevalidationSlot,
-  repoId: string,
-  fresh: WorktreeCatalogObservation
-): void {
-  cancelRevalidation(slot)
-  const served = slot.served
-  slot.served = null
-  if (!served || served === fresh || sameWorktreeCatalogStructure(served.outcome, fresh.outcome)) {
     return
   }
+  // Converge without depending on a later read; a newer publication cancels this.
+  owner.slot.timer = setTimeout(() => {
+    owner.slot.timer = null
+    run()
+  }, idleMs)
+  owner.slot.timer.unref?.()
+}
+
+/** Any scan's publication, success or failure, settles readers that were told to keep their rows. */
+export function settleServedStale(slot: RevalidationSlot, repoId: string): void {
+  cancelRevalidation(slot)
+  if (!slot.served) {
+    return
+  }
+  slot.served = false
   for (const listener of revalidationListeners) {
     try {
       listener(repoId)
@@ -136,9 +122,11 @@ export function settleServedStale(
   }
 }
 
+/** Queued runs re-check that their rows are still served, so a cancelled one simply lapses. */
 export function cancelRevalidation(slot: RevalidationSlot): void {
   if (slot.timer) {
     clearTimeout(slot.timer)
     slot.timer = null
   }
+  slot.queued = false
 }

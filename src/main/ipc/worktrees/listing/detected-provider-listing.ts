@@ -130,7 +130,8 @@ export async function listDetectedWorktreesForCapturedRepo(
       () => isCurrent() && !providerAbort?.signal.aborted
     )
     // Stale rejection preserves client rows; non-authoritative replacement could hide newly created worktrees.
-    if (scan.superseded) {
+    // Aged rows go the same way: a re-list notice follows the refresh, and old branches never overwrite newer ones.
+    if (scan.superseded || scan.stale) {
       return abortedResult() ?? null
     }
     const { gitWorktrees, fresh: freshScan, sideEffectToken, metadataPrune, hygieneDue } = scan

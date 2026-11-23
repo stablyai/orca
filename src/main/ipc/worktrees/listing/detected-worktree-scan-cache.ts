@@ -61,6 +61,8 @@ export type DetectedWorktreeScanResult = {
   fresh: boolean
   /** Mutation overtook this scan; publishing its missing rows as authoritative would falsely delete new worktrees. */
   superseded: boolean
+  /** Older than the window and refreshing in the background; callers keep their rows and wait for the re-list notice. */
+  stale?: true
   generation: number
   sideEffectToken?: DetectedWorktreeSideEffectToken
   /** Owns the next store-hygiene pass; absent preserves eager behavior for non-local scans. */
@@ -163,6 +165,7 @@ export async function listDetectedGitWorktrees(
     authorityCurrent,
     fresh: claim !== null,
     superseded: superseded || !generationCurrent,
+    ...(stale ? { stale } : {}),
     generation: observation.generation,
     ...(claim
       ? {

@@ -8,12 +8,10 @@ import type {
   WorktreeCatalogObservation,
   WorktreeCatalogFlightPlan,
   WorktreeCatalogRequirement,
-  WorktreeCatalogRead,
-  WorktreeCatalogVerifier
+  WorktreeCatalogRead
 } from './repo-worktree-catalog-observation'
 import {
   acceptable,
-  backgroundProbe,
   cancelRevalidation,
   revalidateInBackground,
   servesStale,
@@ -45,7 +43,6 @@ type Entry = {
   failure: WorktreeCatalogObservation | null
   flight: Flight | null
   /** Last runtime verifier's probe, so background flights still fingerprint before their scan. */
-  verifierProbe: WorktreeCatalogVerifier['probe'] | null
   revalidation: RevalidationSlot
 }
 
@@ -114,8 +111,7 @@ function resolveEntry(repo: Repo, runtimeKey: string): Entry {
       success: null,
       failure: null,
       flight: null,
-      verifierProbe: null,
-      revalidation: { timer: null, served: null }
+      revalidation: { timer: null, queued: false, served: false }
     }
     entries.set(key, entry)
   }
@@ -193,6 +189,7 @@ function publish(
     observation.witness = undefined
     if (live && (entry.failure?.startedAt ?? -1) <= observation.startedAt) {
       entry.failure = observation
+      settleServedStale(entry.revalidation, entry.repoId)
     }
     return
   }
@@ -207,7 +204,7 @@ function publish(
     entry.failure = null
   }
   if (isCurrent(entry, observation)) {
-    settleServedStale(entry.revalidation, entry.repoId, observation)
+    settleServedStale(entry.revalidation, entry.repoId)
     plan.observed?.(observation)
   }
 }
@@ -226,9 +223,6 @@ export async function readWorktreeCatalog(
     return { observation: known, superseded: true }
   }
   const entry = resolveEntry(repo, runtimeKey)
-  if (requirement.verifier) {
-    entry.verifierProbe = requirement.verifier.probe
-  }
   const launch = (probe: Promise<string | null> | null): Flight =>
     startFlight(entry, repo, requirement, plan, probe)
   let last: WorktreeCatalogObservation | null = null
@@ -256,7 +250,7 @@ export async function readWorktreeCatalog(
             slot: entry.revalidation,
             flightRunning: () => entry.flight !== null,
             stillServed: () => entry.success === success && isCurrent(entry, success),
-            start: () => launch(backgroundProbe(entry.verifierProbe, success)).promise
+            start: () => launch(null).promise
           },
           success,
           now
