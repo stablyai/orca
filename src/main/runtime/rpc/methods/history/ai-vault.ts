@@ -25,7 +25,7 @@ import {
   searchWithStructuredOwners
 } from '../../../../ai-vault/structured-sessions/structured-session-ownership'
 import {
-  ensureStructuredAgentSessionHostUnlessRefused,
+  ensurePersistedStructuredAgentSessionHostUnlessRefused,
   tryEnsureStructuredAgentSessionHostForResume
 } from '../../../agent-session/installation/structured-agent-session-host-refusal'
 import {
@@ -53,7 +53,10 @@ export const AI_VAULT_METHODS = [
       // A client that reads no structured sessions keeps the transcript hit, as before.
       return supportsStructuredAgentSessions(context)
         ? searchWithStructuredOwners(response, {
-            ensureHost: () => context.runtime.ensureStructuredAgentSessionHost(),
+            ensureHost: () =>
+              ensurePersistedStructuredAgentSessionHostUnlessRefused(() =>
+                context.runtime.ensureStructuredAgentSessionHost()
+              ),
             transport,
             opensChat: (agent) => clientOpensStructuredChatFromHistory(context, agent)
           })
@@ -100,7 +103,7 @@ export const AI_VAULT_METHODS = [
     permission: 'workspace',
     params: AiVaultListSessionsParams,
     handler: async (params, { runtime, clientKind, clientCapabilities, signal }) => {
-      await ensureStructuredAgentSessionHostUnlessRefused(() =>
+      await ensurePersistedStructuredAgentSessionHostUnlessRefused(() =>
         runtime.ensureStructuredAgentSessionHost()
       )
       let result
@@ -157,10 +160,13 @@ export const AI_VAULT_METHODS = [
         executionHostId: LOCAL_EXECUTION_HOST_ID
       }
       if (!isWslUncPath(args.filePath)) {
-        const ensureHost = () => runtime.ensureStructuredAgentSessionHost()
+        const ensureHost = () =>
+          ensurePersistedStructuredAgentSessionHostUnlessRefused(() =>
+            runtime.ensureStructuredAgentSessionHost()
+          )
         await (args.codexHome === null && !args.fork
           ? tryEnsureStructuredAgentSessionHostForResume(ensureHost)
-          : ensureStructuredAgentSessionHostUnlessRefused(ensureHost))
+          : ensureHost())
         assertLegacyAiVaultResumeAllowed(args)
       }
       return (
