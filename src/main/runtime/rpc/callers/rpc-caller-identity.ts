@@ -8,6 +8,7 @@ export type RpcCallerIdentity =
   | { kind: 'local-cli' }
   /** All local IPC windows share identity across reload and app restart. */
   | { kind: 'desktop' }
+  | { kind: 'observer'; credentialId: string }
   /** A paired phone or remote desktop, by its device subject, which survives credential rotation.
    *  `agent`: the orca CLI calling with that device's pairing (`--environment`), not the person using it. */
   | { kind: 'paired-device'; deviceId: string; agent?: true }
@@ -27,10 +28,13 @@ export function resolveRpcCallerIdentity(
   transport:
     | Pick<
         RpcDispatchStreamingOptions,
-        'caller' | 'clientKind' | 'pairedDeviceId' | 'clientCapabilities'
+        'caller' | 'callerScope' | 'clientKind' | 'pairedDeviceId' | 'clientCapabilities'
       >
     | undefined
 ): RpcCallerIdentity | undefined {
+  if (transport?.callerScope?.kind === 'observer') {
+    return { kind: 'observer', credentialId: transport.callerScope.credentialId }
+  }
   if (transport?.caller) {
     return transport.caller
   }
@@ -53,5 +57,7 @@ export function rpcCallerOperationKey(caller: RpcCallerIdentity): string {
       return 'trusted-local:desktop'
     case 'paired-device':
       return caller.deviceId
+    case 'observer':
+      return `observer:${caller.credentialId}`
   }
 }

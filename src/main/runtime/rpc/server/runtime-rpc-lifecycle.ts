@@ -267,6 +267,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     })
     const connectionLog = this.startClientConnectionLog()
     const mobileSocketWiring = new MobileSocketWiring({
+      resolveObserverCredential: (token) => this.observerCredentialStore.authenticate(token),
       deviceRegistry,
       e2eeKeypair,
       onText: (socket, plaintext, reply, sendBinary) => {
@@ -283,7 +284,6 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         )
       },
       onBinary: (socket, bytes) => {
-        this.lastClientRequestAt = Date.now()
         this.handleWebSocketBinaryMessage(bytes, socket.ws)
       },
       onReady: (socket) => {
@@ -308,7 +308,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         }
       },
       onClose: (socket, hasOtherConnections) => {
-        if (!socket) {
+        if (!socket || socket.device.observer) {
           return
         }
         this.abortWebSocketDispatches(socket.ws)

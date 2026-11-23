@@ -248,15 +248,14 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithBots {
       this,
       this.orchestrationEnvironmentTransport
     )
-    if (stats) {
-      this.stats = stats
-    }
+    this.stats = stats ?? this.stats
     this.getAgentStatusSnapshotFn = deps?.getAgentStatusSnapshot ?? null
     this.getAgentStatusSnapshotForPaneFn = deps?.getAgentStatusSnapshotForPane ?? null
     this.publicPaneStatusFn = deps?.getPublicAgentStatusSnapshotForPane
     this.structuredAgentStatusSinkFn = deps?.structuredAgentStatusSink ?? null
     this.readObservedAgentStatusPaneIdentityFn =
       deps?.readObservedAgentStatusPaneIdentity ?? (() => ({ kind: 'unobserved' }))
+    this.getBoundedAgentProviderSessionSnapshotFn = deps?.getBoundedAgentProviderSessionSnapshot
     this.getAgentProviderSessionSnapshotFn =
       deps?.getAgentProviderSessionSnapshot ?? deps?.getAgentStatusSnapshot ?? null
     this.getAgentProviderSessionRowsForSessionFn =

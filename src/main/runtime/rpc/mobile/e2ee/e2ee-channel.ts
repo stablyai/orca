@@ -2,20 +2,18 @@
 import type { WebSocket } from 'ws'
 import { PAIRED_E2EE_HANDSHAKE_DEADLINE_MS } from '../../../../../shared/remote-runtime/e2ee/paired-e2ee-handshake-deadline'
 import {
-  deriveSharedKey,
   encrypt,
   decrypt,
   decryptBytes
 } from '../../../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
-import {
+import type {
   DesktopMobileE2EEV2Session,
-  type DesktopMobileE2EEV2Context
+  DesktopMobileE2EEV2Context
 } from './mobile-e2ee-v2-desktop-session'
 import type { DesktopMobileE2EEV2OutboundItem as V2OutboundItem } from './mobile-e2ee-v2-desktop-outbound'
 import { handleDesktopMobileE2EEV2Inbound } from './mobile-e2ee-v2-desktop-inbound'
 import {
   authenticateMobileE2EE,
-  decodeMobileE2EEPublicKey,
   describeMobileE2EEAuthFailure,
   type DeviceKeyResolution
 } from './mobile-e2ee-auth-validation'
@@ -24,7 +22,7 @@ import {
   trackMobileE2EEOutboundBudgetClose,
   type MobileE2EEOutboundBudgetClose
 } from './mobile-e2ee-outbound-admission'
-import { parseRemoteRuntimeJsonText } from '../../../../../shared/remote-runtime/requests/remote-runtime-request-frames'
+import { admitMobileE2EEHello } from './mobile-e2ee-hello'
 import type { MobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-owner'
 import { createLegacyReplySenders } from './mobile-e2ee-legacy-reply-senders'
@@ -36,7 +34,9 @@ const MAX_CONSECUTIVE_DECRYPT_FAILURES = 5
 
 export type E2EEChannelOptions = {
   serverSecretKey: Uint8Array
-  resolveAuthenticatedDevice: (token: string) => E2EEAuthenticatedDevice | null
+  resolveAuthenticatedDevice: (
+    token: string
+  ) => E2EEAuthenticatedDevice | null | Promise<E2EEAuthenticatedDevice | null>
   // Absent: key auth is refused as bad_auth, the same as before device keys existed.
   resolveAuthenticatedDeviceKey?: (deviceId: string) => DeviceKeyResolution<E2EEAuthenticatedDevice>
   onReady: (channel: E2EEChannel, device: E2EEAuthenticatedDevice) => void
@@ -183,63 +183,30 @@ export class E2EEChannel {
   }
 
   private handleHello(raw: string): void {
-    let hello: Record<string, unknown>
-    try {
-      const parsed = parseRemoteRuntimeJsonText(raw)
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        this.onError(4001, 'Invalid handshake message')
-        return
-      }
-      hello = { ...parsed }
-    } catch {
-      this.onError(4001, 'Invalid handshake message')
+    const handshake = admitMobileE2EEHello(
+      raw,
+      this.serverSecretKey,
+      this.transportContext,
+      this.requireV2
+    )
+    if (handshake.error !== undefined) {
+      this.onError(4001, handshake.error)
       return
     }
-
-    if (hello.type === 'e2ee_hello' && hello.v === 2) {
-      const session = DesktopMobileE2EEV2Session.create({
-        hello,
-        serverSecretKey: this.serverSecretKey,
-        expectedContext: this.transportContext
-      })
-      if (!session) {
-        this.onError(4001, 'Invalid e2ee_hello v2')
-        return
-      }
-      this.v2Session = session
-      this.state = 'awaiting_auth'
-      if (this.ws.readyState === this.ws.OPEN) {
-        this.ws.send(JSON.stringify(session.ready))
-      }
-      return
-    }
-
-    if (this.requireV2) {
-      this.onError(4001, 'E2EE v2 required')
-      return
-    }
-    if (hello.type !== 'e2ee_hello' || typeof hello.publicKeyB64 !== 'string') {
-      this.onError(4001, 'Invalid e2ee_hello')
-      return
-    }
-
-    // Derive the same ECDH shared secret on both peers.
-    const clientPublicKey = decodeMobileE2EEPublicKey(hello.publicKeyB64)
-    if (!clientPublicKey) {
-      this.onError(4001, 'Invalid public key')
-      return
-    }
-
-    this.sharedKey = deriveSharedKey(this.serverSecretKey, clientPublicKey)
+    this.v2Session = handshake.session
+    this.sharedKey = handshake.sharedKey
     this.state = 'awaiting_auth'
-
-    // Ready must be plaintext so the peer can begin encrypted authentication.
     if (this.ws.readyState === this.ws.OPEN) {
-      this.ws.send(JSON.stringify({ type: 'e2ee_ready' }))
+      this.ws.send(JSON.stringify(handshake.ready))
     }
   }
 
+  private observerAuthPending = false
+
   private handleAuth(plaintext: string): void {
+    if (this.observerAuthPending) {
+      return
+    }
     const authentication = authenticateMobileE2EE({
       plaintext,
       v2Session: this.v2Session,
@@ -247,6 +214,23 @@ export class E2EEChannel {
       resolveDevice: this.resolvers.resolveAuthenticatedDevice,
       resolveDeviceKey: this.resolvers.resolveAuthenticatedDeviceKey
     })
+    if (authentication instanceof Promise) {
+      this.observerAuthPending = true
+      void authentication.then(
+        (result) => this.finishAuth(result),
+        () => this.finishAuth({ ok: false, code: 'unauthorized' })
+      )
+      return
+    }
+    this.finishAuth(authentication)
+  }
+
+  private finishAuth(
+    authentication: Awaited<ReturnType<typeof authenticateMobileE2EE<E2EEAuthenticatedDevice>>>
+  ): void {
+    if (this.handshakeTimer === null || this.ws.readyState !== this.ws.OPEN) {
+      return
+    }
     if (!authentication.ok) {
       const failure = describeMobileE2EEAuthFailure(authentication)
       this.sendEncryptedControl(failure.sealedError)

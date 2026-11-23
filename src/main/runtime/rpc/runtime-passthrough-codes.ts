@@ -20,6 +20,7 @@ export const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'chat_fork_runtime_incompatible',
   'chat_fork_anchor_changed',
   'selector_not_found',
+  'observer_scope_stale',
   'selector_ambiguous',
   'terminal_handle_stale',
   'terminal_not_writable',

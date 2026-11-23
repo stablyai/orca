@@ -1,3 +1,4 @@
+import { ObserverCredentialStore } from '../../observer-credential-store'
 import { randomBytes } from 'node:crypto'
 import type { RuntimeTransportMetadata } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -63,6 +64,7 @@ export class RuntimeRpcState {
   protected networkExposurePromise: Promise<void> | null = null
   // Stop fences new exposure and waits pending rebind before taking transport snapshots (STA-2370).
   protected stopping = false
+  protected readonly observerCredentialStore: ObserverCredentialStore
   protected readonly authToken = randomBytes(24).toString('hex')
   protected readonly keepaliveIntervalMs: number
   protected readonly longPollCap: number
@@ -141,6 +143,7 @@ export class RuntimeRpcState {
     this.runtime = runtime
     this.dispatcher = new RpcDispatcher({ runtime, methods: methods ?? ALL_RPC_METHODS })
     this.userDataPath = userDataPath
+    this.observerCredentialStore = new ObserverCredentialStore(userDataPath)
     this.pid = pid
     this.platform = platform
     this.enableWebSocket = enableWebSocket

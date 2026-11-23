@@ -1,6 +1,7 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
   "include": [
+    "scripts/observer-credential-admin.ts",
     "../electron.vite.config.*",
     "./vitest.config.ts",
     "./build-plugins/**/*",

@@ -1,3 +1,4 @@
+import { OBSERVER_METHODS } from './observer'
 import { STATUS_METHODS } from './host-management/status'
 import { DESKTOP_WINDOW_METHODS } from './host-management/desktop-window'
 import { SIDEBAR_INPUT_METHODS } from './sidebar-inputs/sidebar-inputs'
@@ -257,7 +258,8 @@ const SERVICE_RPC_METHODS = [
   ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? SIDEBAR_INPUT_METHODS : []),
   ...SIDEBAR_REPO_ICON_METHODS,
   ...UPDATER_METHODS,
-  ...AUTOMATIC_WORK_METHODS
+  ...AUTOMATIC_WORK_METHODS,
+  ...OBSERVER_METHODS
 ] as const
 
 type ConcatMethods<A extends readonly unknown[], B extends readonly unknown[]> = readonly [

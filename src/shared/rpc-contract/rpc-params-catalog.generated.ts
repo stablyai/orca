@@ -1852,6 +1852,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'notifications.testPush': null,
   'notifications.unregisterPush': null,
   'notifications.unsubscribe': NotificationUnsubscribeParams,
+  'observer.runtime.get': null,
+  'observer.sessions.list': null,
   'orcaAccount.selectOrg': OrcaAccountSelectOrgParams,
   'orcaAccount.signIn.cancel': OrcaAccountSignInFlowParams,
   'orcaAccount.signIn.complete': OrcaAccountSignInCompleteParams,

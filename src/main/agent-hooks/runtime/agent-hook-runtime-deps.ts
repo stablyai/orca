@@ -33,6 +33,8 @@ export function agentHookRuntimeDeps(
     getPublicAgentStatusSnapshotForPane: (paneKey: string, terminalHandle?: string | null) =>
       server.getPublicStatusSnapshotForPane(paneKey, terminalHandle),
     // Include resume identities so mobile can locate provider transcripts, including Pi sessions.
+    getBoundedAgentProviderSessionSnapshot: (worktreeId, scanLimit, rowLimit) =>
+      server.getBoundedStatusSnapshot(worktreeId, scanLimit, rowLimit),
     getAgentProviderSessionSnapshot: (tabId) =>
       tabId === undefined
         ? server.getStatusSnapshot()

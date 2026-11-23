@@ -1,3 +1,4 @@
+import { boundedObserverStatus } from './bounded-observer-status'
 import { sameAgentStatusTerminalOwner } from '../../../shared/agent-status/identity/agent-status-terminal-owner'
 import { structuralValuesEqualIgnoringUndefined } from '../../../shared/collections/structural-value-equality'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
@@ -52,6 +53,17 @@ function semanticRowsEqual(
 }
 
 export abstract class AgentHookServerRowOwnership extends AgentHookServerListeners {
+  getBoundedStatusSnapshot(worktreeId: string, scanLimit: number, rowLimit: number) {
+    return boundedObserverStatus(
+      this.state,
+      this.programStatusFacets,
+      this.canonicalStatusStore,
+      worktreeId,
+      scanLimit,
+      rowLimit
+    )
+  }
+
   /** Set only for the direct applyNormalizedStatus call of applyRestatedStatus. */
   protected restatingStatus = false
 

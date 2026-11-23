@@ -28,6 +28,7 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
   }
 
   protected handleWebSocketBinaryMessage(bytes: Uint8Array<ArrayBufferLike>, ws: WebSocket): void {
+    this.lastClientRequestAt = Date.now()
     this.binaryMessageRouter.dispatch(this.mobileSocketWiring?.getConnectionId(ws), bytes)
   }
 

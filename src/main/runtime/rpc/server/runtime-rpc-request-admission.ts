@@ -26,11 +26,14 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
       return this.buildError('unknown', 'request_too_large', 'RPC request exceeds the maximum size')
     }
 
-    const parsed = this.parseAndAuth(rawMessage)
+    const parsed = await this.parseAndAuth(rawMessage)
     if ('error' in parsed) {
       return parsed.error
     }
     const { request, callerScope } = parsed
+    if (callerScope.kind === 'observer') {
+      return this.dispatcher.dispatch(request, { callerScope, connectionSignal: context?.signal })
+    }
 
     // Only long polls consume admission slots; short RPCs bypass (design §7).
     const longPoll = classifyRuntimeLongPoll(request)
@@ -132,9 +135,9 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     }
   }
 
-  protected parseAndAuth(
+  protected async parseAndAuth(
     rawMessage: string
-  ): { request: RpcRequest; callerScope: RpcCallerScope } | { error: RpcResponse } {
+  ): Promise<{ request: RpcRequest; callerScope: RpcCallerScope } | { error: RpcResponse }> {
     let request: RpcRequest
     try {
       request = JSON.parse(rawMessage) as RpcRequest
@@ -142,7 +145,7 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
       return { error: this.buildError('unknown', 'bad_request', 'Invalid JSON request') }
     }
 
-    if (typeof request.id !== 'string' || request.id.length === 0) {
+    if (!request || typeof request.id !== 'string' || request.id.length === 0) {
       return { error: this.buildError('unknown', 'bad_request', 'Missing request id') }
     }
     if (typeof request.method !== 'string' || request.method.length === 0) {
@@ -153,6 +156,19 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     }
     if (request.authToken === this.authToken) {
       return { request, callerScope: OWNER_RPC_CALLER_SCOPE }
+    }
+    const observer = await this.observerCredentialStore.authenticate(request.authToken)
+    if (observer) {
+      return {
+        request,
+        callerScope: {
+          kind: 'observer',
+          credentialId: observer.id,
+          worktreeId: observer.worktreeId,
+          worktreeInstanceId: observer.worktreeInstanceId,
+          expiresAt: observer.expiresAt
+        }
+      }
     }
     return { error: this.buildError(request.id, 'unauthorized', 'Invalid auth token') }
   }
