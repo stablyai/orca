@@ -3,7 +3,7 @@
 // box docked at the bottom. The agent's question is answered in its comment, as on the desktop: quick
 // replies there, your own words in the box. Back returns to the list; up and down step through it, "4 of 6".
 import { useRef, useState } from 'react'
-import { Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { House, MessageSquare } from 'lucide-react-native'
 import { BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 import {
@@ -24,10 +24,6 @@ import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileNativeChatFloatingControls } from '../../session/native-chat/lower-region/MobileNativeChatFloatingControls'
-import {
-  isAtTail,
-  type MobileScrollTailMetrics
-} from '../../session/native-chat/transcript/viewport/use-mobile-native-chat-tail-follow'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import type { BotItemQuestionStepsSend } from '../../../../src/shared/bots/use-bot-item-question-steps'
 import { MobileBotItemActivity } from './MobileBotItemActivity'
@@ -37,6 +33,7 @@ import { botItemChatName, type BotItemSheet } from './MobileBotItemSheets'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
 import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
 import { useNow } from '../../hooks/use-now'
+import { useBotItemActivityFollow } from './use-bot-item-activity-follow'
 import { usePhoneBotItemView } from './use-phone-bot-item-view'
 import type { PhoneBotItemStepper } from './use-phone-bot-item-walk'
 import { MobileBotItemPageHeader } from './MobileBotItemPageHeader'
@@ -91,7 +88,6 @@ export function MobileBotItemPage({
   const now = useNow(60_000)
   const comment = useRef<BotItemCommentBoxHandle>(null)
   const lastEventId = view.events.at(-1)?.id ?? ''
-  const jump = useJumpToEnd()
   const takesImages = useRouteCapability(BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY)
   // One item on one host: its pending comments and its asks' held answers.
   const itemKey = `${hostKey}\0${bot.id}\0${uid}`
@@ -104,8 +100,14 @@ export function MobileBotItemPage({
     showToast
   })
   // From the comment box or a quick reply: shown at once, then sent to the host.
-  const sendComment: BotItemQuestionStepsSend = (text, paths = [], ...rest) =>
+  const jump = useBotItemActivityFollow({
+    scopeKey: itemKey,
+    hasItems: view.events.length + pending.shown.length > 0
+  })
+  const sendComment: BotItemQuestionStepsSend = (text, paths = [], ...rest) => {
     pending.send(text, paths, lastEventId || null, ...rest)
+    jump.jumpToTail()
+  }
   // `waitingLine`: the question the comment box names, until a reply is on its way.
   const { steps, sent, quick, fromBox, waitingLine } = useBotItemQuestionSteps(
     itemKey,
@@ -163,11 +165,14 @@ export function MobileBotItemPage({
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          onScroll={(event) => jump.measure(event.nativeEvent)}
-          onContentSizeChange={(_width, height) => jump.measure({ contentSize: { height } })}
-          onLayout={(event) =>
-            jump.measure({ layoutMeasurement: { height: event.nativeEvent.layout.height } })
-          }
+          onContentSizeChange={jump.onContentSizeChange}
+          onLayout={jump.onLayout}
+          onScroll={jump.onScroll}
+          onScrollToTop={jump.tail.releaseFollow}
+          onScrollBeginDrag={jump.tail.beginUserScroll}
+          onScrollEndDrag={jump.tail.endUserDrag}
+          onMomentumScrollBegin={jump.tail.beginMomentum}
+          onMomentumScrollEnd={jump.tail.endMomentum}
           scrollEventThrottle={32}
         >
           <View style={styles.head}>
@@ -285,7 +290,10 @@ export function MobileBotItemPage({
         </ScrollView>
         {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}
         <MobileEdgeFade edge="bottom" color={colors.sheetSurface} />
-        <MobileNativeChatFloatingControls showJumpToTail={jump.shown} onJumpToTail={jump.toEnd} />
+        <MobileNativeChatFloatingControls
+          showJumpToTail={jump.tail.showJumpToTail}
+          onJumpToTail={jump.jumpToTail}
+        />
       </View>
       <View onLayout={(event) => onCommentBoxHeight(event.nativeEvent.layout.height)}>
         <MobileBotItemCommentBox
@@ -302,41 +310,12 @@ export function MobileBotItemPage({
           attachTo={takesImages && !item.chat.gone ? item.chat.id : null}
           hostId={hostId}
           bot={bot}
-          onSend={(text, paths, replyingTo, skills) => {
-            fromBox(text, paths, replyingTo, skills)
-            requestAnimationFrame(jump.toEnd)
-          }}
+          onSend={fromBox}
           showToast={showToast}
         />
       </View>
     </View>
   )
-}
-
-/** Chat's Scroll to latest, on a page that keeps its opening place: shown while the end is out of view. */
-function useJumpToEnd() {
-  const ref = useRef<ScrollViewInstance>(null)
-  const metrics = useRef<MobileScrollTailMetrics>({
-    contentOffset: { y: 0 },
-    contentSize: { height: 0 },
-    layoutMeasurement: { height: 0 }
-  })
-  const [shown, setShown] = useState(false)
-  return {
-    ref,
-    shown,
-    measure: (next: Partial<MobileScrollTailMetrics>) => {
-      metrics.current = { ...metrics.current, ...next }
-      setShown(!isAtTail(metrics.current))
-    },
-    toEnd: () => ref.current?.scrollToEnd({ animated: true }),
-    /** A span measured in the window to the middle of the view, as the desktop centres a question. */
-    center: (y: number, height: number, animated: boolean) =>
-      ref.current?.measureInWindow((_x, top, _width, view) => {
-        const at = metrics.current.contentOffset.y + y - top - (view - height) / 2
-        ref.current?.scrollTo({ y: Math.max(0, at), animated })
-      })
-  }
 }
 
 /** The description's first three lines, then Show more; Markdown, as the desktop draws it. */
