@@ -10,7 +10,6 @@ import { applyJournalDomainDispatch } from './journal-domain-dispatch'
 import { applyJournalDomainItem } from './journal-domain-item'
 import { readJournalDomainOperationWindow } from './journal-domain-operation-window'
 import { JournalSqlScope } from './journal-sql-scope'
-import { windowPlaceRows } from './journal-operation-window-sends'
 import { codexTurnLifecycleIdentity } from '../../codex/structured/journal/codex-structured-journal-translation-turns'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
@@ -246,23 +245,32 @@ it('reads the newest turns with the same work however many turns came before the
   expect(long.examined).toBe(short.examined)
   expect(long.sends).toEqual(Array.from({ length: 9 }, (_, index) => `m${491 + index}`))
   expect(long.turns).toEqual(Array.from({ length: 9 }, (_, index) => `turn-${491 + index}`))
-  // A long agent turn's tool calls are never listed to find its sends, and change nothing it reads.
+  // A long agent turn's tool calls are never listed to find its sends, and change nothing it reads:
+  // each stretch a send read lists keys on the index that holds no tool rows.
   const listed = (tools: number) => {
     const db = chat(50, () => true, undefined, 0, tools)
-    const ids = db
-      .prepare(`SELECT COUNT(*) AS n FROM ${windowPlaceRows('item_id')}`)
-      .get('chat', 'epoch', 0, Number.MAX_SAFE_INTEGER)?.n
+    const prepare = db.prepare.bind(db)
+    const statements = new Set<string>()
+    db.prepare = (sql: string) => (statements.add(sql), prepare(sql))
     const { snapshot } = readJournalDomainOperationWindow(
       new JournalSqlScope(db, 'chat', 'epoch'),
-      {
-        latestTurns: 8,
-        turnShape: true
-      }
+      { latestTurns: 8, turnShape: true }
     )
+    const stretches = [...statements].flatMap((sql) => {
+      const plan = prepare(`EXPLAIN QUERY PLAN ${sql}`)
+        .all()
+        .map((step) => String(step.detail))
+      return plan.some((step) => step.startsWith('SEARCH send'))
+        ? plan.filter((step) => /journal_items .*sequence>\?/.test(step))
+        : []
+    })
     db.close()
-    return { ids, sends: snapshot.submissions.map((send) => send.clientMessageId) }
+    return { stretches, sends: snapshot.submissions.map((send) => send.clientMessageId) }
   }
-  expect(listed(1000)).toEqual(listed(0))
+  const few = listed(0)
+  expect(listed(1000)).toEqual(few)
+  expect(few.stretches.length).toBeGreaterThan(0)
+  expect(few.stretches.every((step) => step.includes('journal_items_send_place'))).toBe(true)
   // Sends recovered in doubt long ago are settled for attribution: they add no work as they pile up.
   expect(read(500, 491).examined).toBe(read(50, 41).examined)
   // A send still unanswered anywhere is the turn still to be attributed: kept, as the whole read does,
