@@ -17,6 +17,30 @@ export function workerKeepOpenByDefault(
   return !startedForBot(db, dispatchId, isBotChat)
 }
 
+/** The same default for a worker whose Dispatch lives on the server that runs it: decided here, from the
+ *  coordinator (a bot's chat, or a worker under one), since that server does not know this host's bots. */
+export function coordinatorKeepOpenByDefault(
+  db: OrchestrationDb,
+  worktree: string | undefined,
+  coordinator: {
+    terminalHandle: string | null
+    paneKey: string | null
+    orcaSessionId: string | null
+  } | null,
+  isBotChat: (sessionId: string) => boolean
+): boolean {
+  if (worktree !== 'new-child' && worktree !== 'new-top-level') {
+    return false
+  }
+  if (coordinator?.orcaSessionId && isBotChat(coordinator.orcaSessionId)) {
+    return false
+  }
+  const own = coordinator?.terminalHandle
+    ? db.getActiveDispatchForTerminal(coordinator.terminalHandle, coordinator.paneKey ?? undefined)
+    : undefined
+  return !(own && startedForBot(db, own.id, isBotChat))
+}
+
 // Walks the recorded creators up to the root coordinator, whose session is the Run's when unrecorded.
 function startedForBot(
   db: OrchestrationDb,

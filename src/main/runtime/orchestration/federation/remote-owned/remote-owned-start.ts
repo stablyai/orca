@@ -1,3 +1,5 @@
+import { coordinatorKeepOpenByDefault } from '../../../rpc/methods/orchestration/worker/start/worker-keep-open-default'
+import { botOfSession } from '../../../../bots/bot-session-tabs'
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
@@ -246,6 +248,13 @@ export async function startRemoteOwnedWorker(
           taskId,
           runId: run.id,
           runCreated: bindRun().created,
+          // The server cannot tell a bot's worker from a person's; this host can.
+          keepOpenByDefault: coordinatorKeepOpenByDefault(
+            db,
+            params.worktree,
+            coordinator ?? null,
+            (sessionId) => botOfSession(runtime.bots, sessionId) !== null
+          ),
           ...(started.data?.run ? { serverRunId: started.data.run.id } : {})
         }
       : answer

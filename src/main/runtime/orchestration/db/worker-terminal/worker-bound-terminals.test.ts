@@ -13,8 +13,14 @@ import {
   type OrcaSessionId
 } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { bindWorkerTerminal, keepPaneOpen, paneAutoCloseState } from './worker-bound-terminals'
-import { closeWorkerBoundTerminals } from '../../../rpc/methods/orchestration/worker/release/worker-bound-terminal-close'
-import { workerKeepOpenByDefault } from '../../../rpc/methods/orchestration/worker/start/worker-keep-open-default'
+import {
+  closeRetriedFailedSetup,
+  closeWorkerBoundTerminals
+} from '../../../rpc/methods/orchestration/worker/release/worker-bound-terminal-close'
+import {
+  coordinatorKeepOpenByDefault,
+  workerKeepOpenByDefault
+} from '../../../rpc/methods/orchestration/worker/start/worker-keep-open-default'
 
 describe('terminals bound to a worker', () => {
   let directory: string
@@ -73,6 +79,7 @@ describe('terminals bound to a worker', () => {
     }
     return {
       dispatchId: dispatch.id,
+      agentHandle: `term_agent_${dispatch.id}`,
       agentPaneKey: `tab_${dispatch.id}:leaf-agent-${dispatch.id}`,
       setup: bound('setup'),
       tab: bound('configured_tab')
@@ -88,8 +95,15 @@ describe('terminals bound to a worker', () => {
     const closed: string[] = []
     return {
       closed,
+      // An Orca restart mints a new handle for the same pane.
+      remint: (handle: string, next: string) => {
+        panes.set(next, panes.get(handle)!)
+        panes.delete(handle)
+      },
       runtime: {
         getTerminalPaneKey: (handle: string) => panes.get(handle) ?? null,
+        getTerminalHandleForPaneKey: (paneKey: string) =>
+          [...panes].find(([, pane]) => pane === paneKey)?.[0] ?? null,
         closeTerminal: async (handle: string) => {
           closed.push(handle)
           panes.delete(handle)
@@ -118,11 +132,39 @@ describe('terminals bound to a worker', () => {
     expect(workerKeepOpenByDefault(db, 'current', worker.dispatchId, isBotChat)).toBe(false)
   })
 
-  it('a failed setup terminal stays open while the startup tab closes', async () => {
+  it('a failed setup terminal stays open, with no countdown, until a retry succeeds', async () => {
     const worker = startWorker(botChat, 'failed')
+    expect(paneAutoCloseState(db, worker.setup.paneKey)).toBeNull()
     const { runtime, closed } = host(worker)
     await closeWorkerBoundTerminals(runtime, db, worker.dispatchId)
     expect(closed).toEqual([worker.tab.terminalHandle])
+
+    await closeRetriedFailedSetup(runtime, db, worker.dispatchId)
+    expect(closed).toEqual([worker.tab.terminalHandle, worker.setup.terminalHandle])
+  })
+
+  it('closes bound terminals found by their pane after Orca reminted their handles', async () => {
+    const worker = startWorker(botChat)
+    const { runtime, closed, remint } = host(worker)
+    remint(worker.setup.terminalHandle, 'term_setup_after_restart')
+    remint(worker.tab.terminalHandle, 'term_tab_after_restart')
+    await closeWorkerBoundTerminals(runtime, db, worker.dispatchId)
+    expect(closed).toEqual(['term_setup_after_restart', 'term_tab_after_restart'])
+  })
+
+  it("decides a paired server's worker from this host's coordinator", () => {
+    const party = (orcaSessionId: string | null, terminalHandle: string | null = null) => ({
+      terminalHandle,
+      paneKey: null,
+      orcaSessionId
+    })
+    expect(coordinatorKeepOpenByDefault(db, 'new-child', party(botChat), isBotChat)).toBe(false)
+    expect(coordinatorKeepOpenByDefault(db, 'new-child', party(personChat), isBotChat)).toBe(true)
+    // A worker a bot started, coordinating a helper of its own on the server.
+    const worker = startWorker(botChat)
+    expect(
+      coordinatorKeepOpenByDefault(db, 'new-child', party(null, worker.agentHandle), isBotChat)
+    ).toBe(false)
   })
 
   it('Keep open on a bound terminal keeps only that one', async () => {

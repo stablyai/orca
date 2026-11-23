@@ -96,6 +96,10 @@ export function paneAutoCloseState(
   if (!bound) {
     return own
   }
+  // A failed setup stays open after its worker closes, so it shows no countdown.
+  if (isFailedSetupBinding(db, bound)) {
+    return null
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the projection selects exactly pane_key.
   const worker = db.db
     .prepare(
@@ -115,4 +119,14 @@ export function keepPaneOpen(db: OrchestrationDb, paneKey: string): void {
   if (bound) {
     unbindWorkerTerminal(db, bound.terminal_handle)
   }
+}
+
+const FAILED_SETUP_STATES = new Set(['failed', 'spawn_failed'])
+
+/** A setup terminal whose setup failed: it outlives its worker, to show the error. */
+export function isFailedSetupBinding(db: OrchestrationDb, bound: WorkerBoundTerminalRow): boolean {
+  return (
+    bound.role === 'setup' &&
+    FAILED_SETUP_STATES.has(db.getWorkerDispatch(bound.dispatch_id)?.setup_state ?? '')
+  )
 }

@@ -13,7 +13,7 @@ import type {
 } from '../../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import { stopSingleWorker, type StopMutation } from './stop/single-worker-stop'
 import { settleRestartCutStart } from '../../../../orchestration/workers/turn-stops/awaiting-worker-start-report'
-import { closeWorkerBoundTerminals } from './release/worker-bound-terminal-close'
+import { closeStoppedWorkerTerminals } from './release/worker-bound-terminal-close'
 
 export const ORCHESTRATION_WORKER_STOP_METHODS = [
   defineOrchestrationMethod({
@@ -35,9 +35,7 @@ export function stopWorkerAndHelpers(
   return dedupeWorkerStop(runtime, dispatchId, async () => {
     const stopped = await stopSingleWorker(runtime, dispatchId, mutation)
     if (stopped.state === 'stopped' && !stopped.alreadySettled) {
-      const db = runtime.getOrchestrationDb()
-      const origin = db.getWorkerTerminalResourceByOwner(dispatchId)?.origin_dispatch_id
-      await closeWorkerBoundTerminals(runtime, db, origin ?? dispatchId)
+      await closeStoppedWorkerTerminals(runtime, runtime.getOrchestrationDb(), dispatchId)
     }
     return withStoppedHelpers(runtime, dispatchId, mutation, stopped)
   })
