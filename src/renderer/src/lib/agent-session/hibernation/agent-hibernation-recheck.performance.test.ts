@@ -1,8 +1,15 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
 const work = vi.hoisted(() => {
-  const counters: { statusReads: number; ageCopies: number; planned: number; state: unknown } = {
+  const counters: {
+    statusReads: number
+    tabReads: number
+    ageCopies: number
+    planned: number
+    state: unknown
+  } = {
     statusReads: 0,
+    tabReads: 0,
     ageCopies: 0,
     planned: 0,
     state: {}
@@ -103,9 +110,16 @@ it.each([100, 1_000])(
   'each pane about to sleep re-checks only its own status and ages (%i idle panes in one workspace)',
   async (count) => {
     vi.stubGlobal('window', { api: { pty: { getTerminalAttention: async () => ({}) } } })
-    const tabs = Array.from({ length: count }, (_, index) => ({
-      id: `${String(index).padStart(8, '0')}-2222-4222-8222-222222222222`
-    }))
+    // Every walk over the workspace's tabs reads each tab's id.
+    const tabs = Array.from({ length: count }, (_, index) => {
+      const id = `${String(index).padStart(8, '0')}-2222-4222-8222-222222222222`
+      return {
+        get id() {
+          work.tabReads += 1
+          return id
+        }
+      }
+    })
     const entries = new Map<string, Status>()
     for (const tab of tabs) {
       const paneKey = `${tab.id}:${LEAF_ID}`
@@ -134,6 +148,7 @@ it.each([100, 1_000])(
     }
     await runAgentHibernationTick()
     work.statusReads = 0
+    work.tabReads = 0
     work.ageCopies = 0
     work.planned = 0
     await runAgentHibernationTick()
@@ -144,5 +159,7 @@ it.each([100, 1_000])(
     expect(work.statusReads).toBe(2 * count + 2 * rechecks)
     expect(work.planned).toBe(count + rechecks)
     expect(work.ageCopies).toBe(2 * count + 2 * rechecks)
+    // The tick walks the workspace's tabs a few times; the re-checks share one index of them.
+    expect(work.tabReads).toBeLessThanOrEqual(10 * count)
   }
 )

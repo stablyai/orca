@@ -1,12 +1,19 @@
-/** Names the handle each identity write touches (null: any of them), for owners waiting on a few handles. */
+/** Names the handle each identity write touches (null: any of them), and the pane leaves a graph drops,
+ *  for owners waiting on a few handles. */
 export class TerminalHandleTouches {
   private readonly listeners = new Set<(handle: string | null) => void>()
-  /** Counts graph writes that dropped a leaf, so pane-closed checks run only after one. */
-  leafDrops = 0
+  private readonly leafListeners = new Set<(leafId: string) => void>()
 
-  listen(listener: (handle: string | null) => void): () => void {
+  listen(
+    listener: (handle: string | null) => void,
+    onLeafDropped: (leafId: string) => void
+  ): () => void {
     this.listeners.add(listener)
-    return () => this.listeners.delete(listener)
+    this.leafListeners.add(onLeafDropped)
+    return () => {
+      this.listeners.delete(listener)
+      this.leafListeners.delete(onLeafDropped)
+    }
   }
 
   touch(handle: string | null | undefined): void {
@@ -18,33 +25,34 @@ export class TerminalHandleTouches {
     }
   }
 
-  /** A graph replacement that kept fewer leaves than it had touches the leaving keys' handles. */
+  /** A graph replacement that kept fewer leaves than it had names each leaving leaf and its handle. */
   leavesReplaced(
-    previous: ReadonlyMap<string, unknown>,
+    previous: ReadonlyMap<string, { leafId: string }>,
     kept: number,
     next: ReadonlyMap<string, unknown>,
     bindings: ReadonlyMap<string, string>
   ): void {
-    if (kept >= previous.size) {
-      return
-    }
-    this.leafDrops += 1
-    for (const key of this.listeners.size > 0 ? previous.keys() : []) {
+    let dropped = this.listeners.size > 0 ? previous.size - kept : 0
+    for (const [key, leaf] of dropped > 0 ? previous : []) {
       if (!next.has(key)) {
-        this.touch(bindings.get(key))
+        this.leafRemoved(leaf, bindings.get(key))
+        if (--dropped === 0) {
+          return
+        }
       }
     }
   }
 
-  leafRemoved(existed: boolean, handle: string | undefined): void {
-    if (existed) {
-      this.leafDrops += 1
+  leafRemoved(leaf: { leafId: string } | undefined, handle: string | undefined): void {
+    if (leaf) {
       this.touch(handle)
+      for (const listener of this.leafListeners) {
+        listener(leaf.leafId)
+      }
     }
   }
 
   leavesCleared(): void {
-    this.leafDrops += 1
     this.touch(null)
   }
 }

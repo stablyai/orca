@@ -12,7 +12,7 @@ import {
 
 type Internals = {
   wokenHandlePtyId(handle: string): string | null
-  wokenHandleChecks: Map<string, Set<() => void>>
+  sleptWaits: { size: number }
   recordPtyWorktree(ptyId: string, worktreeId: string, options: { connected: boolean }): void
   requestSleptMailboxWake(mailbox: string): void
   terminalIdentity: {
@@ -112,22 +112,26 @@ it.each([100, 1_000])(
     const cancel = new AbortController()
     try {
       runtime.setNotifier(notifier({ resumeSleepingAgents: async () => true }))
-      const windowGraph = (title: string) => ({
-        tabs: records.map((record) => ({
-          tabId: record.tabId!,
-          worktreeId: record.worktreeId,
-          title,
-          activeLeafId: record.paneKey.split(':')[1],
-          layout: null
-        })),
-        leaves: records.map((record) => ({
-          tabId: record.tabId!,
-          worktreeId: record.worktreeId,
-          leafId: record.paneKey.split(':')[1],
-          paneRuntimeId: 1,
-          ptyId: null
-        }))
-      })
+      // `extra` is one more pane, in a tab no wait names.
+      const windowGraph = (title: string, extra = false) => {
+        const panes = [...records, ...(extra ? [sleeper(count, false)] : [])]
+        return {
+          tabs: panes.map((record) => ({
+            tabId: record.tabId!,
+            worktreeId: record.worktreeId,
+            title,
+            activeLeafId: record.paneKey.split(':')[1],
+            layout: null
+          })),
+          leaves: panes.map((record) => ({
+            tabId: record.tabId!,
+            worktreeId: record.worktreeId,
+            leafId: record.paneKey.split(':')[1],
+            paneRuntimeId: 1,
+            ptyId: null
+          }))
+        }
+      }
       await runtime.syncWindowGraph(1, windowGraph('Agent'))
       await vi.advanceTimersByTimeAsync(5_000)
       const handles = records.map((record) => runtime.getTerminalHandleForPaneKey(record.paneKey)!)
@@ -138,7 +142,7 @@ it.each([100, 1_000])(
           .catch(() => undefined)
       )
       await flush()
-      expect(internals.wokenHandleChecks.size).toBe(count)
+      expect(internals.sleptWaits.size).toBe(count)
       const checks = vi.spyOn(internals, 'wokenHandlePtyId')
 
       for (let event = 0; event < 10; event += 1) {
@@ -149,6 +153,13 @@ it.each([100, 1_000])(
       // Graph publications that keep every pane (a title change) check no wait either.
       for (let event = 0; event < 10; event += 1) {
         await runtime.syncWindowGraph(1, windowGraph(`Agent ${event}`))
+        await flush()
+      }
+      expect(checks).toHaveBeenCalledTimes(0)
+      // Opening and closing a pane no wait names checks none either.
+      for (let event = 0; event < 10; event += 1) {
+        await runtime.syncWindowGraph(1, windowGraph('Agent', true))
+        await runtime.syncWindowGraph(1, windowGraph('Agent'))
         await flush()
       }
       expect(checks).toHaveBeenCalledTimes(0)
@@ -180,7 +191,7 @@ it.each([100, 1_000])(
       await flush()
       await Promise.all(joined)
       expect(checks.mock.calls.length).toBeLessThanOrEqual(2 * count)
-      expect(internals.wokenHandleChecks.size).toBe(0)
+      expect(internals.sleptWaits.size).toBe(0)
     } finally {
       cancel.abort()
       runtime.setNotifier(null)

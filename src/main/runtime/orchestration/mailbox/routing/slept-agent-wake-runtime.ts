@@ -7,6 +7,7 @@ import type {
 } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { RuntimeSleptMailboxWakes } from './slept-mailbox-runtime'
 import { joinWithin } from './slept-agent-wake-join'
+import { SleptAgentWaits } from './slept-agent-waits'
 
 // Covers a cold agent resume; a caller's own deadline overrides it.
 const SLEPT_AGENT_WAKE_TIMEOUT_MS = 120_000
@@ -17,11 +18,7 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
   /** One wake per slept handle, held until its agent is idle, so every act arriving meanwhile joins it. */
   private readonly sleptAgentWakes = new Map<string, { paneKey: string; woken: Promise<void> }>()
   /** Pending wake waits by handle, so an identity write re-checks only the waits on what it touched. */
-  private readonly wokenHandleChecks = new Map<string, Set<() => void>>()
-  private stopWatchingWokenHandles: (() => void) | null = null
-  private recheckingSleptWaits = false
-  private touchedSleptHandles: Set<string> | 'all' | null = null
-  private recheckedLeafDrops = -1
+  private readonly sleptWaits = new SleptAgentWaits(() => this.terminalIdentity.handleTouches)
 
   /** The pane an Agent-slept handle names: still on its stopped process, and not under the user's own Sleep. */
   protected sleptAgentPaneForHandle(
@@ -162,38 +159,8 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
   }
 
   private recheckSleptWaitsOnReady(wasReady: boolean): void {
-    if (!wasReady && this.graphStatus === 'ready' && this.wokenHandleChecks.size > 0) {
-      queueMicrotask(() => this.recheckSleptWaits('all'))
-    }
-  }
-
-  // A graph sync can close or lose a waited pane only by dropping a leaf.
-  protected override onSleptLeafGraphSynced(): void {
-    const drops = this.terminalIdentity.handleTouches.leafDrops
-    if (drops !== this.recheckedLeafDrops && !this.recheckingSleptWaits) {
-      this.recheckedLeafDrops = drops
-      this.recheckSleptWaits('all')
-    }
-  }
-
-  private recheckSleptWaits(handles: Iterable<string> | 'all'): void {
-    // A check can restore a slept name, which touches its handle again.
-    if (this.recheckingSleptWaits) {
-      return
-    }
-    this.recheckingSleptWaits = true
-    try {
-      for (const handle of handles === 'all' ? this.wokenHandleChecks.keys() : handles) {
-        for (const check of this.wokenHandleChecks.get(handle) ?? []) {
-          check()
-        }
-      }
-    } finally {
-      this.recheckingSleptWaits = false
-    }
-    if (this.wokenHandleChecks.size === 0) {
-      this.stopWatchingWokenHandles?.()
-      this.stopWatchingWokenHandles = null
+    if (!wasReady && this.graphStatus === 'ready' && this.sleptWaits.size > 0) {
+      queueMicrotask(() => this.sleptWaits.recheck('all'))
     }
   }
 
@@ -278,11 +245,7 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     const leafId = paneLeafId ?? this.handles.get(handle)?.leafId ?? null
     return new Promise((resolve, reject) => {
       const settle = (error?: unknown): void => {
-        const checks = this.wokenHandleChecks.get(handle)
-        checks?.delete(check)
-        if (checks?.size === 0) {
-          this.wokenHandleChecks.delete(handle)
-        }
+        this.sleptWaits.remove(handle, leafId, check)
         clearTimeout(timer)
         signal?.removeEventListener('abort', onAbort)
         if (error === undefined) {
@@ -311,37 +274,8 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
         return
       }
       signal?.addEventListener('abort', onAbort, { once: true })
-      this.wokenHandleChecks.set(
-        handle,
-        (this.wokenHandleChecks.get(handle) ?? new Set()).add(check)
-      )
-      this.watchWokenHandles()
+      this.sleptWaits.add(handle, leafId, check)
       check()
-    })
-  }
-
-  /** Identity writes re-check the waits on the handles they touched; unsubscribed once none are pending. */
-  private watchWokenHandles(): void {
-    // Deferred: identity writes land mid-sync, before the graph's leaves and handles agree.
-    this.stopWatchingWokenHandles ??= this.terminalIdentity.handleTouches.listen((handle) => {
-      if (this.recheckingSleptWaits || this.touchedSleptHandles === 'all') {
-        return
-      }
-      if (handle !== null && !this.wokenHandleChecks.has(handle)) {
-        return
-      }
-      const queued = this.touchedSleptHandles !== null
-      this.touchedSleptHandles =
-        handle === null ? 'all' : (this.touchedSleptHandles ?? new Set<string>()).add(handle)
-      if (!queued) {
-        queueMicrotask(() => {
-          const touched = this.touchedSleptHandles
-          this.touchedSleptHandles = null
-          if (touched) {
-            this.recheckSleptWaits(touched)
-          }
-        })
-      }
     })
   }
 }

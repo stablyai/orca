@@ -31,6 +31,7 @@ import {
 } from '../../window-activity/window-park-visibility'
 import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
 import type { AppState } from '@/store/types'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 
 export const AGENT_HIBERNATION_TICK_MS = 60 * 1000
 
@@ -54,6 +55,18 @@ type AgentHibernationCoordinatorState = {
 
 const MAX_REFUSED_RETRY_MS = 16 * 60_000
 
+const tabIndexes = new WeakMap<readonly TerminalTab[], Map<string, TerminalTab>>()
+
+/** One index per tabs array, so a drain's one-pane re-checks share it until the tabs change. */
+function terminalTabById(tabs: readonly TerminalTab[]): Map<string, TerminalTab> {
+  let index = tabIndexes.get(tabs)
+  if (!index) {
+    index = new Map(tabs.map((tab) => [tab.id, tab]))
+    tabIndexes.set(tabs, index)
+  }
+  return index
+}
+
 /** Narrows a re-check to the one pane about to sleep. */
 type TargetPane = { tabId: string; paneKey: string }
 
@@ -75,15 +88,14 @@ function snapshotFromState(
   pane?: TargetPane
 ): AgentHibernationPlannerSnapshot {
   const worktreeTabs = targetWorktreeId ? (state.tabsByWorktree[targetWorktreeId] ?? []) : []
+  const paneTab = pane ? terminalTabById(worktreeTabs).get(pane.tabId) : undefined
   return {
     settings: state.settings,
     activeWorktreeId: state.activeWorktreeId,
     foregroundTerminalTabIds: getForegroundTerminalTabIds(),
     tabsByWorktree: targetWorktreeId
       ? {
-          [targetWorktreeId]: pane
-            ? worktreeTabs.filter((tab) => tab.id === pane.tabId)
-            : worktreeTabs
+          [targetWorktreeId]: pane ? (paneTab ? [paneTab] : []) : worktreeTabs
         }
       : state.tabsByWorktree,
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,

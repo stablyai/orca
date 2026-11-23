@@ -176,7 +176,7 @@ export class TerminalIdentitySource {
   }
 
   removeLeaf(key: string): boolean {
-    this.handleTouches.leafRemoved(this.leafRecords.has(key), this.leafBindings.get(key))
+    this.handleTouches.leafRemoved(this.leafRecords.get(key), this.leafBindings.get(key))
     this.paneCandidates.leaves.delete(key)
     return this.remove(this.leafRecords, key)
   }

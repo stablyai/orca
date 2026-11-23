@@ -18,9 +18,13 @@ export type HostPtyEvidence = {
 }
 
 export function resolveAgentHibernationRuntimeOwner(state: AppState, worktreeId: string) {
-  const tabs = state.tabsByWorktree[worktreeId] ?? []
-  const ptyIds = tabs.flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
-  return toAgentHibernationRuntimeOwner(resolveTerminalPtyOwner(state, worktreeId), ptyIds)
+  const worktreeOwner = resolveTerminalPtyOwner(state, worktreeId)
+  // Only a workspace two hosts publish needs its PTYs to name the owner.
+  const ptyIds =
+    worktreeOwner.kind === 'ambiguous'
+      ? (state.tabsByWorktree[worktreeId] ?? []).flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
+      : []
+  return toAgentHibernationRuntimeOwner(worktreeOwner, ptyIds)
 }
 
 /** Worktree → owning runtime; `null` means liveness is required but no host can be asked. */
@@ -82,7 +86,10 @@ export async function collectHostPtyEvidence(
       attentionByWorktreeId
     }
   }
-  const localPtyIds = collectLocalCompletedPtyIds(state, targets, completedTabIds, targetWorktreeId)
+  const localPtyIds =
+    onlyPaneKey !== undefined && targetWorktreeId !== undefined
+      ? collectPaneLocalPtyIds(state, targets, completedTabIds, targetWorktreeId)
+      : collectLocalCompletedPtyIds(state, targets, completedTabIds, targetWorktreeId)
   await Promise.all([
     collectLocalTerminalAttention(localPtyIds, attentionByWorktreeId),
     ...[...targets].map(async ([worktreeId, runtimeEnvironmentId]) => {
@@ -156,6 +163,19 @@ function collectLocalCompletedPtyIds(
     }
   }
   return ptyIdsByWorktreeId
+}
+
+/** A one-pane re-check's own tab: its PTYs, without walking the workspace's other tabs. */
+function collectPaneLocalPtyIds(
+  state: AppState,
+  runtimeTargets: Map<string, string | null>,
+  completedTabIds: Set<string>,
+  worktreeId: string
+): Map<string, string[]> {
+  const ptyIds = runtimeTargets.has(worktreeId)
+    ? []
+    : [...completedTabIds].flatMap((tabId) => state.ptyIdsByTabId[tabId] ?? [])
+  return ptyIds.length > 0 ? new Map([[worktreeId, ptyIds]]) : new Map()
 }
 
 /** This window's own PTYs can also be shown or typed into by paired clients and phones. */
