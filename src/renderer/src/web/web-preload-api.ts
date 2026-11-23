@@ -104,6 +104,7 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     hostedReview: createRuntimeNamespaceApi('hostedReview'),
     linear: createRuntimeNamespaceApi('linear'),
     jira: createWebJiraApi(),
+    clickup: createRuntimeNamespaceApi('clickup'),
     hooks: createHooksApi(),
     stats: {
       getSummary: async () =>

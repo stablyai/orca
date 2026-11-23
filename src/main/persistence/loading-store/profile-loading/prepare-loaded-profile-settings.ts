@@ -2,7 +2,7 @@ import type { GlobalSettings } from '../../../../shared/settings/global-settings
 import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../../shared/execution-host/project-runtime-legacy-migration'
-import { normalizeTaskProviderSettings } from '../../../../shared/work-items/task-providers'
+import { migrateLoadedTaskProviderSettings } from './task-provider-visibility-migration'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/source-control/ai/settings/auto-rename-branch-from-work-settings'
 import { normalizePluginSystemEnabledDefaultOn } from '../../../../shared/plugins/plugin-system-settings'
 import { migrateNestedWorkerMaxDepthDefault } from '../../../../shared/orchestration/workers/nested-worker-depth'
@@ -124,21 +124,11 @@ export function prepareLoadedProfileSettings(
   ) {
     markNeedsSave()
   }
-  const rawTaskProviderSettings = normalizeTaskProviderSettings({
-    visibleTaskProviders: parsed.settings?.visibleTaskProviders,
-    defaultTaskSource: parsed.settings?.defaultTaskSource
-  })
-  const visibleTaskProvidersDefaultedForJira =
-    parsed.settings?.visibleTaskProvidersDefaultedForJira === true
-  const migratedVisibleTaskProviders = visibleTaskProvidersDefaultedForJira
-    ? rawTaskProviderSettings.visibleTaskProviders
-    : rawTaskProviderSettings.visibleTaskProviders.includes('jira')
-      ? rawTaskProviderSettings.visibleTaskProviders
-      : [...rawTaskProviderSettings.visibleTaskProviders, 'jira' as const]
-  const taskProviderSettings = normalizeTaskProviderSettings({
-    visibleTaskProviders: migratedVisibleTaskProviders,
-    defaultTaskSource: rawTaskProviderSettings.defaultTaskSource
-  })
+  const { taskProviderSettings, needsSave: taskProviderVisibilityNeedsSave } =
+    migrateLoadedTaskProviderSettings(parsed.settings)
+  if (taskProviderVisibilityNeedsSave) {
+    markNeedsSave()
+  }
   const primarySelectionDefaultedForLinux =
     parsed.settings?.primarySelectionMiddleClickPasteDefaultedForLinux === true
   const primarySelectionDefaultedForTerminalDefaults =
@@ -153,9 +143,6 @@ export function prepareLoadedProfileSettings(
   const stampPrimarySelectionTerminalDefaults =
     primarySelectionPlatformDefaultEnabled && !primarySelectionDefaultedForTerminalDefaults
   if (migratePrimarySelectionPlatformDefault || stampPrimarySelectionTerminalDefaults) {
-    markNeedsSave()
-  }
-  if (!visibleTaskProvidersDefaultedForJira) {
     markNeedsSave()
   }
   const claudeAgentTeamsDefaultDisabledMigrated =

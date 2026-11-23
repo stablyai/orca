@@ -42,16 +42,26 @@ const ENGLISH_ATTACHMENT_LABELS: WorkspaceAttachmentLabelFormats = {
   issue: (number) => `Issue #${number}`
 }
 
-/** Use provider-native Linear/Jira keys; other references use PR #12-style labels. */
+/** Use provider-native Linear/Jira/ClickUp keys; other references use PR #12-style labels. */
 export function workspaceAttachmentReferenceLabel(
   item: Pick<
     WorkspaceAttachment,
-    'provider' | 'type' | 'number' | 'identifier' | 'linearIdentifier' | 'jiraIdentifier'
+    | 'provider'
+    | 'type'
+    | 'number'
+    | 'identifier'
+    | 'linearIdentifier'
+    | 'jiraIdentifier'
+    | 'clickupIdentifier'
   >,
   formats: WorkspaceAttachmentLabelFormats = ENGLISH_ATTACHMENT_LABELS
 ): string {
   if (item.provider === 'linear' || item.provider === 'jira') {
     return item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? `#${item.number}`
+  }
+  if (item.provider === 'clickup') {
+    const id = item.identifier ?? item.clickupIdentifier
+    return id ? `CU-${id}` : `#${item.number}`
   }
   return formats[item.type](item.number)
 }

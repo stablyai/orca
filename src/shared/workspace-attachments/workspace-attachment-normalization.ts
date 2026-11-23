@@ -11,6 +11,11 @@ import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
 import { getProvenWorkspaceReferenceIdentity } from './workspace-reference-identity'
 import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item-source-context'
 
+// These trackers have no numeric id, so attachments are keyed by their text identifier.
+function isIdentifierKeyedProvider(provider: unknown): boolean {
+  return provider === 'linear' || provider === 'jira' || provider === 'clickup'
+}
+
 function nonEmpty(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
@@ -26,6 +31,7 @@ export function normalizeWorkspaceAttachment(value: unknown): WorkspaceAttachmen
     provider !== 'gitlab' &&
     provider !== 'linear' &&
     provider !== 'jira' &&
+    provider !== 'clickup' &&
     provider !== 'bitbucket' &&
     provider !== 'azure-devops' &&
     provider !== 'gitea'
@@ -36,7 +42,7 @@ export function normalizeWorkspaceAttachment(value: unknown): WorkspaceAttachmen
   if (type !== 'issue' && type !== 'pr' && type !== 'mr') {
     return null
   }
-  if ((provider === 'linear' || provider === 'jira') && type !== 'issue') {
+  if (isIdentifierKeyedProvider(provider) && type !== 'issue') {
     return null
   }
   if (type === 'mr' && provider !== 'gitlab') {
@@ -46,8 +52,11 @@ export function normalizeWorkspaceAttachment(value: unknown): WorkspaceAttachmen
     return null
   }
   const identifier =
-    nonEmpty(raw.identifier) ?? nonEmpty(raw.linearIdentifier) ?? nonEmpty(raw.jiraIdentifier)
-  if (raw.number === 0 && (!identifier || (provider !== 'linear' && provider !== 'jira'))) {
+    nonEmpty(raw.identifier) ??
+    nonEmpty(raw.linearIdentifier) ??
+    nonEmpty(raw.jiraIdentifier) ??
+    nonEmpty(raw.clickupIdentifier)
+  if (raw.number === 0 && (!identifier || !isIdentifierKeyedProvider(provider))) {
     return null
   }
   if (raw.url !== undefined) {
@@ -73,6 +82,9 @@ export function normalizeWorkspaceAttachment(value: unknown): WorkspaceAttachmen
     ...(nonEmpty(raw.repoId) ? { repoId: nonEmpty(raw.repoId) } : {}),
     ...(nonEmpty(raw.linearIdentifier) ? { linearIdentifier: nonEmpty(raw.linearIdentifier) } : {}),
     ...(nonEmpty(raw.jiraIdentifier) ? { jiraIdentifier: nonEmpty(raw.jiraIdentifier) } : {}),
+    ...(nonEmpty(raw.clickupIdentifier)
+      ? { clickupIdentifier: nonEmpty(raw.clickupIdentifier) }
+      : {}),
     ...(nonEmpty(raw.linearWorkspaceId)
       ? { linearWorkspaceId: nonEmpty(raw.linearWorkspaceId) }
       : {}),
@@ -84,7 +96,8 @@ export function normalizeWorkspaceAttachment(value: unknown): WorkspaceAttachmen
   const linkedItem = normalizeWorkspaceLinkedItem({
     ...item,
     title: item.title ?? identifier ?? String(item.number),
-    jiraIdentifier: item.jiraIdentifier ?? (provider === 'jira' ? identifier : undefined)
+    jiraIdentifier: item.jiraIdentifier ?? (provider === 'jira' ? identifier : undefined),
+    clickupIdentifier: item.clickupIdentifier ?? (provider === 'clickup' ? identifier : undefined)
   })
   if (
     context &&
@@ -101,8 +114,12 @@ function attachmentIdentity(item: WorkspaceAttachment): string {
   return JSON.stringify([
     item.provider,
     item.type,
-    item.provider === 'linear' || item.provider === 'jira'
-      ? (item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? item.number)
+    isIdentifierKeyedProvider(item.provider)
+      ? (item.identifier ??
+        item.linearIdentifier ??
+        item.jiraIdentifier ??
+        item.clickupIdentifier ??
+        item.number)
       : item.number
   ])
 }
@@ -294,6 +311,8 @@ export function toWorkspaceLinkedItem(
     ...item,
     linearIdentifier:
       item.linearIdentifier ?? (item.provider === 'linear' ? item.identifier : undefined),
-    jiraIdentifier: item.jiraIdentifier ?? (item.provider === 'jira' ? item.identifier : undefined)
+    jiraIdentifier: item.jiraIdentifier ?? (item.provider === 'jira' ? item.identifier : undefined),
+    clickupIdentifier:
+      item.clickupIdentifier ?? (item.provider === 'clickup' ? item.identifier : undefined)
   })
 }
