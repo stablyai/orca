@@ -129,12 +129,10 @@ export function BrowserToolbarMenuDropdown({
         data-browser-page-menu-id={browserPageId}
         onCloseAutoFocus={overflow.onMenuCloseAutoFocus}
       >
-        {cookieImport ? (
-          <>
-            <BrowserToolbarImportCookiesSub {...cookieImport} />
-            <DropdownMenuSeparator />
-          </>
-        ) : null}
+        {/* Logins first: without cookies or the right profile, most sites are unusable. */}
+        {cookieImport ? <BrowserToolbarImportCookiesSub {...cookieImport} /> : null}
+        {profile ? <BrowserToolbarProfileSub {...profile} /> : null}
+        {cookieImport || profile ? <DropdownMenuSeparator /> : null}
         {overflow.annotateToolItems}
         {hasPageDisplayItems ? <DropdownMenuSeparator /> : null}
         {onFind ? (
@@ -213,8 +211,7 @@ export function BrowserToolbarMenuDropdown({
         <DropdownMenuSeparator />
 
         {extensionsSub}
-        {profile ? <BrowserToolbarProfileSub {...profile} /> : null}
-        {extensionsSub || profile ? <DropdownMenuSeparator /> : null}
+        {extensionsSub ? <DropdownMenuSeparator /> : null}
 
         <DropdownMenuItem
           // Why deferred: focus returning to the ⋯ trigger would otherwise close the dialog at once.
