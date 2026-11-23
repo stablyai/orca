@@ -8825,6 +8825,7 @@
           "6dd594a507": "URL du client web générée.",
           "2752126f3e": "L'appairage à l'exécution est indisponible.",
           "95b8be4cea": "Échec de l'actualisation des interfaces réseau.",
+          "1b4e0bbcc5": "Échec du chargement des droits d'accès partagés.",
           "custom-option": "{{address}} (personnalisée)",
           "add-custom": "Utiliser une adresse personnalisée…",
           "custom-title": "Adresse de connexion personnalisée",

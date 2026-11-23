@@ -23,7 +23,7 @@ export function RuntimeShareComputerSection(): React.JSX.Element {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [editingName, setEditingName] = useState(false)
-  const [runtimeAccessGrants, setRuntimeAccessGrants] = useState<RuntimeAccessGrant[] | null>(null)
+  const [runtimeAccessGrants, setRuntimeAccessGrants] = useState<RuntimeAccessGrant[] | null>()
   const mountedRef = useMountedRef()
   const accessGrantRequest = useRef(0)
   const machineName = useAppStore((state) => state.settings?.machineName ?? '')
@@ -61,7 +61,7 @@ export function RuntimeShareComputerSection(): React.JSX.Element {
       return
     }
     setRuntimeAccessGrants(
-      (current) => current?.filter((grant) => grant.deviceId !== deviceId) ?? null
+      (current) => current?.filter((grant) => grant.deviceId !== deviceId) ?? current
     )
     void loadRuntimeAccessGrants()
   }
@@ -124,10 +124,31 @@ export function RuntimeShareComputerSection(): React.JSX.Element {
         <RuntimePairingUrlGenerator
           framed={false}
           showHeader={false}
-          runtimeAccessGrants={runtimeAccessGrants}
+          runtimeAccessGrants={runtimeAccessGrants ?? null}
           loadRuntimeAccessGrants={loadRuntimeAccessGrants}
           onAccessGrantRevoked={handleAccessGrantRevoked}
         />
+        {runtimeAccessGrants === null ? (
+          <div className="flex items-center justify-between gap-2">
+            <p role="status" className="text-xs text-muted-foreground">
+              {t(
+                'auto.components.settings.RuntimePairingUrlGenerator.1b4e0bbcc5',
+                'Failed to load shared access grants.'
+              )}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              onClick={() => {
+                setRuntimeAccessGrants(undefined)
+                void loadRuntimeAccessGrants()
+              }}
+            >
+              {t('auto.components.settings.serverList.retry', 'Retry')}
+            </Button>
+          </div>
+        ) : null}
         {editingName ? (
           <MachineNameField id="runtime-share-machine-name" />
         ) : (

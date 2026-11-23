@@ -8936,6 +8936,7 @@
           "6dd594a507": "Webclient-URL generiert.",
           "2752126f3e": "Die Kopplung der Laufzeitumgebung ist nicht verfügbar.",
           "95b8be4cea": "Netzwerkschnittstellen konnten nicht aktualisiert werden.",
+          "1b4e0bbcc5": "Berechtigungen für den freigegebenen Zugriff konnten nicht geladen werden.",
           "custom-option": "{{address}} (benutzerdefiniert)",
           "add-custom": "Benutzerdefinierte Adresse verwenden…",
           "custom-title": "Benutzerdefinierte Verbindungsadresse",

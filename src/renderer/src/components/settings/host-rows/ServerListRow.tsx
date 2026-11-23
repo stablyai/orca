@@ -93,7 +93,7 @@ export function ServerListRow({
             <div
               className={cn(
                 'col-start-2 row-start-1 flex min-w-0 items-center gap-2 @lg/server-row:contents',
-                stackPrimaryActionOnNarrow && '@max-xs/server-row:col-span-2'
+                stackPrimaryActionOnNarrow && '@max-xs/server-row:col-end-4'
               )}
             >
               <span className="max-w-full truncate text-sm font-medium @max-lg/server-row:shrink-0">
