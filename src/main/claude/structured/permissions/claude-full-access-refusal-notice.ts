@@ -131,6 +131,10 @@ export function claimClaudeFullAccessRefusalNotice(
 ): ClaudeFullAccessRefusalNotice | null {
   const id = claudeFullAccessRefusalNoticeId(session)
   const applied = session.appliedInputOptions?.get('buildPermissionMode')
+  // Back in the chat's choice: a later fallback is a change of mode, so it gets a new row.
+  if (applied !== undefined && applied === session.launchIntent?.permissionMode) {
+    session.fullAccessRefusalNoticeId = undefined
+  }
   const previous = session.fullAccessRefusalNoticeId
   if (id === null || applied === undefined || id === previous) {
     return null

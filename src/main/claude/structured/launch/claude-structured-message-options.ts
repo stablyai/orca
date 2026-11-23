@@ -130,18 +130,19 @@ function writeClaudeBuildMode(
   })
 }
 
-/** A Full access chat's first send waits briefly for the startup settings read that says
- *  whether Claude allows it, so one write usually settles the mode. */
+/** A Full access or Approve for me chat's first send waits briefly for the startup settings read
+ *  that says whether Claude allows it, so one write usually settles the mode and the first
+ *  warning names the real reason. */
 async function waitForClaudeStartupSettings(
   session: ClaudeSession,
   signal: AbortSignal | undefined
 ): Promise<void> {
-  if (
-    session.launchIntent?.permissionMode === 'bypassPermissions' &&
-    session.bypassDisabled === undefined &&
-    !session.firstRootInit &&
-    session.startupSettings
-  ) {
+  const intent = session.launchIntent?.permissionMode
+  const unread =
+    intent === 'bypassPermissions'
+      ? session.bypassDisabled === undefined
+      : intent === 'auto' && session.autoDisabled === undefined
+  if (unread && !session.firstRootInit && session.startupSettings) {
     await waitForPromiseWithSignal(
       Promise.race([
         session.startupSettings,
