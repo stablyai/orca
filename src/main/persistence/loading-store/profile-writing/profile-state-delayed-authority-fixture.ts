@@ -38,6 +38,7 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
   readonly close = vi.fn(async () => {
     this.inner.close()
   })
+  readonly reportSavingStopped = vi.fn()
 
   constructor(readonly inner: ProfileStateSqliteAuthority) {}
 

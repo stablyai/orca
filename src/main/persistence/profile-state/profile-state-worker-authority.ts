@@ -2,8 +2,10 @@ import type {
   AsyncProfileStateAuthority,
   ProfileStateMaintenance
 } from '../loading-store/profile-writing/profile-state-authority'
-import { ProfileStateBackupRotation } from './backup/profile-state-backup-rotation'
-import { runProfileStateBackupWorker } from './backup/profile-state-backup-worker'
+import {
+  createProfileStateBackupRotation,
+  type ProfileStateBackupRotation
+} from './backup/profile-state-backup-rotation'
 import { quarantineProfileStateDatabase } from './recovery/profile-state-database-quarantine'
 import type { ProfileStateWriteWorkerClient } from './writer/profile-state-writer-worker-client'
 import {
@@ -82,6 +84,11 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   /** True once no reopen will be tried: aborted, closing, or the reopen policy gave up. A retiring writer is not stopped. */
   get savingStopped(): boolean {
     return Boolean(this.stoppedFailure || this.closing) || this.reopenPolicy.savingStopped
+  }
+
+  /** Saving is frozen until restart outside the writer (a failed maintenance pause); say so instead of leaving a retry notice up. */
+  reportSavingStopped(error: unknown): void {
+    this.reopenPolicy.reportStopped(error)
   }
 
   async abort(): Promise<void> {
@@ -212,13 +219,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   }
 
   private createBackups(): ProfileStateBackupRotation {
-    return new ProfileStateBackupRotation(
-      this.initialization.databasePath,
-      this.initialization.profileId,
-      Date.now,
-      (job, signal) =>
-        runProfileStateBackupWorker(job, { workerPath: this.options.backupWorkerPath, signal })
-    )
+    return createProfileStateBackupRotation(this.initialization, this.options.backupWorkerPath)
   }
 
   private run<T>(command: WriterCommand<T>, save = true): Promise<T> {
