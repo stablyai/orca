@@ -1,6 +1,8 @@
 import { createReadStream } from 'node:fs'
 import { setImmediate } from 'node:timers/promises'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
+  CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES,
   readClaudeTranscriptFrontier,
   readClaudeTranscriptWindow
 } from '../../../claude/transcripts/claude-transcript-tail'
@@ -25,6 +27,7 @@ import type { JournalReplacementItem } from '../context-epochs/journal-epoch-rep
 
 /** First imports retain absolute line indices for older UUID-less message identities. */
 export async function importClaudeTranscript(input: {
+  agent: AgentType
   filePath: string
   sessionId: string
   signal?: AbortSignal
@@ -69,11 +72,11 @@ export async function importClaudeTranscript(input: {
         input.decodedMessageIdentities
           ? {
               provider: 'legacy',
-              agent: 'claude',
+              agent: input.agent,
               sessionId: input.sessionId,
               recordId: message.id
             }
-          : claudeLegacyIdentity(row, index, 'claude', input.sessionId),
+          : claudeLegacyIdentity(row, index, input.agent, input.sessionId),
         input.limits
       )
     )
@@ -85,7 +88,7 @@ export async function importClaudeTranscript(input: {
   const source =
     !input.bounded && input.source
       ? adoptedTranscriptSourceObserver({
-          agent: 'claude',
+          agent: input.agent,
           filePath: input.filePath,
           source: input.source,
           signal: input.signal,
@@ -149,6 +152,7 @@ export async function importClaudeTranscript(input: {
     sourceFrontier = await readClaudeTranscriptFrontier({
       filePath: input.filePath,
       consumedBytes: sourceConsumedBytes,
+      maxBytes: CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES,
       check
     })
   }

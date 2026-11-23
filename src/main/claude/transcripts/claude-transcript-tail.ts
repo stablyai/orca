@@ -2,6 +2,7 @@ import { open } from 'node:fs/promises'
 import { setImmediate } from 'node:timers/promises'
 import { claudeRecord } from '../structured/journal/claude-structured-item-translation'
 import { mainChainAsync } from './claude-transcript-chain'
+import { isClaudeConversationEntry } from './claude-conversation-fork-boundary'
 export { mainChain } from './claude-transcript-chain'
 
 // Read backward to the saved leaf so catch-up costs only the appended stretch, not the whole conversation.
@@ -28,24 +29,35 @@ export async function readClaudeTranscriptTail(input: {
   onLeafAbsent?: () => void
 }): Promise<ClaudeTranscriptTail | null> {
   const newestFirst: Record<string, unknown>[] = []
+  let hasNewConversation = false
   let covered = false
   const result = await visitClaudeTranscriptTail(input, (row) => {
-    covered ||= input.chainBoundaries?.includes(String(row.uuid)) === true
-    if (row.uuid === input.leafUuid) {
+    const boundary = typeof row.uuid === 'string' && input.chainBoundaries?.includes(row.uuid)
+    covered ||= boundary === true
+    if (row.uuid === input.leafUuid && !boundary) {
       return true
     }
-    if (!covered) {
+    if (!covered && isClaudeConversationEntry(row)) {
+      hasNewConversation = true
+    }
+    if (!boundary) {
       newestFirst.push(row)
     }
     return false
   })
-  if (result.outcome === 'found') {
-    return mainChainAsync(
+  if (result.outcome === 'found' || covered) {
+    if (covered && !hasNewConversation) {
+      return { rows: [], rewound: false }
+    }
+    const tail = await mainChainAsync(
       newestFirst.toReversed(),
       input.check,
       input.leafUuid,
       covered ? input.chainBoundaries : []
     )
+    if (result.outcome !== 'capacity' || !tail.rewound) {
+      return tail
+    }
   }
   if (result.outcome === 'absent') {
     input.onLeafAbsent?.()
@@ -61,7 +73,12 @@ export async function readClaudeTranscriptFrontier(input: {
   check: () => void
 }): Promise<string | undefined> {
   let frontier: string | undefined
-  await visitClaudeTranscriptTail({ ...input, endBytes: input.consumedBytes }, (row) => {
+  const range = {
+    ...input,
+    endBytes: input.consumedBytes,
+    maxBytes: input.maxBytes ?? WINDOW_RAW_MAX_BYTES
+  }
+  await visitClaudeTranscriptTail(range, (row) => {
     if (typeof row.uuid !== 'string' || !row.uuid) {
       return false
     }

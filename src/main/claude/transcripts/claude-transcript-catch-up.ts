@@ -19,11 +19,7 @@ import type { AgentJournalCursor } from '../../../shared/agent-session/journal/a
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'
 import { createClaudeTranscriptImportPlan } from './claude-transcript-import-plan'
-import {
-  CLAUDE_TRANSCRIPT_WINDOW_MAX_BYTES,
-  readClaudeTranscriptFrontier,
-  readClaudeTranscriptTail
-} from './claude-transcript-tail'
+import { readClaudeTranscriptFrontier, readClaudeTranscriptTail } from './claude-transcript-tail'
 import {
   claudeTranscriptItemKeys,
   createClaudeTranscriptItemReader
@@ -139,14 +135,14 @@ export async function catchUpClaudeTranscript(input: {
       if (recovery?.sourceConsumedBytes !== undefined) {
         const { size, mtimeMs } = await stat(filePath)
         check()
-        if (
-          size === recovery.sourceConsumedBytes &&
-          (sourceFrontier !== undefined || mtimeMs === recovery.sourceMtimeMs)
-        ) {
+        if (size === recovery.sourceConsumedBytes) {
+          if (mtimeMs !== recovery.sourceMtimeMs) {
+            return deferRecovery()
+          }
           const newestUuid = await readClaudeTranscriptFrontier({
             filePath,
             consumedBytes: size,
-            maxBytes: input.maxBytes ?? CLAUDE_TRANSCRIPT_WINDOW_MAX_BYTES,
+            maxBytes: input.maxBytes,
             check
           })
           check()
@@ -157,10 +153,11 @@ export async function catchUpClaudeTranscript(input: {
               size
             ])
           }
+          return deferRecovery()
         }
       }
       const chainBoundaries = sourceFrontier ? [sourceFrontier, copiedLeaf] : []
-      let leafAbsent = input.leafUuid === '' && !!planned.covered
+      let leafAbsent = input.leafUuid === '' && !!planned.covered && !sourceFrontier
       let tail = leafAbsent
         ? null
         : await readClaudeTranscriptTail({
@@ -174,20 +171,6 @@ export async function catchUpClaudeTranscript(input: {
             }
           })
       check()
-      if (!tail && sourceFrontier) {
-        leafAbsent = false
-        tail = await readClaudeTranscriptTail({
-          filePath,
-          leafUuid: sourceFrontier,
-          chainBoundaries,
-          maxBytes: input.maxBytes,
-          check,
-          onLeafAbsent: () => {
-            leafAbsent = true
-          }
-        })
-        check()
-      }
       // Ordinary copy receipts can still bridge from their last imported leaf.
       if (!tail && !leafAbsent && !sourceFrontier && copiedLeaf !== input.leafUuid) {
         tail = await readClaudeTranscriptTail({

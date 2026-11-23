@@ -68,7 +68,8 @@ export async function chat(
       `${JSON.stringify(row('newest-answer', parent, 'Distinctive newest outside answer'))}\n`
     )
     if (mode === 'metadata' || mode === 'uuidless-metadata') {
-      for (let i = 0; i < 27; i++) {
+      const rows = mode === 'uuidless-metadata' ? 39 : 27
+      for (let i = 0; i < rows; i++) {
         await file.write(
           `${JSON.stringify({ type: mode === 'metadata' ? 'progress' : 'file-history-snapshot', ...(mode === 'metadata' ? { uuid: `progress-${i}` } : {}), data: 'x'.repeat(640 * 1024) })}\n`
         )

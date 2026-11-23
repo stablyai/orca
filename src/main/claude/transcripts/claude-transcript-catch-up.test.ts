@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, stat, utimes, writeFile } from 'node:fs/promises'
 import * as jsonlImport from '../../native-chat/agent-session-journal/history-import/journal-jsonl-import'
 import { StructuredAgentSessionSnapshotRoutes } from '../../native-chat/agent-session-wire/host/structured-agent-session-snapshot-routes'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
@@ -145,6 +145,26 @@ it('catches up from a newer saved leaf after growing past the recovery frontier'
       }
     })
   )
+})
+
+it('replaces recovered rows after a same-size rewrite that preserves the progress frontier', async () => {
+  const c = await chat('metadata')
+  expect(await c.catchUp()).toBe(true)
+  const original = await readFile(c.filePath, 'utf8')
+  const before = await stat(c.filePath)
+  await writeFile(c.filePath, original.replace('newest outside answer', 'edited outside answer'))
+  await utimes(c.filePath, before.atime, new Date(before.mtimeMs + 2000))
+  await c.reopen()
+
+  expect(await c.catchUp()).toBe(true)
+  expect(
+    (await c.items()).find(({ itemId }) => itemId === 'claude:provider-catch-up:newest-answer')
+      ?.body
+  ).toEqual({
+    kind: 'message',
+    role: 'assistant',
+    blocks: [{ type: 'text', text: 'Distinctive edited outside answer' }]
+  })
 })
 
 it('leaves an unchanged import with a UUID-less metadata suffix alone on reopen', async () => {

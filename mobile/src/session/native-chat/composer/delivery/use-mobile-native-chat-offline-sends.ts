@@ -38,7 +38,7 @@ export type MobileNativeChatOfflineQueue = {
   lockReason: MobileNativeChatInputLockReason | null
   /** The composer's lock: a chat waiting on its terminal takes no input; an offline one queues. */
   composerLock: { disabled: boolean; offline: boolean }
-  /** The composer's Send: queues while offline or behind earlier queued messages, else sends. */
+  /** Queues while held, offline, or behind earlier queued messages. */
   send: Send
   sendNow: (id: string) => Promise<boolean>
   remove: (ids: string[]) => Promise<boolean>
@@ -52,7 +52,7 @@ export function useMobileNativeChatOfflineQueue(args: {
   scope: string | null
   /** The input lock as the chat reports it; the queue settles it for the composer too. */
   inputLockReason: MobileNativeChatInputLockReason | null
-  /** Not yet: a structured chat hasn't loaded its session (no fence to send with), or a terminal agent waits on a prompt, shown or folded away, that queued text would answer. */
+  /** The chat is loading, catching up, or waiting for a terminal prompt. */
   held: boolean
   send: Send
 }): MobileNativeChatOfflineQueue {
@@ -114,8 +114,11 @@ export function useMobileNativeChatOfflineQueue(args: {
   const queueSend = useCallback<Send>(
     async (text, intent) => {
       // Behind anything already queued, paused or not, so messages reach the agent in the order sent.
+      if (!scope) {
+        return held ? false : send(text, intent)
+      }
       const waiting = readMobileNativeChatOfflineSends(scope).length > 0
-      if (!scope || !(offline || waiting || drainingRef.current)) {
+      if (!(held || offline || waiting || drainingRef.current)) {
         return send(text, intent)
       }
       // The composer's chips go with the message, as a sent one takes them.
@@ -133,7 +136,7 @@ export function useMobileNativeChatOfflineQueue(args: {
       setMobileNativeChatDraftText(scope, (current) => (current === text ? '' : current))
       return true
     },
-    [offline, scope, send]
+    [held, offline, scope, send]
   )
 
   const sendNow = useCallback(

@@ -21,6 +21,8 @@ afterEach(async () => {
 it.each<'metadata' | 'uuidless-metadata'>(['metadata', 'uuidless-metadata'])(
   'recovers once across opens with a %s suffix beyond the raw cap',
   async (mode) => {
+    // The journal worker checks the deadline against its own clock.
+    vi.useFakeTimers({ now: Date.now(), toFake: ['Date'] })
     const c = await chat('batch')
     const suffix = Array.from({ length: 12 }, (_, index) =>
       JSON.stringify({
@@ -134,6 +136,7 @@ it.each([
     )
     const read = vi.spyOn(transcriptTail, 'readClaudeTranscriptWindow')
     const imported = await importClaudeTranscript({
+      agent: 'claude',
       filePath: c.filePath,
       sessionId: PROVIDER,
       limits: { inlineHeadBytes: 1024 },
@@ -152,3 +155,23 @@ it.each([
     expect((await result.value).bytesRead).toBe(bytesRead)
   }
 )
+
+// PR #45200: the reader without a visitor has a separate raw and decode budget.
+it('reads and decodes a bounded recent window despite a large prefix', async () => {
+  vi.useFakeTimers({ now: 0, toFake: ['Date'] })
+  const c = await chat('batch')
+  const prefix = `{"type":"progress","data":"${'x'.repeat(1024 * 1024)}"}\n`
+  const newest =
+    '{"type":"assistant","uuid":"newest","parentUuid":null,"message":{"content":"Newest answer"}}\n'
+  await writeFile(c.filePath, prefix.repeat(30) + newest)
+  const window = await transcriptTail.readClaudeTranscriptWindow({
+    filePath: c.filePath,
+    check: () => {}
+  })
+  expect(window.bytesRead).toBe(20_971_520)
+  expect(window.decodedBytes).toBeLessThanOrEqual(20_971_520)
+  expect(window.rows.at(-1)).toMatchObject({
+    uuid: 'newest',
+    message: { content: 'Newest answer' }
+  })
+})
