@@ -3,7 +3,7 @@ import { INLINE_TEXT_SELECTION } from '../../../platform/text-selection/inline-t
 import type * as Chat from '../../../../../src/shared/native-chat/native-chat-types'
 import type { nativeChatWorkRunEntries } from '../../../../../src/shared/native-chat/transcript/folding/native-chat-work-run'
 import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat/transcript/row-content/native-chat-reasoning-row'
-import { MobileNativeChatGroupedThought } from './message-content/MobileNativeChatReasoningRow'
+import { MobileNativeChatWorkRunAside } from './messages/MobileNativeChatWorkRunAside'
 
 /** A work run's thoughts, drawn beside the tool calls they came before or after. */
 export function useMobileNativeChatRunAsides(
@@ -23,8 +23,8 @@ export function useMobileNativeChatRunAsides(
     }
     const thought = (thoughtMessage: Chat.NativeChatMessage): React.JSX.Element => (
       // Key by thought so later calls cannot remount it.
-      <MobileNativeChatGroupedThought
-        key={`thought:${thoughtMessage.id}`}
+      <MobileNativeChatWorkRunAside
+        key={`${thoughtMessage.role === 'system' ? 'notice' : 'thought'}:${thoughtMessage.id}`}
         message={thoughtMessage}
         fontScale={fontScale}
         live={live}
@@ -34,9 +34,9 @@ export function useMobileNativeChatRunAsides(
       />
     )
     const before = new Map<Chat.NativeChatBlock, React.JSX.Element[]>()
-    for (const [block, thoughts] of run.thoughtsBefore) {
+    for (const [block, thoughts] of run.asidesBefore) {
       before.set(block, thoughts.map(thought))
     }
-    return { before, after: run.thoughtsAfter.map(thought) }
+    return { before, after: run.asidesAfter.map(thought) }
   }, [run, fontScale, live, openReasoning, onToggleReasoning, openSheet])
 }
