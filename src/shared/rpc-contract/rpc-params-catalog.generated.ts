@@ -135,6 +135,12 @@ import {
   AutomationUpdate
 } from './automations/automation-params'
 import {
+  AzureBoardsRepo,
+  AzureBoardsSearch,
+  AzureBoardsWorkItem,
+  AzureBoardsWorkItemComments
+} from './azure-boards/azure-boards-params'
+import {
   ComposioApp,
   ComposioApps,
   ComposioBot,
@@ -1218,6 +1224,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'automation.runs': AutomationRuns,
   'automation.show': AutomationId,
   'automation.update': AutomationUpdate,
+  'azureBoards.assigned': AzureBoardsRepo,
+  'azureBoards.connection': AzureBoardsRepo,
+  'azureBoards.search': AzureBoardsSearch,
+  'azureBoards.teams': AzureBoardsRepo,
+  'azureBoards.workItem': AzureBoardsWorkItem,
+  'azureBoards.workItemComments': AzureBoardsWorkItemComments,
   'bots.access.decide': BotAccessDecide,
   'bots.access.list': null,
   'bots.access.redeem': BotAccessRedeem,

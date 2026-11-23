@@ -6,8 +6,11 @@ import type { GoogleAccountView, GoogleServiceReadiness } from '../google/google
 import { GOOGLE_SERVICE_INFO } from '../google/google-scopes'
 import { googleBotConnectState, type GoogleHostConnect } from '../google/google-bot-connect-state'
 
+// Read through the owner's own sign-in; Orca Cloud has no Azure DevOps events to wake a bot on.
+type LocalOnlyConnectorSource = 'azure-boards'
+
 export type BotConnectorService = {
-  source: ConnectorOfferSource
+  source: ConnectorOfferSource | LocalOnlyConnectorSource
   tool: string
   /** Who what the tool does shows as: the bot's owner, or the bot itself. */
   actsAs: 'owner' | 'bot'
@@ -35,6 +38,8 @@ export type BotConnectorsView = {
 
 export const GH_SIGNED_OUT = 'Run `gh auth login` on this computer.'
 export const GH_MISSING = 'Install the GitHub CLI (gh) on this computer, then run `gh auth login`.'
+export const AZURE_BOARDS_SIGNED_OUT =
+  'Run `az login` on this computer, or set an Azure DevOps token for Orca.'
 export const LINEAR_NO_KEY =
   'Connect Linear to your bot, or add a Linear API key in Settings › Integrations.'
 
@@ -48,6 +53,8 @@ export type LocalSignIns = {
   google?: readonly GoogleAccountView[]
   googleApp?: boolean
   googleDefault?: string | null
+  /** Absent from hosts older than `orca azure-boards`. */
+  azureBoards?: boolean
 }
 
 const OFFER_GOOGLE = '`orca bot connectors --offer google`'
@@ -162,12 +169,25 @@ export function botConnectorServices(
     },
     ...(local.google
       ? [googleService(bot, local.google, local.googleApp === true, local.googleDefault ?? null)]
-      : [])
+      : []),
+    ...(local.azureBoards === undefined
+      ? []
+      : [
+          {
+            source: 'azure-boards' as const,
+            tool: 'orca azure-boards',
+            actsAs: 'owner' as const,
+            signedIn: local.azureBoards,
+            ...(local.azureBoards ? {} : { gap: AZURE_BOARDS_SIGNED_OUT }),
+            wakes: false
+          }
+        ])
   ]
 }
 
 function serviceLines(service: BotConnectorService, botName: string): string[] {
-  const name = CONNECTOR_OFFER_NAMES[service.source]
+  const name =
+    service.source === 'azure-boards' ? 'Azure Boards' : CONNECTOR_OFFER_NAMES[service.source]
   const as = service.actsAs === 'owner' ? 'as your owner' : `as ${botName}`
   const state = service.signedIn
     ? service.actsAs === 'bot'
@@ -175,7 +195,7 @@ function serviceLines(service: BotConnectorService, botName: string): string[] {
       : 'Signed in.'
     : `${service.actsAs === 'bot' ? 'Not connected.' : 'Not signed in.'} ${service.gap ?? ''}`.trim()
   const wakes =
-    service.source === 'slack' || service.source === 'google'
+    service.source === 'slack' || service.source === 'google' || service.source === 'azure-boards'
       ? null
       : service.wakes
         ? `  Connected: Orca wakes ${botName} on @mentions and watched events here.`

@@ -34,6 +34,22 @@
       ]
     },
     {
+      "name": "orca-azure-boards",
+      "sourcePath": "skills/orca-azure-boards",
+      "packageDigest": "d5d24422b5dfdf43600799e32bf1c6dac05f97cbd7e9ec66714700399b217105",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 2599,
+          "executable": false,
+          "classification": "text",
+          "exactSha256": "c3435b89b7a4211d1d65ea3b743f7245d1a6a84d36f7310cd29eb9ce7b2adca6",
+          "textNormalizedSha256": "c3435b89b7a4211d1d65ea3b743f7245d1a6a84d36f7310cd29eb9ce7b2adca6",
+          "identitySha256": "c3435b89b7a4211d1d65ea3b743f7245d1a6a84d36f7310cd29eb9ce7b2adca6"
+        }
+      ]
+    },
+    {
       "name": "orca-cli",
       "sourcePath": "skills/orca-cli",
       "packageDigest": "c5d6b54f0736a56d0b606f5ec45f659f4d22fb8d8e15959679cb979bb2a2a6f6",

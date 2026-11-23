@@ -3,6 +3,7 @@ import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
 import { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
 import { RuntimeGitHubRepositoryQueryCommands } from '../integrations/github/runtime-github-repository-query-commands'
 import { RuntimeGitLabQueryCommands } from '../integrations/gitlab/runtime-gitlab-query-commands'
+import { RuntimeAzureBoardsCommands } from '../integrations/azure-boards/runtime-azure-boards-commands'
 import { recordGitLabProjectRecent } from '../../gitlab/projects/gitlab-project-recents'
 import { RuntimeGitLabMutationCommands } from '../integrations/gitlab/runtime-gitlab-mutation-commands'
 import { RuntimeGitHubReviewQueryCommands } from '../integrations/github/runtime-github-review-query-commands'
@@ -23,6 +24,8 @@ import {
 import { OrcaRuntimeWithFileCommands } from './runtime-file-command-state'
 import { readCreateSourceSetupHooks } from '../../workspace-hooks/create-source-setup-hooks'
 import { getWorktreeCreatePrefetchGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
+
+type AzureBoards = RuntimeAzureBoardsCommands
 
 export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithFileCommands {
   protected readonly gitCommands = new RuntimeGitCommands({
@@ -114,6 +117,48 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
+
+  protected readonly azureBoardsCommands = new RuntimeAzureBoardsCommands({
+    resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
+  })
+
+  getAzureBoardsConnection(repo: string): ReturnType<AzureBoards['getAzureBoardsConnection']> {
+    return this.azureBoardsCommands.getAzureBoardsConnection(repo)
+  }
+
+  getAzureBoardsWorkItem(
+    repo: string,
+    id: number
+  ): ReturnType<AzureBoards['getAzureBoardsWorkItem']> {
+    return this.azureBoardsCommands.getAzureBoardsWorkItem(repo, id)
+  }
+
+  listAzureBoardsWorkItemComments(
+    repo: string,
+    id: number,
+    limit?: number
+  ): ReturnType<AzureBoards['listAzureBoardsWorkItemComments']> {
+    return this.azureBoardsCommands.listAzureBoardsWorkItemComments(repo, id, limit)
+  }
+
+  searchAzureBoardsWorkItems(
+    repo: string,
+    wiql: string,
+    limit?: number
+  ): ReturnType<AzureBoards['searchAzureBoardsWorkItems']> {
+    return this.azureBoardsCommands.searchAzureBoardsWorkItems(repo, wiql, limit)
+  }
+
+  listAzureBoardsAssignedWorkItems(
+    repo: string
+  ): ReturnType<AzureBoards['listAzureBoardsAssignedWorkItems']> {
+    return this.azureBoardsCommands.listAzureBoardsAssignedWorkItems(repo)
+  }
+
+  listAzureBoardsTeams(repo: string): ReturnType<AzureBoards['listAzureBoardsTeams']> {
+    return this.azureBoardsCommands.listAzureBoardsTeams(repo)
+  }
 
   protected readonly gitLabQueryCommands = new RuntimeGitLabQueryCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),

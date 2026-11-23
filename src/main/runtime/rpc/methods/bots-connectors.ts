@@ -9,6 +9,7 @@ import { readGhSignIn } from '../../../bots/bot-local-sign-ins'
 import { getGoogleConnect } from '../../../google/google-connect'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { defineMethod, InvalidArgumentError } from '../core'
+import { getAzureDevOpsAuthStatus } from '../../../azure-devops/client'
 import { CONNECTOR_ACT_METHOD } from './connector-act'
 
 type Workspaces = Pick<BotConnectorsView, 'workspaces' | 'workspacesNote'>
@@ -72,7 +73,8 @@ export const BOT_CONNECTORS_METHOD = defineMethod({
           linear: (await runtime.linearStatus()).connected,
           google: (await getGoogleConnect()?.accounts()) ?? [],
           googleApp: Boolean(await getGoogleConnect()?.client()),
-          googleDefault: (await getGoogleConnect()?.defaultAccount()) ?? null
+          googleDefault: (await getGoogleConnect()?.defaultAccount()) ?? null,
+          azureBoards: (await getAzureDevOpsAuthStatus()).configured
         },
         sources
       ),

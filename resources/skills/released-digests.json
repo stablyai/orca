@@ -35,6 +35,9 @@
     "mobile-fit-debug": [
       "84aa7cc18ed03df90f40c3c70650a0ad3df941a5e1f80870bd00cf6b9b7f7eab"
     ],
+    "orca-azure-boards": [
+      "c3435b89b7a4211d1d65ea3b743f7245d1a6a84d36f7310cd29eb9ce7b2adca6"
+    ],
     "orca-cli": [
       "06b7c1cc62bcae49e9d3ac18384f94cb58040e2fdc9eabb882fb516a119c4494",
       "1c7be78ed388d2c094967a007283ce73e95905a3d48effd858deef112583bab5",

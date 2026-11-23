@@ -178,6 +178,18 @@ function apiUrl(
   return url
 }
 
+/** A 400's own message (bad WIQL, unknown field) is what lets a caller fix the request. */
+function azureDevOpsErrorReason(body: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(body)
+    const message =
+      parsed && typeof parsed === 'object' && 'message' in parsed ? parsed.message : null
+    return typeof message === 'string' && message.trim() ? message.trim().slice(0, 300) : null
+  } catch {
+    return null
+  }
+}
+
 export async function requestAzureDevOpsJsonAtBase<T>(
   baseUrl: string,
   path: string,
@@ -212,7 +224,10 @@ export async function requestAzureDevOpsJsonAtBase<T>(
         !recordAzureDevOpsApiVersionRejection(url, response.status, body)
       ) {
         if (throwOnFailure) {
-          throw new Error(`Azure DevOps request failed: HTTP ${response.status}`)
+          const reason = azureDevOpsErrorReason(body)
+          throw new Error(
+            `Azure DevOps request failed: HTTP ${response.status}${reason ? `: ${reason}` : ''}`
+          )
         }
         return null
       }
