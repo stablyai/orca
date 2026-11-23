@@ -25,6 +25,8 @@ export type BrowserClientDownloadRouteInput = {
   guestWebContentsId: number
   filename?: string
   documentUrl?: string
+  /** An agent's `download` on this page is waiting for it. */
+  agentDownload?: boolean
 }
 
 export type BrowserClientDownloadRouter = {
