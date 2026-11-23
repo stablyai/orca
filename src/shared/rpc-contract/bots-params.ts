@@ -1,3 +1,5 @@
+import { BotRunChatCloseAfterSchema } from '../bots/bot-run-chat-close'
+import { BotItemsStaleSchema } from '../bots/bot-items-stale'
 import { botTidyUp, patchTidyUp, TIDY_UP_EVERY_CHOICES } from '../bots/bot-tidy-up'
 import * as z from 'zod'
 import { BOT_IMPORT_REPLY_MAX, BotImportFromSchema } from '../bots/bot-import'
@@ -8,7 +10,6 @@ import {
   BOT_MAX_SKILL_PROJECTS,
   BOT_MAX_MEMBERS,
   BotMemberSchema,
-  BotItemsStaleSchema,
   BotNameSchema,
   NewBotNameSchema,
   BotNotificationsSchema,
@@ -171,6 +172,8 @@ export const BotUpdate = z.object({
        *  Applied inside the host's update queue, so a claim is a compare-and-set. */
       offerAnswer: BotOfferAnswerUpdateSchema.optional(),
       itemsStale: BotItemsStaleSchema.optional(),
+      /** null follows the host's default again. */
+      runChatsCloseAfter: BotRunChatCloseAfterSchema.nullable().optional(),
       slackMirror: z.boolean().optional()
     })
     // Strict so a phone's unknown key fails the phone gate instead of being dropped.
@@ -345,6 +348,7 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
     tidyUp,
     offerAnswer,
     cancelledWait,
+    runChatsCloseAfter,
     ...rest
   } = updates
   const next: Bot = { ...bot, ...rest }
@@ -388,6 +392,9 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
     next.linear = rest.linearWorkspaces[0] ?? null
   } else if (rest.linear !== undefined) {
     next.linearWorkspaces = rest.linear ? [rest.linear] : []
+  }
+  if (runChatsCloseAfter !== undefined) {
+    next.runChatsCloseAfter = runChatsCloseAfter ?? undefined
   }
   if (permissionMode === null) {
     delete next.permissionMode

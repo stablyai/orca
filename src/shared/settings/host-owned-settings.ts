@@ -1,6 +1,10 @@
 import * as z from 'zod'
 import type { GlobalSettings } from './global-settings-types'
 import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../native-chat/settings/native-chat-idle-stop'
+import {
+  BotRunChatCloseAfterSchema,
+  DEFAULT_BOT_RUN_CHAT_CLOSE_AFTER
+} from '../bots/bot-run-chat-close'
 
 /** Settings a host reads for its own work, so Settings edits them on the host its picker names. */
 const HostOwnedSettingsSchema = z.object({
@@ -13,6 +17,7 @@ const HostOwnedSettingsSchema = z.object({
   deleteChatHistoryWithWorkspace: z.boolean(),
   nativeChatAutoContinueAfterUsageLimit: z.boolean(),
   nativeChatIdleStopMinutes: z.number().min(0),
+  botRunChatsCloseAfter: BotRunChatCloseAfterSchema,
   nativeChatInheritShellEnvironment: z.boolean(),
   // Names are filtered when a chat starts (normalizeNativeChatShellEnvironmentVariables).
   nativeChatShellEnvironmentVariables: z.array(z.string()),
@@ -39,6 +44,7 @@ const HOST_OWNED_SETTING_FALLBACKS: HostOwnedSettings = {
   deleteChatHistoryWithWorkspace: false,
   nativeChatAutoContinueAfterUsageLimit: false,
   nativeChatIdleStopMinutes: DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES,
+  botRunChatsCloseAfter: DEFAULT_BOT_RUN_CHAT_CLOSE_AFTER,
   nativeChatInheritShellEnvironment: true,
   nativeChatShellEnvironmentVariables: [],
   agentDefaultSurface: 'terminal',

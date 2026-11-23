@@ -51,6 +51,7 @@ import type { AdmittedMessage } from '../native-chat/agent-session-wire/host/str
 import { isStructuredAttentionMuted } from './agent-session/lifecycle/structured-agent-session-mobile-attention'
 import { backfillInstalledBotBackgroundChats } from '../bots/bot-background-chat-backfill'
 import { runtimeBotItems } from '../bots/runtime-bot-items'
+import type { BotRunChatCloser } from '../bots/bot-run-chat-close'
 import { botItemOfReport } from '../bots/bot-item-report-fact'
 import { listeningClients } from './orchestration/federation/client-asks/client-ask-listeners'
 
@@ -177,6 +178,9 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     this.botItems.startRecovery()
     this.botJournal.catchUp()
   }
+
+  /** Closes finished run chats once idle, once the scheduler binds bot automations. */
+  botRunChatCloser: BotRunChatCloser | null = null
 
   /** Each bot's looks and Up next, on this host. */
   readonly lookAround = new BotLookAroundStore(

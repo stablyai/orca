@@ -29,6 +29,7 @@ import { createBackgroundStructuredAgentSession } from '../runtime/rpc/methods/s
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import {
   closeStructuredAgentSessionChild,
+  type StructuredAgentSessionCloseOptions,
   type StructuredAgentSessionCloseOutcome
 } from '../runtime/agent-session/lifecycle/structured-agent-session-close'
 import type { BotController } from './bot-controller'
@@ -337,9 +338,10 @@ export async function startBotSession(
 /** Stops a bot's conversation and removes its tab; its history stays. */
 export function closeBotSession(
   runtime: OrcaRuntimeService,
-  sessionId: string
+  sessionId: string,
+  options: Pick<StructuredAgentSessionCloseOptions, 'admitClose'> = {}
 ): ReturnType<typeof closeStructuredAgentSessionChild> {
-  return closeStructuredAgentSessionChild(sessionId, { runtime })
+  return closeStructuredAgentSessionChild(sessionId, { runtime, ...options })
 }
 
 /** The bot as a chat on `agent` runs it: another agent starts on its own defaults, since the bot's

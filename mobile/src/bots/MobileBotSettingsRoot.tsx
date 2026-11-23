@@ -3,11 +3,11 @@
 import { Fragment, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { BOT_ITEM_DEFAULT_STALE_DAYS } from '../../../src/shared/bots/bot-items'
+import type { BotNotifications } from '../../../src/shared/bot-types'
 import {
   BOT_ITEMS_STALE_CHOICES,
-  type BotItemsStale,
-  type BotNotifications
-} from '../../../src/shared/bot-types'
+  type BotItemsStale
+} from '../../../src/shared/bots/bot-items-stale'
 import { mobilePermissionModeCopy } from './mobile-permission-mode-copy'
 import { botStartingPermission } from '../../../src/shared/bots/bot-access-reach'
 import { ListRow } from '../components/list/ListGroup'

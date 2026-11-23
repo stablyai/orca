@@ -55,6 +55,8 @@ export type BotAutomationSessions = {
   /** Stops the agent of a finished run's own conversation now, unless someone watches it or it owes
    *  work; replying later resumes it. Never rejects. */
   release(sessionId: string): Promise<void>
+  /** Closes a finished run's own conversation once it has sat idle for the bot's Close after. */
+  closeWhenIdle(bot: Bot, sessionId: string): void
   /** The bot's Chat, created on first use. */
   sendToChat(bot: Bot, text: string, run?: BotRunFields): Promise<BotRunSend>
 }
@@ -284,6 +286,13 @@ export function createBotAutomationDispatcher(
           // Only a conversation the run started is its own to release.
           if (route.kind === 'take' && runsIn === 'new') {
             void sessions.release(send.sessionId)
+            // A chat that answers a thread or issue hears from it again, so it stays open.
+            if (
+              resultsTo !== 'thread' &&
+              !(typeof resultsTo === 'object' && 'linearIssue' in resultsTo)
+            ) {
+              sessions.closeWhenIdle(target.bot, send.sessionId)
+            }
           }
         })
     }

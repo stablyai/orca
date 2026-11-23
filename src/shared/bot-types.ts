@@ -1,4 +1,6 @@
 import * as z from 'zod'
+import { BotRunChatCloseAfterSchema } from './bots/bot-run-chat-close'
+import { BotItemsStaleSchema } from './bots/bot-items-stale'
 import { BotImportedFromSchema } from './bots/bot-import'
 import { BotSharedFromSchema } from './bots/bot-shared-from'
 import { AGENT_CHAT_PERMISSION_MODES } from './agent-launch/permissions/agent-chat-permission-mode'
@@ -151,19 +153,6 @@ export const BOT_MAX_SKILL_PROJECTS = 20
 const BotSlackLinkSchema = BotSlackAppSchema.extend(BotLinkOwner)
 const BotLinearLinkSchema = BotLinearSchema.extend(BotLinkOwner)
 
-export const BotItemsStaleSchema = z.union([
-  z.literal(3),
-  z.literal(5),
-  z.literal(7),
-  z.literal(14),
-  z.literal('never')
-])
-export type BotItemsStale = z.infer<typeof BotItemsStaleSchema>
-/** Its choices in order, as Settings offers them. */
-export const BOT_ITEMS_STALE_CHOICES: readonly BotItemsStale[] = BotItemsStaleSchema.options.map(
-  (option) => option.value
-)
-
 export const BotSchema = z.object({
   id: z.string().min(1),
   name: BotNameSchema,
@@ -216,6 +205,8 @@ export const BotSchema = z.object({
   /** Days an untouched ask waits before it moves to Stale (planned items 3× as long), or never;
    *  absent is 5. Older hosts drop it. */
   itemsStale: BotItemsStaleSchema.optional().catch(undefined),
+  /** How long its finished run chats stay open; absent follows its host's default. Older hosts drop it. */
+  runChatsCloseAfter: BotRunChatCloseAfterSchema.optional().catch(undefined),
   /** The newest item event its owner has seen in its Items tab; absent is none. Older hosts drop it. */
   itemsSeen: z.number().int().nonnegative().optional().catch(undefined),
   /** Set at create: the Chat runs first-run setup until SOUL.md is written. Older bots never have it. */

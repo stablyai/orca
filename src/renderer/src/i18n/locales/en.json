@@ -30504,6 +30504,22 @@
         "expired": "The sign-in expired. Try again.",
         "couldNotSignIn": "Couldn’t sign in. Try again."
       }
+    },
+    "runChatClose": {
+      "hours24": "24 hours",
+      "days7": "7 days",
+      "never": "Never",
+      "title": "Close finished run chats after",
+      "defaultDescription": "Closes finished chats from automations that start a new conversation each run. Never closes Home Chats, chats linked to a thread, handoff chats, or a chat that is still working. History stays in Session History.",
+      "overriddenBy": "Overridden by {{bots}}.",
+      "group": "Automation runs",
+      "shortTitle": "Close after",
+      "defaultValue": "Default ({{duration}})",
+      "useDefault": "Use default ({{duration}})",
+      "footNever": "This bot's finished run chats stay open until you close them.",
+      "footOverride": "Overrides the default ({{duration}}). History stays in Session History.",
+      "footDefaultOn": "Follows the default on {{computer}}. History stays in Session History.",
+      "footDefault": "Follows the default in Bots settings. History stays in Session History."
     }
   },
   "plugins": {

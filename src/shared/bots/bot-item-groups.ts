@@ -1,7 +1,7 @@
 // How a bot's Items tab groups its items: Needs you, In progress, Waiting, Planned, Snoozed, Stale and
 // Closed. Rows changed since the owner last opened the tab come first, then the latest change; Snoozed,
 // soonest back first.
-import type { BotItemsStale } from '../bot-types'
+import type { BotItemsStale } from './bot-items-stale'
 import type { BotNeed } from './bot-now'
 import {
   BOT_ITEM_DEFAULT_STALE_DAYS,

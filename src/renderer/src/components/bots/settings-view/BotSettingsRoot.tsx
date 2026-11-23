@@ -58,6 +58,7 @@ import { useBotComputerName } from './BotComputerPage'
 import type { BotSettingsPage } from './bot-settings-place'
 import { SettingsControlsOffContext, SettingsInsetGroup, SettingsInsetRow } from './BotSettingsRows'
 import { BotItemsSettingsGroup } from './BotItemsSettingsGroup'
+import { BotRunChatCloseSettingsGroup } from './BotRunChatCloseSettingsGroup'
 
 type Update = (updates: BotUpdateParams['updates']) => Promise<Bot | null>
 
@@ -360,6 +361,7 @@ export function BotSettingsRoot({
         <ScheduleGroup bot={bot} update={update} open={open} />
       ) : null}
       <BotItemsSettingsGroup bot={bot} update={update} />
+      <BotRunChatCloseSettingsGroup bot={bot} update={update} />
       {home ? <SoulAndMemoryGroup home={home} open={open} /> : null}
       <AccessGroup bot={bot} open={open} />
       <BotSharingGroup bot={bot} open={open} />
