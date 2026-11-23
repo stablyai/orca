@@ -1,4 +1,3 @@
-import { webContents } from 'electron'
 import {
   BROWSER_CLIENT_HOST_PAGE_INVENTORY_URL_MAX_LENGTH,
   type BrowserClientHostedPageInventory,
@@ -276,30 +275,19 @@ export class BrowserClientPageMemorySaver implements BrowserClientPageMemoryOwne
       }
       throw error
     }
-    await this.reopen(page, freed)
+    this.reopen(page, freed)
   }
 
-  private async reopen(page: BrowserClientRetainedPage, freed: FreedPage): Promise<void> {
-    // A failed load leaves the page live on its error, as a local tab whose restore failed; a
-    // command that navigates elsewhere still runs.
-    const { routeWebContents } = this.host.dependencies
-    await routeWebContents.navigateGuest(page.lifecycleClaim, freed.inventory.currentUrl)
-    // Navigation settles at did-finish-load; a command sent before did-stop-loading would wait on it.
-    const guest = webContents.fromId(page.registration.webContentsId)
-    if (guest && !guest.isDestroyed() && guest.isLoadingMainFrame()) {
-      await new Promise<void>((resolve) => {
-        const { signal } = this.lifetime
-        const settle = (): void => {
-          guest.off('did-stop-loading', settle)
-          guest.off('destroyed', settle)
-          signal.removeEventListener('abort', settle)
-          resolve()
-        }
-        guest.on('did-stop-loading', settle)
-        guest.on('destroyed', settle)
-        signal.addEventListener('abort', settle)
-      })
-    }
+  /**
+   * Starts the load without waiting for it: a saved address that never loads must not hold the
+   * wake, and a navigate or retire acts on the live page at once. A command that needs the page
+   * waits for the load itself, and a failed load leaves the page on its error like a local tab.
+   */
+  private reopen(page: BrowserClientRetainedPage, freed: FreedPage): void {
+    void this.host.dependencies.routeWebContents.navigateGuest(
+      page.lifecycleClaim,
+      freed.inventory.currentUrl
+    )
   }
 
   private async drop(browserPageId: string): Promise<void> {
