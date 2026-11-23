@@ -12,8 +12,118 @@ import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-
 import { vi } from 'vitest'
 import * as jsonlImport from '../../../native-chat/agent-session-journal/history-import/journal-jsonl-import'
 import { chat, SESSION } from '../../transcripts/claude-transcript-catch-up.test-support'
-import { adapterAtPublishFor, fakeClaude } from '../claude-structured-session-test-support'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import type {
+  ClaudeStreamJsonConnection,
+  ClaudeStreamJsonConnectionHandlers,
+  openClaudeStreamJsonConnection
+} from '../../claude-stream-json-connection'
+import { ClaudeStructuredSessionAdapter } from '../claude-structured-session-adapter'
+
+export function claudeWithSavedHistory(input: {
+  providerSessionId: string
+  cwd: string
+  claudeConfigDir: string
+  continuesChain?: true
+  replayUuids?: string[]
+}) {
+  const { providerSessionId } = input
+  const connections: (ClaudeStreamJsonConnection & {
+    handlers: ClaudeStreamJsonConnectionHandlers
+    sent: Record<string, unknown>[]
+  })[] = []
+  let replayIndex = 0
+  const openConnection: typeof openClaudeStreamJsonConnection = async (launch, handlers = {}) => {
+    let started = false
+    let closed = false
+    const sent: Record<string, unknown>[] = []
+    const emit = (event: Record<string, unknown>) =>
+      handlers.onMessage?.({ type: 'system', session_id: providerSessionId, ...event })
+    const connection: (typeof connections)[number] = {
+      handlers,
+      sent,
+      pid: 4321,
+      get closed() {
+        return closed
+      },
+      exitVerdict: { root: 'live', tree: 'unverifiable' },
+      mcpServerStatus: async () => [],
+      initializationResult: async () => {
+        emit({ subtype: 'hook_started', hook_name: 'SessionStart:startup', uuid: 'init-uuid' })
+        emit({
+          subtype: 'hook_response',
+          hook_name: 'SessionStart:startup',
+          uuid: 'hook-response-uuid'
+        })
+        return { models: [{ value: 'claude-sonnet', displayName: 'Sonnet' }] }
+      },
+      renameSession: async () => {},
+      getContextUsage: async () => ({}),
+      getSettings: async () => ({
+        applied: { model: 'claude-sonnet-5', effort: launch.options.effort ?? 'high' },
+        effective: {
+          model: 'claude-sonnet-5',
+          ...(launch.options.effort ? {} : { effortLevel: 'high' })
+        },
+        sources: {}
+      }),
+      supportedModels: async () => [],
+      setModel: async () => {},
+      setPermissionMode: async () => {},
+      applyFlagSettings: async () => {},
+      interrupt: async () => undefined,
+      cancelAsyncMessage: async () => false,
+      stopTask: async () => {},
+      backgroundTask: async () => false,
+      send: async (message, beforeDispatch) => {
+        await beforeDispatch?.()
+        sent.push(message)
+        if (message.type === 'user') {
+          if (!started) {
+            started = true
+            emit({
+              subtype: 'init',
+              uuid: 'init-uuid',
+              model: 'claude-sonnet-5',
+              apiKeySource: 'none'
+            })
+          }
+          handlers.onMessage?.({
+            ...message,
+            uuid: input.replayUuids?.[replayIndex++] ?? 'user-uuid'
+          })
+        }
+      },
+      close: async () => {
+        closed = true
+        return true
+      }
+    }
+    connections.push(connection)
+    return connection
+  }
+  const adapter = new ClaudeStructuredSessionAdapter({
+    resolveLaunch: async ({ spawnToken }) => ({
+      pathToClaudeCodeExecutable: 'claude',
+      options: {},
+      cwd: input.cwd,
+      claudeConfigDir: input.claudeConfigDir,
+      providerSessionId,
+      resumeLeafUuid: 'old-leaf',
+      resumesTranscript: true,
+      cliFlag: async () => 'supported',
+      continuesChain: input.continuesChain ?? false,
+      env: { [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: spawnToken }
+    }),
+    onEvent: () => {},
+    openConnection,
+    readProcessStartTime: async () => 1_700_000_000_000,
+    now: () => 1_700_000_000_500,
+    persistHandle: async () => {}
+  })
+  return { adapter, connections }
+}
 
 export async function restoredChatWithBlockedRecovery(
   cleanups: (() => Promise<void>)[],
@@ -41,18 +151,14 @@ export async function restoredChatWithBlockedRecovery(
     ]
   })
   await seedTestAgentSessionRecordStore(c.cwd, { records: [record] })
-  const claude = fakeClaude({
-    initSessionId: providerSessionId,
-    replayUuids: ['held-echo', 'new-echo']
-  })
-  const adapter = adapterAtPublishFor(claude, {
+  const claude = claudeWithSavedHistory({
     providerSessionId,
-    resumeLeafUuid: 'old-leaf',
-    resumesTranscript: true,
     continuesChain: true,
     cwd: c.cwd,
-    claudeConfigDir: c.config
+    claudeConfigDir: c.config,
+    replayUuids: ['held-echo', 'new-echo']
   })
+  const { adapter } = claude
   const host = new StructuredAgentSessionHost({
     agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
@@ -76,7 +182,6 @@ export async function restoredChatWithBlockedRecovery(
     release.resolve()
     await host.flushAllStreamedEvents()
     await adapter.closeAll()
-    claude.dispose()
   })
   const body: AgentJournalMessageItem = {
     kind: 'message',

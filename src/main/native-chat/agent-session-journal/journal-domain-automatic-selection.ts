@@ -23,6 +23,7 @@ export function selectJournalAutomaticSubmission(
       !child.closing &&
       !child.stopping &&
       selection.authority.child?.fence === child.fence
-    )
+    ),
+    selection.mailJoinsTurn
   )
 }

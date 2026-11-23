@@ -31,6 +31,7 @@ import {
   getDevicePushToken,
   type MobilePushToken
 } from './push-registration/push-token'
+import { clearAppIconBadge } from './push-registration/app-icon-badge'
 
 const REQUEST_TIMEOUT_MS = 5_000
 const REMOVAL_TIMEOUT_MS = 2_000
@@ -82,6 +83,14 @@ async function mutateRecords(mutate: (value: RegistrationRecords) => void): Prom
     registeredHostIds: [...value.registered],
     pendingUnregisterHostIds: [...value.pending]
   })
+  clearBadgeWithoutHosts(value)
+}
+
+// Hosts set the icon's count through their pushes; with none registered, nothing would lower it.
+function clearBadgeWithoutHosts(records: RegistrationRecords): void {
+  if (records.registered.size === 0) {
+    clearAppIconBadge()
+  }
 }
 
 // A missing token is retried: APNs registration may still be in flight.
@@ -285,6 +294,10 @@ export async function unregisterPushForRemovedHost(hostId: string): Promise<() =
 
 // Provider token rollover invalidates delivery, so refresh every connected host immediately.
 export function startPushTokenSync(): () => void {
+  // Also covers a badge an app version without this clear left behind.
+  void readRecords()
+    .then(clearBadgeWithoutHosts)
+    .catch(() => undefined)
   const stopLease = startMobilePushLeaseRenewal(reconcileAllHosts)
   const stopToken = addPushTokenListener((token) => {
     tokenPromise = Promise.resolve(token)
@@ -294,14 +307,4 @@ export function startPushTokenSync(): () => void {
     stopLease()
     stopToken()
   }
-}
-
-export function resetPushRegistrationForTests(): void {
-  for (const state of hostsById.values()) {
-    state.connection.support?.retire()
-  }
-  hostsById.clear()
-  registrationRecords = null
-  tokenPromise = null
-  consentGeneration = 0
 }

@@ -16,7 +16,7 @@ export async function savedAgentSessionCatalogModels(
     ?.read({ agent: provider, sessionId, savedOnly: true, verifiedOnly, ...scope })
     .catch(() => null)
   return listing && listing.origin !== 'unknown'
-    ? structuredAgentSessionCapabilityView(listing, undefined).models
+    ? structuredAgentSessionCapabilityView(provider, listing, undefined).models
     : undefined
 }
 

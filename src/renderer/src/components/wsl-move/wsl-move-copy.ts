@@ -1,6 +1,7 @@
 /** Plain-language copy for the WSL move dialog: no "manifest", "orcad" or "UNC". */
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { wslMoveHostUpdateRequiredMessage } from './wsl-move-host-copy'
 import {
   WSL_MOVE_MAPPED_DRIVE_UNVERIFIABLE_DETAIL,
   type WslMoveBlockerKind,
@@ -105,11 +106,7 @@ export function wslMoveRefusalMessage(
             { distro }
           )
     case 'wsl_move_host_update_required':
-      return t(
-        'wslMove.refusal.hostUpdateRequired',
-        'The {{distro}} host runs an older version of Orca. Update it in Settings, then try again.',
-        { distro }
-      )
+      return wslMoveHostUpdateRequiredMessage(refusal.detail, distro, t)
     case 'wsl_move_terminals_blocked':
       return t(
         'wslMove.refusal.terminalsBlocked',

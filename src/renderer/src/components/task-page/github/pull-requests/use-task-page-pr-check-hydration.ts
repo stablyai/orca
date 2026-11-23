@@ -1,3 +1,5 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   useCallback,
   useEffect,
@@ -10,7 +12,6 @@ import {
   readLocalRuntimeCapabilityObservation,
   subscribeLocalRuntimeCapabilityObservation
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import { useAppStore } from '@/store/index'
 import {
   capturePRCheckContract,
   type PRCheckContract
@@ -53,10 +54,10 @@ export function useTaskPagePRCheckHydration(
       [localSelected]
     )
   )
-  const runtimeStatuses = useAppStore((state) =>
+  const runtimeStatuses = useAppStoreWithHostStatuses((_state, statuses) =>
     sourceContracts
       .map(({ source, target }) => {
-        const contract = capturePRCheckContract(() => state, target, source)
+        const contract = capturePRCheckContract(() => statuses, target, source)
         return `${contract.scope}:${contract.complete}`
       })
       .join('|')
@@ -102,7 +103,7 @@ export function useTaskPagePRCheckHydration(
         }
         const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
         const runtimeContract = capturePRCheckContract(
-          useAppStore.getState,
+          readRuntimeStatuses,
           getGitHubSourceRuntimeTarget(sourceContext),
           sourceContext
         )

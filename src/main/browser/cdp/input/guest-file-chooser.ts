@@ -51,28 +51,32 @@ export async function interceptFileChooser(
   const dbg = wc.debugger
   dbg.on('message', onMessage)
   const release = async (): Promise<void> => {
-    dbg.removeListener('message', onMessage)
-    if (wc.isDestroyed()) {
-      return
-    }
-    // Desktop-owned cleanup: a revoked host scope must not leave the user's pickers intercepted.
-    await runOutsideRemoteCliBrowserScope(() =>
-      Promise.all(
-        sessionIds.map((sessionId) =>
-          // Best-effort: a page that never answers keeps its queue moving.
-          withTimeout(
-            sendGuestCdpCommand(
-              wc,
-              'Page.setInterceptFileChooserDialog',
-              { enabled: false },
-              sessionId
-            ),
-            PAGE_REPLY_TIMEOUT_MS,
-            undefined
+    try {
+      if (wc.isDestroyed()) {
+        return
+      }
+      // Desktop-owned cleanup: a revoked host scope must not leave the user's pickers intercepted.
+      await runOutsideRemoteCliBrowserScope(() =>
+        Promise.all(
+          sessionIds.map((sessionId) =>
+            // Best-effort: a page that never answers keeps its queue moving.
+            withTimeout(
+              sendGuestCdpCommand(
+                wc,
+                'Page.setInterceptFileChooserDialog',
+                { enabled: false },
+                sessionId
+              ),
+              PAGE_REPLY_TIMEOUT_MS,
+              undefined
+            )
           )
         )
       )
-    )
+    } finally {
+      // Only now: a chooser the input opened can be reported after the input's reply, but before this one's.
+      dbg.removeListener('message', onMessage)
+    }
   }
   try {
     // Both wait on the renderer. Release follows any sent enable in order; abandon stops later ones.

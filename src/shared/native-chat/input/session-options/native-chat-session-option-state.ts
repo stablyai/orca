@@ -127,18 +127,36 @@ export function applyNativeChatReportedSessionOptions(
 ): boolean {
   const sourceFor = (id: string): TrackedNativeChatSessionOption['source'] =>
     confirmed === undefined || confirmed.includes(id) ? 'reported' : 'dispatched'
-  const modelId = typeof values.model === 'string' ? values.model : null
+  // A report without a model (an effort change) applies to the session's current model.
+  if (typeof values.model !== 'string') {
+    const tracked = record.model?.value
+    return typeof tracked === 'string' && tracked
+      ? applyReportedModelValues(record, tracked, values, sourceFor)
+      : false
+  }
+  const modelId = values.model
   if (!modelId) {
     return false
   }
   const modelChanged = record.model?.value !== modelId
-  let changed = modelChanged || record.model?.source !== sourceFor('model')
+  const changed = modelChanged || record.model?.source !== sourceFor('model')
   record.model = { value: modelId, source: sourceFor('model') }
-  const modelValues = modelChanged ? {} : { ...record.valuesByModel[modelId] }
+  if (modelChanged) {
+    record.valuesByModel[modelId] = {}
+  }
+  const { model: _model, ...modelValues } = values
+  return applyReportedModelValues(record, modelId, modelValues, sourceFor) || changed
+}
+
+function applyReportedModelValues(
+  record: NativeChatSessionOptionRecord,
+  modelId: string,
+  values: Record<string, SessionOptionValue>,
+  sourceFor: (id: string) => TrackedNativeChatSessionOption['source']
+): boolean {
+  const modelValues = { ...record.valuesByModel[modelId] }
+  let changed = false
   for (const [id, value] of Object.entries(values)) {
-    if (id === 'model') {
-      continue
-    }
     const current = modelValues[id]
     if (current?.value !== value || current.source !== sourceFor(id)) {
       changed = true

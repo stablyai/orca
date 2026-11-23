@@ -11,6 +11,7 @@ import { readJournalDomainQueuePauseContext } from './journal-domain-queue-pause
 import { readJournalDomainQueuePauses } from './journal-domain-queue-reads'
 import { applyJournalDomainControlCommand } from './journal-domain-control-command'
 import { readJournalSqlUsageLimitCut } from './journal-sql-status-cuts'
+import { failureHoldsMail } from './queued-messages/queued-message-pause'
 import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
 import { applyJournalDomainQueueCommand } from './journal-domain-queue-command'
 import { finishJournalSqlCommand, journalSqlInputCoordinates } from './journal-sql-command-result'
@@ -160,7 +161,7 @@ export function applyJournalSqlSendAdmission(
       !!eligibility.pending
     if (!queue && operation.fromAgent) {
       queue = readJournalDomainQueuePauseContext(db, scope, reopenFloor, []).pauses.some(
-        (pause) => pause.reason === 'failed'
+        failureHoldsMail
       )
     }
     if (!queue) {

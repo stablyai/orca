@@ -12,7 +12,6 @@ export function renderResourceUsageStatusTrigger(
     daemonUnreachable,
     resourceManagerAriaLabel,
     spaceScanReady,
-    iconOnly,
     commitToneClass,
     triggerSessionCount,
     orphanCount,
@@ -21,7 +20,6 @@ export function renderResourceUsageStatusTrigger(
     daemonUnreachable: boolean
     resourceManagerAriaLabel: string
     spaceScanReady: boolean
-    iconOnly: boolean
     commitToneClass: string | null
     triggerSessionCount: number | null
     orphanCount: number
@@ -55,22 +53,13 @@ export function renderResourceUsageStatusTrigger(
             ) : null}
             {/* Why no memory total: it read as Orca's own usage; the tooltip names each owner. */}
             <MemoryStick className={cn('size-3', commitToneClass ?? 'text-muted-foreground')} />
-            {!iconOnly && (
-              <>
-                <Terminal className="size-3 text-muted-foreground" />
-                <span className="text-[11px] tabular-nums text-muted-foreground">
-                  {triggerSessionCount}
-                  {orphanCount > 0 && (
-                    <span className="text-yellow-500 ml-0.5">({orphanCount})</span>
-                  )}
-                </span>
-              </>
-            )}
-            {iconOnly && triggerSessionCount !== null && triggerSessionCount > 0 && (
-              <span className="text-[11px] tabular-nums text-muted-foreground">
-                {triggerSessionCount}
-              </span>
-            )}
+            <Terminal className="size-3 text-muted-foreground" />
+            <span className="text-[11px] tabular-nums text-muted-foreground">
+              {triggerSessionCount}
+              {orphanCount > 0 && (
+                <span className="ml-0.5 text-status-warning-text">({orphanCount})</span>
+              )}
+            </span>
             {daemonUnreachable && (
               <AlertTriangle
                 className="size-3 text-yellow-500"

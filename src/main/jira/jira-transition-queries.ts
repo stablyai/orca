@@ -48,7 +48,7 @@ export async function listTransitions(
     }))
   } catch (error) {
     if (isAuthError(error)) {
-      await clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     console.warn('[jira] listTransitions failed:', error)
@@ -127,7 +127,7 @@ export async function getProjectStatusOrder(
     return { statusIdsByColumn, ...(boardColumns.length ? { columns: boardColumns } : {}) }
   } catch (error) {
     if (isAuthError(error)) {
-      await clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     console.warn('[jira] getProjectStatusOrder failed:', error)

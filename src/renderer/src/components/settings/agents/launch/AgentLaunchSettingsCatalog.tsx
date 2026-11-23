@@ -1,13 +1,15 @@
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { AgentCliUpdateButton } from '@/components/agent-cli-update/AgentCliUpdateButton'
 
 import { AgentLaunchChoiceEditor } from '@/components/agent/launch-settings/AgentLaunchChoiceEditor'
-import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
-import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import {
+  agentChatPermissionModes,
+  savedChatPermissionMode
+} from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { useMemo } from 'react'
 import { recomputeOn } from '@/lib/recompute-on'
-import { toast } from 'sonner'
 import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation
@@ -17,7 +19,7 @@ import { AUTO_TUI_AGENT_ARGS } from '../../../../../../shared/agent-launch/permi
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   agentPermissionArgs,
-  agentPermissionEnv,
+  agentPermissionHasTerminalChoice,
   agentPermissionChoices,
   PERMISSION_CHOICE_AGENTS,
   resolveAgentPermission,
@@ -25,7 +27,7 @@ import {
 } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { agentArgsSetPermission } from '../../../../../../shared/agent-launch/permissions/agent-permission-args'
 import { liftAgentPermissionArgs } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
-import { agentPermissionChoiceLabel } from '../../../agent/launch-settings/agent-permission-choice-label'
+import { toastLiftedAgentPermission } from './agent-permission-lift-toast'
 import { AllAgentsPermissionSetting } from '../permissions/AllAgentsPermissionSetting'
 import type { AgentPermissionChoiceRow } from '../../../agent/launch-settings/agent-permission-choice-row'
 import type { AgentPermissionsSettingProps } from '@/components/settings/agents/permissions/AgentPermissionsSetting'
@@ -49,6 +51,7 @@ import {
   readChatProgram,
   resolveChatProgramContext
 } from '@/lib/agent-session/launch/inventory/host-chat-program'
+import { agentLaunchRouteStoreFor } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import {
   useDetectedAgents,
@@ -71,6 +74,7 @@ import {
 } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
+import { chatProgramInstalled } from '../../../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 
 export type AgentPermissionsRenderer = (props: AgentPermissionsSettingProps) => React.ReactNode
 
@@ -120,11 +124,11 @@ export function AgentLaunchSettingsCatalog({
   useChatProgramFacts(workspace, detectionTarget.kind !== 'ssh')
   const chosen = settings.defaultTuiAgent
   // The saved default reads as available where it opens as a chat without its CLI.
-  const defaultOpensAsChat = useAppStateValue((state) =>
-    chosen && chosen !== 'blank' && detectionTarget.kind !== 'ssh'
-      ? agentChoiceOpensAsChat(state, chosen, workspace, detected)
-      : false
-  )
+  const defaultOpensAsChat = useAppStateValueWithHostStatuses((appState, statuses) => {
+    const state = agentLaunchRouteStoreFor(appState, statuses)
+    const opensAsChat = chosen && chosen !== 'blank' && detectionTarget.kind !== 'ssh'
+    return opensAsChat ? agentChoiceOpensAsChat(state, chosen, workspace, detected) : false
+  })
   // The chat-or-CLI choice is this computer's, so a paired host's page doesn't offer it.
   const chatAgents = local
     ? recomputeOn([hostAgentsVersion], () => chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined))
@@ -133,17 +137,18 @@ export function AgentLaunchSettingsCatalog({
     managedRuntimeChatAgents(LOCAL_EXECUTION_HOST_ID, undefined)
   )
   // Agents whose chat program is here without their CLI, like a downloaded chat runtime, are installed for chat.
-  const chatOnlyKey = useAppStateValue((state) => {
+  const chatOnlyKey = useAppStateValueWithHostStatuses((appState, statuses) => {
     if (detectionTarget.kind === 'ssh') {
       return ''
     }
+    const state = agentLaunchRouteStoreFor(appState, statuses)
     const context = resolveChatProgramContext(state, workspace)
     const selectedDetected = detectionTarget.kind === 'runtime' ? detected : installedHere
-    return chatProviderAgents(context.executionHostId, state.runtimeStatusByEnvironmentId)
+    return chatProviderAgents(context.executionHostId, statuses)
       .filter(
         (agent) =>
           !selectedDetected?.includes(agent) &&
-          readChatProgram(state, agent, context, selectedDetected) === 'available'
+          chatProgramInstalled(readChatProgram(statuses, agent, context, selectedDetected))
       )
       .join(' ')
   })
@@ -187,11 +192,9 @@ export function AgentLaunchSettingsCatalog({
       choices,
       chatOwnSupported,
       ...resolved,
-      terminalChoice:
-        agentPermissionArgs(agent, resolved.choice) ||
-        Object.keys(agentPermissionEnv(agent, resolved.choice)).length
-          ? resolved.choice
-          : 'own',
+      terminalChoice: agentPermissionHasTerminalChoice(agent, resolved.choice)
+        ? resolved.choice
+        : 'own',
       chatChoice:
         chatSupport && resolved.choice !== 'own'
           ? savedChatPermissionMode(chatSupport, resolved.choice)
@@ -208,21 +211,13 @@ export function AgentLaunchSettingsCatalog({
     const lifted = liftAgentPermissionArgs(agent, value)
     await mutate({ type: 'user-arguments', agent, value })
     if (lifted.choice) {
-      const chatSupported = nativeChatPermissionsSupported && agentChatPermissionModes(agent)
-      const values = { agent: label, mode: agentPermissionChoiceLabel(lifted.choice, label) }
-      toast.success(
-        chatSupported
-          ? t(
-              'settings.agents.permissionFromArgs',
-              '{{agent}} set to {{mode}} in terminals and new chats.',
-              values
-            )
-          : t(
-              'settings.agents.permissionFromArgsTerminals',
-              '{{agent}} set to {{mode}} in terminals.',
-              values
-            )
-      )
+      toastLiftedAgentPermission({
+        agent,
+        label,
+        choice: lifted.choice,
+        chatPermissionsSupported: nativeChatPermissionsSupported,
+        t
+      })
     }
   }
   const permissions = buildAgentRowPermissions({

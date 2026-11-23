@@ -79,36 +79,7 @@ export class BotItemsEdits extends BotItemsReads {
     actor: BotItemBotActor,
     now = Date.now()
   ): BotItemWriteOutcome {
-    assertBotItemText('title', changes.title)
-    assertBotItemText('description', changes.description)
-    assertBotItemText('doneMeans', changes.doneMeans)
-    assertBotItemText('note', changes.note)
-    assertBotItemText('note', changes.reason)
-    assertBotItemText('text', changes.comment)
-    if (changes.status === 'canceled' && !changes.reason?.trim()) {
-      throw new BotItemError('invalid_argument', 'Canceling needs a reason: --reason "..."')
-    }
-    if (changes.reason !== undefined && changes.status !== 'canceled') {
-      throw new BotItemError('invalid_argument', '--reason goes with --status canceled.')
-    }
-    if (changes.ask !== undefined && changes.status !== 'needs_you') {
-      throw new BotItemError('invalid_argument', '--ask goes with --status needs-you.')
-    }
-    if (changes.status === 'needs_you' && !changes.comment?.trim() && !changes.ask) {
-      throw new BotItemError(
-        'invalid_argument',
-        'Needs you comes with the question for your owner: `orca bot item set <n> --status needs-you --ask "..." --option "..." --option "..."`, or `--comment "..."` for an open question.'
-      )
-    }
-    if (changes.comment !== undefined && changes.status === undefined) {
-      throw new BotItemError(
-        'invalid_argument',
-        '--comment goes with --status; otherwise use `orca bot item comment`.'
-      )
-    }
-    if (changes.title !== undefined && !changes.title.trim()) {
-      throw new BotItemError('invalid_argument', 'An item needs a title.')
-    }
+    assertBotItemSetInput(changes)
     return this.transaction(() => this.applySet(uid, changes, actor, now))
   }
 
@@ -130,17 +101,25 @@ export class BotItemsEdits extends BotItemsReads {
         fields[field] = { from: item[field], to }
       }
     }
-    // Asking again while already Needs you is a new question.
-    const status =
-      changes.status !== undefined &&
-      (changes.status !== item.status || changes.status === 'needs_you')
-        ? changes.status
-        : undefined
     const edited = Object.keys(fields).length > 0
     const commentText = changes.comment?.trim() ? changes.comment : undefined
+    const images = changes.images?.length ? { images: changes.images } : {}
     const commentData =
       commentText !== undefined || changes.ask
-        ? botItemCommentData(commentText, changes.ask, status === 'needs_you')
+        ? {
+            ...botItemCommentData(commentText, changes.ask),
+            ...images,
+            ...(changes.ask && changes.askedInConversation
+              ? { askedInConversation: changes.askedInConversation }
+              : {})
+          }
+        : undefined
+    // Asking again while already Needs you is a new question; Needs you again with nothing to say is no change.
+    const status =
+      changes.status !== undefined &&
+      (changes.status !== item.status ||
+        (changes.status === 'needs_you' && commentData !== undefined))
+        ? changes.status
         : undefined
     if (!edited && status === undefined && commentData === undefined) {
       return { uid, eventId: null, unchanged: true }
@@ -180,5 +159,33 @@ export class BotItemsEdits extends BotItemsReads {
     this.db
       .prepare('UPDATE items SET title = ?, description = ?, done_means = ? WHERE uid = ?')
       .run(value('title') ?? item.title, value('description'), value('doneMeans'), item.uid)
+  }
+}
+
+/** What `set` refuses from its input alone, before reading the item. */
+export function assertBotItemSetInput(changes: BotItemSetInput): void {
+  assertBotItemText('title', changes.title)
+  assertBotItemText('description', changes.description)
+  assertBotItemText('doneMeans', changes.doneMeans)
+  assertBotItemText('note', changes.note)
+  assertBotItemText('note', changes.reason)
+  assertBotItemText('text', changes.comment)
+  if (changes.status === 'canceled' && !changes.reason?.trim()) {
+    throw new BotItemError('invalid_argument', 'Canceling needs a reason: --reason "..."')
+  }
+  if (changes.reason !== undefined && changes.status !== 'canceled') {
+    throw new BotItemError('invalid_argument', '--reason goes with --status canceled.')
+  }
+  if (changes.ask !== undefined && changes.status !== 'needs_you') {
+    throw new BotItemError('invalid_argument', '--ask goes with --status needs-you.')
+  }
+  if (changes.comment !== undefined && changes.status === undefined) {
+    throw new BotItemError(
+      'invalid_argument',
+      '--comment goes with --status; otherwise use `orca bot item comment`.'
+    )
+  }
+  if (changes.title !== undefined && !changes.title.trim()) {
+    throw new BotItemError('invalid_argument', 'An item needs a title.')
   }
 }

@@ -1,5 +1,8 @@
+import { z } from 'zod'
 import {
+  LEGACY_SOURCE_ARTIFACTS,
   LEGACY_SOURCE_REFUSALS,
+  type LegacySourceArtifact,
   type LegacySourceRefusalReason
 } from './journal-legacy-retention-error'
 
@@ -21,6 +24,42 @@ export type JournalLegacyRetirementState = {
   kept: boolean
   convertedBy: string | null
   retirement: string | null
+  /** What this store last reported about the cleanup, so a repeat isn't sent again. */
+  reported: string | null
+}
+
+/** Where to note what was last reported; nothing else reads it. */
+export const JOURNAL_LEGACY_RETIREMENT_REPORTED = 'journal.legacy-retirement-reported.v1'
+
+/** What one walk of the proof saw, for reporting only: it decides nothing. */
+export type LegacyProofCounts = {
+  chats: number
+  /** Converted here before the proof reached them. */
+  alreadyConverted: number
+  /** Converted by the proof itself: what the proof adds to the store. */
+  newlyConverted: number
+  /** Deleted here, so kept only as the original's version. */
+  deletedHere: number
+  /** Drafts: a record and no history, so nothing converts. */
+  drafts: number
+  originals: number
+  copies: number
+}
+
+/**
+ * The proof of this original into this store finished, and this build keeps the file. A later
+ * launch reads this instead of walking again; a build that deletes walks again in full.
+ */
+export type LegacySourceHeld = {
+  version: 2
+  phase: 'held'
+  layout: typeof LEGACY_PROOF_LAYOUT
+  proof: string
+  store: string
+  /** Null when nothing was measured: a walk resumed at the copies of a deletion cut short. */
+  counts: LegacyProofCounts | null
+  /** The proof walked every page in one run rather than resuming saved progress. */
+  whole: boolean
 }
 
 /** A proof that failed for a reason the frozen original can't outgrow, keyed to that original. */
@@ -31,6 +70,8 @@ export type LegacySourceRefusal = {
   proof: string
   store: string
   reason: LegacySourceRefusalReason
+  /** Which shapes builds left behind an inventory refusal saw; for reporting only. */
+  artifact?: LegacySourceArtifact
 }
 
 /** The proof's page layout; progress saved under another is walked again from the start. */
@@ -62,6 +103,8 @@ export type LegacySourceProving = {
   proof: string
   store: string
   cursor: { table: number; after: string | null; epoch?: string }
+  /** What the walk counted from its first page; absent when it began from older progress. */
+  counts?: LegacyProofCounts
 }
 
 export function decodeLegacySourceProving(value: string | null): LegacySourceProving | null {
@@ -109,7 +152,8 @@ export function decodeLegacySourceProving(value: string | null): LegacySourcePro
     layout: LEGACY_PROOF_LAYOUT,
     proof: data.proof,
     store: data.store,
-    cursor: { table, after, ...(epoch === undefined ? {} : { epoch }) }
+    cursor: { table, after, ...(epoch === undefined ? {} : { epoch }) },
+    ...decodeCounts('counts' in data ? data.counts : undefined)
   }
 }
 
@@ -139,6 +183,9 @@ export function decodeLegacySourceRefusal(value: string | null): LegacySourceRef
     return null
   }
   const reason = LEGACY_SOURCE_REFUSALS.find((known) => known === data.reason)
+  const artifact = LEGACY_SOURCE_ARTIFACTS.find(
+    (known) => 'artifact' in data && known === data.artifact
+  )
   return reason
     ? {
         version: 2,
@@ -146,7 +193,24 @@ export function decodeLegacySourceRefusal(value: string | null): LegacySourceRef
         policy: LEGACY_SOURCE_REFUSAL_POLICY,
         proof: data.proof,
         store: data.store,
-        reason
+        reason,
+        ...(artifact ? { artifact } : {})
       }
     : null
+}
+
+const COUNT = z.number().int().nonnegative()
+const LEGACY_PROOF_COUNTS = z.object({
+  chats: COUNT,
+  alreadyConverted: COUNT,
+  newlyConverted: COUNT,
+  deletedHere: COUNT,
+  drafts: COUNT,
+  originals: COUNT,
+  copies: COUNT
+})
+
+function decodeCounts(value: unknown): { counts?: LegacyProofCounts } {
+  const counts = LEGACY_PROOF_COUNTS.safeParse(value)
+  return counts.success ? { counts: counts.data } : {}
 }

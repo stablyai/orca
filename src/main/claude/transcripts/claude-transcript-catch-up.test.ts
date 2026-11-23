@@ -1,7 +1,14 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { readFile, writeFile } from 'node:fs/promises'
 import * as jsonlImport from '../../native-chat/agent-session-journal/history-import/journal-jsonl-import'
-import { chat, closeClaudeCatchUpChats, SESSION } from './claude-transcript-catch-up.test-support'
+import { StructuredAgentSessionSnapshotRoutes } from '../../native-chat/agent-session-wire/host/structured-agent-session-snapshot-routes'
+import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import {
+  chat,
+  closeClaudeCatchUpChats,
+  PROVIDER,
+  SESSION
+} from './claude-transcript-catch-up.test-support'
 
 afterEach(async () => {
   vi.restoreAllMocks()
@@ -147,6 +154,62 @@ it('leaves an unchanged import with a UUID-less metadata suffix alone on reopen'
   await c.reopen()
   expect(await c.catchUp()).toBe(true)
   expect(await c.journal.reads.physicalCursor()).toEqual(cursor)
+})
+
+it('replaces guarded catch-up coverage with a new legacy import origin', async () => {
+  const c = await chat('batch')
+  expect(await c.catchUp()).toBe(true)
+  expect(await c.journal.reads.historyOrigin()).toMatchObject({
+    raw: { kind: 'native_copy', sourceFrontier: 'newest-answer' }
+  })
+  await c.journal.write({
+    kind: 'epoch-replace',
+    reason: 'legacy_import',
+    fence: 1,
+    items: [
+      {
+        identity: { provider: 'claude', sessionId: PROVIDER, uuid: 'new-import' },
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'New legacy import' }]
+        },
+        ownerFence: 1
+      }
+    ]
+  })
+  expect(await c.journal.reads.historyOrigin()).toMatchObject({
+    raw: { kind: 'legacy_import' }
+  })
+})
+
+it('holds snapshot reads during guarded recovery and resumes with the new history facts', async () => {
+  const c = await chat('batch')
+  await c.journal.appendItem(
+    { provider: 'orca', clientMessageId: 'old-child' },
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Old child output' }] },
+    {
+      fence: 1,
+      turnScope: { kind: 'thread' },
+      agentId: 'old-agent',
+      providerParentRef: 'old-tool',
+      producerKind: 'agent',
+      attempt: 0
+    }
+  )
+  const routes = new StructuredAgentSessionSnapshotRoutes(createStructuredAgentSessionLogger())
+  await c.deferred.followSnapshots(routes.observe(SESSION, c.journal))
+  const { journalSnapshot, snapshotCurrent } = c.deferred.sink
+  expect(journalSnapshot?.()?.canonicalByToolUse).toEqual([['old-tool', 'old-agent']])
+  const duringReplacement = Promise.withResolvers<unknown>()
+  c.journal.epochReplacements.observe((replaced) => {
+    routes.replacing(SESSION, c.journal, replaced)
+    duringReplacement.resolve(journalSnapshot?.())
+  })
+  expect(await c.catchUp()).toBe(true)
+  expect(await duringReplacement.promise).toBeNull()
+  await snapshotCurrent?.()
+  expect(journalSnapshot?.()?.canonicalByToolUse).toEqual([])
 })
 
 it('continues a system frontier without reporting a rewind', async () => {

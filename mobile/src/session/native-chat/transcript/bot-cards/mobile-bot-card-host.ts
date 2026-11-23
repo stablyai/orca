@@ -21,6 +21,8 @@ export type MobileBotCardHost = {
   ) => void
   /** Opens New bot filled from an offer card, held by the chat so it outlives the card's row. */
   editOffer: (offer: MobileBotCardOfferEdit) => void
+  /** Opens the Automations page; absent for a chat another server runs, whose automations it doesn't list. */
+  openAutomations?: () => void
 }
 
 export type MobileBotCardOfferEdit = {

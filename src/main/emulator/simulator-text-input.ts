@@ -1,38 +1,16 @@
 import { runProcess } from '@orca/process-host'
 import {
   buildServeSimKeyboardFramesForCode,
-  buildServeSimKeyboardFramesForText,
   encodeServeSimKeyboardFrame,
   type ServeSimKeyboardFrame
 } from '../../shared/emulator/emulator-keyboard-frame'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import { EmulatorError } from './emulator-errors'
 import { sendServeSimFrameSequence } from './emulator-gesture-sender'
+import { planEmulatorTextInput, type EmulatorTextInputPlan } from './emulator-text-input-plan'
 
 const PASTEBOARD_TIMEOUT_MS = 15_000
 const DEVICECTL_FLAGS = ['--timeout', '10', '--quiet']
-
-type SimulatorTextInputPlan = { kind: 'keys' } | { kind: 'paste'; text: string; enterCount: number }
-
-/**
- * US key usages only type what they name on a US hardware layout; any other text goes through the
- * guest pasteboard. Typed trailing newlines stay Enter presses so "text\n" still submits a field;
- * a paste keeps them as text, like any paste.
- */
-export function planSimulatorTextInput(
-  text: string,
-  options: { paste: boolean; usHardwareKeyboard: boolean }
-): SimulatorTextInputPlan {
-  if (options.paste) {
-    return { kind: 'paste', text: text.replaceAll('\r', ''), enterCount: 0 }
-  }
-  if (options.usHardwareKeyboard && buildServeSimKeyboardFramesForText(text)) {
-    return { kind: 'keys' }
-  }
-  const body = text.replace(/[\r\n]+$/, '')
-  const enterCount = (text.slice(body.length).match(/\n/g) ?? []).length
-  return { kind: 'paste', text: body.replaceAll('\r', ''), enterCount }
-}
 
 type PasteboardRoute = 'devicectl' | 'simctl'
 
@@ -73,7 +51,7 @@ async function stageSimulatorPasteboard(udid: string, text: string): Promise<voi
 async function pasteSimulatorText(
   udid: string,
   wsUrl: string,
-  plan: Extract<SimulatorTextInputPlan, { kind: 'paste' }>,
+  plan: Extract<EmulatorTextInputPlan, { kind: 'paste' }>,
   pasteKeyCode: string
 ): Promise<void> {
   const frames: ServeSimKeyboardFrame[] = []
@@ -110,9 +88,9 @@ export function typeSimulatorText(input: SimulatorTextInput): Promise<void> {
 }
 
 async function typeSimulatorTextNow(input: SimulatorTextInput): Promise<void> {
-  const plan = planSimulatorTextInput(input.text, {
+  const plan = planEmulatorTextInput(input.text, {
     paste: input.paste,
-    usHardwareKeyboard: input.paste ? false : await input.usHardwareKeyboard()
+    usKeys: input.paste ? false : await input.usHardwareKeyboard()
   })
   if (plan.kind === 'keys') {
     await input.typeKeys()

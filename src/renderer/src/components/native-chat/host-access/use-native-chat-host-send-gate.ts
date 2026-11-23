@@ -12,8 +12,7 @@ import type { NativeChatHostOutage } from './use-native-chat-host-outage'
 
 /** What holds Send on the chat's host: its permission check, or a stopped WSL distro only Start may boot. */
 export function useNativeChatHostSendGate(
-  target: RuntimeClientTarget,
-  agent: AgentType,
+  { target, agent }: { target: RuntimeClientTarget; agent: AgentType },
   outage: NativeChatHostOutage | null,
   phase?: AgentSessionStatusSummary['hostExecutionPhase'] | null
 ): NativeChatHostPermissionGate {

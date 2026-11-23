@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CodexRateLimitAccountsState } from '../../../../../shared/agent-accounts/managed-account-types'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { useAppStore } from '../../../store/index'
+import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   emptyCodexAccountsState,
@@ -41,7 +42,8 @@ const EMPTY_CODEX_ACCOUNTS: CodexRateLimitAccountsState = emptyCodexAccountsStat
 
 export function useCodexSwitcherController(
   codex: ProviderRateLimits,
-  ownerUsage: OwnerUsageRateLimits
+  ownerUsage: OwnerUsageRateLimits,
+  owner: AccountOwner
 ) {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
@@ -58,7 +60,7 @@ export function useCodexSwitcherController(
   const fetchInactiveCodexAccountUsage = useAppStore((s) => s.fetchInactiveCodexAccountUsage)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const { target: runtimeTarget, wslHostDistro } = ownerUsage.owner
+  const { target: runtimeTarget, wslHostDistro } = owner
   const activeRuntimeEnvironmentId = runtimeTargetEnvironmentId(runtimeTarget)
   const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null
   const providerAccountHostLabel = hasActiveRuntimeEnvironment
@@ -86,9 +88,13 @@ export function useCodexSwitcherController(
   )
   const {
     roster,
+    rosterKnown,
     inactiveAccounts: inactiveCodexAccounts,
-    usageTarget: codexTarget
+    usageTarget
   } = getOwnerAccountRows('codex', ownerUsage, accounts, EMPTY_CODEX_ACCOUNTS)
+  const codexTarget = wslHostDistro
+    ? { runtime: 'wsl' as const, wslDistro: wslHostDistro }
+    : usageTarget
   const accountState = resolveCodexStatusAccountState(settings, roster, activeRuntimeEnvironmentId)
 
   useEffect(() => {
@@ -175,7 +181,7 @@ export function useCodexSwitcherController(
     const currentKey = getCodexStatusRuntimeKey(
       normalizeCodexStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(codexTarget))
     )
-    if (hasActiveRuntimeEnvironment || group.key === currentKey) {
+    if (hasActiveRuntimeEnvironment || wslHostDistro !== null || group.key === currentKey) {
       return
     }
     try {
@@ -226,7 +232,8 @@ export function useCodexSwitcherController(
     codex,
     activeRuntimeEnvironmentId,
     hasActiveRuntimeEnvironment ? ownerUsage.accounts : null,
-    open
+    open,
+    wslHostDistro === null && codexTarget.runtime !== 'wsl'
   )
 
   return {
@@ -243,6 +250,7 @@ export function useCodexSwitcherController(
     openSettingsTarget,
     providerAccountHostLabel,
     reauthenticatingAccountId,
+    rosterKnown,
     ...reset,
     selectedGroup,
     selectedRuntimeKey,

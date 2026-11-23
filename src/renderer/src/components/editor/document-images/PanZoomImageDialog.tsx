@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react'
-import { Copy, Maximize, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, Maximize, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -20,7 +20,7 @@ import { useViewerZoomCommands } from '../viewer-viewport/use-viewer-zoom-comman
 
 type PanZoomImageDialogProps = Omit<
   React.ComponentProps<typeof DialogContent>,
-  'children' | 'className' | 'showCloseButton' | 'onOpenAutoFocus' | 'size'
+  'children' | 'className' | 'showCloseButton' | 'onOpenAutoFocus' | 'size' | 'surface'
 > & {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -34,6 +34,10 @@ type PanZoomImageDialogProps = Omit<
   /** Shown instead of the image while it has no source or after it fails to load. */
   fallback?: React.ReactNode
   toolbarActions?: React.ReactNode
+  /** In a set of images: steps back or on, by the toolbar arrows or ← and →. Null at that end; both
+   *  omitted for a lone image, which shows no arrows. */
+  onPrevious?: (() => void) | null
+  onNext?: (() => void) | null
 }
 
 async function copyImageAsPng(
@@ -82,7 +86,11 @@ export function PanZoomImageDialog({
   background,
   fallback,
   toolbarActions,
+  onPrevious,
+  onNext,
   onCloseAutoFocus,
+  onKeyDown,
+  busy,
   ...contentProps
 }: PanZoomImageDialogProps): React.JSX.Element {
   const openerRef = useRef<Element | null>(null)
@@ -91,8 +99,24 @@ export function PanZoomImageDialog({
       <DialogContent
         aria-describedby={undefined}
         {...contentProps}
+        busy={busy}
+        onKeyDown={(event) => {
+          onKeyDown?.(event)
+          const step =
+            event.key === 'ArrowLeft' ? onPrevious : event.key === 'ArrowRight' ? onNext : undefined
+          if (
+            step &&
+            !event.defaultPrevented &&
+            !event.altKey &&
+            !event.metaKey &&
+            !event.ctrlKey
+          ) {
+            event.preventDefault()
+            step()
+          }
+        }}
         showCloseButton={false}
-        className="h-[90dvh] w-[90vw] max-w-[90vw] overflow-hidden sm:max-w-[90vw]"
+        surface="media"
         onOpenAutoFocus={(event) => {
           // Dialogs without triggers need an explicit opener for focus restoration.
           openerRef.current = document.activeElement
@@ -120,8 +144,9 @@ export function PanZoomImageDialog({
         }}
       >
         <DialogTitle className="sr-only">{title}</DialogTitle>
-        {/* Mount with dialog content so each opening starts fitted. */}
+        {/* Mount with dialog content, and again per image, so each starts fitted. */}
         <PanZoomImageCanvas
+          key={src ?? title}
           src={src}
           size={size}
           title={title}
@@ -129,7 +154,10 @@ export function PanZoomImageDialog({
           background={background}
           fallback={fallback}
           toolbarActions={toolbarActions}
+          onPrevious={onPrevious}
+          onNext={onNext}
           onClose={() => onOpenChange(false)}
+          closeOnBackdrop={!busy}
         />
       </DialogContent>
     </Dialog>
@@ -144,29 +172,47 @@ function PanZoomImageCanvas({
   background,
   fallback,
   toolbarActions,
-  onClose
+  onPrevious,
+  onNext,
+  onClose,
+  closeOnBackdrop
 }: Pick<
   PanZoomImageDialogProps,
-  'src' | 'size' | 'title' | 'showTitle' | 'background' | 'fallback' | 'toolbarActions'
-> & { onClose: () => void }): React.JSX.Element {
+  | 'src'
+  | 'size'
+  | 'title'
+  | 'showTitle'
+  | 'background'
+  | 'fallback'
+  | 'toolbarActions'
+  | 'onPrevious'
+  | 'onNext'
+> & { onClose: () => void; closeOnBackdrop: boolean }): React.JSX.Element {
   const t = useTranslate()
   const [loaded, setLoaded] = useState<{ src: string; size: PanZoomSize } | null>(null)
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const imageSrc = src && src !== failedSrc ? src : null
   const content = size ?? (loaded && loaded.src === imageSrc ? loaded.size : null)
-  const panZoom = usePanZoomViewport({ content })
+  // Fitted images stay clear of the toolbar row above them.
+  const panZoom = usePanZoomViewport({
+    content,
+    fitPadding: 96,
+    actualSizeClickZoom: 2,
+    zoomedDragPans: true,
+    onClickOutsideContent: closeOnBackdrop ? onClose : undefined
+  })
   useViewerZoomCommands(panZoom, 'popup')
 
   return (
     <>
-      {/* Anchor to dialog edges so padding cannot frame the canvas. */}
       <PanZoomImageSurface
         panZoom={panZoom}
         src={imageSrc}
         alt={title}
         content={content}
-        className="absolute inset-0 bg-background"
+        className="absolute inset-0"
         background={background}
+        backdrop
         fallback={fallback}
         onLoad={(event) => {
           const { naturalWidth: width, naturalHeight: height } = event.currentTarget
@@ -178,16 +224,37 @@ function PanZoomImageCanvas({
       />
       {/* These dialogs can open outside the app tooltip provider. */}
       <TooltipProvider>
-        <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start gap-3">
+        {/* Below the titlebar, clear of native window controls. */}
+        <div className="pointer-events-none absolute inset-x-3 top-12 flex items-start gap-3">
           {showTitle ? (
             <span
               aria-hidden
-              className="min-w-0 truncate rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground shadow-xs"
+              // A hit target, so a click on the title never reaches the canvas and closes it.
+              className="pointer-events-auto min-w-0 truncate rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground shadow-xs"
             >
               {title}
             </span>
           ) : null}
           <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-xs">
+            {onPrevious !== undefined || onNext !== undefined ? (
+              <>
+                <ToolbarButton
+                  label={t('auto.components.editor.PanZoomImageDialog.previous', 'Previous image')}
+                  disabled={!onPrevious}
+                  onClick={() => onPrevious?.()}
+                >
+                  <ChevronLeft />
+                </ToolbarButton>
+                <ToolbarButton
+                  label={t('auto.components.editor.PanZoomImageDialog.next', 'Next image')}
+                  disabled={!onNext}
+                  onClick={() => onNext?.()}
+                >
+                  <ChevronRight />
+                </ToolbarButton>
+                <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />
+              </>
+            ) : null}
             <ToolbarButton
               label={t('auto.components.editor.PanZoomImageDialog.zoomOut', 'Zoom out')}
               disabled={!panZoom.canZoomOut}

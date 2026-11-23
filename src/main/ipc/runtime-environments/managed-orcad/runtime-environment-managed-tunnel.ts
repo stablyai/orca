@@ -33,7 +33,7 @@ import {
   setSshHostServerStatus
 } from '../../../ssh/host-server/ssh-host-server-status'
 import { getSshTargetRegistryStore } from '../../../ssh/targets/ssh-target-registry'
-import { connectionManager, getCurrentMainWindow } from '../../ssh/ssh-ipc-context'
+import { connectionManager } from '../../ssh/ssh-ipc-context'
 import {
   getWslHostPhoneGate,
   getWslHostService
@@ -245,7 +245,6 @@ export function publishResolvedChangedHostStatus(
   })
   // Moves release the relay session; publish even when its stale status line is disconnected.
   broadcastSshState(
-    getCurrentMainWindow,
     target.id,
     connectionManager?.getState(target.id) ?? {
       targetId: target.id,
@@ -261,7 +260,7 @@ export function publishHostServerStatus(targetId: string, status: SshManagedServ
   // Only a host with a connection state has a status line to refresh.
   const state = connectionManager?.getState(targetId)
   if (state) {
-    broadcastSshState(getCurrentMainWindow, targetId, { ...state, managedServer: status })
+    broadcastSshState(targetId, { ...state, managedServer: status })
   }
 }
 

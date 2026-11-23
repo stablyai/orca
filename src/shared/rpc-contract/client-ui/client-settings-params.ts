@@ -14,6 +14,7 @@ import { WorktreeVisibilityDefaultsUpdate } from '../workspaces/worktree-visibil
 import { WorkspaceCleanupRulesParam } from '../workspace-cleanup/workspace-cleanup-policy-params'
 import { AGENT_CHAT_PERMISSION_MODES } from '../../agent-launch/permissions/agent-chat-permission-mode'
 import { PR_AUTO_REFRESH_CADENCES } from '../../source-control/hosted-review/review-refresh-policy'
+import { HOST_OWNED_SETTING_UPDATE_SHAPE } from '../../settings/host-owned-settings'
 
 export const TaskProviderParam = z.custom<TaskProvider>(isTaskProvider, {
   message: 'Unknown task provider'
@@ -100,6 +101,7 @@ const HostNotificationSettingsUpdate = z
 
 export const SettingsUpdate = z
   .object({
+    ...HOST_OWNED_SETTING_UPDATE_SHAPE,
     machineName: z.string().trim().max(MACHINE_NAME_MAX_LENGTH).optional(),
     worktreeVisibilityDefaults: WorktreeVisibilityDefaultsUpdate.optional(),
     defaultTuiAgent: z
@@ -130,8 +132,6 @@ export const SettingsUpdate = z
     /** The host-side switch for bots, so a headless server can turn them on. */
     botsEnabled: z.boolean().optional(),
     agentStatusHooksEnabled: z.boolean().optional(),
-    codexShareHistoryAcrossAccounts: z.boolean().optional(),
-    deleteChatHistoryWithWorkspace: z.boolean().optional(),
     claudeSubagentNavigationEnabled: z.boolean().optional(),
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),
@@ -145,10 +145,11 @@ export const SettingsUpdate = z
       .unknown()
       .transform((value) => normalizePRBotAuthorOverrides(value))
       .optional(),
-    nativeChatAutoContinueAfterUsageLimit: z.boolean().optional(),
+    nativeChatResumeWorkOnRestart: z.boolean().optional(),
     nativeChatPermissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),
     nativeChatQueueFollowUps: z.boolean().optional(),
     nativeChatCiResultLines: z.boolean().optional(),
+    nativeChatAutoName: z.boolean().optional(),
     /** This host's own notification switches; see HOST_NOTIFICATION_SETTINGS_RUNTIME_CAPABILITY. */
     hostNotifications: HostNotificationSettingsUpdate.optional(),
     workspaceCleanupPolicy: WorkspaceCleanupRulesParam.optional(),

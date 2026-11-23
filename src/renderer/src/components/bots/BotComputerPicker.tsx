@@ -24,10 +24,12 @@ function actionLabel(action: BotCreateHostAction, t: Translate): string {
 
 export function BotComputerPicker({
   hostChoice,
-  onAddHost
+  onAddHost,
+  errorId
 }: {
   hostChoice: BotCreateHostChoice
   onAddHost?: (mode: 'ssh' | 'server') => void
+  errorId?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const { host, hosts } = hostChoice
@@ -35,19 +37,25 @@ export function BotComputerPicker({
   const setUpdateDialogOpen = useAppStore((s) => s.setRemoteServerUpdateDialogOpen)
   const updatable = useServerUpdatable()
   const [readyAtOpen, setReadyAtOpen] = useState<ReadonlySet<ExecutionHostId> | null>(null)
+  // Only an open list reads servers' accounts and update state (both go over the network); its rows are
+  // built from what is already known, closed too, so a key that opens it arms the row it will show.
+  const listOpen = readyAtOpen !== null
   const [reconnecting, setReconnecting] = useState<ReadonlySet<string>>(new Set())
   const refreshUpdates = useAppStore((s) => s.refreshRemoteServerUpdates)
   const { setListing } = hostChoice
   useEffect(() => {
-    setListing(true)
+    setListing(listOpen)
     return () => setListing(false)
-  }, [setListing])
-  const needsUpdateCheck = hosts.some(
-    (entry) =>
-      entry.blocked === 'no-bots' &&
-      entry.environmentId &&
-      !remoteServerUpdates.has(entry.environmentId)
-  )
+  }, [listOpen, setListing])
+  // The update check asks every server, so it waits for the list, as it did behind New bot's Change.
+  const needsUpdateCheck =
+    listOpen &&
+    hosts.some(
+      (entry) =>
+        entry.blocked === 'no-bots' &&
+        entry.environmentId &&
+        !remoteServerUpdates.has(entry.environmentId)
+    )
   useEffect(() => {
     if (needsUpdateCheck) {
       void refreshUpdates()
@@ -106,6 +114,7 @@ export function BotComputerPicker({
     <RunTargetCombobox
       selectedHostId={host.hostId}
       fieldName={t('bots.new.computer', 'Computer')}
+      errorId={errorId}
       emptyMessage={noHostsMatchLabel(t)}
       onOpenChange={(open) =>
         setReadyAtOpen(
@@ -117,6 +126,7 @@ export function BotComputerPicker({
       hostOptions={options}
       onAddSshHost={onAddHost ? () => onAddHost('ssh') : undefined}
       onAddRemoteServer={onAddHost ? () => onAddHost('server') : undefined}
+      truncateMiddle
     />
   )
 }

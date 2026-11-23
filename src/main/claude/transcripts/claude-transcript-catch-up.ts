@@ -29,6 +29,15 @@ import {
   createClaudeTranscriptItemReader
 } from './claude-transcript-item-reader'
 
+/** What a live Claude session knows about its transcript, plus a catch-up that may still be running. */
+export type ClaudeSessionHistory = {
+  leafUuid: string | null
+  covered: boolean
+  contextActivity: number
+  recovery?: Promise<void>
+  startRecovery?: () => void
+}
+
 const DEFAULT_CLAUDE_CATCH_UP_TIMEOUT_MS = 30_000
 export type ClaudeTranscriptCatchUpOutcome = boolean | { kind: 'capacity'; deadline: number }
 type ClaudeHistoryView = {

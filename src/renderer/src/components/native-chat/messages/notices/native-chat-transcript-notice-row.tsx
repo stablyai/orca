@@ -1,10 +1,7 @@
 import { agentSessionHostStatusText } from './agent-session-host-status-text'
 import { BotTidyUpLine } from '@/components/bots/BotTidyUpLine'
 import { nativeChatBotCard } from '../../native-chat-bot-cards'
-import {
-  CLAUDE_MODEL_FALLBACK_COPY,
-  claudeModelFallbackLabels
-} from '../../../../../../shared/native-chat/transcript/notices/claude-model-fallback'
+import * as Fallback from '../../../../../../shared/native-chat/transcript/notices/claude-model-fallback'
 import { NativeChatForkedFromRow } from './NativeChatForkedFromRow'
 import { NativeChatAutoReviewDenialRow } from './NativeChatAutoReviewDenialRow'
 import { NativeChatEventRow } from '../events/NativeChatEventRow'
@@ -57,6 +54,7 @@ export function nativeChatTranscriptNoticeRow({
     return <NativeChatDividerRow label={label} />
   }
   if (look.kind === 'command-output') {
+    // Why: command output is laid out in columns; proportional type breaks its grid.
     return (
       <pre className="whitespace-pre-wrap break-words font-mono text-xs text-chat-foreground">
         {block.text}
@@ -80,7 +78,7 @@ export function nativeChatTranscriptNoticeRow({
         <button
           type="button"
           onClick={() => openBotSettings(botId, changed.length === 1 ? changed[0] : undefined)}
-          className="line-clamp-2 rounded-sm text-left hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="truncate rounded-sm text-left hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {changed.map((change) => BOT_CONTEXT_WORDS[change]()).join(' · ')}
         </button>
@@ -102,8 +100,8 @@ export function nativeChatTranscriptNoticeRow({
       <p className="min-w-0 max-w-full select-text text-sm text-chat-foreground-faint [overflow-wrap:anywhere]">
         {t(
           'components.native-chat.notices.modelFallback',
-          CLAUDE_MODEL_FALLBACK_COPY,
-          claudeModelFallbackLabels(look)
+          Fallback.CLAUDE_MODEL_FALLBACK_COPY,
+          Fallback.claudeModelFallbackLabels(look)
         )}
       </p>
     )

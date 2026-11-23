@@ -1,4 +1,7 @@
-import { restoredChatWithBlockedRecovery } from './claude-structured-session-open.test-fixture'
+import {
+  claudeWithSavedHistory,
+  restoredChatWithBlockedRecovery
+} from './claude-structured-session-open.test-fixture'
 import { readTestHostJournal } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { afterEach, expect, it, vi } from 'vitest'
 import * as jsonlImport from '../../../native-chat/agent-session-journal/history-import/journal-jsonl-import'
@@ -9,11 +12,7 @@ import {
   SESSION,
   PROVIDER
 } from '../../transcripts/claude-transcript-catch-up.test-support'
-import {
-  adapterAtPublishFor,
-  fakeClaude,
-  identityFor
-} from '../claude-structured-session-test-support'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const cleanups: (() => Promise<void>)[] = []
 
@@ -27,14 +26,12 @@ afterEach(async () => {
 
 async function openWithBlockedRecovery(outcome: 'success' | 'drop' | 'error' = 'success') {
   const c = await chat('batch')
-  const claude = fakeClaude({ initSessionId: PROVIDER })
-  const adapter = adapterAtPublishFor(claude, {
+  const claude = claudeWithSavedHistory({
     providerSessionId: PROVIDER,
-    resumeLeafUuid: 'old-leaf',
-    resumesTranscript: true,
     cwd: c.cwd,
     claudeConfigDir: c.config
   })
+  const { adapter } = claude
   if (outcome === 'drop') {
     const replace = c.deferred.sink.tryReplaceHistory!.bind(c.deferred.sink)
     vi.spyOn(c.deferred.sink, 'tryReplaceHistory').mockImplementationOnce((replacement) => {
@@ -68,10 +65,15 @@ async function openWithBlockedRecovery(outcome: 'success' | 'drop' | 'error' = '
     release.resolve()
     await opened?.catch(() => {})
     await adapter.closeAll()
-    claude.dispose()
   })
   const acquired = await adapter.acquire({
-    identity: identityFor(SESSION),
+    identity: {
+      sessionId: SESSION,
+      workspaceId: 'workspace',
+      hostId: 'local',
+      agent: 'claude',
+      providerHandle: claudeProviderHandle(PROVIDER, null)
+    },
     fence: 1,
     spawnToken: 'catch-up-open',
     events: c.deferred.sink
@@ -181,6 +183,21 @@ it('releases the recovery hold when the session closes and drops the replacement
 it('keeps the send that acquires a restored chat queued until recovery commits, then delivers it once', async () => {
   const c = await restoredChatWithBlockedRecovery(cleanups)
   const delivered = Promise.withResolvers<void>()
+  const catchingUp = Promise.withResolvers<void>()
+  const ready = Promise.withResolvers<void>()
+  const unsubscribe = c.host.subscribeStatus({
+    id: 'catch-up-phase',
+    emit: (event) => {
+      if (event.type === 'status' && event.session.sessionId === SESSION) {
+        if (event.session.hostExecutionPhase === 'catching-up') {
+          catchingUp.resolve()
+        } else if (event.session.hostExecutionPhase === 'ready') {
+          ready.resolve()
+        }
+      }
+    }
+  })
+  cleanups.unshift(async () => unsubscribe())
   const dispatch = c.adapter.dispatch
   vi.spyOn(c.adapter, 'dispatch').mockImplementation(async (input) => {
     const outcome = await dispatch(input)
@@ -190,6 +207,8 @@ it('keeps the send that acquires a restored chat queued until recovery commits, 
   const clientOperationId = '1800000000000-00000000000000000000000000000001'
   expect(await c.send(clientOperationId)).toMatchObject({ ok: true })
   await c.blocked
+  await catchingUp.promise
+  expect(c.host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('catching-up')
   const waiting = await readTestHostJournal(c.host, SESSION)
   const queued = waiting.submissions.find(
     (submission) => submission.clientMessageId === clientOperationId
@@ -199,6 +218,8 @@ it('keeps the send that acquires a restored chat queued until recovery commits, 
   expect(c.claude.connections[0]!.sent).toEqual([])
   c.release.resolve()
   await delivered.promise
+  await ready.promise
+  expect(c.host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready')
   const recovered = await readTestHostJournal(c.host, SESSION)
   expect(recovered.items).toContainEqual(
     expect.objectContaining({

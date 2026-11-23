@@ -219,6 +219,8 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   canSetOptionWhileIdle: Adapter['canSetOptionWhileIdle'] = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.canSetOptionWhileIdle?.(input) === true
+  noteModelPick: Adapter['noteModelPick'] = (input) =>
+    this.liveOwnerOrNull(input.sessionId)?.noteModelPick?.(input)
   captureMessageSteeringInputs: Adapter['captureMessageSteeringInputs'] = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.captureMessageSteeringInputs?.(input) ?? {
       kind: 'codex-unavailable'

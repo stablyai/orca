@@ -48,7 +48,6 @@ export const BOT_CONNECTORS_METHOD = defineMethod({
     const sources = capabilities?.ok
       ? CapabilitiesResult.safeParse(capabilities.result).data?.sources
       : undefined
-    const approveUrl = sources?.find((source) => source.source === 'slack')?.approveUrl
     const listed =
       places && !(places instanceof Error) && places.ok
         ? PlacesResult.safeParse(places.result).data
@@ -72,9 +71,10 @@ export const BOT_CONNECTORS_METHOD = defineMethod({
           gh,
           linear: (await runtime.linearStatus()).connected,
           google: (await getGoogleConnect()?.accounts()) ?? [],
-          googleApp: Boolean(await getGoogleConnect()?.client())
+          googleApp: Boolean(await getGoogleConnect()?.client()),
+          googleDefault: (await getGoogleConnect()?.defaultAccount()) ?? null
         },
-        approveUrl
+        sources
       ),
       ...workspaces
     }

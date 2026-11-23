@@ -1,4 +1,5 @@
 import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
+import { structuredAgentSessionAddressTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
@@ -109,29 +110,35 @@ export function expandWorkspaceUnreadTargets(
       state.unifiedTabsByWorktree[target.worktreeId]
     )
     const structuredKeysByTabId = new Map([...representedTabs].map(([key, tab]) => [tab.id, key]))
+    // Completion keys group by the tab id a pane key names: a minted chat's session address.
+    const completionsOf = (tabId: string): readonly string[] => {
+      const tab = representedTabs.get(structuredKeysByTabId.get(tabId) ?? '')
+      return (
+        completionKeysByTab.get(
+          tab ? structuredAgentSessionAddressTabId(tab.id, tab.entityId) : tabId
+        ) ?? []
+      )
+    }
     const ownedPanes = workspaceMarkerPaneKeysForHost(
       state,
       target.worktreeId,
       target.executionHostId,
       workspaceMarkerTabs(state, target.worktreeId).flatMap((tab) =>
-        unreadPaneKeysForTab(
-          completionKeysByTab.get(tab.id) ?? [],
-          structuredKeysByTabId.get(tab.id)
-        )
+        unreadPaneKeysForTab(completionsOf(tab.id), structuredKeysByTabId.get(tab.id))
       )
     )
     const tabTargets = workspaceLiveMarkerTabIds(state, target.worktreeId)
       .filter(
         (tabId) =>
           (ownedTabs.has(tabId) && Boolean(state.unreadTerminalTabs[tabId])) ||
-          (completionKeysByTab.get(tabId) ?? []).some((key) => ownedPanes.has(key))
+          completionsOf(tabId).some((key) => ownedPanes.has(key))
       )
       .map((tabId): SlotTarget => ({
         ...target,
         tabId,
         terminalBell: ownedTabs.has(tabId) && state.unreadTerminalTabs[tabId] === 'terminal-bell',
         unreadPaneKeys: unreadPaneKeysForTab(
-          (completionKeysByTab.get(tabId) ?? []).filter((key) => ownedPanes.has(key)),
+          completionsOf(tabId).filter((key) => ownedPanes.has(key)),
           structuredKeysByTabId.get(tabId)
         )
       }))

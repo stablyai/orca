@@ -43,6 +43,8 @@ export type CodexDispatchEchoes = {
     identity: Extract<AgentJournalItemIdentity, { provider: 'codex' }>,
     content: unknown
   ) => string | null
+  /** How an armed send was written: into a running turn (`steer`) or as a turn start. */
+  sentVia: (clientMessageId: string) => AgentJournalTurnJoin | null
   /** True once, for a send this session armed and has not yet settled. */
   settle: (clientMessageId: string) => boolean
   /** Drops an armed send whose write never reached the provider. */
@@ -187,6 +189,7 @@ export function createCodexDispatchEchoes(
     },
     expect: receiptCorrelation.expect,
     receipt: receiptCorrelation.receipt,
+    sentVia: receiptCorrelation.sentVia,
     settle: (clientMessageId) => reporting(() => armed.delete(clientMessageId)),
     disarm: (clientMessageId) => reporting(() => void armed.delete(clientMessageId)),
     bindTurn: (clientMessageId, threadId, turnId, via, answeredAt) =>
@@ -199,8 +202,9 @@ export function createCodexDispatchEchoes(
         entry.answeredAt = answeredAt ?? ++clock
         const receipt = receiptCorrelation.take(clientMessageId, threadId, turnId)
         if (receipt) {
-          armed.delete(clientMessageId)
+          // Before forgetting the send: the receipt reads how it was written.
           onReceipt?.(clientMessageId, receipt)
+          armed.delete(clientMessageId)
         }
         const end = endedTurns.get(turnKey(threadId, turnId)) ?? null
         if (end) {

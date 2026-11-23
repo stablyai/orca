@@ -186,6 +186,27 @@ it('preserves absolute line identities for older messages without UUIDs on first
   ])
 })
 
+it.each(importModes)(
+  'excludes an unterminated record from the Claude source frontier: %s',
+  async (boundedClaude) => {
+    root = await mkdtemp(join(tmpdir(), 'orca-claude-growing-'))
+    const filePath = join(root, 'session.jsonl')
+    await writeFile(
+      filePath,
+      '{"type":"assistant","uuid":"answer","message":{"role":"assistant","content":"Saved answer"}}\n' +
+        '{"type":"progress","uuid":"still-writing","parentUuid":"answer"}'
+    )
+    const imported = await prepareJsonlTranscriptImport({
+      agent: 'claude',
+      transcriptAgent: 'claude',
+      sessionId: 'claude-growing',
+      filePath,
+      boundedClaude
+    })
+    expect(imported).toMatchObject({ ok: true, sourceFrontier: 'answer' })
+  }
+)
+
 it('reads and decodes a bounded recent window despite a large prefix', async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-claude-window-'))
   const filePath = join(root, 'session.jsonl')

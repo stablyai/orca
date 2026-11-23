@@ -1,4 +1,16 @@
+import { setTimeout as delay } from 'node:timers/promises'
+import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import { claudeBuildPermissionMode } from '../permissions/claude-plan-approval-mode'
+import {
+  claudeBypassRefused,
+  claudeInPlan,
+  claudeOwesFullAccessFallback
+} from '../permissions/claude-full-access-refusal'
+import {
+  claimClaudePermissionModeRequest,
+  ClaudePermissionModeUnsettled,
+  setClaudeAllowedPermissionMode
+} from '../permissions/claude-permission-mode-ladder'
 import { claudeStartedUnechoedSend } from '../turns/claude-command-lifecycle'
 import { claudeExecutionObservations } from '../turns/claude-structured-execution-observations'
 import { dispatchClaudeTurn } from '../dispatch/claude-structured-dispatch'
@@ -30,7 +42,13 @@ export async function applyClaudeMessageOptions(
 ): Promise<void> {
   throwIfSignalAborted(signal)
   const model = options.model
-  if (model && session.appliedInputOptions.get('model') !== model) {
+  // Claude owns the model after a refusal fallback until a pick, which is sent even if unchanged.
+  const fallback = session.modelFallback
+  if (
+    model &&
+    (fallback?.picked ||
+      (session.appliedInputOptions.get('model') !== model && model !== fallback?.replaced))
+  ) {
     await waitForPromiseWithSignal(
       setClaudeStructuredOption(session, { key: 'model', value: model }, timeoutMs),
       signal
@@ -61,17 +79,97 @@ export async function applyClaudeMessageOptions(
   }
   throwIfSignalAborted(signal)
   if (options.interactionMode !== undefined) {
-    const mode = options.interactionMode === 'plan' ? 'plan' : claudeBuildPermissionMode(session)
-    await waitForPromiseWithSignal(
-      session.connection.setPermissionMode(mode, { timeoutMs }),
-      signal
-    )
-    session.appliedInputOptions.set('interactionMode', options.interactionMode)
-    if (options.interactionMode === 'default') {
-      session.appliedInputOptions.set('buildPermissionMode', mode)
+    if (options.interactionMode === 'plan') {
+      claimClaudePermissionModeRequest(session)
+      await waitForPromiseWithSignal(
+        session.connection.setPermissionMode('plan', { timeoutMs }),
+        signal
+      )
+      session.appliedInputOptions.set('interactionMode', 'plan')
+    } else {
+      await waitForClaudeStartupSettings(session, signal)
+      const leavingPlan = claudeInPlan(session)
+      const refused = claudeBypassRefused(session)
+      // A refused Full access chat already running its fallback needs no write.
+      const mode =
+        !leavingPlan && refused && !claudeOwesFullAccessFallback(session)
+          ? null
+          : await waitForPromiseWithSignal(
+              writeClaudeBuildMode(session, timeoutMs, !leavingPlan && refused),
+              signal
+            )
+      session.appliedInputOptions.set('interactionMode', options.interactionMode)
+      if (mode !== null) {
+        session.appliedInputOptions.set('buildPermissionMode', mode)
+      }
     }
+  } else {
+    await applyClaudeFullAccessFallback(session, timeoutMs, signal)
   }
   throwIfSignalAborted(signal)
+}
+
+const CLAUDE_STARTUP_SETTINGS_WAIT_MS = 5_000
+
+/** A failed switch leaves Claude's mode unknown, so the recorded fallback goes: the warning waits
+ *  and the next input asks again. It fails the input only where the chat may still be in Plan,
+ *  unless Claude accepted a step out of it, or where the chat picked the mode itself. */
+function writeClaudeBuildMode(
+  session: ClaudeSession,
+  timeoutMs: number | undefined,
+  tolerate: boolean
+): Promise<PermissionMode | null> {
+  return setClaudeAllowedPermissionMode(session, claudeBuildPermissionMode(session), {
+    timeoutMs
+  }).catch((error: unknown) => {
+    if (!tolerate && !(error instanceof ClaudePermissionModeUnsettled)) {
+      throw error
+    }
+    session.appliedInputOptions.delete('buildPermissionMode')
+    return null
+  })
+}
+
+/** A Full access chat's first send waits briefly for the startup settings read that says
+ *  whether Claude allows it, so one write usually settles the mode. */
+async function waitForClaudeStartupSettings(
+  session: ClaudeSession,
+  signal: AbortSignal | undefined
+): Promise<void> {
+  if (
+    session.launchIntent?.permissionMode === 'bypassPermissions' &&
+    session.bypassDisabled === undefined &&
+    !session.firstRootInit &&
+    session.startupSettings
+  ) {
+    await waitForPromiseWithSignal(
+      Promise.race([
+        session.startupSettings,
+        delay(CLAUDE_STARTUP_SETTINGS_WAIT_MS, undefined, { ref: false, signal })
+      ]),
+      signal
+    )
+  }
+}
+
+/** Claude starts a refused Full access chat in its own fallback; the chat's is Approve for me. A
+ *  failed switch leaves the send to run as Claude stands (the next send tries again). */
+export async function applyClaudeFullAccessFallback(
+  session: ClaudeSession,
+  timeoutMs: number | undefined,
+  signal: AbortSignal | undefined
+): Promise<void> {
+  await waitForClaudeStartupSettings(session, signal)
+  if (!claudeOwesFullAccessFallback(session)) {
+    return
+  }
+  const mode = await waitForPromiseWithSignal(
+    writeClaudeBuildMode(session, timeoutMs, true),
+    signal
+  )
+  if (mode !== null) {
+    session.appliedInputOptions.set('buildPermissionMode', mode)
+  }
 }
 
 // Bounded so an unanswered request still lets the steer through.
@@ -142,9 +240,10 @@ export async function dispatchClaudeMessage(
         input.body.from?.orchestration?.message === 'mail-notice'
           ? undefined
           : input.executionOptions
-      if (messageOptions !== undefined) {
-        await applyClaudeMessageOptions(session, messageOptions, timeoutMs, input.signal)
-      }
+      // Claude's refusal mode is no choice of the chat's, so any input moves it to the fallback.
+      await (messageOptions !== undefined
+        ? applyClaudeMessageOptions(session, messageOptions, timeoutMs, input.signal)
+        : applyClaudeFullAccessFallback(session, timeoutMs, input.signal))
       input.signal?.throwIfAborted()
       await input.beforeDispatch?.()
       input.onExecutionSnapshot?.()

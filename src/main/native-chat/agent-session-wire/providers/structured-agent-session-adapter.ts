@@ -96,6 +96,8 @@ export type AgentSessionDispatchOutcome =
   | ({
       state: 'accepted'
       providerIdentity: AgentJournalItemIdentity
+      /** The running turn it joined, which another send opened. */
+      answeredInTurn?: AgentJournalAnsweredTurnIdentity
     } & AgentSessionRanOptionsEvidence)
   /** Transport admission stays pending until provider acknowledgement; elapsed time never proves unknown delivery. */
   | ({ state: 'admitted' } & AgentSessionRanOptionsEvidence)
@@ -316,6 +318,8 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
   ): Promise<void | Readonly<Record<string, string>>>
   /** Opt in only when setOption can update idle metadata without a provider turn. */
   canSetOptionWhileIdle?(input: StructuredAgentSessionSetOptionInput): boolean
+  /** A saved model pick, even of the unchanged value; a child on a provider fallback applies it next turn. */
+  noteModelPick?(input: { sessionId: string; fence: number }): void
   /** Finite live compiler facts for this exact child, without a proposed card. */
   captureMessageSteeringInputs?(input: {
     sessionId: string
