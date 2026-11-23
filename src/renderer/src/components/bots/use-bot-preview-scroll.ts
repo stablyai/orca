@@ -5,6 +5,7 @@ const FACE_SIZE = 20
 const FACE_GAP = 4
 const FACE_STEP = FACE_SIZE + FACE_GAP
 const TRACK_INSET = 4
+const EDGE_WIDTH = FACE_SIZE + 6
 export const PREVIEW_TRACK_HEIGHT = FACE_SIZE + TRACK_INSET * 2
 
 export function botPreviewFaceStart(index: number): number {
@@ -19,11 +20,10 @@ export function useBotPreviewScroll(
   const trackRef = useRef<HTMLSpanElement>(null)
   const [width, setWidth] = useState(0)
   const [range, setRange] = useState({ first: 0, end: 0, anchor: 0, firstFull: 0, endFull: 0 })
-  const badgeWidth = 26 + Math.max(0, String(count).length - 2) * 7
   const totalWidth = count > 0 ? count * FACE_STEP + TRACK_INSET : 0
   const overflow = width > 0 && totalWidth > width
   const trackWidth = overflow
-    ? Math.max(0, Math.floor((width - 2 * (badgeWidth + FACE_GAP) - TRACK_INSET) / FACE_STEP)) *
+    ? Math.max(0, Math.floor((width - 2 * (EDGE_WIDTH + FACE_GAP) - TRACK_INSET) / FACE_STEP)) *
         FACE_STEP +
       TRACK_INSET
     : Math.min(width, totalWidth)
@@ -164,7 +164,7 @@ export function useBotPreviewScroll(
     trackRef,
     trackWidth,
     totalWidth,
-    badgeWidth,
+    badgeWidth: EDGE_WIDTH,
     overflow,
     before: anchor,
     after: width > 0 ? Math.max(0, count - visibleCount - anchor) : 0,

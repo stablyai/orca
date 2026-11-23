@@ -41,20 +41,23 @@ export function BotPreviewEdge({
         ? t('sidebar.cardSlot.working', 'Working')
         : null
   const accessibleLabel = hint ? `${action} · ${hint}` : action
+  const displayCount = count < 100 ? `+${count}` : count < 1000 ? String(count) : '1k+'
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
           aria-label={accessibleLabel}
-          className="pointer-events-auto relative flex aspect-square shrink-0 cursor-pointer items-center justify-center rounded-full bg-muted text-3xs font-medium text-muted-foreground tabular-nums ring-2 ring-sidebar outline-none hover:text-foreground hover:ring-sidebar-ring focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:outline-solid"
+          className="group pointer-events-auto relative flex shrink-0 cursor-pointer items-center justify-center text-3xs font-medium text-muted-foreground tabular-nums outline-none hover:text-foreground focus-visible:z-10"
           style={{ width }}
           onClick={(event) => onPage(direction, event.detail === 0)}
         >
-          {direction === -1 ? <ChevronLeft aria-hidden className="size-2 shrink-0" /> : null}
-          <span className="leading-none tracking-tight">+{count}</span>
-          {direction === 1 ? <ChevronRight aria-hidden className="size-2 shrink-0" /> : null}
-          <BotPreviewPip signal={signal} animateWorking={false} onCounter />
+          {direction === -1 ? <ChevronLeft aria-hidden className="size-1.5 shrink-0" /> : null}
+          <span className="relative flex size-5 shrink-0 items-center justify-center rounded-full bg-muted ring-2 ring-sidebar group-hover:ring-sidebar-ring group-focus-visible:outline-2 group-focus-visible:outline-offset-2 group-focus-visible:outline-ring group-focus-visible:outline-solid">
+            <span className="leading-none tracking-tight">{displayCount}</span>
+            <BotPreviewPip signal={signal} animateWorking={false} onCounter />
+          </span>
+          {direction === 1 ? <ChevronRight aria-hidden className="size-1.5 shrink-0" /> : null}
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom">{accessibleLabel}</TooltipContent>
@@ -87,7 +90,7 @@ export function BotPreviewPip({
       aria-hidden="true"
       className={cn(
         'pointer-events-none absolute z-10 flex size-3 items-center justify-center rounded-full bg-sidebar',
-        onCounter ? 'right-0 -bottom-1.5' : '-right-1 -bottom-1',
+        onCounter ? 'right-0 -bottom-2' : '-right-1 -bottom-1',
         !onCounter && signal === 'attention' && 'size-3.5'
       )}
     >
