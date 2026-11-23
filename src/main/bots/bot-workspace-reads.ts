@@ -17,7 +17,7 @@ import {
 // Matches the shared probe queue's width, so one pass never holds more than its share of it.
 const PASS_PROBES_IN_FLIGHT = 2
 
-/** One pass's path probes: each path once, two at a time, under one deadline for the pass. */
+/** One pass's path probes, two at a time under one deadline for the pass; a worktree is probed once per pass. */
 class PassPathProbes {
   private readonly results = new Map<string, Promise<LocalWorktreePathPresence>>()
   private readonly queued: (() => void)[] = []
@@ -28,19 +28,25 @@ class PassPathProbes {
   presence(pathValue: string): Promise<LocalWorktreePathPresence> {
     let result = this.results.get(pathValue)
     if (!result) {
-      result = new Promise<void>((start) => this.queued.push(start))
-        .then(() => {
-          // A stalled disk ends the rest of the pass as unverifiable, not one timeout per path.
-          this.signal ??= AbortSignal.timeout(LOCAL_WORKTREE_PATH_PROBE_TIMEOUT_MS)
-          return localWorktreePathPresence(pathValue, { signal: this.signal })
-        })
-        .finally(() => {
-          this.inFlight--
-          this.drain()
-        })
+      result = this.fresh(pathValue)
       this.results.set(pathValue, result)
-      this.drain()
     }
+    return result
+  }
+
+  /** A probe started now, through the pass's queue, whatever the pass already knows of this path. */
+  fresh(pathValue: string): Promise<LocalWorktreePathPresence> {
+    const result = new Promise<void>((start) => this.queued.push(start))
+      .then(() => {
+        // A stalled disk ends the rest of the pass as unverifiable, not one timeout per path.
+        this.signal ??= AbortSignal.timeout(LOCAL_WORKTREE_PATH_PROBE_TIMEOUT_MS)
+        return localWorktreePathPresence(pathValue, { signal: this.signal })
+      })
+      .finally(() => {
+        this.inFlight--
+        this.drain()
+      })
+    this.drain()
     return result
   }
 
@@ -72,12 +78,16 @@ export async function localWorktreeProvenGone(
   if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID || parseWslUncPath(worktreePath)) {
     return false
   }
-  const presence = (pathValue: string) =>
-    reads ? reads.paths.presence(pathValue) : localWorktreePathPresence(pathValue)
-  // The worktree after the repository, as a sync check would: a checkout restored meanwhile is seen.
-  const repoPresence = await presence(repo.path)
-  if (repoPresence !== 'directory' && repoPresence !== 'other') {
+  const worktree = await (reads
+    ? reads.paths.presence(worktreePath)
+    : localWorktreePathPresence(worktreePath))
+  if (worktree !== 'missing') {
     return false
   }
-  return (await presence(worktreePath)) === 'missing'
+  // The repository fresh, after the worktree's absence: a drive unplugged meanwhile takes both,
+  // which proves nothing.
+  const repoPresence = await (reads
+    ? reads.paths.fresh(repo.path)
+    : localWorktreePathPresence(repo.path))
+  return repoPresence === 'directory' || repoPresence === 'other'
 }
