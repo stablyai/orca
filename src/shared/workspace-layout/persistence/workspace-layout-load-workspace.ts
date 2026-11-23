@@ -1,4 +1,4 @@
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { checkRunDetailsOwnerScope } from '../../source-control/checks/check-run-details-owner-scope'
 import type { Tab } from '../tab-groups/tab-types'
 import { normalizeTerminalLayoutPtyOwnership } from '../terminal-topology/terminal-layout-pty-ownership'

@@ -9,9 +9,12 @@
 import { win32 } from 'node:path'
 import { readFileSync, realpathSync, statSync } from 'node:fs'
 import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
 import { resolveProjectExecutionRuntime } from '../../../shared/execution-host/project-execution-runtime'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { Project } from '../../../shared/project/project-types'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import type { Repo } from '../../../shared/repository/repo-types'

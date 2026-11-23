@@ -1,6 +1,6 @@
 import type { Store } from '../../persistence/loading-store/store'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
-import { isRepoOnCatalogHost } from '../../../shared/execution-host'
+import { isRepoOnCatalogHost } from '../../../shared/execution-host/execution-host'
 import { getOtherProfileWorktreeIdsForHistoryGc } from '../../orca-profiles/catalog/other-profile-workspace-catalog'
 import {
   addWorkspaceSessionWorktreeOwners,

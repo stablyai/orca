@@ -17,7 +17,7 @@ import { createCodexSessionResumeLaunchPreparation } from '../../codex/history/r
 import { prepareCodexAiVaultSessionResume } from '../../codex/history/resume/codex-ai-vault-session-resume'
 import { resolveHostCodexSessionSourceHome } from '../../codex/history/rollouts/codex-session-source-home'
 import { resolveHostAgentBaseEnvironment } from '../../runtime/agent-session/environment/structured-agent-shell-environment'
-import { isWslHostOrcadProcess } from '../../ipc/wsl-guest-windows-drive-path'
+import { isWslHostOrcadProcess } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 import type { BackendServiceCleanup } from '../../backend/service-composition'
 
 type StructuredLaunchInput = { launchEnv: NodeJS.ProcessEnv }
@@ -30,7 +30,7 @@ type OrcadAccountServices = {
   runtimeDeps: {
     prepareCodexStructuredLaunch: (input: StructuredLaunchInput) => Promise<string | null>
     resolveCodexStructuredLaunchHome: (input: StructuredLaunchInput) => string | null
-    prepareCodexCatalogProbeHome: (homePath: string) => void
+    prepareCodexCatalogProbeHome: (homePath: string) => void | Promise<void>
     prepareAiVaultSessionResume: (
       args: AiVaultPrepareSessionResumeArgs
     ) => Promise<AiVaultPrepareSessionResumeResult>

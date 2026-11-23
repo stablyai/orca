@@ -7,7 +7,7 @@ import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status/co
 import type { AgentStatusState } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusObservation } from '../../../shared/agent-status/contracts/agent-status-observation'
 import type { AgentKind } from '../../../shared/telemetry/schemas/telemetry-property-schemas'
-import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
+import type { LegacyPaneKeyAliasEntry } from '../../../shared/orca-profiles/persisted-state-types'
 import type { CodexRemoteRosterAuthority } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 
@@ -181,6 +181,10 @@ export type AgentPromptSentDedupeEntry = {
 export type NormalizedLocalHook = {
   event: AgentHookEventPayload | null
   onAccepted?: () => void
+  /** A Stop without its text whose transcript normalize skipped; read it off the event loop. */
+  stopTranscriptPath?: string
+  /** A Droid Stop's transcript, read off the event loop for the turn verdict Droid appends after it. */
+  droidVerdictTranscriptPath?: string
 }
 
 export type ServerStatusLineListener = ((event: ClaudeStatusLineRateLimits) => void) | null

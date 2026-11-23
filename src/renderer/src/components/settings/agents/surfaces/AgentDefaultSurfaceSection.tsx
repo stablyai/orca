@@ -2,16 +2,14 @@ import { cancelSettingsListReveal } from '../../section-layout/settings-list-scr
 import { useEffect, useId, type JSX, type ReactNode } from 'react'
 import { Check, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { AgentDefaultSurface } from '../../../../../../shared/native-chat/native-chat-appearance-settings'
-import { normalizeAgentDefaultSurface } from '../../../../../../shared/native-chat/native-chat-providers'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+import type { AgentDefaultSurface } from '../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
+import { normalizeAgentDefaultSurface } from '../../../../../../shared/native-chat/settings/native-chat-providers'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useImmediateMutation } from '@/hooks/useImmediateMutation'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
-import { translate } from '@/i18n/i18n'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
 import { trackAgentDefaultSurfaceChanged } from '../../../feature-tips/feature-tip-telemetry'
@@ -23,27 +21,23 @@ import { AGENT_DEFAULT_SURFACE_SECTION_ID, AGENTS_INSTALLED_SECTION_ID } from '.
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { Button } from '../../../ui/button'
+import { saveAgentDefaultSurface } from '../../../../lib/agent-session/launch/native-chat-provider-choice'
+import type { SettingsHostScope } from '../../host-scope/settings-host-scope'
+import { LOCAL_SETTINGS_HOST_SCOPE } from '../../host-scope/settings-host-scope'
 import {
-  agentsKeepingOwnSurface,
-  followAgentDefaultSurface,
-  saveAgentDefaultSurface
-} from '../../../../lib/agent-session/launch/native-chat-provider-choice'
+  getHostSettingUnsupportedNote,
+  getHostSettingUpdateFailedMessage,
+  useHostSetting,
+  useSettingsHostLabel
+} from '../../host-scope/use-host-setting'
+import {
+  agentSettingsSaveFailed,
+  showKeptSurfaceNotice,
+  type KeptSurfaceWriter
+} from './kept-surface-notice'
 
-function saveFailed(): void {
-  toast.error(
-    translate('settings.agents.localSaveFailed', 'Agent settings could not be saved. Try again.')
-  )
-}
-
-type Writer = {
-  fallbackSettings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
-}
-
-/** After the default changes, names the agents set for themselves to the other surface. */
-function useKeptSurfaceNotice(): (surface: AgentDefaultSurface, writer: Writer) => void {
-  const intlLocale = useIntlLocale()
-  const t = useTranslate()
+/** Settings-owned notice: only while mounted, and dismissed when Settings unmounts. */
+function useKeptSurfaceNotice(): (surface: AgentDefaultSurface, writer: KeptSurfaceWriter) => void {
   const id = useId()
   const mounted = useMountedRef()
   useEffect(
@@ -53,53 +47,9 @@ function useKeptSurfaceNotice(): (surface: AgentDefaultSurface, writer: Writer) 
     [id]
   )
   return (surface, writer) => {
-    const latest = useAppStore.getState().settings ?? writer.fallbackSettings
-    // A failed or superseded write leaves nothing to report.
-    if (!mounted.current || normalizeAgentDefaultSurface(latest.agentDefaultSurface) !== surface) {
-      return
+    if (mounted.current) {
+      showKeptSurfaceNotice({ id, surface, writer })
     }
-    const kept = agentsKeepingOwnSurface(latest, surface)
-    if (kept.length === 0) {
-      toast.dismiss(id)
-      return
-    }
-    const values = {
-      agents: new Intl.ListFormat(intlLocale, { type: 'conjunction' }).format(
-        kept.map((agent) => getAgentLabel(agent))
-      ),
-      count: kept.length
-    }
-    const chat = surface === 'chat'
-    toast.success(
-      chat
-        ? t('settings.agents.defaultSurfaceNowChat', 'Agents now open as chats')
-        : t('settings.agents.defaultSurfaceNowTerminal', 'Agents now open in the terminal'),
-      {
-        id,
-        description: chat
-          ? t(
-              'settings.agents.defaultSurfaceKeptTerminal',
-              '{{agents}} stay in the terminal, as you set.',
-              {
-                ...values,
-                count: values.count,
-                defaultValue_one: '{{agents}} stays in the terminal, as you set.'
-              }
-            )
-          : t('settings.agents.defaultSurfaceKeptChat', '{{agents}} stay as chats, as you set.', {
-              ...values,
-              count: values.count,
-              defaultValue_one: '{{agents}} stays as a chat, as you set.'
-            }),
-        action: {
-          label: chat
-            ? t('settings.agents.defaultSurfaceSetAllChat', 'Set all to Chat')
-            : t('settings.agents.defaultSurfaceSetAllTerminal', 'Set all to Terminal'),
-          onClick: () =>
-            void followAgentDefaultSurface({ agents: kept, surface, ...writer }).catch(saveFailed)
-        }
-      }
-    )
   }
 }
 
@@ -110,7 +60,8 @@ function SurfaceTile({
   title,
   description,
   preview,
-  onSelect
+  onSelect,
+  selectOnClick = false
 }: {
   name: string
   checked: boolean
@@ -119,6 +70,8 @@ function SurfaceTile({
   description: string
   preview: ReactNode
   onSelect: () => void
+  /** Saves even the checked tile, so a server's untouched default can be confirmed as a choice. */
+  selectOnClick?: boolean
 }): JSX.Element {
   return (
     <label
@@ -135,7 +88,8 @@ function SurfaceTile({
         name={name}
         checked={checked}
         disabled={pending}
-        onChange={onSelect}
+        onChange={selectOnClick ? () => {} : onSelect}
+        onClick={selectOnClick ? onSelect : undefined}
         className="sr-only"
       />
       <div aria-hidden className="h-[292px] rounded-lg bg-muted/70 p-3">
@@ -165,12 +119,15 @@ function SurfaceTile({
   )
 }
 
-/** This computer's default surface; agents set on their own Installed row keep their choice. */
+/** The picked host's default surface; on This computer, agents set on their own Installed row keep their choice. */
 export function AgentDefaultSurfaceSection({
   settings,
+  hostScope = LOCAL_SETTINGS_HOST_SCOPE,
   presentation = 'tiles'
 }: {
   settings: GlobalSettings
+  /** A server's value only decides the agents that server starts itself. */
+  hostScope?: SettingsHostScope
   presentation?: 'tiles' | 'switch'
 }): JSX.Element {
   const t = useTranslate()
@@ -178,22 +135,40 @@ export function AgentDefaultSurfaceSection({
   const notify = useKeptSurfaceNotice()
   const updateSettings = useAppStore((s) => s.updateSettingsOrThrow)
   const mutation = useImmediateMutation()
-  const pending = mutation.isPending('default-surface')
-  const surface = normalizeAgentDefaultSurface(settings.agentDefaultSurface)
+  const hostLabel = useSettingsHostLabel(hostScope.target)
+  const hostSurface = useHostSetting({
+    owner: hostScope.target,
+    settingKey: 'agentDefaultSurface',
+    localSettings: settings,
+    updateLocalSettings: updateSettings,
+    updateFailedMessage: getHostSettingUpdateFailedMessage(hostLabel, t)
+  })
+  const onServer = hostScope.target.kind === 'environment'
+  const serverReady = hostScope.available && hostSurface.setting.state === 'ready'
+  const pending = mutation.isPending('default-surface') || (onServer && !serverReady)
+  const surface = onServer
+    ? hostSurface.setting.state === 'ready'
+      ? hostSurface.setting.value
+      : null
+    : normalizeAgentDefaultSurface(settings.agentDefaultSurface)
   const title = t('settings.agents.defaultSurfaceTitle', 'Open agents as')
   const choose = (next: AgentDefaultSurface): void => {
+    if (onServer) {
+      void hostSurface.update(next)
+      return
+    }
     const writer = { fallbackSettings: settings, updateSettings }
     void mutation.run('default-surface', {
       mutate: () => saveAgentDefaultSurface({ surface: next, ...writer }),
       onSuccess: () => {
         trackAgentDefaultSurfaceChanged({
-          from_mode: surface,
+          from_mode: normalizeAgentDefaultSurface(settings.agentDefaultSurface),
           to_mode: next,
           source: 'settings'
         })
         notify(next, writer)
       },
-      onError: saveFailed
+      onError: agentSettingsSaveFailed
     })
   }
   const showInstalledList = (): void => {
@@ -201,7 +176,7 @@ export function AgentDefaultSurfaceSection({
     const list = document.getElementById(AGENTS_INSTALLED_SECTION_ID)
     list?.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'start' })
     const row = list
-      ?.querySelector('[data-settings-scroll-list]')
+      ?.querySelector('[data-settings-group-body]')
       ?.querySelector<HTMLElement>('[data-agent-opens-as]')
     row?.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'nearest' })
     const choice =
@@ -250,10 +225,20 @@ export function AgentDefaultSurfaceSection({
     <div id={AGENT_DEFAULT_SURFACE_SECTION_ID} className="@container scroll-mt-8">
       <SettingsGroup
         title={title}
-        description={t(
-          'settings.agents.defaultSurfaceDescription',
-          'The default for agents on this computer.'
-        )}
+        description={
+          !onServer
+            ? t(
+                'settings.agents.defaultSurfaceDescription',
+                'The default for agents on this computer.'
+              )
+            : hostSurface.setting.state === 'unsupported'
+              ? getHostSettingUnsupportedNote(hostLabel, t)
+              : t(
+                  'settings.agents.defaultSurfaceServerDescription',
+                  "The default for agents {{host}} starts itself, such as from its CLI or orchestration workers. Agents you open from this computer follow This computer's choice.",
+                  { host: hostLabel }
+                )
+        }
         bodyClassName="py-4"
       >
         <div
@@ -273,6 +258,7 @@ export function AgentDefaultSurfaceSection({
             )}
             preview={<ChatSurfacePreview />}
             onSelect={() => choose('chat')}
+            selectOnClick={onServer}
           />
           <SurfaceTile
             name={name}
@@ -285,18 +271,21 @@ export function AgentDefaultSurfaceSection({
             )}
             preview={<TerminalSurfacePreview settings={settings} />}
             onSelect={() => choose('terminal')}
+            selectOnClick={onServer}
           />
         </div>
-        <div className="mt-3 flex justify-end">
-          <button
-            type="button"
-            onClick={showInstalledList}
-            className="inline-flex items-center gap-0.5 rounded-sm text-[13px] font-medium underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          >
-            {t('settings.agents.defaultSurfacePerAgent', 'Choose per agent')}
-            <ChevronRight className="size-3.5" />
-          </button>
-        </div>
+        {onServer ? null : (
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              onClick={showInstalledList}
+              className="inline-flex items-center gap-0.5 rounded-sm text-[13px] font-medium underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              {t('settings.agents.defaultSurfacePerAgent', 'Choose per agent')}
+              <ChevronRight className="size-3.5" />
+            </button>
+          </div>
+        )}
       </SettingsGroup>
     </div>
   )

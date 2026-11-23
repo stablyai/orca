@@ -1,4 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
@@ -79,7 +80,7 @@ async function terminateProcessTree(child: ChildProcess): Promise<void> {
     return
   }
   if (process.platform === 'win32') {
-    spawnSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
+    spawnSync(windowsSystem32Binary('taskkill.exe'), ['/pid', String(child.pid), '/t', '/f'], {
       stdio: 'ignore',
       windowsHide: true
     })

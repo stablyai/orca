@@ -94,11 +94,6 @@ function parseCapturedPath(stdout: string, pathDelimiter: string = delimiter): s
   ]
 }
 
-/** @internal - tests need a launch PATH the runner's own environment cannot supply. */
-export function _setLaunchPathForTests(value: string, key = 'PATH'): void {
-  launchPathOverride = { key, value }
-}
-
 function isLaunchPathKey(name: string, key: string): boolean {
   return process.platform === 'win32' ? name.toLowerCase() === key.toLowerCase() : name === key
 }

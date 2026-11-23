@@ -129,7 +129,12 @@ export type UpdateStatus = (
       /** Optional so older paired clients retain the diagnostic and install retry. */
       installBlock?: UpdateInstallBlock
     }
-) & { source?: UpdateSource }
+) & {
+  source?: UpdateSource
+  automaticDownload?: boolean
+  /** macOS desktop has staged this version for installation on a normal quit. */
+  installOnQuit?: true
+}
 
 export type ReleaseBuildListResult =
   | { ok: true; channel: ReleaseChannel; builds: ReleaseBuild[] }

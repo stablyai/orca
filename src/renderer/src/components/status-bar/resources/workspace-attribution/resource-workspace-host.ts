@@ -1,4 +1,4 @@
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { MergeContext } from './resource-usage-merge-types'

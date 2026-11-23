@@ -1,0 +1,89 @@
+// @vitest-environment happy-dom
+import { act, cleanup, renderHook } from '@testing-library/react'
+import { afterEach, expect, it, vi } from 'vitest'
+import type { WorkerDockSnapshot } from '../../../../../../../shared/orchestration/dock/worker-dock'
+import { useWorkerDockColdSeed, useWorkerDockFeed } from './worker-dock-feed'
+
+const rpc = vi.hoisted(() => ({
+  event: (_value: unknown) => {},
+  resolve: (_value: unknown) => {},
+  reject: (_error: unknown) => {},
+  calls: 0
+}))
+vi.mock('@/runtime/rpc/subscriptions/runtime-rpc-subscribe', () => ({
+  subscribeRuntimeRpc: async (
+    _target: unknown,
+    _method: unknown,
+    _params: unknown,
+    observer: { onEvent: (value: unknown) => void }
+  ) => {
+    rpc.event = observer.onEvent
+    return { unsubscribe: () => {} }
+  }
+}))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: () =>
+    new Promise((resolve, reject) => {
+      rpc.calls++
+      rpc.resolve = resolve
+      rpc.reject = reject
+    })
+}))
+vi.mock('@/lib/window-activity/window-park-visibility', () => ({
+  getWindowParkVisible: () => true,
+  subscribeWindowParkVisibility: () => () => {}
+}))
+afterEach(cleanup)
+
+it('keeps a newer streamed settlement when an older detail window arrives later', async () => {
+  const target = { kind: 'local' } as const
+  const presence = { revision: 'feed-test:1', open: true }
+  const hook = renderHook(() =>
+    useWorkerDockFeed(target, '11111111-1111-4111-8111-111111111111', true, presence)
+  )
+  const snapshot = (revision: number): WorkerDockSnapshot => ({
+    revision,
+    expired: false,
+    identities: [],
+    rows: [],
+    results: [],
+    anchor: null
+  })
+  await act(async () => {
+    rpc.event(snapshot(2))
+  })
+  let loading: Promise<void> | undefined
+  act(() => {
+    loading = hook.result.current.loadWindow?.('old-worker')
+  })
+  await act(async () => {
+    rpc.event(snapshot(3))
+  })
+  await act(async () => {
+    rpc.resolve(snapshot(2))
+    await loading
+  })
+  expect(hook.result.current.snapshot?.revision).toBe(3)
+  expect(hook.result.current.available).toBe(true)
+})
+
+it('seeds a source again after a failed cold read, and never after one that succeeded', async () => {
+  const target = { kind: 'local' } as const
+  const session = '22222222-2222-4222-8222-222222222222'
+  const mount = () => renderHook(() => useWorkerDockColdSeed(target, session, true))
+  rpc.calls = 0
+  let hook = mount()
+  expect(rpc.calls).toBe(1)
+  await act(async () => {
+    rpc.reject(new Error('runtime restarting'))
+  })
+  hook.unmount()
+  hook = mount()
+  expect(rpc.calls).toBe(2)
+  await act(async () => {
+    rpc.resolve({})
+  })
+  hook.unmount()
+  mount()
+  expect(rpc.calls).toBe(2)
+})

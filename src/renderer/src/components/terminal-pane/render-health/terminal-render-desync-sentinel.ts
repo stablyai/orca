@@ -227,17 +227,6 @@ async function persistEntry(
   healedCaptureTimeoutIds.add(timeoutId)
 }
 
-export function stopTerminalRenderDesyncSentinelForTesting(): void {
-  stopRenderDesyncSampleBurst()
-  missingHistoryByPane.clear()
-  pendingPaneKeys.clear()
-  for (const timeoutId of healedCaptureTimeoutIds) {
-    clearTimeout(timeoutId)
-  }
-  healedCaptureTimeoutIds.clear()
-  evidence.length = 0
-}
-
 export function startRenderDesyncSampleBurst(terminal: unknown): void {
   stopRenderDesyncSampleBurst()
   burstTerminal = terminal

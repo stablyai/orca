@@ -1,6 +1,6 @@
 // Build main-owned frame slices through Serializer/restore builders (E2a); global selection stays window-owned, remote server workspaces mirror-owned. Sleeping/closed records, default marks and startup reattach remain outside frames.
 
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import type {
   CarriedSessionFields,
   DesktopLayoutView,

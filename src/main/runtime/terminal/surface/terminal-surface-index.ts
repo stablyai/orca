@@ -4,13 +4,13 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type {
   RuntimeSyncedLeaf,
   RuntimeSyncedTab,
   RuntimeSyncWindowGraph
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
+import type { LoadedWorkspaceLayoutRead } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
 import type {
   LayoutTab,
   WorkspaceLayout
@@ -27,9 +27,13 @@ import {
 import { projectRuntimeSurfaces } from '../records/runtime-leaf-record-projection'
 import type { WorkspaceLayoutReads } from './workspace-layout-stream'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { loadChatTabLayout } from '../../agent-session/agent-session-tab-layout'
+import { loadChatTabLayout } from '../../session-tabs/chat/agent-session-tab-layout'
+import {
+  projectedWorkspacesByWorktree,
+  type ProjectedWorkspace
+} from './projected-workspaces-by-worktree'
 
-type LoadedPartition = Pick<LoadedWorkspaceLayout, 'layout' | 'desktopView' | 'facts'>
+type LoadedPartition = LoadedWorkspaceLayoutRead
 
 export type MainPaneFacts = { binding: string; sleeping: boolean; incarnationId?: string }
 
@@ -53,12 +57,13 @@ export class TerminalSurfaceIndex {
   private current: MainTerminalSurfaces | null = null
   private currentJson = ''
   /** The loaded partitions `current` was projected from: the projection's own cached objects. */
-  private projectedFrom: (LoadedWorkspaceLayout | null)[] = []
-  private projectedHostIds: readonly ExecutionHostId[] = []
+  private projectedFrom: (LoadedWorkspaceLayoutRead | null)[] = []
   private projectedHomes = ''
   private projectedTitles: boolean | null = null
   /** Workspace key → its home partition, as of the last projection. */
   private routes = new Map<string, ExecutionHostId | null>()
+  /** Worktree id → the first workspace its home partition holds for it in the last projection. */
+  private projectedWorkspaces = new Map<string, ProjectedWorkspace>()
   private routesStale = true
 
   constructor(
@@ -129,8 +134,8 @@ export class TerminalSurfaceIndex {
     }
     this.projectedTitles = titles
     this.projectedFrom = loaded
-    this.projectedHostIds = hostIds
     this.projectedHomes = homes
+    this.projectedWorkspaces = projectedWorkspacesByWorktree(loaded, hostIds, this.routes)
     const next = this.project(hostIds, loaded)
     const json = JSON.stringify({
       tabs: next.tabs,
@@ -147,7 +152,7 @@ export class TerminalSurfaceIndex {
 
   private project(
     hostIds: readonly ExecutionHostId[],
-    loaded: readonly (LoadedWorkspaceLayout | null)[]
+    loaded: readonly (LoadedWorkspaceLayoutRead | null)[]
   ): MainTerminalSurfaces {
     const partitions: LoadedPartition[] = []
     const worktreeIds = new Set<string>()
@@ -239,24 +244,18 @@ export class TerminalSurfaceIndex {
 
   /** Main-owned rows from the partitions last projected: reads no session. */
   lastSessionTabsOf(worktreeId: string): ProjectedSessionTabs | null {
-    if (!this.current?.worktreeIds.has(worktreeId)) {
-      return null
-    }
-    for (const [index, partition] of this.projectedFrom.entries()) {
-      const hostId = this.projectedHostIds[index]
-      for (const [key, workspace] of Object.entries(partition?.layout.workspaces ?? {})) {
-        if (partition && workspace.worktreeId === worktreeId && this.routes.get(key) === hostId) {
-          return projectSessionTabs(
-            key,
-            workspace,
-            partition.desktopView,
-            partition.facts,
-            this.deps.generatedTitlesEnabled()
-          )
-        }
-      }
-    }
-    return null
+    const found = this.current?.worktreeIds.has(worktreeId)
+      ? this.projectedWorkspaces.get(worktreeId)
+      : undefined
+    return found
+      ? projectSessionTabs(
+          found.key,
+          found.workspace,
+          found.desktopView,
+          found.facts,
+          this.deps.generatedTitlesEnabled()
+        )
+      : null
   }
 
   private homeOf(key: string): ExecutionHostId | null {

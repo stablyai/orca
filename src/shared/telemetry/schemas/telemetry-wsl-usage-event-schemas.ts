@@ -31,7 +31,8 @@ export const wslUsageSnapshotSchema = z
     /** False when the distro registry could not be read, so the distro buckets mean "unknown", not 0. */
     distro_registry_readable: z.boolean(),
     distros_installed: countBucketSchema,
-    distros_running: countBucketSchema,
+    /** Omitted when running state wasn't probed (no WSL project). Optional, so older payloads validate. */
+    distros_running: countBucketSchema.optional(),
     distros_wsl1: countBucketSchema,
     distros_wsl2: countBucketSchema,
     projects_wsl_total: countBucketSchema,

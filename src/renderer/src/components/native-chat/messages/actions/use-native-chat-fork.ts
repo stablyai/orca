@@ -4,11 +4,11 @@ import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-c
 import {
   AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
-} from '../../../../../../shared/agent-session/agent-session-create-capabilities'
+} from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import {
   agentSessionContextFloorSequence,
   latestAgentSessionContextClearSequence
-} from '../../../../../../shared/agent-session/agent-session-context-clear'
+} from '../../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import type { AgentJournalCursor } from '../../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionLatestTurn } from '../../../../../../shared/agent-session/agent-session-wire'
 import type {
@@ -25,7 +25,7 @@ import {
   nativeChatForkSupport,
   nativeChatLatestForkItemId,
   type NativeChatForkSupport
-} from '../../../../../../shared/native-chat/native-chat-fork-offer'
+} from '../../../../../../shared/native-chat/transcript/turns/native-chat-fork-offer'
 import {
   launchNativeChatFork,
   nativeChatForkSurfaceAddress,

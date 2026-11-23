@@ -3,20 +3,25 @@ import {
   NotificationAttentionReadFrontiers,
   notificationWasAcknowledged
 } from '../../../../shared/notifications/notification-attention-acknowledgement'
-import type { NotificationAttentionAcknowledgement } from '../../../../shared/notifications/notification-settings-types'
+import type {
+  NotificationAttentionAcknowledgement,
+  NotificationSettings
+} from '../../../../shared/notifications/notification-settings-types'
 import { reserveNotificationCooldown } from '../../../../shared/notifications/notification-burst-cooldown'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { AgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type {
   StructuredAttentionOrigin,
   StructuredAttentionState
-} from '../../../../shared/agent-session/agent-session-attention'
+} from '../../../../shared/agent-session/view/agent-session-attention'
 import type {
   MobilePushTestResult,
   MobilePushRegisterInput,
   MobilePushRegisterResult
 } from '../../../../shared/notifications/mobile-push-contract'
 import { MobileNotificationReplayBuffer } from './mobile-notification-replay'
+// Shared contract, not the dispatcher: phones typecheck this file and must not pull in Node timers.
+import type { NotificationPushCoverageRequest as PushCoverageRequest } from '../../../../shared/rpc-contract/notifications/notifications-params'
 import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import { MobileNotificationDismissalStore } from './mobile-notification-dismissal-store'
@@ -65,9 +70,25 @@ export type MobilePushRegistrar = {
   test(deviceId: string): Promise<MobilePushTestResult>
   register(input: MobilePushRegisterInput): Promise<MobilePushRegisterResult>
   unregister(deviceId: string): Promise<{ unregistered: boolean }>
+  coveredTokenDigests(request: PushCoverageRequest): Promise<string[]>
+}
+
+/** Host news for its owner with no agent turn behind it; `id` keys its cooldown and its phone notice. */
+export type OwnerNotice = {
+  id: string
+  title: string
+  body: string
+  /** Where a phone opens on tap. */
+  worktreeId?: string
+  paneKey?: string
+  /** False when the phone already hears it another way, like a failed turn's own push. */
+  phone?: false
+  /** False when this host's windows already show it, like an access request's toast. */
+  desktop?: false
 }
 
 export class RuntimeMobileNotificationController {
+  private readonly ownerNoticeCooldown = new Map<string, number>()
   private readonly attentionReads = new NotificationAttentionReadFrontiers()
   private readonly listeners = new Set<(event: MobileNotificationEvent) => void>()
   private readonly legacyCooldown = new Map<string, number>()
@@ -114,6 +135,11 @@ export class RuntimeMobileNotificationController {
 
   async unregisterPushDevice(deviceId: string): Promise<{ unregistered: boolean }> {
     return (await this.pushRegistrar?.unregister(deviceId)) ?? { unregistered: false }
+  }
+
+  /** The subset of these phones this host pushes itself; empty when it pushes none. */
+  async coveredPushTokenDigests(request: PushCoverageRequest): Promise<string[]> {
+    return (await this.pushRegistrar?.coveredTokenDigests(request)) ?? []
   }
 
   /** `bindForget` runs for a connection without a live report, before it is recorded. */
@@ -268,5 +294,44 @@ export class RuntimeMobileNotificationController {
     }
     this.dispatch({ type: 'notification', source: 'plugin', title, body })
     return { delivered }
+  }
+
+  /**
+   * A banner here and a push to phones, under the notifications switch, once per cooldown for each id.
+   * Phones get the 'plugin' source, which every gateway takes and which carries no agent state.
+   */
+  dispatchOwnerNotice(
+    notice: OwnerNotice,
+    settings: Pick<NotificationSettings, 'enabled'> | undefined
+  ): void {
+    const now = Date.now()
+    if (
+      settings?.enabled === false ||
+      !reserveNotificationCooldown(this.ownerNoticeCooldown, notice.id, now)
+    ) {
+      return
+    }
+    const { id, title, body, worktreeId, paneKey } = notice
+    if (notice.desktop !== false) {
+      try {
+        getRuntimeDesktopSurface().showNotification({ title, body })
+      } catch {
+        // Headless runtimes still relay the notice to phones.
+      }
+    }
+    if (notice.phone === false) {
+      return
+    }
+    this.dispatch({
+      type: 'notification',
+      emittedAt: now,
+      source: 'plugin',
+      title,
+      body,
+      ...(worktreeId ? { worktreeId } : {}),
+      ...(paneKey ? { paneKey } : {}),
+      notificationId: id,
+      attentionKey: id
+    })
   }
 }

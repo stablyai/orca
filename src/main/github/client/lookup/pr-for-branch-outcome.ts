@@ -34,7 +34,7 @@ import {
   hostedReviewRepoScope,
   scopeGeneration
 } from '../../../source-control/hosted-review-scope-generations'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   completePRBranchRead,
   pendingPRBranchRead,
@@ -271,7 +271,8 @@ export async function preparePRBranchRead(
           throwUnlessRetentionRefused(error)
           return requireRetention ? null : readCore(false, settle)
         })
-      const request = { repoPath, branch, linkedPRNumber, connectionId, localGitOptions }
+      const target = { repoPath, branch, linkedPRNumber, connectionId, localGitOptions }
+      const request = { ...target, linkedPRUrl: options.linkedPRUrl }
       const prepared: PreparedPRBranchRead = {
         key,
         matchesRequest,

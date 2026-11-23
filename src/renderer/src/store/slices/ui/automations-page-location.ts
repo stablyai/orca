@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { WorktreeNavHistoryEntry } from './workspace-navigation-history'
 
 /** Where a run page was opened from; Escape returns there. */

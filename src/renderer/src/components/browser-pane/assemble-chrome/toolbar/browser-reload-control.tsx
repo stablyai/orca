@@ -45,9 +45,8 @@ export function BrowserReloadControl({
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7"
+              size="icon-xs"
+              variant="muted-field-icon"
               aria-label={label}
               // Prevent Radix left-click opening so the primary action remains reload and only right-click opens the menu.
               onPointerDown={(e) => {
@@ -68,7 +67,7 @@ export function BrowserReloadControl({
                 onMenuOpenChange(true)
               }}
             >
-              {showStop ? <X className="size-4" /> : <RefreshCw className="size-4" />}
+              {showStop ? <X className="size-3.5" /> : <RefreshCw className="size-3.5" />}
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>

@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { createFloatingWorkspaceTerminalTab } from '@/components/floating-terminal/workspace/floating-workspace-tab-creation'
 import { revealFloatingWorkspacePanel } from '@/components/floating-terminal/workspace/floating-workspace-panel-reveal'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'

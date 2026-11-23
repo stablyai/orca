@@ -1,4 +1,4 @@
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { composeWorktreeId } from '../../../../shared/worktree/id'

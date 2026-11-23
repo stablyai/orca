@@ -1,5 +1,5 @@
-import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
-import { compareDisplayName } from '@/lib/workspace/display/worktree-display-name-order'
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
+import { compareDisplayName } from '../../../../../../shared/worktree/display-name-order'
 import { detectAgentStatusFromTitle } from '../../../../../../shared/agent-status/title/agent-title-status'
 import {
   isAgentStatusFresh,

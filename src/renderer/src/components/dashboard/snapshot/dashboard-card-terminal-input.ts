@@ -1,11 +1,12 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { DashboardCardTerminalInput } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { parseAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import '@/lib/workspace/ownership/connection-context'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
@@ -28,7 +29,6 @@ export type DashboardCardTerminalInputState = Pick<
   | 'settings'
   | 'sshConnectionStates'
   | 'sshStateByEnvironment'
-  | 'runtimeStatusByEnvironmentId'
   | 'restoredRuntimeHostIdByWorkspaceSessionKey'
   | 'runtimeEnvironments'
   | 'runtimeEnvironmentCatalogHydrated'
@@ -36,7 +36,7 @@ export type DashboardCardTerminalInputState = Pick<
   | 'paneForegroundAgentByPaneKey'
   | 'agentStatusByPaneKey'
   | 'agentLaunchConfigByPaneKey'
->
+> & { runtimeStatusByEnvironmentId: RuntimeStatuses }
 
 const EMPTY_STATUSES = acceptedAgentStatuses()
 const EMPTY_RECORD = {} as Record<string, never>
@@ -104,6 +104,7 @@ export function resolveDashboardCardTerminalInput(
   const hostPlatform = resolveTerminalInputHostPlatform({
     clientPlatform: args.clientPlatform,
     state,
+    statuses: state.runtimeStatusByEnvironmentId,
     worktreeId: args.worktreeId,
     transport: {
       getConnectionId: () => connectionId,

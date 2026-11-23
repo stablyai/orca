@@ -1,7 +1,7 @@
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { isLegacyAgentSessionAccountHome } from '../../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 
 export type SessionAccountSource = Pick<

@@ -1,11 +1,11 @@
 import type { PersistedAutomationHostFilter } from '../automations/ownership/automation-host-filter'
-import type { PersistedMobileClientTabSelections } from '../persisted-state-types'
+import type { PersistedMobileClientTabSelections } from '../orca-profiles/persisted-state-types'
 import type {
   ManualRepoOrderEntry,
   VisibleWorkspaceHostIds,
   WorkspaceHostOrder,
   WorkspaceHostScope
-} from '../ui-chrome-types'
+} from '../ui-chrome/ui-chrome-types'
 import type { SavedPortForward } from '../remote-runtime/ssh/ssh-types'
 import {
   parseClientHostedBrowserCloseIntents,

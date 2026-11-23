@@ -3,8 +3,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
-import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
@@ -13,7 +13,7 @@ import type { LastActiveCycleWorkspace, SidebarWorkspacePreview } from './worktr
 import { resolveCycledWorkspaceRow } from './worktree-keyboard-cycle'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { focusActiveWorkspaceSurfaceFromSidebar } from './focus-workspace-surface'
+import { focusActiveWorkspaceSurfaceFromSidebar, focusProjects } from './focus-workspace-surface'
 import type { WorktreeContextMenuDeleteIntent } from '../../workspace-actions/context-menu/worktree-context-menu-delete-intent'
 import { useSidebarWorkspaceDeleteKeyboard } from './use-sidebar-workspace-delete-keyboard'
 import { textInputOwnsComposition } from '../../../../../../shared/keybindings/text-input-shortcut-policy'
@@ -201,9 +201,7 @@ export function useWorktreeListKeyboardNavigation(args: {
         !textFieldClaimsActionKey(e, 'sidebar.focusWorktreeList') &&
         !hasVisibleOverlay()
       ) {
-        scrollRef.current?.focus()
-        // A terminal that finishes mounting after this shortcut must not take the keys back.
-        scrollRef.current?.setAttribute('data-keyboard-navigation', '')
+        focusProjects(() => scrollRef.current)
         e.preventDefault()
         return
       }

@@ -12,7 +12,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { isPathInsideOrEqual } from '../../../shared/file-access/cross-platform-path'
 import {
   AI_VAULT_AGENT_SOURCES,

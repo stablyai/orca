@@ -6,9 +6,11 @@ import { hangDetectionMarkerPath } from './hang-detection-marker'
 import { resolveHangWatchdogWorkerPath } from './hang-watchdog-worker-path'
 import { getTraceFilePath, resolveObservabilityConsent } from '../observability'
 import { nativeHangCaptureDirectory } from './native-hang-capture-store'
+import { recordRecoveredMainThreadStall } from './recovered-stall-trace'
 import {
   HANG_WATCHDOG_CHECK_INTERVAL_MS,
   HANG_WATCHDOG_HEARTBEAT_INTERVAL_MS,
+  HANG_WATCHDOG_STALL_MS,
   HANG_WATCHDOG_TIMEOUT_MS,
   type HangWatchdogWorkerData,
   type HangWatchdogToMainMessage,
@@ -54,6 +56,7 @@ export function installMainThreadHangWatchdog(options: {
       osVersion: os.version()
     },
     timeoutMs: positiveTiming(process.env.ORCA_HANG_WATCHDOG_TIMEOUT_MS, HANG_WATCHDOG_TIMEOUT_MS),
+    stallMs: positiveTiming(process.env.ORCA_HANG_WATCHDOG_STALL_MS, HANG_WATCHDOG_STALL_MS),
     checkIntervalMs: positiveTiming(
       process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS,
       HANG_WATCHDOG_CHECK_INTERVAL_MS
@@ -71,7 +74,7 @@ export function installMainThreadHangWatchdog(options: {
   }
   let stopped = false
   const postMessage = (message: MainToHangWatchdogWorkerMessage): void => {
-    if (stopped && message.type !== 'shutdown' && message.type !== 'capture-drain-ack') {
+    if (stopped && message.type !== 'shutdown') {
       return
     }
     try {
@@ -82,11 +85,11 @@ export function installMainThreadHangWatchdog(options: {
   }
   worker.on('message', (message: HangWatchdogToMainMessage) => {
     if (
-      message?.type === 'capture-drain' &&
-      typeof message.token === 'string' &&
-      message.token.length <= 80
+      message?.type === 'stall-recovered' &&
+      Number.isFinite(message.unresponsiveMs) &&
+      Number.isFinite(message.endedAt)
     ) {
-      setImmediate(() => postMessage({ type: 'capture-drain-ack', token: message.token }))
+      recordRecoveredMainThreadStall(message)
     }
   })
   const powerEvents: NodeJS.EventEmitter = powerMonitor

@@ -9,8 +9,8 @@ import {
   worktreeWorkspaceKey
 } from '../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import type { PersistedState } from '../../shared/persisted-state-types'
-import { getDefaultPersistedState } from '../../shared/constants'
+import type { PersistedState } from '../../shared/orca-profiles/persisted-state-types'
+import { getDefaultPersistedState } from '../../shared/orca-profiles/constants'
 import type { SshRemotePtyLease } from '../../shared/remote-runtime/ssh/ssh-types'
 import { hydrateWorktreeMetaAliasProjection } from './loading-store/worktree-metadata/worktree-meta-alias-projection'
 import { Store } from './loading-store/store'
@@ -84,7 +84,9 @@ export function readPersistedStateJson(path = dataFile(), profileId = 'persisten
   }
 }
 
-export function createStore(options: Pick<StoreRuntimeOptions, 'paneShellPath'> = {}): Store {
+export function createStore(
+  options: Pick<StoreRuntimeOptions, 'paneShellPath' | 'storageAuthority'> = {}
+): Store {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
   return createSqliteTestStore(Store, { ...options, dataFile: dataFile() })
@@ -132,7 +134,7 @@ export function readPersistedState(
 }
 
 /** Restore aliases omitted by serialization, as Store.load does; use readPersistedState for raw state. */
-export function readDataFile(): unknown {
+export function readDataFile(): PersistedState {
   const parsed = readPersistedState()
   hydrateWorktreeMetaAliasProjection(parsed)
   return parsed

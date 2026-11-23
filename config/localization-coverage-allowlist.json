@@ -126,13 +126,6 @@
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/sidebar/workspace-card/metadata/worktree-card-meta-row.tsx",
-    "kind": "jsx-attribute:label",
-    "text": "sidebar",
-    "dynamic": false,
-    "count": 1
-  },
-  {
     "filePath": "src/renderer/src/components/onboarding/OnboardingLanguageSwitcher.tsx",
     "kind": "jsx-text",
     "text": "Language",
@@ -157,6 +150,48 @@
     "filePath": "src/renderer/src/components/settings/appearance/chat/ChatFontFamilySetting.tsx",
     "kind": "jsx-text",
     "text": "fontFamily",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/bots/bot-connectors.ts",
+    "kind": "object-property:label",
+    "text": "Slack",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/bots/bot-connectors.ts",
+    "kind": "object-property:label",
+    "text": "Discord",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/bots/bot-connectors.ts",
+    "kind": "object-property:label",
+    "text": "Google",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/bots/bot-connectors.ts",
+    "kind": "object-property:label",
+    "text": "Linear",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/bots/bot-connectors.ts",
+    "kind": "object-property:label",
+    "text": "GitHub",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/bots/BotMemoryList.tsx",
+    "kind": "jsx-text",
+    "text": "MEMORY.md",
     "dynamic": false,
     "count": 1
   },
@@ -264,5 +299,137 @@
     "text": "Switch back to",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/bot-create-offer-view.ts",
+    "kind": "object-property:label",
+    "text": "watches",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/bot-create-offer-view.ts",
+    "kind": "object-property:label",
+    "text": "does",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/bot-create-offer-view.ts",
+    "kind": "object-property:label",
+    "text": "reports",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/bot-create-offer-view.ts",
+    "kind": "object-property:label",
+    "text": "willPropose",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/bot-create-offer-view.ts",
+    "kind": "object-property:label",
+    "text": "takesOver",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/bot-create-offer-view.ts",
+    "kind": "object-property:label",
+    "text": "template",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/bot-mcp-apps.ts",
+    "kind": "object-property:label",
+    "text": "Datadog site",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/bot-mcp-apps.ts",
+    "kind": "object-property:label",
+    "text": "GitLab address (optional)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/bot-mcp-apps.ts",
+    "kind": "object-property:placeholder",
+    "text": "gitlab.example.com",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/bot-sidebar-view.ts",
+    "kind": "object-property:label",
+    "text": "Manual",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/bot-sidebar-view.ts",
+    "kind": "object-property:description",
+    "text": "Drag bots to arrange them. New bots go on top.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/bot-sidebar-view.ts",
+    "kind": "object-property:label",
+    "text": "Agent Activity",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/bot-sidebar-view.ts",
+    "kind": "object-property:description",
+    "text": "Bots that need you, then most recent activity.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/bot-sidebar-view.ts",
+    "kind": "object-property:label",
+    "text": "Recent",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/bot-sidebar-view.ts",
+    "kind": "object-property:label",
+    "text": "Name",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/webhook-card-view.ts",
+    "kind": "object-property:title",
+    "text": "Webhook",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/bot-connector-offer.ts",
+    "reason": "Agent-facing: the RPC result the bot reads after offering a card."
+  },
+  {
+    "filePath": "src/shared/bots/bot-connectors-view.ts",
+    "reason": "CLI and agent text for orca bot connectors."
+  },
+  {
+    "filePath": "src/shared/bots/bot-work-list.ts",
+    "reason": "CLI and agent text."
+  },
+  {
+    "filePath": "src/shared/bots/bot-item-ask.ts",
+    "reason": "Agent mail for item asks."
+  },
+  {
+    "filePath": "src/shared/bots/bot-item-ask-advice.ts",
+    "reason": "Agent mail for item asks."
   }
 ]

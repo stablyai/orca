@@ -70,6 +70,10 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
   other: {
     marginBottom: spacing.xs
   },
+  // The last choice row keeps the card's edge where the footer would sit.
+  choiceOnlyEnd: {
+    height: ASK_CARD_PADDING - 6
+  },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -107,6 +111,10 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
   nextSkip: {
     backgroundColor: 'transparent',
     borderColor: colors.choiceBorder
+  },
+  // Submit waits for the required question on screen to be answered.
+  nextBlocked: {
+    opacity: 0.5
   },
   nextText: {
     color: colors.bgBase,

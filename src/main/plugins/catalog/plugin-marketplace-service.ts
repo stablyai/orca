@@ -21,6 +21,7 @@ import type { PluginImageCache } from '../media/plugin-image-cache'
 import { validateMarketplaceProvenance } from './plugin-marketplace-provenance'
 import { CommunityMarketplaceSeed } from './plugin-community-marketplace-seed'
 import { pluginMarketplaceErrorMessage } from './plugin-marketplace-error-message'
+import { sharedSourceRefresh } from './plugin-marketplace-shared-refresh'
 import {
   pluginMarketplaceListing,
   type PluginMarketplaceListing,
@@ -157,6 +158,9 @@ export class PluginMarketplaceService {
       }
     }
   }
+
+  /** See sharedSourceRefresh: one update review's previews share one catalog fetch. */
+  readonly refreshSourceShared = sharedSourceRefresh((sourceId) => this.refreshSource(sourceId))
 
   async refreshAll(): Promise<PluginMarketplaceSourceState[]> {
     await this.waitForOfficialSeed()

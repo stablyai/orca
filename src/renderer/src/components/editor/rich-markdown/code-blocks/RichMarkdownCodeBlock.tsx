@@ -6,7 +6,7 @@ import type { NodeViewProps } from '@tiptap/react'
 import { Copy, Check } from 'lucide-react'
 import MermaidBlock from '../../diagrams/MermaidBlock'
 import { useMermaidDiagramExpand } from '../../diagrams/use-mermaid-diagram-expand'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { useDocumentDarkTheme } from '@/hooks/theme/use-document-dark-theme'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   getCodeBlockLanguageLabel,

@@ -1,10 +1,11 @@
 import { useMemo } from 'react'
-import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
 import type { MobileNativeChatStructuredComposer } from './mobile-native-chat-structured-composer'
 import type { MobileNativeChatFileAttachments } from '../attachments/use-mobile-native-chat-file-attachments'
 import type { useMobileStructuredSessionCommands } from './use-mobile-structured-session-commands'
 import type { MobileStructuredThreadGoal } from '../../input/tasks/use-mobile-structured-thread-goal'
 import type { MobileStructuredMcpPanel } from '../../mcp/use-mobile-structured-mcp-panel'
+import type { MobileStructuredAccountUsage } from '../../usage/use-mobile-structured-account-usage'
 
 const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
 
@@ -18,8 +19,11 @@ export function useMobileNativeChatStructuredComposer(args: {
   files: MobileNativeChatFileAttachments
   threadGoal: MobileStructuredThreadGoal | null
   mcpPanel: MobileStructuredMcpPanel | null
+  accountUsage: MobileStructuredAccountUsage | null
+  onCommandNotice: (message: string) => void
 }): MobileNativeChatStructuredComposer | null {
   const { structured, acceptsFiles, compactInstructions, files, threadGoal, mcpPanel } = args
+  const { accountUsage, onCommandNotice } = args
   const conversationCommands = args.conversationCommands ?? NO_COMMANDS
   const { commands, refresh, setMenuOpen } = args.sessionCommands
   const { files: pendingFiles, attachFiles, attachPastedText, removeFiles } = files
@@ -49,12 +53,16 @@ export function useMobileNativeChatStructuredComposer(args: {
             files: pendingFiles,
             onRemoveFile: (id: string) => removeFiles([id]),
             threadGoal,
-            mcpPanel
+            mcpPanel,
+            accountUsage,
+            onCommandNotice
           }
         : null,
     [
       threadGoal,
       mcpPanel,
+      accountUsage,
+      onCommandNotice,
       acceptsFiles,
       attachFiles,
       attachPastedText,

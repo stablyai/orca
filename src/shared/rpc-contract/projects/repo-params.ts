@@ -44,21 +44,28 @@ export const RepoSetHidden = RepoShow.extend({
   hidden: z.boolean()
 })
 
+// Older hosts strip this and read the project checkout, as before.
+const SetupHooksCreateSourceParam = z
+  .union([
+    z.object({ kind: z.literal('base'), baseBranch: z.string().optional() }),
+    z.object({
+      kind: z.literal('branch'),
+      ref: z.string().min(1),
+      baseBranch: z.string().optional()
+    })
+  ])
+  .optional()
+
 /** See `repoHooksCheckIsBackground`: only `wakeWslDistro` may open a stopped WSL distro (E9). */
 export const RepoHooksCheck = RepoSelector.extend({
   background: z.boolean().optional(),
   wakeWslDistro: OptionalBoolean,
-  // Older hosts strip this and read the project checkout, as before.
-  createSource: z
-    .union([
-      z.object({ kind: z.literal('base'), baseBranch: z.string().optional() }),
-      z.object({
-        kind: z.literal('branch'),
-        ref: z.string().min(1),
-        baseBranch: z.string().optional()
-      })
-    ])
-    .optional()
+  createSource: SetupHooksCreateSourceParam
+})
+
+/** `repo.hooks`: `createSource` reports the setup a create from that ref would run. */
+export const RepoHooksRead = RepoSelector.extend({
+  createSource: SetupHooksCreateSourceParam
 })
 
 export const RepoSearchRefs = z.object({
@@ -145,4 +152,8 @@ export const RepoSparsePresetSave = RepoSelector.extend({
   id: OptionalString,
   name: requiredString('Missing preset name'),
   directories: z.array(z.string())
+})
+
+export const RepoSparsePresetRemove = RepoSelector.extend({
+  presetId: requiredString('Missing preset id')
 })

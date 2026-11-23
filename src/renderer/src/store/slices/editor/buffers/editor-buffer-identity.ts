@@ -3,7 +3,7 @@ import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/work
 import { resolveEditorModelOwner } from '@/components/editor/model-lifetime/identity/editor-model-owner'
 import { isLocalWindowsDesktopClient } from '@/app-shell/chrome/desktop-window-chrome'
 import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   isCaseInsensitiveRuntimeRoot,
   normalizeRuntimePathSeparators

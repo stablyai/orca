@@ -5,17 +5,14 @@ import type { LinearIssue } from '../../../../../../shared/linear/issue-types'
 import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
 import React, { useState, useRef, useCallback } from 'react'
 import { useAppStore } from '../../../../store/index'
-import { useTeamStates } from '../../../../hooks/useIssueMetadata'
+import { useTeamStates } from '../../../../lib/work-items/linear/useIssueMetadata'
 import { linearUpdateIssue } from '../../../../runtime/linear/runtime-linear-issue-client'
 import { toast } from 'sonner'
 import { translate } from '../../../../i18n/i18n'
 import { useTranslate } from '../../../../i18n/use-translate'
 import { Popover, PopoverTrigger, PopoverContent } from '../../../ui/popover'
 import { cn } from '../../../../lib/class-names'
-import {
-  getLinearStatePillStyle,
-  getLinearStateMarkerStyle
-} from '../../../linear-state-pill-style'
+import { getLinearStatePillStyle, getLinearStateMarkerStyle } from './linear-state-pill-style'
 import { LoaderCircle, ChevronDown } from 'lucide-react'
 import { defaultScopeSource } from '../../../../runtime/hosts/selection/default-creation-host'
 

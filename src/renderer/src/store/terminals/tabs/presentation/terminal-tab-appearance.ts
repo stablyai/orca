@@ -1,4 +1,4 @@
-import { replaceTabBuckets } from '@/store/keyed-record-transitions'
+import { replaceTabBuckets } from '@/store/record-transitions/keyed-record-transitions'
 import { getTerminalTabOwnerWorktreeIds } from '../../ownership/terminal-tab-owner-index'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { resolveTerminalWorktreeRoute } from '@/lib/workspace/ownership/terminal-worktree-route'

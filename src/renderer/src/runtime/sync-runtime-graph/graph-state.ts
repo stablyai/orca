@@ -1,4 +1,4 @@
-import type { MobileProjectSectionCatalog } from '../../../../shared/mobile-project-sections-contract'
+import type { MobileProjectSectionCatalog } from '../../../../shared/sidebar-list/catalog/mobile-project-sections-contract'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'

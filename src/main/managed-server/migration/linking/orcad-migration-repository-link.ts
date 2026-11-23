@@ -2,7 +2,7 @@ import { getAutomationRunRepoId } from '../../../../shared/automations/history/a
 import type { Automation } from '../../../../shared/automations/automation-definition'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
-import { isRepoOnCatalogHost } from '../../../../shared/execution-host'
+import { isRepoOnCatalogHost } from '../../../../shared/execution-host/execution-host'
 import type { OrcadMigrationSourceCutover } from '../../../../shared/orcad-migration/orcad-migration-source-cutover'
 import type { SshManagedServerLinkedProject } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'

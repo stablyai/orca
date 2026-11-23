@@ -226,7 +226,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
             onClick={setUpWithAgent}
           >
             {agentLaunching ? <Loader2 className="animate-spin" /> : <Bot />}
-            {t('auto.components.settings.EphemeralVmsPane.setUpWithAgent', 'Set up with an agent')}
+            {t('auto.components.settings.EphemeralVmsPane.setUpWithAgent', 'Set up with agent')}
           </Button>
           <span className="min-w-0 flex-1 text-xs text-muted-foreground">
             {setupRepo

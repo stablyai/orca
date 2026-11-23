@@ -14,7 +14,7 @@ import {
   toSshExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../execution-host'
+} from '../execution-host/execution-host'
 
 export type FolderWorkspaceHostState = {
   folderWorkspaces: readonly FolderWorkspace[]
@@ -209,10 +209,16 @@ export type QualifiedFolderHostState<W extends FolderHostWorkspace = FolderHostW
   repos?: readonly FolderHostRepo[]
 }
 
+export type QualifiedFolderWorkspaceSelection<W extends FolderHostWorkspace = FolderWorkspace> = {
+  workspace: W
+  hostId: ExecutionHostId
+  connectionId: string | null
+}
+
 export type QualifiedFolderWorkspaceResult<W extends FolderHostWorkspace> =
   | {
       kind: 'selected'
-      value: { workspace: W; hostId: ExecutionHostId; connectionId: string | null }
+      value: QualifiedFolderWorkspaceSelection<W>
     }
   | { kind: 'ambiguous' }
   | { kind: 'missing' }

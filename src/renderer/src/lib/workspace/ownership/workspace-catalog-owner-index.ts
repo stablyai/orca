@@ -5,7 +5,7 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 
 export function buildCatalogOwnerIndex<
   T extends { id: string; connectionId?: string | null; executionHostId?: string | null }

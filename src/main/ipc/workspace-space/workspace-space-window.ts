@@ -7,11 +7,13 @@ import {
 } from '../../window/workspace-space-window'
 import { safelyRevealWindow } from '../../window/activation/focus-existing-window'
 import { isBackgroundLaunch } from '../../window/activation/foreground-activation-policy'
-import { normalizeExecutionHostId } from '../../../shared/execution-host'
+import { normalizeExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { isWorkspaceSpaceChange } from '../../../shared/workspace-disk-space/workspace-space-change'
 import type { Store } from '../../persistence/loading-store/store'
+import { createStoreNativeSettingsProjection } from '../../core-desktop/native-settings-projection'
 
 export function registerWorkspaceSpaceWindowHandlers(store: Store): void {
+  const nativeSettings = createStoreNativeSettingsProjection(store)
   for (const channel of [
     'workspaceSpace:openWindow',
     'workspaceSpace:publishWindowState',
@@ -26,7 +28,7 @@ export function registerWorkspaceSpaceWindowHandlers(store: Store): void {
 
   ipcMain.handle('workspaceSpace:openWindow', (event): void => {
     if (isTrustedUIRenderer(event.sender)) {
-      createOrFocusWorkspaceSpaceWindow(store)
+      createOrFocusWorkspaceSpaceWindow(nativeSettings)
     }
   })
   ipcMain.handle('workspaceSpace:publishWindowState', (event, state: unknown): void => {

@@ -100,7 +100,14 @@ function formatRunSummary(run: WorkspaceCleanupRun): string {
   const { counts } = run
   const archived = counts.archived > 0 ? `, archived ${counts.archived}` : ''
   const freed = run.freedBytes > 0 ? ` Freed ${formatBytes(run.freedBytes)}.` : ''
-  return `Removed ${counts.removed}${archived}, kept ${counts.kept}, failed ${counts.failed}.${freed}`
+  const chats = run.chatHistory
+  const chatLine =
+    chats && (chats.deleted > 0 || chats.failed > 0)
+      ? ` Deleted ${chats.deleted} chats from deleted workspaces${
+          chats.freedBytes > 0 ? ` (${formatBytes(chats.freedBytes)})` : ''
+        }${chats.failed > 0 ? `, ${chats.failed} failed` : ''}.`
+      : ''
+  return `Removed ${counts.removed}${archived}, kept ${counts.kept}, failed ${counts.failed}.${freed}${chatLine}`
 }
 
 export function formatWorkspaceCleanupRun(run: WorkspaceCleanupRun): string {

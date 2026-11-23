@@ -1,22 +1,20 @@
+import type { AgentSessionGoalDisplay } from '../../../../../../shared/agent-session/thread-goals/agent-session-goal-check-display'
 import { useCallback, useMemo, useState } from 'react'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalThreadGoal
-} from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentOwnedThreadGoalCommand,
   agentSessionThreadGoalReport
-} from '../../../../../../shared/agent-session/agent-session-thread-goal-report'
+} from '../../../../../../shared/agent-session/thread-goals/agent-session-thread-goal-report'
 import type { AgentSessionOptionsResult } from '../../../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
-} from '../../../../../../shared/agent-session/agent-session-thread-goal-wire'
-import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/native-chat-agent-profiles'
+} from '../../../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
+import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 import type { StructuredAgentSessionMutate } from '../structured/writes/use-structured-agent-session-mutate'
 
 export type StructuredAgentSessionThreadGoal = {
-  goal: AgentJournalThreadGoal | null
+  goal: AgentSessionGoalDisplay | null
   pending: boolean
   /** False for agent-owned /goal: clear uses a command and pause is unavailable. */
   hostChanges: boolean

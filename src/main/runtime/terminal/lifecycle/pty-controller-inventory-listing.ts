@@ -4,7 +4,7 @@ import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 import {
   type ExecutionHostId,
   getConnectionExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import {
   PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS,
   PTY_CONTROLLER_LIST_TIMEOUT_MS
@@ -95,7 +95,7 @@ export abstract class OrcaRuntimeWithPtyControllerInventoryListing extends OrcaR
       return null
     }
     const stale = !isCurrent()
-    if (!stale) {
+    if (!stale && inventoryOptions?.supersedesPendingListings !== false) {
       if (connectionId === undefined) {
         this.ptyControllerAggregateInventoryGeneration = generation
       } else {

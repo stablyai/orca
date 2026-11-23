@@ -1,7 +1,7 @@
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache/cache-identity'
 import { getWorktreeGitHubIssueRepository } from '../../../../../../shared/worktree/github-issue-repository'
 import {

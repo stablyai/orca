@@ -44,6 +44,7 @@ export function buildLinearLinkedWorkItem(issue: {
   title: string
   url: string
   workspaceId?: string
+  branchName?: string
 }): MobileLinkedWorkItem {
   return buildLinearWorkspaceSource(issue)
 }

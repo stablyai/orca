@@ -1,5 +1,5 @@
 import type { HostRoute } from '../targets/runtime-client-target'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   getRuntimeEnvironmentRevision,
   resolveContinuedRuntimeEnvironmentRevision

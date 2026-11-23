@@ -53,6 +53,7 @@ import type { AppIconApi } from './api/window-ui/app-icon-api'
 import type { BrowserPasswordsApi } from './api/browser/browser-passwords-api'
 import type { PluginsApi } from './api/plugins/plugin-host-api'
 import type { PreflightApi } from './api/preflight/preflight-api'
+import type { BackgroundWorkerApi } from './api/diagnostics/background-worker-api'
 import type { PtyApi } from './api/terminal/pty-api'
 import type { ProjectGroupsApi, ProjectsApi, RepositoryApi } from './api/projects/repository-api'
 import type { RuntimeApi } from './api/runtime/runtime-api'
@@ -61,6 +62,10 @@ import type { WslDriveProjectApi } from './api/wsl/wsl-drive-project-bridge'
 import type { WslDriveUncConversionApi } from './api/wsl/wsl-drive-unc-conversion-bridge'
 import type { KeybindingsApi, SettingsApi } from './api/preferences/settings-api'
 import type { ShellApi } from './api/terminal/shell-api'
+import type { BotChangesApi } from './api/bot-changes-api'
+import type { GoogleSetupApi } from './api/google-setup-api'
+import type { SlackHandOffApi } from './api/slack-hand-off-api'
+import type { AvatarGenerationApi } from '../shared/avatar-generation/avatar-generation-contract'
 import type { SpeechApi } from './api/speech/speech-api'
 import type { SshApi } from './api/ssh/ssh-api'
 import type { PlainSshTerminalApi } from './api/terminal/plain-ssh-terminal-bridge'
@@ -73,6 +78,7 @@ import type {
 } from './api/diagnostics/telemetry-api'
 import type { UiCommandEventApi } from './api/window-ui/ui-command-event-api'
 import type { UiWindowApi } from './api/window-ui/ui-window-api'
+import type { BotLinkEventApi } from './api/bot-link-event-api'
 import type { UpdaterApi } from './api/updater/updater-api'
 import type { WorkspaceCleanupApi, WorkspaceSpaceApi } from './api/workspaces/workspace-cleanup-api'
 import type {
@@ -140,6 +146,10 @@ export type PreloadApi = {
   developerPermissions: DeveloperPermissionsApi
   computerUsePermissions: ComputerUsePermissionsApi
   shell: ShellApi
+  botChanges: BotChangesApi
+  googleSetup: GoogleSetupApi
+  slackHandOff: SlackHandOffApi
+  avatarGeneration: AvatarGenerationApi
   skills: SkillsApi
   pet: PetApi
   appIcon: AppIconApi
@@ -163,7 +173,7 @@ export type PreloadApi = {
   nativeChat: NativeChatApi
   fs: FilesystemApi['fs']
   git: Merged<GitInspectionApi & GitOperationApi>
-  ui: Merged<UiCommandEventApi & UiWindowApi>
+  ui: Merged<UiCommandEventApi & UiWindowApi & BotLinkEventApi>
   runtime: RuntimeApi['runtime']
   runtimeEnvironments: RuntimeApi['runtimeEnvironments']
   rateLimits: RateLimitsApi
@@ -181,6 +191,8 @@ export type PreloadApi = {
   plainSsh?: PlainSshTerminalApi
   /** COMPAT(legacy-relay-bridge): desktop-only, revisit 2027-01-15. */
   legacyRelayBridge?: LegacyRelayBridgeApi
+  /** Desktop only: heavy background work paused after repeated crashes. */
+  backgroundWorker?: BackgroundWorkerApi
   automations: AutomationsApi
   wsl: RuntimeApi['wsl']
   wslMove: WslMoveApi

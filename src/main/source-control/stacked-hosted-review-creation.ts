@@ -4,7 +4,7 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from './hosted-review-git-options'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import type {
   CreateStackedHostedReviewInput,
   CreateStackedHostedReviewResult,

@@ -1,4 +1,4 @@
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { findLegacyNumericSleepingRecord } from '../../../../shared/agent-session/lifecycle/resume/sleeping-record-legacy-pane-key'
 import {

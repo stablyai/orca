@@ -2,7 +2,7 @@
   "expo": {
     "name": "Orca",
     "slug": "orca-mobile",
-    "version": "0.0.65",
+    "version": "0.0.68",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -96,7 +96,7 @@
         "android.permission.USE_FINGERPRINT"
       ],
       "package": "dev.orca.app",
-      "versionCode": 29,
+      "versionCode": 32,
       "googleServicesFile": "./google-services.json"
     },
     "plugins": [

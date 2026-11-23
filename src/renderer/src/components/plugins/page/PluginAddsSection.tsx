@@ -27,7 +27,7 @@ import { usePluginLanguagePackStore } from '@/store/plugins/localization/plugin-
 import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { usePluginIconThemes } from '@/store/plugins/appearance/plugin-icon-themes'
 import { usePluginSyntaxes } from '@/store/plugins/syntax/plugin-syntax-packs'
-import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '../../ui/ShortcutKeyCombo'
 import { Button } from '../../ui/button'
 import { revealPluginIconTheme } from '../state/plugin-try-action'
 import { DetailRow, DetailSection } from './PluginDetailSections'

@@ -9,7 +9,7 @@ import {
   type BrowserMemorySaverGlobalSettings,
   type BrowserMemorySaverPolicy
 } from '../../../shared/browser/guest-lifecycle/browser-memory-saver'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { getSystemAwakeClock } from '../../power/awake-clock'
 import {
   getSystemPowerState,
@@ -217,6 +217,26 @@ export function createBrowserPageIdleDiscard(sources: {
       pages.delete(pageId)
       deadlines.delete(pageId)
       schedule()
+    },
+    /** Pages Memory Saver would free: hidden this long on its own awake clock, and passing the
+     *  same protection check its discard admission runs. */
+    countHiddenLoadedPages(hiddenForMs: number, canFree: (pageId: string) => boolean): number {
+      const cutoff = sources.now() - hiddenForMs
+      let count = 0
+      for (const [pageId, episode] of pages) {
+        if (
+          episode.visibilityKnown &&
+          episode.visible === false &&
+          episode.revisits <= 15 &&
+          !episode.consumed &&
+          episode.hiddenAt !== null &&
+          episode.hiddenAt <= cutoff &&
+          canFree(pageId)
+        ) {
+          count += 1
+        }
+      }
+      return count
     },
     /** Live setting changes move every waiting deadline at once; already freed pages stay freed. */
     configure(next: BrowserMemorySaverPolicy): void {

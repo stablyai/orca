@@ -1,4 +1,8 @@
+import { BotFailureError } from '../../../../shared/bots/bot-failure-copy'
 import { BranchSwitchCollisionError } from '../../../git/worktrees/checkout/branch-switch-target'
+import { BotItemError } from '../../../bots/bot-item-error'
+import { BotSessionRefusedError } from '../../../bots/bot-session-refused-error'
+import { AgentConversationRefusal } from '../../agent-conversations/agent-conversation-refusal'
 import { SparsePresetValidationError } from '../../../../shared/worktree/creation/sparse-preset-failure'
 import {
   RECIPE_VM_REFUSAL_CODES,
@@ -14,17 +18,19 @@ import {
   type AgentSessionRefusalError
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from '../core'
-import { CONNECTOR_REPLY_ERROR_CODES } from '../../../../shared/rpc-contract/connectors/connector-params'
+import { RUNTIME_PASSTHROUGH_CODES } from '../runtime-passthrough-codes'
+import { CONNECTOR_ACT_ERROR_CODES } from '../../../../shared/connector-action-contract'
+import { BOTS_DISABLED_CODE } from '../../../../shared/bots-switch'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../../shared/orchestration/orchestration-session-caller-codes'
 import { ORCHESTRATION_FEDERATION_ERROR_CODES } from '../../../../shared/orchestration/orchestration-federation-error-codes'
-import { computerUseErrorRecoveryData } from '../../../../shared/computer-use-error-recovery'
-import { COMPUTER_ERROR_CODES } from '../../../../shared/computer-use-runtime-types'
+import { computerUseErrorRecoveryData } from '../../../../shared/computer/computer-use-error-recovery'
+import { COMPUTER_ERROR_CODES } from '../../../../shared/computer/computer-use-runtime-types'
 import { TerminalSplitOutcomeError } from '../../../../shared/workspace-layout/terminal-topology/terminal-split-outcome'
 import { WslHostWindowsDriveRefusalError } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import { wslDistroHoldRpcFailure } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { LINEAR_ERROR_CODES } from '../../../../shared/linear/agent-access'
-import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../../shared/agent-session/agent-session-host-authority'
 import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../../shared/artifacts/artifact-sharing-gate'
+import { ARTIFACT_RATE_LIMITED_CODE } from '../../../../shared/artifacts/artifacts'
 import { AGENT_SKILL_SHARING_DISABLED_CODE } from '../../../../shared/skills/sharing/agent-skill-sharing-gate'
 import { SHARING_UNAVAILABLE_ON_HOST_CODE } from '../../../../shared/remote-runtime/host-status/sharing-unavailable-on-host'
 import {
@@ -49,10 +55,6 @@ import {
   WORKTREE_CREATE_COLLISION_CODE,
   WORKTREE_CREATE_EXACT_NAME_TAKEN_CODE
 } from '../../../../shared/new-workspace/worktree-create-collision'
-import { AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE } from '../../../../shared/agent-launch/contracts/agent-launch-pane-already-live'
-import { AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE } from '../../../../shared/agent-launch/contracts/agent-launch-session-already-exists'
-import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
-import { AGENT_LAUNCH_TARGET_FORBIDDEN_CODE } from '../../../../shared/agent-launch/contracts/agent-launch-target-forbidden'
 import {
   parseTerminalSpawnDeferral,
   TERMINAL_SPAWN_DEFERRED_CODE
@@ -77,46 +79,10 @@ export function errorResponse(
   }
 }
 
-// Runtime plain Error messages are stable codes; changing this allowlist also requires updating the CLI.
-const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
-  WORKTREE_CREATE_COLLISION_CODE,
-  AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE,
-  AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE,
-  AGENT_LAUNCH_TAB_CLOSED_CODE,
-  AGENT_LAUNCH_TARGET_FORBIDDEN_CODE,
-  'agent_launch_replay_unsupported',
-  'runtime_unavailable',
-  'chat_fork_source_unavailable',
-  'chat_fork_runtime_incompatible',
-  'chat_fork_anchor_changed',
-  'selector_not_found',
-  'selector_ambiguous',
-  'terminal_handle_stale',
-  'terminal_not_writable',
-  'terminal_exited',
-  'terminal_gone',
-  'terminal_tab_close_timeout',
-  'terminal_tab_not_found',
-  'terminal_tab_pinned',
-  'agent_prompt_blocked',
-  'agent_prompt_stalled',
-  'no_active_terminal',
-  'repo_not_found',
-  'timeout',
-  'invalid_limit',
-  'request_aborted',
-  'remote_update_manual_required',
-  'remote_update_not_available',
-  'remote_update_not_downloaded',
-  'connectors_disabled',
-  'external_conversation_not_found',
-  ...CONNECTOR_REPLY_ERROR_CODES,
-  ...AGENT_SESSION_RPC_ERROR_CODES
-])
-
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
+  ...CONNECTOR_ACT_ERROR_CODES,
   ...RECIPE_VM_REFUSAL_CODES,
   WORKTREE_CREATE_COLLISION_CODE,
   WORKTREE_CREATE_EXACT_NAME_TAKEN_CODE,
@@ -141,6 +107,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'recipient_ambiguous',
   'recipient_run_mismatch',
   'dispatch_inactive',
+  // Names the send that reaches the sender instead.
+  'bot_reply_not_yours',
   // Its start failed before an agent ran, so there is no output to read.
   'worker_never_started',
   'worker_identity_changed',
@@ -179,6 +147,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'approval_refused',
   'stale_delivery',
   'invalid_argument',
+  'incompatible_runtime',
   // Preserve archive-hook failure so callers can retry, waive or skip it (#19334).
   ARCHIVE_HOOK_FAILED_REMOVAL_CODE,
   // Paired-only method refusal must match the mobile transport allowlist's forbidden code.
@@ -187,7 +156,10 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   PROJECT_RUNTIME_REPAIR_REQUIRED_CODE,
   GIT_DIFF_TOO_LARGE_CODE,
   ARTIFACT_SHARING_DISABLED_CODE,
+  // The reset time and limit ride in data; the message already names them for people.
+  ARTIFACT_RATE_LIMITED_CODE,
   AGENT_SKILL_SHARING_DISABLED_CODE,
+  BOTS_DISABLED_CODE,
   SHARING_UNAVAILABLE_ON_HOST_CODE,
   AGENT_SKILL_NOT_SHAREABLE_CODE,
   AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,
@@ -207,6 +179,12 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)
   }
+  if (error instanceof BotItemError) {
+    return errorResponse(id, meta, error.code, message, error.data)
+  }
+  if (error instanceof AgentConversationRefusal) {
+    return errorResponse(id, meta, error.code, message)
+  }
   // A recipe workspace removal keeps its environment's own code (archive hook, PTY stop, selector).
   if (
     error instanceof RecipeVmWakeUnavailableError ||
@@ -218,7 +196,9 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     error instanceof BranchSwitchCollisionError ||
     error instanceof TerminalSplitOutcomeError ||
     error instanceof SparsePresetValidationError ||
-    error instanceof WslHostWindowsDriveRefusalError
+    error instanceof WslHostWindowsDriveRefusalError ||
+    error instanceof BotSessionRefusedError ||
+    error instanceof BotFailureError
   ) {
     // Keep the existing RPC code while preserving structured details.
     return errorResponse(id, meta, 'runtime_error', message, error.data)

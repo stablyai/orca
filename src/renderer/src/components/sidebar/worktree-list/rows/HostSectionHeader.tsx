@@ -3,7 +3,7 @@ import { AlertTriangle, ChevronDown, Loader2, Server, ServerOff } from 'lucide-r
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { translateHostDisplayLabel } from '../../execution-host-label'
+import { translateHostDisplayLabel } from '../../../../runtime/hosts/display/execution-host-label'
 import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import { HostSectionHeaderMenu } from './HostSectionHeaderMenu'
 import { stopRepoHeaderMenuEvent } from './header-event-guards'
@@ -143,7 +143,7 @@ export function HostSectionHeader({
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <span
             className={cn(
-              'min-w-0 truncate text-[12px] font-semibold leading-none',
+              'min-w-0 truncate text-[12px] font-semibold leading-4',
               isDisconnected || isSuspended ? 'text-muted-foreground' : 'text-foreground'
             )}
           >
@@ -152,7 +152,7 @@ export function HostSectionHeader({
           {detail ? (
             <span
               className={cn(
-                'shrink-0 truncate text-[10px] leading-none',
+                'shrink-0 truncate text-[10px] leading-3.5',
                 detail.isWarning ? 'text-destructive' : 'text-muted-foreground/70'
               )}
             >

@@ -11,7 +11,7 @@ import type {
   WorkspaceSpaceAnalyzeResult,
   WorkspaceSpaceScanProgress
 } from '../../../shared/workspace-disk-space/workspace-space-types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { WorkspaceCleanupRunFinishedEvent } from '../../../shared/workspace-cleanup/workspace-cleanup-run'
 import type { WorkspaceSpaceChange } from '../../../shared/workspace-disk-space/workspace-space-change'
 

@@ -17,7 +17,7 @@ import {
   structuredAttentionOrigin,
   type AgentSessionAttentionEdge,
   type StructuredAttentionRead
-} from '../../../../../../shared/agent-session/agent-session-attention'
+} from '../../../../../../shared/agent-session/view/agent-session-attention'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { applyAgentAttention, resolveAgentAttention } from '@/attention/agent-attention-policy'
 import {
@@ -25,9 +25,23 @@ import {
   readAgentAttentionNotificationSound
 } from '@/attention/agent-attention-notification-delivery'
 import { useAppStore } from '@/store'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { readBots } from '@/lib/bot-catalog'
+import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
+import {
+  botGroupRoomMembers,
+  findBotGroupRoomOfSession,
+  isBotGroupMemberSession
+} from '../../../../../../shared/bots/bot-group'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../../../shared/workspace/identity/workspace-scope'
+import { isBotAttentionSilenced } from '../../../../../../shared/bot-notifications'
+import { isWorktreeNotificationDeliveryMuted } from '@/attention/worktree-notification-mute'
 import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { isCoordinatorOnlyChatNews } from '../../../../../../shared/orchestration/workers/dispatched-worker-attention'
-import { getNotificationWorkspaceLabels } from '../../../../attention/notification-workspace-labels'
+import { getNotificationWorkspaceLabels } from '@/attention/notification-workspace-labels'
 import { createStructuredAttentionSurface } from './structured-attention-surface'
 import type { StructuredTab } from '../status/structured-agent-session-tabs'
 
@@ -72,6 +86,9 @@ function dispatchStructuredAttention(
   if (promptWasRead()) {
     return
   }
+  if (isBotAttentionSilenced(readBots(), botHomeOfSession(sessionId) ?? tab.worktreeId, news)) {
+    return
+  }
   const attentionKey = agentSessionAttentionKey(edge)
   const state = useAppStore.getState()
   const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
@@ -102,6 +119,10 @@ function dispatchStructuredAttention(
       if (promptWasRead()) {
         return
       }
+      // Per-worktree mute keeps the unread writes above but drops the interruption.
+      if (isWorktreeNotificationDeliveryMuted(useAppStore.getState(), request.workspaceId)) {
+        return
+      }
       // The receiving subscription identifies the paired source even when tab ownership is ambiguous.
       const owner =
         subscriptionTarget?.kind === 'environment'
@@ -129,13 +150,53 @@ function dispatchStructuredAttention(
           ...(row?.agentType ? { agentType: row.agentType } : {}),
           agentState: news.agentState,
           ...(news.outcome ? { agentTurnOutcome: news.outcome } : {}),
+          ...(edge.type === 'completion' && edge.completion.failure
+            ? { agentFailure: edge.completion.failure }
+            : {}),
           ...(row?.prompt ? { agentPrompt: row.prompt } : {}),
           ...(row?.lastAssistantMessage
             ? { agentLastAssistantMessage: row.lastAssistantMessage }
+            : {}),
+          ...(isSlackThreadSession(state, tab.worktreeId, sessionId)
+            ? { agentRepliesInSlack: true as const }
             : {})
         },
         sound
       )
     }
   })
+}
+
+/** Whether the session answers a Slack thread, per the links its folder workspace keeps. */
+function isSlackThreadSession(
+  state: ReturnType<typeof useAppStore.getState>,
+  workspaceId: string,
+  sessionId: string
+): boolean {
+  const scope = parseWorkspaceKey(workspaceId)
+  const folderId = scope?.type === 'folder' ? scope.folderWorkspaceId : null
+  return (
+    folderId !== null &&
+    (selectFolderWorkspaces(state) ?? []).some(
+      (workspace) =>
+        workspace.id === folderId &&
+        workspace.externalConversations?.some(
+          (link) => link.sessionId === sessionId && link.source === 'slack'
+        )
+    )
+  )
+}
+
+/** A group member's news is still its bot's: that bot's switches silence it, though it reads in the room. */
+function botHomeOfSession(sessionId: string): string | null {
+  const room = isBotGroupMemberSession(sessionId)
+    ? findBotGroupRoomOfSession(readBotGroups(), sessionId)
+    : null
+  const botId = room
+    ? botGroupRoomMembers(room.group)
+        .flat()
+        .find((member) => member.sessionId === sessionId)?.botId
+    : undefined
+  const bot = botId ? readBots().find((candidate) => candidate.id === botId) : undefined
+  return bot ? folderWorkspaceKey(bot.folderWorkspaceId) : null
 }

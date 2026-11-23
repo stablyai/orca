@@ -5,11 +5,11 @@ import type {
 } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { Tab, TabGroup } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '../../../../store/index'
 import { markHydratedBrowserPageHandles } from '../../../../store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import type { AppState } from '../../../../store/types'
-import { applyWebSessionTabsSnapshot } from '../../../web-session-tabs-sync/snapshot-api'
+import { applyWebSessionTabsSnapshot } from '../../../web-session-tabs-sync/snapshots/snapshot-api'
 import {
   ENV,
   NOW,

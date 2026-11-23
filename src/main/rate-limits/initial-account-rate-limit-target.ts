@@ -1,5 +1,5 @@
 import { resolveLocalAccountRuntimeTarget } from '../../shared/agent-accounts/local-account-runtime'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 
 type AccountRuntimeSelection = {
   host: string | null

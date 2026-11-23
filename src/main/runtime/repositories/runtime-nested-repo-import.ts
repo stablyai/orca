@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/repo-badge-color'
+import { getNextProjectGroupOrder } from '../../../shared/project/groups/project-groups'
 import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import type {
   NestedRepoScanResult,
@@ -13,7 +14,7 @@ import {
   getRepoDialableSshTargetId,
   getRepoExecutionHostId,
   getRepoRoutingConnectionId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
 import { getRepoName } from '../../git/repositories/repository-name'
 import { isGitRepoAsync } from '../../git/repositories/discovery/repo-detection'
@@ -73,7 +74,11 @@ export class RuntimeNestedRepoImport {
       mode: args.mode,
       connectionId: null,
       repoPaths: selection.selectedPaths,
-      createGroup: (input) => store.createProjectGroup!(input)
+      existingGroups: store.getProjectGroups?.() ?? [],
+      existingRepos: store.getRepos(),
+      createGroup: (input) => store.createProjectGroup!(input),
+      renameGroup: (groupId, name) => store.updateProjectGroup?.(groupId, { name }),
+      reparentGroups: (moves) => store.setProjectGroupParents?.(moves)
     })
     const results: ProjectGroupImportResult['projects'] = selection.rejectedPaths.map(
       (repoPath) => ({
@@ -85,7 +90,7 @@ export class RuntimeNestedRepoImport {
     )
     const importedProjectIdsByRepoPath = new Map<string, string>()
     const importTargetResolver = createNestedRepoImportTargetResolver()
-    for (const [projectGroupOrder, repoPath] of selection.selectedPaths.entries()) {
+    for (const repoPath of selection.selectedPaths) {
       try {
         await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
         if (!(await isGitRepoAsync(repoPath))) {
@@ -125,8 +130,9 @@ export class RuntimeNestedRepoImport {
         )
         const group = groupResolver.getGroupForRepo(repoPath)
         if (existing) {
-          if (group) {
-            store.moveProjectToGroup(existing, group.id, projectGroupOrder)
+          // A rescan can reuse the group, so keep its members' order and append the rest.
+          if (group && existing.projectGroupId !== group.id) {
+            store.moveProjectToGroup(existing, group.id)
           }
           importedProjectIdsByRepoPath.set(normalizedImportRepoPath, existing.id)
           results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
@@ -140,7 +146,12 @@ export class RuntimeNestedRepoImport {
           addedAt: Date.now(),
           kind: 'git',
           externalWorktreeVisibilityLegacy: false,
-          ...(group ? { projectGroupId: group.id, projectGroupOrder } : {})
+          ...(group
+            ? {
+                projectGroupId: group.id,
+                projectGroupOrder: getNextProjectGroupOrder(store.getRepos(), group.id)
+              }
+            : {})
         }
         store.addRepo(repo)
         importedProjectIdsByRepoPath.set(normalizedImportRepoPath, repo.id)
@@ -161,6 +172,8 @@ export class RuntimeNestedRepoImport {
       for (const group of groupResolver.getCreatedGroups().toReversed()) {
         store.deleteProjectGroup?.(group.id)
       }
+    } else {
+      groupResolver.applyReusedGroupChanges()
     }
     this.deps.invalidateResolvedWorktrees()
     for (const project of results) {

@@ -1,6 +1,6 @@
 import type React from 'react'
 import { Loader2, Store, Zap } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { PluginThemeRegistration } from '../../../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import {
   editorThemeSlotUpdate,
@@ -287,7 +287,7 @@ export function AppearanceThemeSlotSelect({
         >
           {t(
             'auto.components.settings.AppearanceThemeControl.useTerminalTheme',
-            'Use its terminal colors'
+            'Use theme colors'
           )}
         </Button>
       ) : null}

@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 const SESSION_COUNTER_BITS = 13
 const SESSION_COUNTER_STRIDE = 2 ** SESSION_COUNTER_BITS

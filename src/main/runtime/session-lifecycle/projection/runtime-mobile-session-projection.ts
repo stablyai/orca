@@ -28,7 +28,7 @@ import {
   getPtyDisplayRecord,
   terminalTitleBlocksExplicitAgentStatus
 } from '../../workspaces/process-listing/runtime-worktree-status-projection'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { projectRuntimeMobileSessionTitle } from './runtime-mobile-session-title-projection'
 
 export function projectRuntimeMobileSessionTabs(
@@ -272,6 +272,8 @@ export function projectRuntimeMobileSessionTabs(
       typeof rawTurnCompletedAt === 'number' && Number.isFinite(rawTurnCompletedAt)
         ? rawTurnCompletedAt
         : undefined
+    // A window themes its rows; without one (a server), the host's own palette does.
+    const terminalTheme = tab.terminalTheme ?? host.hostTerminalTheme?.()
     tabs.push({
       type: 'terminal',
       id: tab.id,
@@ -284,7 +286,7 @@ export function projectRuntimeMobileSessionTabs(
       ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
       // Bind identity to the handle's live owner, never a stale persisted surface.
       ...(terminalPty?.incarnationId ? { incarnationId: terminalPty.incarnationId } : {}),
-      ...(tab.terminalTheme ? { terminalTheme: tab.terminalTheme } : {}),
+      ...(terminalTheme ? { terminalTheme } : {}),
       ...(launchAgent ? { launchAgent } : {}),
       ...clientAgentStatus,
       ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {}),

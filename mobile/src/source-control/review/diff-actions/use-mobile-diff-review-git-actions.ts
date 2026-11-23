@@ -28,9 +28,7 @@ export function useMobileDiffReviewGitActions(input: GitActionsInput) {
     // Resolves whether the mutation landed, so callers can move on only after it did.
     async (method: GitMutationMethod, item: MobileDiffReviewQueueItem): Promise<boolean> => {
       if (!client || connState !== 'connected') {
-        setActionError(
-          translate('session.useDiffReviewGitActions.waitingForDesktop', 'Waiting for desktop...')
-        )
+        setActionError(translate('common.waitingForHost', 'Waiting for host…'))
         return false
       }
       setBusyAction(`${method}:${item.filePath}`)

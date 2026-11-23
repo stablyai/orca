@@ -1,5 +1,8 @@
 import { getProvider, registeredPtyProviders } from '../provider/registry'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 
 /** Probe the owning provider before opting into the no-process-table inventory projection. */
 export async function supportsForegroundProcessEvidenceFromRuntimeController(

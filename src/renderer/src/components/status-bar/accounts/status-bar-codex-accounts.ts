@@ -2,13 +2,13 @@ import {
   getManagedAccountDisplayName,
   getManagedAccountPrimaryLabel
 } from '../../../../../shared/agent-accounts/managed-account-display-names'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { CodexRateLimitAccountsState } from '../../../../../shared/agent-accounts/managed-account-types'
 import { translate } from '@/i18n/i18n'
 import {
   getCodexAccountDisplayDetail,
   getCodexAccountDisplayLabel
-} from '@/lib/provider-accounts/codex-account-display-label'
+} from '../../../../../shared/agent-accounts/codex-account-display-label'
 import {
   getCodexStatusRuntimeKey,
   getCodexStatusRuntimeLabel,

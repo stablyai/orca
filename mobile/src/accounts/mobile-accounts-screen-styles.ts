@@ -18,10 +18,6 @@ export const styles = themedStyleSheet(() => ({
   group: {
     backgroundColor: colors.bgPanel
   },
-  errorText: {
-    fontSize: typography.metaSize,
-    color: colors.statusRed
-  },
   footerHint: {
     flexDirection: 'row',
     alignItems: 'flex-start',

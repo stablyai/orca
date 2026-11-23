@@ -1,4 +1,4 @@
-import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import { codexLaunchedAccountHome } from '../launch/codex-structured-launch-resolution'
 import {
   CODEX_STRUCTURED_HANDLE_NAMESPACE,
@@ -11,24 +11,19 @@ import type {
 import { launchPreparationFailure } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import {
   closeFailedCodexAcquisition,
+  codexAcquisitionExitFailure,
   stopSupersededCodexAcquisition
 } from './codex-structured-acquisition-lifecycle'
 import { CodexSubagentExecutions } from '../background-work/codex-subagent-executions'
 import { createCodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
 import { createCodexSessionJournalTranslator } from '../session-lifecycle/codex-structured-session-journal'
-import { spawnCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
+import { codexConnectionOpener, opensSharedCodexServer } from './codex-structured-connection-opener'
 import { codexSpawnedProcessIdentity } from './codex-structured-owner-identity'
 import {
   closeCodexPublishedSession,
   handleCodexSessionExit
 } from '../session-lifecycle/codex-structured-session-close'
 import { openCodexStructuredSession } from '../session-lifecycle/codex-structured-session-start'
-import {
-  agentSessionFailureFact,
-  providerDiagnosticOf
-} from '../../../../shared/agent-session/failures/agent-session-failure'
-import { providerSpawnAbsent } from '../../../provider-process/provider-executable-missing'
-import { providerStartupFailureFact } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import {
   assertCodexConnectionOpen,
   mintCodexAcquisitionGeneration,
@@ -42,6 +37,7 @@ import type { CodexStructuredNotificationRetry } from '../session-lifecycle/code
 import type { deliverCodexServerRequest } from '../session-lifecycle/codex-structured-provider-events'
 import { codexAcquisitionNotificationHandler } from './codex-structured-acquisition-notification'
 import { codexStartFailure } from '../../app-server/codex-startup-outcome'
+import { codexAcceptedSend } from '../journal/codex-structured-journal-translation-turns'
 
 export async function acquireCodexStructuredSession(input: {
   input: StructuredAgentSessionAcquireInput
@@ -77,7 +73,11 @@ export async function acquireCodexStructuredSession(input: {
   const dispatchEchoes = createCodexDispatchEchoes(
     () => deps.onHeldSendsChanged?.({ sessionId }),
     (clientMessageId, providerIdentity) =>
-      deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity })
+      deps.onDispatchSettledLate?.({
+        sessionId,
+        clientMessageId,
+        ...codexAcceptedSend(sessionId, providerIdentity, dispatchEchoes.sentVia(clientMessageId))
+      })
   )
   let account: AgentSessionAccountKind | undefined
   // Frame row identities include this generation.
@@ -88,6 +88,9 @@ export async function acquireCodexStructuredSession(input: {
   const translator = createCodexSessionJournalTranslator({
     sink: acquireInput.events,
     account: () => account,
+    localClock:
+      acquireInput.launch?.location.executionHostId === 'local' &&
+      acquireInput.launch.location.wslDistro === null,
     sessionId,
     acquisitionId: acquisitionGeneration,
     deps,
@@ -96,8 +99,8 @@ export async function acquireCodexStructuredSession(input: {
     subagentExecutions,
     prompts: acquisition.prompts
   })
-  const open = deps.openConnection ?? spawnCodexAppServerConnection
-  const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps.readProcessStartTime)
+  let sharedServer = false
+  const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps, () => sharedServer)
   try {
     await stopSupersededCodexAcquisition({
       sessionId,
@@ -136,6 +139,8 @@ export async function acquireCodexStructuredSession(input: {
           }
     acquisitions.assertCurrent(sessionId, attempt)
     account = launch.codexHome ? deps.resolveAccountKind?.(launch.codexHome) : undefined
+    const open = codexConnectionOpener(deps, sessionId, launch)
+    sharedServer = opensSharedCodexServer(open)
     const connection = await open(
       {
         command: launch.command,
@@ -200,13 +205,7 @@ export async function acquireCodexStructuredSession(input: {
                   attempt.cancelled && attempt.requestedClose !== false
                     ? 'requested-close'
                     : 'unexpected-exit',
-                failure: attempt.cancelled
-                  ? agentSessionFailureFact('hostFault')
-                  : providerSpawnAbsent(error)
-                    ? providerStartupFailureFact(error)
-                    : agentSessionFailureFact('providerExited', {
-                        detail: providerDiagnosticOf(error)
-                      }),
+                failure: codexAcquisitionExitFailure(error, attempt.cancelled),
                 observedAt: deps.now?.() ?? Date.now()
               })
             }

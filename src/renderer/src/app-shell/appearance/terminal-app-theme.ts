@@ -14,7 +14,7 @@ import {
 } from '../../../../shared/terminal-themes/terminal-title-contrast'
 import { terminalPaletteRgba } from '../../../../shared/terminal-themes/terminal-palette-rgba'
 import type { ITheme } from '@xterm/xterm'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { AppThemePaint } from './document-theme'
 import type { ColorProbe } from './plugin-theme-tokens'
 

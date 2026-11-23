@@ -1,11 +1,14 @@
 import { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
 import { useAppStore } from '@/store/index'
+import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
+import { botGroupRoomOfRow } from '@/lib/bot-group-room-history'
 import {
   activateAiVaultStructuredSession,
   openDesktopStructuredSession
 } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { insertUnifiedTabAfterAnchor } from '@/lib/workspace/tabs/unified-tab-anchor-insertion'
 
+import { worktreeIdsShareCheckout } from '../../../../../../shared/worktree/id'
 import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   captureNativeChatComposerFocusIntent,
@@ -22,7 +25,7 @@ import { adoptsCliConversations } from '../../../../../../shared/agent-session/v
 import type { CliConversationRowAgent } from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import { structuredLaunchConversationOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { resumeAiVaultSessionInNewChat } from './ai-vault-session-resume-in-chat-launch'
-import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
+import type { ConfirmationDialogContextValue } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AiVaultSessionRowChatActions } from './ai-vault-session-chat-action'
 
@@ -32,6 +35,8 @@ export type AiVaultResumeHere = {
   workspaceId: string
   /** The chat's agent; another agent's conversation can't continue in it. */
   agent?: AiVaultAgent
+  /** A room's picker: nothing takes its place; a pick opens in its own tab as its own agent. */
+  alongside?: boolean
   /** Picking the chat's own conversation only closes the picker; a no-op once it has closed. */
   dismiss: () => void
   confirm: ConfirmationDialogContextValue
@@ -53,6 +58,11 @@ export function resumeAiVaultSessionHere(args: {
   let current = (): boolean => true
   const here = { ...args.here, current: () => current() }
   const structured = session.structuredSession
+  // A group room never replaces this chat; it opens in its own tab.
+  if (structured && botGroupRoomOfRow(readBotGroups(), session)) {
+    here.dismiss()
+    return activateAiVaultStructuredSession(session).then(() => undefined)
+  }
   if (structured && structured.sessionId === findChatTab(here)?.entityId) {
     here.dismiss()
     return Promise.resolve()
@@ -72,8 +82,10 @@ export function resumeAiVaultSessionHere(args: {
     }
     replace = () => revealInPlaceOf(here, structured)
   } else if (
-    actions.resumeInNewChatWorkspaceId === here.workspaceId &&
-    adoptsCliConversations(session.agent)
+    actions.resumeInNewChatWorkspaceId &&
+    adoptsCliConversations(session.agent) &&
+    // Session cwd ties between same-folder workspaces resolve to either.
+    worktreeIdsShareCheckout(actions.resumeInNewChatWorkspaceId, here.workspaceId)
   ) {
     const rowAgent = session.agent
     replace = () => resumeInPlaceOf(here, session, rowAgent)
@@ -96,7 +108,6 @@ export function resumeAiVaultSessionHere(args: {
       confirmLabel: translate('components.native-chat.resumeCommand.replace', 'Replace'),
       confirmVariant: 'destructive',
       initialFocus: 'confirm',
-      compact: true,
       ignoresOpeningGesture: true,
       signal
     })

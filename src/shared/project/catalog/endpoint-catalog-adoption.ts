@@ -3,7 +3,7 @@ import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 import {
   normalizeProjectHostSetupRow,
   normalizeProjectHostSetupRows,

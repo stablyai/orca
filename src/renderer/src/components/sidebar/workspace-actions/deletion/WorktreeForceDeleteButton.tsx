@@ -1,3 +1,4 @@
+// @protected-copy scope=file
 import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'

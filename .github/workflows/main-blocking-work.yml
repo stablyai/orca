@@ -17,9 +17,7 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
       # Run the blocking-work ratchets over the full tree after every main merge.
       - name: Enforce ratchets
-        run: |
-          node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-sync-fs-ratchet.mjs
-          node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-blocking-api-ratchet.mjs
+        run: node config/scripts/static-analysis/ratchet-runner/run-main-blocking-ratchets.mjs
       # The PR preflight runs spawn separately, so the discovery runner intentionally excludes it.
       - name: Enforce synchronous launches
         if: '!cancelled()'

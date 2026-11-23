@@ -35,6 +35,7 @@ import {
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import { restoreJournalSqlFailure } from './journal-sql-failure'
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -299,7 +300,7 @@ function visibleItem(
     WHERE session_id=? AND epoch=? AND hidden=0 AND item_id=COALESCE((SELECT item_id FROM journal_item_aliases
       WHERE session_id=? AND epoch=? AND provider_item_id=?),?)`)
     .get(target.sessionId, target.epoch, target.sessionId, target.epoch, key, key)
-  return row ? JSON.parse(String(row.payload_json)) : null
+  return row ? readJournalStoredItem(db, [target.sessionId, target.epoch], row.payload_json) : null
 }
 
 function physicalCoordinate(position: JournalDomainInputCoordinate): JournalWriterCoordinate {

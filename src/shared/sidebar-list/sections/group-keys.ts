@@ -10,6 +10,11 @@ export function getProjectGroupHeaderKey(groupId: string | null): string {
 
 export const PINNED_GROUP_KEY = 'pinned'
 
+export const BOTS_GROUP_KEY = 'bots'
+
+/** The whole Projects section, foldable while the Bots section sits above it. */
+export const PROJECTS_SECTION_GROUP_KEY = 'projects-section'
+
 /** Repo, project, and project-group headers; never status, PR, pinned, lineage, or host sections. */
 export function isProjectSectionGroupKey(key: string): boolean {
   return key.startsWith('repo:') || key.startsWith('project:') || key.startsWith('project-group:')

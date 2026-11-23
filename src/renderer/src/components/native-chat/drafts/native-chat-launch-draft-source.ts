@@ -5,7 +5,7 @@ import {
   parseExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import type { AgentPickerDraft } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { NativeChatComposerDraftOwner } from './native-chat-composer-draft-storage'
 

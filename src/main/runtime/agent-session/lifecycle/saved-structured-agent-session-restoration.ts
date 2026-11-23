@@ -1,4 +1,4 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'

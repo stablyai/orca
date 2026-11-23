@@ -1,3 +1,4 @@
+import { useNativeChatViewDisconnect } from '../../pane/ownership/use-native-chat-view-disconnect'
 import { useNativeChatReaderReturn } from './use-native-chat-reader-return'
 import { useNativeChatTranscriptResize } from './use-native-chat-transcript-resize'
 
@@ -252,6 +253,11 @@ export function useNativeChatTranscriptScroll({
     [alignToViewportTop, clearForwardedScroll, onLeaveEnd]
   )
 
+  useNativeChatViewDisconnect(() => {
+    previousIsVisibleRef.current = isVisibleRef.current = false
+    observeVisibility(false, false)
+  })
+
   useLayoutEffect(() => {
     if (isVisible !== previousIsVisibleRef.current) {
       clearForwardedScroll()
@@ -284,7 +290,6 @@ export function useNativeChatTranscriptScroll({
     readerAtEnd,
     observeVisibility,
     restoreScrollOffset,
-    scrollRef,
     showsTailRow,
     scrollToEndWhenMeasurable,
     syncScrollState

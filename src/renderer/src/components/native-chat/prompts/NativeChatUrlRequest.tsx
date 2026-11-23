@@ -1,7 +1,7 @@
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
-import { readApprovalUrl } from '../../../../../shared/agent-session/agent-session-approval-subject'
+import { readApprovalUrl } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import type {
   AgentJournalApprovalItem,
   AgentJournalUrlApprovalSubject

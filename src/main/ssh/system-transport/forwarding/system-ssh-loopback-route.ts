@@ -154,7 +154,8 @@ function probeLoopbackRoute(
   const channel = spawnSystemSshCommand(target, `echo ${LOOPBACK_ROUTE_PROBE_MARKER}`, {
     ...options,
     nonInteractive: true,
-    wrapCommand: false
+    wrapCommand: false,
+    closeStdin: true
   })
   return new Promise((resolve, reject) => {
     let stdout = ''

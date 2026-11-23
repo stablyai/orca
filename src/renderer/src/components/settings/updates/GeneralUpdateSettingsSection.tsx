@@ -16,8 +16,10 @@ import {
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
 import { ReleaseChannelSection } from './ReleaseChannelSection'
 import { UpdateDelaySetting } from './UpdateDelaySetting'
+import { AutomaticUpdatesSetting } from './AutomaticUpdatesSetting'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { formatUpdateDelayDate } from './update-delay-copy'
-import { useNow } from '@/hooks/use-now'
+import { useNow } from '@/lib/window-activity/use-now'
 import { isDelayedUpdatePending } from '../../../../../shared/updater/update-delay'
 import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
@@ -42,6 +44,15 @@ export function GeneralUpdateSettingsSection({
   }
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
+  const installTarget = useAppStore((s) => s.retainedUpdateTarget)
+  const [failedRestartTarget, setFailedRestartTarget] = useState<typeof installTarget>(null)
+  const showManualRestart =
+    updateStatus.installOnQuit === true &&
+    (updateStatus.state === 'error' ||
+      (updateStatus.state === 'downloaded' &&
+        !updateStatus.installing &&
+        installTarget !== null &&
+        failedRestartTarget === installTarget))
   const now = useNow(
     60_000,
     updateStatus.state === 'not-available' && Boolean(updateStatus.delayedUpdate)
@@ -63,8 +74,18 @@ export function GeneralUpdateSettingsSection({
   }, [])
 
   const handleRestartToUpdate = (): void => {
-    // quitAndInstall schedules quitting and resolves early; only broken IPC can reject here.
-    void window.api.updater.quitAndInstall().catch(console.error)
+    void window.api.updater.quitAndInstall().catch((error: unknown) => {
+      setFailedRestartTarget(installTarget)
+      if (!updateStatus.installOnQuit) {
+        toast.error(
+          t(
+            'auto.components.UpdateCard.restartToInstallFailed',
+            'Could not restart to install the update.'
+          ),
+          { description: error instanceof Error ? error.message : String(error) }
+        )
+      }
+    })
   }
 
   return (
@@ -101,7 +122,13 @@ export function GeneralUpdateSettingsSection({
             // Modifier clicks are one-off update actions, not saved toggles.
             onClick={(event) => window.api.updater.check(getUpdateCheckClickOptions(event))}
             title={updateCheckHint}
-            disabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}
+            disabled={
+              updateStatus.state === 'checking' ||
+              updateStatus.state === 'downloading' ||
+              (updateStatus.state === 'error' &&
+                updateStatus.messageCode === 'macStagingTimeout') ||
+              (updateStatus.state === 'downloaded' && updateStatus.installing)
+            }
             className="gap-2"
           >
             {updateStatus.state === 'checking' ? (
@@ -136,19 +163,21 @@ export function GeneralUpdateSettingsSection({
             >
               <Download className="size-3.5" />
               {t(
-                'auto.components.settings.GeneralUpdateSettingsSection.857ca887da',
-                'Download update ('
+                'auto.components.settings.GeneralUpdateSettingsSection.downloadUpdate',
+                'Download update'
               )}
-              {updateStatus.version})
             </Button>
-          ) : updateStatus.state === 'error' &&
+          ) : !showManualRestart &&
+            updateStatus.state === 'error' &&
             updateStatus.retryAction === 'install' &&
             updateStatus.retryable !== false ? (
             <Button variant="default" size="sm" onClick={handleRestartToUpdate} className="gap-2">
               <RefreshCw className="size-3.5" />
               {t('auto.components.UpdateCard.b3b02a9d84', 'Try again')}
             </Button>
-          ) : updateStatus.state === 'downloaded' ? (
+          ) : !showManualRestart &&
+            updateStatus.state === 'downloaded' &&
+            !(updateStatus.automaticDownload && updateStatus.installing) ? (
             <Button
               variant="default"
               size="sm"
@@ -158,10 +187,9 @@ export function GeneralUpdateSettingsSection({
             >
               <Download className="size-3.5" />
               {t(
-                'auto.components.settings.GeneralUpdateSettingsSection.c0a8f827c7',
-                'Restart to update ('
+                'auto.components.settings.GeneralUpdateSettingsSection.restartToUpdate',
+                'Restart to update'
               )}
-              {updateStatus.version})
             </Button>
           ) : null}
         </div>
@@ -179,17 +207,17 @@ export function GeneralUpdateSettingsSection({
             )}
           {updateStatus.state === 'available' && (
             <>
-              {t('auto.components.settings.GeneralUpdateSettingsSection.a6b37929dc', 'Version')}{' '}
-              {updateStatus.version}{' '}
               {updateStatus.externallyManaged
                 ? t(
-                    'auto.components.settings.GeneralUpdateSettingsSection.e3b9d21c07',
-                    'is available. Update Orca through your system package manager — Orca cannot install this release itself.'
+                    'auto.components.settings.GeneralUpdateSettingsSection.externallyManagedVersionAvailable',
+                    'Version {{version}} is available. Update Orca through your system package manager — Orca cannot install this release itself.',
+                    { version: updateStatus.version }
                   )
                 : t(
-                    'auto.components.settings.GeneralUpdateSettingsSection.8311da27ba',
-                    'is available. Click "Download Update" to download it.'
-                  )}{' '}
+                    'auto.components.settings.GeneralUpdateSettingsSection.versionAvailable',
+                    'Version {{version}} is available.',
+                    { version: updateStatus.version }
+                  )}
               {updateStatus.source !== 'local' && (
                 <a
                   href={
@@ -198,7 +226,7 @@ export function GeneralUpdateSettingsSection({
                   target="_blank"
                   onClick={openAppHttpLinkFromAnchor}
                   rel="noopener noreferrer"
-                  className="underline hover:text-foreground"
+                  className="ms-1 whitespace-nowrap underline hover:text-foreground"
                 >
                   {t(
                     'auto.components.settings.GeneralUpdateSettingsSection.8a52ca1d02',
@@ -240,18 +268,23 @@ export function GeneralUpdateSettingsSection({
                   ))}
           {updateStatus.state === 'downloading' &&
             t(
-              'auto.components.settings.GeneralUpdateSettingsSection.2a48034c4c',
-              'Downloading v{{value0}}... {{value1}}%',
-              { value0: updateStatus.version, value1: updateStatus.percent }
+              'auto.components.settings.GeneralUpdateSettingsSection.downloadingVersion',
+              'Downloading version {{version}} ({{percent}}%)…',
+              { version: updateStatus.version, percent: updateStatus.percent }
             )}
-          {updateStatus.state === 'downloaded' && (
+          {updateStatus.state === 'downloaded' && !showManualRestart && (
             <>
-              {t('auto.components.settings.GeneralUpdateSettingsSection.a6b37929dc', 'Version')}{' '}
-              {updateStatus.version}{' '}
-              {t(
-                'auto.components.settings.GeneralUpdateSettingsSection.d89806cc89',
-                'is ready to install.'
-              )}{' '}
+              {updateStatus.installing
+                ? t(
+                    'auto.components.settings.GeneralUpdateSettingsSection.versionInstalling',
+                    'Version {{version}} is being installed.',
+                    { version: updateStatus.version }
+                  )
+                : t(
+                    'auto.components.settings.GeneralUpdateSettingsSection.versionReadyToInstall',
+                    'Version {{version}} is ready to install.',
+                    { version: updateStatus.version }
+                  )}
               {updateStatus.source !== 'local' && (
                 <a
                   href={
@@ -260,7 +293,7 @@ export function GeneralUpdateSettingsSection({
                   target="_blank"
                   onClick={openAppHttpLinkFromAnchor}
                   rel="noopener noreferrer"
-                  className="underline hover:text-foreground"
+                  className="ms-1 whitespace-nowrap underline hover:text-foreground"
                 >
                   {t(
                     'auto.components.settings.GeneralUpdateSettingsSection.8a52ca1d02',
@@ -270,7 +303,13 @@ export function GeneralUpdateSettingsSection({
               )}
             </>
           )}
+          {showManualRestart &&
+            t(
+              'updates.installOnQuit.summary',
+              'Orca couldn’t restart automatically. Quit Orca and let the update install before reopening it.'
+            )}
           {updateStatus.state === 'error' &&
+            !showManualRestart &&
             (updateStatus.installBlock
               ? getUpdateInstallBlockGuidance(updateStatus.installBlock, t).explainer
               : updateStatus.recovery?.kind === 'linux-package-install'
@@ -288,6 +327,7 @@ export function GeneralUpdateSettingsSection({
                     ))}
         </p>
       </SearchableSetting>
+      {isWebClientLocation() ? null : <AutomaticUpdatesSetting />}
       <UpdateDelaySetting />
       {channelSwitcherRevealed ? <ReleaseChannelSection /> : null}
       <GeneralRemoteServerUpdates />

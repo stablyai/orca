@@ -1,7 +1,7 @@
 import {
   requestVirtualizedScrollAnchorRecord,
   supersedeVirtualizedScrollAnchorRestore
-} from '@/hooks/requestVirtualizedScrollAnchorRecord'
+} from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
 import { measureRootProjectHeaderDragRects } from './root-project-header-drop'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 

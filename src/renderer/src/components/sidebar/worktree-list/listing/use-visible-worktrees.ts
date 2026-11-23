@@ -3,12 +3,14 @@ import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hi
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
 import { createLiveAgentWorktreeIdsSelector } from '@/lib/workspace/activity/worktree-activity-state'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import './visible-worktrees'
 import { computeVisibleWorktrees } from './compute-visible-worktrees'
 import {
@@ -25,6 +27,7 @@ import type { SidebarWorktreeFilters } from './use-filters'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 import { useSleepingSweepRetention } from './use-sleeping-sweep-retention'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { useBotListedWorktreeIdentities } from '@/components/bots/use-bot-listed-worktree-identities'
 import {
   readHiddenVmCheckouts,
   subscribeHiddenVmCheckouts,
@@ -36,19 +39,16 @@ const EMPTY_WORKTREE_ID_SET: ReadonlySet<string> = new Set()
 function createSidebarPairedDeviceIdsSelector(enabled: boolean) {
   let inputs: readonly unknown[] = []
   let result = EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT
-  return (state: AppState): ReadonlyMap<string, string> => {
+  return (state: AppState, statuses: RuntimeStatuses): ReadonlyMap<string, string> => {
     if (!enabled) {
       return EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT
     }
-    const nextInputs = [state.runtimeEnvironments, state.runtimeStatusByEnvironmentId]
+    const nextInputs = [state.runtimeEnvironments, statuses]
     if (shallow(inputs, nextInputs)) {
       return result
     }
     inputs = nextInputs
-    const next = getPairedDeviceIdsByEnvironment(
-      state.runtimeEnvironments,
-      state.runtimeStatusByEnvironmentId
-    )
+    const next = getPairedDeviceIdsByEnvironment(state.runtimeEnvironments, statuses)
     if (!shallow(result, next)) {
       result = next
     }
@@ -81,6 +81,7 @@ export function useVisibleSidebarWorktrees(args: {
     workspaceHostScope
   } = filterState
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
+  const botListedWorktreeIdentities = useBotListedWorktreeIdentities()
   const repos = useAppStore((s) => s.repos)
   const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
   // Opt-out lists must skip the clock so they cannot evict the sample shared by live lists.
@@ -89,8 +90,8 @@ export function useVisibleSidebarWorktrees(args: {
     () => createSidebarPairedDeviceIdsSelector(hideWorkspacesFromOtherDevices),
     [hideWorkspacesFromOtherDevices]
   )
-  const pairedDeviceIdsByEnvironment = useAppStore(selectPairedDevices)
-  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
+  const pairedDeviceIdsByEnvironment = useAppStoreWithHostStatuses(selectPairedDevices)
+  const lineageParentIdentities = useAppStoreWithHostStatuses(selectSidebarLineageParentIdentities)
 
   const needsActivityMaps = !showSleepingWorkspaces || sortBy === 'smart'
   const tabsByWorktree = useAppStore((s) =>
@@ -136,6 +137,7 @@ export function useVisibleSidebarWorktrees(args: {
       worktreeIdsWithStructuredChat,
       worktreeIdsWithLiveAgent,
       sleepingSweepExemptWorktreeIds,
+      botListedWorktreeIdentities,
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,
@@ -163,6 +165,7 @@ export function useVisibleSidebarWorktrees(args: {
     args.agentSendTargetWorktreeId,
     worktreeIdsWithLiveAgent,
     sleepingSweepExemptWorktreeIds,
+    botListedWorktreeIdentities,
     filterRepoIds,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
@@ -190,5 +193,5 @@ export function useVisibleSidebarWorktrees(args: {
   // Reuse equal visibility results across epochs to avoid churning the entire row-model chain.
   const visibleWorktrees = useReusedArrayIdentity(recomputedVisibleWorktrees)
 
-  return { visibleWorktrees, pairedDeviceIdsByEnvironment }
+  return { visibleWorktrees, pairedDeviceIdsByEnvironment, botListedWorktreeIdentities }
 }

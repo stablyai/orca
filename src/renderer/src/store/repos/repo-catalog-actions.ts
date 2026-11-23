@@ -8,7 +8,7 @@ import { mergeSshRepoReadoptions, reconcileReadoptedSshRepoRows } from './supers
 import { getRepoHostIdentity } from '../../../../shared/repository/repo-host-identity'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/runtime/repo-hooks/setup-script-prompt'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { isRemovedRuntimeHostId } from '../host-catalog/removed-runtime-host-rows'
 import type { LocalRepoCatalogFetchOutcome } from './repo-catalog-fencing'
 import type { RepoSlice } from './repo-state'

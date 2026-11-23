@@ -2,8 +2,8 @@ import { isFloatingWorkspaceId } from '../../../../../../shared/workspace/identi
 import { resolveWorkspaceDirectory } from '@/lib/workspace/paths/workspace-directory'
 import type { WorkspaceDirectoryState } from '@/lib/workspace/paths/workspace-directory'
 import { firstRegisteredStructuredChatTab } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { StructuredSessionLaunchDirectory } from '@/store/slices/agent-status/structured-session-launch-directories'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { StructuredSessionLaunchDirectory } from '@/store/slices/agent-status/structured-sessions/structured-session-launch-directories'
 
 type NativeChatDirectoryTab = {
   id: string
@@ -62,4 +62,23 @@ export function resolveNativeChatTabDirectory(
     executionHostId
   )
   return resolution.status === 'resolved' ? resolution.directory : null
+}
+
+/** The folder a worktree or folder chat runs in when its host pinned one inside the workspace (a
+ *  conversation adopted from a sub-folder). Relative paths in that chat name files there, while
+ *  file operations stay addressed from the workspace directory. Floating chats resolve above. */
+export function resolveNativeChatSessionFolder(
+  state: Pick<
+    NativeChatTabDirectoryState,
+    'unifiedTabsByWorktree' | 'structuredSessionLaunchDirectoryByTabId'
+  >,
+  tabId: string,
+  worktreeId: string
+): string | null {
+  if (isFloatingWorkspaceId(worktreeId)) {
+    return null
+  }
+  const tab = firstRegisteredStructuredChatTab(state.unifiedTabsByWorktree?.[worktreeId], tabId)
+  const pinned = state.structuredSessionLaunchDirectoryByTabId?.[tabId]
+  return tab && pinned && pinned.sessionId === tab.entityId ? pinned.launchDirectory : null
 }

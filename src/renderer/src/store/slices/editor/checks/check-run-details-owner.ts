@@ -4,7 +4,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { checkRunDetailsOwnerScope } from '../../../../../../shared/source-control/checks/check-run-details-owner-scope'
 import {
   getOpenFileExecutionHostId,
@@ -27,7 +27,7 @@ import type {
 import { resolveExactWorktreeRoute } from '@/lib/workspace/ownership/worktree-owner-route'
 import { onPairedWebClientHost } from '@/app-shell/platform/paired-web-client-host'
 import { captureWorktreeOperationGenerationSnapshot } from '@/lib/workspace/ownership/worktree-operation-generation'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo

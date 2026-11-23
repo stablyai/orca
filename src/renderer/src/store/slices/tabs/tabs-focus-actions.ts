@@ -4,10 +4,13 @@ import { pushRecentTabId, sanitizeRecentTabIds } from './tab-selection-history'
 import { selectActiveTabForWorktree } from './active-tab-selection'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '../../types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { withPreviewEnded } from './tab-preview-flag'
 import { endsPreviewHere, promotePreviewTabsThroughLayoutOwner } from './preview-tab-promotion'
-import { replaceRecordEntries, replaceTabBuckets } from '../../keyed-record-transitions'
+import {
+  replaceRecordEntries,
+  replaceTabBuckets
+} from '../../record-transitions/keyed-record-transitions'
 
 /** Activation ends a preview unless it preserves it; main's frame ends one main owns. */
 function withPreviewOnActivation(tab: Tab, preservePreview: boolean, endsHere: boolean): Tab {

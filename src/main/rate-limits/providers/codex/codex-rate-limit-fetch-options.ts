@@ -1,4 +1,4 @@
-import type { NetworkProxySettings } from '../../../../shared/network-proxy'
+import type { NetworkProxySettings } from '../../../../shared/network/network-proxy'
 import type { UsageReadingAccount } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export type CodexRateLimitFetchOptions = {

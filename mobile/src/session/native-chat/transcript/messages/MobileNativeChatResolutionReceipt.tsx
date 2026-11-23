@@ -5,7 +5,7 @@ import {
   nativeChatReceiptDevice,
   nativeChatReceiptSubject,
   type NativeChatResolvedPrompt
-} from '../../../../../../src/shared/native-chat/native-chat-resolution-receipt'
+} from '../../../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
 import { nativeChatReceiptCopy } from './native-chat-receipt-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
@@ -16,7 +16,7 @@ import { scaledType } from './mobile-native-chat-message-styles'
 import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { urlApprovalProgress } from '../../../../../../src/shared/agent-session/agent-session-approval-subject'
+import { urlApprovalProgress } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-subject'
 import { MobileNativeChatUrlRequestReceipt } from '../../input/prompts/MobileNativeChatUrlRequest'
 
 export function MobileNativeChatResolutionReceipt({
@@ -80,12 +80,10 @@ export function MobileNativeChatResolutionReceipt({
           {body.detail}
         </Text>
       ) : null}
-      {answers.map((answer, index) => {
+      {answers.map((answer) => {
         const heading = nativeChatReceiptAnswerHeading(subject, answer)
         return (
-          <View
-            key={body.kind === 'question' ? (body.questions?.[index]?.id ?? 'answer') : 'answer'}
-          >
+          <View key={answer.key}>
             {heading ? (
               <MobileNativeChatQuestionText
                 content={heading}

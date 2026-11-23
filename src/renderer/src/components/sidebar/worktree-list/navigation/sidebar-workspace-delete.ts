@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { resolveWorktreeOperationRouteForHost } from '@/lib/workspace/ownership/worktree-operation-route'
-import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { Worktree } from '../../../../../../shared/worktree/types'

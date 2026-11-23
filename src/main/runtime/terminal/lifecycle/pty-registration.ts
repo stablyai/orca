@@ -19,7 +19,7 @@ import type {
 } from '../records/runtime-terminal-state-records'
 import type { OrchestrationCompatibilityTerminalAuthority } from '../../orchestration/terminal-authority/orchestration-compatibility-authority'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { mainTerminalRegistered } from '../surface/main-terminal-surfaces'
 import { assertPaneBoundAtRegistration, isRuntimeHostedWorkspace } from './bind-first-registration'
 
@@ -222,6 +222,8 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLa
         this.registerPreAllocatedHandleForPty(ptyId, replacementHandle)
       }
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
+      // A restarted pane's new process: its resumed agent may have reported before it registered.
+      this.terminalWorkerRestartResume.recheckHeldPanes()
     }
   }
 

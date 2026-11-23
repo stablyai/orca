@@ -83,7 +83,7 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 
 ## Frame CSS variables
 
-Panel and custom editor frames get these stable variables, set from Orca's active theme and updated in place when it changes. Other tokens are not exposed to frames.
+Panel and custom editor frames get these stable variables, set from Orca's active theme and fonts and updated in place when they change. Other tokens are not exposed to frames.
 
 | Variable | Orca token |
 | --- | --- |
@@ -107,3 +107,5 @@ Panel and custom editor frames get these stable variables, set from Orca's activ
 | `--orca-input` | `--input` |
 | `--orca-ring` | `--ring` |
 | `--orca-radius` | `--radius` |
+| `--orca-font-sans` | `--font-sans` |
+| `--orca-font-mono` | `--font-mono` |

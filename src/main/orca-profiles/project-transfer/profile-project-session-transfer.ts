@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { rekeyOwnerKey, rekeyWorktreeId } from './profile-project-worktree-identity'
 import {

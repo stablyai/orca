@@ -1,5 +1,5 @@
 import type Database from '../../sqlite/sync-database'
-import { pendingPromptsAllUnanswerableHere } from '../../../shared/agent-session/agent-session-approval-subject'
+import { pendingPromptsAllUnanswerableHere } from '../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { journalDomainInputEligibility } from './journal-domain-input-eligibility'
 import { JournalSqlScope } from './journal-sql-scope'
@@ -9,6 +9,7 @@ import { journalDomainQueueRow } from './journal-domain-queue-rows'
 import { nextJournalDomainQueueCard } from './journal-domain-submission-consume'
 import { readJournalDomainQueuePauseContext } from './journal-domain-queue-pauses'
 import { readJournalSqlUsageLimitCut } from './journal-sql-status-cuts'
+import { failureHoldsMail } from './queued-messages/queued-message-pause'
 import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
 import { applyJournalDomainQueueCommand } from './journal-domain-queue-command'
 import { finishJournalSqlCommand, journalSqlInputCoordinates } from './journal-sql-command-result'
@@ -97,6 +98,24 @@ export function applyJournalSqlSendAdmission(
       : empty({ kind: 'admitted', value: { clientMessageId: id, submission: existing } })
   }
   const eligibility = journalDomainInputEligibility(scope, facts.send)
+  const superseded = () =>
+    empty({
+      kind: 'refused',
+      refusal: refuse(
+        'agent_session_operation_invalid',
+        { reason: 'continuationSuperseded' },
+        'This chat has moved on. Check the latest messages before continuing.'
+      )
+    })
+  const launch = operation.expectedContinuationLaunch
+  // Provider startup may prove a launch while this send waits for the writer.
+  if (
+    launch &&
+    (eligibility.record?.lease.runtimeFence !== launch.runtimeFence ||
+      eligibility.record?.launchedAccount?.fence !== launch.launchFence)
+  ) {
+    return superseded()
+  }
   if (eligibility.blocked) {
     return empty({
       kind: 'refused',
@@ -116,7 +135,7 @@ export function applyJournalSqlSendAdmission(
         scope,
         facts.reopenFloor ?? null,
         []
-      ).pauses.some((pause) => pause.reason === 'failed')
+      ).pauses.some(failureHoldsMail)
     }
     if (!queue) {
       const next = nextJournalDomainQueueCard(db, scope, {
@@ -138,14 +157,7 @@ export function applyJournalSqlSendAdmission(
       readJournalSqlUsageLimitCut(eligibility.context)?.turnItemId !==
         operation.continuationOfTurnItemId)
   ) {
-    return empty({
-      kind: 'refused',
-      refusal: refuse(
-        'agent_session_operation_invalid',
-        { reason: 'continuationSuperseded' },
-        'This chat has moved on. Check the latest messages before continuing.'
-      )
-    })
+    return superseded()
   }
   if (queue) {
     const queuedBytes = Number(

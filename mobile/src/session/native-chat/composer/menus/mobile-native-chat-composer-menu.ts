@@ -1,10 +1,10 @@
-import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../../../../../../src/shared/agent-session/agent-session-wire'
 import {
   getAgentAnsweredNativeChatCommands,
   getNativeChatAgentProfile,
   type NativeChatAgentProfile
-} from '../../../../../../src/shared/native-chat/native-chat-agent-profiles'
+} from '../../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
 import { nativeChatPickerScannedSkills } from '../../../../../../src/shared/native-chat/input/composer/native-chat-composer-autocomplete'
 import {
   buildNativeChatPickerItems,
@@ -20,6 +20,15 @@ import type {
   SlashCommandSuggestion
 } from '../../../../../../src/shared/native-chat/input/commands/native-chat-slash-commands'
 import { structuredSessionSlashCommands } from '../../../../../../src/shared/agent-session/view/structured-agent-session-slash-menu'
+import {
+  NATIVE_CHAT_RESUME_COMMAND,
+  withNativeChatOrcaCommands
+} from '../../../../../../src/shared/native-chat/input/commands/native-chat-orca-commands'
+import {
+  isNativeChatSideChatCommand,
+  withNativeChatSideChatCommands
+} from '../../../../../../src/shared/native-chat/input/commands/native-chat-side-chat-command'
+import { translate } from '../../../../i18n/mobile-i18n'
 
 // Why: the menu is a plain ScrollView right above a streaming transcript, so it mounts a bounded
 // number of rows; typing narrows the rest.
@@ -32,6 +41,10 @@ export type MobileComposerStructuredCatalog = {
   compactInstructions?: boolean
   /** `/mcp` opens the chat's MCP tray. */
   mcpPanel?: boolean
+  /** `/fork` forks the chat, and `/side` and `/btw` are Orca's, as on desktop. */
+  fork?: boolean
+  /** `/usage` opens the chat's Codex account usage. */
+  accountUsage?: boolean
 }
 
 export type MobileComposerCatalog = {
@@ -61,13 +74,16 @@ export function mobileComposerCatalog({
   }
   const reported = structured?.reported
   const commands = structured
-    ? structuredSessionSlashCommands(
-        agent,
-        structured.conversationCommands,
-        reported,
-        structured.compactInstructions,
-        interactionModeSupported,
-        structured.mcpPanel
+    ? withMobileOrcaCommands(
+        structuredSessionSlashCommands(
+          agent,
+          structured.conversationCommands,
+          reported,
+          structured.compactInstructions,
+          interactionModeSupported,
+          structured.mcpPanel
+        ),
+        structured
       )
     : getAgentAnsweredNativeChatCommands(agent)
   return {
@@ -76,6 +92,61 @@ export function mobileComposerCatalog({
     discovery,
     sessionSkills: nativeChatSessionSkills(agent, reported)
   }
+}
+
+/** Desktop's Orca rows: `/fork` and `/usage` run here; `/resume`, `/side` and `/btw` say they are desktop-only. */
+function withMobileOrcaCommands(
+  commands: readonly SlashCommandSuggestion[],
+  structured: MobileComposerStructuredCatalog
+): SlashCommandSuggestion[] {
+  const desktopOnly = mobileDesktopOnlyCommandNotice()
+  const rows = withNativeChatOrcaCommands(commands, {
+    resume: desktopOnly,
+    ...(structured.accountUsage
+      ? {
+          usage: translate(
+            'components.native-chat.usage.description',
+            'Show usage for this chat’s Codex account'
+          )
+        }
+      : {}),
+    ...(structured.fork
+      ? {
+          fork: translate(
+            'components.native-chat.fork.commandDescription',
+            'Fork this chat from its latest response'
+          )
+        }
+      : {})
+  })
+  if (!structured.fork) {
+    return rows
+  }
+  const sideRows = withNativeChatSideChatCommands(rows, {
+    side: desktopOnly,
+    btw: desktopOnly,
+    argumentHint: '',
+    unavailableReason: desktopOnly
+  })
+  // Desktop puts its working rows first; rows that only explain themselves go last here.
+  const own = sideRows.filter((row) => row.orcaOwned && isNativeChatSideChatCommand(row.name))
+  return [...sideRows.filter((row) => !own.includes(row)), ...own]
+}
+
+export function mobileDesktopOnlyCommandNotice(): string {
+  return translate('session.orcaCommands.desktopOnly', 'Available in the desktop app')
+}
+
+/** Orca commands the phone lists but leaves to the desktop app, never sending them as text. */
+export function isMobileDesktopOnlyCommand(
+  name: string,
+  structured: MobileComposerStructuredCatalog | undefined
+): boolean {
+  return (
+    structured !== undefined &&
+    (name === NATIVE_CHAT_RESUME_COMMAND ||
+      (structured.fork === true && isNativeChatSideChatCommand(name)))
+  )
 }
 
 export function mobileComposerSkillTokens(catalog: MobileComposerCatalog): ReadonlySet<string> {

@@ -35,6 +35,7 @@ type DaemonClientConnectionOptions = {
     entryPath: string | null
     appVersion: string | null
     spawnerExecPath: string | null
+    providerSpawn?: true
   }
   log: DaemonFileLog
   streamDataBatcher: DaemonStreamDataBatcher
@@ -166,9 +167,11 @@ export class DaemonClientConnections {
         // Negotiate on the last NDJSON line before the client switches to binary frames.
         ...(streamFraming === BINARY_STREAM_FRAMING ? { streamFraming } : {}),
         ...daemonHelloResizeModel(),
+        ...(hello.role === 'control' ? { visibleProjectionSnapshots: true } : {}),
         ...(identity.launchNonce && identity.startedAtMs
           ? {
               daemonIdentity: {
+                ...(identity.providerSpawn ? { providerSpawn: true } : {}),
                 pid: process.pid,
                 startedAtMs: identity.startedAtMs,
                 launchNonce: identity.launchNonce,

@@ -1,9 +1,11 @@
+import { codexHistoryMoveStatusSchema } from './schemas/telemetry-codex-history-move-event-schemas'
 import {
   onboardingLanguagePickerOpenedSchema,
   onboardingLanguageChangedSchema,
   onboardingLanguageRequestedSchema
 } from './schemas/telemetry-onboarding-language-schemas'
-import { agentTokenUsageSchema } from './schemas/telemetry-agent-token-usage-schema'
+import { agentTokenUsageDailySchema } from './schemas/telemetry-agent-token-usage-schema'
+import { legacyJournalRetirementSchema } from './schemas/telemetry-legacy-journal-retirement-schema'
 import {
   agentDashboardActiveSchema,
   agentDashboardEnabledSchema,
@@ -119,6 +121,10 @@ import {
 import { sshRemoteRuntimeResolvedSchema } from './schemas/telemetry-ssh-runtime-event-schemas'
 import { wslUsageSnapshotSchema } from './schemas/telemetry-wsl-usage-event-schemas'
 import {
+  worktreeCardsIntroActionSchema,
+  worktreeCardStyleChangedSchema
+} from './schemas/telemetry-worktree-card-event-schemas'
+import {
   sshHostServerConversionSchema,
   sshHostServerDecidedSchema,
   sshHostServerDeployFailedSchema,
@@ -155,7 +161,7 @@ export const eventSchemas = {
   setup_script_prompt_shown: setupScriptPromptShownSchema,
   setup_script_prompt_action: setupScriptPromptActionSchema,
 
-  agent_token_usage: agentTokenUsageSchema,
+  agent_token_usage_daily: agentTokenUsageDailySchema,
   agent_started: agentStartedSchema,
   agent_prompt_sent: agentPromptSentSchema,
   agent_error: agentErrorSchema,
@@ -180,6 +186,8 @@ export const eventSchemas = {
   codex_trust_grant: codexTrustGrantSchema,
 
   settings_changed: settingsChangedSchema,
+  worktree_card_style_changed: worktreeCardStyleChangedSchema,
+  worktree_cards_intro_action: worktreeCardsIntroActionSchema,
 
   native_chat_toggled: nativeChatToggledSchema,
   native_chat_message_sent: nativeChatMessageSentSchema,
@@ -260,7 +268,11 @@ export const eventSchemas = {
 
   wsl_usage_snapshot: wslUsageSnapshotSchema,
 
+  legacy_journal_retirement: legacyJournalRetirementSchema,
+
   plugin_installed: pluginInstalledSchema,
+
+  codex_history_move_status: codexHistoryMoveStatusSchema,
 
   ...browserExtensionsEventSchemas
 } as const

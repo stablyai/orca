@@ -1,7 +1,7 @@
 import type { TerminalLaunchResult } from '../../agent-session/lifecycle/agent-session-resume'
 import type * as AgentSessionResume from '../../agent-session/lifecycle/agent-session-resume'
 import type { StartupCommandDelivery } from '../../agent-launch/startup/codex-startup-delivery'
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { PtyIncarnationId } from '../pty/lifecycle/pty-incarnation'
 import type { PtyLivenessVerdict } from '../pty/lifecycle/pty-liveness-verdict'
 import type { RuntimeListingHostScope } from '../../execution-host/runtime-listing-host-scope'
@@ -202,6 +202,12 @@ export type RuntimeTerminalState = 'running' | 'exited' | 'unknown'
 export type RuntimeTerminalRowMetadata = {
   wrapped: boolean
   trailingSpaces: number
+}
+
+export type RuntimeTerminalProjection = {
+  lines: string[]
+  draft?: string
+  tailRows?: RuntimeTerminalRowMetadata[]
 }
 
 export type RuntimeTerminalRead = {

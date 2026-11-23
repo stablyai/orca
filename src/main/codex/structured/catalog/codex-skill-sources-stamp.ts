@@ -13,7 +13,7 @@ import { parse as parseToml } from 'smol-toml'
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 
-// Mirrors Codex's skill walk (codex-rs ext/skills loader: MAX_SCAN_DEPTH).
+// Codex's skill loader scans this many levels deep.
 const CODEX_SKILL_SCAN_DEPTH = 6
 /** Menu bursts across chats and phones share one walk per root. */
 const ROOT_STAMP_REUSE_MS = 1_000

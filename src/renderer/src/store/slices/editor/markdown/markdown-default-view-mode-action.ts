@@ -1,7 +1,7 @@
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import type { AppState } from '../../../types'
 import type { MarkdownViewMode } from '../types/open-file'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import {
   normalizeMarkdownDefaultViewMode,
   type MarkdownDefaultViewMode

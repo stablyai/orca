@@ -11,6 +11,7 @@ import type { OrcadActivationVerdict } from '../activation/orcad-activation-gate
 import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import type { RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import { installOrcadBundle } from './orcad-remote-install'
+import type { InstallLockWait } from './remote-install-lock'
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import type { NodeRuntimeTarget } from '../../../shared/node-runtime/node-runtime-pin'
 import { ORCAD_STARTUP_READINESS_TIMEOUT_MS } from '../../../shared/remote-runtime/orcad-distribution/orcad-profile-preflight'
@@ -65,6 +66,10 @@ export type OrcadDeployOptions = {
   recordedNodeRuntimeProbe?: boolean
   /** WSL only: bounded Node runtime downloads; SSH keeps the default timing. */
   nodeRuntimeDownload?: NodeRuntimeDownloadBudget
+  /** WSL only: the host is a distro on this machine (see `installOrcadBundle`). */
+  localWslHost?: boolean
+  /** Another install holds this version's lock; lets the UI say what the connect waits for. */
+  onInstallLockWait?: (wait: InstallLockWait | null) => void
   now?: () => Date
   sleep?: (ms: number) => Promise<void>
   signal?: AbortSignal
@@ -82,6 +87,8 @@ export type OrcadDeployResult =
       startCheckFailed?: true
       /** This deploy uploaded the slot rather than finding it already installed. */
       freshlyInstalled?: true
+      /** Full force may pass this uncounted-census deferral once the candidate proves no daemon. */
+      forceable?: true
     }
 
 export async function deployOrcad(

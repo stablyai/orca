@@ -6,7 +6,7 @@ import {
   normalizeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../shared/execution-host'
+} from '../../shared/execution-host/execution-host'
 import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/persistence/workspace-layout-load'
 import { stableJson } from '../../shared/workspace-layout/persistence/workspace-layout-load-report'
 import { nameBasedLoadContext } from '../../shared/workspace-layout/persistence/workspace-layout-minted-ids'

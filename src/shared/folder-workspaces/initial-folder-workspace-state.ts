@@ -1,5 +1,5 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
-import type { PersistedState } from '../persisted-state-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../execution-host/execution-host'
+import type { PersistedState } from '../orca-profiles/persisted-state-types'
 import { projectHostSetupProjectionFromRepos } from '../project/host-setup/project-host-setup-projection'
 import type { Repo } from '../repository/repo-types'
 import { getRepoMainWorktreeId } from '../worktree/id'

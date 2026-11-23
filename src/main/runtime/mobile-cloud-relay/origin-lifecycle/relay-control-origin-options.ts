@@ -23,4 +23,6 @@ export type RelayControlOriginOptions = {
   onDataPathUnhealthy: (origin: RelayControlOrigin) => void
   onClose: (origin: RelayControlOrigin, code: number) => void
   onPendingChanged?: (origin: RelayControlOrigin) => void
+  // Test seam: deterministic failover start jitter.
+  random?: () => number
 }

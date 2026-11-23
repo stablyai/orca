@@ -2,9 +2,9 @@ import { resolveTerminalPaneOwnerContext } from '../host-state/terminal-pane-own
 import { useAppStore } from '@/store'
 import { resolveTerminalWorktreeRoute } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/workspace-setup/ephemeral-setup-terminal-worktree-id'
-import { isLocalExecutionHost } from '../../../../../shared/execution-host'
+import { isLocalExecutionHost } from '../../../../../shared/execution-host/execution-host'
 import { settleTerminalPaneRecovery } from '../render-health/recovery/terminal-pane-recovery'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 

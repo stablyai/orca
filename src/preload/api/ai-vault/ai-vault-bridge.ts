@@ -3,7 +3,10 @@ import type {
   AiVaultSearchRequest,
   AiVaultSearchStatus
 } from '../../../shared/ai-vault/search/ai-vault-search-types'
-import type { ExecutionHostId, ExecutionHostScope } from '../../../shared/execution-host'
+import type {
+  ExecutionHostId,
+  ExecutionHostScope
+} from '../../../shared/execution-host/execution-host'
 import { ipcRenderer } from 'electron'
 import type {
   AiVaultDeleteSessionArgs,

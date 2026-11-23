@@ -8,7 +8,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { findRepoForHost } from '../../../repos/repo-host-identity'
 import { getCurrentDirectSshAuthority } from './direct-ssh-authority'
 import { listDetectedWorktreesForRepoCoalesced } from './detected-worktree-refresh'

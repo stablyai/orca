@@ -312,7 +312,7 @@ export function CustomKeyModal(props: Props) {
               onPress={() => setStep('special-keys')}
             >
               <Text style={styles.moreLinkText}>
-                {t('components.customKeyModal.moreKeys', 'More keys — Tab, arrows, F1–F12…')}
+                {t('components.customKeyModal.moreKeys', 'More keys')}
               </Text>
             </Pressable>
           </View>

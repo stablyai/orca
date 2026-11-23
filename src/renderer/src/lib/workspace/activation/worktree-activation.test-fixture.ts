@@ -1,6 +1,6 @@
 import { afterEach, vi } from 'vitest'
 import type { Mock } from 'vitest'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import { resetHookCommandDelayedDeliveryForTests } from '../creation/setup/hook-command-delayed-delivery'
 import { useAppStore } from '@/store/index'
 

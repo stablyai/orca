@@ -1,12 +1,12 @@
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import { resolveNativeChatTranscriptAgent } from '../../native-chat/native-chat-agent-support'
 import type { AiVaultAgent } from './ai-vault-types'
 
 /** Agents whose rows name one conversation inside an account-wide database. */
 export function isAiVaultDatabaseAgent(
   agent: AiVaultAgent
-): agent is Extract<AiVaultAgent, 'opencode' | 'opencode2' | 'zcode'> {
-  return resolveNativeChatTranscriptAgent(agent) === 'opencode'
+): agent is Extract<AiVaultAgent, 'opencode' | 'opencode2' | 'zcode' | 'hermes'> {
+  return resolveNativeChatTranscriptAgent(agent) === 'opencode' || agent === 'hermes'
 }
 
 /** How long a hand-off waits for the host's saved copy before using the preview. */
@@ -29,3 +29,6 @@ export function readAiVaultSessionHandoffResult(value: unknown): AiVaultSessionH
     value && typeof value === 'object' && 'transcriptPath' in value ? value.transcriptPath : null
   return typeof transcriptPath === 'string' && transcriptPath ? { transcriptPath } : {}
 }
+
+/** The host's hand-off prompts for one History row; `full` only when the new agent can read a saved transcript. */
+export type AiVaultSessionHandoffPrompts = { focused?: string; full?: string }

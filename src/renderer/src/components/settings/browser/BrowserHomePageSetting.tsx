@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import '../../../../../shared/constants'
+import '../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser/navigation/browser-url'
 import { Button } from '../../ui/button'

@@ -88,7 +88,8 @@ export class RuntimeHostedReviewCommands {
     clientKind?: DeviceScope,
     signal?: AbortSignal,
     acceptRevalidationOnly = false,
-    selected = false
+    selected = false,
+    linkedPRUrl?: string
   ): Promise<PRSnapshotReply> {
     const deadline = Date.now() + HOSTED_PR_COMPLETION_WAIT_MS
     const repo = await this.deps.resolveRepo(repoSelector)
@@ -116,6 +117,9 @@ export class RuntimeHostedReviewCommands {
     if (typeof currentHeadOid === 'string' && currentHeadOid.trim().length > 0) {
       lookupOptions.currentHeadOid = currentHeadOid.trim()
     }
+    if (linkedPRUrl) {
+      lookupOptions.linkedPRUrl = linkedPRUrl
+    }
     const connectionId = hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo))
     // Legacy phone reads retain their narrower thirty-second reuse contract.
     if (clientKind === 'mobile' && reason === undefined) {
@@ -140,6 +144,7 @@ export class RuntimeHostedReviewCommands {
       connectionId,
       currentHeadOid: lookupOptions.currentHeadOid ?? null,
       linkedPRNumber: linkedPRNumber ?? null,
+      ...(linkedPRUrl ? { linkedPRUrl } : {}),
       fallbackPRNumber: linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
       localGitOptions: lookupOptions.localGitExecOptions,
       isSelected: reason === 'swr' && userRefresh !== true && selected
@@ -225,6 +230,7 @@ export class RuntimeHostedReviewCommands {
           linkedBitbucketPR: args.linkedBitbucketPR ?? null,
           linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
           linkedGiteaPR: args.linkedGiteaPR ?? null,
+          currentHeadOid: args.currentHeadOid ?? null,
           ...executionOptions
         }),
       {

@@ -1,7 +1,10 @@
 import { basename } from 'node:path'
 import type { SkillDiscoverySource } from '../../../shared/skills/discovery/skills'
 import type { Repo } from '../../../shared/repository/repo-types'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import { stablePathId } from './skill-discovery-classification'
 
 /** SSH repos this host cannot read, reported so the gap is visible instead of silent (#11466). */

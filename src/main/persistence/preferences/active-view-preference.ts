@@ -1,8 +1,8 @@
 import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import type { TopLevelView } from '../../../shared/ui-chrome-types'
-import { isTopLevelView } from '../../../shared/top-level-view'
+import type { TopLevelView } from '../../../shared/ui-chrome/ui-chrome-types'
+import { isTopLevelView } from '../../../shared/ui-chrome/top-level-view'
 
 const ACTIVE_VIEW_FILE_NAME = 'active-view.json'
 const SAVE_DEBOUNCE_MS = 100

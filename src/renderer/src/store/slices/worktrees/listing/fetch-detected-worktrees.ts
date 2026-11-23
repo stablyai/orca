@@ -5,7 +5,7 @@ import {
   isStaleWorktreeCatalogPublication
 } from './worktree-catalog-version-state'
 import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { findRepoForHost } from '../../../repos/repo-host-identity'
 import { getCurrentDirectSshAuthority } from './direct-ssh-authority'
 import { listDetectedWorktreesForRepoCoalesced } from './detected-worktree-refresh'

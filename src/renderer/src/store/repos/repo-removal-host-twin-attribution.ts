@@ -3,7 +3,7 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import { collectPtyIdsForTab } from '../terminals/retirement/terminal-tab-retirement'
 import { toVisibleTabType } from '../../../../shared/workspace-layout/tab-groups/tab-types'

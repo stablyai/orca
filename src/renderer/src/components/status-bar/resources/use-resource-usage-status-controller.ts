@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '../../../store/index'
 import { useDaemonActions } from '../../shared/useDaemonActions'
@@ -31,11 +31,12 @@ import {
   getRuntimeHostResourceNotices,
   toRuntimeHostResourceSamples
 } from '../host-connections/runtime-host-resources'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 import { useResourceViewVisible } from './use-resource-view-visible'
 import { useResourcePtyActions } from './pty/use-resource-pty-actions'
 import { useResourceMemorySnapshot } from './use-resource-memory-snapshot'
+import { trackResourceManagerOpen } from './resource-manager-open-request'
 import { useTranslate } from '@/i18n/use-translate'
 
 let lastSelectedResourceTab: 'resources' | 'ptys' = 'resources'
@@ -58,6 +59,7 @@ export function useResourceUsageStatusController() {
 
   const [open, setOpen] = useState(false)
   const [selectedTab, setSelectedTabState] = useState(lastSelectedResourceTab)
+  useEffect(() => (open ? trackResourceManagerOpen() : undefined), [open])
   const setSelectedTab = (tab: string): void => {
     if (tab !== 'resources' && tab !== 'ptys') {
       return

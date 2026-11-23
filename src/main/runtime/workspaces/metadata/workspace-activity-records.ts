@@ -1,6 +1,9 @@
 import { getRepoRegistrationHostIds } from '../../../../shared/repository/repo-host-identity'
 import type { AgentPaneWorkspace } from '../../../agent-hooks/observations/agent-transition-detector'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type {
   SmartStampFields,

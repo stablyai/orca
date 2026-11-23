@@ -2,17 +2,16 @@ import React from 'react'
 import type {
   ActiveRightSidebarTab,
   ActivityBarPosition
-} from '../../../../../shared/ui-chrome-types'
+} from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type { CheckStatus as CoarseCheckStatus } from '../../../../../shared/github/pull-requests/pull-request-types'
 type CheckStatus = CoarseCheckStatus | 'cancelled'
 import { cn } from '@/lib/class-names'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
-import {
-  ActivityBarButton,
-  TopActivityOverflowMenu,
-  type ActivityBarItem
-} from './activity-bar-buttons'
+import { TopActivityOverflowMenu, type ActivityBarItem } from './activity-bar-buttons'
+import type { TopActivityBarLayout } from './activity-bar-overflow'
+import { SortableActivityButton } from './sortable-activity-button'
+import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable'
 
 import { ActivityBarPositionMenu, useActivityBarContextPlugin } from './activity-bar-position-menu'
 import {
@@ -30,22 +29,64 @@ export function RightSidebarTopActivityBar({
   checksStatus,
   closeButton,
   activityBarPosition,
-  onChangeActivityBarPosition
+  onChangeActivityBarPosition,
+  arrangementItems,
+  hiddenActiveItem,
+  isBotPage = false
 }: {
+  arrangementItems: ActivityBarItem[]
+  hiddenActiveItem?: ActivityBarItem
+  isBotPage?: boolean
   hasDesktopWindowChrome: boolean
   topActivityStripRef: (node: HTMLDivElement | null) => void
-  topActivityLayout: { visibleItems: ActivityBarItem[]; overflowItems: ActivityBarItem[] }
+  topActivityLayout: TopActivityBarLayout<ActivityBarItem>
   effectiveTab: ActiveRightSidebarTab
-  onSelectTab: (tab: ActiveRightSidebarTab) => void
+  onSelectTab: (tab: ActiveRightSidebarTab, fromKeyboard: boolean) => void
   checksStatus: CheckStatus | null
   closeButton: React.ReactNode
   activityBarPosition: ActivityBarPosition
   onChangeActivityBarPosition: (pos: ActivityBarPosition) => void
 }): React.JSX.Element {
   const contextPlugin = useActivityBarContextPlugin()
+  const pillGap = topActivityLayout.visibleItems.some((item) => item.labeledTab) && 'gap-0.5'
+  const tabs = (
+    <SortableContext
+      items={topActivityLayout.visibleItems.map((item) => item.id)}
+      strategy={horizontalListSortingStrategy}
+    >
+      {topActivityLayout.visibleItems.map((item) => (
+        <SortableActivityButton
+          key={item.id}
+          item={item}
+          active={effectiveTab === item.id}
+          onClick={(fromKeyboard) => onSelectTab(item.id, fromKeyboard)}
+          layout="top"
+          statusIndicator={item.id === 'checks' ? checksStatus : null}
+          compact={topActivityLayout.compactIds.has(item.id)}
+        />
+      ))}
+    </SortableContext>
+  )
+  const overflowItems = hiddenActiveItem
+    ? [...topActivityLayout.overflowItems, hiddenActiveItem]
+    : topActivityLayout.overflowItems
+  const stripItemIds = new Set(topActivityLayout.visibleItems.map((item) => item.id))
+  const overflowMenu = overflowItems.length > 0 && (
+    <TopActivityOverflowMenu
+      items={overflowItems}
+      activeTab={effectiveTab}
+      onSelect={onSelectTab}
+      checksStatus={checksStatus}
+      arrangementItems={arrangementItems}
+      activityBarPosition={activityBarPosition}
+      onChangeActivityBarPosition={onChangeActivityBarPosition}
+      isBotPage={isBotPage}
+      stripItemIds={stripItemIds}
+    />
+  )
   return (
     <ContextMenu>
-      <div className="flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
+      <div className="flex h-(--app-header-height) min-h-(--app-header-height) items-center overflow-hidden border-b border-border right-sidebar-header-inset right-sidebar-header-drag">
         {!hasDesktopWindowChrome && (
           <TooltipProvider>
             <ContextMenuTrigger
@@ -59,26 +100,8 @@ export function RightSidebarTopActivityBar({
               >
                 <div className={cn('flex min-w-0 shrink', RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)}>
                   {/* Use More for overflow because this narrow titlebar also holds close/window controls. */}
-                  <div className="flex min-w-0 shrink">
-                    {topActivityLayout.visibleItems.map((item) => (
-                      <ActivityBarButton
-                        key={item.id}
-                        item={item}
-                        active={effectiveTab === item.id}
-                        onClick={() => onSelectTab(item.id)}
-                        layout="top"
-                        statusIndicator={item.id === 'checks' ? checksStatus : null}
-                      />
-                    ))}
-                  </div>
-                  {topActivityLayout.overflowItems.length > 0 && (
-                    <TopActivityOverflowMenu
-                      items={topActivityLayout.overflowItems}
-                      activeTab={effectiveTab}
-                      onSelect={onSelectTab}
-                      checksStatus={checksStatus}
-                    />
-                  )}
+                  <div className={cn('flex min-w-0 shrink items-center', pillGap)}>{tabs}</div>
+                  {overflowMenu}
                 </div>
               </div>
             </ContextMenuTrigger>
@@ -117,26 +140,8 @@ export function RightSidebarTopActivityBar({
               className={RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME}
             >
               {/* Keep navigation in the body so custom desktop titlebars remain visually native and uncrowded. */}
-              <div className="flex min-w-0 flex-1 shrink">
-                {topActivityLayout.visibleItems.map((item) => (
-                  <ActivityBarButton
-                    key={item.id}
-                    item={item}
-                    active={effectiveTab === item.id}
-                    onClick={() => onSelectTab(item.id)}
-                    layout="top"
-                    statusIndicator={item.id === 'checks' ? checksStatus : null}
-                  />
-                ))}
-              </div>
-              {topActivityLayout.overflowItems.length > 0 && (
-                <TopActivityOverflowMenu
-                  items={topActivityLayout.overflowItems}
-                  activeTab={effectiveTab}
-                  onSelect={onSelectTab}
-                  checksStatus={checksStatus}
-                />
-              )}
+              <div className={cn('flex min-w-0 flex-1 shrink items-center', pillGap)}>{tabs}</div>
+              {overflowMenu}
             </div>
           </ContextMenuTrigger>
         </TooltipProvider>
@@ -145,6 +150,10 @@ export function RightSidebarTopActivityBar({
         currentPosition={activityBarPosition}
         onChangePosition={onChangeActivityBarPosition}
         pluginKey={contextPlugin.pluginKey}
+        itemId={contextPlugin.itemId}
+        items={arrangementItems}
+        isBotPage={isBotPage}
+        stripItemIds={stripItemIds}
       />
     </ContextMenu>
   )

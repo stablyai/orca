@@ -8,6 +8,7 @@ import {
   StructuredAgentSessionJournalProjections,
   type StructuredAgentSessionJournalProjection
 } from './structured-agent-session-status-journal-projection'
+import { CorruptJournalReads } from './corrupt-journal-reads'
 
 type Observed = (projection: StructuredAgentSessionJournalProjection) => void
 
@@ -33,8 +34,18 @@ export function createStructuredAgentSessionStatusReader(
   invalidated: (sessionId: string) => void
 ) {
   const projections = new StructuredAgentSessionJournalProjections()
+  const corrupt = new CorruptJournalReads()
 
-  async function readSql(
+  function readSql(
+    sessionId: string,
+    journal: SqlAgentSessionJournal,
+    refresh: () => void,
+    observed?: Observed
+  ) {
+    return corrupt.read(journal, () => readSqlOnce(sessionId, journal, refresh, observed))
+  }
+
+  async function readSqlOnce(
     sessionId: string,
     journal: SqlAgentSessionJournal,
     refresh: () => void,
@@ -47,6 +58,14 @@ export function createStructuredAgentSessionStatusReader(
       deps.getConversation(sessionId)?.providerContextBoundary?.operationId ?? null
     )
     const latest = saved ? saved.value : await journal.stopMarks.latest()
+    const record = deps.getConversation(sessionId)
+    const turnEnd = record
+      ? {
+          botSession: deps.isBotHome?.(record.location.workspaceId) === true,
+          quietEnd: (outcome: 'success' | 'failure', usageLimited?: boolean) =>
+            deps.quietTurnEnd?.(sessionId, outcome, usageLimited) === true
+        }
+      : undefined
     return projections.readSql(
       journal,
       () =>
@@ -56,7 +75,8 @@ export function createStructuredAgentSessionStatusReader(
           latest: journal.stopMarks.withCurrentSettlement(latest)
         }),
       refresh,
-      observed
+      observed,
+      turnEnd
     )
   }
 

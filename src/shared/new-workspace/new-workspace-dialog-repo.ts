@@ -3,7 +3,7 @@ import {
   getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId,
   type ExecutionHostScope
-} from '../execution-host'
+} from '../execution-host/execution-host'
 import { isGitRepoKind } from '../repository/repo-kind'
 import { isRepoHidden } from '../project/catalog/hidden-projects'
 import type { Repo } from '../repository/repo-types'

@@ -1,7 +1,7 @@
 /** Reuse pane Unicode/link/IME/shortcut and kitty policy outside panes; callers own transport and parse-completion backpressure. */
 import { Terminal, type ITerminalInitOnlyOptions, type ITerminalOptions } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { DashboardCardTerminalInput } from '../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'

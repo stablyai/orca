@@ -12,7 +12,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   isPaletteCurrentWorktree,
   getPaletteWorktreeExecutionHostId,

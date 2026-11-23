@@ -1,6 +1,8 @@
 import { useAppStore } from '@/store'
-import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
-import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type {
+  WorktreeVisibilityDefaults,
+  Repo
+} from '../../../../../../shared/repository/repo-types'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
 
 export function useRepoOwnerVisibilityDefaults(

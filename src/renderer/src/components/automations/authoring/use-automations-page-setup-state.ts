@@ -6,7 +6,10 @@ import {
   getAutomationHostTargetFromKey,
   type AutomationHostTarget
 } from '../hosts/automation-host-client'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { findAutomationRepo } from '../../../../../shared/automations/ownership/automation-repo-target'
 import { getVisibleAutomationSetupDecision } from './automation-setup-decision'
 import type { AutomationsPageListState } from '../listing/use-automations-page-list-state'

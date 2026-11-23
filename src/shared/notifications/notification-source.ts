@@ -3,7 +3,7 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../execution-host'
+} from '../execution-host/execution-host'
 import {
   isEphemeralVmRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment

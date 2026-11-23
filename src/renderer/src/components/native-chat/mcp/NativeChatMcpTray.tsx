@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
@@ -11,13 +11,14 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import type {
   AgentSessionMcpOperation,
   AgentSessionMcpResult
-} from '../../../../../shared/agent-session/agent-session-mcp'
+} from '../../../../../shared/agent-session/options/protocol/agent-session-mcp'
 import {
   createAgentSessionMcpPanelHook,
   type AgentSessionMcpPanelState
 } from '../../../../../shared/agent-session/view/use-agent-session-mcp-panel'
 import { groupAgentSessionMcpServers } from '../../../../../shared/agent-session/view/agent-session-mcp-server-presentation'
 import { NativeChatComposerTabStrip } from '../composer/controls/NativeChatComposerTabStrip'
+import { useStructuredAgentSessionHostExecutionPhase } from '../session/status/structured-agent-session-status-hooks'
 import { mcpSourceLabel, mcpTraySummary } from './native-chat-mcp-server-text'
 import { NativeChatMcpServerRow, type McpServerAction } from './NativeChatMcpServerRow'
 import { useDeferredPending } from './use-deferred-pending'
@@ -38,10 +39,12 @@ const openSignInPage = (url: string): void => {
 export function NativeChatMcpTray({
   sessionId,
   target,
+  opens,
   onClose
 }: {
   sessionId: string
   target: RuntimeClientTarget
+  opens: number
   onClose: () => void
 }): React.JSX.Element {
   const call = useCallback(
@@ -52,7 +55,9 @@ export function NativeChatMcpTray({
       }),
     [sessionId, target]
   )
-  const panel = useAgentSessionMcpPanel(call, openSignInPage)
+  // An agent at rest has no servers to list; re-read once it starts or stops.
+  const phase = useStructuredAgentSessionHostExecutionPhase(sessionId, target)
+  const panel = useAgentSessionMcpPanel(call, openSignInPage, `${opens}:${phase}`)
   const readAgain = panel.retry
   const [retrying, setRetrying] = useState(false)
   const retry = useCallback(() => {
@@ -151,7 +156,7 @@ function McpTrayStatus({ state }: McpTrayViewProps): React.JSX.Element | null {
     return loading ? (
       <span aria-busy="true">
         {SEPARATOR}
-        <LoadingSpinner className="mr-1 inline size-3 align-[-0.125em]" />
+        <LoadingSpinner className="mr-1 inline-block size-3 align-[-0.125em]" />
         {t('components.native-chat.mcp.loading', 'Loading…')}
       </span>
     ) : null

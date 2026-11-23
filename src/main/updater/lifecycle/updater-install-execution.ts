@@ -16,10 +16,9 @@ import { requestServeUpdateHandoff, failServeUpdateHandoff } from '../serve-upda
 import { UpdaterMacInstallPreflight } from '../mac-install/updater-mac-install-preflight'
 import { prepareThisProcessShipItStaging } from '../mac-install/shipit-leftover-recovery'
 import { MAC_DEFERRED_STAGING_TIMEOUT_MS } from './updater-state'
-import { wslMoveInstallHold } from './updater-wsl-move-install-hold'
 
 export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight {
-  protected async performQuitAndInstall(): Promise<void> {
+  protected async performQuitAndInstall(automatic = false): Promise<void> {
     if (this.quitAndInstallInProgress) {
       recordUpdaterLifecycle('quit_and_install_ignored', { reason: 'already-in-progress' })
       return
@@ -59,16 +58,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
       })
       return
     }
-    const wslHold = wslMoveInstallHold()
-    if (wslHold) {
-      recordUpdaterLifecycle(wslHold.lifecycleEvent, { version: pendingVersion || null })
-      this.sendToMainWindow('updater:quitAndInstallAborted')
-      this.sendInstallFailureStatus({
-        state: 'error',
-        message: wslHold.message,
-        retryAction: 'install',
-        ...(pendingVersion ? { version: pendingVersion } : {})
-      })
+    if (!this.canProceedWithInstall(pendingVersion, automatic)) {
       return
     }
     this.finishActiveUpdateCheckAttempt()
@@ -77,6 +67,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
 
     // Block activate before any work so the old bundle cannot reopen during ShipIt replacement.
     this.quittingForUpdate = true
+    let preparingProfile = false
 
     try {
       this.sendStatus(
@@ -99,9 +90,10 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
           macInstallerReady: process.platform === 'darwin' ? isMacInstallerReady() : true
         })
         span.addEvent('pre_quit_cleanup_start')
+        preparingProfile = true
         await this.runBeforeUpdateQuitCleanup()
+        preparingProfile = false
         span.addEvent('pre_quit_cleanup_done')
-
         if (
           this.updateInstallMode === 'supervised-headless-serve' &&
           !requestServeUpdateHandoff(pendingVersion)
@@ -124,6 +116,9 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
           return
         }
 
+        if (automatic && !(await this.prepareAutomaticInstall(pendingVersion))) {
+          return
+        }
         await commitServeSupervisorPark(() => getMacUpdateRunningInstances())
         // Deferred staging begins inside the native install call below.
         await (this.isMacStagingDeferredToInstall() ? prepareThisProcessShipItStaging() : null)
@@ -134,13 +129,17 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         if (!this.quitAndInstallInProgress) {
           return
         }
+        if (!this.canProceedWithInstall(pendingVersion, automatic)) {
+          return
+        }
         // Mark before native invoke so synchronous errors can recover; pre-native errors cannot.
         setMacInstallPreflightInProgress(false)
         this.quitAndInstallNativeInvoked = true
         // Invoke before destroying PTYs/close guards so synchronous failure leaves the app usable.
         const supervisorOwnsRelaunch = this.updateInstallMode === 'supervised-headless-serve'
+        const silent = automatic || supervisorOwnsRelaunch
         runWithLaunchPath(() =>
-          this.getAutoUpdater().quitAndInstall(supervisorOwnsRelaunch, !supervisorOwnsRelaunch)
+          this.getAutoUpdater().quitAndInstall(silent, !supervisorOwnsRelaunch)
         )
         span.addEvent('native_quit_and_install_invoked')
 
@@ -210,6 +209,16 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
           message: 'Could not start update install'
         }
       )
+      if (preparingProfile && pendingVersion) {
+        this.sendInstallFailureStatus({
+          state: 'error',
+          version: pendingVersion,
+          ...(this.canInstallOnNormalQuit(pendingVersion) ? { installOnQuit: true } : {}),
+          retryAction: 'install',
+          message: this.withInstallFailureCause('Could not prepare the session for restart.', error)
+        })
+        return
+      }
       this.sendInstallFailureStatus({
         state: 'error',
         // A synchronous throw carries the same installer text the 'error' event would have.

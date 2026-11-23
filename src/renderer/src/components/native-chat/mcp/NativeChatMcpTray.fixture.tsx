@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import type { AgentSessionMcpServer } from '../../../../../shared/agent-session/agent-session-mcp'
+import type { AgentSessionMcpServer } from '../../../../../shared/agent-session/options/protocol/agent-session-mcp'
 import type { AgentSessionMcpPanelState } from '../../../../../shared/agent-session/view/use-agent-session-mcp-panel'
 import { NativeChatThreadGoalBanner } from '../session/goals/NativeChatThreadGoalBanner'
 import { NativeChatMcpTrayView } from './NativeChatMcpTray'
@@ -130,6 +130,15 @@ export const claudeAiSignIn = fixture({
 export const rowFailure = fixture({
   servers: CLAUDE_SERVERS,
   failure: { server: 'postgres', message: 'Server is still starting' }
+})
+
+// A Codex chat before its first message: project servers come from config, not a thread.
+export const codexBeforeStart = fixture({
+  servers: [
+    server('tracker', 'connected', { toolCount: 12 }),
+    server('docs', 'not-started', { canToggle: false }),
+    server('search', 'disabled', { canToggle: false })
+  ]
 })
 
 export const notRunning = fixture({ result: { status: 'not-running' } })

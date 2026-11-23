@@ -8,7 +8,47 @@ import type { NativeChatComposerNotice } from './controls/native-chat-composer-n
 import type { NativeChatRecallSource } from '../drafts/native-chat-sent-prompt-history'
 import type { OrchestrationAgentReference } from '../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 
+/** A room target `@` lists, e.g. a bot group's member or another bot from a bot's chat. */
+export type NativeChatRoomMention = {
+  name: string
+  /** Its value in the `@` menu where names can repeat (bots on two computers); its name when absent. */
+  key?: string
+  /** The bot it is, where its chats can be opened from its row. */
+  id?: string
+  /** Stable identity for "recently mentioned", so a rename keeps its place. */
+  recentKey?: string
+  icon: React.ReactNode
+  /** A second line, such as what a bot is for; `@` matches it too. */
+  detail?: string
+  /** A second line shown as written, in place of "For: …" (the chat's own bot: "Your other chats"). */
+  note?: string
+  /** Shown before the note, such as an agent's status. */
+  noteIcon?: React.ReactNode
+  /** Shown but not pickable, with this tag (a paused bot). */
+  unavailable?: string
+  /** The computer it runs on, as a pill on its second line, for a bot on another computer. */
+  host?: React.ReactNode
+  /** Shown dimmed in its place, still pickable: its computer isn't connected now. */
+  dimmed?: true
+}
+
+/** A multi-agent room: `@` names members, and the reply control reads the draft. A bot's own chat
+ *  lists the other bots above files instead. */
+/** A member's value in the `@` menu. */
+export function nativeChatMentionValue(mention: NativeChatRoomMention): string {
+  return mention.key ?? mention.name
+}
+
+export type NativeChatComposerRoom = {
+  replies?: (draft: string) => React.ReactNode
+  mentions: readonly NativeChatRoomMention[]
+  placeholder: string
+  withFiles?: true
+}
+
 export type NativeChatComposerProps = {
+  room?: NativeChatComposerRoom
+  dock?: React.ReactNode
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
   terminalTabId: string
   /** Input-only edit session: every submit saves, Escape cancels, and send-only actions are absent. */
@@ -32,6 +72,8 @@ export type NativeChatComposerProps = {
   afterStop?: NativeChatAfterStopSend
   /** Interrupt the hosted agent, usually by sending ESC into the PTY. */
   onStop?: () => void
+  /** False while Escape must not stop the turn, e.g. a new bot's first turn: only the Stop button does. */
+  escapeStops?: boolean
   /** Render an optimistic echo until the real transcript turn lands. */
   onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
   /** Settle an optimistic echo whose write was refused or never acknowledged. */
@@ -48,8 +90,6 @@ export type NativeChatComposerProps = {
   onSubmitted?: () => void
   /** Picker-only agent commands continue in the hosted TUI after dispatch. */
   onSwitchToTerminal?: () => void
-  /** Reads the hosted TUI's current rendered screen when chat is entered. */
-  readTerminalScreen?: () => string | null
   /** The tab's launch seed as this pane sees it. */
   launchSeed?: NativeChatLaunchSeed
   /** Structured journal transport; absent keeps the existing PTY path unchanged. */
@@ -71,14 +111,15 @@ export type NativeChatComposerHandle = {
   resend?: (text: string, imagePaths?: string[]) => boolean
   insertAgentReferences: (references: OrchestrationAgentReference[]) => boolean
   isComposing?: () => boolean
-  focus: () => boolean
+  /** `caretAtEnd` puts the caret after text already in the box; `glow` flashes the box once. */
+  focus: (options?: { caretAtEnd?: boolean; glow?: boolean }) => boolean
   /** Dictated text is spaced from the text around the caret. */
   insertTypedText: (text: string, options?: { dictated?: boolean }) => boolean
   insertPastedText?: (text: string) => boolean
   /** Whether the input is there and enabled, so text given to it lands. */
   acceptsText: () => boolean
-  /** Append text after a blank line and place the caret at its end; repeated additions stay separate. */
-  appendText: (text: string) => void
+  /** Append text after a blank line and place the caret at its end; repeated additions stay separate; `glow` flashes the box once. */
+  appendText: (text: string, options?: { glow?: boolean }) => void
   /** Routes pane-level paste events back to the composer field. */
   handlePasteEvent: (event: {
     clipboardData: DataTransfer | null

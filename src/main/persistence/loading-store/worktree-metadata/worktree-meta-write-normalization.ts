@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { normalizeStoredTaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import { normalizeWorkspaceLinkedItem } from '../../../../shared/workspace-attachments/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-attachments/workspace-linked-item-source-context'
@@ -10,7 +10,7 @@ import { normalizeGitHubPRSuppressionUpdate } from '../../../../shared/worktree/
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../../shared/workspace-attachments/workspace-attachments'
 import {
-  mergeDiffCommentMutation,
+  applyDiffCommentWrite,
   type DiffCommentBaseMutation
 } from '../../../../shared/file-review/diff-comment-mutation'
 
@@ -38,13 +38,9 @@ export function mergeWorktreeMetaForWrite(
   updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation & DiffCommentBaseMutation,
   identity?: WorktreeMetaIdentity
 ): WorktreeMeta {
-  const { diffCommentsBase, ...metaUpdates } = updates
-  if (diffCommentsBase !== undefined && metaUpdates.diffComments !== undefined) {
-    metaUpdates.diffComments = mergeDiffCommentMutation(
-      diffCommentsBase,
-      existing?.diffComments ?? [],
-      metaUpdates.diffComments
-    )
+  const { diffCommentsBase: _diffCommentsBase, ...metaUpdates } = updates
+  if (metaUpdates.diffComments !== undefined) {
+    metaUpdates.diffComments = applyDiffCommentWrite(existing?.diffComments, updates)
   }
   const normalizedUpdates = normalizeWorkspaceAttachmentUpdate(existing, metaUpdates)
   const updated = {

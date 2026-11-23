@@ -4,7 +4,7 @@ import type {
   CloneTargetArgs,
   CloneTargetCheck
 } from '../../../shared/git/clone/clone-target-check'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import type {
   NestedRepoScanResult,

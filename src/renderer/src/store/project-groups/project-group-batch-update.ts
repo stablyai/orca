@@ -11,7 +11,7 @@ import {
   resolveProjectGroupOwnerHostId,
   runtimeTargetForProjectGroupOwner
 } from './project-group-owner-routing'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { persistProjectGroupUpdates } from './project-group-update-persistence'

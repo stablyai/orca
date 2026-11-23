@@ -1,7 +1,7 @@
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
 
 import { findWorkspace } from '../pages/browser-page-records'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { sendBrowserLayoutCommand } from '../tabs/browser-layout-owner-commands'
 import { reconcileBrowserProfileGuests } from './browser-profile-guest-reconciliation'
 

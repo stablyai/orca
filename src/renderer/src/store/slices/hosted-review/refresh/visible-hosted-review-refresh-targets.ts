@@ -5,7 +5,7 @@ import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { reviewRefreshIntervalMs } from '../../../../../../shared/source-control/hosted-review/review-refresh-policy'
 import {
   buildPRRefreshCandidate,

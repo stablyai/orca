@@ -13,7 +13,7 @@ import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { WorkspacePortScanResult } from '../../../../../shared/workspace/ports/workspace-ports'
 import type { HostedReviewInfo } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 export function buildWorktreeJumpPaletteDocumentIndex({
   worktrees,

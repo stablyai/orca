@@ -1,4 +1,4 @@
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { splitWorktreeId } from '../../../../shared/worktree/id'

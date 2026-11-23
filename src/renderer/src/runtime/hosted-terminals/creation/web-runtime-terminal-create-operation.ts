@@ -3,7 +3,7 @@ import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-op
 import { createAgentSessionKeyboardOptions } from './agent-launch/agent-session-keyboard-capability'
 import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { agentProviderSessionForHostEnsure } from './agent-launch/agent-session-ensure-provider-session'
 import { translate } from '../../../i18n/i18n'
 import { agentResumeHostAuthorityCapability } from './agent-launch/agent-resume-host-authority-capability'

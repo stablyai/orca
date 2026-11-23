@@ -4,7 +4,7 @@ import {
   getRepoDisplayLabelKey,
   getRepoDisplayLabelsByPath
 } from '../../repository/appearance/repo-display-labels'
-import type { ProjectOrderBy } from '../../ui-chrome-types'
+import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
 import { compareCodePoints, compareSidebarText } from '../sorting/text-order'
 
 export type ActivityItem = { lastActivityAt?: number }

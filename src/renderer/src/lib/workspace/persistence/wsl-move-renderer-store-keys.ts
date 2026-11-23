@@ -2,7 +2,7 @@
  * The WSL host's key for a renderer-stored entry of a moved local workspace, or null when the entry
  * is not one: another host's, another distro's, or a project the move did not take.
  */
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { normalizeRuntimePathForComparison } from '../../../../../shared/file-access/cross-platform-path'
 import type { PythonEnvironment } from '../../../../../shared/editor/notebooks/notebook-kernel-types'
 import type { WslMoveRendererRewriteScope } from '../../../../../shared/wsl-move/wsl-move-renderer-rewrite-scope'

@@ -8,7 +8,7 @@ import {
   toModifierDoubleTapEvent
 } from '../../../../../shared/keybindings/modifier-double-tap-detector'
 import { cn } from '../../../lib/class-names'
-import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '../../ui/ShortcutKeyCombo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 

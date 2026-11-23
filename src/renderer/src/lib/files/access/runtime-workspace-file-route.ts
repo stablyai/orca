@@ -2,7 +2,7 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { findRuntimeWorkspaceFileOwner } from '../../../../../shared/file-access/runtime-workspace-file-owner'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { AppState } from '@/store/types'

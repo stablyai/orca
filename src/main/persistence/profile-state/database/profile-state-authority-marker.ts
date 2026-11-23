@@ -1,3 +1,4 @@
+import { lstat } from 'node:fs/promises'
 import { lstatSync } from 'node:fs'
 import { durableWriteTempPath, writeFileDurableSync } from '../../../filesystem/durable-file-write'
 
@@ -25,4 +26,16 @@ export function ensureProfileStateAuthorityMarker(databaseFile: string): void {
   }
   const path = profileStateAuthorityMarkerPath(databaseFile)
   writeFileDurableSync(durableWriteTempPath(path), path, 'sqlite\n')
+}
+
+export async function hasProfileStateAuthorityMarkerAsync(databaseFile: string): Promise<boolean> {
+  try {
+    await lstat(profileStateAuthorityMarkerPath(databaseFile))
+    return true
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return false
+    }
+    throw error
+  }
 }

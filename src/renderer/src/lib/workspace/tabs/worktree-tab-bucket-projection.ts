@@ -1,4 +1,4 @@
-import { readRecordChanges } from '@/store/keyed-record-change-reads'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
 
 export type WorktreeTabBucketProjection<T, P> = {
   project: (source: Readonly<Record<string, readonly T[]>>) => Record<string, P[]>

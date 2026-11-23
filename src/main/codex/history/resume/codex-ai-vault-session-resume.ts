@@ -3,7 +3,7 @@ import type {
   AiVaultPrepareSessionResumeResult
 } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import type { CodexRuntimeHomeService } from '../../../codex-accounts/runtime-home-service'
 import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'

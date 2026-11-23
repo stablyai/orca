@@ -10,7 +10,7 @@ import {
   agentStateLabel,
   agentStateProgressLabel,
   type AgentDotState
-} from '@/components/AgentStateDot'
+} from '@/components/agent/status/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -21,7 +21,7 @@ import { programStatusAttentionLine } from '../../../../shared/program-status/pr
 import {
   agentRowToolInput,
   showsAgentToolPreview
-} from '@/lib/agent-status/presentation/agent-row-tool-preview'
+} from '../../../../shared/agent-status/presentation/agent-row-tool-preview'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import { agentRowStoppingLabel } from '@/lib/agent-status/presentation/agent-row-stopping-label'
 import {
@@ -31,12 +31,13 @@ import {
 import {
   agentRowDisplayDotState,
   agentRowDotState as asDotState
-} from '@/lib/agent-status/presentation/agent-row-dot-state'
+} from '../../../../shared/agent-row-dot-state'
 import {
   agentMainAgentVerdict,
   agentVerdictDisplayMark
 } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
-import { agentVerdictStatusLine } from '@/lib/agent-status/presentation/agent-verdict-status-line'
+import { agentToolDisplayName } from '../../../../shared/agent-status/presentation/agent-tool-preview'
+import { agentVerdictStatusLine } from '../../../../shared/agent-status/presentation/agent-verdict-status-line'
 import type { DashboardAgentRow as DashboardAgentRowData } from './rows/dashboard-agent-row'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
 import { useAgentRowConversationName } from './rows/use-agent-row-conversation-name'
@@ -44,11 +45,10 @@ import { lastEnteredDoneAt } from './rows/agent-finished-timestamp'
 import {
   agentChildRowMessageLine,
   agentChildRowNoUpdateLabel
-} from '@/components/agent-child-row-text'
+} from '@/components/agent/status/agent-child-row-text'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { useHasWorktreeCardUnreadRollup } from '@/components/sidebar/workspace-card/surface/worktree-card-title-status'
 
 function formatTimeAgo(ts: number, now: number, t: Translate = translate): string {
   const delta = now - ts
@@ -131,7 +131,6 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   onSendTargetClick
 }: Props) {
   const t = useTranslate()
-  const hasUnreadRollup = useHasWorktreeCardUnreadRollup()
   useUiLanguageRevision()
   const view = useClaudeAgentRowView(agent)
   const highlighted = view ? view.current && view.focused : isFocusedPane
@@ -189,7 +188,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state, t)
   const showsTool = showsAgentToolPreview(agent.state) && !isMonitoring && stoppingLabel === null
   const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
-  const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
+  const toolName = showsTool ? agentToolDisplayName(agent.entry.toolName) : ''
   // Why the fallback: a hook-owned row without a tool line still shows what the program says it does.
   const toolInput = showsTool
     ? agentRowToolInput(agent.entry, agent.state) || presentation.message || ''
@@ -266,6 +265,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
         sendTargetStatus === 'disabled' && 'cursor-default opacity-60'
       )}
+      data-workspace-agent-row=""
       data-focused-agent-pane={highlighted ? 'true' : undefined}
       data-current={view?.current ? 'true' : undefined}
       aria-current={view?.current ? 'true' : undefined}
@@ -320,7 +320,6 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
                 title={null}
                 progress={presentation.progress}
                 unread={isUnvisited}
-                unreadDisplay={hasUnreadRollup ? 'label' : 'dot'}
               />
             </span>
           </TooltipTrigger>

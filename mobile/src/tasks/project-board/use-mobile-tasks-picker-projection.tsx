@@ -25,6 +25,7 @@ import { PROVIDER_LABELS } from '../task-list/mobile-task-view-options'
 import { jiraSiteLabel } from '../providers/jira/jira-mobile-connection'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { getTaskRepoProjectKey } from '../../../../src/shared/work-items/task-repo-selection'
 
 function sourceCountLabel(count: number, t: Translate): string {
   return count === 1
@@ -114,9 +115,16 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
     () => PROVIDER_OPTIONS.filter((option) => visibleProviders.includes(option.value)),
     [t, visibleProviders]
   )
+  // The list read one twin per project; another host's twin of it has the same remotes.
+  const createRepoReadTwin =
+    selectedCreateRepo &&
+    selectedHostedRepos.find(
+      (repo) => getTaskRepoProjectKey(repo) === getTaskRepoProjectKey(selectedCreateRepo)
+    )
   const selectedCreateGitHubSources =
     provider === 'github' && selectedCreateRepo
-      ? githubRepoSources[selectedCreateRepo.id]
+      ? (githubRepoSources[selectedCreateRepo.id] ??
+        (createRepoReadTwin ? githubRepoSources[createRepoReadTwin.id] : undefined))
       : undefined
   const selectedCreateIssuePreference =
     selectedCreateRepo?.issueSourcePreference === 'origin' ||
@@ -141,11 +149,12 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
         )
       : sourceCountLabel(githubIssueSourceRows.length, t)
   const repoPickerLabel =
-    effectiveRepoIds.size === 0 || selectedHostedRepos.length === hostedRepos.length
+    // Count what was ticked: reads drop a ticked twin, but the picker still shows it.
+    effectiveRepoIds.size === 0 || effectiveRepoIds.size === hostedRepos.length
       ? t('tasks.pickerProjection.allRepos', 'All repos')
-      : selectedHostedRepos.length === 1
-        ? selectedHostedRepos[0]!.displayName
-        : repoCountLabel(selectedHostedRepos.length, t)
+      : effectiveRepoIds.size === 1 && selectedHostedRepos[0]
+        ? selectedHostedRepos[0].displayName
+        : repoCountLabel(effectiveRepoIds.size, t)
   const workspaceRepoOptions = useMemo<PickerOption<string>[]>(
     () =>
       workspaceRepos.map((repo) => ({

@@ -1,5 +1,5 @@
-import type { ComputerSnapshotResult } from '../../../../shared/computer-use-runtime-types'
-import { renumberComputerTreeLine } from '../../../../shared/computer-use-tree-text'
+import type { ComputerSnapshotResult } from '../../../../shared/computer/computer-use-runtime-types'
+import { renumberComputerTreeLine } from '../../../../shared/computer/computer-use-tree-text'
 import { RuntimeClientError } from '../../runtime-client-error'
 import { elementParam } from '../actions/desktop-script-action'
 import { optionalNumberParam, screenshotRequestParams } from '../desktop-script-provider-params'

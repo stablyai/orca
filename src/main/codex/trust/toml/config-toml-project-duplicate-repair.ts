@@ -31,7 +31,8 @@ export function repairOrcaDuplicateTrustTables(content: string): string {
   }
   const removedLines = new Set<number>()
   for (const group of groups.values()) {
-    const userTables = group.filter((table) => !isOrcaWrittenTable(lines, table))
+    const userTables =
+      group.length > 1 ? group.filter((table) => !isOrcaWrittenTable(lines, table)) : []
     const survivor = group.length === 1 ? group[0] : userTables[0]
     // Identical spellings or multiple user tables are outside this repair's provenance.
     if (

@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { RateLimitState } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { RateLimitService } from './rate-limit-service'
 import { getInitialClaudeRateLimitTarget } from '../providers/claude/claude-rate-limit-target'
@@ -48,7 +48,7 @@ export function createAccountRuntimeTargetSettingsSync(
     if (usageTargetChanged) {
       rateLimits.setAntigravityFetchTarget(nextSettingsTargets.usage)
     }
-    const current = rateLimits.getState()
+    const current = await rateLimits.getState()
     const refreshes: Promise<RateLimitState>[] = []
     if (claudePolicyChanged && !isSameTarget(current.claudeTarget, nextSettingsTargets.claude)) {
       refreshes.push(rateLimits.refreshClaudeForTarget(nextSettingsTargets.claude))

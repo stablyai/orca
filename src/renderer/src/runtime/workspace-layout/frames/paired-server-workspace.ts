@@ -1,4 +1,4 @@
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { buildHostIdByWorktreeId } from '@/lib/workspace/persistence/workspace-session-host-persistence'
 import type { HostIdByWorktreeId } from '@/lib/workspace/persistence/workspace-session-host-split'
 import type { AppState } from '@/store/types'

@@ -5,14 +5,15 @@ import {
   useVirtualizer,
   type Virtualizer
 } from '@tanstack/react-virtual'
-import { VIRTUALIZED_LIST_OVERSCAN } from '@/components/virtualized-list'
-import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import { VIRTUALIZED_LIST_OVERSCAN } from '@/components/ui/virtualized-list'
+import type { ProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { NativeChatToolRunRow } from './native-chat-tool-run-rows'
 
 /** A tool line's `min-h-6.5`; measured rows replace it. */
 const ROW_ESTIMATE_PX = 26
 const estimateRowSize = (): number => ROW_ESTIMATE_PX
+const ignoreMeasurement = (): void => {}
 
 export type NativeChatToolRunVirtualizer = Virtualizer<HTMLDivElement, HTMLDivElement>
 export type NativeChatToolRunDrawnRow = { index: number; start: number; end: number }
@@ -26,9 +27,12 @@ export function useNativeChatToolRunWindow({
   drawsEveryRow,
   rangeExtractor,
   marks,
-  onMeasure
+  onMeasure = ignoreMeasurement,
+  estimateSize = estimateRowSize,
+  scrollMargin = 0,
+  enabled = true
 }: {
-  rows: readonly NativeChatToolRunRow[]
+  rows: readonly Pick<NativeChatToolRunRow, 'key'>[]
   scrollerRef: React.RefObject<HTMLDivElement | null>
   isVisible: boolean
   drawsEveryRow: boolean
@@ -38,9 +42,12 @@ export function useNativeChatToolRunWindow({
     overscan: number
     count: number
   }) => number[]
-  marks: ProgrammaticScrollMarks
+  marks?: ProgrammaticScrollMarks
   /** Every real measurement, attach and resize alike, so the cap and follow see them all. */
-  onMeasure: (element: HTMLDivElement) => void
+  onMeasure?: (element: HTMLDivElement) => void
+  estimateSize?: (index: number) => number
+  scrollMargin?: number
+  enabled?: boolean
 }) {
   const onMeasured = useLatestHandler(onMeasure)
   // Stable per row list: a new key function makes the virtualizer rebuild every row's measurement.
@@ -48,7 +55,9 @@ export function useNativeChatToolRunWindow({
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: rows.length,
     getScrollElement: () => scrollerRef.current,
-    estimateSize: estimateRowSize,
+    estimateSize,
+    scrollMargin,
+    enabled,
     getItemKey,
     overscan: VIRTUALIZED_LIST_OVERSCAN,
     rangeExtractor,
@@ -65,7 +74,7 @@ export function useNativeChatToolRunWindow({
       const previous = element?.scrollTop
       elementScroll(offset, options, instance)
       if (element && element.scrollTop !== previous) {
-        marks.mark(element.scrollTop)
+        marks?.mark(element.scrollTop)
       }
     }
   })

@@ -1,4 +1,4 @@
-import { getRepoDialableSshTargetId } from '../../../shared/execution-host'
+import { getRepoDialableSshTargetId } from '../../../shared/execution-host/execution-host'
 import type { GitRuntimeOptions } from '../../git/command-runner/git-runtime-options'
 import type { Repo } from '../../../shared/repository/repo-types'
 import {

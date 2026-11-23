@@ -1,7 +1,10 @@
 import { useEffect, useState, type RefCallback } from 'react'
 
-/** Observe the actual viewport; retained bodies pause work without losing selection or focus. */
-export function useSectionOnScreen(root: Element | null): [RefCallback<Element>, boolean] {
+/** Observe the actual viewport; retained bodies pause work without losing selection or focus.
+ * 'viewport' observes against the window, still clipped by overflow ancestors. */
+export function useSectionOnScreen(
+  root: Element | null | 'viewport'
+): [RefCallback<Element>, boolean] {
   const [element, setElement] = useState<Element | null>(null)
   const [onScreen, setOnScreen] = useState(false)
   useEffect(() => {
@@ -19,7 +22,7 @@ export function useSectionOnScreen(root: Element | null): [RefCallback<Element>,
           setOnScreen(entry.isIntersecting)
         }
       },
-      { root }
+      { root: root === 'viewport' ? null : root }
     )
     observer.observe(element)
     return () => observer.disconnect()
