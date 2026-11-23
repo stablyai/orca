@@ -1,9 +1,9 @@
+import { NativeChatForkIcon } from '@/components/native-chat/messages/actions/NativeChatForkIcon'
 import { useMemo, useRef } from 'react'
 import {
   Clipboard,
   Copy,
   Eraser,
-  GitFork,
   Maximize2,
   MessageSquare,
   Minimize2,
@@ -252,7 +252,7 @@ function TerminalContextMenuItems({
         <AgentSessionContinuationMenuItem onSelect={onContinueAgentSessionInNewSession} />
       ) : null}
       <DropdownMenuItem onSelect={onForkAgentSession}>
-        <GitFork />
+        <NativeChatForkIcon />
         {t('auto.components.terminal.pane.TerminalContextMenu.8a7ddb8b8a', 'Fork Agent Session…')}
       </DropdownMenuItem>
       <AgentSessionContextCopyMenuItem onSelect={onCopyAgentSessionContext} />

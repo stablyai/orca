@@ -119,7 +119,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.audio.read',
       'native.audio.stop'
     ],
-    // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row; the image viewer drops its actions without native.image.act; dictation uses the computer without native.speech.act; without native.a11y.announce only the page's live region speaks.
+    // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row; the image viewer drops its actions without native.image.act; dictation uses the computer without native.speech.act; without native.a11y.announce only the page's live region speaks; without native.chat.fork the page's own Fork sheet offers only this host.
     optionalGrants: [
       'externalNavigation',
       'native.media.name',
@@ -127,6 +127,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.image.act',
       'native.speech.act',
       'native.a11y.announce',
+      'native.chat.fork',
       'terminalKeyRail',
       DEVICE_STORE_GRANT
     ]

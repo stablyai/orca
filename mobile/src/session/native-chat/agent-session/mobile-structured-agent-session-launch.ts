@@ -13,7 +13,8 @@ import {
 import {
   structuredAgentSessionCreateParams,
   type StructuredAgentSessionCreateParams,
-  type StructuredAgentSessionForkSource
+  type StructuredAgentSessionForkSource,
+  type StructuredAgentSessionResumeSource
 } from '../../../../../src/shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import type { StructuredAgentCreateSupportReply } from '../../../../../src/shared/agent-session/lifecycle/operations/structured-agent-create-support-reply'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
@@ -53,14 +54,29 @@ function createParamsFor(
   agent: TuiAgent,
   worktree: string,
   forkFrom: StructuredAgentSessionForkSource | undefined,
-  tabPlacement: StructuredAgentSessionCreateParams['tabPlacement']
+  tabPlacement: StructuredAgentSessionCreateParams['tabPlacement'],
+  firstMessageText?: string,
+  resumeFrom?: StructuredAgentSessionResumeSource
 ): StructuredAgentSessionCreateParams {
   return structuredAgentSessionCreateParams({
     sessionId: createOrcaSessionId(randomV4Uuid),
     worktree,
     agent,
     ...(forkFrom ? { forkFrom } : {}),
+    ...(resumeFrom ? { resumeFrom } : {}),
     ...(tabPlacement ? { tabPlacement } : {}),
+    ...(firstMessageText
+      ? {
+          firstMessage: {
+            clientMessageId: randomV4Uuid(),
+            body: {
+              kind: 'message' as const,
+              role: 'user' as const,
+              blocks: [{ type: 'text' as const, text: firstMessageText }]
+            }
+          }
+        }
+      : {}),
     randomUuid: randomV4Uuid
   })
 }
@@ -139,12 +155,28 @@ async function createSupportRefusal(
 export async function createMobileStructuredAgentSession(
   client: RpcClient,
   worktreeId: string,
-  agent: TuiAgent
+  agent: TuiAgent,
+  /** Sent only to a host advertising forks; skips createSupport like forkMobileStructuredAgentSession. */
+  forkFrom?: StructuredAgentSessionForkSource,
+  /** Sent only to a host advertising create placement; the replay keeps it. */
+  tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement'],
+  /** Sent only to a host advertising create messages: the chat's first prompt. */
+  firstMessageText?: string,
+  /** A transcript already placed on this host, e.g. a chat copied from another host. */
+  resumeFrom?: StructuredAgentSessionResumeSource
 ): Promise<MobileStructuredAgentLaunchResult> {
   const worktree = `id:${worktreeId}`
   return (
-    (await createSupportRefusal(client, worktree, agent)) ??
-    requestStructuredAgentSessionCreate(client, worktree, agent)
+    (forkFrom ? null : await createSupportRefusal(client, worktree, agent)) ??
+    requestStructuredAgentSessionCreate(
+      client,
+      worktree,
+      agent,
+      forkFrom,
+      tabPlacement,
+      firstMessageText,
+      resumeFrom
+    )
   )
 }
 
@@ -171,9 +203,18 @@ async function requestStructuredAgentSessionCreate(
   worktree: string,
   agent: TuiAgent,
   forkFrom?: StructuredAgentSessionForkSource,
-  tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement']
+  tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement'],
+  firstMessageText?: string,
+  resumeFrom?: StructuredAgentSessionResumeSource
 ): Promise<MobileStructuredAgentCreateResult> {
-  const params = createParamsFor(agent, worktree, forkFrom, tabPlacement)
+  const params = createParamsFor(
+    agent,
+    worktree,
+    forkFrom,
+    tabPlacement,
+    firstMessageText,
+    resumeFrom
+  )
   rememberMobileCreatedStructuredSession(params.envelope.sessionId, worktree)
   let response
   let priorCreateOutcomeUnknown = false

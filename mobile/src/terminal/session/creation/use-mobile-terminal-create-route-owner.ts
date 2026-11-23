@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { MobileSessionAttachmentsModel } from '../../../files/attachments/use-mobile-session-attachments'
+import { resolveMobileNativeChatSessionId } from '../../../session/native-chat/conversation/mobile-native-chat-eligibility'
 
 export function useMobileTerminalCreateRouteOwner(
   scope: Pick<
@@ -26,9 +27,10 @@ export function useMobileTerminalCreateRouteOwner(
     const isRouteCurrent = () => activation !== null && activationRef.current === activation
     const isCurrent = () =>
       isRouteCurrent() &&
+      // A fork's source chat is still open: a chat session, or a terminal chat showing that session.
       (!sourceSessionId ||
         sessionTabsRef.current.some(
-          (tab) => tab.type === 'agent-session' && tab.sessionId === sourceSessionId
+          (tab) => resolveMobileNativeChatSessionId(tab) === sourceSessionId
         ))
     return { isRouteCurrent, isCurrent }
   }

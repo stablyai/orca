@@ -6,6 +6,7 @@ import { mobileSessionTabMenuHeader } from './MobileSessionTabMark'
 import { getMobileNativeChatCliForkActions } from '../native-chat/history/mobile-native-chat-cli-fork'
 import { useMobileAllowAutoCloseActions, workerSubjectOf } from './mobile-worker-auto-close'
 import type { MobileSessionController } from '../use-mobile-session-controller'
+import { mobileWorktreeForkAction } from '../native-chat/history/mobile-native-chat-worktree-fork-action'
 
 /** The long-pressed chat tab's actions: continue in a CLI, Allow Auto-Close on a kept worker, close. */
 export function MobileAgentSessionTabActionSheet({
@@ -44,6 +45,12 @@ export function MobileAgentSessionTabActionSheet({
           onDismiss: dismiss
         }),
         ...workerActions,
+        ...(tab && tab.id === controller.activeSessionTab?.id
+          ? [
+              mobileWorktreeForkAction(controller, tab, t, dismiss),
+              mobileWorktreeForkAction(controller, tab, t, dismiss, 'subagent')
+            ].filter((action) => !!action)
+          : []),
         ...closeWithBulkActions(tab, dismiss)
       ]}
       onClose={dismiss}

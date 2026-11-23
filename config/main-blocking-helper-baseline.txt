@@ -221,16 +221,10 @@
 2 src/main/claude/hooks/claude-profile-hook-target.ts
 1 src/main/claude/hooks/statusline-install.ts
 3 src/main/claude/hooks/windows-hook-files.ts
-2 src/main/claude/structured/claude-structured-session-adapter.ts
 2 src/main/claude/structured/launch/claude-structured-child-env.ts
 1 src/main/claude/structured/launch/claude-structured-launch-resolution.ts
 1 src/main/claude/theme-sync/claude-code-theme-sync-schedule.ts
 10 src/main/claude/theme-sync/claude-code-theme-sync.ts
-1 src/main/claude/transcripts/claude-conversation-copy.ts
-2 src/main/claude/transcripts/claude-rewind-fork.ts
-2 src/main/claude/transcripts/claude-rewind-transcript.ts
-1 src/main/claude/transcripts/claude-transcript-catch-up.ts
-1 src/main/claude/transcripts/claude-transcript-recovery.ts
 12 src/main/cli/appimage/appimage-copy-pre-extraction.ts
 29 src/main/cli/appimage/appimage-extracted-root.ts
 5 src/main/cli/appimage/appimage-extraction-pruning.ts

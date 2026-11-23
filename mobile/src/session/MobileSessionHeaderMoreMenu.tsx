@@ -16,6 +16,7 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { mobileWorktreeForkAction } from './native-chat/history/mobile-native-chat-worktree-fork-action'
 import { getMobileNativeChatCliForkActions } from './native-chat/history/mobile-native-chat-cli-fork'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 
@@ -50,6 +51,14 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     handleOpenQuickCommands,
     itemsOnPhone
   } = controller
+  const worktreeFork = mobileWorktreeForkAction(controller, controller.activeSessionTab, t)
+  const subagentFork = mobileWorktreeForkAction(
+    controller,
+    controller.activeSessionTab,
+    t,
+    undefined,
+    'subagent'
+  )
   const workspaceOnPairedHost = useWorkspaceOnPairedHost()
   const tabActionsDisabled = createTabBusy || connState !== 'connected'
   const panels: ActionSheetAction[] = [
@@ -147,6 +156,8 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
       : [])
   ]
   const tabs: ActionSheetAction[] = [
+    ...(worktreeFork ? [worktreeFork] : []),
+    ...(subagentFork ? [subagentFork] : []),
     ...getMobileNativeChatCliForkActions({
       controller,
       tab: activeSessionTab?.type === 'agent-session' ? activeSessionTab : null,

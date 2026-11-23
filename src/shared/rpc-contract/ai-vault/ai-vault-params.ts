@@ -61,7 +61,9 @@ const AiVaultRowResumeParams = z
     filePath: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH),
     codexHome: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH).nullable(),
     executionHostId: z.string().optional(),
-    fork: z.boolean().optional()
+    fork: z.boolean().optional(),
+    forkThroughEntryId: z.string().min(1).max(512).optional(),
+    destinationCwd: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH).optional()
   })
   .strict()
 
