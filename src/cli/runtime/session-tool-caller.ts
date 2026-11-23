@@ -9,7 +9,7 @@ import {
   SHARED_TOOL_PROCESS_SESSION_ID_PATTERN
 } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import type { RuntimeClient } from './client'
-import { resolveHermesActiveProfileHome } from '../../main/hermes/hermes-default-home'
+import { resolveHermesActiveProfileHome } from '../../shared/hermes/hermes-active-profile-home'
 import { RuntimeClientError } from './connection/types'
 
 /** This host's answer for a token: `{ env }`, the session's identity, or `{ env: null }`. */
