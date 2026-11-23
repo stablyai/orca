@@ -44,12 +44,9 @@ it('replaces a checkpoint worker that dies, and the replacement checkpoints the 
     writer.prepare('INSERT INTO writes VALUES(?, zeroblob(1500000))').run(id)
     owner.afterCommit()
     await vi.waitFor(() => {
-      const state = writer.prepare('PRAGMA wal_checkpoint(NOOP)').get() as {
-        log: number
-        checkpointed: number
-      }
-      expect(state.log).toBeGreaterThan(1000)
-      expect(state.checkpointed).toBe(state.log)
+      const state = writer.prepare('PRAGMA wal_checkpoint(NOOP)').get()
+      expect(Number(state?.log)).toBeGreaterThan(1000)
+      expect(state?.checkpointed).toBe(state?.log)
     })
   }
   await checkpointedBy(1)
