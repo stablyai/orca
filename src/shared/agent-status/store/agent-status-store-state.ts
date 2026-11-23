@@ -29,7 +29,8 @@ import {
 } from './agent-status-store-fact-codec'
 import {
   parseAgentStatusParentRecord,
-  type AgentStatusParentRecord
+  type AgentStatusParentRecord,
+  type StoredAgentStatusParentRecord
 } from './agent-status-store-parent'
 import { storedBindingKey, tombstoneKeyIsValid } from './agent-status-store-record-keys'
 import { serializeAgentStatusSubject } from '../contracts/agent-status-subject'
@@ -37,7 +38,7 @@ import { serializeAgentStatusSubject } from '../contracts/agent-status-subject'
 export type AgentStatusStoreState = {
   epoch: string
   revision: number
-  parents: Map<string, AgentStatusParentRecord>
+  parents: Map<string, StoredAgentStatusParentRecord>
   children: Map<string, AgentChildWorkRecord>
   aliases: Map<string, AgentChildWorkAliasRecord>
   facts: Map<string, AgentStatusFactRecord>
@@ -52,6 +53,13 @@ export function deepFreezeAgentStatusStoreValue<T>(value: T): T {
     deepFreezeAgentStatusStoreValue(nested)
   }
   return Object.freeze(value)
+}
+
+export function freezeStoredAgentStatusParentRecord(
+  record: AgentStatusParentRecord
+): StoredAgentStatusParentRecord {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The row is deep-frozen here, which is what the brand promises readers.
+  return deepFreezeAgentStatusStoreValue(record) as StoredAgentStatusParentRecord
 }
 
 export function agentStatusFactMapKey(fact: AgentStatusFactIdentity): string {
@@ -235,7 +243,7 @@ export function agentStatusStoreStateFromSnapshot(
     if (state.parents.has(key)) {
       return null
     }
-    state.parents.set(key, deepFreezeAgentStatusStoreValue(record))
+    state.parents.set(key, freezeStoredAgentStatusParentRecord(record))
   }
   for (const child of snapshot.children) {
     const record = parseAgentChildWorkRecord(child)

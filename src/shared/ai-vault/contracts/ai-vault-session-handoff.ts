@@ -29,3 +29,6 @@ export function readAiVaultSessionHandoffResult(value: unknown): AiVaultSessionH
     value && typeof value === 'object' && 'transcriptPath' in value ? value.transcriptPath : null
   return typeof transcriptPath === 'string' && transcriptPath ? { transcriptPath } : {}
 }
+
+/** The host's hand-off prompts for one History row; `full` only when the new agent can read a saved transcript. */
+export type AiVaultSessionHandoffPrompts = { focused?: string; full?: string }

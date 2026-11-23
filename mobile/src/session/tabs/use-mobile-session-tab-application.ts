@@ -21,9 +21,9 @@ import {
   terminalRecordsEqual
 } from '../../terminal/session/inventory/mobile-terminal-records'
 import {
-  acceptSessionSnapshot,
   applyClosedTabTombstones,
-  confirmsMirroredTabSelection
+  confirmsMirroredTabSelection,
+  useSessionSnapshotGate
 } from './session-tab-snapshot-gate'
 import type { SessionTabsApplyOutcome } from './mobile-session-tabs-stream-health'
 import { getActiveTabIdForHandle } from './terminal-tab-selection'
@@ -74,6 +74,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     setSplitTerminalHandles
   } = scope
   const draftOwnershipRef = useRef<DraftTabOwnership | null>(null)
+  const acceptSessionSnapshot = useSessionSnapshotGate()
   const terminalRowHandlesRef = useRef<TerminalRowHandles>(new Map())
   const applySessionTabs = useCallback(
     (result: SessionTabsResult): SessionTabsApplyOutcome<MobileSessionTab> => {
@@ -114,8 +115,6 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       if (
         result.tabs.length > 0 &&
         confirmsMirroredTabSelection(result.publicationEpoch) &&
-        result.publicationEpoch !== 'none' &&
-        result.publicationEpoch !== 'none:client-navigation' &&
         !result.clientHostedPagesUnreconciled &&
         !result.agentSessionsUnverifiable
       ) {

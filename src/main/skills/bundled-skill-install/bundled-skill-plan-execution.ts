@@ -1,3 +1,4 @@
+import { basename } from 'node:path'
 import { sameBundledSkillObserved } from './bundled-skill-plan-identity'
 import type {
   BundledSkillCleanup,
@@ -120,6 +121,11 @@ async function applyContent(run: SkillRun, op: BundledSkillOp): Promise<string |
   }
   switch (op.kind) {
     case 'keep':
+      // Former placements and agent links rely on the skill's own copy; report it if it changed.
+      // A former name's recovery keep is relied on by nothing, and its retirement may run first.
+      if (basename(op.path) === run.source.name) {
+        await requireUnchanged(run, op.path, op.observed)
+      }
       return undefined
     case 'leave':
       // Agent links may depend on another build's shared copy; skip them if it changed since planning.
@@ -291,10 +297,8 @@ export async function autoUpdateBundledSkills(
         (op) =>
           safe.includes(op) ||
           (required.has(op.path) &&
-            (op.kind === 'keep' ||
-              (op.kind === 'leave' &&
-                op.reason === 'other-build' &&
-                op.cleanup.every((item) => item.action === 'delete'))))
+            (op.kind === 'keep' || (op.kind === 'leave' && op.reason === 'other-build')) &&
+            op.cleanup.every((item) => item.action === 'delete'))
       )
       if (ops.length > 0 && !input.recordOnly) {
         const source = findBundledSkillSource(input.sources, entry.name)

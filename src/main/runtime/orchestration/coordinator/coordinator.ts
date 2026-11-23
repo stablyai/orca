@@ -192,7 +192,10 @@ export class Coordinator {
       }
     }
 
-    this.db.markAsRead(messages.map((m) => m.id))
+    this.db.markAsRead(
+      messages.map((m) => m.id),
+      { kind: 'orca' }
+    )
   }
 
   private handleLifecycleMessage(msg: MessageRow): void {

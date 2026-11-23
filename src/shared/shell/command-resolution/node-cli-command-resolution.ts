@@ -137,6 +137,8 @@ function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: s
     directories.push(join(homePath, 'AppData', 'Local', 'Programs', 'OpenAI', 'Codex', 'bin'))
     // Antigravity's official Windows installer; also absent from a GUI launch's PATH until restart.
     directories.push(join(homePath, 'AppData', 'Local', 'agy', 'bin'))
+    // Qwen Code's standalone Windows installer places its qwen.cmd shim here.
+    directories.push(join(homePath, 'AppData', 'Local', 'qwen-code', 'bin'))
     directories.push(join(homePath, 'AppData', 'Roaming', 'npm'))
     directories.push(join(homePath, 'AppData', 'Local', 'pnpm'))
     directories.push(join(homePath, 'AppData', 'Local', 'Yarn', 'bin'))

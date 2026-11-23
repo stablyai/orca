@@ -6,7 +6,7 @@ export type NativeChatTranscriptWindow = {
   totalSize: number
   scrollMargin: number
   sizerRef: (node: HTMLDivElement | null) => void
-  measureRow: (node: HTMLElement | null) => void
+  measureRow: React.RefCallback<HTMLDivElement>
   /** Scroll so this element's top meets the top of the viewport. */
   alignToViewportTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
   /** Whether a jump is still settling as its target row is measured. */
