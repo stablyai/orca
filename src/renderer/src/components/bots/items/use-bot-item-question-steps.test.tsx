@@ -35,6 +35,7 @@ const item: BotItem = {
   madeBy: null,
   question: { eventId: 'e2', text: botItemAskText(ask) },
   closeNote: null,
+  wait: null,
   links: [],
   version: 2,
   lastEventId: 'e3',
