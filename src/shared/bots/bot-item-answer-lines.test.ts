@@ -2,7 +2,6 @@ import { expect, it } from 'vitest'
 import type { BotItemQuestionShape } from './bot-item-ask'
 import {
   botItemAnswersText,
-  botItemHeldAnswersText,
   botItemNamedAnswers,
   botItemUnsentAnswers
 } from './bot-item-answer-lines'
@@ -17,9 +16,9 @@ it('keeps each answer on its own line when two questions share a first line', ()
   }
   const answers = ['the internal ones', 'none yet']
   expect(botItemNamedAnswers(shape, botItemAnswersText(shape, answers))).toEqual(answers)
-  // Held with the first still open, the second stays on its own line.
+  // With the first still open, the second stays on its own line.
   const later = [null, 'none yet']
-  expect(botItemNamedAnswers(shape, botItemHeldAnswersText(shape, later))).toEqual(later)
+  expect(botItemNamedAnswers(shape, botItemAnswersText(shape, later))).toEqual(later)
 })
 
 it('leaves out of a recovery the lines a comment already answered', () => {
