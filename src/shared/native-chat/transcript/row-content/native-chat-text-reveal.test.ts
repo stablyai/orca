@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  nativeChatRevealStepFrames,
-  receiveNativeChatText,
-  startNativeChatTextReveal
-} from './native-chat-text-reveal'
+import { receiveNativeChatText, startNativeChatTextReveal } from './native-chat-text-reveal'
+import { nativeChatRevealStepFrames } from './native-chat-reveal-scheduler'
 
 let clock = 0
 let callbacks = new Map<number, (at: number) => void>()

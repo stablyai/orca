@@ -17,7 +17,6 @@ import {
   documentRowStreams
 } from '../session/structured/read/document-viewer-visibility'
 import {
-  nativeChatRevealStepFrames,
   nativeChatTextAppended,
   playNativeChatTextReveal,
   playNativeChatTextRevealOnClock,
@@ -26,6 +25,7 @@ import {
   type NativeChatTextReveal,
   type NativeChatTextRevealFrames
 } from '../../../../../shared/native-chat/transcript/row-content/native-chat-text-reveal'
+import { createNativeChatRevealScheduler } from '../../../../../shared/native-chat/transcript/row-content/native-chat-reveal-scheduler'
 
 const WORD_FADE_MS = 300
 /** A step that shows a long stretch at once (a slow-to-draw reply steps seconds apart) fades only
@@ -47,6 +47,8 @@ const ARRIVAL_STEP_MS = 60
 /** A reply that renders slowly leaves most of the thread to typing and scrolling. Until a reply
  *  switches to its saves (a 100 ms step), steps stay under 0.4 s apart, so none is a visible pause. */
 const REVEAL_BUSY_SHARE = 1 / 4
+/** Every streaming reply in the window steps on one clock and shares that one busy share. */
+const revealFrames = createNativeChatRevealScheduler(ARRIVAL_STEP_MS, REVEAL_BUSY_SHARE)
 
 export type NativeChatPacedText = {
   text: string
@@ -110,7 +112,7 @@ export function useNativeChatPacedText(
   })
   // Recorded as text is shown, so only words shown in the last fade window are elements, plus any
   // selected ones, so the selection keeps its nodes.
-  const [frames] = useState(() => nativeChatRevealStepFrames(ARRIVAL_STEP_MS, REVEAL_BUSY_SHARE))
+  const [frames] = useState(revealFrames)
   const setShown = useCallback(
     (length: number, plain = false): void => {
       const now = performance.now()
