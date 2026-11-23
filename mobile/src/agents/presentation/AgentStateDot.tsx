@@ -1,4 +1,3 @@
-import { createContext, useContext } from 'react'
 import { Activity } from 'lucide-react-native'
 import { Animated, View, type ViewStyle } from 'react-native'
 import type { AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
@@ -31,15 +30,11 @@ export const AGENT_WORKING_COLOR = '#eab308'
 /** The dot's box, so rows can line text up past it. */
 export const AGENT_STATE_DOT_SIZE = 10
 
-/** True where the rings drawn below are off screen: they keep their look and stop turning. */
-export const MobileWorkingMotionPausedContext = createContext(false)
-
 /** Spins only while mounted, so idle rows hold no loop; Reduce Motion closes the gap, as desktop does. */
 export function WorkingRing({ color, style }: { color: string; style: ViewStyle }) {
   // Unknown counts as reduced, the same as LoadingSpinner.
   const still = useReducedMotionEnabled() !== false
-  const paused = useContext(MobileWorkingMotionPausedContext)
-  const ring = useWorkingRingRotation(!still && !paused)
+  const ring = useWorkingRingRotation(!still)
   return (
     <Animated.View
       ref={ring.ref}

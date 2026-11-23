@@ -1,5 +1,5 @@
 import { memo, useState } from 'react'
-import { Text, View } from 'react-native'
+import { Text, View, type LayoutChangeEvent } from 'react-native'
 import { Image as ImageIcon } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -11,10 +11,9 @@ import {
   type MobileWaitingAgentMail
 } from './MobileWaitingAgentMailActions'
 import { styles } from '../messages/mobile-native-chat-message-styles'
-import { MobileWorkingMotionPausedContext } from '../../../../agents/presentation/AgentStateDot'
 import type { MobileNativeChatTailViewport } from '../viewport/mobile-native-chat-tail-viewport'
 import {
-  createMobileFooterBlock,
+  useMobileFooterBlock,
   useMobileFooterRowOnScreen,
   type MobileFooterBlock
 } from './use-mobile-footer-row-on-screen'
@@ -31,7 +30,7 @@ export const MobileWaitingAgentMailRows = memo(function MobileWaitingAgentMailRo
   /** The chat's list these rows end; under bot setup its own scroller stands in for it. */
   viewport?: MobileNativeChatTailViewport
 }): React.JSX.Element | null {
-  const [block] = useState(createMobileFooterBlock)
+  const block = useMobileFooterBlock(viewport)
   if (!mail || mail.rows.length === 0) {
     return null
   }
@@ -43,7 +42,6 @@ export const MobileWaitingAgentMailRows = memo(function MobileWaitingAgentMailRo
             key={message.id}
             message={message}
             fontScale={fontScale}
-            viewport={viewport}
             block={block}
           />
         ))}
@@ -63,40 +61,46 @@ export function mobileWaitingAgentMailRows(
   ) : null
 }
 
-/** One waiting row, kept as is while its message, the text scale and whether it is on screen are
- *  unchanged. Scrolled away, its sender's working ring stops turning: these rows are never windowed. */
+/** One waiting row. Off screen it keeps only its measured height and none of its card: the list
+ *  does not window these rows, so the block does, and a far row holds no sender status or motion. */
 const MobileWaitingAgentMailRow = memo(function MobileWaitingAgentMailRow({
   message,
   fontScale,
-  viewport,
   block
 }: {
   message: NativeChatMessage
   fontScale: number
-  viewport: MobileNativeChatTailViewport | undefined
   block: MobileFooterBlock
 }): React.JSX.Element | null {
-  const { onScreen, ref, onLayout } = useMobileFooterRowOnScreen(viewport, block)
+  const { onScreen, ref, onLayout } = useMobileFooterRowOnScreen(block, message.id)
+  const [height, setHeight] = useState<number | null>(null)
+  const laidOut = (event: LayoutChangeEvent): void => {
+    onLayout(event)
+    if (onScreen) {
+      setHeight(event.nativeEvent.layout.height)
+    }
+  }
   if (!message.from) {
     return null
   }
+  const held = !onScreen && height !== null
   return (
     <View
       ref={ref}
-      onLayout={onLayout}
-      style={styles.row}
+      onLayout={laidOut}
+      style={held ? [styles.row, { height }] : styles.row}
       testID={`native-chat-waiting-${message.id}`}
     >
-      <View style={styles.content}>
-        <MobileWorkingMotionPausedContext.Provider value={!onScreen}>
+      {held ? null : (
+        <View style={styles.content}>
           <MobileNativeChatAgentMessageCard
             message={message}
             from={message.from}
             fontScale={fontScale}
             attachments={<MobileQueuedImageCount message={message} />}
           />
-        </MobileWorkingMotionPausedContext.Provider>
-      </View>
+        </View>
+      )}
     </View>
   )
 })
