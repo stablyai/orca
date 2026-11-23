@@ -75,14 +75,13 @@ export function arrangeBotSidebarEntries<E extends ArrangedEntry>(
   const shown = view.hidePausedBots
     ? entries.filter((entry) => entry.kind !== 'bot' || !entry.bot.paused)
     : [...entries]
-  const byPinned = (left: E, right: E): number =>
-    Number(right.isPinned === true) - Number(left.isPinned === true)
   if (view.sortBy === 'manual') {
     return shown
-      .map((entry, index) => ({ entry, index }))
-      .sort((left, right) => byPinned(left.entry, right.entry) || left.index - right.index)
-      .map(({ entry }) => entry)
+      .filter((entry) => entry.isPinned === true)
+      .concat(shown.filter((entry) => entry.isPinned !== true))
   }
+  const byPinned = (left: E, right: E): number =>
+    Number(right.isPinned === true) - Number(left.isPinned === true)
   const name = (entry: E): string => (entry.kind === 'bot' ? entry.bot.name : entry.group.name)
   if (view.sortBy === 'name') {
     const collator = new Intl.Collator(undefined, { sensitivity: 'base' })

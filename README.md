@@ -322,6 +322,7 @@ Pair with your desktop app to monitor and steer your agents from your phone.
 ## Developing
 
 Want to contribute or run locally? See our [CONTRIBUTING.md](.github/CONTRIBUTING.md) guide.
+The [feature map](docs/readme/feature-map.md) links features to their implementation and verification.
 
 <a href="https://github.com/stablyai/orca/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=stablyai/orca&max=500&columns=30" alt="Orca contributors" />
