@@ -41,6 +41,25 @@ describe('antigravityExecutorErrorWords', () => {
     })
   })
 
+  it('names the key only when Google gives a key reason', () => {
+    const consumer =
+      "\u26a0 agent executor error: generating and executing: Error 403, Message: Method doesn't allow unregistered callers. Please use API Key or other form of API consumer identity to call this API., Status: PERMISSION_DENIED, Details: []"
+    expect(antigravityExecutorErrorWords(consumer)?.failureDetail).toBe(
+      "Google returned an error: Method doesn't allow unregistered callers. Please use API Key or other form of API consumer identity to call this API."
+    )
+    const expired = KEY_REJECTED.replace('API_KEY_INVALID', 'API_KEY_EXPIRED')
+    expect(antigravityExecutorErrorWords(expired)?.failureDetail).toMatch(
+      /^Google rejected the API key: /
+    )
+  })
+
+  it('keeps a very long line as it is rather than parsing it', () => {
+    const long = `\u26a0 agent executor error: ${'Error 400, Message: , Status: A, '.repeat(2_000)}Status: B`
+    const started = performance.now()
+    expect(antigravityExecutorErrorWords(long)).toBeUndefined()
+    expect(performance.now() - started).toBeLessThan(50)
+  })
+
   it('leaves lines without that shape to the notice itself', () => {
     expect(
       antigravityExecutorErrorWords(

@@ -164,7 +164,16 @@ export async function acpHostBackendInput(
   const allowed = backend.spec.managedCopyAllowed?.(settings) !== false
   const own = found !== null && !isManagedAgentCopyPath(spec.agent, found) ? found : null
   const program = own ?? (allowed ? managedCopy : null) ?? command
-  return { command: program, env, envToDelete, homePath, stateDirectory, settings, startsProgram }
+  return {
+    command: program,
+    env,
+    envToDelete,
+    homePath,
+    stateDirectory,
+    shellEnv,
+    settings,
+    startsProgram
+  }
 }
 
 /** The account home pinning a new chat to the compatible host program `env` finds, or null. */

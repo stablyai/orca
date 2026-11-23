@@ -1,8 +1,11 @@
+import { randomUUID } from 'node:crypto'
+import { constants } from 'node:fs'
 import {
   copyFile,
   lstat,
   mkdir,
   readlink,
+  rename,
   rm,
   rmdir,
   stat,
@@ -142,12 +145,16 @@ async function linksTo(link: string, target: string, platform: NodeJS.Platform):
   return platform === 'win32' ? linked.toLowerCase() === target.toLowerCase() : linked === target
 }
 
-function ignoreMissing(error: unknown): undefined {
-  if (
+function isMissing(error: unknown): boolean {
+  return (
     error instanceof Error &&
     'code' in error &&
     (error.code === 'ENOENT' || error.code === 'ENOTDIR')
-  ) {
+  )
+}
+
+function ignoreMissing(error: unknown): undefined {
+  if (isMissing(error)) {
     return undefined
   }
   throw error
@@ -157,14 +164,27 @@ function ignoreMissing(error: unknown): undefined {
  *  privileges) brings `~/.gemini/GEMINI.md` to chats on a home Orca owns. Never fails the launch. */
 export async function copyAntigravityUserRules(chatHome: string, userHome: string): Promise<void> {
   const rules = join(chatHome, 'GEMINI.md')
-  const copied = await copyFile(join(userHome, '.gemini', 'GEMINI.md'), rules).then(
-    () => true,
-    () => false
-  )
-  // Rules removed from `~/.gemini` stop applying here too.
-  if (!copied) {
-    await rm(rules, { force: true }).catch((error: unknown) => {
-      console.warn('[antigravity] stale user rules kept in the chat home:', error)
-    })
+  const source = join(userHome, '.gemini', 'GEMINI.md')
+  // A fresh name, created exclusively, then renamed over the copy: a link planted at either name
+  // is replaced rather than written through, and a concurrent start never reads half a file.
+  const temporary = join(chatHome, `.GEMINI.md.${process.pid}.${randomUUID()}.tmp`)
+  try {
+    await copyFile(source, temporary, constants.COPYFILE_EXCL)
+    await rename(temporary, rules)
+  } catch (error) {
+    await rm(temporary, { force: true }).catch(() => undefined)
+    const sourceGone = await stat(source).then(
+      () => false,
+      (cause: unknown) => isMissing(cause)
+    )
+    if (sourceGone) {
+      // Rules removed from `~/.gemini` stop applying here too.
+      await rm(rules, { force: true }).catch((cause: unknown) => {
+        console.warn('[antigravity] stale user rules kept in the chat home:', cause)
+      })
+      return
+    }
+    // Another failure keeps the rules this home already has.
+    console.warn('[antigravity] user rules not copied into the chat home:', error)
   }
 }

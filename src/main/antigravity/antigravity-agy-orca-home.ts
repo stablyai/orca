@@ -1,5 +1,4 @@
-// Gemini API key and Google Agent Platform (gcloud) chats run on agy when it is here, which offers
-// newer models than Orca's server. agy runs them in a home Orca owns (`--gemini-dir`), whose
+// Gemini API key chats run on agy when it is here, which offers newer models than Orca's server. agy runs them in a home Orca owns (`--gemini-dir`), whose
 // settings.json picks the method, so the person's own ~/.gemini login and settings stay untouched.
 
 import { basename, join } from 'node:path'
@@ -25,7 +24,7 @@ import {
   isValidAppVersion
 } from '../../shared/app-lifecycle/identity/app-version'
 import { hasAntigravityChatApiKey } from './antigravity-chat-api-key-store'
-import { agyOrcaHomeCredentialPresent } from './antigravity-agy-orca-home-credential'
+import { agyOrcaHomeKeyPresent } from './antigravity-agy-orca-home-credential'
 import { writeAntigravityChatSettings } from './antigravity-chat-account'
 import {
   AGY_HOME_SKILL_FOLDERS,
@@ -60,7 +59,7 @@ export function agyOrcaHomeArgs(home: AgentSessionAccountHome): string[] {
     : []
 }
 
-// Sign in opens Settings, where the method, key and project are.
+// Sign in opens Settings, where the method and key are.
 function refusal(text: string, purpose: 'chat' | 'listing'): Error {
   if (purpose === 'listing') {
     return new AcpListingRefused(text)
@@ -70,25 +69,22 @@ function refusal(text: string, purpose: 'chat' | 'listing'): Error {
   return detail ? withProviderDiagnostic(refused, detail) : refused
 }
 
-async function missingCredential(method: 'gemini-api-key' | 'agent-platform'): Promise<string> {
-  if (method === 'agent-platform') {
-    return 'No Google Cloud credentials were found for this gcloud chat. Run `gcloud auth application-default login` on this computer, or start a new chat.'
-  }
+async function missingKey(): Promise<string> {
   return (await hasAntigravityChatApiKey())
     ? "The Gemini API key saved for Antigravity can't be read on this computer. Save it again under Settings → Accounts → Antigravity."
     : "No Gemini API key is saved for Antigravity, and GEMINI_API_KEY isn't set. Add a key under Settings → Accounts → Antigravity."
 }
 
 const METHOD_CHANGED =
-  'This chat ran on agy with a Gemini API key or gcloud, and Antigravity now signs in another way. Start a new chat, or switch the sign-in method back under Settings → Accounts → Antigravity.'
+  'This chat ran on agy with a Gemini API key, and Antigravity now signs in another way. Start a new chat, or switch the sign-in method back under Settings → Accounts → Antigravity.'
 
 const folder = hostFolderAccountBinding(VARIABLE, ANTIGRAVITY_AGY_CHAT_HOME_FOLDER, [
   ANTIGRAVITY_ACP_HOME
 ])
 
 /** The home's account binding: settings.json for the saved method before every start or listing.
- *  Only a key or gcloud method runs here, and only with its credential: agy would otherwise sign
- *  in with its own saved login. Chats are refused with the reason; listings aren't run. */
+ *  Only the key method runs here, and only with a key: agy would otherwise sign in with its own
+ *  saved login. Chats are refused with the reason; listings aren't run. */
 export const antigravityAgyOrcaAccount = {
   ...folder,
   prepare: async (
@@ -102,14 +98,14 @@ export const antigravityAgyOrcaAccount = {
     if (!home) {
       throw new Error(`${VARIABLE} is not set`)
     }
-    // A chat pinned here keeps this home after the method moves to a Google account, which agy
-    // would sign in with its own saved login; Orca never writes that method here.
-    if (auth.method !== 'gemini-api-key' && auth.method !== 'agent-platform') {
+    // A chat pinned here keeps this home after the method moves to gcloud or a Google account, which
+    // agy would back with its own saved login; Orca never writes another method here.
+    if (auth.method !== 'gemini-api-key') {
       throw refusal(METHOD_CHANGED, purpose)
     }
-    // New chats without the credential run on Orca's server; one pinned here never runs without it.
-    if (!(await agyOrcaHomeCredentialPresent(auth.method, env))) {
-      throw refusal(await missingCredential(auth.method), purpose)
+    // New chats without a key run on Orca's server; one pinned here never runs without it.
+    if (!(await agyOrcaHomeKeyPresent(env))) {
+      throw refusal(await missingKey(), purpose)
     }
     await folder.prepare?.(env)
     const user = antigravityUserHome(env)

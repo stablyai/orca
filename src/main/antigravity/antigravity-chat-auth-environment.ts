@@ -21,7 +21,7 @@ export async function antigravityChatAuthEnvironment(
 }
 
 /** The account type Orca's Chat saves, for a launch that reads it: Orca's server, and agy on the
- *  home Orca owns for key and gcloud chats; undefined for any other launch. Throws while a save
+ *  home Orca owns for key chats; undefined for any other launch. Throws while a save
  *  is still landing or the saved value is malformed. */
 export function launchAntigravityChatAuth(
   spec: Pick<AcpLaunchSpec, 'agent' | 'authMethod' | 'readsAntigravityChatAuth'>,

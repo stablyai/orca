@@ -150,6 +150,9 @@ export type AcpHostBackendInput = {
   homePath: string
   /** Orca's data folder on this host, where the agent's own account lives. */
   stateDirectory: string
+  /** The shell environment before the host program's scrub, for a credential that a launch on
+   *  another home keeps. */
+  shellEnv?: Readonly<Record<string, string>>
   /** The account type Orca's own Chat signs in with, saved on this host. */
   settings: AcpHostBackendSettings
   /** The question comes from someone using the agent, so it may start the program to answer;

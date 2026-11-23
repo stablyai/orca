@@ -306,7 +306,7 @@ export function AntigravityAccountsSection({
   // chatGoogleSignInInUse); the choice stays hidden otherwise.
   const inUse = state?.chatGoogleSignInInUse
   const googleSignIn = inUse ? { inUse, changed: reread } : undefined
-  // Gemini API key and gcloud chats run on agy here: their method, key and project stay editable.
+  // Gemini API key chats run on agy here: the method and key stay editable.
   const keyOnAgy = state?.chatKeyOnAgy === true
   const chatRows =
     chats && chatRuntime.kind === 'active' ? (
