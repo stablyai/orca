@@ -107,7 +107,14 @@ export type BotConnectorFacts<Connection extends ComposioSignIn, Tool extends Ap
 
 type ConnectorBot = Pick<
   Bot,
-  'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'members' | 'github' | 'google' | 'cliqBots'
+  | 'slack'
+  | 'slackApps'
+  | 'linear'
+  | 'linearWorkspaces'
+  | 'members'
+  | 'github'
+  | 'google'
+  | 'cliqBots'
 >
 
 /** URL servers other than Composio's own, which is drawn as its apps. */
