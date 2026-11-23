@@ -63,9 +63,9 @@ type BrowserToolbarMenuDropdownProps = {
   browserPageId: string
   menuOpen: boolean
   onMenuOpenChange: (open: boolean) => void
-  /** Null where the page's session isn't one of this desktop's profiles. */
+  /** The page's host's profiles; null where that host can't switch this page. */
   profile: BrowserToolbarProfileSubProps | null
-  /** Null where the page's session isn't one of this desktop's profiles, so import can't reach it. */
+  /** Null on streamed pages, whose jar is the server's and takes no import from this desktop. */
   cookieImport: BrowserToolbarImportCookiesSubProps | null
   pageActions: BrowserToolbarPageActions
   /** The Extensions › submenu; null where the page's session runs no extensions. */
@@ -129,12 +129,10 @@ export function BrowserToolbarMenuDropdown({
         data-browser-page-menu-id={browserPageId}
         onCloseAutoFocus={overflow.onMenuCloseAutoFocus}
       >
-        {cookieImport ? (
-          <>
-            <BrowserToolbarImportCookiesSub {...cookieImport} />
-            <DropdownMenuSeparator />
-          </>
-        ) : null}
+        {/* Logins first: without cookies or the right profile, most sites are unusable. */}
+        {cookieImport ? <BrowserToolbarImportCookiesSub {...cookieImport} /> : null}
+        {profile ? <BrowserToolbarProfileSub {...profile} /> : null}
+        {cookieImport || profile ? <DropdownMenuSeparator /> : null}
         {overflow.annotateToolItems}
         {hasPageDisplayItems ? <DropdownMenuSeparator /> : null}
         {onFind ? (
@@ -213,8 +211,7 @@ export function BrowserToolbarMenuDropdown({
         <DropdownMenuSeparator />
 
         {extensionsSub}
-        {profile ? <BrowserToolbarProfileSub {...profile} /> : null}
-        {extensionsSub || profile ? <DropdownMenuSeparator /> : null}
+        {extensionsSub ? <DropdownMenuSeparator /> : null}
 
         <DropdownMenuItem
           // Why deferred: focus returning to the ⋯ trigger would otherwise close the dialog at once.

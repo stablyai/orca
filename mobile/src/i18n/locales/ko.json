@@ -4055,6 +4055,9 @@
       "newHint": "새 로컬 브랜치 만들기",
       "newName": "새 브랜치 이름",
       "title": "이 워크트리의 브랜치"
+    },
+    "activity": {
+      "permission": "권한 필요"
     }
   },
   "worktree": {
@@ -4296,8 +4299,14 @@
         "error": "선택한 자동화 호스트에서 프로젝트 설정에 실패했습니다.",
         "unsupported": "선택한 자동화 호스트가 이 프로젝트를 지원하지 않습니다."
       },
-      "wslDistroStopped": "WSL 배포판 {{distro}}이(가) 중지되어 있어 이 예약 실행에서 시작하지 않았습니다. 배포판을 시작하거나 지금 실행을 사용하세요. 실행 중인 동안에는 이후 실행이 진행됩니다."
-    }
+      "wslDistroStopped": "WSL 배포판 {{distro}}이(가) 중지되어 있어 이 예약 실행에서 시작하지 않았습니다. 배포판을 시작하거나 지금 실행을 사용하세요. 실행 중인 동안에는 이후 실행이 진행됩니다.",
+      "botsOff": "설정에서 봇이 꺼져 있어 Orca가 이 실행을 건너뛰었습니다.",
+      "botMissing": "이 자동화를 실행하는 봇이 더 이상 존재하지 않습니다.",
+      "botFolderMissing": "봇의 폴더를 더 이상 사용할 수 없습니다.",
+      "botPaused": "{{bot}}이(가) 일시 중지되어 Orca가 이 실행을 건너뛰었습니다."
+    },
+    "eventsWontFire": "일정에 따라서만 실행됨: {{connectors}} 커넥터가 필요합니다",
+    "wontFire": "실행되지 않음: {{connectors}} 커넥터가 필요합니다"
   },
   "auto": {
     "components": {
@@ -4555,7 +4564,9 @@
       "newThreadTab": "새 스레드",
       "newThreadHint": "새로 시작",
       "newThread": "{{name}}의 새 스레드",
-      "handoffsPaused": "인계 {{count}}회 후 일시 중지되었습니다. 계속하려면 답장하세요."
+      "handoffsPaused": "인계 {{count}}회 후 일시 중지되었습니다. 계속하려면 답장하세요.",
+      "stopCouldNotBeConfirmed": "중지를 확인할 수 없습니다.",
+      "notStarted": "시작하지 않음"
     },
     "templates": {
       "title": "봇 템플릿",
@@ -4573,6 +4584,397 @@
       "category": {
         "support": "지원 및 분류",
         "personal": "개인 비서"
+      },
+      "pr-review": {
+        "name": "PR 리뷰",
+        "line": "리뷰를 요청받은 PR을 살펴보고 위험한 변경을 정리합니다.",
+        "firstChat": "어떤 저장소를 볼지 물어본 뒤, 내 리뷰를 기다리는 열린 PR을 리뷰하고 결과를 파일과 줄 번호와 함께 이 채팅에 올립니다. 허락하기 전에는 GitHub에 댓글을 달지 않습니다.",
+        "watches": "선택한 저장소에서 내 리뷰를 기다리는 PR",
+        "does": "PR을 하나씩 검토해 위험한 변경과 빠진 테스트를 파일과 줄 번호와 함께 정리합니다.",
+        "reports": "이 채팅에서, 리뷰가 요청될 때",
+        "example1": "#4121: 재시도 카운터가 초기화되지 않아 두 번째 장애부터는 재시도가 멈춥니다.",
+        "example2": "새 타임아웃 경로를 다루는 테스트가 없습니다.",
+        "events": {
+          "review-requested": {
+            "trigger": "PR 리뷰를 요청받을 때",
+            "action": "리뷰하고 이 채팅에 올리기"
+          }
+        }
+      },
+      "bug-investigation": {
+        "name": "버그 조사",
+        "line": "제보된 버그를 재현하고 원인 위치를 찾습니다.",
+        "firstChat": "버그 리포트나 이슈 링크를 건네 주세요. 새 워크스페이스에서 에이전트를 시작해 재현 방법을 기록한 뒤 원인을 보고합니다. 수정은 동의한 뒤에만 작성합니다.",
+        "watches": "건네 주신 버그 리포트와 내게 할당된 Linear 이슈",
+        "does": "새 워크스페이스에서 버그를 재현하고, 시작 지점을 찾아 수정안을 제안합니다.",
+        "reports": "이 채팅에서, 재현과 원인을 찾았을 때",
+        "example1": "Windows에서 ORC-640을 재현했습니다. 줄바꿈 없이 끝나는 텍스트를 붙여넣으면 마지막 줄이 사라집니다.",
+        "example2": "원인: 붙여넣기 종료 마커가 마지막 청크보다 먼저 전송됩니다. 수정을 시작할까요?",
+        "events": {
+          "linear-assigned": {
+            "trigger": "Linear 이슈가 나에게 할당될 때",
+            "action": "조사하기"
+          }
+        }
+      },
+      "dependency-updates": {
+        "name": "의존성 업데이트",
+        "line": "오래되었거나 취약한 패키지를 확인하고 업그레이드를 제안합니다.",
+        "firstChat": "선택한 저장소의 오래되었거나 취약한 패키지를 긴급한 순서대로 정리합니다. 동의하면 에이전트가 그룹별로 PR을 하나씩 엽니다.",
+        "watches": "선택한 저장소의 패키지",
+        "does": "보안 권고와 오래된 패키지를 긴급한 순서로 정리하고, 동의하면 그룹별로 PR 하나씩 업그레이드합니다.",
+        "reports": "이 채팅에서, 매주 월요일 오전 9시",
+        "example1": "권고 1건: http-client 6.19에 심각도 높음 취약점이 있으며 6.21에서 수정되었습니다.",
+        "example2": "마이너 업그레이드 4건은 PR 하나로 묶어 올릴 수 있습니다.",
+        "schedules": {
+          "weekly-check": {
+            "when": "매주 월요일 오전 9시",
+            "what": "새 보안 권고와 메이저 버전"
+          }
+        }
+      },
+      "unreviewed-work": {
+        "name": "검토 안 된 에이전트 작업",
+        "line": "아직 아무도 보지 않은 에이전트 작업 결과를 매일 정리한 목록입니다.",
+        "firstChat": "에이전트가 변경을 마쳤지만 검토하지 않았거나 PR로 만들지 않은 워크스페이스를 정리합니다. 에이전트가 내 응답을 기다릴 때는 Orca가 이미 알려 주므로, 이 봇은 이미 끝난 작업을 다룹니다.",
+        "watches": "내 Orca 워크스페이스",
+        "does": "에이전트가 변경을 마쳤지만 아무도 검토하지 않았거나 PR을 열지 않은 워크스페이스를 정리합니다.",
+        "reports": "이 채팅에서, 평일 오전 9시",
+        "example1": "mobile-pairing이 어제 340줄 변경으로 끝났고 PR이 없습니다.",
+        "example2": "이번 주에 2건이 더 완료되었습니다.",
+        "schedules": {
+          "daily-list": {
+            "when": "평일 오전 9시",
+            "what": "검토를 기다리는 완료된 작업"
+          }
+        }
+      },
+      "workspace-cleanup": {
+        "name": "워크스페이스 정리",
+        "line": "완료되었거나 방치된 워크스페이스를 찾아 삭제를 제안합니다.",
+        "firstChat": "PR이 병합되었거나 2주 동안 변경이 없는 워크스페이스를 커밋되지 않은 변경과 함께 정리합니다. 선택한 항목만 삭제합니다.",
+        "watches": "내 Orca 워크스페이스와 PR",
+        "does": "완료되었거나 방치된 워크스페이스를 커밋되지 않은 변경과 함께 정리하고, 선택한 항목만 삭제합니다.",
+        "reports": "이 채팅에서, 매주 금요일 오후 4시",
+        "example1": "워크스페이스 6개가 완료되었습니다. 이번 주에 PR이 병합되었습니다.",
+        "example2": "폴더 2개가 10월 20일 이후 변경이 없습니다.",
+        "schedules": {
+          "weekly-list": {
+            "when": "매주 금요일 오후 4시",
+            "what": "삭제할 수 있는 워크스페이스"
+          }
+        }
+      },
+      "security-check": {
+        "name": "보안 점검",
+        "line": "병합된 변경에서 유출된 시크릿과 위험한 코드를 찾습니다.",
+        "firstChat": "선택한 저장소에서 지난주에 병합된 PR을 검토하고, 다시 살펴볼 항목을 파일과 줄 번호와 함께 정리합니다.",
+        "watches": "선택한 저장소에서 병합된 PR",
+        "does": "시크릿 유출, 인젝션, 인증 누락, 안전하지 않은 기본값을 점검합니다.",
+        "reports": "이 채팅에서, 매주 월요일 오전 9시와 PR이 병합될 때",
+        "example1": "#4133이 인증 토큰을 포함한 요청 헤더 전체를 로그로 남깁니다.",
+        "example2": "이번 주에는 그 외 항목이 없습니다.",
+        "schedules": {
+          "weekly-review": {
+            "when": "매주 월요일 오전 9시",
+            "what": "이번 주에 병합된 변경"
+          }
+        },
+        "events": {
+          "pr-merged": {
+            "trigger": "PR이 병합될 때",
+            "action": "확인하기"
+          }
+        }
+      },
+      "release": {
+        "name": "릴리스 준비 상태",
+        "line": "다음 릴리스를 막는 요소를 추적합니다.",
+        "firstChat": "실패한 체크, 리뷰 대기 중인 PR, 열린 블로커를 담은 짧은 준비 상태 목록을 유지합니다.",
+        "watches": "PR, 체크, 워크스페이스",
+        "does": "실패한 체크, 리뷰 대기 중인 PR, 열린 블로커를 담은 짧은 준비 상태 목록을 유지합니다.",
+        "reports": "이 채팅에서, 평일 아침",
+        "example1": "1.5는 체크 1건 실패로 막혀 있습니다. #4121의 typecheck입니다.",
+        "example2": "아직 리뷰가 필요한 PR이 2건 있습니다: #4108, #4130.",
+        "schedules": {
+          "readiness-list": {
+            "when": "평일 오전 9시",
+            "what": "준비 상태 목록"
+          }
+        }
+      },
+      "release-notes": {
+        "name": "릴리스 노트",
+        "line": "병합된 PR로 다음 릴리스 노트 초안을 작성합니다.",
+        "firstChat": "마지막 릴리스 태그를 찾아 신규, 수정, 변경 세 그룹으로 노트 초안을 작성합니다. 편집은 이 채팅에서 하면 됩니다.",
+        "watches": "마지막 릴리스 이후 병합된 PR",
+        "does": "사용자용 릴리스 노트 초안을 신규, 수정, 변경 세 그룹으로 작성합니다.",
+        "reports": "이 채팅에서, 요청할 때",
+        "example1": "1.5 초안: 신규 4건, 수정 9건, 변경 2건.",
+        "example2": "가장 큰 변경: 봇끼리 스킬을 공유할 수 있습니다."
+      },
+      "ci-failures": {
+        "name": "CI 실패",
+        "line": "실패한 체크를 설명하고 불안정한 체크 목록을 관리합니다.",
+        "firstChat": "최근 2주간의 체크 실행 기록을 읽어 불안정한 체크를 정리한 뒤, 내 열린 PR에서 실패한 체크를 하나씩 설명합니다. 수정은 동의한 뒤에만 시작합니다.",
+        "watches": "선택한 저장소의 체크 실행 기록",
+        "does": "불안정한 체크와 진짜 실패를 구분하고, 실패마다 원인을 설명하며, 불안정한 체크 목록을 관리합니다.",
+        "reports": "이 채팅에서, 매주 월요일 오전 9시와 체크가 실패할 때",
+        "needsSetup": "GitHub는 아직 브랜치별로 실패를 필터링할 수 없어, 봇이 저장소의 모든 실패를 보고 중요하지 않은 것은 건너뜁니다. 실패마다 턴이 한 번씩 사용됩니다.",
+        "example1": "#4130 typecheck: export 이름이 바뀌었는데 호출 위치 2곳이 빠졌습니다. 수정은 커밋 1개입니다.",
+        "example2": "이번 주 가장 불안정한 항목: 터미널 크기 조절 테스트, 30회 중 4회 실패.",
+        "schedules": {
+          "flaky-list": {
+            "when": "매주 월요일 오전 9시",
+            "what": "불안정한 체크"
+          }
+        },
+        "events": {
+          "check-failed": {
+            "trigger": "체크가 실패할 때",
+            "action": "불안정한 체크인지 진짜 실패인지 알려 주기"
+          }
+        }
+      },
+      "deploy-watch": {
+        "name": "배포 모니터링",
+        "line": "배포마다 바뀐 내용을 올리고 실패한 배포를 알려 줍니다.",
+        "firstChat": "배포 도구가 호출할 자동화 주소를 알려 주고, 배포된 PR을 바탕으로 배포마다 요약합니다.",
+        "watches": "배포 도구의 호출",
+        "does": "배포된 PR을 바탕으로 배포마다 요약하고 실패한 배포를 알려 줍니다.",
+        "reports": "이 채팅에서, 배포가 끝날 때마다",
+        "needsSetup": "배포 도구 커넥터가 없어, 자동화 주소를 배포 도구에 직접 추가해야 합니다.",
+        "example1": "운영 배포 14:02: PR 5건, 릴레이 재시도 수정 포함.",
+        "example2": "스테이징 배포가 migrate 단계에서 실패했습니다: 컬럼이 이미 존재합니다.",
+        "events": {
+          "deploy-called": {
+            "trigger": "배포 도구가 호출할 때",
+            "action": "배포 요약하기"
+          }
+        }
+      },
+      "support": {
+        "name": "지원 분류",
+        "line": "아무도 답하지 않은 질문 목록을 관리합니다.",
+        "firstChat": "선택한 Slack 채널에서 답변이 없는 질문을 링크와 함께 정리하고, 이미 이슈가 있는 질문을 표시합니다.",
+        "watches": "선택한 Slack 채널",
+        "does": "답변이 없는 질문을 링크와 함께 정리하고, 이미 Linear 이슈가 있는 질문을 표시합니다.",
+        "reports": "이 채팅에서, 평일 2시간마다",
+        "example1": "오전 11시 이후 #help에 새 질문 3건. 가장 오래된 질문: SSH 원격 연결이 계속 끊김, 2시간 경과.",
+        "example2": "\"봇을 내보낼 수 있나요?\"는 이미 SUP-212가 있습니다.",
+        "schedules": {
+          "unanswered": {
+            "when": "평일 오전 9시~오후 5시, 2시간마다",
+            "what": "답변 없는 질문"
+          }
+        }
+      },
+      "feedback": {
+        "name": "피드백 요약",
+        "line": "피드백을 주간 주제 목록으로 정리합니다.",
+        "firstChat": "선택한 채널의 최근 한 달 피드백을 주제별로 묶어 개수와 인용문을 함께 정리합니다.",
+        "watches": "Slack 피드백 채널",
+        "does": "피드백을 주제별로 묶어 인용문과 개수를 정리하고, 이미 있는 Linear 이슈를 연결합니다.",
+        "reports": "이 채팅에서, 매주 월요일 오전 9시",
+        "example1": "가장 많은 주제: Windows 터미널에서 붙여넣기, 7명, ORC-640 연결됨.",
+        "example2": "이번 주 새 요청: 3명이 봇 내보내기를 요청했습니다.",
+        "schedules": {
+          "weekly-themes": {
+            "when": "매주 월요일 오전 9시",
+            "what": "이번 주 주제"
+          }
+        }
+      },
+      "bug-intake": {
+        "name": "버그 리포트 접수",
+        "line": "Slack의 버그 리포트를 재현 단계가 담긴 추적 가능한 이슈로 바꿉니다.",
+        "firstChat": "선택한 채널을 읽고 새 버그 리포트마다 이슈 초안을 작성합니다. 승인한 뒤에만 등록합니다.",
+        "watches": "버그가 제보되는 Slack 채널",
+        "does": "버그 리포트마다 재현 단계가 담긴 Linear 이슈 초안을 작성하고, 승인하면 등록합니다.",
+        "reports": "이 채팅에서, 버그가 제보될 때",
+        "example1": "초안 작성: \"macOS 27에서 절전 후 터미널이 멈춤\", 재현 단계는 스레드에서 가져왔습니다.",
+        "example2": "ORC-702와 중복일 수 있습니다.",
+        "events": {
+          "bug-posted": {
+            "trigger": "버그 채널에 누군가 글을 올릴 때",
+            "action": "이슈 초안 작성하기"
+          }
+        }
+      },
+      "issue-triage": {
+        "name": "GitHub 이슈 분류",
+        "line": "새 이슈에 라벨을 붙이고, 중복을 찾고, 빠진 정보를 요청합니다.",
+        "firstChat": "선택한 저장소의 지난주 새 이슈를 훑어보고 라벨과 중복 후보를 이 채팅에 제안합니다.",
+        "watches": "선택한 저장소의 새 이슈",
+        "does": "새 이슈마다 라벨과 중복 후보를 제안하고 빠진 정보를 정리합니다.",
+        "reports": "이 채팅에서, 이슈가 열릴 때",
+        "example1": "#2210: 버그, windows, #2188과 중복.",
+        "example2": "#2214에 버전과 재현 단계가 없습니다. 요청할까요?",
+        "events": {
+          "issue-opened": {
+            "trigger": "이슈가 열릴 때",
+            "action": "라벨과 중복 후보 제안하기"
+          }
+        }
+      },
+      "briefing": {
+        "name": "프로젝트 브리핑",
+        "line": "선택한 프로젝트의 주간 브리핑입니다.",
+        "firstChat": "선택한 프로젝트에서 바뀐 점, 막힌 점, 결정이 필요한 점을 정리합니다.",
+        "watches": "Linear 프로젝트와 GitHub 저장소",
+        "does": "바뀐 점, 막힌 점, 결정이 필요한 점을 정리합니다.",
+        "reports": "이 채팅에서, 매주 금요일 오후 3시",
+        "example1": "모바일 v2: 이슈 6건 완료, 2건은 디자인 대기 중입니다.",
+        "example2": "결정 필요: ORC-902, 푸시 권한 문구.",
+        "schedules": {
+          "weekly-brief": {
+            "when": "매주 금요일 오후 3시",
+            "what": "브리핑"
+          }
+        }
+      },
+      "docs-upkeep": {
+        "name": "문서 관리",
+        "line": "병합된 코드와 더 이상 맞지 않는 문서를 알려 줍니다.",
+        "firstChat": "지난주에 병합된 PR을 읽고, 이제 내용이 틀려진 문서 페이지를 정리합니다.",
+        "watches": "선택한 저장소의 병합된 PR과 문서",
+        "does": "병합된 내용과 맞지 않는 문서 페이지를 지금 틀린 줄과 함께 정리합니다.",
+        "reports": "이 채팅에서, 매주 수요일 오전 10시",
+        "example1": "docs/remote.md에는 SSH에 재시작이 필요하다고 되어 있지만, #4108에서 이미 없어졌습니다.",
+        "example2": "옛 설정 이름이 남은 페이지가 1개 더 있습니다.",
+        "schedules": {
+          "weekly-docs": {
+            "when": "매주 수요일 오전 10시",
+            "what": "수정할 문서"
+          }
+        }
+      },
+      "spec-drafts": {
+        "name": "스펙 초안 작성",
+        "line": "논의 내용을 공유할 수 있는 짧은 스펙으로 정리합니다.",
+        "firstChat": "Slack 스레드나 문서를 건네 주세요. 한 페이지 스펙 초안을 작성하고 정해지지 않은 부분은 질문합니다.",
+        "watches": "건네 주신 Slack 스레드와 문서",
+        "does": "문제, 결정, 범위, 열린 질문을 담은 한 페이지 스펙 초안을 작성합니다.",
+        "reports": "이 채팅에서, 요청할 때",
+        "example1": "초안: \"봇 공유 v2\". 결정 3건, 열린 질문 2건.",
+        "example2": "내 Drive에 문서로 저장했습니다."
+      },
+      "backlog-cleanup": {
+        "name": "백로그 정리",
+        "line": "오래된 이슈, 중복 이슈, 담당자 없는 이슈를 찾습니다.",
+        "firstChat": "선택한 팀에서 60일 동안 변동이 없는 이슈, 중복으로 보이는 이슈, 담당자가 없는 이슈를 정리합니다.",
+        "watches": "선택한 팀의 Linear 이슈",
+        "does": "오래된 이슈, 중복으로 보이는 이슈, 담당자 없는 이슈를 정리합니다.",
+        "reports": "이 채팅에서, 매월 1일",
+        "example1": "8월 이후 변동이 없는 이슈 14건.",
+        "example2": "ORC-511과 ORC-688은 같은 버그로 보입니다.",
+        "schedules": {
+          "monthly-list": {
+            "when": "매월 1일 오전 9시",
+            "what": "정리 목록"
+          }
+        }
+      },
+      "incident-notes": {
+        "name": "장애 기록",
+        "line": "장애 채널의 타임라인을 기록하고 회고 문서 초안을 작성합니다.",
+        "firstChat": "선택한 장애 채널과 스레드를 따라가며 시각이 찍힌 타임라인을 기록하고, 장애가 끝나면 비난 없는 회고 문서 초안을 작성합니다.",
+        "watches": "선택한 장애 채널과 그 스레드",
+        "does": "시각이 찍힌 타임라인을 기록한 뒤 비난 없는 회고 문서 초안을 작성합니다.",
+        "reports": "이 채팅에서, 장애 중과 장애 후",
+        "example1": "14:02 알림 발생, 14:09 롤백 시작, 14:21 오류 정상화.",
+        "example2": "회고 문서 초안이 준비되었습니다.",
+        "events": {
+          "incident-posted": {
+            "trigger": "장애 채널에 누군가 글을 올릴 때",
+            "action": "타임라인에 추가하기"
+          }
+        }
+      },
+      "oncall-handoff": {
+        "name": "온콜 인수인계",
+        "line": "알림, 장애, 남은 후속 조치를 주간으로 요약합니다.",
+        "firstChat": "지난주의 알림 채널과 장애 이슈를 읽고 인수인계 문서를 작성합니다.",
+        "watches": "내 알림 채널과 장애 이슈",
+        "does": "한 주의 알림과 장애를 요약하고 남은 후속 조치를 정리합니다.",
+        "reports": "이 채팅에서, 매주 금요일 오후 4시",
+        "needsSetup": "호출 도구 커넥터가 없어 Slack에 올라온 알림만 읽습니다.",
+        "example1": "알림 12건, 장애 2건. cell-3의 디스크 알림이 5번 발생했습니다.",
+        "example2": "후속 조치 3건이 아직 열려 있습니다.",
+        "schedules": {
+          "weekly-handoff": {
+            "when": "매주 금요일 오후 4시",
+            "what": "인수인계"
+          }
+        }
+      },
+      "followup": {
+        "name": "답장할 항목",
+        "line": "아직 답장하지 않은 항목을 알려 줍니다.",
+        "firstChat": "Slack 스레드와 이슈 댓글에서 아직 답하지 않은 나에게 온 질문과 내가 하겠다고 말한 일을 찾습니다.",
+        "watches": "Slack 스레드와 Linear 댓글",
+        "does": "아직 답하지 않은 나에게 온 질문과 내가 하겠다고 말한 일을 찾습니다.",
+        "reports": "이 채팅에서, 매일 오후 4시",
+        "example1": "2일 전 #design에서 팀원에게 \"내일 확인해 볼게요\"라고 말했습니다.",
+        "example2": "ORC-881에 어제 온 질문이 있습니다.",
+        "schedules": {
+          "daily-owed": {
+            "when": "매일 오후 4시",
+            "what": "아직 남은 답장"
+          }
+        }
+      },
+      "standup": {
+        "name": "데일리 스탠드업 노트",
+        "line": "어제 나와 에이전트가 한 일과 다음 할 일을 정리합니다.",
+        "firstChat": "내 워크스페이스, 병합된 PR, 상태가 바뀐 이슈를 바탕으로 어제 노트를 작성합니다. 팀이 보는 곳에는 직접 복사해 붙여넣으세요.",
+        "watches": "내 워크스페이스, PR, 이슈",
+        "does": "어제 노트와 오늘 계획을 작성합니다.",
+        "reports": "이 채팅에서, 평일 오전 9시",
+        "example1": "어제: #4121 병합(릴레이 재시도). 에이전트가 워크스페이스 2개를 완료했습니다.",
+        "example2": "오늘: ORC-702, #4130 리뷰.",
+        "schedules": {
+          "daily-notes": {
+            "when": "평일 오전 9시",
+            "what": "스탠드업 노트"
+          }
+        }
+      },
+      "email-digest": {
+        "name": "이메일 요약",
+        "line": "하루 두 번, 내 답장이 필요한 이메일을 알려 줍니다.",
+        "firstChat": "오늘 받은 편지함을 읽고 답장이 필요한 이메일을 최신순으로 정리합니다. 이메일은 절대 보내지 않습니다.",
+        "watches": "내 받은 편지함",
+        "does": "답장이 필요한 이메일을 최신순으로 정리합니다. 이메일은 보내지 않습니다.",
+        "reports": "이 채팅에서, 평일 오전 9시와 오후 2시",
+        "example1": "답장이 필요한 메일 2건: 보안 리뷰 일정, 청구서 문의.",
+        "example2": "뉴스레터 14건은 건너뛰었습니다.",
+        "schedules": {
+          "morning": {
+            "when": "평일 오전 9시",
+            "what": "내 답장이 필요한 이메일"
+          },
+          "afternoon": {
+            "when": "평일 오후 2시",
+            "what": "내 답장이 필요한 이메일"
+          }
+        }
+      },
+      "meeting-prep": {
+        "name": "미팅 준비",
+        "line": "미팅마다 관련된 이슈, PR, 문서를 미리 정리합니다.",
+        "firstChat": "오늘 캘린더를 보고 미팅마다 짧은 준비 노트를 작성합니다.",
+        "watches": "내 캘린더",
+        "does": "미팅 전에 관련된 이슈, PR, 문서를 정리합니다.",
+        "reports": "이 채팅에서, 각 미팅 전에",
+        "example1": "11시 모바일 싱크: ORC-902는 결정이 필요하고, #4130이 내 리뷰를 기다립니다.",
+        "example2": "문서: \"푸시 권한 문구\".",
+        "events": {
+          "meeting-soon": {
+            "trigger": "미팅 15분 전",
+            "action": "준비 노트"
+          }
+        }
       }
     },
     "tidyUp": {
@@ -4611,11 +5013,43 @@
         "offline": "{{host}}이(가) 오프라인입니다."
       },
       "thisComputer": "컴퓨터",
-      "readFailedClosedPage": "닫힌 항목을 더 읽지 못했습니다."
+      "readFailedClosedPage": "닫힌 항목을 더 읽지 못했습니다.",
+      "skillLimit": "메시지를 보내지 않았습니다. 선택한 스킬 파일을 {{limit}}개 이하로 줄인 뒤 다시 시도하세요."
     },
     "needs": {
       "chat": "{{name}} 채팅",
       "access": "{{person}}님이 접근 권한을 요청함"
+    },
+    "templateSkills": {
+      "nameWithFolder": "{{name}} ({{folder}})",
+      "prReviewChecklist": "PR 리뷰 체크리스트",
+      "bugReproduction": "버그 재현 절차",
+      "ciFailureTriage": "CI 실패 분류",
+      "releaseReadiness": "릴리스 준비 점검",
+      "releaseNotesStyle": "릴리스 노트 작성 규칙",
+      "dependencyUpgrade": "의존성 업그레이드",
+      "securityChecklist": "보안 체크리스트",
+      "issueTriage": "이슈 분류",
+      "feedbackThemes": "피드백 주제 정리",
+      "statusBrief": "상태 브리핑",
+      "specFormat": "스펙 형식",
+      "incidentTimeline": "장애 타임라인",
+      "workspaceHygiene": "워크스페이스 정리 규칙",
+      "lines": {
+        "pr-review-checklist": "diff에서 동작 변경, 빠진 테스트, 위험한 수정을 읽어내고 각 지적마다 근거를 제시합니다.",
+        "bug-reproduction": "원인을 찾기 전에 버그를 보여 주는 정확한 단계를 먼저 기록합니다.",
+        "ci-failure-triage": "불안정한 체크, 진짜 실패, 인프라 문제를 구분하고 문제가 시작된 커밋을 찾습니다.",
+        "release-readiness": "릴리스를 막는 요소와 목록 작성 방법: 체크, 리뷰, 열린 블로커.",
+        "release-notes-style": "사용자용 노트: 신규, 수정, 변경. 리팩터링과 코드명은 제외합니다.",
+        "dependency-upgrade": "한 번에 한 그룹씩 업그레이드하고, 변경 내역을 읽고, 테스트를 실행하고, 그룹마다 PR을 하나씩 만듭니다.",
+        "security-checklist": "변경에서 살펴볼 시크릿, 인젝션, 인증 확인, 안전하지 않은 기본값.",
+        "issue-triage": "라벨을 붙이고, 중복을 찾고, 빠진 재현 정보를 댓글 하나로 요청합니다.",
+        "feedback-themes": "피드백을 개수와 짧은 인용문이 있는 주제별로 묶고, 기존 이슈를 연결합니다.",
+        "status-brief": "바뀐 점, 막힌 점, 결정이 필요한 점을 열 줄 이내 브리핑으로 정리합니다.",
+        "spec-format": "한 페이지 스펙: 문제, 결정, 범위, 열린 질문.",
+        "incident-timeline": "시각이 찍힌 타임라인을 기록한 뒤 비난 없는 회고 문서 초안을 작성합니다.",
+        "workspace-hygiene": "워크스페이스가 완료되었거나 방치된 시점과, 삭제 전에 확인할 사항."
+      }
     },
     "waits": {
       "cancel": "취소",
@@ -4915,7 +5349,21 @@
       "tryAgain": "다시 시도하세요",
       "signedInTo": "{{app}}에 로그인됨",
       "back": "도구로 돌아가기",
-      "problem": "문제"
+      "problem": "문제",
+      "input": {
+        "invalid": "올바른 서버 이름과 URL 또는 실행 파일을 입력하세요.",
+        "namesRepeat": "헤더 이름과 환경 변수 이름은 각각 고유해야 합니다.",
+        "rowInvalid": "모든 행에 올바른 이름과 값을 입력하거나 행을 삭제하세요."
+      },
+      "signInFailure": {
+        "unsupported": "이 앱은 아직 지원되지 않습니다.",
+        "unavailable": "이 앱에 연결할 수 없습니다. 주소를 확인한 뒤 다시 시도하세요.",
+        "noTool": "이 봇에 더 이상 그 도구가 없습니다.",
+        "desktopOnly": "{{host}}의 Orca에서 로그인하세요.",
+        "denied": "액세스가 허용되지 않았습니다.",
+        "expired": "로그인이 만료되었습니다. 다시 시도하세요.",
+        "couldNotSignIn": "로그인할 수 없습니다. 다시 시도하세요."
+      }
     },
     "handToBot": {
       "menu": "봇에게 넘기기…",
@@ -4985,6 +5433,161 @@
     },
     "panel": {
       "backTo": "{{name}}(으)로 돌아가기"
+    },
+    "failures": {
+      "lookUnfinished": "마지막 둘러보기가 끝나지 않았습니다.",
+      "lookTimedOut": "마지막 둘러보기가 {{minutes}}분 후 중지되었습니다.",
+      "lookInterrupted": "마지막 둘러보기 중에 Orca가 중지되었습니다.",
+      "lookCouldNotStart": "마지막 둘러보기를 시작하지 못했습니다.",
+      "lookAsleep": "이 컴퓨터가 잠자기 상태여서 마지막 둘러보기를 놓쳤습니다.",
+      "tidyUpUnfinished": "마지막 정리가 끝나지 않았습니다.",
+      "tidyUpTimedOut": "마지막 정리가 {{minutes}}분 후 중지되었습니다.",
+      "tidyUpCouldNotStart": "마지막 정리를 시작하지 못했습니다.",
+      "tidyUpAsleep": "이 컴퓨터가 잠자기 상태여서 마지막 정리를 놓쳤습니다.",
+      "tidyUpUnreadChats": "마지막 정리가 채팅을 읽지 못해 실행되지 않았습니다.",
+      "tidyUpNoDraft": "마지막 정리가 새 MEMORY.md로 답하지 않았습니다.",
+      "tidyUpNoOps": "마지막 정리의 답이 Orca가 읽을 수 있는 변경 목록이 아니었습니다.",
+      "tidyUpAllSkipped": "마지막 정리가 요청한 변경을 Orca가 모두 건너뛰어 아무것도 바뀌지 않았습니다. ({{detail}})",
+      "tidyUpNotListLines": "마지막 정리가 실행되지 않았습니다: MEMORY.md에 목록 형식이 아닌 줄이 꽤 있는데, 정리는 목록 줄만 읽습니다.",
+      "tidyUpMovedOnly": "마지막 정리가 상태 줄을 memory/journal/로 옮겼지만, Orca가 나머지 답을 사용할 수 없었습니다. ({{detail}})",
+      "tidyUpBadTopic": "마지막 정리가 Orca가 쓸 수 없는 주제 파일을 지정해 아무것도 바뀌지 않았습니다.",
+      "tidyUpTooLong": "마지막 정리의 MEMORY.md가 {{max}}줄을 넘고 더 짧아지지 않아 아무것도 바뀌지 않았습니다.",
+      "tidyUpTooManyRemoved": "마지막 정리가 한 번에 너무 많은 줄을 빼서 아무것도 바뀌지 않았습니다.",
+      "tidyUpTooManyAdded": "마지막 정리가 한 번에 너무 많은 새 줄을 더해 아무것도 바뀌지 않았습니다.",
+      "tidyUpNotCopied": "마지막 정리가 MEMORY.md에 없는 줄을 옮겼습니다. 새 사실은 MEMORY.md에 들어가므로 아무것도 바뀌지 않았습니다.",
+      "tidyUpTooManyFiled": "마지막 정리가 한 번에 {{max}}줄 넘게 옮겨 아무것도 바뀌지 않았습니다.",
+      "tidyUpChanged": "마지막 정리 중에 MEMORY.md가 바뀌어 아무것도 바뀌지 않았습니다.",
+      "tidyUpNotApplied": "마지막 정리의 변경을 저장하지 못해 아무것도 바뀌지 않았습니다.",
+      "toolGone": "이 봇에 더 이상 그 도구가 없습니다.",
+      "toolDetailsInvalid": "도구 정보가 올바르지 않습니다. 이름, URL 또는 실행 파일과 값을 확인하세요.",
+      "toolDestinationChanged": "자격 증명 대상이 바뀌었습니다. 저장된 값을 다시 입력하거나 해당 행을 삭제하세요.",
+      "toolSavedValueGone": "그 저장된 값을 더 이상 사용할 수 없습니다. 다시 입력하거나 해당 행을 삭제하세요.",
+      "toolValueMissing": "각 행에 값을 입력하거나 행을 삭제하세요.",
+      "toolCredentialsUnreadable": "봇에 저장된 도구 자격 증명을 읽을 수 없습니다. 도구의 값을 다시 입력하세요.",
+      "toolSignInManaged": "이 도구는 Orca가 로그인합니다. 대신 로그인하거나 로그아웃하세요.",
+      "toolCredentialsRaced": "다른 Orca에서 봇의 도구 자격 증명이 바뀌었습니다. 다시 시도하세요.",
+      "toolSourceManaged": "이 도구는 Orca가 관리합니다. 설정한 곳에서 변경하세요.",
+      "toolValuesUnmoved": "저장된 값을 아직 가진 도구가 있습니다. 봇의 도구를 다시 열어 옮기세요.",
+      "toolCodexCheckFailed": "Codex가 도구를 확인하거나 연결하지 못했습니다. 설정을 확인하고 다시 시도하세요.",
+      "toolCodexNoThread": "Codex가 도구를 확인할 스레드를 시작하지 않았습니다.",
+      "toolSignInFolderFailed": "로그인 폴더를 준비하지 못했습니다: {{detail}}",
+      "toolClaudePrepareFailed": "Claude Code에서 {{name}}을(를) 준비하지 못했습니다. 도구 구성을 확인하세요.",
+      "toolNameTaken": "이 봇에 이미 {{name}}(이)라는 도구가 있습니다.",
+      "toolNameTakenByAgent": "사용 중인 {{agent}}에 이미 {{name}}(이)라는 도구가 있으며, 이 봇도 그 도구를 받습니다. --name으로 다른 이름을 고르세요.",
+      "toolNotUpdated": "도구가 업데이트되지 않았습니다.",
+      "toolSignInAddressIncomplete": "로그인 페이지가 마지막에 표시한 주소 전체를 붙여 넣으세요.",
+      "toolSignInAddressWrong": "이 로그인이 끝나는 주소가 아닙니다. 연결로 다시 시작해 로그인한 다음 브라우저에 표시된 주소를 붙여 넣으세요.",
+      "toolSignInEnded": "로그인이 이미 끝났거나 시간이 초과되었습니다. 연결로 다시 시작하세요.",
+      "toolNotFound": "이 봇에 {{name}}(이)라는 도구가 없습니다.",
+      "toolNeedsNoSignIn": "{{name}}은(는) 저장된 값을 사용하므로 로그인이 필요 없습니다.",
+      "toolSignInAgentUnsupported": "Orca는 Claude Code와 Codex에서만 {{name}}에 로그인합니다. 대신 로그인 값을 넣어 추가하세요.",
+      "toolCodexNoSignInPage": "Codex가 {{name}}의 로그인 페이지를 주지 않았습니다.",
+      "toolClaudeSignInFailed": "Claude가 {{name}} 로그인을 시작하지 못했습니다.",
+      "toolClaudeNoSignInPage": "Claude가 {{name}}의 로그인 페이지를 열지 않았습니다.",
+      "groupMessageIdReused": "메시지 ID가 이미 사용되었습니다.",
+      "groupChangedBeforeSend": "그룹이 바뀌었습니다. 보내기 전에 현재 멤버를 확인하세요.",
+      "groupEmptyBeforeSend": "모든 봇이 이 그룹을 나갔습니다. 보내기 전에 봇을 추가하세요.",
+      "groupRequestUnverifiable": "대기열에 있던 원래 그룹 요청을 확인할 수 없습니다.",
+      "groupTurnInactive": "이 그룹 요청이나 멤버는 더 이상 활성 상태가 아닙니다.",
+      "groupBotUnavailable": "이 봇은 일시 중지되었거나 사용할 수 없습니다. 다른 봇으로 대체하지 않았습니다.",
+      "groupBotTwice": "각 봇은 한 번만 선택하세요.",
+      "groupBotGone": "선택한 봇을 더 이상 사용할 수 없습니다.",
+      "groupLocalOnly": "그룹은 현재 이 로컬 호스트의 봇만 지원합니다.",
+      "groupChanged": "그룹이 바뀌었습니다. 이 대화상자를 다시 열고 다시 시도하세요.",
+      "groupReplierGone": "방 답장에서 현재 멤버를 선택하세요.",
+      "groupEmptyBeforeThread": "모든 봇이 이 그룹을 나갔습니다. 스레드를 시작하기 전에 봇을 추가하세요.",
+      "groupNeedsLocalBot": "이 그룹에는 이 컴퓨터의 봇이 하나 이상 필요합니다.",
+      "groupNameTaken": "{{name}}은(는) 이미 이 그룹에 있습니다. 멘션이 헷갈리지 않도록 멤버 이름은 서로 달라야 합니다.",
+      "groupPostFromHost": "다른 컴퓨터의 봇이 있는 그룹에 게시하려면 {{host}}을(를) 사용하세요.",
+      "groupPeerTooOld": "그룹에 봇을 추가하려면 {{host}}의 Orca를 업데이트하세요.",
+      "attachmentUnreadable": "{{name}}을(를) 읽을 수 없습니다.",
+      "attachmentTooLarge": "{{name}}이(가) {{maxMb}}MB를 넘습니다.",
+      "attachmentUploading": "{{name}}을(를) 아직 업로드하는 중입니다.",
+      "attachmentExpired": "{{names}}: 이 첨부 파일이 만료되었습니다. 다시 첨부하세요.",
+      "commentImagesTooMany": "댓글에는 이미지를 최대 {{max}}개까지 넣을 수 있습니다.",
+      "commentImagesTooLarge": "이 이미지들은 합계 {{totalMb}}MB입니다. 댓글은 최대 {{maxMb}}MB까지입니다.",
+      "commentImageNotStored": "댓글에는 붙여 넣거나 첨부한 이미지만 넣을 수 있습니다.",
+      "commentAttachmentsUnavailable": "이 컴퓨터는 지금 첨부 파일을 받을 수 없습니다. 잠시 후 다시 댓글을 다세요.",
+      "commentFileNotAbsolute": "{{path}}: 파일을 전체 경로로 지정하세요.",
+      "commentFilesTooMany": "댓글에는 이미지 외에 파일을 최대 {{max}}개까지 넣을 수 있습니다.",
+      "commentChatDeleted": "이 항목의 채팅이 삭제되어 여기에 파일을 첨부할 수 없습니다.",
+      "commentAttachFailed": "파일을 첨부하지 못했습니다. 잠시 후 다시 댓글을 다세요.",
+      "groupImagesTooMany": "그룹 메시지에는 이미지를 최대 {{max}}개까지 넣을 수 있습니다.",
+      "groupImagesTooLarge": "이 이미지들은 합계 {{totalMb}}MB입니다. 그룹 메시지는 최대 {{maxMb}}MB까지입니다.",
+      "groupImageNotStored": "그룹 메시지에는 붙여 넣거나 첨부한 이미지만 넣을 수 있습니다.",
+      "groupAttachmentsUnavailable": "이 컴퓨터는 지금 첨부 파일을 받을 수 없습니다. 잠시 후 다시 보내세요.",
+      "groupAttachFailed": "파일을 첨부하지 못했습니다. 잠시 후 다시 보내세요.",
+      "groupMentionAmbiguous": "보내기 전에 모호한 봇 멘션을 수정하세요.",
+      "groupMentionUnavailable": "보내기 전에 사용할 수 없거나 모호한 봇 멘션을 수정하세요.",
+      "groupReplierNotMember": "방 답장에서 현재 방 멤버를 선택하세요.",
+      "groupMailNeverStarted": "이 메일은 턴을 시작하지 못했습니다.",
+      "groupRemoteUnreachable": "{{host}}에 연결할 수 없었습니다. {{detail}}",
+      "groupRemoteUnreachableRetry": "{{host}}에 연결할 수 없었습니다. {{detail}} 다시 시도하려면 다시 게시하세요."
+    },
+    "automations": {
+      "paused": "일시중지됨",
+      "newDraft": "다음과 같은 자동화를 설정해 주세요: "
+    },
+    "row": {
+      "idle": "유휴 상태"
+    },
+    "apps": {
+      "line": {
+        "vercel": "배포를 확인하고 로그 읽기",
+        "sentry": "오류와 그 뒤의 이벤트 살펴보기",
+        "datadog": "로그, 지표, 모니터 검색",
+        "posthog": "제품 분석과 기능 플래그 조회",
+        "cloudflare": "Workers, DNS 등 계정 전체 관리",
+        "supabase": "데이터베이스 조회 및 프로젝트 관리",
+        "neon": "SQL 실행 및 Postgres 브랜치 관리",
+        "netlify": "사이트 배포 및 빌드 확인",
+        "gitlab": "이슈와 병합 요청 읽기 및 업데이트",
+        "context7": "코드 라이브러리의 최신 문서와 예제",
+        "atlassian": "Jira 이슈와 Confluence 페이지",
+        "notion": "페이지 검색, 읽기, 편집",
+        "stripe": "결제, 고객, 구독 조회",
+        "github": "이슈와 PR의 멘션 및 이벤트",
+        "slack": "메시지 및 멘션",
+        "linear": "할당된 이슈 및 멘션",
+        "google": "내 계정으로 Gmail, 캘린더, 드라이브 사용"
+      },
+      "composioLine": {
+        "outlook": "메일, 캘린더, 연락처",
+        "microsoft_teams": "채팅, 채널, 회의",
+        "notion": "페이지, 데이터베이스, 댓글",
+        "jira": "이슈, 프로젝트, 스프린트",
+        "hubspot": "연락처, 회사, 거래, 티켓",
+        "salesforce": "계정, 리드, 영업 기회",
+        "asana": "작업, 프로젝트, 댓글",
+        "airtable": "베이스, 테이블, 레코드",
+        "zendesk": "티켓, 사용자, 도움말 센터 문서",
+        "figma": "파일, 댓글, 컴포넌트",
+        "stripe": "결제, 고객, 청구서",
+        "dropbox": "파일 및 폴더",
+        "one_drive": "파일 및 폴더",
+        "confluence": "페이지, 스페이스, 댓글",
+        "clickup": "작업, 목록, 문서",
+        "monday": "보드, 항목, 업데이트",
+        "intercom": "대화, 연락처, 문서",
+        "zoom": "회의, 녹화, 대본",
+        "calendly": "일정, 초대 대상, 예약 링크",
+        "trello": "보드, 목록, 카드",
+        "sentry": "이슈, 이벤트, 릴리스",
+        "box": "파일 및 폴더",
+        "miro": "보드, 스티커 메모, 프레임",
+        "reddit": "게시물, 댓글, 서브레딧"
+      },
+      "webhooks": {
+        "line": "모든 도구나 스크립트의 이벤트"
+      }
+    },
+    "share": {
+      "signInOtherSite": "컴퓨터가 다른 사이트의 로그인 링크를 보내서 열지 않았습니다."
+    }
+  },
+  "sidebar": {
+    "cardSlot": {
+      "working": "작업 중"
     }
   }
 }

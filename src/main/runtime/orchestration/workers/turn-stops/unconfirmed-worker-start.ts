@@ -14,6 +14,9 @@ import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 /** One fence per Dispatch: a start is unconfirmed once, whichever runtime sees it. */
 const START_UNCONFIRMED_FENCE = 'start-unconfirmed'
 
+/** One fence per Dispatch for a resume's withheld continue prompt, apart from its start's. */
+const RESTART_CONTINUE_WITHHELD_FENCE = 'restart-continue-withheld'
+
 /** Stages from which the worker may hold the brief: delivery began, or its turn went unseen. */
 const BRIEF_HANDED_OVER_STAGES: ReadonlySet<string> = new Set([
   'dispatch_input',
@@ -80,6 +83,43 @@ export function observeUnconfirmedWorkerStart(
         startSurface: start.surface,
         lastOutput: start.surface === 'terminal' ? start.screen : undefined,
         ...(start.surface === 'terminal' && start.evidence ? { startEvidence: start.evidence } : {})
+      }
+    },
+    deps
+  )
+}
+
+/** A resumed terminal worker whose continue prompt Orca left unsent is told to its coordinator
+ *  once, with the same advice as a start's; a turn seen later supersedes it. */
+export function observeWithheldRestartContinue(
+  db: OrchestrationDb,
+  dispatchId: string,
+  continued: { screen?: string; evidence: UnconfirmedStartEvidence },
+  deps: WorkerTurnStopReportDeps
+): void {
+  const dispatch = db.getDispatchContextById(dispatchId)
+  const from = dispatch?.assignee_handle
+  if (
+    !dispatch ||
+    !from ||
+    (dispatch.status !== 'pending' && dispatch.status !== 'dispatched') ||
+    db.getFederatedDispatch(dispatchId)
+  ) {
+    return
+  }
+  observeWorker(
+    db,
+    { kind: 'local', dispatch },
+    {
+      presence: 'at-rest',
+      fence: RESTART_CONTINUE_WITHHELD_FENCE,
+      legacyStopKey: RESTART_CONTINUE_WITHHELD_FENCE,
+      rest: {
+        from,
+        reason: 'start-unconfirmed',
+        startSurface: 'terminal',
+        lastOutput: continued.screen,
+        startEvidence: continued.evidence
       }
     },
     deps

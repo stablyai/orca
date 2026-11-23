@@ -12,11 +12,13 @@ export function ProviderIdentityCard({
   accountLabel,
   footer,
   usageSignInHint,
+  statusContent,
   usagePercentageDisplay,
   inMenu = false
 }: {
   p: ProviderRateLimits
   accountLabel?: string
+  statusContent?: React.ReactNode
   footer?: React.ReactNode
   usageSignInHint?: string
   usagePercentageDisplay: UsagePercentageDisplay
@@ -48,13 +50,15 @@ export function ProviderIdentityCard({
             </div>
             {usageSignInHint ? null : <UsageDisplayToggle asMenuItem={inMenu} />}
           </div>
-          <ProviderPanel
-            p={p}
-            embedded
-            showResetCredits={false}
-            usageSignInHint={usageSignInHint}
-            usagePercentageDisplay={usagePercentageDisplay}
-          />
+          {statusContent ?? (
+            <ProviderPanel
+              p={p}
+              embedded
+              showResetCredits={false}
+              usageSignInHint={usageSignInHint}
+              usagePercentageDisplay={usagePercentageDisplay}
+            />
+          )}
           {footer}
         </div>
       </Card>

@@ -30,6 +30,8 @@ const buttonVariants = cva(
         'outline-on-accent': `${outlineButtonClasses} hover:bg-foreground/5 ${disabledOnAccentButtonClasses} disabled:border-border disabled:shadow-none disabled:hover:border-border dark:disabled:border-border dark:disabled:bg-accent dark:disabled:hover:bg-accent`,
         disclosure:
           'text-xs focus-visible:ring-inset hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+        'ghost-inset':
+          'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
         // Keep icon states visible on muted fields, which share accent's light-theme fill.
         'muted-field-icon':
           'text-muted-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-visible:bg-foreground/[0.08] focus-visible:text-foreground aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground data-[state=open]:bg-foreground/[0.08] data-[state=open]:text-foreground',
@@ -37,6 +39,10 @@ const buttonVariants = cva(
         'queued-head-steer':
           'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:bg-primary [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:text-primary-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
+        // A link in muted prose that must read as clickable at rest, such as a held ask's "send anyway":
+        // foreground, always underlined, at the sentence's weight.
+        'link-underlined':
+          'font-normal text-foreground underline underline-offset-2 focus-visible:ring-2',
         // A quiet secondary link, such as a dialog footer's "Manual steps".
         'link-muted':
           'text-muted-foreground underline-offset-4 hover:text-foreground hover:underline',
@@ -63,6 +69,9 @@ const buttonVariants = cva(
         // A `link` inside a sentence: no box of its own, so it wraps with the text and lines up with its edge.
         inlineText:
           "h-auto gap-1 rounded-sm p-0 align-baseline text-xs [&_svg:not([class*='size-'])]:size-3",
+        // `inlineText` at the surrounding sentence's own size and line height, for prose not set in text-xs.
+        inlineInherit:
+          "h-auto gap-1 rounded-sm p-0 align-baseline text-[length:inherit] leading-[inherit] [&_svg:not([class*='size-'])]:size-3",
         inline: 'h-6 gap-1 px-0 has-[>svg]:px-0',
         // A ghost name inside a row label: `inline`'s height, padded so its hover fill clears the text.
         inlineChip: 'h-6 gap-1 px-1.5',

@@ -37,6 +37,7 @@ export class RuntimeBrowserCommands {
   readonly browserSiteDisplay: RuntimeBrowserNavigation['browserSiteDisplay']
   readonly browserSetSiteColorScheme: RuntimeBrowserNavigation['browserSetSiteColorScheme']
   readonly browserStop: RuntimeBrowserNavigation['browserStop']
+  readonly browserSetAudioMuted: RuntimeBrowserNavigation['browserSetAudioMuted']
   readonly browserFindInPage: RuntimeBrowserNavigation['browserFindInPage']
   readonly browserStopFindInPage: RuntimeBrowserNavigation['browserStopFindInPage']
   readonly browserFill: RuntimeBrowserElementActions['browserFill']
@@ -139,8 +140,14 @@ export class RuntimeBrowserCommands {
     const queries = new RuntimeBrowserTabQueries(host, targets, catalog)
     const creation = new RuntimeBrowserTabCreation(host, targets)
     const close = new RuntimeBrowserTabClose(queries, host, targets)
-    const profiles = new RuntimeBrowserProfiles(host, targets, catalog, creation)
     const screencasts = new RuntimeBrowserScreencasts(host, targets, catalog)
+    const profiles = new RuntimeBrowserProfiles(
+      host,
+      targets,
+      catalog,
+      creation,
+      screencasts.guestSwaps
+    )
     const dialogs = new RuntimeBrowserDialogs(targets)
     const grab = new RuntimeBrowserGrab(targets, catalog)
     this.browserProfileDetectBrowsers = profiles.browserProfileDetectBrowsers.bind(profiles)
@@ -158,6 +165,7 @@ export class RuntimeBrowserCommands {
     this.browserSiteDisplay = navigation.browserSiteDisplay.bind(navigation)
     this.browserSetSiteColorScheme = navigation.browserSetSiteColorScheme.bind(navigation)
     this.browserStop = navigation.browserStop.bind(navigation)
+    this.browserSetAudioMuted = navigation.browserSetAudioMuted.bind(navigation)
     this.browserFindInPage = navigation.browserFindInPage.bind(navigation)
     this.browserStopFindInPage = navigation.browserStopFindInPage.bind(navigation)
     this.browserFill = elements.browserFill.bind(elements)

@@ -46,6 +46,7 @@ const BROWSER_COMMAND_NAMES = [
   'browserStop',
   'browserFindInPage',
   'browserStopFindInPage',
+  'browserSetAudioMuted',
   'browserScreenshot',
   'browserScreencast',
   'browserEval',

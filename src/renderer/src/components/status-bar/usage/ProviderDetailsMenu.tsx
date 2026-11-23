@@ -31,6 +31,7 @@ export function ProviderDetailsMenu({
   accountLabel,
   panelFooter,
   usageSignInHint,
+  accountStatus,
   variant = 'default'
 }: {
   provider: ProviderRateLimits | null
@@ -45,6 +46,7 @@ export function ProviderDetailsMenu({
   triggerContent?: React.ReactNode
   trigger?: React.ReactElement
   accountLabel?: string
+  accountStatus?: React.ReactNode
   panelFooter?: React.ReactNode
   usageSignInHint?: string
   variant?: 'default' | 'account'
@@ -74,6 +76,7 @@ export function ProviderDetailsMenu({
               accountLabel={accountLabel}
               footer={panelFooter}
               usageSignInHint={usageSignInHint}
+              statusContent={accountStatus}
               usagePercentageDisplay={usagePercentageDisplay}
               inMenu
             />

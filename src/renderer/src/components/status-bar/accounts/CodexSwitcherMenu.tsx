@@ -21,18 +21,42 @@ import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
 import { isCodexUsageSignInRequired } from '../../../../../shared/agent-accounts/codex/codex-auth-errors'
 import { getCodexStatusRuntimeKey } from './status-bar-runtime-targets'
 import { scopeCodexAuthFailure } from './status-bar-codex-accounts'
+import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
+import { getAccountOwnerKey } from './owner-account-rows'
 
-export function CodexSwitcherMenu({
-  codex,
-  ownerUsage,
-  asSubmenu = false,
-  triggerContent
-}: {
+type CodexSwitcherProps = {
   codex: ProviderRateLimits
   ownerUsage: OwnerUsageRateLimits
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
-}): React.JSX.Element {
+}
+
+export function CodexSwitcherMenu(props: CodexSwitcherProps): React.JSX.Element {
+  const t = useTranslate()
+  const owner = props.ownerUsage.owner
+  if (!owner) {
+    return (
+      <ProviderDetailsMenu
+        provider={props.codex}
+        asSubmenu={props.asSubmenu}
+        triggerContent={props.triggerContent}
+        ariaLabel={t(
+          'auto.components.status.bar.StatusBar.ba55303942',
+          'Open Codex details and account switcher'
+        )}
+      />
+    )
+  }
+  return <CodexSwitcherForOwner {...props} owner={owner} key={getAccountOwnerKey(owner)} />
+}
+
+function CodexSwitcherForOwner({
+  codex,
+  ownerUsage,
+  asSubmenu = false,
+  triggerContent,
+  owner
+}: CodexSwitcherProps & { owner: AccountOwner }): React.JSX.Element {
   const t = useTranslate()
   const {
     activeTarget,
@@ -63,7 +87,7 @@ export function CodexSwitcherMenu({
     setSkipFutureResetConfirm,
     skipFutureResetConfirm,
     switchGroups
-  } = useCodexSwitcherController(codex, ownerUsage)
+  } = useCodexSwitcherController(codex, ownerUsage, owner)
 
   const isBusy = isSwitching || reauthenticatingAccountId !== null
   const signInRequired = codex.status === 'error' && isCodexUsageSignInRequired(codex)
@@ -181,6 +205,11 @@ export function CodexSwitcherMenu({
       panelFooter={
         !signInRequired && resetCreditCount !== null ? (
           <CodexResetCredits
+            unsupportedRuntime={
+              owner.wslHostDistro !== null || selectedGroup?.runtimeTarget.runtime === 'wsl'
+                ? 'wsl'
+                : undefined
+            }
             resetCreditCount={resetCreditCount}
             resetCreditExpiry={resetCreditExpiry}
             canRedeemReset={canRedeemReset}
@@ -201,7 +230,7 @@ export function CodexSwitcherMenu({
         ) : undefined
       }
       topContent={
-        !hasActiveRuntimeEnvironment ? (
+        !hasActiveRuntimeEnvironment && owner.wslHostDistro === null ? (
           <AccountRuntimeToggle
             groups={switchGroups}
             value={selectedRuntimeKey}
@@ -244,7 +273,7 @@ export function CodexSwitcherMenu({
               pane: 'accounts',
               repoId: null,
               sectionId: 'accounts-codex',
-              hostScope: ownerUsage.owner.target
+              hostScope: owner.target
             })
             openSettingsPage()
           }}
