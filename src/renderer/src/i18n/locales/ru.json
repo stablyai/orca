@@ -569,10 +569,12 @@
         "imported_few": "Импортировано {{count}} файла cookie для {{domains}}. Перезагрузите страницу, чтобы использовать их.",
         "imported_many": "Импортировано {{count}} файлов cookie для {{domains}}. Перезагрузите страницу, чтобы использовать их."
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Браузеры на этом устройстве",
         "destination": "Импорт в браузер для {{host}}.",
-        "hostAgents": "Агенты на {{host}} могут использовать эти входы, но не могут читать файлы cookie.",
+        "hostAgents": "Агенты на {{host}} могут использовать эти входы, но не могут читать файлы cookie."
+      },
+      "sshPage": {
         "stored": "Сохранено в браузере для {{host}}.",
         "googleCookiesSkipped": "Файлы cookie Google не импортированы. Откройте страницу, которая работает через {{host}}, и войдите в Google."
       }
@@ -19260,9 +19262,7 @@
         "typeHtml": "HTML"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Браузеры на этом устройстве",
         "remoteLabel": "Браузеры на {{value0}}",
-        "clientNoteLocalStorage": "Импорт читает данные браузеров на этом устройстве. Cookie сохраняются локально.",
         "remoteNoteRemoteStorage": "Импорт читает данные браузеров на {{value0}}. Cookie сохраняются на том компьютере, и на его экране может появиться запрос разрешения."
       },
       "native": {

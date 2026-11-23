@@ -18571,9 +18571,7 @@
         "streamBrowserUnavailable": "El navegador remoto no está disponible. Comprueba su configuración en el servidor."
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Navegadores en este dispositivo",
         "remoteLabel": "Navegadores en {{value0}}",
-        "clientNoteLocalStorage": "Las importaciones leen los navegadores de este dispositivo. Las cookies se guardan localmente.",
         "remoteNoteRemoteStorage": "Las importaciones leen los navegadores en {{value0}}. Las cookies se guardan en esa máquina y puede aparecer un aviso de permiso en su pantalla."
       },
       "HostedReviewUnlinkMenuItem": {
@@ -21288,10 +21286,12 @@
         "imported_many": "Se importaron {{count}} cookies para {{domains}}. Recarga la página para usarlas.",
         "failed": "No se pudieron importar las cookies: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Navegadores en este dispositivo",
         "destination": "Importa al navegador de {{host}}.",
-        "hostAgents": "Los agentes en {{host}} pueden usar estos inicios de sesión, pero no pueden leer las cookies.",
+        "hostAgents": "Los agentes en {{host}} pueden usar estos inicios de sesión, pero no pueden leer las cookies."
+      },
+      "sshPage": {
         "stored": "Guardado en el navegador de {{host}}.",
         "googleCookiesSkipped": "No se importaron las cookies de Google. Abre una página que navegue a través de {{host}} e inicia sesión en Google."
       }
