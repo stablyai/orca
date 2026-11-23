@@ -39,6 +39,7 @@ import type { PhoneBotItemStepper } from './use-phone-bot-item-walk'
 import { MobileBotItemPageHeader } from './MobileBotItemPageHeader'
 import { MobileBotItemSubtitle } from './MobileBotItemSubtitle'
 import { usePhoneBotItemPendingComments } from './use-phone-bot-item-pending-comments'
+import { botItemCommentDraftKey, returnBotItemCommentDraft } from './bot-item-comment-drafts'
 import { useBotItemQuestionSteps } from './use-phone-bot-item-question-steps'
 
 const DESCRIPTION_LINES_HEIGHT = 3 * 20
@@ -97,7 +98,8 @@ export function MobileBotItemPage({
     uid,
     events: view.events,
     hostName,
-    showToast
+    showToast,
+    returnText: (text) => returnBotItemCommentDraft(botItemCommentDraftKey(hostId, uid), text)
   })
   // From the comment box or a quick reply: shown at once, then sent to the host.
   const jump = useBotItemActivityFollow({

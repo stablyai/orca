@@ -91,7 +91,9 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
         worktree,
         profileId,
         ...(split ? { split, ...(callerTabId ? { splitFromTabId: callerTabId } : {}) } : {}),
-        ...(flags.has('headless') ? { placement: { kind: 'server' } } : {})
+        ...(flags.has('headless') ? { placement: { kind: 'server' } } : {}),
+        // A CLI has no screen, so a paired caller's default 'caller' audience would show it nowhere.
+        ...(flags.has('focus') ? { activate: true, navigation: 'all' } : {})
       },
       { timeoutMs: 60_000 }
     )

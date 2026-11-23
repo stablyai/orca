@@ -160,12 +160,16 @@ type ListRowProps = {
   marker?: string
   /** Lines the subtitle may take before it cuts; two by default. */
   subtitleLines?: number
+  /** A small mark before the subtitle, e.g. the agent a row runs. */
+  subtitleIcon?: ReactNode
   /** Richer content under the title, e.g. usage bars or a coloured status line. */
   detail?: ReactNode
   /** A slot for an icon or a status dot, 24 pt wide or as wide as its content. */
   leading?: ReactNode
   /** The current value in grey, e.g. "This computer". */
   value?: string
+  /** A small mark before the value, e.g. an agent's logo. */
+  valueIcon?: ReactNode
   /** Anything after the value: a switch, a badge, a spinner. */
   accessory?: ReactNode
   /** Draws a chevron: the row opens a picker or another screen. */
@@ -194,9 +198,11 @@ export function ListRow({
   subtitleColor,
   marker,
   subtitleLines = 2,
+  subtitleIcon,
   detail,
   leading,
   value,
+  valueIcon,
   accessory,
   navigates = false,
   selected,
@@ -231,16 +237,18 @@ export function ListRow({
         {title}
       </Text>
       {subtitle !== undefined ? (
-        <Text
-          style={[
-            listRowStyles.subtitle,
-            subtitleMono && listRowStyles.subtitleMono,
-            subtitleColor !== undefined && { color: subtitleColor }
-          ]}
-          numberOfLines={subtitleLines}
-        >
-          {subtitle}
-        </Text>
+        <WithIcon icon={subtitleIcon}>
+          <Text
+            style={[
+              listRowStyles.subtitle,
+              subtitleMono && listRowStyles.subtitleMono,
+              subtitleColor !== undefined && { color: subtitleColor }
+            ]}
+            numberOfLines={subtitleLines}
+          >
+            {subtitle}
+          </Text>
+        </WithIcon>
       ) : null}
       {detail}
     </View>
@@ -259,9 +267,11 @@ export function ListRow({
         main
       )}
       {value !== undefined ? (
-        <Text style={listRowStyles.value} numberOfLines={1}>
-          {value}
-        </Text>
+        <WithIcon icon={valueIcon} shrink>
+          <Text style={listRowStyles.value} numberOfLines={1}>
+            {value}
+          </Text>
+        </WithIcon>
       ) : null}
       {accessory}
       {selected ? <Check size={17} color={colors.textPrimary} strokeWidth={2.4} /> : null}
@@ -304,6 +314,26 @@ export function ListRow({
   )
 }
 
+function WithIcon({
+  icon,
+  shrink = false,
+  children
+}: {
+  icon: ReactNode
+  shrink?: boolean
+  children: ReactNode
+}) {
+  if (icon === undefined || icon === null) {
+    return <>{children}</>
+  }
+  return (
+    <View style={[listRowStyles.withIcon, shrink && listRowStyles.shrink]}>
+      {icon}
+      {children}
+    </View>
+  )
+}
+
 const listRowStyles = themedStyleSheet(() => ({
   row: {
     minHeight: metrics.rowMinHeight,
@@ -330,8 +360,10 @@ const listRowStyles = themedStyleSheet(() => ({
   titleEmphasis: { fontWeight: metrics.titleWithSubtitleWeight },
   titleStrong: { fontWeight: '700' },
   titleDestructive: { color: colors.statusRed },
-  subtitle: { ...metrics.subtitle, color: colors.textSecondary },
+  subtitle: { ...metrics.subtitle, color: colors.textSecondary, flexShrink: 1 },
   subtitleMono: { fontFamily: typography.monoFamily },
   value: { ...metrics.value, color: colors.textSecondary, flexShrink: 1, maxWidth: 180 },
-  checkSpace: { width: 17 }
+  checkSpace: { width: 17 },
+  withIcon: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minWidth: 0 },
+  shrink: { flexShrink: 1 }
 }))

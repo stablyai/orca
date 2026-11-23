@@ -8,6 +8,8 @@ export function DrawnActionSheetModal({
   title,
   titleAccessibilityLabel,
   message,
+  headerIcon,
+  groupDestructive,
   actions,
   onClose,
   onAfterClose
@@ -41,6 +43,8 @@ export function DrawnActionSheetModal({
         title={title}
         titleAccessibilityLabel={titleAccessibilityLabel}
         message={message}
+        headerIcon={headerIcon}
+        groupDestructive={groupDestructive}
         actions={sequencedActions}
         onClose={onClose}
       />

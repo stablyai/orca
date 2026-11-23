@@ -1,6 +1,7 @@
 import type { BrowserExtensionsBannerAssignment } from '../browser/extensions/browser-extensions-banner'
 import type { AgentDashboardSurface } from './schemas/telemetry-agent-dashboard-event-schemas'
 import type { MilestoneInstallCohort } from './schemas/telemetry-protected-milestone-schemas'
+import type { AgentKind } from './schemas/telemetry-property-schemas'
 
 export type ChatUiLaunchTipTargeting =
   | { mode: 'all' }
@@ -40,6 +41,11 @@ export type TelemetrySettings = {
   agentDashboardActiveDays?: Partial<Record<AgentDashboardSurface, number>>
   /** UTC day of the last unsampled chat send per client; at most two writes a day. */
   chatMessageSentDays?: Partial<Record<'desktop' | 'mobile', number>>
+  /** Picker accepts counted for one UTC day, sent as daily rows once that day ends. */
+  pickerAccepts?: {
+    day: number
+    counts: [agentKind: AgentKind, itemKind: 'command' | 'skill', count: number][]
+  }
   /** UTC-day cursors written only after the SDK accepted the milestone capture; at most two writes a day. */
   protectedMilestones?: {
     installCohort?: MilestoneInstallCohort

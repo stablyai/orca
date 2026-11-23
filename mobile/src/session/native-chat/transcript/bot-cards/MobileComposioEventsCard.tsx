@@ -13,7 +13,7 @@ import { openExternalLink } from '../../../../platform/external-links/external-l
 import { colors } from '../../../../theme/mobile-theme'
 import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePill'
 import { MobileBotCardActions } from './MobileBotCardFrame'
-import { webhookKeyReveal } from './mobile-bot-card-operations'
+import { copyPhoneWebhookUrl } from '../../../../bots/webhooks/mobile-webhook-url-copy'
 import {
   composioEventsByHand,
   composioEventsStatusRead,
@@ -59,13 +59,10 @@ function ByHandSteps({
   // The address carries the hook's key, fetched on the owner's tap and never shown.
   const copyUrl = () => {
     setCopy('busy')
-    void webhookKeyReveal
-      .request(client, { hookId })
-      .then((response) => clipboard.writeText(webhookKeyReveal.interpret(response).url))
-      .then(
-        () => setCopy('copied'),
-        () => setCopy('failed')
-      )
+    void copyPhoneWebhookUrl(client, hookId, clipboard).then(
+      (copied) => setCopy(copied.kind === 'copied' ? 'copied' : 'failed'),
+      () => setCopy('failed')
+    )
   }
   return (
     <>

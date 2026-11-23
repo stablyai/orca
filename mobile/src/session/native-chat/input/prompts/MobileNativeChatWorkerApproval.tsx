@@ -1,6 +1,7 @@
 import { useContext, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Timer } from '../../../../components/icons/app-icons'
+import { readShellApprovalDetail } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-shell-detail'
 import { workerApprovalTimeLeft } from '../../../../../../src/shared/orchestration/approvals/worker-approval-time-left'
 import { useNow } from '../../../../hooks/use-now'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -41,8 +42,16 @@ export function useMobileNativeChatWorkerApprovalSlot(
   if (folded === approvalId) {
     return { card: null, strip: { title, expand: () => setFolded(null) } }
   }
-  // The whole input: the person allows exactly what runs.
-  const detail = summary.detail
+  // The whole input: the person allows exactly what runs; a shell call's as its command, then the rest.
+  const shell = summary.detail
+    ? readShellApprovalDetail(summary.detail, summary.tool, undefined)
+    : null
+  // Other arguments get their own block: wrapped inline code reads as prose.
+  const detail = shell
+    ? [detailMarkdown(shell.command), shell.otherArguments && fencedMarkdown(shell.otherArguments)]
+        .filter(Boolean)
+        .join('\n\n')
+    : summary.detail && detailMarkdown(summary.detail)
   const fold = (): void => setFolded(approvalId)
   // Workers, not prompts: one worker's helpers can each ask at once.
   const waiting = new Set(approvals.open.map((open) => open.worker.partyKey)).size
@@ -67,7 +76,7 @@ export function useMobileNativeChatWorkerApprovalSlot(
         prompt={{
           questions: [
             {
-              question: detail ? `${title}\n\n${detailMarkdown(detail)}` : title,
+              question: detail ? `${title}\n\n${detail}` : title,
               multiSelect: false,
               options: allowedActions.map((decision) => ({
                 label:
@@ -141,6 +150,10 @@ function detailMarkdown(detail: string): string {
   if (!detail.includes('\n') && !detail.includes('`')) {
     return `\`${detail}\``
   }
+  return fencedMarkdown(detail)
+}
+
+function fencedMarkdown(detail: string): string {
   // Longer than any backtick run inside, so the input can't close its own block early.
   const longest = Math.max(0, ...(detail.match(/`+/g) ?? []).map((run) => run.length))
   const fence = '`'.repeat(Math.max(3, longest + 1))

@@ -3832,7 +3832,6 @@
       "needsYou": "需要你处理",
       "working": "工作中",
       "everythingElse": "其他",
-      "open": "当前",
       "closeTab": "关闭 {{title}}"
     },
     "tabRows": {
@@ -5383,7 +5382,6 @@
       "extraAgentArguments": "额外的智能体参数",
       "allAutomations": "全部自动化",
       "schedule": "日程",
-      "nextRun": "下次运行",
       "agent": "智能体",
       "project": "项目",
       "unavailable": "不可用",
@@ -5434,7 +5432,6 @@
       "newWorkspacePerRun": "每次运行新建工作区",
       "instructions": "指令",
       "runNow": "立即运行",
-      "viewAllRuns": "查看所有运行",
       "savedAgent": "{{agent}}（已保存）",
       "chooseAProjectSetUpOnThisHost": "请选择此主机上已配置的项目。",
       "newAutomation": "新建自动化",
@@ -5458,9 +5455,6 @@
       "letYourAgentsWorkOnASchedule": "让代理按计划工作",
       "createAnAutomationToRunATaskOnThisHost": "创建自动化以在此主机上运行任务。",
       "nextDate": "下次：{{date}}",
-      "lastResult": "上次：{{status}} · {{date}}",
-      "latestResultNotReported": "未报告最新结果",
-      "sshTarget": " · SSH {{target}}",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "请重新连接此主机以刷新或更改。已保存的信息仍可在下方查看。",
       "recentRuns": "最近运行",
       "outcome": "结果",
@@ -5483,7 +5477,6 @@
       "fullOutputUnavailable": "无法加载完整输出。",
       "retryFullOutput": "重试",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "已加载的历史记录中没有匹配的运行。请加载更多以继续。",
-      "noMatchingRunsYet": "暂无匹配的运行。",
       "runSummary": "{{title}}，{{status}}，{{date}}",
       "scheduled": "已计划",
       "loadMoreRuns": "加载更多运行",
@@ -6021,6 +6014,8 @@
       "computer": "电脑",
       "computerMessage": "bot 运行的位置",
       "agentOn": "位于 {{host}}",
+      "noAgent": "无",
+      "noChatAgents": "{{host}} 上没有可用的聊天智能体",
       "botsOffOn": "{{host}} 上的 Bots 已关闭",
       "updateDesktopFirst": "请先更新 {{host}} 上的 Orca",
       "checking": "检查中…"
@@ -6790,6 +6785,7 @@
         "title": "还没有事项",
         "body": "当 {{bot}} 为你接手任务时，会在这里显示它正在做什么，以及需要你做什么",
         "needsYou": "没有需要你处理的事项",
+        "allClear": "没有需要你处理的事项，也没有正在运行的工作",
         "filtered": "没有匹配的事项"
       },
       "toast": {
@@ -7860,7 +7856,12 @@
       "unreadableNotShared": "无法读取 · 未分享",
       "overLimitNotShared": "超出技能数量上限 · 未分享",
       "linkNoLongerAvailable": "此分享链接已不可用",
-      "signInOtherSite": "电脑发来的是其他网站的登录链接，因此没有打开。"
+      "signInOtherSite": "电脑发来的是其他网站的登录链接，因此没有打开。",
+      "original": {
+        "sharedBy": "由 {{who}} 分享",
+        "viewOriginal": "查看原始版本",
+        "originalGone": "已不可用"
+      }
     },
     "settingsView": {
       "sharing": "分享",

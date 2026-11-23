@@ -4,6 +4,7 @@ import {
   CircularProgressIndicator,
   Column,
   Host,
+  HorizontalDivider,
   Icon,
   ListItem,
   ModalBottomSheet,
@@ -26,7 +27,7 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useBottomDrawerModalHost } from '../bottom-drawer/bottom-drawer-modal-host-scope'
 import { useMaterialSymbolImages } from '../icons/material-symbol-images'
 import { actionSheetTitleText, useActionSheetPress } from './action-sheet-press'
-import type { ActionSheetModalProps } from './ActionSheetContent'
+import { actionSheetGroups, type ActionSheetModalProps } from './ActionSheetContent'
 import { DIALOG_HOST_STYLE } from './native-dialog-host'
 import { DrawnActionSheetModal } from './DrawnActionSheetModal'
 
@@ -41,8 +42,9 @@ const SPINNER_SIZE = 20
 
 /** A Material 3 modal bottom sheet of list items. */
 export function ActionSheetModal(props: ActionSheetModalProps) {
-  // A shared drawer Modal can unmount under a sheet in its own window, so those keep the drawn one.
-  if (useBottomDrawerModalHost() !== null) {
+  // A shared drawer Modal can unmount under a sheet in its own window, so those keep the drawn one;
+  // a subject tile is drawn too, as the Material sheet has none.
+  if (useBottomDrawerModalHost() !== null || props.headerIcon) {
     return <DrawnActionSheetModal {...props} />
   }
   return <MaterialActionSheet {...props} />
@@ -53,6 +55,7 @@ function MaterialActionSheet({
   title,
   titleAccessibilityLabel,
   message,
+  groupDestructive,
   actions,
   onClose,
   onAfterClose
@@ -132,64 +135,76 @@ function MaterialActionSheet({
               {message}
             </Text>
           ) : null}
-          {actions.map((action) => {
-            const symbol = action.icon?.nativeSymbol?.android
-            const icon = symbol ? images.get(symbol) : undefined
-            const check = images.get(CHECK_SYMBOL)
-            const inactive = action.disabled === true || action.loading === true
-            return (
-              <ListItem
-                key={action.id ?? action.label}
-                colors={{
-                  containerColor: TRANSPARENT,
-                  ...(action.destructive
-                    ? { contentColor: colors.statusRed, leadingContentColor: colors.statusRed }
-                    : {})
-                }}
-                modifiers={[
-                  // A checkable row is a radio choice, so TalkBack announces which one is current.
-                  ...(inactive
-                    ? []
-                    : action.checked === undefined
-                      ? [clickable(() => press(action))]
-                      : [selectable(action.checked, () => press(action), 'radioButton')]),
-                  ...(action.disabled ? [alpha(DISABLED_ALPHA)] : [])
-                ]}
-              >
-                <ListItem.HeadlineContent>
-                  <Text>{action.label}</Text>
-                </ListItem.HeadlineContent>
-                {action.hint ? (
-                  <ListItem.SupportingContent>
-                    <Text>{action.hint}</Text>
-                  </ListItem.SupportingContent>
-                ) : null}
-                {action.renderIcon ? (
-                  <ListItem.LeadingContent>
-                    <RNHostView matchContents>
-                      <View>{action.renderIcon()}</View>
-                    </RNHostView>
-                  </ListItem.LeadingContent>
-                ) : icon ? (
-                  <ListItem.LeadingContent>
-                    <Icon source={icon} size={ICON_SIZE} />
-                  </ListItem.LeadingContent>
-                ) : null}
-                {action.loading || action.status || (action.checked && check) ? (
-                  <ListItem.TrailingContent>
-                    <Row verticalAlignment="center" horizontalArrangement={{ spacedBy: 8 }}>
-                      {action.status ? <Text>{action.status}</Text> : null}
-                      {action.loading ? (
-                        <CircularProgressIndicator modifiers={[size(SPINNER_SIZE, SPINNER_SIZE)]} />
-                      ) : action.checked && check ? (
-                        <Icon source={check} size={ICON_SIZE} />
-                      ) : null}
-                    </Row>
-                  </ListItem.TrailingContent>
-                ) : null}
-              </ListItem>
-            )
-          })}
+          {actionSheetGroups(actions, groupDestructive).flatMap((group, index) => [
+            ...(index > 0
+              ? [
+                  <HorizontalDivider
+                    key={`${group.key}-divider`}
+                    modifiers={[padding(0, 8, 0, 8)]}
+                  />
+                ]
+              : []),
+            ...group.actions.map((action) => {
+              const symbol = action.icon?.nativeSymbol?.android
+              const icon = symbol ? images.get(symbol) : undefined
+              const check = images.get(CHECK_SYMBOL)
+              const inactive = action.disabled === true || action.loading === true
+              return (
+                <ListItem
+                  key={action.id ?? action.label}
+                  colors={{
+                    containerColor: TRANSPARENT,
+                    ...(action.destructive
+                      ? { contentColor: colors.statusRed, leadingContentColor: colors.statusRed }
+                      : {})
+                  }}
+                  modifiers={[
+                    // A checkable row is a radio choice, so TalkBack announces which one is current.
+                    ...(inactive
+                      ? []
+                      : action.checked === undefined
+                        ? [clickable(() => press(action))]
+                        : [selectable(action.checked, () => press(action), 'radioButton')]),
+                    ...(action.disabled ? [alpha(DISABLED_ALPHA)] : [])
+                  ]}
+                >
+                  <ListItem.HeadlineContent>
+                    <Text>{action.label}</Text>
+                  </ListItem.HeadlineContent>
+                  {action.hint ? (
+                    <ListItem.SupportingContent>
+                      <Text>{action.hint}</Text>
+                    </ListItem.SupportingContent>
+                  ) : null}
+                  {action.renderIcon ? (
+                    <ListItem.LeadingContent>
+                      <RNHostView matchContents>
+                        <View>{action.renderIcon()}</View>
+                      </RNHostView>
+                    </ListItem.LeadingContent>
+                  ) : icon ? (
+                    <ListItem.LeadingContent>
+                      <Icon source={icon} size={ICON_SIZE} />
+                    </ListItem.LeadingContent>
+                  ) : null}
+                  {action.loading || action.status || (action.checked && check) ? (
+                    <ListItem.TrailingContent>
+                      <Row verticalAlignment="center" horizontalArrangement={{ spacedBy: 8 }}>
+                        {action.status ? <Text>{action.status}</Text> : null}
+                        {action.loading ? (
+                          <CircularProgressIndicator
+                            modifiers={[size(SPINNER_SIZE, SPINNER_SIZE)]}
+                          />
+                        ) : action.checked && check ? (
+                          <Icon source={check} size={ICON_SIZE} />
+                        ) : null}
+                      </Row>
+                    </ListItem.TrailingContent>
+                  ) : null}
+                </ListItem>
+              )
+            })
+          ])}
         </Column>
       </ModalBottomSheet>
     </Host>

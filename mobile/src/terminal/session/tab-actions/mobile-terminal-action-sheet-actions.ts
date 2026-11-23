@@ -1,4 +1,4 @@
-import { Eraser, Monitor, Smartphone } from '../../../components/icons/app-icons'
+import { Eraser, Monitor, Pencil, Smartphone, X } from '../../../components/icons/app-icons'
 import type { ActionSheetAction } from '../../../components/sheets/ActionSheetModal'
 import { translate } from '../../../i18n/mobile-i18n'
 import type { MobileNativeChatTab } from '../../../session/native-chat/conversation/mobile-native-chat-eligibility'
@@ -57,6 +57,7 @@ export function getMobileTerminalActionSheetActions<
     {
       id: 'rename',
       label: translate('session.terminalActionSheetActions.rename', 'Rename'),
+      icon: Pencil,
       closeBeforePress: true,
       onPress: () => {
         args.onRename(target)
@@ -74,7 +75,8 @@ export function getMobileTerminalActionSheetActions<
     ...(args.workerActions ?? []),
     {
       id: 'close',
-      label: translate('common.close', 'Close'),
+      label: translate('session.tabMenu.closeTab', 'Close Tab'),
+      icon: X,
       destructive: true,
       onPress: () => {
         args.onDismiss()

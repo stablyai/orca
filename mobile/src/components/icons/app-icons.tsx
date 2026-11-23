@@ -64,6 +64,7 @@ export {
   Code2,
   Columns2,
   Copy,
+  CopyX,
   CornerDownRight,
   Cpu,
   Database,

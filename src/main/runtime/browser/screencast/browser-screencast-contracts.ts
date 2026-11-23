@@ -37,6 +37,8 @@ export type BrowserScreencastParams = {
   agentCursor?: 1
   // The viewer locks its input while a phone drives the page: `driver` events.
   driverEvents?: 1
+  // The viewer hears the page's downloads start and end: `downloadRequested`, `downloadFinished`.
+  downloads?: 1
 } & BrowserCommandTargetParams
 
 export type BrowserScreencastStartResult = {
@@ -66,7 +68,7 @@ export type ActiveBrowserScreencastSubscriber = {
   frameCredit: { credit: BrowserScreencastFrameCredit; release: () => void } | null
   pointerEvents: boolean
   contextMenus: boolean
-  // Present while the viewer hears the page's prompts, its own file pickers or the agent cursor.
+  // Present while the viewer hears the page's prompts, its own file pickers, the agent cursor or downloads.
   stopViewerEvents: (() => void) | null
 }
 

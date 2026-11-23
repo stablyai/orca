@@ -32,7 +32,11 @@ import { useBottomDrawerModalHost } from '../bottom-drawer/bottom-drawer-modal-h
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { sfSymbol } from '../icons/platform-symbol-names'
 import { actionSheetTitleText, useActionSheetPress } from './action-sheet-press'
-import type { ActionSheetAction, ActionSheetModalProps } from './ActionSheetContent'
+import {
+  actionSheetGroups,
+  type ActionSheetAction,
+  type ActionSheetModalProps
+} from './ActionSheetContent'
 import { DrawnActionSheetModal } from './DrawnActionSheetModal'
 
 export { ActionSheetContent } from './ActionSheetContent'
@@ -69,8 +73,9 @@ function stillAvailable(
 }
 
 export function ActionSheetModal(props: ActionSheetModalProps) {
-  // A shared drawer Modal can unmount under a sheet in its own window, so those keep the drawn one.
-  if (useBottomDrawerModalHost() !== null) {
+  // A shared drawer Modal can unmount under a sheet in its own window, so those keep the drawn one;
+  // a subject tile is drawn too, as neither native sheet has one.
+  if (useBottomDrawerModalHost() !== null || props.headerIcon) {
     return <DrawnActionSheetModal {...props} />
   }
   return <NativeActionSheet {...props} />
@@ -166,6 +171,7 @@ function ListActionSheet({
   title,
   titleAccessibilityLabel,
   message,
+  groupDestructive,
   actions,
   onClose,
   onAfterClose
@@ -185,11 +191,16 @@ function ListActionSheet({
         ...(heading ? [navigationTitle(heading), navigationBarTitleDisplayMode('inline')] : [])
       ]}
     >
-      <Section header={message ? <Text>{message}</Text> : undefined}>
-        {actions.map((action) => (
-          <ActionRow key={action.id ?? action.label} action={action} onPress={press} />
-        ))}
-      </Section>
+      {actionSheetGroups(actions, groupDestructive).map((group, index) => (
+        <Section
+          key={group.key}
+          header={index === 0 && message ? <Text>{message}</Text> : undefined}
+        >
+          {group.actions.map((action) => (
+            <ActionRow key={action.id ?? action.label} action={action} onPress={press} />
+          ))}
+        </Section>
+      ))}
     </List>
   )
 

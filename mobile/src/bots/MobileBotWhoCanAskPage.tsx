@@ -32,6 +32,7 @@ import {
 } from './bot-sheet-operations'
 import { MobileConnectorSourceIcon } from './MobileConnectorSourceIcon'
 import { MobileBotWhoCanAskPicker } from './MobileBotWhoCanAskPicker'
+import { MobileBotPairedServers } from './MobileBotPairedServers'
 import type { RouteBot } from './use-route-bot'
 import { useWhoCanAskConnectors } from './use-who-can-ask-connectors'
 import type { WhoCanAskConnector } from './who-can-ask-connectors'
@@ -354,6 +355,12 @@ export function MobileBotWhoCanAskPage(props: {
             onAdd={() => setPicking({ key: connector.key, picked: [], confirming: false })}
           />
         ))}
+        <MobileBotPairedServers
+          client={client}
+          bot={bot}
+          locked={props.locked}
+          showToast={props.showToast}
+        />
       </MobileBotWhoCanAsk>
     </>
   )

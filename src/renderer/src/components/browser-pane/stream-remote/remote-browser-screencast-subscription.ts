@@ -14,6 +14,7 @@ import type { RemoteBrowserDialogPage } from './remote-browser-javascript-dialog
 import type { RemoteBrowserViewportSize } from './remote-browser-stream-tokens'
 import type { RemoteBrowserPagePrompts } from './remote-browser-page-prompts'
 import type { RemoteBrowserHostContextMenus } from './remote-browser-host-context-menus'
+import { showRemoteBrowserDownloadNotice } from './remote-browser-download-notices'
 
 export type RemoteBrowserScreencastSubscribe = (
   args: { selector: string; method: string; params?: unknown; timeoutMs?: number },
@@ -110,7 +111,8 @@ export async function openRemoteBrowserScreencastStream(
         // A web client's picked files have no paths to stage on the host.
         ...(isWebClientLocation() ? {} : { fileChoosers: 1 }),
         agentCursor: 1,
-        driverEvents: 1
+        driverEvents: 1,
+        downloads: 1
       }),
       timeoutMs: 15_000
     },
@@ -186,6 +188,11 @@ function dispatchScreencastResponse(
     events.onAgentCursor({ x, y, viewportWidth, viewportHeight, press })
   } else if (event.type === 'driver') {
     events.onDriver({ browserPageId: event.browserPageId, driver: event.driver })
+  } else if (
+    (event.type === 'downloadRequested' || event.type === 'downloadFinished') &&
+    dialogPage.target.kind === 'environment'
+  ) {
+    showRemoteBrowserDownloadNotice(event, dialogPage.target.environmentId)
   } else if (event.type === 'error') {
     events.onFailed(event.message)
   }

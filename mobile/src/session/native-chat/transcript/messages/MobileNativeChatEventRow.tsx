@@ -76,8 +76,8 @@ export function MobileNativeChatEventRow({
   icon: ReactNode
   /** Its state on the mark; VoiceOver hears it with the row's words. */
   badge?: MobileNativeChatEventBadge | null
-  /** The row's words: the name in primary text, the rest muted. */
-  children: ReactNode
+  /** The row's words: the name in primary text, the rest muted; given whether its details are open. */
+  children: ReactNode | ((open: boolean) => ReactNode)
   /** The words as plain text: the row button's name, with the time. */
   label: string
   /** Right after the words, such as an open button. */
@@ -132,7 +132,7 @@ export function MobileNativeChatEventRow({
           numberOfLines={wordsLines}
           style={[styles.words, type]}
         >
-          {children}
+          {typeof children === 'function' ? children(toggles && open) : children}
         </Text>
         {action ? <View style={[styles.action, line]}>{action}</View> : null}
         <View pointerEvents="none" style={styles.spacer} />

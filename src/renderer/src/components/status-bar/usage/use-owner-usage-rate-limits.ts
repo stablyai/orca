@@ -22,6 +22,10 @@ import {
   resolveOwnerUsageRateLimits,
   type OwnerUsageState
 } from './owner-usage-rate-limits'
+import {
+  getCodexStatusActiveId,
+  scopeCodexAuthFailure
+} from '../accounts/status-bar-codex-accounts'
 
 // Why: accounts.list({refreshUsage}) waits for the host's provider fetches.
 const REMOTE_USAGE_REFRESH_TIMEOUT_MS = 30_000
@@ -177,9 +181,40 @@ export function useAccountOwnerUsage(
     () => resolveOwnerUsageRateLimits(local, ownerState, t),
     [local, ownerState, t]
   )
+  const authFailureAccount = rateLimits.codex?.usageMetadata?.authFailureAccount
+  const localActiveCodexId = useAppStore((s) => {
+    if (ownerId || !authFailureAccount || !s.settings) {
+      return null
+    }
+    return getCodexStatusActiveId(
+      {
+        activeAccountId: s.settings.activeCodexManagedAccountId ?? null,
+        activeAccountIdsByRuntime: s.settings.activeCodexManagedAccountIdsByRuntime
+      },
+      authFailureAccount
+    )
+  })
+  const hostCodexAccounts = owned?.snapshot?.codex
+  const scopedRateLimits = useMemo(() => {
+    if (!rateLimits.codex || !authFailureAccount) {
+      return rateLimits
+    }
+    const target = rateLimits.codexTarget
+    const matchesRuntime =
+      authFailureAccount.runtime === target.runtime &&
+      (!target.wslDistro || authFailureAccount.wslDistro === target.wslDistro)
+    const activeAccountId = !ownerId
+      ? localActiveCodexId
+      : hostCodexAccounts && getCodexStatusActiveId(hostCodexAccounts, authFailureAccount)
+    const codex = scopeCodexAuthFailure(
+      rateLimits.codex,
+      matchesRuntime ? (activeAccountId ?? null) : null
+    )
+    return codex === rateLimits.codex ? rateLimits : { ...rateLimits, codex }
+  }, [authFailureAccount, hostCodexAccounts, localActiveCodexId, ownerId, rateLimits])
   return {
     owner,
-    rateLimits,
+    rateLimits: scopedRateLimits,
     accounts: ownerId ? (owned?.snapshot ?? null) : null,
     remoteOwner,
     refreshRemote: ownerId || unavailable ? refreshRemote : null

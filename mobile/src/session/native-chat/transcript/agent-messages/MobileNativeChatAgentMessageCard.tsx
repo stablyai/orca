@@ -14,6 +14,7 @@ import {
   agentMessageSenderCanOpen,
   type AgentMessageHeading
 } from '../../../../../../src/shared/agent-session/view/messages/agent-message-presentation'
+import { agentMessagePreviewLine } from '../../../../../../src/shared/agent-session/view/messages/agent-message-preview-line'
 import { mobileNativeChatDisplayCopyText } from '../messages/mobile-native-chat-display-copy'
 import { MobileNativeChatMarkdown } from '../message-content/MobileNativeChatMarkdown'
 import { MobileNativeChatMessageTime } from '../messages/MobileNativeChatMessageTime'
@@ -56,6 +57,27 @@ function lead(heading: AgentMessageHeading, t: Translate): string {
   }
 }
 
+/** The one word drawn before the name for a start, a hand-off or a task; a plain message draws none. */
+function kindWord(heading: AgentMessageHeading, t: Translate): string | null {
+  switch (heading) {
+    case 'started':
+    case 'started-agent':
+      return t('chat.agentMessage.kind.started', 'Started')
+    case 'reopened-worker':
+      return t('chat.agentMessage.kind.reopened', 'Reopened')
+    case 'followed-up-worker':
+      return t('chat.agentMessage.kind.followedUp', 'Follow-up')
+    case 'handed-off':
+      return t('chat.agentMessage.kind.handedOff', 'Handed off')
+    case 'task':
+      return t('chat.agentMessage.kind.task', 'Task')
+    case 'worker':
+    case 'coordinator':
+    case 'generic':
+      return null
+  }
+}
+
 type AgentMessageCardProps = {
   message: NativeChatMessage
   from: AgentMessageSource
@@ -66,7 +88,8 @@ type AgentMessageCardProps = {
 }
 
 /** A message between agents (a start, a task, a worker's update) as one status row: the sender's agent
- *  mark with its live state, "Update from <name>", the open icon, and the message opening below. */
+ *  mark with its live state, a kind word for a start or a task, the name, the message's first line, the
+ *  open icon, and the whole message opening below. */
 export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAgentMessageCard({
   message,
   from,
@@ -83,7 +106,10 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
   const senderName = useMobileAgentMessageName(sender ?? NO_SENDER, unnamed)
   const view = useMobileAgentMessageView(sender)
   const { shown, more } = agentMessageSendersShown(from)
-  const words = lead(agentMessageHeading(from, message), t)
+  const heading = agentMessageHeading(from, message)
+  const words = lead(heading, t)
+  const kind = kindWord(heading, t)
+  const preview = agentMessagePreviewLine(text).line
   const items = message.agentStartItems ?? []
   const merged = message.mergedEvents ?? []
   const canCopy = agentMessageCanCopy(text)
@@ -104,7 +130,7 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
         items.length > 0
           ? ` ${t('chat.agentMessage.row.forItems', 'for')} ${items.map((item) => item.title).join(', ')}`
           : ''
-      }`}
+      }${preview ? `: ${preview}` : ''}`}
       action={
         sender && !several ? <OpenSender from={from} sender={sender} unnamed={unnamed} /> : null
       }
@@ -182,24 +208,30 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
         ) : null
       }
     >
-      {words}{' '}
-      {shown.length === 0
-        ? unnamed
-        : shown.map((shownSender, index) => (
-            <Fragment key={shownSender.party.address}>
-              {index > 0 ? ', ' : null}
-              <SenderName sender={shownSender} unnamed={unnamed} />
-            </Fragment>
-          ))}
-      {more > 0 ? ` +${more}` : null}
-      {items.length > 0 ? (
+      {(open) => (
         <>
-          {` ${t('chat.agentMessage.row.forItems', 'for')} `}
-          <MobileNativeChatEventName>
-            {items.map((item) => item.title).join(', ')}
-          </MobileNativeChatEventName>
+          {kind ? `${kind} ` : null}
+          {shown.length === 0
+            ? unnamed
+            : shown.map((shownSender, index) => (
+                <Fragment key={shownSender.party.address}>
+                  {index > 0 ? ', ' : null}
+                  <SenderName sender={shownSender} unnamed={unnamed} />
+                </Fragment>
+              ))}
+          {more > 0 ? ` +${more}` : null}
+          {items.length > 0 ? (
+            <>
+              {` ${t('chat.agentMessage.row.forItems', 'for')} `}
+              <MobileNativeChatEventName>
+                {items.map((item) => item.title).join(', ')}
+              </MobileNativeChatEventName>
+            </>
+          ) : null}
+          {/* The open message shows its first line itself. */}
+          {preview && !open ? ` ${preview}` : null}
         </>
-      ) : null}
+      )}
     </MobileNativeChatEventRow>
   )
 })

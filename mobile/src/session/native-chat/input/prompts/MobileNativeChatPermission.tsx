@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ShieldQuestion } from '../../../../components/icons/app-icons'
 import { approvalDetailPreview } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-detail-preview'
 import { approvalBlockedPathToShow } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-blocked-path'
+import { readShellApprovalDetail } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-shell-detail'
 import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
 import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
 import { useMobilePendingControl } from '../../../../components/controls/use-mobile-pending-control'
@@ -197,7 +198,11 @@ function MobileNativeChatPermissionContext({
       ) : isUrlApprovalSubject(permission.subject) ? (
         <MobileNativeChatUrlTarget url={permission.subject.url} />
       ) : permission.detail ? (
-        <MobileNativeChatPermissionDetail detail={permission.detail} />
+        <MobileNativeChatPermissionDetail
+          detail={permission.detail}
+          toolName={permission.toolName}
+          description={permission.description}
+        />
       ) : null}
       {newerSubject ? (
         <Text testID="native-chat-approval-needs-newer-orca" style={styles.detail}>
@@ -208,13 +213,23 @@ function MobileNativeChatPermissionContext({
   )
 }
 
-function MobileNativeChatPermissionDetail({ detail }: { detail: string }): React.JSX.Element {
+function MobileNativeChatPermissionDetail({
+  detail,
+  toolName,
+  description
+}: {
+  detail: string
+  toolName: string | undefined
+  description: string | undefined
+}): React.JSX.Element {
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
-  const preview = approvalDetailPreview(detail)
+  const shell = readShellApprovalDetail(detail, toolName, description)
+  const text = shell?.command ?? detail
+  const preview = approvalDetailPreview(text)
   return (
     <View style={styles.content}>
-      {preview !== detail ? (
+      {preview !== text ? (
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ expanded }}
@@ -226,9 +241,14 @@ function MobileNativeChatPermissionDetail({ detail }: { detail: string }): React
           </Text>
         </Pressable>
       ) : null}
-      <Text selectable style={styles.detail}>
-        {expanded ? detail : preview}
+      <Text selectable style={shell ? styles.command : styles.detail}>
+        {expanded ? text : preview}
       </Text>
+      {shell?.otherArguments ? (
+        <Text selectable style={styles.otherArguments}>
+          {shell.otherArguments}
+        </Text>
+      ) : null}
     </View>
   )
 }
@@ -262,6 +282,18 @@ const styles = themedStyleSheet(() => ({
     color: colors.textSecondary,
     fontSize: typography.metaSize,
     lineHeight: typography.metaSize + 5
+  },
+  command: {
+    color: colors.textPrimary,
+    fontFamily: typography.monoFamily,
+    fontSize: typography.metaSize,
+    lineHeight: typography.metaSize + 5
+  },
+  otherArguments: {
+    color: colors.textMuted,
+    fontFamily: typography.monoFamily,
+    fontSize: typography.metaSize - 1,
+    lineHeight: typography.metaSize + 4
   },
   planFile: {
     marginTop: spacing.sm,

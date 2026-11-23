@@ -98,6 +98,21 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
     optionalGrants: [DEVICE_STORE_GRANT, DIALOG_GRANT, HEADER_GRANT]
   },
+  // A group room: Back and its item hops navigate, Copy writes the clipboard, and + picks photos (all three media verbs, as a chat's).
+  {
+    pathname: '/h/[hostId]/group/[groupId]',
+    grants: [
+      'navigate',
+      'storage',
+      'externalLink',
+      'haptics',
+      'native.clipboard.write',
+      'native.media.pick',
+      'native.media.read',
+      'native.media.release'
+    ],
+    optionalGrants: ['externalNavigation', 'native.image.act', DEVICE_STORE_GRANT]
+  },
   // Session alone needs media/audio/screencast grants: native clipboard read/write, navigation/storage/external links/haptics come from actual closure callers.
   // Media pick/read/release are all-or-none; partial set can start handle upload it cannot finish. Audio start/read/stop likewise must permit closing mic; device owns wake lock.
   // screencastBinary lets the pane request wantsBinary from shells that encode frames.

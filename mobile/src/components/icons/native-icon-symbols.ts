@@ -70,6 +70,7 @@ export const NATIVE_ICON_SYMBOLS = {
   Code2: ['chevron.left.forwardslash.chevron.right', 'code'],
   Columns2: ['rectangle.split.2x1', 'view_column_2', 'rectangle.split.2x1.fill'],
   Copy: ['doc.on.doc', 'content_copy', 'doc.on.doc.fill'],
+  CopyX: ['xmark.square', 'tab_close', 'xmark.square.fill'],
   CornerDownRight: ['arrow.turn.down.right', 'subdirectory_arrow_right'],
   Cpu: ['cpu', 'memory', 'cpu.fill'],
   Database: ['cylinder.split.1x2', 'database', 'cylinder.split.1x2.fill'],

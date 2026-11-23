@@ -50,7 +50,6 @@ function toolsLine(tools: PhoneBotTools | null, agent: string, t: Translate): st
 export function MobileBotToolsRow(props: {
   client: RpcClient | null
   bot: ToolsBot
-  online: boolean
   onOpen: () => void
 }) {
   const t = useMobileTranslation()
@@ -88,7 +87,6 @@ export function MobileBotToolsRow(props: {
           : (toolsLine(tools, botAgentLabel(props.bot.agent), t) ?? '')
       }
       detail
-      disabled={!props.online}
       onPress={props.onOpen}
     />
   )
