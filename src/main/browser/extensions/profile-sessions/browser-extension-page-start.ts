@@ -97,6 +97,10 @@ export function restoreHistoryBehind(
   history: { entries: Electron.NavigationEntry[]; index: number },
   url: string
 ): Promise<void> {
+  // Why: a page that committed before its stop (about:, data:) makes Electron refuse a restore.
+  if (contents.navigationHistory.getAllEntries().length > 0) {
+    return contents.getURL() === url ? Promise.resolve() : contents.loadURL(url)
+  }
   const entries = [...history.entries.slice(0, history.index + 1), { url, title: '' }]
   return contents.navigationHistory.restore({ entries, index: entries.length - 1 })
 }
