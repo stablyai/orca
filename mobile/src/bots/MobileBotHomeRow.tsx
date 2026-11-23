@@ -38,22 +38,21 @@ export function MobileBotHomeRow({
   const t = useMobileTranslation()
   const now = useSharedNow(30_000)
   const bot = view.botFacts!
-  // The desktop row's line, from its Chat's and threads' agent rows; waits while nothing works.
-  const line = mobileBotRowLine(bot, item.agents ?? [], now)
+  // The desktop row's line, from its Chat's and threads' agent rows; waits while nothing works. A
+  // search that found the bot by what it's for shows that in its place.
+  const line = bot.searchPurpose ? null : mobileBotRowLine(bot, item.agents ?? [], now)
   // The line's count, so the badge never disagrees with it; a down host's row keeps its last, greyed.
   const needsYou = mobileBotRowNeedsYou(bot.line, item.agents ?? [], now)
   // A down server's bot shows only where it runs and that computer's word: its last activity isn't live.
   const down = bot.host?.word !== undefined
   const asking = !down && line?.kind === 'needYouElsewhere'
-  const lineText = line ? mobileBotRowLineText(line, now) : bot.statusLine
+  const lineText = line ? mobileBotRowLineText(line, now) : (bot.searchPurpose ?? bot.statusLine)
   // The line names who waits on an access answer, since nothing else on the row says it.
   const preview = down
     ? ''
-    : bot.searchPurpose
-      ? bot.searchPurpose
-      : asking && bot.askedForAccess
-        ? `${lineText} · ${t('bots.needs.access', '{{person}} asked for access', { person: bot.askedForAccess })}`
-        : lineText
+    : asking && bot.askedForAccess
+      ? `${lineText} · ${t('bots.needs.access', '{{person}} asked for access', { person: bot.askedForAccess })}`
+      : lineText
   const age =
     !down && line?.kind === 'activity' && line.at !== null ? formatTimeAgo(line.at, now) : null
   // The desktop's mark before a thread's label, which leads an activity line.

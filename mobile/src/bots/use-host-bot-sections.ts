@@ -21,6 +21,8 @@ import { usePublishedBotStatuses } from './use-published-bot-statuses'
 /** The host list's Bots section, drawn from every host's bots, their chats and the list's search. */
 export function useHostBotSections(args: {
   client: RpcClient | null
+  /** The paired host answers; a search's purpose read waits for it, and reads again after a reconnect. */
+  connected: boolean
   hostId: string | undefined
   hostCapabilities: readonly string[]
   listings: readonly HostBotListing[]
@@ -49,7 +51,7 @@ export function useHostBotSections(args: {
         listing.hostId === LOCAL_EXECUTION_HOST_ID &&
         listing.bots.length > 0
     )
-  const purposes = useBotPurposes(searchesOwnBots ? args.client : null)
+  const purposes = useBotPurposes(searchesOwnBots && args.connected ? args.client : null)
   const sections = useMemo(
     () =>
       buildHostBotSections({

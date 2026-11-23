@@ -36,6 +36,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host/e
 
 export type HostListSectionsInputs = {
   client: RpcClient | null
+  connected: boolean
   hostId: string | undefined
   /** Null in a build that lists without the feed. */
   feed: HostSidebarFeed | null
@@ -257,6 +258,7 @@ export function useHostListSections(inputs: HostListSectionsInputs): HostListSec
   const lineageStores = useLineageStores(inputs)
   const botSections = useHostBotSections({
     client: inputs.client,
+    connected: inputs.connected,
     hostId: inputs.hostId,
     hostCapabilities: inputs.hostCapabilities,
     listings: bots,
