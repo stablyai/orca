@@ -50,8 +50,6 @@ export type BotPictureCustom = {
   description: string
   /** A mascot the carousel no longer offers: drawn and dressed as that mascot. */
   mascot?: BotMascotId
-  /** Slack gets it (an uploaded or generated image, or a mascot), known before its preview loads. */
-  sentToSlack?: boolean
 }
 
 // A mascot from its bitmap with the outfit's art over it.

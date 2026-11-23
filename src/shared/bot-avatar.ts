@@ -87,11 +87,6 @@ export function uploadAvatar(version: string): string {
   return `${UPLOAD_PREFIX}${version}`
 }
 
-/** A mascot avatar, even one this build doesn't know yet (a newer host's). */
-export function isMascotAvatar(value: string | null): boolean {
-  return value?.startsWith(MASCOT_PREFIX) === true
-}
-
 export function isUploadAvatar(value: string | null): boolean {
   return value?.startsWith(UPLOAD_PREFIX) === true
 }

@@ -1552,7 +1552,6 @@
       },
       "avatarSlackNote": "Slack gets the picture, not the color or outfit.",
       "avatarSlackNoteColor": "Slack gets the picture, not the color.",
-      "avatarSlackNotePicture": "Changes your bot's picture in Slack too.",
       "linearStatus": {
         "checking": "Checking",
         "unknown": "Can’t check",
