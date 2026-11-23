@@ -123,6 +123,28 @@ export async function isGitBashAvailableAsync(): Promise<boolean> {
   return false
 }
 
+/** resolveWindowsGitBashShellPath without blocking the event loop, for launches prepared at spawn. */
+export async function resolveWindowsGitBashShellPathAsync(shell: string): Promise<string | null> {
+  const trimmed = shell.trim()
+  const name = pathWin32.basename(trimmed).toLowerCase()
+  const explicit =
+    trimmed !== WINDOWS_GIT_BASH_SHELL &&
+    (name === 'bash.exe' || name === 'bash') &&
+    (pathWin32.isAbsolute(trimmed) || trimmed.includes('\\') || trimmed.includes('/'))
+  if (!trimmed || (trimmed !== WINDOWS_GIT_BASH_SHELL && name !== 'bash.exe' && name !== 'bash')) {
+    return null
+  }
+  const candidates = explicit
+    ? [name === 'bash' ? `${trimmed}.exe` : trimmed]
+    : getGitBashCandidatePaths()
+  for (const candidate of candidates) {
+    if (isGitForWindowsBashPath(candidate) && (await pathExists(candidate))) {
+      return candidate
+    }
+  }
+  return null
+}
+
 function pathExists(path: string): Promise<boolean> {
   return access(path).then(
     () => true,

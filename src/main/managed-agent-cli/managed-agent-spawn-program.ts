@@ -17,7 +17,7 @@ import {
   normalizeRuntimePathForComparison
 } from '../../shared/file-access/cross-platform-path'
 import { normalizePathEntry } from '../../shared/shell/command-resolution/node-cli-command-resolution'
-import { resolveWindowsGitBashShellPath } from '../pty/shell-startup/git-bash'
+import { resolveWindowsGitBashShellPathAsync } from '../pty/shell-startup/git-bash'
 import { resolveLoginShellEnvironment } from '../startup/shell-environment/login-shell-environment'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { readHostManagedAgentCommands } from '../runtime/rpc/methods/host-management/managed-copy-detection'
@@ -92,7 +92,7 @@ async function effectiveSearchPath(
       ? shell === 'cmd'
         ? null
         : shell === 'posix'
-          ? resolveWindowsGitBashShellPath(spawn.shellOverride ?? 'git-bash')
+          ? await resolveWindowsGitBashShellPathAsync(spawn.shellOverride ?? 'git-bash')
           : spawn.shellOverride
       : spawn.shellOverride
   const initialEnv =
