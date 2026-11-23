@@ -52,7 +52,7 @@ export function RuntimeServersHeaderActions(): React.JSX.Element {
         type="button"
         variant="outline"
         size="sm"
-        className="@max-xs/settings-section:text-settings-detail"
+        className="@max-xs/settings-section:text-settings-detail @max-xs/settings-section:has-[>svg]:px-1.5"
         onClick={() => setDialog('add')}
       >
         <Plus className="@max-xs/settings-section:hidden" />
