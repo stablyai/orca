@@ -138,6 +138,29 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     )
   }
 
+  /** A reload's writes leave its slept waits untouched, so they re-check once its graph is ready. */
+  override markGraphReady(windowId: number): void {
+    const wasReady = this.graphStatus === 'ready'
+    super.markGraphReady(windowId)
+    this.recheckSleptWaitsOnReady(wasReady)
+  }
+
+  override markRendererReloadCancelled(
+    windowId: number,
+    fence: Parameters<RuntimeSleptMailboxWakes['markRendererReloadCancelled']>[1]
+  ): boolean {
+    const wasReady = this.graphStatus === 'ready'
+    const restored = super.markRendererReloadCancelled(windowId, fence)
+    this.recheckSleptWaitsOnReady(wasReady)
+    return restored
+  }
+
+  private recheckSleptWaitsOnReady(wasReady: boolean): void {
+    if (!wasReady && this.graphStatus === 'ready' && this.wokenHandleChecks.size > 0) {
+      queueMicrotask(() => this.recheckSleptWaits('all'))
+    }
+  }
+
   protected override onSleptLeafGraphSynced(): void {
     this.recheckSleptWaits('all')
   }
