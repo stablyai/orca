@@ -15,7 +15,11 @@ import type {
   CodexUsageSession
 } from './types'
 
-import { UsageScanReadBudget } from '../usage/source-input/usage-scan-read-budget'
+import {
+  createUsageScanCheckpointClock,
+  UsageScanReadBudget,
+  type UsageScanCheckpoint
+} from '../usage/source-input/usage-scan-pacing'
 
 const YIELD_EVERY_FILES = 10
 
@@ -30,7 +34,8 @@ type CodexRolloutResumePlan = {
 export async function scanCodexUsageFiles(
   worktrees: CodexUsageWorktreeRef[],
   previousProcessedFiles: CodexUsagePersistedFile[],
-  onFilesScanned?: (count: number) => void
+  onFilesScanned?: (count: number) => void,
+  onCheckpoint?: UsageScanCheckpoint<CodexUsagePersistedFile>
 ): Promise<{
   processedFiles: CodexUsagePersistedFile[]
   sessions: CodexUsageSession[]
@@ -120,6 +125,7 @@ export async function scanCodexUsageFiles(
 
   const parsedByPath = new Map<string, CodexUsagePersistedFile>()
   const readBudget = new UsageScanReadBudget()
+  const checkpointDue = createUsageScanCheckpointClock()
   let lostOwnerKeys = lostOwnerPath
   const parseAndPublish = async (
     filePath: string,
@@ -152,6 +158,15 @@ export async function scanCodexUsageFiles(
   for (const [index, filePath] of pathsToParse.entries()) {
     await parseAndPublish(filePath, resumeByPath.get(filePath))
     await readBudget.consume(readBytesByPath.get(filePath) ?? 0)
+    if (onCheckpoint && checkpointDue()) {
+      // Unparsed files keep their previous record, so ownership matches a scan that stopped here.
+      await onCheckpoint(
+        files.flatMap(
+          (path) =>
+            parsedByPath.get(path) ?? reusedByPath.get(path) ?? previousByPath.get(path) ?? []
+        )
+      )
+    }
 
     // Yield so large histories do not monopolize the scan worker.
     onFilesScanned?.(1)

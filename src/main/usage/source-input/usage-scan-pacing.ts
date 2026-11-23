@@ -21,3 +21,23 @@ export class UsageScanReadBudget {
     }
   }
 }
+
+// A paced cold scan can outlast a session; saving progress lets the next launch resume instead of restart.
+export const USAGE_SCAN_CHECKPOINT_INTERVAL_MS = 30_000
+
+/** Saves the per-source records a scan would leave if it stopped now. */
+export type UsageScanCheckpoint<T> = (sources: T[]) => Promise<void>
+
+export function createUsageScanCheckpointClock(
+  intervalMs = USAGE_SCAN_CHECKPOINT_INTERVAL_MS
+): () => boolean {
+  let last = Date.now()
+  return () => {
+    const now = Date.now()
+    if (now - last < intervalMs) {
+      return false
+    }
+    last = now
+    return true
+  }
+}

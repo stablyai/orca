@@ -54,31 +54,23 @@ async function comparableForms(pathValue: string): Promise<string[]> {
   return [...forms]
 }
 
-const optionalString = z.string().optional().catch(undefined)
-const listOf = <T extends z.ZodType>(item: T) => z.array(item).catch([])
-// Every provider projects locations as `worktree:<id>`, `cwd:<path>` or `unscoped`.
-const sourceAttributionSchema = z
-  .object({
-    dailyAggregates: listOf(
-      z
-        .object({ projectKey: optionalString, worktreeId: optionalString })
-        .catch({ projectKey: undefined, worktreeId: undefined })
-    ),
-    sessions: listOf(
-      z
-        .object({
-          primaryWorktreeId: optionalString,
-          locationBreakdown: listOf(
-            z
-              .object({ locationKey: optionalString, worktreeId: optionalString })
-              .catch({ locationKey: undefined, worktreeId: undefined })
-          )
-        })
-        .catch({ primaryWorktreeId: undefined, locationBreakdown: [] })
-    )
-  })
-  .catch({ dailyAggregates: [], sessions: [] })
+function fieldOf<K extends string>(record: unknown, field: K): unknown {
+  return typeof record === 'object' && record !== null && field in record
+    ? record[field]
+    : undefined
+}
 
+function stringField<K extends string>(record: unknown, field: K): string | undefined {
+  const value = fieldOf(record, field)
+  return typeof value === 'string' ? value : undefined
+}
+
+function arrayField<K extends string>(record: unknown, field: K): readonly unknown[] {
+  const value = fieldOf(record, field)
+  return Array.isArray(value) ? value : []
+}
+
+// Every provider projects locations as `worktree:<id>`, `cwd:<path>` or `unscoped`.
 function collectAttributionKeys(source: unknown): { keys: Set<string>; worktreeIds: Set<string> } {
   const keys = new Set<string>()
   const worktreeIds = new Set<string>()
@@ -90,14 +82,13 @@ function collectAttributionKeys(source: unknown): { keys: Set<string>; worktreeI
       worktreeIds.add(worktreeId)
     }
   }
-  const { dailyAggregates, sessions } = sourceAttributionSchema.parse(source)
-  for (const daily of dailyAggregates) {
-    add(daily.projectKey, daily.worktreeId)
+  for (const daily of arrayField(source, 'dailyAggregates')) {
+    add(stringField(daily, 'projectKey'), stringField(daily, 'worktreeId'))
   }
-  for (const session of sessions) {
-    add(undefined, session.primaryWorktreeId)
-    for (const location of session.locationBreakdown) {
-      add(location.locationKey, location.worktreeId)
+  for (const session of arrayField(source, 'sessions')) {
+    add(undefined, stringField(session, 'primaryWorktreeId'))
+    for (const location of arrayField(session, 'locationBreakdown')) {
+      add(stringField(location, 'locationKey'), stringField(location, 'worktreeId'))
     }
   }
   return { keys, worktreeIds }
@@ -130,17 +121,26 @@ export async function retainUsageSourcesForWorktrees<T>(
   }
   const changedIds = new Set(changed.map((worktree) => worktree.worktreeId))
   const changedPaths = (await Promise.all(changed.map((w) => comparableForms(w.path)))).flat()
-  const pathsById = new Map<string, string[]>()
+  const rowsById = new Map<string, UsageScanWorktreeRef[]>()
   for (const worktree of [...before.values(), ...after.values()]) {
-    const forms = await comparableForms(worktree.path)
-    pathsById.set(worktree.worktreeId, [...(pathsById.get(worktree.worktreeId) ?? []), ...forms])
+    rowsById.set(worktree.worktreeId, [...(rowsById.get(worktree.worktreeId) ?? []), worktree])
   }
-  // A new worktree nested inside an unchanged one takes over that subtree's usage.
-  const worktreeAffected = (worktreeId: string): boolean =>
-    changedIds.has(worktreeId) ||
-    (pathsById.get(worktreeId) ?? []).some((parent) =>
-      changedPaths.some((child) => contains(parent, child))
-    )
+  // Only worktrees a cached source names are canonicalized, so 750+ known worktrees cost nothing extra.
+  const worktreeVerdicts = new Map<string, boolean>()
+  const worktreeAffected = async (worktreeId: string): Promise<boolean> => {
+    let verdict = worktreeVerdicts.get(worktreeId)
+    if (verdict === undefined) {
+      // A new worktree nested inside an unchanged one takes over that subtree's usage.
+      const parents = (
+        await Promise.all((rowsById.get(worktreeId) ?? []).map((w) => comparableForms(w.path)))
+      ).flat()
+      verdict =
+        changedIds.has(worktreeId) ||
+        parents.some((parent) => changedPaths.some((child) => contains(parent, child)))
+      worktreeVerdicts.set(worktreeId, verdict)
+    }
+    return verdict
+  }
   const cwdVerdicts = new Map<string, boolean>()
   const cwdAffected = async (cwd: string): Promise<boolean> => {
     let verdict = cwdVerdicts.get(cwd)
@@ -166,7 +166,13 @@ export async function retainUsageSourcesForWorktrees<T>(
   const retained: T[] = []
   for (const source of sources) {
     const { keys, worktreeIds } = collectAttributionKeys(source)
-    let affected = [...worktreeIds].some(worktreeAffected)
+    let affected = false
+    for (const worktreeId of worktreeIds) {
+      if (affected) {
+        break
+      }
+      affected = await worktreeAffected(worktreeId)
+    }
     for (const key of keys) {
       if (affected) {
         break

@@ -25,7 +25,11 @@ import {
   type ClaudeUsageVerifiedSources
 } from './persisted-projection-validation'
 
-import { UsageScanReadBudget } from '../usage/source-input/usage-scan-read-budget'
+import {
+  createUsageScanCheckpointClock,
+  UsageScanReadBudget,
+  type UsageScanCheckpoint
+} from '../usage/source-input/usage-scan-pacing'
 
 const FILE_SCAN_BATCH_SIZE = 4
 
@@ -82,7 +86,8 @@ export async function scanClaudeUsageFiles(
   previousProcessedFiles: ClaudeUsagePersistedFile[] = [],
   onFilesScanned?: (count: number) => void,
   profileDirs?: string[],
-  verifiedSources?: ClaudeUsageVerifiedSources
+  verifiedSources?: ClaudeUsageVerifiedSources,
+  onCheckpoint?: UsageScanCheckpoint<ClaudeUsagePersistedFile>
 ): Promise<{
   processedFiles: ClaudeUsagePersistedFile[]
   sessions: ClaudeUsageSession[]
@@ -159,6 +164,7 @@ export async function scanClaudeUsageFiles(
   }
   const changed = files.filter((path) => !plans.get(path)?.reusable)
   const readBudget = new UsageScanReadBudget()
+  const checkpointDue = createUsageScanCheckpointClock()
   for (let index = 0; index < changed.length; index += FILE_SCAN_BATCH_SIZE) {
     const batch = changed.slice(index, index + FILE_SCAN_BATCH_SIZE)
     const reads = await Promise.all(
@@ -171,6 +177,12 @@ export async function scanClaudeUsageFiles(
     await readBudget.consume(
       batch.reduce((sum, path) => sum + (plans.get(path)?.readBytes ?? 0), 0)
     )
+    if (onCheckpoint && checkpointDue()) {
+      // Unread files keep their previous record, so ownership matches a scan that stopped here.
+      await onCheckpoint(
+        files.flatMap((path) => projections.get(path) ?? plans.get(path)?.previous ?? [])
+      )
+    }
     if (index + batch.length < changed.length) {
       await yieldToEventLoop()
     }
