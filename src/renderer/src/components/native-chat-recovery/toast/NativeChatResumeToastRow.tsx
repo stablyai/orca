@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
@@ -9,27 +9,18 @@ import { resumeActivityLabel } from '../tree/native-chat-resume-activity-label'
 import type { ResumeToastRow } from './native-chat-resume-toast-view'
 
 function rowActions(row: ResumeToastRow, remote: boolean, t: Translate): ResumeFailureAction[] {
-  if (row.state !== 'needs-you') {
+  if (!row.failure) {
     return []
   }
-  if (row.openOnly) {
-    // A terminal worker whose resume was refused is settled already: its coordinator heard it was lost.
-    return row.candidate.surface === 'terminal' ? [] : ['open']
-  }
-  const guided: ResumeFailureAction[] = row.failure
-    ? (() => {
-        const guidance = resumeFailureGuidance(row.failure, t)
-        return [guidance.primary, guidance.secondary].filter(
-          (action): action is ResumeFailureAction => action !== null
-        )
-      })()
-    : ['retry', 'open']
-  const shown =
-    row.candidate.surface === 'terminal' ? guided.filter((action) => action !== 'open') : guided
+  const guidance = resumeFailureGuidance(row.failure, t)
+  const guided = [guidance.primary, guidance.secondary].filter(
+    (action): action is ResumeFailureAction =>
+      action !== null && !(action === 'open' && row.candidate.surface === 'terminal')
+  )
   // A server's chats can only be hidden by closing; this machine's can always be dismissed.
   return remote
-    ? shown.filter((action) => action !== 'dismiss')
-    : [...shown.filter((action) => action !== 'dismiss'), 'dismiss']
+    ? guided.filter((action) => action !== 'dismiss')
+    : [...guided.filter((action) => action !== 'dismiss'), 'dismiss']
 }
 
 function actionLabel(action: ResumeFailureAction, row: ResumeToastRow, t: Translate): string {
@@ -58,27 +49,13 @@ function StateMark({ row }: { row: ResumeToastRow }): React.JSX.Element {
       </span>
     )
   }
-  const [Icon, className, label] =
-    row.state === 'resumed'
-      ? [
-          CheckCircle2,
-          'text-status-success',
-          t('auto.components.NativeChatResumeToast.stateResumed', 'Resumed')
-        ]
-      : row.state === 'needs-you'
-        ? [
-            AlertCircle,
-            'text-status-warning',
-            t('auto.components.NativeChatResumeToast.stateNeedsYou', 'Needs you')
-          ]
-        : [
-            Loader2,
-            'animate-spin text-muted-foreground motion-reduce:animate-none',
-            t('auto.components.NativeChatResumeToast.stateResuming', 'Resuming')
-          ]
   return (
-    <span role="img" aria-label={label} className="mt-0.5 inline-flex shrink-0">
-      <Icon className={`size-3.5 ${className}`} />
+    <span
+      role="img"
+      aria-label={t('auto.components.NativeChatResumeToast.stateNeedsYou', 'Needs you')}
+      className="mt-0.5 inline-flex shrink-0"
+    >
+      <AlertCircle className="size-3.5 text-status-warning" />
     </span>
   )
 }
@@ -87,26 +64,20 @@ export function NativeChatResumeToastRow({
   row,
   name,
   age,
-  busy,
   remote,
   onAction
 }: {
   row: ResumeToastRow
   name: string
   age: string
-  busy: boolean
   remote: boolean
   onAction: (action: ResumeFailureAction, sessionId: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const actions = rowActions(row, remote, t)
-  const reason = row.openOnly
-    ? t('auto.components.NativeChatResumeFailureGuidance.fallbackShort', 'Couldn’t resume.')
-    : row.failure
-      ? resumeFailureGuidance(row.failure, t).text
-      : row.state === 'needs-you' || row.state === 'stopped'
-        ? resumeActivityLabel(row.candidate.activity, t)?.summary
-        : undefined
+  const reason = row.failure
+    ? resumeFailureGuidance(row.failure, t).text
+    : resumeActivityLabel(row.candidate.activity, t)?.summary
   return (
     <li className="flex min-w-0 items-start gap-2 rounded-md px-2 py-1.5 hover:bg-accent/40">
       <StateMark row={row} />
@@ -141,8 +112,6 @@ export function NativeChatResumeToastRow({
                 }
                 size="xs"
                 className={action === 'dismiss' ? 'ml-auto' : undefined}
-                // Open is read-only, so it stays available while a resume runs.
-                disabled={busy && action !== 'open'}
                 aria-label={`${actionLabel(action, row, t)}: ${name}`}
                 onClick={() => onAction(action, row.candidate.sessionId)}
               >

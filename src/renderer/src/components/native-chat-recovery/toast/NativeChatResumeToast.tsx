@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { AlertCircle, CheckCircle2, Loader2, RotateCcw, X } from 'lucide-react'
+import { AlertCircle, RotateCcw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
@@ -16,75 +16,13 @@ export type NativeChatResumeToastProps = {
   defaultExpanded?: boolean
   onResume: (sessionIds: readonly string[]) => void
   onRowAction: (action: ResumeFailureAction, sessionId: string) => void
-  /** Opening the list keeps the report until it is closed. */
-  onDetailsOpened?: () => void
   /** Local only: deletes the durable offer. A server's chats can only be hidden by closing. */
   onDismissAll?: () => void
-  onOpenSettings: () => void
   onClose: () => void
 }
 
 function headline(view: ResumeToastView, t: Translate, machineName?: string): string {
-  const { phase, counts } = view
-  if (phase === 'resuming') {
-    return machineName
-      ? t(
-          'auto.components.NativeChatResumeToast.resumingOn',
-          'Resuming {{count}} agents on {{machine}}…',
-          {
-            count: counts.resuming,
-            machine: machineName,
-            defaultValue_one: 'Resuming {{count}} agent on {{machine}}…'
-          }
-        )
-      : t('auto.components.NativeChatResumeToast.resuming', 'Resuming {{count}} agents…', {
-          count: counts.resuming,
-          defaultValue_one: 'Resuming {{count}} agent…'
-        })
-  }
-  if (phase === 'finished' && counts.needsYou === 0) {
-    if (machineName) {
-      return t(
-        'auto.components.NativeChatResumeToast.resumedOn',
-        'Resumed {{count}} agents on {{machine}}.',
-        {
-          count: counts.resumed,
-          machine: machineName,
-          defaultValue_one: 'Resumed {{count}} agent on {{machine}}.'
-        }
-      )
-    }
-    return view.interruptedByUpdate
-      ? t(
-          'auto.components.NativeChatResumeToast.resumedUpdate',
-          'Resumed {{count}} agents after the update.',
-          {
-            count: counts.resumed,
-            defaultValue_one: 'Resumed {{count}} agent after the update.'
-          }
-        )
-      : t(
-          'auto.components.NativeChatResumeToast.resumedRestart',
-          'Resumed {{count}} agents after the restart.',
-          {
-            count: counts.resumed,
-            defaultValue_one: 'Resumed {{count}} agent after the restart.'
-          }
-        )
-  }
-  if (phase === 'finished' && counts.resumed > 0) {
-    const text = t(
-      'auto.components.NativeChatResumeToast.partial',
-      'Resumed {{resumed}} of {{total}} agents. {{count}} need you.',
-      {
-        resumed: counts.resumed,
-        total: counts.total,
-        count: counts.needsYou,
-        defaultValue_one: 'Resumed {{resumed}} of {{total}} agents. {{count}} needs you.'
-      }
-    )
-    return machineName ? `${machineName}: ${text}` : text
-  }
+  const { counts } = view
   if (machineName) {
     return t(
       'auto.components.NativeChatResumeToast.stoppedOn',
@@ -116,21 +54,14 @@ function headline(view: ResumeToastView, t: Translate, machineName?: string): st
 }
 
 function HeadlineIcon({ view }: { view: ResumeToastView }): React.JSX.Element {
-  if (view.phase === 'resuming') {
-    return (
-      <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />
-    )
-  }
-  if (view.counts.needsYou > 0) {
-    return <AlertCircle className="size-4 shrink-0 text-status-warning" />
-  }
-  if (view.phase === 'finished') {
-    return <CheckCircle2 className="size-4 shrink-0 text-status-success" />
-  }
-  return <RotateCcw className="size-4 shrink-0 text-muted-foreground" />
+  return view.counts.needsYou > 0 ? (
+    <AlertCircle className="size-4 shrink-0 text-status-warning" />
+  ) : (
+    <RotateCcw className="size-4 shrink-0 text-muted-foreground" />
+  )
 }
 
-/** The resume-on-restart report: one line, a Resume when nothing was sent, chats behind Details. */
+/** The chats a restart left for the person: one line, a Resume, chats behind Details. */
 export function NativeChatResumeToast({
   view,
   machineName,
@@ -139,16 +70,13 @@ export function NativeChatResumeToast({
   defaultExpanded = false,
   onResume,
   onRowAction,
-  onDetailsOpened,
   onDismissAll,
-  onOpenSettings,
   onClose
 }: NativeChatResumeToastProps): React.JSX.Element {
   const t = useTranslate()
   const [expanded, setExpanded] = useState(defaultExpanded)
   const titleId = useId()
   const listId = useId()
-  const busy = view.phase === 'resuming'
   const listRef = useRef<HTMLUListElement>(null)
   const [moreBelow, setMoreBelow] = useState(false)
   const rowCount = view.rows.length
@@ -157,9 +85,7 @@ export function NativeChatResumeToast({
       setMoreBelow(hasMoreBelow(listRef.current))
     }
   }, [expanded, rowCount])
-  const offering = view.phase === 'offer'
-  const showResume = offering && view.resumable.length > 0
-  const showDismissAll = onDismissAll !== undefined && offering
+  const showResume = view.resumable.length > 0
   return (
     <section
       aria-labelledby={titleId}
@@ -178,14 +104,12 @@ export function NativeChatResumeToast({
             >
               {headline(view, t, machineName)}
             </p>
-            {offering && (
-              <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
-                {t(
-                  'auto.components.NativeChatResumeToast.promptsNotResent',
-                  'Resuming won’t send your prompts again.'
-                )}
-              </p>
-            )}
+            <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+              {t(
+                'auto.components.NativeChatResumeToast.promptsNotResent',
+                'Resuming won’t send your prompts again.'
+              )}
+            </p>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {showResume && (
@@ -200,12 +124,7 @@ export function NativeChatResumeToast({
               className={showResume ? undefined : '-ml-2'}
               aria-expanded={expanded}
               aria-controls={listId}
-              onClick={() => {
-                if (!expanded) {
-                  onDetailsOpened?.()
-                }
-                setExpanded(!expanded)
-              }}
+              onClick={() => setExpanded(!expanded)}
             >
               {t('auto.components.NativeChatResumeToast.details', 'Details')}
             </Button>
@@ -239,7 +158,6 @@ export function NativeChatResumeToast({
                     t('auto.components.NativeChatResumeToast.untitled', 'Untitled agent')
                 )}
                 age={formatShortTimeAgo(row.candidate.recordedAt, listedAt)}
-                busy={busy}
                 remote={machineName !== undefined}
                 onAction={onRowAction}
               />
@@ -253,38 +171,15 @@ export function NativeChatResumeToast({
         <div className="space-y-1.5 border-t border-border px-3.5 py-2.5 text-xs text-muted-foreground">
           {/* Balanced, so a longer locale wraps into even lines instead of orphaning a word; CJK breaks only between phrases. */}
           <p className="text-balance break-keep">
-            {offering
-              ? t(
-                  'auto.components.NativeChatResumeToast.willAsk',
-                  'Orca asks agents to continue. Queued messages may be sent.'
-                )
-              : t(
-                  'auto.components.NativeChatResumeToast.asked',
-                  'Orca asked agents to continue. Queued messages may be sent.'
-                )}
+            {t(
+              'auto.components.NativeChatResumeToast.willAsk',
+              'Orca asks agents to continue. Queued messages may be sent.'
+            )}
           </p>
-          {(showDismissAll || view.startedBy === 'launch') && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              {view.startedBy === 'launch' && (
-                <span>
-                  {t(
-                    'auto.components.NativeChatResumeToast.resumedAutomatically',
-                    'Resumed automatically.'
-                  )}{' '}
-                  <Button variant="link" size="inlineText" onClick={onOpenSettings}>
-                    {t(
-                      'auto.components.NativeChatResumeToast.changeInSettings',
-                      'Change in Settings'
-                    )}
-                  </Button>
-                </span>
-              )}
-              {showDismissAll && (
-                <Button variant="link" size="inlineText" onClick={onDismissAll}>
-                  {t('auto.components.NativeChatResumeToast.dismissAll', 'Dismiss all')}
-                </Button>
-              )}
-            </div>
+          {onDismissAll && (
+            <Button variant="link" size="inlineText" onClick={onDismissAll}>
+              {t('auto.components.NativeChatResumeToast.dismissAll', 'Dismiss all')}
+            </Button>
           )}
         </div>
       </div>

@@ -41,7 +41,8 @@ export type StructuredAgentSessionRestartFailureLedger = {
   read: () => Promise<AgentSessionResumeFailureRecord[]>
   /** Saved failure rows a surface can show; retry eligibility is checked separately. */
   list: () => Promise<StructuredAgentSessionResumeFailure[]>
-  /** File failures or complete reservations, then reopen only rows still owned by this action. */
+  /** File failures or complete reservations, then reopen only rows still owned by this action.
+   *  `last: false` settles only these chats and leaves the action's other reservations held. */
   settle: (
     operationId: string,
     outcomes: readonly StructuredAgentSessionResumeOutcome[],
@@ -52,7 +53,8 @@ export type StructuredAgentSessionRestartFailureLedger = {
       /** Continuation outcome decides failure; reattachment alone proves no delivery. */
       failureAfterResume: (sessionId: string) => AgentSessionResumeFailureOutcome | null
       failureReason: (sessionId: string) => string
-    }
+    },
+    last?: boolean
   ) => Promise<void>
   /** Dismiss only visible agents/records; unnamed dismissal preserves newer chats and adds no fence. */
   dismiss: (
@@ -138,7 +140,8 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
   const settle: StructuredAgentSessionRestartFailureLedger['settle'] = async (
     operationId,
     outcomes,
-    action
+    action,
+    last = true
   ) => {
     const capsule = deps.capsule
     if (!capsule) {
@@ -203,6 +206,9 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
           operationId
         })
       })
+    if (!last) {
+      return
+    }
     // Rollback reopens only still-owned rows, preserving already completed removals.
     await deps
       .enqueue(() => capsule.rollbackResume(operationId, deps.now()))

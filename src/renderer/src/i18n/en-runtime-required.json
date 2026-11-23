@@ -81,18 +81,6 @@
         "activitySubagentCount_other": "{{count}} subagents running"
       },
       "NativeChatResumeToast": {
-        "partial_one": "Resumed {{resumed}} of {{total}} agents. {{count}} needs you.",
-        "partial_other": "Resumed {{resumed}} of {{total}} agents. {{count}} need you.",
-        "resumedOn_one": "Resumed {{count}} agent on {{machine}}.",
-        "resumedOn_other": "Resumed {{count}} agents on {{machine}}.",
-        "resumedRestart_one": "Resumed {{count}} agent after the restart.",
-        "resumedRestart_other": "Resumed {{count}} agents after the restart.",
-        "resumedUpdate_one": "Resumed {{count}} agent after the update.",
-        "resumedUpdate_other": "Resumed {{count}} agents after the update.",
-        "resumingOn_one": "Resuming {{count}} agent on {{machine}}…",
-        "resumingOn_other": "Resuming {{count}} agents on {{machine}}…",
-        "resuming_one": "Resuming {{count}} agent…",
-        "resuming_other": "Resuming {{count}} agents…",
         "stoppedOn_one": "{{count}} agent stopped on {{machine}}.",
         "stoppedOn_other": "{{count}} agents stopped on {{machine}}.",
         "stoppedRestart_one": "{{count}} agent stopped when Orca closed.",
@@ -1154,11 +1142,7 @@
             "checkLabelCount_one": "{{count}} agent to check",
             "checkLabelCount_other": "{{count}} agents to check",
             "labelCount_one": "{{count}} agent to resume",
-            "labelCount_other": "{{count}} agents to resume",
-            "resumedAriaCount_one": "{{count}} agent resumed. Click to see it.",
-            "resumedAriaCount_other": "{{count}} agents resumed. Click to see them.",
-            "resumedLabelCount_one": "{{count}} agent resumed",
-            "resumedLabelCount_other": "{{count}} agents resumed"
+            "labelCount_other": "{{count}} agents to resume"
           },
           "PortsStatusSegment": {
             "portsAria_one": "Ports, {{count}} workspace port",
