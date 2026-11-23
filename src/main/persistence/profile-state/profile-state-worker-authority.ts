@@ -167,6 +167,9 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
         if (consumed || this.writer !== writer) {
           throw new Error('Profile maintenance resume has already been consumed')
         }
+        if (this.stoppedFailure) {
+          throw this.stoppedFailure
+        }
         consumed = true
         this.writer = this.createWriter({ ...this.initialization, revision }, true)
         this.backups = this.createBackups()
@@ -316,9 +319,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       }
     )
     if (stopping) {
-      this.stopping = stopping.finally(() => {
-        this.stopping = undefined
-      })
+      this.stopping = stopping.finally(() => (this.stopping = undefined))
     }
   }
 
