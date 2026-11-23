@@ -7,6 +7,8 @@ import { childrenByParent, serverChain } from './codex-shared-host-process-readi
 /** Set once a shared server's tree could not be held in its job; Windows chats then keep their
  *  own server for the rest of the session, as with the setting off. */
 let sharingRefused = false
+/** Checks that found no native Codex to judge; one may be a crash, a second turns sharing off. */
+let inconclusiveChecks = 0
 
 /** A shared Windows server whose tree isn't in its job; its chat falls back to its own server. */
 export class CodexSharedServerUncontainedError extends Error {
@@ -53,31 +55,44 @@ export class CodexSharedServerWindowsJob {
     return child
   }
 
-  /** Throws unless the launcher chain down to native Codex is in the job, and then this
-   *  session's later Windows chats keep their own server. Codex that started before assignment,
-   *  or an outer job that forbids nesting, leaves it out. A server that exited meanwhile proves
+  /** Throws unless the launcher chain down to native Codex is in the job. A chain member outside
+   *  it (Codex that started before assignment, or an outer job that forbids nesting) makes this
+   *  session's later Windows chats keep their own server. A server that exited meanwhile proves
    *  nothing about containment; its chats already saw the exit, so it fails as an exit. */
   async requireHolds(rootPid: number | undefined, exited: () => boolean): Promise<void> {
-    if (!(await this.holdsServer(rootPid))) {
-      if (exited()) {
-        throw new Error('codex shared app-server exited before it took chats')
-      }
-      sharingRefused = true
-      throw new CodexSharedServerUncontainedError()
+    const verdict = await this.holdsServer(rootPid)
+    if (verdict === 'held') {
+      return
     }
+    if (exited()) {
+      throw new Error('codex shared app-server exited before it took chats')
+    }
+    // Native Codex crashing before its launcher's exit is seen looks like no chain at all.
+    inconclusiveChecks += verdict === 'inconclusive' ? 1 : 0
+    if (verdict === 'outside' || inconclusiveChecks >= 2) {
+      sharingRefused = true
+    }
+    throw new CodexSharedServerUncontainedError()
   }
 
-  private async holdsServer(rootPid: number | undefined): Promise<boolean> {
+  private async holdsServer(
+    rootPid: number | undefined
+  ): Promise<'held' | 'outside' | 'inconclusive'> {
     if (rootPid === undefined) {
-      return false
+      return 'inconclusive'
     }
     const rows = await this.readTable().catch(() => [])
     const processes = new Map(rows.map((row) => [row.pid, row] as const))
     const children = childrenByParent(rows.map((row) => [row.pid, row.ppid] as const))
     const chain = serverChain(processes, children, rootPid)
-    return (
-      chain !== null && [...chain].every((pid) => this.api.isProcessInJob(this.job, pid) === true)
-    )
+    if (chain === null) {
+      return 'inconclusive'
+    }
+    const members = [...chain].map((pid) => this.api.isProcessInJob(this.job, pid))
+    if (members.includes(false)) {
+      return 'outside'
+    }
+    return members.every((member) => member === true) ? 'held' : 'inconclusive'
   }
 
   /** Ends every process still in the job, orphans included, and closes it. */

@@ -12,7 +12,6 @@ import {
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 import { NumberField, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
-import { isWindowsUserAgent } from '../../../app-shell/platform/user-agent-platform'
 import { AgentDashboardExperimentalSetting } from '../../dashboard/settings/AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from '../virtual-machines/recipes/EphemeralVmsExperimentalSetting'
 import { AppRailExperimentalSetting } from '../../app-rail/AppRailExperimentalSetting'
@@ -243,14 +242,6 @@ export function ExperimentalPane({
                     'Uses less memory and starts new chats faster. If a shared process crashes, all of its chats reconnect. Applies to chats on this computer started after you change it; remote and WSL hosts keep one process per chat.'
                   )}
                 </p>
-                {isWindowsUserAgent() ? (
-                  <p className="text-xs text-muted-foreground">
-                    {t(
-                      'auto.components.settings.ExperimentalPane.sharedCodexServers.windowsStop',
-                      'On Windows, Stop means Codex stopped everything it tracks for that chat.'
-                    )}
-                  </p>
-                ) : null}
               </div>
               <Switch
                 checked={sharedCodexServersEnabled}

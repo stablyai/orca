@@ -9255,7 +9255,6 @@
             "title": "Shared Codex servers",
             "description": "Codex chats with the same setup share one background process instead of starting one per chat.",
             "copy": "Uses less memory and starts new chats faster. If a shared process crashes, all of its chats reconnect. Applies to chats on this computer started after you change it; remote and WSL hosts keep one process per chat.",
-            "windowsStop": "On Windows, Stop means Codex stopped everything it tracks for that chat.",
             "toggleLabel": "Toggle shared Codex servers"
           }
         },
