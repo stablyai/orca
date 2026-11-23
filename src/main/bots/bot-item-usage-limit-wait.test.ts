@@ -167,4 +167,13 @@ describe('usage-limit Waiting', () => {
     await waits.settled()
     expect(note()).toMatch(/usage resets/)
   })
+
+  it('goes back to In progress on the first snapshot after a restart once its stop is gone', async () => {
+    const { store, uid, waits, note } = setup({ ctx_a: { session: 'a', state: 'working' } })
+    store.usageLimitWait(uid, 'Claude usage resets Nov 22, 1:00 PM')
+    expect(note()).toMatch(/usage resets/)
+    waits.saw({ type: 'snapshot', sessions: [summary('a')] }, NOW)
+    await waits.settled()
+    expect(note()).toBe('working')
+  })
 })

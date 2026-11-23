@@ -24,13 +24,21 @@ export function automationItemRefusal(
 /** `--item`, checked before anything is created: the bot's own open item, on a host that links
  *  automations (an older one would store the link as a file path). */
 export async function automationItemFlag(
-  client: HandlerContext['client'],
+  client: Pick<HandlerContext['client'], 'call'>,
   flags: HandlerContext['flags'],
   botId: string
 ): Promise<string | undefined> {
   const item = getOptionalStringFlag(flags, 'item')
   if (item === undefined) {
     return undefined
+  }
+  // Only a bot's chat links to items, so one from elsewhere is refused before it saves anything.
+  const caller = callerChat()
+  if (!caller.callerSessionId) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      "Only a bot's chat links automations to items. Run this from the bot's chat, or leave out --item."
+    )
   }
   const status = await client.call<RuntimeStatus>('status.get')
   if (!status.result.capabilities?.includes(BOTS_ITEM_WAITING_CAPABILITY)) {
@@ -40,7 +48,7 @@ export async function automationItemFlag(
     )
   }
   const shown = await client.call<{ item: BotItem }>('bots.items.show', {
-    ...callerChat(),
+    ...caller,
     botId,
     item,
     limit: 1

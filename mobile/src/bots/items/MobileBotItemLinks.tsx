@@ -236,8 +236,8 @@ export function MobileBotItemLinks({
           <ListRow
             key={entry.key}
             title={title}
+            subtitle={line}
             leading={<Hourglass size={ICON} color={colors.textMuted} />}
-            accessibilityLabel={`${title}, ${line}`}
             disabled={!entry.active}
           />
         )

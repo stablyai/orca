@@ -154,7 +154,8 @@ export class BotItemUsageLimitWaits {
     } else if (event.type === 'status') {
       this.summaries.set(event.session.sessionId, event.session)
     }
-    this.read(now)
+    // A snapshot always passes: a wait saved before a restart may outlive every stop.
+    this.read(now, event.type === 'snapshot')
   }
 
   /** A minute passed: a stop whose time has come ends even when its session says nothing new. */
@@ -176,7 +177,7 @@ export class BotItemUsageLimitWaits {
     await this.running
   }
 
-  private read(now: number): void {
+  private read(now: number, force = false): void {
     const next = new Map<string, BotUsageLimitCut>()
     for (const summary of this.summaries.values()) {
       const cut = cutOf(summary, now)
@@ -192,7 +193,7 @@ export class BotItemUsageLimitWaits {
         const held = this.cuts.get(root)
         return held?.at === cut.at && held.auto === cut.auto && held.agent === cut.agent
       })
-    if (!same) {
+    if (!same || force) {
       this.cuts.clear()
       next.forEach((cut, root) => this.cuts.set(root, cut))
       this.run()
