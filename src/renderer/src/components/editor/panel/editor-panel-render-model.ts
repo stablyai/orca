@@ -231,6 +231,17 @@ export function getEditorPanelRenderModel({
     isSingleDiff,
     isDiffSurface: isSingleDiff || isChangesMode,
     isCombinedDiff,
+    canToggleEditorMinimap:
+      inlineFileContent !== undefined &&
+      !inlineFileContent.csvPreview &&
+      !inlineFileContent.loadError &&
+      !isBinaryEditSurface &&
+      activeFile.conflict?.kind !== 'conflict-placeholder' &&
+      !isChangesMode &&
+      activeCustomEditor === null &&
+      (viewerLanguage === 'markdown'
+        ? (inlineMarkdownRenderState?.renderMode ?? 'source') === 'source'
+        : effectiveToggleValue !== 'rich'),
     worktreeEntries,
     resolvedLanguage,
     openFileState,

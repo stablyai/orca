@@ -103,6 +103,7 @@ export function EditorPanelShell({
           copiedPathVisible={copiedPathVisible}
           isSingleDiff={model.isSingleDiff}
           isDiffSurface={model.isDiffSurface}
+          canToggleEditorMinimap={model.canToggleEditorMinimap}
           isMarkdown={model.isMarkdown}
           isCsv={model.isCsv}
           isNotebook={model.isNotebook}
