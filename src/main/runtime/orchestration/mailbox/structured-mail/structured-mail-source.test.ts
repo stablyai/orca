@@ -74,46 +74,38 @@ it("sends the owner's answer to an item question a thread asked back to that thr
   const asker = 'orca_session_id:11111111-1111-4111-8111-111111111111'
   const other = 'orca_session_id:22222222-2222-4222-8222-222222222222'
   try {
-    const note = (from: string, askedInConversation: string | undefined, sessionId = asker) => {
-      const { body } = structuredMailMessage({
+    const answersThere = (
+      from: string,
+      askedInConversation: string | undefined,
+      sessionId = asker
+    ) => {
+      const message = db.insertMessage({
+        from,
+        ...(from === 'orca:items' ? { orcaAuthored: 'item-mail' as const } : {}),
+        to: sessionId,
+        subject: 'Item #4 answered',
+        type: 'status',
+        payload: JSON.stringify({
+          botItems: [],
+          ...(askedInConversation ? { askedInConversation } : {})
+        })
+      })
+      const source = structuredMailSource({
         db,
         mailboxHandle: sessionId,
         dispatchId: null,
-        message: db.insertMessage({
-          from,
-          ...(from === 'orca:items' ? { orcaAuthored: 'item-mail' as const } : {}),
-          to: sessionId,
-          subject: 'Item #4 answered',
-          type: 'status',
-          payload: JSON.stringify({
-            botItems: [],
-            ...(askedInConversation ? { askedInConversation } : {})
-          })
-        }),
-        cliCommand: 'orca',
+        batch: [message],
         senderSnapshot: () => ({ name: 'Items', agent: null }),
-        followUp: undefined,
-        sessionId,
-        conversationPlace: (source) => ({
-          place: 'the Slack thread in #eng',
-          answersThere: isConversationReport({
-            kind: 'message',
-            role: 'user',
-            blocks: [],
-            from: source
-          })
-        })
+        sessionId
       })
-      return body.blocks.map((block) => ('text' in block ? block.text : '')).join('')
+      return isConversationReport({ kind: 'message', role: 'user', blocks: [], from: source })
     }
-    const there = 'go to the Slack thread in #eng.]'
-    const stays = 'so your final message stays in Orca.]'
 
-    expect(note('orca:items', asker)).toContain(there)
+    expect(answersThere('orca:items', asker)).toBe(true)
     // Another chat reading it, item mail no thread asked, and anyone else's payload stay in Orca.
-    expect(note('orca:items', asker, other)).toContain(stays)
-    expect(note('orca:items', undefined)).toContain(stays)
-    expect(note(other, asker)).toContain(stays)
+    expect(answersThere('orca:items', asker, other)).toBe(false)
+    expect(answersThere('orca:items', undefined)).toBe(false)
+    expect(answersThere(other, asker)).toBe(false)
   } finally {
     db.close()
   }
