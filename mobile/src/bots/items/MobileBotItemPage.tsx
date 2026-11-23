@@ -1,8 +1,9 @@
 // One item's page inside the bot panel, in the desktop's order: title, "Item · chat · when", description
 // (three lines, Show more), the close note, Status (and Snoozed while it is) and Chat, Done means, Links, Activity, and the comment
-// box docked at the bottom. Back returns to the list; up and down step through it, "4 of 6".
-import { useEffect, useRef, useState } from 'react'
-import { Keyboard, Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native'
+// box docked at the bottom. The agent's question is answered in its comment, as on the desktop: quick
+// replies there, your own words in the box. Back returns to the list; up and down step through it, "4 of 6".
+import { useRef, useState } from 'react'
+import { Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native'
 import { House, MessageSquare } from 'lucide-react-native'
 import { BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 import {
@@ -28,10 +29,8 @@ import {
   type MobileScrollTailMetrics
 } from '../../session/native-chat/transcript/viewport/use-mobile-native-chat-tail-follow'
 import { MobileBotTextButton } from '../MobileBotTextButton'
-import { botItemWaitingLine } from '../../../../src/shared/bots/bot-item-question-answers'
-import { MobileNativeChatPromptStrip } from '../../session/native-chat/input/prompts/MobileNativeChatPromptStrip'
+import type { BotItemQuestionStepsSend } from '../../../../src/shared/bots/use-bot-item-question-steps'
 import { MobileBotItemActivity } from './MobileBotItemActivity'
-import { useMobileBotItemAskSlot } from './MobileBotItemAskCard'
 import { MobileBotItemCommentBox, type BotItemCommentBoxHandle } from './MobileBotItemCommentBox'
 import { MobileBotItemLinks } from './MobileBotItemLinks'
 import { botItemChatName, type BotItemSheet } from './MobileBotItemSheets'
@@ -43,6 +42,7 @@ import type { PhoneBotItemStepper } from './use-phone-bot-item-walk'
 import { MobileBotItemPageHeader } from './MobileBotItemPageHeader'
 import { MobileBotItemSubtitle } from './MobileBotItemSubtitle'
 import { usePhoneBotItemPendingComments } from './use-phone-bot-item-pending-comments'
+import { useBotItemQuestionSteps } from './use-phone-bot-item-question-steps'
 
 const DESCRIPTION_LINES_HEIGHT = 3 * 20
 
@@ -90,46 +90,38 @@ export function MobileBotItemPage({
   const view = usePhoneBotItemView({ client, uid, reads })
   const now = useNow(60_000)
   const comment = useRef<BotItemCommentBoxHandle>(null)
-  // An answer on its way or landed: the ask card waits for the item's next event, or comes back if it
-  // surely failed, so a second tap never posts it twice.
-  const [replyAfter, setReplyAfter] = useState<string | null>(null)
   const lastEventId = view.events.at(-1)?.id ?? ''
-  const replyBusy = replyAfter !== null && replyAfter === lastEventId
-  const waitingLine = view.item ? botItemWaitingLine(view.item, view.events) : null
-  const waitingOn = waitingLine
-    ? { replies: waitingLine.replies, asker: view.item?.owner.name ?? bot.name }
-    : null
-  const ask = useMobileBotItemAskSlot({
-    item: view.item,
-    events: view.events,
-    online: online && !view.failed,
-    pending: replyBusy,
-    send: async (text) => {
-      setReplyAfter(lastEventId)
-      const outcome = (await comment.current?.send(text)) ?? 'failed'
-      if (outcome === 'failed') {
-        setReplyAfter(null)
-      }
-      return outcome
-    }
-  })
-  const askShown = ask.card !== null && ask.strip === null
-  useEffect(() => {
-    // The card takes the comment box's place: a keyboard up for the box would type into it unseen.
-    if (askShown) {
-      Keyboard.dismiss()
-    }
-  }, [askShown])
   const jump = useJumpToEnd()
   const takesImages = useRouteCapability(BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY)
+  // One item on one host: its pending comments and its asks' held answers.
+  const itemKey = `${hostKey}\0${bot.id}\0${uid}`
   const pending = usePhoneBotItemPendingComments({
     client,
-    key: `${hostKey}\0${bot.id}\0${uid}`,
+    key: itemKey,
     uid,
     events: view.events,
     hostName,
     showToast
   })
+  // From the comment box or a quick reply: shown at once, then sent to the host.
+  const sendComment: BotItemQuestionStepsSend = (text, paths = [], ...rest) =>
+    pending.send(text, paths, lastEventId || null, ...rest)
+  // `waitingLine`: the question the comment box names, until a reply is on its way.
+  const { steps, sent, quick, fromBox, waitingLine } = useBotItemQuestionSteps(
+    itemKey,
+    view.item,
+    view.events,
+    sendComment,
+    pending.shown
+  )
+  const quickReplies = {
+    send: quick,
+    edit: (text: string) => comment.current?.fill(text),
+    recover: (text: string) => comment.current?.fill(text, true),
+    type: () => comment.current?.answer(),
+    steps,
+    sent
+  }
   const back = <MobileBotItemPageHeader stepper={stepper} online={online} onBack={onBack} />
   const item = view.item
   if (!item) {
@@ -286,37 +278,36 @@ export function MobileBotItemPage({
             attachments={{ client, onOpenFile }}
             pending={pending}
             onReveal={jump.center}
+            itemScope={itemKey}
+            quickReplies={quickReplies}
+            repliesDisabled={!online || view.failed}
           />
         </ScrollView>
         {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}
         <MobileEdgeFade edge="bottom" color={colors.sheetSurface} />
         <MobileNativeChatFloatingControls showJumpToTail={jump.shown} onJumpToTail={jump.toEnd} />
       </View>
-      <View
-        style={askShown ? styles.askDock : undefined}
-        onLayout={(event) => onCommentBoxHeight(event.nativeEvent.layout.height)}
-      >
-        <View style={ask.strip ? styles.hidden : styles.askSlot}>{ask.card}</View>
-        <MobileNativeChatPromptStrip prompt={ask.strip} />
-        {/* Kept mounted under the card: it sends the card's answer. */}
-        <View style={askShown ? styles.hidden : undefined}>
-          <MobileBotItemCommentBox
-            ref={comment}
-            client={client}
-            item={item}
-            online={online && !view.failed}
-            hostName={hostName}
-            waitingOn={waitingOn}
-            attachTo={takesImages && !item.chat.gone ? item.chat.id : null}
-            hostId={hostId}
-            bot={bot}
-            onComment={(text, paths, skills) => {
-              pending.send(text, paths, lastEventId || null, undefined, undefined, skills)
-              requestAnimationFrame(jump.toEnd)
-            }}
-            showToast={showToast}
-          />
-        </View>
+      <View onLayout={(event) => onCommentBoxHeight(event.nativeEvent.layout.height)}>
+        <MobileBotItemCommentBox
+          ref={comment}
+          client={client}
+          item={item}
+          online={online && !view.failed}
+          hostName={hostName}
+          question={
+            waitingLine && !pending.shown.some(({ failed }) => !failed)
+              ? { ...waitingLine, asker: item.owner.name ?? bot.name }
+              : null
+          }
+          attachTo={takesImages && !item.chat.gone ? item.chat.id : null}
+          hostId={hostId}
+          bot={bot}
+          onSend={(text, paths, replyingTo, skills) => {
+            fromBox(text, paths, replyingTo, skills)
+            requestAnimationFrame(jump.toEnd)
+          }}
+          showToast={showToast}
+        />
       </View>
     </View>
   )
@@ -376,10 +367,6 @@ function ClampedDescription({ text }: { text: string }) {
 
 const styles = themedStyleSheet(() => ({
   page: { flex: 1, backgroundColor: colors.sheetSurface },
-  hidden: { display: 'none' },
-  // As chat caps its card: the activity stays in view and a tall card scrolls inside.
-  askDock: { flexShrink: 1, minHeight: 0, maxHeight: '60%' },
-  askSlot: { flexShrink: 1, minHeight: 0 },
   scroll: { flex: 1 },
   content: { gap: spacing.sm, paddingBottom: spacing.lg },
   head: { paddingHorizontal: spacing.xs, gap: spacing.xs },

@@ -410,6 +410,10 @@
       "folderItems_other": "{{count}} items"
     },
     "items": {
+      "ask": {
+        "heldCount_one": "{{count}} answer not sent yet, <send>send anyway</send>",
+        "heldCount_other": "{{count}} answers not sent yet, <send>send anyway</send>"
+      },
       "needYouCount_one": "{{count}} item needs you",
       "needYouCount_other": "{{count}} items need you",
       "pill": {

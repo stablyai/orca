@@ -4697,15 +4697,16 @@
         "next": "次の項目",
         "subWhere": "項目 {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "後で"
-      },
       "write": {
         "offline": "{{host}} はオフラインです。"
       },
       "thisComputer": "コンピュータ",
       "readFailedClosedPage": "クローズ済みの項目をこれ以上読み込めませんでした。",
-      "skillLimit": "メッセージは送信されませんでした。選択するスキルファイルを {{limit}} 個以内にして、もう一度お試しください。"
+      "skillLimit": "メッセージは送信されませんでした。選択するスキルファイルを {{limit}} 個以内にして、もう一度お試しください。",
+      "ask": {
+        "notSentYet": "まだ送信されていません",
+        "replaced": "Agent が新たな質問をしました。確認してから返信してください。"
+      }
     },
     "needs": {
       "chat": "{{name}} とのチャット",
