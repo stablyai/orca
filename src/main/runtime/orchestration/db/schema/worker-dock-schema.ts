@@ -34,9 +34,6 @@ const projection = (identity: string) => `
 `
 
 export function installWorkerDockSchema(this: OrchestrationDb): void {
-  const installed = this.db
-    .prepare("SELECT 1 FROM sqlite_master WHERE name = 'worker_dock_facts'")
-    .get()
   this.db.exec('CREATE TABLE IF NOT EXISTS worker_dock_authority (id TEXT PRIMARY KEY)')
   if (!this.db.prepare('SELECT id FROM worker_dock_authority LIMIT 1').get()) {
     this.db.prepare('INSERT INTO worker_dock_authority(id) VALUES(?)').run(randomUUID())
@@ -76,6 +73,7 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
       entry TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS worker_dock_provider_failure_source ON worker_dock_provider_failures(source);
+    CREATE TABLE IF NOT EXISTS worker_dock_backfill (id INTEGER PRIMARY KEY CHECK(id = 1));
   `)
   if (!this.hasColumn('worker_dock_facts', 'result_lost_at')) {
     this.db.exec('ALTER TABLE worker_dock_facts ADD COLUMN result_lost_at INTEGER')
@@ -146,12 +144,14 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
     DELETE FROM worker_dock_acknowledgments WHERE dispatch_id = OLD.id;
     DELETE FROM worker_dock_owner_stops WHERE dispatch_id = OLD.id;
   END;`)
-  if (!installed) {
+  // The marker commits with the backfill, so an open that stopped mid-install backfills again.
+  if (!this.db.prepare('SELECT 1 FROM worker_dock_backfill').get()) {
     runLifecycleWriteTransaction(this.db, 'worker_dock_install', () => {
       const project = this.db.prepare(projection('?'))
       for (const row of this.db.prepare('SELECT dispatch_id FROM worker_dispatches').all()) {
         project.run(row.dispatch_id)
       }
+      this.db.prepare('INSERT OR IGNORE INTO worker_dock_backfill(id) VALUES(1)').run()
     })
   }
 }

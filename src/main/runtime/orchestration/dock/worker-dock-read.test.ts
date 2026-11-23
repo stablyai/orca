@@ -381,6 +381,27 @@ describe('worker dock lifecycle projection', () => {
     expect(db.getWorkerDispatch(first)?.state).toBe('failed')
   })
 
+  it('backfills on the next open when an install stopped before its backfill committed', () => {
+    const cleared = worker()
+    report(cleared, 'failed')
+    const settlement = read().rows[0].settlement!
+    acknowledgeWorkerDock(db, {
+      party,
+      settlements: [{ dispatchId: cleared, settlement }],
+      acknowledged: true
+    })
+    const open = worker()
+    db.db.exec('DROP TABLE IF EXISTS worker_dock_backfill; DELETE FROM worker_dock_facts')
+    expect(read().identities).toEqual([])
+    installWorkerDockSchema.call(db)
+    expect(read().identities.map((row) => row.dispatchId)).toEqual([open])
+    expect(readWorkerDockResult(db, party, cleared)).toMatchObject({ acknowledged: true })
+    db.db.prepare("UPDATE worker_dispatches SET state = 'failed' WHERE dispatch_id = ?").run(open)
+    db.db.exec('DELETE FROM worker_dock_facts')
+    installWorkerDockSchema.call(db)
+    expect(read().identities).toEqual([])
+  })
+
   it('does not equate an unproven stop with user intent or accept another session acknowledgment', () => {
     const id = worker()
     db.db.prepare("UPDATE worker_dispatches SET state = 'stopped' WHERE dispatch_id = ?").run(id)

@@ -1,13 +1,11 @@
 import { useTranslate } from '@/i18n/use-translate'
 import { lazy, Suspense, useCallback, useContext, useMemo, useState } from 'react'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import { WorkerDockResult } from '../../../../../../shared/orchestration/dock/worker-dock'
 import { useNativeChatPinnedWorkerApprovals } from '../../worker-approvals/native-chat-worker-approval-feed'
 import { useWorkerDockFeed } from './dock/worker-dock-feed'
 import type { WorkerDockRowView } from './dock/WorkerDockRow'
-import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
-import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
+import { useWorkerDockOwnerActions } from './dock/use-worker-dock-owner-actions'
 import { useWorkerDockRosterState } from './dock/NativeChatWorkerDockFrame'
 import { Button } from '@/components/ui/button'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
@@ -135,11 +133,6 @@ export function NativeChatStructuredSessionStatus(props: {
       })),
     [workerIdentities, ownerActionsAvailable]
   )
-  const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
-  const [retryAction, setRetryAction] = useState<(() => void) | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<WorkerDockResult | null>(null)
-  const [opened, setOpened] = useState<{ row: WorkerDockRowView; opener: HTMLElement } | null>(null)
   const [providerDetails, setProviderDetails] = useState<{
     row: WorkerDockRowView
     opener: HTMLElement
@@ -159,108 +152,8 @@ export function NativeChatStructuredSessionStatus(props: {
       ),
     [target]
   )
-  const open = useCallback(
-    (row: WorkerDockRowView, opener: HTMLElement) => {
-      if (!feed.party) {
-        return
-      }
-      if (!row.resultId && !row.settlement && !row.retired) {
-        workerOpen(row)
-        return
-      }
-      setOpened({ row, opener })
-      void callRuntimeRpc(target, 'orchestration.workerDockResult', {
-        party: feed.party,
-        dispatch: row.dispatchId
-      }).then(
-        (value) => {
-          const parsed = WorkerDockResult.safeParse(value)
-          if (parsed.success) {
-            setResult(parsed.data)
-          } else {
-            setError(row.reason ?? 'The saved result is not available yet. Try again.')
-          }
-        },
-        (value) => setError(value instanceof Error ? value.message : String(value))
-      )
-    },
-    [feed.party, target, workerOpen]
-  )
-  const acknowledge = useCallback(
-    async (settlements: { dispatchId: string; settlement: string }[], acknowledged = true) => {
-      if (!feed.party) {
-        return
-      }
-      for (let offset = 0; offset < settlements.length; offset += 1000) {
-        await callRuntimeRpc(target, 'orchestration.workerDockAcknowledge', {
-          party: feed.party,
-          settlements: settlements.slice(offset, offset + 1000),
-          acknowledged
-        })
-      }
-    },
-    [feed.party, target]
-  )
-  const action = useCallback(
-    (row: WorkerDockRowView, kind: 'stop' | 'clear') => {
-      if (!feed.party) {
-        return
-      }
-      const requestId = createNonSecureContextUuid()
-      const attempt = () => {
-        setPending((current) => new Set(current).add(row.id))
-        setError(null)
-        const request =
-          kind === 'clear' && row.settlement
-            ? acknowledge([{ dispatchId: row.dispatchId, settlement: row.settlement }])
-            : callRuntimeRpc(target, 'orchestration.workerDockStop', {
-                party: feed.party,
-                dispatch: row.dispatchId,
-                requestId
-              })
-        void request
-          .catch((value) => {
-            setRetryAction(() => attempt)
-            setError(value instanceof Error ? value.message : String(value))
-          })
-          .finally(() =>
-            setPending((current) => {
-              const next = new Set(current)
-              next.delete(row.id)
-              return next
-            })
-          )
-      }
-      attempt()
-    },
-    [acknowledge, feed.party, target]
-  )
-  const clearAll = () => {
-    const captured = (feed.snapshot?.identities ?? []).flatMap((row) =>
-      row.settlement && (row.state === 'failed' || row.state === 'unexpected')
-        ? [{ dispatchId: row.dispatchId, settlement: row.settlement }]
-        : []
-    )
-    const capturedDispatches = new Set(captured.map((item) => item.dispatchId))
-    const capturedIds = new Set(
-      (feed.snapshot?.identities ?? [])
-        .filter((row) => capturedDispatches.has(row.dispatchId))
-        .map((row) => row.id)
-    )
-    const attempt = () => {
-      setError(null)
-      setPending((current) => new Set([...current, ...capturedIds]))
-      void acknowledge(captured)
-        .catch((value) => {
-          setRetryAction(() => attempt)
-          setError(value instanceof Error ? value.message : String(value))
-        })
-        .finally(() =>
-          setPending((current) => new Set([...current].filter((id) => !capturedIds.has(id))))
-        )
-    }
-    attempt()
-  }
+  const owner = useWorkerDockOwnerActions(target, feed.party, feed.snapshot?.identities, workerOpen)
+  const { dialog, failure } = owner
   if (crew) {
     // The suspended crew panel's strip keeps main's own view while it is enabled.
     return (
@@ -294,9 +187,9 @@ export function NativeChatStructuredSessionStatus(props: {
         workerRows={controlledWorkerRows}
         ownerActionsAvailable={ownerActionsAvailable}
         workerIdentities={controlledWorkerIdentities}
-        onOpenWorker={open}
-        onWorkerAction={action}
-        onClearAll={clearAll}
+        onOpenWorker={owner.open}
+        onWorkerAction={owner.action}
+        onClearAll={owner.clearAll}
         loadWindow={feed.loadWindow}
         tasks={backgroundTasks.tasks}
         settledTasks={backgroundTasks.settledTasks}
@@ -307,7 +200,7 @@ export function NativeChatStructuredSessionStatus(props: {
         supportsTaskStop={backgroundTasks.supportsStop}
         offersStopAll={backgroundTasks.offersStopAll}
         incomplete={backgroundTasks.incomplete || !feed.available}
-        stoppingTaskIds={new Set([...stop.stoppingTaskIds, ...pending])}
+        stoppingTaskIds={new Set([...stop.stoppingTaskIds, ...owner.pending])}
         stoppingAll={stop.stoppingAll}
         expanded={expandedHere}
         onExpandedChange={(value) => {
@@ -330,31 +223,31 @@ export function NativeChatStructuredSessionStatus(props: {
           />
         </Suspense>
       ) : null}
-      {error && !opened ? (
+      {failure && !dialog ? (
         <div role="alert" className="px-4 py-1 text-xs text-muted-foreground">
-          {error}
-          {retryAction ? (
-            <Button variant="ghost" size="xs" onClick={() => retryAction?.()}>
+          {failure.message}
+          {failure.retry ? (
+            <Button variant="ghost" size="xs" onClick={failure.retry}>
               {t('components.native-chat.workerDock.retry', 'Retry')}
             </Button>
           ) : null}
-          <Button variant="ghost" size="xs" onClick={() => setError(null)}>
+          <Button variant="ghost" size="xs" onClick={owner.dismissFailure}>
             {t('components.native-chat.workerDock.dismiss', 'Dismiss')}
           </Button>
         </div>
       ) : null}
-      {opened ? (
+      {dialog ? (
         <Suspense fallback={null}>
           <WorkerDockResultDialog
-            ownerActionsAvailable={ownerActionsAvailable && result?.ownerActionsAvailable !== false}
-            result={result}
-            error={opened ? error : null}
+            ownerActionsAvailable={
+              ownerActionsAvailable && dialog.result?.ownerActionsAvailable !== false
+            }
+            result={dialog.result}
+            error={dialog.error}
             onClose={() => {
-              setResult(null)
-              setError(null)
-              const opener = opened?.opener
-              setOpened(null)
-              if (opener?.isConnected) {
+              const { opener } = dialog
+              owner.close()
+              if (opener.isConnected) {
                 opener.focus()
               } else {
                 document
@@ -364,22 +257,8 @@ export function NativeChatStructuredSessionStatus(props: {
                   ?.focus()
               }
             }}
-            onOpen={() => {
-              if (opened) {
-                workerOpen(opened.row)
-              }
-            }}
-            onRestore={() => {
-              if (result) {
-                void acknowledge(
-                  [{ dispatchId: result.dispatchId, settlement: result.settlement }],
-                  false
-                ).then(
-                  () => setResult({ ...result, acknowledged: false }),
-                  (value) => setError(value instanceof Error ? value.message : String(value))
-                )
-              }
-            }}
+            onOpen={() => workerOpen(dialog.row)}
+            onRestore={owner.restore}
           />
         </Suspense>
       ) : null}
