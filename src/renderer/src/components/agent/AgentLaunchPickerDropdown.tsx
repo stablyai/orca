@@ -2,6 +2,7 @@ import { useRef, useState, type Ref } from 'react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
+import { hermesProfileSurfaceUnavailable } from './launch-settings/HermesProfileMenu'
 import { AgentLaunchSurfaceButtons } from './AgentLaunchSetupFooter'
 import { AgentPickerAgentTabs, AgentPickerBlankTerminalPane } from './AgentPickerAgentRail'
 import type { AgentPickerChoice } from './agent-picker-search-rows'
@@ -255,6 +256,7 @@ function AgentLaunchPickerPane({
       onShowAgent(picked.agent)
     }
   }
+  const t = useTranslate()
   if (!setup.ready) {
     return null
   }
@@ -298,6 +300,7 @@ function AgentLaunchPickerPane({
         <AgentLaunchOpenAs
           entry={entry}
           disabled={disabled}
+          surfaceUnavailable={hermesProfileSurfaceUnavailable(entry, setup.draft, t)}
           onChoose={(surface) => commit(true, surface)}
         />
       )}
@@ -309,10 +312,13 @@ function AgentLaunchPickerPane({
 function AgentLaunchOpenAs({
   entry,
   disabled,
+  surfaceUnavailable,
   onChoose
 }: {
   entry: AgentPickerEntry
   disabled?: boolean
+  /** Why a surface can't be launched from this card now. */
+  surfaceUnavailable?: Partial<Record<AgentPickerSurface, string>>
   onChoose: (surface: AgentPickerSurface) => void
 }) {
   const t = useTranslate()
@@ -328,7 +334,7 @@ function AgentLaunchOpenAs({
       : undefined
   const reasons: Partial<Record<AgentPickerSurface, string>> = {
     chat: entry.surfaces.includes('chat')
-      ? undefined
+      ? surfaceUnavailable?.chat
       : (chatRefused ?? t('agentPicker.noChat', 'No chat for {{agent}}', { agent: entry.label })),
     terminal: entry.surfaces.includes('terminal')
       ? undefined
