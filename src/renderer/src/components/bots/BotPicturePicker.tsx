@@ -94,7 +94,8 @@ export function BotPicturePicker({
   onColorChange,
   outfit = null,
   onOutfitChange,
-  intake: sharedIntake
+  intake: sharedIntake,
+  footer
 }: {
   value: BotPictureValue
   custom: BotPictureCustom | null
@@ -115,6 +116,8 @@ export function BotPicturePicker({
   /** An intake that outlives this picker (New bot's picture button), so a decode survives the popover
    *  closing and one order holds across both surfaces; its owner places the picture. */
   intake?: BotAvatarIntake
+  /** Drawn under the picker, told whether Generate is the current face. */
+  footer?: (generating: boolean) => React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const rootRef = useRef<HTMLDivElement>(null)
@@ -355,6 +358,7 @@ export function BotPicturePicker({
           }}
         />
       </div>
+      {footer?.(generating)}
     </TooltipProvider>
   )
 }
