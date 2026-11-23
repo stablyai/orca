@@ -161,6 +161,20 @@ export function readWorkerDock(
   })
 }
 
+/** Each worker's end reason as the strip shows it, for readers outside the strip. */
+export function readWorkerDockReasons(
+  db: OrchestrationDb,
+  dispatchIds: readonly string[]
+): Map<string, string> {
+  const rows = dispatchIds.length
+    ? db.db
+        .prepare(`SELECT f.dispatch_id, f.reason FROM json_each(?) selected
+      CROSS JOIN worker_dock_facts f ON f.dispatch_id = selected.value WHERE f.reason IS NOT NULL`)
+        .all(JSON.stringify(dispatchIds))
+    : []
+  return new Map(rows.map((row) => [String(row.dispatch_id), String(row.reason)]))
+}
+
 export function readWorkerDockResult(
   db: OrchestrationDb,
   party: string,
