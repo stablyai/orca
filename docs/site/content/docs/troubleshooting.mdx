@@ -52,6 +52,12 @@ No tab is open in the current worktree. Open one with `orca tab create --url ...
 - Close worktrees you're not actively using. Each worktree keeps file watchers alive.
 - Split layouts with many browser tabs are the biggest RAM users — close browsers you don't need.
 
+### A chat stays on “Sending…” after a macOS scheduling change
+
+If a script recently lowered process priorities to reduce CPU load, check whether it also selected the agent running your chat. Under contention, a backgrounded agent can take minutes to acknowledge a message that Orca has already handed over.
+
+On the Mac running the agent, inspect its PID with `ps -ww -p PID -o pid,ppid,lstart,pri,time,command`. Match the session identifier in the command to the chat, or use the PID and start time from a record that identifies that session. A low priority alone cannot tell you who set it. If you confirm that a script applied background scheduling to that running PID by mistake, `taskpolicy -B -p PID` clears the external background flag. Check whether the original message is acknowledged before resending it.
+
 ## Windows: RAM disappears but no app is using it
 
 Orca workloads start many short-lived processes (hooks, `git status` polling, agent CLIs). If a buggy kernel driver keeps a reference to every process that exits, exited processes are never freed: RAM drains into kernel memory that Task Manager can't attribute to any app, and starting new processes gets slower, so Orca often gets blamed.
