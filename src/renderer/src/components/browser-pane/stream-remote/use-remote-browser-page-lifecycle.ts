@@ -301,6 +301,7 @@ export function useRemoteBrowserPageLifecycle({
     frameMetadata,
     // Only the live stream's report is current; a new stream's ready replaces it.
     pagePointer: streamStatus.kind === 'live' ? viewer.pagePointer : null,
+    pageDriver: streamStatus.kind === 'live' ? viewer.pageDriver : null,
     runtimeWorktree,
     runtimeTarget,
     createRemoteOperationToken,

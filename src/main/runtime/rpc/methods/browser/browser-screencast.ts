@@ -8,11 +8,13 @@ import {
   FileChooserAnswer,
   PagePromptAnswer,
   ScreencastAck,
+  ScreencastReclaimForDesktop,
   ScreencastUnsubscribe
 } from '../../../../../shared/rpc-contract/browser/browser-screencast-params'
 import { acknowledgeBrowserScreencastFrame } from '../../../browser/screencast/browser-screencast-frame-credit'
 import { respondToStreamedBrowserPagePrompt } from '../../../../browser/guest-lifecycle/prompts/browser-page-prompts'
 import { answerBrowserFileChooser } from '../../../../browser/guest-lifecycle/prompts/browser-file-chooser-viewers'
+import { ownerOnly } from '../bots-caller-gates'
 
 export const BROWSER_SCREENCAST_METHODS = [
   defineStreamingMethod({
@@ -51,6 +53,23 @@ export const BROWSER_SCREENCAST_METHODS = [
     handler: async (params, { pairedDeviceId }) => ({
       result: await answerBrowserFileChooser(pairedDeviceId, params)
     })
+  }),
+  defineMethod({
+    name: 'browser.screencast.reclaimForDesktop',
+    permission: 'workspace',
+    params: ScreencastReclaimForDesktop,
+    // A desktop viewer's Take back, as on the host's own window; ends the phone's streams of the page.
+    handler: async (params, context) => {
+      ownerOnly(context, 'Only a person at a desktop can take a page back from the phone.')
+      const { runtime } = context
+      // Only pages a phone holds; a page it already left needs nothing.
+      for (const [browserPageId, driver] of runtime.getAllBrowserDrivers()) {
+        if (driver.kind === 'mobile' && (params.all || browserPageId === params.browserPageId)) {
+          runtime.reclaimBrowserForDesktop(browserPageId)
+        }
+      }
+      return { reclaimed: true }
+    }
   }),
   defineMethod({
     name: 'browser.screencast.unsubscribe',
