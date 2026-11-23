@@ -190,3 +190,24 @@ function assignSameNameWireField<K extends SameNameWriteField>(
 ): void {
   ;(update as Record<SameNameWriteField, unknown>)[field] = value
 }
+
+/** Keep dirty and in-flight local fields over a hydration, so a remote echo can't revert them. */
+export function overlayPendingLocalUIEdits(
+  hydrated: Partial<PersistedUIWriteBaseline>,
+  state: Parameters<typeof capturePersistedUIWriteBaseline>[0] & {
+    persistedUIWriteInFlightCounts: Partial<Record<keyof PersistedUIWriteBaseline, number>>
+  },
+  previousBaseline: PersistedUIWriteBaseline
+): void {
+  Object.assign(
+    hydrated,
+    diffPersistedUIWriteFields(capturePersistedUIWriteBaseline(state), previousBaseline)
+  )
+  // In-flight fields too: a flip-back to the baseline value diffs empty,
+  // yet the in-flight write's echo must not revert it (PR#17057 review).
+  for (const field of PERSISTED_UI_WRITE_BASELINE_FIELDS) {
+    if (Object.hasOwn(state.persistedUIWriteInFlightCounts, field)) {
+      Object.assign(hydrated, { [field]: state[field] })
+    }
+  }
+}

@@ -150,14 +150,19 @@ export function sanitizePaneKeyTimestampRecord(value: unknown): Record<string, n
       groups.set(group, { at: entry[1], keys: [entry] })
     }
   }
-  if (groups.size <= PANE_KEY_TIMESTAMP_MAX_ENTRIES) {
+  if (
+    groups.size <= PANE_KEY_TIMESTAMP_MAX_ENTRIES &&
+    entries.length <= 2 * PANE_KEY_TIMESTAMP_MAX_ENTRIES
+  ) {
     return out
   }
+  // A group is a chat's few keys; the newest keys overall still bound a hand-built record.
   return Object.fromEntries(
     [...groups.values()]
       .toSorted((left, right) => right.at - left.at)
       .slice(0, PANE_KEY_TIMESTAMP_MAX_ENTRIES)
-      .flatMap(({ keys }) => keys)
+      .flatMap(({ keys }) => keys.toSorted((left, right) => right[1] - left[1]))
+      .slice(0, 2 * PANE_KEY_TIMESTAMP_MAX_ENTRIES)
   )
 }
 

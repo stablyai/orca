@@ -48,9 +48,9 @@ import {
 } from '../../repos/wsl-moved-repo-ui-retention'
 
 import {
-  type PersistedUIWriteBaseline,
   capturePersistedUIWriteBaseline,
-  diffPersistedUIWriteFields
+  diffPersistedUIWriteFields,
+  overlayPendingLocalUIEdits
 } from './persisted-ui-write-baseline'
 import {
   hydrateTrustedOrcaHooks,
@@ -72,6 +72,7 @@ import {
   hydrateReadAndBotState,
   sanitizeTaskResumeState
 } from './ui-slice-bot-sidebar-hydration'
+import { mergeCopiedReadMarkKeys } from './ui-slice-hydration-values'
 import { hydrateWslMovedSection } from './ui-slice-wsl-moved-section-actions'
 import { hydrateBrowserPaneLayout } from './browser-pane-layout-hydration'
 import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
@@ -287,19 +288,10 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         const nextWriteBaseline = capturePersistedUIWriteBaseline(hydrated)
         const previousBaseline = s.persistedUIWriteBaseline
         if (previousBaseline) {
-          const pendingLocalEdits = diffPersistedUIWriteFields(
-            capturePersistedUIWriteBaseline(s),
-            previousBaseline
-          )
-          Object.assign(hydrated, pendingLocalEdits)
-          // In-flight fields too: a flip-back to the baseline value diffs empty,
-          // yet the in-flight write's echo must not revert it (PR#17057 review).
-          for (const field of Object.keys(
-            s.persistedUIWriteInFlightCounts
-          ) as (keyof PersistedUIWriteBaseline)[]) {
-            ;(hydrated as Record<string, unknown>)[field] = s[field]
-          }
+          overlayPendingLocalUIEdits(hydrated, s, previousBaseline)
         }
+        // A pending local write can restore a mark sanitization dropped; its copied key comes back too.
+        hydrated.chatReadMarkKeysCopiedHere = mergeCopiedReadMarkKeys(hydrated, s)
         // Identical hydration preserves root identity; advance only baseline keys on baseline movement so acks cannot erase remote edits or spur redundant resends.
         const writeBaselineMoved =
           !previousBaseline ||
