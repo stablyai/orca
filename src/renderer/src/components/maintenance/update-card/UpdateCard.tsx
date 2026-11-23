@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import type { ChangelogData } from '../../../../../shared/updater/update-status-types'
+import type { RetainedUpdateTarget } from '../../../store/slices/ui/retained-update-target'
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { useAppStore } from '../../../store/index'
 import { Card } from '../../ui/card'
@@ -27,7 +28,12 @@ export function UpdateCard(): React.JSX.Element | null {
   const collapseAnimationTimerRef = useRef<number | null>(null)
   const [mediaFailed, setMediaFailed] = useState(false)
   const [mediaLoaded, setMediaLoaded] = useState(false)
-  const [installError, setInstallError] = useState<string | null>(null)
+  const installTarget = useAppStore((state) => state.retainedUpdateTarget)
+  const [installFailure, setInstallFailure] = useState<{
+    target: RetainedUpdateTarget
+    message: string
+  } | null>(null)
+  const installError = installFailure?.target === installTarget ? installFailure.message : null
   const [compatibilityRelaunching, setCompatibilityRelaunching] = useState(false)
   const [compatibilitySetupError, setCompatibilitySetupError] = useState<string | null>(null)
   const [autoDismissed, setAutoDismissed] = useState(false)
@@ -49,7 +55,6 @@ export function UpdateCard(): React.JSX.Element | null {
     hasStartedDownload.current = false
     setMediaFailed(false)
     setMediaLoaded(false)
-    setInstallError(null)
   }
   const prevStateRef = useRef(status.state)
   if (status.state !== prevStateRef.current) {
@@ -71,13 +76,36 @@ export function UpdateCard(): React.JSX.Element | null {
     const timer = window.setTimeout(() => setAutoDismissed(true), 3000)
     return () => window.clearTimeout(timer)
   }, [shouldAutoDismissLatest])
-  useEffect(() => {
-    if (status.state === 'downloaded' && !status.automaticDownload && hasStartedDownload.current) {
-      void window.api.updater.quitAndInstall().catch((error) => {
-        setInstallError(String((error as Error)?.message ?? error))
-      })
+  const installRequestPending = useRef(false)
+  const requestInstall = useCallback((target: RetainedUpdateTarget | null): void => {
+    if (installRequestPending.current) {
+      return
     }
-  }, [status.state, status.automaticDownload])
+    installRequestPending.current = true
+    setInstallFailure(null)
+    void window.api.updater
+      .quitAndInstall()
+      .catch((error: unknown) => {
+        if (target) {
+          setInstallFailure({
+            target,
+            message: error instanceof Error ? error.message : String(error)
+          })
+        }
+      })
+      .finally(() => {
+        installRequestPending.current = false
+      })
+  }, [])
+  useEffect(() => {
+    if (status.state !== 'downloaded' || !hasStartedDownload.current) {
+      return
+    }
+    hasStartedDownload.current = false
+    if (!status.installing && !status.automaticDownload) {
+      requestInstall(installTarget)
+    }
+  }, [status, installTarget, requestInstall])
 
   const prefersReducedMotion = usePrefersReducedMotion()
   const clearAnimationTimers = useCallback(() => {
@@ -122,11 +150,6 @@ export function UpdateCard(): React.JSX.Element | null {
   const handleClose = (): void => {
     dismissUpdate()
   }
-  const handleInstallRetry = (): void => {
-    void window.api.updater.quitAndInstall().catch((error) => {
-      setInstallError(String((error as Error)?.message ?? error))
-    })
-  }
   const handleEnableHttp1Compatibility = (): void => {
     if (compatibilityRelaunching) {
       return
@@ -149,6 +172,7 @@ export function UpdateCard(): React.JSX.Element | null {
         setCompatibilityRelaunching(false)
       })
   }
+  const handleInstallRetry = (): void => requestInstall(installTarget)
   const errorCard = buildUpdateCardErrorModel(
     {
       status,

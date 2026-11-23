@@ -33,7 +33,10 @@ import type { RuntimeBrowserTabClose } from '../tabs/browser-tab-close'
 import type { RuntimeBrowserScreencasts } from '../screencast/browser-screencasts'
 import type { BrowserClientPageOpeningHost } from '../client-pages/browser-client-page-opening'
 import { cloneBrowserTabToProfile } from './browser-tab-profile-clone'
-import { closeServerPagesInDeletedProfile } from './deleted-profile-server-pages'
+import {
+  closeServerPagesInDeletedProfile,
+  closeServerPagesOfMissingProfiles
+} from './deleted-profile-server-pages'
 import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 
 function requireBrowserProfile(profileId: string): BrowserSessionProfile {
@@ -247,6 +250,11 @@ export class RuntimeBrowserProfiles {
       )
     }
     return { deleted, profileId: params.profileId }
+  }
+
+  /** Startup: saved server tabs of an already-deleted profile close. */
+  async browserCloseServerPagesOfMissingProfiles(): Promise<void> {
+    await closeServerPagesOfMissingProfiles(this.host, this.close, this.pageGuestSwaps)
   }
 
   async browserProfileDetectBrowsers(): Promise<BrowserDetectProfilesResult> {

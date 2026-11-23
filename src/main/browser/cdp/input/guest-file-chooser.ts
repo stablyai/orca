@@ -5,13 +5,23 @@ import { acquireElectronDebugger } from '../debugger/electron-debugger-lease'
 import { sendGuestCdpCommand } from '../debugger/guest-cdp-command'
 import { withTimeout as rejectAfterTimeout } from '../commands/cdp-screenshot'
 import { runOutsideRemoteCliBrowserScope } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
+import { getActiveRpcCaller } from '../../../runtime/rpc/callers/active-call'
+import {
+  askBrowserFileChooserViewer,
+  browserFileChooserViewer,
+  cancelHeldFileChooser
+} from '../../guest-lifecycle/prompts/browser-file-chooser-viewers'
 
 // A click's user activation lasts 5s in Chromium, so its picker cannot open any later.
 const FILE_CHOOSER_OPEN_TIMEOUT_MS = 5_000
 // A hung page must not wedge its command queue on setup or cleanup.
 const PAGE_REPLY_TIMEOUT_MS = 2_000
 
-export type OpenedFileChooser = { backendNodeId: number | null; sessionId: string | undefined }
+export type OpenedFileChooser = {
+  backendNodeId: number | null
+  sessionId: string | undefined
+  multiple: boolean
+}
 
 export type FileChooserInterception = {
   /** The next chooser the page opened, or null when none opened in time. */
@@ -38,13 +48,17 @@ export async function interceptFileChooser(
   const onMessage = (
     _event: unknown,
     method: string,
-    params: { backendNodeId?: number } | undefined,
+    params: { backendNodeId?: number; mode?: string } | undefined,
     eventSessionId?: string
   ): void => {
     const sessionId = eventSessionId || undefined
     if (method === 'Page.fileChooserOpened' && sessionIds.includes(sessionId)) {
       openedAny = true
-      resolveOpened({ backendNodeId: params?.backendNodeId ?? null, sessionId })
+      resolveOpened({
+        backendNodeId: params?.backendNodeId ?? null,
+        sessionId,
+        multiple: params?.mode === 'selectMultiple'
+      })
     }
   }
   // The getter throws once the guest is destroyed, e.g. after a click that closes its popup.
@@ -119,24 +133,40 @@ export async function withFileChooserBlocked<T>(
   run: () => Promise<T>,
   { agent }: { agent: boolean }
 ): Promise<T> {
+  // A streaming device's own input opens the picker on that device instead. Queued commands run in their own call.
+  const caller = getActiveRpcCaller()
+  const viewer =
+    !agent && caller?.kind === 'paired-device'
+      ? browserFileChooserViewer(wc.id, caller.deviceId)
+      : null
   const debuggerLease = acquireElectronDebugger(wc)
   try {
-    const chooser = await interceptFileChooser(wc, undefined, { cancel: true })
-    let result: T
-    try {
-      result = await run()
-    } finally {
-      await chooser.release()
+    const chooser = await interceptFileChooser(wc, undefined, { cancel: viewer === null })
+    const ran = await run().then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error })
+    )
+    await chooser.release()
+    const opened = chooser.opened ? await chooser.next() : null
+    if (viewer && opened) {
+      if (ran.ok && askBrowserFileChooserViewer(wc, viewer, opened)) {
+        return ran.value
+      }
+      // Held for the viewer but not handed over: close it, as a cancelled picker is.
+      await cancelHeldFileChooser(wc, opened)
     }
-    if (chooser.opened) {
-      throw new BrowserError(
-        'browser_file_chooser_opened',
-        agent
-          ? 'The action opened a file picker, which Orca closed so the system dialog would not take over the screen. To choose files, run `upload --element <ref> --files <paths>` on the file input or the button that opens it.'
-          : "This page's file picker can't open from a remote view."
-      )
+    if (!ran.ok) {
+      throw ran.error
     }
-    return result
+    if (!chooser.opened) {
+      return ran.value
+    }
+    throw new BrowserError(
+      'browser_file_chooser_opened',
+      agent
+        ? 'The action opened a file picker, which Orca closed so the system dialog would not take over the screen. To choose files, run `upload --element <ref> --files <paths>` on the file input or the button that opens it.'
+        : "This page's file picker can't open from a remote view."
+    )
   } finally {
     debuggerLease.release()
   }

@@ -2238,6 +2238,8 @@
       "editSavedArguments": "Unter Einstellungen > Agenten > Argumente bearbeiten.",
       "emptyMessage": "Diese Nachricht ist leer und wurde daher nicht gesendet.",
       "fullAccessAsRoot": "{{agent}} verwendet keinen Vollzugriff, solange die Ausführung als root erfolgt. Unter Einstellungen → Agenten für den Computer, auf dem dieser Chat läuft, eine andere Berechtigung für {{agent}} auswählen und anschließend einen neuen Chat starten.",
+      "botToolsNeedStatusHooks": "{{agent}}-Bots brauchen Agentenstatus-Hooks: Über sie handeln die Werkzeuge eines Bots als dieser Bot. Aktiviere sie für {{agent}} unter Einstellungen → Agenten und starte dann einen neuen Chat.",
+      "botToolsGatewayOutdated": "Das Gateway von {{agent}} läuft noch mit einer älteren Version des Orca-Plugins, daher können die Werkzeuge dieses Bots nicht als der Bot handeln. Führe `hermes gateway stop` aus und starte dann einen neuen Chat.",
       "historyInOtherAccount": "Der Verlauf dieses Chats befindet sich in einem anderen Claude-Konto. Zu diesem Konto zurückwechseln, um den Chat fortzusetzen.",
       "historyTooLarge": "Der Verlauf dieser Unterhaltung ist zu groß, um ihn hier wiederherzustellen.",
       "hostFault": "Bei Orca ist ein Problem aufgetreten, daher wurde dies nicht übermittelt.",
