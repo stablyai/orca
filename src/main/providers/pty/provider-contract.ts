@@ -21,9 +21,17 @@ import type { PtyProcessInfo } from './process-info'
 import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { TerminalOwner } from '../../../shared/terminal/pty/lifecycle/terminal-owner'
 import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
+import type { RuntimeTerminalProjection } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
+
+export type PtyProviderBufferSnapshotOptions = {
+  scrollbackRows?: number
+  visibleProjection?: true
+}
 
 export type PtyProviderBufferSnapshot = {
   data: string
+  /** Screen rows returned in place of ANSI for a visible projection request. */
+  visibleProjection?: RuntimeTerminalProjection
   /** Live state that can be restored without an alternate-screen frame. */
   frameRestoreAnsi?: string
   /** Authoritative normal buffer captured beside an alternate-screen frame. */
@@ -157,8 +165,9 @@ export type IPtyProvider = {
   /** Authoritative provider model snapshot after monitoring-stream gaps; optional for other providers. */
   getBufferSnapshot?: (
     id: string,
-    opts?: { scrollbackRows?: number }
+    opts?: PtyProviderBufferSnapshotOptions
   ) => Promise<PtyProviderBufferSnapshot | null>
+  supportsVisibleProjectionSnapshot?(id: string): boolean
   /** Whether this exact PTY can return a sequence-safe provider snapshot. */
   canProvideAuthoritativeBufferSnapshot?: (id: string) => boolean
   /** Applied size readback detects dropped/clamped remote resize requests.

@@ -230,3 +230,12 @@ export function formatBrowserActionEffects(result: unknown): string {
   }
   return lines.length > 0 ? `\n${lines.join('\n')}` : ''
 }
+
+/** Servers name the pages a paired desktop renders, which this host's setting never reaches. */
+export function withClientHostedPagesNote(text: string, result: unknown): string {
+  const note =
+    result && typeof result === 'object' && 'clientHostedPagesNote' in result
+      ? result.clientHostedPagesNote
+      : undefined
+  return typeof note === 'string' && note ? `${text}\n${note}` : text
+}

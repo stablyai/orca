@@ -57,6 +57,8 @@ export type NativeChatStructuredComposerTransport = {
   contextUsage?: StructuredAgentContextUsage | null
   /** The agent's guess at the next prompt, absent while a queued message will be sent next. */
   promptSuggestion?: AgentSessionPromptSuggestion | null
+  /** Presentation owner of a staged composer; its transport and attachments remain local. */
+  pendingCreationId?: string
   worktreeId?: string
   /** Present only where the host can set this session's goal. */
   threadGoal?: { setObjective: (objective: string) => Promise<boolean> }

@@ -116,12 +116,13 @@ export function useAgentMenuObservation(
   )
   const terminalPending = useAppStateValueWithHostStatuses(terminalPendingSelector)
   const input = buildRouteInputForStatuses(state, hostStatuses, { agent: 'claude', workspace })
-  const { settings, pending: preferencesPending } = useHostAgentMenuSettings(
+  const hostPreferences = useHostAgentMenuSettings(
     unresolvedTarget ? null : facts,
     desktopSettings,
     viewActive && (open || shown),
     viewActive && open
   )
+  const { settings, pending: preferencesPending } = hostPreferences
   useAppStateValue(
     useShallow((state) => [
       state.settings?.defaultTuiAgent,
@@ -270,6 +271,7 @@ export function useAgentMenuObservation(
     model,
     preferences: { defaultTuiAgent, disabledTuiAgents, agentLaunchChoices },
     preferencesPending,
+    preferencesInherited: hostPreferences.inherited,
     detection,
     contextKey: JSON.stringify([workspace, launchCwd, facts]),
     selectionFor: (

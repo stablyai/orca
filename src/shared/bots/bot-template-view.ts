@@ -46,7 +46,9 @@ export function botTemplateEventParts(name: string): { trigger: string; action: 
 export function botTemplateMatches(
   template: BotTemplate,
   query: string,
-  categoryLabel: (category: BotTemplateCategory) => string
+  categoryLabel: (category: BotTemplateCategory) => string,
+  // Why: translated pages still find a template by the words they show, and by its English.
+  shownText: (english: string) => string = (english) => english
 ): boolean {
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   if (words.length === 0) {
@@ -55,6 +57,8 @@ export function botTemplateMatches(
   const text = [
     template.name,
     template.line,
+    shownText(template.name),
+    shownText(template.line),
     categoryLabel(template.category),
     ...template.connectors.map((kind) => BOT_CONNECTOR_NAMES[kind]),
     ...template.skills

@@ -82,9 +82,9 @@ function authorizeUrl(
   url.searchParams.set('state', args.state)
   url.searchParams.set('code_challenge', args.codeChallenge)
   url.searchParams.set('code_challenge_method', 'S256')
-  // A refresh token every time, so Reconnect always yields one.
+  // A refresh token every time, so Reconnect always yields one; the chooser lets them add another account.
   url.searchParams.set('access_type', 'offline')
-  url.searchParams.set('prompt', 'consent')
+  url.searchParams.set('prompt', 'select_account consent')
   if (args.loginHint) {
     url.searchParams.set('login_hint', args.loginHint)
   }

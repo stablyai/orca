@@ -1,6 +1,7 @@
 // Signing a bot's tool in from the phone: its page opens in the phone's browser, which ends on the
 // computer's 127.0.0.1 return address, and the address is pasted back. Orca's own sign-ins run on the
 // bot's host for this phone (bots.tools.signIn.*); a tool its agent's CLI signs in to finishes there.
+import { botFailureMessage } from '../bot-failure-message'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   botToolSignInFailureWords,
@@ -45,7 +46,8 @@ export type BotToolPhoneSignIn = {
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
+const messageOf = (error: unknown) =>
+  botFailureMessage(error) ?? (error instanceof Error ? error.message : String(error))
 
 export function useBotToolPhoneSignIn(args: {
   client: RpcClient | null

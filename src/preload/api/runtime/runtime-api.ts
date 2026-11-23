@@ -100,6 +100,7 @@ export type RuntimeApi = {
     onOrchestrationSessionWorkersChanged?: (
       callback: (event: { sessionId: string }) => void
     ) => () => void
+    onPeerMailReturned?: (callback: () => void) => () => void
   }
   runtimeEnvironments: {
     desktopCreatedChatIds?: () => Promise<string[]>

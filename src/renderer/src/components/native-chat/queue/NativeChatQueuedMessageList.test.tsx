@@ -167,7 +167,7 @@ it('fits the live synchronous card, caps the queue while it is open, and submits
 
   fireEvent.click(screen.getByRole('button', { name: 'Next question' }))
   fireEvent.click(screen.getByRole('button', { name: /full scope/i }))
-  fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }))
   expect(respond).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: /draft/i }))
   fireEvent.click(screen.getByRole('button', { name: 'Next' }))

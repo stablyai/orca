@@ -117,6 +117,18 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   },
   // Qwen lists its skills as commands once a session runs; Orca knows none of its skill folders.
   'qwen-code': null,
+  // Cline's ACP reports no commands and sends a `/word` to the model as text.
+  cline: null,
+  // Devin reports skills only once a session starts, so resting chats rely on the scan.
+  devin: {
+    skillPrefix: '/',
+    skillSourceOwner: 'devin'
+  },
+  // CodeBuddy reports skills only once a session starts, so resting chats rely on the scan.
+  codebuddy: {
+    skillPrefix: '/',
+    skillSourceOwner: 'codebuddy'
+  },
   // ZCode invokes a `/name` mention by running its own Skill tool, so the text passes through.
   zcode: {
     skillPrefix: '/',
