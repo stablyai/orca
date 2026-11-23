@@ -44,6 +44,7 @@ describe('threadMuteCommand', () => {
     expect(threadMuteCommand('<@UOTHER> mute', bot)).toBeNull()
     expect(threadMuteCommand('@bob be quiet', bot)).toBeNull()
     expect(threadMuteCommand('mute?', bot)).toBeNull()
+    expect(threadMuteCommand('mute?! 🤔', bot)).toBeNull()
     expect(threadMuteCommand("don't mute", bot)).toBeNull()
     expect(threadMuteCommand('mute the video player', bot)).toBeNull()
   })

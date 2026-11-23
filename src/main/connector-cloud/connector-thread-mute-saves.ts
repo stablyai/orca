@@ -15,16 +15,19 @@ type MuteSaveStore = ExternalConversationLinkStore & Pick<RuntimeStore, 'flushPe
 export function threadMuteSaves(
   store: MuteSaveStore
 ): (key: ConnectorConversation, muted: boolean) => Promise<void> {
-  // Threads whose mute is in memory but not yet on disk: its save failed, or is still running.
-  const unsaved = new Set<string>()
+  // Threads whose mute is in memory but not yet on disk (its save failed, or is still running), by
+  // how many changes each has had, so a save clears only the changes made before it began.
+  const unsaved = new Map<string, number>()
   let retry: ReturnType<typeof setTimeout> | null = null
   let delay = FIRST_RETRY_MS
   const flush = async (): Promise<void> => {
     // A flush saves every change made before it began: those threads' mutes are then on disk.
     const covered = [...unsaved]
     await store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
-    for (const id of covered) {
-      unsaved.delete(id)
+    for (const [id, changes] of covered) {
+      if (unsaved.get(id) === changes) {
+        unsaved.delete(id)
+      }
     }
     delay = FIRST_RETRY_MS
   }
@@ -49,7 +52,7 @@ export function threadMuteSaves(
     if (!writeLinkFact(store, key, { muted: muted ? true : undefined }) && !unsaved.has(id)) {
       return
     }
-    unsaved.add(id)
+    unsaved.set(id, (unsaved.get(id) ?? 0) + 1)
     try {
       await flush()
     } catch (error) {

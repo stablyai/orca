@@ -187,7 +187,9 @@ function applyStep(
   const step = threadMuteStep(thread.muted, delivery, {
     userId,
     names: plain ? [] : deps.botNames(thread.botId),
-    others: plain ? [] : deps.otherBotNames(thread.botId)
+    // Only a reply leading with the shared Slack mention can be another bot's.
+    others:
+      plain || !delivery.text.trimStart().startsWith('<@') ? [] : deps.otherBotNames(thread.botId)
   })
   if (step === 'send') {
     return null
