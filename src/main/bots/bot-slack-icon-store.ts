@@ -162,7 +162,8 @@ export class BotSlackIcons {
       return { wanted: false, current: true }
     }
     const kept = stat && (await readBotSlackIcon(this.deps.filesystem, this.deps.root(), bot))
-    if (stat && kept) {
+    // A bot deleted while its icon was read keeps nothing here.
+    if (stat && kept && this.has(botId)) {
       this.whole.set(botId, { path, size: stat.size, mtimeMs: stat.mtimeMs })
     }
     return { wanted: !kept, current: true }
@@ -195,6 +196,15 @@ export class BotSlackIcons {
       }
     }
     return stored !== 'refused'
+  }
+
+  private has(botId: string): boolean {
+    try {
+      this.deps.bot(botId)
+      return true
+    } catch {
+      return false
+    }
   }
 
   read(botId: string): Promise<{ look: string; png: Buffer } | null> {

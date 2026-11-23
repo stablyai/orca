@@ -18,6 +18,7 @@ vi.mock('@/lib/bot-catalog-snapshot', () => ({
 }))
 vi.mock('@/lib/bot-host-status', () => ({ botHostHas: () => true }))
 vi.mock('@/lib/bot-host-link-read', () => ({ onBotHostCameBack: () => () => {} }))
+vi.mock('./bot-outfit-art', () => ({ allowOutfitReadsAgain: () => {} }))
 vi.mock('./bot-slack-icon-raster', () => ({ drawBotSlackIcon: async () => 'cG5n' }))
 vi.mock('./bot-slack-icon-rpc', () => ({
   botSlackIconWanted: async () => ({ wanted: true, current: true }),

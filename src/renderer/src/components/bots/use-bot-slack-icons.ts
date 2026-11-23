@@ -15,6 +15,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 import { BOTS_SLACK_ICON_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import { wornBotOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import { botSlackIconLook } from '../../../../shared/bots/bot-slack-icon'
+import { allowOutfitReadsAgain } from './bot-outfit-art'
 import { drawBotSlackIcon } from './bot-slack-icon-raster'
 import { botSlackIconWanted, uploadBotSlackIcon } from './bot-slack-icon-rpc'
 
@@ -146,6 +147,7 @@ export function publishBotSlackIcon(bot: Bot): void {
 
 // A real step for this bot: what this window knew of its icon is dropped, and its host is asked again.
 function askAgain(bot: Bot): void {
+  allowOutfitReadsAgain()
   handled.delete(botRefKey(bot))
   failures.delete(botRefKey(bot))
   publishBotSlackIcon(bot)
