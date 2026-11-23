@@ -202,7 +202,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     getOrchestrationDb: () => this.getOrchestrationDb(),
     resolveOrchestrationWorkerServer: (selector) => this.resolveOrchestrationWorkerServer(selector),
     callOrchestrationWorkerServer: (...args) => this.callOrchestrationWorkerServer(...args),
-    getOrchestrationFleetAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot(),
+    getOrchestrationFleetAgentStatusSnapshot: (...args) =>
+      this.getOrchestrationFleetAgentStatusSnapshot(...args),
     ensureStructuredAgentSessionHost: () => this.ensureStructuredAgentSessionHost(),
     // Read per call: the host binds it after this field initializes.
     getAgentStatusSnapshotFn: () => this.getAgentStatusSnapshotFn?.() ?? [],
