@@ -9,6 +9,8 @@ import type { ChecksPanelPollingInput } from './refresh/use-checks-panel-polling
 import { useChecksPanelReviewData } from './review-data/use-checks-panel-review-data'
 import { ChecksList } from './presentation/checks-list'
 import { PRCommentsList } from './comments/comments-list'
+import { refreshChecksPanelHostedReview } from './refresh/hosted-review-manual-refresh'
+import type { ChecksPanelManualRefreshInput } from './refresh/manual-refresh-dependencies'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const isCurrentAsyncResult = (): boolean => true
@@ -248,5 +250,33 @@ describe('empty copy under a refresh banner', () => {
     expect(container.textContent).not.toContain('No comments')
     renderComments(true)
     expect(container.textContent).toContain('No comments')
+  })
+})
+
+describe('manual refresh lookups', () => {
+  it('keeps current results when the review lookup finds nothing', async () => {
+    const set = setters()
+    const fetchGitLabDetails = vi.fn(async () => {})
+    const model = {
+      ...set,
+      repo,
+      branch: 'feature',
+      activeGitLabReview: null,
+      fetchGitLabDetails,
+      fetchHostedReviewForBranch: vi.fn(async () => null),
+      linkedPR: null,
+      linkedGitLabMR: null,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null,
+      fallbackGitHubPRNumber: null
+    } as unknown as ChecksPanelManualRefreshInput
+    await expect(refreshChecksPanelHostedReview(model, 'gitlab', () => true)).resolves.toBe(
+      'no-review'
+    )
+    // Nothing would re-read a section cleared here while the selected review stays the same.
+    expect(set.setChecks).not.toHaveBeenCalled()
+    expect(set.setComments).not.toHaveBeenCalled()
+    expect(fetchGitLabDetails).not.toHaveBeenCalled()
   })
 })

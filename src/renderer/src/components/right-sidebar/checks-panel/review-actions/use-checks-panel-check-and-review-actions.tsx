@@ -176,8 +176,8 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
       if (!isCurrentRequestContext()) {
         return
       }
-      setChecks(null)
-      setComments(undefined)
+      // Keep current results: a newly linked PR changes the read identity, and the section owners
+      // reset and re-read; clearing here would strand them if this action is superseded.
       setChecksLoading(true)
       setCommentsLoading(true)
       let requestKey: string | null = null

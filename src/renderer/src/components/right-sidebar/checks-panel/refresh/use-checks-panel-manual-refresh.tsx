@@ -322,8 +322,8 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           })
         ])
       } else if (isCurrentRequest()) {
-        setChecks(null)
-        setComments(undefined)
+        // A superseded or inconclusive lookup must not clear results no read will settle. A PR
+        // that is really gone changes the read identity, and the section owners reset and re-read.
         refreshOutcome = 'no-pr'
       }
     } catch {

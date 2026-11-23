@@ -91,7 +91,7 @@ export async function refreshChecksPanelHostedReview(
   provider: HostedReviewProvider,
   isCurrentRequest: () => boolean
 ): Promise<'review' | 'no-review' | 'superseded'> {
-  const { repo, branch, activeGitLabReview, fetchGitLabDetails, setChecks, setComments } = model
+  const { repo, branch, activeGitLabReview, fetchGitLabDetails } = model
   if (!repo || !branch) {
     return 'superseded'
   }
@@ -118,7 +118,7 @@ export async function refreshChecksPanelHostedReview(
     })
     return 'review'
   }
-  setChecks(null)
-  setComments(undefined)
+  // A lookup that finds no review keeps the current results: if the review is really gone, the
+  // panel's review identity changes and the section owners reset and re-read.
   return 'no-review'
 }
