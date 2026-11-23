@@ -7,24 +7,18 @@ import {
 } from './native-chat-status-session-options'
 
 const claude = getAgentSessionOptionCatalog('claude')!
-const codex = getAgentSessionOptionCatalog('codex')!
 
-function chip(
-  scopeKey: string,
-  dispatchCommand: () => Promise<void> = async () => {},
-  agent: 'claude' | 'codex' = 'claude'
-) {
-  const catalog = agent === 'claude' ? claude : codex
+function chip(scopeKey: string, dispatchCommand: () => Promise<void> = async () => {}) {
   const memory: NativeChatStatusReportMemory = new Map()
   const surface = createNativeChatPtySessionOptions({
-    agent,
+    agent: 'claude',
     scopeKey,
     mode: 'live',
     modelLabel: 'Model',
     dispatchCommand
   })!
   const report = (model: string, effort?: string, sessionId = 'session-a') => {
-    const reported = takeNativeChatStatusReport(memory, scopeKey, agent, catalog, catalog.models, {
+    const reported = takeNativeChatStatusReport(memory, scopeKey, 'claude', claude, claude.models, {
       model,
       providerSession: { id: sessionId, effort }
     })
@@ -32,10 +26,8 @@ function chip(
       surface.reportSessionOptions(reported.values, reported.forNewModel)
     }
   }
-  const shown = (id: string) => {
-    const kind = surface.getSnapshot().find((row) => row.id === id)?.kind
-    return kind?.type === 'select' ? kind.currentValue : undefined
-  }
+  const shown = (id: string) =>
+    surface.getSnapshot().find((row) => row.id === id)?.kind.currentValue
   const source = (id: string) => surface.getSnapshot().find((row) => row.id === id)?.valueSource
   return { surface, report, shown, source }
 }
@@ -107,18 +99,38 @@ it('keeps an effort the session reports while a chip model pick is still being s
   expect([shown('model'), shown('effort')]).toEqual(['sonnet', 'max'])
 })
 
-it('follows late and revised applied effort until the session reports its effort', () => {
-  const model = 'gpt-5.6-sol'
-  const { surface, report, shown, source } = chip('applied-seed', undefined, 'codex')
+it('merges changed host options while preserving phone picks and session reports', async () => {
+  const scope = 'applied-seed'
+  const launch = { model: 'opus', effort: 'high', fastMode: true }
+  const initial = chip(scope)
+  await initial.surface.mergeAppliedSessionOptions(launch)
+  expect([initial.shown('effort'), initial.source('effort')]).toEqual(['high', 'applied'])
+  await initial.surface.setOption('fastMode', false)
+
+  let finishDispatch: (() => void) | undefined
+  const { surface, report, shown, source } = chip(
+    scope,
+    () => new Promise<void>((resolve) => (finishDispatch = resolve))
+  )
+  const fast = () => [shown('fastMode'), source('fastMode')]
   const effort = () => [shown('effort'), source('effort')]
-  surface.mergeAppliedSessionOptions({ model, effort: 'high' })
+  await surface.mergeAppliedSessionOptions(launch)
+  expect(fast()).toEqual([false, 'applied'])
+  report('opus')
   expect(effort()).toEqual(['high', 'applied'])
-  report(model)
-  expect(effort()).toEqual(['high', 'applied'])
-  surface.mergeAppliedSessionOptions({ model, effort: 'low' })
+  await surface.mergeAppliedSessionOptions({ ...launch, effort: 'low' })
   expect(effort()).toEqual(['low', 'applied'])
-  report(model, 'medium')
-  expect(effort()).toEqual(['medium', 'reported'])
-  surface.mergeAppliedSessionOptions({ model, effort: 'high' })
-  expect(effort()).toEqual(['medium', 'reported'])
+  expect(fast()).toEqual([false, 'applied'])
+
+  const pick = surface.setOption('effort', 'medium')
+  await vi.waitFor(() => expect(finishDispatch).toBeDefined())
+  const merge = surface.mergeAppliedSessionOptions(launch)
+  finishDispatch!()
+  await pick
+  await merge
+  expect(effort()).toEqual(['medium', 'dispatched'])
+
+  report('opus', 'low')
+  await surface.mergeAppliedSessionOptions({ ...launch, effort: 'medium' })
+  expect(effort()).toEqual(['low', 'reported'])
 })

@@ -17,7 +17,6 @@ import {
   type NativeChatPtySessionOptionsSurface
 } from '../../../../../../../shared/native-chat/input/session-options/native-chat-pty-session-options'
 import type { NativeChatSessionOptionDispatchCommand } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-dispatch'
-import { nativeChatLaunchAgentForLeaf } from '../../../pane/routing/native-chat-leaf-routing'
 import {
   ensureNativeChatModelEnrichment,
   readNativeChatEnrichedModels,
@@ -113,13 +112,9 @@ export function useNativeChatSessionOptions(args: {
         const tab = state.tabsByWorktree[mounted.worktreeId]?.find(({ id }) => id === terminalTabId)
         if (
           pane.status === 'resolved' &&
+          pane.leafId === mounted.getTabWideAgentHintLeafId() &&
           mounted.getPtyIdForPane(pane.numericPaneId) === targetPtyId &&
-          nativeChatLaunchAgentForLeaf({
-            launchAgent: tab?.launchAgent,
-            launchAgentLeafId: mounted.getTabWideAgentHintLeafId(),
-            leafId: pane.leafId,
-            leafIds: manager.getPanes().map(({ leafId }) => leafId)
-          }) === agent
+          tab?.launchAgent === agent
         ) {
           state.setNativeChatAppliedSessionOptions(terminalTabId, {
             agent: applied.agent,

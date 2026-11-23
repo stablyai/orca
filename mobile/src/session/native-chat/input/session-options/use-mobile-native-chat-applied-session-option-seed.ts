@@ -21,6 +21,6 @@ export function useMobileNativeChatAppliedSessionOptionSeed(
         ([, value]) => typeof value === 'string' || typeof value === 'boolean'
       )
     )
-    surface.mergeAppliedSessionOptions(values)
+    void surface.mergeAppliedSessionOptions(values)
   }, [appliedSessionOptions, surface])
 }

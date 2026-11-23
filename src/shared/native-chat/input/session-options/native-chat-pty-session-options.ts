@@ -20,7 +20,10 @@ import {
   readNativeChatSessionOptionCache,
   writeNativeChatSessionOptionCache
 } from './native-chat-session-option-cache'
-import { createSessionOptionAppliers } from './native-chat-session-option-apply'
+import {
+  createSerializedApplyQueue,
+  createSessionOptionAppliers
+} from './native-chat-session-option-apply'
 import {
   buildNativeChatSessionOptionSnapshot,
   resolveEffectiveNativeChatModelId,
@@ -39,7 +42,7 @@ type PersistSelection = (args: {
 
 export type NativeChatPtySessionOptionsSurface = SessionOptionsSurface & {
   recordOutgoingCommand(command: string): void
-  mergeAppliedSessionOptions(values: Record<string, SessionOptionValue>): void
+  mergeAppliedSessionOptions(values: Record<string, SessionOptionValue>): Promise<void>
   /** Applies what the running agent reports. `forNewModel` holds values that are not news on their
    *  own (an unchanged effort) but describe a model the session switches to. */
   reportSessionOptions(
@@ -158,29 +161,33 @@ export function createNativeChatPtySessionOptions(
     }
   }
 
-  const appliers = createSessionOptionAppliers({
-    mode: args.mode,
-    catalog,
-    getModels: activeModels,
-    getRecord: () => record,
-    dispatchCommand: args.dispatchCommand,
-    onAgentPicker: args.onAgentPicker,
-    persist,
-    onDraftValuesChanged: args.onDraftValuesChanged,
-    publish,
-    clearModelTruth,
-    setTrackedValue
-  })
+  const serialize = createSerializedApplyQueue()
+  const appliers = createSessionOptionAppliers(
+    {
+      mode: args.mode,
+      catalog,
+      getModels: activeModels,
+      getRecord: () => record,
+      dispatchCommand: args.dispatchCommand,
+      onAgentPicker: args.onAgentPicker,
+      persist,
+      onDraftValuesChanged: args.onDraftValuesChanged,
+      publish,
+      clearModelTruth,
+      setTrackedValue
+    },
+    serialize
+  )
 
   return {
     getSnapshot: () => snapshot,
     setOption: appliers.setOption,
-    mergeAppliedSessionOptions: (values) => {
-      // Keep in-flight picks on the same record and apply queue.
-      if (mergeNativeChatAppliedSessionOptions(args.scopeKey, args.agent, values, record)) {
-        publishSnapshot()
-      }
-    },
+    mergeAppliedSessionOptions: (values) =>
+      serialize(() => {
+        if (mergeNativeChatAppliedSessionOptions(args.scopeKey, values, record)) {
+          publishSnapshot()
+        }
+      }),
     invokeAction: appliers.invokeAction,
     subscribe: (listener) => {
       listeners.add(listener)

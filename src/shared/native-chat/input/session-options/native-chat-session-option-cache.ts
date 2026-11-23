@@ -1,6 +1,7 @@
 import type { AgentType } from '../../../agent-status/contracts/agent-status-types'
 import type { SessionOptionValue } from '../native-chat-session-options'
 import {
+  clearTrackedSessionOption,
   cloneNativeChatSessionOptionRecord,
   createNativeChatSessionOptionRecord,
   getTrackedSessionOption,
@@ -11,6 +12,10 @@ import {
 import { setBoundedScopeCacheEntry } from '../composer/native-chat-scope-cache'
 
 const sessionOptionCache = new Map<string, NativeChatSessionOptionRecord>()
+const hostAppliedSessionOptions = new Map<
+  string,
+  { agent: AgentType; values: Record<string, SessionOptionValue> }
+>()
 
 export function readNativeChatSessionOptionCache(
   scopeKey: string,
@@ -54,33 +59,39 @@ export function seedNativeChatAppliedSessionOptions(
 
 export function mergeNativeChatAppliedSessionOptions(
   scopeKey: string,
-  agent: AgentType,
-  values: Record<string, SessionOptionValue> | null | undefined,
-  liveRecord?: NativeChatSessionOptionRecord
+  values: Record<string, SessionOptionValue>,
+  record: NativeChatSessionOptionRecord
 ): boolean {
-  if (typeof values?.model !== 'string' || !values.model) {
+  const { model: modelId, ...options } = values
+  if (typeof modelId !== 'string' || !modelId) {
     return false
   }
-  const { model: modelId, ...options } = values
-  const record = liveRecord ?? readNativeChatSessionOptionCache(scopeKey)
-  if (record?.agent !== agent) {
-    seedNativeChatAppliedSessionOptions(scopeKey, agent, values)
-    return true
-  }
+
+  const lastHost = hostAppliedSessionOptions.get(scopeKey)
+  const previous = lastHost?.agent === record.agent ? lastHost.values : undefined
+  setBoundedScopeCacheEntry(hostAppliedSessionOptions, scopeKey, {
+    agent: record.agent,
+    values: { ...values }
+  })
+
   let changed = false
   if (record.model?.value !== modelId) {
-    if (record.model && record.model.source !== 'applied') {
+    if (!shouldApplyHostValue(record.model, previous, 'model', modelId)) {
       return false
     }
     if (record.model) {
-      delete record.valuesByModel[modelId]
+      for (const [id, tracked] of Object.entries(record.valuesByModel[modelId] ?? {})) {
+        if (tracked.source === 'applied') {
+          clearTrackedSessionOption(record, modelId, id)
+        }
+      }
     }
     setTrackedSessionOption(record, 'model', modelId, 'applied')
     changed = true
   }
   for (const [id, value] of Object.entries(options)) {
     const current = getTrackedSessionOption(record, modelId, id)
-    if (!current || (current.source === 'applied' && current.value !== value)) {
+    if (shouldApplyHostValue(current, previous, id, value)) {
       setTrackedSessionOption(record, id, value, 'applied')
       changed = true
     }
@@ -89,6 +100,19 @@ export function mergeNativeChatAppliedSessionOptions(
     writeNativeChatSessionOptionCache(scopeKey, record)
   }
   return changed
+}
+
+function shouldApplyHostValue(
+  current: TrackedNativeChatSessionOption | undefined,
+  previous: Record<string, SessionOptionValue> | undefined,
+  id: string,
+  value: SessionOptionValue
+): boolean {
+  return (
+    previous?.[id] !== value &&
+    current?.value !== value &&
+    (!current || (previous !== undefined && current.source === 'applied'))
+  )
 }
 
 /** A picked model drops the old model's other values; any other pick only replaces its own option. */
