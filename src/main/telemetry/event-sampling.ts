@@ -41,11 +41,19 @@ const TENTH_SAMPLED_EVENTS: ReadonlySet<string> = new Set<EventName>([
 // Diagnostic repeats add nothing after the first per reason in a session.
 const unattributedHookReasonsSeen = new Set<string>()
 
-function stringProp(props: unknown, key: string): string | undefined {
-  if (props === null || typeof props !== 'object' || !(key in props)) {
+function stringProp(
+  props: unknown,
+  key: 'outcome' | 'fallback_reason' | 'reason'
+): string | undefined {
+  if (props === null || typeof props !== 'object') {
     return undefined
   }
-  const value: unknown = Reflect.get(props, key)
+  const value =
+    key === 'outcome'
+      ? 'outcome' in props && props.outcome
+      : key === 'fallback_reason'
+        ? 'fallback_reason' in props && props.fallback_reason
+        : 'reason' in props && props.reason
   return typeof value === 'string' ? value : undefined
 }
 
