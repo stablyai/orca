@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "Erneut anmelden",
-      "usageSignInMessage": "Für das ausgewählte Claude-Konto ist eine erneute Anmeldung erforderlich. Einstellungen > Konten für KI-Anbieter öffnen oder „Systemstandard“ auswählen."
+      "usageSignInMessage": "Für dieses Konto ist eine erneute Anmeldung erforderlich."
     }
   },
   "agentHistory": {

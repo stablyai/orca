@@ -22421,7 +22421,7 @@
       "signInRequired": "Reconnectez-vous pour utiliser ce compte",
       "signInAgain": "Se reconnecter",
       "usageSignInLabel": "Se reconnecter",
-      "usageSignInMessage": "Le compte Claude sélectionné nécessite une nouvelle connexion. Ouvrez Paramètres > Comptes de fournisseurs d'IA, ou choisissez Système par défaut.",
+      "usageSignInMessage": "Ce compte nécessite une nouvelle connexion.",
       "signIn": "Se connecter",
       "moreSignInOptions": "Plus d'options de connexion",
       "copySignInLink": "Copier plutôt le lien de connexion",
