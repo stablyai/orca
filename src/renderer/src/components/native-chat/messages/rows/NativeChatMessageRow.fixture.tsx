@@ -4,10 +4,21 @@ import { agentJournalSubmissionKey } from '../../../../../../shared/agent-sessio
 import { MessageRow } from './NativeChatMessageRow'
 import { useStructuredAgentSessionDeliveryNotices } from '../../session/structured/delivery/use-structured-agent-session-delivery-notices'
 import { NativeChatHostSetupContext } from '../../host-access/native-chat-host-setup'
+import { NativeChatNoticeRow } from '../notices/NativeChatNoticeRow'
+import {
+  AGENT_SESSION_RESTART_CONTINUATION_MESSAGE,
+  AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE
+} from '../../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 
 const signInView = { signIn: { signingIn: false, signIn: () => {} }, install: null }
 
-function RecordedSteer({ state }: { state: AgentJournalSubmission['dispatchState'] }) {
+function RecordedSteer({
+  state,
+  text = 'Ignore failures outside this branch.'
+}: {
+  state: AgentJournalSubmission['dispatchState']
+  text?: string
+}) {
   const notices = useStructuredAgentSessionDeliveryNotices({
     pending: [],
     submissions: [
@@ -35,7 +46,7 @@ function RecordedSteer({ state }: { state: AgentJournalSubmission['dispatchState
         role: 'user',
         timestamp: 0,
         source: 'transcript',
-        blocks: [{ type: 'text', text: 'Ignore failures outside this branch.' }]
+        blocks: [{ type: 'text', text }]
       }}
       expandSignal={false}
       onScrollMessageToTop={() => {}}
@@ -55,6 +66,32 @@ export const accepted = defineFixture({
 export const rejected = defineFixture({
   width: 480,
   render: () => <RecordedSteer state="rejected" />
+})
+
+/** A restart continuation its agent never answered: before, it stayed on Sending… with no note. */
+export const restartContinuationUnanswered = defineFixture({
+  width: 560,
+  render: () => (
+    <div className="native-chat-appearance space-y-3 p-4">
+      <RecordedSteer state="pending" text={AGENT_SESSION_RESTART_CONTINUATION_MESSAGE} />
+    </div>
+  )
+})
+/** After: settled as unknown, with the unconfirmed note, and its queued messages released. */
+export const restartContinuationSettled = defineFixture({
+  width: 560,
+  render: () => (
+    <div className="native-chat-appearance space-y-3 p-4">
+      <RecordedSteer state="unknown" text={AGENT_SESSION_RESTART_CONTINUATION_MESSAGE} />
+      <NativeChatNoticeRow
+        block={{
+          type: 'text',
+          tone: 'warning',
+          text: AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE
+        }}
+      />
+    </div>
+  )
 })
 
 export const signedOut = defineFixture({
