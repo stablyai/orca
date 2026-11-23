@@ -292,8 +292,8 @@ export function setWorktreeMetaForHost(
     WORKTREE_METADATA_DOMAINS,
     undefined,
     undefined,
-    // A migrated or rehomed row can enter or leave a host's records with its flags unchanged.
-    singleWorkspaceUnmoved
+    // A migrated, rehomed or adopted row can change what this or another locator reads.
+    singleWorkspaceUnmoved && meta.instanceId === undefined
       ? withUnreadStateHint(linkWriteOptions, existing, updated)
       : linkWriteOptions
   )

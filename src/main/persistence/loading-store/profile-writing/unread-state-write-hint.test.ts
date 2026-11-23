@@ -40,6 +40,12 @@ it('marks only the record writes that keep every unread and archived flag', () =
   store.setWorktreeMeta(target, { isUnread: true, lastTerminalUseAt: 2 })
   store.setWorktreeMeta(target, { isArchived: true })
   store.setWorktreeMeta(target, { isUnread: false })
+  store.setWorktreeMeta(target, { isUnread: true, isArchived: false })
+  // Adopting the instance under a new locator also rewrites what the old locator reads.
+  const { instanceId } = store.getWorktreeMetaForHost(target.id, 'local')!
+  store.setWorktreeMeta(hostWorktreeTarget({ id: 'repo-1::/workspace/renamed', hostId: 'local' }), {
+    instanceId
+  })
   store.updateFolderWorkspace(folder.id, { lastActivityAt: 3 })
   store.updateFolderWorkspace(folder.id, { isUnread: true })
   store.updateFolderWorkspace(folder.id, { folderPath: join(testState.dir, 'moved') })
@@ -49,6 +55,8 @@ it('marks only the record writes that keep every unread and archived flag', () =
     true,
     undefined,
     true,
+    undefined,
+    undefined,
     undefined,
     undefined,
     true,
