@@ -14,7 +14,7 @@ const VIRTUAL_BRIDGE_INTERFACE_PATTERN =
 // dial its synthetic subnet. Like bridges, these stay manually selectable, never auto-advertised.
 // Tailscale is deliberately absent: its tailnet address must still win at rank 0.
 const TUNNEL_INTERFACE_PATTERN =
-  /^(?:tun|tap|utun|wintun|wireguard|singbox_tun|sing-tun|clash|mihomo|meta tunnel|openvpn)/i
+  /^(?:tun|tap|utun|wintun|wireguard|wg|singbox_tun|sing-tun|clash|mihomo|meta tunnel|openvpn|nordlynx|ppp|zt)/i
 const HYPER_V_INTERFACE_PATTERN = /^vEthernet /i
 const HOST_LOCAL_HYPER_V_INTERFACE_PATTERN =
   /^vEthernet \((?:Default Switch|WSL(?: \(Hyper-V firewall\))?)\)$/i

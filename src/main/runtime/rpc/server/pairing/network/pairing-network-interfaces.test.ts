@@ -51,6 +51,17 @@ describe('getPairingNetworkInterfaces', () => {
     await expect(getDefaultPairingAddress('0.0.0.0', noDefaultRoute)).resolves.toBeNull()
   })
 
+  it('advertises eth0 over a wg-quick tunnel that holds the default route', async () => {
+    networkInterfacesMock.mockReturnValue({
+      wg0: [ipv4('10.8.0.2')],
+      eth0: [ipv4('192.168.1.30')]
+    })
+
+    await expect(getDefaultPairingAddress('0.0.0.0', async () => new Set(['wg0']))).resolves.toBe(
+      '192.168.1.30'
+    )
+  })
+
   it('keeps the tailnet address and drops the tunnel adapter', async () => {
     networkInterfacesMock.mockReturnValue({
       Tailscale: [ipv4('100.101.102.103')],
