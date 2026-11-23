@@ -163,20 +163,22 @@ export function CheckRunDetails({
               <span className="min-w-0 flex-1 break-words text-xs text-destructive">
                 {state.error}
               </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                className="shrink-0"
-                disabled={state.loading}
-                aria-busy={state.loading}
-                onClick={onRetry}
-              >
-                <RefreshCw className={cn('size-3', state.loading && 'animate-spin')} />
-                {state.loading
-                  ? t('githubChecks.retrying', 'Retrying…')
-                  : t('auto.components.right.sidebar.checks.panel.content.dcb3c546fe', 'Retry')}
-              </Button>
+              {state.retryable === false ? null : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  className="shrink-0"
+                  disabled={state.loading}
+                  aria-busy={state.loading}
+                  onClick={onRetry}
+                >
+                  <RefreshCw className={cn('size-3', state.loading && 'animate-spin')} />
+                  {state.loading
+                    ? t('githubChecks.retrying', 'Retrying…')
+                    : t('auto.components.right.sidebar.checks.panel.content.dcb3c546fe', 'Retry')}
+                </Button>
+              )}
             </div>
           )}
 
