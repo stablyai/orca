@@ -70,6 +70,8 @@ describe('a directive to stop listening', () => {
     expect(isThreadMuteDirective(undefined, names)).toBe(false)
     // A bot named for a negation still never takes "Never mute this thread" as its own.
     expect(isThreadMuteDirective('Never mute this thread.', ['Never'])).toBe(false)
+    expect(isThreadMuteDirective('Do not mute this thread.', ['Do not'])).toBe(false)
+    expect(isThreadMuteDirective('Why stop listening here', ['Why'])).toBe(false)
     // Far longer than any directive: rejected before it is scanned.
     expect(isThreadMuteDirective(`a${' '.repeat(40_000)}b`, 'any')).toBe(false)
     expect(isThreadMuteDirective(`${'please '.repeat(40)}stop listening here`, 'any')).toBe(false)

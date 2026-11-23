@@ -25,9 +25,14 @@ const PLAIN = /^[\p{L} ,]+[.!]?$/u
 // scanned further, so a long reply costs nothing here.
 const MAX_DIRECTIVE_LENGTH = 200
 
-// A leading word that turns the phrase around is never taken as the bot's name ("Never mute this
-// thread", to a bot named Never).
-const NEGATIONS = new Set(['never', 'not', 'no', 'dont', 'nobody', 'nope'])
+// Words that negate, question or qualify what follows. A bot name with any of them ("Never", "Do
+// not", "Why") is never taken as the leading name, so "Do not mute this thread" stays a sentence.
+const QUALIFIERS = new Set(
+  (
+    'never not no nobody nope dont do does did why how what when where who whom whose which ' +
+    'should shall can could would will may might must if maybe perhaps is are was were please'
+  ).split(' ')
+)
 
 function words(text: string): string {
   return text.toLowerCase().replace(/ +/g, ' ').replace(/ ?, ?/g, ', ').trim()
@@ -67,7 +72,7 @@ export function isThreadMuteDirective(
     const named = words(name)
     return (
       named !== '' &&
-      !NEGATIONS.has(named) &&
+      !named.split(/[ ,]+/).some((word) => QUALIFIERS.has(word)) &&
       rest.startsWith(`${named} `) &&
       isPhrase(rest.slice(named.length + 1))
     )
