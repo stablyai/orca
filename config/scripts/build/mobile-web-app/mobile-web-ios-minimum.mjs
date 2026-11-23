@@ -71,6 +71,10 @@ export const IOS_FEATURE_SINCE = {
 
 // Statics whose receiver names them, so a call is unambiguous. Prototype methods (Set#union,
 // Array#at) are not: a minified receiver could be any object with a method of that name.
+// Known prototype use past iOS 16.4: react-native-gesture-handler 3's web GestureDetector calls
+// Set#union/intersection/difference (iOS 17) only when a detector's userSelect, touchAction or
+// enableContextMenu changes after mount. Every Orca detector passes constants; one that changes
+// them needs that path replaced first.
 const STATIC_CALLS = new Set(
   Object.keys(IOS_FEATURE_SINCE).filter((name) => /^[A-Z]\w*\.\w+$/.test(name))
 )
