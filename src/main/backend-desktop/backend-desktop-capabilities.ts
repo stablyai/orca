@@ -9,7 +9,7 @@ import {
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { agentTokenUsageSchema } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
+import { agentTokenUsageDailySchema } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import { claudeProfileTranscriptDirs } from '../claude-usage/transcript-file-discovery'
 import { readUsageWorktreeCatalog } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { isTelemetryEnabled, track } from '../telemetry/client'
@@ -60,8 +60,8 @@ export function createBackendDesktopCapabilities(
     if (method === 'usage.telemetry.enabled') {
       return isTelemetryEnabled()
     }
-    if (method === 'usage.telemetry.capture') {
-      return track('agent_token_usage', agentTokenUsageSchema.parse(params))
+    if (method === 'usage.telemetry.captureDaily') {
+      return track('agent_token_usage_daily', agentTokenUsageDailySchema.parse(params))
     }
     throw new Error('This desktop capability is not supported.')
   }

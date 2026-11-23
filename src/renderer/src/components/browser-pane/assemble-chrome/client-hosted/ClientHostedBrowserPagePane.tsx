@@ -36,7 +36,7 @@ import { useBrowserPageWebviewShortcuts } from '../../host-guest/input/use-brows
 import { useBrowserPageZoomFeedback } from '../../host-guest/viewport/use-browser-page-zoom-feedback'
 import { ClientHostedBrowserLoadFailure } from '../../navigate/client-hosted-browser-load-failure'
 import { useClientHostedPageUrlSubmission } from '../../navigate/use-client-hosted-page-url-submission'
-import { useClientPageWorkspaceFileDrop } from '../../navigate/browser-page-workspace-file-drop'
+import { useWorkspaceDocPageFileDrop } from '../../navigate/browser-page-workspace-file-drop'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { useBrowserPageReloadActions } from '../../navigate/use-browser-page-reload-actions'
 import { consumeBrowserPageDeferredNavigation } from '../../navigate/browser-page-deferred-navigation'
@@ -144,7 +144,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
   )
   const getAgentCursorHost = useCallback(() => webviewRef.current?.parentElement ?? null, [])
   useBrowserAgentCursor(browserTab.id, webviewRef, getAgentCursorHost)
-  const fileDrop = useClientPageWorkspaceFileDrop(browserTab.id, worktreeId, pageBox.contentRef)
+  const fileDrop = useWorkspaceDocPageFileDrop(browserTab.id, worktreeId, pageBox.contentRef)
 
   const annotate = useClientHostedBrowserAnnotate(
     props,

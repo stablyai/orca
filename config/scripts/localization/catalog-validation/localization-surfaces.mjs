@@ -13,6 +13,7 @@ export const LOCALIZATION_SURFACES = {
       // Shared copy the desktop draws (the phone draws it too).
       path.join('src', 'shared', 'bots', 'bot-item-note-lines.ts'),
       path.join('src', 'shared', 'bots', 'bot-first-look-words.ts'),
+      path.join('src', 'shared', 'bots', 'bot-failure-copy.ts'),
       path.join('src', 'shared', 'connectors', 'connector-message-asker-view.ts'),
       path.join('src', 'shared', 'bots', 'bot-item-status-name.ts'),
       path.join('src', 'shared', 'bots', 'bot-look-around-every-label.ts'),
@@ -48,6 +49,7 @@ export const LOCALIZATION_SURFACES = {
       path.join('src', 'shared', 'bots', 'bot-row-line.ts'),
       path.join('src', 'shared', 'bots', 'bot-item-note-lines.ts'),
       path.join('src', 'shared', 'bots', 'bot-first-look-words.ts'),
+      path.join('src', 'shared', 'bots', 'bot-failure-copy.ts'),
       path.join('src', 'shared', 'bots', 'bot-item-status-name.ts'),
       path.join('src', 'shared', 'bots', 'bot-look-around-every-label.ts'),
       path.join('src', 'shared', 'bots', 'bot-template-text.ts'),

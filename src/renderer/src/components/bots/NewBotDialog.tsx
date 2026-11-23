@@ -28,7 +28,7 @@ import { BotRunsOnPicker } from './BotRunsOnPicker'
 import { BotImportNudge } from './BotImportNudge'
 import { openCreatedBot } from './bot-create-open'
 import { NewBotPictureButton } from './NewBotPictureButton'
-import { useNewBotPicture } from './use-new-bot-picture'
+import { useNewBotHostLooks, useNewBotPicture } from './use-new-bot-picture'
 import { useBotAvatarIntakeState } from './use-bot-avatar-intake'
 import { useBotAgentMenu } from './use-bot-agent-choices'
 import { useBotCreateHost } from './bot-create-hosts'
@@ -38,10 +38,7 @@ import {
 } from '../../../../shared/execution-host/execution-host'
 import { useBotAgentSetup } from './use-bot-agent-setup'
 import { proposalCreateParams, type BotProposal } from '../../../../shared/bots/bot-proposal'
-import {
-  BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
-  BOTS_TEMPLATES_RUNTIME_CAPABILITY
-} from '../../../../shared/bot-runtime-capabilities'
+import { BOTS_TEMPLATES_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import { useBotHostHas } from '@/lib/bot-host-status'
 import { Button } from '@/components/ui/button'
 import { DEFAULT_BOT_AVATAR_COLOR } from '../../../../shared/bots/bot-avatar-color'
@@ -66,6 +63,7 @@ import { botShareErrorMessage } from './sharing/bot-share-error-copy'
 import {
   createNewBotFromShare,
   freeBotName,
+  sharedLook,
   sharedMascot,
   sharedPicturePng,
   type NewBotShareSource
@@ -148,9 +146,10 @@ export function NewBotDialog({
   const trimmedName = name.trim()
   const createdBot = useRef(false)
   const picture = useNewBotPicture(
-    useBotHostHas(hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY),
+    useNewBotHostLooks(hostId),
     fromShare ? sharedMascot(fromShare.review) : proposal?.mascot,
-    fromShare && sharedPicturePng(fromShare.review)
+    fromShare && sharedPicturePng(fromShare.review),
+    fromShare && sharedLook(fromShare.review)
   )
   // Pasted, dropped and uploaded pictures, from the dialog and the picture popover alike.
   const intake = useBotAvatarIntakeState({ onPicture: picture.placeUpload, undoable: false })
@@ -228,6 +227,7 @@ export function NewBotDialog({
           ...agentSetup.setup,
           avatar: picture.avatar,
           avatarColor: picture.avatarColor,
+          avatarOutfit: picture.avatarOutfit,
           ...(takingOver ? { takingOver } : {})
         })
         bot = await picture.saveUpload(bot)

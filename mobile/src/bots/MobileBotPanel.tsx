@@ -23,7 +23,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { MobileBotActivityTab } from './MobileBotActivityTab'
-import { MobileBotSettingsTab, type BotSettingsHome } from './MobileBotSettingsTab'
+import { MobileBotSettingsTab } from './MobileBotSettingsTab'
 import type { BotSettingsTarget } from './MobileBotSettingsRoot'
 import { SheetPageScrollContext } from '../components/nav-bar/sheet-page-scroll'
 import { MobileBotUpNext } from './MobileBotUpNext'
@@ -88,7 +88,7 @@ export function MobileBotPanel(props: {
   onOpenItemChat: (item: BotItem) => void
   /** Opens a file an item links; a path outside the bot's folder is refused with a toast. */
   onOpenFile: (path: string, showToast: (message: string) => void) => void
-  home: BotSettingsHome
+  home: Parameters<typeof MobileBotSettingsTab>[0]['home']
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()

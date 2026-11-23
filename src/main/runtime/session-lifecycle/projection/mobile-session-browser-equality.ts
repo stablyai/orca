@@ -21,6 +21,8 @@ export function headlessBrowserTabsUnchanged(
       tab.canGoBack === prev.canGoBack &&
       tab.canGoForward === prev.canGoForward &&
       (tab.faviconUrl ?? null) === (prev.faviconUrl ?? null) &&
+      tab.audible === prev.audible &&
+      tab.audioMuted === prev.audioMuted &&
       tab.browserProfileId === prev.browserProfileId &&
       tab.executionHostKey === prev.executionHostKey &&
       ((tab.placement === undefined && prev.placement === undefined) ||
