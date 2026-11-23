@@ -83,15 +83,15 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
 
   async abort(): Promise<void> {
     this.idleStop.cancel()
-    if (this.stopping) {
-      await this.stopping
-    }
-    // Set first so the aborted writer's indeterminate fault is not recovered by a reopen.
+    // Set before waiting so neither this abort's fault nor a retirement under way is recovered by a reopen.
     this.stoppedFailure ??= new ProfileStateWriterError(
       'profile-state-writer-aborted',
       'Profile state writer was aborted',
       'known-failure'
     )
+    if (this.stopping) {
+      await this.stopping
+    }
     if (this.writer) {
       return this.writer.abort()
     }
@@ -290,7 +290,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       writer,
       () => this.writer === writer && !this.stopping && !this.closing && !this.stoppedFailure,
       (revision) => {
-        if (this.writer !== writer || this.closing) {
+        if (this.writer !== writer || this.closing || this.stoppedFailure) {
           return false
         }
         this.writer = null
