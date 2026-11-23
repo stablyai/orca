@@ -1,27 +1,29 @@
-import { StringDecoder } from 'node:string_decoder'
-import exec from 'stream-chain/exec.js'
-import { none } from 'stream-chain/defs.js'
-import parser, { type Token } from 'stream-json/core/parser.js'
-import { ownRetainedString } from '../../../../shared/text/own-retained-string'
+import { OVERLONG_JSON_STRING, scanOversizedJsonObject } from './claude-oversized-json-object'
 
-const SCAN_BATCH_BYTES = 1024
-const MAX_NESTING_DEPTH = 64
-const MAX_REPORT_FIELD_CHARS = 256
+const HEADER_BYTES = 1024
+const MAX_FIELD_CHARS = 256
+const MAX_PENDING_REQUESTS = 32
 const MAX_KEY_CHARS = 'pending_permission_requests'.length
+
+const FRAME_TYPE = /^[ \t\r]*\{[ \t\r]*"type"[ \t\r]*:[ \t\r]*"([\w-]+)"/
+const SYSTEM_SUBTYPE = /^[ \t\r]*,[ \t\r]*"subtype"[ \t\r]*:[ \t\r]*"([\w-]+)"/
+const REQUEST_SUBTYPE =
+  /^[ \t\r]*,[ \t\r]*(?:"request_id"[ \t\r]*:[ \t\r]*"(?:[^"\\]|\\.)*"[ \t\r]*,[ \t\r]*)?"request"[ \t\r]*:[ \t\r]*\{[ \t\r]*"subtype"[ \t\r]*:[ \t\r]*"([\w-]+)"/
 
 type Fields = Record<string, Field>
 type Field = true | { object: Fields } | { items: Fields }
-type Projection =
-  | { fields: Fields; key: string; value: Record<string, unknown> }
+type Projection = { depth: number } & (
+  | { fields: Fields; key?: string; value: Record<string, unknown> }
   | { items: Fields; value: unknown[] }
+)
 
 const REQUEST_FIELDS: Fields = {
   type: true,
   request_id: true,
   request: { object: { subtype: true } }
 }
-const CONTROL_FIELDS: Fields = {
-  ...REQUEST_FIELDS,
+const RESPONSE_FIELDS: Fields = {
+  type: true,
   response: {
     object: {
       subtype: true,
@@ -38,150 +40,177 @@ const REPORT_FIELDS: Fields = {
   parent_tool_use_id: true,
   permissionMode: true
 }
+const UNKNOWN_FRAME_FIELDS: Fields = { ...REPORT_FIELDS, ...REQUEST_FIELDS, ...RESPONSE_FIELDS }
+const AMBIGUOUS = Symbol('repeated JSON key')
 
-/** Project only the given JSON paths, including fields read before a control prefix ends. */
-function scanFields(fields: Fields, scalarLimit: number, maxDepth: number) {
-  const decoder = new StringDecoder('utf8')
-  const parse = exec(parser({ packValues: false }))
-  const stack: (Projection | undefined)[] = []
-  let root: Record<string, unknown> | undefined
-  let valid = true
-  let scalar = ''
-  let limit = 0
-  let truncated = false
+type FrameKind = 'report' | 'request' | 'response' | 'unknown'
 
-  const selectedField = (parent: Projection | undefined): Field | undefined =>
-    parent && 'fields' in parent && Object.hasOwn(parent.fields, parent.key)
-      ? parent.fields[parent.key]
-      : undefined
-
-  const assign = (parent: Projection | undefined, value: unknown): void => {
-    if (parent && 'fields' in parent && selectedField(parent)) {
-      parent.value[parent.key] = value
-    } else if (parent && 'items' in parent && value !== null) {
-      parent.value.push(value)
+function permissionFrameKind(header: string): FrameKind | undefined {
+  const type = FRAME_TYPE.exec(header)
+  if (!type) {
+    return 'unknown'
+  }
+  switch (type[1]) {
+    case 'system': {
+      const subtype = SYSTEM_SUBTYPE.exec(header.slice(type[0].length))?.[1]
+      return subtype === undefined || subtype === 'init' || subtype === 'status'
+        ? 'report'
+        : undefined
     }
+    case 'control_request': {
+      const subtype = REQUEST_SUBTYPE.exec(header.slice(type[0].length))?.[1]
+      return subtype === undefined || subtype === 'can_use_tool' ? 'request' : undefined
+    }
+    case 'control_response':
+      return 'response'
+    default:
+      return undefined
+  }
+}
+
+function couldBeRootModeReport(frame: Record<string, unknown>, sessionId: string): boolean {
+  return (
+    (frame.type === 'system' || frame.type === AMBIGUOUS || frame.type === OVERLONG_JSON_STRING) &&
+    (frame.subtype === 'init' ||
+      frame.subtype === 'status' ||
+      frame.subtype === AMBIGUOUS ||
+      frame.subtype === OVERLONG_JSON_STRING) &&
+    (typeof frame.session_id !== 'string' || frame.session_id === sessionId) &&
+    typeof frame.parent_tool_use_id !== 'string' &&
+    frame.parent_tool_use_id !== OVERLONG_JSON_STRING &&
+    Object.hasOwn(frame, 'permissionMode')
+  )
+}
+
+/** A null result invalidates the running mode; undefined means the frame gave no evidence. */
+export function scanClaudeOversizedPermissionFrame(
+  chunk: Buffer,
+  start: number,
+  end: number,
+  authorizeFullAccess: boolean,
+  awaitingReply: boolean,
+  sessionId: string
+) {
+  // The CLI leads with type and subtype, so ordinary frames bypass the tokenizer.
+  const kind = permissionFrameKind(
+    chunk.toString('utf8', start, Math.min(end, start + HEADER_BYTES))
+  )
+  if (
+    kind === undefined ||
+    (kind === 'request' && !authorizeFullAccess) ||
+    (kind === 'response' && !authorizeFullAccess && !awaitingReply)
+  ) {
+    return undefined
+  }
+  const fields = {
+    report: REPORT_FIELDS,
+    request: REQUEST_FIELDS,
+    response: RESPONSE_FIELDS,
+    unknown: UNKNOWN_FRAME_FIELDS
+  }[kind]
+  const root: Record<string, unknown> = Object.create(null)
+  const projections: Projection[] = []
+  let readable = true
+
+  const parentAt = (depth: number): Projection | undefined => {
+    const parent = projections.at(-1)
+    return parent?.depth === depth - 1 ? parent : undefined
   }
 
-  const consume = (token: Token): void => {
-    const parent = stack.at(-1)
-    switch (token.name) {
-      case 'startObject':
-      case 'startArray': {
-        if (stack.length === maxDepth) {
-          throw new RangeError('Oversized Claude frame exceeds the scan depth')
-        }
-        const shape =
-          stack.length === 0
-            ? { object: fields }
-            : parent && 'items' in parent
-              ? { object: parent.items }
-              : selectedField(parent)
-        let next: Projection | undefined
-        if (shape && shape !== true) {
-          if (token.name === 'startObject' && 'object' in shape) {
-            next = { fields: shape.object, key: '', value: Object.create(null) }
-            if (stack.length === 0) {
-              root = next.value
-            }
-          } else if (token.name === 'startArray' && 'items' in shape) {
-            next = { items: shape.items, value: [] }
-          }
-        }
-        assign(parent, next?.value ?? null)
-        stack.push(next)
-        break
+  const fieldAt = (parent: Projection | undefined): Field | undefined =>
+    parent && 'fields' in parent && parent.key !== undefined ? parent.fields[parent.key] : undefined
+
+  const assign = (parent: Projection | undefined, value: unknown): boolean => {
+    if (!parent) {
+      return false
+    }
+    if ('items' in parent) {
+      if (parent.value.length === MAX_PENDING_REQUESTS) {
+        readable = false
+        return false
       }
-      case 'endObject':
-      case 'endArray':
-        stack.pop()
-        break
-      case 'startKey':
-      case 'startString':
-        scalar = ''
-        limit =
-          token.name === 'startKey'
-            ? parent && 'fields' in parent
-              ? MAX_KEY_CHARS
-              : 0
-            : selectedField(parent) === true
-              ? scalarLimit
-              : 0
-        truncated = false
-        break
-      case 'stringChunk':
-        if (limit && !truncated) {
-          truncated = scalar.length + token.value.length > limit
-          scalar = truncated ? '' : scalar + token.value
-        }
-        break
-      case 'endKey':
-        if (parent && 'fields' in parent) {
-          parent.key = scalar
-          if (selectedField(parent)) {
-            delete parent.value[scalar]
-          }
-        }
-        break
-      case 'endString':
-        if (parent && 'fields' in parent && selectedField(parent) === true) {
-          // Even a long parent string identifies a child. A long mode is an unknown mode.
-          parent.value[parent.key] =
-            truncated && parent.key === 'permissionMode' ? 'unknown' : ownRetainedString(scalar)
-        } else {
-          assign(parent, null)
-        }
-        break
-      case 'endNumber':
-      case 'trueValue':
-      case 'falseValue':
-      case 'nullValue':
-        assign(parent, null)
-        break
-      // Packed values and number text repeat the events above; whitespace carries nothing.
-      case 'keyValue':
-      case 'stringValue':
-      case 'startNumber':
-      case 'numberChunk':
-      case 'numberValue':
-      case 'whitespace':
-        break
+      parent.value.push(value)
+      return true
     }
+    if (parent.key === undefined) {
+      return false
+    }
+    parent.value[parent.key] = value
+    parent.key = undefined
+    return true
   }
 
-  const feed = (input: string | typeof none): void => {
-    try {
-      parse(input, consume)
-    } catch {
-      valid = false
-    }
-  }
-
-  return {
-    write(chunk: Buffer, start: number, end: number): void {
-      for (let offset = start; valid && offset < end; offset += SCAN_BATCH_BYTES) {
-        feed(decoder.write(chunk.subarray(offset, Math.min(end, offset + SCAN_BATCH_BYTES))))
+  const scan = scanOversizedJsonObject({
+    stringLimit(depth, key) {
+      const parent = parentAt(depth)
+      return key
+        ? parent && 'fields' in parent
+          ? MAX_KEY_CHARS
+          : 0
+        : fieldAt(parent) === true
+          ? MAX_FIELD_CHARS
+          : 0
+    },
+    key(depth, key) {
+      const parent = parentAt(depth)
+      if (
+        !parent ||
+        !('fields' in parent) ||
+        typeof key !== 'string' ||
+        !Object.hasOwn(parent.fields, key)
+      ) {
+        return
+      }
+      if (Object.hasOwn(parent.value, key)) {
+        parent.value[key] = AMBIGUOUS
+        readable = false
+      } else {
+        parent.key = key
       }
     },
-    prefix: () => (valid ? root : undefined),
-    finish(): Record<string, unknown> | undefined {
-      if (valid) {
-        feed(decoder.end())
-        if (valid) {
-          feed(none)
+    value(depth, value) {
+      if (value === OVERLONG_JSON_STRING) {
+        readable = false
+      }
+      assign(parentAt(depth), value)
+    },
+    open(depth, array) {
+      if (depth === 0) {
+        projections.push({ depth, fields, value: root })
+        return
+      }
+      const parent = parentAt(depth)
+      const shape = parent && 'items' in parent ? { object: parent.items } : fieldAt(parent)
+      let next: Projection | undefined
+      if (shape && shape !== true) {
+        if (!array && 'object' in shape) {
+          next = { depth, fields: shape.object, value: Object.create(null) }
+        } else if (array && 'items' in shape) {
+          next = { depth, items: shape.items, value: [] }
         }
       }
-      return valid && stack.length === 0 ? root : undefined
+      if (assign(parent, next?.value ?? null) && next) {
+        projections.push(next)
+      }
+    },
+    close(depth) {
+      if (projections.at(-1)?.depth === depth) {
+        projections.pop()
+      }
+    }
+  })
+
+  return {
+    write: scan.write,
+    finish(): Record<string, unknown> | null | undefined {
+      if (!scan.finish()) {
+        // A broken candidate report could hide attribution or a mode later in the frame.
+        return kind === 'report' || kind === 'unknown' ? null : undefined
+      }
+      if (!readable) {
+        return couldBeRootModeReport(root, sessionId) ? null : undefined
+      }
+      return root
     }
   }
-}
-
-export function readClaudePermissionControlPrefix(chunk: Buffer, bytes: number) {
-  const scan = scanFields(CONTROL_FIELDS, bytes, bytes)
-  scan.write(chunk, 0, bytes)
-  return scan.prefix()
-}
-
-export function scanClaudePermissionReport() {
-  return scanFields(REPORT_FIELDS, MAX_REPORT_FIELD_CHARS, MAX_NESTING_DEPTH)
 }

@@ -3,15 +3,11 @@ import {
   readClaudeFrameString,
   readClaudeReportedPermissionMode
 } from '../startup/claude-structured-init-proof'
-import {
-  readClaudePermissionControlPrefix,
-  scanClaudePermissionReport
-} from './claude-oversized-permission-frame'
+import { scanClaudeOversizedPermissionFrame } from './claude-oversized-permission-frame'
 import type { ClaudePermissionNoticeMode } from './claude-permission-notice-mode'
 
 const CLAUDE_STDOUT_PREFIX_BYTES = 64 * 1024
 const STDOUT_STRING_BATCH_CHARS = 16 * 1024
-const LEADING_FRAME_TYPE = /^[ \t\r]*\{[ \t\r]*"type"[ \t\r]*:[ \t\r]*"([\w-]+)"/
 
 export type ClaudeFullAccessPolicy = {
   /** Each raw stdout chunk, no later than the SDK reads it. */
@@ -45,7 +41,7 @@ export function createClaudeFullAccessPolicy(
   let prefix: Buffer | undefined
   let prefixBytes = 0
   let oversized = false
-  let reportScan: ReturnType<typeof scanClaudePermissionReport> | undefined
+  let oversizedScan: ReturnType<typeof scanClaudeOversizedPermissionFrame>
   let trailingHighSurrogate = ''
 
   const remember = (request: unknown): void => {
@@ -92,6 +88,19 @@ export function createClaudeFullAccessPolicy(
     }
   }
 
+  const observeFrame = (frame: Record<string, unknown>, readPending: boolean): void => {
+    if (frame.type === 'control_request') {
+      remember(frame)
+    } else if (frame.type === 'control_response') {
+      if (readPending) {
+        rememberPending(frame.response)
+      }
+      noticeMode?.reply(frame.response)
+    } else {
+      observeReport(frame)
+    }
+  }
+
   const observeLine = (line: string): void => {
     // Each relevant key appears literally in its frame; anything else skips the parse.
     const report = line.includes('"permissionMode"')
@@ -105,18 +114,8 @@ export function createClaudeFullAccessPolicy(
     } catch {
       return
     }
-    if (!isRecord(frame)) {
-      return
-    }
-    if (frame.type === 'control_request') {
-      remember(frame)
-    } else if (frame.type === 'control_response') {
-      if (report || tool) {
-        rememberPending(frame.response)
-      }
-      noticeMode?.reply(frame.response)
-    } else {
-      observeReport(frame)
+    if (isRecord(frame)) {
+      observeFrame(frame, report || tool)
     }
   }
 
@@ -124,7 +123,7 @@ export function createClaudeFullAccessPolicy(
     prefix = undefined
     prefixBytes = 0
     oversized = false
-    reportScan = undefined
+    oversizedScan = undefined
   }
 
   const appendPrefix = (chunk: Buffer, start: number, end: number): void => {
@@ -142,26 +141,19 @@ export function createClaudeFullAccessPolicy(
     prefixBytes = required
   }
 
-  const startOversizedLine = (): void => {
+  const startOversizedLine = (chunk: Buffer, start: number, end: number): void => {
     oversized = true
-    if (!prefix) {
-      return
-    }
-    const type = LEADING_FRAME_TYPE.exec(
-      prefix.toString('utf8', 0, Math.min(1024, prefixBytes))
-    )?.[1]
-    // The CLI leads with type. Scan through LF for reports since a child marker can follow the mode.
-    if (type === undefined || type === 'system') {
-      reportScan = scanClaudePermissionReport()
-      reportScan.write(prefix, 0, prefixBytes)
-    }
-    if (
-      (type !== undefined && type !== 'control_request' && type !== 'control_response') ||
-      (!authorizeFullAccess && (type === 'control_request' || !noticeMode?.awaitingReply()))
-    ) {
-      prefix = undefined
-      prefixBytes = 0
-    }
+    oversizedScan = scanClaudeOversizedPermissionFrame(
+      chunk,
+      start,
+      end,
+      authorizeFullAccess,
+      noticeMode?.awaitingReply() ?? false,
+      providerSessionId
+    )
+    oversizedScan?.write(chunk, start, end)
+    prefix = undefined
+    prefixBytes = 0
   }
 
   const finishLine = (): void => {
@@ -171,16 +163,15 @@ export function createClaudeFullAccessPolicy(
       observeLine(line)
       return
     }
-    const report = reportScan?.finish()
-    const control = prefix && readClaudePermissionControlPrefix(prefix, prefixBytes)
+    const frame = oversizedScan?.finish()
     clearLine()
-    if (report?.type === 'system') {
-      observeReport(report)
-    } else if (control?.type === 'control_request') {
-      remember(control)
-    } else if (control?.type === 'control_response') {
-      rememberPending(control.response)
-      noticeMode?.reply(control.response)
+    if (frame === null) {
+      if (authorizeFullAccess) {
+        mode = null
+      }
+      noticeMode?.reportUnknown()
+    } else if (frame) {
+      observeFrame(frame, true)
     }
   }
 
@@ -197,17 +188,20 @@ export function createClaudeFullAccessPolicy(
       ) {
         observeLine(chunk.toString('utf8', start, end))
       } else {
-        if (!oversized) {
+        if (!oversized && prefixBytes === 0 && end - start > CLAUDE_STDOUT_PREFIX_BYTES) {
+          startOversizedLine(chunk, start, end)
+          start = end
+        } else if (!oversized) {
           const prefixEnd = Math.min(end, start + CLAUDE_STDOUT_PREFIX_BYTES - prefixBytes)
           if (prefixEnd > start) {
             appendPrefix(chunk, start, prefixEnd)
             start = prefixEnd
           }
-          if (start < end) {
-            startOversizedLine()
+          if (start < end && prefix) {
+            startOversizedLine(prefix, 0, prefixBytes)
           }
         }
-        reportScan?.write(chunk, start, end)
+        oversizedScan?.write(chunk, start, end)
         if (newline !== -1) {
           finishLine()
         }

@@ -18,7 +18,7 @@ export function createClaudePermissionNoticeMode(onChange: () => void) {
   let writtenThrough = 0
   let provenThrough = 0
   let evictedThrough = 0
-  let provenMode: string | undefined
+  let provenMode: string | null | undefined
   let runningMode: string | undefined
   let unconfirmed = false
 
@@ -35,8 +35,8 @@ export function createClaudePermissionNoticeMode(onChange: () => void) {
   }
 
   const updateRunning = (): boolean => {
-    const uncertain = unresolvedWrite()
-    const running = uncertain ? undefined : provenMode
+    const uncertain = provenMode === null || unresolvedWrite()
+    const running = uncertain ? undefined : (provenMode ?? undefined)
     if (running === runningMode && uncertain === unconfirmed) {
       return false
     }
@@ -107,6 +107,12 @@ export function createClaudePermissionNoticeMode(onChange: () => void) {
     report: (mode: string): void => {
       if (!closed) {
         prove(mode, writtenThrough)
+      }
+    },
+    reportUnknown: (): void => {
+      if (!closed) {
+        provenMode = null
+        updateRunning()
       }
     },
     reply: (response: unknown): void => {

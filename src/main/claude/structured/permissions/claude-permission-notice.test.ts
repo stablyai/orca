@@ -18,6 +18,7 @@ import {
   seedClaudePermissionNotice,
   type ClaudePermissionNoticeSession
 } from './claude-full-access-refusal-notice'
+import { scanClaudeOversizedPermissionFrame } from './claude-oversized-permission-frame'
 import {
   createClaudePermissionNoticeMode,
   type ClaudePermissionNoticeIntent
@@ -359,7 +360,7 @@ it('keeps permission evidence in wire order across oversized stdout frames', () 
   })
   feed(`${redelivery}\n`)
   expect(policy.allows('redelivered')).toBe(true)
-  expect(policy.allows('past-prefix')).toBe(false)
+  expect(policy.allows('past-prefix')).toBe(true)
 
   const { permissionMode, ...header } = report('default', 'init')
   const init = JSON.stringify({
@@ -380,6 +381,182 @@ it('keeps permission evidence in wire order across oversized stdout frames', () 
   expect(noticeMode.running()).toBe('default')
   expect(policy.retained()).toEqual({ partialChars: 0, partialBytes: 0, requests: 0 })
   policy.close()
+})
+
+it('rejects duplicate request IDs anywhere in an oversized frame', () => {
+  const policy = createClaudeFullAccessPolicy(PROVIDER_SESSION)
+  const pad = 'x'.repeat(70_000)
+  policy.observe(wireLine(report('bypassPermissions')))
+  policy.observe(
+    `{"type":"control_request","request_id":"victim","request":{"subtype":"can_use_tool","input":"${pad}"},"request_id":"other"}\n`
+  )
+  policy.observe(
+    `{"type":"control_request","request_id":"bad-tail","request":{"subtype":"can_use_tool","input":"${pad}"},}\n`
+  )
+  expect(policy.retained().requests).toBe(0)
+  policy.observe(wireLine(report('default')) + wireLine(toolRequest('victim')))
+  expect(policy.allows('victim')).toBe(false)
+  expect(policy.allows('other')).toBe(false)
+  expect(policy.allows('bad-tail')).toBe(false)
+})
+
+it('reads oversized status reports with deeply nested unrelated data', () => {
+  const noticeMode = createClaudePermissionNoticeMode(() => {})
+  const policy = createClaudeFullAccessPolicy('s', true, noticeMode)
+  policy.observe(`${JSON.stringify({ ...report('bypassPermissions'), session_id: 's' })}\n`)
+  policy.observe(
+    `${JSON.stringify({
+      type: 'system',
+      subtype: 'status',
+      session_id: 's',
+      permissionMode: 'default',
+      pad: 'x'.repeat(70_000),
+      deep: JSON.parse(`${'['.repeat(65)}0${']'.repeat(65)}`)
+    })}\n${wireLine(toolRequest('after-status'))}`
+  )
+  expect(policy.mode()).toBe('ask')
+  expect(noticeMode.running()).toBe('default')
+  expect(policy.allows('after-status')).toBe(false)
+})
+
+it.each([
+  ['truncated nesting', ',"deep":[{"value":0]}}'],
+  ['trailing characters', '}junk'],
+  ['duplicate mode', ',"permissionMode":"bypassPermissions"}'],
+  ['duplicate session', ',"session_id":"other"}'],
+  ['overlong string', '}', 'm'.repeat(257)],
+  ['excessive nesting', `,"deep":${'['.repeat(4096)}0${']'.repeat(4096)}}`]
+])(
+  'suspends Full access after an unreadable oversized mode report with %s',
+  (_, suffix, mode = 'auto') => {
+    const noticeMode = createClaudePermissionNoticeMode(() => {})
+    const policy = createClaudeFullAccessPolicy(PROVIDER_SESSION, true, noticeMode)
+    const pad = 'x'.repeat(70_000)
+    policy.observe(`${wireLine(report('bypassPermissions'))}${wireLine(toolRequest('before'))}`)
+    policy.observe(
+      `${JSON.stringify({ ...report(mode), pad }).slice(0, -1)}${suffix}\n${wireLine(toolRequest('after'))}`
+    )
+    expect(policy.mode()).toBeNull()
+    expect(noticeMode.running()).toBeUndefined()
+    expect(noticeMode.unconfirmed()).toBe(true)
+    expect(noticeMode.hasRun('auto')).toBe(false)
+    expect(policy.allows('before')).toBe(true)
+    expect(policy.allows('after')).toBe(false)
+    policy.observe(`${wireLine(report('bypassPermissions'))}${wireLine(toolRequest('recovered'))}`)
+    expect(noticeMode.running()).toBe('bypassPermissions')
+    expect(policy.allows('recovered')).toBe(true)
+  }
+)
+
+it('keeps the wire positions of requests after oversized input', () => {
+  const policy = createClaudeFullAccessPolicy(PROVIDER_SESSION)
+  const input = { content: 'x'.repeat(70_000) }
+  policy.observe(wireLine(report('bypassPermissions')))
+  const initialize = JSON.stringify({
+    type: 'control_response',
+    response: {
+      subtype: 'success',
+      request_id: 'initialize',
+      response: {},
+      pending_permission_requests: [
+        {
+          type: 'control_request',
+          request_id: 'first',
+          request: { subtype: 'can_use_tool', input }
+        },
+        toolRequest('second')
+      ]
+    }
+  })
+  const lateId = JSON.stringify({
+    type: 'control_request',
+    request: { subtype: 'can_use_tool', input },
+    request_id: 'late-id'
+  })
+  policy.observe(`${initialize}\n${lateId}\n${wireLine(report('default'))}`)
+  policy.observe(wireLine(toolRequest('second')) + wireLine(toolRequest('after')))
+  expect(policy.allows('first')).toBe(true)
+  expect(policy.allows('second')).toBe(true)
+  expect(policy.allows('late-id')).toBe(true)
+  expect(policy.allows('after')).toBe(false)
+})
+
+it('skips tokenizing oversized SessionStart hook progress', () => {
+  const wire = Buffer.from(
+    `${JSON.stringify({
+      type: 'system',
+      subtype: 'hook_progress',
+      hook_id: 'h',
+      hook_name: 'SessionStart:startup',
+      hook_event: 'SessionStart',
+      stdout: 'x'.repeat(100_000),
+      stderr: '',
+      output: 'x'.repeat(100_000),
+      session_id: 's'
+    })}\n`
+  )
+  expect(
+    scanClaudeOversizedPermissionFrame(wire, 0, wire.length - 1, true, true, 's')
+  ).toBeUndefined()
+  const policy = createClaudeFullAccessPolicy('s')
+  policy.observe(wire)
+  expect(policy.mode()).toBeUndefined()
+  expect(policy.retained()).toEqual({ partialChars: 0, partialBytes: 0, requests: 0 })
+})
+
+it('reads initialize mode and inherited requests after an oversized command catalog', () => {
+  const noticeMode = createClaudePermissionNoticeMode(() => {})
+  const policy = createClaudeFullAccessPolicy('s', true, noticeMode)
+  noticeMode.write(
+    wireLine({ type: 'control_request', request_id: 'init', request: { subtype: 'initialize' } })
+  )
+  const commands = Array.from({ length: 400 }, (_, i) => ({
+    name: `skill-${i}`,
+    description: 'd'.repeat(200)
+  }))
+  policy.observe(
+    `${JSON.stringify({
+      type: 'control_response',
+      response: {
+        subtype: 'success',
+        request_id: 'init',
+        response: { commands, current_permission_mode: 'bypassPermissions' },
+        pending_permission_requests: [
+          {
+            type: 'control_request',
+            request_id: 'inherited',
+            request: {
+              subtype: 'can_use_tool',
+              tool_name: 'Bash',
+              input: { command: 'git status' }
+            }
+          }
+        ]
+      }
+    })}\n`
+  )
+  expect(noticeMode.running()).toBe('bypassPermissions')
+  expect(policy.allows('inherited')).toBe(true)
+})
+
+it('rejects all permission evidence when oversized initialize redelivery exceeds the request cap', () => {
+  const noticeMode = createClaudePermissionNoticeMode(() => {})
+  const policy = createClaudeFullAccessPolicy(PROVIDER_SESSION, true, noticeMode)
+  noticeMode.write(
+    wireLine({ type: 'control_request', request_id: 'init', request: { subtype: 'initialize' } })
+  )
+  const oversized = {
+    type: 'control_response',
+    response: {
+      ...reply('init', { current_permission_mode: 'bypassPermissions' }).response,
+      pending_permission_requests: Array.from({ length: 33 }, (_, i) => toolRequest(`pending-${i}`))
+    },
+    pad: 'x'.repeat(70_000)
+  }
+  policy.observe(`${JSON.stringify(oversized)}\n`)
+  expect(noticeMode.running()).toBeUndefined()
+  expect(policy.retained().requests).toBe(0)
+  expect(policy.allows('pending-0')).toBe(false)
 })
 
 it('waits for the retried history read through a completed resumed turn and skips retired delivery', async () => {
