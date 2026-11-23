@@ -1,4 +1,5 @@
 import type { AppState } from '../../../types'
+import { structuredTabsShowingConversation } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusChange } from '../contracts/agent-status-contract'
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
@@ -119,11 +120,10 @@ export function stageProjectionTopology(
       }
     }
     // A closed tab's conversation that another open tab, in any workspace, still shows stays represented.
-    if (removedKeys.size > 0) {
-      for (const tab of Object.values(state.unifiedTabsByWorktree).flat()) {
-        if (isStructuredTab(tab) && removedKeys.delete(chatPaneKey(tab.entityId))) {
-          represented.set(chatPaneKey(tab.entityId), tab)
-        }
+    for (const key of removedKeys) {
+      const [survivor] = structuredTabsShowingConversation(state.unifiedTabsByWorktree, key)
+      if (survivor) {
+        represented.set(key, survivor)
       }
     }
   }

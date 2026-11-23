@@ -1,7 +1,11 @@
 import { editorTabRetirement } from '../editor/tabs/editor-tab-retirement'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '../../types'
-import { chatPaneAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import {
+  chatPaneAddressTabId,
+  chatPaneKey
+} from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { structuredTabsShowingConversation } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import {
   landsOnEmptiedWorktree,
   emptiedWorktreeLandingPatch,
@@ -47,15 +51,13 @@ function closedChatPaneTabIds(
   state: Pick<AppState, 'unifiedTabsByWorktree'>,
   closed: Pick<Tab, 'id' | 'entityId'>
 ): string[] {
-  for (const tabs of Object.values(state.unifiedTabsByWorktree)) {
-    for (const tab of tabs) {
-      if (
-        tab.id !== closed.id &&
-        tab.contentType === 'agent-session' &&
-        tab.entityId === closed.entityId
-      ) {
-        return []
-      }
+  const showing = structuredTabsShowingConversation(
+    state.unifiedTabsByWorktree,
+    chatPaneKey(closed.entityId)
+  )
+  for (const tab of showing) {
+    if (tab.id !== closed.id) {
+      return []
     }
   }
   return [chatPaneAddressTabId(closed.entityId)]

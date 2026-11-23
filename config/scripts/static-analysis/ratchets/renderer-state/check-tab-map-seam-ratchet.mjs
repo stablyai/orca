@@ -27,14 +27,12 @@ export const CONSUMERS = new Map([
   [
     `${STATUS}StructuredAgentSessionStatusBridge.tsx`,
     {
-      // survivorsFromSnapshot runs only when a closed tab's conversation would otherwise retire.
-      coldPaths: new Set(['reconcileFromSnapshot', 'survivorsFromSnapshot']),
+      coldPaths: new Set(['reconcileFromSnapshot']),
       helpers: {
         getStructuredAgentSessionTabs: ['reconcileFromSnapshot'],
         // A bot's tabless sessions plus every tab: the same whole-map walk.
-        withBotSessions: ['reconcileFromSnapshot', 'survivorsFromSnapshot'],
-        reconcileFromSnapshot: ['reconcile'],
-        survivorsFromSnapshot: ['reconcile']
+        withBotSessions: ['reconcileFromSnapshot'],
+        reconcileFromSnapshot: ['reconcile']
       },
       imports: new Set([
         'useEffect',
@@ -48,6 +46,8 @@ export const CONSUMERS = new Map([
         'structuredAgentSessionStatusFeedKey',
         'getStructuredAgentSessionTabs',
         'getStructuredAgentSessionTabsInWorkspace',
+        // An index lookup per closed conversation, never a tab-map walk.
+        'structuredTabsShowingConversation',
         'readTabMapChanges',
         'createTabOwnerCache',
         'ownerInputChanged',

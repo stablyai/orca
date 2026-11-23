@@ -196,12 +196,12 @@ export function createStructuredSessionMembership() {
     return member
   }
   /** Places listed tabs that changed and returns members no longer listed: all of them, or within
-   *  `tabIds`, where `allTabs` names every open tab another workspace may show a closed tab's chat in. */
+   *  `tabIds`, where `showing` names the open tabs, in any workspace, still showing a conversation. */
   const reconcileTabs = (
     listedTabs: Iterable<StructuredTab>,
     tabIds: ReadonlySet<string> | null,
     placeTab: (tab: StructuredTab, paneKey: string) => void,
-    allTabs?: () => Iterable<StructuredTab>
+    showing?: (paneKey: string) => Iterable<StructuredTab>
   ): Member[] => {
     const listed = new Set<string>()
     const tabs = [...listedTabs]
@@ -226,12 +226,14 @@ export function createStructuredSessionMembership() {
       candidates.filter((member) => !listed.has(member.paneKey)).map((m) => m.paneKey)
     )
     // A closed tab's conversation that another open tab still shows moves there instead of retiring.
-    if (tabIds && orphaned.size > 0) {
-      for (const tab of allTabs?.() ?? tabs) {
-        const paneKey = tabIds.has(tab.id) ? null : chatPaneKey(tab.entityId)
-        if (paneKey && orphaned.delete(paneKey)) {
-          listed.add(paneKey)
-          placeTab(tab, paneKey)
+    if (tabIds && showing) {
+      for (const paneKey of orphaned) {
+        for (const tab of showing(paneKey)) {
+          if (!tabIds.has(tab.id)) {
+            listed.add(paneKey)
+            placeTab(tab, paneKey)
+            break
+          }
         }
       }
     }
