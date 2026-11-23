@@ -95,7 +95,7 @@ export function useNativeChatPacedText(
     text: drawsWhole ? initial.source : text
   }))
   const saved = useRef(firstSave)
-  const [savedText, setSavedText] = useState(firstSave.text)
+  const [savedState, setSavedState] = useState(firstSave)
   const revealMs = reducedMotion && !drawsWhole ? PLAIN_REVEAL_MS : undefined
   const pace = useRef(initial)
   // Text already there when the reply mounts never fades.
@@ -149,7 +149,9 @@ export function useNativeChatPacedText(
     if (!streaming || (caughtUp && !drawsWhole) || saved.current.revision !== savedRevision) {
       saved.current = { revision: savedRevision, text }
       if (drawsWhole) {
-        setSavedText(saved.current.text)
+        setSavedState((held) =>
+          held.revision === savedRevision && held.text === text ? held : saved.current
+        )
       }
     }
     const source = drawsWhole ? saved.current.text : text
@@ -183,7 +185,10 @@ export function useNativeChatPacedText(
     savedRevision
   ])
 
-  const source = drawsWhole ? savedText : text
+  // A save, or the turn's end, is the reveal's source in the render that brings it, as main's
+  // text is; a render later, the reveal would stop and start again around the turn's end.
+  const savedSource = savedRevision !== savedState.revision || !streaming ? text : savedState.text
+  const source = drawsWhole ? savedSource : text
   const behind = shown < source.length
   // The length on screen; a tick that holds a partial word renders nothing, so it is not timed.
   const onScreen = useRef(initial.shown)
@@ -228,7 +233,7 @@ export function useNativeChatPacedText(
           const source =
             save.length > onScreenText.length && save.startsWith(onScreenText) ? save : onScreenText
           saved.current = { revision: savedRevision, text: source }
-          setSavedText(source)
+          setSavedState(saved.current)
           pace.current = {
             source,
             shown: next.shown,

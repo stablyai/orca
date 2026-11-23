@@ -268,3 +268,46 @@ it("paints a slow final save in main's frames after falling back to its saves", 
     vi.useRealTimers()
   }
 })
+
+// Perf contract: a fallen-back reply whose final save lands with its turn's end keeps revealing in
+// every render; dropping out for one render would redraw the whole reply twice around the end.
+it("keeps revealing through the render that brings a fallen-back reply's final save", () => {
+  vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+  try {
+    const { reveals } = createNativeChatReplyRevealTracker()
+    const before = 'one two three'
+    reveals.drawn.set('reply', {
+      source: before,
+      shown: before.length,
+      arrivals: [],
+      drawsWhole: true,
+      savedAt: 45
+    })
+    const root = { current: null }
+    const renders: { text: string; revealing: boolean }[] = []
+    const { rerender } = renderHook(
+      ({ text, revision, streaming }) => {
+        const paced = useNativeChatPacedText('reply', text, streaming, root, revision)
+        renders.push({ text, revealing: paced.revealing })
+        return paced
+      },
+      {
+        initialProps: { text: before, revision: 45, streaming: true },
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <NativeChatReplyRevealsContext.Provider value={reveals}>
+            <NativeChatSaveFallbackContext.Provider value>
+              {children}
+            </NativeChatSaveFallbackContext.Provider>
+          </NativeChatReplyRevealsContext.Provider>
+        )
+      }
+    )
+    const final = `${before} four five six seven eight`
+    rerender({ text: final, revision: 47, streaming: false })
+    expect(renders.filter((render) => render.text === final).map((r) => r.revealing)).not.toContain(
+      false
+    )
+  } finally {
+    vi.useRealTimers()
+  }
+})
