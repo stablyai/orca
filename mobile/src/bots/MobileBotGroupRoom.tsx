@@ -161,8 +161,6 @@ export function MobileBotGroupRoom({
       setError(botFailureMessage(error) ?? String(error))
     }
   }
-  // The host takes a post to bots on other computers only from its own window, as the desktop says.
-  const postsOnComputer = (group?.remoteMembers?.length ?? 0) > 0
   const working =
     group?.members.some((member) => sessions.get(member.sessionId)?.isWorking) ?? false
   const startThread = async () => {
@@ -265,16 +263,6 @@ export function MobileBotGroupRoom({
         hostOutage={outage}
       />
       <MobileNativeChatSendErrorBanner message={error} onDismiss={() => setError(null)} />
-      {/* Above the composer, not its placeholder: a saved draft would hide that. */}
-      {postsOnComputer ? (
-        <Text style={styles.notice}>
-          {t(
-            'bots.groups.remotePostOnComputer',
-            'To post in a group with bots on other computers, use {{host}}.',
-            { host: hostName }
-          )}
-        </Text>
-      ) : null}
       <MobileNativeChatComposer
         value={draft}
         onChangeText={setDraft}
@@ -284,7 +272,7 @@ export function MobileBotGroupRoom({
         getComposerEditGeneration={composerDraft.getEditGeneration}
         agent={readers.find((turn) => turn.sessionId === selectedMember?.sessionId)?.agent}
         placeholder={t('bots.groups.composerPlaceholder', 'Message the group, @ to mention a bot')}
-        disabled={!connected || postsOnComputer}
+        disabled={!connected}
         onAttachImage={attachPhotos}
         attachments={[...photos.images]}
         onRemoveAttachment={photos.remove}
