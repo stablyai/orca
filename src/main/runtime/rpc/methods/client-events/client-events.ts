@@ -32,6 +32,10 @@ export const CLIENT_EVENT_METHODS = [
         // Mobile discards terminalSideEffects; filter per-OSC batch frames before they cross the relay.
         const unsubscribe = runtime.onClientEvent(
           (event) => {
+            // Only a desktop keeps an agent CLI update list; a phone would search its query cache for nothing.
+            if (event.type === 'agentCliUpdateFinished' && clientKind === 'mobile') {
+              return
+            }
             emit(event)
           },
           { consumesTerminalSideEffects: clientKind !== 'mobile' }

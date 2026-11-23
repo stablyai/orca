@@ -49,6 +49,7 @@ export type ConversationChat = StructuredAgentTurnHost &
     | 'journalReads'
     | 'currentWork'
     | 'publishedWork'
+    | 'conversation'
   > & {
     deps: { store: { getConversation(sessionId: string): { currentFence: number } | null } }
   }

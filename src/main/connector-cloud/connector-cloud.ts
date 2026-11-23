@@ -140,6 +140,7 @@ export class ConnectorCloud {
     threadReplies: boolean
     githubEvents2: boolean
     githubWorkflows: boolean
+    githubCiFinished: boolean
     connectorStatus: ConnectorCloudStatus
     connectorMessage?: string
     connectorNeedsSignIn?: true
@@ -153,6 +154,9 @@ export class ConnectorCloud {
       // Whether it sends github.workflow_finished, so trigger-options offers it only where it does.
       githubWorkflows:
         this.cloudFeatures()?.has('triggers.workflows' satisfies ConnectorCloudFeature) === true,
+      // Whether it sends github.ci_finished, so trigger-options and watch-pr use it only where it does.
+      githubCiFinished:
+        this.cloudFeatures()?.has('triggers.ci_finished' satisfies ConnectorCloudFeature) === true,
       connectorStatus,
       ...((connectorStatus === 'refused' || connectorStatus === 'needs-sign-in') &&
       this.reach.refusal

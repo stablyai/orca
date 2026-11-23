@@ -31,6 +31,8 @@ export type EndedTurnReplies = {
   links: ConnectorWorkLink[]
   /** How long the turn ran; absent when its start predates this watch. */
   tookMs?: number
+  /** The turn's turn-started `at` as its conversation knows it; absent after a restart. */
+  turnStartedAt?: number
 }
 
 /** What a fill did: the conversations its rows cover, and whether a usage-limit pause cut them
@@ -199,7 +201,8 @@ export function conversationReplyFill(
         ...(prose ? { prose: capAnswer(prose, JOURNAL_CONNECTOR_REPLY_PROSE_BYTES) } : {}),
         ...(outcome === 'failed' && turn.failure ? { failure: turn.failure } : {}),
         ...(turn.links.length > 0 ? { links: turn.links } : {}),
-        ...(outcome === 'answered' && turn.tookMs !== undefined ? { tookMs: turn.tookMs } : {})
+        ...(outcome === 'answered' && turn.tookMs !== undefined ? { tookMs: turn.tookMs } : {}),
+        ...(turn.turnStartedAt === undefined ? {} : { turnStartedAt: turn.turnStartedAt })
       })
     }
     if (await store.fillOutcomes(fills)) {

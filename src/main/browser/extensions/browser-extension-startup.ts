@@ -15,6 +15,7 @@ import { detachBrowserExtensionsFromAllProfileSessions } from './profile-session
 import { forgetAllBrowserExtensionSessions } from './profile-sessions/browser-extension-idle-resume'
 import { notifyBrowserExtensionActionsChanged } from './actions/browser-extension-action-registry'
 import { registerBrowserExtensionNamespaces } from './register-browser-extension-namespaces'
+import { setBrowserExtensionProfilePresence } from './profile-sessions/browser-extension-profile-presence'
 import { observeBrowserExtensionTabLifecycle } from './tabs-and-windows/browser-extension-tab-lifecycle'
 import { observeBrowserExtensionWebNavigation } from './api/web-navigation'
 import { observeBrowserExtensionCommands } from './api/commands'
@@ -105,6 +106,9 @@ function installBrowserExtensionSupport(): void {
   initialized = true
   setSavedBrowserTabsSource(savedBrowserTabs, (profileId) =>
     browserSessionRegistry.resolveKnownPartition(profileId)
+  )
+  setBrowserExtensionProfilePresence(
+    (profileId) => browserSessionRegistry.getProfile(profileId) !== null
   )
   registerBrowserExtensionNamespaces()
   installBrowserExtensionApiHost()

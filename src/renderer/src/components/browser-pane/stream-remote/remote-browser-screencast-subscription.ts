@@ -6,6 +6,7 @@ import type {
 } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-feature-interaction-source'
 import { e2eConfig } from '@/app-shell/startup/e2e-config'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { isRemoteBrowserPageMissingCode } from './remote-browser-stream-errors'
 import type { RemoteBrowserDialogPage } from './remote-browser-javascript-dialog'
 import type { RemoteBrowserViewportSize } from './remote-browser-stream-tokens'
@@ -95,7 +96,9 @@ export async function openRemoteBrowserScreencastStream(
         everyNthFrame: 1,
         minFrameIntervalMs: 33,
         pointerEvents: 1,
-        pagePrompts: 1
+        pagePrompts: 1,
+        // A web client's picked files have no paths to stage on the host.
+        ...(isWebClientLocation() ? {} : { fileChoosers: 1 })
       }),
       timeoutMs: 15_000
     },
@@ -161,6 +164,8 @@ function dispatchScreencastResponse(
     events.pagePrompts.show(event.request, dialogPage)
   } else if (event.type === 'pagePromptClosed') {
     events.pagePrompts.close(event.requestId)
+  } else if (event.type === 'fileChooser') {
+    events.pagePrompts.chooseFiles(event.request, dialogPage)
   } else if (event.type === 'error') {
     events.onFailed(event.message)
   }

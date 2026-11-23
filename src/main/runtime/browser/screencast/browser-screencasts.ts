@@ -38,7 +38,7 @@ import type {
 import { BrowserScreencastGuestReplacements } from './browser-screencast-guest-replacement'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import { watchGuestPointer } from '../../../browser/guest-lifecycle/input/browser-guest-pointer-watch'
-import { askScreencastViewerPagePrompts } from './browser-screencast-page-prompts'
+import { askScreencastViewerPrompts } from './browser-screencast-page-prompts'
 
 export class RuntimeBrowserScreencasts {
   private readonly activeScreencastsByPageId = new Map<string, ActiveBrowserScreencastPage>()
@@ -254,11 +254,7 @@ export class RuntimeBrowserScreencasts {
       startPagePrompts: () => {
         const subscriber = active.subscribers.get(subscriptionId)
         if (subscriber) {
-          subscriber.releasePagePrompts = askScreencastViewerPagePrompts(
-            guest.id,
-            params.pagePrompts,
-            stream
-          )
+          subscriber.releasePagePrompts = askScreencastViewerPrompts(guest.id, params, stream)
         }
       },
       session: {

@@ -66,6 +66,7 @@ export class RuntimeBrowserCommands {
   readonly browserMouseClick: RuntimeBrowserPointerInput['browserMouseClick']
   readonly browserMouseUp: RuntimeBrowserPointerInput['browserMouseUp']
   readonly browserMouseWheel: RuntimeBrowserPointerInput['browserMouseWheel']
+  readonly browserDropFiles: RuntimeBrowserPointerInput['browserDropFiles']
   readonly browserScreenshot: RuntimeBrowserCapture['browserScreenshot']
   readonly browserPdf: RuntimeBrowserCapture['browserPdf']
   readonly browserFullScreenshot: RuntimeBrowserCapture['browserFullScreenshot']
@@ -112,6 +113,7 @@ export class RuntimeBrowserCommands {
   readonly browserProfileList: RuntimeBrowserProfiles['browserProfileList']
   readonly browserProfileCreate: RuntimeBrowserProfiles['browserProfileCreate']
   readonly browserProfileDelete: RuntimeBrowserProfiles['browserProfileDelete']
+  readonly browserCloseServerPagesOfMissingProfiles: RuntimeBrowserProfiles['browserCloseServerPagesOfMissingProfiles']
   readonly browserScreencast: RuntimeBrowserScreencasts['browserScreencast']
   readonly browserDialogAccept: RuntimeBrowserDialogs['browserDialogAccept']
   readonly browserDialogDismiss: RuntimeBrowserDialogs['browserDialogDismiss']
@@ -146,7 +148,8 @@ export class RuntimeBrowserCommands {
       targets,
       catalog,
       creation,
-      screencasts.guestSwaps
+      screencasts.guestSwaps,
+      close
     )
     const dialogs = new RuntimeBrowserDialogs(targets)
     const grab = new RuntimeBrowserGrab(targets, catalog)
@@ -194,6 +197,7 @@ export class RuntimeBrowserCommands {
     this.browserMouseClick = pointer.browserMouseClick.bind(pointer)
     this.browserMouseUp = pointer.browserMouseUp.bind(pointer)
     this.browserMouseWheel = pointer.browserMouseWheel.bind(pointer)
+    this.browserDropFiles = pointer.browserDropFiles.bind(pointer)
     this.browserScreenshot = capture.browserScreenshot.bind(capture)
     this.browserPdf = capture.browserPdf.bind(capture)
     this.browserFullScreenshot = capture.browserFullScreenshot.bind(capture)
@@ -240,6 +244,8 @@ export class RuntimeBrowserCommands {
     this.browserProfileList = profiles.browserProfileList.bind(profiles)
     this.browserProfileCreate = profiles.browserProfileCreate.bind(profiles)
     this.browserProfileDelete = profiles.browserProfileDelete.bind(profiles)
+    this.browserCloseServerPagesOfMissingProfiles =
+      profiles.browserCloseServerPagesOfMissingProfiles.bind(profiles)
     this.browserScreencast = screencasts.browserScreencast.bind(screencasts)
     this.browserDialogAccept = dialogs.browserDialogAccept.bind(dialogs)
     this.browserDialogDismiss = dialogs.browserDialogDismiss.bind(dialogs)

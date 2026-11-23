@@ -20761,7 +20761,6 @@
         "steerHint": "在智能体工作时立即发送",
         "sendHint": "立即发送此消息",
         "delete": "删除",
-        "moreActions": "更多操作",
         "moveChanged": "队列在此移动前发生了变化。请重新拖动该消息",
         "reorderHint": "拖动可重新排序，或使用上、下方向键",
         "reorderMessage": "重新排序消息",
@@ -22791,6 +22790,7 @@
       "thisComputer": "此计算机",
       "unavailable": "{{agent}} 在此主机上不可用",
       "update": "更新",
+      "updateTo": "更新到 {{version}}",
       "verifying": "正在检查已下载的运行时",
       "installTitle": "安装 {{agent}} 以开始聊天",
       "continueTitle": "安装 {{agent}} 以继续",
@@ -26239,7 +26239,11 @@
         "signIn": "智能体正在等待你登录",
         "prompt": "智能体停在了一个需要你回答的提示处"
       },
-      "agentInterrupted": "智能体在完成此次运行前被中断"
+      "agentInterrupted": "智能体在完成此次运行前被中断",
+      "botsOff": "设置中已关闭机器人，因此 Orca 跳过了这次运行。",
+      "botMissing": "运行这个自动化的机器人已不存在。",
+      "botFolderMissing": "机器人的文件夹已不可用。",
+      "botPaused": "{{bot}} 已暂停，因此 Orca 跳过了这次运行。"
     },
     "extraAgentArgs": {
       "errors": {
@@ -27559,7 +27563,20 @@
         "github": "议题和 PR 中的提及与事件",
         "slack": "消息与提及",
         "linear": "分配给它的议题与提及",
-        "google": "以你的身份使用 Gmail、日历和云端硬盘"
+        "google": "以你的身份使用 Gmail、日历和云端硬盘",
+        "vercel": "查看部署并阅读其日志",
+        "sentry": "调查错误及其背后的事件",
+        "datadog": "搜索日志、指标和监控",
+        "posthog": "查询产品分析和功能开关",
+        "cloudflare": "管理 Workers、DNS 以及账号的其他内容",
+        "supabase": "查询数据库并管理项目",
+        "neon": "运行 SQL 并管理 Postgres 分支",
+        "netlify": "部署网站并检查其构建",
+        "gitlab": "读取和更新议题与合并请求",
+        "context7": "代码库的最新文档和示例",
+        "atlassian": "Jira 议题和 Confluence 页面",
+        "notion": "搜索、阅读和编辑页面",
+        "stripe": "查询付款、客户和订阅"
       },
       "mcp": {
         "adding": "正在添加 {{app}}…",
@@ -27589,7 +27606,33 @@
       "unsupported": "暂不支持此应用",
       "cantReach": "无法连接到 {{app}}",
       "accessNotAllowed": "未获得访问授权",
-      "signInExpired": "登录已过期"
+      "signInExpired": "登录已过期",
+      "composioLine": {
+        "outlook": "邮件、日历和联系人",
+        "microsoft_teams": "聊天、频道和会议",
+        "notion": "页面、数据库和评论",
+        "jira": "议题、项目和冲刺",
+        "hubspot": "联系人、公司、交易和工单",
+        "salesforce": "客户、潜在客户和商机",
+        "asana": "任务、项目和评论",
+        "airtable": "数据库、表和记录",
+        "zendesk": "工单、用户和帮助中心文章",
+        "figma": "文件、评论和组件",
+        "stripe": "付款、客户和发票",
+        "dropbox": "文件和文件夹",
+        "one_drive": "文件和文件夹",
+        "confluence": "页面、空间和评论",
+        "clickup": "任务、列表和文档",
+        "monday": "看板、项目和更新",
+        "intercom": "对话、联系人和文章",
+        "zoom": "会议、录制和文字记录",
+        "calendly": "活动、受邀者和预约链接",
+        "trello": "看板、列表和卡片",
+        "sentry": "问题、事件和发布",
+        "box": "文件和文件夹",
+        "miro": "白板、便签和框架",
+        "reddit": "帖子、评论和子版块"
+      }
     },
     "row": {
       "paused": "已暂停",
@@ -27918,7 +27961,8 @@
         "step": "第 {{n}} 个，共 {{total}} 个",
         "typeAnswer": "输入你的回答",
         "replaced": "智能体提出了新问题。请先阅读，再回复"
-      }
+      },
+      "readMoreClosedFailed": "无法读取更多已关闭的条目"
     },
     "usageLimit": {
       "continuesAt": "将于 {{time}} 继续",
@@ -28225,7 +28269,14 @@
           "download": "点击<b>下载 JSON</b>。Orca 会保存该密钥"
         }
       },
-      "pasteHint": "点击“允许”后，页面将无法加载。请将该页面的地址粘贴到这里"
+      "pasteHint": "点击“允许”后，页面将无法加载。请将该页面的地址粘贴到这里",
+      "signInRun": {
+        "cancelled": "Google 登录已取消。",
+        "failed": "Google 登录失败。请重试。",
+        "noAccount": "Google 已登录，但主机没有发送账号。",
+        "alreadyRunning": "已有 Google 登录正在进行。请先完成或取消它。",
+        "notWaiting": "没有等待中的 Google 登录。请重新开始。"
+      }
     },
     "toolApp": {
       "address": "地址",
@@ -28451,6 +28502,7 @@
         "githubReviewRequested": "收到评审请求时",
         "githubAssigned": "在 GitHub 上被分配时",
         "githubCiFailed": "CI 失败时",
+        "githubCiFinished": "CI 完成时",
         "githubCiPassed": "CI 通过时",
         "githubPrConflicted": "PR 出现冲突时",
         "githubPrClosed": "PR 关闭时",
@@ -28662,7 +28714,10 @@
         "members": "成员",
         "membersCount": "成员 {{count}}",
         "noMembers": "此群组中没有 bots"
-      }
+      },
+      "deliveryUnconfirmed": "投递未确认",
+      "starting": "正在启动…",
+      "notStarted": "尚未启动"
     },
     "settingsView": {
       "pathCopied": "路径已复制",
@@ -29745,7 +29800,50 @@
       "groupImagesTooLarge": "这些图片共 {{totalMb}} MB。一条群组消息最多 {{maxMb}} MB。",
       "groupImageNotStored": "群组消息中只能放粘贴或附加的图片。",
       "groupAttachmentsUnavailable": "这台电脑现在无法接收附件。请稍后再发送。",
-      "groupAttachFailed": "无法附加文件。请稍后再发送。"
+      "groupAttachFailed": "无法附加文件。请稍后再发送。",
+      "groupMentionAmbiguous": "请先修正有歧义的机器人提及，再发送。",
+      "groupMentionUnavailable": "请先修正不可用或有歧义的机器人提及，再发送。",
+      "groupReplierNotMember": "请在“房间回复”中选择一位当前的房间成员。",
+      "groupMailNeverStarted": "这封邮件从未开始一轮对话。",
+      "groupRemoteUnreachable": "无法连接 {{host}}。{{detail}}",
+      "groupRemoteUnreachableRetry": "无法连接 {{host}}。{{detail}} 重新发布即可重试。"
+    },
+    "notices": {
+      "couldNotFinish": "{{bot}} 未能完成",
+      "turnEnded": "“{{automation}}”在完成前就结束了。",
+      "folderMissing": "机器人的文件夹不见了，因此“{{automation}}”无法启动。",
+      "sessionRefused": "“{{automation}}”无法启动。",
+      "askedYou": "{{bot}} 向你提问",
+      "accessAsked": "{{person}} 请求使用 {{bot}}",
+      "webhookNeedsLook": "{{bot}} 的 Webhook 需要查看",
+      "webhookRefusals": "“{{automation}}”在过去 10 分钟内拒绝了 {{refused}} 次调用。如果这些调用不在预期内，请暂停它。",
+      "webhookHourlyCap": "“{{automation}}”已达到每小时 {{limit}} 次运行的上限，其余调用会排队等待。要停止它们，请暂停它。"
+    },
+    "tools": {
+      "pasteInvalid": "粘贴的内容无效。",
+      "checkUnfinished": "原生检查没有完成。请重新检查",
+      "signIn": {
+        "notThisSignIn": "该地址不是来自此次登录。请粘贴你最终到达的页面地址"
+      },
+      "input": {
+        "invalid": "请输入有效的服务器名称，以及 URL 或可执行文件。",
+        "namesRepeat": "每个请求头或环境变量名称都必须唯一。",
+        "rowInvalid": "请为每一行输入有效的名称和值，或删除该行。"
+      },
+      "paste": {
+        "notConfig": "请粘贴服务器 URL 或启动命令，或在“编辑详情”中输入配置。",
+        "badUrl": "请使用不含内嵌凭据的 HTTP 或 HTTPS URL。",
+        "badCommand": "请使用一条引号配对的启动命令，或手动输入详情。不支持 shell 表达式。"
+      },
+      "signInFailure": {
+        "unsupported": "暂不支持此应用。",
+        "unavailable": "无法连接此应用。请检查地址后重试。",
+        "noTool": "这个机器人已经没有那个工具了。",
+        "desktopOnly": "请在 {{host}} 上的 Orca 中登录。",
+        "denied": "未获得访问授权",
+        "expired": "登录已过期。请重试。",
+        "couldNotSignIn": "无法登录。请重试。"
+      }
     }
   },
   "speechModelUpdate": {

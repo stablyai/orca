@@ -175,9 +175,10 @@ export type DispatchFleetEvidence = {
 }
 
 export function readDispatchFleetEvidence(runtime: SessionWorkersRuntime): DispatchFleetEvidence {
+  const rows = runtime.getAgentStatusSnapshotFn?.() ?? []
   return {
-    statuses: runtime.getOrchestrationFleetAgentStatusSnapshot(),
-    chatStatusRows: latestLiveAgentStatusRowsByPaneKey(runtime.getAgentStatusSnapshotFn?.() ?? [])
+    statuses: runtime.getOrchestrationFleetAgentStatusSnapshot(undefined, rows),
+    chatStatusRows: latestLiveAgentStatusRowsByPaneKey(rows)
   }
 }
 

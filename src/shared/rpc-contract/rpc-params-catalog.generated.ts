@@ -44,6 +44,14 @@ import { MobileWebBundleLocaleCatalogParamsSchema } from '../mobile-web-bundle/l
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
 import {
+  WorkerDockAcknowledge,
+  WorkerDockRead,
+  WorkerDockResultRead,
+  WorkerDockResultsRead,
+  WorkerDockStop,
+  WorkerDockSubscribe
+} from '../orchestration/dock/worker-dock'
+import {
   CrewSubscribeParams,
   WorkerApprovalsSubscribeParams,
   WorkerApprovalsUnsubscribeParams
@@ -246,7 +254,7 @@ import {
   SiteColorScheme
 } from './browser/browser-core-params'
 import { ExtensionList, ExtensionReload } from './browser/browser-extension-params'
-import { MouseClick } from './browser/browser-extras-params'
+import { DropFiles, MouseClick } from './browser/browser-extras-params'
 import {
   GrabAwait,
   GrabCaptureSelection,
@@ -308,6 +316,7 @@ import {
   Wait
 } from './browser/browser-params'
 import {
+  FileChooserAnswer,
   PagePromptAnswer,
   ScreencastAck,
   ScreencastUnsubscribe
@@ -1124,6 +1133,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentActivity.setRead': AgentActivitySetReadParams,
   'agentCliUpdate.check': AgentCliUpdateCheckParams,
   'agentCliUpdate.run': AgentCliUpdateRunParams,
+  'agentCliUpdate.subscribe': null,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
   'agentSession.accountUsage': OptionsParams,
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
@@ -1377,10 +1387,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.dialogDismiss': ExpectUrlBrowserTarget,
   'browser.download': SelectorPath,
   'browser.drag': Drag,
+  'browser.dropFiles': DropFiles,
   'browser.eval': Eval,
   'browser.exec': Exec,
   'browser.extensionList': ExtensionList,
   'browser.extensionReload': ExtensionReload,
+  'browser.fileChooserAnswer': FileChooserAnswer,
   'browser.fill': Fill,
   'browser.find': Find,
   'browser.findInPage': FindInPage,
@@ -1919,6 +1931,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerApprovalsUnsubscribe': WorkerApprovalsUnsubscribeParams,
   'orchestration.workerAutoClose': OrchestrationWorkerSubjectParams,
   'orchestration.workerChatTouch': OrchestrationWorkerSubjectParams,
+  'orchestration.workerDockAcknowledge': WorkerDockAcknowledge,
+  'orchestration.workerDockRead': WorkerDockRead,
+  'orchestration.workerDockResult': WorkerDockResultRead,
+  'orchestration.workerDockResultsRead': WorkerDockResultsRead,
+  'orchestration.workerDockStop': WorkerDockStop,
+  'orchestration.workerDockSubscribe': WorkerDockSubscribe,
   'orchestration.workerKeepOpen': OrchestrationWorkerKeepOpenParams,
   'orchestration.workerList': WorkerListParams,
   'orchestration.workerRead': WorkerReadParams,
