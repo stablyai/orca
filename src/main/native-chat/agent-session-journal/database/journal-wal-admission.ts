@@ -6,10 +6,9 @@ export type JournalWalState = {
   stopped: boolean
   unknown: boolean
   log: number
-  checkpointed: number
 }
 
-/** Writes wait on frames no checkpoint has copied yet; a fully copied WAL restarts on the next write. */
+/** Bulk writes wait on WAL pressure; urgent ones wait only for an unknown WAL or the ceiling. */
 export function journalWalGated(state: JournalWalState, urgent: boolean): boolean {
   if (state.stopped) {
     return false
@@ -17,8 +16,7 @@ export function journalWalGated(state: JournalWalState, urgent: boolean): boolea
   if (state.unknown) {
     return true
   }
-  const backlog = state.log - state.checkpointed
-  return backlog >= (urgent ? JOURNAL_WAL_URGENT_FRAMES : JOURNAL_WAL_BACKPRESSURE_FRAMES)
+  return state.log >= (urgent ? JOURNAL_WAL_URGENT_FRAMES : JOURNAL_WAL_BACKPRESSURE_FRAMES)
 }
 
 /** Writers parked on WAL admission, each resumed once its own class is admitted. */

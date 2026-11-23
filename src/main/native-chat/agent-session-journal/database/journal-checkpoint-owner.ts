@@ -3,21 +3,31 @@ import { spawnWorkerThread } from '../../../worker-threads/worker-thread-spawn'
 import type Database from '../../../sqlite/sync-database'
 import type { WorkerRequestTransport } from '../../../worker-threads/worker-thread-transport'
 import { journalCheckpointWorkerSource } from './journal-checkpoint-worker-source'
-import { JournalWalWaiters, journalWalGated } from './journal-wal-admission'
+import {
+  JOURNAL_WAL_BACKPRESSURE_FRAMES,
+  JournalWalWaiters,
+  journalWalGated
+} from './journal-wal-admission'
 
 const CHECKPOINT_FRAMES = 1000
-const CHECKPOINT_IDLE_MS = 100
-// If the worker falls behind or is gone, the writer's own commits checkpoint past this many frames.
+const CHECKPOINT_RETRY_MS = 100
+// While a worker runs, the writer's own commits checkpoint only once the WAL passes this many frames.
 const WRITER_BACKSTOP_FRAMES = 10_000
+// SQLite's default, for while no worker runs.
+const WRITER_ALONE_FRAMES = 1000
 const PARKED_RECHECK_MS = 100
 const RESTART_DELAY_MS = 10_000
+const RESTART_MAX_DELAY_MS = 5 * 60_000
 const STOP_TIMEOUT_MS = 5000
 
 /** The writer admits and measures; a worker thread runs PASSIVE checkpoints beside it and is replaced when it dies. */
 export class JournalCheckpointOwner {
   private worker: WorkerRequestTransport | undefined
+  private asking = false
+  private askAgain = false
   private exited: Promise<void> = Promise.resolve()
   private restartTimer: ReturnType<typeof setTimeout> | undefined
+  private restartDelayMs: number
   private recheck: ReturnType<typeof setTimeout> | undefined
   private stopped = false
   private closing = false
@@ -27,6 +37,7 @@ export class JournalCheckpointOwner {
   private unknown = true
   private frames: ReturnType<Database.Database['prepare']> | undefined
   private passive: ReturnType<Database.Database['prepare']> | undefined
+  private truncate: ReturnType<Database.Database['prepare']> | undefined
   private readonly waiters = new JournalWalWaiters()
   private warned = false
   private closePromise: Promise<void> | undefined
@@ -39,6 +50,7 @@ export class JournalCheckpointOwner {
       restartDelayMs?: number
     } = {}
   ) {
+    this.restartDelayMs = options.restartDelayMs ?? RESTART_DELAY_MS
     try {
       const version = String(writer.prepare('SELECT sqlite_version() AS version').get()?.version)
       const [major = 0, minor = 0] = version.split('.').map(Number)
@@ -50,7 +62,7 @@ export class JournalCheckpointOwner {
       }
       this.frames = writer.prepare('PRAGMA wal_checkpoint(NOOP)')
       this.passive = writer.prepare('PRAGMA wal_checkpoint(PASSIVE)')
-      writer.pragma(`wal_autocheckpoint = ${WRITER_BACKSTOP_FRAMES}`)
+      this.truncate = writer.prepare('PRAGMA wal_checkpoint(TRUNCATE)')
       this.measure()
       this.spawn()
     } catch (error) {
@@ -65,6 +77,10 @@ export class JournalCheckpointOwner {
       throw new Error('journal WAL admission requires a transaction-free writer')
     }
     while (this.gated(urgent)) {
+      this.relieve()
+      if (!this.gated(urgent)) {
+        return
+      }
       await new Promise<void>((resolve) => {
         this.waiters.park(urgent, resolve)
         this.armRecheck()
@@ -83,7 +99,7 @@ export class JournalCheckpointOwner {
     }
     this.measure()
     if (this.log - this.checkpointed >= CHECKPOINT_FRAMES) {
-      this.ask(false)
+      this.ask()
     }
     this.wake()
   }
@@ -97,8 +113,8 @@ export class JournalCheckpointOwner {
   }
 
   private gated(urgent: boolean): boolean {
-    const { stopped, unknown, log, checkpointed } = this
-    return journalWalGated({ stopped, unknown, log, checkpointed }, urgent)
+    const { stopped, unknown, log } = this
+    return journalWalGated({ stopped, unknown, log }, urgent)
   }
 
   private measure(): void {
@@ -115,6 +131,34 @@ export class JournalCheckpointOwner {
     }
   }
 
+  /**
+   * Runs only while a write waits on WAL room, so the writer is idle. Its PASSIVE checkpoint returns at
+   * once when the worker is mid-checkpoint, and catches up for itself when no worker is running. A fully
+   * checkpointed WAL past the ceiling resets only through TRUNCATE once overlapping readers keep the
+   * next write from restarting it, so try one without waiting on readers.
+   */
+  private relieve(): void {
+    if (this.stopped || this.writer.isTransaction) {
+      return
+    }
+    try {
+      this.passive!.get()
+      this.measure()
+      if (this.log >= JOURNAL_WAL_BACKPRESSURE_FRAMES && this.checkpointed === this.log) {
+        const timeout = Number(this.writer.pragma('busy_timeout', { simple: true }))
+        this.writer.pragma('busy_timeout = 0')
+        try {
+          this.truncate!.get()
+        } finally {
+          this.writer.pragma(`busy_timeout = ${timeout}`)
+        }
+        this.measure()
+      }
+    } catch (error) {
+      this.warn(error)
+    }
+  }
+
   private wake(): void {
     this.waiters.wake((urgent) => this.gated(urgent))
     if (this.waiters.size > 0) {
@@ -122,32 +166,29 @@ export class JournalCheckpointOwner {
     }
   }
 
-  /** Parked writes never wait on the worker: without one, the idle writer checkpoints for itself. */
   private armRecheck(): void {
     if (this.recheck || this.stopped) {
       return
     }
     this.recheck = setTimeout(() => {
       this.recheck = undefined
-      if (!this.stopped && !this.writer.isTransaction) {
-        if (this.worker) {
-          this.ask(true)
-        } else {
-          try {
-            this.passive!.get()
-          } catch (error) {
-            this.warn(error)
-          }
-        }
-        this.measure()
-      }
+      this.relieve()
       this.wake()
     }, PARKED_RECHECK_MS)
   }
 
-  private ask(force: boolean): void {
+  /** One request at a time: a slow checkpoint never queues more behind it. */
+  private ask(): void {
+    if (!this.worker) {
+      return
+    }
+    if (this.asking) {
+      this.askAgain = true
+      return
+    }
     try {
-      this.worker?.postMessage({ type: 'check', force })
+      this.worker.postMessage({ type: 'check' })
+      this.asking = true
     } catch (error) {
       // A worker that can't take messages is exiting; its exit schedules the replacement.
       this.warn(error)
@@ -165,19 +206,26 @@ export class JournalCheckpointOwner {
             workerData: {
               filename: this.filename,
               frames: CHECKPOINT_FRAMES,
-              idleMs: CHECKPOINT_IDLE_MS
+              retryMs: CHECKPOINT_RETRY_MS
             }
           })
     } catch (error) {
       this.warn(error)
+      this.scheduleRestart()
       return
     }
     this.worker = worker
-    let ready = false
+    // The worker checks once at start, for a WAL a crash left behind.
+    this.asking = true
     let failure: unknown
     worker.on('message', (message: { type?: unknown }) => {
-      if (message?.type === 'ready') {
-        ready = true
+      if (message?.type === 'checked' && this.worker === worker) {
+        this.asking = false
+        this.restartDelayMs = this.options.restartDelayMs ?? RESTART_DELAY_MS
+        if (this.askAgain) {
+          this.askAgain = false
+          this.ask()
+        }
       }
     })
     worker.on('error', (error: Error) => {
@@ -187,25 +235,44 @@ export class JournalCheckpointOwner {
       worker.on('exit', (code: number) => {
         if (this.worker === worker) {
           this.worker = undefined
+          this.asking = false
+          this.askAgain = false
         }
         resolve()
         if (this.closing) {
           return
         }
+        this.autocheckpoint(WRITER_ALONE_FRAMES)
         this.warn(failure ?? new Error(`checkpoint worker exited with code ${code}`))
-        // A worker that never opened the database would fail the same way again.
-        if (ready) {
-          this.restartTimer = setTimeout(() => {
-            this.restartTimer = undefined
-            if (!this.closing) {
-              this.spawn()
-            }
-          }, this.options.restartDelayMs ?? RESTART_DELAY_MS)
-          this.restartTimer.unref()
-        }
+        this.scheduleRestart()
       })
     })
     worker.unref()
+    this.autocheckpoint(WRITER_BACKSTOP_FRAMES)
+  }
+
+  /** Each restart that dies before a successful check waits twice as long, so a persistent failure settles. */
+  private scheduleRestart(): void {
+    if (this.closing) {
+      return
+    }
+    clearTimeout(this.restartTimer)
+    this.restartTimer = setTimeout(() => {
+      this.restartTimer = undefined
+      if (!this.closing) {
+        this.spawn()
+      }
+    }, this.restartDelayMs)
+    this.restartTimer.unref()
+    this.restartDelayMs = Math.min(this.restartDelayMs * 2, RESTART_MAX_DELAY_MS)
+  }
+
+  private autocheckpoint(frames: number): void {
+    try {
+      this.writer.pragma(`wal_autocheckpoint = ${frames}`)
+    } catch (error) {
+      this.warn(error)
+    }
   }
 
   private warn(error: unknown): void {
