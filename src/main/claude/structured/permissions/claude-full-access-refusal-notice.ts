@@ -155,10 +155,11 @@ export function claimClaudeFullAccessRefusalNotice(
     Pick<ClaudeSession, 'fullAccessRefusalNoticeId' | 'fullAccessRefusalNotices'>
 ): ClaudeFullAccessRefusalNotice | null {
   const previous = session.fullAccessRefusalNoticeId
-  // After an earlier process's warning, Claude reporting the chat's choice is running it too.
+  // After a warning, with no mode applied (an earlier process's, or a switch whose answer never
+  // came), Claude reporting the chat's choice is running it.
   const applied =
     session.appliedInputOptions?.get('buildPermissionMode') ??
-    (previous === EARLIER_PROCESS_WARNING ? claudeRunningChoice(session) : undefined)
+    (previous !== undefined ? claudeRunningChoice(session) : undefined)
   const restored =
     applied !== undefined &&
     applied === session.launchIntent?.permissionMode &&
