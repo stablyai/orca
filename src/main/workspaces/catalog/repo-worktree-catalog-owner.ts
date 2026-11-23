@@ -205,7 +205,10 @@ function acceptable(
   }
   // Verifier confirmations are a runtime admission; other readers need a full observation that young.
   const basis = requirement.verifier ? observation.confirmedAt : observation.completedAt
-  return now - basis <= requirement.maxAgeMs
+  // A completion-timed reuse must not outlive the verifier's full-list ceiling, which runs from scan start.
+  const withinCeiling =
+    !requirement.verifier || now - observation.startedAt < requirement.verifier.ceilingMs
+  return withinCeiling && now - basis <= requirement.maxAgeMs
 }
 
 /** The sole owner of a repo's raw worktree rows: readers state what they accept and share its one flight. */

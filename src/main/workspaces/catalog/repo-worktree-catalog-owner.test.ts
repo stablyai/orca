@@ -38,8 +38,11 @@ function controlledScans() {
   return { plan, pending, finish, fail }
 }
 
-const read = (plan: ReturnType<typeof controlledScans>['plan']) =>
-  readWorktreeCatalog(repo, 'local:default', { kind: 'desktop', maxAgeMs: 5_000 }, plan)
+// Each case owns its repo: the fake clock restarts at 0, and an older test's newer rows would mask it.
+const repoFor = (id: string): Repo => ({ ...repo, id, path: `/repos/${id}` })
+
+const read = (plan: ReturnType<typeof controlledScans>['plan'], target: Repo = repo) =>
+  readWorktreeCatalog(target, 'local:default', { kind: 'desktop', maxAgeMs: 5_000 }, plan)
 
 describe('worktree catalog freshness', () => {
   beforeEach(() => {
@@ -84,11 +87,38 @@ describe('worktree catalog freshness', () => {
     })
   })
 
+  it('never lets completion-timed reuse outlive the verifier ceiling measured from scan start', async () => {
+    const scans = controlledScans()
+    const target = repoFor('ceiling')
+    const first = read(scans.plan, target)
+    await vi.waitFor(() => expect(scans.pending).toHaveLength(1))
+    await scans.finish('/repos/freshness/v1', 6_000)
+    await first
+
+    vi.setSystemTime(10_000)
+    const verified = readWorktreeCatalog(
+      target,
+      'local:default',
+      {
+        kind: 'runtime',
+        maxAgeMs: 30_000,
+        verifier: { ceilingMs: 8_000, timeoutMs: 1_000, probe: () => Promise.resolve('fp') }
+      },
+      scans.plan
+    )
+    await vi.waitFor(() => expect(scans.pending).toHaveLength(1))
+    await scans.finish('/repos/freshness/v2', 11_000)
+    expect((await verified).observation?.outcome).toMatchObject({
+      worktrees: [{ path: '/repos/freshness/v2' }]
+    })
+  })
+
   it('reuses a slow failed scan for its window from completion instead of retrying it at once', async () => {
     const scans = controlledScans()
+    const target = repoFor('failure')
     const runtimeRead = () =>
       readWorktreeCatalog(
-        repo,
+        target,
         'local:default',
         { kind: 'runtime', maxAgeMs: 5_000, reusesFailure: true },
         scans.plan
