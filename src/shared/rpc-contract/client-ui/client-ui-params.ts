@@ -31,6 +31,8 @@ export const FeatureTipIds = z.array(
   z.custom(isFeatureTipSeenId, { message: 'Unknown feature tip id' })
 )
 
+const SearchEngineParam = z.enum(['google', 'duckduckgo', 'bing', 'kagi'])
+
 export const UnknownRecord = z.record(z.string(), z.unknown())
 
 export const UnknownRecordArray = z.array(UnknownRecord)
@@ -254,10 +256,7 @@ export const UiUpdateFields = z
     manuallyUnreadTurnsByPaneKey: z.record(z.string(), z.number().finite()).optional(),
     chatReadMarksCopiedHere: z.boolean().optional(),
     browserDefaultUrl: NullableString.optional(),
-    browserDefaultSearchEngine: z
-      .enum(['google', 'duckduckgo', 'bing', 'kagi'])
-      .nullable()
-      .optional(),
+    browserDefaultSearchEngine: SearchEngineParam.nullable().optional(),
     browserDefaultZoomLevel: z.number().finite().optional(),
     browserKagiSessionLink: NullableString.optional(),
     browserDevToolsDock: z

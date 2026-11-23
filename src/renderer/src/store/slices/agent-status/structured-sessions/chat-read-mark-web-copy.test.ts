@@ -7,12 +7,9 @@ const OTHER_OLD_TAB_KEY = `structured-agent-session-old:${LEAF}`
 const CONVERSATION_KEY = `structured-agent-session-sess-2:${LEAF}`
 
 it('copies a web client’s tab-keyed marks to the conversation key once, and never again', () => {
-  let state = {
-    activityClearedAtByPaneKey: { [OLD_TAB_KEY]: 50, [OTHER_OLD_TAB_KEY]: 60 } as Record<
-      string,
-      number
-    >,
-    manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70 } as Record<string, number>,
+  let state: Parameters<typeof copyWebClientChatReadMarksOnce>[0] = {
+    activityClearedAtByPaneKey: { [OLD_TAB_KEY]: 50, [OTHER_OLD_TAB_KEY]: 60 },
+    manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70 },
     chatReadMarksCopiedHere: false
   }
   state = { ...state, ...copyWebClientChatReadMarksOnce(state, () => ['sess-2']) }

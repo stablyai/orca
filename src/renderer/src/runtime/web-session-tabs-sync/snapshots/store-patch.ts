@@ -33,7 +33,10 @@ import { recordAgentFinishDropped } from '@/attention/agent-finish-drop-breadcru
 
 /** Commit a reconciliation patch and return a receipt for its host evidence. */
 export function applyWebSessionTabsStorePatch(
-  buildPatch: (state: AppState, changedAgentPaneKeys: Set<string>) => AppState | Partial<AppState>,
+  buildPatch: (
+    state: AppState,
+    changedAgentPaneKeys: Set<string>
+  ) => AppState | Partial<AppState>,
   hostMirrorVerdict: HostSessionMirrorPatchVerdict,
   agentStatusSnapshots?: RuntimeMobileSessionTabsResult | readonly RuntimeMobileSessionTabsResult[],
   allowCompletionNotification = false,
