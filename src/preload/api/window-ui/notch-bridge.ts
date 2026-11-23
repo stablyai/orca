@@ -23,8 +23,9 @@ export const notchApi: NotchApi = {
     return () => ipcRenderer.removeListener(NOTCH_SNAPSHOT_CHANNEL, receive)
   },
   onViewedPanesReset: (listener) => {
-    ipcRenderer.on(NOTCH_VIEWED_PANES_RESET_CHANNEL, listener)
-    return () => ipcRenderer.removeListener(NOTCH_VIEWED_PANES_RESET_CHANNEL, listener)
+    const receive = (): void => listener()
+    ipcRenderer.on(NOTCH_VIEWED_PANES_RESET_CHANNEL, receive)
+    return () => ipcRenderer.removeListener(NOTCH_VIEWED_PANES_RESET_CHANNEL, receive)
   },
   setViewedPanes: (keys) => ipcRenderer.send(NOTCH_VIEWED_PANES_CHANNEL, keys),
   acknowledgePanes: (keys) => ipcRenderer.send(NOTCH_ACKNOWLEDGE_CHANNEL, keys),
