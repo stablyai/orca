@@ -8,11 +8,7 @@ import type { ContextualTourId } from '../../../../../shared/feature-education/c
 import { normalizeFeatureInteractions } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import { normalizeContextualTourIds } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import type { UISlice } from './ui-slice-contract'
-import {
-  sanitizeAcknowledgedAgentsByPaneKey,
-  sanitizeActivityClearedAtByPaneKey,
-  sanitizePaneKeyTimestampRecord
-} from './ui-slice-hydration-sanitizers'
+import { sanitizePaneKeyTimestampRecord } from './ui-slice-hydration-sanitizers'
 
 const VALID_TASK_PRESETS = new Set<TaskViewPresetId>([
   'all',
@@ -178,10 +174,8 @@ export function hydrateAgentReadState(
   | 'chatReadMarksCopiedHere'
 > {
   return {
-    acknowledgedAgentsByPaneKey: sanitizeAcknowledgedAgentsByPaneKey(
-      ui.acknowledgedAgentsByPaneKey
-    ),
-    activityClearedAtByPaneKey: sanitizeActivityClearedAtByPaneKey(ui.activityClearedAtByPaneKey),
+    acknowledgedAgentsByPaneKey: sanitizePaneKeyTimestampRecord(ui.acknowledgedAgentsByPaneKey),
+    activityClearedAtByPaneKey: sanitizePaneKeyTimestampRecord(ui.activityClearedAtByPaneKey),
     manuallyUnreadTurnsByPaneKey: sanitizePaneKeyTimestampRecord(ui.manuallyUnreadTurnsByPaneKey),
     chatReadMarksCopiedHere: ui.chatReadMarksCopiedHere === true
   }

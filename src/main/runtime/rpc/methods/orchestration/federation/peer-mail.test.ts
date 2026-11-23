@@ -252,6 +252,31 @@ describe('agent mail between paired Orca servers', () => {
     expect(mailFor(b, 'term_b').map((message) => message.body)).toEqual(['Thanks.'])
   })
 
+  it("reports the server's delivery hold, as a local send does", async () => {
+    // A terminal whose agent died shows no live status, so its server's gate holds the mail.
+    vi.spyOn(b.runtime, 'readTerminalMailHold').mockImplementation((mailbox) =>
+      mailbox === 'term_b' ? { kind: 'unverified', terminal: 'term_b' } : null
+    )
+
+    const sent = await cli(
+      a,
+      'send',
+      '--from',
+      'term_a',
+      '--on',
+      'devB',
+      '--to',
+      'term_b',
+      '--subject',
+      'Still there?'
+    )
+
+    expect(sent).toMatchObject({
+      result: { warnings: [{ code: 'recipient_delivery_held', recipient: 'term_b' }] }
+    })
+    expect(mailFor(b, 'term_b')).toHaveLength(1)
+  })
+
   it('returns a chat agent reply to the chat on the opening server', async () => {
     const send = ORCHESTRATION_METHODS.find((method) => method.name === 'orchestration.send')!
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
@@ -477,7 +502,7 @@ describe('agent mail between paired Orca servers', () => {
     a.runtime.ensureOrchestrationFederationRelay()
     await vi.waitFor(() => expect(mailFor(a, 'term_a')).toHaveLength(1))
     const [answer] = mailFor(a, 'term_a')
-    b.db.markAsRead([first!.id])
+    b.db.markAsRead([first!.id], { kind: 'orca' })
 
     aCredential = 'fingerprint_a_repaired'
     await expect(

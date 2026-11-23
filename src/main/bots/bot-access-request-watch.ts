@@ -4,7 +4,7 @@
 // bots', and keeps on disk how far it has announced.
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { accessRequestPerson } from '../../shared/bots/bot-access-request'
+import { accessRequestPerson, botAccessRequestNoticeId } from '../../shared/bots/bot-access-request'
 import { botHasConnector } from '../../shared/bot-types'
 import type { ConnectorAccessRequest } from '../../shared/connector-bot-access-contract'
 import type { BotSlackResult } from '../../shared/connector-bot-slack-contract'
@@ -55,12 +55,12 @@ function requestNotice(
   chatSessionId: string | null
 ): OwnerNotice {
   return {
-    id: `bot-access-request:${request.requestId}`,
+    id: botAccessRequestNoticeId(request.requestId),
     title: `${accessRequestPerson(request)} asked to use ${botName}`,
     body: [CONNECTOR_SOURCE_NAMES[request.source], request.workspaceName]
       .filter(Boolean)
       .join(' · '),
-    // A tap opens the bot's Home Chat, where its requests are answered.
+    // A phone's tap opens the bot's Home Chat and the request's decision there.
     worktreeId: folderWorkspaceKey(folderWorkspaceId),
     ...(chatSessionId ? { paneKey: chatPaneKey(chatSessionId) } : {}),
     desktop: false

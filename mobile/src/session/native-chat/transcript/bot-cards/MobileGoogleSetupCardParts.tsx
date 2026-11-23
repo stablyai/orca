@@ -69,27 +69,32 @@ export function useMobileGoogleSetupAnswer(scope: MobileGoogleSetupScope): {
   return { busy, error, reopened, reopen: () => setReopened(true), answer, run }
 }
 
+/** Also the Composio setup cards' frame, as on the desktop; `avatar` replaces the Google mark. */
 export function MobileGoogleSetupFrame({
+  avatar,
   heading,
   trailing,
   trailingTone,
   title,
+  titleLines,
   meta,
   fontScale,
   children
 }: {
+  avatar?: ReactNode
   heading: string
   trailing?: string | null
   /** `ask` when it waits on the owner. */
   trailingTone?: 'ask'
   title?: string
+  titleLines?: number
   meta?: string | null
   fontScale: number
   children?: ReactNode
 }): React.JSX.Element {
   return (
     <MobileBotCardFrame
-      avatar={<MobileGoogleMark />}
+      avatar={avatar ?? <MobileGoogleMark />}
       heading={heading}
       trailing={
         trailing ? (
@@ -104,7 +109,7 @@ export function MobileGoogleSetupFrame({
           </Text>
         ) : null
       }
-      {...(title ? { title } : {})}
+      {...(title ? { title, titleLines } : {})}
       meta={
         meta ? (
           <MobileBotCardMeta fontScale={fontScale} lines={3}>

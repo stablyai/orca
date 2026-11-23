@@ -94,10 +94,6 @@ function saveTally(): void {
   }
 }
 
-export function handleTccPromptForTests(): TccPromptNoticePayload | null {
-  return recordPrompt()
-}
-
 function recordPrompt(): TccPromptNoticePayload | null {
   if (tally.dismissed || tally.notified || tally.promptCount >= TCC_PROMPT_NOTICE_THRESHOLD) {
     return null
@@ -271,13 +267,4 @@ export function stopTccPromptNotice(): void {
   watch?.stop()
   watch = null
   mainWindowRef = null
-}
-
-export function resetTccPromptNoticeForTests(): void {
-  cancelDeferredWatchStart()
-  tally = { ...EMPTY_TALLY }
-  watch = null
-  mainWindowRef = null
-  nextClaimId = 0
-  pendingClaim = null
 }

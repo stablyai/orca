@@ -31,7 +31,7 @@ const schedule = z
   .superRefine((value, ctx) => {
     const message = getAutomationScheduleInputError(
       value,
-      'schedule must be an RRULE or a cron expression'
+      'schedule must be an RRULE or a cron expression.'
     )
     if (message) {
       ctx.addIssue({ code: 'custom', message })

@@ -241,7 +241,8 @@ export function runtimeBotActivityHost(runtime: OrcaRuntimeService): BotActivity
       const creatorById = new Map(created.map((dispatch) => [dispatch.id, dispatch]))
       const workers = await readDispatchWorkers(
         runtime,
-        created.map((dispatch) => dispatch.id)
+        created.map((dispatch) => dispatch.id),
+        { lostTerminalsEnded: true }
       )
       return workers.flatMap((worker) => {
         const dispatch = creatorById.get(worker.dispatchId)

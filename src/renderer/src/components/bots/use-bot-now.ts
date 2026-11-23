@@ -15,6 +15,7 @@ import { useBotActivity } from './use-bot-activity'
 import { useBotChatTree } from './use-bot-chat-tree'
 import { useBotConnectorEntries, type BotConnectorEntry } from './bot-connector-entries'
 import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { usePairedServerAsks } from './use-paired-server-asks'
 
 export type BotNowView = BotNow<BotConnectorEntry, HostAccessRequest>
 export type BotNeedView = BotNeed<BotConnectorEntry, HostAccessRequest>
@@ -46,9 +47,10 @@ export function useBotNow(bot: Bot | null): BotNowView {
     () => requests.filter((request) => request.botId === botId && request.hostId === hostId),
     [requests, botId, hostId]
   )
+  const pairedAsks = usePairedServerAsks(bot)
   return useMemo(
-    () => botNow({ activity, chatState, connectors, accessRequests, waitingSideChats }),
-    [activity, chatState, connectors, accessRequests, waitingSideChats]
+    () => botNow({ activity, chatState, connectors, accessRequests, waitingSideChats, pairedAsks }),
+    [activity, chatState, connectors, accessRequests, waitingSideChats, pairedAsks]
   )
 }
 

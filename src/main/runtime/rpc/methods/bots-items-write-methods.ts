@@ -9,13 +9,19 @@ import {
 } from '../../../../shared/rpc-contract/bots-items-params'
 
 import { botItemAskAdvice } from '../../../../shared/bots/bot-item-ask-advice'
-import { linksOutsideLinkedChains } from '../../../bots/bot-item-dispatch-facts'
+import {
+  dispatchStarterBotId,
+  linksOutsideLinkedChains
+} from '../../../bots/bot-item-dispatch-facts'
 import { defineMethod } from '../core'
 import { addItem } from './bots-items-add'
 import { admitBotItemFiles } from './bots-items-bot-files'
 import { BotItemError } from '../../../bots/bot-item-error'
 import { assertBotItemSetInput } from '../../../bots/bot-items-edits'
-import { assertBotItemOwnerWrite } from '../../../bots/bot-items-tables'
+import { assertBotItemAttach, assertBotItemOwnerWrite } from '../../../bots/bot-items-tables'
+import type { BotItemLinkInput } from '../../../bots/bot-items-input'
+import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
+import type { Bot } from '../../../../shared/bot-types'
 import { commentAsMaker } from './bots-items-maker-comment'
 import { parseItemLink, resolveItem, writeResult, writerOf } from './bots-items-write-support'
 
@@ -120,15 +126,32 @@ const LINK = defineMethod({
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
+    const db = context.runtime.getOrchestrationDb()
+    const requested = params.refs.map(parseItemLink)
+    const startedBy: Record<string, string | null> =
+      item.ownerBotId === writer.bot.id
+        ? {}
+        : startersOf(db, requested, context.runtime.bots.list())
+    // Every worker named is checked, one already linked too, so a mixed call fails whole.
+    assertBotItemAttach(item, writer.actor, requested, (id) => startedBy[id] ?? null)
     // A step of a follow-up chain the item already links is that worker again: no second link.
-    const links = linksOutsideLinkedChains(
-      context.runtime.getOrchestrationDb(),
-      await store.links(item.uid),
-      params.refs.map(parseItemLink)
-    )
-    const outcome = await store.link(item.uid, links, writer.actor)
+    const links = linksOutsideLinkedChains(db, await store.links(item.uid), requested)
+    const outcome = await store.link(item.uid, links, writer.actor, startedBy)
     return writeResult(context.runtime, outcome, writer)
   }
 })
+
+/** Who started each worker named, read only for a link to someone else's item. */
+function startersOf(
+  db: OrchestrationDb,
+  links: readonly BotItemLinkInput[],
+  bots: readonly Bot[]
+): Record<string, string | null> {
+  return Object.fromEntries(
+    links.flatMap((link) =>
+      link.kind === 'dispatch' ? [[link.ref, dispatchStarterBotId(db, link.ref, bots)]] : []
+    )
+  )
+}
 
 export const BOT_ITEMS_WRITE_METHODS = [ADD, SET, COMMENT, DONE, CANCEL, LINK]

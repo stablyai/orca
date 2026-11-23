@@ -182,6 +182,11 @@ export function getStructuredAgentSessionTabs(
   return list
 }
 
+/** A chat tab's pane key: its conversation's, whatever tab it sits in. */
+export function structuredTabPaneKey(tab: StructuredTab): string {
+  return chatPaneKey(tab.entityId)
+}
+
 const emptyPaneTabs: ReadonlyMap<string, StructuredTab> = new Map()
 const paneTabs = new WeakMap<readonly StructuredTab[], ReadonlyMap<string, StructuredTab>>()
 export function getStructuredAgentSessionTabsByPaneKey(
@@ -190,9 +195,15 @@ export function getStructuredAgentSessionTabsByPaneKey(
   if (!tabs) {
     return emptyPaneTabs
   }
-  const structuredTabs = Array.isArray(tabs)
-    ? structuredTabsOf(tabs, undefined)
-    : getStructuredAgentSessionTabs(tabs)
+  return structuredTabsByPaneKey(
+    Array.isArray(tabs) ? structuredTabsOf(tabs, undefined) : getStructuredAgentSessionTabs(tabs)
+  )
+}
+
+/** A chat list's tabs by pane key, built once per list identity. */
+export function structuredTabsByPaneKey(
+  structuredTabs: readonly StructuredTab[]
+): ReadonlyMap<string, StructuredTab> {
   const cached = paneTabs.get(structuredTabs)
   if (cached) {
     return cached

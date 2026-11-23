@@ -27,8 +27,6 @@ type Memo = { owner: readonly unknown[]; hosts: Map<string, string | null>; part
 const memo = new WeakMap<object, Memo>()
 const lastByBucket = new Map<string, AliasPart>()
 let aliasVisits = 0
-export const agentSenderAliasWorkForTest = () => aliasVisits
-export const agentSenderAliasBucketsForTest = () => [...lastByBucket.keys()]
 
 function part(
   id: string,

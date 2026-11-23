@@ -23,6 +23,25 @@ export const list = defineFixture({
   render: () => <Panel bot={base} />
 })
 
+/** The side panel at its narrowest: every row's logo is one 20 px bare mark, in line with the header. */
+export const listNarrow = defineFixture({
+  width: 300,
+  setup: () => stub({ linearLinked: true, composio: true }),
+  render: () => <Panel bot={base} />
+})
+
+/** Seeded Datadog MCP tool row alongside the connector list. */
+export const datadogToolRow = defineFixture({
+  width: 372,
+  setup: () =>
+    stub({
+      linearLinked: true,
+      composio: true,
+      owned: [{ name: 'datadog', detail: 'https://mcp.datadoghq.com/v1/mcp', remote: true }]
+    }),
+  render: () => <Panel bot={base} />
+})
+
 export const composioRowOpen = defineFixture({
   width: 372,
   setup: () => stub({ linearLinked: true, composio: true }),
@@ -239,4 +258,19 @@ export const googlePage = defineFixture({
   setup: () => fresh({ linearLinked: true, composio: false }),
   render: () => <Panel bot={base} />,
   interact: () => openRow('Google')
+})
+
+/** The Google page's menu: add another account, as GitHub's does. */
+export const googlePageMenu = defineFixture({
+  width: 420,
+  setup: () => fresh({ linearLinked: true, composio: false }),
+  render: () => <Panel bot={base} />,
+  interact: async () => {
+    await openRow('Google')
+    const trigger = [...document.querySelectorAll<HTMLElement>('button')].find(
+      (button) => button.getAttribute('aria-label') === 'Google actions'
+    )
+    trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    await settle(200)
+  }
 })

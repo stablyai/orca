@@ -121,25 +121,7 @@ export function nativeChatBotDirectiveCardOf(line: string): NativeChatDirectiveB
   return firstCard<string, NativeChatDirectiveBotCard>(DIRECTIVE_CARDS, line)
 }
 
-/** How the phone shows each kind. `phoneFallback` kinds show the host's line until their PR lands. */
-export const NATIVE_CHAT_BOT_CARD_ON_PHONE = {
-  memoryUpdated: 'phoneCard',
-  connectorOffer: 'phoneCard',
-  importPlan: 'phoneFallback',
-  importDone: 'phoneFallback',
-  botRequest: 'phoneCard',
-  googleSetup: 'phoneCard',
-  composioSetup: 'phoneFallback',
-  createOffer: 'phoneCard',
-  toolAdded: 'phoneCard',
-  webhook: 'phoneCard'
-} as const satisfies Record<NativeChatBotCardKind, 'phoneCard' | 'phoneFallback'>
-
-type OnPhone = typeof NATIVE_CHAT_BOT_CARD_ON_PHONE
-
-/** The phone's renderer map: a `phoneCard` kind without a renderer fails the typecheck. */
+/** The phone's renderer map: a kind without a renderer fails the typecheck; one returning null shows the host's line. */
 export type NativeChatPhoneBotCardRenderers<Render, Context> = {
-  [K in NativeChatBotCardKind]: OnPhone[K] extends 'phoneFallback'
-    ? 'phoneFallback'
-    : (card: NativeChatBotCardValues[K], context: Context) => Render
+  [K in NativeChatBotCardKind]: (card: NativeChatBotCardValues[K], context: Context) => Render
 }

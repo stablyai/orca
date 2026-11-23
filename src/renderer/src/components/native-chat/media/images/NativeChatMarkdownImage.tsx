@@ -106,7 +106,8 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
     tabId: fileLinkContext?.sourceTabId,
     sessionId: owner?.sessionId,
     active: leaseActive,
-    retryKey
+    retryKey,
+    cwd: fileLinkContext?.pathBase
   })
   const imageHref = media.href
   const imageRuntimeContext =

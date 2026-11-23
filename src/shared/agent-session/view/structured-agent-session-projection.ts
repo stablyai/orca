@@ -14,7 +14,11 @@ import {
   type AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
 import type { AgentTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
-import type { AgentSessionAwaitedQuestion } from '../agent-session-wire'
+import type {
+  AgentSessionAwaitedApproval,
+  AgentSessionAwaitedQuestion
+} from '../agent-session-wire'
+import { structuredAgentSessionAwaitedApproval } from './structured-agent-session-awaited-approval'
 import { agentJournalLinkageFields } from '../journal/agent-session-journal-producer'
 import { itemBlocks } from './structured-agent-session-item-blocks'
 import { agentJournalItemRowOrigin } from '../journal/agent-session-journal-position'
@@ -168,6 +172,7 @@ export type StructuredAgentSessionStatusProjection = {
   /** The newest async question still waiting for the person's next message; set by the host's
    *  journal reads and folded with the person's Skip into the published `awaitsAnswer`. */
   openAsyncQuestion?: AgentSessionAwaitedQuestion
+  awaitsApproval?: AgentSessionAwaitedApproval
 }
 
 /** Share host/client previews; null status means no turn yet. Bound text because sends admit 256 KB and status frames include all sessions;
@@ -235,14 +240,14 @@ export function projectStructuredAgentSessionStatusState(
     currentFence,
     request
   )
+  const pending =
+    status === 'attention' ? items.filter(pendingStructuredAgentSessionPrompt(scope)) : []
+  const awaitsApproval = structuredAgentSessionAwaitedApproval(pending[0])
   return {
     latestRequest,
     owesWork:
       status !== 'idle' && owesStructuredAgentSessionWork(items, submissions, currentFence, scope),
-    pendingPromptIds:
-      status === 'attention'
-        ? items.filter(pendingStructuredAgentSessionPrompt(scope)).map((item) => item.itemId)
-        : [],
+    pendingPromptIds: pending.map((item) => item.itemId),
     summary: {
       status,
       latestPrompt: normalizePromptField(latestPrompt),
@@ -250,16 +255,19 @@ export function projectStructuredAgentSessionStatusState(
       ...(toolInput ? { toolInput } : {}),
       ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
       ...(turnOutcome ? { turnOutcome } : {}),
-      ...(statusStartedAt !== undefined ? { statusStartedAt } : {})
+      ...(statusStartedAt !== undefined ? { statusStartedAt } : {}),
+      ...(awaitsApproval ? { awaitsApproval } : {})
     }
   }
 }
 
+// Why: callers walk every live chat, and a FIFO smaller than that set misses on every pass.
+const MAX_MEMOIZED_PANE_LEAVES = 32_768
 const structuredAgentSessionPaneLeaf = memoizeStringResult((sessionId: string): string => {
   const bytes = sha256(new TextEncoder().encode(sessionId))
   const hex = Array.from(bytes.slice(0, 16), (byte) => byte.toString(16).padStart(2, '0')).join('')
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`
-}, 2048)
+}, MAX_MEMOIZED_PANE_LEAVES)
 
 /** The tab part of a chat's pane key: a conversation address, not the id of any tab it shows in. */
 export function chatPaneAddressTabId(sessionId: string): string {
@@ -271,7 +279,7 @@ export function chatPaneAddressTabId(sessionId: string): string {
 export const chatPaneKey = memoizeStringResult(
   (sessionId: string): string =>
     `${chatPaneAddressTabId(sessionId)}:${structuredAgentSessionPaneLeaf(sessionId)}`,
-  2048
+  MAX_MEMOIZED_PANE_LEAVES
 )
 
 const CHAT_PANE_ADDRESS_PREFIX = chatPaneAddressTabId('')
