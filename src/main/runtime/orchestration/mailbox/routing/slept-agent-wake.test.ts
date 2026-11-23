@@ -281,6 +281,34 @@ describe('Agent-slept window pane wake', () => {
     db.close()
   })
 
+  it('keeps a slept pane its handle and pending exit wait across a renderer reload', async () => {
+    const { db, runtime, handle } = await sleptPane()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reload path under test reads only these runtime members.
+    const internals = runtime as unknown as {
+      sleepingMailRecord: (paneKey: string) => unknown
+      issuePtyHandle: (pty: unknown) => string
+      ptysById: Map<string, unknown>
+    }
+    // The pane's saved sleep record, which names the handle it slept under.
+    vi.spyOn(internals, 'sleepingMailRecord').mockReturnValue({
+      agent: 'codex',
+      terminalHandle: handle
+    })
+    const waiting = runtime.waitForTerminal(handle, { condition: 'exit', timeoutMs: 5_000 })
+    const settled = vi.fn()
+    void waiting.then(settled, settled)
+
+    expect(runtime.markRendererReloading(1)).not.toBeNull()
+    // A terminal listing during the reload re-issues the stopped process's handle.
+    internals.issuePtyHandle(internals.ptysById.get(PTY_ID))
+    await runtime.syncWindowGraph(1, graph(null))
+    await Promise.resolve()
+
+    expect(runtime.sleptAgentHandleForPane(PANE_KEY)).toBe(handle)
+    expect(settled).not.toHaveBeenCalled()
+    db.close()
+  })
+
   it("waits on through Agent Sleep's stop when the exit wait began while the agent was awake", async () => {
     const db = createDatabase('orca-slept-wake-')
     const rows: AgentStatusIpcPayload[] = []

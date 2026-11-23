@@ -202,7 +202,8 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
       [
         sleepRow && this.recordedSleptHandle(paneKey, sleepRow),
         this.dispatchedSleptHandle(paneKey, sleepRow?.paneSleep)
-      ].find((kept) => kept && !this.handles.has(kept)) ?? `term_${randomUUID()}`
+      ].find((kept) => kept && this.handleFreeForSleptPane(kept, sleptPtyId)) ??
+      `term_${randomUUID()}`
     this.terminalIdentity.addSynthetic(handle)
     this.terminalIdentity.setHandle(handle, {
       handle,
@@ -219,6 +220,12 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
   }
 
   /** The handle saved on the pane's sleep record, only for the conversation the sleep row stopped. */
+  /** A listing during a reload re-issues the stopped process's own name; that record is this pane's to reclaim. */
+  private handleFreeForSleptPane(handle: string, sleptPtyId: string): boolean {
+    const record = this.handles.get(handle)
+    return !record || record.ptyId === sleptPtyId
+  }
+
   private recordedSleptHandle(
     paneKey: string,
     row: Pick<AgentStatusIpcPayload, 'agentType' | 'providerSession'>
