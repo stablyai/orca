@@ -13,7 +13,7 @@ import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { CustomKeyModal } from '../terminal/shortcuts/settings/CustomKeyModal'
 import { MobileDictationSetupSheet } from '../dictation/setup/MobileDictationSetupSheet'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
-import { MobileBrowserTabActionSheet } from './tabs/MobileBrowserTabActionSheet'
+import { MobileSessionBrowserTabSheet } from './MobileSessionBrowserTabSheet'
 import { getMobileTerminalActionSheetActions } from '../terminal/session/tab-actions/mobile-terminal-action-sheet-actions'
 import { isTerminalPhoneDisplayMode } from '../terminal/session/pane-layout/terminal-phone-display-mode'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -21,6 +21,7 @@ import { useMobileAllowAutoCloseActions } from './tabs/mobile-worker-auto-close'
 import { MobileAgentSessionTabActionSheet } from './tabs/MobileAgentSessionTabActionSheet'
 import { MobileSessionBotSheet } from './MobileSessionBotSheet'
 import { MobileNewTabSheet } from './tabs/MobileNewTabSheet'
+import { MobileNewHomeChatConfirm } from './MobileNewHomeChatConfirm'
 import {
   MobileBrowserProfilePicker,
   useMobileNewBrowserProfile
@@ -58,7 +59,6 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     fileActionTarget,
     setFileActionTarget,
     browserActionTarget,
-    setBrowserActionTarget,
     discardMarkdownTarget,
     setDiscardMarkdownTarget,
     leaveDrafts,
@@ -92,7 +92,6 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     launchQuickCommand,
     handleCreateMarkdownNote,
     handleCreateBrowser,
-    handleBrowserNavigationCommand,
     handleCloseTerminal,
     handleCloseSessionTab,
     bulkCloseActions,
@@ -138,13 +137,14 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         agentPromptMaxLength={controller.quickCommandAgentPromptMaxLength}
         onLaunch={launchQuickCommand}
       />
+      <MobileNewHomeChatConfirm controller={controller} />
       <MobileNewTabSheet
         visible={showCreateTabDrawer}
         workspaceName={worktreeName}
         agentOptions={createTabAgentOptions}
         surfaceChoice={createTabAgentSurfaceChoice}
         agentStatusRow={createTabAgentStatusRow}
-        leadingAgentActions={controller.createTabLeadingAgentActions}
+        bot={controller.botNewTabActions}
         // Why: browser/markdown creation resolve a real worktree on the host
         // (browser.tabCreate, files.createFile); the floating sentinel is
         // terminal-only over RPC, so those options hide there.
@@ -281,13 +281,9 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         ]}
         onClose={() => setFileActionTarget(null)}
       />
-      <MobileBrowserTabActionSheet
-        target={browserActionTarget}
-        onClose={() => setBrowserActionTarget(null)}
-        onNavigate={handleBrowserNavigationCommand}
-        onCloseTab={handleCloseSessionTab}
+      <MobileSessionBrowserTabSheet
+        controller={controller}
         profileLabel={browserProfile.tabLabel(browserActionTarget?.browserProfileId)}
-        bulkCloseActions={bulkCloseActions}
       />
       <MobileBrowserProfilePicker
         choice={browserProfile}

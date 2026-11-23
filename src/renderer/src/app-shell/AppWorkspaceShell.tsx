@@ -221,10 +221,8 @@ export function AppWorkspaceShell(props: {
               list={<WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />}
             />
             <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
-              {/* Automations/artifacts own their headers; another titlebar would leave an empty stripe. */}
-              {layout.stackedSidebarOpen &&
-              layout.activeView !== 'automations' &&
-              layout.activeView !== 'artifacts' ? (
+              {/* Every page sits under the top bar; window controls and board sheets rely on it. */}
+              {layout.stackedSidebarOpen ? (
                 <div className="titlebar">{titlebarMainStrip}</div>
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">

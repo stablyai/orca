@@ -1,4 +1,5 @@
 import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/settings/native-chat-providers'
+import { normalizeUsageLimitAutoContinueDefaultOn } from '../../../../shared/native-chat/settings/native-chat-usage-limit-auto-continue'
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import { getDefaultVoiceSettings } from '../../../../shared/orca-profiles/constants'
 import { normalizePRBotAuthorOverrides } from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
@@ -118,6 +119,7 @@ export function normalizeLoadedGlobalSettings(
       primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
     ...migratedAutoRenameBranchFromWork,
     ...migratedPluginSystemEnabled,
+    ...normalizeUsageLimitAutoContinueDefaultOn(parsed.settings),
     ...migratedNestedWorkerMaxDepth,
     ...migratedTerminalCursorStyle,
     terminalLineHeight: migratedTerminalLineHeight,

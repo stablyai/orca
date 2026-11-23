@@ -4,6 +4,11 @@ import type {
   BrowserExtensionReloadResult,
   BrowserExtensionSummaryListResult
 } from '../../../../shared/browser/extensions/browser-extension-types'
+import type {
+  BrowserIdentityModeSetResult,
+  BrowserIdentityModeStatus,
+  BrowserUserAgentMode
+} from '../../../../shared/browser/identity/browser-user-agent-mode'
 import { BrowserError } from '../../../browser/browser-error'
 
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
@@ -19,6 +24,14 @@ export type RuntimeBrowserCommandsFactory = (
   host: RuntimeBrowserCommandHost
 ) => RuntimeBrowserCommands
 
+export type RuntimeBrowserIdentity = {
+  get(): Promise<BrowserIdentityModeStatus>
+  set(
+    mode: BrowserUserAgentMode,
+    options: { reset?: boolean }
+  ): Promise<BrowserIdentityModeSetResult>
+}
+
 export type RuntimeBrowserCommandsFactoryOptions = {
   /** The provider creates pages against this runtime's client-host lease registry. */
   clientHosting?: boolean
@@ -28,6 +41,8 @@ export type RuntimeBrowserCommandsFactoryOptions = {
     reload(params: BrowserExtensionReloadParams): Promise<BrowserExtensionReloadResult>
   }
   supportsGoogleCookieClear?: () => boolean
+  /** An engine process with its own identity setting; null while it can't serve one. */
+  identity?: () => RuntimeBrowserIdentity | null
   /** Client pages live in this runtime's own registries, so they need no healthy engine. */
   clientHostingWithoutEngine?: boolean
   /** The provider owns browser pages without a renderer window. */
@@ -73,6 +88,11 @@ export function runtimeBrowserCommandsFactorySupportsGoogleCookieClear(): boolea
     runtimeBrowserCommandsFactoryIsAvailable() &&
     currentOptions.supportsGoogleCookieClear?.() === true
   )
+}
+
+/** Hosts without their own identity store (orcad) serve the browser engine's. */
+export function runtimeBrowserEngineIdentity(): RuntimeBrowserIdentity | null {
+  return runtimeBrowserCommandsFactoryIsAvailable() ? (currentOptions.identity?.() ?? null) : null
 }
 
 export type RuntimeBrowserUnavailableCause = {

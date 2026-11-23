@@ -26,6 +26,10 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
   }
 
   protected getUpdateCheckVariant(options?: UpdateCheckOptions): UpdateCheckVariant {
+    const teamChannel = this.getTeamUpdatePolicy?.()?.updateChannel
+    if (teamChannel) {
+      return teamChannel === 'rc' ? 'prerelease' : 'default'
+    }
     if (options?.includePerfPrerelease) {
       return 'perf'
     }
@@ -288,7 +292,12 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
         message: 'Windows update signature check could not run'
       })
     }
-    this.sendStatus({ state: 'error', ...coded, userInitiated })
+    this.sendStatus({
+      state: 'error',
+      ...coded,
+      userInitiated,
+      ...(this.currentStatus.state === 'downloading' ? { failurePhase: 'download' } : {})
+    })
   }
 
   /** Retain the distro-package manual-install card when settling a check; ordinary status would erase it. */

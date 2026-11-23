@@ -9,6 +9,7 @@ import type { TurnAutomations } from './connector-turn-automations'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import type { ConnectorAccountTransport } from './connector-transport'
+import type { ConnectorWakeSocketFactory } from './connector-wake-socket'
 
 export type ConnectorRuntimeKind = 'desktop' | 'serve'
 
@@ -46,7 +47,8 @@ export type ConnectorMachine = {
 }
 
 /** How the client reaches the cloud as this machine; the credential behind it can change. */
-export type ConnectorTransport = Pick<ConnectorAccountTransport, 'call'>
+export type ConnectorTransport = Pick<ConnectorAccountTransport, 'call'> &
+  Partial<Pick<ConnectorAccountTransport, 'wakeToken'>>
 
 export type ConnectorPollClientOptions = {
   transport: ConnectorTransport
@@ -55,6 +57,8 @@ export type ConnectorPollClientOptions = {
   seam: ExternalConversationSeam
   machine: ConnectorMachine
   random?: () => number
+  /** Opens wake sockets; tests pass a fake. */
+  wakeSocketFactory?: ConnectorWakeSocketFactory
   /** The cloud stopped this client, for good. */
   onHalt?: (reason: string) => void
 }

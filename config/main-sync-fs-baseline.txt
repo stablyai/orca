@@ -19,7 +19,6 @@
 1 src/main/ai-vault/scan-service/session-scanner-service-spawn.ts
 3 src/main/ai-vault/scanners/omp/omp-session-root.ts # small fixed profile-dir probes mirroring OMP dirs.ts; one readdir + per-profile candidate checks, not a per-file sweep
 1 src/main/ai-vault/scanners/opencode/reader-transport/opencode-wsl-runtime-preparation.ts
-2 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn.ts
 8 src/main/amp/hook-service.ts
 2 src/main/amp/managed-plugin-install-status.ts
 2 src/main/antigravity/native-credential-backend.ts
@@ -48,7 +47,6 @@
 2 src/main/browser/cookies/chromium/chromium-cookie-path.ts
 4 src/main/browser/cookies/chromium/chromium-cookie-snapshot.ts
 1 src/main/browser/cookies/chromium/import-cookies.ts
-3 src/main/browser/cookies/client-route/client-route-cookie-import-source-store.ts
 2 src/main/browser/cookies/sources/browser-cookie-detection.ts
 8 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
 2 src/main/browser/cookies/sources/browser-cookie-key.ts
@@ -122,7 +120,7 @@
 6 src/main/codex-accounts/managed-homes/codex-managed-home-path.ts
 1 src/main/codex-accounts/managed-homes/guest-codex-account-homes.ts
 6 src/main/codex-accounts/managed-homes/host-codex-managed-home-ownership.ts
-7 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-core.ts
+8 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-core.ts # +1 stat only before deleting a mirror login on a system logout, so an unreadable auth.json is not taken for one (#45264)
 5 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-provenance.ts
 23 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-sync.ts
 2 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-wsl-core.ts
@@ -139,12 +137,12 @@
 5 src/main/codex/configuration/homes/codex-windows-sandbox-read-grant.ts
 1 src/main/codex/configuration/settings/codex-config-path-reference-rewrite.ts
 1 src/main/codex/configuration/settings/config-settings-baseline.ts
-5 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts
+4 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts
 3 src/main/codex/configuration/settings/config-settings-promotion.ts
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
-6 src/main/codex/configuration/toml/config-toml-atomic-write.ts
+7 src/main/codex/configuration/toml/config-toml-atomic-write.ts # compare-before-publish re-read of config.toml so a save made after Orca read it is never overwritten (moved here from the worker-only trust transaction)
 4 src/main/codex/history/backfill/codex-session-backfill-marker.ts
-17 src/main/codex/history/bridges/codex-session-bridge.ts
+14 src/main/codex/history/bridges/codex-session-bridge.ts
 5 src/main/codex/history/index/codex-session-index-heal-state.ts
 2 src/main/codex/history/index/codex-state-db.ts
 2 src/main/codex/history/resume/codex-session-resume-home.ts
@@ -234,11 +232,11 @@
 7 src/main/emulator/serve-sim-execution.ts
 17 src/main/emulator/serve-sim-runtime-materializer.ts
 12 src/main/external-editors/external-editor-launch.ts
-14 src/main/filesystem/atomic-file-publication.ts
+13 src/main/filesystem/atomic-file-publication.ts
 9 src/main/filesystem/durable-file-write.ts
 3 src/main/filesystem/file-content-observation.ts # Existing reads/existence checks relocated from observed callers; no new synchronous I/O.
 2 src/main/filesystem/local-file-io/filesystem-path-containment.ts
-3 src/main/filesystem/rolling-file-backup.ts # +1 Windows-only chmod inside the existing sync backup copy: clears the read-only attribute so a later rename over the backup cannot fail (STA-16113)
+2 src/main/filesystem/rolling-file-backup.ts # +1 Windows-only chmod inside the existing sync backup copy: clears the read-only attribute so a later rename over the backup cannot fail (STA-16113)
 2 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
 5 src/main/git/repositories/discovery/repo-detection.ts
@@ -297,7 +295,6 @@
 4 src/main/muse/hook-service.ts
 2 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
-1 src/main/native-chat/transcript-discovery/host-readable-transcript-path.ts
 2 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
 2 src/main/node-runtime/managed-runtime-release-install.ts
 7 src/main/node-runtime/managed-runtime-release.ts
@@ -523,6 +520,7 @@
 1 src/main/warp-themes/discovery.ts
 1 src/main/webhooks/webhook-call-file.ts
 2 src/main/webhooks/webhook-host-ledger.ts
+1 src/main/webhooks/webhook-host-newer-agent-hooks.ts # one read of the small newer-agent hooks file per signed-in account, next to the ledger's own read (STA-16837)
 1 src/main/window/desktop-integration/custom-app-icon.ts
 3 src/main/window/desktop-integration/macos-press-and-hold-default.ts
 1 src/main/windows/windows-administrator-restart.ts
@@ -530,7 +528,7 @@
 1 src/main/windows/windows-process-table.ts
 2 src/main/worker-threads/forked-child-entry-path.ts
 3 src/main/worker-threads/worker-large-send-log.ts
-4 src/main/workspace-hooks/hooks.ts
+3 src/main/workspace-hooks/hooks.ts
 10 src/main/workspace-hooks/issue-command-file.ts
 1 src/main/workspaces/catalog/folder-repo-git-conversion.ts
 2 src/main/workspaces/catalog/folder-upgrade-worktree-path.ts
@@ -568,7 +566,7 @@
 6 src/shared/file-content/node-bounded-file-reader.ts
 5 src/shared/file-content/node-file-content-equality.ts
 6 src/shared/file-content/node-source-copy-content-equality.ts
-2 src/shared/file-write/windows-retry-file-operations.ts
+3 src/shared/file-write/windows-retry-file-operations.ts # removeFileWithWindowsRetry: the rmSync moved here from rolling-file-backup.ts, which dropped one
 1 src/shared/file-write/windows-transient-lock-removal.ts
 1 src/shared/plugins/declarative/testing/orca-testing.ts
 1 src/shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch.ts

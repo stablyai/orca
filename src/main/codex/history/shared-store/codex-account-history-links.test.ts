@@ -53,13 +53,17 @@ async function holdThreadLock(lock: string): Promise<() => Promise<void>> {
 }
 
 const roots: string[] = []
-function fixture(platform: NodeJS.Platform = 'linux') {
+// Without a platform, the home is one Orca manages on this host, as share runs it in the app.
+function fixture(platform?: NodeJS.Platform) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'codex-account-history-')))
   roots.push(root)
   const store = join(root, 'store')
   const account = join(root, 'account')
   mkdirSync(join(store, 'sessions', DAY), { recursive: true })
   mkdirSync(join(account, 'sessions', DAY), { recursive: true })
+  if (!platform && process.platform === 'win32') {
+    writeFileSync(join(account, '.orca-managed-home'), 'account-1\n')
+  }
   const pending = join(root, 'index-pending')
   const warnings: unknown[] = []
   const share = () =>
@@ -68,7 +72,7 @@ function fixture(platform: NodeJS.Platform = 'linux') {
       storeHome: store,
       sqliteHome: store,
       indexPendingDir: pending,
-      platform,
+      platform: platform ?? process.platform,
       onWarning: (error) => warnings.push(error)
     })
   const unshare = () =>

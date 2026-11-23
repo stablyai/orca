@@ -12,6 +12,7 @@ import {
   agentSessionMcpServerDisplayName,
   groupAgentSessionMcpServers
 } from '../../../../../src/shared/agent-session/view/agent-session-mcp-server-presentation'
+import { MobilePendingButton } from '../../../components/controls/MobilePendingButton'
 import { MobileSwitch } from '../../../components/controls/MobileSwitch'
 import { TextField } from '../../../components/composer-input/TextField'
 import type { Translate } from '../../../i18n/mobile-i18n'
@@ -342,40 +343,26 @@ function McpButton({
   disabled?: boolean
   onPress: () => void
 }) {
-  const foreground = tone === 'primary' ? colors.bgBase : colors.textPrimary
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: disabled || busy, busy }}
-      disabled={disabled || busy}
+    <MobilePendingButton
+      label={label}
+      pending={busy}
+      disabled={disabled}
       onPress={onPress}
       hitSlop={tall ? undefined : 6}
-      style={({ pressed }) => [
+      style={[
         styles.button,
         tall && styles.buttonTall,
         tone === 'primary' && styles.buttonPrimary,
         tone === 'secondary' && styles.buttonSecondary,
-        tone === 'plain' && styles.buttonPlain,
-        pressed && styles.buttonPressed,
-        disabled && !busy && styles.buttonDisabled
+        tone === 'plain' && styles.buttonPlain
       ]}
-    >
-      {/* The label keeps the button's width while it spins. */}
-      <Text
-        style={[
-          styles.buttonLabel,
-          tone === 'primary' && styles.buttonLabelPrimary,
-          tone === 'plain' && styles.buttonLabelPlain,
-          busy && styles.buttonLabelHidden
-        ]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-      {busy ? (
-        <ActivityIndicator size="small" color={foreground} style={styles.buttonSpinner} />
-      ) : null}
-    </Pressable>
+      labelStyle={[
+        styles.buttonLabel,
+        tone === 'primary' && styles.buttonLabelPrimary,
+        tone === 'plain' && styles.buttonLabelPlain
+      ]}
+      spinnerColor={tone === 'primary' ? colors.bgBase : colors.textPrimary}
+    />
   )
 }

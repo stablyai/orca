@@ -12,18 +12,19 @@ import {
   type CodexAccountSelectionTarget,
   normalizeCodexAccountSelectionTarget
 } from '../../../shared/agent-accounts/codex/codex-selection-lane'
-import type {
-  CodexHomePathResolver,
-  KimiHomeResolver,
-  ClaudeAuthPreparationResolver,
-  OpenCodeGoRateLimitConfig,
-  MiniMaxRateLimitConfig,
-  AntigravityUsageEnabledResolver,
-  ClaudeOAuthUsageEnabledResolver,
-  MuseUsageEnabledResolver,
-  ZcodePlanRateLimitConfig,
-  GeminiCliOAuthEnabledResolver,
-  InactiveCodexAccountInfo
+import {
+  MIN_REFETCH_MS,
+  type CodexHomePathResolver,
+  type KimiHomeResolver,
+  type ClaudeAuthPreparationResolver,
+  type OpenCodeGoRateLimitConfig,
+  type MiniMaxRateLimitConfig,
+  type AntigravityUsageEnabledResolver,
+  type ClaudeOAuthUsageEnabledResolver,
+  type MuseUsageEnabledResolver,
+  type ZcodePlanRateLimitConfig,
+  type GeminiCliOAuthEnabledResolver,
+  type InactiveCodexAccountInfo
 } from './service-types'
 import {
   type ClaudeAccountSelectionTarget,
@@ -34,6 +35,19 @@ import type { RateLimitState } from '../../../shared/agent-usage/rate-limits/rat
 import type { NetworkProxySettings } from '../../../shared/network/network-proxy'
 
 export class RateLimitService extends RateLimitServiceAccountRefresh {
+  private lastOwnerReturnAt = Number.NEGATIVE_INFINITY
+
+  refreshOnOwnerReturn(): Promise<void> {
+    const now = Date.now()
+    const elapsed = now - this.lastOwnerReturnAt
+    // Admit and restamp after a backward clock change.
+    if (elapsed >= 0 && elapsed < MIN_REFETCH_MS) {
+      return Promise.resolve()
+    }
+    this.lastOwnerReturnAt = now
+    return this.refreshIfWatched()
+  }
+
   setCodexHomePathResolver(resolver: CodexHomePathResolver): void {
     this.codexHomePathResolver = resolver
   }

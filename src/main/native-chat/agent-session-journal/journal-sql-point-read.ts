@@ -24,7 +24,7 @@ import { JournalSqlStatusContext } from './journal-sql-status-context'
 import { readJournalSqlUsageLimitCut, readJournalSqlOrcaStopCut } from './journal-sql-status-cuts'
 import { readJournalSqlStatusState } from './journal-sql-status-state'
 import { readJournalSqlStatusIndicators } from './journal-sql-status-indicators'
-import { readJournalSqlQueue } from './journal-sql-queued-messages'
+import { readJournalSqlQueue } from './journal-sql-queue-read'
 import { readJournalDomainItems } from './journal-sql-item-reads'
 import {
   readJournalDomainAcpHistory,
@@ -88,6 +88,7 @@ function read(
     case 'bot-memory-sources':
     case 'automation-result-notes':
     case 'operation-window':
+    case 'turn-attribution':
     case 'prompt-item':
     case 'latest-task-list':
     case 'run-mentions':

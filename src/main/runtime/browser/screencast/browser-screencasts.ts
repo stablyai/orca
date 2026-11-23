@@ -35,12 +35,17 @@ import type {
   ActiveBrowserScreencastSubscriber,
   ActiveBrowserScreencastPage
 } from './browser-screencast-contracts'
+import { BrowserScreencastGuestReplacements } from './browser-screencast-guest-replacement'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import { watchScreencastViewerPageEvents } from './browser-screencast-viewer-page-events'
+import { startScreencastViewerEvents } from './browser-screencast-viewer-events'
 
 export class RuntimeBrowserScreencasts {
   private readonly activeScreencastsByPageId = new Map<string, ActiveBrowserScreencastPage>()
+  readonly guestSwaps = new BrowserScreencastGuestReplacements(this.activeScreencastsByPageId)
 
   constructor(
-    private readonly host: Pick<RuntimeBrowserCommandHost, 'getAvailableAuthoritativeWindow'>,
+    private readonly host: Pick<RuntimeBrowserCommandHost, 'getAvailableAuthoritativeWindowId'>,
     private readonly targets: Pick<
       RuntimeBrowserCommandTargets,
       'resolveBrowserCommandTarget' | 'resolveBrowserPageWebContents'
@@ -68,7 +73,7 @@ export class RuntimeBrowserScreencasts {
     const target = await this.targets.resolveBrowserCommandTarget(params, {
       waitForFirstLoad: false
     })
-    const { browserPageId, webContents: guest } = this.targets.resolveBrowserPageWebContents(
+    const { browserPageId } = this.targets.resolveBrowserPageWebContents(
       target.worktreeId,
       target.browserPageId
     )
@@ -80,25 +85,33 @@ export class RuntimeBrowserScreencasts {
       resolveSubscriberDone = resolve
     })
     let createdPageStream = false
+    await this.guestSwaps.settle(browserPageId)
     let active = this.activeScreencastsByPageId.get(browserPageId)
-    while (active?.stopping) {
-      await active.session?.done
-      active = this.activeScreencastsByPageId.get(browserPageId)
-    }
+    // Read the guest only now: a replacement swaps it while this viewer waits.
+    const { webContents: guest } = this.targets.resolveBrowserPageWebContents(
+      target.worktreeId,
+      browserPageId
+    )
     if (!active) {
       createdPageStream = true
       const subscribers = new Map<string, ActiveBrowserScreencastSubscriber>()
+      const pageEvents = watchScreencastViewerPageEvents(guest, subscribers)
       const pendingRecord: Omit<ActiveBrowserScreencastPage, 'started'> = {
         format: params.format,
         session: null,
         stopping: false,
         subscribers,
         viewportOwnerSubscriptionId: null,
-        appliedBudget: budget
+        appliedBudget: budget,
+        pointer: pageEvents.pointer
       }
       // Hidden host compositors stop producing guest frames when throttled.
-      const win = this.host.getAvailableAuthoritativeWindow()
-      const releaseThrottle = win ? rendererPublicationThrottle.acquire(win.webContents) : () => {}
+      const windowId = this.host.getAvailableAuthoritativeWindowId()
+      const desktop = getRuntimeDesktopSurface()
+      const releaseThrottle =
+        windowId !== null ? (desktop.holdRendererPublication?.(windowId) ?? (() => {})) : () => {}
+      // A window's guests stop drawing once its display sleeps; offscreen pages draw without one.
+      const releaseDisplay = windowId !== null ? desktop.holdDisplayAwake?.() : undefined
       // Active-tab covers hide the guest widget independently of the host.
       const releaseGuestThrottle = rendererPublicationThrottle.acquire(guest)
       const started = startBrowserScreencast(guest, {
@@ -147,8 +160,10 @@ export class RuntimeBrowserScreencasts {
           return session.done
         })
         .finally(() => {
+          pageEvents.stop()
           releaseGuestThrottle()
           releaseThrottle()
+          releaseDisplay?.()
           if (this.activeScreencastsByPageId.get(browserPageId) === record) {
             this.activeScreencastsByPageId.delete(browserPageId)
           }
@@ -171,7 +186,10 @@ export class RuntimeBrowserScreencasts {
       pendingFrameRetry: null,
       pairedDeviceId: stream.pairedDeviceId,
       delivery: INITIAL_SCREENCAST_SUBSCRIBER_DELIVERY,
-      frameCredit: null
+      frameCredit: null,
+      pointerEvents: params.pointerEvents === 1,
+      contextMenus: params.contextMenus === 1,
+      stopViewerEvents: null
     }
     if (params.frameAck === 1) {
       const credit = createBrowserScreencastFrameCredit({
@@ -230,6 +248,16 @@ export class RuntimeBrowserScreencasts {
         // Replayed delivery is the first evidence that ghost eviction may use.
         deliverScreencastSubscriberFrame(subscriber, bytes)
       },
+      startViewerEvents: () => {
+        const subscriber = active.subscribers.get(subscriptionId)
+        if (subscriber) {
+          subscriber.stopViewerEvents = startScreencastViewerEvents(
+            { guestWebContentsId: guest.id, browserPageId },
+            params,
+            stream
+          )
+        }
+      },
       session: {
         done: subscriberDone,
         stop: () => this.leaveScreencastSubscriber(active, subscriptionId, session),
@@ -241,7 +269,9 @@ export class RuntimeBrowserScreencasts {
         browserPageId,
         format: active.format,
         tab: this.catalog.describeBrowserTab(browserPageId, target.worktreeId),
-        ...(subscriber.frameCredit ? { frameAck: true as const } : {})
+        ...(subscriber.frameCredit ? { frameAck: true as const } : {}),
+        ...(subscriber.pointerEvents ? { pointer: active.pointer() } : {}),
+        ...(subscriber.contextMenus ? { contextMenus: true as const } : {})
       }
     }
   }

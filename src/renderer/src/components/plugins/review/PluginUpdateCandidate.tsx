@@ -1,3 +1,4 @@
+import { pluginBlockCopy } from '../presentation/plugin-block-copy'
 // @protected-copy
 import { Check, ChevronDown } from 'lucide-react'
 import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
@@ -272,13 +273,7 @@ export function CandidateRow({
     )
   } else if (preview?.blockedByKillList) {
     note = (
-      <p className="text-xs text-destructive">
-        {t(
-          'auto.components.settings.PluginMarketplaceListingRow.blocked',
-          "Blocked by Orca's safety list: {{value0}}",
-          { value0: preview.blockedByKillList.reason }
-        )}
-      </p>
+      <p className="text-xs text-destructive">{pluginBlockCopy(preview.blockedByKillList, t)}</p>
     )
   } else if (isCurrent(entry, preview)) {
     note = (

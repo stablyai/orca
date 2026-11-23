@@ -42,6 +42,9 @@ export const SendParams = z
     files: z.array(z.string().min(1).max(4096)).max(30).optional(),
     // A paired server: this Orca carries the mail there and the replies back (`send --on`).
     on: OptionalString,
+    // A paired computer's agent: it pulls the mail while connected and decides there (`send --on-client`).
+    // Supplied but empty is refused, never read as a local send.
+    onClient: z.string().trim().min(1, 'Missing --on-client computer').optional(),
     waitForLifecycleSettlement: OptionalBoolean,
     devMode: OptionalBoolean
   })

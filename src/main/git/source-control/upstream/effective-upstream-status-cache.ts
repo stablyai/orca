@@ -1,6 +1,5 @@
 import type { GitUpstreamStatus } from '../../../../shared/git/status/git-status-types'
 import type { GitRuntimeOptions } from '../../command-runner/git-runtime-options'
-import { invalidateGitReadCaches } from '../git-read-cache-invalidation'
 import { resolvedUpstreamNameCache } from './resolved-upstream-name-cache'
 
 const EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS = 5 * 60_000
@@ -18,24 +17,6 @@ const retiredEffectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstre
 export const effectiveUpstreamStatusWriteGeneration = new Map<string, number>()
 let writeGenerationSequence = 0
 let evictedWriteGeneration = 0
-
-export function clearEffectiveUpstreamStatusCacheForTests(): void {
-  effectiveUpstreamStatusCache.clear()
-  effectiveUpstreamStatusInFlight.clear()
-  retiredEffectiveUpstreamStatusInFlight.clear()
-  effectiveUpstreamStatusWriteGeneration.clear()
-  writeGenerationSequence = 0
-  evictedWriteGeneration = 0
-  invalidateGitReadCaches()
-}
-
-export function getEffectiveUpstreamStatusCacheCountForTests(): number {
-  return effectiveUpstreamStatusCache.size
-}
-
-export function getEffectiveUpstreamStatusGenerationCountForTests(): number {
-  return effectiveUpstreamStatusWriteGeneration.size
-}
 
 export function getEffectiveUpstreamStatusWriteGeneration(cacheKey: string): number {
   return effectiveUpstreamStatusWriteGeneration.get(cacheKey) ?? evictedWriteGeneration

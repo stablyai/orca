@@ -1,6 +1,6 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { nativeChatAppearanceStyle } from '../../appearance/native-chat-appearance-style'
-import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
+import { NativeChatCrewBackgroundTasksStatus } from './NativeChatCrewBackgroundTasksStatus'
 import type { AgentSessionBackgroundTask } from '../../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import {
   crewSummary,
@@ -190,7 +190,7 @@ function strip(props: {
   return (
     // The chat's own font rules apply inside the strip, as in a real chat pane.
     <div className="native-chat-appearance bg-chat-canvas" style={nativeChatAppearanceStyle({})}>
-      <NativeChatBackgroundTasksStatus
+      <NativeChatCrewBackgroundTasksStatus
         tasks={props.tasks ?? tasks}
         settledTasks={[]}
         supportsTaskStop

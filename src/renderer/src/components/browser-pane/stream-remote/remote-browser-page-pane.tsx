@@ -3,15 +3,13 @@ import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import {
-  BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
-  BROWSER_TAB_HISTORY_STATE_RUNTIME_CAPABILITY
+  BROWSER_TAB_HISTORY_STATE_RUNTIME_CAPABILITY,
+  BROWSER_GRAB_RUNTIME_CAPABILITY
 } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
 import '@/lib/browser/documents/file-preview'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
-import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
-import { resolveBrowserSourceUnifiedTab } from '@/lib/browser/workspace/browser-workspace-source-resolution'
 import { useBrowserPageChromeFocus } from '../assemble-chrome/focus/use-browser-page-chrome-focus'
 import { useBrowserAddressBarEditSession } from '../assemble-chrome/address-bar/use-browser-address-bar-edit-session'
 import { useElementGuestFocus } from '../assemble-chrome/focus/browser-page-guest-focus'
@@ -36,14 +34,16 @@ import {
 import { useRemoteBrowserPageChromeChords } from './use-remote-browser-page-chrome-chords'
 import { useRemoteBrowserPagePointerHistory } from './use-remote-browser-page-pointer-history'
 import { useRemoteBrowserPageWheel } from './use-remote-browser-page-wheel'
-import { useRemoteBrowserPageMarkup } from './use-remote-browser-page-markup'
 import { useRemoteBrowserPageZoom } from './use-remote-browser-page-zoom'
+import { useRemoteBrowserPageFind } from './use-remote-browser-page-find'
 import {
   RemoteBrowserPageContextMenu,
   useRemoteBrowserPageContextMenu
 } from './remote-browser-page-context-menu'
 import { RemoteBrowserPageToolbar } from './remote-browser-page-toolbar'
+import { useRemoteBrowserPageFileDrop } from './use-remote-browser-page-file-drop'
 import { RemoteBrowserPageViewport } from './remote-browser-page-viewport'
+import { useRemoteBrowserPageAnnotate } from './use-remote-browser-page-annotate'
 
 export function RemoteBrowserPagePane({
   browserTab,
@@ -94,6 +94,8 @@ export function RemoteBrowserPagePane({
     (s) => s.remoteBrowserPageHandlesByPageId[browserTab.id] ?? null
   )
   const stagedPage = remotePageHandle?.staged === true
+  const remotePageId =
+    remotePageHandle?.environmentId === runtimeEnvironmentId ? remotePageHandle.remotePageId : null
   // Older hosts publish canGoBack/canGoForward as always false; keep both arrows enabled for them.
   const historyStateKnown = useRuntimeEnvironmentCapability(
     runtimeEnvironmentId,
@@ -101,26 +103,16 @@ export function RemoteBrowserPagePane({
   )
   const history = historyStateKnown ? browserTab : { canGoBack: true, canGoForward: true }
 
-  // Why: runtimes predating browser.certificate-trust.v1 can't honor a proceed request, so hide "Proceed Anyway" until support is advertised.
-  const remoteCertificateTrustSupported = useRuntimeEnvironmentCapability(
-    certificateFailure?.challengeId ? remotePageHandle?.environmentId : null,
-    BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY
-  )
-
-  const {
-    enqueueRemoteInput,
-    clearPendingRemoteWheel,
-    resetRemoteInputQueue,
-    pendingRemoteWheelRef,
-    remoteWheelFrameRef,
-    remoteWheelInFlightRef
-  } = useRemoteBrowserPageInputQueue()
+  const { inputQueue, enqueueRemoteInput, clearPendingRemoteInput, resetRemoteInputQueue } =
+    useRemoteBrowserPageInputQueue()
 
   const {
     lifecycle,
     streamStatus,
     frameUrl,
     frameMetadata,
+    pagePointer,
+    pageDriver,
     runtimeWorktree,
     runtimeTarget,
     createRemoteOperationToken,
@@ -144,19 +136,32 @@ export function RemoteBrowserPagePane({
     isActive,
     setPaneNotice,
     setPaneBusy,
-    clearPendingRemoteWheel,
+    clearPendingRemoteInput,
     resetRemoteInputQueue
   })
+  const grabSupported = useRuntimeEnvironmentCapability(
+    remotePageHandle?.environmentId,
+    BROWSER_GRAB_RUNTIME_CAPABILITY
+  )
 
   // Stopped streams cannot clear paneBusy with frames; staged pages remain busy until creation. Stream notices outrank consequent RPC failures.
-  const busy = stagedPage
-    ? true
-    : streamStatus.kind === 'stopped'
-      ? false
-      : paneBusy || isRemoteBrowserStreamBusy(streamStatus)
+  const busy =
+    stagedPage ||
+    (streamStatus.kind !== 'stopped' && (paneBusy || isRemoteBrowserStreamBusy(streamStatus)))
   const streamNotice = remoteBrowserStreamNotice(streamStatus)
   const remoteError =
     paneNotice?.kind === 'direct' ? paneNotice.text : (streamNotice ?? paneNotice?.text ?? null)
+
+  const remotePageTarget = {
+    runtimeTarget,
+    lifecycle,
+    runtimeWorktree,
+    createRemoteOperationToken,
+    isCurrentRemoteOperationToken,
+    closeMissingRemotePage,
+    runtimeEnvironmentId,
+    setPaneNotice
+  }
 
   const {
     applyRemoteTabInfo,
@@ -167,19 +172,13 @@ export function RemoteBrowserPagePane({
     navigateToUrl,
     submitAddressBar
   } = useRemoteBrowserPageNavigation({
+    ...remotePageTarget,
     browserTab,
     stagedPage,
     addressBarValue,
     setAddressBarValueFromPage,
-    lifecycle,
-    runtimeWorktree,
-    runtimeTarget,
-    createRemoteOperationToken,
-    isCurrentRemoteOperationToken,
-    closeMissingRemotePage,
     onSetUrl,
     onUpdatePageState,
-    setPaneNotice,
     setPaneBusy
   })
 
@@ -194,26 +193,19 @@ export function RemoteBrowserPagePane({
     }
   }, [browserTab.id, navigateToUrl, stagedPage])
 
+  const find = useRemoteBrowserPageFind({ ...remotePageTarget, isActive, browserTab })
   useRemoteBrowserPageChromeChords({
+    ...remotePageTarget,
     chromeShortcutScope,
     workspaceId,
     runRemoteNavigation,
-    setPaneNotice
+    openFind: find.openFind
   })
   useRemoteBrowserPagePointerHistory({ isActive, remoteViewportRef, runRemoteNavigation })
 
-  // Transfer viewport focus to the first image, which owns remote key input.
-  const hasStreamFrame = frameUrl !== null
-  useEffect(() => {
-    if (!hasStreamFrame || document.activeElement !== remoteViewportRef.current) {
-      return
-    }
-    imageRef.current?.focus()
-  }, [hasStreamFrame])
-
   const { reconnectRemoteStream, resyncRemoteViewport } = useRemoteBrowserPageStream({
     activeRuntimeEnvironmentId: runtimeEnvironmentId,
-    browserPageId: browserTab.id,
+    page: browserTab,
     isActive,
     lifecycle,
     stagedPage,
@@ -230,7 +222,7 @@ export function RemoteBrowserPagePane({
     applyTabInfo: applyRemoteTabInfo,
     clearStreamFrame,
     closeMissingRemotePage,
-    clearPendingRemoteWheel,
+    clearPendingRemoteInput,
     setPaneNotice,
     setPaneBusy,
     setFrameUrl,
@@ -238,79 +230,95 @@ export function RemoteBrowserPagePane({
   })
 
   const {
+    markup,
+    pickerAvailable,
+    annotateTools,
+    annotateBanner,
+    annotateOverlays,
+    pagePointerOwned
+  } = useRemoteBrowserPageAnnotate({
+    browserTab,
+    workspaceId,
+    worktreeId,
+    isActive,
+    chromeShortcutScope,
+    busy,
+    frameUrl,
+    stagedPage,
+    grabSupported,
+    imageRef,
+    remoteViewportRef,
+    runtimeEnvironmentId,
+    remotePageId,
+    runtimeTarget,
+    runtimeWorktree,
+    lifecycle,
+    inputQueue
+  })
+
+  const {
     getRemoteImagePoint,
     handleRemotePointerDown,
     handleRemotePointerUp,
+    handleRemotePointerMove,
     handleRemoteScreenshotKeyDown,
     handleRemoteScreenshotPaste,
-    runRemoteEditCommand
+    runRemoteEditCommand,
+    selectPopupElement
   } = useRemoteBrowserPageInput({
+    ...remotePageTarget,
     busy,
+    pickerAvailable,
+    pagePointerOwned,
+    hostContextMenus: lifecycle.hostContextMenus,
+    inputQueue,
     imageRef,
     remoteViewportRef,
     remoteCssViewportSizeRef,
     remoteViewportSizeRef,
     frameMetadata,
-    runtimeTarget,
-    lifecycle,
-    runtimeWorktree,
     enqueueRemoteInput,
-    createRemoteOperationToken,
-    isCurrentRemoteOperationToken,
-    closeMissingRemotePage,
     scheduleRemoteTabInfoRefresh,
-    setPaneNotice
+    isActive,
+    mountedRef
+  })
+
+  const attachFileDrop = useRemoteBrowserPageFileDrop({
+    ...remotePageTarget,
+    remoteViewportRef,
+    getPageUrl: () => browserTab.url,
+    getRemoteImagePoint
   })
 
   const zoom = useRemoteBrowserPageZoom({
+    ...remotePageTarget,
     browserPageId: browserTab.id,
-    runtimeEnvironmentId,
-    onZoomed: resyncRemoteViewport,
-    lifecycle,
-    runtimeTarget,
-    runtimeWorktree,
-    createRemoteOperationToken,
-    isCurrentRemoteOperationToken,
-    setPaneNotice
+    streaming: frameUrl !== null,
+    onZoomed: resyncRemoteViewport
   })
   useRemoteBrowserPageWheel({
+    ...remotePageTarget,
     busy,
     imageRef,
     remoteViewportRef,
     frameUrl,
-    runtimeTarget,
-    lifecycle,
-    runtimeWorktree,
     getRemoteImagePoint,
-    enqueueRemoteInput,
-    createRemoteOperationToken,
-    isCurrentRemoteOperationToken,
-    closeMissingRemotePage,
+    inputQueue,
     scheduleRemoteTabInfoRefresh,
-    setPaneNotice,
-    pendingRemoteWheelRef,
-    remoteWheelFrameRef,
-    remoteWheelInFlightRef,
     requestZoom: zoom.requestZoom
   })
 
   const { contextMenu, setContextMenu, handleRemoteContextMenu } = useRemoteBrowserPageContextMenu({
+    ...remotePageTarget,
     busy,
+    pagePointerOwned,
+    hostContextMenus: lifecycle.hostContextMenus,
     browserTabUrl: browserTab.url,
     imageRef,
-    runtimeTarget,
-    lifecycle,
-    runtimeWorktree,
     getRemoteImagePoint,
     enqueueRemoteInput,
-    createRemoteOperationToken,
-    isCurrentRemoteOperationToken,
-    closeMissingRemotePage,
-    mountedRef,
-    setPaneNotice
+    mountedRef
   })
-
-  const markup = useRemoteBrowserPageMarkup(imageRef, remoteViewportRef)
 
   return (
     // Scope E2E controls per pane; a workspace may have several address bars.
@@ -329,30 +337,10 @@ export function RemoteBrowserPagePane({
             imageRef.current?.focus()
           }}
           history={history}
+          linkTab={{ browserPageId: browserTab.id, worktreeId, runtimeEnvironmentId }}
+          pageMenuDeps={{ ...remotePageTarget, enqueueRemoteInput }}
           actions={{
             edit: runRemoteEditCommand,
-            openInNewTab: (url, activate) => {
-              const sourceUnifiedTab = resolveBrowserSourceUnifiedTab(
-                useAppStore.getState(),
-                browserTab.id,
-                worktreeId
-              )
-              void openWorkspaceBrowserTab({
-                workspaceId: worktreeId,
-                url,
-                ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
-                focusOnCreate: activate,
-                selectWorktree: false,
-                intent: { kind: 'url' },
-                expectedRuntimeEnvironmentId: runtimeEnvironmentId,
-                placementPreference: 'server'
-              }).catch((error) => {
-                setPaneNotice({
-                  kind: 'direct',
-                  text: error instanceof Error ? error.message : String(error)
-                })
-              })
-            },
             // The server's loopback address would open this machine's, not the page's.
             externalUrl: resolveRemoteFailureExternalUrl,
             goBack: () => void runRemoteNavigation('browser.back'),
@@ -361,8 +349,15 @@ export function RemoteBrowserPagePane({
           }}
         />
       ) : null}
+      {selectPopupElement}
       <RemoteBrowserPageToolbar
+        page={browserTab}
+        workspaceId={workspaceId}
+        worktreeId={worktreeId}
+        isActive={isActive}
+        siteDisplaySource={zoom.siteDisplaySource}
         runtimeEnvironmentId={runtimeEnvironmentId}
+        remotePageId={remotePageId}
         addressBarValue={addressBarValue}
         onAddressBarChange={setAddressBarValue}
         onSubmitAddressBar={submitAddressBar}
@@ -373,31 +368,33 @@ export function RemoteBrowserPagePane({
         addressBarInputRef={addressBarInputRef}
         addressBarEditSession={addressBarEditSession}
         busy={busy}
-        loading={browserTab.loading}
-        loadErrorCode={browserTab.loadError?.code ?? null}
-        markup={markup}
-        frameUrl={frameUrl}
-        isActive={isActive}
         history={history}
+        pickerAvailable={pickerAvailable}
+        annotateTools={annotateTools}
         onBack={() => void runRemoteNavigation('browser.back')}
         onForward={() => void runRemoteNavigation('browser.forward')}
         onReload={(ignoreCache) =>
           void runRemoteNavigation('browser.reload', undefined, ignoreCache)
         }
         onStop={() => void stopRemotePage()}
+        onFind={find.openFind}
       />
+      {annotateBanner}
       <RemoteBrowserPageViewport
         remoteViewportRef={remoteViewportRef}
+        attachFileDrop={attachFileDrop}
         imageRef={imageRef}
         feedbackBadgeRef={zoom.feedbackBadgeRef}
+        find={find}
         frameUrl={frameUrl}
         frameMetadata={frameMetadata}
+        pagePointer={pagePointer}
+        pageDriver={pageDriver}
         busy={busy}
         markup={markup}
         browserTab={browserTab}
         remoteError={remoteError}
         streamStatus={streamStatus}
-        remoteCertificateTrustSupported={remoteCertificateTrustSupported}
         certificateFailure={certificateFailure}
         remotePageHandle={remotePageHandle}
         activeRuntimeEnvironmentId={runtimeEnvironmentId}
@@ -414,6 +411,8 @@ export function RemoteBrowserPagePane({
         handleRemoteContextMenu={handleRemoteContextMenu}
         handleRemoteScreenshotKeyDown={handleRemoteScreenshotKeyDown}
         handleRemoteScreenshotPaste={handleRemoteScreenshotPaste}
+        handleRemotePointerMove={handleRemotePointerMove}
+        annotateOverlays={annotateOverlays}
       />
     </div>
   )

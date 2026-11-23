@@ -223,11 +223,15 @@
         "children": [
           {
             "el": "DetailsHover",
-            "when": "vars.hoverDetails && !ws.isRenaming",
-            "props": { "branchName": "=vars.hoverBranch", "workspaceTitle": "=vars.hoverTitle" },
+            "when": "vars.hoverDetails",
+            "props": {
+              "branchName": "=vars.hoverBranch",
+              "workspaceTitle": "=vars.hoverTitle",
+              "closed": "=ws.isRenaming"
+            },
             "children": [{ "el": "IdentityBlock" }]
           },
-          { "el": "IdentityBlock", "when": "!(vars.hoverDetails && !ws.isRenaming)" },
+          { "el": "IdentityBlock", "when": "!vars.hoverDetails" },
           { "el": "RemoteBranchConflict", "when": "git.remoteBranchConflict != null" },
           { "el": "DeleteFailed", "when": "ws.removalError != null && !ws.isDeleting" },
           { "el": "LinearSetupPrompt", "when": "place.isActive && links.linearIssue" },

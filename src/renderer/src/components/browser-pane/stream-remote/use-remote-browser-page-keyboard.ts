@@ -1,6 +1,5 @@
 import { useRef } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import '@/lib/keyboard/useShortcutLabel'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useTranslate } from '@/i18n/use-translate'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
@@ -11,6 +10,8 @@ import {
 import { iterateBrowserTextInsertionChunks } from '../../../../../shared/browser/automation/browser-text-insertion-chunks'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../../shared/clipboard/clipboard-text'
 import { isEditableKeyboardTarget } from '../host-guest/input/browser-keyboard'
+import { useAppStore } from '@/store'
+import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import {
   getRemoteBrowserKeyboardShortcut,
   getRemoteBrowserKeypressKey
@@ -23,6 +24,7 @@ import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifec
 import type { RemoteBrowserOperationToken } from './remote-browser-stream-tokens'
 import {
   buildRemoteClipboardCommandExpression,
+  buildRemoteExecCommandExpression,
   buildRemoteCutDeleteExpression,
   readRemoteClipboardCommandResult,
   type RemoteBrowserClipboardChord,
@@ -53,6 +55,7 @@ type RemoteKeyboardInput =
   | { method: 'execCommand'; command: 'undo' | 'redo' | 'selectAll' }
 
 export function useRemoteBrowserPageKeyboard({
+  pickerAvailable,
   runtimeTarget,
   lifecycle,
   runtimeWorktree,
@@ -61,8 +64,10 @@ export function useRemoteBrowserPageKeyboard({
   isCurrentRemoteOperationToken,
   closeMissingRemotePage,
   scheduleRemoteTabInfoRefresh,
-  setPaneNotice
+  setPaneNotice,
+  closeSelectPopupForPageInput
 }: {
+  pickerAvailable: boolean
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
   lifecycle: RemoteBrowserStreamLifecycle
   runtimeWorktree: string
@@ -72,6 +77,7 @@ export function useRemoteBrowserPageKeyboard({
   closeMissingRemotePage: (remotePageId?: string | null) => void
   scheduleRemoteTabInfoRefresh: (token: RemoteBrowserOperationToken, delayMs?: number) => void
   setPaneNotice: (notice: RemoteBrowserPaneNotice | null) => void
+  closeSelectPopupForPageInput: () => void
 }): {
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
   handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
@@ -141,6 +147,10 @@ export function useRemoteBrowserPageKeyboard({
     const rpcOptions = { timeoutMs: 15_000, suppressFeatureInteraction: true }
     setPaneNotice(null)
     enqueueRemoteInput(async () => {
+      if (!isCurrentRemoteOperationToken(operationToken)) {
+        return
+      }
+      closeSelectPopupForPageInput()
       try {
         if (input.method === 'browser.keyboardInsertText') {
           // Why: a paste pressed before our queued copy finished carries the clipboard from before it.
@@ -212,6 +222,18 @@ export function useRemoteBrowserPageKeyboard({
     if (isEditableKeyboardTarget(event.target)) {
       return
     }
+    // The annotate chord arms the picker here; typing it into the page too would double-act.
+    if (
+      pickerAvailable &&
+      keybindingMatchesAction(
+        'browser.annotateElement',
+        event.nativeEvent,
+        getShortcutPlatform(),
+        useAppStore.getState().keybindings
+      )
+    ) {
+      return
+    }
     const clipboardCommand = getNativeClipboardChordCommand(
       event,
       getShortcutPlatform() === 'darwin'
@@ -245,6 +267,8 @@ export function useRemoteBrowserPageKeyboard({
   }
 
   const handleRemoteScreenshotPaste = (event: React.ClipboardEvent<HTMLImageElement>): void => {
+    // Why text only: markup and files would be staged in the page over several requests, and a page
+    // that navigated meanwhile could receive them; they wait for a host-bound delivery.
     const text = getClipboardEventText(event.nativeEvent)
     const copyWriteAtPaste = lastCopyWriteRef.current
     if (
@@ -278,21 +302,4 @@ export function useRemoteBrowserPageKeyboard({
   }
 
   return { handleRemoteScreenshotKeyDown, handleRemoteScreenshotPaste, runRemoteEditCommand }
-}
-
-/** Runs an edit command in the focused document, reaching into same-origin frames like a native edit does. */
-function buildRemoteExecCommandExpression(command: 'undo' | 'redo' | 'selectAll'): string {
-  return `(() => {
-    let doc = document;
-    while (doc.activeElement && doc.activeElement.contentDocument) {
-      doc = doc.activeElement.contentDocument;
-    }
-    const field = doc.activeElement;
-    // Why: a programmatically focused field may not hold the frame selection that execCommand selects in.
-    if (${JSON.stringify(command)} === 'selectAll' && field && typeof field.select === 'function') {
-      field.select();
-      return;
-    }
-    doc.execCommand(${JSON.stringify(command)});
-  })()`
 }
