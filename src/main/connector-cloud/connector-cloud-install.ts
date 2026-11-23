@@ -210,6 +210,7 @@ function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore)
     write: (key, muted) => {
       writeLinkFact(store, key, { muted: muted ? true : undefined })
     },
+    queued: (key) => runtime.getExternalConversationSeam()?.queued(key) ?? Promise.resolve(),
     botNames: (botId) => {
       const bot = store.getBots?.().find((entry) => entry.id === botId)
       return bot ? [bot.name, bot.folder] : []

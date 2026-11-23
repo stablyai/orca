@@ -23,17 +23,19 @@ const send = (text: string, extra: Record<string, unknown> = {}) => ({
 })
 
 describe('threadMuteCommand', () => {
-  it('reads only a whole message as a command, past mentions of the bot', () => {
-    expect(threadMuteCommand('mute')).toBe('mute')
-    expect(threadMuteCommand('<@U0BOT> Be quiet!')).toBe('mute')
-    expect(threadMuteCommand('@Orca reviewer stop responding in this thread', ['reviewer'])).toBe(
-      'mute'
-    )
-    expect(threadMuteCommand('@Orca please unmute 🔊')).toBe('unmute')
-    expect(threadMuteCommand('Start responding again.')).toBe('unmute')
-    expect(threadMuteCommand("don't mute")).toBeNull()
-    expect(threadMuteCommand('mute the video player')).toBeNull()
-    expect(threadMuteCommand('can you stop responding so fast')).toBeNull()
+  const bot = { userId: 'U0BOT', names: ['Reviewer bot', 'reviewer'] }
+  it('reads only a whole message addressed to this bot as a command', () => {
+    expect(threadMuteCommand('mute', bot)).toBe('mute')
+    expect(threadMuteCommand('<@U0BOT> Be quiet!', bot)).toBe('mute')
+    expect(threadMuteCommand('<@U0BOT> reviewer stop responding in this thread', bot)).toBe('mute')
+    expect(threadMuteCommand('@Orca reviewer please unmute 🔊', bot)).toBe('unmute')
+    expect(threadMuteCommand('Start responding again.', bot)).toBe('unmute')
+    // Someone else's mute, a question, or a sentence that only contains the word.
+    expect(threadMuteCommand('<@UOTHER> mute', bot)).toBeNull()
+    expect(threadMuteCommand('@bob be quiet', bot)).toBeNull()
+    expect(threadMuteCommand('mute?', bot)).toBeNull()
+    expect(threadMuteCommand("don't mute", bot)).toBeNull()
+    expect(threadMuteCommand('mute the video player', bot)).toBeNull()
   })
 })
 
@@ -61,7 +63,8 @@ describe('a muted thread', () => {
             write: (_key, next) => {
               muted = next
             },
-            botNames: () => [],
+            botNames: () => ['reviewer'],
+            queued: async () => {},
             react: async (_bot, _key, _ref, emoji) => {
               reacted.push(emoji)
             }
@@ -81,16 +84,43 @@ describe('a muted thread', () => {
     }
 
     await deliver(send('first'))
-    expect(await deliver(send('@bot mute'))).toEqual({ outcome: 'accepted' })
+    expect(await deliver(send('<@U0BOT> mute'))).toEqual({ outcome: 'accepted' })
     await deliver(send('anyone there?'))
     await deliver(send('hello again', { mentioned: true }))
     await deliver(send('mute'))
+    await deliver(send('ping @reviewer'))
+    await deliver(send('mute'))
+    await deliver(send('<@UOTHER> unmute'))
     await deliver(send('still muted'))
     await deliver(send('unmute'))
     await deliver(send('back'))
 
-    expect(reached).toEqual(['first', 'hello again', 'back'])
-    expect(reacted).toEqual([':mute:', ':mute:', ':loud_sound:'])
+    expect(reached).toEqual(['first', 'hello again', 'ping @reviewer', 'back'])
+    expect(reacted).toEqual([':mute:', ':mute:', ':mute:', ':loud_sound:'])
     expect(muted).toBe(false)
+  })
+})
+
+describe('a mute in the same poll as its thread’s start', () => {
+  // The start writes the thread's link only once its queued delivery runs; the mute must wait for it.
+  it('mutes once the queued start linked the thread', async () => {
+    let linked = false
+    let muted = false
+    const done = handleThreadMute(
+      {
+        read: () => (linked ? { botId: 'bot1', muted } : null),
+        write: (_key, next) => {
+          muted = next
+        },
+        botNames: () => [],
+        queued: async () => {
+          linked = true
+        },
+        react: async () => {}
+      },
+      send('mute') as Parameters<typeof handleThreadMute>[1]
+    )
+    expect(await done).toEqual({ outcome: 'accepted' })
+    expect(muted).toBe(true)
   })
 })

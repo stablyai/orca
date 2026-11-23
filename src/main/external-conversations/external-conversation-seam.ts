@@ -57,6 +57,9 @@ export class ExternalConversationSeam {
   private readonly abort = new AbortController()
   readonly signal = this.abort.signal
   private readonly chain = new ConversationChain(this.abort.signal)
+  /** Settles after the conversation's queued deliveries, so the link a start writes exists. */
+  readonly queued = (key: ConversationKey): Promise<unknown> =>
+    this.chain.enqueue(conversationId(key), async () => ({ outcome: 'accepted' }))
   private readonly linked = new Map<string, { key: ConversationKey; worktreeId: string }>()
   private readonly chatDeliveries = new ChatDeliveries((...link) => this.linkChat(...link))
   /** Built by the first watcher, so an unwatched seam subscribes to nothing. */
@@ -114,17 +117,14 @@ export class ExternalConversationSeam {
     const seam = { ...this.deps, chain: this.chain }
     const args = turnId === undefined ? [] : [turnId]
     // A Stop bound to a turn never lands on a later one.
-    const turnIsCurrent = () => turnId === undefined || this.currentTurn(key) === turnId
+    const turnIsCurrent = () =>
+      turnId === undefined ||
+      this.replyTarget(findLink(this.deps.store, key)?.link.paneKey ?? '')?.turnId === turnId
     return this.deps.receipts.run(key, id, 'connector.cancel', args, async () =>
       turnIsCurrent()
         ? cancelConversation(host, seam, key, this.abort.signal, turnIsCurrent)
         : refused('turn_not_running')
     )
-  }
-
-  private currentTurn(key: ConversationKey): number | null {
-    const linked = findLink(this.deps.store, key)
-    return (linked && this.replyTarget(linked.link.paneKey)?.turnId) ?? null
   }
 
   /** Whether a chat's current or next turn is a connector's delivery, not its owner's. */

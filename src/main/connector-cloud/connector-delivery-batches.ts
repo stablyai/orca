@@ -15,7 +15,7 @@ import {
   type SendDelivery,
   type ThreadDelivery
 } from './connector-deliveries'
-import { threadMuteCommand } from './connector-thread-mute'
+import { mayBeThreadMuteCommand } from './connector-thread-mute'
 
 /** A start or send and the sends queued right behind it in the same poll: the same person's, run
  *  as one turn. Anything else, and a send that is its own bare mention, goes on its own. */
@@ -61,7 +61,7 @@ export function connectorDeliveryUnits(
       !delivery.bareMention &&
       !delivery.asker?.earlierOwn &&
       // A mute command is handled alone, before the agent, never as words of the turn before it.
-      !threadMuteCommand(delivery.text) &&
+      !(delivery.conversation.source === 'slack' && mayBeThreadMuteCommand(delivery.text)) &&
       askerOf(delivery) === askerOf(batch[0])
     ) {
       batch.push(delivery)
