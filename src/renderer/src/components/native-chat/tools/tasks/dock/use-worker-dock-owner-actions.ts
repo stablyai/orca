@@ -27,7 +27,9 @@ export function useWorkerDockOwnerActions(
   target: RuntimeClientTarget,
   party: string | null | undefined,
   identities: WorkerDockSnapshot['identities'] | undefined,
-  workerOpen: (row: WorkerDockRowView) => void
+  workerOpen: (row: WorkerDockRowView) => void,
+  /** Read just before each Stop request, so a Stop or Retry is never sent once its row can't stop. */
+  stopAvailable?: (dispatchId: string) => boolean
 ) {
   const t = useTranslate()
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
@@ -128,14 +130,20 @@ export function useWorkerDockOwnerActions(
       track(new Set([row.id]), () =>
         settlement
           ? clear([{ dispatchId: row.dispatchId, settlement }])
-          : callRuntimeRpc(target, 'orchestration.workerDockStop', {
-              party,
-              dispatch: row.dispatchId,
-              requestId
-            })
+          : stopAvailable && !stopAvailable(row.dispatchId)
+            ? Promise.reject(
+                new Error(
+                  t('components.native-chat.workerDock.unavailable', 'Worker status unavailable')
+                )
+              )
+            : callRuntimeRpc(target, 'orchestration.workerDockStop', {
+                party,
+                dispatch: row.dispatchId,
+                requestId
+              })
       )
     },
-    [clear, party, target, track]
+    [clear, party, stopAvailable, t, target, track]
   )
   const clearAll = useCallback(() => {
     const captured = (identities ?? []).flatMap((row) =>

@@ -24642,7 +24642,7 @@
       "signInRequired": "이 계정을 사용하려면 다시 로그인하세요",
       "signInAgain": "다시 로그인",
       "usageSignInLabel": "다시 로그인",
-      "usageSignInMessage": "선택한 Claude 계정에 다시 로그인해야 합니다. 설정 > AI 제공자 계정을 열거나 시스템 기본값을 선택하세요.",
+      "usageSignInMessage": "이 계정에 다시 로그인해야 합니다.",
       "signIn": "로그인",
       "moreSignInOptions": "추가 로그인 옵션",
       "copySignInLink": "대신 로그인 링크 복사",

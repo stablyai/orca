@@ -22137,7 +22137,7 @@
       "signInRequired": "Erneute Anmeldung erforderlich, um dieses Konto zu verwenden",
       "signInAgain": "Erneut anmelden",
       "usageSignInLabel": "Erneut anmelden",
-      "usageSignInMessage": "Für das ausgewählte Claude-Konto ist eine erneute Anmeldung erforderlich. Einstellungen > Konten für KI-Anbieter öffnen oder „Systemstandard“ auswählen.",
+      "usageSignInMessage": "Für dieses Konto ist eine erneute Anmeldung erforderlich.",
       "signIn": "Anmelden",
       "moreSignInOptions": "Weitere Anmeldeoptionen",
       "copySignInLink": "Stattdessen Anmeldelink kopieren",

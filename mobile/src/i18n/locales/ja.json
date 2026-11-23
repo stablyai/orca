@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "もう一度サインイン",
-      "usageSignInMessage": "選択した Claude アカウントは再度サインインが必要です。設定 > AI プロバイダーアカウントを開くか、システムのデフォルトを選択してください。"
+      "usageSignInMessage": "このアカウントは再度サインインが必要です。"
     }
   },
   "agentHistory": {
