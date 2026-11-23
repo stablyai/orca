@@ -120,6 +120,7 @@ async function restoreSnapshotTargets(targets: readonly SnapshotTarget[]): Promi
       const saved = snapshot ?? []
       tracker.saved = groupByScope(saved, cdpCookieScopeKey)
       tracker.savedStale = snapshot === null
+      tracker.savedUnknown = snapshot === null
       tracker.reading = false
       if (tracker.changedScopes.size > 0) {
         scheduleSave(tracker)
@@ -187,6 +188,7 @@ export async function writeTrackedSnapshot(
   await writeSessionCookieSnapshot(tracker.filePath, cookies)
   tracker.saved = groupByScope(cookies, cdpCookieScopeKey)
   tracker.savedStale = false
+  tracker.savedUnknown = false
 }
 
 /** For a profile created after launch: nothing to restore yet. */
@@ -204,6 +206,7 @@ function track(filePath: string, target: Session): SessionCookieTracker {
     filePath,
     saved: new Map(),
     savedStale: false,
+    savedUnknown: false,
     reading: false,
     changedScopes: new Map(),
     changedDuringSave: null,

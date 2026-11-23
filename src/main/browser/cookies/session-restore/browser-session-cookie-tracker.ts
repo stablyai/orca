@@ -9,6 +9,8 @@ export type SessionCookieTracker = {
   saved: Map<string, CdpCookie[]>
   /** The file may hold cookies `saved` lacks (it could not be read), so the next save must rewrite it. */
   savedStale: boolean
+  /** The file could not be read, so `saved` says nothing about it: only a full clear may rewrite it from `saved`. */
+  savedUnknown: boolean
   /** Set until the file has been read: a save before then would compare against nothing. */
   reading: boolean
   /** Scopes whose cookies changed since `saved` was read. */

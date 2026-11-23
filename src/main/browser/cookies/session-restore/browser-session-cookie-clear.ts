@@ -19,7 +19,7 @@ export async function clearBrowserCookieJar(target: Session): Promise<void> {
  */
 export async function persistBrowserCookieClear(
   target: Session,
-  cleared: (cookie: CdpCookie) => boolean = () => true
+  partial?: (cookie: CdpCookie) => boolean
 ): Promise<void> {
   await target.cookies.flushStore()
   const tracker = sessionCookieTrackerFor(target)
@@ -30,6 +30,12 @@ export async function persistBrowserCookieClear(
   await queueSnapshotWrite(tracker, async () => {
     // A profile deleted meanwhile already lost its file.
     if (sessionCookieTrackerFor(target) !== tracker) {
+      return
+    }
+    const cleared = partial ?? (() => true)
+    // An unreadable file's other sites are unknown: leave it for the next save, which reads the jar.
+    if (tracker.savedUnknown && partial) {
+      scheduleSave(tracker)
       return
     }
     const saved = [...tracker.saved.values()].flat()

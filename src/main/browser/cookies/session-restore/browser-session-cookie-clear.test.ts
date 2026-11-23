@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { chmodSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Cookie, CookiesSetDetails, Session } from 'electron'
@@ -132,5 +132,20 @@ describe('session cookie snapshot after a cookie clear', () => {
     await clear.persistBrowserCookieClear(target, (cookie) => cookie.domain === 'google.com')
 
     expect((await launch()).jar.names()).toEqual(['sid'])
+  })
+
+  it('a clear that touches no saved cookie keeps a file this launch could not read', async () => {
+    const first = await launch()
+    const file = first.snapshots.snapshotPath('default')
+    await first.snapshots.writeSessionCookieSnapshot(file, [sessionCookie('sid', 'example.com')])
+    chmodSync(file, 0o000)
+    const { target, clear, snapshots } = await launch()
+    chmodSync(file, 0o600)
+
+    await clear.persistBrowserCookieClear(target, (cookie) => cookie.domain === 'google.com')
+
+    expect((await snapshots.readSessionCookieSnapshot(file))?.map((cookie) => cookie.name)).toEqual(
+      ['sid']
+    )
   })
 })
