@@ -7,7 +7,8 @@ import {
   createAgentModelCatalogSuccessWriter,
   retireAgentModelCatalogObservations,
   agentModelCatalogLaunchAgents,
-  agentModelCatalogEntryIsStale
+  agentModelCatalogEntryIsStale,
+  agentModelCatalogDefaultVerified
 } from './agent-model-catalog-entry-lifetime'
 import { independentAgentModelCatalog } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 export type { AgentModelCatalogProbe } from './agent-model-catalog-discovery'
@@ -30,17 +31,16 @@ export type {
 } from './agent-model-catalog-entry'
 export { withLiveCatalogListing } from './agent-model-catalog-entry'
 import {
-  AGENT_MODEL_CATALOG_FAILURE_TTL_MS,
   AgentModelCatalogFailures,
   type AgentModelCatalogFailure
 } from './agent-model-catalog-failures'
-import {
-  AGENT_MODEL_CATALOG_PICKER_WAIT_MS,
-  AgentModelCatalogListingWaiters
-} from './agent-model-catalog-listing-waiters'
+import { AgentModelCatalogListingWaiters } from './agent-model-catalog-listing-waiters'
 
-export { AGENT_MODEL_CATALOG_FAILURE_TTL_MS, AGENT_MODEL_CATALOG_PICKER_WAIT_MS }
+export { AGENT_MODEL_CATALOG_FAILURE_TTL_MS } from './agent-model-catalog-failures'
+export { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from './agent-model-catalog-listing-waiters'
 export type { AgentModelCatalogFailure }
+
+// Persist successful display catalogs; launch proof requires fresh in-process discovery.
 
 export const AGENT_MODEL_CATALOG_MAX_ENTRIES = 256
 
@@ -297,12 +297,13 @@ export class AgentModelCatalogStore {
     this.partialAttempts.clear()
   }
 
-  verified(entry: AgentModelCatalogEntry): boolean {
+  verified(entry: AgentModelCatalogEntry, requireConfiguredDefault = false): boolean {
     return (
       !this.isStale(entry) &&
       (!independentAgentModelCatalog(entry.agent) || entry.discovered?.complete === true) &&
       !this.hasActiveFailure(entry.fingerprint) &&
-      !this.failure(entry.fingerprint)?.unavailable
+      !this.failure(entry.fingerprint)?.unavailable &&
+      agentModelCatalogDefaultVerified(entry, this.partialAttempts, requireConfiguredDefault)
     )
   }
 

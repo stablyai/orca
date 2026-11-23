@@ -180,11 +180,14 @@ export const RespondParams = z
   })
   .strict()
 
-export const SetOptionParams = z.strictObject({
-  envelope: MutationEnvelope,
-  key: Identifier('Invalid option key'),
-  value: z.string().max(MAX_OPTION_LABEL)
-})
+/** A null model returns the chat to the agent's default; only hosts advertising default-model take it. */
+export const SetOptionParams = z
+  .strictObject({
+    envelope: MutationEnvelope,
+    key: Identifier('Invalid option key'),
+    value: z.string().max(MAX_OPTION_LABEL).nullable()
+  })
+  .refine((params) => params.value !== null || params.key === 'model', 'Only a model has a default')
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
 export const RevealParams = OptionsParams.extend({

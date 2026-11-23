@@ -27,6 +27,7 @@ import {
 } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
 
 import { isAgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { effectiveAgentSessionOptions } from '../../../runtime/agent-session/records/agent-session-record-options'
 
 export function savedStructuredAgentSessionStatus(
   record: AgentSessionConversationView,
@@ -36,7 +37,10 @@ export function savedStructuredAgentSessionStatus(
   const at = turn?.at ?? markerAt
   const outcome =
     turn?.state === 'open' || (!turn && markerAt !== undefined) ? 'cancellation' : turn?.outcome
-  const model = normalizeOptionalField(record.options?.model, AGENT_MODEL_MAX_LENGTH)
+  const model = normalizeOptionalField(
+    effectiveAgentSessionOptions(record)?.model,
+    AGENT_MODEL_MAX_LENGTH
+  )
   const interactionMode = record.options?.interactionMode
   const launchDirectory = agentSessionPinnedLaunchDirectory(record)
   return {

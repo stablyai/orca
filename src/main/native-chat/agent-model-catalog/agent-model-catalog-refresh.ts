@@ -1,3 +1,4 @@
+import { agentModelCatalogReleasedOwner } from './agent-model-catalog-read-scope'
 import { resolveAgentModelCatalogAccount } from './agent-model-catalog-account-resolution'
 import type { AgentModelCatalogAdmission } from './agent-model-catalog-admission'
 import { agentModelCatalogFingerprint } from './agent-model-catalog-fingerprint'
@@ -16,7 +17,6 @@ import { scopedAgentModelCatalogLister } from './agent-model-catalog-scoped-list
 import { seedAccountList } from './agent-model-catalog-account-list'
 import type { AgentModelCatalogEntry } from './agent-model-catalog-entry'
 import {
-  agentModelCatalogReleasedOwner,
   bindAgentModelCatalogScope,
   type AgentModelCatalogBinding
 } from './agent-model-catalog-snapshot'
@@ -31,6 +31,7 @@ export type AgentModelCatalogLaunch = {
   legacy?: boolean
   /** Resolves saved scope only and lists nothing (a saved-only read, or a deleted chat's). */
   passive: boolean
+  requireConfiguredDefault?: true
   bindingKey: string
   identity: string
 }
@@ -197,6 +198,7 @@ export function createAgentModelCatalogRefreshes(context: {
               }
             }
           } else if (
+            launch.requireConfiguredDefault ||
             deps.store.probeDue(fingerprint) ||
             [...targets].some((model) => deps.store.efforts.due(fingerprint, model))
           ) {

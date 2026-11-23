@@ -1,3 +1,4 @@
+import { withStructuredAgentSessionReportedModel } from '../../../structured-agent-session-default-model-choice'
 import { structuredLaunchRequestedOptions } from '../../../native-chat/input/session-options/native-chat-session-option-defaults'
 import {
   commitStructuredAgentSessionOptionValues,
@@ -63,7 +64,9 @@ export function structuredAgentSessionShownSnapshot(
   state: StructuredAgentSessionOptionState
 ): SessionOptionDescriptor[] {
   const view = structuredAgentSessionOptionView(state, undefined, {})
-  const snapshot = structuredAgentSessionOptionSnapshot(view)
+  const snapshot = structuredAgentSessionOptionSnapshot(view).map((option) =>
+    withStructuredAgentSessionReportedModel(option, view)
+  )
   const modelOption = snapshot.find((descriptor) => descriptor.id === 'model')
   const model = modelOption?.kind.currentValue
   const descriptor = snapshot.find((entry) => entry.id === 'effort')
@@ -114,8 +117,11 @@ function modelOptionView(
   seed: Readonly<Record<string, string>> | undefined,
   held: Readonly<Record<string, string>>
 ): StructuredAgentSessionOptionState {
+  // A chat on the agent's default no longer launches with the seed's model.
   const unconfirmedSeed =
-    seed !== undefined && structuredAgentSessionModelId(state.record, 'own') === null
+    !state.modelDefault &&
+    seed !== undefined &&
+    structuredAgentSessionModelId(state.record, 'own') === null
   const hasHeld = Object.keys(held).length > 0
   if (!state.catalog || (!unconfirmedSeed && !hasHeld)) {
     return state
@@ -134,7 +140,7 @@ function modelOptionView(
 export function structuredAgentSessionSendSelection(
   view: StructuredAgentSessionOptionState
 ): Record<string, string> | undefined {
-  if (view.record.agent !== 'claude') {
+  if (view.record.agent !== 'claude' || view.modelDefault) {
     return undefined
   }
   const snapshot =

@@ -197,6 +197,10 @@ export function applyNativeChatSessionOptionSettingsMutation(
       picks: mutation.picks
     })
   }
+  if (mutation.type === 'clear-model') {
+    const { model: _cleared, ...kept } = persisted?.[mutation.agent] ?? {}
+    return { ...persisted, [mutation.agent]: kept }
+  }
   // Older clients still send catalog-based clearing; observations cannot change a saved pick.
   return null
 }
