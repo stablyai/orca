@@ -14,14 +14,14 @@ const GO = 'Go ahead without a separate OK?'
 const TIER = 'Which tier?'
 const MERGE = 'Merge it?'
 const options = [{ label: 'Yes' }, { label: 'No' }]
+const NOW = 1_800_000_000_000
 
 /** A host before this change: an owner's first answer moved the item to In progress. */
 class OlderHost extends BotItemsStore {
   moveOnAnswer(uid: string): void {
-    const now = Date.now()
-    this.writeStatus(uid, 'working', null, OWNER, now)
+    this.writeStatus(uid, 'working', null, OWNER, NOW)
     const moved = { from: 'needs_you', to: 'working', cause: 'answer' }
-    this.appendEvent(uid, 'status', OWNER, moved, true, now)
+    this.appendEvent(uid, 'status', OWNER, moved, true, NOW)
   }
 }
 
@@ -115,7 +115,7 @@ describe('an ask of several questions', () => {
     store.moveOnAnswer(uid)
     store.set(uid, { status: 'needs_you' }, BOT)
     expect(store.get(uid)).toMatchObject({ status: 'needs_you', questionEvent: null })
-    store.ownerComment(uid, `${GO} → No`, OWNER, [], Date.now(), undefined, question)
+    store.ownerComment(uid, `${GO} → No`, OWNER, [], NOW, undefined, question)
     expect(store.get(uid)?.status).toBe('needs_you')
     store.ownerComment(uid, `${TIER} → Yes`, OWNER)
     expect(store.get(uid)?.status).toBe('working')
@@ -125,7 +125,7 @@ describe('an ask of several questions', () => {
     const { store, uid } = asking([HOSTS])
     const merge = ask(store, uid, [MERGE])
     // An Alt-clicked quick reply of the newer ask, sent with the box's reply target closed.
-    store.ownerComment(uid, `${MERGE} → Yes`, OWNER, [], Date.now(), undefined, undefined, true)
+    store.ownerComment(uid, `${MERGE} → Yes`, OWNER, [], NOW, undefined, undefined, true)
     expect(lastComment(store, uid).answers).toBe(`e${merge}`)
     expect(store.get(uid)?.status).toBe('needs_you')
     store.ownerComment(uid, 'Yes', OWNER)
