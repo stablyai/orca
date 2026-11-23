@@ -11,8 +11,9 @@ export class ClaudeChildOwnerIndex {
     this.byOwner.clear()
   }
 
-  /** Record `id` under its owner; returns nothing changed when it has none. */
-  add(id: string, task: DecodedClaudeTask): void {
+  /** Move `id` under the owner `task` names, forgetting the owner it left with no children. */
+  setLive(id: string, task: DecodedClaudeTask, previous: DecodedClaudeTask | undefined): void {
+    this.forget(id, previous)
     if (!task.parentTaskId) {
       return
     }
@@ -22,7 +23,7 @@ export class ClaudeChildOwnerIndex {
   }
 
   /** Drop `id` from the owner it was recorded under, forgetting an owner with no children left. */
-  remove(id: string, live: DecodedClaudeTask | undefined): void {
+  forget(id: string, live: DecodedClaudeTask | undefined): void {
     const parent = live?.parentTaskId
     if (parent === undefined) {
       return

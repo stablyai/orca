@@ -122,6 +122,48 @@ describe('a child ending wakes a finished subagent it was launched from', () => 
     expect(decoder.drain(Date.now() + CLAUDE_CHILD_WAKE_LEASE_MS * 2)).toEqual([])
   })
 
+  it('keeps the wake when a frame naming the owner is rejected as historical', () => {
+    const decoder = new ClaudeChildWorkDecoder()
+    finishOwnerThenChildEnds(decoder)
+    // An older invocation's frame is ignored by the currency gate, so it must not release the lease:
+    // otherwise the owner has no guess left and the row stays working for good.
+    observe(decoder, {
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: OWNER,
+      tool_use_id: 'toolu_parent_stale',
+      status: 'completed'
+    })
+    expect(decoder.wakeExpiryAt()).toBeDefined()
+    const evidence = decoder.drain(Date.now() + CLAUDE_CHILD_WAKE_LEASE_MS)
+    expect(evidence.map((edge) => edge.type)).toEqual(['ended'])
+  })
+
+  it('accepts a running roster entry for the owner after its wake expired', () => {
+    const decoder = new ClaudeChildWorkDecoder()
+    finishOwnerThenChildEnds(decoder)
+    decoder.drain(Date.now() + CLAUDE_CHILD_WAKE_LEASE_MS)
+    // The lease is spent and the owner reads done; a later running report proves the resume happened.
+    const evidence = observe(decoder, {
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      tasks: [{ task_id: OWNER, tool_use_id: PARENT, status: 'running', task_type: 'local_agent' }]
+    })
+    expect(states(evidence)).toContainEqual([OWNER, 'working'])
+  })
+
+  it('still rejects an ended task that never had a wake', () => {
+    const decoder = new ClaudeChildWorkDecoder()
+    observe(decoder, start(OWNER, PARENT))
+    observe(decoder, notification(OWNER, PARENT, 'completed'))
+    const evidence = observe(decoder, {
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      tasks: [{ task_id: OWNER, tool_use_id: PARENT, status: 'running', task_type: 'local_agent' }]
+    })
+    expect(states(evidence)).not.toContainEqual([OWNER, 'working'])
+  })
+
   it('does not hold a wake for an owner that never ended', () => {
     const decoder = new ClaudeChildWorkDecoder()
     observe(decoder, start(OWNER, PARENT))

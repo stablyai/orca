@@ -16,7 +16,7 @@ import {
 } from '../background-tasks/claude-background-task-frames'
 import { claudeStartedTaskKind } from '../subagents/claude-subagent-task-frames'
 import { ClaudeAgentWaitCalls } from './claude-agent-wait-calls'
-import { ClaudeChildWakeLease, childWorkEndedEvidence } from './claude-child-wake-lease'
+import { childWorkEndedEvidence, claudeChildWake } from './claude-child-wake-lease'
 import { ClaudeChildOwnerIndex } from './claude-child-owner-index'
 import {
   claudeChildWorkOutcome,
@@ -33,6 +33,11 @@ type ClaudeToolOwner = (toolUseId: string) => string | null
 
 type PendingEdge = (observedAt: number) => AgentChildWorkEvidence
 
+/** A roster-shaped start for an owner the provider confirms running; no spawn call of its own. */
+function rosterStart(id: string): Record<string, unknown> {
+  return { type: 'system', subtype: 'task_started', task_id: id, status: 'running' }
+}
+
 export class ClaudeChildWorkDecoder {
   /** Read-only outside the decoder; Steer moves the top-level foreground ones to the background. */
   readonly live = new Map<string, DecodedClaudeTask>()
@@ -42,7 +47,12 @@ export class ClaudeChildWorkDecoder {
   private waiting: ReadonlySet<string> = new Set()
   private pending: PendingEdge[] = []
   private readonly agentWaits = new ClaudeAgentWaitCalls()
-  private readonly wakeLease = new ClaudeChildWakeLease()
+  private readonly wake = claudeChildWake({
+    endedOwner: (id) => this.ended.get(id),
+    showWorking: (id, task) => this.upsert(id, { ...task, running: true }, {}, true),
+    restore: (id, owner) => this.settleWake(id, owner),
+    revive: (id) => this.started(id, rosterStart(id), true)
+  })
   /** `ownerOf` names the subagent that made a child tool call; an ending task wakes it. */
   constructor(readonly taskInvocations = new ClaudeTaskInvocations()) {}
 
@@ -55,15 +65,12 @@ export class ClaudeChildWorkDecoder {
     if (message.type !== 'system') {
       return
     }
-    // Any frame naming this owner proves the provider runs it, so the guess is no longer needed.
-    this.wakeLease.release(taskId(message))
-    this.wakeLease.release(taskAliasId(message.tool_use_id))
     if (message.subtype === 'background_tasks_changed') {
       if (Array.isArray(message.tasks)) {
         for (const entry of claudeRosterEntries(message.tasks)) {
           // A roster entry that reports the owner running proves the provider resumes it.
           if (entry.live) {
-            this.wakeLease.release(entry.id)
+            this.wake.confirmRunning(entry.id)
           }
           if (
             !this.ended.has(entry.id) &&
@@ -83,6 +90,9 @@ export class ClaudeChildWorkDecoder {
     if (selected && (!selected.current || selected.invocation.excluded)) {
       return
     }
+    // Only a frame the decoder admits proves the provider runs this owner; a historical alias
+    // that is ignored above would otherwise clear the lease and leave the row working for good.
+    this.wake.confirmRunning(id)
     switch (message.subtype) {
       case 'task_started':
         this.started(id, message)
@@ -124,19 +134,19 @@ export class ClaudeChildWorkDecoder {
     this.ended.clear()
     this.childrenByOwner.clear()
     this.agentWaits.clear()
-    this.wakeLease.clear()
+    this.wake.clear()
     this.waiting = new Set()
     this.pending.push((observedAt) => ({ type: 'session-ended', observedAt }))
   }
 
   /** When a held wake stops guessing; the host restates the row then, as no frame need arrive again. */
   wakeExpiryAt(): number | undefined {
-    return this.wakeLease.earliestExpiry()
+    return this.wake.earliestExpiry()
   }
 
   drain(observedAt: number): AgentChildWorkEvidence[] {
     // A wake that outlived its lease restores the ending it guessed past, before this drain reads it.
-    this.wakeLease.settleExpired(observedAt)
+    this.wake.settleExpired(observedAt)
     const pending = this.pending
     this.pending = []
     return pending.map((edge) => edge(observedAt))
@@ -157,6 +167,7 @@ export class ClaudeChildWorkDecoder {
     if (ended?.run !== undefined && ended.run === toolUseId && ended.outcome !== 'succeeded') {
       return
     }
+    this.wake.confirmRunning(id)
     const kind = claudeStartedTaskKind(message)
     this.upsert(
       id,
@@ -181,29 +192,13 @@ export class ClaudeChildWorkDecoder {
     )
   }
 
-  /** Claude resumes a finished subagent when a task it launched notifies; show it working from that frame, not its restart a moment later. */
-  private wakeOwner(
-    toolUseId: string | undefined,
-    ownerOf: ClaudeToolOwner | undefined,
-    parentTaskId?: string
-  ): void {
-    const ownerId = parentTaskId ?? (toolUseId ? ownerOf?.(toolUseId) : null)
-    const owner = ownerId ? this.ended.get(ownerId) : undefined
-    if (ownerId && owner?.outcome === 'succeeded' && owner.task?.kind === 'agent') {
-      this.upsert(ownerId, { ...owner.task, running: true }, {}, true)
-      // Why: Claude does not resume an owner whose remaining descendants end later (or one whose
-      // worktree is gone), so the guess must expire or the row stays working until the chat closes.
-      this.wakeLease.hold(ownerId, owner, (restored) => this.settleWake(ownerId, restored))
-    }
-  }
-
   /** Put the owner back to the ending the wake guessed past, unless a real frame replaced it. */
   private settleWake(ownerId: string, restored: EndedClaudeTask): void {
     // Only the running wake itself is ours to undo; a stop or a restart leaves a different record.
     if (this.live.get(ownerId)?.running !== true) {
       return
     }
-    this.childrenByOwner.remove(ownerId, this.live.get(ownerId))
+    this.childrenByOwner.forget(ownerId, this.live.get(ownerId))
     this.live.delete(ownerId)
     this.ended.set(ownerId, restored)
     this.pending.push((observedAt) =>
@@ -238,6 +233,11 @@ export class ClaudeChildWorkDecoder {
       return
     }
     if (!existing && this.ended.has(id)) {
+      // An owner whose wake already ran out may still be reported running; any other ended task stays done.
+      if (this.wake.confirmedRunning(id)) {
+        this.started(id, rosterStart(id), true)
+        this.upsert(id, { ...this.live.get(id)!, running: true }, {}, true)
+      }
       return
     }
     const kind =
@@ -277,16 +277,14 @@ export class ClaudeChildWorkDecoder {
     }
     const ownerBecameLive = !this.live.has(id) || restart
     this.ended.delete(id)
-    this.childrenByOwner.remove(id, this.live.get(id))
+    this.childrenByOwner.setLive(id, task, this.live.get(id))
     this.live.set(id, task)
-    const children = this.childrenByOwner
-    children.add(id, task)
     this.report(id, task, facts, restart)
     // Admission can resolve a child's raw owner only after that owner's live edge.
     if (!ownerBecameLive) {
       return
     }
-    for (const childId of children.children(id)) {
+    for (const childId of this.childrenByOwner.children(id)) {
       const child = this.live.get(childId)
       if (child && childId !== id) {
         this.report(childId, child, {})
@@ -316,7 +314,7 @@ export class ClaudeChildWorkDecoder {
   ): void {
     const task = this.live.get(id)
     this.taskInvocations.settle(id, status, reported.runId ?? task?.toolUseId)
-    this.childrenByOwner.remove(id, this.live.get(id))
+    this.childrenByOwner.forget(id, this.live.get(id))
     this.live.delete(id)
     const outcome = claudeChildWorkOutcome(status)
     this.ended.set(id, {
@@ -325,9 +323,9 @@ export class ClaudeChildWorkDecoder {
       // Kept only for an agent a task it launched can wake.
       ...(task?.kind === 'agent' ? { task } : {})
     })
-    // Every ending but a stop notifies, which wakes the subagent that launched the task.
     if (outcome !== 'cancelled') {
-      this.wakeOwner(reported.runId ?? task?.toolUseId, ownerOf, task?.parentTaskId)
+      // Every ending but a stop notifies, which wakes the subagent that launched the task.
+      this.wake.fromEnding(reported.runId ?? task?.toolUseId, ownerOf, task?.parentTaskId)
     }
     this.pending.push((observedAt) =>
       childWorkEndedEvidence(id, reported.runId, outcome, observedAt, reported)
