@@ -54,7 +54,7 @@ export async function cleanupDaemonForProtocol(
         'Daemon cleanup aborted: the endpoint is owned by a different daemon than expected'
       )
     }
-    const sessions = await client
+    const sessions: ListSessionsResult = await client
       .request<ListSessionsResult>('listSessions', undefined)
       .catch(() => ({ sessions: [] }))
     killedCount = sessions.sessions.filter((s) => s.isAlive).length
