@@ -390,6 +390,11 @@
       "title": "Browser page stopped",
       "failed": "The browser page stopped unexpectedly. Retry to restore it."
     },
+    "serverPage": {
+      "download": {
+        "started": "Downloading to {{path}} on {{host}}"
+      }
+    },
     "clientHosted": {
       "preparationFailed": "Couldn't start the remote browser on this desktop. Check the paired connection and try again.",
       "unavailableTitle": "Client-hosted browser unavailable",

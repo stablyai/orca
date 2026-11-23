@@ -295,7 +295,6 @@ import {
   ProfileClearGoogleCookies,
   ProfileDelete,
   ProfileImportFromBrowser,
-  Screencast,
   Scroll,
   Select,
   SelectorPath,
@@ -321,6 +320,7 @@ import {
 import {
   FileChooserAnswer,
   PagePromptAnswer,
+  Screencast,
   ScreencastAck,
   ScreencastReclaimForDesktop,
   ScreencastUnsubscribe
