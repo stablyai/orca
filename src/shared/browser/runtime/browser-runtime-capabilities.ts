@@ -57,7 +57,10 @@ export const BROWSER_AUDIO_MUTE_RUNTIME_CAPABILITY = 'browser.audio-mute.v1' as 
 // Older hosts have no browser.dropFiles, so streamed panes refuse files dragged in from the desktop.
 export const BROWSER_DROP_FILES_RUNTIME_CAPABILITY = 'browser.drop-files.v1' as const
 
-// Headless, identity, certificate trust, page zoom, site display, stop/hard reload, find in page, profile switch and audio mute are host-conditional, so getStatus adds them itself.
+// Older hosts neither stream page prompts nor relay browser.pagePromptAnswer, so phones don't ask for them without this.
+export const BROWSER_PAGE_PROMPTS_RUNTIME_CAPABILITY = 'browser.page-prompts.v1' as const
+
+// Headless, identity, certificate trust, page zoom, site display, stop/hard reload, find in page, profile switch, audio mute and page prompts are host-conditional, so getStatus adds them itself.
 export const BROWSER_RUNTIME_CAPABILITIES = [
   BROWSER_EXPECT_URL_RUNTIME_CAPABILITY,
   BROWSER_TAB_HISTORY_STATE_RUNTIME_CAPABILITY,

@@ -2179,6 +2179,41 @@
       "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again.",
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
       "certificateProceedNeedsHostUpdate": "Update Orca on this host to accept certificate warnings from your phone."
+    },
+    "pagePrompt": {
+      "downloadStarted": "Downloading to {{path}} on the host",
+      "downloadSaved": "Saved to {{path}} on the host",
+      "downloadCanceled": "Download canceled.",
+      "downloadFailed": "Couldn't finish the download.",
+      "answerFailed": "That answer did not reach the page.",
+      "openFailed": "Couldn't open an app for this {{scheme}} link.",
+      "localFiles": "Local files",
+      "ask": {
+        "camera": "Use your camera",
+        "microphone": "Use your microphone",
+        "location": "Know your location",
+        "notifications": "Show notifications",
+        "clipboard": "See text and images copied to the clipboard",
+        "midi": "Use your MIDI devices",
+        "windowManagement": "Manage windows on all your displays",
+        "idleDetection": "Know when you are actively using this device",
+        "localNetwork": "Access apps on this device and devices on your local network"
+      },
+      "fileTitle": "This file wants to",
+      "permissionTitle": "{{site}} wants to",
+      "block": "Block",
+      "allow": "Allow",
+      "signInTitle": "Sign in",
+      "signInDescription": "{{origin}} is asking for a username and password.",
+      "signInInsecure": "Your connection to this site isn't private.",
+      "signInRetry": "That username or password didn't work.",
+      "signIn": "Sign in",
+      "openLinkTitle": "Open this {{scheme}} link?",
+      "openLinkDescription": "{{origin}} wants to open another application.",
+      "openLinkAnonymous": "A page in the browser wants to open another application.",
+      "openLink": "Open link",
+      "username": "Username",
+      "password": "Password"
     }
   },
   "files": {
