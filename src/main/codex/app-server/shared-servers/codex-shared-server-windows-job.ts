@@ -104,7 +104,8 @@ export class CodexSharedServerWindowsJob {
     const children = childrenByParent(
       rows.map((row) => {
         const parent = byPid.get(row.ppid)?.creationTimeMs
-        const stale = row.creationTimeMs !== undefined && parent !== undefined && row.creationTimeMs < parent
+        const stale =
+          row.creationTimeMs !== undefined && parent !== undefined && row.creationTimeMs < parent
         return [row.pid, stale ? null : row.ppid] as const
       })
     )
