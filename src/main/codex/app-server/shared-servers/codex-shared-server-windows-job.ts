@@ -3,7 +3,7 @@ import type { spawnCodexAppServerConnection } from '../codex-app-server-connecti
 import type { ProviderProcessSpawner } from '../../../provider-process/provider-process-spawn'
 import { readWindowsProcessIdentityTableFresh } from '../../../windows/windows-process-table'
 import { windowsJobObjectApi, type WindowsJobObjectApi } from '../../../windows/windows-job-object'
-import { childrenByParent, serverChain } from './codex-shared-host-process-reading'
+import { childrenByParent, descendants } from './codex-shared-host-process-reading'
 
 /** Set once a shared server's tree could not be held in its job; Windows chats then keep their
  *  own server for the rest of the session, as with the setting off. */
@@ -97,13 +97,14 @@ export class CodexSharedServerWindowsJob {
       return 'inconclusive'
     }
     const rows = await this.readTable().catch(() => [])
-    const processes = new Map(rows.map((row) => [row.pid, row] as const))
+    const names = new Map(rows.map((row) => [row.pid, row.name] as const))
     const children = childrenByParent(rows.map((row) => [row.pid, row.ppid] as const))
-    const chain = serverChain(processes, children, rootPid)
-    if (chain === null) {
+    // The whole tree, not just the path to Codex: a launcher's other children count too.
+    const tree = [rootPid, ...descendants(children, rootPid)]
+    if (!tree.some((pid) => /^codex/i.test(names.get(pid) ?? ''))) {
       return 'inconclusive'
     }
-    const members = [...chain].map((pid) => this.api.isProcessInJob(this.job, pid))
+    const members = tree.map((pid) => this.api.isProcessInJob(this.job, pid))
     if (members.includes(false)) {
       return 'outside'
     }

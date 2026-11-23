@@ -99,8 +99,8 @@ export async function acquireCodexStructuredSession(input: {
     subagentExecutions,
     prompts: acquisition.prompts
   })
-  let sharedServer = false
-  const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps, () => sharedServer)
+  let sharedServer = (): boolean => false
+  const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps, () => sharedServer())
   try {
     await stopSupersededCodexAcquisition({
       sessionId,
@@ -140,7 +140,8 @@ export async function acquireCodexStructuredSession(input: {
     acquisitions.assertCurrent(sessionId, attempt)
     account = launch.codexHome ? deps.resolveAccountKind?.(launch.codexHome) : undefined
     const open = codexConnectionOpener(deps, sessionId, launch)
-    sharedServer = opensSharedCodexServer(open)
+    // Read at spawn: a Windows shared open can fall back to the chat's own server.
+    sharedServer = () => opensSharedCodexServer(open)
     const connection = await open(
       {
         command: launch.command,

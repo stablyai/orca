@@ -18,6 +18,16 @@ type BacklogLease = {
   shed: () => void
 }
 
+/** Settles on a frame, so it walks the chats in place and stops at the first match. */
+function someLease(leases: Iterable<BacklogLease>, test: (lease: BacklogLease) => boolean): boolean {
+  for (const lease of leases) {
+    if (test(lease)) {
+      return true
+    }
+  }
+  return false
+}
+
 /** Bytes queued by the paused chats on one server, bounded however many chats stall. Past the
  *  budget the shared reader pauses, so Codex waits as it would on a dedicated chat's pipe. With
  *  every chat paused (a journal stall) that is all: nothing is dropped. If a chat needs the server
@@ -80,13 +90,14 @@ export class CodexSharedServerBacklog {
     const stalled =
       this.total > 0 &&
       this.waiters.size === 0 &&
-      ![...this.leases].some((lease) => lease.reading || lease.waiting)
+      !someLease(this.leases, (lease) => lease.reading || lease.waiting)
     if (stalled) {
       this.setPaused(true)
     }
     if (this.total > (this.paused ? half : CODEX_SHARED_SERVER_BACKLOG_BYTES)) {
       this.setPaused(true)
-      if ([...this.leases, ...this.waiters].some((lease) => lease.waiting)) {
+      const waiting = (lease: BacklogLease): boolean => lease.waiting
+      if (someLease(this.leases, waiting) || someLease(this.waiters, waiting)) {
         // A grace that saw the backlog shrink starts over, up to a cap: catching up isn't stalling.
         const now = Date.now()
         this.graceSince ??= now

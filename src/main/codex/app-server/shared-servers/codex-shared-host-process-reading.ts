@@ -37,36 +37,17 @@ export function childrenByParent(
 /** Every process below one, by parent links. */
 export function descendants(children: ReadonlyMap<number, number[]>, root: number): number[] {
   const found: number[] = []
+  // Windows keeps a dead parent's pid, so a reused pid can close a cycle.
+  const seen = new Set([root])
   const queue = [...(children.get(root) ?? [])]
   for (let index = 0; index < queue.length; index += 1) {
     const pid = queue[index]!
+    if (seen.has(pid)) {
+      continue
+    }
+    seen.add(pid)
     found.push(pid)
     queue.push(...(children.get(pid) ?? []))
   }
   return found
-}
-
-/** The server's launcher chain down to the native Codex process; null when Codex isn't found. */
-export function serverChain(
-  processes: ReadonlyMap<number, { name: string }>,
-  children: ReadonlyMap<number, number[]>,
-  serverPid: number
-): Set<number> | null {
-  const parents = new Map<number, number>()
-  const queue = [serverPid]
-  for (let index = 0; index < queue.length; index += 1) {
-    const pid = queue[index]!
-    if (/^codex/i.test(processes.get(pid)?.name ?? '')) {
-      const chain = new Set<number>()
-      for (let at: number | undefined = pid; at !== undefined; at = parents.get(at)) {
-        chain.add(at)
-      }
-      return chain
-    }
-    for (const child of children.get(pid) ?? []) {
-      parents.set(child, pid)
-      queue.push(child)
-    }
-  }
-  return null
 }

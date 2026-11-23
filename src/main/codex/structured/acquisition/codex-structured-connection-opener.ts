@@ -54,6 +54,8 @@ export function codexConnectionOpener(
       })
       .catch((error: unknown) => {
         if (error instanceof CodexSharedServerUncontainedError) {
+          // The chat's own server from here: recovery may signal it.
+          sharedOpeners.delete(open)
           return spawnCodexAppServerConnection(connectionLaunch, handlers)
         }
         throw error
