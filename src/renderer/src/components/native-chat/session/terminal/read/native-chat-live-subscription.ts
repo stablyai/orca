@@ -160,9 +160,7 @@ export function subscribeNativeChatLiveSession({
       if (!messages) {
         return false
       }
-      if (repaired) {
-        limitRef.current = Math.max(limitRef.current, messages.length)
-      }
+      // Only the reader's own paging widens the budget; repairs must not ratchet the held-base cap.
       transcriptEpochRef.current++
       setOlderHistoryGeneration(transcriptEpochRef.current)
       setLoadingEarlier(false)

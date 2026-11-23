@@ -555,6 +555,61 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(latest?.hasMore).toBe(true)
   })
 
+  it('keeps the held base bounded when repairs run between sliding replacements', async () => {
+    vi.useFakeTimers()
+    try {
+      const rows = Array.from({ length: 3_000 }, (_, n) => ({
+        ...user(`row-${n}`, `text-${n}`),
+        transcriptOrder: n
+      }))
+      const transport = Object.assign(getMockTransport('env-1'), {
+        pagesByCursor: true,
+        verifyTranscriptRanges: vi.fn().mockResolvedValue([false])
+      })
+      let end = 300
+      transport.readSession.mockImplementation(async (_agent, _session, limit, _path, options) => {
+        const before = Math.min(options?.beforeOffset ?? end, end)
+        const start = Math.max(0, before - (limit ?? 300))
+        return {
+          messages: rows.slice(start, before),
+          hasMore: start > 0,
+          ranges: [{ start, end: before, digest: '0000000000000001' }]
+        }
+      })
+      await render({
+        paneKey: PANE,
+        agent: AGENT,
+        sessionId: SESSION,
+        runtimeEnvironmentId: 'env-1'
+      })
+      await act(async () =>
+        transport.emit({
+          type: 'snapshot',
+          messages: rows.slice(0, 300),
+          hasMore: true,
+          ranges: [{ start: 0, end: 300, digest: '0000000000000001' }]
+        })
+      )
+      for (end = 307; end <= 2_400; end += 7) {
+        await act(async () =>
+          transport.emit({
+            type: 'replacement',
+            messages: rows.slice(end - 300, end),
+            hasMore: true,
+            ranges: [{ start: end - 300, end, digest: '0000000000000001' }]
+          })
+        )
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1_100)
+        })
+      }
+      expect(latest?.messages.length).toBeLessThanOrEqual(900)
+      expect(latest?.messages.at(-1)?.id).toBe('row-2399')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('resets paged-in history when a host without verification re-sends the window', async () => {
     const transport = Object.assign(getMockTransport('env-1'), { pagesByCursor: true })
     const at = (id: string, offset: number) => ({ ...assistant(id, 't'), transcriptOrder: offset })
