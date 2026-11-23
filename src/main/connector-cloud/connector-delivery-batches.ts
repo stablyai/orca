@@ -15,7 +15,8 @@ import {
   type SendDelivery,
   type ThreadDelivery
 } from './connector-deliveries'
-import { mayBeThreadMuteCommand, slackThreadBotUser } from './connector-thread-mute'
+import { slackThreadBotUser } from './connector-thread-mute'
+import { mayBeThreadMuteCommand } from './connector-thread-mute-phrases'
 
 /** A start or send and the sends queued right behind it in the same poll: the same person's, run
  *  as one turn. Anything else, and a send that is its own bare mention, goes on its own. */

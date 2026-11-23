@@ -3,7 +3,8 @@ import type { ExternalConversationHost } from '../external-conversations/externa
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import { dispatchDelivery } from './connector-deliveries'
 import { dispatchBatch } from './connector-delivery-batches'
-import { handleThreadMute, threadMuteCommand, threadMuteStep } from './connector-thread-mute'
+import { handleThreadMute, threadMuteStep } from './connector-thread-mute'
+import { threadMuteCommand } from './connector-thread-mute-phrases'
 
 const conversation = { source: 'slack', externalId: 'T1:C1:1800000000.000100:U0BOT' }
 const send = (text: string, extra: Record<string, unknown> = {}) => ({
@@ -54,6 +55,7 @@ describe('a mention in a muted thread', () => {
     expect(step('ping @reviewer, look')).toBe('unmute_and_send')
     expect(step('ping @reviewer-2')).toBe('silence')
     expect(step('@reviewer-2 hello')).toBe('silence')
+    expect(step('send it to ops@reviewer.io')).toBe('silence')
   })
 })
 
