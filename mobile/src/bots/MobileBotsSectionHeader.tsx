@@ -71,13 +71,14 @@ export function MobileBotsSectionHeader({
         </View>
         <Text style={hostScreenStyles.sectionTitle}>{label}</Text>
         <View
-          style={[styles.preview, collapsed && styles.previewFaces]}
+          style={[styles.preview, collapsed && facts.length > 0 && styles.previewFaces]}
           onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
           pointerEvents="none"
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
         >
-          {collapsed ? (
+          {/* A folded search that matched only groups has no faces to show; its count says it. */}
+          {collapsed && facts.length > 0 ? (
             <View style={styles.stack}>
               {preview.shown.map((bot, index) => (
                 <View key={bot.id} style={[styles.face, { zIndex: 10 - index }]}>
