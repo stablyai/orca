@@ -126,6 +126,28 @@ it('keeps stale known spending on a moved account past the reading wait', async 
   expect(holds.ready('chat', cut, SWITCHED + 135_000)).toBe(false)
 })
 
+it('releases a moved chat from picker room that arrived after its turn before the sweep', async () => {
+  const room = {
+    ...reading({ usedPercent: 0, resetsAt: SWITCHED + 3_600_000 }),
+    updatedAt: ENDED + 1
+  }
+  const holds = await attributed(NEXT, room)
+  const cut = holds.withSwitchReset('chat', CUT)
+  expect(holds.verdict('chat', cut, SWITCHED).resetsAt).toBe(ENDED + 1)
+  expect(holds.ready('chat', cut, SWITCHED)).toBe(true)
+})
+
+it('does not release a moved chat from room that predates its turn', async () => {
+  const room = {
+    ...reading({ usedPercent: 0, resetsAt: SWITCHED + 3_600_000 }),
+    updatedAt: ENDED - 1
+  }
+  const holds = await attributed(NEXT, room)
+  const cut = holds.withSwitchReset('chat', CUT)
+  expect(holds.verdict('chat', cut, SWITCHED).resetsAt).toBe(SWITCHED)
+  expect(holds.ready('chat', cut, SWITCHED)).toBe(false)
+})
+
 it('leaves an unknown reset unknown when the chat never moved accounts', async () => {
   const holds = await attributed(HIT, reading({ usedPercent: 10, resetsAt: SWITCHED + 3_600_000 }))
   const cut = holds.withSwitchReset('chat', CUT)
