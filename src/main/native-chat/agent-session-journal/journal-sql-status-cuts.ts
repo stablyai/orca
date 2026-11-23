@@ -91,22 +91,31 @@ export function readJournalSqlUsageLimitCut(
   if (!latest || latest.verdict !== 'failure') {
     return null
   }
-  for (const { item } of state.select({
-    kind: 'scoped-statuses',
+  const limit = readJournalSqlTurnUsageLimit(state, latest.item.itemId, floor)
+  if (!limit) {
+    return null
+  }
+  const fence = state.itemFence(latest.item.itemId)
+  return {
     turnItemId: latest.item.itemId,
-    floor
-  })) {
+    chain: readUsageLimitChain(state, latest.item.itemId),
+    ...(fence === undefined ? {} : { fence }),
+    ...(limit.resetsAt !== undefined ? { resetsAt: limit.resetsAt } : {}),
+    turnEndedAt: latest.item.recoveredAt ?? latest.lifecycle.completedAt
+  }
+}
+
+/** The usage limit a turn's own status rows report, whatever else is pending in the chat. */
+export function readJournalSqlTurnUsageLimit(
+  state: JournalSqlStatusContext,
+  turnItemId: string,
+  floor = 0
+): ReturnType<typeof nativeChatUsageLimitOfRow> | null {
+  for (const { item } of state.select({ kind: 'scoped-statuses', turnItemId, floor })) {
     const displayed = state.displayed(item.itemId)
     const limit = displayed && nativeChatUsageLimitOfRow(displayed)
     if (limit) {
-      const fence = state.itemFence(latest.item.itemId)
-      return {
-        turnItemId: latest.item.itemId,
-        chain: readUsageLimitChain(state, latest.item.itemId),
-        ...(fence === undefined ? {} : { fence }),
-        ...(limit.resetsAt !== undefined ? { resetsAt: limit.resetsAt } : {}),
-        turnEndedAt: latest.item.recoveredAt ?? latest.lifecycle.completedAt
-      }
+      return limit
     }
   }
   return null

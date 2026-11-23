@@ -128,6 +128,24 @@ describe("another agent's mail after a failed turn", () => {
     expect(await rig.handoff(followUp)).toBeUndefined()
   })
 
+  it('already queued behind a send the agent refused, runs after it', async () => {
+    rig = await createQueuedMessageTestRig()
+    const { working, followUp } = await personQueued()
+    await providerTurn(working, 'completed', 'failure')
+    const retry = rig.send('try again')
+    expect(await retry.result).toMatchObject({ ok: true })
+    await eventually(async () =>
+      expect((await rig.submission(retry.id))?.handedOverAt).toBeDefined()
+    )
+    const sent = await mail()
+    expect(sent.queued).toBeDefined()
+    await rig.settleRejected(retry.id, 'overloaded')
+    await eventually(async () =>
+      expect((await rig.handoff(sent.queued!))?.handedOverAt).toBeDefined()
+    )
+    expect(await rig.handoff(followUp)).toBeUndefined()
+  })
+
   it('waits behind a usage limit', async () => {
     rig = await createQueuedMessageTestRig()
     await failAtUsageLimit()
@@ -135,6 +153,17 @@ describe("another agent's mail after a failed turn", () => {
     expect(sent.queued).toBeDefined()
     expect(await journal().queuedMessages.failureHolds()).toBe(true)
     expect(await rig.handoff(sent.queued!)).toBeUndefined()
+  })
+
+  it('waits behind a usage limit while another send is still pending', async () => {
+    rig = await createQueuedMessageTestRig()
+    await failAtUsageLimit()
+    const pending = rig.send('are you there?')
+    expect(await pending.result).toMatchObject({ ok: true })
+    await eventually(async () =>
+      expect((await rig.submission(pending.id))?.dispatchState).toBe('pending')
+    )
+    expect(await journal().queuedMessages.failureHolds()).toBe(true)
   })
 
   it('a Stop still holds the person’s follow-up', async () => {

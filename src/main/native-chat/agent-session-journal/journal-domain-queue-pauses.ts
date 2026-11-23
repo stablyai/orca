@@ -11,7 +11,7 @@ import { readJournalDomainQueueFailure } from './journal-domain-queue-failures'
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlStatusContext } from './journal-sql-status-context'
-import { readJournalSqlUsageLimitCut } from './journal-sql-status-cuts'
+import { readJournalSqlTurnUsageLimit } from './journal-sql-status-cuts'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -69,7 +69,7 @@ export function readJournalDomainQueuePauseContext(
     latestAcceptedTurnSequence: Number(head.latest_accepted ?? 0),
     latestPersonAcceptedSequence: Number(head.latest_person_accepted ?? 0)
   }
-  const failedAt = readJournalDomainQueueFailure(db, target)
+  const { failedAt, turnItemId } = readJournalDomainQueueFailure(db, target)
   return createQueuePauseContext(
     {
       epoch: target.epoch,
@@ -77,11 +77,14 @@ export function readJournalDomainQueuePauseContext(
       ...accepted,
       latestPersonAcceptedTurnSequence: accepted.latestPersonAcceptedSequence,
       failedAt,
-      ...(failedAt > 0
+      ...(failedAt > 0 && turnItemId !== null
         ? {
             failedAtUsageLimit:
-              readJournalSqlUsageLimitCut(
-                new JournalSqlStatusContext(new JournalSqlScope(db, target.sessionId, target.epoch))
+              readJournalSqlTurnUsageLimit(
+                new JournalSqlStatusContext(
+                  new JournalSqlScope(db, target.sessionId, target.epoch)
+                ),
+                turnItemId
               ) !== null
           }
         : {}),
