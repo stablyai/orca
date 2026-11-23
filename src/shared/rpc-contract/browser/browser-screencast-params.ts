@@ -61,8 +61,11 @@ export const PagePromptAnswer = z.object({
 
 // A `fileChooser` event's requestId and the host paths the viewer staged; null when the person closed their picker.
 // A `print` event's PDF, read in slices by the device it was handed to.
-export const ReadPrintPdf = z.object({
-  printId: z.string().min(1),
+export const ReleasePrintPdf = z.object({
+  printId: z.string().min(1)
+})
+
+export const ReadPrintPdf = ReleasePrintPdf.extend({
   offset: z.number().int().nonnegative().optional()
 })
 

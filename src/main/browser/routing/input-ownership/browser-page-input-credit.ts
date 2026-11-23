@@ -67,6 +67,11 @@ export class BrowserPageInputCredit {
     this.creditByTabId.set(browserTabId, { pairedDeviceId, at: now })
   }
 
+  /** An agent acts on the tab now: what the page does next is not the earlier input's. */
+  withdraw(browserTabId: string): void {
+    this.creditByTabId.delete(browserTabId)
+  }
+
   /** Whose input just reached the tab, without spending it on what that input opens. */
   peek(browserTabId: string): string | null {
     const credit = this.creditByTabId.get(browserTabId)

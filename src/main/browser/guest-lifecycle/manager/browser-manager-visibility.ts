@@ -56,13 +56,23 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     this.leadAgentOnPage(browserPageId)
     return {
       ...lease,
-      // A person's input queued ahead may have taken the page back; the agent leads again as it acts.
+      // A person's input queued ahead may have taken the page back; the agent leads again as it acts,
+      // and what the page does from here (a timed print, a popup) is not that input's.
       run: (execute) =>
         lease.run(() => {
           this.leadAgentOnPage(browserPageId)
+          this.withdrawPageInputCredit(browserPageId)
           return execute()
         })
     }
+  }
+
+  private withdrawPageInputCredit(browserPageId: string): void {
+    const pageGuestId =
+      this.webContentsIdByTabId.get(browserPageId) ?? browserPopupPageWebContentsId(browserPageId)
+    const ownerTabId =
+      pageGuestId === null ? null : this.resolveBrowserTabIdForGuestWebContentsId(pageGuestId)
+    this.pageInputCredit.withdraw(ownerTabId ?? browserPageId)
   }
 
   private leadAgentOnPage(browserPageId: string): void {

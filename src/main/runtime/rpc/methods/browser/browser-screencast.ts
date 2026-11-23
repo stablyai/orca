@@ -7,6 +7,7 @@ import {
   FileChooserAnswer,
   PagePromptAnswer,
   ReadPrintPdf,
+  ReleasePrintPdf,
   Screencast,
   ScreencastAck,
   ScreencastReclaimForDesktop,
@@ -15,7 +16,10 @@ import {
 import { acknowledgeBrowserScreencastFrame } from '../../../browser/screencast/browser-screencast-frame-credit'
 import { respondToStreamedBrowserPagePrompt } from '../../../../browser/guest-lifecycle/prompts/browser-page-prompts'
 import { answerBrowserFileChooser } from '../../../../browser/guest-lifecycle/prompts/browser-file-chooser-viewers'
-import { readBrowserPrintPdf } from '../../../../browser/guest-lifecycle/prompts/browser-print-viewers'
+import {
+  readBrowserPrintPdf,
+  releaseBrowserPrintPdf
+} from '../../../../browser/guest-lifecycle/prompts/browser-print-viewers'
 import { ownerOnly } from '../bots-caller-gates'
 
 export const BROWSER_SCREENCAST_METHODS = [
@@ -62,6 +66,12 @@ export const BROWSER_SCREENCAST_METHODS = [
     params: ReadPrintPdf,
     // Only the device the print was handed to can read it.
     handler: async (params, { pairedDeviceId }) => readBrowserPrintPdf(pairedDeviceId, params)
+  }),
+  defineMethod({
+    name: 'browser.releasePrintPdf',
+    permission: 'workspace',
+    params: ReleasePrintPdf,
+    handler: async (params, { pairedDeviceId }) => releaseBrowserPrintPdf(pairedDeviceId, params)
   }),
   defineMethod({
     name: 'browser.screencast.reclaimForDesktop',

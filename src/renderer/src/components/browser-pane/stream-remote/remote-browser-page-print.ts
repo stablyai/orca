@@ -7,7 +7,7 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { streamDownloadedFile } from '@/runtime/files/reads/runtime-remote-file-download'
 import type { RemoteBrowserDialogPage } from './remote-browser-javascript-dialog'
 
-// One save per page at a time: a page's print() returns at once here, so a looping page can't stack dialogs.
+// One save per page at a time; the host also holds one print per page until it is read or released.
 const printingPages = new Set<string>()
 
 /** A streamed page called print(): save it here as a PDF, then open that in this computer's viewer, where it prints. */
@@ -15,8 +15,18 @@ export async function saveRemoteBrowserPagePrint(
   page: RemoteBrowserDialogPage,
   { printId, title }: { printId: string; title: string }
 ): Promise<void> {
+  // A print this pane won't read is released, so the page can print again.
+  const release = (): void => {
+    void callRuntimeRpc(
+      page.target,
+      'browser.releasePrintPdf',
+      { printId },
+      { suppressFeatureInteraction: true, background: true }
+    ).catch(() => {})
+  }
   const key = `${JSON.stringify(page.target)}\n${page.pageId}`
   if (printingPages.has(key)) {
+    release()
     return
   }
   printingPages.add(key)
@@ -30,10 +40,13 @@ export async function saveRemoteBrowserPagePrint(
         { timeoutMs: 60_000, suppressFeatureInteraction: true }
       )
     )
-    if (!saved.canceled) {
+    if (saved.canceled) {
+      release()
+    } else {
       await window.api.shell.openFilePath(saved.destinationPath, LOCAL_EXECUTION_HOST_ID)
     }
   } catch (error) {
+    release()
     toast.error(translate('browser.serverPage.print.failed', "Couldn't save the page as a PDF"), {
       description: readIpcErrorMessage(error) ?? String(error)
     })
