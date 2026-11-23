@@ -1,8 +1,10 @@
 import type { ParsedAgentStatusPayload } from '../../../../agent-status/contracts/agent-status-types'
 import type { HookListenerState } from '../../../listener-state'
+import { readString } from '../../../tool-input-preview'
 import { buildClaudeCachedLeadStatusPayload } from './claude-lifecycle-events'
-import { setClaudeMainAgentTurnState } from './claude-roster-state'
+import { setClaudeMainAgentTurnState, updateClaudeRunningNonAgentTask } from './claude-roster-state'
 import { isClaudeToolEvent } from './claude-tool-events'
+import { readClaudeBackgroundAgentTasks } from '../background-tasks/claude-background-task-inventory'
 
 /**
  * Claude Code can compact a finished conversation while it sits idle (CLI `idleCompaction`, on by default). That
@@ -36,12 +38,19 @@ export function settleClaudeIdleCompaction(
   if (
     heldTurnId === undefined ||
     opensTurn ||
+    // A child's own tool hooks must keep building its roster row; only the lead's activity is the compaction's.
+    readString(hookPayload, 'agent_id') !== undefined ||
     eventName === 'Stop' ||
     eventName === 'StopFailure' ||
     (readTurnId(hookPayload) || heldTurnId) !== heldTurnId ||
     !(eventName === 'PreCompact' || eventName === 'PostCompact' || isClaudeToolEvent(eventName))
   ) {
     return null
+  }
+  // The compaction's own hooks still carry the run's shell inventory; restating the cached lead would keep it stale.
+  const backgroundTasks = readClaudeBackgroundAgentTasks(hookPayload)
+  if (backgroundTasks.present) {
+    updateClaudeRunningNonAgentTask(state, paneKey, backgroundTasks)
   }
   // Restate the finished turn, so the row a receiver holds never reopens on the compaction's own activity.
   return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
