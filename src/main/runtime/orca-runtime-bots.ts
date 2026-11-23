@@ -352,9 +352,10 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     this.botChangeNotices.changed({ kinds: ['access'] })
   }
 
-  /** A group's room, members or latest message changed; windows and phones re-read the groups. */
-  notifyBotGroupsChanged(): void {
-    this.botChangeNotices.changed({ kinds: ['groups'] })
+  /** A group's room, members or latest message changed; windows and phones re-read the groups, and
+   *  open rooms of `groupIds` (every room when absent) re-read their page. */
+  notifyBotGroupsChanged(groupIds?: readonly string[]): void {
+    this.botChangeNotices.changed({ kinds: ['groups'], ...(groupIds ? { groupIds } : {}) })
   }
 
   /** A paired server's worker verdicts changed: their bots re-read (all, if a bot can't be read). */

@@ -125,7 +125,7 @@ export async function sendBotGroupMessage(
   })
   // Marks its asks in flight before any reader can see the post.
   void deliverRemoteAsks(groups, message, remoteBodies)
-  groups.changed()
+  groups.changed(message.groupId)
   for (const turn of message.turns) {
     void deliverTurn(groups, message, turn)
   }
@@ -168,7 +168,7 @@ export function assertGroupQueuedMessageAllowed(
     assertTurnActive(groups, message, turn)
   } catch (error) {
     recordTurnError(groups, message.id, operationId, error)
-    groups.changed()
+    groups.changed(message.groupId)
     throw error
   }
 }
@@ -275,7 +275,7 @@ export async function deliverTurn(
   } finally {
     groups.store.delivered([turn.operationId])
     groups.deliveries.delete(turn.operationId)
-    groups.changed()
+    groups.changed(message.groupId)
   }
 }
 
