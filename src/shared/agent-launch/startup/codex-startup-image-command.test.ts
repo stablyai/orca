@@ -232,7 +232,8 @@ it('keeps PowerShell comma arguments whole through the native launch wrapper', (
     `--version #note,here`,
     `'hello, world'; Write-Output a,b`,
     `--version\nWrite-Output a,b`,
-    `"$("hello a,b world")"`
+    `"$("hello a,b world")"`,
+    `--% a,b`
   ]) {
     const invocation = `& 'C:\\tools\\codex.exe' ${args}`
     expect(prepareShellNativeAgentLaunch(invocation, 'powershell', false)).toBe(invocation)
@@ -243,6 +244,7 @@ it('keeps PowerShell comma arguments whole through the native launch wrapper', (
     `"hello, world"`,
     `“hello a,b world”`,
     `“It’s fine, (thanks)”`,
+    `--settings 'a,b' --prefill '--%'`,
     `--settings "{""A"":""x,y""}"`
   ]) {
     for (const agent of ['codex', 'claude']) {

@@ -4,7 +4,7 @@ import {
   quotePowerShellLiteral
 } from '../../shell/launch/powershell-native-argument'
 import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../shell/command-resolution/command-token-scanner'
-import { readLaunchArguments, readLaunchPosition, type LaunchPosition } from './launch-position'
+import { readLaunchPosition, type LaunchPosition } from './launch-position'
 
 const SCRIPT_HEAD = /& \{ (\$orcaProgram = |param\(\$orcaProgram\); )/
 const SCRIPT_END = ' } --'
@@ -101,6 +101,11 @@ function quoteCommaWords(tail: string): string | null {
   return out + tail.slice(end)
 }
 
+/** A bare --% stops PowerShell parsing; a quoted '--%' is only data. */
+export function hasPowerShellStopParsing(command: string, launch: LaunchPosition): boolean {
+  return /(^|\s)--%(\s|$)/.test(command.slice(launch.end))
+}
+
 export function powerShellNativeLaunch(
   command: string,
   launch: LaunchPosition,
@@ -108,8 +113,7 @@ export function powerShellNativeLaunch(
   prependArgs = '',
   after = ''
 ): string {
-  const args = readLaunchArguments(command, 'powershell', launch)
-  if (command.includes('--%', launch.end) && (args?.includes('--%') ?? true)) {
+  if (hasPowerShellStopParsing(command, launch)) {
     return command
   }
   // A native program gets a bare a,b as one argument but a script block gets an array. Quote plain

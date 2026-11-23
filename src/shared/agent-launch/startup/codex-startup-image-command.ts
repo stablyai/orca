@@ -23,7 +23,11 @@ import {
   readLaunchPosition,
   type LaunchPosition
 } from './launch-position'
-import { powerShellNativeLaunch, unwrapPowerShellNativeLaunch } from './powershell-native-launch'
+import {
+  hasPowerShellStopParsing,
+  powerShellNativeLaunch,
+  unwrapPowerShellNativeLaunch
+} from './powershell-native-launch'
 import {
   CLAUDE_DIRECT_POSIX_PREFIX,
   withClaudeDirectLaunchCommand
@@ -105,7 +109,10 @@ export function readCodexDirectLaunch(
     return null
   }
   const args = readLaunchArguments(command, shell, launch)
-  if ((shell === 'cmd' && !args) || (shell !== 'posix' && args?.includes('--%'))) {
+  if (
+    (shell === 'cmd' && (!args || args.includes('--%'))) ||
+    (shell === 'powershell' && hasPowerShellStopParsing(command, launch))
+  ) {
     return null
   }
   return { launch, args }
