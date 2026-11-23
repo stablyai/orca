@@ -36,18 +36,31 @@ const UPLOAD: BotPictureCustom = {
   description: 'Your image'
 }
 
-function Picture({ initial }: { initial: BotPictureValue }): React.JSX.Element {
+// An emoji picture from before mascots, which Slack never gets.
+const EMOJI: BotPictureCustom = { src: null, fallback: '🦊', after: 0, description: '🦊' }
+
+function Picture({
+  initial,
+  custom = UPLOAD
+}: {
+  initial: BotPictureValue
+  custom?: BotPictureCustom
+}): React.JSX.Element {
   // The saved avatar matches the selection, as after it was applied.
   const shown: Bot = {
     ...bot,
     avatar:
-      initial.kind === 'mascot' ? mascotAvatar(PICKABLE_BOT_MASCOT_IDS[initial.index]) : 'upload:1'
+      initial.kind === 'mascot'
+        ? mascotAvatar(PICKABLE_BOT_MASCOT_IDS[initial.index])
+        : custom.src
+          ? 'upload:1'
+          : custom.fallback
   }
   const [value, setValue] = useState(initial)
   const [color, setColor] = useState<string | null>(null)
   const picture: ReturnType<typeof useBotPictureSetting> = {
     value,
-    custom: UPLOAD,
+    custom,
     pick: setValue,
     upload: () => setValue({ kind: 'custom' }),
     undo: () => {},
@@ -93,5 +106,11 @@ export const uploaded = defineFixture({
     })
   },
   render: () => <Picture initial={{ kind: 'custom' }} />,
+  interact: openPicture
+})
+
+export const emoji = defineFixture({
+  width: 420,
+  render: () => <Picture initial={{ kind: 'custom' }} custom={EMOJI} />,
   interact: openPicture
 })
