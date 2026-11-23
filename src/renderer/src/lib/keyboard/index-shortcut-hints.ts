@@ -69,6 +69,11 @@ function hide(): void {
   publish(HIDDEN)
 }
 
+/** Hides the digits once a jump fires: main consumes Cmd/Ctrl+digit, so the page only learns of the release later. */
+export function dismissIndexShortcutHints(): void {
+  hide()
+}
+
 function onModifiersChanged(event: KeyboardEvent): void {
   const held = heldIndexShortcutActions(
     event,
@@ -97,7 +102,7 @@ function onKeyDown(event: KeyboardEvent): void {
   if (MODIFIER_KEYS.has(event.key)) {
     onModifiersChanged(event)
   } else if (!DIGIT_KEY.test(event.code)) {
-    // Why digits keep the hints: the user is stepping through numbers with the modifier still held.
+    // Why digits keep the hints: a jump hides them itself (dismissIndexShortcutHints); other digits change nothing.
     hide()
   }
 }
