@@ -874,37 +874,38 @@ describe('a cookie clear, quit and retirement at the real callers', () => {
     await saveSnapshot([sessionCookie('sid', 'example.com')])
     const { jar, target, clear } = await launch({ unreadable: true })
     const release = jar.holdReads()
-    let done = false
-    const clearing = clear.clearBrowserCookieJar(target).then(() => (done = true))
-    await settleUntil(() => done)
+    // Settles with every jar read still held.
+    await clear.clearBrowserCookieJar(target)
 
-    expect(done).toBe(true)
     await jar.cookies.set({ url: 'https://example.org/', name: 'after', secure: true })
     release()
-    await clearing
     await settle()
     await elapse(30_000)
     expect((await launch()).jar.names()).toEqual(['after'])
   })
 
-  it('a whole clear of an unread file whose removal failed still saves cookies set meanwhile', async () => {
-    await saveSnapshot([sessionCookie('sid', 'example.com')])
-    const { jar, target, clear } = await launch({ unreadable: true })
-    const releaseFlush = jar.holdFlush()
-    const clearing = clear.clearBrowserCookieJar(target)
-    await settle()
-    // Set after the native clear, while the file is still unread: the event isn't recorded.
-    await jar.cookies.set({ url: 'https://example.org/', name: 'during', secure: true })
-    await settle()
-    io.rmFailures = 1
-    releaseFlush()
-    await expect(clearing).rejects.toThrow('EBUSY')
+  // Two failures: the timer's removal fails too, and the sealed write of the new cookie replaces the file.
+  it.each([1, 2])(
+    'a whole clear of an unread file whose removal failed %i time(s) still saves cookies set meanwhile',
+    async (rmFailures) => {
+      await saveSnapshot([sessionCookie('sid', 'example.com')])
+      const { jar, target, clear } = await launch({ unreadable: true })
+      const releaseFlush = jar.holdFlush()
+      const clearing = clear.clearBrowserCookieJar(target)
+      await settle()
+      // Set after the native clear, while the file is still unread: the event isn't recorded.
+      await jar.cookies.set({ url: 'https://example.org/', name: 'during', secure: true })
+      await settle()
+      io.rmFailures = rmFailures
+      releaseFlush()
+      await expect(clearing).rejects.toThrow('EBUSY')
 
-    await elapse(30_000)
+      await elapse(30_000)
 
-    expect(storedCookies().map((cookie) => cookie.name)).toEqual(['during'])
-    expect((await launch()).jar.names()).toEqual(['during'])
-  })
+      expect(storedCookies().map((cookie) => cookie.name)).toEqual(['during'])
+      expect((await launch()).jar.names()).toEqual(['during'])
+    }
+  )
 
   it('a route jar being retired is not restored again until its release', async () => {
     const { retire } = await launch()

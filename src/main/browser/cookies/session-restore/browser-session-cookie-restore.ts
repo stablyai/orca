@@ -239,13 +239,14 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
   // A failed clear that kept nothing removes the file first: neither sealing nor a read of the
   // jar (which may fail) can hold that up. Capturing newer cookies is a separate step.
   const current = !quitting && trackers.get(tracker.filePath) === tracker
+  let forced = rewrite
   if (rewrite && tracker.saved.size === 0 && current) {
-    try {
-      await writeTrackedSnapshot(tracker, [])
-    } catch (error) {
+    // This is its one removal attempt. If it fails, a newer cookie read below may still replace
+    // the file (a sealed write replaces it whole); an empty read leaves it to quit.
+    forced = false
+    await writeTrackedSnapshot(tracker, []).catch((error: unknown) =>
       console.warn('[browser-session-cookies] Save failed:', error)
-      return
-    }
+    )
   }
   if (!canSealSessionCookies()) {
     return
@@ -259,7 +260,7 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
     if (cookies && !quitting && trackers.get(tracker.filePath) === tracker) {
       const saved = groupByScope(cookies, cdpCookieScopeKey)
       // Sites often re-set a session cookie to the value it already had; skip the sealed write.
-      if ((rewrite && tracker.savedFile === 'stale') || !sameSavedCookies(tracker.saved, saved)) {
+      if ((forced && tracker.savedFile === 'stale') || !sameSavedCookies(tracker.saved, saved)) {
         await writeTrackedSnapshot(tracker, cookies)
       }
       tracker.fullRead = false
