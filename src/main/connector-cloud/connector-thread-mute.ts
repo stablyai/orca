@@ -265,14 +265,17 @@ function applyStep(
     return null
   }
   const ref = delivery.asker?.messageRef
-  if (ref && step !== 'silence') {
-    // The emoji is the only answer: a failed one leaves the thread muted (or not) all the same.
-    void deps
-      .react(thread.botId, key, ref, step === 'mute' ? MUTED_EMOJI : UNMUTED_EMOJI)
-      .catch((error: unknown) =>
-        console.warn('[connectors] could not react to a thread mute', error)
-      )
-  }
-  // A save that fails is refused, so the connector service sends the command again.
-  return (written ?? Promise.resolve()).then(() => ACCEPTED)
+  // A save that fails is refused, so the connector service sends the command again; the emoji
+  // shows only a mute (or unmute) already on disk.
+  return (written ?? Promise.resolve()).then(() => {
+    if (ref && step !== 'silence') {
+      // The emoji is the only answer: a failed one leaves the thread muted (or not) all the same.
+      void deps
+        .react(thread.botId, key, ref, step === 'mute' ? MUTED_EMOJI : UNMUTED_EMOJI)
+        .catch((error: unknown) =>
+          console.warn('[connectors] could not react to a thread mute', error)
+        )
+    }
+    return ACCEPTED
+  })
 }
