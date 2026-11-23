@@ -48,13 +48,7 @@ export function RuntimeServersHeaderActions(): React.JSX.Element {
 
   return (
     <ButtonGroup>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="@max-xs/settings-section:text-settings-detail @max-xs/settings-section:has-[>svg]:px-1.5"
-        onClick={() => setDialog('add')}
-      >
+      <Button type="button" variant="outline" size="responsive-sm" onClick={() => setDialog('add')}>
         <Plus className="@max-xs/settings-section:hidden" />
         {t('auto.components.settings.serverList.addServer', 'Add server')}
       </Button>
