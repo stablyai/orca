@@ -4,6 +4,7 @@ import { EVENT_ONLY_SCHEDULE } from '../automation-event-triggers'
 import { automationReceiptFacts } from './automation-receipt-facts'
 import {
   automationReceiptStartDetails,
+  automationReceiptStartSet,
   automationReceiptStarts
 } from './automation-receipt-summary'
 
@@ -18,25 +19,99 @@ const automation: BotAutomationFacts = {
   once: { by: 5000 }
 }
 
-it('uses recorded evidence for retained deadline-only waits and keeps unknown-start fallbacks', () => {
+it('proves a deadline-only wait only from a complete V1, and never lists an unknown start', () => {
   const complete = automationReceiptFacts({ createdAt: 10 })
-  expect(automationReceiptStarts(automation, complete)).toEqual([{ kind: 'deadline', at: 5000 }])
-  expect(automationReceiptStarts(automation, undefined)).toEqual([
-    { kind: 'unknown' },
-    { kind: 'deadline', at: 5000 }
-  ])
-  expect(automationReceiptStarts(automation, complete, true)).toEqual([
-    { kind: 'unknown' },
-    { kind: 'deadline', at: 5000 }
-  ])
-  expect(
-    automationReceiptStarts(automation, {
+  const deadlineOnly = { starts: [{ kind: 'deadline', at: 5000 }] }
+  expect(automationReceiptStartSet(automation, complete)).toEqual({
+    ...deadlineOnly,
+    alternativesUnproven: false
+  })
+  for (const unproven of [
+    automationReceiptStartSet(automation, undefined),
+    automationReceiptStartSet(automation, complete, true),
+    automationReceiptStartSet(automation, {
       version: 1,
       automationCreatedAt: 10,
       zone: { kind: 'not-recorded' },
       triggerExtras: { coverage: 'partial', items: [] }
-    })
-  ).toEqual([{ kind: 'unknown' }, { kind: 'deadline', at: 5000 }])
+    }),
+    automationReceiptStartSet(automation, { version: 1, unavailable: 'item-budget' })
+  ]) {
+    expect(unproven).toEqual({ ...deadlineOnly, alternativesUnproven: true })
+  }
+})
+
+const slack = { id: 's', source: 'slack' as const, event: 'message' as const, in: ['#ops'] }
+const gmail = { id: 'g', source: 'gmail' as const, event: 'new_email' as const }
+const slackExtra = { triggerId: 's', additionalConditions: 'none' as const }
+const gmailExtra = {
+  triggerId: 'g',
+  additionalConditions: 'none' as const,
+  google: { kind: 'gmail' as const, account: { kind: 'host-only' as const } }
+}
+function v1(items: unknown[], coverage: 'complete' | 'partial' = 'complete'): unknown {
+  return {
+    version: 1,
+    automationCreatedAt: 10,
+    zone: { kind: 'not-recorded' },
+    triggerExtras: { coverage, items }
+  }
+}
+
+it('keeps complete event-plus-deadline and event-only waits exact', () => {
+  const wait = { ...automation, on: [slack, gmail] }
+  const set = automationReceiptStartSet(wait, v1([slackExtra, gmailExtra]))
+  expect(set.alternativesUnproven).toBe(false)
+  expect(set.starts.map((start) => start.kind)).toEqual(['event', 'event', 'deadline'])
+  const eventOnly = automationReceiptStartSet(
+    { ...automation, once: {}, on: [slack] },
+    v1([slackExtra])
+  )
+  expect(eventOnly).toEqual({
+    starts: [{ kind: 'event', trigger: slack, extra: slackExtra }],
+    alternativesUnproven: false
+  })
+})
+
+it.each([
+  ['legacy', [slack], undefined],
+  ['partial', [slack], v1([slackExtra], 'partial')],
+  ['missing extra', [slack, gmail], v1([slackExtra])],
+  ['orphan extra', [slack], v1([slackExtra, gmailExtra])],
+  ['mismatched Google arm', [slack, gmail], v1([slackExtra, { ...gmailExtra, google: undefined }])],
+  ['duplicate base id', [slack, { ...slack, in: ['#other'] }], v1([slackExtra])],
+  ['duplicate extra id', [slack], v1([slackExtra, slackExtra])]
+] as const)(
+  'keeps retained %s wait starts and the deadline but leaves alternatives unproven',
+  (_case, on, facts) => {
+    const set = automationReceiptStartSet({ ...automation, on: [...on] }, facts)
+    expect(set.alternativesUnproven).toBe(true)
+    expect(set.starts.filter((start) => start.kind === 'event')).toHaveLength(on.length)
+    expect(set.starts.at(-1)).toEqual({ kind: 'deadline', at: 5000 })
+    expect(set.starts.some((start) => start.kind === 'unknown')).toBe(false)
+  }
+)
+
+it('withholds shortened place strings and treats a shortened wait as unproven', () => {
+  const set = automationReceiptStartSet({ ...automation, on: [slack] }, v1([slackExtra]), true)
+  expect(set).toEqual({
+    starts: [
+      { kind: 'event', trigger: slack, extra: null, placeWithheld: true },
+      { kind: 'deadline', at: 5000 }
+    ],
+    alternativesUnproven: true
+  })
+})
+
+it('drops an ambiguous duplicate extra but keeps independent valid extras', () => {
+  const starts = automationReceiptStarts(
+    { ...automation, once: undefined, on: [slack, gmail] },
+    v1([slackExtra, slackExtra, gmailExtra])
+  )
+  expect(starts).toEqual([
+    { kind: 'event', trigger: slack, extra: null },
+    { kind: 'event', trigger: gmail, extra: gmailExtra }
+  ])
 })
 
 it('keeps custom cron and unknown recurrence zone literal, rather than inventing a preset', () => {
@@ -80,7 +155,7 @@ it('keeps the historical schedule inspectable when the saved receipt was paused'
         zone: { kind: 'effective-at-save', iana: 'UTC' },
         triggerExtras: { coverage: 'complete', items: [] }
       }
-    )
+    ).scopes
   ).toEqual([
     {
       start: {
@@ -125,7 +200,7 @@ it('associates each saved account and condition state with its historical start'
         ]
       }
     }
-  )
+  ).scopes
   expect(
     details.map(({ start, showLabel }) =>
       start.kind === 'event'
@@ -191,7 +266,7 @@ it('labels two retained historical events so their conditions remain attributabl
         ]
       },
       undefined
-    ).map(({ start, showLabel }) =>
+    ).scopes.map(({ start, showLabel }) =>
       start.kind === 'event' ? { id: start.trigger.id, showLabel } : start
     )
   ).toEqual([
@@ -205,7 +280,7 @@ it('keeps the approved single-event Details free of a duplicate trigger label', 
     automationReceiptStartDetails(
       { ...automation, on: [{ id: 'g', source: 'github', event: 'comment' }] },
       undefined
-    ).map(({ start, showLabel }) =>
+    ).scopes.map(({ start, showLabel }) =>
       start.kind === 'event' ? { id: start.trigger.id, showLabel } : start
     )
   ).toEqual([{ id: 'g', showLabel: false }])

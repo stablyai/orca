@@ -8,26 +8,61 @@ import {
 
 export type AutomationReceiptStart =
   | { kind: 'schedule'; schedule: AutomationScheduleDescriptor; zone: string | null }
-  | { kind: 'event'; trigger: BotAutomationTrigger; extra: AutomationReceiptTriggerExtra | null }
+  | {
+      kind: 'event'
+      trigger: BotAutomationTrigger
+      extra: AutomationReceiptTriggerExtra | null
+      /** A shortened transport may have clipped place strings; only the event kind is exact. */
+      placeWithheld?: true
+    }
   | { kind: 'deadline'; at: number }
   | { kind: 'unknown' }
 
-/** Lists retained base starts; extra coverage does not prove original-start completeness. */
-export function automationReceiptStarts(
+export type AutomationReceiptStartSet = {
+  starts: AutomationReceiptStart[]
+  /**
+   * A wait whose original alternatives are not proven complete: legacy, partial, shortened or
+   * incoherent receipt evidence. The listed starts are true, but may not be every alternative.
+   */
+  alternativesUnproven: boolean
+}
+
+function extraMatches(
+  trigger: BotAutomationTrigger,
+  extra: AutomationReceiptTriggerExtra
+): boolean {
+  const google = trigger.source === 'gmail' || trigger.source === 'calendar'
+  return google ? extra.google?.kind === trigger.source : !extra.google
+}
+
+/** Retained base starts with only the extras that join one base trigger unambiguously. */
+export function automationReceiptStartSet(
   automation: BotAutomationFacts,
   value: unknown,
   shortened = false
-): AutomationReceiptStart[] {
+): AutomationReceiptStartSet {
   const decoded = shortened ? undefined : readAutomationReceiptFacts(value)
   const facts = decoded && !('unavailable' in decoded) ? decoded : undefined
-  const extras = new Map(facts?.triggerExtras.items.map((extra) => [extra.triggerId, extra]))
-  const duplicateIds = new Set<string>()
-  for (const trigger of automation.on ?? []) {
-    if (duplicateIds.has(trigger.id)) {
-      extras.delete(trigger.id)
+  const items = facts?.triggerExtras.items ?? []
+  const extras = new Map<string, AutomationReceiptTriggerExtra>()
+  const ambiguous = new Set<string>()
+  for (const extra of items) {
+    if (extras.has(extra.triggerId)) {
+      ambiguous.add(extra.triggerId)
     }
-    duplicateIds.add(trigger.id)
+    extras.set(extra.triggerId, extra)
   }
+  const baseIds = new Set<string>()
+  for (const trigger of automation.on ?? []) {
+    if (baseIds.has(trigger.id)) {
+      ambiguous.add(trigger.id)
+    }
+    baseIds.add(trigger.id)
+  }
+  for (const id of ambiguous) {
+    extras.delete(id)
+  }
+  let coherent = ambiguous.size === 0 && items.length === baseIds.size
   const starts: AutomationReceiptStart[] = botAutomationWhenParts(automation).map((part) => {
     if (part.kind === 'schedule') {
       return {
@@ -35,39 +70,46 @@ export function automationReceiptStarts(
         zone: facts?.zone.kind === 'effective-at-save' ? facts.zone.iana : null
       }
     }
-    const extra = extras.get(part.trigger.id)
-    const google = part.trigger.source === 'gmail' || part.trigger.source === 'calendar'
-    return {
-      ...part,
-      extra:
-        extra && (google ? extra.google?.kind === part.trigger.source : !extra.google)
-          ? extra
-          : null
-    }
+    const candidate = extras.get(part.trigger.id)
+    const extra = candidate && extraMatches(part.trigger, candidate) ? candidate : null
+    coherent &&= extra !== null
+    return { ...part, extra, ...(shortened ? { placeWithheld: true as const } : {}) }
   })
+  // Complete means coherent extras for every event of an intact base, per the saved V1 delta.
+  const complete = facts?.triggerExtras.coverage === 'complete' && coherent
   if (automation.once?.by !== undefined) {
-    if (
-      starts.length === 0 &&
-      (facts?.triggerExtras.coverage !== 'complete' || facts.triggerExtras.items.length !== 0)
-    ) {
-      starts.push({ kind: 'unknown' })
-    }
+    // Unknown alternatives qualify the wait; they are never listed as another trigger.
     starts.push({ kind: 'deadline', at: automation.once.by })
+    return { starts, alternativesUnproven: !complete }
   }
-  return starts.length ? starts : [{ kind: 'unknown' }]
+  return { starts: starts.length ? starts : [{ kind: 'unknown' }], alternativesUnproven: false }
+}
+
+export function automationReceiptStarts(
+  automation: BotAutomationFacts,
+  value: unknown,
+  shortened = false
+): AutomationReceiptStart[] {
+  return automationReceiptStartSet(automation, value, shortened).starts
 }
 
 export function automationReceiptStartDetails(
   automation: BotAutomationFacts,
   value: unknown,
   shortened = false
-): { start: AutomationReceiptStart; showLabel: boolean }[] {
-  const starts = automationReceiptStarts(automation, value, shortened)
+): {
+  scopes: { start: AutomationReceiptStart; showLabel: boolean }[]
+  alternativesUnproven: boolean
+} {
+  const { starts, alternativesUnproven } = automationReceiptStartSet(automation, value, shortened)
   const showLabel =
     !automation.enabled ||
     starts.length > 2 ||
     starts.filter((start) => start.kind === 'event').length > 1
-  return starts
-    .filter((start) => showLabel || start.kind === 'event')
-    .map((start) => ({ start, showLabel }))
+  return {
+    scopes: starts
+      .filter((start) => showLabel || start.kind === 'event')
+      .map((start) => ({ start, showLabel })),
+    alternativesUnproven
+  }
 }

@@ -6,10 +6,10 @@ import {
   type AutomationScheduleDescriptor
 } from '../../../../shared/automations/scheduling/automation-schedules'
 import { getUiWeekdayNames } from '@/i18n/weekday-names'
-import { eventWithPlace } from '@/components/bots/bot-automation-when'
+import { eventLabel, eventWithPlace } from '@/components/bots/bot-automation-when'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import {
-  automationReceiptStarts,
+  automationReceiptStartSet,
   type AutomationReceiptStart
 } from '../../../../shared/automations/automation-receipt-summary'
 
@@ -124,7 +124,15 @@ export function receiptStartLabel(start: AutomationReceiptStart): string {
           'On a saved Calendar trigger (timing not recorded)'
         )
   }
-  return eventWithPlace(start.trigger)
+  return start.placeWithheld ? eventLabel(start.trigger) : eventWithPlace(start.trigger)
+}
+
+/** Qualifies a wait whose saved alternatives are not proven complete, without naming a trigger. */
+export function receiptAlternativesUnprovenNote(): string {
+  return translate(
+    'components.native-chat.automationSaved.otherStartsMayBeMissing',
+    'Other start conditions may not be listed.'
+  )
 }
 
 export function automationReceiptSummary(saved: Saved, shortened = false): string {
@@ -135,16 +143,26 @@ export function automationReceiptSummary(saved: Saved, shortened = false): strin
 }
 
 export function automationReceiptTriggerSummary(saved: Saved, shortened = false): string {
-  const starts = automationReceiptStarts(saved.automation, saved.receiptFacts, shortened)
+  const { starts, alternativesUnproven } = automationReceiptStartSet(
+    saved.automation,
+    saved.receiptFacts,
+    shortened
+  )
   if (starts.length > 2) {
-    return translate(
-      'components.native-chat.automationSaved.savedSeveralTriggers',
-      'Saved: {{count}} start conditions',
-      { count: starts.length }
-    )
+    return alternativesUnproven
+      ? translate(
+          'components.native-chat.automationSaved.savedAtLeastTriggers',
+          'Saved: at least {{count}} start conditions',
+          { count: starts.length }
+        )
+      : translate(
+          'components.native-chat.automationSaved.savedSeveralTriggers',
+          'Saved: {{count}} start conditions',
+          { count: starts.length }
+        )
   }
   const labels = starts.map(receiptStartLabel)
-  const description =
+  const listed =
     saved.automation.once && starts.length > 1
       ? translate(
           'components.native-chat.automationSaved.firstOf',
@@ -154,6 +172,13 @@ export function automationReceiptTriggerSummary(saved: Saved, shortened = false)
           }
         )
       : labels.join(translate('components.native-chat.automationSaved.or', ', or '))
+  const description = alternativesUnproven
+    ? translate(
+        'components.native-chat.automationSaved.listedStartsMayBeMissing',
+        '{{starts}}; other start conditions may not be listed',
+        { starts: listed }
+      )
+    : listed
   return translate(
     'components.native-chat.automationSaved.savedTrigger',
     'Saved: {{description}}',

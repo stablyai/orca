@@ -41,8 +41,12 @@ function whenLines(automation: Automation, effectiveZone?: string): string[] {
 }
 
 function resultsPlace(resultsTo: AutomationBotResultsTo | undefined): string {
-  if (resultsTo === undefined || resultsTo === 'none') {
+  // Why: absent is the project default (results stay in each run); explicit none posts nowhere.
+  if (resultsTo === undefined) {
     return translate('components.native-chat.automationSaved.resultsInEachRun', 'In each run')
+  }
+  if (resultsTo === 'none') {
+    return translate('automations.botTarget.resultsToNone', 'Nowhere')
   }
   if (resultsTo === 'chat') {
     return translate('components.native-chat.automationSaved.resultsChat', 'Chat')

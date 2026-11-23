@@ -290,3 +290,53 @@ it.each(['workspace', 'tab'] as const)(
     expect(fixture.navigation).toBeNull()
   }
 )
+
+it.each([
+  ['ready', 're-pair'],
+  ['missing', 're-pair'],
+  ['rejected', 're-pair'],
+  ['ready', 'restart'],
+  ['missing', 'restart'],
+  ['rejected', 'restart']
+] as const)(
+  'settles a paired %s reply after a %s under the same view as stale, then honors a fresh Open',
+  async (reply, change) => {
+    replaceRuntimeEnvironmentRevisions([{ id: 'E', createdAt: 1, pairingRevision: 7 }])
+    fixture.status.set('E', { status: { runtimeId: 'W' } })
+    const paired = {
+      target: { kind: 'environment' as const, environmentId: 'E' },
+      sessionId: 'chat-on-W',
+      worktreeId: 'project-Y',
+      tabId: 'chat-tab'
+    }
+    const pending = Promise.withResolvers<unknown>()
+    fixture.reply = pending.promise
+    const opening = openCardAutomation(
+      paired,
+      'receipt',
+      saved,
+      false,
+      new AbortController().signal
+    )
+    if (change === 're-pair') {
+      replaceRuntimeEnvironmentRevisions([{ id: 'E', createdAt: 1, pairingRevision: 8 }])
+    } else {
+      fixture.status.set('E', { status: { runtimeId: 'W-restarted' } })
+    }
+    if (reply === 'rejected') {
+      pending.reject(new Error('connection reset'))
+    } else {
+      pending.resolve(
+        reply === 'ready' ? { status: 'ready', automation, owner } : { status: reply }
+      )
+    }
+    expect(await opening).toBe('stale')
+    expect(fixture.navigation).toBeNull()
+
+    fixture.reply = { status: 'ready', automation, owner }
+    expect(
+      await openCardAutomation(paired, 'receipt', saved, false, new AbortController().signal)
+    ).toBe('opened')
+    expect(fixture.navigation).toMatchObject({ automationId: 'collision', hostId: 'runtime:E' })
+  }
+)

@@ -15,6 +15,7 @@ import {
 import { ALL_AUTOMATION_HOSTS_FILTER } from '../../../../../shared/automations/ownership/automation-host-filter'
 import { canRerunAutomationRun } from './automation-run-view-state'
 import { getAutomationRunDetailsWorkspaceName } from './automation-run-workspace-display'
+import { useDismissVanishedAutomationSelection } from './use-dismiss-vanished-automation-selection'
 import type { AutomationsPageListState } from '../listing/use-automations-page-list-state'
 import type { AutomationsPageLocalState } from '../use-automations-page-local-state'
 import type { AutomationsPageSetupState } from '../authoring/use-automations-page-setup-state'
@@ -94,44 +95,22 @@ export function useAutomationRunPageState({
   } = list
   const { selectedRuns, selectedRunsReady, selectedRunsNotice, selectedAutomationRunPage } = setup
 
-  useEffect(() => {
-    if (
-      isLoading ||
-      scopedExternal.loading ||
-      !isDetailOpen ||
-      pendingAutomationRunNavigation ||
-      (pageView === 'run' && selectedAutomationRunPage)
-    ) {
-      return
-    }
-    const hasSelectedLocal = selectedRow?.key
-      ? visibleRows.some((row) => row.key === selectedRow.key)
-      : selectedId !== null && selectedRow !== null
-    const hasSelectedExternal =
-      selectedExternalKey !== null &&
-      externalAutomationEntries.some((entry) => entry.key === selectedExternalKey)
-    if (hasSelectedLocal || hasSelectedExternal) {
-      return
-    }
-    setIsDetailOpen(false)
-    setSelectedAutomationRunPageId(null)
-    setActivePaneTab('overview')
-  }, [
+  useDismissVanishedAutomationSelection({
     isLoading,
-    scopedExternal.loading,
+    externalLoading: scopedExternal.loading,
     isDetailOpen,
+    pendingAutomationRunNavigation,
     pageView,
     selectedAutomationRunPage,
-    externalAutomationEntries,
-    visibleRows,
-    pendingAutomationRunNavigation,
-    selectedExternalKey,
-    selectedId,
     selectedRow,
-    setActivePaneTab,
+    visibleRows,
+    selectedId,
+    selectedExternalKey,
+    externalAutomationEntries,
     setIsDetailOpen,
-    setSelectedAutomationRunPageId
-  ])
+    setSelectedAutomationRunPageId,
+    setActivePaneTab
+  })
   useEffect(() => {
     if (!pendingAutomationRunNavigation) {
       return

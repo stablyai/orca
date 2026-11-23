@@ -26,6 +26,15 @@ import { openCardAutomation } from '../automation-receipt-client'
 const AUTOMATION_CARD_DISCLOSURE = 'automation-card:'
 type AutomationSaved = NonNullable<NativeChatMessage['automationSaved']>
 
+/** The newest folded Open. Any later automation-card gesture makes it stale, so its late reply
+ *  cannot expand a card or close one the reader opened meanwhile. */
+let pendingCardOpen: AbortController | null = null
+
+function supersedePendingCardOpen(): void {
+  pendingCardOpen?.abort()
+  pendingCardOpen = null
+}
+
 function draftChangeInChat(owner: NativeChatVisualOwner, name: string): void {
   requestNativeChatComposerFocus(owner.tabId ?? structuredAgentSessionTabId(owner.sessionId), {
     append: translate(
@@ -59,13 +68,28 @@ export function NativeChatAutomationSavedRow({
   )
   const toggle = useRef<HTMLButtonElement>(null)
   const pendingOpen = useRef<AbortController | null>(null)
-  useEffect(() => () => pendingOpen.current?.abort(), [])
   const [opening, setOpening] = useState(false)
+  useEffect(
+    () => () => {
+      // Why: the chat pane's <Activity> runs this when hidden, not only on unmount, and keeps
+      // this row's state; release the Open here or it stays disabled after returning.
+      pendingOpen.current?.abort()
+      pendingOpen.current = null
+      setOpening(false)
+    },
+    []
+  )
   const Icon = hasAutomationSchedule(automation) ? CalendarClock : Zap
   const Chevron = open ? ChevronUp : ChevronDown
+  const choose = (next: boolean): void => {
+    supersedePendingCardOpen()
+    setOpen(next)
+  }
   const openFull = (): void => {
+    supersedePendingCardOpen()
     pendingOpen.current?.abort()
     const lifetime = new AbortController()
+    pendingCardOpen = lifetime
     pendingOpen.current = lifetime
     setOpening(true)
     void openCardAutomation(owner, disclosureId, saved, shortened, lifetime.signal)
@@ -82,11 +106,12 @@ export function NativeChatAutomationSavedRow({
         setOpen(true)
       })
       .finally(() => {
+        if (pendingCardOpen === lifetime) {
+          pendingCardOpen = null
+        }
         if (pendingOpen.current === lifetime) {
           pendingOpen.current = null
-          if (!lifetime.signal.aborted) {
-            setOpening(false)
-          }
+          setOpening(false)
         }
       })
   }
@@ -96,7 +121,7 @@ export function NativeChatAutomationSavedRow({
         if (event.key === 'Escape' && open) {
           event.preventDefault()
           event.stopPropagation()
-          setOpen(false)
+          choose(false)
           toggle.current?.focus()
         }
       }}
@@ -126,7 +151,7 @@ export function NativeChatAutomationSavedRow({
             ref={toggle}
             type="button"
             aria-expanded={open}
-            onClick={() => setOpen(!open)}
+            onClick={() => choose(!open)}
             className="flex min-w-0 flex-1 items-end justify-between gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <span className="min-w-0">

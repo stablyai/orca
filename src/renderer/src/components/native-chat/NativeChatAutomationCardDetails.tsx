@@ -9,7 +9,12 @@ import type { NativeChatVisualOwner } from './media/visuals/native-chat-visual-o
 import { captureAutomationReceiptSource, openReceiptAutomation } from './automation-receipt-client'
 import { readAutomationReceiptFacts } from '../../../../shared/automations/automation-receipt-facts'
 import { automationReceiptStartDetails } from '../../../../shared/automations/automation-receipt-summary'
-import { receiptInstant, receiptStartLabel, receiptZoneName } from './automation-receipt-copy'
+import {
+  receiptAlternativesUnprovenNote,
+  receiptInstant,
+  receiptStartLabel,
+  receiptZoneName
+} from './automation-receipt-copy'
 import { NativeChatAutomationCurrentDetails } from './NativeChatAutomationCurrentDetails'
 
 /** An opened automation card: its live settings, newest runs and actions, read from its host. */
@@ -42,11 +47,12 @@ export function NativeChatAutomationCardDetails({
       ? facts.zone.iana
       : null
   const viewerZone = Intl.DateTimeFormat().resolvedOptions().timeZone
-  const savedScopes = automationReceiptStartDetails(
+  const startDetails = automationReceiptStartDetails(
     saved.automation,
     saved.receiptFacts,
     shortened
-  ).map(({ start, showLabel }, index) => {
+  )
+  const savedScopes = startDetails.scopes.map(({ start, showLabel }, index) => {
     if (start.kind !== 'event') {
       return { id: `${start.kind}:${index}`, text: receiptStartLabel(start) }
     }
@@ -82,6 +88,9 @@ export function NativeChatAutomationCardDetails({
         .join(' · ')
     }
   })
+  if (startDetails.alternativesUnproven) {
+    savedScopes.push({ id: 'alternatives-unproven', text: receiptAlternativesUnprovenNote() })
+  }
   const note =
     details.acknowledgement === 'deleted'
       ? t('components.native-chat.automationSaved.deleteAcknowledged', 'Automation deleted')

@@ -166,7 +166,9 @@ export async function openCardAutomation(
     current &&= sameView()
   })
   signal.addEventListener('abort', unsubscribe, { once: true })
-  const accepts = (): boolean => current && !signal.aborted && sameView()
+  // Why: a reply after re-pair or a runtime restart is stale even when the view is unchanged.
+  const accepts = (): boolean =>
+    current && !signal.aborted && sameView() && automationReceiptSourceCurrent(source)
   try {
     const result = await readAutomationReceipt(source)
     if (!accepts()) {
