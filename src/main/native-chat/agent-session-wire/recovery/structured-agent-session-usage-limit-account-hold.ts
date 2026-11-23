@@ -201,12 +201,13 @@ export class UsageLimitAccountHolds {
     const cut = movedCut ? { ...limited, resetsAt: Math.min(limited.resetsAt, moved.at) } : limited
     const scope = this.scopes.get(id)
     let hold = this.holds.get(id)
+    const relaunched = this.relaunched.at(id, switchFreeIdentity(limited)) !== undefined
     if (!hold && !scope) {
       return {
         resetsAt: cut.resetsAt,
         unknownReset: false,
         awaitingReading: false,
-        awaitingRoom: limited.resetFromSwitch === true
+        awaitingRoom: relaunched
       }
     }
     const account = scope?.account
@@ -288,7 +289,7 @@ export class UsageLimitAccountHolds {
         (account ? !fresh(resetsAt) : scope?.bootstrap !== undefined) &&
         now >= waitFrom &&
         now < waitFrom + READING_WAIT_MS,
-      awaitingRoom: limited.resetFromSwitch === true && room === undefined
+      awaitingRoom: relaunched && room === undefined
     }
   }
 
@@ -297,7 +298,7 @@ export class UsageLimitAccountHolds {
     cut: NativeChatUsageLimitCut & SwitchReset,
     now: number
   ): cut is NativeChatUsageLimitCut & { resetsAt: number; turnEndedAt: number } {
-    return isAccountHoldSchedulable(cut, this.verdict(id, cut, now), now)
+    return isAccountHoldSchedulable(cut, now, (limited) => this.verdict(id, limited, now))
   }
 
   ready(

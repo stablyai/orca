@@ -38,7 +38,7 @@ function reading(usedPercent: number, updatedAt: number): ProviderRateLimits {
   }
 }
 
-async function relaunchedChat(reset = RESET) {
+async function relaunchedChat(reset: number | null = RESET) {
   let clock = NOW
   let homePath = join(tmpdir(), 'orca-usage-fixture', 'a')
   const nextHome = join(tmpdir(), 'orca-usage-fixture', 'b')
@@ -108,7 +108,7 @@ async function relaunchedChat(reset = RESET) {
       kind: 'status',
       ...agentSessionFailureWords(
         agentSessionFailureFact('usageLimitReached', {
-          usageLimit: reset === undefined ? {} : { resetsAt: reset }
+          usageLimit: reset === null ? {} : { resetsAt: reset }
         }),
         { surface: 'row' }
       )
@@ -138,7 +138,7 @@ async function relaunchedChat(reset = RESET) {
   await relaunch()
   expect(await journal.reads.usageLimitCut()).toMatchObject({
     fence: cutFence,
-    ...(reset === undefined ? {} : { resetsAt: reset })
+    ...(reset === null ? {} : { resetsAt: reset })
   })
 
   return {
@@ -224,22 +224,21 @@ it('discards stale quota when the chat relaunches before the retry is admitted',
   expect(await host.readUsageLimitContinue(SESSION)).toMatchObject({ continueAt: NOW + 25_000 })
 })
 
-it('holds a retry when the account is exhausted and asks for a missing reading', async () => {
+it('holds a retry when the account is exhausted without waking an idle reading', async () => {
   const { pass, requested } = await relaunchedChat()
   expect(await pass(5_000, null)).toEqual([])
-  expect(requested).toContainEqual({ notWithinMs: 600_000 })
+  expect(requested).toEqual([])
   expect(await pass(20_000, reading(100, NOW + 20_000))).toEqual([])
   expect(await pass(45_000, reading(100, NOW + 45_000))).toEqual([])
 })
 
 it('requires fresh room before a resetless relaunched cut continues', async () => {
-  const { pass } = await relaunchedChat(undefined)
+  const { pass } = await relaunchedChat(null)
   expect(await pass(5_000, null)).toEqual([])
   expect(
     await pass(20_000, { ...reading(0, NOW + 20_000), status: 'error', error: 'offline' })
   ).toEqual([])
   expect(await pass(35_000, reading(0, NOW - 1))).toEqual([])
   expect(await pass(50_000, { ...reading(0, NOW + 50_000), weekly: null })).toEqual([])
-  expect(await pass(65_000, reading(0, NOW + 65_000))).toEqual([])
-  expect(await pass(85_000, reading(0, NOW + 85_000))).toHaveLength(1)
+  expect(await pass(65_000, reading(0, NOW + 65_000))).toHaveLength(1)
 })

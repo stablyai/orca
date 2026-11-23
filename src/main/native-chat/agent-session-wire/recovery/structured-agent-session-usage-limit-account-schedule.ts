@@ -17,11 +17,13 @@ export function withMovedCutReset<T extends NativeChatUsageLimitCut>(
 
 export function isAccountHoldSchedulable(
   cut: NativeChatUsageLimitCut & SwitchReset,
-  verdict: { resetsAt: number },
-  now: number
+  now: number,
+  verdict: (cut: NativeChatUsageLimitCut & { resetsAt: number } & SwitchReset) => {
+    resetsAt: number
+  }
 ): cut is NativeChatUsageLimitCut & { resetsAt: number; turnEndedAt: number } {
   return (
     isNativeChatUsageLimitCutSchedulable(cut, Number.NEGATIVE_INFINITY) &&
-    isNativeChatUsageLimitCutSchedulable({ ...cut, ...verdict }, now)
+    isNativeChatUsageLimitCutSchedulable({ ...cut, ...verdict(cut) }, now)
   )
 }
