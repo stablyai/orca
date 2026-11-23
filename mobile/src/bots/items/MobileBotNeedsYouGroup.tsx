@@ -93,10 +93,11 @@ function AskRow({
     { client, sessionId, enabled: sessionId !== null, hostSupport, agent: null },
     null
   )
-  const asked = ask.approval ? undefined : asyncQuestionSkip?.awaiting
+  // A prompt the turn stopped for is the one it waits on, as on the desktop; Skip is for the others.
+  const asked = ask.approval || ask.question ? undefined : asyncQuestionSkip?.awaiting
   const save = asyncQuestionSkip?.save
   const title = askRowTitle(ask, owner?.name ?? botName, t)
-  const line = askLine(ask, t, asked?.text)
+  const line = askLine(ask, t, ask.question ?? asked?.text)
   const command = ask.tool?.input ? (
     <Text style={styles.command} numberOfLines={1}>
       {ask.tool.input}

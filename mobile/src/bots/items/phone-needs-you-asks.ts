@@ -4,7 +4,7 @@
 // can be lower than the desktop's.
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import * as z from 'zod'
-import type { AgentSessionAwaitedApproval } from '../../../../src/shared/agent-session/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../../src/shared/agent-session/agent-session-wire'
 import type { ConnectorAccessRequest } from '../../../../src/shared/connector-bot-access-contract'
 import { accessRequestPerson } from '../../../../src/shared/bots/bot-access-request'
 import type { BotChatTreeChat, BotChatTreeWorker } from '../../../../src/shared/bots/bot-chat-tree'
@@ -36,6 +36,8 @@ export type PhoneAsk = {
   number: number | null
   /** The tool an approval asks to run, when its chat's or worker's status says. */
   tool: { name: string; input: string | null } | null
+  /** The question a chat's turn stopped for, when its host's status says. */
+  question: string | null
   /** What a tap opens; null when the phone can't reach it. */
   open:
     | { chat: BotChatTreeChat }
@@ -52,6 +54,12 @@ export function phoneAskCounts(ask: PhoneAsk): boolean {
   return !(ask.open && 'stopped' in ask.open)
 }
 
+/** What a waiting chat's session asks, as its host's status feed says. */
+export type PhoneChatPrompt = Pick<
+  AgentSessionStatusSummary,
+  'awaitsApproval' | 'awaitsBlockingQuestion'
+>
+
 /** What the activity read says of a worker: its dot and the tool its permission prompt asks for. */
 export type PhoneWorkerAsk = { dot: string; tool?: { name: string; input: string | null } }
 
@@ -61,7 +69,7 @@ export function phoneNeedsYouAsks(
   chats: readonly BotChatTreeChat[],
   workerAsk: (dispatchId: string) => PhoneWorkerAsk | null,
   itemOf: (dispatchId: string) => Pick<BotItem, 'title' | 'number'> | null,
-  chatApproval: (chat: BotChatTreeChat) => AgentSessionAwaitedApproval | undefined,
+  chatPrompt: (chat: BotChatTreeChat) => PhoneChatPrompt | undefined,
   connectors: readonly PhoneConnectorNeed[],
   accessRequests: readonly ConnectorAccessRequest[],
   /** Automations whose newest run stopped for a sign-in. */
@@ -73,7 +81,8 @@ export function phoneNeedsYouAsks(
       continue
     }
     if (chat.live === 'needs-you') {
-      const approval = chatApproval(chat)
+      const prompt = chatPrompt(chat)
+      const approval = prompt?.awaitsApproval
       asks.push({
         key: `chat:${chat.chatId}`,
         approval: approval !== undefined,
@@ -81,6 +90,7 @@ export function phoneNeedsYouAsks(
         worker: null,
         number: null,
         tool: approval ? { name: approval.tool, input: approval.input ?? null } : null,
+        question: prompt?.awaitsBlockingQuestion?.text ?? null,
         open: { chat }
       })
     }
@@ -97,6 +107,7 @@ export function phoneNeedsYouAsks(
         worker: item ? worker.title : null,
         number: item?.number ?? null,
         tool: seen?.tool ?? null,
+        question: null,
         // A handed agent with no Dispatch opens only where the tree placed it.
         open: worker.dispatchId || worker.worktreeId ? { worker } : null
       })
@@ -110,6 +121,7 @@ export function phoneNeedsYouAsks(
       worker: null,
       number: null,
       tool: null,
+      question: null,
       open: { connector }
     })
   }
@@ -121,6 +133,7 @@ export function phoneNeedsYouAsks(
       worker: null,
       number: null,
       tool: null,
+      question: null,
       open: { access: request }
     })
   }
@@ -133,6 +146,7 @@ export function phoneNeedsYouAsks(
       worker: null,
       number: null,
       tool: null,
+      question: null,
       open: { stopped: { automationId: automation.id } }
     })
   }
@@ -169,9 +183,15 @@ export function openPhoneAsk(ask: PhoneAsk, openers: PhoneAskOpeners): void {
 
 const noSubscription = (): (() => void) => () => {}
 
-// The waiting chats' approvals as `useChatApprovals` reads them: [session id, approval] pairs.
-const ChatApprovals = z.array(
-  z.tuple([z.string(), z.object({ tool: z.string(), input: z.string().optional() })])
+// The waiting chats' prompts as `useChatPrompts` reads them: [session id, prompt] pairs.
+const ChatPrompts = z.array(
+  z.tuple([
+    z.string(),
+    z.object({
+      awaitsApproval: z.object({ tool: z.string(), input: z.string().optional() }).optional(),
+      awaitsBlockingQuestion: z.object({ text: z.string() }).optional()
+    })
+  ])
 )
 
 /** The session whose status is the chat's: the one a /clear moved it to, else its own. */
@@ -179,12 +199,12 @@ export function chatSessionId(chat: BotChatTreeChat): string {
   return chat.liveSessionId ?? chat.chatId
 }
 
-/** The approval each waiting chat's session waits on, as its host's status feed says; none on a host
- *  without it. Read as one string, so other sessions' frames re-render nothing. */
-function useChatApprovals(
+/** The approval or question each waiting chat's session waits on, as its host's status feed says;
+ *  none on a host without it. Read as one string, so other sessions' frames re-render nothing. */
+function useChatPrompts(
   client: RpcClient | null,
   chats: readonly BotChatTreeChat[] | null
-): (chat: BotChatTreeChat) => AgentSessionAwaitedApproval | undefined {
+): (chat: BotChatTreeChat) => PhoneChatPrompt | undefined {
   const capabilities = useOptionalHostProtocolGates()?.hostCapabilities
   const statusFeed = useMemo(
     () => structuredAgentSessionHostSupport(capabilities ?? []).statusFeed,
@@ -203,16 +223,19 @@ function useChatApprovals(
     const snapshot = feed?.getSnapshot()
     return JSON.stringify(
       waiting.flatMap((id) => {
-        const approval = snapshot?.get(id)?.awaitsApproval
-        return approval ? [[id, approval]] : []
+        const status = snapshot?.get(id)
+        const { awaitsApproval, awaitsBlockingQuestion } = status ?? {}
+        return awaitsApproval || awaitsBlockingQuestion
+          ? [[id, { awaitsApproval, awaitsBlockingQuestion }]]
+          : []
       })
     )
   }, [feed, waiting])
-  const approvals = useSyncExternalStore(subscribe, read, read)
+  const prompts = useSyncExternalStore(subscribe, read, read)
   return useMemo(() => {
-    const byId = new Map(ChatApprovals.parse(JSON.parse(approvals)))
+    const byId = new Map(ChatPrompts.parse(JSON.parse(prompts)))
     return (chat: BotChatTreeChat) => byId.get(chatSessionId(chat))
-  }, [approvals])
+  }, [prompts])
 }
 
 const NO_CONNECTORS: readonly PhoneConnectorNeed[] = []
@@ -245,7 +268,7 @@ export function usePhoneNeedsYouAsks({
   /** Needs you items that aren't stale, unfiltered. */
   itemCount: number
 }): { asks: readonly PhoneAsk[]; count: number } {
-  const chatApproval = useChatApprovals(client, chats)
+  const chatPrompt = useChatPrompts(client, chats)
   const accessRequests = access?.requests
   const all = useMemo(() => {
     const byDispatch = botItemsByDispatch(items ?? [])
@@ -254,12 +277,12 @@ export function usePhoneNeedsYouAsks({
       chats ?? [],
       (dispatchId) => seen.get(`worker:${dispatchId}`) ?? null,
       (dispatchId) => byDispatch.get(dispatchId) ?? null,
-      chatApproval,
+      chatPrompt,
       connectors,
       accessRequests ?? [],
       (automations ?? []).flatMap((row) => (row.needsSignIn ? [row.automation] : []))
     )
-  }, [chats, workers, items, chatApproval, connectors, accessRequests, automations])
+  }, [chats, workers, items, chatPrompt, connectors, accessRequests, automations])
   return { asks: all, count: botNeedsYouCount(all.filter(phoneAskCounts).length, itemCount) }
 }
 
