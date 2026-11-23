@@ -39,6 +39,7 @@ const TYPED_ANSWER = -1
 /** Single-select advances after a pick; multi-select confirms explicitly, and multi-question prompts retain earlier answers. */
 export function NativeChatQuestionCard({
   prompt,
+  disabled = false,
   isSubmitting = false,
   isCancelling = false,
   onAnswer,
@@ -55,7 +56,7 @@ export function NativeChatQuestionCard({
   const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
   const surfaceRef = useRef<HTMLDivElement>(null)
-  const blocked = isSubmitting || isCancelling
+  const blocked = disabled || isSubmitting || isCancelling
   const autoAdvance = useNativeChatQuestionAutoAdvance(blocked)
   const [index, setIndex] = useState(0)
   useNativeChatPromptCardFocus(cardRef, shouldFocus, index)
@@ -240,7 +241,7 @@ export function NativeChatQuestionCard({
   }
   useNativeChatQuestionKeys(
     cardRef,
-    shouldFocus && !isSubmitting,
+    shouldFocus && !blocked,
     q.options.length,
     pickOption,
     (delta) => {
@@ -280,7 +281,7 @@ export function NativeChatQuestionCard({
       aria-busy={isSubmitting}
       onKeyDown={(event) => {
         if (!confirmNativeChatQuestionOnCardEnter(event, currentAnswered, () => confirm(true))) {
-          foldNativeChatQuestionOnEscape(event, isSubmitting ? undefined : collapse)
+          foldNativeChatQuestionOnEscape(event, blocked ? undefined : collapse)
         }
       }}
     >
@@ -303,13 +304,21 @@ export function NativeChatQuestionCard({
               answered: answeredAt(i)
             }))}
             index={index}
-            disabled={isSubmitting}
-            cancelDisabled={isCancelling}
+            disabled={blocked}
+            cancelDisabled={blocked}
             onGoTo={goTo}
             onCollapse={collapse}
             onCancel={cancel}
           />
           {look?.header}
+          {look?.heading || look?.context ? (
+            <div className="px-3.5 pt-3 text-sm">
+              {look.heading ? <p className="font-semibold">{look.heading}</p> : null}
+              {look.context ? (
+                <div className="mt-1 text-muted-foreground">{look.context}</div>
+              ) : null}
+            </div>
+          ) : null}
           <div
             data-native-chat-dock-unsqueezed
             // Short of room (fit level card), the question, options and typed answer scroll as one body,
@@ -363,7 +372,7 @@ export function NativeChatQuestionCard({
                       description={opt.description}
                       preview={opt.preview}
                       selected={(selections[index] ?? []).includes(i)}
-                      disabled={isSubmitting}
+                      disabled={blocked}
                       onSelect={() => pickOption(i)}
                       onEnter={() => pickOption(i, 'enter')}
                     />
@@ -376,7 +385,7 @@ export function NativeChatQuestionCard({
                 multiline={freeTextInput?.multiline === true}
                 value={otherText[index] ?? ''}
                 chosen={currentTypedAnswerChosen}
-                disabled={isSubmitting}
+                disabled={blocked}
                 takesFocus={q.options.length === 0}
                 placeholder={answerPlaceholder}
                 inputRef={answerInputRef}
@@ -398,7 +407,7 @@ export function NativeChatQuestionCard({
             {index > 0 ? (
               <button
                 type="button"
-                disabled={isSubmitting}
+                disabled={blocked}
                 onClick={() => goTo(index - 1)}
                 className="inline-flex h-8 shrink-0 items-center rounded-lg px-3 text-[length:calc(var(--chat-ui-size,var(--text-sm))*13/14)] font-semibold text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground/45 disabled:opacity-50"
               >
@@ -410,14 +419,13 @@ export function NativeChatQuestionCard({
               label={
                 isSubmitting
                   ? t('components.native-chat.question.sending', 'Sending…')
-                  : skipAndSubmit
-                    ? t('components.native-chat.question.skipAndSubmit', 'Skip and submit')
-                    : CONFIRM_LABEL[confirmLabel]()
+                  : (look?.submitLabel ??
+                    (skipAndSubmit
+                      ? t('components.native-chat.question.skipAndSubmit', 'Skip and submit')
+                      : CONFIRM_LABEL[confirmLabel]()))
               }
               answered={confirmLabel !== 'skip' && !outlinedConfirm}
-              enterHint={
-                currentAnswered && !isSubmitting && !q.multiSelect && !freeTextInput?.multiline
-              }
+              enterHint={currentAnswered && !blocked && !q.multiSelect && !freeTextInput?.multiline}
               disabled={blocked || nothingToSend || confirmBlocked}
               onConfirm={() => confirm()}
             />

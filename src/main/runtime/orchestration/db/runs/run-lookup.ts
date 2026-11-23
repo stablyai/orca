@@ -151,7 +151,7 @@ export function runsBoundToPane(this: OrchestrationDb, paneKey: string): RunRow[
   )
 }
 
-export function getRunRaw(this: OrchestrationDb, id: string): RunRow | undefined {
+export function getRunRaw(this: Pick<OrchestrationDb, 'db'>, id: string): RunRow | undefined {
   return this.db.prepare(RUN_BY_ID_SQL).get(id) as RunRow | undefined
 }
 
@@ -217,7 +217,10 @@ export function unbindOtherRunsForCoordinator(
   return changed
 }
 
-export function requireRun(this: OrchestrationDb, runId: string): void {
+export function requireRun(
+  this: { getRunRaw(id: string): RunRow | undefined },
+  runId: string
+): void {
   if (!this.getRunRaw(runId)) {
     throw new Error(`Run not found: ${runId}`)
   }

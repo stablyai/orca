@@ -1,3 +1,4 @@
+import { assertSessionLinkMailBoundary } from '../../../../orchestration/session-links/session-link-mail-boundary'
 import { dropReaderlessRunQuestions } from '../../../../orchestration/db/questions/readerless-run-questions'
 import { deletedCoordinatorChat } from './deleted-coordinator-chat'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
@@ -157,6 +158,7 @@ export const ORCHESTRATION_ASK_METHODS = [
         }
         // An explicit Run or coordinator target still reaches the Run; otherwise the asker's creator.
         const to = params.to && params.to !== reportTo ? `run:${run.id}` : reportTo
+        await assertSessionLinkMailBoundary(db, orchestrationCaller?.orcaSessionId, to)
         const created = db.createQuestion({
           runId: run.id,
           dispatchId: askingDispatch.id,

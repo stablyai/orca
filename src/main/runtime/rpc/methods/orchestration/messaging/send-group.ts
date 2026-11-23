@@ -3,6 +3,7 @@ import type {
   MessageType
 } from '../../../../orchestration/db/orchestration-records'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { sessionLinkMailBoundary } from '../../../../orchestration/session-links/session-link-mail-boundary'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { resolveGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
@@ -265,6 +266,11 @@ export async function sendGroupMessage(args: {
       'terminal_not_found',
       `No recipient of ${groupAddress} resolved to a live terminal or durable Run/Dispatch mailbox.`
     )
+  }
+
+  const linkBoundary = await sessionLinkMailBoundary(db, sender.orcaSessionId)
+  for (const recipient of uniqueRecipients) {
+    linkBoundary.assert(recipient.to)
   }
 
   const threadId = params.threadId ?? `thread_${Date.now()}`

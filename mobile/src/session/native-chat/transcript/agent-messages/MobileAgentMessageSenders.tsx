@@ -62,6 +62,14 @@ export function MobileAgentMessageSenders({
         )
       })}
       {more > 0 ? <Text style={[styles.meta, queued && styles.queuedMeta]}>+{more}</Text> : null}
+      {from.link ? (
+        <Text
+          numberOfLines={queued ? 1 : 2}
+          style={[styles.meta, queued && styles.queuedMeta, styles.sessionLink]}
+        >
+          {t('chat.agentMessage.sessionLink', 'Link')}: {from.link.title}
+        </Text>
+      ) : null}
     </View>
   )
 }

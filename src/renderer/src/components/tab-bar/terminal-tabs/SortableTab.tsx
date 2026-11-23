@@ -1,6 +1,6 @@
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { structuredAgentSessionAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
-import { useCallback, useEffect } from 'react'
+import { useCallback } from 'react'
 import { Minimize2, Pin } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../../shared/agent-status/title/agent-title-decoration'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
@@ -19,6 +19,7 @@ import {
 import { preventMiddleButtonDefault } from '../strip/middle-button-default-guard'
 import { useSortableTabRename } from './use-sortable-tab-rename'
 import { useTabRenameReturnFocus } from './use-tab-rename-return-focus'
+import { useTabSessionLink } from '../use-tab-session-link'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
 import { SortableTabCloseButton } from './SortableTabCloseButton'
 import { useSortableTabContextMenu } from './use-sortable-tab-context-menu'
@@ -156,22 +157,6 @@ export default function SortableTab({
   const showUnreadActivity =
     hasUnreadActivity && !isEditing && !isTerminalTabActivityLive(activityStatus)
 
-  useEffect(() => {
-    const closeMenu = (): void => setMenuOpen(false)
-    window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
-    return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
-  }, [setMenuOpen])
-
-  // Why: webview clicks miss the renderer pointerdown Radix uses for outside-click, so dismiss on window blur instead.
-  useEffect(() => {
-    if (!menuOpen) {
-      return
-    }
-    const dismiss = (): void => setMenuOpen(false)
-    window.addEventListener('blur', dismiss)
-    return () => window.removeEventListener('blur', dismiss)
-  }, [menuOpen, setMenuOpen])
-
   // Why: while editing, drop drag listeners so typing can't start a drag; attributes stay spread to keep dnd-kit a11y.
   const dragListeners = isEditing ? undefined : listeners
   const handleActivate = useCallback(() => {
@@ -182,6 +167,7 @@ export default function SortableTab({
     onActivate: handleActivate,
     disabled: isEditing
   })
+  const sessionLink = useTabSessionLink(tab.worktreeId, unifiedTabId, menuOpen)
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive, sizing)
   const tabTitle = tab.customTitle ?? tab.title
@@ -398,7 +384,9 @@ export default function SortableTab({
         onToggleViewMode={onToggleViewMode}
         canSplitTerminal={canSplitTerminal}
         nativeChat={nativeChat}
+        onWorkTogether={sessionLink.onOpen}
       />
+      {sessionLink.dialog}
       {naming ? <NativeChatNamingFailedDialog naming={naming} chatName={displayTitle} /> : null}
     </ContextMenu>
   )

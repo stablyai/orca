@@ -3723,7 +3723,8 @@
         "task": "Task from",
         "update": "Update from",
         "message": "Message from"
-      }
+      },
+      "sessionLink": "Link"
     },
     "fork": {
       "busy": "Another chat or terminal is opening. Wait, then fork the {{agent}} chat again.",

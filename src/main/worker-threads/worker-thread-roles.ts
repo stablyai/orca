@@ -24,6 +24,7 @@ export type WorkerThreadRole =
   | 'orca-profile-state-backup'
   | 'orca-profile-state-writer'
   | 'orca-row-cache-checkpoint'
+  | 'orca-session-links'
   | 'orca-session-search'
   | 'orca-usage-scan'
   | 'orca-warp-theme-parser'

@@ -7,6 +7,9 @@ import type { AskPrompt } from '../../../../../shared/native-chat/input/question
 
 /** Another surface's own look for the question card. */
 export type NativeChatQuestionCardLook = {
+  heading?: string
+  context?: React.ReactNode
+  submitLabel?: string
   /** The outer frame, where the surface's fill and gutter differ from chat's. */
   frameClassName?: string
   /** Emphasis on the bordered body. */
@@ -27,6 +30,7 @@ export type NativeChatQuestionCardDraft = {
 
 export type NativeChatQuestionCardProps = {
   prompt: AskPrompt
+  disabled?: boolean
   /** Whether the snapshotted answer is still being delivered to the agent. */
   isSubmitting?: boolean
   isCancelling?: boolean

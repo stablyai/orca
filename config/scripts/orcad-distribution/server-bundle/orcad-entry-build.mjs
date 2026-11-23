@@ -32,6 +32,8 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   botsDbWorker: 'src/main/bots/db-worker/bots-db-worker-entry.ts',
   orchestrationReader:
     'src/main/runtime/orchestration/db/reader-worker/orchestration-reader-entry.ts',
+  sessionLinkWorker:
+    'src/main/runtime/orchestration/session-links/worker/session-link-worker-entry.ts',
   portScanCommandWorker: 'src/main/ports/port-scan-command-worker-entry.ts',
   commandPathDirectoryWorker: 'src/main/ipc/command-path/command-path-directory-worker-entry.ts',
   sessionScanner: 'src/main/ai-vault/scan-service/session-scanner-service-entry.ts',

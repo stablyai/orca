@@ -6,43 +6,49 @@ import { SortableTabContextMenu } from './SortableTabContextMenu'
 
 const noop = (): void => {}
 
-export const open = defineFixture({
-  width: 360,
-  render: function MenuFixture() {
-    const trigger = useRef<HTMLButtonElement>(null)
-    useEffect(() => {
-      trigger.current?.dispatchEvent(
-        new MouseEvent('contextmenu', { bubbles: true, clientX: 16, clientY: 8 })
-      )
-    }, [])
-    return (
-      <div className="relative h-[420px] overflow-hidden bg-background">
-        <FixtureCodeBackdrop />
-        <ContextMenu>
-          <ContextMenuTrigger asChild>
-            <button ref={trigger}>Tab</button>
-          </ContextMenuTrigger>
-          <SortableTabContextMenu
-            open
-            tab={{ id: 'tab-1', worktreeId: 'wt-1', color: null }}
-            unifiedTabId="tab-1"
-            groupId="group-1"
-            isActive
-            tabCount={3}
-            hasTabsToRight
-            hasTabsToLeft={false}
-            isPinned={false}
-            onActivate={noop}
-            onClose={noop}
-            onCloseOthers={noop}
-            onCloseToRight={noop}
-            onCloseToLeft={noop}
-            onRenameOpen={noop}
-            onSetTabColor={noop}
-            onTogglePin={noop}
-          />
-        </ContextMenu>
-      </div>
+function MenuFixture({ workTogether = false }: { workTogether?: boolean }) {
+  const trigger = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    trigger.current?.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, clientX: 16, clientY: 8 })
     )
-  }
+  }, [])
+  return (
+    <div className="relative h-[420px] overflow-hidden bg-background">
+      <FixtureCodeBackdrop />
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <button ref={trigger}>Tab</button>
+        </ContextMenuTrigger>
+        <SortableTabContextMenu
+          open
+          tab={{ id: 'tab-1', worktreeId: 'wt-1', color: null }}
+          unifiedTabId="tab-1"
+          groupId="group-1"
+          isActive
+          tabCount={3}
+          hasTabsToRight
+          hasTabsToLeft={false}
+          isPinned={false}
+          onActivate={noop}
+          onClose={noop}
+          onCloseOthers={noop}
+          onCloseToRight={noop}
+          onCloseToLeft={noop}
+          onRenameOpen={noop}
+          onSetTabColor={noop}
+          onTogglePin={noop}
+          canSplitTerminal={!workTogether}
+          nativeChat={workTogether ? { sessionId: 'claude-review', agent: 'claude' } : undefined}
+          onWorkTogether={workTogether ? noop : undefined}
+        />
+      </ContextMenu>
+    </div>
+  )
+}
+
+export const open = defineFixture({ width: 360, render: () => <MenuFixture /> })
+export const chatWorkTogether = defineFixture({
+  width: 480,
+  render: () => <MenuFixture workTogether />
 })

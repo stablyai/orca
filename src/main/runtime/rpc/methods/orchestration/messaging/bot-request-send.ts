@@ -1,3 +1,4 @@
+import { sessionLinkMailBoundary } from '../../../../orchestration/session-links/session-link-mail-boundary'
 /** Stores mail to a bot with Orca's record of the request beside it, after the checks pass. */
 
 import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
@@ -217,18 +218,11 @@ async function admitBotRequestMail(
     toBotId: target.id,
     purpose
   }
-  const blockedReceipt = (
-    blocked: Exclude<BotRequestAdmission, { kind: 'sent' }>
-  ): { sent: false; receipt: unknown } => {
+  const blockedReceipt = (blocked: Exclude<BotRequestAdmission, { kind: 'sent' }>) => {
     const earlier = db.getMessageById(blocked.messageId)
-    return {
-      sent: false,
-      receipt: {
-        ...(earlier ? { message: exposeMessage(earlier) } : {}),
-        duplicate: true,
-        next: `${target.name} already has this request, so no second message was sent.`
-      }
-    }
+    const message = earlier ? { message: exposeMessage(earlier) } : {}
+    const next = `${target.name} already has this request, so no second message was sent.`
+    return { sent: false, receipt: { ...message, duplicate: true, next } }
   }
   const messageId = args.messageId ?? generateId('msg')
   // Checked before a conversation is made for it; the store checks again as it stores.
@@ -244,6 +238,7 @@ async function admitBotRequestMail(
     depth: record.depth,
     record: JSON.stringify(record)
   }
+  const linkBoundary = await sessionLinkMailBoundary(db, acting.sessionId)
   /** `reserved`: the request's place is already held, so only its mail is stored. */
   /** `held`: the chat a failed turn holds that this request queues in, named to the sender. */
   const admit = (address: string, reserved = false, held?: HeldChat | null) => {
@@ -259,6 +254,7 @@ async function admitBotRequestMail(
     if (!recipient.ok) {
       throw new OrchestrationError(recipient.code, recipient.message)
     }
+    linkBoundary.assert(recipient.to)
     // The bot may have been paused or removed while the Chat was found.
     check()
     runtimeBotGroups(runtime).assertPeerScope(groupScope)

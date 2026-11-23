@@ -27,6 +27,7 @@
   "src/main/orcad/orcad-local-serve-selection-entry.ts": "Dedicated utility/child-process entry; blocking work stays off Electron main.",
   "src/main/bots/db-worker/bots-db-worker-entry.ts": "Dedicated worker-thread entry; bot store SQL stays off Electron main and orcad's loop.",
   "src/main/runtime/orchestration/db/reader-worker/orchestration-reader-entry.ts": "Dedicated worker-thread entry; orchestration read SQL stays off Electron main and orcad's loop.",
+  "src/main/runtime/orchestration/session-links/worker/session-link-worker-entry.ts": "Dedicated worker-thread entry; session link SQL stays off Electron main and orcad's loop.",
   "src/main/bots/bot-items-schema.ts": "Bots DB worker; bot store SQL runs only inside this worker thread.",
   "src/main/bots/bot-items-tables.ts": "Bots DB worker; bot store SQL runs only inside this worker thread.",
   "src/main/bots/bot-items-store.ts": "Bots DB worker; bot store SQL runs only inside this worker thread.",

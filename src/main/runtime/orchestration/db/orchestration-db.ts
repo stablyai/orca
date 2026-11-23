@@ -59,7 +59,11 @@ class OrchestrationDbCore {
   /** PTYs whose pointers were released this session; title edges skip the release write for them. */
   readonly releasedPointerPtyIds = new Set<string>()
 
+  /** The file this database opened; the session link worker joins it on its own connection. */
+  readonly path: (string & {}) | ':memory:'
+
   constructor(dbPath: (string & {}) | ':memory:') {
+    this.path = dbPath
     this.db = new Database(dbPath)
     // First, so opening beside another connection's checkpoint waits rather than failing.
     this.db.pragma('busy_timeout = 5000')
