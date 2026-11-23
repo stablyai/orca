@@ -52,6 +52,7 @@ pnpm dev:fresh [--keep] [--seed-from[=<profile dir>]]   # temporary profile, rem
 ## Troubleshooting
 
 - Slow main-process rebuilds: set `ORCA_DEV_MAIN_SOURCEMAPS=0` before `pnpm dev` when you don't need main-process source maps.
-- Renderer misbehaving in dev: set `ORCA_DEV_BUNDLED=0` to turn off bundled dev mode, and report it.
+- Renderer dev uses the standard Vite server by default. `ORCA_DEV_BUNDLED=1` opts into bundled dev mode, which can retain native memory across rebuilds in the current Rolldown version. Restart existing dev instances to use the new default.
+- `pnpm check:changed`, `pnpm tc`, `pnpm test`, `pnpm lint`, and `pnpm check:code-quality:changed` share one check reservation per user and host across worktrees, stored under `~/.cache/orca`. Additional runs wait; nested check scripts reuse the reservation. `check:changed` exits immediately for no changes or a cached passing result and refreshes its inputs after queueing. Check groups and typechecks default to at most two concurrent tasks/projects. Direct compiler/test executable invocations bypass this coordination. A killed reservation owner is reclaimed by the next run.
 - Test passes alone but fails after others: add `// @orca-isolated-worker` to the file; `ORCA_VITEST_ISOLATE_EVERY_FILE=1` isolates every file to confirm a leak. Windows always isolates every file, because native addons kept across files corrupt the heap.
 - Slow typechecks: where supported, `pnpm tc` keeps incremental caches in `.cache/typecheck/`; delete it to force a fresh check.

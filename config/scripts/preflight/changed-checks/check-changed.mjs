@@ -19,6 +19,7 @@ import {
 import { planChangedChecks } from './check-changed-selection.mjs'
 import { resolveOxcCliInvocation } from '../../tool-invocation/oxc-cli-invocation.mjs'
 import { resolvePnpmCliInvocation } from '../../tool-invocation/pnpm-cli-invocation.mjs'
+import { withLocalCheckSlot } from '../local-checks/local-check-slot.mjs'
 
 const OUTPUT_TAIL_LINES = 200
 const HEARTBEAT_MS = 60_000
@@ -354,21 +355,34 @@ async function runPool(tasks, concurrency, run) {
   return results
 }
 
-export async function main(root, argv) {
-  const startedAt = performance.now()
+function pendingChecks(root, argv) {
   const options = parseArgs(argv)
   const { ref, mergeBase } = resolveMergeBase(root, options.base)
   const files = collectChangedFiles(root, mergeBase)
   if (files.length === 0) {
     console.log(`check:changed: no changes against ${ref}.`)
-    return 0
+    return null
   }
   const hash = computePassHash(root, mergeBase)
   if (!options.force && !options.related && readPassHash(root) === hash) {
     console.log('Nothing changed since last passing run.')
+    return null
+  }
+  return { options, ref, mergeBase, files, hash }
+}
+
+export async function main(root, argv) {
+  if (!pendingChecks(root, argv)) {
     return 0
   }
+  return withLocalCheckSlot(() => {
+    const pending = pendingChecks(root, argv)
+    return pending ? runChecks(root, pending) : 0
+  })
+}
 
+async function runChecks(root, { options, ref, mergeBase, files, hash }) {
+  const startedAt = performance.now()
   const plan = planChangedChecks(files, {
     scriptsDir: path.join(root, 'config', 'scripts'),
     listDirectory: (directory) => {
@@ -418,7 +432,10 @@ export async function main(root, argv) {
   )
 
   // Typecheck and tests lead the queue: they take longest, so the short checks fill in around them.
-  const concurrency = Math.max(3, Math.floor(availableParallelism() / 3))
+  const concurrency = Math.max(
+    1,
+    Math.min(Number(options.maxWorkers ?? 2), Math.floor(availableParallelism() / 3))
+  )
   const running = new Map()
   // Why: output is buffered until a task ends, so long test runs would otherwise look hung.
   const heartbeat = setInterval(() => {

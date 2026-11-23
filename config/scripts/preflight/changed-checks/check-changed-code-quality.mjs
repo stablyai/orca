@@ -4,6 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { runProcessSync } from '@orca/process-host'
+import { withLocalCheckSlot } from '../local-checks/local-check-slot.mjs'
 import { scanAstGrep } from '../../static-analysis/structural-scan/ast-grep-scan.mjs'
 import { resolvePullRequestDiffBase } from '../../git/pr-diff-base/git-pull-request-diff-base.mjs'
 import { resolveOxlintInvocation } from '../../tool-invocation/oxlint-cli-invocation.mjs'
@@ -654,5 +655,5 @@ export function main(
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exit(main())
+  process.exitCode = await withLocalCheckSlot(() => main())
 }
