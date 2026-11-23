@@ -86,6 +86,23 @@ export class AgentTokenUsageReporter {
     return operation
   }
 
+  /** Sharing is off: days up to today may hold usage from while it was off, so start after them. */
+  pause(): Promise<void> {
+    const operation = this.pending.then(async () => {
+      const today = localDay(this.now())
+      const state = this.state ?? (await this.load(today))
+      this.state = state
+      const tomorrow = shiftDay(today, 1)
+      if (state.startDay < tomorrow) {
+        state.startDay = tomorrow
+        this.unsaved = true
+      }
+      await this.saveIfUnsaved(state)
+    })
+    this.pending = operation.catch(() => {})
+    return operation
+  }
+
   async flush(): Promise<void> {
     await this.pending
     await this.writer.flush()

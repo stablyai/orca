@@ -17,6 +17,8 @@ export type ChatUiLaunchTipCohort =
 export type TelemetrySettings = {
   /** New users: true at install. Existing users: null until they resolve the first-launch banner. */
   optedIn: boolean | null
+  /** When sharing last turned on after being off; usage from before that day is never reported. */
+  sharingResumedAt?: number
   /** Anonymous UUID v4. Generated on first run. Stable across launches; not surfaced in the UI. */
   installId: string
   /** Cohort marker: true for pre-existing profiles (gates the opt-in banner), false for fresh installs. */

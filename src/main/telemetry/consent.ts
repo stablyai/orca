@@ -85,3 +85,20 @@ export function resolveConsent(settings: GlobalSettings): ConsentState {
 
   return { effective: 'pending_banner' }
 }
+
+/** Opt-in update that keeps install identity and stamps when sharing turns on from off or pending. */
+export function telemetryWithOptIn(
+  settings: GlobalSettings,
+  optedIn: boolean,
+  now = Date.now()
+): NonNullable<GlobalSettings['telemetry']> {
+  return {
+    // Only broken migration can omit telemetry; updateSettings deep-merges fallback state.
+    ...(settings.telemetry ?? { installId: '', existedBeforeTelemetryRelease: true }),
+    optedIn,
+    // Usage from that day and earlier is never reported, so nothing from while sharing was off leaves.
+    ...(optedIn && resolveConsent(settings).effective !== 'enabled'
+      ? { sharingResumedAt: now }
+      : {})
+  }
+}

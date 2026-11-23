@@ -101,4 +101,20 @@ describe('AgentTokenUsageReporter', () => {
       { ...tokens(10), provider: 'claude', usage_day: '2026-11-22' }
     ])
   })
+
+  it('never reports a day on which a scan saw sharing turned off, or any earlier unsent day', async () => {
+    const { create, sent, at } = await setup()
+    const reporter = create()
+    await reporter.report([])
+    at(21)
+    await reporter.pause()
+    at(23)
+    await reporter.report([
+      { day: '2026-11-20', ...tokens(10) },
+      { day: '2026-11-21', ...tokens(20) },
+      { day: '2026-11-22', ...tokens(30) }
+    ])
+    // Unsent days up to the off day are dropped too; only later days are sent.
+    expect(sent).toEqual([{ ...tokens(30), provider: 'claude', usage_day: '2026-11-22' }])
+  })
 })
