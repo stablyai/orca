@@ -137,15 +137,19 @@ export function MobileBrowserPane({
     [clearLongPressTimer]
   )
 
-  const resetBrowserZoomState = useCallback(() => {
+  const cancelPageGesture = useCallback(() => {
     clearLongPressTimer()
     pinchRef.current = null
     panRef.current = null
     scrollingRef.current = false
     startPointRef.current = null
+  }, [clearLongPressTimer])
+
+  const resetBrowserZoomState = useCallback(() => {
+    cancelPageGesture()
     zoomRef.current = DEFAULT_ZOOM
     setZoom(DEFAULT_ZOOM)
-  }, [clearLongPressTimer])
+  }, [cancelPageGesture])
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
@@ -178,9 +182,14 @@ export function MobileBrowserPane({
     // Publish committed gesture/stream refs before passive effects without leaking uncommitted render values.
     frameMetadataRef.current = frameMetadata
     layoutRef.current = layout
-    pageCoveredRef.current = dialog !== null || pagePrompts.prompt !== null
+    const pageCovered = dialog !== null || pagePrompts.prompt !== null
+    // A touch already down when a card opens must not land its tap or long-press right-click under it.
+    if (pageCovered && !pageCoveredRef.current) {
+      cancelPageGesture()
+    }
+    pageCoveredRef.current = pageCovered
     zoomRef.current = zoom
-  }, [dialog, frameMetadata, layout, pagePrompts.prompt, zoom])
+  }, [cancelPageGesture, dialog, frameMetadata, layout, pagePrompts.prompt, zoom])
 
   useEffect(() => {
     lastZoomResetUrlRef.current = tab.url || 'about:blank'

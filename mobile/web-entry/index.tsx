@@ -16,7 +16,10 @@ import {
   stampPageMountState,
   type PageMountTarget
 } from '../src/mobile-web-shell/bridge/page-lifecycle/page-bootstrap'
-import { storageReadResultSchema } from '../src/mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
+import {
+  linkOpenResultSchema,
+  storageReadResultSchema
+} from '../src/mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
 import { BRIDGE_HOST_CATALOGS_GRANT } from '../src/mobile-web-shell/bridge/protocol/bridge-frame-fields'
 import {
   publishPageStorage,
@@ -173,7 +176,15 @@ bootstrapShellPage({
     })
     // Publish plain-function seams before first render because effects and initial list paint already read them.
     publishPageHostProfile(session.host)
-    publishExternalLinkOpener((url) => client.notifyExternalLink(url))
+    publishExternalLinkOpener(
+      // Older shells only take the link; this one says whether an app opened it.
+      session.grants.native.includes('native.link.open')
+        ? async (url) =>
+            linkOpenResultSchema.parse(
+              (await client.callNativeVerb('native.link.open', { url })).result
+            ).opened
+        : (url) => client.notifyExternalLink(url)
+    )
     publishHapticsNotifier((kind) => client.notifyHaptics(kind))
     // Expose shell keyboard height to hooks and plain functions.
     publishShellKeyboardSource({

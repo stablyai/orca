@@ -162,6 +162,10 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
 
   const handleResponderMove = useCallback(
     (event: GestureResponderEvent, gesture: PanResponderGestureState) => {
+      // The pane cancelled this gesture when a card covered it; later moves must not scroll the page.
+      if (pageCoveredRef.current) {
+        return
+      }
       const startedPinch = pinchRef.current
         ? null
         : createPinchGesture(event, frameGeometry, zoomRef.current)
