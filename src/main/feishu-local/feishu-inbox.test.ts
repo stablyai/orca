@@ -30,6 +30,14 @@ it('drops unsupported streams and rejects an alias that shadows a pinned app', (
   ).not.toContainEqual(profile)
 })
 
+it('offers a shared app once under the profile the CLI actually resolves for its ID', () => {
+  const alias = { ...profile, name: 'second-name' }
+  expect(eligibleProfiles([profile, alias])).toEqual([profile])
+  expect(eligibleProfiles([alias, profile])).toEqual([alias])
+  expect(eligibleProfiles([profile, { ...alias, name: profile.appId }])).not.toContainEqual(profile)
+  expect(eligibleProfiles([profile, { ...alias, name: profile.name }])).toEqual([])
+})
+
 it('keeps the pairing, actor, original DM and both replay keys bound across a restart', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'feishu-inbox-'))
   const path = join(dir, 'inbox.sqlite')

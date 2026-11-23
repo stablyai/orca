@@ -55,7 +55,7 @@ async function cli(args: string[], signal?: AbortSignal, input?: string): Promis
   }
 }
 
-/** --profile resolves a name before an app ID. Exclude duplicates and shadowed IDs. */
+/** By app ID the CLI picks the first matching profile, unless a profile name shadows that ID. */
 export function eligibleProfiles(value: unknown): FeishuProfile[] {
   const result = z.array(profile).safeParse(value)
   if (!result.success) {
@@ -66,9 +66,14 @@ export function eligibleProfiles(value: unknown): FeishuProfile[] {
     (p) =>
       p.brand === 'feishu' &&
       appId.safeParse(p.appId).success &&
-      all.filter(
-        (other) => other.name === p.name || other.appId === p.appId || other.name === p.appId
-      ).length === 1
+      all.find((other) => other.appId === p.appId) === p &&
+      !all.some(
+        (other) =>
+          other !== p &&
+          (other.name === p.name ||
+            other.name === p.appId ||
+            (other.appId === p.appId && other.brand !== p.brand))
+      )
   )
 }
 export async function listProfiles(signal?: AbortSignal): Promise<FeishuProfile[]> {
