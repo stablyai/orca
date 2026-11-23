@@ -2,7 +2,8 @@
 // one turn.
 import {
   CONNECTOR_CLIENT_LIMITS,
-  ConnectorDelivery
+  ConnectorDelivery,
+  type ConnectorDeliveryResult
 } from '../../shared/connectors/connector-cloud-contract'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
@@ -106,24 +107,43 @@ export function dispatchBatch(
   if (!first) {
     return late.map((delivery) => refuse(delivery.deliveryId, { outcome: 'expired' }))
   }
-  // Refused before the seam (expired, unsupported), or held by a thread's mute: the later ones go
-  // on as a batch of their own, so a request and its follow-ups behind a silenced one stay one turn.
+  const carriedBy = (done: Promise<ConnectorDeliveryResult>) => (delivery: SendDelivery) =>
+    seam.receipts.carried(delivery.conversation, delivery.deliveryId, delivery.text, done)
   const [next, ...after] = later
-  const carried = first.received
-    ? later.map((delivery): DispatchedDelivery => ({
-        deliveryId: delivery.deliveryId,
-        received: true,
-        ...(first.viaOutbox ? { viaOutbox: true as const } : {}),
-        done: seam.receipts.carried(
-          delivery.conversation,
-          delivery.deliveryId,
-          delivery.text,
-          first.done
-        )
-      }))
-    : next
-      ? dispatchBatch(seam, host, machine, [next, ...after], msLeft, outboxAccount)
-      : []
+  // Held by a thread's mute: the later ones wait for its decision, then go with it as one turn, or
+  // (silenced, a command) on as a batch of their own, so a request and its follow-ups stay together.
+  const heldLater = first.carriedLater
+  const carried: DispatchedDelivery[] = heldLater
+    ? (() => {
+        const rest = heldLater.then((carries) => {
+          if (carries || !next) {
+            return new Map(
+              later.map((delivery) => [delivery.deliveryId, carriedBy(first.done)(delivery)])
+            )
+          }
+          const own = dispatchBatch(seam, host, machine, [next, ...after], msLeft, outboxAccount)
+          return new Map(own.map((entry) => [entry.deliveryId, entry.done]))
+        })
+        return later.map((delivery) => ({
+          deliveryId: delivery.deliveryId,
+          received: false,
+          done: rest.then(
+            (dones) =>
+              dones.get(delivery.deliveryId) ?? { outcome: 'unknown', reason: 'not_dispatched' }
+          )
+        }))
+      })()
+    : first.received
+      ? later.map((delivery): DispatchedDelivery => ({
+          deliveryId: delivery.deliveryId,
+          received: true,
+          ...(first.viaOutbox ? { viaOutbox: true as const } : {}),
+          done: carriedBy(first.done)(delivery)
+        }))
+      : // Refused before the seam (expired, unsupported): the later ones go on as their own batch.
+        next
+        ? dispatchBatch(seam, host, machine, [next, ...after], msLeft, outboxAccount)
+        : []
   return [
     first,
     ...carried,

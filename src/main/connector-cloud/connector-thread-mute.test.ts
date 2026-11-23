@@ -70,6 +70,8 @@ describe('a mention in a muted thread', () => {
 describe('a muted thread', () => {
   // Muting is decided before the agent: once muted, only a mention or "unmute" reaches the chat.
   it('keeps unmentioned replies from the agent until a mention or unmute', async () => {
+    // One waiting list for the whole test, as Orca keeps one per connector.
+    const waiting = new Map<string, Promise<unknown>>()
     let muted = false
     const reacted: string[] = []
     const reached: string[] = []
@@ -99,7 +101,7 @@ describe('a muted thread', () => {
             botNames: () => ['reviewer'],
             otherBotNames: () => ['reviewer-2'],
             queued: async () => {},
-            waiting: new Map(),
+            waiting,
             react: async (_bot, _key, _ref, emoji) => {
               reacted.push(emoji)
             }
@@ -182,6 +184,8 @@ describe('a resent delivery', () => {
   // A delivery this machine already took replays its receipt: a resent old mention never undoes a
   // newer mute, and a resent silenced reply never reaches the chat because the thread was unmuted.
   it('never decides the mute again', async () => {
+    // One waiting list for the whole test, as Orca keeps one per connector.
+    const waiting = new Map<string, Promise<unknown>>()
     let muted = true
     const reached: string[] = []
     const seam = {
@@ -206,7 +210,7 @@ describe('a resent delivery', () => {
             botNames: () => [],
             otherBotNames: () => [],
             queued: async () => {},
-            waiting: new Map(),
+            waiting,
             react: async () => {}
           },
           delivery,
@@ -229,6 +233,8 @@ describe('a resent delivery', () => {
 describe('a mention that unmutes, with follow-ups in its poll', () => {
   // The unmute is saved before the mention goes on, and its follow-ups still go with it as one turn.
   it('reaches the chat once, carrying them', async () => {
+    // One waiting list for the whole test, as Orca keeps one per connector.
+    const waiting = new Map<string, Promise<unknown>>()
     let muted = true
     const turns: { text: string; later: number }[] = []
     const seam = {
@@ -263,7 +269,7 @@ describe('a mention that unmutes, with follow-ups in its poll', () => {
             botNames: () => ['reviewer'],
             otherBotNames: () => [],
             queued: async () => {},
-            waiting: new Map(),
+            waiting,
             react: async () => {}
           },
           delivery,
@@ -292,6 +298,8 @@ describe('a silenced reply resent after an unmute', () => {
   // Its receipt says the mute held it: the resend replays that, never reaching the chat or counting
   // its automations as run in a turn.
   it('replays as held', async () => {
+    // One waiting list for the whole test, as Orca keeps one per connector.
+    const waiting = new Map<string, Promise<unknown>>()
     let muted = true
     const reached: string[] = []
     const held = new Map<string, Promise<unknown>>()
@@ -333,7 +341,7 @@ describe('a silenced reply resent after an unmute', () => {
             botNames: () => [],
             otherBotNames: () => [],
             queued: async () => {},
-            waiting: new Map(),
+            waiting,
             react: async () => {}
           },
           delivery,
@@ -391,6 +399,8 @@ describe('a wait in the thread queue that a Stop lands on while it runs', () => 
 describe('a silenced reply leading a batch', () => {
   // The request and its follow-ups behind it still reach the chat as one turn.
   it('leaves the rest batched', async () => {
+    // One waiting list for the whole test, as Orca keeps one per connector.
+    const waiting = new Map<string, Promise<unknown>>()
     let muted = true
     const turns: { text: string; later: number }[] = []
     const seam = {
@@ -425,7 +435,7 @@ describe('a silenced reply leading a batch', () => {
             botNames: () => [],
             otherBotNames: () => [],
             queued: async () => {},
-            waiting: new Map(),
+            waiting,
             react: async () => {}
           },
           delivery,
