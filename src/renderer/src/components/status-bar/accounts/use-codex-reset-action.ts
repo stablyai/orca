@@ -47,6 +47,11 @@ export function useCodexResetAction(
   const consumeLocalResetCredit = useAppStore((s) => s.consumeCodexRateLimitResetCredit)
   const resetBlocked =
     codex.status === 'fetching' || (codex.status === 'error' && isCodexUsageSignInRequired(codex))
+  const offerCount = codex.rateLimitResetCredits?.availableCount ?? 0
+  // Why: a confirmation names the offer it was opened for; a refresh that changes it must not spend.
+  const offerKey = `${offerCount}:${codex.rateLimitResetCredits?.nextExpiresAt ?? ''}`
+  const offerAvailableRef = useRef(false)
+  offerAvailableRef.current = !resetBlocked && offerCount > 0
 
   // Why: scope the host's spend to the account and offer this menu shows.
   const hostScope =
@@ -72,6 +77,16 @@ export function useCodexResetAction(
     }
   }, [resetBlocked])
 
+  const confirmedOfferKey = useRef<string | null>(null)
+  useLayoutEffect(() => {
+    if (confirmedOfferKey.current !== null && confirmedOfferKey.current !== offerKey) {
+      confirmedOfferKey.current = null
+      resetConfirmationRevision.current += 1
+      setResetConfirmOpen(false)
+      setSkipFutureResetConfirm(false)
+    }
+  }, [offerKey])
+
   useEffect(() => {
     if (!enabled || !menuOpen || !hostEnvironmentId) {
       return
@@ -91,6 +106,7 @@ export function useCodexResetAction(
 
   const canRedeemCurrentReset = (): boolean =>
     enabled &&
+    offerAvailableRef.current &&
     mountedRef.current &&
     (hostEnvironmentId !== null || useAppStore.getState().rateLimits.codexTarget.runtime === 'host')
 
@@ -122,6 +138,7 @@ export function useCodexResetAction(
     }
     // Why: the confirmation names one account; a host switch while it is open must not spend another's credit.
     setConfirmedScope(hostScope)
+    confirmedOfferKey.current = offerKey
     setSkipFutureResetConfirm(false)
     setResetConfirmOpen(true)
   }
@@ -138,7 +155,8 @@ export function useCodexResetAction(
         console.error('Failed to save Codex reset confirmation preference:', error)
       }
     }
-    if (!mountedRef.current || revision !== resetConfirmationRevision.current) {
+    // Why: the offer can change or run out while the preference write is in flight.
+    if (revision !== resetConfirmationRevision.current || !canRedeemCurrentReset()) {
       return
     }
     await redeem(confirmedScope)
