@@ -8,6 +8,7 @@ import { printResult } from '../output/command-result-output'
 import { formatActionResult, formatSaved, type ActionResult } from './slack-action-format'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { actionArgs, readMessageText, type SlackVerb } from './slack-action-args'
+import { slackReadRefusalMessage } from '../../shared/connectors/slack-read-refusal'
 
 // The host retries an unavailable cloud itself, waiting out Retry-After.
 const ACT_TIMEOUT_MS = 180_000
@@ -72,7 +73,7 @@ function sessionOf(): string {
 }
 
 /** One connector.act call; a refusal, the host's or the cloud's, is thrown in words a bot acts on. */
-async function callAct(
+export async function callAct(
   client: HandlerContext['client'],
   params: { sessionId: string; verb: string; ref?: string; args: ConnectorActionArgs }
 ) {
@@ -85,7 +86,11 @@ async function callAct(
         : error
     })
   if (!answer.result.ok) {
-    throw new RuntimeClientError(answer.result.refusal, answer.result.message)
+    const slackMessage =
+      params.verb === 'read'
+        ? slackReadRefusalMessage(`${answer.result.refusal} ${answer.result.message}`)
+        : null
+    throw new RuntimeClientError(answer.result.refusal, slackMessage ?? answer.result.message)
   }
   return { ...answer, result: answer.result.result }
 }

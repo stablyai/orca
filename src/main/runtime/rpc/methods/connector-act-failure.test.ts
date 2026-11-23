@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { actFailure } from './connector-act'
+import { callAct } from '../../../../cli/slack/slack'
 
 const host = { server: null, botName: 'Release manager' }
 
@@ -24,5 +25,18 @@ describe('connector action read failures', () => {
       code: 'connector_refused',
       message: 'Orca Cloud refused it (forbidden).'
     })
+  })
+
+  it('explains a Slack refusal returned by the action service', async () => {
+    const client = {
+      call: async () => ({
+        ok: true,
+        result: { ok: false, refusal: 'missing_scope', message: 'Slack API rejected the request.' }
+      })
+    } as Parameters<typeof callAct>[0]
+
+    await expect(
+      callAct(client, { sessionId: 'session-1', verb: 'read', args: {} })
+    ).rejects.toMatchObject({ message: expect.stringContaining('channels:history') })
   })
 })
