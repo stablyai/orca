@@ -7,10 +7,6 @@ import { startFederatedWorker } from '../../../../orchestration/legacy-remote-ho
 import { startLocalWorker } from './start/local-worker-start'
 import type { WorkerFollowUp } from './follow-up/worker-follow-up-placement'
 import { withWorkerStartNext } from '../receipt-next'
-import {
-  decideWorkerStartMode,
-  readWorkerStartModeSettings
-} from '../structured-workers/orchestration-worker-start-mode'
 import { resolveOrchestrationCaller } from '../runs/run-scope'
 import {
   assertHelperStartScope,
@@ -29,6 +25,7 @@ import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/agent-sess
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { checkedWorkerOrigin } from '../../bots-items-worker-origin'
+import { decideStartMode, noteTerminalFallbackOnItem } from './start/worker-chat-lineage'
 import {
   linkWorkerToQuestion,
   openQuestionReminder,
@@ -101,10 +98,7 @@ export async function startWorker(
     params.forQuestion === undefined ? openQuestionReminder(db, coordinator) : undefined
   const withLink = <T>(started: T): T =>
     withOpenQuestion(reminder, withQuestionLink(questionLink, started))
-  const mode = decideWorkerStartMode({
-    params,
-    settings: readWorkerStartModeSettings(runtime)
-  })
+  const { mode, chatLineage } = decideStartMode(runtime, db, params, orchestrationCaller, followUp)
   if (params.on) {
     // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
     const receipt = await startFederatedWorker({
@@ -136,10 +130,12 @@ export async function startWorker(
     existingTask,
     orchestrationMutation,
     mode,
+    chatLineage,
     helperCreator,
     followUp
   })
   await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
+  noteTerminalFallbackOnItem(runtime, chatLineage ? checked?.itemUid : undefined, receipt)
   const started = withLink(withRun(withWorkerStartNext(receipt)))
   return checked && started && typeof started === 'object'
     ? { ...started, linkedItem: checked.linkedItem }
