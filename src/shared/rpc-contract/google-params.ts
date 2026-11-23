@@ -27,7 +27,9 @@ export const GoogleSignInStartParams = z.object({
   callerLoopbackPort: z.number().int().min(1024).max(65_535).optional(),
   account: Email.optional(),
   /** Gmail, Calendar, Files; absent: what the account already has, else all. Always adds to what it has. */
-  services: z.array(z.enum(GOOGLE_SERVICE_CHOICES)).min(1).max(3).optional()
+  services: z.array(z.enum(GOOGLE_SERVICE_CHOICES)).min(1).max(3).optional(),
+  /** A saved account signs in through this computer's app, not its own (a setup that just made it). */
+  currentApp: z.boolean().optional()
 })
 
 export const GoogleSignInFlowParams = z.object({ flowId: z.string().min(1).max(64) })

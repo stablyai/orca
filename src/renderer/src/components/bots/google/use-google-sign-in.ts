@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   GoogleAccountView,
+  GoogleSignInAsk,
   GoogleSignInPrompt
 } from '../../../../../shared/google/google-connect-types'
 import type { GoogleServiceChoice } from '../../../../../shared/google/google-scopes'
@@ -23,7 +24,8 @@ export function useGoogleSignIn(
   state: GoogleSignInState
   connect: (
     services: readonly GoogleServiceChoice[],
-    account?: string
+    account?: string,
+    options?: Pick<GoogleSignInAsk, 'currentApp'>
   ) => Promise<GoogleAccountView | null>
   cancel: () => void
 } {
@@ -43,13 +45,22 @@ export function useGoogleSignIn(
   // A cancelled run's rejection is what the person asked for, not a failure to show.
   const runs = useRef(0)
   const connect = useCallback(
-    async (services: readonly GoogleServiceChoice[], account?: string) => {
+    async (
+      services: readonly GoogleServiceChoice[],
+      account?: string,
+      options?: Pick<GoogleSignInAsk, 'currentApp'>
+    ) => {
       const run = ++runs.current
       show({ kind: 'waiting', prompt: null })
       try {
         const connected = await connectGoogle(
           target,
-          { services, ...(account ? { account } : {}), ...(bot ? { bot } : {}) },
+          {
+            services,
+            ...(account ? { account } : {}),
+            ...(options?.currentApp ? { currentApp: true } : {}),
+            ...(bot ? { bot } : {})
+          },
           (prompt, way) => show({ kind: 'waiting', prompt, way })
         )
         show({ kind: 'idle' })
