@@ -135,8 +135,8 @@ it('drops a ready worker with no fresh status a day after its last change', () =
   expect(new Set(current())).toEqual(new Set([recent, stale]))
   refreshWorkerDockActivity(db, party, {
     readAgentStatusOfPanes: () => [],
-    readObservedAgentStatusPaneIdentityFn: () => null,
-    getAgentStatusTerminalHandleForPaneKey: () => null,
+    readObservedAgentStatusPaneIdentityFn: () => ({ kind: 'unobserved' }),
+    getAgentStatusTerminalHandleForPaneKey: () => undefined,
     getTerminalProcessIncarnation: () => null
   })
   expect(current()).toEqual([recent])

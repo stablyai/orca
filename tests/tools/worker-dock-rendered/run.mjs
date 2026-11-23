@@ -519,4 +519,7 @@ if (shots && !filter) {
 await browser.close()
 const failed = results.filter((result) => !result.ok).length
 console.log(`${results.length - failed} passed, ${failed} failed`)
-process.exitCode = failed ? 1 : 0
+if (!results.length) {
+  console.error(`No check matches ORCA_WORKER_DOCK_TEST_FILTER=${filter}`)
+}
+process.exitCode = failed || !results.length ? 1 : 0

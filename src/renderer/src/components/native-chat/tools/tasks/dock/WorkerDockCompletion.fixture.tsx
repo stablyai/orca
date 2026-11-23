@@ -16,7 +16,6 @@ import type {
 import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import { folderWorkspaceKey } from '../../../../../../../shared/workspace/identity/workspace-scope'
 import type { AgentJournalRenderItem } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { formatOrcaSessionAddress } from '../../../../../../../shared/agent-session/identity/orca-session-address'
 import type {
   WorkerDockEntry,
   WorkerDockSnapshot
@@ -86,7 +85,7 @@ function completionFixture(isBot: boolean) {
         subscribeCommandsChanged: noSubscription,
         trimHistory: () => {},
         dispose: () => {},
-        loadOlder: async () => ({ status: 'empty' }),
+        loadOlder: async () => 'exhausted',
         admit: async () => {},
         trackSend: () => ({ issue: () => {}, settle: () => {} }),
         publishCreated: () => {}
@@ -97,7 +96,7 @@ function completionFixture(isBot: boolean) {
       const worker: WorkerDockEntry = {
         id: 'fixture-worker',
         dispatchId: 'ctx_fixture_completion',
-        source: formatOrcaSessionAddress(sessionId),
+        source: `orca_session_id:${sessionId}`,
         name: 'Release worker',
         title: 'Verify the release notes',
         kind: 'worker',
@@ -135,7 +134,7 @@ function completionFixture(isBot: boolean) {
             })
           events.add(send)
           send(dock)
-          return { unsubscribe: () => events.delete(send) }
+          return { unsubscribe: () => void events.delete(send), sendBinary: () => {} }
         }
       }
       finish = () => {

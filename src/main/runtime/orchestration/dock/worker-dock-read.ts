@@ -10,6 +10,9 @@ import {
   WorkerDockEntry,
   WorkerDockResult,
   compareWorkerDockEntries,
+  WORKER_DOCK_FAILURE_MS,
+  WORKER_DOCK_UNKNOWN_MS,
+  WORKER_DOCK_UNVERIFIED_READY_MS,
   type WorkerDockSnapshot
 } from '../../../../shared/orchestration/dock/worker-dock'
 import { exposeUtcTimestamp } from '../db/utc-timestamp'
@@ -18,13 +21,7 @@ import {
   readProviderFailureIdentities,
   readProviderFailureRows
 } from './worker-dock-provider-failures'
-import {
-  WORKER_DOCK_FAILURE_MS,
-  WORKER_DOCK_UNKNOWN_MS,
-  WORKER_DOCK_UNVERIFIED_READY_MS,
-  workerDockCurrentRowsSql,
-  workerDockEligibleSql
-} from '../db/worker-dock-eligibility'
+import { workerDockCurrentRowsSql, workerDockEligibleSql } from '../db/worker-dock-eligibility'
 import { readWorkerDockActivity, workerDockActivityRevision } from './worker-dock-activity'
 
 const stateSql = `CASE f.state
@@ -81,13 +78,25 @@ export function readWorkerDock(
       workerDockActivityRevision(db) +
       db.workerDockSources.version(source)
     const activity = readWorkerDockActivity(db, source)
-    const current = (request.currentOnly ?? request.activeOnly) === true
+    const current = request.currentOnly === true
     const now = Date.now()
     const candidates = current
       ? `(${workerDockCurrentRowsSql}) f`
       : `worker_dock_facts f INDEXED BY worker_dock_eligible WHERE ${workerDockEligibleSql}`
     let nextExpiry: number | undefined
     let hasUnverifiedWorkers = false
+    // Unsettled workers the roster omits can still change state, so their source must stay routable.
+    const omitted: string[] =
+      current && db.workerDockSources.needsSeed(source)
+        ? db.db
+            .prepare(
+              `SELECT dispatch_id FROM worker_dock_facts INDEXED BY worker_dock_source_state_time
+              WHERE source = ? AND state IN ('start_unknown', 'stop_unknown')
+                AND (changed_at IS NULL OR changed_at <= ?)`
+            )
+            .all(source, now - WORKER_DOCK_UNKNOWN_MS)
+            .map((row) => String(row.dispatch_id))
+        : []
     const identities: WorkerDockSnapshot['identities'] = db.db
       .prepare(`SELECT ${identitySql} AS id, f.dispatch_id AS dispatchId,
       ${stateSql} AS state, f.changed_at AS changedAt, f.settlement, (f.model IS NOT NULL AND length(trim(f.model)) > 0) AS hasModel,
@@ -116,6 +125,7 @@ export function readWorkerDock(
             const expires = (identity.changedAt ?? 0) + window
             if (expires <= now) {
               hasUnverifiedWorkers ||= unverified
+              omitted.push(identity.dispatchId)
               return []
             }
             nextExpiry = Math.min(nextExpiry ?? expires, expires)
@@ -189,7 +199,7 @@ export function readWorkerDock(
       rows,
       anchor: identities[center]?.id ?? null
     }
-    db.workerDockSources.rememberSnapshot(source, snapshot)
+    db.workerDockSources.rememberSnapshot(source, snapshot, omitted)
     return snapshot
   })
 }

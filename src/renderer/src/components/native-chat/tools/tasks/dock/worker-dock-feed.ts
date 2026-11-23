@@ -11,6 +11,7 @@ import {
   WorkerDockSnapshot,
   type WorkerDockEntry
 } from '../../../../../../../shared/orchestration/dock/worker-dock'
+import { currentOnOlderHosts } from './worker-dock-older-host-roster'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
@@ -23,42 +24,6 @@ type State = {
 }
 const EMPTY: State = { snapshot: null, available: true, rows: new Map() }
 
-const FAILURE_MS = 4 * 60 * 60_000
-const FAILURE_LIMIT = 4
-const UNVERIFIED_MS = 24 * 60 * 60_000
-
-/** The current-work rule as far as a snapshot can tell: hosts predating currentOnly send every
- *  eligible record, so finished and older failures are dropped here; a current host's rows pass. */
-function currentOnOlderHosts(
-  identities: readonly Pick<WorkerDockEntry, 'id' | 'state' | 'changedAt' | 'settlement'>[],
-  now: number
-): Set<string> {
-  const failures = identities
-    .filter(
-      (row) =>
-        (row.state === 'failed' || row.state === 'unexpected') &&
-        row.settlement !== null &&
-        row.changedAt !== null &&
-        row.changedAt > now - FAILURE_MS
-    )
-    .sort((a, b) => (b.changedAt ?? 0) - (a.changedAt ?? 0))
-    .slice(0, FAILURE_LIMIT)
-  return new Set([
-    ...identities
-      .filter(
-        (row) =>
-          row.state !== 'failed' &&
-          row.state !== 'unexpected' &&
-          row.state !== 'saving' &&
-          (row.state !== 'unavailable' ||
-            row.changedAt === null ||
-            row.changedAt > now - UNVERIFIED_MS)
-      )
-      .map((row) => row.id),
-    ...failures.map((row) => row.id)
-  ])
-}
-
 class WorkerDockFeed {
   state = EMPTY
   private listeners = new Set<() => void>()
@@ -66,6 +31,7 @@ class WorkerDockFeed {
   private detailed = false
   private stop: (() => void) | undefined
   private retry: ReturnType<typeof setTimeout> | undefined
+  private aging: ReturnType<typeof setTimeout> | undefined
   private generation = 0
   private active = false
   get unused(): boolean {
@@ -82,11 +48,27 @@ class WorkerDockFeed {
     }
     // Hosts predating currentOnly still include settled entries in the same snapshot.
     if (snapshot && !snapshot.currentOnly) {
-      const kept = currentOnOlderHosts(snapshot.identities, Date.now())
+      const now = Date.now()
+      const { kept, nextExpiry } = currentOnOlderHosts(snapshot.identities, now)
       if (kept.size !== snapshot.identities.length) {
-        snapshot.identities = snapshot.identities.filter((row) => kept.has(row.id))
-        snapshot.rows = snapshot.rows.filter((row) => kept.has(row.id))
+        snapshot = {
+          ...snapshot,
+          identities: snapshot.identities.filter((row) => kept.has(row.id)),
+          rows: snapshot.rows.filter((row) => kept.has(row.id))
+        }
       }
+      // An older host sends nothing when a row ages out, so the feed wakes itself for the next one.
+      clearTimeout(this.aging)
+      this.aging =
+        nextExpiry === undefined
+          ? undefined
+          : setTimeout(() => {
+              if (this.listeners.size && this.state.snapshot) {
+                this.publish(this.state.snapshot, this.state.available)
+              }
+            }, nextExpiry - now)
+    } else if (snapshot) {
+      clearTimeout(this.aging)
     }
     const rows = new Map(this.state.rows)
     for (const row of snapshot?.rows ?? []) {
@@ -188,6 +170,7 @@ class WorkerDockFeed {
           ++this.generation
           this.active = false
           clearTimeout(this.retry)
+          clearTimeout(this.aging)
           this.stop?.()
           this.stop = undefined
         } else {

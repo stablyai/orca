@@ -72,6 +72,14 @@ export function WorkerDockRoster(props: {
     const keptIds = new Set(kept.map((row) => row.id))
     return [...kept, ...props.identities.filter((row) => !keptIds.has(row.id))]
   }, [held, props.identities, current])
+  // The held order follows what is shown, so a row that arrived keeps its place when the next comes.
+  if (
+    held &&
+    (held.length !== identities.length ||
+      held.some((row, index) => row.id !== identities[index].id))
+  ) {
+    setHeld(identities)
+  }
   const orderHeld = identities.some((row, index) => row.id !== props.identities[index]?.id)
   const clearing = props.identities.some(
     (row) => (row.state === 'failed' || row.state === 'unexpected') && props.pending.has(row.id)
@@ -139,7 +147,7 @@ export function WorkerDockRoster(props: {
       setBudget(workerDockRosterBudget(root.current, element, props.narrow, orderHeld))
     }
   })
-  useLayoutEffect(measure, [measure, props.expanded, props.narrow, orderHeld, items.length])
+  useLayoutEffect(measure, [measure, props.expanded, props.narrow, orderHeld, items])
   useEffect(() => {
     const pane = root.current?.closest('[data-native-chat-root]')
     if (!pane || typeof ResizeObserver === 'undefined') {
@@ -205,8 +213,8 @@ export function WorkerDockRoster(props: {
     scrollTo
   })
   // A row that leaves while it holds focus (Clear, say) hands focus to the row that takes its
-  // place, or to the header, so the keyboard never drops to the page.
-  const lastFocus = useRef<{ id: string; index: number } | null>(null)
+  // place, to the header, or to the message box once the strip is gone, never to the page.
+  const lastFocus = useRef<{ id: string; index: number; pane: Element | null } | null>(null)
   useLayoutEffect(() => {
     const saved = lastFocus.current
     if (!saved || items.some((row) => row.id === saved.id)) {
@@ -223,7 +231,11 @@ export function WorkerDockRoster(props: {
           `[data-worker-dock-row="${CSS.escape(next.id)}"] [data-worker-dock-open]`
         )
       : null
-    ;(target ?? summary.current)?.focus()
+    ;(
+      target ??
+      summary.current ??
+      saved.pane?.querySelector<HTMLElement>('[data-native-chat-composer-scope] textarea')
+    )?.focus()
   }, [items])
   if (!total && !identities.length && !props.incomplete) {
     return null
@@ -257,7 +269,11 @@ export function WorkerDockRoster(props: {
           const id = row.dataset.workerDockRow ?? null
           setFocused(id)
           lastFocus.current = id
-            ? { id, index: items.findIndex((item) => item.id === id) }
+            ? {
+                id,
+                index: items.findIndex((item) => item.id === id),
+                pane: row.closest('[data-native-chat-root]')
+              }
             : lastFocus.current
           row.scrollIntoView({ block: 'nearest' })
         }

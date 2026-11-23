@@ -120,7 +120,11 @@ export class WorkerDockSourcePresence {
     }
   }
 
-  rememberSnapshot(source: string, snapshot: WorkerDockSnapshot): void {
+  rememberSnapshot(
+    source: string,
+    snapshot: WorkerDockSnapshot,
+    omitted: readonly string[] = []
+  ): void {
     const first = !this.seeded.has(source)
     if (first) {
       this.seeded.add(source)
@@ -141,6 +145,9 @@ export class WorkerDockSourcePresence {
     if (first) {
       for (const row of snapshot.identities) {
         this.dispatchSources.set(row.dispatchId, source)
+      }
+      for (const id of omitted) {
+        this.dispatchSources.set(id, source)
       }
     }
   }

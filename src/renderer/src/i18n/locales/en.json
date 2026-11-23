@@ -22738,7 +22738,6 @@
         "openWorker": "Open worker",
         "remoteOwner": "Stop or clear this from the computer it runs on",
         "restore": "Show in dock again",
-        "loadingResult": "Loading result…",
         "unavailable": "Worker status unavailable",
         "empty": "0 workers",
         "clearAllLabel_one": "Clear failed worker",

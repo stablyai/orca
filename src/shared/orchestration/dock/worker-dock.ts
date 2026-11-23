@@ -5,9 +5,17 @@ export const WorkerDockSource = z.object({ party: CrewParty })
 export const WorkerDockSubscribe = WorkerDockSource.extend({
   includeRows: z.boolean().optional(),
   /** Only current work: live workers and recent, unresolved failures (see workerDockCurrentRowsSql). */
-  currentOnly: z.boolean().optional(),
-  activeOnly: z.boolean().optional()
+  currentOnly: z.boolean().optional()
 })
+/** How long a ready worker whose agent status is not fresh stays in the strip after its last
+ *  change: longer than nearly every worker runs, so only a stale record ages out. */
+export const WORKER_DOCK_UNVERIFIED_READY_MS = 24 * 60 * 60_000
+/** A launch or stop whose outcome was never seen is fenced off after an hour. */
+export const WORKER_DOCK_UNKNOWN_MS = 60 * 60_000
+/** A failure stays a current attention item for four hours; after that it lives in history. */
+export const WORKER_DOCK_FAILURE_MS = 4 * 60 * 60_000
+/** At most this many failures show at once, newest first. */
+export const WORKER_DOCK_FAILURE_LIMIT = 4
 export const WorkerDockState = z.enum([
   'starting',
   'running',

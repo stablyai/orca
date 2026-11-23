@@ -339,7 +339,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               shown={!readFailure?.final}
               keepFloatingTerminalTriggerClear={props.isVisible}
             >
-              {composerShown ? null : subagents.dock}
+              {subagents.dock}
               {subagents.pairedAsks}
               {prompt || subagentOpen ? null : (
                 <NativeChatStructuredComposerTabStrips
@@ -390,7 +390,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               {composerShown ? (
                 <NativeChatComposer
                   ref={composerRef}
-                  dock={subagents.dock}
                   terminalTabId={props.tabId}
                   paneKey={paneKey}
                   draftScopeKey={structuredAgentSessionDraftScopeKey(props.sessionId)}
