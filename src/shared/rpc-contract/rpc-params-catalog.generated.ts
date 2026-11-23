@@ -138,7 +138,10 @@ import {
   AzureBoardsRepo,
   AzureBoardsSearch,
   AzureBoardsWorkItem,
-  AzureBoardsWorkItemComments
+  AzureBoardsWorkItemAssigneeSet,
+  AzureBoardsWorkItemCommentAdd,
+  AzureBoardsWorkItemComments,
+  AzureBoardsWorkItemStateSet
 } from './azure-boards/azure-boards-params'
 import {
   AzureDevOpsPr,
@@ -1231,9 +1234,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'automation.runs': AutomationRuns,
   'automation.show': AutomationId,
   'automation.update': AutomationUpdate,
+  'azureBoards.addComment': AzureBoardsWorkItemCommentAdd,
   'azureBoards.assigned': AzureBoardsRepo,
   'azureBoards.connection': AzureBoardsRepo,
   'azureBoards.search': AzureBoardsSearch,
+  'azureBoards.setAssignee': AzureBoardsWorkItemAssigneeSet,
+  'azureBoards.setState': AzureBoardsWorkItemStateSet,
   'azureBoards.teams': AzureBoardsRepo,
   'azureBoards.workItem': AzureBoardsWorkItem,
   'azureBoards.workItemComments': AzureBoardsWorkItemComments,

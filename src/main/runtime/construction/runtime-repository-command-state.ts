@@ -162,6 +162,24 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
     return this.azureBoardsCommands.listAzureBoardsTeams(repo)
   }
 
+  addAzureBoardsWorkItemComment(
+    ...args: Parameters<AzureBoards['addAzureBoardsWorkItemComment']>
+  ): ReturnType<AzureBoards['addAzureBoardsWorkItemComment']> {
+    return this.azureBoardsCommands.addAzureBoardsWorkItemComment(...args)
+  }
+
+  setAzureBoardsWorkItemState(
+    ...args: Parameters<AzureBoards['setAzureBoardsWorkItemState']>
+  ): ReturnType<AzureBoards['setAzureBoardsWorkItemState']> {
+    return this.azureBoardsCommands.setAzureBoardsWorkItemState(...args)
+  }
+
+  setAzureBoardsWorkItemAssignee(
+    ...args: Parameters<AzureBoards['setAzureBoardsWorkItemAssignee']>
+  ): ReturnType<AzureBoards['setAzureBoardsWorkItemAssignee']> {
+    return this.azureBoardsCommands.setAzureBoardsWorkItemAssignee(...args)
+  }
+
   protected readonly azureDevOpsReviewCommands = new RuntimeAzureDevOpsReviewCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)

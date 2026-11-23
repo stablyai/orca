@@ -8,22 +8,13 @@ import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { resolveAzureBoardsRepo } from './azure-boards-target'
+import { requireAzureDevOpsWriteConfirmation } from './azure-boards-write'
 
 const VOTES: Record<string, 10 | 5 | 0 | -5> = {
   approve: 10,
   'approve-with-suggestions': 5,
   reset: 0,
   'wait-for-author': -5
-}
-
-/** Refuses with a preview unless --confirm: an agent must show the user the write first. */
-function requireConfirmation(context: HandlerContext, preview: string): void {
-  if (context.flags.get('confirm') !== true) {
-    throw new RuntimeClientError(
-      'confirmation_required',
-      `${preview}\nNothing was posted. Show this to the user and rerun with --confirm once they approve.`
-    )
-  }
 }
 
 export function azureDevOpsPrWriteHandlers(
@@ -51,7 +42,7 @@ export function azureDevOpsPrWriteHandlers(
           : filePath
             ? `a new thread on ${filePath}${line ? `:${line}` : ''}`
             : 'a new thread'
-      requireConfirmation(context, `Would post ${where} on PR ${id}:\n${body}`)
+      requireAzureDevOpsWriteConfirmation(context, `Would post ${where} on PR ${id}:\n${body}`)
       const repo = await resolveAzureBoardsRepo(
         context,
         AZURE_DEVOPS_PR_REVIEW_WRITE_RUNTIME_CAPABILITY
@@ -76,7 +67,10 @@ export function azureDevOpsPrWriteHandlers(
           '--vote must be approve, approve-with-suggestions, wait-for-author or reset. Reject is not available.'
         )
       }
-      requireConfirmation(context, `Would set your vote on PR ${id} to ${name} (${vote}).`)
+      requireAzureDevOpsWriteConfirmation(
+        context,
+        `Would set your vote on PR ${id} to ${name} (${vote}).`
+      )
       const repo = await resolveAzureBoardsRepo(
         context,
         AZURE_DEVOPS_PR_REVIEW_WRITE_RUNTIME_CAPABILITY

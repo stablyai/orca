@@ -8,7 +8,11 @@ export const AZURE_BOARDS_HANDLER_GROUP: HandlerGroup = {
     'azure-boards comment list',
     'azure-boards search',
     'azure-boards assigned',
-    'azure-boards team list'
+    'azure-boards team list',
+    'azure-boards comment add',
+    'azure-boards state set',
+    'azure-boards assignee set',
+    'azure-boards assignee clear'
   ],
   load: async () => (await import('./azure-boards.js')).AZURE_BOARDS_HANDLERS
 }

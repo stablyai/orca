@@ -2,11 +2,14 @@ import {
   AzureBoardsRepo,
   AzureBoardsSearch,
   AzureBoardsWorkItem,
-  AzureBoardsWorkItemComments
+  AzureBoardsWorkItemAssigneeSet,
+  AzureBoardsWorkItemCommentAdd,
+  AzureBoardsWorkItemComments,
+  AzureBoardsWorkItemStateSet
 } from '../../../../../../shared/rpc-contract/azure-boards/azure-boards-params'
 import { defineMethod } from '../../../core'
 
-// Read-only: every method is a GET or a WIQL POST, which Azure DevOps treats as a read.
+// Reads are GETs or a WIQL POST; the three writes require `confirm: true` and spend a daily budget.
 export const AZURE_BOARDS_METHODS = [
   defineMethod({
     name: 'azureBoards.connection',
@@ -45,5 +48,26 @@ export const AZURE_BOARDS_METHODS = [
     permission: 'workspace',
     params: AzureBoardsRepo,
     handler: async (params, { runtime }) => runtime.listAzureBoardsTeams(params.repo)
+  }),
+  defineMethod({
+    name: 'azureBoards.addComment',
+    permission: 'workspace',
+    params: AzureBoardsWorkItemCommentAdd,
+    handler: async (params, { runtime }) =>
+      runtime.addAzureBoardsWorkItemComment(params.repo, params.id, params.text)
+  }),
+  defineMethod({
+    name: 'azureBoards.setState',
+    permission: 'workspace',
+    params: AzureBoardsWorkItemStateSet,
+    handler: async (params, { runtime }) =>
+      runtime.setAzureBoardsWorkItemState(params.repo, params.id, params.state)
+  }),
+  defineMethod({
+    name: 'azureBoards.setAssignee',
+    permission: 'workspace',
+    params: AzureBoardsWorkItemAssigneeSet,
+    handler: async (params, { runtime }) =>
+      runtime.setAzureBoardsWorkItemAssignee(params.repo, params.id, params.assignee)
   })
 ]

@@ -6,6 +6,7 @@ import type {
 import type {
   AzureDevOpsAssignedWorkItemsPage,
   AzureDevOpsTeam,
+  AzureDevOpsWorkItem,
   AzureDevOpsWorkItemDetail
 } from '../../../../shared/azure-devops/boards-types'
 import {
@@ -20,6 +21,11 @@ import { listAzureDevOpsTeams } from '../../../azure-devops/boards/team-resoluti
 import { listAzureDevOpsWorkItemComments } from '../../../azure-devops/boards/work-item-comments-client'
 import { getAzureDevOpsWorkItemDetail } from '../../../azure-devops/boards/work-item-client'
 import { searchAzureDevOpsWorkItems } from '../../../azure-devops/boards/work-item-search-client'
+import {
+  addAzureDevOpsWorkItemComment,
+  setAzureDevOpsWorkItemAssignee,
+  setAzureDevOpsWorkItemState
+} from '../../../azure-devops/boards/work-item-write-client'
 import {
   getAzureDevOpsRepoRef,
   type AzureDevOpsRepoRef
@@ -96,5 +102,29 @@ export class RuntimeAzureBoardsCommands {
 
   async listAzureBoardsTeams(repoSelector: string): Promise<AzureDevOpsTeam[]> {
     return listAzureDevOpsTeams(await this.resolveAzureRepo(repoSelector))
+  }
+
+  async addAzureBoardsWorkItemComment(
+    repoSelector: string,
+    id: number,
+    text: string
+  ): Promise<{ commentId: number }> {
+    return addAzureDevOpsWorkItemComment(await this.resolveAzureRepo(repoSelector), id, text)
+  }
+
+  async setAzureBoardsWorkItemState(
+    repoSelector: string,
+    id: number,
+    state: string
+  ): Promise<AzureDevOpsWorkItem> {
+    return setAzureDevOpsWorkItemState(await this.resolveAzureRepo(repoSelector), id, state)
+  }
+
+  async setAzureBoardsWorkItemAssignee(
+    repoSelector: string,
+    id: number,
+    assignee: string | null
+  ): Promise<AzureDevOpsWorkItem> {
+    return setAzureDevOpsWorkItemAssignee(await this.resolveAzureRepo(repoSelector), id, assignee)
   }
 }

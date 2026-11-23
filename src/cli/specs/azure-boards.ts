@@ -5,6 +5,9 @@ const REPO_FLAGS = [...GLOBAL_FLAGS, 'repo']
 const REPO_NOTE =
   'Reads the Azure DevOps project of --repo (id:<id>, name:<name> or path:<path>), or of the Orca workspace the command runs in.'
 
+const WRITE_NOTE =
+  'Without --confirm, prints the change and makes none; pass --confirm only after the user approved it. At most 20 comments and 20 updates a day go through Orca.'
+
 export const AZURE_BOARDS_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['azure-boards', 'connection'],
@@ -58,5 +61,43 @@ export const AZURE_BOARDS_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca azure-boards team list [--repo <selector>] [--json]',
     allowedFlags: REPO_FLAGS,
     notes: [REPO_NOTE]
+  },
+  {
+    path: ['azure-boards', 'comment', 'add'],
+    summary: 'Comment on a work item (needs --confirm)',
+    usage:
+      'orca azure-boards comment add <id> --body <text> [--confirm] [--repo <selector>] [--json]',
+    allowedFlags: [...REPO_FLAGS, 'id', 'body', 'confirm'],
+    booleanFlags: ['confirm'],
+    positionalArgs: ['id'],
+    notes: [REPO_NOTE, WRITE_NOTE]
+  },
+  {
+    path: ['azure-boards', 'state', 'set'],
+    summary: 'Move a work item to another state of its type (needs --confirm)',
+    usage: 'orca azure-boards state set <id> --to <state> [--confirm] [--repo <selector>] [--json]',
+    allowedFlags: [...REPO_FLAGS, 'id', 'to', 'confirm'],
+    booleanFlags: ['confirm'],
+    positionalArgs: ['id'],
+    notes: [REPO_NOTE, WRITE_NOTE, 'An unknown state lists the valid ones for that item type.']
+  },
+  {
+    path: ['azure-boards', 'assignee', 'set'],
+    summary: 'Assign a work item (needs --confirm)',
+    usage:
+      'orca azure-boards assignee set <id> (--to <email> | --me) [--confirm] [--repo <selector>] [--json]',
+    allowedFlags: [...REPO_FLAGS, 'id', 'to', 'me', 'confirm'],
+    booleanFlags: ['confirm', 'me'],
+    positionalArgs: ['id'],
+    notes: [REPO_NOTE, WRITE_NOTE]
+  },
+  {
+    path: ['azure-boards', 'assignee', 'clear'],
+    summary: 'Unassign a work item (needs --confirm)',
+    usage: 'orca azure-boards assignee clear <id> [--confirm] [--repo <selector>] [--json]',
+    allowedFlags: [...REPO_FLAGS, 'id', 'confirm'],
+    booleanFlags: ['confirm'],
+    positionalArgs: ['id'],
+    notes: [REPO_NOTE, WRITE_NOTE]
   }
 ]

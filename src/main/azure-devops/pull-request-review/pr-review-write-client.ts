@@ -1,5 +1,5 @@
 import { requestAzureDevOpsJsonAtBase } from '../azure-devops-api-request'
-import { reserveAzureDevOpsPrWrite } from './pr-review-write-budget'
+import { reserveAzureDevOpsWrite } from '../azure-devops-write-budget'
 import {
   getAzureDevOpsCurrentUserId,
   pullRequestPath,
@@ -28,7 +28,7 @@ export async function addAzureDevOpsPullRequestComment(
   id: number,
   input: AzureDevOpsPrCommentInput
 ): Promise<{ threadId: number; commentId: number }> {
-  await reserveAzureDevOpsPrWrite('comment')
+  await reserveAzureDevOpsWrite('comment')
   const threads = `${pullRequestPath(location, id)}/threads`
   if (input.threadId !== undefined) {
     const reply = await requestAzureDevOpsJsonAtBase<{ id?: number }>(
@@ -82,7 +82,7 @@ export async function setAzureDevOpsPullRequestVote(
   if (!me) {
     throw new Error('Azure DevOps did not say who is signed in; run az login or check the token.')
   }
-  await reserveAzureDevOpsPrWrite('vote')
+  await reserveAzureDevOpsWrite('vote')
   const result = await requestAzureDevOpsJsonAtBase<{ vote?: number }>(
     location.collection,
     `${pullRequestPath(location, id)}/reviewers/${encodeURIComponent(me)}`,

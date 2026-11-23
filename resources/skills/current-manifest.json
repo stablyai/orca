@@ -36,16 +36,16 @@
     {
       "name": "orca-azure-boards",
       "sourcePath": "skills/orca-azure-boards",
-      "packageDigest": "d5d24422b5dfdf43600799e32bf1c6dac05f97cbd7e9ec66714700399b217105",
+      "packageDigest": "da252cab4444b8891724ae3336d73cc3cbda925e94c468d196506859522d872d",
       "files": [
         {
           "path": "SKILL.md",
-          "size": 2599,
+          "size": 2678,
           "executable": false,
           "classification": "text",
-          "exactSha256": "c3435b89b7a4211d1d65ea3b743f7245d1a6a84d36f7310cd29eb9ce7b2adca6",
-          "textNormalizedSha256": "c3435b89b7a4211d1d65ea3b743f7245d1a6a84d36f7310cd29eb9ce7b2adca6",
-          "identitySha256": "c3435b89b7a4211d1d65ea3b743f7245d1a6a84d36f7310cd29eb9ce7b2adca6"
+          "exactSha256": "deffc35ec43d00c17ca8777ca0aa105d6bd4dcb3ad48c4b00ac7405c72721677",
+          "textNormalizedSha256": "deffc35ec43d00c17ca8777ca0aa105d6bd4dcb3ad48c4b00ac7405c72721677",
+          "identitySha256": "deffc35ec43d00c17ca8777ca0aa105d6bd4dcb3ad48c4b00ac7405c72721677"
         }
       ]
     },

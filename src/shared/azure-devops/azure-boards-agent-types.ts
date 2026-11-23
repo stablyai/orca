@@ -1,6 +1,7 @@
 import type { AzureDevOpsWorkItem } from './boards-types'
 
 export const AZURE_BOARDS_AGENT_ACCESS_RUNTIME_CAPABILITY = 'azure-boards.agent-access.v1' as const
+export const AZURE_BOARDS_AGENT_WRITE_RUNTIME_CAPABILITY = 'azure-boards.agent-write.v1' as const
 
 /** What `orca azure-boards connection` reports for one repo; never carries a credential. */
 export type AzureBoardsConnection = {

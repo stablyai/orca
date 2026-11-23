@@ -20,6 +20,7 @@ import {
   formatAzureBoardsWorkItemList
 } from './azure-boards-format'
 import { resolveAzureBoardsRepo } from './azure-boards-target'
+import { azureBoardsWriteHandlers } from './azure-boards-write'
 
 function workItemId(context: HandlerContext): number {
   const raw = getRequiredStringFlag(context.flags, 'id').trim().replace(/^#/, '')
@@ -31,6 +32,7 @@ function workItemId(context: HandlerContext): number {
 }
 
 export const AZURE_BOARDS_HANDLERS: Record<string, CommandHandler> = {
+  ...azureBoardsWriteHandlers(workItemId),
   'azure-boards connection': async (context) => {
     const repo = await resolveAzureBoardsRepo(context)
     const response = await context.client.call<AzureBoardsConnection>('azureBoards.connection', {

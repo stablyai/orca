@@ -36,7 +36,8 @@
       "84aa7cc18ed03df90f40c3c70650a0ad3df941a5e1f80870bd00cf6b9b7f7eab"
     ],
     "orca-azure-boards": [
-      "c3435b89b7a4211d1d65ea3b743f7245d1a6a84d36f7310cd29eb9ce7b2adca6"
+      "c3435b89b7a4211d1d65ea3b743f7245d1a6a84d36f7310cd29eb9ce7b2adca6",
+      "deffc35ec43d00c17ca8777ca0aa105d6bd4dcb3ad48c4b00ac7405c72721677"
     ],
     "orca-azure-devops-pr": [
       "4780bb95be266a0c3e2d5881167a02a4261872df81ad9b0aaf92138a9268fea1",

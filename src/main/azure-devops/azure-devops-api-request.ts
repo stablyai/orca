@@ -76,8 +76,10 @@ export type AzureDevOpsRequestOptions = {
   searchParams?: Record<string, string | number>
   timeoutMs?: number
   onResponse?: (response: Response) => void
-  method?: 'GET' | 'POST' | 'PUT'
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH'
   body?: unknown
+  /** Work item updates take JSON Patch (`application/json-patch+json`). */
+  contentType?: string
 }
 
 function envValue(name: string): string | null {
@@ -202,7 +204,9 @@ export async function requestAzureDevOpsJsonAtBase<T>(
       method: options.method ?? 'GET',
       headers: {
         Accept: 'application/json',
-        ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(options.body !== undefined
+          ? { 'Content-Type': options.contentType ?? 'application/json' }
+          : {}),
         ...(await resolveAzureDevOpsAuthHeaders(baseUrl))
       },
       ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
