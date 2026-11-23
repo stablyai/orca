@@ -55,7 +55,8 @@ export async function measureJournalConversionStorage(
     return { ...storage, sizedAt: at }
   }
   // A copy converts from its original chat; octet_length sizes TEXT without loading it. A chat
-  // whose history lives in its outcome generation restores that too, so it counts.
+  // whose history lives in its outcome generation restores each key's newest record there, so
+  // that counts, not the revisions it superseded.
   const from = journalLegacyConversionSource(destination, sessionId)
   const bytes = (sql: string) => Number(source.prepare(sql).get(from)?.bytes ?? 0)
   const rows = bytes(
@@ -66,7 +67,9 @@ export async function measureJournalConversionStorage(
     .get()
     ? bytes(`SELECT COALESCE(SUM(octet_length(o.value_json)),0) AS bytes
         FROM journal_outcome_epochs e JOIN journal_outcomes o ON o.generation=e.generation
-        WHERE e.session_id=?`)
+        WHERE e.session_id=? AND o.seq=(SELECT n.seq FROM journal_outcomes n
+          WHERE n.generation=o.generation AND n.field=o.field AND n.entry_key=o.entry_key
+            AND n.seq<=e.through_seq ORDER BY n.seq DESC LIMIT 1)`)
     : 0
   return { ...storage, remainingBytes: rows + outcomes, sizedAt: at }
 }

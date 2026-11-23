@@ -205,7 +205,8 @@ export class JournalSqlConversions {
       }
     }
     // Measured only for a chat that still converts, so ready chats never read their rows.
-    if (await this.lowOnSpace(promotion, sessionId)) {
+    const started = await this.room(promotion, sessionId)
+    if (started.low) {
       throw new JournalConversionStorageError()
     }
     await this.boundary(promotion)
@@ -217,7 +218,15 @@ export class JournalSqlConversions {
       const { header } = reader
       for (;;) {
         await this.boundary(promotion)
-        if (await this.lowOnSpace(promotion)) {
+        const now = await this.room(promotion)
+        if (now.low) {
+          // The room this attempt used becomes its estimate, so the next try waits for room for
+          // at least that much more than it wrote.
+          const sized = this.sizes.get(sessionId)
+          if (sized) {
+            const used = started.free - now.free
+            this.sizes.set(sessionId, { ...sized, bytes: Math.max(sized.bytes, used) })
+          }
           throw new JournalConversionStorageError()
         }
         const page = await reader.next()
@@ -240,10 +249,14 @@ export class JournalSqlConversions {
     }
   }
 
-  /** Whether background work must stop: free space below the floor, plus this chat's estimate. */
-  private async lowOnSpace(promotion: AbortSignal, sessionId?: string): Promise<boolean> {
+  /** Free bytes, and whether background work must stop: below the floor plus this chat's estimate. */
+  private async room(
+    promotion: AbortSignal,
+    sessionId?: string
+  ): Promise<{ free: number; low: boolean }> {
+    const open = { free: Infinity, low: false }
     if (promotion.aborted) {
-      return false
+      return open
     }
     const sized = sessionId === undefined ? undefined : this.sizes.get(sessionId)
     const storage = await this.storage(sessionId, sized?.sizedAt).catch((error: unknown) => {
@@ -253,7 +266,7 @@ export class JournalSqlConversions {
       throw error
     })
     if (!storage || promotion.aborted) {
-      return false
+      return open
     }
     const bytes =
       storage.remainingBytes ??
@@ -262,7 +275,8 @@ export class JournalSqlConversions {
       this.sizes.set(sessionId, { sizedAt: storage.sizedAt, bytes: storage.remainingBytes })
     }
     const needed = sessionId === undefined ? 0 : bytes * CONVERSION_EXPANSION
-    return isDiskAlmostFull({ ...storage, freeBytes: storage.freeBytes - needed })
+    const low = isDiskAlmostFull({ ...storage, freeBytes: storage.freeBytes - needed })
+    return { free: storage.freeBytes, low }
   }
 
   /** Only a failed space measure defers; a damaged or missing original keeps its own failure. */

@@ -65,9 +65,13 @@ it('estimates one chat from its own bytes, so other chats and newer store chats 
   // History kept in the chat's outcome generation restores too, so it counts.
   ensureJournalOutcomeTables(legacy)
   legacy.prepare("INSERT INTO journal_outcome_generations VALUES(7,'unopened','epoch')").run()
-  legacy.prepare("INSERT INTO journal_outcome_epochs VALUES('unopened','epoch',7,1,0,0)").run()
+  legacy.prepare("INSERT INTO journal_outcome_epochs VALUES('unopened','epoch',7,1,5,0)").run()
   const outcome = JSON.stringify({ text: '🙂'.repeat(500) })
-  legacy.prepare("INSERT INTO journal_outcomes VALUES(7,1,'items','k',1,'a',?,0)").run(outcome)
+  const insert = legacy.prepare("INSERT INTO journal_outcomes VALUES(7,?,'items','k',1,'a',?,0)")
+  // Only the newest revision up to the chat's recorded position restores, so only it counts.
+  insert.run(1, 'x'.repeat(100_000))
+  insert.run(2, outcome)
+  insert.run(9, 'x'.repeat(100_000))
   const bytes =
     Buffer.byteLength(outcome) +
     legacy

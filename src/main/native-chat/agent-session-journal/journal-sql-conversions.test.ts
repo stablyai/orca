@@ -196,4 +196,31 @@ describe('JournalSqlConversions storage guard', () => {
     await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
     expect(asked).toEqual([undefined, 'v1', 'v1'])
   })
+
+  it('a chat that stopped partway starts again only with room for more than that attempt used', async () => {
+    let now = 1_000
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    let free = 40 * GB
+    let checks = 0
+    // A 10 GB chat starts with 40 GB free; its second batch finds 9 GB, after using 31 GB.
+    const { conversions, writes } = conversion((sessionId, sizedAt) => {
+      if (sessionId !== undefined) {
+        return sizedAt === 'v1'
+          ? { freeBytes: free, totalBytes: 1000 * GB, sizedAt }
+          : { freeBytes: free, totalBytes: 1000 * GB, remainingBytes: 10 * GB, sizedAt: 'v1' }
+      }
+      return ++checks === 2
+        ? { freeBytes: 9 * GB, totalBytes: 1000 * GB }
+        : { freeBytes: free, totalBytes: 1000 * GB }
+    }, 3)
+    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
+    now += 60_000
+    writes.length = 0
+    // Once the partial copy is gone, the same 40 GB can't hold 1.5x the 31 GB used above the floor.
+    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
+    expect(writes).not.toContain('import-page')
+    now += 120_000
+    free = 57 * GB
+    await expect(conversions.ensure('chat', false)).resolves.toBe('epoch')
+  })
 })
