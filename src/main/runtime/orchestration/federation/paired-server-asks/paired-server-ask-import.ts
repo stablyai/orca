@@ -62,7 +62,11 @@ export function declinePairedServerAsk(
   ask: { conversationId: string; messageId: string; to: string; subject: string }
 ): void {
   const noticeId = `${ask.messageId}_declined`
-  if (isDeclined(db, ask.conversationId, ask.messageId)) {
+  // Under any other id (an older build's row) the notice would join a Dispatch's queued reports.
+  if (
+    !isGeneratedId(ask.conversationId, 'peerconv') ||
+    isDeclined(db, ask.conversationId, ask.messageId)
+  ) {
     return
   }
   const machine = runtime.readMachineName()

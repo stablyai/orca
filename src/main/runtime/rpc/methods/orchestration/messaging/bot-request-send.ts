@@ -74,6 +74,8 @@ export async function sendToBot(
     messageId?: string
     /** The recipient isn't woken until the caller runs `nudge`: an item it names is made first. */
     holdNudge?: boolean
+    /** Pulled from a server this computer dials: it acts for no one here (bot-request-acting.ts). */
+    pulledFromServer?: boolean
   } & Pick<SendBotRequestArgs, 'senderSnapshot' | 'pairedSender' | 'images' | 'onAdmitted'>
 ): Promise<{ receipt: unknown; nudge: () => void } | null> {
   const { runtime } = context
@@ -130,8 +132,9 @@ type SendBotRequestArgs = {
   images?: readonly string[]
   /** Nudges the sender runs later instead of now. */
   held?: (() => void)[]
-  /** Commits with the request's admission, before anyone is woken for it. */
-  onAdmitted?: () => void
+  /** Commits with the request's admission, before anyone is woken for it, given the bot it reaches
+   *  as checked at that moment; a throw refuses the admission. */
+  onAdmitted?: (botId: string) => void
 }
 
 /** Every refusal, from the first check to a blocked admission, leaves the owner's card. */
@@ -260,7 +263,8 @@ async function admitBotRequestMail(
       throw new OrchestrationError(recipient.code, recipient.message)
     }
     // The bot may have been paused or removed while the Chat was found.
-    check()
+    const reached = check().bot.id
+    const onAdmitted = args.onAdmitted && (() => args.onAdmitted?.(reached))
     runtimeBotGroups(runtime).assertPeerScope(groupScope)
     const mail = {
       id: messageId,
@@ -278,8 +282,8 @@ async function admitBotRequestMail(
       answerSenderSnapshot: args.senderSnapshot
     }
     const admission: BotRequestAdmission = reserved
-      ? { kind: 'sent', message: db.admitReservedBotRequest(mail, args.onAdmitted) }
-      : db.admitBotRequest({ ...request, message: mail, onAdmitted: args.onAdmitted })
+      ? { kind: 'sent', message: db.admitReservedBotRequest(mail, onAdmitted) }
+      : db.admitBotRequest({ ...request, message: mail, onAdmitted })
     if (admission.kind !== 'sent') {
       return blockedReceipt(admission)
     }

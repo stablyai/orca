@@ -31,6 +31,9 @@ export type PairedServerAsks = {
   serverKey: string
   /** The credential this computer is paired to the server with now. */
   pairing: string
+  /** The pairing's revision these asks were read under: a return sent under it can't reach a
+   *  pairing that replaced it. */
+  pairingRevision?: number
   wire: z.infer<typeof PeerMailClientAsksPull>
 }
 
@@ -144,6 +147,7 @@ export async function pairedServerAsksFor(
     serverName: server.name,
     serverKey,
     pairing,
+    ...(server.pairingRevision !== undefined ? { pairingRevision: server.pairingRevision } : {}),
     wire: {
       session: randomUUID(),
       installationId,

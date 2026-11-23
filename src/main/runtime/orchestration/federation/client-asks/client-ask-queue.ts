@@ -7,6 +7,19 @@ import { forgetPeerQuestionOut, tellUnpairedPeerQuestions } from '../peer-mail/p
 import { notifyPeerMailQueued } from '../peer-mail/peer-mail-waiters'
 import { clientDeviceEnvironmentPattern, CLIENT_ENVIRONMENT_PREFIX } from './client-ask-environment'
 import { forgetClientAskDevice } from './client-ask-listeners'
+import { recordEndedClientPairings } from './client-ask-ended-pairings'
+import { peerMailLocalRecipient } from '../peer-mail/peer-mail-delivery'
+import { resolveBareOrchestrationRecipient } from '../../../rpc/methods/orchestration/messaging/recipient-routing'
+import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
+import { ClientReplyPayload } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
+
+function queuedReply(payload: unknown): { subject: string; threadId?: string | null } | undefined {
+  try {
+    return ClientReplyPayload.safeParse(JSON.parse(String(payload))).data
+  } catch {
+    return undefined
+  }
+}
 
 export type ClientItemKind = 'client_ask' | 'client_reply' | 'client_ask_withdraw'
 
@@ -22,6 +35,60 @@ export function queueClientItem(
     payload: JSON.stringify(item.payload)
   })
   notifyPeerMailQueued(db.db)
+}
+
+/** A reply this Orca's agent queued there under an ended pairing will never be taken: its sender,
+ *  the agent the conversation is with, hears so once, by the reply's thread. */
+function tellDroppedReplies(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  params: {
+    environmentId: string
+    currentPairing: string | null
+    serverName: string
+    reason: string
+  }
+): void {
+  const dropped = db.db
+    .prepare(
+      `SELECT i.dispatch_id, i.message_id, i.payload FROM federation_relay_items i
+       JOIN peer_mail_conversations c ON c.conversation_id = i.dispatch_id
+       WHERE i.direction = 'to_worker' AND i.kind = 'client_reply' AND i.acked_at IS NULL
+         AND c.role = 'home' AND c.environment_id = ?1 AND (?2 IS NULL OR c.peer_fingerprint <> ?2)`
+    )
+    .all(params.environmentId, params.currentPairing)
+  for (const row of dropped) {
+    const conversation = db.getPeerMailConversation(String(row.dispatch_id))
+    if (!conversation) {
+      continue
+    }
+    const id = String(row.message_id)
+    const reply = queuedReply(row.payload)
+    const handle = peerMailLocalRecipient(runtime, conversation)
+    const recipient = resolveBareOrchestrationRecipient({ runtime, db, handle })
+    const told = runLifecycleWriteTransaction(db.db, 'client_reply_dropped', () => {
+      const settled = db.db
+        .prepare(
+          `UPDATE federation_relay_items SET acked_at = datetime('now')
+           WHERE dispatch_id = ? AND direction = 'to_worker' AND message_id = ? AND acked_at IS NULL`
+        )
+        .run(conversation.conversation_id, id).changes
+      if (settled === 0) {
+        return null
+      }
+      return db.insertMessage({
+        from: params.serverName,
+        to: recipient.ok ? recipient.to : handle,
+        subject: reply?.subject ?? 'Re: Reply',
+        body: `${params.reason} Your reply ${id} there was not delivered.`,
+        threadId: reply?.threadId ?? undefined,
+        runId: recipient.ok ? recipient.runId : undefined
+      })
+    })
+    if (told) {
+      runtime.notifyMessageArrived(told.to_handle, told.type)
+    }
+  }
 }
 
 /** What that computer hasn't taken under an ended pairing will never be taken. */
@@ -56,7 +123,10 @@ function endClientPairings(
       reason,
       ...(currentPairing ? { currentPairing } : {})
     })
+    tellDroppedReplies(runtime, db, { environmentId, currentPairing, serverName, reason })
     dropQueuedClientItems(db, environmentId, currentPairing)
+    // So a reply on one of those conversations is refused from now on, after a restart too.
+    recordEndedClientPairings(db, environmentId, currentPairing)
   }
 }
 

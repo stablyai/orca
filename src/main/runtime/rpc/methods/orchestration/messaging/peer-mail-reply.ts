@@ -16,11 +16,8 @@ import { notifyPeerMailQueued } from '../../../../orchestration/federation/peer-
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import { botAnswerOf } from './bot-request-outcome'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
-import {
-  clientEnvironmentId,
-  clientEnvironmentParts
-} from '../../../../orchestration/federation/client-asks/client-ask-environment'
-import { listenerForClientEnvironment } from '../../../../orchestration/federation/client-asks/client-ask-listeners'
+import { isClientEnvironment } from '../../../../orchestration/federation/client-asks/client-ask-environment'
+import { isEndedClientPairing } from '../../../../orchestration/federation/client-asks/client-ask-ended-pairings'
 import { queueClientItem } from '../../../../orchestration/federation/client-asks/client-ask-queue'
 import type { ClientReplyPayload } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import type { z } from 'zod'
@@ -93,27 +90,20 @@ export async function replyOverPeerMail(args: {
       NOTHING_SENT
     )
   }
-  const clientParts = clientEnvironmentParts(environmentId)
-  if (clientParts !== null) {
-    // Under the pairing the computer pulls with now; while it is offline, on this conversation,
-    // which it pulls when it reconnects under the same pairing.
-    const client = listenerForClientEnvironment(
-      runtime,
-      clientParts.deviceId,
-      clientParts.installationId,
-      conversation.peer_fingerprint
-    )
-    const current = client
-      ? db.openHomePeerMailConversation({
-          environmentId: clientEnvironmentId(client.deviceId, client.installationId),
-          peerFingerprint: client.fingerprint,
-          localParty: conversation.local_party ?? '',
-          localPaneKey: conversation.local_pane_key
-        })
-      : conversation
-    // A paired computer pulls it as it pulls asks, and gives it to its agent with no consent step.
+  if (isClientEnvironment(environmentId)) {
+    // Only the pairing the conversation was made under pulls it, and its agent takes it only there:
+    // once that pairing ended (removed, or re-made since), nothing would ever take it.
+    if (isEndedClientPairing(db, environmentId, conversation.peer_fingerprint)) {
+      throw new OrchestrationError(
+        'request_mismatch',
+        `The pairing ${original.id} came over has ended: that computer was removed or paired again since. No reply was sent. Ask it again with --on-client to start a new conversation.`,
+        NOTHING_SENT
+      )
+    }
+    // A paired computer pulls it as it pulls asks, and gives it to its agent with no consent step;
+    // while it is offline, it waits for that computer's next pull.
     queueClientItem(db, {
-      conversationId: current.conversation_id,
+      conversationId: conversation.conversation_id,
       messageId: id,
       kind: 'client_reply',
       payload: {

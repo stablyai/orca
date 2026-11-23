@@ -7,6 +7,12 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import { importPairedServerItem } from './paired-server-ask-import'
 import { flushPairedServerReturns } from './paired-server-ask-returns'
+import { retirePairedServerRoute } from './paired-server-ask-removal'
+import { admitPairedServerAsks } from './paired-server-ask-admission'
+import {
+  getPairedServerAsk,
+  holdPairedServerAsk
+} from '../../db/federation/paired-server-asks-store'
 import type { PairedServerAsks } from './paired-server-asks-pull'
 
 const SERVER: PairedServerAsks = {
@@ -36,6 +42,7 @@ describe('what this computer hands back to a paired server', () => {
       getOrchestrationDb: () => db,
       readMachineName: () => "Alice's Mac",
       bots: { list: () => [] },
+      notifyBotsChanged: () => {},
       callOrchestrationWorkerServer: vi.fn(
         async (_environment: string, _method: string, params: unknown) => {
           pages.push(Returned.parse(params).items.map((item) => item.messageId))
@@ -118,5 +125,107 @@ describe('what this computer hands back to a paired server', () => {
     expect(pages[1]).toEqual(['msg_return_50'])
     expect(db.listPendingFederationRelay(sentHere, 'to_home')).toHaveLength(1)
     expect(db.listPendingFederationRelay(otherServer, 'to_home')).toHaveLength(1)
+  })
+
+  it('sends a full page the server took none of once per wake, never again at once', async () => {
+    const conversation = 'peerconv_0000000000c1'
+    open(conversation, SERVER.environmentId)
+    for (let index = 0; index < 50; index += 1) {
+      queue(conversation, `msg_full_${index}`)
+    }
+
+    await flushPairedServerReturns(runtime, SERVER)
+    expect(pages).toHaveLength(1)
+    await flushPairedServerReturns(runtime, SERVER)
+    expect(pages).toHaveLength(2)
+    expect(db.listPendingFederationRelay(conversation, 'to_home')).toHaveLength(50)
+  })
+
+  it('settles a conversation the server has gone only through what this page sent it', async () => {
+    const gone = 'peerconv_0000000000c2'
+    const later = 'peerconv_0000000000c3'
+    open(gone, SERVER.environmentId)
+    open(later, SERVER.environmentId)
+    for (let index = 0; index < 51; index += 1) {
+      queue(gone, `msg_gone_${index}`)
+    }
+    queue(later, 'msg_later')
+    // Both are named gone, though the page held only the first's oldest 50.
+    answer = (page) =>
+      page === 1 ? { acknowledgments: [], gone: [gone, later] } : { acknowledgments: [], gone: [] }
+
+    await flushPairedServerReturns(runtime, SERVER)
+
+    expect(pages[0]).toHaveLength(50)
+    expect(db.listPendingFederationRelay(gone, 'to_home').map((item) => item.message_id)).toEqual([
+      'msg_gone_50'
+    ])
+    expect(db.listPendingFederationRelay(later, 'to_home')).toHaveLength(1)
+  })
+
+  it("hands back only this pairing's conversations, fenced to the pairing it read", async () => {
+    const current = 'peerconv_0000000000c4'
+    const replaced = 'peerconv_0000000000c5'
+    open(current, SERVER.environmentId)
+    db.db
+      .prepare(
+        `INSERT INTO peer_mail_conversations (conversation_id, role, peer_fingerprint, environment_id)
+         VALUES (?, 'peer', 'fingerprint_replaced', ?)`
+      )
+      .run(replaced, SERVER.environmentId)
+    queue(current, 'msg_current')
+    queue(replaced, 'msg_replaced')
+
+    await flushPairedServerReturns(runtime, { ...SERVER, pairingRevision: 3 })
+
+    expect(pages).toEqual([['msg_current']])
+    expect(vi.mocked(runtime.callOrchestrationWorkerServer).mock.calls[0]![5]).toEqual({
+      expectedEnvironmentPairingRevision: 3
+    })
+    expect(db.listPendingFederationRelay(replaced, 'to_home')).toHaveLength(1)
+  })
+
+  it("never returns or retires a Dispatch's reports filed under a conversation an older build kept", async () => {
+    const dispatchId = 'ctx_0000000000d2'
+    const conversation = 'peerconv_0000000000c6'
+    open(dispatchId, SERVER.environmentId)
+    open(conversation, SERVER.environmentId)
+    queue(dispatchId, 'msg_worker_report')
+    queue(conversation, 'msg_reply')
+    answer = () => ({ acknowledgments: [], gone: [] })
+
+    await flushPairedServerReturns(runtime, SERVER)
+    retirePairedServerRoute(runtime, SERVER.environmentId)
+
+    expect(pages).toEqual([['msg_reply']])
+    expect(db.listPendingFederationRelay(conversation, 'to_home')).toEqual([])
+    expect(db.listPendingFederationRelay(dispatchId, 'to_home')).toHaveLength(1)
+  })
+
+  it("declines unread an approved ask an older build kept under a Dispatch's id, queuing nothing there", async () => {
+    const dispatchId = 'ctx_0000000000e1'
+    open(dispatchId, SERVER.environmentId)
+    holdPairedServerAsk(db, {
+      message_id: 'm_stored',
+      conversation_id: dispatchId,
+      server_key: SERVER.serverKey,
+      environment_id: SERVER.environmentId,
+      root_session: 'orca_session_id:asker',
+      bot_id: 'docs',
+      payload: JSON.stringify({
+        to: 'bot:docs',
+        senderLabel: 'Ranger',
+        subject: 'Hi',
+        type: 'status',
+        rootSession: 'orca_session_id:asker'
+      }),
+      state: 'admit'
+    })
+
+    await admitPairedServerAsks(runtime)
+
+    expect(getPairedServerAsk(db, 'm_stored')).toBeUndefined()
+    expect(db.getMessageById('m_stored')).toBeFalsy()
+    expect(db.listPendingFederationRelay(dispatchId, 'to_home')).toEqual([])
   })
 })

@@ -1,12 +1,14 @@
-// An ask a paired server's agent sent an agent here is admitted as the owner's own mail, through
-// the peer-mail bot path, once allowed or approved; the waiting row goes in the admission's write.
+// An ask a paired server's agent sent an agent here is admitted through the peer-mail bot path, for
+// no one here, once allowed or approved; the waiting row goes in the admission's write.
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { OrchestrationError } from '../../orchestration-error'
 import { ClientAskPayload } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import { deliverPeerMailToBot } from '../../../rpc/methods/orchestration/federation/peer-mail-bot-delivery'
 import { peerMailSenderSnapshot } from '../peer-mail/peer-mail-sender-snapshot'
+import { isGeneratedId } from '../../db/generated-id'
 import {
   dropPairedServerAsk,
+  getPairedServerAsk,
   listPairedServerAsks,
   type PairedServerAskRow
 } from '../../db/federation/paired-server-asks-store'
@@ -21,7 +23,12 @@ async function admit(runtime: OrcaRuntimeService, row: PairedServerAskRow): Prom
   const parsed = ClientAskPayload.safeParse(safeJson(row.payload))
   // The pairing the ask came under, kept here: admitting needs no connection, and the answer goes
   // back when the server is reached again.
-  const pairing = db.getPeerMailConversation(row.conversation_id)?.peer_fingerprint
+  // A row an older build kept under any id but a reverse conversation's is declined unread: its
+  // replies would join that id's queue (a Dispatch's), and no notice goes there.
+  const conversation = isGeneratedId(row.conversation_id, 'peerconv')
+    ? db.getPeerMailConversation(row.conversation_id)
+    : undefined
+  const pairing = conversation?.role === 'peer' ? conversation.peer_fingerprint : undefined
   if (!parsed.success || !pairing) {
     declineHeldPairedServerAsk(runtime, row)
     return
@@ -53,6 +60,10 @@ async function admit(runtime: OrcaRuntimeService, row: PairedServerAskRow): Prom
       {
         environmentId: row.environment_id,
         serverName,
+        // At commit, after every wait: still waiting here, for the bot it was approved for. A
+        // decline or removal since, or a name lookup landing on another bot, admits nothing.
+        admits: (botId) =>
+          botId === row.bot_id && getPairedServerAsk(db, row.message_id)?.state === 'admit',
         alsoOnAdmitted: () => void dropPairedServerAsk(db, row.message_id)
       }
     )

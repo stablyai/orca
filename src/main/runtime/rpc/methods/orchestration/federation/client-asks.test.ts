@@ -36,6 +36,11 @@ describe('agents here messaging agents on a paired computer', () => {
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'orca-client-asks-'))
     db = new OrchestrationDb(join(dir, 'server.db'))
+    startRuntime()
+  })
+
+  /** This Orca, started on the database; again, as after a restart, it keeps nothing from memory. */
+  function startRuntime() {
     runtime = new OrcaRuntimeService(null)
     vi.spyOn(runtime, 'readMachineName').mockReturnValue('Build Box')
     vi.spyOn(runtime, 'getTerminalHandleForPaneKey').mockReturnValue(null)
@@ -47,7 +52,7 @@ describe('agents here messaging agents on a paired computer', () => {
     )
     runtime.setOrchestrationDb(db)
     dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-  })
+  }
 
   afterEach(() => {
     db.close()
@@ -330,7 +335,8 @@ describe('agents here messaging agents on a paired computer', () => {
     ).toEqual(['Second question'])
   })
 
-  it('queues a reply under the pairing the computer pulls with after a re-pair', async () => {
+  /** A question to the computer's agent, answered there; its answer is unread here. */
+  async function answeredQuestion(answerId: string) {
     await pull()
     await ask({ type: 'question' })
     const [item] = (await pull()).items
@@ -339,7 +345,7 @@ describe('agents here messaging agents on a paired computer', () => {
         {
           conversationId: item!.conversationId,
           sequence: 1,
-          messageId: 'msg_answer_2',
+          messageId: answerId,
           kind: 'peer_mail',
           payload: JSON.stringify({
             senderLabel: 'Literature on Client A',
@@ -351,37 +357,72 @@ describe('agents here messaging agents on a paired computer', () => {
         }
       ]
     })
-    const [answer] = db.getUnreadMessages('term_s')
+    return { item: item!, answer: db.getUnreadMessages('term_s')[0]! }
+  }
+
+  const reply = (id: string) =>
+    local('orchestration.reply', { id, body: 'Thanks.', from: 'term_s' })
+
+  it('refuses a reply on a conversation whose pairing was re-made, after a restart too, and queues none', async () => {
+    const { answer } = await answeredQuestion('msg_answer_2')
     const repaired = { deviceId: 'device_a2', fingerprint: 'fp_a2' }
-    await fromClient(
-      'orchestration.peerMailPull',
-      { waitMs: 0, clientAsks: asks('session_2', { previousPairing: 'fp_a' }) },
-      repaired
-    )
-    // That session ends, and the next one no longer names the pairing it replaced.
-    const gone = new AbortController()
-    gone.abort()
-    await fromClient(
-      'orchestration.peerMailPull',
-      { waitMs: 0, clientAsks: asks('session_2') },
-      { ...repaired, signal: gone.signal }
-    )
-    await fromClient(
-      'orchestration.peerMailPull',
-      { waitMs: 0, clientAsks: asks('session_3') },
-      repaired
-    )
+    const pullRepaired = (session: string, extra: Record<string, unknown> = {}) =>
+      fromClient(
+        'orchestration.peerMailPull',
+        { waitMs: 0, clientAsks: asks(session, extra) },
+        repaired
+      )
+    await pullRepaired('session_2', { previousPairing: 'fp_a' })
 
-    await local('orchestration.reply', { id: answer!.id, body: 'Thanks.', from: 'term_s' })
+    const refused = await reply(answer.id)
+    startRuntime()
+    await pullRepaired('session_3')
+    const refusedAfterRestart = await reply(answer.id)
 
-    const pulled = await fromClient(
-      'orchestration.peerMailPull',
-      { waitMs: 0, clientAsks: asks('session_3') },
-      repaired
+    expect(refused).toMatchObject({ ok: false, error: { code: 'request_mismatch' } })
+    expect(refusedAfterRestart).toMatchObject({ ok: false, error: { code: 'request_mismatch' } })
+    const pulled = await pullRepaired('session_3')
+    expect(Pulled.parse(pulled.ok ? pulled.result : null).items).toEqual([])
+  })
+
+  it('tells the replier once when a reply waiting for the offline computer is lost to its re-pair', async () => {
+    const { answer } = await answeredQuestion('msg_answer_5')
+    await settleOffline()
+    expect(await reply(answer.id)).toMatchObject({ ok: true })
+    const repaired = { deviceId: 'device_a2', fingerprint: 'fp_a2' }
+
+    // The re-pair is announced until the server answers it, so it may come twice.
+    const announce = (session: string) =>
+      fromClient(
+        'orchestration.peerMailPull',
+        { waitMs: 0, clientAsks: asks(session, { previousPairing: 'fp_a' }) },
+        repaired
+      )
+    await announce('session_2')
+    await announce('session_3')
+
+    const lost = told().filter((body) => body.includes('was not delivered'))
+    expect(lost).toHaveLength(1)
+    expect(lost[0]).toMatch(
+      /^The pairing with Client A was re-made\. Your reply msg_\w+ there was not delivered\.$/
     )
-    expect(
-      Pulled.parse(pulled.ok ? pulled.result : null).items.map((queued) => queued.kind)
-    ).toEqual(['client_reply'])
+  })
+
+  it('keeps a pairing that still pulls, whatever re-pair another computer claims for it', async () => {
+    const { item, answer } = await answeredQuestion('msg_answer_6')
+    await fromClient(
+      'orchestration.peerMailPull',
+      { waitMs: 0, clientAsks: asks('copy_session', { previousPairing: 'fp_a' }) },
+      { deviceId: 'device_copy', fingerprint: 'fp_copy' }
+    )
+    // The computer pulls again under its own credential.
+    await pull('session_back')
+
+    expect(await reply(answer.id)).toMatchObject({ ok: true })
+    const items = (await pull('session_back')).items.filter(
+      (queued) => queued.messageId !== item.messageId
+    )
+    expect(items.map((queued) => queued.kind)).toEqual(['client_reply'])
   })
 
   it('queues a reply while the computer is offline, for its next pull', async () => {

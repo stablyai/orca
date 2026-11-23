@@ -22,7 +22,10 @@ import type { PairedServerAsks } from '../../../../orchestration/federation/pair
 import { importPairedServerItem } from '../../../../orchestration/federation/paired-server-asks/paired-server-ask-import'
 import { activePairedServerAsks } from '../../../../orchestration/federation/paired-server-asks/paired-server-asks-loop'
 import { settleRemovedPairedServer } from '../../../../orchestration/federation/peer-mail/paired-server-changes'
-import { settlePairedServerAsksOnRemoval } from '../../../../orchestration/federation/paired-server-asks/paired-server-ask-removal'
+import {
+  forgetPairedServerAsksOf,
+  settlePairedServerAsksOnRemoval
+} from '../../../../orchestration/federation/paired-server-asks/paired-server-ask-removal'
 import { structuredMailMessage } from '../../../../orchestration/mailbox/structured-mail/structured-mail-source'
 import type { BotRequestRecord } from '../../../../../bots/bot-request-view'
 
@@ -848,6 +851,31 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     const record = JSON.parse(computer.db.getBotRequest(sent.message.id)!.record)
     expect(record.askers).toEqual([{ kind: 'unknown' }])
     expect(record.askedBy).toEqual([{ kind: 'unknown' }])
+  })
+
+  it('admits nothing when an approved ask is declined while its admission waits', async () => {
+    await introduce()
+    const sent = await ask()
+    await vi.waitFor(async () => expect(await cards()).toHaveLength(1))
+    let release = () => {}
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    withChat.mockImplementation(async (_botId, work) => {
+      await waiting
+      return work(DOCS_CHAT)
+    })
+
+    await call('pairedServerAsks.decide', { messageId: sent.message.id, decision: 'once' })
+    await vi.waitFor(() => expect(withChat).toHaveBeenCalled())
+    // Its agent's asks are declined (as when it is deleted) while the admission waits for its chat.
+    forgetPairedServerAsksOf(computer.runtime, 'docs')
+    release()
+
+    await vi.waitFor(() => expect(server.db.getUnreadMessages(ASKER)).toHaveLength(1))
+    expect(server.db.getUnreadMessages(ASKER)[0]!.body).toBe("Declined on Alice's Mac.")
+    expect(computer.db.getMessageById(sent.message.id)).toBeFalsy()
+    expect(computer.db.getBotRequest(sent.message.id)).toBeFalsy()
   })
 
   it('shows a card again, from any chat, once a person removes a server it allowed', async () => {

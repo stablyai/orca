@@ -101,7 +101,10 @@ export async function refreshPairedServerAsks(
   holder.asksStale = false
   holder.asksFrom = supportKey(pairing, knownServerAsksSupport(runtime, server))
   const same =
-    next && holder.asks?.pairing === next.pairing && holder.asks.serverKey === next.serverKey
+    next &&
+    holder.asks?.pairing === next.pairing &&
+    holder.asks.serverKey === next.serverKey &&
+    holder.asks.pairingRevision === next.pairingRevision
   if (same) {
     return
   }

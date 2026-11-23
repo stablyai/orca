@@ -28,10 +28,11 @@ export function readSendingActor(
     callerSessionId: string | undefined
     sender: OrchestrationCallerIdentity
     receiving: ReceivingBot
-    fromPairedServer?: string
+    /** Pulled from a server this computer dials: only that path sets it. */
+    pulledFromServer?: boolean
   }
 ): Promise<ActingSender | null> {
-  return mail.fromPairedServer === undefined
-    ? readActingSender(runtime, db, mail.callerSessionId, mail.sender, mail.receiving)
-    : Promise.resolve(PAIRED_SERVER_SENDER)
+  return mail.pulledFromServer === true
+    ? Promise.resolve(PAIRED_SERVER_SENDER)
+    : readActingSender(runtime, db, mail.callerSessionId, mail.sender, mail.receiving)
 }

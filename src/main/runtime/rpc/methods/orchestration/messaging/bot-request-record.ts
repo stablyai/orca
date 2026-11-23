@@ -16,10 +16,19 @@ export function botRequestRecord(db: OrchestrationDb, messageId: string): BotReq
   }
   try {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only sendBotRequest writes this column, from a BotRequestRecord.
-    return JSON.parse(request.record) as BotRequestRecord
+    return actsForNoOneFromServer(JSON.parse(request.record) as BotRequestRecord)
   } catch {
     return null
   }
+}
+
+/** Earlier versions recorded a request pulled from a paired server (`fromPairedServer`, written
+ *  only on that path) as the owner's. That server has no access here, so it acts for no one here,
+ *  as such a request is recorded now: a request still waiting to be read never opens an owner turn. */
+function actsForNoOneFromServer(record: BotRequestRecord): BotRequestRecord {
+  return typeof record.fromPairedServer === 'string'
+    ? { ...record, askers: [{ kind: 'unknown' }], askedBy: [{ kind: 'unknown' }] }
+    : record
 }
 
 /** Whom a request acts for, and the event that started its chain, as this host recorded it; null

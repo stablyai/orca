@@ -2,6 +2,7 @@
 // relay queue; it hands them back as soon as one is queued, since the server can't pull from here.
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import { REVERSED_CONVERSATION_SQL } from '../../db/federation/paired-server-asks-store'
 import type { PairedServerAsks } from './paired-server-asks-pull'
 
 const RETURN_TIMEOUT_MS = 15_000
@@ -14,25 +15,33 @@ const Returned = z.object({
   gone: z.array(z.string())
 })
 
-// Per server: a flush is running, and whether a wake landed while it ran.
-type Flush = { again: boolean; done: Promise<void> }
+// Per server: a flush is running, the newest asks it was called with, and whether a wake landed
+// while it ran.
+type Flush = { asks: PairedServerAsks; again: boolean; done: Promise<void> }
 const flushingByRuntime = new WeakMap<object, Map<string, Flush>>()
 
-const OWED_SQL = `SELECT DISTINCT c.conversation_id FROM peer_mail_conversations c
+// One page, picked by the query: only conversations this server opened under this pairing (mail
+// owed under an older one never goes to whatever answers now), each from its oldest owed row.
+const PAGE_SQL = `SELECT i.dispatch_id, i.sequence, i.message_id, i.kind, i.payload
+  FROM peer_mail_conversations c
   JOIN federation_relay_items i ON i.dispatch_id = c.conversation_id
-  WHERE c.role = 'peer' AND c.environment_id = ? AND i.direction = 'to_home' AND i.acked_at IS NULL
-  ORDER BY c.conversation_id`
+  WHERE c.role = 'peer' AND c.environment_id = ? AND c.peer_fingerprint = ?
+    AND ${REVERSED_CONVERSATION_SQL} AND i.direction = 'to_home' AND i.acked_at IS NULL
+  ORDER BY c.conversation_id, i.sequence LIMIT ${PAGE}`
 
-/** One page to the server; true when more may be waiting. */
+type OwedItem = {
+  dispatch_id: string
+  sequence: number
+  message_id: string
+  kind: string
+  payload: string
+}
+
+/** One page to the server; true when a full page made progress, so more may be waiting. */
 async function returnPage(runtime: OrcaRuntimeService, asks: PairedServerAsks): Promise<boolean> {
   const db = runtime.getOrchestrationDb()
-  const conversations = db.db
-    .prepare(OWED_SQL)
-    .all(asks.environmentId)
-    .map((row) => String(row.conversation_id))
-  const items = conversations
-    .flatMap((id) => db.listPendingFederationRelay(id, 'to_home', PAGE))
-    .slice(0, PAGE)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: PAGE_SQL selects exactly these federation_relay_items columns.
+  const items = db.db.prepare(PAGE_SQL).all(asks.environmentId, asks.pairing) as OwedItem[]
   if (items.length === 0) {
     return false
   }
@@ -49,25 +58,31 @@ async function returnPage(runtime: OrcaRuntimeService, asks: PairedServerAsks): 
           payload: item.payload
         }))
       },
-      RETURN_TIMEOUT_MS
+      RETURN_TIMEOUT_MS,
+      undefined,
+      // Refused before it is sent if the pairing was replaced since this page was chosen.
+      { expectedEnvironmentPairingRevision: asks.pairingRevision }
     )
   )
   // Only what this page sent can be acknowledged: an ack past it, or for another conversation,
   // would settle mail the server never received.
-  const sentThrough = new Map<string, number>()
+  const sent = new Map<string, { first: number; last: number }>()
   for (const item of items) {
-    sentThrough.set(
-      item.dispatch_id,
-      Math.max(sentThrough.get(item.dispatch_id) ?? 0, item.sequence)
-    )
+    const range = sent.get(item.dispatch_id)
+    sent.set(item.dispatch_id, {
+      first: Math.min(range?.first ?? item.sequence, item.sequence),
+      last: Math.max(range?.last ?? item.sequence, item.sequence)
+    })
   }
+  let progressed = false
   const acknowledge = (conversationId: string, throughSequence: number): void => {
-    const sent = sentThrough.get(conversationId)
-    if (sent !== undefined) {
+    const range = sent.get(conversationId)
+    if (range !== undefined && throughSequence >= range.first) {
+      progressed = true
       db.acknowledgeFederationRelay({
         dispatchId: conversationId,
         direction: 'to_home',
-        throughSequence: Math.min(throughSequence, sent)
+        throughSequence: Math.min(throughSequence, range.last)
       })
     }
   }
@@ -78,7 +93,8 @@ async function returnPage(runtime: OrcaRuntimeService, asks: PairedServerAsks): 
   for (const conversationId of returned.gone) {
     acknowledge(conversationId, Number.MAX_SAFE_INTEGER)
   }
-  return items.length === PAGE
+  // A page the server took none of waits for the next wake or pull, never sent again at once.
+  return items.length === PAGE && progressed
 }
 
 /** Hands back what is owed now; a failure leaves it queued for the next wake or pull. A call while
@@ -91,16 +107,17 @@ export function flushPairedServerReturns(
   flushingByRuntime.set(runtime, flushing)
   const running = flushing.get(asks.environmentId)
   if (running) {
+    running.asks = asks
     running.again = true
     return running.done
   }
-  const state: Flush = { again: true, done: Promise.resolve() }
+  const state: Flush = { asks, again: true, done: Promise.resolve() }
   flushing.set(asks.environmentId, state)
   state.done = (async () => {
     try {
       while (state.again) {
         state.again = false
-        if (await returnPage(runtime, asks)) {
+        if (await returnPage(runtime, state.asks)) {
           state.again = true
         }
       }

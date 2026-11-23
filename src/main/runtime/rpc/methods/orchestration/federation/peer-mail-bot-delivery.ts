@@ -11,15 +11,22 @@ import { agentMessageSenderName } from '../../../../../../shared/agent-session/j
 const admitting = new Set<string>()
 
 /** Peer mail that reaches a bot is admitted as this Orca's own bot mail is, for the owner: a paired
- *  computer has full access here. `{ to }` is mail for an agent that is no bot, stored as peer mail. */
+ *  computer has full access here. Mail pulled from a server this Orca dials acts for no one here,
+ *  since that server has none. `{ to }` is mail for an agent that is no bot, stored as peer mail. */
 export async function deliverPeerMailToBot(
   runtime: OrcaRuntimeService,
   params: z.infer<typeof PeerMailDeliverParams>,
   peerFingerprint: string,
   senderSnapshot: string | undefined,
   /** Mail a server this Orca dials queued for it: its conversation names that server, and
-   *  `alsoOnAdmitted` commits with the request's admission. */
-  pulled?: { environmentId: string; serverName: string; alsoOnAdmitted: () => void }
+   *  `alsoOnAdmitted` commits with the request's admission. `admits` is asked inside that write,
+   *  with the bot it reaches: false refuses it, so nothing goes to a bot it wasn't approved for. */
+  pulled?: {
+    environmentId: string
+    serverName: string
+    admits: (botId: string) => boolean
+    alsoOnAdmitted: () => void
+  }
 ): Promise<'delivered' | { to: string; body?: string }> {
   const db = runtime.getOrchestrationDb()
   // The label is no party here, so the request reads as the owner's own.
@@ -94,8 +101,18 @@ export async function deliverPeerMailToBot(
               ''),
           botName: agentMessageSenderName(params.sender?.bot?.name)
         },
+        ...(pulled ? { pulledFromServer: true } : {}),
         // Its reply and any notice go back over this conversation, linked before the bot is woken.
-        onAdmitted: link
+        onAdmitted: (botId) => {
+          if (pulled && !pulled.admits(botId)) {
+            throw new OrchestrationError(
+              'request_mismatch',
+              'This ask is no longer approved for that agent. Nothing was delivered.',
+              { effectsApplied: false }
+            )
+          }
+          link()
+        }
       }
     )
     if (!('receipt' in routed)) {

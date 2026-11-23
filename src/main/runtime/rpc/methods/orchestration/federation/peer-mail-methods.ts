@@ -23,6 +23,7 @@ import {
   clientAskPullStarted
 } from '../../../../orchestration/federation/client-asks/client-ask-listeners'
 import { settleReplacedClientPairing } from '../../../../orchestration/federation/client-asks/client-ask-queue'
+import { reviveClientPairing } from '../../../../orchestration/federation/client-asks/client-ask-ended-pairings'
 
 const NOTHING_DELIVERED = { effectsApplied: false } as const
 const MAX_PULL_WAIT_MS = 25_000
@@ -200,6 +201,10 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
         asks && ctx.pairedDeviceId
           ? clientEnvironmentId(ctx.pairedDeviceId, asks.installationId)
           : null
+      if (clientEnvironment) {
+        // Its own credential proves this pairing still pulls, whatever another pull claimed.
+        reviveClientPairing(ctx.runtime.getOrchestrationDb(), clientEnvironment, peerFingerprint)
+      }
       try {
         const db = ctx.runtime.getOrchestrationDb()
         const holdBack = new Set(params.holdBack)

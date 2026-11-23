@@ -281,6 +281,11 @@ export function recordAnnouncedPairing(
     )
 }
 
+/** A conversation a paired server opened for its agents' asks carries a `generateId('peerconv')` id;
+ *  the relay keys replies by conversation, so a row an older build stored under any other id (a
+ *  Dispatch's) is never read as one. For `peer_mail_conversations` aliased `c`. */
+export const REVERSED_CONVERSATION_SQL = `c.conversation_id GLOB 'peerconv_${'[0-9a-fA-F]'.repeat(12)}'`
+
 /** Servers this computer has a reason to pull asks from: something routed by them, or a reply owed. */
 export const PAIRED_SERVER_ASK_ENVIRONMENTS_SQL = `
 SELECT environment_id FROM paired_server_introductions
@@ -288,7 +293,7 @@ UNION SELECT environment_id FROM paired_server_allowances
 UNION SELECT environment_id FROM paired_server_asks
 UNION SELECT c.environment_id FROM peer_mail_conversations c
   JOIN federation_relay_items i ON i.dispatch_id = c.conversation_id
-  WHERE c.role = 'peer' AND c.environment_id IS NOT NULL
+  WHERE c.role = 'peer' AND c.environment_id IS NOT NULL AND ${REVERSED_CONVERSATION_SQL}
     AND i.direction = 'to_home' AND i.acked_at IS NULL`
 
 /** One server's arm of the pull loop's reason to run. */
@@ -301,7 +306,8 @@ SELECT 1 FROM paired_server_asks WHERE environment_id = ?1
 UNION ALL
 SELECT 1 FROM peer_mail_conversations c
   JOIN federation_relay_items i ON i.dispatch_id = c.conversation_id
-  WHERE c.role = 'peer' AND c.environment_id = ?1 AND i.direction = 'to_home' AND i.acked_at IS NULL`
+  WHERE c.role = 'peer' AND c.environment_id = ?1 AND ${REVERSED_CONVERSATION_SQL}
+    AND i.direction = 'to_home' AND i.acked_at IS NULL`
 
 /** Whether a server's loop pulls for asks: then it waits on the server's first status read. */
 export function pairedServerAsksWanted(db: OrchestrationDb, environmentId: string): boolean {
