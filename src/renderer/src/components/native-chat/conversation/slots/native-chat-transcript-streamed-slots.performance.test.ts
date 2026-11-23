@@ -1,5 +1,6 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
+import * as slotsModule from './native-chat-transcript-slots'
 import { buildNativeChatTranscript } from './native-chat-transcript-slots'
 import {
   createNativeChatStreamedTranscript,
@@ -76,15 +77,74 @@ it('patches from a full build its streamed rows needed, instead of building ever
   expect(later.slots.filter((slot, index) => slot !== first.slots[index])).toHaveLength(1)
 })
 
-it('builds again rather than patch a row drawn as a work run', () => {
-  const saved = history()
-  const { slots } = transcript(saved)
-  const run = slots.map((slot, index) =>
-    index === slots.length - 1 && slot.kind === 'message'
-      ? { ...slot, workRun: [slot.message] }
-      : slot
-  )
-  expect(withStreamedRows(run, saved, withReply(saved, 'Answer 199, and more'))).toBeNull()
+function workingRun(thought: string): NativeChatMessage[] {
+  const call = (id: string): NativeChatMessage => ({
+    id,
+    role: 'assistant',
+    blocks: [{ type: 'tool-call', name: 'Read', input: { path: id } }],
+    timestamp: 1,
+    source: 'transcript'
+  })
+  const thinking = (id: string, text: string): NativeChatMessage => ({
+    id,
+    role: 'reasoning',
+    state: 'running',
+    blocks: [{ type: 'text', text }],
+    timestamp: 1,
+    source: 'transcript'
+  })
+  return [
+    ...history(),
+    message('ask-live', 'user', 'Look around'),
+    call('call-1'),
+    thinking('thought-1', 'First'),
+    call('call-2'),
+    thinking('thought-2', thought)
+  ]
+}
+
+const withThought = (rows: readonly NativeChatMessage[], text: string): NativeChatMessage[] => [
+  ...rows.slice(0, -1),
+  { ...rows.at(-1)!, blocks: [{ type: 'text', text }] }
+]
+
+it('patches only the run slot while a thought streams inside a work run', () => {
+  const saved = workingRun('Thinking')
+  const input = {
+    ...inputFor(saved),
+    turnKeys: saved.map((_, index) => (index >= 400 ? 'turn-live' : `turn-${index >> 1}`)),
+    liveTurnKey: 'turn-live'
+  }
+  const builds = vi.spyOn(slotsModule, 'buildNativeChatTranscript')
+  const project = createNativeChatStreamedTranscript()
+  const first = project(input, saved, saved)
+  const run = first.slots.at(-1)
+  expect(run).toMatchObject({ kind: 'message' })
+  expect(run?.kind === 'message' ? run.workRun?.map((row) => row.id) : []).toEqual([
+    'call-1',
+    'thought-1',
+    'call-2',
+    'thought-2'
+  ])
+  let previous = first
+  let text = 'Thinking'
+  for (let window = 0; window < 20; window++) {
+    text += ` step ${window}`
+    const next = project(input, saved, withThought(saved, text))
+    expect(next.slots.filter((slot, index) => slot !== previous.slots[index])).toHaveLength(1)
+    previous = next
+  }
+  expect(builds).toHaveBeenCalledTimes(1)
+  const last = previous.slots.at(-1)
+  expect(last?.kind === 'message' ? last.workRun?.at(-1)?.blocks : []).toEqual([
+    { type: 'text', text }
+  ])
+  expect(last?.estimatedHeight).toBe(run?.estimatedHeight)
+  // The thought ending regroups the run, so it builds again.
+  const ended = withThought(saved, text)
+  project(input, saved, [...ended.slice(0, -1), { ...ended.at(-1)!, state: 'completed' }])
+  expect(builds).toHaveBeenCalledTimes(2)
+  builds.mockRestore()
 })
 
 it('caps a settled reply whose controls stay in flow as a full build does', () => {

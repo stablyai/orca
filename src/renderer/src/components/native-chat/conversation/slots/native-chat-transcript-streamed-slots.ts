@@ -7,6 +7,7 @@ import {
   type NativeChatTranscriptSlot
 } from './native-chat-transcript-slots'
 import { nativeChatMessageSlotHeight } from './native-chat-message-slot-height'
+import { nativeChatWorkRunMember } from '../../../../../../shared/native-chat/transcript/folding/native-chat-work-run'
 import { NATIVE_CHAT_ACTIVITY_ROW_GAP_PX } from './native-chat-activity-row-joins'
 import {
   NATIVE_CHAT_ROW_GAP_PX,
@@ -14,10 +15,13 @@ import {
 } from '../../viewport/virtualization/native-chat-row-height-estimate'
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
 
-/** Where each row is drawn: a slot's own row by its index; a run or note cluster's rows as -1. */
-const slotIndexes = new WeakMap<readonly NativeChatTranscriptSlot[], Map<string, number>>()
+/** Where each row is drawn: a slot's own row or a work run's member by the slot's index; a note
+ *  cluster's rows as -1. */
+type SlotPlace = { at: number; inRun: boolean }
 
-function slotIndexById(slots: readonly NativeChatTranscriptSlot[]): Map<string, number> {
+const slotIndexes = new WeakMap<readonly NativeChatTranscriptSlot[], Map<string, SlotPlace>>()
+
+function slotIndexById(slots: readonly NativeChatTranscriptSlot[]): Map<string, SlotPlace> {
   let index = slotIndexes.get(slots)
   if (!index) {
     index = new Map()
@@ -25,14 +29,42 @@ function slotIndexById(slots: readonly NativeChatTranscriptSlot[]): Map<string, 
       if (slot.kind !== 'message') {
         continue
       }
-      // A cluster draws its members (its head included) from its own list, which a patch can't reach.
-      const members = [...(slot.workRun ?? []), ...(slot.itemNotes ?? [])]
-      index.set(slot.message.id, members.length > 0 ? -1 : at)
-      members.forEach((member) => index!.set(member.id, -1))
+      // A note cluster draws its members (its head included) from its own list, which a patch can't reach.
+      if ((slot.itemNotes?.length ?? 0) > 0) {
+        for (const member of [slot.message, ...slot.itemNotes!]) {
+          index.set(member.id, { at: -1, inRun: false })
+        }
+        continue
+      }
+      index.set(slot.message.id, { at, inRun: slot.workRun !== undefined })
+      for (const member of slot.workRun ?? []) {
+        index.set(member.id, { at, inRun: true })
+      }
     }
     slotIndexes.set(slots, index)
   }
   return index
+}
+
+/** A run with `current` in place of `before`, or null when the run's drawing would change: its
+ *  height reads only a lead head's text, and a member's lifecycle can regroup the run. */
+function withStreamedRunMember(
+  slot: NativeChatMessageSlot,
+  before: NativeChatMessage,
+  current: NativeChatMessage
+): NativeChatMessageSlot | null {
+  const members = slot.workRun ?? []
+  const at = members.indexOf(before)
+  const isHead = slot.message === before
+  if (at === -1 || before.state !== current.state) {
+    return null
+  }
+  if (isHead && nativeChatWorkRunMember(before, slot.receipt !== undefined, false) === 'lead') {
+    return null
+  }
+  const workRun = members.slice()
+  workRun[at] = current
+  return { ...slot, workRun, message: isHead ? current : slot.message }
 }
 
 /** What a slot draws of its row: a streamed row that keeps these keeps its slot as built. */
@@ -93,7 +125,7 @@ function streamedSlotHeight(
 /**
  * Slots built from `built` with each streaming row's current message in its slot, so a live
  * window rebuilds no transcript structure. Null when a streamed row would draw differently (its
- * first words, an image) or is drawn inside a cluster, which needs a full build.
+ * first words, an image, a run's lead) or is drawn inside a note cluster, which needs a full build.
  */
 export function withStreamedRows(
   slots: NativeChatTranscriptSlot[],
@@ -113,13 +145,26 @@ export function withStreamedRows(
     if (!sameBesideText(before, current)) {
       return null
     }
-    const at = slotIndexById(slots).get(current.id)
+    const place = slotIndexById(slots).get(current.id)
     // A row with no slot is not drawn (folded, or the live line's reasoning).
-    if (at === undefined) {
+    if (place === undefined) {
       continue
     }
-    const slot = slots[at]
-    if (slot?.kind !== 'message' || slot.message !== before) {
+    const { at } = place
+    const slot = (next ?? slots)[at]
+    if (slot?.kind !== 'message') {
+      return null
+    }
+    if (place.inRun) {
+      const run = withStreamedRunMember(slot, before, current)
+      if (!run) {
+        return null
+      }
+      next ??= slots.slice()
+      next[at] = run
+      continue
+    }
+    if (slot.message !== before) {
       return null
     }
     const estimatedHeight = streamedSlotHeight(slot, before, current, typography)
