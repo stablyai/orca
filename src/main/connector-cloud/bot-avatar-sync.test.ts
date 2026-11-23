@@ -145,6 +145,8 @@ it('leaves a drawn icon the cloud failed to take for the next real step, not the
     squarePng(512)
   )
   let up = false
+  let down = true
+  let hold: Promise<void> | null = null
   const sent: unknown[] = []
   const sync = new BotAvatarSync({
     bots: {
@@ -160,11 +162,12 @@ it('leaves a drawn icon the cloud failed to take for the next real step, not the
         schema: T
       ): Promise<ConnectorResult<z.infer<T>>> => {
         sent.push(body)
+        await hold
         if (up) {
           return { ok: true, value: schema.parse(undefined) }
         }
         // Down, or not knowing the bot yet: neither may resend the drawing on a timer.
-        return sent.length === 1
+        return down
           ? { ok: false, status: 503, error: null, retryAfterMs: null }
           : { ok: false, status: 404, error: 'unknown_bot', retryAfterMs: null }
       }
@@ -179,15 +182,29 @@ it('leaves a drawn icon the cloud failed to take for the next real step, not the
   expect(sent).toHaveLength(1)
 
   // A real step while the cloud doesn't know the bot: refused, and then not resent on its backoff.
+  down = false
   sync.changed()
   await vi.waitFor(() => expect(sent).toHaveLength(2))
   await vi.advanceTimersByTimeAsync(2 * 60 * 60_000)
   expect(sent).toHaveLength(2)
 
+  // A real step that comes while a send is on its way, which then fails, still gets its own try.
+  down = true
+  let release = (): void => {}
+  hold = new Promise((resolve) => (release = resolve))
+  sync.changed()
+  await vi.waitFor(() => expect(sent).toHaveLength(3))
+  sync.changed()
+  hold = null
+  release()
+  await vi.waitFor(() => expect(sent).toHaveLength(4))
+  await vi.advanceTimersByTimeAsync(2 * 60 * 60_000)
+  expect(sent).toHaveLength(4)
+
   // A real step (any bot write) sends it.
   up = true
   sync.changed()
-  await vi.waitFor(() => expect(sent).toHaveLength(3))
-  expect(sent[2]).toMatchObject({ kind: 'upload' })
+  await vi.waitFor(() => expect(sent).toHaveLength(5))
+  expect(sent[4]).toMatchObject({ kind: 'upload' })
   vi.useRealTimers()
 })

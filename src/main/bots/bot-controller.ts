@@ -103,7 +103,7 @@ export class BotController {
 
   /** Each bot's MEMORY.md as Orca last recorded it: turn ends restore against it, Forget edits it. */
   readonly memory: BotMemoryRecord
-  /** The drawn Slack icons of colored or dressed mascots, kept in the bots' homes. */
+  /** The drawn Slack icons of colored or dressed mascots, kept in Orca's app data. */
   readonly slackIcons: BotSlackIcons
 
   constructor(private readonly deps: BotControllerDependencies) {

@@ -240,6 +240,8 @@ export class BotAvatarSync {
       console.error('Failed to send the bot’s picture to the cloud:', error)
     }
     this.sending.delete(bot.id)
+    // A bot write or a new drawing came in while this one was on its way.
+    const stepped = writes !== this.writes || icons !== this.icons.get(bot.id)
     if (sent && icons !== this.icons.get(bot.id)) {
       // An icon was kept after this send read none: it goes next.
       this.sent.delete(bot.id)
@@ -260,11 +262,14 @@ export class BotAvatarSync {
           this.retryLater()
         }
       }
-    } else if (refused && writes === this.writes && carried) {
+    } else if (refused && stepped) {
+      // A bot write meanwhile may have registered it, or changed its picture.
+      this.pass()
+    } else if (refused && carried) {
       // The cloud doesn't know this bot yet, and the picture is a drawing: its bytes wait for a real step
       // (the write that links the bot is one) rather than going again on the backoff timer.
       this.owed.add(bot.id)
-    } else if (refused && writes === this.writes) {
+    } else if (refused) {
       // The cloud doesn't know this bot: it is asked again less and less often, or after a write.
       const before = this.refused.get(bot.id)
       const waitMs = Math.min(
@@ -273,13 +278,13 @@ export class BotAvatarSync {
       )
       this.refused.set(bot.id, { avatar, waitMs, until: Date.now() + waitMs })
       this.retryLater()
-    } else if (refused) {
-      // A bot write came in meanwhile and may have registered it, or changed its picture.
-      this.pass()
     } else {
       // The cloud may have taken it before the answer was lost: what it holds is unknown.
       this.sent.delete(bot.id)
-      if (carried) {
+      // A real step that came in meanwhile still gets its try, rather than waiting for the next one.
+      if (stepped) {
+        this.pass()
+      } else if (carried) {
         this.owed.add(bot.id)
       } else {
         this.retryLater()
@@ -289,7 +294,6 @@ export class BotAvatarSync {
     this.pump()
   }
 
-  // The drawn icon for the mascot's look now, named by its bytes as an upload is; null sends the plain mascot.
   // The drawn icon for the mascot's look now, named by its bytes as an upload is; null sends the plain
   // mascot. Kept per bot until its look or icon changes, so a retry (signed out, offline) reads nothing.
   private async mascotIcon(bot: SyncedBot): Promise<{ version: string; png: string } | null> {
