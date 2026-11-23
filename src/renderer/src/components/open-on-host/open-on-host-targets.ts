@@ -62,13 +62,14 @@ export function listOpenOnHostTargets(
     ) {
       continue
     }
+    const existingSetup =
+      option.kind === 'ready' ? getRuntimeReadySetup(option, rpcHostId, projectHostSetups) : null
     targets.push({
       hostId: rpcHostId,
       environmentId: parsed.environmentId,
       label: option.label,
-      existingSetup:
-        option.kind === 'ready' ? getRuntimeReadySetup(option, rpcHostId, projectHostSetups) : null,
-      disabledReason: getDisabledReason(option, hostById.get(rpcHostId), input, t)
+      existingSetup,
+      disabledReason: getDisabledReason(option, hostById.get(rpcHostId), existingSetup, input, t)
     })
   }
   return targets
@@ -110,18 +111,22 @@ function getRuntimeHostId(
 function getDisabledReason(
   option: ProjectHostSetupOption,
   host: ExecutionHostRegistryEntry | undefined,
+  existingSetup: ReadyProjectHostSetupOption | null,
   { cloneUrl, requireBranchReuse }: OpenOnHostTargetsInput,
   t: Translate
 ): string | null {
   if (option.kind === 'needs-setup' && !option.canSetLocation) {
     return option.detail
   }
-  // Why: the options builder checks health only for needs-setup rows, and on the relay the shown
-  // row is ssh:, so it never checked the server's setup capabilities either.
+  // Why: the options builder checks health only for needs-setup rows. Reusing a runtime-owned copy
+  // needs no setup capability, but a clone does, and a blocked (incompatible) host takes neither.
+  const needsSetupCapability = option.kind === 'needs-setup' || !existingSetup
   const runtimeUnavailable = !host
     ? null
     : (getHostHealthUnavailableDetail(host.health) ??
-      (option.kind === 'needs-setup' ? getHostSetupUnavailableDetail(host, t) : null))
+      (needsSetupCapability || host.health === 'blocked'
+        ? getHostSetupUnavailableDetail(host, t)
+        : null))
   if (runtimeUnavailable) {
     return runtimeUnavailable
   }

@@ -227,7 +227,7 @@ async function fetchHostRemote(
         worktreeId: getRepoMainWorktreeId(hostRepo),
         worktreePath: hostRepo.path
       },
-      remoteBranch && remoteBranch.remoteName !== 'origin' ? remoteBranch : undefined
+      remoteBranch ?? undefined
     )
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

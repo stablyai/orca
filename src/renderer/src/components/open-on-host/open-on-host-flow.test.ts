@@ -151,7 +151,7 @@ describe('runOpenOnHost', () => {
     expect(await runOpenOnHost(workspaceRequest)).toEqual({ worktreeId: 'w2', notice: null })
     expect(fetch).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: 'buildbox-repo::/home/me/orca' }),
-      undefined
+      { remoteName: 'origin', branchName: 'feature/x' }
     )
     expect(createWorktree.mock.calls[0][2]).toBe('origin/feature/x')
     expect(createWorktree.mock.calls[0][12]).toBe('feature/x')

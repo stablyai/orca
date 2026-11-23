@@ -244,6 +244,31 @@ describe('listOpenOnHostTargets', () => {
     expect(byHost('runtime:buildbox', targets).disabledReason).not.toBeNull()
   })
 
+  it('disables a ready location on a host with an incompatible version', () => {
+    const targets = listOpenOnHostTargets(
+      {
+        ...input,
+        hosts: input.hosts.map((host) =>
+          host.id === 'runtime:buildbox' ? { ...host, health: 'blocked' } : host
+        )
+      },
+      t
+    )
+    expect(byHost('runtime:buildbox', targets).disabledReason).not.toBeNull()
+  })
+
+  it('disables the clone fallback on a host without setup capability', () => {
+    const targets = listOpenOnHostTargets(
+      {
+        ...input,
+        projectHostSetups: [],
+        hosts: [runtimeHost('runtime:old', [])]
+      },
+      t
+    )
+    expect(byHost('runtime:old', targets).disabledReason).not.toBeNull()
+  })
+
   it('skips a ready location on the merged-away id of the source host', () => {
     const targets = listOpenOnHostTargets(
       {
