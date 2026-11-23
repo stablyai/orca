@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { joinSentences, sentenceStop } from '../../../../../shared/text/sentence-joining'
 
 /** Copies a key or secret through the secret clipboard; where the clear isn't promised, the toast says so. */
 export function copyWebhookSecret(text: string, copied: string): void {
@@ -9,7 +10,13 @@ export function copyWebhookSecret(text: string, copied: string): void {
       toast.success(
         clearsLater
           ? copied
-          : `${copied}. ${translate('bots.webhooks.copiedNoClear', 'Clear your clipboard when you’re done; this browser can’t promise to clear it for you.')}`
+          : joinSentences([
+              `${copied}${sentenceStop(copied)}`,
+              translate(
+                'bots.webhooks.copiedNoClear',
+                'Clear your clipboard when you’re done; this browser can’t promise to clear it for you.'
+              )
+            ])
       )
     })
     .catch(() => {

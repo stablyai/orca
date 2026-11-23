@@ -1,23 +1,27 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 /** Translate only shipped status labels; configured names remain literal. */
-export function translateWorkspaceBoardStatusLabel(status: { id: string; label: string }): string {
+export function translateWorkspaceBoardStatusLabel(
+  status: { id: string; label: string },
+  t: Translate = translate
+): string {
   switch (status.id) {
     case 'todo':
       return !status.label.trim() || status.label === 'Todo'
-        ? translate('auto.components.sidebar.workspaceBoardStatus.todo', 'Todo')
+        ? t('auto.components.sidebar.workspaceBoardStatus.todo', 'Todo')
         : status.label
     case 'in-progress':
       return !status.label.trim() || status.label === 'In progress'
-        ? translate('auto.components.sidebar.workspaceBoardStatus.inProgress', 'In progress')
+        ? t('auto.components.sidebar.workspaceBoardStatus.inProgress', 'In progress')
         : status.label
     case 'in-review':
       return !status.label.trim() || status.label === 'In review'
-        ? translate('auto.components.sidebar.workspaceBoardStatus.inReview', 'In review')
+        ? t('auto.components.sidebar.workspaceBoardStatus.inReview', 'In review')
         : status.label
     case 'completed':
       return !status.label.trim() || status.label === 'Done'
-        ? translate('auto.components.sidebar.workspaceBoardStatus.done', 'Done')
+        ? t('auto.components.sidebar.workspaceBoardStatus.done', 'Done')
         : status.label
     default:
       return status.label

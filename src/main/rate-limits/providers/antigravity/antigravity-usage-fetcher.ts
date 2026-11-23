@@ -57,11 +57,6 @@ const UNSUPPORTED_USAGE_COMMAND_REASON =
 // Unsupported /usage spends quota; latch each runtime for the process lifetime.
 const unsupportedUsageRuntimes = new Set<string>()
 
-/** Clears the unsupported latch. Tests only — a live process has no way back. */
-export function resetAntigravityUsageSupportForTests(): void {
-  unsupportedUsageRuntimes.clear()
-}
-
 export type AntigravityUsageDependencies = {
   /** Injected so tests exercise the classification without spawning agy. */
   runCommand?: typeof runProcess
@@ -167,9 +162,10 @@ async function readAntigravityUsage(
     )
 
   let run: AgyRun
+  const wslDistro = wsl?.wslDistro
   if (wsl) {
-    // Background quota polling must not start stopped distros.
-    if (!(await isWslDistroRunningForBackgroundWork(wsl.wslDistro))) {
+    // Background quota polling must not start stopped distros; run only in the distro gated here.
+    if (!wslDistro || !(await isWslDistroRunningForBackgroundWork(wslDistro))) {
       return unavailable(
         `Antigravity usage is not available while ${wslLabel} is not running.`,
         'cli-unavailable',
@@ -178,7 +174,7 @@ async function readAntigravityUsage(
     }
     run = (args, timeoutMs) =>
       runWslProcess({
-        distro: wsl.wslDistro ?? undefined,
+        distro: wslDistro,
         loginPath: 'preferred',
         program: command,
         args,

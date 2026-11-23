@@ -9,6 +9,7 @@ import { journalDomainQueueRow } from './journal-domain-queue-rows'
 import { nextJournalDomainQueueCard } from './journal-domain-submission-consume'
 import { readJournalDomainQueuePauseContext } from './journal-domain-queue-pauses'
 import { readJournalSqlUsageLimitCut } from './journal-sql-status-cuts'
+import { failureHoldsMail } from './queued-messages/queued-message-pause'
 import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
 import { applyJournalDomainQueueCommand } from './journal-domain-queue-command'
 import { finishJournalSqlCommand, journalSqlInputCoordinates } from './journal-sql-command-result'
@@ -116,7 +117,7 @@ export function applyJournalSqlSendAdmission(
         scope,
         facts.reopenFloor ?? null,
         []
-      ).pauses.some((pause) => pause.reason === 'failed')
+      ).pauses.some(failureHoldsMail)
     }
     if (!queue) {
       const next = nextJournalDomainQueueCard(db, scope, {

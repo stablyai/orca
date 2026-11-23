@@ -1,14 +1,21 @@
 import { reportSessionSearchBackgroundError, traceSessionSearch } from '../session-search-trace'
-import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
+import { setImmediate as yieldToEventLoop, setTimeout as delay } from 'node:timers/promises'
 import type SyncDatabase from '../../sqlite/sync-database'
 import { deleteSearchMessages } from './session-search-message-rows'
 import { readIndexGeneration, recordIndexMaintenance } from './session-search-index-generation'
+import {
+  compactSessionSearchIndex,
+  recordSessionSearchDeletedRows,
+  sessionSearchIndexCompactionDue
+} from './session-search-index-compaction'
 
 export const RETENTION_DELETE_ROWS_PER_STEP = 256
 // Reclaim freed pages incrementally to avoid a long vacuum after the purge.
 const RECLAIM_PAGES_PER_STEP = 2000
 // FTS merges free pages constantly and later writes reuse them; moving them each drain only churns the file.
 const RECLAIM_FREE_PAGE_SHARE = 0.25
+// Rest three times each merge step's work so a long first compaction yields the disk and the worker.
+const COMPACTION_REST_PER_WORK = 3
 
 type ExpiredFile = { path: string; mtime_ms: number; row_id: number }
 
@@ -141,6 +148,7 @@ export async function drainOrphanedSessionMessages(
       deleted = traceSessionSearch('drain', () =>
         deleteSearchMessages(db, sessionRowId, RETENTION_DELETE_ROWS_PER_STEP)
       )
+      recordSessionSearchDeletedRows(db, deleted)
       recordIndexMaintenance(db, before)
       db.exec('COMMIT')
       onMessagesChanged(-deleted)
@@ -170,7 +178,9 @@ export class SessionSearchOrphanCleanup {
     private readonly db: SyncDatabase,
     private readonly closed: () => boolean,
     private readonly onMessagesChanged: (delta: number) => void,
-    private readonly onError: (error: unknown) => void
+    private readonly onError: (error: unknown) => void,
+    private readonly rest: (workMs: number) => Promise<void> = (workMs) =>
+      delay(workMs * COMPACTION_REST_PER_WORK)
   ) {}
 
   request(sessionRowId?: number): void {
@@ -183,6 +193,15 @@ export class SessionSearchOrphanCleanup {
       this.orphanedSessions.add(sessionRowId)
     }
     if (this.draining) {
+      return
+    }
+    this.draining = true
+    void this.runOrphanDrain()
+  }
+
+  /** Deletes that orphan nothing, such as a removed file, can still make compaction due. */
+  checkCompaction(): void {
+    if (this.closed() || this.draining) {
       return
     }
     this.draining = true
@@ -206,24 +225,42 @@ export class SessionSearchOrphanCleanup {
     }
   }
 
+  private async drainRequested(): Promise<void> {
+    while (!this.closed() && (this.recoveryRequested || this.orphanedSessions.size > 0)) {
+      await this.drainKnownOrphans()
+      if (this.recoveryRequested && !this.closed()) {
+        this.recoveryRequested = false
+        await drainOrphanedMessages(
+          this.db,
+          () => this.closed(),
+          async () => {
+            await yieldToEventLoop()
+            await this.drainKnownOrphans()
+          },
+          this.onMessagesChanged
+        )
+      }
+    }
+  }
+
   private async runOrphanDrain(): Promise<void> {
     try {
       // A microtask would still run cleanup before the awaiting writer/open reply.
       await yieldToEventLoop()
-      while (!this.closed() && (this.recoveryRequested || this.orphanedSessions.size > 0)) {
-        await this.drainKnownOrphans()
-        if (this.recoveryRequested && !this.closed()) {
-          this.recoveryRequested = false
-          await drainOrphanedMessages(
-            this.db,
-            () => this.closed(),
-            async () => {
-              await yieldToEventLoop()
-              await this.drainKnownOrphans()
-            },
-            this.onMessagesChanged
-          )
+      for (;;) {
+        await this.drainRequested()
+        if (this.closed() || !sessionSearchIndexCompactionDue(this.db)) {
+          break
         }
+        // Replacements and retention sweeps keep arriving during a long first compaction.
+        await compactSessionSearchIndex(
+          this.db,
+          () => this.closed(),
+          async (workMs) => {
+            await this.rest(workMs)
+            await this.drainRequested()
+          }
+        )
       }
     } catch (error) {
       if (!this.closed()) {

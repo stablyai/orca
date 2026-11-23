@@ -18,6 +18,9 @@ import {
   type UsageLimitCutDisposition
 } from './structured-agent-session-usage-limit-disposition'
 
+/** Sends per 10 s pass; 64 limited chats freed by one reset start over about 5 minutes. */
+export const USAGE_LIMIT_CONTINUE_SENDS_PER_PASS = 2
+
 type Cut = HostUsageLimitCut & { resetsAt: number; turnEndedAt: number }
 type Attempt = { identity: string; count: number; at: number; unconfirmed?: boolean }
 
@@ -43,7 +46,8 @@ export class StructuredAgentSessionUsageLimitContinue {
   }
 
   constructor(private readonly deps: UsageLimitContinueDeps) {
-    this.cold = new UsageLimitColdCuts({ ...deps, logger: deps.host.logger })
+    const switchReset = (id: string, cut: HostUsageLimitCut) => this.holds.withSwitchReset(id, cut)
+    this.cold = new UsageLimitColdCuts({ ...deps, logger: deps.host.logger, switchReset })
   }
 
   start(): void {
@@ -69,11 +73,12 @@ export class StructuredAgentSessionUsageLimitContinue {
 
   private enabled = (): boolean => this.deps.host.usageLimitAutoContinue?.isEnabled() === true
 
-  /** Only a loaded chat with a known reset has a schedule whose state can change. */
+  /** Only a loaded chat with a cut has a schedule whose state can change; an unknown reset gains
+   *  or loses one as the chat's account moves. */
   private async publishScheduled(): Promise<void> {
     for (const id of this.deps.sessions.keys()) {
       const cut = await this.cold.readForSweep(id)
-      if (cut !== 'unreadable' && cut?.resetsAt !== undefined) {
+      if (cut !== 'unreadable' && cut !== null) {
         this.deps.publish(id)
       }
     }
@@ -111,8 +116,9 @@ export class StructuredAgentSessionUsageLimitContinue {
 
   readState = (
     id: string,
-    cut: HostUsageLimitCut | null
+    read: HostUsageLimitCut | null
   ): AgentSessionStatusSummary['usageLimitContinue'] => {
+    const cut = read && this.holds.withSwitchReset(id, read)
     // A cut Orca can never continue shows only the manual actions, whatever the setting.
     if (!cut || !this.holds.schedulable(id, cut, this.deps.now())) {
       return undefined
@@ -208,19 +214,20 @@ export class StructuredAgentSessionUsageLimitContinue {
         if (!this.deps.sessions.has(id) && !this.cold.has(id)) {
           continue
         }
-        const cut = await this.cold.readForSweep(id)
+        const read = await this.cold.readForSweep(id)
         // Unreadable is not "no cut": its attempt record must survive to guard a repeat send.
-        if (cut === 'unreadable') {
+        if (read === 'unreadable') {
           continue
         }
+        // Before the overdue check: after a restart only the reading still knows a later reset,
+        // and a switched account frees the chat before it, even when its reset is unknown.
+        if (read) {
+          await this.holds.attribute(id, this.deps.host, read, this.deps.now())
+        }
+        const cut = read && this.holds.withSwitchReset(id, read)
         const previous = this.attempts.get(id)
         if (!cut || previous?.identity !== identity(cut)) {
           this.attempts.delete(id)
-        }
-        // Before the overdue check: after a restart only the reading still knows a later reset,
-        // and a switched account frees the chat before it.
-        if (cut?.resetsAt !== undefined) {
-          await this.attribute(id, cut)
         }
         const attempt = this.attempts.get(id)
         if (!cut || !this.eligible(id, cut) || attempt?.unconfirmed || (attempt?.count ?? 0) >= 5) {
@@ -232,8 +239,9 @@ export class StructuredAgentSessionUsageLimitContinue {
         }
       }
       due.sort((a, b) => a.at - b.at || a.cut.resetsAt - b.cut.resetsAt)
-      // Every due chat goes this pass; one at a time, since a cold send can start an agent process.
-      for (const next of due) {
+      // One at a time, since a cold send can start an agent process; the rest stay due for later
+      // passes, so a reset that frees many chats does not start their agents all at once.
+      for (const next of due.slice(0, USAGE_LIMIT_CONTINUE_SENDS_PER_PASS)) {
         await this.send(next.id, next.cut)
       }
     } catch (error) {
@@ -244,13 +252,6 @@ export class StructuredAgentSessionUsageLimitContinue {
     } finally {
       this.running = false
     }
-  }
-
-  /** The account a cut hit is the one its turn's runtime launched under, when the record names it. */
-  private attribute(id: string, cut: HostUsageLimitCut): Promise<void> {
-    const launched = this.deps.host.store.getRecord(id)?.launchedAccount
-    const home = launched && launched.fence === cut.fence ? launched.accountHome : null
-    return this.holds.attribute(id, this.deps.host, { cut: identity(cut), home }, this.deps.now())
   }
 
   private async deferUnchangedCut(id: string, cut: Cut, at: number): Promise<void> {
@@ -270,7 +271,7 @@ export class StructuredAgentSessionUsageLimitContinue {
   private async send(id: string, cut: Cut): Promise<void> {
     // Earlier sends take time; moved sources resolve again, once per new witness for every chat.
     if (!this.holds.attributionCurrent(id, this.deps.host)) {
-      await this.attribute(id, cut)
+      await this.holds.attribute(id, this.deps.host, cut, this.deps.now())
     }
     const record = this.deps.host.store.getRecord(id)
     if (!record) {

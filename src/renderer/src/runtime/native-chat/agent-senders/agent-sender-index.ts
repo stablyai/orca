@@ -48,9 +48,6 @@ const hostParts = new WeakMap<object, BuiltPart>()
 const latestParts = new Map<string, BuiltPart>()
 const indexes = new WeakMap<object, { aliases: Aliases; index: SenderIndex }>()
 let joins = 0
-let claims = 0
-/** Rows joined to panes and identity claims resolved. */
-export const agentSenderIndexWorkForTest = () => ({ joins, claims })
 
 function senderAliases(state: AppState): Aliases {
   const inputs = [
@@ -199,7 +196,6 @@ function senderIndex(state: AppState): SenderIndex {
 
 /** A host's claim for an identity: its own rows, then every row a peer runs for its principals. */
 function claim(index: SenderIndex, host: string, identity: string): Located | undefined {
-  claims++
   const part = index.parts.get(host)
   let value = part?.identities.get(identity)
   for (const principal of part?.principals.keys() ?? []) {

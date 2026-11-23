@@ -99,7 +99,7 @@ function parseUrlInput(
     return { url: value, ref: '' }
   }
   const segments = url.pathname.split('/').filter(Boolean)
-  const page = pageRef(segments)
+  const page = pageRef(segments, url.hostname)
   if (page === null) {
     return { reason: 'invalid-git-url' }
   }
@@ -108,7 +108,10 @@ function parseUrlInput(
 }
 
 /** Repository path length and ref of a hosted page URL; null when no repository path remains. */
-function pageRef(segments: string[]): { repositoryLength: number; ref: string } | null {
+function pageRef(
+  segments: string[],
+  hostname: string
+): { repositoryLength: number; ref: string } | null {
   const decode = (parts: string[]): string => {
     try {
       return parts.map(decodeURIComponent).join('/')
@@ -127,11 +130,24 @@ function pageRef(segments: string[]): { repositoryLength: number; ref: string } 
     const named = kind === 'tree' || kind === 'tags' || kind === 'releases' || kind === 'commit'
     return { repositoryLength: gitLabMarker, ref: named ? decode(rest) : '' }
   }
-  // GitHub, Gitea, Codeberg: /owner/repo/tree/<ref>, /releases/tag/<tag>, /commit/<sha>.
+  // GitHub: /owner/repo/tree/<ref>; Gitea/Forgejo/Codeberg: /owner/repo/src/{branch,tag,commit}/<ref>.
   if (segments.length >= 3) {
     const [kind, ...rest] = segments.slice(2)
     if (kind === 'tree' || kind === 'commit') {
       return { repositoryLength: 2, ref: decode(rest) }
+    }
+    if (
+      kind === 'src' &&
+      hostname !== 'bitbucket.org' &&
+      rest.length >= 2 &&
+      (rest[0] === 'branch' || rest[0] === 'tag' || rest[0] === 'commit')
+    ) {
+      // Why exclude Bitbucket: its /src/<ref>/<path> layout belongs on the fallback path.
+      // Why one segment for commit: a sha has no slash, so the rest is a file path.
+      return {
+        repositoryLength: 2,
+        ref: decode(rest.slice(1, rest[0] === 'commit' ? 2 : undefined))
+      }
     }
     if (kind === 'releases') {
       return { repositoryLength: 2, ref: rest[0] === 'tag' ? decode(rest.slice(1)) : '' }

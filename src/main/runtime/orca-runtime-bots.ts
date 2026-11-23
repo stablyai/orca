@@ -42,11 +42,10 @@ import { OrcaRuntimeWithLinearCommands } from './integrations/linear/linear-comm
 import { botStructuredSessionWiring, type WiredBot } from '../bots/bot-structured-session-wiring'
 import { botChatJournal } from '../bots/bot-chat-reads'
 import type { RuntimeStore } from './construction/runtime-store-contract'
-import { googleSetupRuns } from '../google/google-setup-runs'
-import { onBotToolSignInChanged } from '../bots/bot-tool-sign-in-changed'
-import { onBotToolCredentialEnded } from '../bots/bot-tool-credential-ended'
+import { watchBotSettingsChangeSources } from '../bots/bot-settings-change-sources'
 import type { BotChangeScope } from '../../shared/bots/bot-change-scope'
 import type { BotChatTreeIndex } from '../bots/bot-chat-tree-index'
+import { BotChatTreeWorkerCache } from '../bots/bot-chat-tree-worker-cache'
 import { pairedBotRosterCache } from '../bots/paired-bot-rosters'
 import type { DispatchRowChange } from './orchestration/db/worker-status-notice'
 import type { AdmittedMessage } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
@@ -54,6 +53,7 @@ import { isStructuredAttentionMuted } from './agent-session/lifecycle/structured
 import { backfillInstalledBotBackgroundChats } from '../bots/bot-background-chat-backfill'
 import { runtimeBotItems } from '../bots/bot-items-runtime'
 import { botItemOfReport } from '../bots/bot-item-report-fact'
+import { listeningClients } from './orchestration/federation/client-asks/client-ask-listeners'
 
 export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands {
   /** Set at construction (orcad: as its account installs); a profile switch publishes another
@@ -274,11 +274,11 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
         lookAround: this.lookAround,
         requestTurnEnded: (sessionId, turnId, ended) =>
           this.botSessions.turnEnded(sessionId, turnId, ended),
-        recentChats: (botId, sessionId, message) =>
-          this.botSessions.recentChats(botId, sessionId, message),
+        recentChats: (botId, sessionId) => this.botSessions.recentChats(botId, sessionId),
         unansweredQuestionNote: (sessionId) => this.botSessions.unansweredQuestionNote(sessionId),
         botChats: (bot, sessionId) => this.botSessions.chatsOf(bot, sessionId),
         pairedBotRosters: this.pairedBotRosters.read,
+        clientName: (installationId) => listeningClients(this, installationId)[0]?.name ?? null,
         scrubToolSecrets: (bot) => this.scrubBotToolSecrets(bot)
       }),
       assertQueuedMessageAllowed: (sessionId: string, messageId: string) =>
@@ -333,18 +333,13 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** Each bot's chats-tree base between reads, kept from the record store's and database's own
    *  changes; set once the runtime is built (bot-chat-tree-host). */
   botChatTreeIndex: BotChatTreeIndex | null = null
+  /** Settled workers the chats tree read, kept until their Dispatch's rows change. */
+  readonly botChatTreeWorkers = new BotChatTreeWorkerCache()
 
-  // Setup cards in every window and phone re-read the bot's Google setup run on this notice.
-  protected readonly stopGoogleSetupNotices = googleSetupRuns().onChange(() =>
+  // Every window's and phone's settings rows re-read on what changes them from outside their settings.
+  protected readonly stopSettingsChangeSources = watchBotSettingsChangeSources(() =>
     this.botChangeNotices.changed({ kinds: ['settings'] })
   )
-
-  // A tool's sign-in state shows in every window's and phone's rows: they re-read the tools on this,
-  // and when a credential ends (a tool removed, a sign-in replaced).
-  protected readonly stopToolSignInNotices = [
-    onBotToolSignInChanged(() => this.botChangeNotices.changed({ kinds: ['settings'] })),
-    onBotToolCredentialEnded(() => this.botChangeNotices.changed({ kinds: ['settings'] }))
-  ]
 
   /** Something a bot's settings or cards show changed on this host; windows and phones re-read.
    *  Unscoped, every reader re-reads. */
@@ -364,6 +359,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   /** A paired server's worker verdicts changed: their bots re-read (all, if a bot can't be read). */
   protected botFederatedWorkersChanged(dispatchIds: readonly string[]): void {
+    this.botChatTreeWorkers.drop(dispatchIds)
     const botIds = this.botChatTreeIndex?.ownersOf(dispatchIds) ?? null
     if (botIds?.length !== 0) {
       this.botChangeNotices.changed({ ...(botIds ? { botIds } : {}), kinds: ['workers'] })
@@ -371,6 +367,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   }
 
   protected botDispatchChanged(dispatchId: string | null, change: DispatchRowChange): void {
+    this.botChatTreeWorkers.rowChanged(dispatchId, change)
     if (change !== 'deleted') {
       this.botItems.dispatchChanged(dispatchId)
     }

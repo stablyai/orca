@@ -106,12 +106,6 @@ export function subscribePRAutoRefreshCadence(listener: PRAutoRefreshCadenceList
   }
 }
 
-export function _resetPRAutoRefreshCadencesForTests(): void {
-  processCadence = 'default'
-  hostCadences.clear()
-  cadenceListeners.clear()
-}
-
 /** Stretch a timed interval by the cadence; null means no timed refresh. */
 export function scaleReviewRefreshInterval(
   intervalMs: number | null,
