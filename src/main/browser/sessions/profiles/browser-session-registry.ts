@@ -18,6 +18,7 @@ import {
 } from '../../cookies/staging/browser-session-cookie-staging'
 import {
   BROWSER_SESSION_META_FILE_NAME,
+  didReadBrowserSessionMeta,
   forgetBrowserSessionProfileMeta,
   getCachedBrowserExtensionEnabledIds,
   loadBrowserSessionMeta,
@@ -111,9 +112,10 @@ class BrowserSessionRegistry {
     return loadBrowserSessionMeta(() => this.metadataPath, this.defaultPartition)
   }
 
-  // Restore profiles and their policies before any webview loads.
-  initializeBrowserSessionsFromPersistedState(): void {
+  // Restore profiles and their policies before any webview loads; false when the saved profiles could not be read.
+  initializeBrowserSessionsFromPersistedState(): boolean {
     const meta = this.loadPersistedMeta()
+    const read = didReadBrowserSessionMeta(this.metadataPath)
     const migration = inspectRetiredBrowserSessionProfileUserAgentModes(
       meta.profiles,
       this.activeOrcaProfileId
@@ -131,15 +133,14 @@ class BrowserSessionRegistry {
         this.profiles.set('default', { ...current, source: meta.defaultSource })
       }
     }
-    if (meta.profiles.length > 0) {
-      this.hydrateFromPersisted(meta.profiles)
-    }
+    this.hydrateFromPersisted(meta.profiles)
 
     // Hydration skips the default profile, so install its policies separately.
     const defaultProfile = this.getDefaultProfile()
     void installBrowserSessionPartitionPolicies(defaultProfile).catch(() => {
       console.warn('[proxy] Failed to apply proxy to browser partition', defaultProfile.partition)
     })
+    return read
   }
 
   /**

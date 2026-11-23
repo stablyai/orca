@@ -100,6 +100,11 @@ export function loadBrowserSessionMeta(
   }
 }
 
+/** Whether the last read of this metadata file succeeded; a failed read looks like "no profiles". */
+export function didReadBrowserSessionMeta(metadataPath: string): boolean {
+  return enabledExtensionIdsByPath.has(metadataPath)
+}
+
 /**
  * A profile's enabled extensions from the last successful read, or null before one. Why: a profile
  * reattaching after it went idle shouldn't reread every profile's metadata.

@@ -1,5 +1,6 @@
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
+import { browserSessionProfilesReadAtStartup } from '../../../browser/sessions/browser-session-startup'
 import type { RuntimeBrowserTabClose } from '../tabs/browser-tab-close'
 import type { RuntimeBrowserScreencasts } from '../screencast/browser-screencasts'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
@@ -66,6 +67,9 @@ export async function closeServerPagesOfMissingProfiles(
   close: ServerPageCloser,
   guestSwaps: ServerPageGuestSwaps
 ): Promise<void> {
+  if (!browserSessionProfilesReadAtStartup()) {
+    return
+  }
   try {
     for (const profileId of host.serveBrowserTabs?.savedProfileIds() ?? []) {
       if (!browserSessionRegistry.getProfile(profileId)) {
