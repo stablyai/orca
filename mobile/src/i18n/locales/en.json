@@ -3525,6 +3525,8 @@
       "historyItemTooLarge": "This part of the chat was too large to show.",
       "continuedOutsideCatchingUp": "Catching up on turns made outside this chat…",
       "continuedOutside": "Continued outside this chat.",
+      "continuedOutsideRecent": "This chat was continued in a separate CLI session. Showing recent history only.",
+      "continuedOutsideUnloaded": "Continued outside this chat. Newer turns couldn't be loaded.",
       "continuedOutsideRewound": "Continued outside this chat. Earlier replies above are no longer in this conversation's history."
     },
     "orcaStop": {

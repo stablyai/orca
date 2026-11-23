@@ -1,6 +1,8 @@
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type {
+  AgentJournalCursor,
+  AgentJournalItemIdentity
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   usableJournalHistoryOrigin,
   type NativeCopyOrigin

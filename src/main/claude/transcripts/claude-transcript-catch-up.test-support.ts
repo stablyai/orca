@@ -1,4 +1,4 @@
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
 import { mkdir, mkdtemp, open, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -111,7 +111,7 @@ export async function chat(
     ...testEventSinkLogging(SESSION),
     logger: logging.logger
   })
-  const publish = vi.fn()
+  const publish: Mock<(...args: unknown[]) => void> = vi.fn()
   deferred.bind({ journal, fence: 1, publish })
   cleanups.push(async () => {
     deferred.close()
