@@ -1,10 +1,87 @@
-import type { ElectronApplication, Locator, Page } from '@stablyai/playwright-test'
+import {
+  expect,
+  type ElectronApplication,
+  type Locator,
+  type Page
+} from '@stablyai/playwright-test'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { resolveCliCommand } from '../../src/shared/shell/command-resolution/node-cli-command-resolution'
+import { quoteStartupArg } from '../../src/shared/agent-launch/startup/tui-agent-startup-shell'
 import type { JiraIssue } from '../../src/shared/jira/jira-types'
-import { expect } from './helpers/orca-app'
-import { buildFakeAgentCommandOverride } from './helpers/fake-agent-command-override'
-import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
-import { waitForSessionReady } from './helpers/store'
-import { SUPPORTED, test } from './helpers/structured-claude-stub'
+import { test as base } from './desktop/electron-fixtures/orca-app'
+import { buildFakeAgentCommandOverride } from './agents/session-fixtures/fake-agent-command-override'
+import {
+  attachRepoAndOpenTerminal,
+  createRestartSession
+} from './desktop/electron-fixtures/orca-restart'
+import { waitForSessionReady } from './desktop/renderer-probes/store'
+
+const SUPPORTED = process.platform !== 'win32'
+const SYSTEM_DIRS = ['/usr/bin', '/bin', '/usr/sbin', '/sbin']
+const STUB_SCRIPT = path.join(
+  process.cwd(),
+  'tests',
+  'e2e',
+  'fixtures',
+  'structured-claude-stub.cjs'
+)
+
+function macLoginShellPathDirs(): string[] {
+  if (process.platform !== 'darwin') {
+    return []
+  }
+  const files = [
+    '/etc/paths',
+    ...(existsSync('/etc/paths.d') ? readdirSync('/etc/paths.d') : []).map((name) =>
+      path.join('/etc/paths.d', name)
+    )
+  ]
+  return files.flatMap((file) => readFileSync(file, 'utf8').split('\n').filter(Boolean))
+}
+
+const test = base.extend<{ claudeStub: { command: string } }>({
+  // oxlint-disable-next-line no-empty-pattern -- Playwright requires fixture dependency destructuring.
+  claudeStub: async ({}, provideFixture, testInfo) => {
+    testInfo.skip(!SUPPORTED, 'the Claude stub wrapper is POSIX-only')
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-task-prompt-'))
+    try {
+      const command = path.join(dir, 'claude')
+      const launchLog = path.join(dir, 'launches.jsonl')
+      const emptyHome = path.join(dir, 'empty-home')
+      mkdirSync(emptyHome)
+      // Login shells must not select a real Claude before the fixture's restricted PATH.
+      const shadowing = resolveCliCommand('claude', {
+        pathEnv: [...SYSTEM_DIRS, ...macLoginShellPathDirs()].join(path.delimiter),
+        homePath: emptyHome
+      })
+      testInfo.skip(path.isAbsolute(shadowing), 'a system-wide claude would shadow the stub')
+      const commandLine = [process.execPath, STUB_SCRIPT, launchLog]
+        .map((value) => quoteStartupArg(value, 'posix'))
+        .join(' ')
+      writeFileSync(command, `#!/bin/sh\nexec ${commandLine} "$@"\n`)
+      chmodSync(command, 0o755)
+      await provideFixture({ command })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  },
+  launchEnv: async ({ claudeStub }, provideFixture) => {
+    await provideFixture({
+      PATH: [path.dirname(claudeStub.command), ...SYSTEM_DIRS].join(path.delimiter)
+    })
+  }
+})
 
 const GLOBAL_TEMPLATE = '{{url}} /global-ticket'
 const PROJECT_TEMPLATE = '{{url}} /jira-engineer'
