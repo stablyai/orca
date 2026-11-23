@@ -21,8 +21,9 @@ try {
   const oversized = () => statSync(workerData.filename + '-wal').size > workerData.sizeLimit;
   const ceiling = (state) => state.log >= workerData.backpressureFrames;
   const schedule = (state, blocked) => {
+    // While writes wait on the WAL, retry soon: a truncate needs a gap between readers' snapshots.
     if (blocked || state.log - state.checkpointed >= 1000) {
-      idle = setTimeout(() => check(true), 1000);
+      idle = setTimeout(() => check(true), blocked ? 100 : 1000);
     }
   };
   const check = (force, id, nextGeneration = generation) => {

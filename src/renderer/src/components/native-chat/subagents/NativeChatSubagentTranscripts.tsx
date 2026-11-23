@@ -1,7 +1,9 @@
+import { slackPeopleOf } from '../../../../../shared/connectors/slack-mention-tokens'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { cn } from '@/lib/class-names'
 import { NativeChatMessageList } from '../NativeChatMessageList'
 import { NativeChatSideChatForkPointContext } from '../messages/actions/native-chat-fork-context'
+import { NativeChatSlackPeopleContext } from '../native-chat-markdown-mentions'
 import { NativeChatToolRunWindowProvider } from '../tools/runs/native-chat-tool-run-window-context'
 import type { NativeChatFind } from '../viewport/find/use-native-chat-find'
 import {
@@ -51,6 +53,7 @@ export function NativeChatSubagentTranscripts({
     [open, openId, paneKey]
   )
   const isVisible = props.isVisible ?? true
+  const slackPeople = useMemo(() => slackPeopleOf(props.session.messages), [props.session.messages])
   const mainRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<HTMLDivElement>(null)
   const shownId = shown?.agentId ?? null
@@ -86,11 +89,13 @@ export function NativeChatSubagentTranscripts({
           className={cn('flex min-h-0 flex-1 flex-col', shown && 'invisible')}
           inert={shown !== null}
         >
-          <NativeChatMessageList
-            {...props}
-            isVisible={isVisible && shown === null}
-            subagentView={main}
-          />
+          <NativeChatSlackPeopleContext value={slackPeople}>
+            <NativeChatMessageList
+              {...props}
+              isVisible={isVisible && shown === null}
+              subagentView={main}
+            />
+          </NativeChatSlackPeopleContext>
         </div>
         {shown ? (
           <div

@@ -3,7 +3,10 @@
 import { fenceQuotedText, inlineUntrusted } from '../../shared/quoted-text-fence'
 import {
   botItemCommentImages,
+  botItemCommentSkills,
   botItemEventId,
+  type BotItemCommentImage,
+  type BotItemCommentSkill,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
 import { offsetSentImagePromptMarkers } from '../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
@@ -45,7 +48,13 @@ export function botItemChangeMail(
 ): { subject: string; body: string } | null {
   const actor = changes[0]?.event.actor
   const who =
-    actor?.kind === 'owner' ? 'Your owner' : actor?.kind === 'bot' ? 'Your other chat' : null
+    actor?.kind === 'owner'
+      ? 'Your owner'
+      : actor?.kind === 'bot'
+        ? actor.botId === changes[0]?.item.ownerBotId
+          ? 'Your other chat'
+          : 'Another agent'
+        : null
   const lines = changes.flatMap((change) => {
     const what = changeWords(change.event)
     return what ? [{ ...change, what }] : []
@@ -63,21 +72,32 @@ export function botItemChangeMail(
     imagesBefore += event.kind === 'commented' ? botItemCommentImages(event.data).length : 0
     return `- ${itemName(item)}: ${what} (event ${botItemEventId(event.id)})${said}`
   })
-  const commentedOn = new Set(
-    lines.flatMap(({ event, item }) => (event.kind === 'commented' ? [item.uid] : []))
-  )
-  // The owner's comment on a Needs you item is their answer, and moves it to In progress with it.
-  const answered = (event: BotItemEventRecord, item: BotItemRecord) =>
+  const commentedOn = (answers: boolean) =>
+    new Set(
+      lines.flatMap(({ event, item }) =>
+        event.kind === 'commented' && isAnswer(event) === answers ? [item.uid] : []
+      )
+    )
+  const repliedOn = commentedOn(false)
+  const answeredOn = commentedOn(true)
+  // The owner's answer or other comment on a Needs you item moves it to In progress with it.
+  const movedWith = (on: Set<string>, event: BotItemEventRecord, item: BotItemRecord) =>
     actor?.kind === 'owner' &&
-    commentedOn.has(item.uid) &&
+    on.has(item.uid) &&
     event.kind === 'status' &&
     statusOf(event.data.from) === 'needs_you' &&
     statusOf(event.data.to) === 'working'
-  const replied = lines.some(({ event, item }) => answered(event, item))
+  const movedByReply = (event: BotItemEventRecord, item: BotItemRecord) =>
+    movedWith(repliedOn, event, item) || movedWith(answeredOn, event, item)
+  const replied = lines.some(({ event, item }) => movedWith(repliedOn, event, item))
   const tos = lines.flatMap(({ event, item }) =>
-    event.kind === 'status' && !answered(event, item) ? [statusOf(event.data.to)] : []
+    event.kind === 'status' && !movedByReply(event, item) ? [statusOf(event.data.to)] : []
   )
+  const answered = lines.some(({ event }) => isAnswer(event))
   const next = [
+    answered
+      ? "Your owner answered your question, and the item is In progress again: carry on with that answer. If your question still stands, set it to Needs you again with only what's left."
+      : null,
     replied
       ? "Your owner replied to your question, so the item moved to In progress. If your question still stands, set it to Needs you again with only what's left."
       : null,
@@ -105,8 +125,28 @@ function commentWords(event: BotItemEventRecord, imagesBefore: number): string {
   const images = botItemCommentImages(event.data)
   const text = offsetSentImagePromptMarkers(str(event.data.text) ?? '', images.length, imagesBefore)
   const said = text.trim() || images.length === 0 ? `:\n${fenceQuotedText(text)}` : ''
+  return `${said}${imagesNote(images, imagesBefore)}${skillsNote(botItemCommentSkills(event.data))}`
+}
+
+const quoted = (text: string): string => text.replaceAll('"', '\\"')
+
+/** Skills picked in the comment, as chat sends a picked skill: by the file its agent loads. */
+function skillsNote(skills: readonly BotItemCommentSkill[]): string {
+  if (skills.length === 0) {
+    return ''
+  }
+  const named = skills
+    // By name alone: the comment's token is `/name` or `$name` by the bot's agent.
+    .map(({ name, path }) => `${inlineUntrusted(name)} "${quoted(inlineUntrusted(path, 4096))}"`)
+    .join(', ')
+  const which = skills.length === 1 ? 'a skill' : `${skills.length} skills`
+  return `\n  [Orca: they picked ${which} for this; load each from its file and follow it: ${named}]`
+}
+
+/** `sent`: the images go with the mail as image-refs; otherwise only their paths do. */
+function imagesNote(images: readonly BotItemCommentImage[], imagesBefore = 0, sent = true): string {
   if (images.length === 0) {
-    return said
+    return ''
   }
   const paths = images
     .map(
@@ -114,7 +154,9 @@ function commentWords(event: BotItemEventRecord, imagesBefore: number): string {
     )
     .join(', ')
   const count = images.length === 1 ? 'an image' : `${images.length} images`
-  return `${said}\n  [Orca: they attached ${count}, sent with this message. If you can't see ${images.length === 1 ? 'it' : 'them'}, open with your image tool: ${paths}]`
+  const them = images.length === 1 ? 'it' : 'them'
+  const see = sent ? `, sent with this message. If you can't see ${them}, open` : `; open ${them}`
+  return `\n  [Orca: they attached ${count}${see} with your image tool: ${paths}]`
 }
 
 /** Every image the owner's comments in this mail attached, oldest first. */
@@ -127,7 +169,7 @@ export function botItemMailImages(changes: readonly { event: BotItemEventRecord 
 function changeWords(event: BotItemEventRecord): string | null {
   switch (event.kind) {
     case 'commented':
-      return 'commented'
+      return isAnswer(event) ? `answered your question ${str(event.data.answers)}` : 'commented'
     case 'status': {
       const note = str(event.data.note)
       const words = statusWords(statusOf(event.data.from), statusOf(event.data.to))
@@ -156,6 +198,11 @@ export function botItemRequestMail(item: {
   }
 }
 
+/** The owner's comment naming the question it replies to: written while the bot asked. */
+function isAnswer(event: BotItemEventRecord): boolean {
+  return event.kind === 'commented' && typeof event.data.answers === 'string'
+}
+
 function str(value: unknown): string | null {
   return typeof value === 'string' ? value : null
 }
@@ -165,10 +212,11 @@ function str(value: unknown): string | null {
 export function botItemMakerCommentMail(
   item: Pick<BotItemRecord, 'number' | 'title'>,
   makerName: string,
-  commentText: string
+  commentText: string,
+  images: readonly BotItemCommentImage[] = []
 ): { subject: string; body: string } {
   return {
     subject: `${makerName} commented (${itemName(item)})`,
-    body: `${makerName}, which added ${itemName(item)} for you, commented on it:\n${fenceQuotedText(commentText)}\n\nCheck with \`orca bot item show ${item.number}\` before acting. If nothing needs doing, end the turn without a chat reply.`
+    body: `${makerName}, which added ${itemName(item)} for you, commented on it:\n${fenceQuotedText(commentText)}${imagesNote(images, 0, false)}\n\nCheck with \`orca bot item show ${item.number}\` before acting. If nothing needs doing, end the turn without a chat reply.`
   }
 }

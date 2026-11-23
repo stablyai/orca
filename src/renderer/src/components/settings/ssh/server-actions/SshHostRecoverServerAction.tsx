@@ -224,7 +224,7 @@ function OpenRecoverServerDialog({
             >
               {busy
                 ? t('components.settings.recoverServer.clearing', 'Clearing…')
-                : t('auto.components.settings.recoverServer.confirm', 'Clear lock and restart')}
+                : t('auto.components.settings.recoverServer.confirm', 'Clear lock & restart')}
             </Button>
           ) : null}
         </DialogFooter>

@@ -20,7 +20,7 @@ import { NativeChatSessionOptionChoiceBody } from './NativeChatSessionOptionChoi
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
 import { AgentPickerLegacyModelsToggle } from '../../../../agent/AgentPickerLegacyModelsToggle'
 import { useLegacyModelsExpanded } from '../../../../agent/use-legacy-models-expanded'
-import { NativeChatModelCliUpdateRow } from './NativeChatModelCliUpdateRow'
+import { NativeChatModelNeedsCliUpdateRow } from './NativeChatModelNeedsCliUpdateRow'
 
 type NativeChatModelComboboxProps = {
   choices: readonly SessionOptionSelectChoice[]
@@ -32,7 +32,7 @@ type NativeChatModelComboboxProps = {
   busy: boolean
   /** Called for a model other than the current one; the list stays as it is. */
   onSelect: (value: string) => void
-  /** The chat host's own CLI update, which brings models this list lacks. */
+  /** The chat host's own CLI, too old for models on Orca's list. */
   cliUpdate?: SessionOptionsCliUpdate
 }
 
@@ -67,6 +67,10 @@ export function NativeChatModelCombobox({
     (choice) => searching || !choice.hidden || choice.value === currentValue
   )
   const legacyChoices = listed.filter(folded)
+  // A model the CLI already lists is pickable, whatever the list says it needs.
+  const needsUpdate = cliUpdate
+    ? cliUpdate.models.filter((model) => !choices.some((choice) => choice.value === model.id))
+    : []
   const renderChoice = (choice: SessionOptionSelectChoice) => {
     const label = nativeChatSessionChoiceLabel(choice, say)
     const current = choice.value === currentValue
@@ -125,6 +129,15 @@ export function NativeChatModelCombobox({
           <CommandGroup>
             {/* One keyed array, so a row moving between sections keeps its highlight. */}
             {[
+              ...(cliUpdate
+                ? needsUpdate.map((model) => (
+                    <NativeChatModelNeedsCliUpdateRow
+                      key={`cli-update:${model.id}`}
+                      model={model}
+                      update={cliUpdate}
+                    />
+                  ))
+                : []),
               ...listed.filter((choice) => !folded(choice)).map(renderChoice),
               ...(legacyExpanded ? legacyChoices.map(renderChoice) : []),
               <AgentPickerLegacyModelsToggle
@@ -137,7 +150,6 @@ export function NativeChatModelCombobox({
             ]}
           </CommandGroup>
         </NativeChatSessionOptionWriteGroup>
-        <NativeChatModelCliUpdateRow update={cliUpdate} />
       </CommandList>
     </Command>
   )

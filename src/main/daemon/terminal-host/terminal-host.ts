@@ -7,7 +7,7 @@ import type { Session } from '../sessions/session'
 import type { PtyProcessInspectionOptions } from '../../providers/pty/process-inspection'
 import type { SessionInfo } from '../protocol/daemon-session-info'
 import type { TakePendingOutputResult } from '../protocol/daemon-rpc-contract'
-import type { TerminalSnapshot } from '../protocol/terminal-snapshot'
+import type { TerminalSnapshot, TerminalSnapshotReadOptions } from '../protocol/terminal-snapshot'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type { TerminalHostOptions } from './terminal-host-options'
 import { recordTerminalHostSessionExit } from './terminal-host-session-exit'
@@ -283,10 +283,7 @@ export class TerminalHost {
     return getTerminalHostSnapshot(this.sessions.get(sessionId), opts)
   }
 
-  async getSettledSnapshot(
-    sessionId: string,
-    opts: { scrollbackRows?: number } = {}
-  ): Promise<TerminalSnapshot | null> {
+  async getSettledSnapshot(sessionId: string, opts: TerminalSnapshotReadOptions = {}) {
     return getSettledTerminalHostSnapshot(this.sessions.get(sessionId), opts)
   }
 

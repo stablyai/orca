@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
+import { writePiExtensionFile } from '../launch/pi-extension-file'
 import { inspectProcessLiveness } from '../../../daemon/endpoint/identity/daemon-process-inspection'
 import {
   PI_BACKGROUND_WORK_BRIDGE_FILE,
@@ -22,19 +23,7 @@ export async function ensurePiBackgroundWorkBridge(
   const source = getPiBackgroundWorkBridgeSource()
   try {
     directory ??= join(getAppEnvironment().getPath('userData'), 'pi-native-chat')
-    const path = join(directory, PI_BACKGROUND_WORK_BRIDGE_FILE)
-    if ((await readFile(path, 'utf8').catch(() => null)) !== source) {
-      // Pi exits when an extension fails to load, so a concurrent launch must never read a partial file.
-      await mkdir(directory, { recursive: true })
-      const staged = `${path}.${randomUUID()}.tmp`
-      try {
-        await writeFile(staged, source)
-        await rename(staged, path)
-      } catch (error) {
-        await rm(staged, { force: true }).catch(() => {})
-        throw error
-      }
-    }
+    const path = await writePiExtensionFile(directory, PI_BACKGROUND_WORK_BRIDGE_FILE, source)
     const probes = join(directory, 'probes')
     await reclaimAbandonedProbeFolders(probes)
     return { extension: path, directory: join(probes, `${process.pid}-${randomUUID()}`) }

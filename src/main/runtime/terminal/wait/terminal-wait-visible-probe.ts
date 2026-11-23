@@ -9,7 +9,7 @@ import {
   isKnownReadyPromptSettled
 } from './terminal-wait-detection'
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
-import { restoreProjectedComposerDraft } from '../view/orca-runtime-terminal-projection'
+import { restoreProjectedComposerDraft } from '../../../daemon/emulation/terminal-screen-projection'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason

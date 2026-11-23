@@ -1,6 +1,4 @@
 // One drill-in of the settings view: each mounts the section component that owns it.
-import { ExternalLink } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
@@ -22,29 +20,8 @@ import { BotWhoCanAskPage } from './BotWhoCanAskPage'
 
 type Update = (updates: BotUpdateParams['updates']) => Promise<Bot | null>
 
-const SOUL_FILE = 'SOUL.md'
-
 function SoulPage({ bot, home }: { bot: Bot; home: BotHome }): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <BotSoulBody
-      home={home}
-      footer={
-        <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
-          <code className="font-mono">{SOUL_FILE}</code>
-          <span className="flex-1" />
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={() => openBotHomeFileTab(bot, home, 'SOUL.md')}
-          >
-            <ExternalLink />
-            {t('bots.settingsView.openAsFile', 'Open as file')}
-          </Button>
-        </div>
-      }
-    />
-  )
+  return <BotSoulBody home={home} onOpenAsFile={() => openBotHomeFileTab(bot, home, 'SOUL.md')} />
 }
 
 /** The bot's home folder isn't loaded in this window, so its files can't be read here. */
@@ -91,6 +68,7 @@ export function BotSettingsSubpage({
           bot={bot}
           home={home}
           defaultTab={place.memoryTab === 'history' ? 'history' : 'facts'}
+          onOpenAsFile={() => openBotHomeFileTab(bot, home, 'MEMORY.md')}
         >
           <BotMemoryTopicFiles bot={bot} home={home} />
         </BotMemoryBody>

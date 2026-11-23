@@ -22,14 +22,12 @@ export type CompleteGitRepoAdd = (
 
 type CompleteGitRepoAddOptions = {
   closeModal: () => void
-  setHideDefaultBranchWorkspace: (hide: boolean) => void
   /** Hosted Add Project keeps the composer open and selects the project after normal telemetry. */
   finishProjectAdd?: CompleteGitRepoAdd
 }
 
 export function useCompleteGitRepoAdd({
   closeModal,
-  setHideDefaultBranchWorkspace,
   finishProjectAdd
 }: CompleteGitRepoAddOptions): CompleteGitRepoAdd {
   const detectedTelemetryTrackedRef = useRef<Set<string>>(new Set())
@@ -73,10 +71,9 @@ export function useCompleteGitRepoAdd({
         repoId,
         source,
         executionHostId,
-        closeModal,
-        setHideDefaultBranchWorkspace
+        closeModal
       })
     },
-    [closeModal, finishProjectAdd, setHideDefaultBranchWorkspace]
+    [closeModal, finishProjectAdd]
   )
 }

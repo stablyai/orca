@@ -40,12 +40,16 @@ export function decodeCodexQuestionOptionId(
 export type CodexPreparedAnswer =
   | { kind: 'decision'; decision: CodexApprovalDecision }
   | { kind: 'answer'; questionId: string; answer: string }
+  | { kind: 'reply'; reply: Record<string, unknown> }
 
 /** Validate without mutation so unusable answers are rejected before journal commit. */
 export function prepareCodexPromptAnswer(
   prompt: CodexPendingPrompt,
   response: AgentSessionPromptResponse
 ): CodexPreparedAnswer {
+  if (prompt.formReply) {
+    return { kind: 'reply', reply: Object.assign({}, prompt.formReply(response), { _meta: null }) }
+  }
   if (prompt.method !== CODEX_USER_INPUT_METHOD) {
     if (response.kind !== 'option' || !isCodexApprovalDecision(response.optionId)) {
       throw new Error(`Codex item ${prompt.codexItemId} takes an approval decision`)
@@ -97,6 +101,9 @@ export function applyCodexPromptAnswer(
   prompt: CodexPendingPrompt,
   prepared: CodexPreparedAnswer
 ): Record<string, unknown> | null {
+  if (prepared.kind === 'reply') {
+    return prepared.reply
+  }
   if (prepared.kind === 'decision') {
     return prompt.method === CODEX_MCP_ELICITATION_METHOD
       ? codexMcpElicitationReply(prepared.decision)

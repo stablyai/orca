@@ -89,7 +89,7 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     workspaceName?: string
   }> {
     signal?.throwIfAborted()
-    this.validateLinearCreateWorkspaceScope(workspaceId === 'all' ? undefined : workspaceId)
+    await this.validateLinearCreateWorkspaceScope(workspaceId === 'all' ? undefined : workspaceId)
     let teams: Awaited<ReturnType<typeof listLinearTeamsOrThrow>>
     try {
       teams = await listLinearTeamsOrThrow(workspaceId ?? 'all', signal)
@@ -150,7 +150,7 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     }
 
     const scope = parent?.workspaceId ?? workspaceId
-    this.validateLinearCreateWorkspaceScope(scope)
+    await this.validateLinearCreateWorkspaceScope(scope)
     let teams: Awaited<ReturnType<typeof listLinearTeamsOrThrow>>
     try {
       teams = await listLinearTeamsOrThrow(scope ?? 'all', signal)
@@ -158,7 +158,7 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
       throw this.mapLinearReadFailure(error)
     }
     if (teams.length === 0) {
-      requireConnectedWorkspaces()
+      await requireConnectedWorkspaces()
     }
     const matches = teams.filter(
       (team) =>
@@ -208,11 +208,11 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     throw linearError('linear_team_required', `No connected Linear team matched ${teamInput}.`)
   }
 
-  public validateLinearCreateWorkspaceScope(workspaceId: string | undefined): void {
+  public async validateLinearCreateWorkspaceScope(workspaceId: string | undefined): Promise<void> {
     if (!workspaceId) {
       return
     }
-    const workspaces = getLinearStatus().workspaces ?? []
+    const workspaces = (await getLinearStatus()).workspaces ?? []
     if (workspaces.length > 0 && !workspaces.some((workspace) => workspace.id === workspaceId)) {
       throw linearError(
         'linear_invalid_workspace',
@@ -272,7 +272,7 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     signal?.throwIfAborted()
     const link = getLinearCurrentIssueFromWorktree(worktree)
     if (!link.workspaceId) {
-      const backfill = resolveLegacyLinearLinkWorkspace(
+      const backfill = await resolveLegacyLinearLinkWorkspace(
         worktree.linkedLinearIssue ?? '',
         worktree.linkedLinearIssueOrganizationUrlKey
       )

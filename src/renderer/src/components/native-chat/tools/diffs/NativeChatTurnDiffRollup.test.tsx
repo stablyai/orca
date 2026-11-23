@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
-import { render } from '../../messages/actions/native-chat-tooltip-test-harness'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   NativeChatDisclosureContext,
   useNativeChatDisclosures
@@ -63,7 +63,7 @@ function Harness({ show = true, diff = changes }: { show?: boolean; diff?: Nativ
 afterEach(cleanup)
 
 it('folds a turn to its summary while retaining revealed files and patches across row remounts', async () => {
-  const { rerender } = render(<Harness />)
+  const { rerender } = render(<Harness />, { wrapper: TooltipProvider })
   const summary = screen.getByRole('button', { name: /23 changed files/ })
   expect(summary).toHaveAttribute('aria-expanded', 'false')
   expect(screen.queryByRole('button', { name: '/src/file-0.ts +1 -1' })).toBeNull()
@@ -100,7 +100,9 @@ it('folds a turn to its summary while retaining revealed files and patches acros
 
 it('keeps an opened summary open when earlier history loads into its turn', () => {
   const tail = editMessage('tail', 2)
-  const { rerender } = render(<Harness diff={diffOf([tail], 'turn')} />)
+  const { rerender } = render(<Harness diff={diffOf([tail], 'turn')} />, {
+    wrapper: TooltipProvider
+  })
   fireEvent.click(screen.getByRole('button', { name: /2 changed files/ }))
   rerender(<Harness diff={diffOf([editMessage('history', 2), tail], 'turn')} />)
   expect(screen.getByRole('button', { name: /2 changed files/ })).toHaveAttribute(

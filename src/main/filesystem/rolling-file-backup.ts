@@ -1,11 +1,27 @@
 import { randomUUID } from 'node:crypto'
-import { chmodSync, lstatSync, rmSync, type Stats } from 'node:fs'
+import { chmodSync, lstatSync, type Stats } from 'node:fs'
 import {
   copyFileWithWindowsRetry,
+  removeFileWithWindowsRetry,
   renameFileWithWindowsRetry
 } from '../../shared/file-write/windows-retry-file-operations'
 
 export function writeRollingFileBackup(sourcePath: string, backupPath: string): void {
+  stageRollingFileBackup(sourcePath, backupPath).commit()
+}
+
+export type StagedRollingFileBackup = {
+  /** Replaces the previous backup with the staged copy. */
+  commit: () => void
+  /** Drops the staged copy and keeps the previous backup. */
+  discard: () => void
+}
+
+/** Copies `sourcePath` beside the backup without touching the previous backup until `commit`. */
+export function stageRollingFileBackup(
+  sourcePath: string,
+  backupPath: string
+): StagedRollingFileBackup {
   let existing: Stats | null = null
   try {
     const backup = lstatSync(backupPath)
@@ -21,21 +37,36 @@ export function writeRollingFileBackup(sourcePath: string, backupPath: string): 
   }
 
   const tempPath = `${backupPath}.${process.pid}.${randomUUID()}.tmp`
+  const discard = (): void => removeFileWithWindowsRetry(tempPath)
+  // Why: Windows refuses to rename over a read-only file. On Windows the owner write bit is the
+  // read-only attribute; ACLs are untouched.
+  const makeWritable = (path: string): void => {
+    if (process.platform === 'win32') {
+      chmodSync(path, 0o666)
+    }
+  }
   try {
     // A fresh inode avoids hard-link mutation; rename preserves the old backup on failure.
     copyFileWithWindowsRetry(sourcePath, tempPath)
-    if (process.platform === 'win32') {
-      // Why: copyFile keeps a read-only attribute, and Windows refuses to rename over a read-only file.
-      // On Windows the owner write bit is the read-only attribute; ACLs are untouched.
-      for (const path of isReplaceableReadOnlyBackup(existing)
-        ? [tempPath, backupPath]
-        : [tempPath]) {
-        chmodSync(path, 0o666)
+    // copyFile keeps the source's read-only attribute.
+    makeWritable(tempPath)
+  } catch (error) {
+    discard()
+    throw error
+  }
+  return {
+    commit: () => {
+      try {
+        // Only now: a discarded stage leaves the previous backup's attribute as it was.
+        if (isReplaceableReadOnlyBackup(existing)) {
+          makeWritable(backupPath)
+        }
+        renameFileWithWindowsRetry(tempPath, backupPath)
+      } finally {
+        discard()
       }
-    }
-    renameFileWithWindowsRetry(tempPath, backupPath)
-  } finally {
-    rmSync(tempPath, { force: true })
+    },
+    discard
   }
 }
 

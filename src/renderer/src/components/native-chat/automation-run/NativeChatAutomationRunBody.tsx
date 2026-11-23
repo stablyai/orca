@@ -6,7 +6,11 @@ import { callBotRpc } from '@/lib/bot-hosts'
 import { openBotAutomation } from '@/components/bots/bot-automation-open'
 import { useBotForWorkspace } from '@/components/bots/bot-workspace'
 import { useBotActivity } from '@/components/bots/use-bot-activity'
-import { botErrorMessage } from '@/components/bots/bot-presentation'
+import { botErrorMessage, botRefusalText } from '@/components/bots/bot-presentation'
+import { structuredAgentSessionTargetPlace } from '@/components/native-chat/pane/ownership/use-structured-agent-session-host-label'
+import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store'
+import type { AgentSessionRefusalReference } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AutomationRunMessage } from '../../../../../shared/automations/automation-run-message'
 import {
   automationRunAccess,
@@ -22,6 +26,8 @@ import { useNativeChatLinkClick } from '../links/actions/native-chat-link-click-
 import { NativeChatAutomationRunInstructions } from './NativeChatAutomationRunInstructions'
 import { RUN_LINK_BUTTON } from './automation-run-link-button'
 import { ROW_HEADING, ROW_NOTE } from './NativeChatAutomationRowFrame'
+import { NativeChatMessageTimestamp } from '../messages/rows/NativeChatMessageTimestamp'
+import type { MergedRunFailure } from '../../../../../shared/native-chat/transcript/events/native-chat-event-plan'
 
 const HEADING = ROW_HEADING
 const NOTE = ROW_NOTE
@@ -107,17 +113,17 @@ function RunActions({
   const exists = useBotActivity(bot).automations.some(
     (row) => row.automation.id === run.automation.id
   )
-  const openAutomation = state === 'not-started' && exists
-  if (!openAutomation && !instructions && !copyEvent) {
+  const openOn = state === 'not-started' && exists ? bot?.hostId : undefined
+  if (!openOn && !instructions && !copyEvent) {
     return null
   }
   return (
     <div className="mt-2 flex flex-wrap gap-3.5">
-      {openAutomation ? (
+      {openOn ? (
         <button
           type="button"
           className={RUN_LINK_BUTTON}
-          onClick={() => openBotAutomation(run.automation.id, run.runId)}
+          onClick={() => openBotAutomation(openOn, run.automation.id, run.runId)}
         >
           {say('openAutomation')}
         </button>
@@ -184,6 +190,27 @@ function RunEvent({
   )
 }
 
+/** The send's error, or why its chat was refused, naming the bot's host as this reader does. */
+function StartError({
+  error,
+  refusal
+}: {
+  error: string
+  refusal?: AgentSessionRefusalReference
+}): React.JSX.Element {
+  // The transcript's own runtime ran the refused start; it calls itself this computer.
+  const owner = useNativeChatVisualOwner()
+  const t = useTranslate()
+  const hostName = useAppStore((state) =>
+    owner ? structuredAgentSessionTargetPlace(state, owner.target, t) : undefined
+  )
+  return (
+    <div className="rounded-md border border-chat-inline-code-border bg-chat-inline-code-surface px-2 py-1 font-mono text-xs text-chat-foreground [overflow-wrap:anywhere] select-text">
+      {refusal ? botRefusalText(refusal, hostName) : error}
+    </div>
+  )
+}
+
 /** The opened run: the recorded error, the saved instructions, the event, and what to do next. */
 export function NativeChatAutomationRunBody({
   messageId,
@@ -192,6 +219,8 @@ export function NativeChatAutomationRunBody({
   instructions,
   facts,
   error,
+  refusal,
+  earlierFailures,
   wording,
   findQuery
 }: {
@@ -201,6 +230,9 @@ export function NativeChatAutomationRunBody({
   instructions: string
   facts: string
   error?: string
+  refusal?: AgentSessionRefusalReference
+  /** Earlier tries of this run that couldn't start, newest first. */
+  earlierFailures?: readonly MergedRunFailure[]
   wording: AutomationRunWording
   /** The Find bar's query: instructions holding it show whole. */
   findQuery: string
@@ -212,9 +244,7 @@ export function NativeChatAutomationRunBody({
       {error ? (
         <>
           <h4 className={HEADING}>{say('startError')}</h4>
-          <div className="rounded-md border border-chat-inline-code-border bg-chat-inline-code-surface px-2 py-1 font-mono text-xs text-chat-foreground [overflow-wrap:anywhere] select-text">
-            {error}
-          </div>
+          <StartError error={error} refusal={refusal} />
         </>
       ) : null}
       {instructions ? (
@@ -230,6 +260,15 @@ export function NativeChatAutomationRunBody({
         </>
       ) : null}
       <RunEvent run={run} facts={facts} wording={wording} />
+      {earlierFailures?.map((failure) => (
+        <div key={failure.id}>
+          <h4 className={cn(HEADING, 'flex items-center gap-1')}>
+            {say('couldNotStart')}
+            <NativeChatMessageTimestamp timestamp={failure.timestamp} />
+          </h4>
+          <StartError error={failure.error} refusal={failure.refusal} />
+        </div>
+      ))}
       <RunActions
         run={run}
         state={state}

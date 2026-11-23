@@ -144,18 +144,21 @@ export function useBotWhoCanAsk(bot: Bot, service: BotWhoCanAskService) {
   // The picker closes first, so the confirmation is the only thing on screen.
   const add = async (picked: BotMember[], request?: HostAccessRequest): Promise<void> => {
     setPickerOpen(false)
-    const confirmed = await confirmAccess({
-      botName: bot.name,
-      details: { bot, connector: service.kind },
-      people: picked.map((member) => ({
-        id: member.id,
-        name: member.name || member.id,
-        ...(request ? { identity: accessRequestIdentity(request) } : {})
-      })),
-      connector: service.connector,
-      workspace: service.workspace
-    })
-    // Closing the confirmation leaves a request waiting; only Decline declines it.
+    const confirmed = await confirmAccess(
+      {
+        botName: bot.name,
+        details: { bot, connector: service.kind },
+        people: picked.map((member) => ({
+          id: member.id,
+          name: member.name || member.id,
+          ...(request ? { identity: accessRequestIdentity(request) } : {})
+        })),
+        connector: service.connector,
+        workspace: service.workspace
+      },
+      // A request's Reject declines it; Escape or a press outside leaves it waiting.
+      request ? () => void decideAccessRequest(request, 'declined') : undefined
+    )
     if (!confirmed) {
       return
     }

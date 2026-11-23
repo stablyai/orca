@@ -18,6 +18,7 @@ export type NativeChatPickerItem =
       description?: string
       /** How the provider says the command is invoked, e.g. `<objective>`. */
       argumentHint?: string
+      aliases?: readonly string[]
       skillCollision: boolean
       orcaOwned?: true
       /** The provider reported this as its built-in command. */
@@ -123,6 +124,7 @@ export function buildNativeChatPickerItems(
         argumentHint: command.argumentHint
           ? sanitizePickerText(command.argumentHint, 80)
           : undefined,
+        ...(command.aliases ? { aliases: command.aliases } : {}),
         skillCollision: sharedSigil && !command.orcaOwned && skillNames.has(command.name),
         ...(command.orcaOwned ? { orcaOwned: true as const } : {}),
         ...(command.builtin ? { builtin: true as const } : {})
@@ -269,29 +271,42 @@ export function preferredNativeChatPickerIndex(
   return bestIndex
 }
 
+const NO_ALIASES: readonly string[] = []
+
 function getMatchRank(
-  item: Pick<NativeChatPickerItem, 'name' | 'description'>,
+  item: Pick<NativeChatPickerItem, 'name' | 'description'> & { aliases?: readonly string[] },
   query: string,
   matchDescriptions: boolean
 ): number | null {
   const normalizedQuery = query.toLowerCase()
-  const name = item.name.toLowerCase()
-  if (name === normalizedQuery) {
-    return 0
+  let rank = getNameRank(item.name.toLowerCase(), normalizedQuery)
+  for (const alias of item.aliases ?? NO_ALIASES) {
+    // A provider's own name match outranks an alias match of the same tier.
+    const aliasRank = getNameRank(alias, normalizedQuery)
+    if (aliasRank !== null && (rank === null || aliasRank + 0.5 < rank)) {
+      rank = aliasRank + 0.5
+    }
   }
-  if (name.startsWith(normalizedQuery)) {
-    return 1
-  }
-  if (name.includes(normalizedQuery)) {
-    return 2
-  }
-  if (isSubsequence(normalizedQuery, name)) {
-    return 3
+  if (rank !== null) {
+    return rank
   }
   if (matchDescriptions && item.description?.toLowerCase().includes(normalizedQuery)) {
     return 4
   }
   return null
+}
+
+function getNameRank(name: string, query: string): number | null {
+  if (name === query) {
+    return 0
+  }
+  if (name.startsWith(query)) {
+    return 1
+  }
+  if (name.includes(query)) {
+    return 2
+  }
+  return isSubsequence(query, name) ? 3 : null
 }
 
 function isSubsequence(query: string, value: string): boolean {

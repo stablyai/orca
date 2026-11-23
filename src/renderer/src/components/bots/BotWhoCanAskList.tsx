@@ -7,7 +7,7 @@ import { refreshAccessRequests, type HostAccessRequest } from '@/lib/bot-access-
 import type { Bot, BotMember } from '../../../../shared/bot-types'
 import type { BotSlackResult } from '../../../../shared/connector-bot-slack-contract'
 import { BOT_ACCESS_COPY } from '../../../../shared/bots/bot-access-copy'
-import { BotConnectorCaption, BotPeopleChips } from './bot-connector-people'
+import { BotConnectorSection, BotPeopleChips } from './bot-connector-people'
 import { BotAccessDetails, BotAccessSummary } from './BotAccessReach'
 import type { BotAccessConnector } from '../../../../shared/bots/bot-access-reach'
 import { AttentionDot } from './AttentionDot'
@@ -18,7 +18,8 @@ import { requestLine, useBotWhoCanAsk } from './use-bot-who-can-ask'
 
 /** complete is false when the service's people are too many to read whole. */
 export type BotWhoCanAskFound = {
-  members: { id: string; name: string; handle?: string; avatarUrl?: string }[]
+  /** `app`: another Slack app's bot user, offered beside people. */
+  members: { id: string; name: string; handle?: string; avatarUrl?: string; app?: true }[]
   complete: boolean
 }
 
@@ -40,6 +41,8 @@ export type BotWhoCanAskService = {
   idleHint?: { title: string; detail: string }
   /** The owner's own account here, listed as the owner rather than offered; null when unknown. */
   ownerId: string | null
+  /** The owner's other accounts here (GitHub's other linked logins): found as the owner, never offered. */
+  otherOwnerIds?: readonly string[]
   /** Its name there, e.g. "@orca-bots"; null when unknown. */
   ownerName: string | null
   kind: BotAccessConnector
@@ -68,11 +71,10 @@ function AccessRequestRows({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <>
-      <BotConnectorCaption
-        title={t('bots.accessRequest.heading', BOT_ACCESS_COPY.heading)}
-        count={requests.length}
-      />
+    <BotConnectorSection
+      title={t('bots.accessRequest.heading', BOT_ACCESS_COPY.heading)}
+      count={requests.length}
+    >
       <ul className="mb-4">
         {requests.map((request) => (
           <li key={request.requestId} className="flex h-9 items-center gap-2 text-sm">
@@ -90,7 +92,7 @@ function AccessRequestRows({
           </li>
         ))}
       </ul>
-    </>
+    </BotConnectorSection>
   )
 }
 
@@ -135,80 +137,81 @@ export function BotWhoCanAskList({
           onSignedIn={refreshAccessRequests}
         />
       ) : null}
-      <BotConnectorCaption
+      <BotConnectorSection
         title={t('bots.access.whoCanAsk', BOT_ACCESS_COPY.whoCanAsk, { name: bot.name })}
-      />
-      <BotAccessSummary bot={bot} others={listed.map((member) => member.name || member.id)} />
-      <BotPeopleChips
-        owner={owner}
-        members={listed}
-        onRemove={remove}
-        add={
-          <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                size="xs"
-                variant="outline"
-                disabled={service.outsiders === null || capped || saving}
-                title={
-                  capped
-                    ? t('bots.whoCanAsk.cap', '{{count}} people is the most here.', {
-                        count: cap
-                      })
-                    : undefined
-                }
-              >
-                {saving ? <Loader2 className="animate-spin" /> : <Plus />}
-                {t('bots.whoCanAsk.add', 'Add')}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-80">
-              {pickerOpen ? (
-                <BotWhoCanAskPicker
-                  bot={bot}
-                  service={service}
-                  owner={owner}
-                  onPicked={(picked) => void add(picked)}
-                />
-              ) : null}
-            </PopoverContent>
-          </Popover>
-        }
-      />
-      {keptOnlyMe && listed.length === 0 && !saving ? (
-        <div role="status" className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="min-w-0 flex-1">
-            {t('bots.whoCanAsk.keptOnlyMe', 'Removed {{names}}.', {
-              names: keptOnlyMe.map((member) => member.name || member.id).join(', ')
-            })}
-          </span>
-          {/* Giving them access back is a grant, so it asks first like any add. */}
-          <Button size="xs" variant="ghost" onClick={() => void add(keptOnlyMe)}>
-            <Undo2 />
-            {t('bots.access.undo', BOT_ACCESS_COPY.undo)}
-          </Button>
-        </div>
-      ) : null}
-      {saving ? (
-        <p role="status" className="mt-2 text-xs text-muted-foreground">
-          {t('bots.whoCanAsk.saving', 'Saving…')}
-        </p>
-      ) : save.kind === 'failed' ? (
-        <div
-          role="alert"
-          className="mt-2 flex items-center gap-2 rounded-md border border-destructive/40 px-2.5 py-1.5 text-xs"
-        >
-          <TriangleAlert className="size-3.5 shrink-0 text-destructive" aria-hidden />
-          <span className="min-w-0 flex-1">{save.message}</span>
-          <Button size="xs" variant="outline" onClick={save.retry}>
-            {t('bots.whoCanAsk.retry', 'Try again')}
-          </Button>
-        </div>
-      ) : capped && listed.length > 0 ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          {t('bots.whoCanAsk.cap', '{{count}} people is the most here.', { count: cap })}
-        </p>
-      ) : null}
+      >
+        <BotAccessSummary bot={bot} others={listed.map((member) => member.name || member.id)} />
+        <BotPeopleChips
+          owner={owner}
+          members={listed}
+          onRemove={remove}
+          add={
+            <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  disabled={service.outsiders === null || capped || saving}
+                  title={
+                    capped
+                      ? t('bots.whoCanAsk.cap', '{{count}} people is the most here.', {
+                          count: cap
+                        })
+                      : undefined
+                  }
+                >
+                  {saving ? <Loader2 className="animate-spin" /> : <Plus />}
+                  {t('bots.whoCanAsk.add', 'Add')}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-80">
+                {pickerOpen ? (
+                  <BotWhoCanAskPicker
+                    bot={bot}
+                    service={service}
+                    owner={owner}
+                    onPicked={(picked) => void add(picked)}
+                  />
+                ) : null}
+              </PopoverContent>
+            </Popover>
+          }
+        />
+        {keptOnlyMe && listed.length === 0 && !saving ? (
+          <div role="status" className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="min-w-0 flex-1">
+              {t('bots.whoCanAsk.keptOnlyMe', 'Removed {{names}}.', {
+                names: keptOnlyMe.map((member) => member.name || member.id).join(', ')
+              })}
+            </span>
+            {/* Giving them access back is a grant, so it asks first like any add. */}
+            <Button size="xs" variant="ghost" onClick={() => void add(keptOnlyMe)}>
+              <Undo2 />
+              {t('bots.access.undo', BOT_ACCESS_COPY.undo)}
+            </Button>
+          </div>
+        ) : null}
+        {saving ? (
+          <p role="status" className="mt-2 text-xs text-muted-foreground">
+            {t('bots.whoCanAsk.saving', 'Saving…')}
+          </p>
+        ) : save.kind === 'failed' ? (
+          <div
+            role="alert"
+            className="mt-2 flex items-center gap-2 rounded-md border border-destructive/40 px-2.5 py-1.5 text-xs"
+          >
+            <TriangleAlert className="size-3.5 shrink-0 text-destructive" aria-hidden />
+            <span className="min-w-0 flex-1">{save.message}</span>
+            <Button size="xs" variant="outline" onClick={save.retry}>
+              {t('bots.whoCanAsk.retry', 'Try again')}
+            </Button>
+          </div>
+        ) : capped && listed.length > 0 ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {t('bots.whoCanAsk.cap', '{{count}} people is the most here.', { count: cap })}
+          </p>
+        ) : null}
+      </BotConnectorSection>
       <BotAccessDetails
         bot={bot}
         others={listed.length}

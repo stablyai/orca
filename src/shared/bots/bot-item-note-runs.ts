@@ -1,4 +1,5 @@
 // How a chat draws item changes: the item mail the bot reads stays hidden (its note shows the change),
+// the agent's note that only links workers to items joins those workers' Started rows next to it,
 // the owner's quick changes to one item, with nothing shown between them, fold into the first, and the
 // bot's notes in one turn, with only tool work between them, fold into the first (its row stays put
 // while a live turn adds to it, and shows the latest note's time).
@@ -6,7 +7,7 @@ import type { NativeChatMessage } from '../native-chat/native-chat-types'
 import { isNativeChatOrcaCard } from '../native-chat/native-chat-orca-card'
 import { nativeChatRowRendersContent } from '../native-chat/transcript/row-content/native-chat-row-content'
 import { nativeChatRowRendersProse } from '../native-chat/transcript/folding/native-chat-trailing-run'
-import { botItemNoteIsQuiet } from './bot-item-note-lines'
+import type { BotItemNoteItem, BotItemNoteView } from './bot-item-note'
 
 /** The sender item mail names. */
 export const BOT_ITEM_MAIL_SENDER = 'orca:items'
@@ -30,7 +31,8 @@ function ownerMoveOf(message: NativeChatMessage): string | null {
   return entry?.event === 'status' ? entry.uid : null
 }
 
-function drawsNothing(message: NativeChatMessage): boolean {
+/** Item mail, a folded note, or a row with nothing to draw. */
+export function rowDrawsNothing(message: NativeChatMessage): boolean {
   return (
     isBotItemMail(message) ||
     (!isNativeChatOrcaCard(message) && !nativeChatRowRendersContent(message.blocks))
@@ -50,9 +52,115 @@ export function foldBotItemNotes<T extends readonly NativeChatMessage[]>(
     return messages
   }
   const out = messages.map((message) => (isBotItemMail(message) ? hidden(message) : message))
+  joinWorkerLinksToStarts(out, turnKeys)
   foldOwnerMoves(messages, out)
   foldBotTurnNotes(out, turnKeys)
   return out
+}
+
+const DISPATCH_REF = 'dispatch:'
+
+/** The Dispatches a note of the bot's links, when linking them is all it does; else null. */
+function linkedDispatches(message: NativeChatMessage): string[] | null {
+  const note = message.botItemNote
+  if (note?.by !== 'bot' || note.entries.length === 0) {
+    return null
+  }
+  const ids: string[] = []
+  for (const entry of note.entries) {
+    if (entry.event !== 'linked' || entry.refs.length === 0) {
+      return null
+    }
+    for (const ref of entry.refs) {
+      if (!ref.startsWith(DISPATCH_REF)) {
+        return null
+      }
+      ids.push(ref.slice(DISPATCH_REF.length))
+    }
+  }
+  return ids
+}
+
+/** Matched by Dispatch id, never by name. A link line joins each worker's Started row ("Started X for
+ *  item") when that row is in its own turn or next to it, nothing drawn between, on either side; a
+ *  link far from its start, another chat's or the owner's, or one naming a worker this chat never
+ *  started keeps its own line. */
+function joinWorkerLinksToStarts(
+  out: NativeChatMessage[],
+  turnKeys: readonly (string | undefined)[]
+): void {
+  const startsById = new Map<string, number[]>()
+  out.forEach((message, index) => {
+    const id = message.agentStart ? message.agentStartDispatchId : undefined
+    if (id) {
+      startsById.set(id, [...(startsById.get(id) ?? []), index])
+    }
+  })
+  if (startsById.size === 0) {
+    return
+  }
+  const joins = new Map<number, BotItemNoteItem[]>()
+  out.forEach((message, index) => {
+    const ids = linkedDispatches(message)
+    if (!ids) {
+      return
+    }
+    const turn = turnKeys[index]
+    const nearby = (start: number): boolean => {
+      if (turn !== undefined && turnKeys[start] === turn) {
+        return true
+      }
+      // The link may land just before its start, whose card the host appends a moment later.
+      for (let between = Math.min(start, index) + 1; between < Math.max(start, index); between++) {
+        if (!rowDrawsNothing(out[between]!)) {
+          return false
+        }
+      }
+      return true
+    }
+    const joined = ids.map((id) => ({ id, start: startsById.get(id)?.find(nearby) }))
+    if (joined.some(({ start }) => start === undefined)) {
+      return
+    }
+    for (const { id, start } of joined) {
+      const items = linkedItems(message.botItemNote!, `${DISPATCH_REF}${id}`)
+      const kept = (joins.get(start!) ?? []).filter(
+        (item) => !items.some((linked) => linked.uid === item.uid)
+      )
+      joins.set(start!, [...kept, ...items])
+    }
+    out[index] = hidden(message)
+  })
+  for (const [start, items] of joins) {
+    out[start] = joinedStart(out[start]!, items)
+  }
+}
+
+/** Each Started row as last joined, so a streaming turn that changes nothing about its links keeps
+ *  the same row and its card doesn't draw again. */
+const joinedStarts = new WeakMap<NativeChatMessage, { key: string; row: NativeChatMessage }>()
+
+function joinedStart(row: NativeChatMessage, items: BotItemNoteItem[]): NativeChatMessage {
+  const key = JSON.stringify(items)
+  const last = joinedStarts.get(row)
+  if (last?.key === key) {
+    return last.row
+  }
+  const joined = { ...row, agentStartItems: items }
+  joinedStarts.set(row, { key, row: joined })
+  return joined
+}
+
+/** Each item a note links to `ref` once, as of its last entry. */
+function linkedItems(note: BotItemNoteView, ref: string): BotItemNoteItem[] {
+  const items = new Map<string, BotItemNoteItem>()
+  for (const entry of note.entries) {
+    if (entry.event === 'linked' && entry.refs.includes(ref)) {
+      const { uid, number, title, status } = entry
+      items.set(uid, { uid, number, title, status })
+    }
+  }
+  return [...items.values()]
 }
 
 function foldOwnerMoves(messages: readonly NativeChatMessage[], out: NativeChatMessage[]): void {
@@ -69,7 +177,7 @@ function foldOwnerMoves(messages: readonly NativeChatMessage[], out: NativeChatM
     }
     if (uid !== null) {
       lead = index
-    } else if (!drawsNothing(message)) {
+    } else if (!rowDrawsNothing(message)) {
       lead = -1
     }
   }
@@ -112,42 +220,10 @@ function foldBotTurnNotes(
       }
     } else if (
       lead >= 0 &&
-      !drawsNothing(message) &&
+      !rowDrawsNothing(message) &&
       (turn !== turnKeys[lead] || breaksRun(message))
     ) {
       lead = -1
     }
   }
-}
-
-export type BotItemNoteJoin = 'above' | 'below' | 'both'
-
-/** Which sides of each quiet item-note row touch another quiet note, so the two sit close: the
- *  nearest row that draws, past folded and hidden ones (`hidden`: what this surface folded away).
- *  `drawsBelow`: the row carries something under its note (a turn's diff), which keeps them apart. */
-export function botItemNoteJoins(
-  messages: readonly NativeChatMessage[],
-  hidden: (index: number) => boolean,
-  drawsBelow: (index: number) => boolean = () => false
-): Map<number, BotItemNoteJoin> {
-  const drawn = messages.flatMap((message, index) =>
-    hidden(index) || drawsNothing(message) ? [] : [index]
-  )
-  const quiet = (index: number | undefined) => {
-    const note = index === undefined ? undefined : messages[index]!.botItemNote
-    return note !== undefined && botItemNoteIsQuiet(note)
-  }
-  const joins = new Map<number, BotItemNoteJoin>()
-  drawn.forEach((index, at) => {
-    if (!quiet(index)) {
-      return
-    }
-    const previous = drawn[at - 1]
-    const above = quiet(previous) && !drawsBelow(previous!)
-    const below = quiet(drawn[at + 1]) && !drawsBelow(index)
-    if (above || below) {
-      joins.set(index, above && below ? 'both' : above ? 'above' : 'below')
-    }
-  })
-  return joins
 }

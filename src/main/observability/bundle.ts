@@ -228,8 +228,3 @@ export function generateBundleSubmissionId(): string {
     .replace(/\//g, '_')
     .replace(/=+$/, '')
 }
-
-export const _internalsForTests = {
-  MAX_BUNDLE_BYTES,
-  DAEMON_LOG_BUDGET_BYTES
-}

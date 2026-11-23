@@ -6,8 +6,12 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { botTarget, type BotRef } from '@/lib/bot-hosts'
 import type { GoogleSetupRun } from '../../../../../../shared/google/google-setup-run'
+import {
+  googleReadyChoices,
+  googleSetupBlockerIsConnect
+} from '../../../../../../shared/google/google-setup-card-view'
 import { useTurnOnBotGoogle } from '../use-turn-on-bot-google'
-import { googleAccountChoices, googleReadinessFixer } from '../GoogleAccountReadiness'
+import { googleAccountChoices, googleReadinessFixer } from '../google-account-readiness'
 import { googleChoiceLogos, GoogleLogoStack } from '../GoogleServicePicker'
 import { GoogleAddServiceDialog } from '../GoogleAddServiceDialog'
 import { GoogleSignInWaiting } from '../GoogleSignInWaiting'
@@ -18,7 +22,6 @@ import { useBotHostLabel } from '../../use-bot-host-label'
 import { GoogleSetupCardFrame, GoogleSetupReceipt } from './GoogleSetupCardParts'
 import { googleSetupOwnerStep, googleSetupServicesList } from './google-setup-card-copy'
 import { GoogleSetupBlockerPanel } from './GoogleSetupBlockerPanel'
-import { googleSetupBlockerIsConnect } from './google-setup-blocker-copy'
 import { answerGoogleSetup, useGoogleSetupBlocker } from './google-setup-run-store'
 
 const HEADING = (): string => translate('bots.googleSetup.heading', 'Connect Google')
@@ -34,7 +37,7 @@ export function GoogleSetupConnectCard({
   newest: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const signIn = useGoogleSignIn(botTarget(bot))
+  const signIn = useGoogleSignIn(botTarget(bot), bot)
   const host = useBotHostLabel(bot.hostId)
   const turnOn = useTurnOnBotGoogle()
   const done = run.steps.connect?.status === 'done'
@@ -137,16 +140,12 @@ export function GoogleSetupConnectedCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const host = useGoogleHost(botTarget(bot))
-  const signIn = useGoogleSignIn(botTarget(bot))
+  const signIn = useGoogleSignIn(botTarget(bot), bot)
   const google = host.status === 'ready' ? host.google : null
   const account =
     google?.accounts.find((entry) => entry.email === run.account) ?? google?.accounts[0] ?? null
   const rows = account ? googleReadinessRows(account).filter((row) => row.key !== 'contacts') : []
-  const ready = account
-    ? googleAccountChoices(account).filter((choice) =>
-        rows.some((row) => row.key === choice && row.readiness.state === 'ready')
-      )
-    : (run.services ?? [])
+  const ready = account ? googleReadyChoices(account) : (run.services ?? [])
   const fix = account
     ? googleReadinessFixer({
         target: botTarget(bot),
@@ -208,7 +207,7 @@ export function GoogleSetupConnectedCard({
             size="inlineText"
             onClick={() => shareGoogleApp(botTarget(bot), google?.client?.projectId)}
           >
-            {t('bots.googleSetup.connected.share', 'Share setup with teammates')}
+            {t('bots.googleSetup.connected.share', 'Share setup')}
           </Button>
         ) : null}
       </div>

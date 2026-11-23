@@ -4,7 +4,7 @@ import type {
   DocPreviewFileAccessRequest,
   DocPreviewFileAccessResult,
   DocPreviewFileChunk,
-  DocPreviewFileTarget
+  DocPreviewFileChunkRequest
 } from '../../../shared/document-preview/doc-preview-file-access'
 import type { DirEntry } from '../../../shared/file-listing/directory-entry'
 import type { FsChangeEvent } from '../../../shared/file-watch/filesystem-change-event'
@@ -46,7 +46,7 @@ export type IFilesystemProvider = {
   readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult>
   readDocPreviewFile?(request: DocPreviewFileAccessRequest): Promise<DocPreviewFileAccessResult>
   readDocPreviewFileChunk?(
-    request: DocPreviewFileTarget,
+    request: DocPreviewFileChunkRequest,
     offset: number,
     length: number
   ): Promise<DocPreviewFileChunk>

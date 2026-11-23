@@ -35,11 +35,11 @@ export const GOOGLE_OWNER_ONLY =
   'Only your owner can change Google on this computer; ask them in Orca.'
 
 /** This host's Google, read for one bot; a host without Google has no app. */
-export function hostGoogleBotState(bot: Pick<Bot, 'google'>): GoogleBotConnectState {
+export async function hostGoogleBotState(bot: Pick<Bot, 'google'>): Promise<GoogleBotConnectState> {
   const connect = getGoogleConnect()
   return googleBotConnectState({
     allowed: bot.google === true,
-    client: connect?.client() ?? null,
-    accounts: connect?.accounts() ?? []
+    client: (await connect?.client()) ?? null,
+    accounts: (await connect?.accounts()) ?? []
   })
 }

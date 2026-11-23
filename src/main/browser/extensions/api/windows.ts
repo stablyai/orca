@@ -9,13 +9,12 @@ import {
 import {
   describeBrowserExtensionTab,
   listBrowserExtensionTabs,
-  resolveCallerWindowId
+  requireCallerWindow
 } from '../tabs-and-windows/browser-extension-tab-model'
 import {
   WINDOW_ID_CURRENT,
   createBrowserExtensionPopout,
   describeBrowserExtensionWindow,
-  getBrowserExtensionWindow,
   getLastFocusedBrowserExtensionWindowId,
   listBrowserExtensionWindows,
   presentBrowserExtensionWindow,
@@ -72,18 +71,6 @@ function describe(
         .map((tab) => describeBrowserExtensionTab(caller.extension, tab))
     : undefined
   return describeBrowserExtensionWindow(entry, tabs)
-}
-
-function requireWindow(
-  caller: BrowserExtensionCaller,
-  windowId: number
-): BrowserExtensionWindowEntry {
-  const resolvedId = windowId === WINDOW_ID_CURRENT ? resolveCallerWindowId(caller) : windowId
-  const entry = resolvedId === null ? null : getBrowserExtensionWindow(resolvedId, caller.session)
-  if (!entry) {
-    throw new BrowserExtensionApiError(`No window with id: ${windowId}.`)
-  }
-  return entry
 }
 
 function applyWindowState(
@@ -143,17 +130,23 @@ export function registerWindowsNamespace(): void {
       ),
       get: defineBrowserExtensionMethod(
         z.tuple([windowIdSchema, queryOptionsSchema.optional()]),
-        (caller, windowId, options) => describe(caller, requireWindow(caller, windowId), options)
+        (caller, windowId, options) =>
+          describe(caller, requireCallerWindow(caller, windowId), options)
       ),
       getCurrent: defineBrowserExtensionMethod(
         z.tuple([queryOptionsSchema.optional()]),
-        (caller, options) => describe(caller, requireWindow(caller, WINDOW_ID_CURRENT), options)
+        (caller, options) =>
+          describe(caller, requireCallerWindow(caller, WINDOW_ID_CURRENT), options)
       ),
       getLastFocused: defineBrowserExtensionMethod(
         z.tuple([queryOptionsSchema.optional()]),
         (caller, options) => {
           const windowId = getLastFocusedBrowserExtensionWindowId(caller.session)
-          return describe(caller, requireWindow(caller, windowId ?? WINDOW_ID_CURRENT), options)
+          return describe(
+            caller,
+            requireCallerWindow(caller, windowId ?? WINDOW_ID_CURRENT),
+            options
+          )
         }
       ),
       create: defineBrowserExtensionMethod(
@@ -180,19 +173,19 @@ export function registerWindowsNamespace(): void {
                 : 'focused',
             state: data?.state
           })
-          return describe(caller, requireWindow(caller, window.id), { populate: true })
+          return describe(caller, requireCallerWindow(caller, window.id), { populate: true })
         }
       ),
       update: defineBrowserExtensionMethod(
         z.tuple([windowIdSchema, updateInfoSchema]),
         (caller, windowId, info) => {
-          const entry = requireWindow(caller, windowId)
+          const entry = requireCallerWindow(caller, windowId)
           applyWindowUpdate(entry, info, findBrowserExtensionCallerAgentPage(caller) !== null)
           return describe(caller, entry, undefined)
         }
       ),
       remove: defineBrowserExtensionMethod(z.tuple([windowIdSchema]), (caller, windowId) => {
-        const entry = requireWindow(caller, windowId)
+        const entry = requireCallerWindow(caller, windowId)
         if (entry.isMain) {
           throw new BrowserExtensionApiError("Extensions cannot close Orca's main window")
         }

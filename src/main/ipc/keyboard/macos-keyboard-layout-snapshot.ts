@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type {
   KeyboardLayoutKeyCharacters,
@@ -10,19 +10,20 @@ const HELPER_EXECUTABLE = 'orca-keyboard-layout'
 const HELPER_TIMEOUT_MS = 1000
 const MAX_HELPER_OUTPUT_BYTES = 64 * 1024
 
-let cachedHelperPath: string | null | undefined
+let cachedHelperPath: Promise<string | null> | undefined
 let readInFlight: Promise<KeyboardLayoutSnapshot | null> | null = null
 
-function resolveHelperPath(): string | null {
-  if (cachedHelperPath !== undefined) {
-    return cachedHelperPath
+function resolveHelperPath(): Promise<string | null> {
+  if (cachedHelperPath === undefined) {
+    const candidate = join(dirname(process.execPath), HELPER_EXECUTABLE)
+    cachedHelperPath =
+      process.platform === 'darwin'
+        ? access(candidate).then(
+            () => candidate,
+            () => null
+          )
+        : Promise.resolve(null)
   }
-  if (process.platform !== 'darwin') {
-    cachedHelperPath = null
-    return cachedHelperPath
-  }
-  const candidate = join(dirname(process.execPath), HELPER_EXECUTABLE)
-  cachedHelperPath = existsSync(candidate) ? candidate : null
   return cachedHelperPath
 }
 
@@ -63,16 +64,11 @@ export function parseKeyboardLayoutSnapshot(stdout: string): KeyboardLayoutSnaps
 }
 
 export function readMacKeyboardLayoutSnapshot(): Promise<KeyboardLayoutSnapshot | null> {
-  const helperPath = resolveHelperPath()
-  if (!helperPath) {
-    return Promise.resolve(null)
-  }
-  if (readInFlight) {
-    return readInFlight
-  }
-  readInFlight = runHelper(helperPath).finally(() => {
-    readInFlight = null
-  })
+  readInFlight ??= resolveHelperPath()
+    .then((helperPath) => (helperPath ? runHelper(helperPath) : null))
+    .finally(() => {
+      readInFlight = null
+    })
   return readInFlight
 }
 

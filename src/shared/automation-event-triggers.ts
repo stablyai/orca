@@ -29,6 +29,7 @@ export const AUTOMATION_EVENT_KINDS = {
     'assigned',
     'ci_failed',
     'ci_passed',
+    'ci_finished',
     'pr_conflicted',
     'pr_closed',
     'pr_ready',
@@ -241,6 +242,14 @@ export const EVENT_ONLY_SCHEDULE = {
 
 export function hasAutomationSchedule(automation: Pick<Automation, 'dtstart'>): boolean {
   return automation.dtstart < EVENT_ONLY_SCHEDULE.dtstart
+}
+
+/** Nothing but its webhook starts it, so the automation can't outlive the webhook. */
+export function webhookIsOnlyStart(automation: Pick<Automation, 'on' | 'dtstart'>): boolean {
+  return (
+    !hasAutomationSchedule(automation) &&
+    (automation.on ?? []).every((trigger) => isWebhookTrigger(trigger))
+  )
 }
 
 /** Whether the source event already reached this run, as its latest event or a folded one. */

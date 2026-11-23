@@ -19,6 +19,7 @@ export type NativeChatRowContentMetrics = {
   userFolds: boolean
   imageCount: number
   toolCount: number
+  /** One closed summary row per subagent group; its rows exist only once opened. */
   subagentGroupCount: number
 }
 
@@ -57,9 +58,9 @@ export const NATIVE_CHAT_SUBAGENT_HEAD_PX = SUBAGENT_ROW_PX
 const STATUS_ROW_PX = 28
 const TURN_DIFF_PX = 28
 const RECEIPT_PX = 56
-/** How far assistant prose's controls hang below the row (`-mb-5`) when they may; a row that keeps
+/** How far assistant prose's controls hang below the row (`-mb-1`) when they may; a row that keeps
  *  them in flow is that much taller. */
-const AGENT_CONTROLS_OVERHANG_PX = 20
+const AGENT_CONTROLS_OVERHANG_PX = 4
 const ROW_MIN_PX = 24
 /** Charge internal gap-5 only; the virtualizer owns inter-row gaps, which would otherwise compound drift. */
 export const NATIVE_CHAT_ROW_GAP_PX = 20
@@ -168,7 +169,7 @@ export function estimateNativeChatRowHeight(
     height = RECEIPT_PX * scale
     partCount = 1
   } else if (chrome.folded === true) {
-    height = content.subagentGroupCount * SUBAGENT_ROW_PX * scale
+    height = content.subagentGroupCount * STATUS_ROW_PX * scale
     partCount = height > 0 ? 1 : 0
   } else if (content.compactAgentMessage) {
     height = COMPACT_AGENT_MESSAGE_PX * scale
@@ -192,7 +193,7 @@ export function estimateNativeChatRowHeight(
       // A run is one collapsed header by default; its members only exist while open.
       height += TOOL_RUN_CHROME_PX * scale + 2 * typography.lineHeightPx
     }
-    height += content.subagentGroupCount * SUBAGENT_ROW_PX * scale
+    height += content.subagentGroupCount * STATUS_ROW_PX * scale
     partCount = height > 0 ? 1 : 0
   }
   if (chrome.hasStatus) {
