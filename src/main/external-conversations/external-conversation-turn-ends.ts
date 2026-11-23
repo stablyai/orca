@@ -11,7 +11,6 @@ import type { EndedChatTurn } from './external-conversation-ended-turn'
 import type { ConversationReplyFill, FilledTurn } from './external-conversation-reply-fill'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
-import type { ConnectorTurnOrigin } from '../../shared/connectors/connector-cloud-contract'
 import { connectorReplyWords } from '../../shared/agent-session/journal/journal-connector-reply-turn'
 import { isSlackDirectMessage } from '../../shared/connectors/slack-direct-message'
 export type { SlackMirrorTurn } from './slack-mirror'
@@ -97,11 +96,6 @@ function tookOf(ended: ChatTurnEnd['ended']): { tookMs?: number } {
 export type ChatTurnReplies = {
   /** Fills the reply outbox rows an ended turn answered (design item 125). */
   replyFill?: () => ConversationReplyFill | null
-  /** Read once per ended turn. */
-  chatTurnOrigin: (sessionId: string, turnAt: number | null) => ConnectorTurnOrigin
-  /** Whether every delivery the ending turn answers has reply outbox rows; read before
-   *  chatTurnOrigin, which ends the turn. */
-  chatTurnOutboxed?: (sessionId: string) => boolean
 }
 
 /** The first call reads; every later one gets that same read. */
@@ -256,15 +250,12 @@ function ownerDmAnswer(link: ExternalConversationLink, turn: EndedChatTurn): boo
 const COALESCED_QUIET_REPLY =
   'I replied but the message may not have reached you. Please ask again.'
 
-/** Only count metadata can turn a quiet completion into a constant; earlier text is never read.
- *  `outboxed`: every delivery the turn answers has reply outbox rows, which post each merged
- *  turn's own words, so nothing was dropped. */
+/** Only count metadata can turn a quiet completion into a constant; earlier text is never read. */
 export function botTurnReply(
   end: ChatTurnEnd,
   link: ExternalConversationLink,
   turn: EndedChatTurn,
-  requested: boolean,
-  outboxed = false
+  requested: boolean
 ): string | undefined {
   const message = turn.lastAssistantMessage
   if (!link.bot || !message || !isQuietBotResult(message)) {
@@ -278,11 +269,9 @@ export function botTurnReply(
   // Quiet to the thread's own message is its answer: the merged turns before it were not the reply.
   const reason = !requested
     ? 'not-thread-request'
-    : outboxed && providerTurnCount === 2
-      ? 'answered-through-outbox'
-      : answersThread(link, turn)
-        ? 'thread-answered-quietly'
-        : 'coalesced-quiet'
+    : answersThread(link, turn)
+      ? 'thread-answered-quietly'
+      : 'coalesced-quiet'
   const fallback = reason === 'coalesced-quiet'
   // Text-free and id-free: only how many turns merged and what was decided.
   console.info('[connector] merged quiet completion', { providerTurnCount, fallback, reason })
