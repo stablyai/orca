@@ -47,6 +47,7 @@ import { reconcileOrphanedRuntimeSessions } from './catalog/runtime-environment-
 import { registerRuntimeSshAccessHandlers } from './connectivity/runtime-ssh-access-handlers'
 import { retirePairedRuntimeBrowserClientHostEnvironment } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { registerRuntimeEnvironmentBrowserClientHostHandler } from './browser-hosting/runtime-environment-browser-client-host-handler'
+import { registerRuntimeEnvironmentPortForwardHandlers } from './port-forwarding/runtime-environment-port-forward-handlers'
 import { advanceRuntimeEnvironmentCapabilityIncarnation } from './connections/runtime-environment-capability-evidence'
 import { retireMobileDesktopRelayEnvironment } from './mobile-relay/runtime-environment-mobile-relay-hosts'
 import { watchRuntimeEnvironmentPreference } from './catalog/runtime-environment-preference'
@@ -173,6 +174,7 @@ export async function registerRuntimeEnvironmentHandlers(
     getUserDataPath,
     getSettings: () => store.getSettings()
   })
+  registerRuntimeEnvironmentPortForwardHandlers({ getUserDataPath })
   registerRuntimeEnvironmentRecoveryHandler()
   registerRuntimeEnvironmentRepairHandler({
     getUserDataPath,

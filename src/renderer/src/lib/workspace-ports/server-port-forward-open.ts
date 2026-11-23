@@ -1,0 +1,107 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store/index'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/workspace-ports-runtime-capabilities'
+import { isLoopbackBrowserUrl } from '../../../../shared/browser/navigation/loopback-browser-url'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { forwardedUrlForRemoteUrl } from './workspace-port-urls'
+import { serverForwardsPorts } from './server-port-forward-support'
+
+/** How a port's URL opens in the system browser; null when only Orca's browser on its host reaches it. */
+export function portSystemBrowserOpener(
+  url: string,
+  target: RuntimeClientTarget
+): (() => Promise<void>) | null {
+  if (target.kind === 'local') {
+    return () => window.api.shell.openUrl(url)
+  }
+  // A paired server's localhost reaches the system browser only through a forward of its port.
+  return serverForwardsPorts(target.environmentId) && isLoopbackBrowserUrl(url)
+    ? () => openServerLoopbackInSystemBrowser(url, target.environmentId)
+    : null
+}
+
+/**
+ * Opens a paired server's localhost URL in the system browser through a forward of its port,
+ * starting one first when needed. Never opens this computer's own localhost. Call only from a
+ * person's gesture: it is the only way a forward starts without the Forward dialog.
+ */
+export async function openServerLoopbackInSystemBrowser(
+  rawUrl: string,
+  environmentId: string
+): Promise<void> {
+  let url: URL
+  try {
+    url = new URL(rawUrl)
+  } catch {
+    return
+  }
+  const port = Number(url.port) || (url.protocol === 'https:' ? 443 : 80)
+  const state = useAppStore.getState()
+  const known = forwardedUrlForRemoteUrl(
+    rawUrl,
+    state.portForwardsByConnection[environmentId] ?? []
+  )
+  if (known) {
+    await window.api.shell.openUrl(known)
+    return
+  }
+  const host = selectExecutionHostDisplayLabel(state, toRuntimeExecutionHostId(environmentId))
+  const api = window.api.runtimeEnvironments.portForwards
+  const supported =
+    api !== undefined &&
+    (await runtimeEnvironmentSupportsCapability(
+      environmentId,
+      NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY
+    ).catch(() => false))
+  if (!api || !supported) {
+    toast.error(
+      translate(
+        'auto.lib.workspace.ports.serverPortForward.updateServer',
+        "Couldn't forward port {{port}} from {{host}}. Update Orca on {{host}} and try again.",
+        { port, host }
+      )
+    )
+    return
+  }
+  let target: string | null
+  let created: boolean
+  try {
+    const result = await api.ensure({ environmentId, remotePort: port })
+    target = forwardedUrlForRemoteUrl(rawUrl, [result.entry])
+    created = result.created
+  } catch {
+    target = null
+    created = false
+  }
+  if (!target) {
+    toast.error(
+      translate(
+        'auto.lib.workspace.ports.serverPortForward.failed',
+        "Couldn't forward port {{port}} from {{host}}. Check the connection and try again.",
+        { port, host }
+      )
+    )
+    return
+  }
+  await window.api.shell.openUrl(target)
+  if (created) {
+    toast.success(
+      translate(
+        'auto.lib.workspace.ports.serverPortForward.forwarded',
+        'Forwarded port {{port}} from {{host}}',
+        { port, host }
+      ),
+      {
+        description: translate(
+          'auto.lib.workspace.ports.serverPortForward.opened',
+          'Opened {{address}} in your default browser.',
+          { address: new URL(target).host }
+        )
+      }
+    )
+  }
+}
