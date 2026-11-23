@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, useRef } from 'react'
+import { act, useEffect, useRef } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChecksDetailPollingPolicy } from '../../../../../shared/github/checks/checks-detail-polling-policy'
@@ -13,7 +13,15 @@ import { refreshChecksPanelHostedReview } from './refresh/hosted-review-manual-r
 import type { ChecksPanelManualRefreshInput } from './refresh/manual-refresh-dependencies'
 import { useAppStore } from '@/store/index'
 
+type HostedReviewCacheEntry = ReturnType<typeof useAppStore.getState>['hostedReviewCache'][string]
+
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+
+/** Test doubles supply only the fields the code under test reads. */
+function testDouble<T>(value: object): T {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each double supplies every field the hook or helper under test reads; the rest of the panel model is unused here.
+  return value as T
+}
 const isCurrentAsyncResult = (): boolean => true
 const fetchPRCheckDetails = vi.fn()
 const gitLabProjectRefRef = { current: null }
@@ -26,8 +34,9 @@ beforeEach(() => {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
-  Object.assign(window, {
-    api: { ...(window as { api?: object }).api, gh: { onWorkItemMutated: () => () => {} } }
+  Reflect.set(window, 'api', {
+    ...Reflect.get(window, 'api'),
+    gh: { onWorkItemMutated: () => () => {} }
   })
 })
 
@@ -60,7 +69,10 @@ function TimerHost({
   fetchChecks: () => Promise<void>
 }): null {
   const modelRef = useRef(model)
-  modelRef.current = model
+  // Same order as the production polling hook: refresh the ref before the timer effect runs.
+  useEffect(() => {
+    modelRef.current = model
+  })
   const policyRef = useRef(new ChecksDetailPollingPolicy())
   useChecksDetailTimer({
     model,
@@ -74,7 +86,7 @@ function TimerHost({
 }
 
 function timerModel(set: ReturnType<typeof setters>, gitLab: boolean): ChecksPanelPollingInput {
-  return {
+  return testDouble<ChecksPanelPollingInput>({
     ...set,
     activeGitLabReview: gitLab ? { number: 7, state: 'merged', status: 'success' } : null,
     pr: gitLab ? null : { number: 7, state: 'merged', checksStatus: 'success' },
@@ -86,7 +98,7 @@ function timerModel(set: ReturnType<typeof setters>, gitLab: boolean): ChecksPan
     isPanelVisible: true,
     pollIntervalRef: { current: 60_000 },
     prevChecksRef: { current: '' }
-  } as unknown as ChecksPanelPollingInput
+  })
 }
 
 describe('checks timer resets', () => {
@@ -155,7 +167,7 @@ function reviewDataModel(
   fetchPRComments: ReturnType<typeof vi.fn>,
   overrides: { headSha?: string; hostId?: string } = {}
 ): ReviewDataModel {
-  return {
+  return testDouble<ReviewDataModel>({
     ...set,
     activeGitLabReview: null,
     branch: 'feature',
@@ -169,7 +181,7 @@ function reviewDataModel(
     prNumber: 7,
     repo,
     activeWorktree: { id: 'wt', hostId: overrides.hostId ?? 'local' }
-  } as unknown as ReviewDataModel
+  })
 }
 
 describe('GitHub comments resets', () => {
@@ -258,7 +270,7 @@ describe('manual refresh lookups', () => {
   it('keeps current results when the review lookup finds nothing', async () => {
     const set = setters()
     const fetchGitLabDetails = vi.fn(async () => {})
-    const model = {
+    const model = testDouble<ChecksPanelManualRefreshInput>({
       ...set,
       repo,
       branch: 'feature',
@@ -271,7 +283,7 @@ describe('manual refresh lookups', () => {
       linkedAzureDevOpsPR: null,
       linkedGiteaPR: null,
       fallbackGitHubPRNumber: null
-    } as unknown as ChecksPanelManualRefreshInput
+    })
     await expect(refreshChecksPanelHostedReview(model, 'gitlab', () => true)).resolves.toBe(
       'no-review'
     )
@@ -290,7 +302,7 @@ describe('manual refresh lookups', () => {
     captured: ReturnType<typeof gitLabReview> | null
   ) {
     const fetchGitLabDetails = vi.fn(async () => {})
-    const model = {
+    const model = testDouble<ChecksPanelManualRefreshInput>({
       ...setters(),
       repo,
       branch: 'feature',
@@ -304,17 +316,19 @@ describe('manual refresh lookups', () => {
       linkedAzureDevOpsPR: null,
       linkedGiteaPR: null,
       fallbackGitHubPRNumber: null
-    } as unknown as ChecksPanelManualRefreshInput
+    })
     return { model, fetchGitLabDetails }
   }
 
   function publish(review: ReturnType<typeof gitLabReview> | null): void {
     useAppStore.setState({
-      hostedReviewCache: { 'hosted-key': { data: review, fetchedAt: Date.now() } }
-    } as never)
+      hostedReviewCache: {
+        'hosted-key': testDouble<HostedReviewCacheEntry>({ data: review, fetchedAt: Date.now() })
+      }
+    })
   }
 
-  afterEach(() => useAppStore.setState({ hostedReviewCache: {} } as never))
+  afterEach(() => useAppStore.setState({ hostedReviewCache: {} }))
 
   it('reads the published replacement, not the MR a late click captured', async () => {
     // A title save published MR 18 while this click, begun on MR 17, still waited.
