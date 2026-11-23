@@ -57,6 +57,9 @@ export class ProviderRelayLineReader {
 
   /** Resolves once the last line, spilled or not, has been delivered. */
   end(): Promise<void> {
+    if (this.disposed) {
+      return Promise.resolve()
+    }
     if (!this.spilled && !this.draining) {
       this.flushMemory()
       return Promise.resolve()
