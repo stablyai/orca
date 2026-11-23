@@ -19,6 +19,8 @@ import {
 import { LOCAL_CLI_RPC_CALLER } from '../runtime/rpc/callers/rpc-caller-identity'
 import type { RpcContext } from '../runtime/rpc/core'
 
+const NOW = 1_750_000_000_000
+
 function createBot(overrides: Partial<Bot> = {}): Bot {
   return {
     id: 'bot-1',
@@ -94,9 +96,10 @@ function createHarness(initialBot: Bot, initialLinks: ExternalConversationLink[]
   const handedOff: Harness['handedOff'] = []
   const actsForBySession = new Map<string, BotConversationActsFor>()
 
-  const gate = new BotUsageLimitGate()
+  const gate = new BotUsageLimitGate({ now: () => NOW })
   const deps: BotUsageLimitFailoverDeps = {
     gate,
+    now: () => NOW,
     listBots: () => [bot],
     botOfSession: (sessionId) => (sessions.has(sessionId) ? bot : null),
     updateBot: async (_botId, edit: (current: Bot) => BotHostUpdates) => {
@@ -205,7 +208,7 @@ function createHarness(initialBot: Bot, initialLinks: ExternalConversationLink[]
 describe('BotUsageLimitFailover invariants and security boundaries', () => {
   it('switches in-place for same-agent backups, preserves configured primary, and returns to primary when idle', async () => {
     const h = createHarness(createBot())
-    const resetsAt = Date.now() + 600_000
+    const resetsAt = NOW + 600_000
 
     await h.failover.onUsageLimitCut('session-home', { turnItemId: 'turn-1', resetsAt, chain: 1 })
 
@@ -289,7 +292,7 @@ describe('BotUsageLimitFailover invariants and security boundaries', () => {
     // Cut 1 fails over in-place to Backup 1 (claude-haiku-4-5).
     await h.failover.onUsageLimitCut('session-slack', {
       turnItemId: 'turn-1',
-      resetsAt: Date.now() + 600_000,
+      resetsAt: NOW + 600_000,
       chain: 1
     })
     expect(h.getBot().activeBackup?.target.model).toBe('claude-haiku-4-5')
@@ -297,7 +300,7 @@ describe('BotUsageLimitFailover invariants and security boundaries', () => {
     // Cut 2 on Backup 1 cascades cross-agent to Backup 2 (codex / gpt-5-codex).
     await h.failover.onUsageLimitCut('session-slack', {
       turnItemId: 'turn-2',
-      resetsAt: Date.now() + 900_000,
+      resetsAt: NOW + 900_000,
       chain: 2
     })
 
@@ -338,7 +341,7 @@ describe('BotUsageLimitFailover invariants and security boundaries', () => {
 
     await h.failover.onUsageLimitCut('session-home', {
       turnItemId: 'turn-ask',
-      resetsAt: Date.now() + 600_000,
+      resetsAt: NOW + 600_000,
       chain: 1
     })
     expect(h.sameAgentApplies).toEqual([])
@@ -370,7 +373,7 @@ describe('BotUsageLimitFailover invariants and security boundaries', () => {
       agent: 'claude',
       accountHomeKey: 'acct-a',
       model: 'claude-sonnet-4-5',
-      resetsAt: Date.now() + 600_000
+      resetsAt: NOW + 600_000
     })
 
     const resolved = await h.failover.resolveLaunchSetup(h.getBot())
