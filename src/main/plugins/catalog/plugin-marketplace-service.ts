@@ -1,6 +1,5 @@
 import {
   OFFICIAL_MARKETPLACE_GIT_SOURCE,
-  isOfficialMarketplaceGitSource,
   isMarketplaceListingSupported,
   pluginMarketplaceGitSourceSchema,
   type PluginMarketplaceEntry,
@@ -16,13 +15,19 @@ import {
   type PluginMarketplaceCachedSnapshot,
   type PluginMarketplaceRegisteredSource
 } from './plugin-marketplace-store'
-import type { PluginKillListEntry } from '../../../shared/plugins/catalog/plugin-kill-list'
+import type {
+  PluginBlockNotice,
+  PluginKillListEntry
+} from '../../../shared/plugins/catalog/plugin-kill-list'
 import type { PluginImageCache } from '../media/plugin-image-cache'
 import { cacheValidatedMarketplace } from './plugin-marketplace-provenance'
 import { CommunityMarketplaceSeed } from './plugin-community-marketplace-seed'
 import { COMMUNITY_MARKETPLACE_GIT_SOURCE } from '../../../shared/plugins/catalog/plugin-install-link'
 import type { OrcaCloudCapabilities } from '../../../shared/orca-profiles/orca-cloud-capabilities'
-import { PluginMarketplaceTeamPolicy } from './plugin-marketplace-team-policy'
+import {
+  isOfficialPluginChannel,
+  PluginMarketplaceTeamPolicy
+} from './plugin-marketplace-team-policy'
 import { pluginMarketplaceErrorMessage } from './plugin-marketplace-error-message'
 import { sharedSourceRefresh } from './plugin-marketplace-shared-refresh'
 import {
@@ -43,7 +48,9 @@ type MarketplaceFetcher = (
 export class PluginMarketplaceService {
   private readonly store: PluginMarketplaceStore
   private readonly fetcher: MarketplaceFetcher
-  private readonly getKillListEntry: (pluginKey: string) => PluginKillListEntry | null
+  private readonly getKillListEntry: (
+    pluginKey: string
+  ) => (PluginKillListEntry & PluginBlockNotice) | null
   private readonly hostVersion: string | null
   private readonly imageCache: PluginImageCache | null
   private readonly refreshChains = new Map<string, Promise<PluginMarketplaceSourceState>>()
@@ -57,7 +64,7 @@ export class PluginMarketplaceService {
     pluginsDataDir: string
     fetcher?: MarketplaceFetcher
     store?: PluginMarketplaceStore
-    getKillListEntry?: (pluginKey: string) => PluginKillListEntry | null
+    getKillListEntry?: (pluginKey: string) => (PluginKillListEntry & PluginBlockNotice) | null
     /** Picks which of an entry's releases to offer; without it the newest is offered. */
     hostVersion?: string
     imageCache?: PluginImageCache
@@ -79,24 +86,13 @@ export class PluginMarketplaceService {
     const sources = await this.teamPolicy.list(this.store)
     return Promise.all(
       sources.map(async (source) => {
-        try {
-          const managed = this.teamPolicy.isManaged(source.id)
-          const error = this.sourceErrors.get(source.id)
-          return pluginMarketplaceSourceState(
-            source,
-            await this.store.readSnapshot(source.id),
-            Boolean(error),
-            error,
-            managed
-          )
-        } catch (error) {
-          return pluginMarketplaceSourceState(
-            source,
-            null,
-            true,
-            pluginMarketplaceErrorMessage(error)
-          )
-        }
+        const managed = this.teamPolicy.isManaged(source.id)
+        let error = this.sourceErrors.get(source.id)
+        const snapshot = await this.store.readSnapshot(source.id).catch((cause) => {
+          error = pluginMarketplaceErrorMessage(cause)
+          return null
+        })
+        return pluginMarketplaceSourceState(source, snapshot, Boolean(error), error, managed)
       })
     )
   }
@@ -114,6 +110,9 @@ export class PluginMarketplaceService {
       addedAt: Date.now()
     }
     const fetched = await this.fetchAndValidate(candidate)
+    if (!this.teamPolicy.allows(parsedSource)) {
+      throw new Error('This plugin catalog is turned off by your team.')
+    }
     const registered = existing ?? (await this.store.addSource(parsedSource, candidate.addedAt))
     try {
       const snapshot = await this.store.writeSnapshot({ source: registered, ...fetched })
@@ -136,7 +135,7 @@ export class PluginMarketplaceService {
       throw new Error('This plugin catalog is managed by your team.')
     }
     const source = (await this.store.listSources()).find((candidate) => candidate.id === sourceId)
-    if (source && isOfficialMarketplaceGitSource(source.source.url)) {
+    if (source && isOfficialPluginChannel(source.source)) {
       throw new Error('the official marketplace is managed by Orca and cannot be removed')
     }
     const removed = await this.store.removeSource(sourceId)
@@ -254,18 +253,18 @@ export class PluginMarketplaceService {
       return pluginMarketplaceSourceState(source, snapshot, false)
     } catch (error) {
       const cached = await this.store.readSnapshot(source.id).catch(() => null)
+      const message = pluginMarketplaceErrorMessage(error)
+      this.sourceErrors.set(source.id, message)
       if (!cached) {
         throw error
       }
-      const message = pluginMarketplaceErrorMessage(error)
-      this.sourceErrors.set(source.id, message)
       return pluginMarketplaceSourceState(source, cached, true, message)
     }
   }
 
   private async performOfficialSeed(): Promise<PluginMarketplaceSourceState> {
     const sources = await this.store.listSources()
-    const existing = sources.find((source) => isOfficialMarketplaceGitSource(source.source.url))
+    const existing = sources.find((source) => isOfficialPluginChannel(source.source))
     const source =
       existing ?? (await this.store.addSource(OFFICIAL_MARKETPLACE_GIT_SOURCE, Date.now()))
     const snapshot = await this.store.readSnapshot(source.id).catch(() => null)

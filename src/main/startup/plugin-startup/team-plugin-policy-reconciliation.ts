@@ -57,9 +57,11 @@ export function watchTeamPluginPolicy(
       policy?.internalCatalogs,
       policy?.requiredPlugins,
       policy?.requiredPluginRules,
+      policy?.blockedPlugins,
       team?.flags[flags.plugins],
       team?.flags[flags.officialPlugins],
-      team?.flags[flags.communityPlugins]
+      team?.flags[flags.communityPlugins],
+      team?.flags[flags.allowMemberSources]
     ]
     const snapshot =
       policy && pluginSettings.some((value) => value !== undefined)

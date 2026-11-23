@@ -29629,6 +29629,7 @@
     }
   },
   "plugins": {
+    "blockedByTeam": "Blocked by your team.",
     "requiredFailures": {
       "toast": "A required plugin could not be installed",
       "open": "Open Plugins",

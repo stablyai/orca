@@ -48,7 +48,10 @@ import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
 import { getActiveTeamCapabilities } from '../../orca-profiles/cloud-auth/active-team-capabilities'
 import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import { watchTeamPluginPolicy } from './team-plugin-policy-reconciliation'
-import { getRequiredTeamPlugins } from '../../plugins/installation/plugin-team-install-policy'
+import {
+  findTeamPluginBlock,
+  getRequiredTeamPlugins
+} from '../../plugins/installation/plugin-team-install-policy'
 
 const PLUGIN_AUTO_UPDATE_STARTUP_DELAY_MS = 60_000
 // Why: the official catalog fetch must not compete with first paint; opening the marketplace seeds sooner.
@@ -64,6 +67,8 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     pluginsDataDir: getPluginsDataDir(app.getPath('userData'))
   })
   await core.pluginKillListService.initialize()
+  const getPluginBlock = (key: string) =>
+    core.pluginKillListService?.find(key) ?? findTeamPluginBlock(key)
   core.pluginInstallStatsService = new PluginInstallStatsService({
     pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
     // Why packaged only (like the safety list): dev and e2e runs must not reach the network unasked.
@@ -84,7 +89,7 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
   core.pluginMarketplaceService = new PluginMarketplaceService({
     imageCache: pluginImageCache,
     pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
-    getKillListEntry: (pluginKey) => core.pluginKillListService?.find(pluginKey) ?? null,
+    getKillListEntry: getPluginBlock,
     hostVersion: pluginHostVersion(app.getVersion()),
     getTeamCapabilities: getActiveTeamCapabilities
   })
@@ -124,7 +129,7 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     getPluginConsents: () => normalizePluginConsents(store.getSettings().pluginConsents),
     getDevPluginPaths: () => normalizePluginIdList(store.getSettings().devPluginPaths),
     getKeybindings: () => core.keybindings?.getOverrides() ?? {},
-    getPluginKillListEntry: (pluginKey) => core.pluginKillListService?.find(pluginKey) ?? null,
+    getPluginKillListEntry: getPluginBlock,
     hostEntryPath: resolvePluginHostEntryPath(app.getAppPath(), app.isPackaged),
     getDesktopFrameServices: getPluginDesktopFrameServices,
     statusBar: new PluginStatusBarState(),
@@ -177,7 +182,7 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
     getHeld: () => pluginAutoUpdater.getHeldForReview(),
     findName: (pluginKey) => pluginService.findValidPlugin(pluginKey)?.manifest.name ?? null,
-    isKillListed: (pluginKey) => Boolean(core.pluginKillListService?.find(pluginKey))
+    isKillListed: (pluginKey) => Boolean(getPluginBlock(pluginKey))
   })
   // Why packaged only (like the safety list): dev and e2e runs must not update fixtures unasked.
   const autoUpdateScheduled = app.isPackaged || process.env.ORCA_PLUGIN_AUTO_UPDATE === '1'

@@ -250,6 +250,7 @@ export async function buildPluginList(
           ? {
               blockedByKillList: {
                 reason: killListEntry.reason,
+                ...(killListEntry.team ? { team: true as const } : {}),
                 ...(killListEntry.advisoryUrl ? { advisoryUrl: killListEntry.advisoryUrl } : {})
               }
             }

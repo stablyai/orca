@@ -14,7 +14,8 @@ export const ORCA_CLOUD_TEAM_POLICY_FLAGS = {
   computerUse: 'desktop.computerUse',
   plugins: 'desktop.plugins',
   officialPlugins: 'plugins.official',
-  communityPlugins: 'plugins.community'
+  communityPlugins: 'plugins.community',
+  allowMemberSources: 'plugins.memberSources'
 } as const
 
 export type OrcaCloudTeamFeatureFlag =
@@ -60,6 +61,7 @@ export const orcaCloudTeamPolicySchema = z.object({
   internalCatalogs: z.array(pluginMarketplaceGitSourceSchema).optional(),
   requiredPlugins: z.array(z.string().refine(isQualifiedPluginKey)).optional(),
   requiredPluginRules: z.array(requiredPluginRuleSchema).optional(),
+  blockedPlugins: z.array(z.string().refine(isQualifiedPluginKey)).optional(),
   updateChannel: z.enum(['stable', 'rc']).optional(),
   updateDelayDays: z.number().int().min(0).max(90).optional(),
   minimumVersion: z.string().max(64).refine(isValidAppVersion).optional(),

@@ -1,3 +1,4 @@
+import { pluginBlockCopy } from '../presentation/plugin-block-copy'
 import { ArrowUpCircle, Copy, FileText, Hash, Loader2, RotateCcw, Trash2 } from 'lucide-react'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { translate } from '@/i18n/i18n'
@@ -70,11 +71,7 @@ export function installedPluginControls(
   let tone: 'default' | 'destructive' = 'default'
   if (plugin.blockedByKillList) {
     tone = 'destructive'
-    description = t(
-      'auto.components.settings.PluginSettingsRow.killListMessage',
-      "Orca's safety list disabled this plugin: {{value0}}",
-      { value0: plugin.blockedByKillList.reason }
-    )
+    description = pluginBlockCopy(plugin.blockedByKillList, t, true)
   } else if (kind === 'invalid' && plugin.error) {
     tone = 'destructive'
     description = invalidPluginErrorMessage(plugin.error, !plugin.isDev, t)

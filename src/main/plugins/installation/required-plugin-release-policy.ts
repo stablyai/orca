@@ -1,10 +1,9 @@
 import { satisfies } from 'semver'
+import type { PluginMarketplaceGitSource } from '../../../shared/plugins/catalog/plugin-marketplace'
 import {
-  isOfficialMarketplaceGitSource,
-  isSameGitRepository,
-  type PluginMarketplaceGitSource
-} from '../../../shared/plugins/catalog/plugin-marketplace'
-import { COMMUNITY_MARKETPLACE_GIT_SOURCE } from '../../../shared/plugins/catalog/plugin-install-link'
+  isCommunityPluginChannel,
+  isOfficialPluginChannel
+} from '../catalog/plugin-marketplace-team-policy'
 import type { PluginLockEntry } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import type { RequiredPluginRule } from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import { getActiveTeamCapabilities } from '../../orca-profiles/cloud-auth/active-team-capabilities'
@@ -32,9 +31,9 @@ function matchesCatalog(
 ): boolean {
   switch (catalog) {
     case 'official':
-      return isOfficialMarketplaceGitSource(source.url)
+      return isOfficialPluginChannel(source)
     case 'community':
-      return isSameGitRepository(source.url, COMMUNITY_MARKETPLACE_GIT_SOURCE.url)
+      return isCommunityPluginChannel(source)
     default:
       return catalog.url === source.url && catalog.ref === source.ref
   }

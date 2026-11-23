@@ -1,3 +1,4 @@
+import { pluginBlockCopy } from '../presentation/plugin-block-copy'
 import { AlertTriangle, CircleAlert } from 'lucide-react'
 import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api/plugins/plugin-host-api'
 import { translate } from '@/i18n/i18n'
@@ -113,11 +114,7 @@ export function CatalogCard({
           ? { text: phase.message, tone: 'destructive' }
           : listing?.blockedByKillList && !entry.installed
             ? {
-                text: t(
-                  'auto.components.settings.PluginMarketplaceListingRow.blocked',
-                  "Blocked by Orca's safety list: {{value0}}",
-                  { value0: listing.blockedByKillList.reason }
-                ),
+                text: pluginBlockCopy(listing.blockedByKillList, t),
                 tone: 'destructive'
               }
             : installError

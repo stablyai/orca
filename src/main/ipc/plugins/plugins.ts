@@ -218,8 +218,10 @@ export function registerPluginHandlers(
     const parsed = parsePluginInstallArgs(args)
     const pluginsDir = getUserPluginsDir(pluginService.options.userDataPath)
     const hostVersion = pluginService.options.hostVersion
-    const blockedPluginReason = (pluginKey: string): string | null =>
-      pluginService.options.getPluginKillListEntry?.(pluginKey)?.reason ?? null
+    const blockedPluginReason = (pluginKey: string): string | null => {
+      const block = pluginService.options.getPluginKillListEntry?.(pluginKey)
+      return block?.team ? null : (block?.reason ?? null)
+    }
     const result =
       parsed.kind === 'local-path'
         ? await installPluginFromLocalPath({

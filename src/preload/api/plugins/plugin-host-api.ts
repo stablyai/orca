@@ -1,3 +1,4 @@
+import type { PluginBlockNotice } from '../../../shared/plugins/catalog/plugin-kill-list'
 import type { PluginHostImages } from '../../../shared/plugins/images/plugin-image-url'
 import type { EditorSaveHookDecision } from '../../../shared/plugins/events/plugin-editor-save-hook'
 import type { PluginUpdateAccessGrowth } from '../../../shared/plugins/approval/plugin-update-access-growth'
@@ -95,7 +96,7 @@ export type PluginMarketplaceHostListing = {
   categories: string[]
   official: boolean
   bundled: boolean
-  blockedByKillList?: { reason: string; advisoryUrl?: string }
+  blockedByKillList?: PluginBlockNotice
   /** Estimated listing date (ISO 8601): a community plugin's oldest dated release. Absent for
    *  official plugins and undated releases. */
   addedAt?: string
@@ -135,7 +136,7 @@ export type PluginMarketplaceHostInstallPreview = {
   manifest: PluginManifest
   official: boolean
   bundled: boolean
-  blockedByKillList?: { reason: string; advisoryUrl?: string }
+  blockedByKillList?: PluginBlockNotice
   /** The manifest's images, verified at preview. */
   images?: PluginHostImages
   /** For an update: what it asks for beyond the installed version. */

@@ -1,3 +1,4 @@
+import type { PluginBlockNotice } from './catalog/plugin-kill-list'
 import type { PluginCatalogType } from './catalog/plugin-catalog-types'
 import type { PluginExecutionProfile } from './contributions/plugin-execution-profile'
 import type { PluginHostImages } from './images/plugin-image-url'
@@ -122,7 +123,7 @@ export type PluginHostListEntry = {
     }[]
   }[]
   restarts: number
-  blockedByKillList?: { reason: string; advisoryUrl?: string }
+  blockedByKillList?: PluginBlockNotice
   source?: {
     kind: 'local-path' | 'git' | 'marketplace' | 'bundled'
     reference: string

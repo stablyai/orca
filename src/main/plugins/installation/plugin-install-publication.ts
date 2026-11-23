@@ -1,5 +1,6 @@
 import { readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
+import { findTeamPluginBlock, teamAllowsPluginInstallSource } from './plugin-team-install-policy'
 import { requiredPluginInstallError } from './required-plugin-release-policy'
 import {
   PLUGIN_CONTENT_HASH_PATTERN,
@@ -42,7 +43,7 @@ export async function publishPluginInstall(input: {
       : null
   // Same-byte reinstalls preserve immutable provenance; interrupted source changes must not appear published.
   const publishedEntry = existingProvenance ?? legacyCurrentEntry ?? input.entry
-  const policyError = requiredPluginInstallError(publishedEntry)
+  const policyError = pluginInstallPolicyError(publishedEntry)
   if (policyError) {
     throw new Error(policyError)
   }
@@ -51,7 +52,7 @@ export async function publishPluginInstall(input: {
   if (!existingProvenance) {
     await writePluginInstallProvenance(input.pluginDir, publishedEntry)
   }
-  const currentPolicyError = requiredPluginInstallError(publishedEntry)
+  const currentPolicyError = pluginInstallPolicyError(publishedEntry)
   if (currentPolicyError) {
     throw new Error(currentPolicyError)
   }
@@ -81,6 +82,18 @@ export async function publishPluginInstall(input: {
       )
     ).catch(() => undefined)
   }
+}
+
+function pluginInstallPolicyError(entry: PluginLockEntry): string | null {
+  if (entry.source.kind === 'bundled') {
+    return null
+  }
+  return (
+    findTeamPluginBlock(entry.pluginKey)?.reason ??
+    (!teamAllowsPluginInstallSource(entry.source)
+      ? 'This plugin source is turned off by your team.'
+      : requiredPluginInstallError(entry))
+  )
 }
 
 async function pruneHistoricalVersions(pluginDir: string, retained: ReadonlySet<string>) {

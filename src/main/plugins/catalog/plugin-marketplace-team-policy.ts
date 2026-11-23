@@ -5,28 +5,60 @@ import {
 } from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import {
   isOfficialMarketplaceGitSource,
+  isSameGitRepository,
+  OFFICIAL_MARKETPLACE_GIT_SOURCE,
   type PluginMarketplaceGitSource
 } from '../../../shared/plugins/catalog/plugin-marketplace'
+import { COMMUNITY_MARKETPLACE_GIT_SOURCE } from '../../../shared/plugins/catalog/plugin-install-link'
 import {
   marketplaceSourceId,
   type PluginMarketplaceRegisteredSource,
   type PluginMarketplaceStore
 } from './plugin-marketplace-store'
 
+type CatalogSource = Pick<PluginMarketplaceGitSource, 'url' | 'ref'>
+
+export function isOfficialPluginChannel(source: CatalogSource): boolean {
+  return (
+    source.ref === OFFICIAL_MARKETPLACE_GIT_SOURCE.ref && isOfficialMarketplaceGitSource(source.url)
+  )
+}
+
+export function isCommunityPluginChannel(source: CatalogSource): boolean {
+  return (
+    source.ref === COMMUNITY_MARKETPLACE_GIT_SOURCE.ref &&
+    isSameGitRepository(source.url, COMMUNITY_MARKETPLACE_GIT_SOURCE.url)
+  )
+}
+
+export function allowsTeamCatalogSource(
+  source: CatalogSource,
+  capabilities: OrcaCloudCapabilities | undefined
+): boolean {
+  if (capabilities?.flags[flags.plugins] === false) {
+    return false
+  }
+  if (
+    capabilities?.teamPolicy?.internalCatalogs?.some(
+      (catalog) => catalog.url === source.url && catalog.ref === source.ref
+    )
+  ) {
+    return true
+  }
+  if (isOfficialPluginChannel(source)) {
+    return capabilities?.flags[flags.officialPlugins] !== false
+  }
+  if (isCommunityPluginChannel(source)) {
+    return capabilities?.flags[flags.communityPlugins] !== false
+  }
+  return capabilities?.flags[flags.allowMemberSources] !== false
+}
+
 export class PluginMarketplaceTeamPolicy {
   constructor(private readonly getCapabilities?: () => OrcaCloudCapabilities | undefined) {}
 
   allows(source: PluginMarketplaceGitSource, capabilities = this.getCapabilities?.()): boolean {
-    if (capabilities?.flags[flags.plugins] === false) {
-      return false
-    }
-    if (isOfficialMarketplaceGitSource(source.url)) {
-      return capabilities?.flags[flags.officialPlugins] !== false
-    }
-    return (
-      capabilities?.flags[flags.communityPlugins] !== false ||
-      this.isManaged(marketplaceSourceId(source), capabilities)
-    )
+    return allowsTeamCatalogSource(source, capabilities)
   }
 
   requiredPluginRules(): readonly RequiredPluginRule[] | undefined {

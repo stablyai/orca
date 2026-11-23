@@ -1,3 +1,4 @@
+import { pluginBlockCopy } from '../presentation/plugin-block-copy'
 import { Fragment, useEffect, useMemo, useRef } from 'react'
 import { BadgeCheck, ChevronLeft } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -146,11 +147,7 @@ export function PluginDetailPage({
       <Alert
         tone="destructive"
         title={t('auto.components.settings.PluginStatus.blocked', 'Blocked')}
-        body={t(
-          'auto.components.settings.PluginSettingsRow.killListMessage',
-          "Orca's safety list disabled this plugin: {{value0}}",
-          { value0: plugin.blockedByKillList.reason }
-        )}
+        body={pluginBlockCopy(plugin.blockedByKillList, t, true)}
       />
     )
   } else if (controls?.kind === 'error') {
@@ -191,11 +188,7 @@ export function PluginDetailPage({
       <Alert
         tone="destructive"
         title={t('auto.components.settings.PluginStatus.blocked', 'Blocked')}
-        body={t(
-          'auto.components.settings.PluginMarketplaceListingRow.blocked',
-          "Blocked by Orca's safety list: {{value0}}",
-          { value0: listing.blockedByKillList.reason }
-        )}
+        body={pluginBlockCopy(listing.blockedByKillList, t)}
       />
     )
   } else if (stale) {

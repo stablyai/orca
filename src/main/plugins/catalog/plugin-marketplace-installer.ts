@@ -1,3 +1,4 @@
+import type { PluginBlockNotice } from '../../../shared/plugins/catalog/plugin-kill-list'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -51,7 +52,7 @@ export type PluginMarketplaceInstallPreview = {
   manifest: PluginManifest
   official: boolean
   bundled: boolean
-  blockedByKillList?: { reason: string; advisoryUrl?: string }
+  blockedByKillList?: PluginBlockNotice
   /** The manifest's images, verified at preview and cached by hash. */
   images?: PluginHostImages
   /** What each recipe file can run, read before the staging tree is deleted; null if unreadable. */
@@ -168,7 +169,12 @@ export class PluginMarketplaceInstaller {
     const blockedReason =
       listing.blockedByKillList?.reason ?? this.blockedPluginReason(preview.pluginKey)
     if (blockedReason) {
-      return { ok: false, error: `plugin is blocked by Orca's safety list: ${blockedReason}` }
+      return {
+        ok: false,
+        error: listing.blockedByKillList?.team
+          ? blockedReason
+          : `plugin is blocked by Orca's safety list: ${blockedReason}`
+      }
     }
     const incompatible = this.releaseCompatibilityError(listing)
     if (incompatible) {

@@ -1,11 +1,13 @@
 import {
   OFFICIAL_MARKETPLACE_OWNER,
-  isOfficialMarketplaceGitSource,
   isOfficialOrganizationGitSource,
   type PluginMarketplaceEntry,
   type PluginMarketplaceGitSource
 } from '../../../shared/plugins/catalog/plugin-marketplace'
-import type { PluginKillListEntry } from '../../../shared/plugins/catalog/plugin-kill-list'
+import type {
+  PluginBlockNotice,
+  PluginKillListEntry
+} from '../../../shared/plugins/catalog/plugin-kill-list'
 import type {
   PluginMarketplaceCachedSnapshot,
   PluginMarketplaceRegisteredSource
@@ -18,6 +20,7 @@ import {
 import type { PluginCatalogRelease } from '../../../shared/plugins/catalog/plugin-catalog-release'
 import { estimatePluginAddedAt } from '../../../shared/plugins/catalog/plugin-added-at'
 import type { RequiredPluginRule } from '../../../shared/orca-profiles/orca-cloud-team-policy'
+import { isOfficialPluginChannel } from './plugin-marketplace-team-policy'
 import { requiredPluginReleaseAllowed } from '../installation/required-plugin-release-policy'
 
 export type PluginMarketplaceSourceState = {
@@ -47,7 +50,7 @@ export type PluginMarketplaceListing = {
   categories: string[]
   official: boolean
   bundled: boolean
-  blockedByKillList?: { reason: string; advisoryUrl?: string }
+  blockedByKillList?: PluginBlockNotice
   /** Estimated listing date (ISO 8601): a community plugin's oldest dated release. Absent for
    *  official plugins and undated releases; catalogs carry no listing date of their own. */
   addedAt?: string
@@ -136,7 +139,7 @@ export function pluginMarketplaceListing(input: {
   snapshot: PluginMarketplaceCachedSnapshot
   entry: PluginMarketplaceEntry
   hostVersion: string | null
-  blocked: PluginKillListEntry | null
+  blocked: (PluginKillListEntry & PluginBlockNotice) | null
   requiredRules?: readonly RequiredPluginRule[] | undefined
 }): PluginMarketplaceListing | null {
   const { source, snapshot, entry, blocked, requiredRules } = input
@@ -151,7 +154,7 @@ export function pluginMarketplaceListing(input: {
     return null
   }
   const official =
-    isOfficialMarketplaceGitSource(source.source.url) &&
+    isOfficialPluginChannel(source.source) &&
     snapshot.marketplace.owner.toLowerCase() === OFFICIAL_MARKETPLACE_OWNER &&
     isOfficialOrganizationGitSource(entry.source.url)
   const addedAt = estimatePluginAddedAt(entry.releases, official)
@@ -174,6 +177,7 @@ export function pluginMarketplaceListing(input: {
       ? {
           blockedByKillList: {
             reason: blocked.reason,
+            ...(blocked.team ? { team: true as const } : {}),
             ...(blocked.advisoryUrl ? { advisoryUrl: blocked.advisoryUrl } : {})
           }
         }
@@ -201,7 +205,7 @@ export function pluginMarketplaceSourceState(
         }
       : null,
     stale,
-    official: isOfficialMarketplaceGitSource(source.source.url),
+    official: isOfficialPluginChannel(source.source),
     ...(managed ? { managed: true } : {}),
     ...(error ? { error } : {})
   }

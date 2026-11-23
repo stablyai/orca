@@ -48,7 +48,7 @@ export function livePluginActivationState(
   source: PluginPolicySource,
   plugin: ValidDiscoveredPlugin
 ): PluginActivationState {
-  if (!source.isPluginSystemEnabled()) {
+  if (!source.isPluginSystemEnabled() || source.getPluginKillListEntry?.(plugin.pluginKey)) {
     return 'disabled'
   }
   return getPluginActivationState(
@@ -65,5 +65,8 @@ export function pluginPolicyBlockError(
   pluginKey: string
 ): string | null {
   const blocked = source.getPluginKillListEntry?.(pluginKey)
-  return blocked ? `Blocked by Orca's plugin safety list: ${blocked.reason}` : null
+  if (!blocked) {
+    return null
+  }
+  return blocked.team ? blocked.reason : `Blocked by Orca's plugin safety list: ${blocked.reason}`
 }

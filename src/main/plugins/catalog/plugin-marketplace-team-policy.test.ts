@@ -7,17 +7,15 @@ import {
   OFFICIAL_MARKETPLACE_GIT_SOURCE,
   pluginMarketplaceListingSchema
 } from '../../../shared/plugins/catalog/plugin-marketplace'
+import { COMMUNITY_MARKETPLACE_GIT_SOURCE } from '../../../shared/plugins/catalog/plugin-install-link'
 import { PluginMarketplaceService } from './plugin-marketplace-service'
 import { PluginMarketplaceStore } from './plugin-marketplace-store'
 
 it('protects managed catalogs from both governing teams and blocks excluded sources', async () => {
   const pluginsDataDir = await mkdtemp(join(tmpdir(), 'orca-plugin-policy-'))
   const store = new PluginMarketplaceStore(pluginsDataDir)
-  const community = {
-    kind: 'git',
-    url: 'https://git.example.com/community/catalog.git',
-    ref: 'main'
-  } as const
+  const community = COMMUNITY_MARKETPLACE_GIT_SOURCE
+  const member = { ...community, url: 'https://git.example.com/member/catalog.git' }
   const internal = {
     kind: 'git',
     url: 'https://git.example.com/my-team/catalog.git',
@@ -25,7 +23,12 @@ it('protects managed catalogs from both governing teams and blocks excluded sour
   } as const
   const secondInternal = { ...internal, url: 'https://git.example.com/another-team/catalog.git' }
   let capabilities: OrcaCloudCapabilities | undefined = {
-    flags: { team_settings: true, 'plugins.official': false, 'plugins.community': false },
+    flags: {
+      team_settings: true,
+      'plugins.official': false,
+      'plugins.community': false,
+      'plugins.memberSources': false
+    },
     refreshedAt: 1,
     teamPolicy: { orgIds: ['org_a', 'org_b'], internalCatalogs: [internal, secondInternal] }
   }
@@ -37,6 +40,7 @@ it('protects managed catalogs from both governing teams and blocks excluded sour
   try {
     await store.addSource(OFFICIAL_MARKETPLACE_GIT_SOURCE)
     await store.addSource(community)
+    await store.addSource(member)
     const sources = await marketplace.listSources()
     expect(sources.map(({ source, managed }) => [source.url, managed])).toEqual([
       [internal.url, true],
@@ -44,11 +48,28 @@ it('protects managed catalogs from both governing teams and blocks excluded sour
     ])
     await expect(marketplace.addSource(community)).rejects.toThrow('turned off by your team')
     await expect(marketplace.removeSource(sources[1]!.id)).rejects.toThrow('managed by your team')
+    await expect(marketplace.addSource(member)).rejects.toThrow('turned off by your team')
+    expect(marketplace.allowsSource({ ...community, ref: 'member-branch' })).toBe(false)
+
+    capabilities.flags['plugins.community'] = true
+    expect((await marketplace.listSources()).map(({ source }) => source.url)).toEqual([
+      community.url,
+      internal.url,
+      secondInternal.url
+    ])
+    capabilities.flags['plugins.community'] = false
+    capabilities.flags['plugins.memberSources'] = true
+    expect((await marketplace.listSources()).map(({ source }) => source.url)).toEqual([
+      member.url,
+      internal.url,
+      secondInternal.url
+    ])
 
     capabilities = undefined
     expect((await marketplace.listSources()).map(({ source }) => source.url)).toEqual([
       'https://github.com/stablyai/orca-plugins.git',
-      community.url
+      community.url,
+      member.url
     ])
   } finally {
     await rm(pluginsDataDir, { recursive: true, force: true })

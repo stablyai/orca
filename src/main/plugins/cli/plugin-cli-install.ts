@@ -76,7 +76,10 @@ export function candidateHost(deps: PluginCliInstallDeps): PluginCliCandidateHos
     userDataPath: options.userDataPath,
     hostVersion: options.hostVersion,
     executionHost: deps.executionHost,
-    blockedPluginReason: (pluginKey) => options.getPluginKillListEntry?.(pluginKey)?.reason ?? null
+    blockedPluginReason: (pluginKey) => {
+      const block = options.getPluginKillListEntry?.(pluginKey)
+      return block?.team ? null : (block?.reason ?? null)
+    }
   }
 }
 
