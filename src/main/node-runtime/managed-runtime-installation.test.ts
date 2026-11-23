@@ -6,8 +6,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ManagedRuntimeInstallation } from './managed-runtime-installation'
 import {
+  ManagedRuntimeStartError,
   resolveInstalledRuntimeRelease,
   runtimeReleaseId,
+  type ManagedRuntimeStartFailure,
   writeRuntimeReleaseReceipt,
   type ManagedRuntime,
   type ManagedRuntimePin
@@ -452,34 +454,95 @@ describe('limits on automatic attempts', () => {
     expect(fetcher).toHaveBeenCalledTimes(3)
   })
 
-  it('gives up after one checksum mismatch, which recurs', async () => {
+  /** Whether a host's check starts an install; install() sets the operation before it returns. */
+  async function checkStarts(host: ManagedRuntimeInstallation): Promise<boolean> {
+    await host.updateIfBehind()
+    const started = (await host.status(false)).operation !== null
+    if (started) {
+      await settled(host)
+    }
+    return started
+  }
+
+  /** The same size as the pinned archive, with other bytes: the release itself differs. */
+  const republished = () => Buffer.from(PINNED.bytes.toString().replace('1.5.2', '9.9.9'))
+
+  it('gives up after one whole archive whose hash differs, which recurs', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     await seedRelease(OLD)
-    const fetcher = serve(Buffer.from('not the pinned server'))
+    expect(republished().length).toBe(PINNED.bytes.length)
+    const fetcher = serve(republished())
     const subject = installation(fetcher)
     await subject.updateIfBehind()
     expect((await settled(subject)).operation?.error).toMatch(/didn't match/)
     vi.setSystemTime(Date.now() + 30 * day)
-    await installation(fetcher).updateIfBehind()
+    expect(await checkStarts(installation(fetcher))).toBe(false)
     expect(fetcher).toHaveBeenCalledTimes(1)
   })
 
-  it("gives up after one release that won't start on this host", async () => {
+  it('retries a body of another size, such as a captive portal page', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    await seedRelease(OLD)
+    const portal = vi.fn<Fetch>(async () => new Response('<html>sign in</html>'))
+    expect(await checkStarts(installation(portal))).toBe(true)
+    vi.setSystemTime(Date.now() + 61 * 60_000)
+    expect(await checkStarts(installation(serve()))).toBe(true)
+    expect(launches()).toMatchObject({ version: '1.5.2', current: true })
+  })
+
+  const refusing = (failure: ManagedRuntimeStartFailure | null) =>
+    runtime({
+      validate: async () => {
+        throw failure
+          ? new ManagedRuntimeStartError('did not start', failure)
+          : new Error('ENOSPC: no space left on device, mkdtemp')
+      }
+    })
+
+  it('gives up after one release that ran and refused to start on this host', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     await seedRelease(OLD)
     const fetcher = serve()
-    const probe = runtime({
-      validate: async () => {
-        throw new Error('needs a newer C library')
-      }
-    })
+    const exit = { code: 1, signal: null, processless: false }
+    const probe = refusing({ kind: 'exit', exit, stderr: 'GLIBC_2.38 not found' })
     const subject = installation(fetcher, { runtime: probe })
     await subject.updateIfBehind()
     expect((await settled(subject)).operation?.error).toMatch(/couldn't start on this host/)
     vi.setSystemTime(Date.now() + 30 * day)
-    await installation(fetcher, { runtime: probe }).updateIfBehind()
+    expect(await checkStarts(installation(fetcher, { runtime: probe }))).toBe(false)
     expect(fetcher).toHaveBeenCalledTimes(1)
     expect(launches()).toMatchObject({ version: '1.5.0' })
+  })
+
+  it('retries a probe that timed out, never started a process, or failed outside the release', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const spawnFailed = { code: null, signal: null, processless: true }
+    for (const probe of [
+      refusing({ kind: 'timeout', timeoutMs: 90_000 }),
+      refusing({ kind: 'exit', exit: spawnFailed, stderr: '' }),
+      refusing(null)
+    ]) {
+      await rm(data, { recursive: true, force: true })
+      await seedRelease(OLD)
+      expect(await checkStarts(installation(serve(), { runtime: probe }))).toBe(true)
+      vi.setSystemTime(Date.now() + 61 * 60_000)
+      expect(await checkStarts(installation(serve(), { runtime: probe }))).toBe(true)
+    }
+  })
+
+  it('starts no automatic attempt when its record cannot be written', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    await seedRelease(OLD)
+    // A directory where the record goes: the rename onto it fails every time.
+    await mkdir(recordFile(), { recursive: true })
+    const fetcher = refuse()
+    for (let start = 0; start < 6; start += 1) {
+      const host = installation(fetcher)
+      expect(await checkStarts(host)).toBe(false)
+      expect((await host.status()).updatesAutomatically).toBeUndefined()
+      vi.setSystemTime(Date.now() + 60 * 60_000)
+    }
+    expect(fetcher).not.toHaveBeenCalled()
   })
 
   it('treats a record written by a clock that was ahead as written now', async () => {
@@ -577,5 +640,84 @@ describe('when Update is left out', () => {
     await cancelled
     await vi.waitFor(() => expect(seen.length).toBeGreaterThan(0))
     expect(seen).not.toContain(true)
+  })
+})
+
+describe('a check that changes what clients should show', () => {
+  it('tells subscribers when it skips after status said an update was pending', async () => {
+    for (const skip of ['external', 'switched off'] as const) {
+      await rm(data, { recursive: true, force: true })
+      await seedRelease(OLD)
+      let external = false
+      let enabled = true
+      const subject = new ManagedRuntimeInstallation('server-agent', runtime(), {
+        dataDirectory: data,
+        program: 'server',
+        findExternal: async () => external,
+        updatesEnabled: () => enabled,
+        fence: (work) => work(),
+        fetcher: serve()
+      })
+      const first = await subject.status()
+      expect(first.updatesAutomatically).toBe(true)
+      const onChange = vi.fn()
+      subject.subscribe(onChange)
+      if (skip === 'external') {
+        external = true
+      } else {
+        enabled = false
+      }
+      await subject.updateIfBehind()
+      expect(onChange).toHaveBeenCalled()
+      const shown = await subject.status(false)
+      expect(shown.revision).toBeGreaterThan(first.revision)
+      expect(shown.updatesAutomatically).toBeUndefined()
+    }
+  })
+
+  it("hands an automatic run to the user's Update, which the kill switch then leaves alone", async () => {
+    await seedRelease(OLD)
+    const held = heldServe()
+    const unwatch = vi.fn()
+    const subject = new ManagedRuntimeInstallation('server-agent', runtime(), {
+      dataDirectory: data,
+      program: 'server',
+      findExternal: async () => false,
+      fence: (work) => work(),
+      fetcher: held.fetcher,
+      watchUpdatesEnabled: () => unwatch
+    })
+    await subject.updateIfBehind()
+    const id = await runningId(subject)
+    expect(subject.install().id).toBe(id)
+    expect(unwatch).toHaveBeenCalledTimes(1)
+    subject.stopAutoUpdate()
+    held.release()
+    expect((await settled(subject)).operation?.phase).toBe('succeeded')
+  })
+
+  it('records a Cancel and stops watching the kill switch even when an Update follows at once', async () => {
+    await seedRelease(OLD)
+    const held = heldServe()
+    const unwatch = vi.fn()
+    const subject = new ManagedRuntimeInstallation('server-agent', runtime(), {
+      dataDirectory: data,
+      program: 'server',
+      findExternal: async () => false,
+      fence: (work) => work(),
+      fetcher: held.fetcher,
+      watchUpdatesEnabled: () => unwatch
+    })
+    await subject.updateIfBehind()
+    const cancelling = subject.cancel(await runningId(subject))
+    // Another client presses Update before the cancelled run unwinds.
+    subject.install()
+    held.release()
+    await cancelling
+    await settled(subject)
+    expect(unwatch).toHaveBeenCalled()
+    await vi.waitFor(async () =>
+      expect(JSON.parse(await readFile(recordFile(), 'utf8'))).toMatchObject({ declined: true })
+    )
   })
 })

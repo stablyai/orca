@@ -69,11 +69,12 @@ export class PinnedRuntimeAutoUpdate {
   /** undefined until read; then the record in memory, which disk follows. */
   private record: AutoUpdateRecord | null | undefined = undefined
   private loading: Promise<void> | null = null
-  private writes: Promise<void> = Promise.resolve()
+  private writes: Promise<unknown> = Promise.resolve()
 
   constructor(private readonly file: string) {}
 
-  /** Whether `pin` should be fetched now; a due attempt is recorded before it starts. */
+  /** Whether `pin` should be fetched now. A due attempt starts only once its record is on disk, so
+   *  a record that can't be written stops automatic attempts rather than its cap. */
   async take(pin: ManagedRuntimePin, installed: InstalledRelease): Promise<boolean> {
     if (pinnedReleaseAhead(pin, installed) === null) {
       return false
@@ -86,20 +87,19 @@ export class PinnedRuntimeAutoUpdate {
     if (last && last.attempts > 0) {
       // A clock that was ahead must not hold updates back for as long as it was ahead.
       if (last.lastAt > now) {
-        this.save({ ...last, lastAt: now })
+        await this.save({ ...last, lastAt: now })
         return false
       }
       if (now - last.lastAt < RETRY_MS * 2 ** (last.attempts - 1)) {
         return false
       }
     }
-    this.save({
+    return this.save({
       releaseId: runtimeReleaseId(pin),
       attempts: (last?.attempts ?? 0) + 1,
       lastAt: now,
       declined: false
     })
-    return true
   }
 
   /** Whether the record still allows a first automatic attempt at `pin`. */
@@ -117,7 +117,7 @@ export class PinnedRuntimeAutoUpdate {
     if (!pin || outcome.kind !== 'install') {
       return Promise.resolve()
     }
-    const apply = (): Promise<void> => {
+    const apply = (): Promise<unknown> => {
       const last = this.current(pin)
       const base = last ?? {
         releaseId: runtimeReleaseId(pin),
@@ -138,7 +138,7 @@ export class PinnedRuntimeAutoUpdate {
       }
       return Promise.resolve()
     }
-    return this.record === undefined ? this.load().then(apply) : apply()
+    return (this.record === undefined ? this.load().then(apply) : apply()).then(() => undefined)
   }
 
   /** Removing the runtime forgets its record. */
@@ -195,17 +195,19 @@ export class PinnedRuntimeAutoUpdate {
   }
 
   /** Written whole and renamed (retrying the locks Windows scanners hold), so a crash never leaves
-   *  half a record; a failed write only costs the backoff, never the update. */
-  private save(record: AutoUpdateRecord): Promise<void> {
+   *  half a record. Resolves whether it reached disk; memory keeps it either way. */
+  private save(record: AutoUpdateRecord): Promise<boolean> {
     this.record = record
     const write = this.writes.then(async () => {
       const temporary = `${this.file}.${process.pid}-${randomUUID()}.tmp`
       try {
         await writeFile(temporary, JSON.stringify(record), { mode: 0o600 })
         await renameFileWithWindowsRetryAsync(temporary, this.file)
+        return true
       } catch (error) {
         console.warn('[managed-runtime] automatic update record not saved:', error)
         await rm(temporary, { force: true }).catch(() => undefined)
+        return false
       }
     })
     this.writes = write

@@ -21,8 +21,10 @@ const AUTOMATIC_FREE_SPACE_MARGIN_BYTES = 2 * 1024 ** 3
 
 /** What an install run carries about the automatic check. */
 export type AutomaticRunFlags = {
-  /** Started by the automatic check, not the user. */
+  /** Started by the automatic check and not joined by the user's Update: the kill switch may stop it. */
   automatic?: true
+  /** Its attempt was counted when the check took it. */
+  counted?: true
   /** Stopped because automatic updates were turned off, not declined by the user. */
   stoppedBySwitch?: true
   /** Failed in a way that will recur, so no automatic attempt follows. */
@@ -39,6 +41,8 @@ export type AutoUpdateHost = {
   install(options?: { automatic: true }): ManagedRuntimeOperation
   /** Told when automatic updates are turned off; returns an unsubscribe. */
   watchEnabled?: (onDisabled: () => void) => () => void
+  /** Clients re-read status: what it reports has changed without an operation changing. */
+  changed(): void
 }
 
 export class ManagedRuntimeAutoUpdater {
@@ -47,6 +51,8 @@ export class ManagedRuntimeAutoUpdater {
   private readonly pinned: PinnedRuntimeAutoUpdate | null
   /** Whether this process has run its check; until then a due pinned update is still coming. */
   private checked = false
+  /** Whether status told clients an update is pending, so they left Update out. */
+  private reportedPending = false
 
   constructor(
     private readonly runtime: ManagedRuntime,
@@ -61,14 +67,25 @@ export class ManagedRuntimeAutoUpdater {
   /** Bring Orca's own copy to the latest or pinned release; never installs one nobody asked for,
    *  touches a user's own, or updates a copy new chats don't run (another program, a signed-in agy). */
   async updateIfBehind(publishedRelease: () => Promise<boolean>): Promise<void> {
-    const { runtime, host, pinned } = this
+    const { reportedPending } = this
     this.checked = true
+    this.reportedPending = false
+    const started = await this.check(publishedRelease)
+    // A check that installs publishes its operation; one that doesn't must still retire "pending".
+    if (reportedPending && !started) {
+      this.host.changed()
+    }
+  }
+
+  /** Whether it started an install. */
+  private async check(publishedRelease: () => Promise<boolean>): Promise<boolean> {
+    const { runtime, host, pinned } = this
     if ((!runtime.refreshPin && !pinned) || host.busy() || !host.enabled()) {
-      return
+      return false
     }
     // Nothing installed has nothing to update, so the latest release isn't looked up.
     if (!(await publishedRelease())) {
-      return
+      return false
     }
     const state = await host.status()
     if (
@@ -79,63 +96,89 @@ export class ManagedRuntimeAutoUpdater {
       state.installedCurrent ||
       host.busy()
     ) {
-      return
+      return false
     }
     if (pinned) {
       const pin = runtime.pin()
-      if (pin && (await pinned.take(pin, state)) && !host.busy()) {
-        host.install({ automatic: true })
+      if (!pin || !(await pinned.take(pin, state)) || host.busy()) {
+        return false
       }
-      return
+      host.install({ automatic: true })
+      return true
     }
     const last = this.lastLatest
     if (last?.version === state.version && Date.now() - last.at < LATEST_RETRY_MS) {
-      return
+      return false
     }
     this.lastLatest = { version: state.version, at: Date.now() }
     host.install()
+    return true
   }
 
   /** Whether clients may leave Update out: this process's check is still to run and will fetch the pin. */
   async pending(
     state: Pick<ManagedRuntimeInstallState, 'source'> & InstalledRelease
   ): Promise<boolean> {
-    return (
+    const pending =
       !this.checked &&
       this.host.enabled() &&
       state.source === 'managed' &&
       (await this.pinned?.firstAttemptDue(this.runtime.pin(), state)) === true
-    )
+    // Read again: the check may have run while the record was read.
+    this.reportedPending ||= pending && !this.checked
+    return pending && !this.checked
   }
 
   /** Marks a run the check started, and watches the kill switch while it runs. */
   adopt(run: AutomaticRunFlags, options: { automatic: true } | undefined, stop: () => void): void {
     if (options?.automatic) {
       run.automatic = true
+      run.counted = true
       run.unwatch = this.host.watchEnabled?.(stop)
     }
   }
 
+  /** Stops a run the check started that hasn't published its release; the user's own runs go on. */
+  stop(
+    run: (AutomaticRunFlags & { committed: boolean; controller: AbortController }) | null
+  ): void {
+    if (run?.automatic && !run.committed) {
+      run.stoppedBySwitch = true
+      run.controller.abort()
+    }
+  }
+
+  /** The user's Update joined this run: it is theirs now, so the kill switch leaves it alone. */
+  joined(run: AutomaticRunFlags, options: { automatic: true } | undefined): void {
+    if (!options?.automatic && run.automatic) {
+      run.automatic = undefined
+      run.unwatch?.()
+      run.unwatch = undefined
+    }
+  }
+
   /** What an automatic install passes the installer. */
-  installOptions(run: AutomaticRunFlags): { freeSpaceMarginBytes?: number } {
-    return run.automatic ? { freeSpaceMarginBytes: AUTOMATIC_FREE_SPACE_MARGIN_BYTES } : {}
+  installOptions(run: AutomaticRunFlags): { automaticFreeSpaceMarginBytes?: number } {
+    return run.counted ? { automaticFreeSpaceMarginBytes: AUTOMATIC_FREE_SPACE_MARGIN_BYTES } : {}
   }
 
   failed(run: AutomaticRunFlags, error: unknown): void {
     run.finalFailure = isFinalInstallFailure(error) || undefined
   }
 
-  /** Records how a run ended, before the outcome is published, so a status read it prompts sees it. */
+  /** Records how a run ended, before the outcome is published, so a status read it prompts sees it;
+   *  also for a run whose outcome is never published because another install replaced it. */
   ended(
     run: AutomaticRunFlags,
     kind: ManagedRuntimeOperation['kind'],
     phase: ManagedRuntimeOperation['phase']
   ): Promise<void> {
     run.unwatch?.()
+    run.unwatch = undefined
     const outcome: InstallOutcome = {
       kind,
       phase,
-      automatic: run.automatic === true,
+      automatic: run.counted === true,
       stoppedBySwitch: run.stoppedBySwitch === true,
       finalFailure: run.finalFailure === true
     }

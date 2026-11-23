@@ -79,7 +79,11 @@ export class ManagedRuntimeInstallation {
       busy: () => this.running !== null,
       status: () => this.status(),
       install: (options) => this.install(options),
-      ...(deps.watchUpdatesEnabled && { watchEnabled: deps.watchUpdatesEnabled })
+      ...(deps.watchUpdatesEnabled && { watchEnabled: deps.watchUpdatesEnabled }),
+      changed: () => {
+        this.facts = null
+        this.state.set(this.state.get().value)
+      }
     })
     this.mutation = this.reclaim()
   }
@@ -153,11 +157,7 @@ export class ManagedRuntimeInstallation {
 
   /** Turned off mid-download: stop the automatic install before it publishes, without declining it. */
   stopAutoUpdate(): void {
-    const run = this.running
-    if (run?.automatic && !run.committed) {
-      run.stoppedBySwitch = true
-      run.controller.abort()
-    }
+    this.autoUpdater.stop(this.running)
   }
 
   /** Join installs; canceled work must finish cleanup before another begins. */
@@ -174,6 +174,7 @@ export class ManagedRuntimeInstallation {
       throw new Error(`${label} is being removed. Try again after it finishes.`)
     }
     if (current && current.id === running?.id && !running.controller.signal.aborted) {
+      this.autoUpdater.joined(running, options)
       return current
     }
     const run: Run = { id: randomUUID(), controller: new AbortController(), committed: false }
@@ -240,9 +241,6 @@ export class ManagedRuntimeInstallation {
     const settles =
       patch.phase === 'succeeded' || patch.phase === 'cancelled' || patch.phase === 'failed'
     if (operation?.id === run.id && (settles || !run.controller.signal.aborted)) {
-      if (settles) {
-        void this.autoUpdater.ended(run, operation.kind, patch.phase ?? 'failed')
-      }
       this.state.set({ ...operation, ...patch })
       if (settles) {
         // Reread the disk now so onRelease learns the outcome even when no client is watching.
@@ -259,6 +257,13 @@ export class ManagedRuntimeInstallation {
     // The release chats ran before this install; they may still be running it.
     const before = (await this.facts?.read.catch(() => null)) ?? null
     const previous = this.runtime.refreshPin ? (before?.installedVersion ?? null) : null
+    // Recorded before it is published, and even when another install replaced this one's operation.
+    const finish = (
+      patch: Partial<ManagedRuntimeOperation> & Pick<ManagedRuntimeOperation, 'phase'>
+    ) => {
+      void this.autoUpdater.ended(run, 'install', patch.phase)
+      this.publish(run, patch)
+    }
     try {
       await this.runtime.refreshPin?.(signal)
       const pin = this.runtime.pin()
@@ -282,19 +287,20 @@ export class ManagedRuntimeInstallation {
       if (this.runtime.refreshPin) {
         await this.reclaimOlderThan(pin.version, previous)
       }
-      this.publish(run, { phase: 'succeeded' })
+      finish({ phase: 'succeeded' })
     } catch (error) {
       if (run.committed) {
         console.warn(`[managed-runtime] ${this.agent} installed; staging not removed:`, error)
-        this.publish(run, { phase: 'succeeded' })
+        finish({ phase: 'succeeded' })
       } else if (run.controller.signal.aborted) {
-        this.publish(run, { phase: 'cancelled' })
+        finish({ phase: 'cancelled' })
       } else {
         this.autoUpdater.failed(run, error)
         const text = installFailureText(this.runtime.label, error, deadline)
-        this.publish(run, { phase: 'failed', error: this.autoUpdater.failureText(text, before) })
+        finish({ phase: 'failed', error: this.autoUpdater.failureText(text, before) })
       }
     } finally {
+      run.unwatch?.()
       this.running = this.running === run ? null : this.running
     }
   }

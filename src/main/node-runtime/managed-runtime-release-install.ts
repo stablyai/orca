@@ -27,7 +27,6 @@ import { extractPinnedZipMembers } from './pinned-zip-members'
 import {
   downloadFailureMessage,
   downloadVerifiedArchive,
-  ReleaseMismatchError,
   extractRuntimeArchive,
   RUNTIME_ARCHIVE_RETRY_DELAYS_MS
 } from './runtime-archive-download'
@@ -44,8 +43,9 @@ export type RuntimeReleaseInstall = {
   root: string
   pin: ManagedRuntimePin
   fetcher?: MainHttpClient['fetch']
-  /** Room left free after installing; defaults to a margin sized for an install the user asked for. */
-  freeSpaceMarginBytes?: number
+  /** An install nobody asked for: it keeps this much free instead of the usual margin, and doesn't
+   *  start when free space can't be read. */
+  automaticFreeSpaceMarginBytes?: number
   signal: AbortSignal
   publish: (patch: Partial<ManagedRuntimeOperation>) => void
   /** Mark committed immediately after publication, before fallible cleanup. */
@@ -96,11 +96,7 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
       : !('members' in pin)
         ? pin.archiveBytes * (1 + UNPACKED_RATIO)
         : pin.members.reduce((sum, m) => sum + m.bytes, pin.archiveBytes)
-  const margin = input.freeSpaceMarginBytes ?? FREE_SPACE_MARGIN_BYTES
-  if (space && space.bavail * space.bsize < needed + margin) {
-    const megabytes = Math.ceil((needed + margin) / 1024 ** 2)
-    throw new Error(`${label} needs ${megabytes} MB of free disk space to install.`)
-  }
+  assertFreeSpace(label, space ? space.bavail * space.bsize : null, needed, input)
   const staging = join(root, `.download-${process.pid}-${randomUUID()}`)
   const release = join(staging, 'release')
   try {
@@ -126,12 +122,21 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
           publish({ downloadedBytes: bytes })
         }
       }
-    ).catch((error: unknown) => {
+    ).catch(async (error: unknown) => {
       if (signal.aborted) {
         throw error
       }
       console.warn(`[managed-runtime] ${agent} download failed:`, error)
-      throw new Error(downloadFailureMessage(label, error), { cause: error })
+      // Only a whole archive whose hash differs shows the release itself isn't the pinned one; a
+      // portal page, a proxy's error or a cut-off body is another size and may pass next time.
+      const whole =
+        isChecksumMismatch(error) &&
+        (await lstat(archive).then(
+          (file) => file.size === pin.archiveBytes,
+          () => false
+        ))
+      const Failure = whole ? ArchiveHashMismatchError : Error
+      throw new Failure(downloadFailureMessage(label, error), { cause: error })
     })
     publish({ phase: 'extracting', downloadedBytes: pin.archiveBytes })
     await (pin.format === 'file'
@@ -193,15 +198,54 @@ async function extractWholeArchive(
   await rm(archive, { force: true })
 }
 
-/** The downloaded release didn't start in its check, which retrying won't change. */
-class RuntimeStartRefusedError extends Error {}
+const megabytes = (bytes: number): number => Math.ceil(bytes / 1024 ** 2)
 
-/** A failure that recurs on every attempt: the published archive isn't the pinned one, or the
- *  release won't start on this host. Network, disk and deadline failures may pass. */
+function assertFreeSpace(
+  label: string,
+  available: number | null,
+  needed: number,
+  { automaticFreeSpaceMarginBytes: automaticMargin }: RuntimeReleaseInstall
+): void {
+  const manual = needed + FREE_SPACE_MARGIN_BYTES
+  if (automaticMargin === undefined) {
+    if (available !== null && available < manual) {
+      throw new Error(`${label} needs ${megabytes(manual)} MB of free disk space to install.`)
+    }
+    return
+  }
+  if (available === null) {
+    throw new Error(
+      `Orca couldn't read this host's free disk space, so it didn't update ${label} by itself. Update installs it.`
+    )
+  }
+  const automatic = needed + automaticMargin
+  if (available < automatic) {
+    throw new Error(
+      `Orca updates ${label} by itself only with ${megabytes(automatic)} MB free, and this host has ${megabytes(available)} MB. Update needs ${megabytes(manual)} MB.`
+    )
+  }
+}
+
+/** The whole archive downloaded and its hash isn't the pinned one: the release itself differs. */
+class ArchiveHashMismatchError extends Error {}
+
+/** The downloaded release ran in its check and refused to start, or answered as another version. */
+class RuntimeStartRefusedError extends Error {
+  constructor(
+    message: string,
+    options: ErrorOptions,
+    readonly ranAndRefused: boolean
+  ) {
+    super(message, options)
+  }
+}
+
+/** A failure that recurs on every attempt: the whole archive isn't the pinned one, or the release
+ *  ran and refused to start on this host. Timeouts, disk, network, HTTP and odd-sized bodies may pass. */
 export function isFinalInstallFailure(error: unknown): boolean {
   return (
-    error instanceof RuntimeStartRefusedError ||
-    (error instanceof Error && error.cause instanceof ReleaseMismatchError)
+    error instanceof ArchiveHashMismatchError ||
+    (error instanceof RuntimeStartRefusedError && error.ranAndRefused)
   )
 }
 
@@ -227,7 +271,10 @@ async function validate(input: RuntimeReleaseInstall, folder: string): Promise<v
     const observed = error instanceof ManagedRuntimeStartError ? error.failure : null
     throw new RuntimeStartRefusedError(
       `${runtime.label} couldn't start on this host, so it wasn't installed. This host may not support it.${observed ? ` ${startFailureText(observed)}` : ''}`,
-      { cause: error }
+      { cause: error },
+      // It ran: it answered as another version, or a process started and exited on its own.
+      observed?.kind === 'version' ||
+        (observed?.kind === 'exit' && !observed.exit.processless && !observed.exit.outcomeLost)
     )
   })
 }
