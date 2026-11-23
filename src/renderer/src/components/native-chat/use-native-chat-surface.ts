@@ -152,6 +152,7 @@ export function useNativeChatSurface({
     onContextMenuCapture: contextMenu.onContextMenuCapture
   }
   return {
+    isVisible,
     rootRef,
     rootProps,
     appearance,

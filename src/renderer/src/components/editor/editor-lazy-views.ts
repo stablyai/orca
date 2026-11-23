@@ -12,6 +12,7 @@ export const RichMarkdownEditor = lazy(
 )
 export const MarkdownPreview = lazy(() => import('./markdown-preview/surface/MarkdownPreview'))
 export const ImageViewer = lazy(() => import('./document-images/ImageViewer'))
+export const EditorImageViewer = lazy(() => import('./document-images/EditorImageViewer'))
 export const MediaViewer = lazy(() => import('./document-media/MediaViewer'))
 export const ImageDiffViewer = lazy(() => import('./diff/large-files/ImageDiffViewer'))
 export const MermaidViewer = lazy(() => import('./diagrams/MermaidViewer'))

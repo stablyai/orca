@@ -6,6 +6,12 @@ import { basename } from '../../../../lib/path'
 import type { NativeChatBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { PanZoomImageDialog } from '../../../editor/document-images/PanZoomImageDialog'
 import {
+  ImageActions,
+  type ImageActionSource
+} from '@/components/editor/document-images/ImageActions'
+import { resolveImageAbsolutePath } from '@/components/editor/markdown/link-routing/markdown-preview-links'
+import { nativeChatImageActionSource } from './native-chat-image-actions'
+import {
   getLocalImageCacheKey,
   useLocalImageSrc
 } from '../../../editor/document-images/useLocalImageSrc'
@@ -48,7 +54,12 @@ function useTranscriptImageSrc(
   block: ImageRef | undefined,
   runtimeContext: RuntimeFileOperationArgs | null | undefined,
   active: boolean
-): { source: string | undefined; displaySrc: string | undefined; external: boolean } {
+): {
+  source: string | undefined
+  displaySrc: string | undefined
+  external: boolean
+  imageSource: ImageActionSource | undefined
+} {
   const source = block?.url?.trim() || block?.path
   const filePath = block?.path ?? source ?? ''
   const external = renderableImageSource(source)
@@ -59,7 +70,15 @@ function useTranscriptImageSrc(
     runtimeContext,
     TRANSCRIPT_IMAGE_ACCESS
   )
-  return { source, displaySrc: external && active ? source : localSrc, external }
+  const absolutePath = !external ? resolveImageAbsolutePath(source, filePath) : null
+  return {
+    source,
+    displaySrc: external && active ? source : localSrc,
+    external,
+    imageSource: absolutePath
+      ? nativeChatImageActionSource(absolutePath, runtimeContext)
+      : undefined
+  }
 }
 
 function ImageLabelChip({ label }: { label: string }): React.JSX.Element {
@@ -93,7 +112,11 @@ export function NativeChatImageTile({
   const [near, setNear] = useState(false)
   const [thumbnailErrorSrc, setThumbnailErrorSrc] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
-  const { source, displaySrc, external } = useTranscriptImageSrc(block, runtimeContext, near)
+  const { source, displaySrc, external, imageSource } = useTranscriptImageSrc(
+    block,
+    runtimeContext,
+    near
+  )
   const label = nativeChatImageLabel(block)
   const viewImageLabel = t('components.native-chat.composer.viewAttachment', 'View image')
 
@@ -133,22 +156,24 @@ export function NativeChatImageTile({
   }
   return (
     <div ref={ref} className={cn('relative shrink-0', className)}>
-      <button
-        type="button"
-        aria-label={`${viewImageLabel}: ${label}`}
-        title={label}
-        data-native-chat-copy-image-src={copyableNativeChatImageSrc(displaySrc)}
-        onClick={onOpen}
-        className="flex size-full cursor-zoom-in items-center justify-center overflow-hidden rounded-md border border-border bg-chat-canvas transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <img
-          src={displaySrc}
-          alt={label}
-          loading="lazy"
-          onError={() => setThumbnailErrorSrc(displaySrc ?? null)}
-          className={imageClassName}
-        />
-      </button>
+      <ImageActions src={displaySrc} title={label} imageSource={imageSource}>
+        <button
+          type="button"
+          aria-label={`${viewImageLabel}: ${label}`}
+          title={label}
+          data-native-chat-copy-image-src={copyableNativeChatImageSrc(displaySrc)}
+          onClick={onOpen}
+          className="flex size-full cursor-zoom-in items-center justify-center overflow-hidden rounded-md border border-border bg-chat-canvas transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <img
+            src={displaySrc}
+            alt={label}
+            loading="lazy"
+            onError={() => setThumbnailErrorSrc(displaySrc ?? null)}
+            className={imageClassName}
+          />
+        </button>
+      </ImageActions>
     </div>
   )
 }
@@ -191,6 +216,7 @@ export function NativeChatImageViewer({
       onOpenChange={(open) => !open && onIndexChange(null)}
       src={displaySrc}
       title={label}
+      imageSource={read.imageSource}
       showTitle
       onPrevious={step(-1)}
       onNext={step(1)}

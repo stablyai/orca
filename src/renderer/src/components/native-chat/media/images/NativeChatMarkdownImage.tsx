@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { chatImageAccess } from '@/lib/files/access/local-file-access'
+import { nativeChatImageActionSource } from './native-chat-image-actions'
 import { basename } from '@/lib/path'
 import { useTranslate } from '@/i18n/use-translate'
 import type { LinkAction } from '@/components/link-actions/link-action-request'
@@ -175,6 +176,10 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
       {t('components.native-chat.composer.imageUnavailable', 'Preview unavailable')}
     </span>
   )
+  const imageSource =
+    localSrc && target
+      ? nativeChatImageActionSource(target.absolutePath, runtimeContext)
+      : undefined
   const copyAttributes = {
     'data-native-chat-copy-image-src': copyableNativeChatImageSrc(displaySrc)
   }
@@ -235,6 +240,7 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
         }
       }}
       dialogProps={{
+        imageSource,
         fallback,
         onCloseAutoFocus: (event) => {
           if (handingOff.current) {

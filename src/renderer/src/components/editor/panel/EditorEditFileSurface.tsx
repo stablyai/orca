@@ -8,7 +8,7 @@ import { ConflictBanner, ConflictPlaceholderView } from '../conflict-review/Conf
 import {
   CsvViewer,
   CsvPagedViewer,
-  ImageViewer,
+  EditorImageViewer,
   IpynbViewer,
   MermaidViewer,
   MonacoEditor,
@@ -186,11 +186,9 @@ export function EditorEditFileSurface({
             />
           ) : null}
           <div className="min-h-0 flex-1">
-            <ImageViewer
-              content={fileContent.content}
-              src={fileContent.mediaUrl}
-              byteSize={fileContent.size}
-              filePath={activeFile.filePath}
+            <EditorImageViewer
+              content={fileContent}
+              file={activeFile}
               mimeType={fileContent.mimeType}
               preferenceKey={pdfPreferenceKey}
               scrollCacheKey={pdfViewStateKey}
@@ -336,10 +334,10 @@ export function EditorEditFileSurface({
       monacoEditor={monacoEditor}
     />
   ) : isSvg && mdViewMode === 'rich' ? (
-    <ImageViewer
+    <EditorImageViewer
       key={activeFile.id}
       svgSource={currentContent}
-      filePath={activeFile.filePath}
+      file={activeFile}
       mimeType="image/svg+xml"
     />
   ) : isMermaid && mdViewMode === 'rich' ? (
