@@ -5,6 +5,18 @@ import type { WorkerThreadRole } from './worker-thread-roles'
 /** V8's default CodeRange (512 MB on x64) costs every worker ~600 MB of address space, so a few
  * workers exhaust a `ulimit -v` host (#37538). Worker JIT code stays far below this. */
 export const WORKER_CODE_RANGE_MB = 64
+/** Long-lived workers that move small messages keep a grown young generation (tens of MiB) while
+ * idle; scan, search and transcript workers keep V8's default so bulk parsing isn't slowed. */
+export const SMALL_WORKER_MAX_YOUNG_GENERATION_MB = 8
+const SMALL_HEAP_WORKER_ROLES: ReadonlySet<WorkerThreadRole> = new Set<WorkerThreadRole>([
+  'orca-agent-identity',
+  'orca-bots-db',
+  'orca-child-process-spawner',
+  'orca-command-path-directory',
+  'orca-environment-store',
+  'orca-main-thread-hang-watchdog',
+  'orca-port-scan'
+])
 
 export type WorkerThreadObserver = {
   /** Runs before construction: a worker copies environment data when it is created. */
@@ -44,7 +56,13 @@ export function spawnWorkerThread(
   }
   const worker = new Worker(filename, {
     ...options,
-    resourceLimits: { codeRangeSizeMb: WORKER_CODE_RANGE_MB, ...options.resourceLimits }
+    resourceLimits: {
+      codeRangeSizeMb: WORKER_CODE_RANGE_MB,
+      ...(SMALL_HEAP_WORKER_ROLES.has(options.name)
+        ? { maxYoungGenerationSizeMb: SMALL_WORKER_MAX_YOUNG_GENERATION_MB }
+        : {}),
+      ...options.resourceLimits
+    }
   })
   spawned.set(worker, worker.threadId)
   try {

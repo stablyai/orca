@@ -30,6 +30,8 @@ export function launchWatcherChild(
   try {
     child = fork(entryPath, [], {
       stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+      // Event batching allocates little; uncapped, idle new-space growth dominates this child's heap.
+      execArgv: ['--max-semi-space-size=2', '--optimize-for-size'],
       env: {
         ...process.env,
         ELECTRON_RUN_AS_NODE: '1',
