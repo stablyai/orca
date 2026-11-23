@@ -24545,9 +24545,9 @@
       "addAccountHelp": "계정을 추가하려면 agy에서 /logout을 실행하고 다시 로그인한 뒤 여기에서 저장하세요.",
       "googleSignIn": "Google 계정 로그인",
       "googleSignInAgy": "agy 자체 로그인",
-      "googleSignInAgyOption": "agy를 실행해 로그인",
+      "googleSignInAgyOption": "agy를 실행해 로그인 (Claude, GPT-OSS도 제공)",
       "googleSignInOrca": "Orca 기본 제공 로그인",
-      "googleSignInOrcaOption": "여기서 브라우저로 로그인 (agy 불필요)",
+      "googleSignInOrcaOption": "여기서 브라우저로 로그인 (agy 불필요, Gemini 모델만)",
       "googleSignInUpdateFailed": "Antigravity의 Google 로그인 방식을 변경할 수 없습니다."
     },
     "claude": {
