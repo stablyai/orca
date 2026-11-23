@@ -1,3 +1,4 @@
+import { crewChatStatusChange } from '../../orchestration/crew/crew-changes'
 import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from '../catalog/worktree-launch-host-repo'
@@ -117,7 +118,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       getLivenessVerdict: (ptyId) => this.getPtyLivenessVerdict(ptyId),
       getSummary
     })
-    const { mirroredWorktreeIdByTabId, connectedPtyEvidence } =
+    const { mirroredWorktreeIdByTabId, connectedPtyEvidence, savedAgentRecords } =
       applyRuntimeWorktreePsSessionActivity({
         store: this.store,
         summaries,
@@ -131,7 +132,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
     const rowSources = collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId,
       connectedPtyEvidence,
-      hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? [],
+      hookSnapshots: this.paneAgentStatuses(undefined, savedAgentRecords),
       readStructuredSummary: getStructuredAgentSessionHost()?.readStatusSummary
     })
     attachRuntimeWorktreeAgentRows({
@@ -265,6 +266,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       claimKeyId: this.agentSessionClaimSigner.keyId,
       logger,
       ...catalogDeps,
+      ...this.botStructuredSessionHostDeps(() => this.requireStore()),
       claudeCliFlags: claudeCliFlagSupport,
       usageLimitAutoContinue: this.usageLimitAutoContinueHostDeps(),
       idleSweep: { idleMs: () => nativeChatIdleStopMs(this.requireStore().getSettings()) },
@@ -277,9 +279,10 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       prepareLaunchAccountHome: (record, launchDirectory) =>
         this.prepareStructuredAgentLaunchAccountHome(record, launchDirectory),
       onRequestFailure: (failure) => this.onStructuredRequestFailureForErrorMail(failure),
+      onIdleProviderDeath: (death) => this.onStructuredIdleProviderDeathForMail(death),
       // Structured chat has no CLI hooks; this projection drives first-work renaming.
       onSessionStatusChanged: (summary, options) => {
-        this.crewChanges.notify(new Set(['status', 'names']))
+        this.crewChanges.notify(crewChatStatusChange(summary.sessionId))
         this.onStructuredSessionStatusForMail(summary)
         this.workerAutoReleaseActivity.observeChat(summary)
         nameChat(summary, options)
@@ -298,12 +301,11 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
         readNotificationSettings: () => this.requireStore().getSettings().notifications,
         readWorkspaceLabels: (scope) =>
           readStructuredAttentionWorkspaceLabels(this.requireStore(), scope),
-        isWorkspaceMuted: (scope) => this.isWorkspaceNotificationMuted(scope.workspaceId),
+        ...this.botAttentionDeliveryDeps(),
         // The same contexts the session's chat row carries.
         readOrchestration: (paneKey) => this.agentOrchestrationProjection.getForPaneKey(paneKey),
         dispatch: (event) => this.mobileNotifications.dispatch(event),
-        reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state),
-        now: () => Date.now()
+        reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state)
       }),
       createTurnAttention: () =>
         chatWorkerTurnStopReporter({
@@ -313,7 +315,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
       hasOpenDispatch: (record) =>
         structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
-    })
+    }).then(() => this.backfillBotBackgroundChats())
     // Starts watches not yet running once the host has served: a failed first start or a teardown retries here.
     this.startPullRequestWatches()
   }

@@ -20,6 +20,7 @@ import { ORCA_STRUCTURED_SESSION_ENV } from '../../../../shared/agent-launch/env
 import { withCliRuntimeOnPath } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { prependOrcaCliDirToChildPath } from '../../../cli/launchers/orca-cli-child-path'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../../../ipc/pty/host-env/spawn-env-keys'
+import { REMOTE_RUNTIME_SELECTOR_ENV_KEYS } from '../../../ipc/pty/host-env/inherited-orca-identity-env'
 import { resolveStructuredWorkerIdentityForSession } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 
 /** Remove inherited pane identity so hooks and the CLI cannot attribute the chat to the host's launching pane; the seal keeps a worker's own handle. */
@@ -78,12 +79,6 @@ function childIdentity(
   return { env, commandEnv: { ...named, ...applyThisAppCli(env) } }
 }
 
-const REMOTE_RUNTIME_SELECTOR_ENV_KEYS = [
-  'ORCA_ENVIRONMENT',
-  'ORCA_PAIRING_CODE',
-  'ORCA_REMOTE_PAIRING'
-] as const
-
 /** Without an installed app environment, no user-data root is known; inventing one would write the CLI shim into the wrong directory. */
 function applyThisAppCli(env: Record<string, string>): Record<string, string> {
   delete env.ORCA_CLI_COMMAND
@@ -126,4 +121,15 @@ export function withoutCallerIdentity(
     Object.entries(env).filter(([key]) => !CALLER_IDENTITY_ENV.includes(key))
   )
   return { env: kept, envToDelete: [...new Set([...envToDelete, ...CALLER_IDENTITY_ENV])] }
+}
+
+/** A chat's seal with no caller, for a shared tool process that a non-chat spawn may start: it keeps
+ *  this environment for every later chat, so it carries the marker and this app's CLI too. */
+export function sealSharedToolProcessChild(
+  env: Readonly<Record<string, string>>,
+  envToDelete: readonly string[]
+): { env: Record<string, string>; envToDelete: string[] } {
+  const sealed: Record<string, string> = { ...env, [ORCA_STRUCTURED_SESSION_ENV]: '1' }
+  applyThisAppCli(sealed)
+  return withoutCallerIdentity(sealed, [...envToDelete, ...STRUCTURED_CHILD_ENV_TO_DELETE])
 }

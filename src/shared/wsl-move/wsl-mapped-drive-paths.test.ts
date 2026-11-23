@@ -25,7 +25,7 @@ describe('mapped-drive paths', () => {
     expect(wslMoveSourcePathToLinux('W:\\..\\x', 'Ubuntu', [W])).toBeNull()
   })
 
-  it('maps a file URL on a mapped drive, keeping its encoding', () => {
+  it('preserves file URL encoding and refuses paths outside mapped shares', () => {
     expect(wslMappedDriveFileUrlToLinux('file:///W:/home/me/a%20b.ts', 'Ubuntu', [W])).toBe(
       'file:///home/me/a%20b.ts'
     )
@@ -33,9 +33,6 @@ describe('mapped-drive paths', () => {
       'file:///home/me/x#L2'
     )
     expect(wslMappedDriveFileUrlToLinux('file:///X:/home/me', 'Ubuntu', [W])).toBeNull()
-  })
-
-  it('refuses a file URL whose `..` climbs out of the share, as the path form does', () => {
     expect(wslMappedDriveFileUrlToLinux('file:///H:/a/../../etc/passwd', 'Ubuntu', [H])).toBeNull()
     expect(wslMappedDriveFileUrlToLinux('file:///H:/a/%2E%2E/%2E%2E/etc', 'Ubuntu', [H])).toBeNull()
     expect(wslMappedDriveFileUrlToLinux('file:///H:/me/../me/x', 'Ubuntu', [H])).toBe(
@@ -85,16 +82,13 @@ describe('wslMoveRendererRewriteScope with mapped drives', () => {
     mappedDrives: [W]
   }
 
-  it('maps W: paths, folded w:/ keys and worktree ids to the host with exact case', () => {
+  it('maps paths, keys and worktree ids with exact case only for an explicitly mapped drive', () => {
     const scope = wslMoveRendererRewriteScope(move)
     expect(scope.hostPath('W:\\home\\me\\App\\src\\Main.ts')).toBe('/home/me/App/src/Main.ts')
     expect(scope.hostPath('w:/home/me/app')).toBe('/home/me/App')
     expect(scope.hostWorktreeId('repo-1::W:\\home\\me\\App')).toBe('repo-1::/home/me/App')
     expect(scope.hostPath('X:\\home\\me\\App')).toBeNull()
-  })
-
-  it('leaves W: paths alone for a move that mapped no drive', () => {
-    const scope = wslMoveRendererRewriteScope({ ...move, mappedDrives: undefined })
-    expect(scope.hostPath('W:\\home\\me\\App')).toBeNull()
+    const unmappedScope = wslMoveRendererRewriteScope({ ...move, mappedDrives: undefined })
+    expect(unmappedScope.hostPath('W:\\home\\me\\App')).toBeNull()
   })
 })

@@ -129,6 +129,17 @@ export const worktreeRemove = bindDeferredRpcOperation(
   })
 )
 
+// A folder row's delete; desktops from before phones could remove folder workspaces refuse it.
+export const folderWorkspaceRemove = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'folder-workspace.remove-or-skip',
+    method: 'folderWorkspace.delete',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('folder-workspace-removed', hostScreenUnreadReplySchema)
+  })
+)
+
 // Navigation never waits for activation. The host list ignores its reply; session startup inspects accepted headless replies for advice and treats refusal as no advice.
 export const worktreeActivate = bindDeferredRpcOperation(
   defineRpcOperation({

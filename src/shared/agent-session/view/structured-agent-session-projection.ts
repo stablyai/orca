@@ -1,4 +1,5 @@
 import { memoizeStringResult } from '../../collections/string-result-cache'
+import { isAgentSessionSlotTabId } from './agent-session-slot-tab-id'
 import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
   normalizeOptionalField,
@@ -14,28 +15,28 @@ import {
   type AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
 import type { AgentTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
-import { agentJournalToolCallLifecycle } from '../journal/agent-journal-tool-call-lifecycle'
+import type {
+  AgentSessionAwaitedApproval,
+  AgentSessionAwaitedQuestion
+} from '../agent-session-wire'
+import { structuredAgentSessionAwaitedApproval } from './structured-agent-session-awaited-approval'
 import { agentJournalLinkageFields } from '../journal/agent-session-journal-producer'
-import { structuredAgentSessionStatusBlock } from './structured-agent-session-status-block'
+import { itemBlocks } from './structured-agent-session-item-blocks'
 import { agentJournalItemRowOrigin } from '../journal/agent-session-journal-position'
 import { AGENT_STATUS_TOOL_NAME_MAX_LENGTH } from '../../agent-status/contracts/agent-status-types'
 import { describeToolInput } from '../../native-chat/tools/native-chat-tool-summary'
 import { statusStructuredAgentSessionToolCall } from './structured-agent-session-live-turn'
 import {
   hasStructuredAgentSessionRequest,
-  latestStructuredAgentSessionAssistantMessage,
   latestStructuredAgentSessionPrompt,
   latestStructuredAgentSessionRequest,
   type StructuredAgentSessionLatestRequest
 } from '../requests/structured-agent-session-latest-request'
-import {
-  isStructuredAgentSessionToolAction,
-  structuredAgentSessionToolCallBlock
-} from './messages/structured-agent-session-tool-call-block'
-
-import type { NativeChatBlock, NativeChatMessage } from '../../native-chat/native-chat-types'
+import { currentStructuredAgentSessionAnswer } from '../requests/structured-agent-session-current-answer'
+import type { NativeChatMessage } from '../../native-chat/native-chat-types'
 import { sha256 } from '../../hashing/sha256'
-import { readAgentMessageSource } from '../journal/agent-session-message-source'
+import { nativeChatMessageSenderFields } from '../../native-chat-message-sender-fields'
+import { tookOverGoalBlocks } from '../../native-chat/took-over-notice'
 import { structuredAgentSessionStatusStartedAt } from './structured-agent-session-status-started-at'
 import { owesStructuredAgentSessionWork } from './structured-agent-session-owed-work'
 import type { StructuredAgentSessionWorkScope } from './structured-agent-session-main-agent-working'
@@ -44,20 +45,6 @@ import {
   agentSessionCurrentContextRows
 } from '../conversation-context/agent-session-context-clear'
 import { nativeChatStatusTurnOutcome } from '../../native-chat/transcript/continuation/native-chat-orca-stop-cut'
-
-/** Only transport-clipped output has a fetchable remainder; older saved truncations have none. */
-function toolResult(
-  item: AgentJournalRenderItem,
-  payload: { head: string; truncated: boolean; byteLength: number },
-  callId: string | undefined
-) {
-  return {
-    type: 'tool-result' as const,
-    output: payload.truncated ? `${payload.head}\n… (${payload.byteLength} bytes)` : payload.head,
-    callId,
-    ...(item.shortened && payload.truncated ? { fullOutputItemId: item.itemId } : {})
-  }
-}
 
 /** Anchor truncation markers at the end so body lookalikes remain content. */
 const BOUNDED_TEXT_MARKERS = [
@@ -69,70 +56,6 @@ const BOUNDED_TEXT_MARKERS = [
 export function stripBoundedTextMarker(text: string): { text: string; truncated: boolean } {
   const stripped = BOUNDED_TEXT_MARKERS.reduce((value, marker) => value.replace(marker, ''), text)
   return { text: stripped, truncated: stripped.length !== text.length }
-}
-
-function itemBlocks(item: AgentJournalRenderItem): {
-  role: NativeChatMessage['role']
-  blocks: NativeChatBlock[]
-} | null {
-  const body = item.body
-  if (body.kind === 'message') {
-    return { role: body.role, blocks: body.blocks }
-  }
-  if (isStructuredAgentSessionToolAction(body)) {
-    const call = structuredAgentSessionToolCallBlock(body, item.itemId)
-    // Call/result share one row; use its call ID to pair them.
-    if (body.kind === 'diff') {
-      return { role: 'assistant', blocks: [call, toolResult(item, body.patch, call.callId)] }
-    }
-    return {
-      role: 'assistant',
-      blocks: [
-        call,
-        ...(body.output
-          ? [
-              {
-                ...toolResult(item, body.output, call.callId),
-                // Interrupted output is not an error reported by the tool.
-                isError: agentJournalToolCallLifecycle(body) === 'failed'
-              }
-            ]
-          : [])
-      ]
-    }
-  }
-  if (body.kind === 'approval') {
-    if (body.resolution.state === 'pending') {
-      return null
-    }
-    return {
-      role: 'system',
-      blocks: [
-        {
-          type: 'text',
-          text: `${body.title}\n${body.detail ?? ''}\n${body.resolution.state}`.trim()
-        }
-      ]
-    }
-  }
-  if (body.kind === 'question') {
-    if (body.resolution.state === 'pending') {
-      return null
-    }
-    const choices = body.options.map((option) => option.label).join(' · ')
-    return {
-      role: 'system',
-      blocks: [{ type: 'text', text: `${body.question}\n${choices}`.trim() }]
-    }
-  }
-  // Turn records are timing only; unknown newer-host kinds must not become text.
-  if (body.kind !== 'status' || body.turnLifecycle) {
-    return null
-  }
-  return {
-    role: 'system',
-    blocks: [structuredAgentSessionStatusBlock(body, item.turnScope, item.itemId)]
-  }
 }
 
 function isAgentJournalMessageSendMode(value: string): value is AgentJournalMessageSendMode {
@@ -181,19 +104,20 @@ export function projectStructuredItemToNativeChat(
   const sentAs = item.body.kind === 'message' ? item.body.sentAs : undefined
   const lifecycle = item.body.kind === 'message' ? messageLifecycle(item.body) : {}
   const command = item.body.kind === 'message' ? item.body.command : undefined
-  // Validate wire-origin sender fields from any host version.
-  const from = item.body.kind === 'message' ? readAgentMessageSource(item.body.from) : undefined
   const message: NativeChatMessage | null = projected
     ? {
         ...agentJournalItemRowOrigin(item),
         ...agentJournalLinkageFields(item),
         role: projected.role,
-        blocks: projected.blocks,
+        blocks: tookOverGoalBlocks(item.body) ?? projected.blocks,
         // A send mode this build cannot name renders as an ordinary message.
         ...(sentAs !== undefined && isAgentJournalMessageSendMode(sentAs) ? { sentAs } : {}),
         ...lifecycle,
         ...(command ? { command } : {}),
-        ...(from && projected.role === 'user' ? { from } : {}),
+        ...nativeChatMessageSenderFields(item.body, projected.role),
+        ...(projected.drawnMarkdown !== undefined
+          ? { drawnMarkdown: projected.drawnMarkdown }
+          : {}),
         ...(item.shortened && item.body.kind === 'message' ? { shortened: true } : {})
       }
     : null
@@ -203,12 +127,14 @@ export function projectStructuredItemToNativeChat(
 
 export type StructuredAgentSessionProjectedStatus = 'working' | 'attention' | 'idle'
 
+/** Legacy tab id of chats opened before slot ids were minted; still their pane/status address. */
 export function structuredAgentSessionTabId(sessionId: string): string {
   return `structured-agent-session-${sessionId}`
 }
 
-/** Ignore prompts from ended generations when the host scope proves no child can answer them. */
-function pendingStructuredAgentSessionPrompt(
+/** An approval or question still waiting on the user; with the host's scope, never one from an ended
+ *  generation, which no child can answer. */
+export function pendingStructuredAgentSessionPrompt(
   scope?: StructuredAgentSessionWorkScope
 ): (item: AgentJournalRenderItem) => boolean {
   return (item) =>
@@ -244,9 +170,10 @@ export type StructuredAgentSessionStatusProjection = {
   /** Idle-only latest-request verdict: turn outcome, host-observed end if absent, or refused-send failure. */
   turnOutcome?: AgentTurnOutcome
   statusStartedAt?: number
-  /** The row of the newest async question still waiting for the person's next message; set by
-   *  the host's journal reads and folded with the person's Skip into the published `awaitsAnswer`. */
-  openAsyncQuestion?: string
+  /** The newest async question still waiting for the person's next message; set by the host's
+   *  journal reads and folded with the person's Skip into the published `awaitsAnswer`. */
+  openAsyncQuestion?: AgentSessionAwaitedQuestion
+  awaitsApproval?: AgentSessionAwaitedApproval
 }
 
 /** Share host/client previews; null status means no turn yet. Bound text because sends admit 256 KB and status frames include all sessions;
@@ -266,7 +193,9 @@ export function projectStructuredAgentSessionStatusState(
   currentFence?: number | null,
   scope?: StructuredAgentSessionWorkScope,
   /** An indexed read of these rows by id, so per-write status finds command turns without scanning history. */
-  itemOf?: (itemId: string) => AgentJournalRenderItem | null
+  itemOf?: (itemId: string) => AgentJournalRenderItem | null,
+  /** A bot's session, whose quiet-marker answers the preview skips. */
+  botSession = false
 ): {
   summary: StructuredAgentSessionStatusProjection
   latestRequest: StructuredAgentSessionLatestRequest | null
@@ -296,8 +225,9 @@ export function projectStructuredAgentSessionStatusState(
         AGENT_STATUS_TOOL_INPUT_MAX_LENGTH
       )
     : undefined
+  const workingSends = status === 'working' ? submissions : []
   const lastAssistantMessage = normalizeOptionalField(
-    latestStructuredAgentSessionAssistantMessage(items, bodyOf),
+    currentStructuredAgentSessionAnswer(items, workingSends, bodyOf, botSession, currentFence),
     AGENT_STATUS_MAX_FIELD_LENGTH
   )
   const latestRequest = latestStructuredAgentSessionRequest(items, submissions, bodyOf)
@@ -311,14 +241,14 @@ export function projectStructuredAgentSessionStatusState(
     currentFence,
     request
   )
+  const pending =
+    status === 'attention' ? items.filter(pendingStructuredAgentSessionPrompt(scope)) : []
+  const awaitsApproval = structuredAgentSessionAwaitedApproval(pending[0])
   return {
     latestRequest,
     owesWork:
       status !== 'idle' && owesStructuredAgentSessionWork(items, submissions, currentFence, scope),
-    pendingPromptIds:
-      status === 'attention'
-        ? items.filter(pendingStructuredAgentSessionPrompt(scope)).map((item) => item.itemId)
-        : [],
+    pendingPromptIds: pending.map((item) => item.itemId),
     summary: {
       status,
       latestPrompt: normalizePromptField(latestPrompt),
@@ -326,17 +256,26 @@ export function projectStructuredAgentSessionStatusState(
       ...(toolInput ? { toolInput } : {}),
       ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
       ...(turnOutcome ? { turnOutcome } : {}),
-      ...(statusStartedAt !== undefined ? { statusStartedAt } : {})
+      ...(statusStartedAt !== undefined ? { statusStartedAt } : {}),
+      ...(awaitsApproval ? { awaitsApproval } : {})
     }
   }
 }
 
+// Why: callers walk every live chat, and a FIFO smaller than that set misses on every pass.
+const MAX_MEMOIZED_PANE_LEAVES = 32_768
 const structuredAgentSessionPaneLeaf = memoizeStringResult((sessionId: string): string => {
   const bytes = sha256(new TextEncoder().encode(sessionId))
   const hex = Array.from(bytes.slice(0, 16), (byte) => byte.toString(16).padStart(2, '0')).join('')
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`
-}, 2048)
+}, MAX_MEMOIZED_PANE_LEAVES)
+
+/** The tab id a chat's pane key names: status, attention and orchestration rows still address a
+ *  minted slot's chat by its session's legacy id. */
+export function structuredAgentSessionAddressTabId(tabId: string, sessionId: string): string {
+  return isAgentSessionSlotTabId(tabId) ? structuredAgentSessionTabId(sessionId) : tabId
+}
 
 export function structuredAgentSessionPaneKey(tabId: string, sessionId: string): string {
-  return `${tabId}:${structuredAgentSessionPaneLeaf(sessionId)}`
+  return `${structuredAgentSessionAddressTabId(tabId, sessionId)}:${structuredAgentSessionPaneLeaf(sessionId)}`
 }

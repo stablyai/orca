@@ -133,6 +133,9 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
         } else if (target === 'initial') {
           stream.callbacks.onSnapshot(data ?? '', pushedMeta)
         } else if (target === 'recovery') {
+          if (info !== null) {
+            stream.callbacks.onOutputGapRecovered?.()
+          }
           // Pushed recovery replaces screen/scrollback, including empty images, because dropped output leaves an unsafe splice gap (P2-5). RELEASE_SYNCHRONIZED_OUTPUT clears mode 2026: erase-screen alone leaves its latch blocking paint.
           stream.callbacks.onSnapshot(
             `${RELEASE_SYNCHRONIZED_OUTPUT}\x1b[2J\x1b[3J\x1b[H${data ?? ''}`,

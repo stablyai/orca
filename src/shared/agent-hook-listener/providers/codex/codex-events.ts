@@ -42,6 +42,7 @@ import {
   setCodexMainAgentTurnState
 } from './codex-state'
 import { pendingCodexAsyncQuestion, trackCodexAsyncQuestions } from './codex-async-questions'
+import { reviewerEvidenceDeferred } from './codex-rollout-prefetch-scope'
 
 export function buildCodexStatusPayload(
   state: HookListenerState,
@@ -73,7 +74,8 @@ export function buildCodexStatusPayload(
     agentType: 'codex',
     model: lead?.model,
     toolName: asyncQuestion?.toolName ?? snapshot.toolName,
-    toolInput: snapshot.toolInput,
+    // The snapshot's input belongs to whatever tool runs now, not the question.
+    toolInput: asyncQuestion ? asyncQuestion.title : snapshot.toolInput,
     interactivePrompt: asyncQuestion?.prompt ?? snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
@@ -149,7 +151,8 @@ function resolveCodexApprovalOwnedState(
   transcriptPath: string | undefined,
   stateName: 'working' | 'waiting' | 'done'
 ): 'working' | 'waiting' | 'done' {
-  if (stateName !== 'waiting' || eventName !== 'PermissionRequest') {
+  // Unread rollout bytes may hold a newer reviewer; show the prompt rather than risk hiding a human's approval.
+  if (stateName !== 'waiting' || eventName !== 'PermissionRequest' || reviewerEvidenceDeferred()) {
     return stateName
   }
   return codexTurnApprovalsAreAutoReviewed(

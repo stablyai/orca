@@ -5,11 +5,24 @@ import { parseMessageTypes } from '../routing'
 import { checkRunMailbox } from './check-run'
 import { checkWorkerMailbox } from './check-worker'
 import { checkDirectMailbox } from './check-direct'
+import { withOwnDirectMail } from './check-own-direct-mail'
 import { CheckMailReconciliation } from './check-mail-reconciliation'
-import { checkedMailboxes, handsOverBatch, withReportFollowUps } from './mailbox-message-receipt'
+import { callerMailTaker } from '../../../../orchestration/db/messages/mail-taker'
+import {
+  checkedMailboxes,
+  handsOverBatch,
+  withReplyFollowUps,
+  withReportItems
+} from './mailbox-message-receipt'
 import { withRunCheckNext } from '../receipt-next'
-import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
-import { hasRunBindingKey } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import {
+  ORCHESTRATION_UNBOUND_RUN_ID,
+  orchestrationSkillRecoveryData
+} from '../../../../../../shared/orchestration/orchestration-rpc-contract'
+import {
+  hasRunBindingKey,
+  sessionCallerOf
+} from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import {
   callerHoldsDispatchPane,
@@ -54,14 +67,20 @@ export const ORCHESTRATION_CHECK_METHODS = [
       const paneKey = caller.paneKey ?? undefined
       const boundRun = hasRunBindingKey(caller) ? db.getCurrentRunForCoordinator(caller) : undefined
       const consumingCheck = params.peek !== true && params.all !== true && params.unread !== false
+      const reader = sessionCallerOf(orchestrationCaller)
       // Mail this check takes may still wait as a card in a chat's queue; that card must not run too.
-      const releasing = <T>(result: T): T => {
+      // The item line is read for this answer only; the check's recorded receipt never holds it.
+      const releasing = <T>(result: T): Promise<T> => {
         if (consumingCheck && params.ack && !params.wait) {
           runtime.withdrawStaleChatMail(checkedMailboxes(result))
         }
-        return consumingCheck && !(params.ack && !params.wait)
-          ? result
-          : withReportFollowUps(db, result)
+        return withReportItems(
+          runtime,
+          db,
+          consumingCheck && !(params.ack && !params.wait)
+            ? result
+            : withReplyFollowUps(runtime, db, reader, result)
+        )
       }
       const livePane = runtime.getTerminalPaneKey(handle)
       const process = runtime.getTerminalProcessIncarnation(handle)
@@ -76,9 +95,16 @@ export const ORCHESTRATION_CHECK_METHODS = [
           )
         }
       }
-      const reconciliation = new CheckMailReconciliation(runtime, db, signal)
+      // run_unbound is the id the caller's own direct mail (bot item mail) carries, not a Run.
+      const unboundOnly = params.run === ORCHESTRATION_UNBOUND_RUN_ID
+      const reconciliation = new CheckMailReconciliation(
+        runtime,
+        db,
+        callerMailTaker(caller),
+        signal
+      )
       try {
-        if (params.run || boundRun) {
+        if (!unboundOnly && (params.run || boundRun)) {
           const result = await checkRunMailbox({
             params,
             runtime,
@@ -93,12 +119,29 @@ export const ORCHESTRATION_CHECK_METHODS = [
             orchestrationCompatibilityEvidence,
             recordMutationReceipt,
             reconciliation,
+            reader,
             revalidateCaller
           })
-          return releasing(
+          const answer =
             consumingCheck && !(params.ack && !params.wait) && !handsOverBatch(result)
               ? await withRunCheckNext(runtime, result)
               : result
+          return await releasing(
+            !params.run && boundRun && consumingCheck && !params.ack && !params.wait
+              ? await withOwnDirectMail({
+                  runtime,
+                  db,
+                  reader,
+                  handle,
+                  runId: boundRun.id,
+                  typeFilter,
+                  format: params.format === true || params.inject === true,
+                  reconciliation,
+                  revalidate: revalidateCaller,
+                  record: recordMutationReceipt,
+                  result: answer
+                })
+              : answer
           )
         }
 
@@ -122,8 +165,8 @@ export const ORCHESTRATION_CHECK_METHODS = [
             `Dispatch ${remoteAttachment.dispatch_id} is no longer attached to this worker process.`
           )
         }
-        if (activeDispatch || remoteAttachment) {
-          return releasing(
+        if ((activeDispatch || remoteAttachment) && !unboundOnly) {
+          return await releasing(
             await checkWorkerMailbox({
               params,
               runtime,
@@ -136,6 +179,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
               remoteAttachment,
               recordMutationReceipt,
               reconciliation,
+              reader,
               revalidateCaller,
               acknowledgeOnly: !params.wait
             })
@@ -154,20 +198,22 @@ export const ORCHESTRATION_CHECK_METHODS = [
             orchestrationSkillRecoveryData()
           )
         }
-        return releasing(
+        return await releasing(
           await checkDirectMailbox({
-            params,
+            params: unboundOnly ? { ...params, run: undefined } : params,
+            ...(unboundOnly ? { runId: ORCHESTRATION_UNBOUND_RUN_ID } : {}),
             runtime,
             db,
             handle,
             typeFilter,
             signal,
             reconciliation,
+            reader,
             recordMutationReceipt,
             revalidateConsumer: () => {
               revalidateCaller()
               if (
-                db.getCurrentRunForCoordinator(caller) ||
+                (!unboundOnly && db.getCurrentRunForCoordinator(caller)) ||
                 db.getActiveDispatchForIdentity(handle, paneKey) ||
                 (paneKey && db.findActiveRemoteAttachmentForPane(paneKey))
               ) {

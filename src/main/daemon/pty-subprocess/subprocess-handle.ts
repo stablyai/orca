@@ -17,7 +17,7 @@ import { createPtyForegroundProcessTracker } from './foreground-process-tracker'
 import { PtyPreListenerEvents } from './pre-listener-events'
 import { ptyProcessNameIsSpawnFile } from './spawn-file-foreground-process'
 import { inspectSpawnFileWindowsChildProcesses } from './spawn-file-child-processes'
-import type { ConptyStartupEvents } from './conpty-startup-input-reader'
+import { runsOnWinpty, type ConptyStartupEvents } from './conpty-startup-input-reader'
 
 export type DaemonPtyPhysicalOwner = ReturnType<typeof createDaemonPtyPhysicalOwner>
 
@@ -135,12 +135,23 @@ export function createDaemonPtySubprocessHandle(args: {
   return {
     pid: proc.pid,
     processNameIsSpawnFile: ptyProcessNameIsSpawnFile(proc),
+    ...(runsOnWinpty(proc) ? { resizeRedrawsOwnScreen: true } : {}),
     // Only the login(1) wrapper hides the shell's exit status, and it forks the shell as its child.
     shellIsRootChild: !reportsChildExitStatus,
     ...(process.platform === 'win32'
       ? {
-          inspectChildProcesses: (fresh?: boolean, ignoreDetached?: boolean) =>
-            inspectSpawnFileWindowsChildProcesses(proc, shellPath, fresh, ignoreDetached)
+          inspectChildProcesses: (
+            fresh?: boolean,
+            ignoreDetached?: boolean,
+            jobMembershipOnly?: boolean
+          ) =>
+            inspectSpawnFileWindowsChildProcesses(
+              proc,
+              shellPath,
+              fresh,
+              ignoreDetached,
+              jobMembershipOnly
+            )
         }
       : {}),
     shellPath: args.shellPath,

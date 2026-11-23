@@ -175,8 +175,7 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
       nextTabs,
       new Set([retiredTab.id, retiredTab.browserWorkspaceId])
     )
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(worktreeId, nextSnapshot))
     return true
   }
 
@@ -299,7 +298,7 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
         }))
       )
     }
-    const session = this.getAvailableAuthoritativeWindow()
+    const session = this.hasAuthoritativeWindow()
       ? null
       : this.getWorkspaceSessionForWorktree(worktreeId)
     const next =

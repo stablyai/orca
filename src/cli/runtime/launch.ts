@@ -24,6 +24,7 @@ import { RuntimeClientError } from './connection/types'
 import { BACKGROUND_OPEN_ARG } from '../../shared/app-lifecycle/launch/background-open-argv'
 import {
   getExecutableAppArgs,
+  resolveAppChildCwd,
   resolveAppRoot,
   resolveForegroundOrcaExecutable,
   stripElectronRunAsNode
@@ -270,7 +271,7 @@ function spawnElectronServe(
     program: executable,
     args: childArgs,
     detached: args.recipeJson === true,
-    cwd: resolveAppRoot(),
+    cwd: resolveAppChildCwd(userDataPath),
     stdio:
       args.recipeJson === true
         ? ['ignore', 'pipe', 'inherit']

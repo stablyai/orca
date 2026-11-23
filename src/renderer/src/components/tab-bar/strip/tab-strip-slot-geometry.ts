@@ -44,7 +44,8 @@ function getSlotNaturalSpan(strip: HTMLElement, slot: HTMLElement): [number, num
     return [rect.left, rect.right]
   }
   let prev = slot.previousElementSibling
-  while (prev && !prev.matches(SLOT_SELECTOR)) {
+  // A windowed strip's spacer stands in for the unmounted tabs before it.
+  while (prev && !prev.matches(`${SLOT_SELECTOR}, [data-tab-strip-gap]`)) {
     prev = prev.previousElementSibling
   }
   const left = prev

@@ -68,12 +68,12 @@ export async function listMcpIssues(
   const pagination = resolveIssueListCursor(request)
   const limit = resolveLimit(request.limit)
   const orderBy = request.orderBy ?? 'updatedAt'
-  const { entries, failures: entryFailures } = getIssueListEntries(pagination.workspaceId)
+  const { entries, failures: entryFailures } = await getIssueListEntries(pagination.workspaceId)
   if (entries.length === 0) {
     if (entryFailures[0]) {
       throw entryFailures[0].error
     }
-    throw linearNotConnectedError('issue list')
+    throw linearNotConnectedError()
   }
   const pagedRequest = {
     ...request,
@@ -120,17 +120,17 @@ export async function listMcpIssues(
   }
 }
 
-function getIssueListEntries(workspaceId?: (string & {}) | 'all'): {
+async function getIssueListEntries(workspaceId?: (string & {}) | 'all'): Promise<{
   entries: LinearClientForWorkspace[]
   failures: WorkspaceReadFailure[]
-} {
+}> {
   if (workspaceId === 'all') {
     return getFanoutClientEntries()
   }
   if (workspaceId) {
-    resolveWorkspaceSelector({ workspaceId }, getStatus().workspaces ?? [])
+    resolveWorkspaceSelector({ workspaceId }, (await getStatus()).workspaces ?? [])
   }
-  return { entries: getClients(workspaceId), failures: [] }
+  return { entries: await getClients(workspaceId), failures: [] }
 }
 
 async function readIssueListWorkspaces(

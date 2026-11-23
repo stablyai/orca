@@ -2,8 +2,11 @@ import type {
   BrowserBackResult,
   BrowserClickResult,
   BrowserGotoResult,
-  BrowserReloadResult
+  BrowserReloadResult,
+  BrowserStopResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
+import type { BrowserPageZoomDirection } from '../../../../shared/browser/site-settings/browser-page-zoom'
+import type { BrowserPageSiteDisplay } from '../../../../shared/browser/site-settings/browser-site-display'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost
@@ -14,7 +17,7 @@ export class RuntimeBrowserNavigation {
   constructor(
     private readonly host: Pick<
       RuntimeBrowserCommandHost,
-      'getAvailableAuthoritativeWindow' | 'notifyHeadlessBrowserSessionTabsChanged'
+      'getAvailableAuthoritativeWindowId' | 'notifyHeadlessBrowserSessionTabsChanged'
     >,
     private readonly targets: Pick<
       RuntimeBrowserCommandTargets,
@@ -46,7 +49,7 @@ export class RuntimeBrowserNavigation {
     if (pageId) {
       this.targets.notifyRendererNavigation(pageId, result.url, result.title)
     }
-    if (!this.host.getAvailableAuthoritativeWindow() && target.worktreeId) {
+    if (this.host.getAvailableAuthoritativeWindowId() === null && target.worktreeId) {
       this.host.notifyHeadlessBrowserSessionTabsChanged?.(target.worktreeId)
     }
     return result
@@ -63,15 +66,33 @@ export class RuntimeBrowserNavigation {
     return result
   }
 
-  async browserReload(params: BrowserCommandTargetParams): Promise<BrowserReloadResult> {
+  async browserReload(
+    params: BrowserCommandTargetParams & { ignoreCache?: boolean }
+  ): Promise<BrowserReloadResult> {
     const target = await this.targets.resolveBrowserCommandTarget(params)
     const bridge = this.targets.requireAgentBrowserBridge()
-    const result = await bridge.reload(target.worktreeId, target.browserPageId)
+    const result = await bridge.reload(target.worktreeId, target.browserPageId, {
+      ignoreCache: params.ignoreCache === true
+    })
     const pageId = bridge.getActivePageId(target.worktreeId, target.browserPageId)
     if (pageId) {
       this.targets.notifyRendererNavigation(pageId, result.url, result.title)
     }
     return result
+  }
+
+  async browserZoom(
+    params: { direction: BrowserPageZoomDirection } & BrowserCommandTargetParams
+  ): Promise<BrowserPageSiteDisplay | null> {
+    const target = await this.targets.resolveBrowserCommandTarget(params)
+    return this.targets
+      .requireAgentBrowserBridge()
+      .zoom(params.direction, target.worktreeId, target.browserPageId)
+  }
+
+  async browserStop(params: BrowserCommandTargetParams): Promise<BrowserStopResult> {
+    const target = await this.targets.resolveBrowserCommandTarget(params)
+    return this.targets.requireAgentBrowserBridge().stop(target.worktreeId, target.browserPageId)
   }
 
   async browserForward(params: BrowserCommandTargetParams): Promise<unknown> {

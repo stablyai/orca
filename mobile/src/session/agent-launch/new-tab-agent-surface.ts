@@ -37,9 +37,7 @@ export function resolveNewTabAgentSurfaces(args: {
   }
   const startsAsChat = (agent: TuiAgent): boolean =>
     canChat(agent) &&
-    (picked !== null
-      ? picked === 'chat'
-      : hostDefaults === null || nativeChatPreferenceFor(hostDefaults, agent))
+    (picked !== null ? picked === 'chat' : hostStartsAgentAsChat(hostDefaults, agent))
   const surfaces = new Set(listed.map((agent) => (startsAsChat(agent) ? 'chat' : 'terminal')))
   const [only] = surfaces
   return {
@@ -48,4 +46,12 @@ export function resolveNewTabAgentSurfaces(args: {
     nativeChatDefaultFor: (agent) =>
       picked !== null || hostDefaults === null ? startsAsChat(agent) : undefined
   }
+}
+
+/** A headless host with no choice of its own (null) starts chats; an older host's absence starts none. */
+export function hostStartsAgentAsChat(
+  hostDefaults: NativeChatDefaultSettings | null | undefined,
+  agent: TuiAgent
+): boolean {
+  return hostDefaults === null || nativeChatPreferenceFor(hostDefaults, agent)
 }

@@ -27,6 +27,7 @@ import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../src/
 import { remoteRuntimeClientCapabilities } from '../../../../src/shared/remote-runtime/remote-runtime-client-capabilities'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../../src/shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
+import { TERMINAL_HOST_PANE_RESPAWN_CLIENT_CAPABILITY } from '../../../../src/shared/terminal/pty/lifecycle/host-pane-respawn-capability'
 
 export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilities([
   AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY,
@@ -55,6 +56,8 @@ export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilitie
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY,
+  // The session view follows a tab's terminal handle, so a pane the host restarts shows its new terminal.
+  TERMINAL_HOST_PANE_RESPAWN_CLIENT_CAPABILITY,
   // Every socket this list is sent on reads frames through MobileE2EEV2PhysicalChannel, which inflates them.
   COMPRESSED_FRAMES_CLIENT_CAPABILITY
 ])

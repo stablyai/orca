@@ -1,5 +1,9 @@
 /** An opted-in desktop serves a managed SSH host’s CLI browser requests. Both peers must advertise desktopBridge.v1; unsupported peers refuse with unavailable instead of hanging. */
 import { z } from 'zod'
+import {
+  BROWSER_CLIENT_AUTOMATION_RESULT_CHUNK_MAX_BYTES,
+  BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES
+} from './browser-client-automation-protocol'
 
 export const DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY = 'browser.desktopBridge.v1'
 /** Send cancel only when negotiated: older desktops drop the whole attachment on unknown event types. */
@@ -136,6 +140,8 @@ export const DesktopBrowserBridgeRequest = z.object({
   /** The workspace orcad resolved the caller's selector to; absent when it named none. */
   // Why longer than an identity: a worktree id embeds the repository's absolute path.
   workspaceId: z.string().min(1).max(MAX_WORKSPACE_ID_LENGTH).optional(),
+  /** orcad accepts desktopBrowserBridge.resultChunk; older ones omit it and older desktops ignore it. */
+  stagedResults: z.literal(true).optional(),
   params: z
     .record(z.string(), z.unknown())
     .refine(
@@ -164,7 +170,14 @@ export const DesktopBrowserBridgeResultParams = z.discriminatedUnion('ok', [
     attachmentId: Identity,
     requestId: Identity,
     ok: z.literal(true),
-    result: z.unknown()
+    result: z.unknown(),
+    /** The value went ahead in resultChunk calls; result is null. */
+    stagedResultBytes: z
+      .number()
+      .int()
+      .positive()
+      .max(BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES)
+      .optional()
   }),
   z.object({
     attachmentId: Identity,
@@ -174,6 +187,21 @@ export const DesktopBrowserBridgeResultParams = z.discriminatedUnion('ok', [
   })
 ])
 export type DesktopBrowserBridgeResultParams = z.infer<typeof DesktopBrowserBridgeResultParams>
+
+/** One piece of a result too large for a single frame, sent in order before the result. */
+export const DesktopBrowserBridgeResultChunkParams = z.object({
+  attachmentId: Identity,
+  requestId: Identity,
+  offset: z.number().int().nonnegative().max(BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES),
+  contentBase64: z
+    .string()
+    .min(1)
+    .max(Math.ceil(BROWSER_CLIENT_AUTOMATION_RESULT_CHUNK_MAX_BYTES / 3) * 4)
+    .regex(/^[A-Za-z0-9+/]*={0,2}$/)
+})
+export type DesktopBrowserBridgeResultChunkParams = z.infer<
+  typeof DesktopBrowserBridgeResultChunkParams
+>
 
 // Routed tabs can still display local files; those remain off-limits to hosts.
 // Allow chrome-error: so hosts can navigate away from failed loads.

@@ -19,6 +19,7 @@ import {
   buildPtyTerminalWaitResult
 } from './terminal-wait-results'
 import { outputClockOf } from './tui-idle-evidence-source'
+import { hasTerminalAgentPainted, isShellInFront } from '../input/terminal-command-paint'
 import { createSetupCompletionScanner } from '../../orchestration/workers/launch/setup-completion-signal'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 const TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS = 10
@@ -69,16 +70,20 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
         }
         const snapshotText = projection.tail.join('\n')
         const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
-        // Why the shared tier-1 rule: a probe must not settle what the live screen would refuse.
-        const ready = screenRule
-          ? isKnownReadyPromptBody(
-              snapshotText,
-              agent,
-              () => restoreProjectedComposerDraft(projection.tail, projection.draft),
-              // Why read now: output since the probe started makes the pane clocked.
-              outputClockOf(this.tuiIdleEvidenceSource, pty) !== null
-            )
-          : isKnownReadyPromptSettled(snapshotText)
+        // Why the shared tier-1 rule: a probe must not settle what the live screen would refuse,
+        // nor on a frame no current program painted (a reattach awaiting paint, or the shell back in front).
+        const ready =
+          !isShellInFront(pty) &&
+          hasTerminalAgentPainted(pty, agent) &&
+          (screenRule
+            ? isKnownReadyPromptBody(
+                snapshotText,
+                agent,
+                () => restoreProjectedComposerDraft(projection.tail, projection.draft),
+                // Why read now: output since the probe started makes the pane clocked.
+                outputClockOf(this.tuiIdleEvidenceSource, pty) !== null
+              )
+            : isKnownReadyPromptSettled(snapshotText))
         if (!blockedReason && !ready) {
           return
         }

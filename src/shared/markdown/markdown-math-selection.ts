@@ -36,7 +36,12 @@ export function markdownMathSelectionText(selection: Selection, root: Element): 
     keepsWhiteSpace: new Map()
   }
   appendSelectedChildren(container, range, out)
-  return out.parts.join('').trimEnd()
+  const text = out.parts.join('')
+  const trimmed = text.trimEnd()
+  // Native copy keeps a last row's empty-cell tabs, but not a fully empty last row.
+  const tail = text.slice(trimmed.length)
+  const kept = trimmed + tail.slice(0, tail.lastIndexOf('\t') + 1)
+  return /(^|\n)\t+$/.test(kept) ? trimmed : kept
 }
 
 /** Puts the selection on the clipboard as {@link markdownMathSelectionText} when it holds a formula. */

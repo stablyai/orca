@@ -17,11 +17,6 @@ export function checkOrcaStarred(): Promise<boolean | null> {
   return inFlightStarCheck
 }
 
-/** @internal Drop any coalesced check so suites cannot inherit one another's. */
-export function __resetOrcaStarCheckForTests(): void {
-  inFlightStarCheck = null
-}
-
 async function runOrcaStarredCheck(): Promise<boolean | null> {
   await acquire()
   try {

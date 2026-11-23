@@ -11,6 +11,7 @@ import { NumberField, SettingsSegmentedControl } from '../form-controls/Settings
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentDashboardExperimentalSetting } from '../../dashboard/settings/AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from '../virtual-machines/recipes/EphemeralVmsExperimentalSetting'
+import { AppRailExperimentalSetting } from '../../app-rail/AppRailExperimentalSetting'
 import { WslHostsExperimentalSetting } from '../wsl/hosts/WslHostsExperimentalSetting'
 import { wslHostsAvailable } from '../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import {
@@ -49,6 +50,7 @@ export function ExperimentalPane({
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().newWorktreeCardStyle
   ])
+  const showAppRail = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().appRail])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   // Use the planner’s clamped millisecond value/default while editing minutes.
   const agentHibernationIdleMinutes = Math.round(
@@ -280,6 +282,10 @@ export function ExperimentalPane({
               />
             </div>
           </SearchableSetting>
+        ) : null}
+
+        {showAppRail ? (
+          <AppRailExperimentalSetting settings={settings} updateSettings={updateSettings} />
         ) : null}
 
         <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />

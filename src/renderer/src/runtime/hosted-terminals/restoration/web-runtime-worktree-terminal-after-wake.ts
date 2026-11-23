@@ -125,13 +125,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
           environmentId: runtimeEnvironmentId,
           worktreeId,
           activate: opts?.activate !== false,
-          selectWorktree: false,
-          buildStartup: () =>
-            startup.freshAgentLaunch?.legacy?.() ?? {
-              startupPlan: null,
-              pasteDraftAfterLaunch: null,
-              submitPastedPrompt: false
-            }
+          selectWorktree: false
         }).then((result) => result.outcome)
       : createWebRuntimeSessionTerminal(
           {

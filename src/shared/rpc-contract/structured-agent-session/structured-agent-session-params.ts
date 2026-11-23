@@ -1,3 +1,4 @@
+import { BotLinkOpenTargetSchema } from '../../bots/bot-link-open-target'
 import { AgentSessionSelectionSchema } from '../../agent-session/options/protocol/agent-session-execution-options'
 import {
   SendBody,
@@ -187,6 +188,7 @@ export const SetOptionParams = z.strictObject({
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
 export const RevealParams = OptionsParams.extend({
+  botLinkTarget: BotLinkOpenTargetSchema.optional(),
   navigation: z.literal('caller').optional()
 }).strict()
 export const SwitchToChatParams = OptionsParams.extend({
@@ -301,6 +303,12 @@ export const RestartResumableParams = z
 /** Absent selects the whole offered set; IDs narrow it. Host rechecks eligibility, excluding invented IDs. */
 export const RestartResumeParams = z
   .object({ sessionIds: z.array(SessionId).max(MAX_RESTART_RESUME_SESSIONS).optional() })
+  .strict()
+
+/** Waits for this start's own continuation of what the last run cut off; `taken` answers once it
+ *  has reserved its chats, before any agent starts. */
+export const RestartLaunchSettledParams = z
+  .object({ until: z.literal('taken').optional() })
   .strict()
 
 export const HistoryParams = z

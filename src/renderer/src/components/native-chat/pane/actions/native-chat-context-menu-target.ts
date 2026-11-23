@@ -12,6 +12,8 @@ export type NativeChatContextMenuTarget = {
   codeText: string | null
   messageText: string | null
   rewindItemId: string | null
+  /** A message of the owner's posted to the chat's Slack thread, which Delete from Slack takes back. */
+  slackPostedItemId: string | null
 }
 
 export const noNativeChatContextMenuTarget: NativeChatContextMenuTarget = {
@@ -19,14 +21,20 @@ export const noNativeChatContextMenuTarget: NativeChatContextMenuTarget = {
   link: null,
   codeText: null,
   messageText: null,
-  rewindItemId: null
+  rewindItemId: null,
+  slackPostedItemId: null
 }
+
+export type NativeChatLinkContextResolver = (
+  href: string,
+  link: Element
+) => NativeChatFileLinkContext | null
 
 export type NativeChatContextMenuTargetSources = {
   root: HTMLElement | null
   composer: Pick<NativeChatComposerHandle, 'acceptsText'> | null
-  messageList: Pick<NativeChatMessageListHandle, 'messageCopyText'> | null
-  linkContext: NativeChatFileLinkContext | null
+  messageList: Partial<Pick<NativeChatMessageListHandle, 'messageCopyText'>> | null
+  linkContext: NativeChatFileLinkContext | null | NativeChatLinkContextResolver
 }
 
 /** Rows mark themselves with ids only; their text comes from the transcript the rows draw. */
@@ -44,15 +52,25 @@ export function readNativeChatContextMenuTarget(
     ?.getAttribute('data-native-chat-message-id')
   return {
     quoteText: quotable?.text ?? null,
-    link: href ? nativeChatLinkActions(href, linkContext) : null,
+    link:
+      href && link
+        ? nativeChatLinkActions(
+            href,
+            typeof linkContext === 'function' ? linkContext(href, link) : linkContext
+          )
+        : null,
     codeText:
       element
         ?.closest('[data-native-chat-code-block]')
         ?.querySelector('[data-native-chat-code-content]')?.textContent || null,
-    messageText: (messageId && messageList?.messageCopyText(messageId)) || null,
+    messageText: (messageId && messageList?.messageCopyText?.(messageId)) || null,
     rewindItemId:
       element
         ?.closest('[data-native-chat-rewind-item]')
-        ?.getAttribute('data-native-chat-rewind-item') ?? null
+        ?.getAttribute('data-native-chat-rewind-item') ?? null,
+    slackPostedItemId:
+      element
+        ?.closest('[data-native-chat-slack-posted]')
+        ?.getAttribute('data-native-chat-slack-posted') ?? null
   }
 }

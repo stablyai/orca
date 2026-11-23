@@ -25,6 +25,8 @@ export type HomeAgentEntry = Readonly<{
   repo: string
   branch: string
   agent: RuntimeWorktreeAgentRow
+  /** Set when the agent is a bot's chat in its home: the row names and pictures the bot. */
+  bot?: HomeAgentBot
 }>
 
 /** A listed workspace, so search can find one with no agent. */
@@ -34,6 +36,7 @@ export type HomeWorkspaceEntry = Readonly<{
   repo: string
   branch: string
 }>
+export type HomeAgentBot = Readonly<{ id: string; name: string; avatar: string | null }>
 
 export type HostWorktreeInfo = {
   hostId: string
@@ -43,6 +46,8 @@ export type HostWorktreeInfo = {
   workspaces?: readonly HomeWorkspaceEntry[]
   /** Every agent from this connection's latest list read. */
   agents?: readonly HomeAgentEntry[]
+  /** This connection's unread rows, by worktree id. */
+  unreadWorktreeIds?: readonly string[]
   /** The agents of a read the connection has since lost: what they were, not what they are. */
   lastSeenAgents?: readonly HomeAgentEntry[]
   catalogUnavailable?: boolean
@@ -64,19 +69,24 @@ export function homeWorkspaceEntries(
   }))
 }
 
-/** Every agent the list read returned, with the workspace it runs in. */
-export function homeAgentEntries(worktrees: readonly HomeWorktreeSummary[]): HomeAgentEntry[] {
-  return worktrees.flatMap((worktree) =>
-    Array.isArray(worktree.agents)
-      ? worktree.agents.map((agent) => ({
-          worktreeId: worktree.worktreeId,
-          workspaceName: worktree.displayName || worktree.repo,
-          repo: worktree.repo,
-          branch: worktree.branch,
-          agent
-        }))
-      : []
-  )
+export function homeAgentEntries(
+  worktrees: readonly HomeWorktreeSummary[],
+  botByHomeId: ReadonlyMap<string, HomeAgentBot> = new Map()
+): HomeAgentEntry[] {
+  return worktrees.flatMap((worktree) => {
+    if (!Array.isArray(worktree.agents)) {
+      return []
+    }
+    const bot = botByHomeId.get(worktree.worktreeId)
+    return worktree.agents.map((agent) => ({
+      worktreeId: worktree.worktreeId,
+      workspaceName: bot?.name || worktree.displayName || worktree.repo,
+      repo: worktree.repo,
+      branch: worktree.branch,
+      agent,
+      ...(bot ? { bot } : {})
+    }))
+  })
 }
 
 /** One desktop's counts read, as its card and the Agents list see it. */
@@ -87,6 +97,7 @@ export type HomeWorktreeRead = {
         activeCount: number
         agents: readonly HomeAgentEntry[]
         workspaces?: readonly HomeWorkspaceEntry[]
+        unreadWorktreeIds?: readonly string[]
       }
     | undefined
   dataUpdatedAt: number
@@ -119,6 +130,7 @@ export function homeWorktreeInfo(
     ...(live ? { agents: data.agents } : agents ? { lastSeenAgents: agents } : {}),
     // Only a live read's workspaces can be opened from search.
     ...(live && data.workspaces ? { workspaces: data.workspaces } : {}),
+    ...(live && data.unreadWorktreeIds ? { unreadWorktreeIds: data.unreadWorktreeIds } : {}),
     ...(failed ? { catalogUnavailable: true, staleCounts: true } : {}),
     countsProvenAt: read.dataUpdatedAt
   }

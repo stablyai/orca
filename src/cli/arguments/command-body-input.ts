@@ -65,7 +65,13 @@ export async function readTextOrFileFlag(
 
 async function readBodyFile(path: string, cwd: string): Promise<string> {
   if (path !== '-') {
-    return readFile(isAbsolute(path) ? path : join(cwd, path), 'utf8')
+    const resolved = isAbsolute(path) ? path : join(cwd, path)
+    try {
+      return await readFile(resolved, 'utf8')
+    } catch (error) {
+      const reason = error instanceof Error && 'code' in error ? String(error.code) : String(error)
+      throw new RuntimeClientError('invalid_argument', `Could not read ${resolved}: ${reason}`)
+    }
   }
   return readStdin('body')
 }

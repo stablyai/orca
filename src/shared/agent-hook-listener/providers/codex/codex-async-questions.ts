@@ -9,6 +9,9 @@ import { readString } from '../../tool-input-preview'
 type CodexAsyncQuestionCall = {
   /** The tool input as Codex sent it, published as the row's interactivePrompt. */
   prompt: string
+  /** Question titles by index; the first unanswered one is the row's tool input. */
+  titles: string[]
+  /** Ascending, since deletes keep insertion order. */
   unanswered: Set<number>
 }
 
@@ -18,13 +21,14 @@ export type CodexAsyncQuestions = Map<string, CodexAsyncQuestionCall>
 const REPLY_OPEN = '<send_user_message_question_reply>'
 const REPLY_CLOSE = '</send_user_message_question_reply>'
 
-/** The questions Codex's TUI is holding open for the user; the newest call is shown. */
-export type CodexPendingAsyncQuestion = { toolName: string; prompt: string }
+/** The questions Codex's TUI is holding open for the user. */
+export type CodexPendingAsyncQuestion = { toolName: string; prompt: string; title: string }
 
 /**
- * Codex asks a non-blocking question mid-turn: its status stays working, PostToolUse lands ~20 ms
- * after PreToolUse, and each answer arrives as a UserPromptSubmit reply. Only the hooks show it,
- * so track it here. A skip (Ctrl+]) sends no hook; Orca infers it from the keystroke.
+ * Codex asks a non-blocking question mid-turn: its status stays working, and each answer arrives
+ * as a UserPromptSubmit reply. Only the hooks show it, so track it here. PreToolUse runs before
+ * Codex validates the input; only an accepted call gets PostToolUse. A skip (Ctrl+]) sends no
+ * hook; Orca infers it from the keystroke.
  */
 export function trackCodexAsyncQuestions(
   state: HookListenerState,
@@ -38,7 +42,7 @@ export function trackCodexAsyncQuestions(
     return undefined
   }
   if (
-    eventName === 'PreToolUse' &&
+    eventName === 'PostToolUse' &&
     readString(hookPayload, 'tool_name') === CODEX_ASYNC_QUESTION_TOOL
   ) {
     openCall(state, paneKey, hookPayload)
@@ -53,8 +57,13 @@ export function pendingCodexAsyncQuestion(
   paneKey: string
 ): CodexPendingAsyncQuestion | undefined {
   const calls = state.codexAsyncQuestionsByPaneKey.get(paneKey)
+  // Codex's TUI focuses the oldest pending question; the newest call keys the prompt so it rings.
+  const oldest = calls?.values().next().value
   const newest = calls ? [...calls.values()].at(-1) : undefined
-  return newest ? { toolName: CODEX_ASYNC_QUESTION_TOOL, prompt: newest.prompt } : undefined
+  const next = oldest?.unanswered.values().next().value
+  return oldest && newest && next !== undefined
+    ? { toolName: CODEX_ASYNC_QUESTION_TOOL, prompt: newest.prompt, title: oldest.titles[next] }
+    : undefined
 }
 
 /** Codex's TUI skips the focused question, which is the oldest unless the user navigated. */
@@ -85,11 +94,9 @@ function openCall(
 ): void {
   const callId = readString(hookPayload, 'tool_use_id')
   const input = hookPayload['tool_input']
-  const questions =
-    input && typeof input === 'object' && 'questions' in input && Array.isArray(input.questions)
-      ? input.questions
-      : null
-  if (!callId || !questions || !parseCodexAsyncQuestionsInput(input)) {
+  // Codex accepted every question, so parsed indexes match its reply ids.
+  const questions = parseCodexAsyncQuestionsInput(input)?.questions
+  if (!callId || !questions) {
     return
   }
   let calls = state.codexAsyncQuestionsByPaneKey.get(paneKey)
@@ -99,6 +106,7 @@ function openCall(
   }
   calls.set(callId, {
     prompt: JSON.stringify(input),
+    titles: questions.map((question) => question.question),
     unanswered: new Set(questions.keys())
   })
 }

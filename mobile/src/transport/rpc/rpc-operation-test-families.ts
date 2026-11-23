@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { RpcResponse } from './rpc-wire-types'
 import type { RpcCompatibleReader } from './rpc-operation-contract'
 import { rpcResultVariant, rpcResultVariants } from './rpc-operation-result-reader'

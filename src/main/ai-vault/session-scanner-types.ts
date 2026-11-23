@@ -95,6 +95,8 @@ export type SessionFileCandidate = {
 // Pass-local wrapper; only its original physical candidates may reach parsers or IPC.
 export type SessionFileChoice = SessionFileCandidate & {
   alternatives?: readonly SessionFileCandidate[]
+  /** Proven duplicates parsers never read; search retires their rows. */
+  outrankedCopies?: readonly SessionFileCandidate[]
 }
 
 export function physicalSessionCandidates(

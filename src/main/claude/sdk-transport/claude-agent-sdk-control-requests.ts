@@ -202,6 +202,7 @@ export type ClaudeControlSurface = {
   /** The blocking subagent or command started by `toolUseId` returns at once and keeps running. */
   backgroundTask: (toolUseId: string, options?: ClaudeControlOptions) => Promise<boolean>
   supportedModels: (options?: ClaudeControlOptions) => Promise<unknown[]>
+  mcpServerStatus: () => ReturnType<Query['mcpServerStatus']>
   /** Initialization is untimed; child exit closes the query. */
   initializationResult: () => Promise<unknown>
   getSettings: (options?: ClaudeControlOptions) => Promise<unknown>
@@ -267,6 +268,7 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
       ),
     supportedModels: (options) =>
       runClaudeControl('list_models', () => query.supportedModels(), options?.timeoutMs),
+    mcpServerStatus: () => runClaudeControl('mcp_status', () => query.mcpServerStatus()),
     initializationResult: () =>
       runClaudeControl('initialize', () => query.initializationResult(), null),
     getContextUsage: (options) =>

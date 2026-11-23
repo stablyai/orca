@@ -15,6 +15,9 @@
 6 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite.ts
 6 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite-list.ts
 10 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite.ts
+13 src/main/bots/bot-group-store-tables.ts # store-open table setup moved out of the store, keep-field triggers and the incremental remote-ask index pass (one-shot startup)
+50 src/main/bots/bot-group-store.ts # +3: one indexed remote-ask insert per post on append and its by-request lookup
+18 src/main/bots/bot-work-store.ts
 5 src/main/browser-passwords/browser-password-chromium-import.ts
 1 src/main/browser/cookies/chromium/prepare-import.ts
 5 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
@@ -27,39 +30,28 @@
 19 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 5 src/main/native-chat/agent-session-journal/database/journal-checkpoint-owner.ts
 22 src/main/native-chat/agent-session-journal/database/journal-database.ts
-14 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
-7 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
-22 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
+7 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # worker-only: +1 is the reply outbox table migration, run on the journal SQL worker
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
-32 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
-18 src/main/native-chat/agent-session-journal/database/journal-legacy-source.ts
+5 src/main/native-chat/agent-session-journal/database/journal-retire-pending.ts # worker-only: retired-epoch pending table, triggers and settle, run on the journal SQL worker
+5 src/main/native-chat/agent-session-journal/database/journal-text-tail-schema.ts
 12 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 18 src/main/native-chat/agent-session-journal/history-import/journal-pi-active-branch.ts
 6 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
-24 src/main/native-chat/agent-session-journal/journal-domain-import-rows.ts
-4 src/main/native-chat/agent-session-journal/journal-domain-import-submissions.ts
-2 src/main/native-chat/agent-session-journal/journal-domain-import.ts
 4 src/main/native-chat/agent-session-journal/journal-domain-item-display.ts
-4 src/main/native-chat/agent-session-journal/journal-domain-item-names.ts
 12 src/main/native-chat/agent-session-journal/journal-domain-maintenance.ts
 10 src/main/native-chat/agent-session-journal/journal-domain-queue-failures.ts
 6 src/main/native-chat/agent-session-journal/journal-domain-queue-pauses.ts
 8 src/main/native-chat/agent-session-journal/journal-domain-queue-reads.ts
 4 src/main/native-chat/agent-session-journal/journal-domain-queue-revision.ts
 10 src/main/native-chat/agent-session-journal/journal-domain-queue-rows.ts
-6 src/main/native-chat/agent-session-journal/journal-domain-stop-notes.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-submission-consume.ts
-4 src/main/native-chat/agent-session-journal/journal-domain-submission-records.ts
 20 src/main/native-chat/agent-session-journal/journal-forgotten-chats.ts
 4 src/main/native-chat/agent-session-journal/journal-sql-accepted-inputs.ts
 4 src/main/native-chat/agent-session-journal/journal-stored-output-rows.ts
+24 src/main/native-chat/agent-session-journal/journal-text-tail.ts
 15 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format.ts
-6 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-table.ts
-2 src/main/native-chat/agent-session-journal/queued-messages/journal-queue-import.ts
 5 src/main/native-chat/agent-session-journal/queued-messages/queued-message-schema.ts
-10 src/main/native-chat/agent-session-journal/replay/journal-historical-inputs.ts
 4 src/main/native-chat/agent-session-journal/replay/journal-read-row.ts
-8 src/main/native-chat/agent-session-journal/replay/journal-retained-inputs.ts
 1 src/main/native-chat/agent-session-journal/writing/command-receipt-schema.ts
 8 src/main/native-chat/agent-session-journal/writing/command-receipt-table.ts
 2 src/main/native-chat/agent-session-journal/writing/journal-goal-attachment-inverse.ts
@@ -91,7 +83,6 @@
 2 src/main/persistence/profile-state/recovery/profile-state-section-repair.ts
 4 src/main/rate-limits/providers/opencode-go/opencode-go-api-key-source.ts
 2 src/main/runtime/agent-session/records/agent-session-record-lineage.ts
-38 src/main/runtime/agent-session/records/agent-session-record-rows.ts
 23 src/main/runtime/orchestration/db/dispatch-context/presentation-completion-source.ts
 6 src/main/runtime/orchestration/db/dispatch-row-writer.ts
 1 src/main/runtime/orchestration/db/federation/federated-stub-home-run-backfill.ts
@@ -105,7 +96,8 @@
 15 src/main/runtime/orchestration/db/schema/orchestration-schema-version-skew.ts
 15 src/main/runtime/orchestration/db/schema/structured-worker-orca-session-backfill.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-settlement.ts
+1 src/main/runtime/orchestration/db/worker-status-notice.ts
 4 src/main/runtime/orchestration/workers/lifecycle/context-only-dispatch-release.ts
 24 src/main/sqlite/row-cache/keyed-json-row-cache.ts
 5 src/main/sqlite/sync-database.ts
-14 src/main/sqlite/versioned-cache-database.ts
+13 src/main/sqlite/versioned-cache-database.ts

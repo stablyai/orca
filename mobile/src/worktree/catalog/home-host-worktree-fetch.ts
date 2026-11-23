@@ -1,5 +1,11 @@
 import * as z from 'zod'
 import {
+  botHomeWorktreeId,
+  hostBotsKey,
+  readHostBots,
+  type HostBotsRead
+} from '../../bots/host-bots-read'
+import {
   HOME_WORKTREE_COUNTS_FAMILY,
   type NO_HOST_LIST_INPUT
 } from '../../host-screen/catalog/host-list-queries'
@@ -7,6 +13,7 @@ import { defineHostQuery } from '../../query/host-query'
 import {
   homeAgentEntries,
   homeWorkspaceEntries,
+  type HomeAgentBot,
   type HomeAgentEntry,
   type HomeWorkspaceEntry,
   type HomeWorktreeSummary
@@ -27,6 +34,8 @@ export type HomeWorktreeCounts = {
   agents: readonly HomeAgentEntry[]
   // Unarchived workspaces for the Agents search; never stored, like agents.
   workspaces?: readonly HomeWorkspaceEntry[]
+  /** Unread rows' ids, for the rows Home draws over a hidden home (a group room). */
+  unreadWorktreeIds?: readonly string[]
   // The rows this launch read: the next read's delta base, and the wide layout's host list seed. Never stored.
   catalog?: WorktreeCatalogSnapshot
 }
@@ -36,17 +45,23 @@ export const homeWorktreeCountsQuery = defineHostQuery<
   HomeWorktreeCounts
 >({
   family: HOME_WORKTREE_COUNTS_FAMILY,
-  fetch: async (client, _target, _input, previous) => {
+  fetch: async (client, _target, _input, previous, { hostId }) => {
+    // Bot homes are listed as bots, not worktrees; a host too old to name them keeps today's count.
+    const bots = readHostBots(client, hostBotsKey(hostId))
     const catalog = await readWorktreeCatalogSnapshot(client, previous?.catalog)
+    const botByHomeId = botsByHomeWorktreeId(await bots)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows stay opaque because three screens project a row differently. Home reads `status`, `sidebarStatus` and its counts through their own guards, plus the host-typed `agents` the Agents list shows, and the `worktree-home-catalog` golden records the row it is given as `{worktreeId, displayName, repo, status}`.
     const worktrees = catalog.worktrees as HomeWorktreeSummary[]
     // Count what the list shows: archived rows are hidden, and active is the sleeping filter's rule.
-    const listed = worktrees.filter((w) => w.isArchived !== true)
+    const unarchived = worktrees.filter((w) => w.isArchived !== true)
+    const listed = unarchived.filter((w) => !botByHomeId.has(w.worktreeId))
     return {
       totalWorktrees: listed.length,
       activeCount: listed.filter(isWorktreeActive).length,
-      agents: homeAgentEntries(listed),
+      // A bot's chats stay agents: one waiting on the user reaches Active and the badge.
+      agents: homeAgentEntries(unarchived, botByHomeId),
       workspaces: homeWorkspaceEntries(listed),
+      unreadWorktreeIds: unarchived.flatMap((w) => (w.unread === true ? [w.worktreeId] : [])),
       catalog
     }
   },
@@ -78,3 +93,14 @@ export const homeWorktreeCountsQuery = defineHostQuery<
     strip: ({ totalWorktrees, activeCount }) => ({ totalWorktrees, activeCount, agents: [] })
   }
 })
+
+function botsByHomeWorktreeId(answer: HostBotsRead): ReadonlyMap<string, HomeAgentBot> {
+  return new Map(
+    answer.kind === 'bots'
+      ? answer.bots.map((bot) => [
+          botHomeWorktreeId(bot),
+          { id: bot.id, name: bot.name, avatar: bot.avatar }
+        ])
+      : []
+  )
+}
