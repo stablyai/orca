@@ -25,8 +25,8 @@ export function startsInChatLineage(
     return true
   }
   // A retry or follow-up continues the worker it repeats, whoever sends it.
-  const earlier = params.retryOf ?? followUpOf
-  if (earlier && db.getDispatchContextById(earlier)?.chat_lineage === 1) {
+  const earlier = [params.retryOf, followUpOf].filter((id): id is string => Boolean(id))
+  if (earlier.some((id) => db.getDispatchContextById(id)?.chat_lineage === 1)) {
     return true
   }
   return db.creatorStartsChatWorkers(resolveDispatchCreator(runtime, params.from, caller))
@@ -66,7 +66,9 @@ export function noteTerminalFallbackOnItem(
     .catch((error: unknown) => console.warn('[orchestration] item fallback note failed', error))
 }
 
+// A failed start reports a terminal mode too, but started nothing to note.
 const TerminalFallbackReceipt = z.object({
   dispatchId: z.string(),
+  state: z.enum(['ready', 'starting']),
   mode: z.object({ mode: z.string(), detail: z.string() })
 })
