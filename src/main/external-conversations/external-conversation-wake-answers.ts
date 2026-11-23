@@ -8,26 +8,30 @@ import type { EndedChatTurn, EndedTurnLaunch } from './external-conversation-end
 import type { LinkedConversation } from './external-conversation-links'
 
 type WakeAnswers = ExternalConversationLink['wakeAnswers']
-/** Kept per link, newest last; a run past the cap is no one's, so its wake-up stays in Orca. */
-const MAX_WAKE_RUNS = 16
+/** Kept per link until its wake-up is judged, newest last; past the cap the oldest unfinished run is
+ *  no one's, so its wake-up stays in Orca. */
+const MAX_WAKE_RUNS = 32
 
 export type WakeAnswersDeps = {
-  /** Keeps the runs whose wake-ups answer the link. */
+  /** Keeps (or, with undefined, clears) the runs whose wake-ups answer the link. */
   keepWakeAnswers: (linked: LinkedConversation, wakeAnswers: WakeAnswers) => void
 }
 
-/** At a turn's end: the runs it launched for its conversation alone join the link's. */
+/** At a turn's end: a wake-up's runs, now judged, leave the link's record, and the runs the turn
+ *  launched for its conversation alone join it. */
 export function recordLaunches(
   deps: WakeAnswersDeps,
   linked: LinkedConversation,
-  launches: readonly EndedTurnLaunch[] | undefined
+  turn: Pick<EndedChatTurn, 'launches' | 'wake'>
 ): void {
   const kept = linked.link.wakeAnswers?.runs ?? []
-  const added = (launches ?? [])
+  const judged = new Set(turn.wake?.wokenBy ?? [])
+  const added = (turn.launches ?? [])
     .filter((launch) => !kept.includes(launch.run) && launchedFor(linked.link, launch))
     .map((launch) => launch.run)
-  if (added.length > 0) {
-    deps.keepWakeAnswers(linked, { runs: [...kept, ...added].slice(-MAX_WAKE_RUNS) })
+  const runs = [...kept.filter((run) => !judged.has(run)), ...added].slice(-MAX_WAKE_RUNS)
+  if (added.length > 0 || runs.length < kept.length) {
+    deps.keepWakeAnswers(linked, runs.length > 0 ? { runs } : undefined)
   }
 }
 

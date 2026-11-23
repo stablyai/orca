@@ -266,13 +266,16 @@ export class ChatTurns {
       return
     }
     // Read now: a run recorded while the end was read stays recorded.
+    // Judged before its record changes: the runs a wake-up names are dropped once it is judged.
+    let woken = false
     const read = this.recorded.read(
       paneKey,
       () => news.readTurn(),
       (turn) => {
         const current = this.deps.linkedFor(paneKey)
+        woken = origin === 'local' && !shared && !!current && wokenTurn(turn, current.link)
         if (!shared && current) {
-          recordLaunches(this.deps, current, turn.launches)
+          recordLaunches(this.deps, current, turn)
         }
       }
     )
@@ -283,8 +286,6 @@ export class ChatTurns {
       const reported =
         origin === 'local' && !shared && Boolean(opener && isConversationReport(opener.body))
       // A wake-up for runs launched for the conversation alone answers there, by its words only.
-      const link = this.deps.linkedFor(paneKey)?.link ?? linked.link
-      const woken = origin === 'local' && !shared && wokenTurn(turn, link)
       const reply = turnReply(linked.link, turn)
       const links = readOnce(() => this.toldLinks.next(paneKey, linked.link))
       const fill = this.deps.replyFill?.()
@@ -307,6 +308,8 @@ export class ChatTurns {
       // Owner words steered in and posted to the thread go before the answer.
       ;(mirrored ? mirrored.release : this.deps.emit)({
         ...ended,
+        // A watch begun mid-turn never saw its start: the turn's own start places it.
+        turnId: ended.turnId ?? turn.startedAt ?? null,
         ...end.turnFor(turn),
         origin: reported || woken ? 'delivery' : origin,
         ...(words ? { lastAssistantMessage: words } : {}),

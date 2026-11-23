@@ -123,11 +123,17 @@ function harness() {
         prompt?: PendingPrompt
         /** The end's journal read waits until `release` runs. */
         hold?: { release?: () => void }
+        /** The watch restarted mid-turn, so it never saw the turn start. */
+        unwatched?: true
       }
     ) {
       leadStartedAt = at
       leadWorking = true
-      chat.observe(PANE)
+      if (opts.unwatched) {
+        chat = turns()
+      } else {
+        chat.observe(PANE)
+      }
       if (opts.prompt) {
         pending = opts.prompt
         chat.news({ kind: 'prompt', sessionId: SESSION })
@@ -152,7 +158,7 @@ function harness() {
           if (hold) {
             await new Promise<void>((resolve) => (hold.release = resolve))
           }
-          return { ...wake, ...words, ...launches }
+          return { ...wake, ...words, ...launches, startedAt: at }
         }
       })
       await flush()
@@ -242,7 +248,7 @@ describe('a background run answers the conversation it was launched for', () => 
     await t.turn(41, { woke: ['follow-up'], says: 'Checked.' })
     await t.turn(51, { woke: ['agent-run-2'], says: 'Resumed audit done.' })
     expect(t.said()).toEqual(['Auditing.', 'Audit done; checking once more.'])
-    expect(t.link().wakeAnswers).toEqual({ runs: ['agent-run-1'] })
+    expect(t.link().wakeAnswers).toBeUndefined()
   })
 
   it('ends in Orca a wake-up another run finished into, or one someone in Orca steered', async () => {
@@ -263,7 +269,7 @@ describe('a background run answers the conversation it was launched for', () => 
     })
     await t.turn(31, { woke: ['thread-build'], steered: true, says: 'Did it your way.' })
     expect(t.said()).toEqual(['Retrying.'])
-    expect(t.link().wakeAnswers?.runs).not.toContain('follow-up')
+    expect(t.link().wakeAnswers?.runs ?? []).not.toContain('follow-up')
   })
 
   it('posts a quick wake-up whose launching turn’s end is still being read', async () => {
@@ -279,6 +285,31 @@ describe('a background run answers the conversation it was launched for', () => 
     hold.release?.()
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(t.said()).toEqual(['Started.', 'Quick job done.'])
+  })
+
+  it('drops a run once its wake-up is judged, so a long run outlasts many short ones', async () => {
+    const t = harness()
+    await t.turn(1, { from: 'thread', launches: [{ run: 'long-run', sends: ['thread'] }] })
+    for (let index = 0; index < 40; index++) {
+      const at = 10 + index * 20
+      await t.turn(at, { from: 'thread', launches: [{ run: `short-${index}`, sends: ['thread'] }] })
+      await t.turn(at + 10, { woke: [`short-${index}`] })
+    }
+    expect(t.link().wakeAnswers).toEqual({ runs: ['long-run'] })
+    await t.turn(900, { woke: ['long-run'], says: 'Long run done.' })
+    expect(t.said()).toEqual(['Long run done.'])
+    expect(t.link().wakeAnswers).toBeUndefined()
+  })
+
+  it('places a wake-up whose start a restarted watch never saw by its own start', async () => {
+    const t = harness()
+    await t.turn(10, { from: 'thread', launches: [{ run: 'worker-retry', sends: ['thread'] }] })
+    await t.turn(21, { woke: ['worker-retry'], says: 'Worker started.', unwatched: true })
+    expect(t.events.at(-1)).toMatchObject({
+      kind: 'turn-ended',
+      turnId: 21,
+      lastAssistantMessage: 'Worker started.'
+    })
   })
 
   it('saves the record only when a launch adds to it', async () => {

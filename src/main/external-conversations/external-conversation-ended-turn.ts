@@ -50,6 +50,8 @@ export type EndedChatTurn = {
    *  the wake-up), and whether someone steered a message into it. */
   wake?: { wokenBy: string[]; steered: boolean }
   launches?: EndedTurnLaunch[]
+  /** When the turn's row says it began, for a watch that never saw it start. */
+  startedAt?: number
 }
 
 export async function endedTurn(
@@ -107,6 +109,7 @@ export async function endedTurn(
   return {
     ...(wake ? { wake } : {}),
     ...(launches ? { launches } : {}),
+    ...(lifecycle?.startedAt === undefined ? {} : { startedAt: lifecycle.startedAt }),
     ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
     ...(failure ? { failure } : {}),
     latestOpener: latestTurnOpener(items),
