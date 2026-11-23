@@ -1,6 +1,12 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data.test-fixture'
+import {
+  HOST_TEST_SESSION as SESSION,
+  hostTestMessage,
+  hostTestOperationId
+} from './structured-agent-session-host-test-data.test-fixture'
+import { QUEUED_RIG_CALLER } from './structured-agent-session-queued-message-rig.test-fixture'
+import { structuredAgentSessionMessageSendMutation } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   MAIL,
   chatOnAccountA,
@@ -371,4 +377,24 @@ it("still continues a limited worker whose Dispatch opens just as the person's s
     expect(chat.dispatchedTo('Continue where you left off')).toEqual([chat.accountA])
   )
   expect(chat.dispatchedTo('raced past the limit')).toEqual([])
+})
+
+it("delivers the person's Continue on the old account when the worker's open Dispatch waits on it", async () => {
+  const chat = await chatOnAccountA()
+  chat.setOpenDispatch(true)
+  const { turnItemId } = await chat.limited()
+  chat.switchTo('/homes/b')
+  const continued = await rig!.host.send(QUEUED_RIG_CALLER, {
+    ...structuredAgentSessionMessageSendMutation({
+      sessionId: SESSION,
+      clientOperationId: hostTestOperationId(),
+      expectedRuntimeFence: rig!.store.getRecord(SESSION)!.lease.runtimeFence,
+      body: hostTestMessage('Continue now'),
+      usageLimitContinuationOfTurnItemId: turnItemId
+    }),
+    userSend: true
+  })
+  expect(continued).toMatchObject({ ok: true })
+  // Kept back for the move, it would wait on the Dispatch that waits on it.
+  await eventually(() => expect(chat.dispatchedTo('Continue now')).toEqual([chat.accountA]))
 })

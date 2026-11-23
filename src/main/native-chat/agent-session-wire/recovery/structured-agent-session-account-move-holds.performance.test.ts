@@ -1,6 +1,6 @@
 // Perf contracts for #43145: a Dispatch end reaches only the chats held on it, so other ends cost
 // no visits or wakes at 10 or 100 held chats; a hold's fallback check backs off while its work
-// lasts. Each fails when its fix is reverted (a walk of every hold; a fixed two-minute check).
+// lasts and then stops. Each fails when its fix is reverted (a walk of every hold; a repeating check).
 import { afterEach, expect, it, vi } from 'vitest'
 import { AccountMoveHolds } from './structured-agent-session-account-move-holds'
 import type { StructuredAgentSessionAccountTransition } from './structured-agent-session-outgrown-child'
@@ -31,7 +31,7 @@ it.each([10, 100])(
   }
 )
 
-it('checks a hold on long-lived child work or a Dispatch 4 times in an hour, and one waiting on a turn never', () => {
+it('checks a hold on long-lived child work or a Dispatch 5 times in a day, and one waiting on a turn never', () => {
   vi.useFakeTimers()
   try {
     const transitions: Record<string, StructuredAgentSessionAccountTransition> = {
@@ -57,10 +57,11 @@ it('checks a hold on long-lived child work or a Dispatch 4 times in an hour, and
       holds.observe(sessions.get(id), id, transition, 'sweep')
     }
 
-    vi.advanceTimersByTime(60 * 60_000)
+    vi.advanceTimersByTime(24 * 60 * 60_000)
 
-    // Two, then four, eight and sixteen minutes later; a fixed two-minute check would make 30.
-    expect(Object.fromEntries(wakes)).toEqual({ 'child-work': 4, dispatch: 4 })
+    // Two, then four, eight, sixteen and thirty-two minutes later, then none; a fixed two-minute
+    // check would make 720, and one repeating at the longest wait 46.
+    expect(Object.fromEntries(wakes)).toEqual({ 'child-work': 5, dispatch: 5 })
     holds.dispose()
   } finally {
     vi.useRealTimers()

@@ -132,8 +132,10 @@ export function wireStructuredAgentSessionQueuedMessages(
     drain,
     refresh,
     accountMoveEvidence: (sessionId: string) => {
-      context().accountMoveEvidence?.(sessionId)
-      drain.schedule(sessionId)
+      // Only a held chat has a card this can release.
+      if (context().accountMoveEvidence?.(sessionId) === true) {
+        drain.schedule(sessionId)
+      }
     },
     onOpened: (sessionId: string) => {
       const journal = sessions.get(sessionId)?.journal

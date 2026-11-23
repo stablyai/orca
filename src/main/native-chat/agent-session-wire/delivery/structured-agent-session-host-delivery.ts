@@ -59,7 +59,8 @@ export type StructuredAgentSessionConversationDelivery = {
   accountTransition: StructuredAgentSessionAccountTransitionRead
   accountMoveSettled: (sessionId: string, reader?: AccountMoveReader) => null
   accountMoveHeld: (sessionId: string) => boolean
-  accountMoveEvidence: (sessionId: string) => void
+  accountMoveEvidence: (sessionId: string) => boolean
+  accountMovePasses: (sessionId: string, clientMessageId: string) => void
 }
 
 export function createStructuredAgentSessionConversationDelivery(input: {
@@ -262,6 +263,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     accountMoveSettled: outgrown.accountMoveSettled,
     accountMoveHeld: outgrown.accountMoveHeld,
     accountMoveEvidence: outgrown.accountMoveEvidence,
+    accountMovePasses: outgrown.accountMovePasses,
     afterCommit,
     afterSettleEdge: (sessionId, journal) => {
       input.clientDelivery.publishStatusAndSettlement(sessionId)

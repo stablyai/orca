@@ -72,6 +72,8 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
   // Personal Stop holds handover meanwhile; its next step decides.
   const unlessStopping = async (sessionId: string) =>
     (await clientDelivery.readStopping(sessionId)) ? undefined : sessions.get(sessionId)
+  /** Per chat, the latest continue let past a hold its own Dispatch keeps. */
+  const passing = new Map<string, string>()
   const keepRetries = new AccountMoveKeepRetries((sessionId) => input.wake(sessionId))
   const holds = new AccountMoveHolds({
     wake: input.wake,
@@ -123,6 +125,13 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
         logger: deps.logger
       })
       if (outcome.kind !== 'deferred' || !outcome.transition || !next || !session) {
+        return outcome
+      }
+      // The continue its open Dispatch waits on: keeping it back would wait forever.
+      if (
+        outcome.transition.waitsFor === 'dispatch' &&
+        passing.get(sessionId) === next.clientMessageId
+      ) {
         return outcome
       }
       // Owed work showed up only after the send was accepted: it must not reach the old account.
@@ -182,6 +191,9 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
       holds.heldForPerson(sessions.get(sessionId), sessionId),
     /** Its child work settled: a hold waiting on it is read again. */
     accountMoveEvidence: (sessionId: string) => holds.stale(sessionId, 'work'),
+    accountMovePasses: (sessionId: string, clientMessageId: string) => {
+      passing.set(sessionId, clientMessageId)
+    },
     /** `reader` no longer waits on the chat's move (no person card, or no continue due). */
     accountMoveSettled: (sessionId: string, reader: AccountMoveReader = 'person'): null => {
       holds.forget(sessions.get(sessionId), sessionId, reader)
@@ -190,6 +202,7 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
     dispose: () => {
       holds.dispose()
       keepRetries.dispose()
+      passing.clear()
     }
   }
 }

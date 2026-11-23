@@ -130,3 +130,27 @@ it("leaves no hold behind a usage-limited worker's continue: 10 or 100 Dispatch 
   expect(await events(100)).toBe(0)
   expect(wake).not.toHaveBeenCalled()
 })
+
+it('runs no queue drain for 10 or 100 child-work reports in a chat nothing holds', async () => {
+  const chat = await chatOnAccountA()
+  const journal = rig!.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const write = vi.spyOn(journal, 'write')
+  const drains = () =>
+    write.mock.calls.filter(([operation]) => operation.kind === 'automatic-submission').length
+  for (const reports of [10, 100]) {
+    const before = drains()
+    for (let i = 0; i < reports; i++) {
+      chat.background([
+        devServer({
+          id: `child-${reports}-${i}`,
+          membership: 'settled',
+          state: 'done',
+          outcome: 'succeeded'
+        })
+      ])
+      await new Promise((settled) => setImmediate(settled))
+    }
+    await rig!.drafts()
+    expect(drains() - before).toBe(0)
+  }
+})

@@ -75,6 +75,7 @@ export async function admitStructuredAgentSessionSend(
   const passes = continuation && move?.waitsFor === 'dispatch'
   if (passes) {
     context.accountMoveSettled?.(ctx.sessionId, 'sweep')
+    context.accountMovePasses?.(ctx.sessionId, params.envelope.clientOperationId)
   }
   const transition = passes ? null : move
   if (transition) {

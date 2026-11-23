@@ -14,7 +14,8 @@ import type { StructuredAgentSessionAccountTransition } from './structured-agent
 
 /** A turn, prompt, held send or owed wake-up ends with a write in the chat itself, so each drain
  *  reads that work again; an owed wake-up is also read at its deadline. Child work and a Dispatch
- *  end on an edge: a check two minutes on catches a missed one, backing off while the work lasts. */
+ *  end on an edge: a check two minutes on catches a missed one, backing off, and none follows the
+ *  half-hour one, so a wait that lasts costs no wakeups; its edge still ends it. */
 const SETTLES_IN_CHAT = new Set(['turn', 'prompt', 'held-send', 'wake-up'])
 const HOLD_CHECK_MS = 2 * 60_000
 const HOLD_CHECK_MAX_MS = 32 * 60_000
@@ -142,13 +143,15 @@ export class AccountMoveHolds {
     return newest
   }
 
-  stale(sessionId: string, level: 'work' | 'account'): void {
+  /** Whether the chat was held. */
+  stale(sessionId: string, level: 'work' | 'account'): boolean {
     const hold = this.held.get(sessionId)
     if (hold && hold.stale !== 'account') {
       hold.stale = level
     }
     // A read begun before this edge may not install what it saw; the edge's own pass reads again.
     this.reading.delete(sessionId)
+    return hold !== undefined
   }
 
   /** `reader` now waits on the kept move (it was fresh, so nothing was read). */
@@ -178,10 +181,12 @@ export class AccountMoveHolds {
     if (previous) {
       clearTimeout(previous.timer)
     }
-    const checkMs = previous ? Math.min(previous.checkMs * 2, HOLD_CHECK_MAX_MS) : HOLD_CHECK_MS
+    const checkMs = previous ? previous.checkMs * 2 : HOLD_CHECK_MS
     const until =
       transition.wakeUpUntil ??
-      (SETTLES_IN_CHAT.has(transition.waitsFor) ? undefined : this.deps.now() + checkMs)
+      (SETTLES_IN_CHAT.has(transition.waitsFor) || checkMs > HOLD_CHECK_MAX_MS
+        ? undefined
+        : this.deps.now() + checkMs)
     const timer =
       until === undefined
         ? undefined
