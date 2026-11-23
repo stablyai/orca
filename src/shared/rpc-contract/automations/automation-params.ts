@@ -17,6 +17,7 @@ import {
 } from '../rpc-param-primitives'
 import { normalizeExecutionHostId } from '../../execution-host/execution-host'
 import { getAutomationScheduleInputError } from '../../automations/scheduling/automation-schedule-parsing'
+import { isAutomationTimeZoneSupported } from '../../automations/scheduling/automation-timezone-validation'
 import {
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   normalizeAutomationPrecheckTimeoutSeconds
@@ -277,7 +278,10 @@ export const AutomationCreate = z.object({
   setupDecision: SetupDecision,
   setupTrustHash: z.string().max(128).optional(),
   reuseSession: OptionalBoolean,
-  timezone: OptionalString,
+  timezone: OptionalString.refine(
+    (value) => value === undefined || isAutomationTimeZoneSupported(value),
+    { message: 'Unknown time zone' }
+  ),
   timezoneExplicit: OptionalBoolean,
   rrule: AutomationSchedule,
   dtstart: requiredNumber('Missing trigger start time'),
@@ -312,7 +316,10 @@ export const AutomationUpdateFields = z.object({
   setupDecision: SetupDecision,
   setupTrustHash: z.string().max(128).optional(),
   reuseSession: OptionalBoolean,
-  timezone: OptionalString,
+  timezone: OptionalString.refine(
+    (value) => value === undefined || isAutomationTimeZoneSupported(value),
+    { message: 'Unknown time zone' }
+  ),
   timezoneExplicit: OptionalBoolean,
   rrule: AutomationSchedule.optional(),
   dtstart: requiredNumber('Missing trigger start time').optional(),
