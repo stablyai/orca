@@ -1,13 +1,15 @@
-// A comment in an item's Activity: one quiet surface for every author, with avatar, name and time, then
+// A comment in an item's Activity: avatar, name and time, then
 // the text as Markdown, its images and its file links. An agent's Needs you question is a comment too:
 // its body and attachments, then its question footer (BotItemQuestionLines). A reply to a question quotes it, and leads back to it.
 // While the item waits on it, the asking comment stands out, shown whole: a Needs you tag by its time
 // and its question ruled off from the body. Answered, it reads as any other comment, but stays whole
 // until the item is closed, so answering never folds what was just read.
+import { resolveHighlightsReplyBackground } from '../../../../../shared/bots-global-settings'
 import { useState } from 'react'
 import { CornerDownRight } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
   botItemCommentImages,
@@ -104,6 +106,11 @@ export function BotItemCommentCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const { event, replyTo } = entry
+  const replyBackground = useAppStore((state) =>
+    event.actor.kind === 'owner'
+      ? resolveHighlightsReplyBackground(state.settings?.highlightsReplyBackground)
+      : 'neutral'
+  )
   const waiting = entry.waiting === true
   // Waited on while shown: whole until this view unmounts (Show less still folds it).
   const [askedHere, setAskedHere] = useState(waiting)
@@ -126,6 +133,9 @@ export function BotItemCommentCard({
     <div className="relative -mx-2 my-1 rounded-[10px] bg-sidebar">
       <div
         {...{ [BOT_ITEM_COMMENT_ATTRIBUTE]: event.id }}
+        data-highlights-reply-background={
+          replyBackground === 'neutral' ? undefined : replyBackground
+        }
         tabIndex={-1}
         role="article"
         aria-label={t('bots.items.activity.commentLabel', '{{name}}, {{time}}', {
@@ -135,7 +145,10 @@ export function BotItemCommentCard({
         className={cn(
           // A hairline (an inset ring, so its size and padding hold) and, in dark, the muted surface: a
           // tint alone lost the card's edge on the page.
-          'rounded-[10px] bg-foreground/[0.035] px-2 pt-1.5 inset-ring inset-ring-border outline-none focus:ring-2 focus:ring-ring/50 dark:bg-muted',
+          'rounded-[10px] px-2 pt-1.5 inset-ring outline-none focus:ring-2 focus:ring-ring/50',
+          replyBackground !== 'neutral'
+            ? 'highlights-reply-surface'
+            : 'bg-foreground/[0.035] inset-ring-border dark:bg-muted',
           // Shown from "Replying to": a full ring and tint, easing out as it ends.
           'data-[flash=on]:bg-foreground/8 data-[flash=on]:ring-2 data-[flash=on]:ring-ring data-[flash=fading]:transition-[box-shadow,background-color] data-[flash=fading]:duration-600 dark:data-[flash=on]:bg-foreground/8',
           // A question's chips end the card: more room under them.

@@ -2,12 +2,14 @@
 // "Question → answer" (a held one reopens on click), then the open line with ‹ 2 of 4 › and its quick
 // replies. A quick reply or the comment box's Enter answers the line and the step moves on; answers
 // wait until the last line or "send anyway". The comment box below is the one place to type.
+import { resolveHighlightsReplyBackground } from '../../../../../shared/bots-global-settings'
 import { Check, ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
 import { Trans } from 'react-i18next'
 import { i18n } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store'
 import {
   botItemQuestionLine,
   type BotItemQuestionShape,
@@ -77,11 +79,26 @@ export function BotItemAnswerLine({
   onClick?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const replyBackground = useAppStore((state) =>
+    resolveHighlightsReplyBackground(state.settings?.highlightsReplyBackground)
+  )
+  const tinted = !onClick && replyBackground !== 'neutral'
   const content = (
     <>
-      {botItemQuestionLine(question)} →{' '}
-      <span className="text-foreground/72 [overflow-wrap:anywhere]">{words}</span>
-      {onClick ? <> · {t('bots.items.ask.notSentYet', 'not sent yet')}</> : null}
+      {botItemQuestionLine(question)}{' '}
+      {tinted ? (
+        <span
+          data-highlights-reply-background={replyBackground}
+          className="highlights-reply-surface mt-1 block rounded-md px-2 py-1 text-foreground inset-ring [overflow-wrap:anywhere]"
+        >
+          <span className="font-medium">{t('bots.items.activity.you', 'You')}</span> · {words}
+        </span>
+      ) : (
+        <>
+          → <span className="text-foreground/72 [overflow-wrap:anywhere]">{words}</span>
+          {onClick ? <> · {t('bots.items.ask.notSentYet', 'not sent yet')}</> : null}
+        </>
+      )}
     </>
   )
   const line = 'block w-full text-left text-[13px] leading-[19px] text-muted-foreground'

@@ -978,6 +978,25 @@ body[data-modal-overlay-open]
 }
 
 /* Tailwind must generate this utility; a plain class silently emits no scrollbar-none CSS. */
+[data-highlights-reply-background='blue'] {
+  --highlights-reply-accent: var(--color-blue-600);
+}
+[data-highlights-reply-background='teal'] {
+  --highlights-reply-accent: var(--color-teal-600);
+}
+.dark [data-highlights-reply-background='blue'] {
+  --highlights-reply-accent: var(--color-blue-400);
+}
+.dark [data-highlights-reply-background='teal'] {
+  --highlights-reply-accent: var(--color-teal-400);
+}
+
+@utility highlights-reply-surface {
+  --muted-foreground: color-mix(in srgb, var(--foreground) 75%, var(--muted));
+  background-color: color-mix(in srgb, var(--highlights-reply-accent) 16%, var(--muted));
+  --tw-inset-ring-color: color-mix(in srgb, var(--highlights-reply-accent) 34%, var(--border));
+}
+
 @utility scrollbar-none {
   -ms-overflow-style: none;
   scrollbar-width: none;

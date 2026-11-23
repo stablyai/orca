@@ -1,5 +1,6 @@
 import type React from 'react'
 
+import { resolveHighlightsReplyBackground } from '../../../../../shared/bots-global-settings'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
@@ -33,6 +34,7 @@ import {
 } from './themes/AppearanceThemeControl'
 import { useIconThemePickerLabels } from './use-appearance-picker-labels'
 import { AppearanceLanguageSetting } from './AppearanceLanguageSetting'
+import { HighlightsReplyBackgroundSetting } from './HighlightsReplyBackgroundSetting'
 
 type AppearanceInterfaceSectionProps = {
   settings: GlobalSettings
@@ -167,6 +169,12 @@ export function AppearanceInterfaceSection({
           />
         </SearchableSetting>
       ))}
+
+      <HighlightsReplyBackgroundSetting
+        value={resolveHighlightsReplyBackground(settings.highlightsReplyBackground)}
+        onChange={(highlightsReplyBackground) => updateSettings({ highlightsReplyBackground })}
+        forceVisible={forceVisiblePrimary}
+      />
 
       {editorThemeSlots.map((slot) => (
         <SearchableSetting
