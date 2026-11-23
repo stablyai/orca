@@ -33,6 +33,10 @@ export type StructuredAgentSessionRestartResumeSurfaces = {
     sessionId: string,
     clientMessageId: string
   ) => Promise<{ value: AgentSessionSendResult } | undefined>
+  awaitSendDecided: (
+    sessionId: string,
+    clientMessageId: string
+  ) => Promise<{ value: AgentSessionSendResult } | undefined>
   readChildWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
   childWorkOpen: (sessionId: string) => boolean
   publishStatus?: (sessionId: string) => void
@@ -81,6 +85,12 @@ export function structuredAgentSessionRestartResumeSurfaces(
       host.waitForSendSettlement(sessionId, clientMessageId, {
         until: 'dispatched',
         budgetMs: STRUCTURED_AGENT_SESSION_START_WAIT_MS
+      }),
+    // After a give-up: the provider's later accept or reject, for as long as the chat is open.
+    awaitSendDecided: (sessionId, clientMessageId) =>
+      host.waitForSendSettlement(sessionId, clientMessageId, {
+        until: 'decided',
+        budgetMs: MAX_TIMER_DELAY_MS
       }),
     now
   }

@@ -9,7 +9,9 @@ import {
 import {
   refusedBy,
   settledVerdict,
-  type ContinuationSubmission
+  verdictOf,
+  type ContinuationSubmission,
+  type SubmissionWait
 } from './structured-agent-session-continuation-verdict'
 import {
   agentSessionSendSubmission,
@@ -60,6 +62,10 @@ export type StructuredAgentSessionContinuationHost = {
     sessionId: string,
     clientMessageId: string
   ) => Promise<{ value: AgentSessionSendResult } | undefined>
+  awaitSendDecided: (
+    sessionId: string,
+    clientMessageId: string
+  ) => Promise<{ value: AgentSessionSendResult } | undefined>
   logger: StructuredAgentSessionLogger
   now: () => number
   /** Recheck under acceptance serialization so the first post-restart message wins. */
@@ -95,6 +101,8 @@ export function continuationDeps(
       agentSessionSendSubmission(
         (await host.awaitSendDispatched(sessionId, clientMessageId))?.value
       ),
+    awaitDecided: async (sessionId, clientMessageId) =>
+      agentSessionSendSubmission((await host.awaitSendDecided(sessionId, clientMessageId))?.value),
     logger: host.logger,
     note: restartNoteWriter(host),
     settleUnanswered: async (sessionId, clientMessageId) => {
@@ -169,6 +177,8 @@ export type StructuredAgentSessionContinuationDeps = {
   note: (sessionId: string, text: string, tone?: 'error' | 'warning') => Promise<void>
   /** Release cards held only by the restart once the continuation has an outcome, so they never wait on it forever. */
   liftRestartHold: (sessionId: string) => Promise<void>
+  /** After a give-up, the provider's own accept or reject; undefined when the wait ends without one. */
+  awaitDecided?: SubmissionWait
   /** Settle a handed-over continuation its agent never answered, so it stops showing as sending. */
   settleUnanswered?: (sessionId: string, clientMessageId: string) => Promise<void>
   /** Required to report best-effort note failures. */
@@ -235,6 +245,16 @@ export async function startStructuredAgentSessionContinuation(
         })
       }
       await noteOutcome(deps, sessionId, { sessionId, outcome: 'unknown' })
+      // The agent may still take or refuse it; say so in the chat when it does.
+      void deps
+        .awaitDecided?.(sessionId, clientMessageId)
+        .then(async (decided) => {
+          const late = decided && verdictOf(sessionId, decided)
+          if (late && (late.outcome === 'continued' || late.outcome === 'refused')) {
+            await noteOutcome(deps, sessionId, late)
+          }
+        })
+        .catch(() => {})
     }
   }
 }

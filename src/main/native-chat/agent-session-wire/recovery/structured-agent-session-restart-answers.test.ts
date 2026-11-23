@@ -72,7 +72,7 @@ it('returns before late answers, then settles them in one pass without dropping 
   expect(giveUp.stuck).toHaveBeenCalledOnce()
 })
 
-it('settles a chat its agent never answers on its own: no longer sending, queue released, noted', async () => {
+it('settles a chat its agent never answers on its own: no longer sending, queue released, noted, and a late accept still noted', async () => {
   vi.useFakeTimers()
   type Row = { clientMessageId: string; dispatchState: string; handedOverAt?: number }
   const rows = new Map<string, Row>()
@@ -97,6 +97,7 @@ it('settles a chat its agent never answers on its own: no longer sending, queue 
       }
     }
   })
+  const lateAccept = Promise.withResolvers<void>()
   const submission = (clientMessageId: string) => ({
     value: { clientMessageId, submission: rows.get(clientMessageId) }
   })
@@ -118,6 +119,11 @@ it('settles a chat its agent never answers on its own: no longer sending, queue 
       return submission(id)
     },
     awaitSendDispatched: async () => undefined,
+    // Resolves once the agent accepts or rejects, as the real settlement wait does.
+    awaitSendDecided: async (_sessionId: string, id: string) => {
+      await lateAccept.promise
+      return submission(id)
+    },
     logger,
     now: () => 0
   }
@@ -156,4 +162,13 @@ it('settles a chat its agent never answers on its own: no longer sending, queue 
     { sessionId: 'fast', text: AGENT_SESSION_RESTART_CONTINUATION_NOTE },
     { sessionId: 'stuck', text: AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE }
   ])
+
+  // The agent takes it after all: its delivery and the chat say so.
+  rows.get('continue-stuck')!.dispatchState = 'accepted'
+  lateAccept.resolve()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(notes.at(-1)).toEqual({
+    sessionId: 'stuck',
+    text: AGENT_SESSION_RESTART_CONTINUATION_NOTE
+  })
 })
