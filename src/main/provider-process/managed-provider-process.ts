@@ -200,7 +200,7 @@ export function spawnManagedProviderProcess(
       // CLI exits) counts until then. Otherwise, once the leader exits or its outcome is lost, its pid
       // can be reused while cleanup still runs.
       releaseAgentMemory = registerAgentProcess(
-        child.ownerPid ?? child.pid,
+        (child instanceof DirectProviderChild ? child.raw.pid : undefined) ?? child.pid,
         child.pid,
         () =>
           (child instanceof DirectProviderChild ? directOwnerUnreaped(child.raw) : undefined) ??

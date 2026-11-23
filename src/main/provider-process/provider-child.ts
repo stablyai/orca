@@ -19,8 +19,6 @@ export type ProviderChild = Pick<
   EventEmitter & {
     /** Actual CLI writer, which differs from the root on the compatibility path. */
     readonly writerPid?: number
-    /** The native owner wrapping the CLI, when it has one; its tree is what the chat counts. */
-    readonly ownerPid?: number
     /** The launcher's owner-pipe watcher, beside the CLI on the direct path. */
     readonly watcherPid?: number
     ready?: Promise<void>

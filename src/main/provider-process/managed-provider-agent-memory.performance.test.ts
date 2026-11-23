@@ -57,7 +57,6 @@ describe('agent memory registrations', () => {
     // A native launch: the agent runs under its own directly spawned owner.
     Object.setPrototypeOf(child, DirectProviderChild.prototype)
     Object.defineProperties(child, {
-      ownerPid: { value: 9_300_001 },
       leaderExited: { value: true },
       raw: { value: owner }
     })
