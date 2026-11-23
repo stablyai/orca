@@ -192,20 +192,22 @@ export class DirectRpcClient implements RpcClient {
       }
       return
     }
-    if (!this.reconnect.claimExpeditedRetry(reason)) {
-      return
+    if (reason === 'network-change') {
+      this.reconnect.retryAfterNetworkHint(() => this.retryConnection(reason))
+    } else {
+      this.retryConnection(reason)
     }
+  }
+
+  private retryConnection(reason: ForegroundNudgeReason): void {
+    const state = this.getState()
     const dialing = this.socketSession
     const dialAgeMs = Date.now() - this.socketFactory.getDialStartedAt()
     if (reason !== 'focus' && dialing && isStaleForegroundDial(state, dialAgeMs)) {
-      console.log('[net] foreground — abandoning stale dial', {
-        state,
-        dialAgeMs
-      })
       this.socketClose.forceClose(dialing)
     }
     if (this.getState() === 'reconnecting') {
-      this.reconnect.redialNow()
+      this.reconnect.redialNow(reason === 'app-resume' && state === 'reconnecting')
     }
   }
 
