@@ -22,6 +22,7 @@ import type {
 import { journalOpenReadRefusal } from '../../agent-session-journal/replay/journal-open-failure'
 import {
   confirmedCurrentOptions,
+  currentContextWindow,
   structuredAgentSessionCapabilityView,
   type StructuredAgentSessionLiveOptions,
   type StructuredAgentSessionRestingOptions as RestingOptions
@@ -175,6 +176,7 @@ export async function readStructuredAgentSessionOptions(
     fastMode:
       selected.current.fastMode ??
       (model === options.current.model ? options.current.fastMode : undefined),
+    contextWindow: currentContextWindow(saved.contextWindow, options, model),
     // The saved tier as the shared speed rule runs it under the saved model.
     ...(context.deps.agents.definition(agent)?.restingOptions.acceptsKey('interactionMode')
       ? {
@@ -200,6 +202,10 @@ export async function readStructuredAgentSessionOptions(
     if (current[key] !== undefined && saved[key] !== undefined) {
       acceptedInputSources[key] = 'saved'
     }
+  }
+  // Another model's size is its own, never the saved pick.
+  if (current.contextWindow !== undefined && current.contextWindow === saved.contextWindow) {
+    acceptedInputSources.contextWindow = 'saved'
   }
   if (saved.fastMode === undefined && selected.current.fastMode === false) {
     acceptedInputSources.fastMode = 'policy'

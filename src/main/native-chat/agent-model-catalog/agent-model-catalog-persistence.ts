@@ -66,6 +66,7 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
     : undefined
   const description = text(row.description)
   const defaultEffort = text(row.defaultEffort)
+  const defaultContextWindow = text(row.defaultContextWindow)
   const resolvedModel = text(row.resolvedModel)
   return {
     id,
@@ -80,6 +81,14 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
       ? { supportsFastMode: row.supportsFastMode }
       : {}),
     ...(typeof row.defaultFastMode === 'boolean' ? { defaultFastMode: row.defaultFastMode } : {}),
+    ...(Array.isArray(row.contextWindows)
+      ? {
+          contextWindows: row.contextWindows
+            .map(parseChoice)
+            .filter((choice): choice is AgentSessionOptionChoice => choice !== null)
+        }
+      : {}),
+    ...(defaultContextWindow ? { defaultContextWindow } : {}),
     ...(typeof row.supportsAutoMode === 'boolean'
       ? { supportsAutoMode: row.supportsAutoMode }
       : {}),

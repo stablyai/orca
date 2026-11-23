@@ -19279,6 +19279,7 @@
         "model": "模型",
         "effort": "推理強度",
         "fastMode": "快速模式",
+        "contextWindow": "上下文視窗",
         "speed": "速度",
         "thinking": "思考",
         "sessionOptions": "工作階段選項",

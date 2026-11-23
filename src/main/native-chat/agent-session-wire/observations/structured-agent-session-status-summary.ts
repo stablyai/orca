@@ -69,6 +69,7 @@ export function structuredAgentSessionStatusSummary({
   // Published so another device's pick moves the client's option stamp.
   const effort = record?.options?.effort
   const fastMode = record?.options?.fastMode
+  const contextWindow = record?.options?.contextWindow
   const serviceTier = record?.options?.serviceTier
   const interactionMode = record?.options?.interactionMode
   const fallbackModel = session.child
@@ -109,6 +110,7 @@ export function structuredAgentSessionStatusSummary({
       : {}),
     ...(effort ? { effort } : {}),
     ...(fastMode ? { fastMode } : {}),
+    ...(contextWindow ? { contextWindow } : {}),
     ...(serviceTier ? { serviceTier } : {}),
     ...(isAgentSessionInteractionMode(interactionMode) ? { interactionMode } : {}),
     ...childWork,

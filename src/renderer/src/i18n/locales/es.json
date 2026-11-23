@@ -19164,6 +19164,7 @@
         "model": "Modelo",
         "effort": "Esfuerzo",
         "fastMode": "Modo rápido",
+        "contextWindow": "Ventana de contexto",
         "speed": "Velocidad",
         "thinking": "Razonamiento",
         "sessionOptions": "Opciones de sesión",

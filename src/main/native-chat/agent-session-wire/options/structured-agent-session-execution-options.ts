@@ -23,6 +23,8 @@ export function captureStructuredExecutionOptions(
       : {
           ...(saved.personality ? { personality: saved.personality } : {}),
           ...(saved.interactionMode ? { interactionMode: saved.interactionMode } : {}),
+          // Older clients' selections never name a size; a model that does not list it skips it.
+          ...(saved.contextWindow ? { contextWindow: saved.contextWindow } : {}),
           ...selection
         }
   // A missing Fast pick has a definite baseline on hosts that offer it.

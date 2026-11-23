@@ -319,7 +319,7 @@ export function canSetStructuredAgentSessionOption(
     )
   }
   return (
-    (['model', 'effort', 'serviceTier', 'personality'].includes(id) &&
+    (['model', 'effort', 'contextWindow', 'serviceTier', 'personality'].includes(id) &&
       typeof value === 'string' &&
       value.length > 0) ||
     (id === 'fastMode' && typeof value === 'boolean')

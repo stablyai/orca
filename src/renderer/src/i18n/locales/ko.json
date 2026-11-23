@@ -20247,6 +20247,7 @@
         "model": "모델",
         "effort": "추론 수준",
         "fastMode": "빠른 모드",
+        "contextWindow": "컨텍스트 창",
         "speed": "속도",
         "thinking": "사고",
         "sessionOptions": "세션 옵션",

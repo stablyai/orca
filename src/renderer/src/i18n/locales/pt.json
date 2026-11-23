@@ -20786,6 +20786,7 @@
         "model": "Modelo",
         "effort": "Esforço",
         "fastMode": "Modo rápido",
+        "contextWindow": "Janela de contexto",
         "thinking": "Pensando",
         "sessionOptions": "Opções da sessão",
         "chooseInAgentPicker": "Escolha no seletor de agente…",

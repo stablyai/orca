@@ -274,9 +274,28 @@ export type AcpDialect = {
   fastConfigId?: string
   /** This agent's on/off thinking parameter, written only for a CLI model id that names it. */
   thinkingConfigId?: string
+  /** This agent's context-window parameter, mapped to Orca's context window choice. */
+  contextWindowConfigId?: string
   /** This agent's mode values, mapped to Orca's Build/Plan interaction mode. */
   interactionModes?: Readonly<Record<AgentSessionInteractionMode, string>>
 }
+
+/** What a session's option reads and writes take from its dialect. */
+export type AcpStructuredOptionsDialect = Pick<
+  AcpDialect,
+  | 'modelEfforts'
+  | 'familyEfforts'
+  | 'withheldCommands'
+  | 'chatModelIds'
+  | 'effortChangesModel'
+  | 'clampsUnlistedEffort'
+  | 'builtinCommands'
+  | 'skillDescription'
+  | 'fastConfigId'
+  | 'thinkingConfigId'
+  | 'contextWindowConfigId'
+  | 'interactionModes'
+>
 
 export type AcpChildStops = { subagents: boolean; backgroundTasks: boolean }
 

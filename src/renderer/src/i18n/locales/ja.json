@@ -19734,6 +19734,7 @@
         "model": "モデル",
         "effort": "推論レベル",
         "fastMode": "高速モード",
+        "contextWindow": "コンテキストウィンドウ",
         "speed": "速度",
         "thinking": "思考",
         "sessionOptions": "セッションオプション",

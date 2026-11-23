@@ -1,11 +1,16 @@
 import { acpEffortOption, acpInteractionModeValue, acpSelectChoices } from './acp-select-choices'
-import { acpModelMenuModels, withFastModeOption } from './acp-model-menu'
+import {
+  acpContextWindowWrite,
+  acpModelMenuModels,
+  withContextWindowOption,
+  withFastModeOption
+} from './acp-model-menu'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
 import { acpSessionSlashCommand } from './acp-session-slash-command'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
 
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/protocol/agent-session-options-result'
-import type { AcpDialect } from '../acp-dialects/acp-dialect'
+import type { AcpStructuredOptionsDialect } from '../acp-dialects/acp-dialect'
 import {
   unpickedSessionConfiguredChoice,
   withLiveCatalogListing,
@@ -31,22 +36,7 @@ function isSelect(option: SessionConfigOption): option is SelectOption {
 }
 
 export class AcpStructuredOptions {
-  constructor(
-    private readonly dialect: Pick<
-      AcpDialect,
-      | 'modelEfforts'
-      | 'familyEfforts'
-      | 'withheldCommands'
-      | 'chatModelIds'
-      | 'effortChangesModel'
-      | 'clampsUnlistedEffort'
-      | 'builtinCommands'
-      | 'skillDescription'
-      | 'fastConfigId'
-      | 'thinkingConfigId'
-      | 'interactionModes'
-    > = {}
-  ) {}
+  constructor(private readonly dialect: AcpStructuredOptionsDialect = {}) {}
 
   private forkSupport: AgentSessionOptionsResult['forkSupport'] = 'unknown'
   /** As the agent last reported them; replace through `adoptConfigOptions`. */
@@ -97,10 +87,11 @@ export class AcpStructuredOptions {
       this.unobservedCurrent.add(key)
     }
     if (key === 'model') {
-      // Each model has its own effort, thinking and Fast defaults, so all are written again.
+      // Each model has its own effort, thinking, Fast and context defaults, so all are written again.
       this.appliedInput.delete('effort')
       this.appliedInput.delete('fastMode')
       this.appliedInput.delete('thinking')
+      this.appliedInput.delete('contextWindow')
       this.unobservedCurrent.add('effort')
     }
     if (key === 'effort' && this.dialect.effortChangesModel) {
@@ -229,6 +220,9 @@ export class AcpStructuredOptions {
       )
       return option ? { method: 'config', configId: option.id, value } : null
     }
+    if (key === 'contextWindow') {
+      return acpContextWindowWrite(this.idSelect(this.dialect.contextWindowConfigId), value)
+    }
     if (key === 'model') {
       const option = this.select('model')
       const model = this.dialect.chatModelIds?.get(value) ?? value
@@ -283,7 +277,8 @@ export class AcpStructuredOptions {
         confirmed
       }
     }
-    return withFastModeOption(menu, this.idSelect(this.dialect.fastConfigId))
+    const fast = withFastModeOption(menu, this.idSelect(this.dialect.fastConfigId))
+    return withContextWindowOption(fast, this.idSelect(this.dialect.contextWindowConfigId))
   }
 
   /** Unpicked new-session default: null if unlisted, undefined if the session cannot establish it. */

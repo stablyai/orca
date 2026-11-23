@@ -10,6 +10,7 @@ export const NATIVE_CHAT_SESSION_OPTION_COPY = {
   model: 'Model',
   effort: 'Effort',
   fastMode: 'Fast mode',
+  contextWindow: 'Context window',
   speed: 'Speed',
   thinking: 'Thinking',
   standard: 'Standard',
@@ -99,6 +100,8 @@ export function nativeChatSessionOptionLabel(
       return say('effort')
     case 'fastMode':
       return say('fastMode')
+    case 'contextWindow':
+      return say('contextWindow')
     case 'serviceTier':
       return say('speed')
     case 'thinking':

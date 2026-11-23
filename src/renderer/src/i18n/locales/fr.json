@@ -19457,6 +19457,7 @@
         "model": "Modèle",
         "effort": "Effort",
         "fastMode": "Mode rapide",
+        "contextWindow": "Fenêtre de contexte",
         "speed": "Vitesse",
         "thinking": "Réflexion",
         "sessionOptions": "Options de session",

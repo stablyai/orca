@@ -15,7 +15,7 @@ const listReplySchema = z.object({
     .min(1)
 })
 
-/** Lists every model with its own effort levels and Fast support, before any session exists. */
+/** Lists every model with its own effort levels, Fast support and context sizes, before any session exists. */
 export async function readCursorModelCatalog(connection: {
   requestSessionFreeExtension(method: string, params: unknown): Promise<unknown>
 }): Promise<AgentSessionModelOption[]> {
@@ -31,6 +31,7 @@ export async function readCursorModelCatalog(connection: {
     )
     const effort = acpEffortOption(options)
     const fast = options.find((option) => option.id === 'fast')
+    const context = options.find((option) => option.id === 'context')
     return {
       id: model.value,
       label: model.name,
@@ -41,7 +42,13 @@ export async function readCursorModelCatalog(connection: {
         : [],
       ...(effort ? { defaultEffort: effort.currentValue } : {}),
       supportsFastMode: fast !== undefined,
-      ...(fast?.type === 'select' ? { defaultFastMode: fast.currentValue === 'true' } : {})
+      ...(fast?.type === 'select' ? { defaultFastMode: fast.currentValue === 'true' } : {}),
+      // Empty, not absent: the listing saw every model, so a stale size never outlives it.
+      contextWindows:
+        context?.type === 'select'
+          ? acpSelectChoices(context).map((choice) => ({ value: choice.value, label: choice.name }))
+          : [],
+      ...(context?.type === 'select' ? { defaultContextWindow: context.currentValue } : {})
     }
   })
 }

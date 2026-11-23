@@ -208,6 +208,7 @@ export const CURSOR_ACP_DIALECT: AcpDialect = {
   clientCapabilities: { _meta: { parameterizedModelPicker: true } },
   fastConfigId: 'fast',
   thinkingConfigId: 'thinking',
+  contextWindowConfigId: 'context',
   // The CLI's `--model auto` is the chat server's `default`.
   chatModelIds: new Map([['auto', 'default']]),
   unlistedChatModel,

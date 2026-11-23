@@ -13,6 +13,7 @@ const ANSWERED_VALUE_IDS = [
   'model',
   'effort',
   'fastMode',
+  'contextWindow',
   'serviceTier',
   'interactionMode'
 ] as const
@@ -84,6 +85,7 @@ export function structuredAgentSessionOptionStamp(
         | 'permissionMode'
         | 'effort'
         | 'fastMode'
+        | 'contextWindow'
         | 'serviceTier'
         | 'interactionMode'
       >
@@ -95,6 +97,7 @@ export function structuredAgentSessionOptionStamp(
     summary?.permissionMode,
     summary?.effort,
     summary?.fastMode,
+    summary?.contextWindow,
     summary?.serviceTier,
     summary?.interactionMode
   ]
