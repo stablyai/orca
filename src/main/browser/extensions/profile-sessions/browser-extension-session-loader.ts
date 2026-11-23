@@ -257,12 +257,13 @@ export function whenBrowserExtensionProfileLoaded(profileId: string): Promise<vo
   return stateByProfileId.get(profileId)?.loading.catch(() => {}) ?? Promise.resolve()
 }
 
-/** Whether the profile's enabled extensions are still loading after its attach. */
-export function isBrowserExtensionProfileLoading(profileId: string): boolean {
-  return (
-    unloadingByProfileId.has(profileId) ||
-    (stateByProfileId.get(profileId)?.loadingExtensions ?? false)
-  )
+/**
+ * While the profile's enabled extensions are still loading after its attach (or unloading before the
+ * next), that attach or unload; null otherwise. A wait made for one must not be reused for the next.
+ */
+export function getBrowserExtensionProfileLoadingPhase(profileId: string): object | null {
+  const state = stateByProfileId.get(profileId)
+  return unloadingByProfileId.get(profileId) ?? (state?.loadingExtensions ? state.loading : null)
 }
 
 export function getBrowserExtensionSessionForProfile(profileId: string): Electron.Session | null {

@@ -6,6 +6,7 @@ import {
   whenBrowserExtensionsInSession
 } from './browser-extension-session-presence'
 import { loadPageWhenReady } from './browser-page-held-first-load'
+import { waitForBrowserGuestLoad } from '../../guest-lifecycle/browser-guest-load'
 
 class FakePage extends EventEmitter {
   readonly started: string[] = []
@@ -16,6 +17,9 @@ class FakePage extends EventEmitter {
   }
   isDestroyed(): boolean {
     return this.destroyed
+  }
+  isLoadingMainFrame(): boolean {
+    return false
   }
   nativeStops = 0
   stop(): void {
@@ -54,6 +58,16 @@ describe('a held first load', () => {
     expect(page.started).toEqual([])
   })
 
+  it('Stop with nothing loading settles the page load at once, not at its deadline', async () => {
+    const page = new FakePage()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as in hold(), plus isLoadingMainFrame, which FakePage provides.
+    const contents = page as unknown as Electron.WebContents
+    const pageLoad = waitForBrowserGuestLoad(contents, () => hold(page, deferred().promise))
+    page.stop()
+    await expect(pageLoad).resolves.toBeUndefined()
+    expect(page.listenerCount('destroyed')).toBe(0)
+  })
+
   it('starts nothing until ready, then only the newest load asked for meanwhile', async () => {
     const page = new FakePage()
     const ready = deferred()
@@ -84,8 +98,12 @@ describe('a held first load', () => {
   })
 })
 
-function fakeSession(): { sess: Electron.Session; extensions: EventEmitter } {
-  const extensions = Object.assign(new EventEmitter(), { getExtension: () => null })
+type FakeExtensions = EventEmitter & { getExtension: (id: string) => { id: string } | null }
+
+function fakeSession(): { sess: Electron.Session; extensions: FakeExtensions } {
+  const extensions: FakeExtensions = Object.assign(new EventEmitter(), {
+    getExtension: (_id: string): { id: string } | null => null
+  })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the presence wait reads only session.extensions events and getExtension.
   return { sess: { extensions } as unknown as Electron.Session, extensions }
 }
@@ -118,6 +136,13 @@ describe('extensions in the session', () => {
     await settle()
     expect(inSession).toBe(true)
     expect(extensions.listenerCount('extension-loaded')).toBe(0)
+    extensions.getExtension = (id: string) => (id === 'good' ? { id } : null)
+    let laterInSession = false
+    void whenBrowserExtensionsInSession(sess, deferred().promise).then(
+      () => (laterInSession = true)
+    )
+    await settle()
+    expect(laterInSession).toBe(true)
   })
 
   it('ends when the startup load ends, though an extension never loaded', async () => {

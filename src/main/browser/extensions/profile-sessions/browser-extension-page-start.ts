@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { getBrowserExtensionProfileIdForSession } from '../api-runtime/browser-extension-api-host'
 import {
   getBrowserExtensionSessionForProfile,
-  isBrowserExtensionProfileLoading,
+  getBrowserExtensionProfileLoadingPhase,
   whenBrowserExtensionProfileLoaded,
   whenBrowserExtensionProfileUnloaded
 } from './browser-extension-session-loader'
@@ -32,29 +32,24 @@ export function whenBrowserExtensionsReadyForPage(
   return profileId ? whileExtensionsStart(profileId) : null
 }
 
-const startWaits = new Map<string, Promise<void>>()
+const startWaits = new Map<string, { phase: object; wait: Promise<void> }>()
 
-// One bounded wait per starting profile, so a later caller never extends the deadline.
+// One bounded wait per profile attach, so a later caller never extends the deadline.
 function whileExtensionsStart(profileId: string): Promise<void> | null {
-  if (!isBrowserExtensionProfileLoading(profileId)) {
+  const phase = getBrowserExtensionProfileLoadingPhase(profileId)
+  if (!phase) {
     return null
   }
   const running = startWaits.get(profileId)
-  if (running) {
-    return running
+  if (running?.phase === phase) {
+    return running.wait
   }
   const timers: NodeJS.Timeout[] = []
   const after = (ms: number): Promise<void> =>
     new Promise<void>((resolve) => timers.push(setTimeout(resolve, ms)))
   const loaded = whenBrowserExtensionProfileLoaded(profileId)
-  let gaveUp = false
   // Restore hooks get a short bound; the session step a long one, as a load started before it hangs.
-  const giveUp = Promise.race([
-    loaded,
-    after(IN_SESSION_WAIT_LIMIT_MS).then(() => {
-      gaveUp = true
-    })
-  ])
+  const giveUp = Promise.race([loaded, after(IN_SESSION_WAIT_LIMIT_MS)])
   const wait = Promise.all([
     Promise.race([
       whenBrowserExtensionProfileUnloaded(profileId).then(() => {
@@ -66,21 +61,14 @@ function whileExtensionsStart(profileId: string): Promise<void> | null {
     Promise.race([loaded, after(FIRST_LOAD_WAIT_MS)])
   ])
     .then(() => undefined)
-    .finally(() => {
-      timers.forEach(clearTimeout)
-      const forget = (): void => {
-        if (startWaits.get(profileId) === wait) {
-          startWaits.delete(profileId)
-        }
-      }
-      // A wait that gave up stays until that load ends, so later pages don't wait for it again.
-      if (gaveUp) {
-        void loaded.finally(forget)
-      } else {
-        forget()
-      }
-    })
-  startWaits.set(profileId, wait)
+    .finally(() => timers.forEach(clearTimeout))
+  // Kept until this attach's loads end: later pages share it, and one that gave up isn't repeated.
+  void loaded.finally(() => {
+    if (startWaits.get(profileId)?.wait === wait) {
+      startWaits.delete(profileId)
+    }
+  })
+  startWaits.set(profileId, { phase, wait })
   return wait
 }
 

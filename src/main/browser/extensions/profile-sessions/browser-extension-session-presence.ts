@@ -3,6 +3,13 @@ const loadEndedListeners = new WeakMap<Electron.Session, Set<(extensionId: strin
 
 /** A load into this session failed: that extension will not appear, so nothing waits for it. */
 export function noteBrowserExtensionLoadFailed(sess: Electron.Session, extensionId: string): void {
+  const starting = startingBySession.get(sess)
+  if (starting) {
+    startingBySession.set(
+      sess,
+      starting.filter((id) => id !== extensionId)
+    )
+  }
   loadEndedListeners.get(sess)?.forEach((listener) => listener(extensionId))
 }
 
