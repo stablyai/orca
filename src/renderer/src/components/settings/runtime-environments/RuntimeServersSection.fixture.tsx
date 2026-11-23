@@ -13,6 +13,8 @@ import { RuntimeAddServerDialog } from './pairing/runtime-add-server-dialog'
 import { RuntimeServerListHeader } from './server-rows/runtime-server-list-header'
 import { RuntimeServerList } from './server-rows/runtime-server-list'
 import { RuntimeShareComputerSection } from './pairing/runtime-share-computer-section'
+import { RuntimeDefaultHostRow } from './catalog/runtime-default-host-row'
+import { LOCAL_RUNTIME_VALUE, NO_RUNTIME_VALUE } from './catalog/runtime-environment-selection'
 import type { ManagedServerCatalog } from './managed-servers/use-managed-server-catalog'
 import type { RuntimeHostDetails } from './catalog/runtime-environment-host-details'
 
@@ -145,6 +147,14 @@ function Section({
       fullWidthDescriptionOnNarrow
     >
       <div className="space-y-6">
+        {web ? null : <RuntimeShareComputerSection />}
+        <RuntimeDefaultHostRow
+          allowLocalRuntime={!web}
+          activeValue={web ? NO_RUNTIME_VALUE : LOCAL_RUNTIME_VALUE}
+          environments={listedEnvironments}
+          isBusy={false}
+          onValueChange={() => {}}
+        />
         <div className="space-y-2">
           <RuntimeServerListHeader />
           <RuntimeServerList
@@ -173,7 +183,6 @@ function Section({
             onPasteAccessLink={(trigger) => setDialog('add', trigger)}
           />
         </div>
-        {web ? null : <RuntimeShareComputerSection />}
         <RuntimeAddServerDialog
           open={dialog === 'add'}
           name=""
@@ -246,10 +255,28 @@ const longNameServers = [
   ...servers.slice(1)
 ]
 export const longServerName = sectionFixture({ environments: longNameServers })
+const manyServers = [
+  ...servers,
+  ...Array.from({ length: 9 }, (_, index) => {
+    const name = `test-runner-${index + 1}`
+    return environment(name, name, `ws://192.0.2.${index + 20}:6768`)
+  })
+]
+const longListOptions = {
+  environments: manyServers,
+  phases: manyServers.map((_, index) => (index < 2 ? 'available' : 'current'))
+} satisfies Parameters<typeof sectionFixture>[0]
+export const longServerList = sectionFixture(longListOptions)
 // The 600px window has a 280px sidebar, 64px of gutters and up to 12px for the scrollbar.
 // The fixture frame adds 32px of padding around the resulting 244px settings column.
-export const settingsMinimum = sectionFixture({ width: 276, links: 2 })
-export const webSettingsMinimum = sectionFixture({ width: 276, web: true })
+const settingsMinimumWidth = 276
+export const settingsMinimum = sectionFixture({ width: settingsMinimumWidth, links: 2 })
+export const minimumLongServerList = sectionFixture({
+  ...longListOptions,
+  width: settingsMinimumWidth
+})
+export const minimumNoServers = sectionFixture({ width: settingsMinimumWidth, environments: [] })
+export const webSettingsMinimum = sectionFixture({ width: settingsMinimumWidth, web: true })
 export const narrowest = sectionFixture({ width: 248, environments: longNameServers })
 export const narrow = sectionFixture({ width: 440 })
 export const compactVersionSkew = sectionFixture({
