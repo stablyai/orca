@@ -13,6 +13,8 @@ export const BUILD_LOG_MAX_TAIL = 1000
 const MAX_FAILED_LOGS = 3
 
 type RawTimelineRecord = {
+  id?: string | null
+  parentId?: string | null
   name?: string | null
   type?: string | null
   state?: string | null
@@ -23,13 +25,36 @@ type RawTimelineRecord = {
   issues?: { type?: string | null; message?: string | null }[] | null
 }
 
+/** Run order is per parent (stage, job, task), so siblings are sorted and the tree walked depth first. */
+function inRunOrder(records: RawTimelineRecord[]): RawTimelineRecord[] {
+  const ids = new Set(records.map((record) => record.id).filter((id): id is string => Boolean(id)))
+  const children = new Map<string | null, RawTimelineRecord[]>()
+  for (const record of records) {
+    const parent = record.parentId && ids.has(record.parentId) ? record.parentId : null
+    children.set(parent, [...(children.get(parent) ?? []), record])
+  }
+  const ordered: RawTimelineRecord[] = []
+  const visit = (parent: string | null): void => {
+    const siblings = [...(children.get(parent) ?? [])].sort(
+      (left, right) => (left.order ?? 0) - (right.order ?? 0)
+    )
+    for (const record of siblings) {
+      ordered.push(record)
+      if (record.id) {
+        visit(record.id)
+      }
+    }
+  }
+  visit(null)
+  return ordered
+}
+
 /** Steps in run order; a step's issues keep only their messages. */
 export function mapBuildTimeline(
   records: RawTimelineRecord[] | null | undefined
 ): AzureDevOpsBuildStep[] {
-  return (records ?? [])
+  return inRunOrder(records ?? [])
     .filter((record) => record.type !== 'Checkpoint' && typeof record.name === 'string')
-    .sort((left, right) => (left.order ?? 0) - (right.order ?? 0))
     .map((record) => ({
       name: record.name ?? '',
       type: record.type ?? 'Task',
@@ -94,16 +119,37 @@ export async function getAzureDevOpsPullRequestBuild(
         .filter((step) => step.type === 'Task' && step.result === 'failed' && step.logId !== null)
         .slice(0, MAX_FAILED_LOGS)
     : []
+  // Line counts let each failed log be read from its last `tail` lines instead of in full.
+  const lineCounts = new Map<number, number>()
+  if (failed.length > 0) {
+    const meta = await requestAzureDevOpsJsonAtBase<{
+      value?: { id?: number; lineCount?: number }[]
+    }>(location.collection, `${base}/logs`, { timeoutMs: BUILD_TIMEOUT_MS }, true)
+    for (const log of meta?.value ?? []) {
+      if (typeof log.id === 'number' && typeof log.lineCount === 'number') {
+        lineCounts.set(log.id, log.lineCount)
+      }
+    }
+  }
   const logs = await Promise.all(
     failed.map(async (step): Promise<AzureDevOpsBuildLog> => {
+      const lineCount = lineCounts.get(step.logId ?? -1)
+      const range: Record<string, string> =
+        lineCount === undefined
+          ? {}
+          : { startLine: String(Math.max(1, lineCount - tail + 1)), endLine: String(lineCount) }
       const raw = await requestAzureDevOpsJsonAtBase<{ value?: unknown[] }>(
         location.collection,
         `${base}/logs/${encodeURIComponent(String(step.logId))}`,
-        { timeoutMs: BUILD_TIMEOUT_MS },
+        { searchParams: range, timeoutMs: BUILD_TIMEOUT_MS },
         true
       )
       const lines = (raw?.value ?? []).filter((line): line is string => typeof line === 'string')
-      return { step: step.name, lines: tailLogLines(lines, tail), truncated: lines.length > tail }
+      return {
+        step: step.name,
+        lines: tailLogLines(lines, tail),
+        truncated: (lineCount ?? lines.length) > tail
+      }
     })
   )
   return {

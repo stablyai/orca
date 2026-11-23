@@ -71,7 +71,7 @@ export function formatAzureDevOpsPrChecks(checks: AzureDevOpsPrCheck[]): string 
       [
         check.status,
         check.kind,
-        `${check.name}${check.isBlocking ? ' (required)' : ''}${check.isStale ? ' (stale build)' : ''}`,
+        `${check.name}${check.isBlocking ? ' (required)' : ''}${check.isStale ? ' (stale build)' : ''}${check.buildId !== null ? ` [build ${check.buildId}]` : ''}`,
         check.url ?? ''
       ]
         .join('\t')

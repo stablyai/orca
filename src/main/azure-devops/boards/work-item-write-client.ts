@@ -5,6 +5,7 @@ import type { AzureDevOpsRepoRef } from '../repository-ref'
 import { resolveAzureDevOpsApiBases } from './api-bases'
 import { hydrateAzureDevOpsWorkItems } from './backlog-client'
 import { getAzureDevOpsWorkItemTypes } from './work-item-type-metadata'
+import { mapAzureDevOpsWorkItem, type RawAzureDevOpsWorkItem } from './work-item-mappers'
 
 const WRITE_TIMEOUT_MS = 15_000
 // Pinned versions disable the version-negotiation retry, so a write is never sent twice.
@@ -88,8 +89,9 @@ async function patchWorkItem(
   value: string
 ): Promise<AzureDevOpsWorkItem> {
   await reserveAzureDevOpsWrite('workItemUpdate')
-  await requestAzureDevOpsJsonAtBase<unknown>(
-    resolveAzureDevOpsApiBases(repo).project,
+  const bases = resolveAzureDevOpsApiBases(repo)
+  const updated = await requestAzureDevOpsJsonAtBase<RawAzureDevOpsWorkItem>(
+    bases.project,
     `/_apis/wit/workitems/${encodeURIComponent(String(item.id))}`,
     {
       method: 'PATCH',
@@ -104,7 +106,8 @@ async function patchWorkItem(
     },
     true
   )
-  return currentWorkItem(repo, item.id)
+  // The PATCH response is the committed item; a further read could fail after the change landed.
+  return (updated && mapAzureDevOpsWorkItem(updated, bases.workItemWebUrl)) ?? item
 }
 
 /** States differ per process and per type, so the target is checked against the item's own type. */

@@ -37,7 +37,7 @@ ORCA azure-devops pr threads <id> --json               # human discussion with f
 ORCA azure-devops pr files <id> --since-iteration <n> --json   # only what changed after iteration n
 ```
 
-For an incremental review, remember the `iterationCount` you last reviewed and pass it as `--since-iteration`. `files` returns `baseCommit` and `headCommit`; fetch them and diff locally:
+For an incremental review, remember the `iterationCount` you last reviewed and compare it with the current one from `pr show`: equal means nothing new to review; greater means pass the old count as `--since-iteration` (a value at or past the latest iteration returns no files). `files` returns `baseCommit` and `headCommit`; fetch them and diff locally:
 
 ```bash
 git fetch origin <headCommit> <baseCommit>

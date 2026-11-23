@@ -90,7 +90,18 @@ export async function listAzureDevOpsPullRequestFiles(
   if (!latest || typeof latest.id !== 'number') {
     return { iteration: 0, comparedTo: 0, baseCommit: null, headCommit: null, files: [] }
   }
-  const comparedTo = Math.max(0, Math.min(Math.floor(sinceIteration), latest.id - 1))
+  // Nothing has been pushed since the iteration the caller already reviewed.
+  if (Math.floor(sinceIteration) >= latest.id) {
+    const head = latest.sourceRefCommit?.commitId ?? null
+    return {
+      iteration: latest.id,
+      comparedTo: latest.id,
+      baseCommit: head,
+      headCommit: head,
+      files: []
+    }
+  }
+  const comparedTo = Math.max(0, Math.floor(sinceIteration))
   const changes = await requestAzureDevOpsJsonAtBase<{
     changeEntries?: Parameters<typeof mapFileChanges>[0]
   }>(
