@@ -159,7 +159,8 @@ export async function scanCodexUsageFiles(
   for (const [index, filePath] of pathsToParse.entries()) {
     await parseAndPublish(filePath, resumeByPath.get(filePath))
     await readBudget.consume(readBytesByPath.get(filePath) ?? 0)
-    if (onCheckpoint && checkpointDue()) {
+    // A pending reclaim must finish first: a checkpoint would erase the lost owner that triggers it.
+    if (onCheckpoint && !lostOwnerKeys && checkpointDue()) {
       // Unparsed files keep their previous record, so ownership matches a scan that stopped here.
       await onCheckpoint(
         files.flatMap(

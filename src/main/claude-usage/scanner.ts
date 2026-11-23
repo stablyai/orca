@@ -177,7 +177,8 @@ export async function scanClaudeUsageFiles(
     await readBudget.consume(
       batch.reduce((sum, path) => sum + (plans.get(path)?.readBytes ?? 0), 0)
     )
-    if (onCheckpoint && checkpointDue()) {
+    // A pending reclaim must finish first: a checkpoint would erase the lost owner that triggers it.
+    if (onCheckpoint && !lateOwnerLoss && checkpointDue()) {
       // Unread files keep their previous record, so ownership matches a scan that stopped here.
       await onCheckpoint(
         files.flatMap((path) => projections.get(path) ?? plans.get(path)?.previous ?? [])
