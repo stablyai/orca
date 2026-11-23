@@ -13,6 +13,7 @@ import {
   onBrowserGuestPaintRetentionChange
 } from '../retention/browser-page-paint-retention-terms'
 import type { BrowserClientRetainedRendererPage } from './browser-client-page-retained-state'
+import { keepFreedBrowserClientPageRevision } from './browser-client-page-freed-pages'
 
 export function syncBrowserClientPagePaintRetention(page: BrowserClientRetainedRendererPage): void {
   const container = page.visibleAttachment?.container
@@ -129,6 +130,7 @@ export function forgetBrowserClientPageGuestActivity(
   page: BrowserClientRetainedRendererPage,
   pages: Iterable<BrowserClientRetainedRendererPage>
 ): void {
+  keepFreedBrowserClientPageRevision(page)
   if (browserGuestActivity.get(page.identity.browserPageId)?.webview !== page.webview) {
     return
   }

@@ -308,6 +308,15 @@ export class BrowserClientPageMemorySaver implements BrowserClientPageMemoryOwne
       return
     }
     this.freed.delete(browserPageId)
-    await freed.retiring
+    try {
+      await freed.retiring
+    } catch (error) {
+      // An unfinished cleanup still owes the server an answer, as a page whose free failed does.
+      this.host.failedPages.set(
+        browserPageId,
+        Object.freeze({ ...freed.inventory, state: 'outcomeUnknown' })
+      )
+      throw error
+    }
   }
 }

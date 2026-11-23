@@ -6,6 +6,10 @@ import type {
 import { BrowserClientPageRetainedRegistry } from './browser-client-page-retained-registry'
 import type { BrowserClientPageRendererMemoryProfile } from './browser-client-page-retained-memory-profile'
 import type { BrowserClientPageVisibleAttachment } from './browser-client-page-visible-attachment'
+import {
+  markBrowserClientPageFreed,
+  noteBrowserClientPageMounted
+} from './browser-client-page-freed-pages'
 
 type PageKey = Pick<
   BrowserClientPageRendererRequest['page'],
@@ -31,12 +35,6 @@ type RendererPageRegistry = {
 
 let activeRendererPageRegistry: RendererPageRegistry | null = null
 const mountedListeners = new Set<(page: PageKey) => void>()
-// Pages this window handed to Memory Saver; their guest loss is a free, not a failure.
-const freedPageIds = new Set<string>()
-
-export function isBrowserClientPageFreed(browserPageId: string): boolean {
-  return freedPageIds.has(browserPageId)
-}
 
 export function attachBrowserClientPageToViewport(
   page: Pick<BrowserClientPageRendererRequest['page'], 'browserPageId' | 'pageHostGeneration'>,
@@ -61,7 +59,7 @@ export function freeBrowserClientPage(
     findBrowserClientPageWebview(browserPageId) === webview &&
     window.api.browser.reserveGuestDiscard({ browserPageId, webContentsId, policyToken })
   if (freed) {
-    freedPageIds.add(browserPageId)
+    markBrowserClientPageFreed(browserPageId)
   }
   return freed
 }
@@ -145,7 +143,7 @@ export function installBrowserClientPageRenderer(
     new BrowserClientPageRetainedRegistry({
       document: options.document ?? document,
       onPageMounted: (page) => {
-        freedPageIds.delete(page.browserPageId)
+        noteBrowserClientPageMounted(page.browserPageId)
         for (const listener of mountedListeners) {
           listener(page)
         }

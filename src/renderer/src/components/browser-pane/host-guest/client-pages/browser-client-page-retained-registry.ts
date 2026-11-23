@@ -12,6 +12,7 @@ import {
   readBrowserClientPageAttachedGuestId
 } from './browser-client-page-retained-elements'
 import { browserClientPageRetainedKey } from './browser-client-page-retained-key'
+import { takeFreedBrowserClientPageRevision } from './browser-client-page-freed-pages'
 import { retireBrowserGuestMetadata } from '../metadata/browser-guest-metadata-cache'
 import {
   resolveBrowserClientPageRetainedLimits,
@@ -192,7 +193,7 @@ export class BrowserClientPageRetainedRegistry {
       webview,
       status: 'attaching',
       webContentsId: null,
-      metadataRevision: 0,
+      metadataRevision: takeFreedBrowserClientPageRevision(key),
       attachmentObserved: false,
       visibleAttachment: null,
       mount,

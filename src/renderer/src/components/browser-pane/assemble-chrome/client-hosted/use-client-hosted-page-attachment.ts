@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import {
-  isBrowserClientPageFreed,
-  wakeBrowserClientPage
-} from '../../host-guest/client-pages/browser-client-page-renderer-installation'
+import { wakeBrowserClientPage } from '../../host-guest/client-pages/browser-client-page-renderer-installation'
+import { isBrowserClientPageFreed } from '../../host-guest/client-pages/browser-client-page-freed-pages'
 import { whenBrowserClientPageContainerShown } from '../../host-guest/client-pages/browser-client-page-paint-retention'
 import type { ClientHostedBrowserPagePaneProps } from '../../describe-page/browser-page-types'
 
