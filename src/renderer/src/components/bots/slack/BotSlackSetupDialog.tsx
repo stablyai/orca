@@ -1,6 +1,5 @@
 // @protected-copy: drawn inside the security-surface setup dialog
 import React, { useEffect, useId, useState } from 'react'
-import { Loader2 } from 'lucide-react'
 import { SlackIcon } from '@/components/icons/SlackIcon'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -28,7 +27,9 @@ import { BotHostSignInButton } from '../BotHostSignInButton'
 import { ConnectorSetupDialog, useSetupStepAside } from '../connector-setup-surface'
 import { forgetOpenedSlackPages, useBotSlackSetup } from './use-bot-slack-setup'
 import { useSlackHandOffOffer } from './use-slack-hand-off-offer'
-import { SlackCopyLink, SlackHandOffConfirm, SlackHandOffLines } from './slack-hand-off-parts'
+import { SlackCopyLink, SlackHandOffLines } from './slack-hand-off-parts'
+import { SlackSetupWorking } from './SlackSetupWorking'
+import { SlackSetupWaiting } from './SlackSetupWaiting'
 import { useBotHostLabel } from '../use-bot-host-label'
 import {
   SlackOneLineIntro,
@@ -133,24 +134,15 @@ function BotSlackSetupFlow({
   const body = ((): React.JSX.Element => {
     switch (step.kind) {
       case 'checking':
-      case 'setting-up': {
-        const status = (
-          <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
-            {step.kind === 'checking'
-              ? t('bots.slack.setup.checking', 'Checking Slack…')
-              : t('bots.slack.setup.settingUp', 'Setting up your Slack app…')}
-          </p>
+      case 'setting-up':
+        return (
+          <SlackSetupWorking
+            settingUp={step.kind === 'setting-up'}
+            handOff={step.kind === 'setting-up' && step.handOff}
+            email={ownEmail}
+            hostName={hostName}
+          />
         )
-        return step.kind === 'setting-up' && step.handOff && ownEmail && hostName ? (
-          <div className="space-y-4">
-            <SlackHandOffConfirm email={ownEmail} host={hostName} />
-            {status}
-          </div>
-        ) : (
-          status
-        )
-      }
       case 'prepare':
         return (
           <SlackSetupPrepare
@@ -232,46 +224,16 @@ function BotSlackSetupFlow({
         )
       case 'waiting':
         return (
-          <div className="space-y-4">
-            <p role="status" className="flex items-center gap-2 text-sm">
-              <Loader2 className="size-4 animate-spin" />
-              {t('bots.slack.setup.waiting', 'Waiting for Slack…')}
-            </p>
-            {hostName && step.link ? (
-              <>
-                <p className="text-sm text-muted-foreground">
-                  {t(
-                    'bots.slack.setup.approveAsYourself',
-                    'Approve in Slack as yourself. Approving in another browser?'
-                  )}{' '}
-                  <SlackCopyLink link={step.link} copied={step.copied} onCopy={copyLink} />
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {t(
-                    'bots.slack.setup.waitingAdmin',
-                    'If your workspace needs an admin to approve new apps, {{name}} joins once they do. If they decline, Install again reuses the same app.',
-                    { name: bot.name }
-                  )}
-                </p>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {t(
-                  'bots.slack.setup.waitingDetail',
-                  'Finish in Slack. If your workspace needs an admin to approve new apps, {{name}} joins once they do. If they decline, Install again reuses the same app.',
-                  { name: bot.name }
-                )}
-              </p>
-            )}
-            <DialogFooter>
-              <Button variant="ghost" onClick={onClose}>
-                {t('bots.slack.setup.close', 'Close')}
-              </Button>
-              <Button variant="outline" onClick={() => void setUp(step.teamId)}>
-                {t('bots.slack.setup.installAgain', 'Install again')}
-              </Button>
-            </DialogFooter>
-          </div>
+          <SlackSetupWaiting
+            botName={bot.name}
+            hostName={hostName}
+            link={step.link}
+            copied={step.copied}
+            teamId={step.teamId}
+            onCopy={copyLink}
+            onClose={onClose}
+            onInstallAgain={(waitingTeamId) => void setUp(waitingTeamId)}
+          />
         )
       case 'expired':
       case 'other-user':
