@@ -191,6 +191,8 @@ async function launchServeMode(
         idleFreeMs: () => memorySaverIdleMs(state.store?.getSettings())
       })
     )
+    // Tabs saved under a profile an older build deleted would otherwise stay listed but never load.
+    void runtime.browserCloseServerPagesOfMissingProfiles()
   }
   publishHeadlessRuntimeGraph(runtime)
   // Register SSH before binding RPC so the first paired client sees targets.

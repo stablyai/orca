@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import type { RuntimeAccessGrant } from '../../../../../../shared/remote-runtime/host-catalog/runtime-access-grants'
 import { usePairingOfferExpiry } from '../../../mobile/use-pairing-offer-expiry'
 
 export type RuntimePairingLinkExpiry = { kind: 'expires'; at: number } | { kind: 'expired' } | null
@@ -7,11 +6,10 @@ export type RuntimePairingLinkExpiry = { kind: 'expires'; at: number } | { kind:
 /** A used link keeps working, so only an unused one reports its expiry. No auto-mint. */
 export function useRuntimePairingLinkExpiry(args: {
   expiresAt: number | null
-  grantId: string | null
-  grants: readonly RuntimeAccessGrant[]
+  used: boolean
   onExpired: () => void
 }): RuntimePairingLinkExpiry {
-  const { expiresAt, grantId, grants, onExpired } = args
+  const { expiresAt, used, onExpired } = args
   const [expiredAt, setExpiredAt] = useState<number | null>(() =>
     expiresAt !== null && Date.now() >= expiresAt ? expiresAt : null
   )
@@ -24,7 +22,6 @@ export function useRuntimePairingLinkExpiry(args: {
     },
     0
   )
-  const used = grants.some((grant) => grant.deviceId === grantId && grant.lastSeenAt !== null)
   if (typeof expiresAt !== 'number' || used) {
     return null
   }

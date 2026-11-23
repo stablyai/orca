@@ -17,7 +17,7 @@ import {
 import { CodexSubagentExecutions } from '../background-work/codex-subagent-executions'
 import { createCodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
 import { createCodexSessionJournalTranslator } from '../session-lifecycle/codex-structured-session-journal'
-import { spawnCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
+import { codexConnectionOpener, opensSharedCodexServer } from './codex-structured-connection-opener'
 import { codexSpawnedProcessIdentity } from './codex-structured-owner-identity'
 import {
   closeCodexPublishedSession,
@@ -99,8 +99,8 @@ export async function acquireCodexStructuredSession(input: {
     subagentExecutions,
     prompts: acquisition.prompts
   })
-  const open = deps.openConnection ?? spawnCodexAppServerConnection
-  const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps.readProcessStartTime)
+  let sharedServer = false
+  const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps, () => sharedServer)
   try {
     await stopSupersededCodexAcquisition({
       sessionId,
@@ -139,6 +139,8 @@ export async function acquireCodexStructuredSession(input: {
           }
     acquisitions.assertCurrent(sessionId, attempt)
     account = launch.codexHome ? deps.resolveAccountKind?.(launch.codexHome) : undefined
+    const open = codexConnectionOpener(deps, sessionId, launch)
+    sharedServer = opensSharedCodexServer(open)
     const connection = await open(
       {
         command: launch.command,

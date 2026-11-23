@@ -6,9 +6,11 @@ import type { AutomationRunEvent } from '../../shared/automation-event-triggers'
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { Bot } from '../../shared/bot-types'
 import { GoogleToolError, type GoogleApi } from './google-api-client'
+import type { GoogleDefaultAccount } from './google-credential-store'
 import { calendarChangedSince, upcomingEvents, type UpcomingEvent } from './google-calendar-changes'
 import { gmailChangesSince, gmailHistoryNow, gmailLabelIds } from './google-gmail-changes'
 import {
+  accountlessRulesPausedBy,
   calendarDueAt,
   calendarRunEvent,
   gmailRuleMatches,
@@ -36,7 +38,7 @@ export type GoogleTriggerCheckerDeps = {
   /** Accounts signed in here that Google still accepts. */
   accounts(): string[] | Promise<string[]>
   /** Where a rule without an account listens. */
-  defaultAccount(): Promise<string | null>
+  defaultAccount(): Promise<GoogleDefaultAccount>
   api(account: string): GoogleApi | Promise<GoogleApi>
   runForEvent(automationId: string, event: AutomationRunEvent): Promise<unknown>
   readState(): GoogleTriggerState
@@ -56,6 +58,7 @@ export class GoogleTriggerChecker {
   /** Each pending Calendar timer, with the rule and account it was set for. */
   private readonly timers = new Map<string, { timer: Timer; target: string }>()
   private readonly fired = new Set<string>()
+  private warnedUnreadableDefault = false
 
   constructor(private readonly deps: GoogleTriggerCheckerDeps) {}
 
@@ -81,11 +84,19 @@ export class GoogleTriggerChecker {
   }
 
   private async check(): Promise<void> {
+    const automations = this.deps.automations()
+    const fallback = await this.deps.defaultAccount()
+    // Once per stretch, not every tick: rules without an account wait for a readable default.
+    const paused = accountlessRulesPausedBy(fallback, automations, this.deps.bots())
+    if (paused && !this.warnedUnreadableDefault) {
+      console.warn(`[google] rules without an account are paused: ${paused}`)
+    }
+    this.warnedUnreadableDefault = paused !== null
     const targets = googleRuleTargets(
-      this.deps.automations(),
+      automations,
       this.deps.bots(),
       await this.deps.accounts(),
-      await this.deps.defaultAccount()
+      'email' in fallback ? fallback.email : null
     )
     const state = this.deps.readState()
     const before = JSON.stringify(state)

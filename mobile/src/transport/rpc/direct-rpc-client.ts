@@ -210,8 +210,11 @@ export class DirectRpcClient implements RpcClient {
     if (reason !== 'focus' && dialing && isStaleForegroundDial(state, dialAgeMs, followUp)) {
       this.socketClose.forceClose(dialing)
     }
+    if (reason === 'app-resume') {
+      this.reconnect.noteAppResume(state === 'reconnecting')
+    }
     if (this.getState() === 'reconnecting') {
-      this.reconnect.redialNow(reason, state === 'reconnecting', followUp)
+      this.reconnect.redialNow(reason, followUp)
     }
   }
 

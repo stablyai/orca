@@ -88,7 +88,7 @@ const SET = defineMethod({
       Object.entries(changes).filter(([, value]) => value !== undefined)
     )
     const outcome = await store.set(item.uid, defined, writer.actor)
-    const result = await writeResult(context.runtime, outcome, writer)
+    const result = await writeResult(context, outcome, writer)
     // A tip back to the bot when its ask may be hard to read; the ask is already posted as written.
     const advice =
       status === 'needs_you' && result.eventId !== null ? botItemAskAdvice({ comment, ask }) : null
@@ -112,7 +112,7 @@ const COMMENT = defineMethod({
       item.ownerBotId !== writer.bot.id && item.madeBy?.botId === writer.bot.id
         ? await commentAsMaker(context, writer, item, text, images)
         : await store.comment(item.uid, text, writer.actor, images)
-    return writeResult(context.runtime, outcome, writer)
+    return writeResult(context, outcome, writer)
   }
 })
 
@@ -125,7 +125,7 @@ const DONE = defineMethod({
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
     const outcome = await store.close(item.uid, 'done', params.note, writer.actor)
-    return writeResult(context.runtime, outcome, writer)
+    return writeResult(context, outcome, writer)
   }
 })
 
@@ -138,7 +138,7 @@ const CANCEL = defineMethod({
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
     const outcome = await store.close(item.uid, 'canceled', params.reason, writer.actor)
-    return writeResult(context.runtime, outcome, writer)
+    return writeResult(context, outcome, writer)
   }
 })
 
@@ -158,10 +158,13 @@ const LINK = defineMethod({
         : startersOf(db, requested, context.runtime.bots.list())
     // Every worker named is checked, one already linked too, so a mixed call fails whole.
     assertBotItemAttach(item, writer.actor, requested, (id) => startedBy[id] ?? null)
+    if (params.check) {
+      return null
+    }
     // A step of a follow-up chain the item already links is that worker again: no second link.
     const links = linksOutsideLinkedChains(db, await store.links(item.uid), requested)
     const outcome = await store.link(item.uid, links, writer.actor, startedBy)
-    return writeResult(context.runtime, outcome, writer)
+    return writeResult(context, outcome, writer)
   }
 })
 

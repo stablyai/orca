@@ -2232,6 +2232,8 @@
       "editSavedArguments": "請在設定 > 代理程式 > 引數中編輯。",
       "emptyMessage": "此訊息為空，因此未傳送。",
       "fullAccessAsRoot": "{{agent}} 以 root 身分執行時不會使用「完整存取權」。請在執行此聊天的電腦上，前往「設定 → 代理程式」為 {{agent}} 選擇其他權限，然後開始新的聊天。",
+      "botToolsNeedStatusHooks": "{{agent}} 機器人需要代理程式狀態鉤子：機器人的工具正是透過它們以機器人身分運作。請在「設定 → 代理程式」中為 {{agent}} 開啟，然後開始新的聊天。",
+      "botToolsGatewayOutdated": "{{agent}} 的閘道仍在執行舊版 Orca 外掛，因此此機器人的工具無法以機器人身分運作。請執行 `hermes gateway stop`，然後開始新的聊天。",
       "historyInOtherAccount": "此聊天的歷史記錄位於另一個 Claude 帳戶中。請切換回該帳戶以繼續此聊天。",
       "historyTooLarge": "此對話的歷史記錄過大，無法在此恢復。",
       "hostFault": "Orca 遇到問題，因此此操作未完成。",
@@ -4480,13 +4482,8 @@
       "folder": "資料夾",
       "copyPath": "複製路徑",
       "pathCopied": "已複製路徑",
-      "off": "關閉",
-      "lastLooked": "上次檢視 {{when}}",
       "tidyNightLine": "每晚凌晨 3 點後",
       "tidyWeekLine": "每週一次，凌晨 3 點後",
-      "today": "今天",
-      "yesterday": "昨天",
-      "lastTidied": "上次整理 {{when}}",
       "withAccess": "{{service}}：{{people}} 有存取權限",
       "requests_one": "{{count}} 個請求",
       "requests_other": "{{count}} 個請求",
@@ -5159,6 +5156,13 @@
     },
     "share": {
       "signInOtherSite": "電腦傳來的是其他網站的登入連結，因此沒有開啟。"
+    },
+    "settingsPage": {
+      "off": "關閉",
+      "lastLooked": "上次檢視 {{when}}",
+      "today": "今天",
+      "yesterday": "昨天",
+      "lastTidied": "上次整理 {{when}}"
     }
   },
   "sidebar": {

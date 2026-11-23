@@ -2668,6 +2668,8 @@
       "editSavedArguments": "Edite-os em Configurações > Agentes > Argumentos.",
       "emptyMessage": "Esta mensagem está vazia, por isso não foi enviada.",
       "fullAccessAsRoot": "{{agent}} não usará Acesso total enquanto for executado como root. Escolha outra permissão para {{agent}} em Configurações → Agentes para o computador que executa este chat e inicie um novo chat.",
+      "botToolsNeedStatusHooks": "Os bots do {{agent}} precisam dos Hooks de status do agente: é por eles que as ferramentas de um bot agem como o bot. Ative-os para o {{agent}} em Configurações → Agentes e depois inicie um novo chat.",
+      "botToolsGatewayOutdated": "O gateway do {{agent}} ainda está executando uma versão antiga do plugin do Orca, então as ferramentas deste bot não podem agir como o bot. Execute `hermes gateway stop` e depois inicie um novo chat.",
       "historyInOtherAccount": "O histórico deste chat está em outra conta do Claude. Volte para essa conta para continuar.",
       "historyTooLarge": "O histórico desta conversa é grande demais para ser restaurado aqui.",
       "hostFault": "O Orca encontrou um problema, por isso isto não foi concluído.",
@@ -5164,13 +5166,8 @@
       "folder": "Pasta",
       "copyPath": "Copiar caminho",
       "pathCopied": "Caminho copiado",
-      "off": "Desativado",
-      "lastLooked": "última olhada {{when}}",
       "tidyNightLine": "Toda noite depois das 3h",
       "tidyWeekLine": "Uma vez por semana, depois das 3h",
-      "today": "hoje",
-      "yesterday": "ontem",
-      "lastTidied": "última arrumação {{when}}",
       "withAccess": "{{service}}: {{people}} com acesso",
       "requests_one": "{{count}} pedido",
       "requests_other": "{{count}} pedidos",
@@ -5852,6 +5849,13 @@
     },
     "share": {
       "signInOtherSite": "O computador enviou um link de login de outro site, então ele não foi aberto."
+    },
+    "settingsPage": {
+      "off": "Desativado",
+      "lastLooked": "última olhada {{when}}",
+      "today": "hoje",
+      "yesterday": "ontem",
+      "lastTidied": "última arrumação {{when}}"
     }
   },
   "sidebar": {

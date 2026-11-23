@@ -2310,6 +2310,8 @@
       "editSavedArguments": "Edítalos en Ajustes > Agentes > Argumentos.",
       "emptyMessage": "Este mensaje está vacío, así que no se envió.",
       "fullAccessAsRoot": "{{agent}} no usará Acceso total mientras se ejecute como root. Elija otro permiso para {{agent}} en Configuración → Agentes para el equipo que ejecuta este chat y luego inicie un chat nuevo.",
+      "botToolsNeedStatusHooks": "Los bots de {{agent}} necesitan los Hooks de estado del agente: son lo que permite que las herramientas de un bot actúen como el bot. Actívalos para {{agent}} en Configuración → Agentes y luego inicia un chat nuevo.",
+      "botToolsGatewayOutdated": "El gateway de {{agent}} todavía ejecuta una versión anterior del plugin de Orca, así que las herramientas de este bot no pueden actuar como el bot. Ejecuta `hermes gateway stop` y luego inicia un chat nuevo.",
       "historyInOtherAccount": "El historial de este chat está en otra cuenta de Claude. Vuelva a esa cuenta para continuarlo.",
       "historyTooLarge": "El historial de esta conversación es demasiado grande para restaurarlo aquí.",
       "hostFault": "Orca tuvo un problema, así que esto no se completó.",
@@ -4477,7 +4479,7 @@
                   "bf628700f6": "Los controles deben pasar",
                   "65c847ad1e": "Checks pendientes",
                   "382c70faeb": "Detrás",
-                  "195917574e": "De cheques",
+                  "195917574e": "Verificando",
                   "4ecc0d90ee": "Obstruido",
                   "49ac4fec10": "Los controles fallaron",
                   "04a3015a12": "Se puede hacer merge"
@@ -4590,13 +4592,8 @@
       "folder": "Carpeta",
       "copyPath": "Copiar ruta",
       "pathCopied": "Ruta copiada",
-      "off": "Desactivado",
-      "lastLooked": "última revisión {{when}}",
       "tidyNightLine": "Cada noche después de las 3:00",
       "tidyWeekLine": "Una vez por semana, después de las 3:00",
-      "today": "hoy",
-      "yesterday": "ayer",
-      "lastTidied": "última ordenación {{when}}",
       "withAccess": "{{service}}: {{people}} con acceso",
       "requests_one": "{{count}} solicitud",
       "requests_other": "{{count}} solicitudes",
@@ -5278,6 +5275,13 @@
     },
     "share": {
       "signInOtherSite": "El ordenador envió un enlace de inicio de sesión de otro sitio, así que no se abrió."
+    },
+    "settingsPage": {
+      "off": "Desactivado",
+      "lastLooked": "última revisión {{when}}",
+      "today": "hoy",
+      "yesterday": "ayer",
+      "lastTidied": "última ordenación {{when}}"
     }
   },
   "sidebar": {

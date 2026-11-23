@@ -2234,6 +2234,8 @@
       "editSavedArguments": "設定 > Agent > 引数で編集してください。",
       "emptyMessage": "このメッセージは空のため、送信されませんでした。",
       "fullAccessAsRoot": "{{agent}} は root として実行されている間はフルアクセスを使用しません。このチャットを実行しているコンピューターの [設定 → Agent] で {{agent}} に別の権限を選択してから、新しいチャットを開始してください。",
+      "botToolsNeedStatusHooks": "{{agent}} のボットにはAgent 状態フックが必要です。ボットのツールはこれによってボットとして動作します。[設定 → Agent] で {{agent}} のフックをオンにしてから、新しいチャットを開始してください。",
+      "botToolsGatewayOutdated": "{{agent}} のゲートウェイがまだ古い Orca プラグインで動作しているため、このボットのツールはボットとして動作できません。`hermes gateway stop` を実行してから、新しいチャットを開始してください。",
       "historyInOtherAccount": "このチャットの履歴は別の Claude アカウントにあります。続けるには、そのアカウントに切り替えてください。",
       "historyTooLarge": "この会話の履歴は大きすぎるため、ここでは復元できません。",
       "hostFault": "Orca で問題が発生したため、この操作は完了しませんでした。",
@@ -4567,13 +4569,8 @@
       "folder": "フォルダー",
       "copyPath": "パスをコピー",
       "pathCopied": "パスをコピーしました",
-      "off": "オフ",
-      "lastLooked": "最後の見回り {{when}}",
       "tidyNightLine": "毎晩 3 時以降",
       "tidyWeekLine": "週 1 回、3 時以降",
-      "today": "今日",
-      "yesterday": "昨日",
-      "lastTidied": "最後の整理 {{when}}",
       "withAccess": "{{service}}: アクセスできる人 {{people}}",
       "requests_one": "リクエスト {{count}} 件",
       "requests_other": "リクエスト {{count}} 件",
@@ -5246,6 +5243,13 @@
     },
     "share": {
       "signInOtherSite": "コンピューターから別のサイトのサインインリンクが送られてきたため、開きませんでした。"
+    },
+    "settingsPage": {
+      "off": "オフ",
+      "lastLooked": "最後の見回り {{when}}",
+      "today": "今日",
+      "yesterday": "昨日",
+      "lastTidied": "最後の整理 {{when}}"
     }
   },
   "sidebar": {

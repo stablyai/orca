@@ -264,7 +264,13 @@ export async function buildPluginList(
       }
     }
   )
-  return markCommandReplacementOwners(entries, lock, (pluginKey, line) =>
+  const orderedEntries = entries.toSorted(
+    (a, b) =>
+      (lock.plugins[a.pluginKey]?.installedAt ?? Infinity) -
+        (lock.plugins[b.pluginKey]?.installedAt ?? Infinity) ||
+      (a.pluginKey < b.pluginKey ? -1 : a.pluginKey > b.pluginKey ? 1 : 0)
+  )
+  return markCommandReplacementOwners(orderedEntries, lock, (pluginKey, line) =>
     service.captureLog(pluginKey)('warn', line)
   )
 }

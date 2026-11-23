@@ -84,6 +84,22 @@ export function assertBotItemText(
   }
 }
 
+/** What a Waiting item waits on: one line, refused when missing or longer, in the caller's words (an
+ *  agent's name its CLI flags; the owner's don't). */
+export function botItemWaitText(
+  note: string | undefined,
+  words: { missing: string; tooLong: string }
+): string {
+  const text = note?.trim() ?? ''
+  if (!text) {
+    throw new BotItemError('invalid_argument', words.missing)
+  }
+  if (text.length > BOT_ITEM_LIMITS.wait || /[\r\n]/.test(text)) {
+    throw new BotItemError('invalid_argument', words.tooLong)
+  }
+  return text
+}
+
 /** A status move's comment data. With an ask, it holds the question lines and their quick replies, and
  *  a host-built `text` spelling them out for readers without the ask; the sent `comment` (a copy for
  *  hosts without asks) is not kept. */
