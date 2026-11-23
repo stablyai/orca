@@ -1,7 +1,7 @@
 import { getUpdateInstallBlockGuidance } from '../../maintenance/update-card/update-install-block-guidance'
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { Download, Loader2, RefreshCw } from 'lucide-react'
+import { Download, Loader2, Power, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { Button } from '../../ui/button'
@@ -167,16 +167,24 @@ export function GeneralUpdateSettingsSection({
                 'Download update'
               )}
             </Button>
-          ) : !showManualRestart &&
-            updateStatus.state === 'error' &&
+          ) : showManualRestart ? (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => void window.api.app.quit().catch(console.error)}
+              className="gap-2"
+            >
+              <Power className="size-3.5" />
+              {t('updates.installOnQuit.quit', 'Quit Orca')}
+            </Button>
+          ) : updateStatus.state === 'error' &&
             updateStatus.retryAction === 'install' &&
             updateStatus.retryable !== false ? (
             <Button variant="default" size="sm" onClick={handleRestartToUpdate} className="gap-2">
               <RefreshCw className="size-3.5" />
               {t('auto.components.UpdateCard.b3b02a9d84', 'Try again')}
             </Button>
-          ) : !showManualRestart &&
-            updateStatus.state === 'downloaded' &&
+          ) : updateStatus.state === 'downloaded' &&
             !(updateStatus.automaticDownload && updateStatus.installing) ? (
             <Button
               variant="default"
@@ -303,11 +311,14 @@ export function GeneralUpdateSettingsSection({
               )}
             </>
           )}
-          {showManualRestart &&
-            t(
-              'updates.installOnQuit.summary',
-              'Orca couldn’t restart automatically. Quit Orca and let the update install before reopening it.'
-            )}
+          {showManualRestart && (
+            <>
+              <span className="block font-medium text-foreground">
+                {t('updates.installOnQuit.title', 'Update ready to install')}
+              </span>
+              {t('updates.installOnQuit.summary', 'Quit Orca. Reopen after installation.')}
+            </>
+          )}
           {updateStatus.state === 'error' &&
             !showManualRestart &&
             (updateStatus.installBlock
