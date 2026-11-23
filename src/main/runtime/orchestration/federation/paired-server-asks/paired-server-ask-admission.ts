@@ -29,11 +29,18 @@ export function heldAskPairing(db: OrchestrationDb, row: PairedServerAskRow): st
   return conversation?.role === 'peer' ? conversation.peer_fingerprint : undefined
 }
 
-/** At commit, after every wait: the ask still waits here, and `botId`, the bot it is about to reach,
- *  is the one it was approved for. A decline or removal since, or a name lookup landing on another
- *  bot, admits nothing. */
+/** At commit, after every wait: the same ask still waits here, as it was read (same bot, server and
+ *  conversation), and `botId`, the bot it is about to reach, is the one it was approved for. A
+ *  decline, removal or replacement since, or a name lookup landing on another bot, admits nothing. */
 export function stillAdmits(db: OrchestrationDb, row: PairedServerAskRow, botId: string): boolean {
-  return botId === row.bot_id && getPairedServerAsk(db, row.message_id)?.state === 'admit'
+  const current = getPairedServerAsk(db, row.message_id)
+  return (
+    botId === row.bot_id &&
+    current?.state === 'admit' &&
+    current.bot_id === row.bot_id &&
+    current.server_key === row.server_key &&
+    current.conversation_id === row.conversation_id
+  )
 }
 
 async function admit(runtime: OrcaRuntimeService, row: PairedServerAskRow): Promise<void> {

@@ -27,7 +27,7 @@ export function acknowledgeFederationRelay(
     this.db
       .prepare(
         `UPDATE federation_relay_items SET acked_at = COALESCE(acked_at, datetime('now'))
-         WHERE dispatch_id = ? AND direction = ? AND sequence <= ?`
+         WHERE dispatch_id = ? AND direction = ? AND acked_at IS NULL AND sequence <= ?`
       )
       .run(params.dispatchId, params.direction, params.throughSequence)
     this.db.exec('COMMIT')

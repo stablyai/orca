@@ -401,11 +401,41 @@ describe('agents here messaging agents on a paired computer', () => {
     await announce('session_2')
     await announce('session_3')
 
-    const lost = told().filter((body) => body.includes('was not delivered'))
+    const lost = told().filter((body) => body.includes('never confirmed as taken'))
     expect(lost).toHaveLength(1)
     expect(lost[0]).toMatch(
-      /^The pairing with Client A was re-made\. Your reply msg_\w+ there was not delivered\.$/
+      /^The pairing with Client A was re-made\. Your reply msg_\w+ there was never confirmed as taken, and it will not be sent again\.$/
     )
+  })
+
+  it('on a re-pair, ends only the pairing it names: another this device still pulls with keeps its mail', async () => {
+    await pull()
+    await ask({ type: 'question', subject: 'First pairing' })
+    const second = { deviceId: 'device_a', fingerprint: 'fp_b' }
+    await fromClient(
+      'orchestration.peerMailPull',
+      { waitMs: 0, clientAsks: asks('session_b') },
+      second
+    )
+    await ask({ type: 'question', subject: 'Second pairing' })
+
+    await fromClient(
+      'orchestration.peerMailPull',
+      { waitMs: 0, clientAsks: asks('session_c', { previousPairing: 'fp_a' }) },
+      { deviceId: 'device_a', fingerprint: 'fp_c' }
+    )
+
+    expect(told()).toHaveLength(1)
+    const kept = await fromClient(
+      'orchestration.peerMailPull',
+      { waitMs: 0, clientAsks: asks('session_b') },
+      second
+    )
+    expect(
+      Pulled.parse(kept.ok ? kept.result : null).items.map(
+        (item) => JSON.parse(item.payload).subject
+      )
+    ).toEqual(['Second pairing'])
   })
 
   it('keeps a pairing that still pulls, whatever re-pair another computer claims for it', async () => {

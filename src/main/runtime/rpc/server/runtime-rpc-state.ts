@@ -1,4 +1,6 @@
 import { randomBytes } from 'node:crypto'
+import { pairedDeviceCredentials } from './pairing/device-principal'
+import { registerPairedDeviceCredentials } from '../../orchestration/federation/client-asks/client-ask-ended-pairings'
 import type { RuntimeTransportMetadata } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
@@ -152,6 +154,11 @@ export class RuntimeRpcState {
     methods
   }: OrcaRuntimeRpcServerOptions) {
     this.runtime = runtime
+    // A reply to a paired computer whose pairing is no longer in the registry is refused.
+    registerPairedDeviceCredentials(
+      runtime,
+      pairedDeviceCredentials(() => this.deviceRegistry)
+    )
     this.dispatcher = new RpcDispatcher({ runtime, methods: methods ?? ALL_RPC_METHODS })
     // By declaration, so every subscription, current or future, is classified the same way.
     this.streamingMethods = new Set(

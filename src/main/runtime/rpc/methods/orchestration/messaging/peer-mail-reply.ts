@@ -16,7 +16,7 @@ import { notifyPeerMailQueued } from '../../../../orchestration/federation/peer-
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import { botAnswerOf } from './bot-request-outcome'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
-import { isClientEnvironment } from '../../../../orchestration/federation/client-asks/client-ask-environment'
+import { clientEnvironmentParts } from '../../../../orchestration/federation/client-asks/client-ask-environment'
 import { isEndedClientPairing } from '../../../../orchestration/federation/client-asks/client-ask-ended-pairings'
 import { queueClientItem } from '../../../../orchestration/federation/client-asks/client-ask-queue'
 import type { ClientReplyPayload } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
@@ -90,10 +90,17 @@ export async function replyOverPeerMail(args: {
       NOTHING_SENT
     )
   }
-  if (isClientEnvironment(environmentId)) {
+  const clientParts = clientEnvironmentParts(environmentId)
+  if (clientParts !== null) {
     // Only the pairing the conversation was made under pulls it, and its agent takes it only there:
     // once that pairing ended (removed, or re-made since), nothing would ever take it.
-    if (isEndedClientPairing(db, environmentId, conversation.peer_fingerprint)) {
+    if (
+      isEndedClientPairing(runtime, db, {
+        environmentId,
+        deviceId: clientParts.deviceId,
+        pairing: conversation.peer_fingerprint
+      })
+    ) {
       throw new OrchestrationError(
         'request_mismatch',
         `The pairing ${original.id} came over has ended: that computer was removed or paired again since. No reply was sent. Ask it again with --on-client to start a new conversation.`,

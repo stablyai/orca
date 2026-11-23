@@ -252,7 +252,12 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
       const db = ctx.runtime.getOrchestrationDb()
       for (const ack of params.acknowledgments) {
         const conversation = db.getPeerMailConversation(ack.conversationId)
-        if (!conversation || conversation.peer_fingerprint !== peerFingerprint) {
+        // Under any id but a peer conversation's (an older build's row) it could settle a Dispatch's.
+        if (
+          !conversation ||
+          conversation.peer_fingerprint !== peerFingerprint ||
+          !isGeneratedId(ack.conversationId, 'peerconv')
+        ) {
           continue
         }
         // Asks it took from this Orca's conversation with it, or replies it took home.

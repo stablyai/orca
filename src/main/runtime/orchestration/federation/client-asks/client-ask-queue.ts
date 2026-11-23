@@ -8,7 +8,11 @@ import { forgetPeerQuestionOut, tellUnpairedPeerQuestions } from '../peer-mail/p
 import { notifyPeerMailQueued } from '../peer-mail/peer-mail-waiters'
 import { clientDeviceEnvironmentPattern, CLIENT_ENVIRONMENT_PREFIX } from './client-ask-environment'
 import { forgetClientAskDevice } from './client-ask-listeners'
-import { recordEndedClientPairings } from './client-ask-ended-pairings'
+import {
+  clientPairingScopeSql,
+  recordEndedClientPairings,
+  type ClientPairingScope
+} from './client-ask-ended-pairings'
 import { peerMailLocalRecipient } from '../peer-mail/peer-mail-delivery'
 import { resolveBareOrchestrationRecipient } from '../../../rpc/methods/orchestration/messaging/recipient-routing'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
@@ -39,17 +43,13 @@ export function queueClientItem(
 }
 
 /** A reply this Orca's agent queued there under an ended pairing will never be taken: its sender,
- *  the agent the conversation is with, hears so once, by the reply's thread. Runs inside the
- *  pairing's ending write; returns the notices, to announce once it commits. */
+ *  the agent the conversation is with, hears so once, by the reply's thread. A reply the computer
+ *  took whose acknowledgment never arrived may have reached it, so the notice says only what this
+ *  Orca knows. Runs inside the pairing's ending write; returns the notices, to announce after it. */
 function tellDroppedReplies(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
-  params: {
-    environmentId: string
-    currentPairing: string | null
-    serverName: string
-    reason: string
-  }
+  params: { environmentId: string; scope: ClientPairingScope; serverName: string; reason: string }
 ): MessageRow[] {
   const told: MessageRow[] = []
   const dropped = db.db
@@ -57,9 +57,9 @@ function tellDroppedReplies(
       `SELECT i.dispatch_id, i.message_id, i.payload FROM federation_relay_items i
        JOIN peer_mail_conversations c ON c.conversation_id = i.dispatch_id
        WHERE i.direction = 'to_worker' AND i.kind = 'client_reply' AND i.acked_at IS NULL
-         AND c.role = 'home' AND c.environment_id = ?1 AND (?2 IS NULL OR c.peer_fingerprint <> ?2)`
+         AND c.role = 'home' AND c.environment_id = ?1 AND ${clientPairingScopeSql('c.peer_fingerprint')}`
     )
-    .all(params.environmentId, params.currentPairing)
+    .all(params.environmentId, params.scope.keep ?? null, params.scope.only ?? null)
   for (const row of dropped) {
     const conversation = db.getPeerMailConversation(String(row.dispatch_id))
     if (!conversation) {
@@ -81,7 +81,7 @@ function tellDroppedReplies(
           from: params.serverName,
           to: recipient.ok ? recipient.to : handle,
           subject: reply?.subject ?? 'Re: Reply',
-          body: `${params.reason} Your reply ${id} there was not delivered.`,
+          body: `${params.reason} Your reply ${id} there was never confirmed as taken, and it will not be sent again.`,
           threadId: reply?.threadId ?? undefined,
           runId: recipient.ok ? recipient.runId : undefined
         })
@@ -95,16 +95,16 @@ function tellDroppedReplies(
 function dropQueuedClientItems(
   db: OrchestrationDb,
   environmentId: string,
-  currentPairing: string | null
+  scope: ClientPairingScope
 ): void {
   db.db
     .prepare(
       `UPDATE federation_relay_items SET acked_at = datetime('now')
        WHERE direction = 'to_worker' AND acked_at IS NULL AND dispatch_id IN (
          SELECT conversation_id FROM peer_mail_conversations
-         WHERE role = 'home' AND environment_id = ?1 AND (?2 IS NULL OR peer_fingerprint <> ?2))`
+         WHERE role = 'home' AND environment_id = ?1 AND ${clientPairingScopeSql('peer_fingerprint')})`
     )
-    .run(environmentId, currentPairing)
+    .run(environmentId, scope.keep ?? null, scope.only ?? null)
 }
 
 function endClientPairings(
@@ -112,28 +112,27 @@ function endClientPairings(
   environmentIds: readonly string[],
   serverName: string,
   reason: string,
-  // Kept when the computer still pulls under it: only older pairings' mail is lost.
-  currentPairing: string | null = null
+  // Which of each environment's pairings end; none named: every one.
+  scope: ClientPairingScope = {}
 ): void {
   const db = runtime.getOrchestrationDb()
+  // First, and durably: from here on a reply on one of these conversations is refused, after a
+  // restart too, even if telling their askers below fails part way.
+  for (const environmentId of environmentIds) {
+    recordEndedClientPairings(db, environmentId, scope)
+  }
   for (const environmentId of environmentIds) {
     tellUnpairedPeerQuestions(runtime, db, {
       environmentId,
       serverName,
       reason,
-      ...(currentPairing ? { currentPairing } : {})
+      ...(scope.keep ? { currentPairing: scope.keep } : {}),
+      ...(scope.only ? { onlyPairing: scope.only } : {})
     })
-    // In one write: a lost reply's notice, the rest dropped, and the pairing recorded as ended, so
-    // a reply on one of its conversations is refused from now on, after a restart too.
+    // A lost reply's notice and the rest dropped, in one write.
     const told = runLifecycleWriteTransaction(db.db, 'client_pairing_ended', () => {
-      const notices = tellDroppedReplies(runtime, db, {
-        environmentId,
-        currentPairing,
-        serverName,
-        reason
-      })
-      dropQueuedClientItems(db, environmentId, currentPairing)
-      recordEndedClientPairings(db, environmentId, currentPairing)
+      const notices = tellDroppedReplies(runtime, db, { environmentId, scope, serverName, reason })
+      dropQueuedClientItems(db, environmentId, scope)
       return notices
     })
     for (const message of told) {
@@ -172,7 +171,8 @@ export function settleReplacedClientPairing(
     environmentIds,
     params.name,
     `The pairing with ${params.name} was re-made.`,
-    params.currentFingerprint
+    // Only the pairing it names: another this computer still pulls with keeps its mail.
+    { only: params.previousPairing }
   )
 }
 

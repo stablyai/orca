@@ -72,26 +72,29 @@ export function tellUnpairedPeerQuestions(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   params: { environmentId: string } &
-    // `currentPairing` keeps the questions sent under it, as a re-paired server's pairing does.
+    // `currentPairing` keeps the questions sent under it, as a re-paired server's pairing does;
+    // `onlyPairing` ends only that pairing's.
     (
-      | { serverName: string; reason: string; currentPairing?: string }
+      | { serverName: string; reason: string; currentPairing?: string; onlyPairing?: string }
       | { server: OrchestrationWorkerServer }
     )
 ): void {
-  const { serverName, reason, pairing } =
+  const { serverName, reason, pairing, only } =
     'server' in params
       ? {
           serverName: params.server.name,
           reason: `The pairing with ${params.server.name} was re-made.`,
-          pairing: peerMailPairing(params.server)
+          pairing: peerMailPairing(params.server),
+          only: null
         }
-      : { ...params, pairing: params.currentPairing ?? null }
+      : { ...params, pairing: params.currentPairing ?? null, only: params.onlyPairing ?? null }
   const waiting = db.db
     .prepare(
       `SELECT message_id, conversation_id, asker, thread_id FROM peer_questions_out
-       WHERE environment_id = ?1 AND awaiting = 1 AND (?2 IS NULL OR peer_fingerprint <> ?2)`
+       WHERE environment_id = ?1 AND awaiting = 1 AND (?2 IS NULL OR peer_fingerprint <> ?2)
+         AND (?3 IS NULL OR peer_fingerprint = ?3)`
     )
-    .all(params.environmentId, pairing)
+    .all(params.environmentId, pairing, only)
   let anyTold = false
   for (const row of waiting) {
     const id = String(row.message_id)

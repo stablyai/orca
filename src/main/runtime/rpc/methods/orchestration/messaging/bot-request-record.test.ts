@@ -19,11 +19,27 @@ const records: Record<string, object> = {
     fromPairedComputer: 'Build Box',
     askers: OWNER,
     askedBy: OWNER
+  },
+  // Recorded alike since both directions share one field: told apart by the conversation filed under.
+  msg_pulled: {
+    purpose: 'question',
+    fromPairedComputer: 'Build Box',
+    askers: OWNER,
+    askedBy: OWNER
   }
 }
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these reads use only getBotRequest.
+// A conversation a server this computer dials opened names its environment; one a computer that
+// dials here opened names none.
+const conversations: Record<string, { role: string; environment_id: string | null }> = {
+  msg_direct: { role: 'peer', environment_id: null },
+  msg_pulled: { role: 'peer', environment_id: 'env_s' }
+}
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these reads use only the three lookups below.
 const db = {
-  getBotRequest: (id: string) => (records[id] ? { record: JSON.stringify(records[id]) } : undefined)
+  getBotRequest: (id: string) =>
+    records[id] ? { record: JSON.stringify(records[id]) } : undefined,
+  getPeerMailMessage: (id: string) => (conversations[id] ? { conversation_id: id } : undefined),
+  getPeerMailConversation: (id: string) => conversations[id]
 } as unknown as OrchestrationDb
 const turnOf = (requestIds: string[]) =>
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: answersRequest reads only requestIds.
@@ -41,6 +57,10 @@ it('answers the first request that wants an answer, past status mail the turn al
 
 it('reads a request an earlier version recorded from a paired server as no one here, never the owner', () => {
   expect(botRequestActsFor(db, 'msg_from_server')).toEqual({
+    askers: [{ kind: 'unknown' }],
+    askedBy: [{ kind: 'unknown' }]
+  })
+  expect(botRequestActsFor(db, 'msg_pulled')).toEqual({
     askers: [{ kind: 'unknown' }],
     askedBy: [{ kind: 'unknown' }]
   })

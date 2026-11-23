@@ -54,23 +54,28 @@ export function clientAskCard(args: {
   }
 }
 
-// The conversation an ask this Orca's agent sent a paired computer went out on.
-const ISSUED_SQL = `SELECT i.dispatch_id FROM federation_relay_items i
+// The conversation a question or handoff this Orca's agent sent a paired computer went out on, and
+// the thread it was sent in (its own id unless it named one). One seek on the client-ask index.
+const ISSUED_SQL = `SELECT i.dispatch_id, json_extract(i.payload, '$.threadId') AS thread_id
+  FROM federation_relay_items i
   JOIN peer_mail_conversations c ON c.conversation_id = i.dispatch_id
-  WHERE i.message_id = ? AND i.direction = 'to_worker' AND i.kind = 'client_ask'
+  WHERE i.message_id = ? AND i.kind = 'client_ask' AND i.direction = 'to_worker'
+    AND json_extract(i.payload, '$.type') IN ('question', 'handoff')
     AND c.role = 'home' AND c.environment_id LIKE '${CLIENT_ENVIRONMENT_PREFIX}%'`
 
-// The ask's thread as that conversation brought it back, and this Orca's own notices on it (an
-// unpair or re-pair), which came over no conversation. Mail another conversation brought is not it.
+// The ask's thread as that conversation brought it back, and mail on it that came over no
+// conversation (this Orca's own notices among it). Mail another conversation brought is not it.
 const REPLIES_SQL = `SELECT m.id, m.body, m.payload, p.conversation_id FROM messages m
   LEFT JOIN peer_mail_messages p ON p.message_id = m.id
   WHERE m.thread_id = ?1 AND (p.conversation_id = ?2 OR p.conversation_id IS NULL)
   ORDER BY m.rowid`
 
 /** How an ask to a paired computer's agent stands here: declined on that computer's notice, answered
- *  by its agent's answer, or not answered when its question settled without one (an unpair or
- *  re-pair notice, shown as the answer is). A handoff, which awaits no answer, takes its first reply
- *  from that computer. Only an ask this Orca sent reads as one, from its own conversation. */
+ *  by its agent's answer, or not answered when its question settled without one (this Orca's unpair
+ *  or re-pair notice for it, shown as the answer is). A handoff, which awaits no answer, takes its
+ *  first reply from that computer. Only a question or handoff this Orca sent reads as one, from its
+ *  own conversation. On a thread other mail shares, only what names this ask counts: its decline,
+ *  an answer to it, or the notice for it. */
 export function readClientAskOutcome(
   db: OrchestrationDb,
   messageId: string
@@ -80,20 +85,29 @@ export function readClientAskOutcome(
     return { outcome: null, answer: null, mailIds: [], chatId: null }
   }
   const conversationId = String(issued.dispatch_id)
+  const ownThread = typeof issued.thread_id !== 'string' || issued.thread_id === messageId
+  const question = db.db
+    .prepare('SELECT awaiting FROM peer_questions_out WHERE message_id = ? AND conversation_id = ?')
+    .get(messageId, conversationId)
+  const names = (reply: { id: string; payload: string | null }) =>
+    reply.id === `${messageId}_declined` || isBotAnswer(reply, messageId)
   const replies = db.db
     .prepare(REPLIES_SQL)
-    .all(messageId, conversationId)
+    .all(ownThread ? messageId : String(issued.thread_id), conversationId)
     .map((row) => ({
       id: String(row.id),
       body: String(row.body),
       payload: typeof row.payload === 'string' ? row.payload : null,
       fromComputer: row.conversation_id !== null
     }))
+    .filter((reply) =>
+      reply.fromComputer
+        ? ownThread || names(reply)
+        : // tellUnpairedPeerQuestions names the question it settles.
+          reply.body.includes(`Your question ${messageId} there will not be answered`)
+    )
   // Only that computer answers or declines; a notice of this Orca's only settles a question.
   const returned = replies.filter((reply) => reply.fromComputer)
-  const question = db.db
-    .prepare('SELECT awaiting FROM peer_questions_out WHERE message_id = ? AND conversation_id = ?')
-    .get(messageId, conversationId)
   const mailIds = replies.map((reply) => reply.id)
   const reading = (outcome: BotRequestCardReading['outcome'], answer?: string) => ({
     outcome,

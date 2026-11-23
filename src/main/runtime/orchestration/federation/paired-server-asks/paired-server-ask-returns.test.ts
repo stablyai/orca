@@ -10,6 +10,8 @@ import { flushPairedServerReturns } from './paired-server-ask-returns'
 import { retirePairedServerRoute } from './paired-server-ask-removal'
 import { admitPairedServerAsks } from './paired-server-ask-admission'
 import { queuePeerMailReply } from '../peer-mail/peer-mail-delivery'
+import { ORCHESTRATION_PEER_MAIL_METHODS } from '../../../rpc/methods/orchestration/federation/peer-mail-methods'
+import type { RpcContext } from '../../../rpc/core'
 import {
   getPairedServerAsk,
   holdPairedServerAsk
@@ -142,6 +144,30 @@ describe('what this computer hands back to a paired server', () => {
     expect(db.listPendingFederationRelay(conversation, 'to_home')).toHaveLength(50)
   })
 
+  it('moves past a conversation the server never takes, so the next one still goes back', async () => {
+    const stuck = 'peerconv_0000000000c9'
+    const next = 'peerconv_0000000000ca'
+    open(stuck, SERVER.environmentId)
+    open(next, SERVER.environmentId)
+    for (let index = 0; index < 50; index += 1) {
+      queue(stuck, `msg_stuck_${index}`)
+    }
+    queue(next, 'msg_next')
+    // The server takes only the second conversation's mail, whenever it is sent.
+    answer = () => ({
+      acknowledgments: [{ conversationId: next, throughSequence: 1 }],
+      gone: []
+    })
+
+    await flushPairedServerReturns(runtime, SERVER)
+    await flushPairedServerReturns(runtime, SERVER)
+
+    expect(pages[0]).not.toContain('msg_next')
+    expect(pages[1]![0]).toBe('msg_next')
+    expect(db.listPendingFederationRelay(next, 'to_home')).toEqual([])
+    expect(db.listPendingFederationRelay(stuck, 'to_home')).toHaveLength(50)
+  })
+
   it('settles a conversation the server has gone only through what this page sent it', async () => {
     const gone = 'peerconv_0000000000c2'
     const later = 'peerconv_0000000000c3'
@@ -216,6 +242,33 @@ describe('what this computer hands back to a paired server', () => {
       })
     ).toThrow(/not one this Orca can answer over/)
     expect(db.listPendingFederationRelay(dispatchId, 'to_home')).toEqual([])
+  })
+
+  it("lets no paired computer acknowledge a Dispatch's reports through a stored conversation under its id", async () => {
+    const dispatchId = 'ctx_0000000000d4'
+    db.db
+      .prepare(
+        `INSERT INTO peer_mail_conversations (conversation_id, role, peer_fingerprint, environment_id)
+         VALUES (?, 'peer', 'fingerprint_client', NULL)`
+      )
+      .run(dispatchId)
+    queue(dispatchId, 'msg_worker_report')
+    const ack = ORCHESTRATION_PEER_MAIL_METHODS.find(
+      (method) => method.name === 'orchestration.peerMailAck'
+    )!
+
+    await ack.handler(
+      { acknowledgments: [{ conversationId: dispatchId, throughSequence: 1 }] },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the ack handler reads.
+      {
+        runtime,
+        clientKind: 'runtime',
+        pairedDeviceId: 'device_c',
+        authenticatedCallerFingerprint: 'fingerprint_client'
+      } as unknown as RpcContext
+    )
+
+    expect(db.listPendingFederationRelay(dispatchId, 'to_home')).toHaveLength(1)
   })
 
   it('settles what an older pairing owes once the server sees this computer under a new one', () => {

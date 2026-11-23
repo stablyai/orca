@@ -16,19 +16,34 @@ export function botRequestRecord(db: OrchestrationDb, messageId: string): BotReq
   }
   try {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only sendBotRequest writes this column, from a BotRequestRecord.
-    return actsForNoOneFromServer(JSON.parse(request.record) as BotRequestRecord)
+    const record = JSON.parse(request.record) as BotRequestRecord
+    return pulledFromServer(db, messageId, record) ? actsForNoOne(record) : record
   } catch {
     return null
   }
 }
 
-/** Earlier versions recorded a request pulled from a paired server (`fromPairedServer`, written
- *  only on that path) as the owner's. That server has no access here, so it acts for no one here,
- *  as such a request is recorded now: a request still waiting to be read never opens an owner turn. */
-function actsForNoOneFromServer(record: BotRequestRecord): BotRequestRecord {
-  return typeof record.fromPairedServer === 'string'
-    ? { ...record, askers: [{ kind: 'unknown' }], askedBy: [{ kind: 'unknown' }] }
-    : record
+/** Earlier versions recorded a request pulled from a paired server as the owner's. That server has
+ *  no access here, so it acts for no one here, as such a request is recorded now: one still waiting
+ *  to be read never opens an owner turn. Such a request is known by its record's `fromPairedServer`
+ *  (written only on that path, before paired senders shared one field) or by the conversation its
+ *  mail is filed under: one a server this computer dials opened, which names that server's
+ *  environment, unlike a conversation a computer that dials here opens. */
+function pulledFromServer(
+  db: OrchestrationDb,
+  messageId: string,
+  record: BotRequestRecord
+): boolean {
+  if (typeof record.fromPairedServer === 'string') {
+    return true
+  }
+  const route = db.getPeerMailMessage(messageId)
+  const conversation = route ? db.getPeerMailConversation(route.conversation_id) : undefined
+  return conversation?.role === 'peer' && conversation.environment_id !== null
+}
+
+function actsForNoOne(record: BotRequestRecord): BotRequestRecord {
+  return { ...record, askers: [{ kind: 'unknown' }], askedBy: [{ kind: 'unknown' }] }
 }
 
 /** Whom a request acts for, and the event that started its chain, as this host recorded it; null

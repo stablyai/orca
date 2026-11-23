@@ -30,13 +30,16 @@ describe("the card of an ask to a paired computer's agent", () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  const issue = (messageId: string) =>
+  const issue = (
+    messageId: string,
+    ask: { type: string; threadId?: string } = { type: 'handoff' }
+  ) =>
     db.enqueueFederationRelay({
       dispatchId: conversationId,
       direction: 'to_worker',
       kind: 'client_ask',
       messageId,
-      payload: '{}'
+      payload: JSON.stringify(ask)
     })
 
   const returned = (conversation: string, id: string, threadId: string, body: string) =>
@@ -85,8 +88,8 @@ describe("the card of an ask to a paired computer's agent", () => {
     })
   })
 
-  it("shows this Orca's own notice for a question settled without an answer", () => {
-    issue('msg_question')
+  it("shows this Orca's own notice for a question settled without an answer, never other local mail", () => {
+    issue('msg_question', { type: 'question' })
     recordPeerQuestionOut(db, {
       messageId: 'msg_question',
       conversationId,
@@ -95,19 +98,63 @@ describe("the card of an ask to a paired computer's agent", () => {
       asker: ASKER
     })
     db.db.prepare('UPDATE peer_questions_out SET awaiting = NULL').run()
+    const body =
+      'The pairing with Client A was re-made. Your question msg_question there will not be answered.'
     const notice = db.insertMessage({
       from: 'Client A',
       to: ASKER,
       subject: 'Re: Question',
-      body: 'The pairing with Client A was re-made.',
+      body,
+      threadId: 'msg_question'
+    })
+    db.insertMessage({
+      from: 'term_x',
+      to: ASKER,
+      subject: 'Re',
+      body: 'Other',
       threadId: 'msg_question'
     })
 
     expect(readClientAskOutcome(db, 'msg_question')).toEqual({
       outcome: 'dropped',
-      answer: 'The pairing with Client A was re-made.',
+      answer: body,
       mailIds: [notice.id],
       chatId: null
     })
+  })
+
+  it('reads a question sent in a shared thread by what names it, and no status ask at all', () => {
+    issue('msg_in_thread', { type: 'question', threadId: 'thread_shared' })
+    issue('msg_status', { type: 'status' })
+    returned(conversationId, 'msg_other_reply', 'thread_shared', 'About something else.')
+    db.insertPeerMailMessage({
+      conversationId,
+      remoteParty: 'bot:Literature',
+      message: {
+        id: 'msg_its_answer',
+        from: 'Literature',
+        to: ASKER,
+        subject: 'Re: Ask',
+        body: 'All real.',
+        threadId: 'thread_shared',
+        payload: JSON.stringify({ requestId: 'msg_in_thread', botAnswer: true })
+      }
+    })
+    recordPeerQuestionOut(db, {
+      messageId: 'msg_in_thread',
+      conversationId,
+      environmentId: 'client:device_a/install_a',
+      peerFingerprint: 'fp_a',
+      asker: ASKER,
+      threadId: 'thread_shared'
+    })
+
+    expect(readClientAskOutcome(db, 'msg_in_thread')).toEqual({
+      outcome: 'answered',
+      answer: 'All real.',
+      mailIds: ['msg_its_answer'],
+      chatId: null
+    })
+    expect(readClientAskOutcome(db, 'msg_status')).toEqual(NOTHING)
   })
 })

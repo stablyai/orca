@@ -64,6 +64,11 @@ describe('what admitting a held ask from a paired server checks', () => {
     expect(stillAdmits(db, row, 'docs')).toBe(true)
     // A name lookup that landed on another bot.
     expect(stillAdmits(db, row, 'other')).toBe(false)
+    // The row was replaced since it was read: approved for another bot now.
+    db.db
+      .prepare("UPDATE paired_server_asks SET bot_id = 'other' WHERE message_id = ?")
+      .run(row.message_id)
+    expect(stillAdmits(db, row, 'docs')).toBe(false)
     dropPairedServerAsk(db, row.message_id)
     expect(stillAdmits(db, row, 'docs')).toBe(false)
   })

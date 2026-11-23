@@ -33,3 +33,18 @@ export function callerScopeOf(device: DeviceEntry): RpcCallerScope {
 export function fingerprintAuthenticatedPairingCredential(token: string): string {
   return createHash('sha256').update(token).digest('hex')
 }
+
+/** The credential fingerprint a paired device holds now, by device id: null once it was removed,
+ *  undefined while no registry is loaded to tell. */
+export function pairedDeviceCredentials(
+  registry: () => { getDevice: (deviceId: string) => DeviceEntry | null } | null
+): (deviceId: string) => string | null | undefined {
+  return (deviceId) => {
+    const current = registry()
+    if (!current) {
+      return undefined
+    }
+    const device = current.getDevice(deviceId)
+    return device ? devicePrincipalOf(device).callerFingerprint : null
+  }
+}

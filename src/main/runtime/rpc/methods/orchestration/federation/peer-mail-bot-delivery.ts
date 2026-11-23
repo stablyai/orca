@@ -63,8 +63,17 @@ export async function deliverPeerMailToBot(
       { effectsApplied: false, retryable: true }
     )
   }
-  // Stored by an attempt that ended before linking it: a duplicate, never a second request.
+  // Stored by an attempt that ended before linking it: a duplicate, never a second request. For mail
+  // a server queued, only that request to the bot it was approved for: its id is the server's to
+  // pick, so any other stored message is never linked to its conversation.
   if (db.getMessageById(params.messageId)) {
+    if (pulled && !pulled.admits(db.getBotRequest(params.messageId)?.to_bot_id ?? '')) {
+      throw new OrchestrationError(
+        'request_mismatch',
+        'This ask is no longer approved for that agent. Nothing was delivered.',
+        { effectsApplied: false }
+      )
+    }
     link()
     return 'delivered'
   }

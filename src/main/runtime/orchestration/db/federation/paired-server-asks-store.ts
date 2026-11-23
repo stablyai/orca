@@ -46,6 +46,9 @@ CREATE TABLE IF NOT EXISTS paired_server_announced (
   pairing_fingerprint     TEXT NOT NULL,
   server_seen_fingerprint TEXT NOT NULL
 );
+-- The reverse conversations of one pairing to a server, in id order: a return page walks them.
+CREATE INDEX IF NOT EXISTS idx_peer_mail_conversations_reversed
+  ON peer_mail_conversations(environment_id, peer_fingerprint, conversation_id) WHERE role = 'peer';
 `
 
 export type PairedServerAskRow = {
@@ -292,9 +295,9 @@ SELECT environment_id FROM paired_server_introductions
 UNION SELECT environment_id FROM paired_server_allowances
 UNION SELECT environment_id FROM paired_server_asks
 UNION SELECT c.environment_id FROM peer_mail_conversations c
-  JOIN federation_relay_items i ON i.dispatch_id = c.conversation_id
   WHERE c.role = 'peer' AND c.environment_id IS NOT NULL AND ${REVERSED_CONVERSATION_SQL}
-    AND i.direction = 'to_home' AND i.acked_at IS NULL`
+    AND EXISTS (SELECT 1 FROM federation_relay_items i
+      WHERE i.dispatch_id = c.conversation_id AND i.direction = 'to_home' AND i.acked_at IS NULL)`
 
 /** One server's arm of the pull loop's reason to run. */
 export const PAIRED_SERVER_ASK_WANTS_SQL = `
@@ -305,9 +308,9 @@ UNION ALL
 SELECT 1 FROM paired_server_asks WHERE environment_id = ?1
 UNION ALL
 SELECT 1 FROM peer_mail_conversations c
-  JOIN federation_relay_items i ON i.dispatch_id = c.conversation_id
   WHERE c.role = 'peer' AND c.environment_id = ?1 AND ${REVERSED_CONVERSATION_SQL}
-    AND i.direction = 'to_home' AND i.acked_at IS NULL`
+    AND EXISTS (SELECT 1 FROM federation_relay_items i
+      WHERE i.dispatch_id = c.conversation_id AND i.direction = 'to_home' AND i.acked_at IS NULL)`
 
 /** Whether a server's loop pulls for asks: then it waits on the server's first status read. */
 export function pairedServerAsksWanted(db: OrchestrationDb, environmentId: string): boolean {
