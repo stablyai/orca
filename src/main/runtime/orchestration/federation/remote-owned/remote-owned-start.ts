@@ -1,7 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
-import { ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import {
+  ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY,
+  ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY
+} from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { startsInChatLineage } from '../../../rpc/methods/orchestration/worker/start/worker-chat-lineage'
 import { ORCHESTRATION_CONTRACT_PREFLIGHT_TIMEOUT_MS } from '../../../../../shared/orchestration/orchestration-timing-budgets'
 import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
@@ -44,10 +48,18 @@ export async function serverOwnsPlacedWorkers(
   runtime: OrcaRuntimeService,
   server: OrchestrationWorkerServer
 ): Promise<boolean> {
+  return serverSupports(runtime, server, ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY)
+}
+
+async function serverSupports(
+  runtime: OrcaRuntimeService,
+  server: OrchestrationWorkerServer,
+  capability: string
+): Promise<boolean> {
   const decision = await getOrchestrationPeerCapabilityCache(runtime).resolve({
     peerFingerprint: server.peerFingerprint,
     expectedRuntimeEpoch: null,
-    capability: ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY,
+    capability,
     probe: async () =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: status.get answers RuntimeStatus; the cache reads only its capabilities and runtime ID.
       (await runtime.callOrchestrationWorkerServer(
@@ -104,6 +116,10 @@ export async function startRemoteOwnedWorker(
     params.worktree === 'new-child'
       ? await resolveCrossMachineChildParent(runtime, params.from, ctx.orchestrationCaller)
       : undefined
+  // An older server ignores the lineage and keeps its own settings, as before.
+  const chatLineage =
+    startsInChatLineage(runtime, db, params, ctx.orchestrationCaller) &&
+    (await serverSupports(runtime, server, ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY))
   const { run } = bindRun()
   // An older CLI sends no request ID; the start still runs, but a retry cannot find it.
   const forward = remoteForwardKey(runtime, ctx, params.from, callerRequestId ?? randomUUID())!
@@ -140,6 +156,7 @@ export async function startRemoteOwnedWorker(
     task: _task,
     deps: _deps,
     parent: _parent,
+    chatLineage: _chatLineage,
     ...options
   } = params
   const startCard = prepareWorkerStartCard(runtime, ctx.orchestrationCaller)
@@ -154,7 +171,8 @@ export async function startRemoteOwnedWorker(
           ? { task: task.id }
           : { spec: task.spec, ...(task.task_title ? { taskTitle: task.task_title } : {}) }),
         adoptTaskId: task.id,
-        ...(crossStoreParent ? { crossStoreParent } : {})
+        ...(crossStoreParent ? { crossStoreParent } : {}),
+        ...(chatLineage ? { chatLineage } : {})
       },
       timeoutMs: budgets.attachDeadlineMs,
       requestId: forward.key,
