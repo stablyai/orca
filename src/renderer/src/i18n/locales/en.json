@@ -22665,7 +22665,7 @@
         "restarted": "Restarted. Your next message runs {{program}} {{installed}} and continues this conversation.",
         "notRunning": "Your next message starts {{program}} {{installed}} and continues this conversation.",
         "busy": "{{agent}} still has work open in this chat, so it kept running. Try again when it finishes.",
-        "failed": "Couldn’t restart this chat."
+        "failed": "Couldn’t confirm that this chat restarted."
       }
     },
     "tab": {

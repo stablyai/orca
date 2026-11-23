@@ -14,7 +14,7 @@ import {
 type Restart =
   | { phase: 'restarting' }
   | { phase: 'answered'; outcome: RestartAgentOutcome; installedVersion: string }
-  | { phase: 'failed'; error: unknown }
+  | { phase: 'failed'; error: unknown; installedVersion: string }
 
 /** Says when the host has a newer agent installed than this chat runs, and restarts it on request. */
 export function useNativeChatProviderUpdateNotice({
@@ -42,13 +42,18 @@ export function useNativeChatProviderUpdateNotice({
     setRestart(null)
   }
   const program = agentPermissionSettingsSourceName(agent)
-  if (restart?.phase === 'answered' && restart.outcome !== 'busy') {
+  // A press with no answer (a timeout, say) still settled if the host has since dropped the update,
+  // which it does once that agent stops.
+  if (
+    (restart?.phase === 'answered' && restart.outcome !== 'busy') ||
+    (restart?.phase === 'failed' && !update)
+  ) {
     const installed = { program, installed: restart.installedVersion }
     return {
       key: 'provider-update',
       kind: 'update',
       text:
-        restart.outcome === 'stopped'
+        restart.phase === 'answered' && restart.outcome === 'stopped'
           ? t(
               'components.native-chat.providerUpdate.restarted',
               'Restarted. Your next message runs {{program}} {{installed}} and continues this conversation.',
@@ -78,7 +83,7 @@ export function useNativeChatProviderUpdateNotice({
       { sessionId }
     ).then(
       ({ outcome }) => settle({ phase: 'answered', outcome, installedVersion }),
-      (error: unknown) => settle({ phase: 'failed', error })
+      (error: unknown) => settle({ phase: 'failed', error, installedVersion })
     )
   }
   const versions = {
@@ -90,7 +95,10 @@ export function useNativeChatProviderUpdateNotice({
     restart?.phase === 'failed'
       ? nativeChatNoticeFromError(
           restart.error,
-          t('components.native-chat.providerUpdate.failed', 'Couldn’t restart this chat.')
+          t(
+            'components.native-chat.providerUpdate.failed',
+            'Couldn’t confirm that this chat restarted.'
+          )
         )
       : restart?.phase === 'answered'
         ? {
