@@ -9,6 +9,7 @@ import { restoreManagedDataAccountEnvironment } from '../../../shared/agent-laun
 import { openCodeAcpAccountBinding } from '../../opencode/accounts/opencode-structured-account-home'
 import { createAcpStructuredLaunchResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import type { AcpLaunchSpec } from './acp-launch-contract'
+import { CURSOR_BOT_RULE } from './acp-instructions'
 import { acpLaunchSpecFor } from './acp-launch-registry'
 
 const PREAMBLE = 'You are Zorblax, a bot that runs in Orca.'
@@ -27,14 +28,16 @@ const SPECS = {
     account: openCodeAcpAccountBinding(() => managedAccounts)
   },
   omp: acpLaunchSpecFor('omp')!,
-  antigravity: acpLaunchSpecFor('antigravity')!
+  antigravity: acpLaunchSpecFor('antigravity')!,
+  cursor: acpLaunchSpecFor('cursor')!
 }
 
 const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome']> = {
   grok: { variable: 'GROK_HOME', path: '/home/user/.grok' },
   opencode: { kind: 'opencode', locator: { kind: 'unmanaged' } },
   omp: { variable: 'PI_CODING_AGENT_DIR', path: '/home/user/.omp/agent' },
-  antigravity: { variable: 'GEMINI_HOME', path: '/home/user/orca-data/antigravity-chat' }
+  antigravity: { variable: 'GEMINI_HOME', path: '/home/user/orca-data/antigravity-chat' },
+  cursor: { variable: 'CURSOR_CONFIG_DIR', path: '/home/user/.cursor' }
 }
 
 let dataDirectory = ''
@@ -51,6 +54,8 @@ function launch(
     instructions?: string | null
     launchEnv?: Record<string, string>
     spec?: AcpLaunchSpec
+    workspacePath?: string
+    version?: string
   } = {}
 ) {
   const record: AgentSessionRecord = {
@@ -62,13 +67,15 @@ function launch(
   const resolve = createAcpStructuredLaunchResolver(options.spec ?? SPECS[agent], {
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     savedSession: { hasProviderTurn: async () => false },
-    resolveWorkspacePath: async () => '/home/user/.orca/bots/zorblax',
+    resolveWorkspacePath: async () => options.workspacePath ?? '/home/user/.orca/bots/zorblax',
     resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
     resolveLaunchEnv: () => options.launchEnv ?? {},
     resolveCommand: (command) => `/resolved/${command}`,
     inheritedEnv: {},
     dataDirectory,
-    probeVersion: async () => ({ version: agent === 'omp' ? '17.2.9' : '1.18.35' }),
+    probeVersion: async () => ({
+      version: options.version ?? (agent === 'omp' ? '17.2.9' : '1.18.35')
+    }),
     ...(options.instructions === undefined
       ? {}
       : { resolveInstructions: async () => options.instructions ?? null })
@@ -127,6 +134,23 @@ describe('ACP launch: standing instructions', () => {
     expect(base).toEqual((await launch('omp')).args)
     expect(flag).toMatch(/^--append-system-prompt=/)
     await expectPrivateFile(flag.slice('--append-system-prompt='.length))
+  })
+
+  it("writes them into Cursor's always-apply rule in the bot home", async () => {
+    const home = await mkdtemp(join(tmpdir(), 'cursor-bot-'))
+    try {
+      const resolved = await launch('cursor', {
+        instructions: PREAMBLE,
+        workspacePath: home,
+        version: '2026.11.19'
+      })
+      expect(resolved.sessionMeta).toBeUndefined()
+      expect(await readFile(join(home, CURSOR_BOT_RULE), 'utf8')).toBe(
+        `---\nalwaysApply: true\n---\n\n${PREAMBLE}`
+      )
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
   })
 
   it('refuses to start an agent that has no way to take them', async () => {

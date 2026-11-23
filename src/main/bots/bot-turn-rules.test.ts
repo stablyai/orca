@@ -136,6 +136,11 @@ describe('what a bot launch says its context holds', () => {
     expect((await context.plan('s1', say))?.text ?? '').not.toContain('[Orca rules update:')
   })
 
+  it('a resumed Cursor chat is given the rewritten rule, so it says nothing', async () => {
+    const plan = await turnOf({ ...claudeChat, provider: 'cursor' })
+    expect(plan?.text).toBe('')
+  })
+
   it('a new Claude conversation is given them at start and says nothing', async () => {
     const plan = await turnOf({ ...claudeChat, providerHandleChain: [] })
     expect(plan?.text).toBe('')

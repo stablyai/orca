@@ -1,4 +1,10 @@
 import { acpEffortOption, acpInteractionModeValue, acpSelectChoices } from './acp-select-choices'
+import {
+  acpCurrentModelAndEffort,
+  acpReportedPermissionMode,
+  acpSelectByCategory,
+  acpSelectById
+} from './acp-structured-option-lookup'
 import { acpModelMenuModels, withFastModeOption } from './acp-model-menu'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
 import { acpSessionSlashCommand } from './acp-session-slash-command'
@@ -20,15 +26,9 @@ import type {
   SessionModelState
 } from '../generated/acp-protocol.generated'
 
-type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
-
 export type AcpOptionWrite =
   | { method: 'config'; configId: string; value: string }
   | { method: 'model'; modelId: string }
-
-function isSelect(option: SessionConfigOption): option is SelectOption {
-  return option.type === 'select'
-}
 
 export class AcpStructuredOptions {
   constructor(
@@ -42,6 +42,7 @@ export class AcpStructuredOptions {
       | 'builtinCommands'
       | 'skillDescription'
       | 'fastConfigId'
+      | 'contextConfigId'
       | 'interactionModes'
     > = {}
   ) {}
@@ -52,23 +53,17 @@ export class AcpStructuredOptions {
   private commands: AgentSessionSlashCommand[] | undefined
   private reportedCommands: readonly AvailableCommand[] | undefined
   private isBuiltin: (command: AvailableCommand) => boolean = () => false
-  // Only new sessions resolve configured defaults; loaded sessions retain their saved choices.
   private resolvesConfig = false
   readonly picked = new Set<string>()
   readonly appliedInput = new Map<string, string>()
   readonly applied = new Map<string, string>()
-  // A control without refreshed options leaves the prior current values unproven.
   private readonly unobservedCurrent = new Set<'model' | 'effort'>()
   writeRevision = 0
   /** Orca's own writes in flight; config changes outside them are the agent's own. */
   writing = 0
   /** While Orca's hidden model command runs, its reply belongs to it, never to the chat. */
   commandReply: string | null = null
-  // What a launch-line or model-command selection resolved to. The agent never echoes the raw
-  // selector, so a concrete change away from this retires it; ordinary control proof never does.
   private selectorProof: Readonly<Record<string, string | undefined>> | null = null
-
-  // Native controls a withdrawn send stopped waiting for; their call deadline bounds each one.
   private readonly unsettled = new Set<Promise<unknown>>()
 
   /** Later controls and prompts wait for it, and its key is re-sent once it settles. */
@@ -94,9 +89,9 @@ export class AcpStructuredOptions {
       this.unobservedCurrent.add(key)
     }
     if (key === 'model') {
-      // Each model has its own effort and Fast defaults, so both are written again.
       this.appliedInput.delete('effort')
       this.appliedInput.delete('fastMode')
+      this.appliedInput.delete('context')
       this.unobservedCurrent.add('effort')
     }
     if (key === 'effort' && this.dialect.effortChangesModel) {
@@ -125,18 +120,24 @@ export class AcpStructuredOptions {
   adoptLaunchModel(model: string): void {
     this.appliedInput.set('model', model)
     this.picked.add('model')
-    this.selectorProof = this.currentValues()
+    this.selectorProof = acpCurrentModelAndEffort(this.configOptions, this.models?.currentModelId)
   }
 
   /** `resolvedModel` marks selector proof: the model the agent's own command reported. */
   adoptOwnWrite(key: string, value: string, resolvedModel?: string): void {
     this.appliedInput.set(key, value)
     if (resolvedModel !== undefined) {
-      this.selectorProof = { ...this.currentValues(), model: resolvedModel }
+      this.selectorProof = {
+        ...acpCurrentModelAndEffort(this.configOptions, this.models?.currentModelId),
+        model: resolvedModel
+      }
     } else if (key === 'model') {
       this.selectorProof = null
     } else if (this.selectorProof) {
-      this.selectorProof = { ...this.selectorProof, effort: this.currentValues().effort }
+      this.selectorProof = {
+        ...this.selectorProof,
+        effort: acpCurrentModelAndEffort(this.configOptions, this.models?.currentModelId).effort
+      }
     }
   }
 
@@ -144,7 +145,10 @@ export class AcpStructuredOptions {
     if (this.resolvesConfig || this.picked.has(key) || this.unobservedCurrent.has(key)) {
       return false
     }
-    return value.length > 0 && this.currentValues()[key] === value
+    return (
+      value.length > 0 &&
+      acpCurrentModelAndEffort(this.configOptions, this.models?.currentModelId)[key] === value
+    )
   }
 
   notePick(key: string): void {
@@ -157,10 +161,10 @@ export class AcpStructuredOptions {
     }
     this.configOptions = configOptions
     if (this.writing === 0 && this.unsettled.size === 0) {
-      if (this.select('model')) {
+      if (acpSelectByCategory(this.configOptions, 'model')) {
         this.unobservedCurrent.delete('model')
       }
-      if (this.effortOption()) {
+      if (acpEffortOption(this.configOptions)) {
         this.unobservedCurrent.delete('effort')
       }
     }
@@ -168,8 +172,7 @@ export class AcpStructuredOptions {
     if (!proof || this.writing > 0) {
       return
     }
-    // A role or :level selector carries thinking too; missing values are no concrete change.
-    const now = this.currentValues()
+    const now = acpCurrentModelAndEffort(this.configOptions, this.models?.currentModelId)
     const drifted = (key: string) =>
       now[key] !== undefined && proof[key] !== undefined && now[key] !== proof[key]
     if (drifted('model') || drifted('effort')) {
@@ -206,8 +209,14 @@ export class AcpStructuredOptions {
     return this.commands
   }
 
+  /** Model ids the running session lists. Empty until it has reported a model selector. */
+  modelChoiceValues(): readonly string[] {
+    const option = acpSelectByCategory(this.configOptions, 'model')
+    return option ? acpSelectChoices(option).map((choice) => choice.value) : []
+  }
+
   offersEffort(value: string): boolean {
-    const option = this.effortOption()
+    const option = acpEffortOption(this.configOptions)
     return !!(
       option &&
       (this.dialect.clampsUnlistedEffort ||
@@ -217,22 +226,28 @@ export class AcpStructuredOptions {
 
   write(key: string, value: string): AcpOptionWrite | null {
     if (key === 'fastMode') {
-      const fast = this.fastOption()
+      const fast = acpSelectById(this.configOptions, this.dialect.fastConfigId)
       return fast ? { method: 'config', configId: fast.id, value } : null
     }
+    if (key === 'context') {
+      const context = acpSelectById(this.configOptions, this.dialect.contextConfigId)
+      return context && acpSelectChoices(context).some((choice) => choice.value === value)
+        ? { method: 'config', configId: context.id, value }
+        : null
+    }
     if (key === 'model') {
-      const option = this.select('model')
+      const option = acpSelectByCategory(this.configOptions, 'model')
       if (option) {
         return { method: 'config', configId: option.id, value }
       }
       return this.models ? { method: 'model', modelId: value } : null
     }
     if (key === 'effort') {
-      const option = this.effortOption()
+      const option = acpEffortOption(this.configOptions)
       return option ? { method: 'config', configId: option.id, value } : null
     }
     if (key === 'interactionMode') {
-      const option = this.select('mode')
+      const option = acpSelectByCategory(this.configOptions, 'mode')
       const native = acpInteractionModeValue(this.dialect.interactionModes, option, value)
       return option && native ? { method: 'config', configId: option.id, value: native } : null
     }
@@ -244,7 +259,7 @@ export class AcpStructuredOptions {
     const write = this.write('interactionMode', value)
     return write?.method === 'config'
       ? this.appliedInput.get('interactionMode') !== value ||
-          this.select('mode')?.currentValue !== write.value
+          acpSelectByCategory(this.configOptions, 'mode')?.currentValue !== write.value
       : value === 'plan'
   }
 
@@ -253,8 +268,8 @@ export class AcpStructuredOptions {
     AgentSessionOptionsResult,
     'models' | 'current' | 'forkSupport' | 'fastModeSupport'
   > {
-    const modelOption = this.select('model')
-    const effortOption = this.effortOption()
+    const modelOption = acpSelectByCategory(this.configOptions, 'model')
+    const effortOption = acpEffortOption(this.configOptions)
     const currentModel = (modelOption?.currentValue ?? this.models?.currentModelId) || undefined
     const models = acpModelMenuModels({
       dialect: this.dialect,
@@ -263,17 +278,24 @@ export class AcpStructuredOptions {
       state: this.models,
       currentModel
     })
-    const confirmed = [...(currentModel ? ['model'] : []), ...(effortOption ? ['effort'] : [])]
+    const contextOption = acpSelectById(this.configOptions, this.dialect.contextConfigId)
+    const context = contextOption?.currentValue
+    const confirmed = [
+      ...(currentModel ? ['model'] : []),
+      ...(effortOption ? ['effort'] : []),
+      ...(context ? ['context'] : [])
+    ]
     const menu = {
       models,
       forkSupport: this.forkSupport,
       current: {
         ...(currentModel ? { model: currentModel } : {}),
         ...(effortOption ? { effort: effortOption.currentValue } : {}),
+        ...(context ? { context } : {}),
         confirmed
       }
     }
-    return withFastModeOption(menu, this.fastOption())
+    return withFastModeOption(menu, acpSelectById(this.configOptions, this.dialect.fastConfigId))
   }
 
   /** Unpicked new-session default: null if unlisted, undefined if the session cannot establish it. */
@@ -306,45 +328,14 @@ export class AcpStructuredOptions {
   reportedPermissionMode(
     values: Readonly<Partial<Record<string, string>>> | undefined
   ): string | null {
-    if (!values) {
-      return this.applied.get('permissionMode') ?? null
-    }
-    const current = this.select('mode')?.currentValue
-    return current
-      ? (Object.entries(values).find(([, value]) => value === current)?.[0] ?? null)
-      : null
-  }
-
-  // Match the mode category rather than assuming an agent's config ID.
-  modeConfigId(): string {
-    return this.select('mode')?.id ?? 'mode'
-  }
-
-  // Only the running values, so config notifications don't project the whole catalog again.
-  private currentValues(): Readonly<Record<string, string | undefined>> {
-    return {
-      model: (this.select('model')?.currentValue ?? this.models?.currentModelId) || undefined,
-      effort: this.effortOption()?.currentValue
-    }
-  }
-
-  private effortOption(): SelectOption | null {
-    return acpEffortOption(this.configOptions)
-  }
-
-  private fastOption(): SelectOption | null {
-    const id = this.dialect.fastConfigId
-    if (!id) {
-      return null
-    }
-    const option = this.configOptions.find((entry) => entry.id === id)
-    return option && isSelect(option) ? option : null
-  }
-
-  private select(category: string): SelectOption | null {
-    const option = this.configOptions.find(
-      (entry) => entry.category === category || (category === 'model' && entry.id === 'model')
+    return acpReportedPermissionMode(
+      acpSelectByCategory(this.configOptions, 'mode')?.currentValue,
+      values,
+      this.applied.get('permissionMode') ?? null
     )
-    return option && isSelect(option) ? option : null
+  }
+
+  modeConfigId(): string {
+    return acpSelectByCategory(this.configOptions, 'mode')?.id ?? 'mode'
   }
 }

@@ -9,6 +9,7 @@ import { getWheelScrollDeltaY } from '@/lib/wheel-scroll-delta'
 import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
 import { handleImeOverlayEscape } from '@/lib/text-input/ime/ime-overlay-escape'
 import { PortalContainerContext, usePortalContainer } from './portal-container-context'
+import { dismissPointerIsInsideBorderBox } from '@/lib/overlay-interaction/scrollbar-gutter-pointer'
 
 // React delegates wheel passively, so native defaultPrevented may not reflect synthetic cancellation.
 const consumerPreventedWheelEvents = new WeakSet<WheelEvent>()
@@ -117,6 +118,7 @@ function PopoverContent({
   style,
   onWheel,
   onWheelCapture,
+  onPointerDownOutside,
   ref: forwardedRef,
   tone = 'default',
   ...props
@@ -192,6 +194,18 @@ function PopoverContent({
             onWheel={handleConsumerWheel}
             onWheelCapture={handleConsumerWheelCapture}
             {...props}
+            onPointerDownOutside={(event) => {
+              const content = event.currentTarget
+              // Scrollbar drags are reported outside while the point is still inside the border box.
+              if (
+                content instanceof HTMLElement &&
+                dismissPointerIsInsideBorderBox(event, content.getBoundingClientRect())
+              ) {
+                event.preventDefault()
+                return
+              }
+              onPointerDownOutside?.(event)
+            }}
             onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
             onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
           />

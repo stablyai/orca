@@ -203,6 +203,11 @@ export function useNativeChatSessionOptions(args: {
         }
       }
     )
+    // Cursor's CLI listing replaces the chat catalog with every effort/fast variant and drops
+    // the context size the person just picked. The ACP catalog is the one this chat runs.
+    if (agent === 'cursor') {
+      return unsubscribe
+    }
     ensureNativeChatModelEnrichment({
       agent,
       hostKey: discoveryContext.hostKey,

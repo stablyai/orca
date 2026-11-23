@@ -17,6 +17,10 @@ export type AgentSessionModelOption = {
   supportsFastMode?: boolean
   /** Whether this model runs Fast until the person picks; absent is off. */
   defaultFastMode?: boolean
+  /** Context sizes the model lists, such as 256k and 500k. Absent means one size. */
+  contextWindows?: AgentSessionOptionChoice[]
+  /** The size a new session uses until the person picks; absent is the first listed size. */
+  defaultContext?: string
   /** Whether the model runs Approve for me; absent is unknown, which neither offers nor launches it. */
   supportsAutoMode?: boolean
   /** Provider tier IDs beyond standard; capable clients replace Fast with one speed choice including default. Absence means unknown. */

@@ -29,6 +29,8 @@ export type AcpInstructionsDelivery = (input: {
   file: () => Promise<string>
   /** What the child will see, inherited values included. */
   env: Readonly<Record<string, string>>
+  /** The session folder the agent starts in. */
+  cwd: string
 }) => Promise<AcpInstructionsLaunch | null>
 
 // Grok keeps them with the session, so a reopened conversation keeps the preamble it began with.
@@ -63,6 +65,26 @@ export const deliverOmpInstructions: AcpInstructionsDelivery = async ({ file }) 
   args: [`--append-system-prompt=${await file()}`]
 })
 
+/** Cursor's always-apply rule in the session folder. Cursor ACP has no system-prompt field. */
+export const CURSOR_BOT_RULE = join('.cursor', 'rules', 'orca-bot.mdc')
+
+/** The rule file Cursor reads into each completion. `alwaysApply` is what ACP sessions load. */
+export function cursorBotRule(text: string): string {
+  return `---\nalwaysApply: true\n---\n\n${text}`
+}
+
+// Cursor's own answer (2026-07) is that ACP cannot prepend a system prompt, and that a project rule
+// carries the guidance instead. The bot home is that project. Rewritten on every launch, including
+// a reopen, so a later preamble replaces the file the next completion reads.
+export const deliverCursorInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  const path = join(cwd, CURSOR_BOT_RULE)
+  await mkdir(join(cwd, '.cursor', 'rules'), { recursive: true })
+  const staged = `${path}.${randomUUID()}`
+  await writeFile(staged, cursorBotRule(text), { mode: 0o600 })
+  await rename(staged, path)
+  return {}
+}
+
 const cleared = new Map<string, Promise<void>>()
 
 /** One file per chat, rewritten at each launch. Stdio children never outlive the host, and one host
@@ -93,7 +115,12 @@ export async function writeAcpInstructionsFile(
 export async function acpLaunchInstructions(
   spec: Pick<AcpLaunchSpec, 'agent' | 'instructions'>,
   dataDirectory: string,
-  input: { sessionId: string; text: string | null; env: Readonly<Record<string, string>> }
+  input: {
+    sessionId: string
+    text: string | null
+    env: Readonly<Record<string, string>>
+    cwd: string
+  }
 ): Promise<AcpInstructionsLaunch | null> {
   const { text } = input
   if (!text) {
@@ -102,6 +129,7 @@ export async function acpLaunchInstructions(
   const delivered = await spec.instructions?.({
     text,
     env: input.env,
+    cwd: input.cwd,
     file: () => writeAcpInstructionsFile(dataDirectory, input.sessionId, text)
   })
   if (!delivered) {

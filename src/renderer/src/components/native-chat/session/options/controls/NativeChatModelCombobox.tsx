@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/command'
 import { nativeChatModelDescription } from './native-chat-model-description'
 import { useTranslate } from '@/i18n/use-translate'
+import { pointerIsInVerticalScrollbarGutter } from '@/lib/overlay-interaction/scrollbar-gutter-pointer'
 import type {
   SessionOptionsCliUpdate,
   SessionOptionSelectChoice
@@ -117,7 +118,15 @@ export function NativeChatModelCombobox({
         // cmdk rows override inherited aria-disabled, so announce pending writes on the list too.
         aria-busy={busy}
         // Keep focus in search; model changes can remove or disable the clicked option.
+        // A scrollbar mousedown must keep its default: preventDefault makes Chromium miss the popover and Radix closes it.
         onMouseDown={(event) => {
+          if (
+            event.currentTarget instanceof HTMLElement &&
+            pointerIsInVerticalScrollbarGutter(event.currentTarget, event.clientX)
+          ) {
+            event.stopPropagation()
+            return
+          }
           event.preventDefault()
           search.current?.focus()
         }}

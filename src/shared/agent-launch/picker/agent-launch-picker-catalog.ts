@@ -17,6 +17,7 @@ import {
 } from '../permissions/tui-agent-permission-choice'
 import type { TuiAgent } from '../catalog/tui-agent'
 import type { AgentPickerEntry, AgentPickerModel, AgentPickerSurface } from './agent-launch-picker'
+import { cursorParameterizedSelection } from '../../agent-session/options/model-catalog/cursor-model-selection'
 import { classifyAgentModels } from '../../agent-session/options/model-catalog/legacy-agent-models'
 
 type ModelMenuEntry = Pick<AgentPickerEntry, 'agent' | 'catalog'> &
@@ -56,11 +57,19 @@ export function agentPickerEntryOptions(
   let options = agentPickerOptions(entry.agent, model, surface)
   const rows = agentPickerModels(entry, surface)
   const composer = agentPickerUsesComposerModelMenu(entry, surface)
+  // A saved CLI variant (`grok-4.7-high`) still uses the base model's Fast and context choices.
+  const described =
+    entry.agent === 'cursor' && model && !rows.some((row) => row.id === model)
+      ? cursorParameterizedSelection(
+          model,
+          rows.map((row) => row.id)
+        )?.model
+      : model
   const live = composer
-    ? model
-      ? listedModelDescribing(rows, undefined, model)
+    ? described
+      ? listedModelDescribing(rows, undefined, described)
       : rows.find((row) => row.isDefault)
-    : rows.find((row) => row.id === model || (model === undefined && row.isDefault))
+    : rows.find((row) => row.id === described || (described === undefined && row.isDefault))
   if (composer && !live && model) {
     return []
   }

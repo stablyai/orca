@@ -8,6 +8,7 @@ import {
 import { AcpStructuredOptions } from '../options/acp-structured-options'
 import { acpLaunchSpecFor } from '../launch/acp-launch-registry'
 import { readCursorModelCatalog } from '../acp-dialects/cursor-model-catalog'
+import { discoveredModel } from '../../../shared/agent-session/options/model-catalog/structured-agent-session-discovered-model'
 import type { SessionConfigOption } from '../generated/acp-protocol.generated'
 import type { AcpScriptedAgent } from '../process/testing/acp-scripted-agent.test-support'
 import {
@@ -270,7 +271,20 @@ it("lists each model's own effort levels and Fast default before a chat exists",
           {
             value: 'composer-2.5',
             name: 'Composer 2.5',
-            configOptions: [{ ...OPUS_OPTIONS[3]!, currentValue: 'true' }]
+            configOptions: [
+              { ...OPUS_OPTIONS[3]!, currentValue: 'true' },
+              {
+                id: 'context',
+                name: 'Context',
+                category: 'model_config',
+                type: 'select',
+                currentValue: '256k',
+                options: [
+                  { value: '256k', name: '256K' },
+                  { value: '500k', name: '500K' }
+                ]
+              }
+            ]
           }
         ]
       }
@@ -304,9 +318,37 @@ it("lists each model's own effort levels and Fast default before a chat exists",
       isDefault: false,
       efforts: [],
       supportsFastMode: true,
-      defaultFastMode: true
+      defaultFastMode: true,
+      contextWindows: [
+        { value: '256k', label: '256K' },
+        { value: '500k', label: '500K' }
+      ],
+      defaultContext: '256k'
     }
   ])
+})
+
+it("offers a Cursor model's Fast toggle and context sizes together", () => {
+  expect(
+    discoveredModel(
+      {
+        id: 'grok-4.7',
+        label: 'Grok 4.7',
+        isDefault: false,
+        efforts: [{ value: 'high', label: 'High' }],
+        defaultEffort: 'high',
+        supportsFastMode: true,
+        defaultFastMode: true,
+        contextWindows: [
+          { value: '256k', label: '256K' },
+          { value: '500k', label: '500K' }
+        ],
+        defaultContext: '256k'
+      },
+      true,
+      'cursor'
+    ).options.map((option) => option.id)
+  ).toEqual(['effort', 'context', 'fastMode'])
 })
 
 it("drops Cursor's new-file markers from an edit's diff", () => {

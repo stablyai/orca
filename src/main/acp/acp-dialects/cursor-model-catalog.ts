@@ -1,7 +1,16 @@
 import { z } from 'zod'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
-import { SessionConfigOptionSchema } from '../generated/acp-protocol.generated'
+import {
+  SessionConfigOptionSchema,
+  type SessionConfigOption
+} from '../generated/acp-protocol.generated'
 import { acpEffortOption, acpSelectChoices } from '../options/acp-select-choices'
+
+type SelectConfigOption = Extract<SessionConfigOption, { type: 'select' }>
+
+function isSelectConfigOption(option: SessionConfigOption): option is SelectConfigOption {
+  return option.type === 'select'
+}
 
 const listReplySchema = z.object({
   models: z
@@ -31,6 +40,13 @@ export async function readCursorModelCatalog(connection: {
     )
     const effort = acpEffortOption(options)
     const fast = options.find((option) => option.id === 'fast')
+    const context = options.find(
+      (option): option is SelectConfigOption =>
+        isSelectConfigOption(option) && option.id === 'context'
+    )
+    const contextWindows = context
+      ? acpSelectChoices(context).map((choice) => ({ value: choice.value, label: choice.name }))
+      : []
     return {
       id: model.value,
       label: model.name,
@@ -41,7 +57,13 @@ export async function readCursorModelCatalog(connection: {
         : [],
       ...(effort ? { defaultEffort: effort.currentValue } : {}),
       supportsFastMode: fast !== undefined,
-      ...(fast?.type === 'select' ? { defaultFastMode: fast.currentValue === 'true' } : {})
+      ...(fast?.type === 'select' ? { defaultFastMode: fast.currentValue === 'true' } : {}),
+      ...(contextWindows.length > 0
+        ? {
+            contextWindows,
+            ...(context?.currentValue ? { defaultContext: context.currentValue } : {})
+          }
+        : {})
     }
   })
 }

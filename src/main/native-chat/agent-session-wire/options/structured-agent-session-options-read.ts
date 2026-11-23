@@ -175,6 +175,7 @@ export async function readStructuredAgentSessionOptions(
     fastMode:
       selected.current.fastMode ??
       (model === options.current.model ? options.current.fastMode : undefined),
+    context: saved.context ?? options.current.context ?? selected.current.context,
     // The saved tier as the shared speed rule runs it under the saved model.
     ...(context.deps.agents.definition(agent)?.restingOptions.acceptsKey('interactionMode')
       ? {
@@ -196,7 +197,14 @@ export async function readStructuredAgentSessionOptions(
     (key) => saved[key] === undefined && defaultedBy(key)
   )
   const acceptedInputSources: AgentSessionAcceptedInputSources = {}
-  for (const key of ['model', 'effort', 'fastMode', 'serviceTier', 'interactionMode'] as const) {
+  for (const key of [
+    'model',
+    'effort',
+    'fastMode',
+    'context',
+    'serviceTier',
+    'interactionMode'
+  ] as const) {
     if (current[key] !== undefined && saved[key] !== undefined) {
       acceptedInputSources[key] = 'saved'
     }

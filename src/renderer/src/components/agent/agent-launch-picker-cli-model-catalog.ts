@@ -12,7 +12,10 @@ import { discoverRuntimeCommitMessageModels } from '@/runtime/source-control/git
 
 /** Agents with no structured chat have no host model catalog, so they list models through their CLI. */
 export function agentPickerListsCliModels(entry: Pick<AgentPickerEntry, 'agent'>): boolean {
+  // Cursor's CLI lists one row per effort and fast variant. Its chat catalog is the shorter ACP
+  // list, with Fast and context as options on each model.
   return (
+    entry.agent !== 'cursor' &&
     !isNativeChatSupportedAgent(entry.agent) &&
     getAgentSessionOptionCatalog(entry.agent)?.listModels !== undefined
   )

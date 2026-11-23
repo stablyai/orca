@@ -5,10 +5,11 @@ import { botRulesBlock, botSessionPreamble } from './bot-preamble'
 import { type BotHomeFilesystem, localBotHomeFilesystem } from './bot-home'
 import type { BotTurnContext } from './bot-turn-context'
 
-/** Agents that rebuild their system prompt from the instructions every start passes them (Pi's
- *  --append-system-prompt, Antigravity's reopen `_meta`); other agents keep a resumed thread's first
- *  ones. Claude records its prompt per conversation and reuses it on resume until compaction. */
-const READS_INSTRUCTIONS_EACH_START: ReadonlySet<string> = new Set(['pi', 'antigravity'])
+/** Agents that take the instructions again on every start (Pi's --append-system-prompt, Antigravity's
+ *  reopen `_meta`, Cursor's always-apply rule rewritten in the bot home). Other agents keep a
+ *  resumed thread's first ones. Claude records its prompt per conversation and reuses it on resume
+ *  until compaction. */
+const READS_INSTRUCTIONS_EACH_START: ReadonlySet<string> = new Set(['pi', 'antigravity', 'cursor'])
 
 function startsFresh(record: BotSessionLaunch): boolean {
   return (

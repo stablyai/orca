@@ -236,6 +236,8 @@ export type AcpDialect = {
   builtinCommands?(initialized: InitializeResponse): (command: AvailableCommand) => boolean
   /** This agent's fast parameter, mapped to Orca's fast mode toggle. */
   fastConfigId?: string
+  /** This agent's context-size parameter, mapped to Orca's context choice. */
+  contextConfigId?: string
   /** This agent's mode values, mapped to Orca's Build/Plan interaction mode. */
   interactionModes?: Readonly<Record<AgentSessionInteractionMode, string>>
 }

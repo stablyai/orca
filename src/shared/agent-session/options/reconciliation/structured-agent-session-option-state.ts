@@ -13,6 +13,7 @@ const ANSWERED_VALUE_IDS = [
   'model',
   'effort',
   'fastMode',
+  'context',
   'serviceTier',
   'interactionMode'
 ] as const

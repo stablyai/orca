@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { CURSOR_ACP_DIALECT } from '../acp/acp-dialects/cursor-dialect'
 import { readCursorModelCatalog } from '../acp/acp-dialects/cursor-model-catalog'
+import { deliverCursorInstructions } from '../acp/launch/acp-instructions'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
 import { CURSOR_MINIMUM_VERSIONS } from '../acp/launch/acp-minimum-versions'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
@@ -39,6 +40,7 @@ export const CURSOR_LAUNCH_SPEC: AcpLaunchSpec = {
     // Each model's listed defaults are its own, not the model a new session starts on.
     listingNamesConfiguredModel: false
   },
+  instructions: deliverCursorInstructions,
   transcriptImport: null,
   sessionHistory: CURSOR_SESSION_HISTORY,
   // No session/close or delete: a naming task's session would stay in the user's Cursor history.

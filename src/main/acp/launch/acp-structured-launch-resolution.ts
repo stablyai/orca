@@ -229,6 +229,7 @@ export function acpStructuredLaunchPart(
     const visualsLoaded = visuals && loaded.includes(visuals.skill) ? visuals : null
     const instructions = await acpLaunchInstructions(spec, deps.dataDirectory, {
       sessionId: identity.sessionId,
+      cwd,
       text: await basis.instructions(
         linkedSkillsSection(
           linked.projects,

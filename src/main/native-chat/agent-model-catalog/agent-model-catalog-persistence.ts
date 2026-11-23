@@ -80,6 +80,14 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
       ? { supportsFastMode: row.supportsFastMode }
       : {}),
     ...(typeof row.defaultFastMode === 'boolean' ? { defaultFastMode: row.defaultFastMode } : {}),
+    ...(Array.isArray(row.contextWindows)
+      ? {
+          contextWindows: row.contextWindows
+            .map(parseChoice)
+            .filter((choice): choice is AgentSessionOptionChoice => choice !== null)
+        }
+      : {}),
+    ...(text(row.defaultContext) ? { defaultContext: text(row.defaultContext)! } : {}),
     ...(typeof row.supportsAutoMode === 'boolean'
       ? { supportsAutoMode: row.supportsAutoMode }
       : {}),

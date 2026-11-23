@@ -171,7 +171,14 @@ export function structuredAgentSessionMessageSelection(
 ): Record<string, string> {
   const selection: Record<string, string> = {}
   const snapshot = structuredAgentSessionOptionSnapshot(view)
-  for (const id of ['model', 'effort', 'fastMode', 'serviceTier', 'interactionMode'] as const) {
+  for (const id of [
+    'model',
+    'effort',
+    'fastMode',
+    'context',
+    'serviceTier',
+    'interactionMode'
+  ] as const) {
     const descriptor = snapshot.find((entry) => entry.id === id)
     if (view.acceptedInputSources !== undefined) {
       if (!view.acceptedInputSources[id]) {
