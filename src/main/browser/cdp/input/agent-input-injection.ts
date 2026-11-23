@@ -18,7 +18,17 @@ const suspensions = new WeakMap<InjectionTarget, Set<(suspended: boolean) => Pro
 
 async function setSuspended(target: InjectionTarget, suspended: boolean): Promise<void> {
   await setBrowserInputGuard(target, suspended)
-  await Promise.all(Array.from(suspensions.get(target) ?? [], (update) => update(suspended)))
+  const updates = (): Promise<unknown> =>
+    Promise.all(Array.from(suspensions.get(target) ?? [], (update) => update(suspended)))
+  // The preload's acknowledged guard fences every private key policy, so input waits for no other ACK.
+  // Resume still republishes policies (one armed mid-input starts disabled) without holding the caller.
+  if (hasBrowserInputGuard(target)) {
+    if (!suspended) {
+      void updates().catch(() => {})
+    }
+    return
+  }
+  await updates()
 }
 const unacknowledged = new WeakSet<InjectionTarget>()
 const recoveryListeners = new WeakSet<InjectionTarget>()
@@ -121,7 +131,15 @@ export async function withAgentInputInjection<T>(
           keyboardDepth.delete(webContents)
           suspensionGates.delete(webContents)
           // Recovery cannot replace a delivered result or its original error.
-          await setSuspended(webContents, false).catch(() => markUnacknowledged(webContents))
+          const resume = setSuspended(webContents, false).catch(() => {
+            if (!isAgentInjectingKeyboard(webContents)) {
+              markUnacknowledged(webContents)
+            }
+          })
+          // A guarded guest stays fenced until it acknowledges; a later input supersedes this revision.
+          if (!hasBrowserInputGuard(webContents)) {
+            await resume
+          }
         }
       }
     } finally {

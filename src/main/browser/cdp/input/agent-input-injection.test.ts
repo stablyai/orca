@@ -1,6 +1,51 @@
 import { EventEmitter } from 'node:events'
 import { expect, it } from 'vitest'
 import { registerAgentInputSuspension, withAgentInputInjection } from './agent-input-injection'
+import { setBrowserInputPolicy } from './browser-input-guard'
+import {
+  BROWSER_INPUT_GUARD,
+  BROWSER_INPUT_GUARD_ACK
+} from '../../../../shared/browser/element-grab/browser-input-guard'
+
+it('delivers guarded keyboard input after one current guard ACK, never waiting on policy round trips', async () => {
+  const sent: { token: string; revision: number; suspended: boolean }[] = []
+  const frame = {
+    send: (channel: string, payload: { token: string; revision: number; suspended: boolean }) => {
+      if (channel === BROWSER_INPUT_GUARD) {
+        sent.push(payload)
+      }
+    }
+  }
+  const guest = Object.assign(target(), { mainFrame: frame })
+  const ack = (message: { token: string; revision: number; suspended: boolean }): void => {
+    guest.emit('ipc-message', { senderFrame: frame }, BROWSER_INPUT_GUARD_ACK, message)
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the guard uses only mainFrame.send, on/off/once and id.
+  setBrowserInputPolicy(guest as unknown as Electron.WebContents, 'chord', 'chord-token')
+  ack(sent[0])
+  // An active chord policy whose own round trip never completes.
+  registerAgentInputSuspension(guest, () => new Promise<void>(() => {}))
+
+  let delivered = false
+  const injection = withAgentInputInjection(guest, async () => {
+    delivered = true
+    return 'typed'
+  })
+  await Promise.resolve()
+  const suspend = sent.at(-1)
+  if (!suspend?.suspended) {
+    throw new Error('Missing guard suspension')
+  }
+  ack({ ...suspend, revision: suspend.revision - 1 })
+  await Promise.resolve()
+  expect(delivered).toBe(false)
+
+  ack(suspend)
+  // The resume guard message stays unacknowledged; the delivered result does not wait for it.
+  await expect(injection).resolves.toBe('typed')
+  expect(delivered).toBe(true)
+  expect(sent.at(-1)?.suspended).toBe(false)
+})
 
 function target() {
   let menuIgnored = false
