@@ -27412,7 +27412,6 @@
         "isIn": "{{name}} is in Slack",
         "ready": "Your Slack app is ready. Approve it in Slack to finish.",
         "approve": "Approve in Slack",
-        "otherBrowser": "Approving in another browser?",
         "approveAsYourself": "Approve in Slack as yourself. Approving in another browser?",
         "waitingAdmin": "If your workspace needs an admin to approve new apps, {{name}} joins once they do. If they decline, Install again reuses the same app.",
         "newLink": "Get a new link",
@@ -27492,7 +27491,14 @@
         "confirm": "Orca on this computer creates the Slack app with {{email}}’s token. {{host}} gets only this bot’s app.",
         "offerMac": "This Mac is signed in to Orca as {{email}}, which already has a token for {{workspace}}.",
         "offer": "This computer is signed in to Orca as {{email}}, which already has a token for {{workspace}}.",
-        "use": "Use it →"
+        "use": "Use it →",
+        "question": "Use your {{device}}’s Slack sign-in instead?",
+        "firstQuestion": "Your {{device}} is already signed in to Slack. Use that sign-in?",
+        "useDevice": "Use {{device}}’s sign-in",
+        "questionHere": "Use this computer’s Slack sign-in instead?",
+        "firstQuestionHere": "This computer is already signed in to Slack. Use that sign-in?",
+        "useHere": "Use this computer’s sign-in",
+        "anotherWay": "Set up another way"
       },
       "postAs": {
         "orcaUser": "Orca user",
@@ -27510,22 +27516,17 @@
       "mentionLine": "Mention <code>@{{name}}</code> in a channel or DM.",
       "reconnect": {
         "expiredTitle": "Slack token expired",
-        "useTitleMac": "Use your Mac’s token?",
-        "useTitle": "Use this computer’s token?",
         "whyMine": "Each computer keeps its own Slack token. Slack stopped accepting the one {{email}} uses.",
         "whyHost": "Each computer keeps its own Slack token. Slack stopped accepting the one {{host}} uses.",
         "why": "Slack stopped accepting this workspace’s saved token.",
         "submit": "Reconnect",
         "about": "About Slack tokens",
-        "useDetail": "Use it sets up this bot’s Slack app with {{email}}’s token. {{host}} only gets this bot’s app.",
-        "hostExpiredMac": "<host>{{host}}</host>’s token expired. This Mac’s works.",
-        "hostExpired": "<host>{{host}}</host>’s token expired. This computer’s works.",
-        "pasteInstead": "Paste a token instead",
-        "use": "Use it",
         "kept": "Orca Cloud keeps the new token encrypted, so your next bots here need one click.",
         "mineMac": "This Mac’s token expired. Paste a new one.",
         "mine": "This computer’s token expired. Paste a new one.",
-        "paste": "Paste a new token to reconnect."
+        "paste": "Paste a new token to reconnect.",
+        "expiredOnTitle": "Slack sign-in expired on {{host}}",
+        "signInAgain": "Sign in again"
       },
       "problem": {
         "reconnecting": "Waiting for {{host}} to reconnect…",
@@ -27534,14 +27535,24 @@
         "offlineNext": "Check that Orca is running on {{host}}, then reconnect. Slack setup starts again once {{host}} is back.",
         "otherUser": "A different Slack account approved the connection.",
         "otherUserNext": "Someone signed in to another Slack account approved the Slack link, so {{bot}} can’t act as you. Get a new link and approve it while signed in to your own Slack account.",
-        "expired": "The Slack link expired before the connection was approved.",
-        "expiredNext": "Get a new link and approve the connection in Slack.",
+        "expired": "Slack sign-in didn’t finish.",
+        "expiredNext": "The Slack link expired before anyone approved the connection.",
         "tokenRejected": "Slack rejected this workspace’s token.",
         "tokenRejectedNext": "This happens after the Slack app was removed or the token was revoked. Replace the token to set up {{bot}} again.",
         "reconnect": "Reconnect",
         "replaceToken": "Replace token",
         "details": "Details",
         "reconnectFailed": "Orca still can’t reach {{host}}."
+      },
+      "approve": {
+        "noteUntil": "Works once, until {{time}}. Sign in to Slack as yourself there; Orca Cloud passes the approval back to {{host}}.",
+        "note": "Works once. Sign in to Slack as yourself there; Orca Cloud passes the approval back to {{host}}.",
+        "noteUntilHere": "Works once, until {{time}}. Sign in to Slack as yourself there.",
+        "noteHere": "Works once. Sign in to Slack as yourself there.",
+        "openOn": "Open Slack on {{host}}",
+        "otherDevice": "Approve on another device",
+        "linkLabel": "Slack approval link",
+        "copied": "Copied"
       }
     },
     "whoCanAsk": {
