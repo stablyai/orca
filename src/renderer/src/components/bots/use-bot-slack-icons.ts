@@ -5,7 +5,7 @@ import { useEffect } from 'react'
 import { readBots, readBotsEnabled, subscribeToBotChanges, useBotsEnabled } from '@/lib/bot-catalog'
 import { onBotHostCameBack } from '@/lib/bot-host-link-read'
 import { readBotHostState, readLiveBotHostIds } from '@/lib/bot-catalog-snapshot'
-import { botRefKey, callBotRpc, type BotRef } from '@/lib/bot-hosts'
+import { botRefKey } from '@/lib/bot-hosts'
 import { botHostHas } from '@/lib/bot-host-status'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
@@ -13,7 +13,9 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 import { BOTS_SLACK_ICON_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import { wornBotOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import { botSlackIconLook } from '../../../../shared/bots/bot-slack-icon'
+import { slackIconFailures } from './bot-slack-icon-failures'
 import { drawBotSlackIcon } from './bot-slack-icon-raster'
+import { botSlackIconWanted, uploadBotSlackIcon } from './bot-slack-icon-rpc'
 
 // Per bot, the look asked about or drawn this session; a failed one is let go for the next bots read.
 const handled = new Map<string, { look: string; attempt: number }>()
@@ -27,7 +29,7 @@ const running = new Set<string>()
 // Per bot, failed attempts at its look: a failure is tried again on the next notices, at most this many times,
 // until its record changes, its host comes back, or bots are turned back on.
 const MAX_TRIES = 3
-const failures = new Map<string, { look: string; count: number }>()
+const failures = slackIconFailures
 // What the last run saw, so a notice that changed neither the bots nor which hosts are live (a Needs You
 // count) costs nothing, and a bot record it already looked at is skipped.
 let seenBots: readonly Bot[] | null = null
@@ -38,24 +40,6 @@ const seen = new WeakSet<Bot>()
 const retry = new Set<string>()
 // Bots listed last run, for letting a deleted bot's look go.
 let listedCount = 0
-
-// Whether the host wants `look` drawn, and whether `look` is the bot's look there yet.
-function botSlackIconWanted(
-  bot: BotRef,
-  look: string
-): Promise<{ wanted: boolean; current: boolean }> {
-  return callBotRpc(bot, 'bots.avatar.slackIcon.wanted', { botId: bot.id, look })
-}
-
-// False when the host's look changed since and it dropped the drawing.
-async function uploadBotSlackIcon(bot: BotRef, look: string, png: string): Promise<boolean> {
-  const { stored } = await callBotRpc<{ stored: boolean }>(bot, 'bots.avatar.slackIcon.upload', {
-    botId: bot.id,
-    look,
-    png
-  })
-  return stored
-}
 
 // Lets a failed or outdated attempt go; the next bots notice, of any kind, looks at the bot again.
 function forget(bot: Bot, attempt: number): void {
@@ -271,6 +255,26 @@ function hostCameBack(hostId: ExecutionHostId): void {
   }
 }
 
+// Coming back to the window is a real step: each failed icon is tried again, its count of tries started over.
+function retryFailed(): void {
+  if (failures.size === 0) {
+    return
+  }
+  for (const key of failures.keys()) {
+    retry.add(key)
+    failures.delete(key)
+  }
+  seenBots = null
+  publishLooks()
+}
+
+/** The settings' Try again: the bot's icon is asked about and drawn again now. */
+export function retryBotSlackIcon(bot: Bot): void {
+  failures.delete(botRefKey(bot))
+  handled.delete(botRefKey(bot))
+  publishBotSlackIcon(bot)
+}
+
 /** For the window: follows the bots list another surface loaded, and never loads it itself. Turning
  *  bots back on runs it too, as the list may have changed while they were off. */
 export function useBotSlackIcons(): void {
@@ -287,9 +291,11 @@ export function useBotSlackIcons(): void {
     publishLooks()
     const stopBots = subscribeToBotChanges(publishLooks)
     const stopCameBack = onBotHostCameBack(hostCameBack)
+    window.addEventListener('focus', retryFailed)
     return () => {
       stopBots()
       stopCameBack()
+      window.removeEventListener('focus', retryFailed)
       // Off, nothing here is kept: no list, no waiting attempts, and the one running stops at its next check.
       seenBots = null
       seenLive = null

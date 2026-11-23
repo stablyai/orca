@@ -27504,7 +27504,9 @@
         "mineMac": "This Mac’s token expired. Paste a new one.",
         "mine": "This computer’s token expired. Paste a new one.",
         "paste": "Paste a new token to reconnect."
-      }
+      },
+      "iconFailed": "Slack didn't get {{name}}'s latest picture. It still shows the plain mascot.",
+      "iconRetry": "Try again"
     },
     "whoCanAsk": {
       "searching": "Searching…",

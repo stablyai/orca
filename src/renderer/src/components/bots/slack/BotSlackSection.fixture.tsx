@@ -9,8 +9,13 @@ import type { Bot } from '../../../../../shared/bot-types'
 import { BotConnectorsSection } from '../../settings/bots/BotConnectorsSection'
 import { clickWhenShown, settle, slackOnly, stub } from '../bot-connectors-host-fixture'
 import { BotSlackSetupDialog } from './BotSlackSetupDialog'
+import { BotSlackSection } from './BotSlackSection'
+import type { ConnectorBotSlackState } from '../../../../../shared/connector-bot-slack-contract'
 import portrait from '../../../component-fixtures/assets/slack-avatar.jpg'
 import { connectorAvatarSrc } from '../../../../../shared/connector-avatar-scheme'
+import { botSlackIconLook } from '../../../../../shared/bots/bot-slack-icon'
+import { botRefKey } from '@/lib/bot-hosts'
+import { slackIconFailures } from '../bot-slack-icon-failures'
 
 // The Slack photo's address; the host's avatar cache is played by a bundled portrait wherever its
 // cached src is drawn, so the shot never waits on the network.
@@ -165,3 +170,41 @@ const dialog = (interact?: () => Promise<void>, photo = true) =>
 export const afterInstall = dialog()
 export const afterInstallPicker = dialog(openPicker)
 export const afterInstallPickerNoPhoto = dialog(openPicker, false)
+
+// A dressed mascot whose colored picture this window failed to send to Slack: the note and its Try again.
+const dressed: Bot = {
+  ...builder,
+  avatar: 'mascot:B1',
+  avatarColor: '#f4c4cf',
+  avatarOutfit: 'party'
+}
+const installedSlack: Extract<ConnectorBotSlackState, { state: 'installed' }> = {
+  state: 'installed',
+  teamId: 'T1',
+  teamName: 'Globex',
+  appId: 'A1',
+  botUserId: 'UB',
+  installerUserId: 'U-alice',
+  installerName: 'Alice',
+  postAs: 'person',
+  computerName: 'm4 air'
+}
+const iconFailed = (width: number) =>
+  defineFixture({
+    width: width + 40,
+    setup: () => {
+      host(dressed)
+      slackIconFailures.set(botRefKey(dressed), { look: botSlackIconLook(dressed) ?? '', count: 1 })
+    },
+    render: () => (
+      <ConfirmationDialogProvider>
+        <div style={{ width }} className="bg-sidebar px-2 py-3 text-sidebar-foreground">
+          <BotSlackSection bot={dressed} slack={installedSlack} />
+        </div>
+      </ConfirmationDialogProvider>
+    ),
+    interact: () => settle(300)
+  })
+
+export const panel350IconFailed = iconFailed(350)
+export const panel280IconFailed = iconFailed(280)
