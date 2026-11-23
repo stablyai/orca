@@ -99,6 +99,20 @@ function flattenCatalog(value, prefix = '', paths = new Set()) {
   return paths
 }
 
+// Why leaves only: flattenCatalog also yields namespace nodes, so a quoted namespace in a pinned
+// file's comment would look like an unpinned key.
+function flattenTranslationLeaves(value, prefix = '', leaves = new Set()) {
+  for (const [key, child] of Object.entries(value)) {
+    const childPath = prefix ? `${prefix}.${key}` : key
+    if (typeof child === 'string') {
+      leaves.add(childPath)
+    } else if (typeof child === 'object' && child !== null) {
+      flattenTranslationLeaves(child, childPath, leaves)
+    }
+  }
+  return leaves
+}
+
 // Why same-directory only: a dialog's copy module and split-out footer sit beside it; deeper
 // imports reach shared chrome that carries no trust meaning.
 function siblingImports(filePath, sourceText) {
@@ -149,7 +163,7 @@ export function collectProtectedCopyKeys(sources, englishPaths) {
 }
 
 /** Pinned keys the manifest lost, and keys a pinned file renders that are not pinned yet. */
-export function findPinViolations(sources, englishPaths, generated, root) {
+export function findPinViolations(sources, englishLeaves, generated, root) {
   const violations = []
   for (const pin of PINNED_PROTECTED_COPY) {
     for (const key of pin.keys) {
@@ -166,8 +180,8 @@ export function findPinViolations(sources, englishPaths, generated, root) {
     }
     for (const literal of evidence.literals) {
       const key = literal.replace(PLURAL_SUFFIX_RE, '')
-      const isCatalogKey = englishPaths.has(key) || englishPaths.has(`${key}_other`)
-      if (isCatalogKey && !pin.keys.includes(key)) {
+      const isTranslationKey = englishLeaves.has(key) || englishLeaves.has(`${key}_other`)
+      if (isTranslationKey && !pin.keys.includes(key)) {
         violations.push(`${key} is rendered by ${pin.files.join(', ')} but not pinned`)
       }
     }
@@ -192,7 +206,12 @@ export async function main(root = process.cwd(), args = process.argv.slice(2)) {
   const generated = collectProtectedCopyKeys(sources, englishPaths)
   const expected = `${JSON.stringify(generated, null, 2)}\n`
   const outputPath = path.join(root, PROTECTED_COPY_KEYS_PATH)
-  const pinViolations = findPinViolations(sources, englishPaths, generated, root)
+  const pinViolations = findPinViolations(
+    sources,
+    flattenTranslationLeaves(english),
+    generated,
+    root
+  )
   if (pinViolations.length > 0) {
     console.error(
       `Protected copy pins in config/scripts/localization/catalog-validation/protected-copy-keys.mjs do not match source:\n${pinViolations.map((line) => `  ${line}`).join('\n')}`
