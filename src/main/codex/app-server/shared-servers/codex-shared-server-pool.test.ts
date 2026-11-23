@@ -501,12 +501,15 @@ describe('shared Codex app-servers', () => {
     expect(connB.closed).toBe(false)
   })
 
-  it('never shares a server for a custom Codex command, or on Windows', () => {
+  it('never shares a server with the switch off, for a custom Codex command, or on Windows', () => {
     const opener = codexConnectionOpener({ sharedServers: () => true }, 's', {
       customCommand: true
     })
     expect(opener).toBe(spawnCodexAppServerConnection)
     expect(codexConnectionOpener({ sharedServers: () => true }, 's', {}, 'win32')).toBe(
+      spawnCodexAppServerConnection
+    )
+    expect(codexConnectionOpener({ sharedServers: () => false }, 's', {}, 'linux')).toBe(
       spawnCodexAppServerConnection
     )
   })
