@@ -11,6 +11,7 @@ import { ChecksList } from './presentation/checks-list'
 import { PRCommentsList } from './comments/comments-list'
 import { refreshChecksPanelHostedReview } from './refresh/hosted-review-manual-refresh'
 import type { ChecksPanelManualRefreshInput } from './refresh/manual-refresh-dependencies'
+import { useAppStore } from '@/store/index'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const isCurrentAsyncResult = (): boolean => true
@@ -277,6 +278,76 @@ describe('manual refresh lookups', () => {
     // Nothing would re-read a section cleared here while the selected review stays the same.
     expect(set.setChecks).not.toHaveBeenCalled()
     expect(set.setComments).not.toHaveBeenCalled()
+    expect(fetchGitLabDetails).not.toHaveBeenCalled()
+  })
+
+  function gitLabReview(number: number, headSha: string) {
+    return { provider: 'gitlab', number, headSha, state: 'open', title: `MR ${number}` }
+  }
+
+  function gitLabRefreshModel(
+    card: ReturnType<typeof gitLabReview> | null,
+    captured: ReturnType<typeof gitLabReview> | null
+  ) {
+    const fetchGitLabDetails = vi.fn(async () => {})
+    const model = {
+      ...setters(),
+      repo,
+      branch: 'feature',
+      hostedReviewCacheKey: 'hosted-key',
+      activeGitLabReview: captured,
+      fetchGitLabDetails,
+      fetchHostedReviewForBranch: vi.fn(async () => card),
+      linkedPR: null,
+      linkedGitLabMR: null,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null,
+      fallbackGitHubPRNumber: null
+    } as unknown as ChecksPanelManualRefreshInput
+    return { model, fetchGitLabDetails }
+  }
+
+  function publish(review: ReturnType<typeof gitLabReview> | null): void {
+    useAppStore.setState({
+      hostedReviewCache: { 'hosted-key': { data: review, fetchedAt: Date.now() } }
+    } as never)
+  }
+
+  afterEach(() => useAppStore.setState({ hostedReviewCache: {} } as never))
+
+  it('reads the published replacement, not the MR a late click captured', async () => {
+    // A title save published MR 18 while this click, begun on MR 17, still waited.
+    publish(gitLabReview(18, 'sha-18'))
+    const { model, fetchGitLabDetails } = gitLabRefreshModel(
+      gitLabReview(17, 'sha-17'),
+      gitLabReview(17, 'sha-17')
+    )
+    await refreshChecksPanelHostedReview(model, 'gitlab', () => true)
+    expect(fetchGitLabDetails).toHaveBeenCalledTimes(1)
+    expect(fetchGitLabDetails).toHaveBeenCalledWith(
+      expect.objectContaining({ mrNumberOverride: 18, headShaOverride: 'sha-18' })
+    )
+  })
+
+  it('still reads the selected MR when the card lookup comes back empty', async () => {
+    publish(gitLabReview(17, 'sha-17'))
+    const { model, fetchGitLabDetails } = gitLabRefreshModel(null, gitLabReview(17, 'sha-17'))
+    await refreshChecksPanelHostedReview(model, 'gitlab', () => true)
+    expect(fetchGitLabDetails).toHaveBeenCalledWith(
+      expect.objectContaining({ mrNumberOverride: 17, headShaOverride: 'sha-17' })
+    )
+  })
+
+  it('reads nothing when the published selection no longer has an MR', async () => {
+    publish(null)
+    const { model, fetchGitLabDetails } = gitLabRefreshModel(
+      gitLabReview(17, 'sha-17'),
+      gitLabReview(17, 'sha-17')
+    )
+    await expect(refreshChecksPanelHostedReview(model, 'gitlab', () => true)).resolves.toBe(
+      'no-review'
+    )
     expect(fetchGitLabDetails).not.toHaveBeenCalled()
   })
 })

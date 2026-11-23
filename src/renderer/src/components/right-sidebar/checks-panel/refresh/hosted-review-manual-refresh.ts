@@ -107,8 +107,19 @@ export async function refreshChecksPanelHostedReview(
   if (provider !== 'gitlab') {
     return 'review'
   }
-  const refreshedGitLabReview =
-    refreshedReview?.provider === 'gitlab' ? refreshedReview : activeGitLabReview
+  // The published card is the panel's selection. A newer lookup (a title save, say) can publish a
+  // replacement while this click waits; a late click must not claim details for the review it
+  // replaced. Its own card and the captured review are only the fallback when nothing is published.
+  const published = model.hostedReviewCacheKey
+    ? useAppStore.getState().hostedReviewCache[model.hostedReviewCacheKey]
+    : undefined
+  const refreshedGitLabReview = published
+    ? published.data?.provider === 'gitlab'
+      ? published.data
+      : null
+    : refreshedReview?.provider === 'gitlab'
+      ? refreshedReview
+      : activeGitLabReview
   if (refreshedGitLabReview) {
     await fetchGitLabDetails({
       mrNumberOverride: refreshedGitLabReview.number,
