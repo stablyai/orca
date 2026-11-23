@@ -88,7 +88,13 @@ export function browserUrlForPortForwardEntry(entry: PortForwardEntry): string {
   return `${protocol}://${host}:${entry.localPort}`
 }
 
-/** The address of an SSH host's URL through the forward of its host and port; null when that port is not forwarded. */
+// Browsers resolve *.localhost to loopback themselves; hosts are matched case-insensitively.
+function forwardMatchKey(host: string, port: number): string {
+  const hostname = host.toLowerCase().replace(/^\[|\]$/g, '')
+  return portForwardKey(hostname.endsWith('.localhost') ? 'localhost' : hostname, port)
+}
+
+/** The address of an SSH host's loopback URL through the forward of its port; null when that port is not forwarded. */
 export function forwardedUrlForRemoteUrl(
   rawUrl: string,
   forwards: readonly PortForwardEntry[]
@@ -102,19 +108,17 @@ export function forwardedUrlForRemoteUrl(
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     return null
   }
-  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '')
-  // Browsers resolve *.localhost to loopback themselves.
-  const isLocalhostName = hostname === 'localhost' || hostname.endsWith('.localhost')
   const port = Number(url.port) || (url.protocol === 'https:' ? 443 : 80)
-  const key = portForwardKey(isLocalhostName ? 'localhost' : hostname, port)
+  const key = forwardMatchKey(url.hostname, port)
   const forward = forwards.find(
-    (entry) => portForwardKey(entry.remoteHost, entry.remotePort) === key
+    (entry) => forwardMatchKey(entry.remoteHost, entry.remotePort) === key
   )
   if (!forward) {
     return null
   }
-  // Keep the page's own loopback name for its Host header; the listener is IPv4 only, so other hosts map to it.
-  if (!isLocalhostName && hostname !== '127.0.0.1') {
+  const hostname = url.hostname.toLowerCase()
+  // Keep the page's own localhost name for its Host header, cookies and redirect URIs; the listener is IPv4 only.
+  if (hostname !== 'localhost' && !hostname.endsWith('.localhost') && hostname !== '127.0.0.1') {
     url.hostname = '127.0.0.1'
   }
   url.port = String(forward.localPort)

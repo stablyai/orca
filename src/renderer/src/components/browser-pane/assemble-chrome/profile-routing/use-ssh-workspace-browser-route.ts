@@ -234,6 +234,18 @@ function useSshWorkspaceRouteTargetId(worktreeId: string): string | null {
   return useAppStore((s) => selectSshWorkspaceRouteTargetId(s, worktreeId))
 }
 
+/** Whether this worktree's desktop-hosted pages browse through its SSH host. */
+export function useSshWorkspaceBrowsesThroughHost(worktreeId: string): boolean {
+  return useAppStore(
+    (s) =>
+      resolveSshWorkspaceBrowserRouteEligibility(
+        getExecutionHostIdForWorktree(s, worktreeId),
+        s.settings,
+        s.runtimeEnvironments
+      )?.eligible === true
+  )
+}
+
 const NO_PORT_FORWARDS: readonly PortForwardEntry[] = []
 
 /** The port forwards of the SSH host an SSH-routed page browses through; none for a page on this desktop's network. */

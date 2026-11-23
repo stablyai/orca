@@ -44,8 +44,13 @@ export function getSshRoutedOpenableExternalUrl(
   forwards: readonly PortForwardEntry[]
 ): string | null {
   const url = redactKagiSessionToken(currentUrl)
+  // A public URL opens as is; only the SSH host's loopback needs its forward.
+  const publicUrl = resolveRemoteFailureExternalUrl(url)
+  if (publicUrl) {
+    return publicUrl
+  }
   const forwarded = forwardedUrlForRemoteUrl(url, forwards)
-  return forwarded ? normalizeExternalBrowserUrl(forwarded) : resolveRemoteFailureExternalUrl(url)
+  return forwarded ? normalizeExternalBrowserUrl(forwarded) : null
 }
 
 export function retryBrowserTabLoad(

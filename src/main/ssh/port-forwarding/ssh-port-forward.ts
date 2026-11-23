@@ -1,7 +1,6 @@
 import type { SshConnection } from '../connection/ssh-connection'
 import { Ssh2PortForwardProvider } from './ssh2-port-forward-provider'
 import { SystemSshPortForwardProvider } from './system-ssh-port-forward-provider'
-import { assertIpv6LoopbackPortFree } from './local-forward-ipv6-loopback-probe'
 import type { PortForwardEntry } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type {
   PortForwardCloseReason,
@@ -99,10 +98,6 @@ export class SshPortForwardManager {
       settled: Promise.resolve()
     }
     const settled = (async (): Promise<StartedPortForward> => {
-      // An OS-chosen port is never typed by hand, so only fixed ports must own localhost.
-      if (localPort !== 0) {
-        await assertIpv6LoopbackPortFree(localPort)
-      }
       const started = await provider.start(conn, {
         id,
         connectionId,
