@@ -160,6 +160,12 @@ describe('verifySocksClientOwner on Windows', () => {
       allowed: true,
       unreadableOwnProcess: 'pid 101: OpenProcessToken failed with Win32 error 5'
     })
+    // A readable owner is judged by its SID even when its PID is in the app's list.
+    withOwner(async () => ({ pid: 100, sid: 'S-1-5-21-1-2-3-1002' }))
+    await expect(verifySocksClientOwner(socket)).resolves.toMatchObject({
+      allowed: false,
+      reason: 'foreign-owner'
+    })
 
     const stale = createFakeWindowsSecurity()
     stale.hasNativeExport = (name) => name !== 'tcpClientOwnerAsync'

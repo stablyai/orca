@@ -161,13 +161,10 @@ async function verifyWindowsClientOwner(
     return { allowed: false, reason: 'lookup-failed', detail: 'client connection not listed' }
   }
   // The browser's own network process may be sandboxed so its token can't be read; it's still ours.
-  if (isOwnAppProcess(owner.pid)) {
-    return 'error' in owner
-      ? { allowed: true, unreadableOwnProcess: `pid ${owner.pid}: ${owner.error}` }
-      : { allowed: true }
-  }
   if ('error' in owner) {
-    return { allowed: false, reason: 'lookup-failed', detail: owner.error }
+    return isOwnAppProcess(owner.pid)
+      ? { allowed: true, unreadableOwnProcess: `pid ${owner.pid}: ${owner.error}` }
+      : { allowed: false, reason: 'lookup-failed', detail: owner.error }
   }
   return owner.sid === security.userSid
     ? { allowed: true }
@@ -177,12 +174,13 @@ async function verifyWindowsClientOwner(
 const OWN_APP_PIDS_TTL_MS = 1_000
 let ownAppPids: { pids: ReadonlySet<number>; readAt: number } | null = null
 
-/** Brief cache: a page opens connections in bursts, and the app's process list rarely changes. */
+/** Brief cache for bursts of connections; a miss re-reads so a just-started child isn't refused. */
 function isOwnAppProcess(pid: number): boolean {
   const now = Date.now()
-  if (!ownAppPids || now - ownAppPids.readAt >= OWN_APP_PIDS_TTL_MS) {
-    ownAppPids = { pids: new Set(app.getAppMetrics().map((metric) => metric.pid)), readAt: now }
+  if (ownAppPids && now - ownAppPids.readAt < OWN_APP_PIDS_TTL_MS && ownAppPids.pids.has(pid)) {
+    return true
   }
+  ownAppPids = { pids: new Set(app.getAppMetrics().map((metric) => metric.pid)), readAt: now }
   return ownAppPids.pids.has(pid)
 }
 
