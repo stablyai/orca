@@ -3,15 +3,12 @@ import type { CdpCookie } from '../browser-cdp-cookie'
 import { cdpCookieScopeKey } from '../browser-cookie-clear-store'
 import { withCookieMutationLock } from '../mutation/cookie-mutation-lock'
 import { groupByScope, noteScopeChange } from './browser-session-cookie-scopes'
-import {
-  scheduleSave,
-  sessionCookieTrackerFor,
-  writeTrackedSnapshot
-} from './browser-session-cookie-restore'
-import { queueSnapshotWrite } from './browser-session-cookie-tracker'
+import { scheduleSave, writeTrackedSnapshot } from './browser-session-cookie-restore'
+import { queueSnapshotWrite, sessionCookieTrackerFor } from './browser-session-cookie-tracker'
 
 /** Clears every cookie in a jar, durably. */
 export async function clearBrowserCookieJar(target: Session): Promise<void> {
+  await sessionCookieTrackerFor(target)?.restored
   await withCookieMutationLock(target, () => target.clearStorageData({ storages: ['cookies'] }))
   await persistBrowserCookieClear(target)
 }
