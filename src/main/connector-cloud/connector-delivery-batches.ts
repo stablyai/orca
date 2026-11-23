@@ -15,7 +15,7 @@ import {
   type SendDelivery,
   type ThreadDelivery
 } from './connector-deliveries'
-import { slackThreadBotUser } from './connector-thread-mute'
+import { slackThreadBotUser, spokenText } from './connector-thread-mute'
 import { mayBeThreadMuteCommand } from './connector-thread-mute-phrases'
 
 /** A start or send and the sends queued right behind it in the same poll: the same person's, run
@@ -65,7 +65,7 @@ export function connectorDeliveryUnits(
       !(
         delivery.conversation.source === 'slack' &&
         slackThreadBotUser(delivery.conversation.externalId) !== null &&
-        mayBeThreadMuteCommand(delivery.text)
+        mayBeThreadMuteCommand(spokenText(delivery))
       ) &&
       askerOf(delivery) === askerOf(batch[0])
     ) {

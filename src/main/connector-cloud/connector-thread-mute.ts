@@ -20,17 +20,27 @@ import {
  *  muted thread silences any send that doesn't mention the bot; a mention unmutes and goes on. */
 export type ThreadMuteStep = 'mute' | 'unmute' | 'silence' | 'unmute_and_send' | 'send'
 
+/** What the person wrote: `text` also carries the thread before it, for an older Orca. */
+export function spokenText(
+  delivery: Pick<SendDelivery, 'text'> & { asker?: { text: string } }
+): string {
+  return delivery.asker?.text ?? delivery.text
+}
+
 export function threadMuteStep(
   muted: boolean,
-  delivery: Pick<SendDelivery, 'text' | 'bareMention' | 'mentioned' | 'resume'>,
+  delivery: Pick<SendDelivery, 'text' | 'bareMention' | 'mentioned' | 'resume'> & {
+    asker?: { text: string }
+  },
   bot: ThreadBot
 ): ThreadMuteStep {
+  const text = spokenText(delivery)
   // Resume is pressed on the bot's own failed turn: it goes on, and may still be refused, so it
   // leaves the mute as it was.
   if (delivery.resume) {
     return 'send'
   }
-  const command = threadMuteCommand(delivery.text, bot)
+  const command = threadMuteCommand(text, bot)
   if (command) {
     return command
   }
@@ -38,12 +48,12 @@ export function threadMuteStep(
     return 'send'
   }
   // Another bot behind the same Slack app, named after its mention, leaves this one muted.
-  if (addressesOtherBot(delivery.text, bot)) {
+  if (addressesOtherBot(text, bot)) {
     return 'silence'
   }
   // `mentioned` comes only from a newer connector service; until then the bot's own mention in the
   // text counts.
-  return delivery.mentioned || delivery.bareMention || mentionsBot(delivery.text, bot)
+  return delivery.mentioned || delivery.bareMention || mentionsBot(text, bot)
     ? 'unmute_and_send'
     : 'silence'
 }
@@ -117,14 +127,14 @@ export function handleThreadMute(
   if (thread) {
     // Most replies to a thread that isn't muted are no command: they skip the bot's names.
     const applied =
-      thread.muted || mayBeThreadMuteCommand(delivery.text)
+      thread.muted || mayBeThreadMuteCommand(spokenText(delivery))
         ? applyStep(deps, delivery, record, userId, thread)
         : null
     return applied && { decided: hold(deps, id, applied.decided) }
   }
   // No link yet: a start in the same poll is still writing it. A likely command waits for it and
   // is then decided as any other; the rest go on now, batched as ever.
-  if (!mayBeThreadMuteCommand(delivery.text)) {
+  if (!mayBeThreadMuteCommand(spokenText(delivery))) {
     return null
   }
   const linkedAt = deps.queued(key)
@@ -184,13 +194,15 @@ function applyStep(
 ): ThreadMuteOutcome | null {
   const key = delivery.conversation
   // A reply with no mention and nothing like a command needs no names: most of a muted thread's.
-  const plain = !delivery.text.includes('@') && !mayBeThreadMuteCommand(delivery.text)
+  const plain = !spokenText(delivery).includes('@') && !mayBeThreadMuteCommand(spokenText(delivery))
   const step = threadMuteStep(thread.muted, delivery, {
     userId,
     names: plain ? [] : deps.botNames(thread.botId),
     // Only a reply leading with this bot's own Slack mention can be another bot's behind its app.
     others:
-      plain || !leadsWithBotUser(delivery.text, userId) ? [] : deps.otherBotNames(thread.botId)
+      plain || !leadsWithBotUser(spokenText(delivery), userId)
+        ? []
+        : deps.otherBotNames(thread.botId)
   })
   if (step === 'send') {
     return null

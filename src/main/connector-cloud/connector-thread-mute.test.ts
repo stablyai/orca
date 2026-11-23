@@ -58,6 +58,9 @@ describe('a mention in a muted thread', () => {
     expect(step('ping @reviewer, look')).toBe('unmute_and_send')
     expect(step('ping @reviewer-2')).toBe('silence')
     expect(step('@reviewer-2 hello')).toBe('silence')
+    // The person's own words decide, not the thread context an older Orca's text carries with them.
+    const withContext = { text: 'earlier: can you look?\n\nunmute', asker: { text: 'unmute' } }
+    expect(threadMuteStep(true, withContext, bot)).toBe('unmute')
     expect(step('send it to ops@reviewer.io')).toBe('silence')
     expect(step('the example username is `@reviewer`')).toBe('silence')
     expect(step('```\n<@U0BOT> hi\n```')).toBe('silence')
