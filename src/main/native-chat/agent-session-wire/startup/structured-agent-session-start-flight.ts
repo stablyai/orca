@@ -27,6 +27,18 @@ export class StructuredAgentSessionStartFlights {
   private readonly exits = new Map<string, StructuredAgentSessionEndedEvent[]>()
   /** Attempts still unwinding: a decided start's provider work may still be acquiring. */
   private readonly attempts = new Map<string, Set<Promise<unknown>>>()
+  /** The ceiling of a session's latest cut attempt still unwinding. */
+  private readonly ceilings = new Map<string, Promise<void>>()
+
+  /** A cut attempt whose acquire is still out: past its ceiling, it never finished starting. */
+  unwinding(sessionId: string, ceiling: Promise<void>): void {
+    this.ceilings.set(sessionId, ceiling)
+  }
+
+  /** Settles once that ceiling has passed; never while no cut attempt is unwinding. */
+  ceilingPassed(sessionId: string): Promise<void> {
+    return this.ceilings.get(sessionId) ?? new Promise(() => {})
+  }
 
   trackAttempt(sessionId: string, attempt: Promise<unknown>): void {
     const live = this.attempts.get(sessionId) ?? new Set()
@@ -36,6 +48,7 @@ export class StructuredAgentSessionStartFlights {
       live.delete(attempt)
       if (live.size === 0 && this.attempts.get(sessionId) === live) {
         this.attempts.delete(sessionId)
+        this.ceilings.delete(sessionId)
       }
     }
     void attempt.then(done, done)

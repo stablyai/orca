@@ -13,9 +13,9 @@ export type StructuredAgentSessionCloseOutcome = {
   stopped: boolean
   closeAttempted: boolean
   reason?: string
-  /** The close cut a start whose acquire had not returned: true once that start has ended and its
-   *  exit is proven, false when it ended without that proof. */
-  whenStartEnds?: Promise<boolean>
+  /** The close cut a start whose acquire had not returned: stopped once that start has ended and its
+   *  exit is proven; otherwise why not. */
+  whenStartEnds?: Promise<{ stopped: true } | { stopped: false; reason: string }>
 }
 
 export type StructuredSessionSurfaceRuntime = Pick<
@@ -58,7 +58,9 @@ export async function closeStructuredAgentSessionChild(
       ? captureStructuredSessionSurface(host, sessionId, options.runtime)
       : options.surface
   const admitClose = options.admitClose
-  const wasStarting = host.reads.agentStarting(sessionId)
+  const startingOrWindingDown = () =>
+    host.reads.agentStarting(sessionId) || host.reads.startWindingDown(sessionId)
+  const wasStarting = startingOrWindingDown()
   let admitted = admitClose === undefined
   let closeFailure: string | undefined
   try {
@@ -83,7 +85,7 @@ export async function closeStructuredAgentSessionChild(
   if (
     admitted &&
     // A start may also have registered after that read, before this close's lane cut it.
-    (wasStarting || host.reads.agentStarting(sessionId)) &&
+    (wasStarting || startingOrWindingDown()) &&
     closeFailure === undefined &&
     !structuredSessionCloseSettled(sessionId)
   ) {
@@ -116,6 +118,12 @@ export async function closeStructuredAgentSessionChild(
 export const STARTING_AGENT_STOPPED_REASON =
   'Its agent was still starting; Orca cancelled the start.'
 
+export const STARTING_AGENT_NEVER_FINISHED_REASON =
+  'Its agent never finished starting; its process could not be proven gone.'
+
+const STARTING_AGENT_EXIT_UNPROVEN_REASON =
+  'Its agent was still starting when stopped; the start ended, but its exit was not proven.'
+
 export const STARTING_AGENT_STOPPING_REASON =
   'Its agent was still starting; Orca will close it as soon as it comes up.'
 
@@ -124,21 +132,23 @@ async function settleCancelledStart(
   sessionId: string,
   surface: StructuredSessionSurface | null,
   runtime: StructuredSessionSurfaceRuntime | undefined
-): Promise<boolean> {
+): Promise<{ stopped: true } | { stopped: false; reason: string }> {
   try {
-    await host.reads.startAttemptsEnded(sessionId)
+    if ((await host.reads.startAttemptsEnded(sessionId)) === 'ceiling') {
+      return { stopped: false, reason: STARTING_AGENT_NEVER_FINISHED_REASON }
+    }
     if (!structuredSessionCloseSettled(sessionId)) {
-      return false
+      return { stopped: false, reason: STARTING_AGENT_EXIT_UNPROVEN_REASON }
     }
     await retireCapturedStructuredSessionSurface(host, sessionId, surface, runtime)
-    return true
+    return { stopped: true }
   } catch (error) {
     host.deps.logger.warn('settling a cancelled start failed', {
       scope: 'cancelled-start-close',
       sessionId,
       error
     })
-    return false
+    return { stopped: false, reason: STARTING_AGENT_EXIT_UNPROVEN_REASON }
   }
 }
 

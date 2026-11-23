@@ -14,8 +14,8 @@ export async function stopStructuredDispatch(
   const stop = await stopStructuredWorker(structured, runtime)
   if (!stop.stopped && stop.whenStartEnds) {
     // Its agent is still starting: the stop stays pending until that start ends, never blocking here.
-    void stop.whenStartEnds.then((stopped) =>
-      settleStopOfCancelledStart(runtime, db, dispatchId, stopped)
+    void stop.whenStartEnds.then((ended) =>
+      settleStopOfCancelledStart(runtime, db, dispatchId, ended)
     )
     return {
       dispatchId,
@@ -52,18 +52,15 @@ function settleStopOfCancelledStart(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   dispatchId: string,
-  stopped: boolean
+  ended: { stopped: true } | { stopped: false; reason: string }
 ): void {
   try {
     // The agent's own exit may already have settled it.
     if (db.getWorkerDispatch(dispatchId)?.state === 'stopping') {
-      if (stopped) {
+      if (ended.stopped) {
         db.settleWorkerStop(dispatchId)
       } else {
-        db.markWorkerStopUnknown(
-          dispatchId,
-          'Its agent was still starting when stopped; the start ended, but its exit was not proven.'
-        )
+        db.markWorkerStopUnknown(dispatchId, ended.reason)
       }
     }
     runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')

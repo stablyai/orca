@@ -25,6 +25,7 @@ import {
 } from './structured-agent-session-startup-tracking'
 
 import { awakeNow } from '../../../power/awake-clock'
+import { holdUnwindingStartCeiling } from './structured-agent-session-unwinding-ceiling'
 import './structured-agent-session-startup-attempt-mint'
 
 type Tracked = StructuredAgentSessionTrackedStartup
@@ -217,6 +218,15 @@ export class StructuredAgentSessionStartupAttempts {
     if (tracked?.attemptId === attemptId && !tracked.child) {
       this.settle(sessionId, tracked, 'ended')
     }
+  }
+
+  /** A cut attempt whose acquire is still out keeps its ceiling: past it, the start never finished. */
+  holdCeiling(registeredAt: number, unwinding: Promise<unknown>): Promise<void> {
+    return holdUnwindingStartCeiling({
+      due: registeredAt + this.limits.ceilingMs,
+      now: this.now,
+      unwinding
+    })
   }
 
   isOpen(sessionId: string): boolean {

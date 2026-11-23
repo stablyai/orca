@@ -8,6 +8,7 @@ import { HOST_TEST_SESSION as SESSION } from '../../../../../native-chat/agent-s
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   closeStructuredAgentSessionChild,
+  STARTING_AGENT_NEVER_FINISHED_REASON,
   STARTING_AGENT_STOPPING_REASON
 } from '../../../../agent-session/lifecycle/structured-agent-session-close'
 import { observeStructuredSession } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
@@ -33,11 +34,14 @@ function sendBrief(current: QueuedMessageTestRig) {
 }
 
 /** A worker whose agent process is still being acquired: a restarted host holds its next start. */
-async function workerWithHeldStart(): Promise<{
+async function workerWithHeldStart(ceilingMs?: number): Promise<{
   current: QueuedMessageTestRig
   release: () => void
 }> {
-  const current = await createQueuedMessageTestRig({ restartable: true })
+  const current = await createQueuedMessageTestRig({
+    restartable: true,
+    ...(ceilingMs ? { hostDeps: { startupLimits: { ceilingMs } } } : {})
+  })
   rig = current
   await current.crashRestartHostFromDisk()
   setStructuredAgentSessionHost(current.host)
@@ -71,8 +75,8 @@ describe('a structured worker whose agent is slow to start', () => {
       closeAttempted: true,
       reason: STARTING_AGENT_STOPPING_REASON
     })
-    let ended: boolean | undefined
-    void closed.whenStartEnds?.then((stopped) => (ended = stopped))
+    let ended: unknown
+    void closed.whenStartEnds?.then((outcome) => (ended = outcome))
     await Promise.resolve()
     expect(ended).toBeUndefined()
     expect(observeStructuredSession(SESSION).status).not.toBe('exited')
@@ -88,10 +92,37 @@ describe('a structured worker whose agent is slow to start', () => {
     expect(closed.stopped).toBe(false)
     // The acquire ignored the abort and returns a live child after the close.
     release()
-    expect(await closed.whenStartEnds).toBe(true)
+    expect(await closed.whenStartEnds).toEqual({ stopped: true })
     expect(current.releaseAcquisition).toHaveBeenCalledTimes(1)
     expect(observeStructuredSession(SESSION).status).toBe('exited')
     expect(briefSends(current)).toBe(0)
+  })
+
+  it('settles a stop as never finished once the start ceiling passes with the acquire still out', async () => {
+    const { current, release } = await workerWithHeldStart(300)
+    expect(await sendBrief(current)).toBe('starting')
+    const closed = await closeStructuredAgentSessionChild(SESSION)
+    expect(closed.reason).toBe(STARTING_AGENT_STOPPING_REASON)
+    // The acquire never returns; only the start's own ceiling decides the stop.
+    expect(await closed.whenStartEnds).toEqual({
+      stopped: false,
+      reason: STARTING_AGENT_NEVER_FINISHED_REASON
+    })
+    expect(current.releaseAcquisition).not.toHaveBeenCalled()
+    release()
+  })
+
+  it('stops reading as starting once the ceiling fails a start whose acquire never returns', async () => {
+    const { current, release } = await workerWithHeldStart(300)
+    expect(await sendBrief(current)).toBe('starting')
+    // The ceiling rejects the held brief; the worker must not keep claiming its agent is starting.
+    await eventually(async () => {
+      const page = await current.host.history({ sessionId: SESSION, direction: 'tail' })
+      expect(page.ok && page.page.submissions?.[0]?.dispatchState).toBe('rejected')
+    })
+    expect(current.host.reads.agentStarting(SESSION)).toBe(false)
+    expect(observeStructuredSession(SESSION).reason).not.toMatch(/still starting/)
+    release()
   })
 
   it('keeps an attached agent that has not taken its brief as pending', async () => {

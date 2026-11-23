@@ -116,6 +116,8 @@ export function registerStructuredAgentSessionStart(
       return failedStructuredAgentSessionStart()
     })
   flights.trackAttempt(sessionId, attempting)
+  let attemptEnded = false
+  void attempting.then(() => (attemptEnded = true))
   let recorded: Promise<void> = Promise.resolve()
   // Stop, close, quit, the deadline and the contract guard decide the start at once, even while
   // its attempt or the session's serialized work is still held; late attempt work fails the
@@ -150,6 +152,9 @@ export function registerStructuredAgentSessionStart(
       acquire.end()
       flights.end(sessionId, attemptId)
       attempts.abandon(sessionId, attemptId)
+      if (!attemptEnded) {
+        flights.unwinding(sessionId, attempts.holdCeiling(registeredAt, attempting))
+      }
       context.publishStatus(sessionId)
     })
   context.tasks.trackAttach(outcome.then(() => Promise.all([attempting, recorded])))
