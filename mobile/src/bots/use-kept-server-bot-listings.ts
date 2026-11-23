@@ -51,15 +51,22 @@ export function useKeptServerBotListings(args: {
       // A read that landed first is newer than anything kept.
       if (shownFor.current === pairedHostId && kept.length > 0) {
         kept.forEach((entry) => handed.current.set(slot(entry.hostId), entry))
-        setListings((previous) => [
-          ...previous.filter((listing) => !kept.some((entry) => entry.hostId === listing.hostId)),
-          ...kept.map((entry) =>
+        setListings((previous) => {
+          const hydrated = kept.map((entry) =>
             mergeKeptServerBotListing(
               previous.find((listing) => listing.hostId === entry.hostId),
               entry
             )
           )
-        ])
+          return hydrated.every((entry) => previous.includes(entry))
+            ? previous
+            : [
+                ...previous.filter(
+                  (listing) => !kept.some((entry) => entry.hostId === listing.hostId)
+                ),
+                ...hydrated
+              ]
+        })
       }
     })
   }, [pairedHostId, serverIds, setListings])

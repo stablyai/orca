@@ -1,4 +1,5 @@
 import type { HostBotListing } from './host-bot-listing'
+import { areStructurallyEqual } from '../worktree/catalog/structural-equality'
 
 /** Applies a fresh host listing without losing detail that its optional reads did not refresh. */
 export function mergeHostBotListing(
@@ -28,10 +29,16 @@ export function mergeHostBotListing(
           ...(kept.ownChats ? { ownChats: kept.ownChats } : {})
         }
       : {}
-  return [
-    ...previous.filter((entry) => entry.hostId !== listing.hostId),
-    { ...listing, ...threadFacts, ...lineage, ...(groups ? { groups } : {}) }
-  ]
+  const next = {
+    ...listing,
+    ...threadFacts,
+    ...lineage,
+    ...(groups ? { groups } : {})
+  }
+  if (last && areStructurallyEqual(last, next)) {
+    return previous
+  }
+  return [...previous.filter((entry) => entry.hostId !== listing.hostId), next]
 }
 
 /** Hydrates a late cached lineage into its newer, still-degraded server listing. */
@@ -44,7 +51,7 @@ export function mergeKeptServerBotListing(
     live.workerStatus !== 'unavailable' ||
     live.installationId !== kept.installationId
   ) {
-    return kept
+    return live ?? kept
   }
   return {
     ...kept,
