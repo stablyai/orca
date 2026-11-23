@@ -306,10 +306,11 @@ export class StructuredAgentSessionUsageLimitContinue {
         })),
         expectedContinuationLaunch: { runtimeFence, launchFence },
         beforeRun: async () => {
-          const current = await this.cold.read(id)
+          const read = await this.cold.read(id)
+          const current = read && this.holds.withSwitchReset(id, read)
           if (
             !current ||
-            identity(current) !== identity(cut) ||
+            attemptIdentity(current) !== attemptIdentity(cut) ||
             !this.eligible(id, current) ||
             !this.holds.bindingHolds(id, this.deps.host, binding) ||
             !this.holds.ready(id, current, this.deps.now())

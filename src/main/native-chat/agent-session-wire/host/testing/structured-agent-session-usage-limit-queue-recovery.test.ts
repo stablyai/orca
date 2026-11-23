@@ -294,12 +294,16 @@ it('continues a known-reset relaunched cut after its normal reading wait', async
 })
 
 it('requires fresh room before a resetless relaunched cut continues', async () => {
-  const { pass } = await relaunchedChat(null)
+  const { current, pass } = await relaunchedChat(null)
   expect(await pass(5_000, null)).toEqual([])
   expect(
     await pass(20_000, { ...reading(0, NOW + 20_000), status: 'error', error: 'offline' })
   ).toEqual([])
   expect(await pass(35_000, reading(0, NOW - 1))).toEqual([])
   expect(await pass(50_000, { ...reading(0, NOW + 50_000), weekly: null })).toEqual([])
-  expect(await pass(65_000, reading(0, NOW + 65_000))).toHaveLength(1)
+  const sent = await pass(65_000, reading(0, NOW + 65_000))
+  expect(sent).toHaveLength(1)
+  await eventually(async () =>
+    expect((await current.submission(sent[0]!.clientMessageId))?.handedOverAt).toBeDefined()
+  )
 })
