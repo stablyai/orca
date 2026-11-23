@@ -15,6 +15,8 @@ const CHECKPOINT_PINNED_RETRY_MS = 1000
 // SQLite's default: the writer's own commits checkpoint only while no worker runs.
 const WRITER_ALONE_FRAMES = 1000
 const PARKED_RECHECK_MS = 100
+// Saves never wait on the worker: past this, an unanswered check lets writes past the WAL ceiling.
+const WORKER_STALL_MS = 5000
 const RESTART_DELAY_MS = 10_000
 const RESTART_MAX_DELAY_MS = 5 * 60_000
 const STOP_TIMEOUT_MS = 5000
@@ -23,6 +25,7 @@ const STOP_TIMEOUT_MS = 5000
 export class JournalCheckpointOwner {
   private worker: WorkerRequestTransport | undefined
   private asking = false
+  private askedAt = 0
   private askAgain: { force: boolean } | undefined
   private exited: Promise<void> = Promise.resolve()
   private restartTimer: ReturnType<typeof setTimeout> | undefined
@@ -47,6 +50,7 @@ export class JournalCheckpointOwner {
     private readonly options: {
       factory?: () => WorkerRequestTransport
       restartDelayMs?: number
+      stallMs?: number
     } = {}
   ) {
     this.restartDelayMs = options.restartDelayMs ?? RESTART_DELAY_MS
@@ -112,8 +116,17 @@ export class JournalCheckpointOwner {
   }
 
   private gated(urgent: boolean): boolean {
-    const { stopped, unknown, log } = this
+    const { unknown, log } = this
+    const stopped = this.stopped || this.stalled()
     return journalWalGated({ stopped, unknown, log }, urgent)
+  }
+
+  /** A worker inside a long checkpoint is not dead, but writes stop waiting on it, as on main. */
+  private stalled(): boolean {
+    return (
+      this.asking &&
+      performance.now() - this.askedAt >= (this.options.stallMs ?? WORKER_STALL_MS)
+    )
   }
 
   private measure(): void {
@@ -203,6 +216,7 @@ export class JournalCheckpointOwner {
     try {
       this.worker.postMessage({ type: 'check', force })
       this.asking = true
+      this.askedAt = performance.now()
     } catch (error) {
       // A worker that can't take messages is exiting; its exit schedules the replacement.
       this.warn(error)
@@ -232,6 +246,7 @@ export class JournalCheckpointOwner {
     this.worker = worker
     // The worker checks once at start, for a WAL a crash left behind.
     this.asking = true
+    this.askedAt = performance.now()
     let failure: unknown
     worker.on('message', (message: { type?: unknown; ran?: unknown }) => {
       if (message?.type !== 'checked' || this.worker !== worker) {

@@ -1,9 +1,11 @@
+import { EventEmitter } from 'node:events'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../../../sqlite/sync-database'
+import { JournalSqlBatch } from '../journal-sql-batch'
 import { JournalCheckpointOwner } from './journal-checkpoint-owner'
 import { journalCheckpointWorkerSource } from './journal-checkpoint-worker-source'
 
@@ -55,4 +57,33 @@ it('replaces a checkpoint worker that dies, and the replacement checkpoints the 
 
   await vi.waitFor(() => expect(workers).toHaveLength(2))
   await checkpointedBy(2)
+})
+
+it('lets saves past the WAL ceiling while a live worker stays inside one checkpoint', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'journal-checkpoint-stall-'))
+  cleanup.push(() => rmSync(root, { recursive: true }))
+  const filename = join(root, 'chat.db')
+  const writer = new Database(filename)
+  cleanup.push(() => writer.close())
+  writer.exec(`PRAGMA page_size=512; PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;
+    CREATE TABLE writes(id INTEGER PRIMARY KEY, body BLOB);`)
+  // Alive but never answers, as a thread blocked in a native fsync; it exits only when stopped.
+  const hung = Object.assign(new EventEmitter(), {
+    postMessage: (message: { type: string }) => {
+      if (message.type === 'stop') {
+        queueMicrotask(() => hung.emit('exit', 0))
+      }
+    },
+    unref: () => {},
+    terminate: async () => 0
+  })
+  const owner = new JournalCheckpointOwner(writer, filename, { factory: () => hung, stallMs: 50 })
+  cleanup.push(() => owner.close())
+  const batch = new JournalSqlBatch(writer, owner)
+  // Past the 32,768-frame bulk ceiling with nothing checkpointed.
+  await batch.run([1], (id) =>
+    writer.prepare('INSERT INTO writes VALUES(?, zeroblob(18874368))').run(id)
+  )
+  await batch.run([2], (id) => writer.prepare("INSERT INTO writes VALUES(?, 'saved')").run(id))
+  expect(writer.prepare('SELECT body FROM writes WHERE id = 2').get()).toEqual({ body: 'saved' })
 })
