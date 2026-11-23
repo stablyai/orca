@@ -60,7 +60,8 @@ const ZED_CLIENT_INFO: Implementation = { name: 'zed', version: '0.0.0' }
 // as Zed; named `orca`, a Google-account chat loses Claude and GPT-OSS. Its versions are not agy's.
 const managedServerClientInfo = (): Implementation => ZED_CLIENT_INFO
 
-// agy before 1.5.1 had the same allowlist; later agy offers every model to any client.
+// agy 1.5.1 and later offer every model to any client. Orca requires a newer agy, so `zed` is only
+// the fallback when agy's version is unknown.
 function agyClientInfo(version: string | null): Implementation {
   return version && isValidAppVersion(version) && compareAppVersions(version, '1.5.1') >= 0
     ? ORCA_ACP_CLIENT_INFO
