@@ -1,3 +1,4 @@
+import { findAppWindow } from '../window/app-window-lookup'
 import { BrowserWindow, ipcMain } from 'electron'
 import { STAR_NAG_INITIAL_THRESHOLD } from '../../shared/feature-education/star-nag/star-nag-threshold'
 import { checkOrcaStarred } from '../github/client/fetch/orca-star'
@@ -159,7 +160,7 @@ export class StarNagService {
     mode: StarNagPromptMode,
     surface: StarNagSurface = 'card'
   ): boolean {
-    const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+    const win = findAppWindow()
     if (!win) {
       this.promptVisible = false
       this.promptSession = null

@@ -903,6 +903,16 @@
       "uiZoom": {
         "zoomOut": "Zoom out",
         "zoomIn": "Zoom in"
+      },
+      "notch": {
+        "title": "Show agent status at the notch",
+        "description": "See running agents and sessions that need attention without opening Orca.",
+        "keyword": {
+          "notch": "notch",
+          "agents": "agents",
+          "status": "status",
+          "island": "dynamic island"
+        }
       }
     },
     "browser": {
@@ -30888,5 +30898,21 @@
     "moveLeft": "Move left",
     "moveRight": "Move right",
     "reset": "Reset tab order"
+  },
+  "notch": {
+    "status": {
+      "working": "{{count}} working",
+      "attention": "{{count}} awaiting input",
+      "done": "{{count}} finished",
+      "idle": "No agents running"
+    },
+    "sessionList": "Agent sessions",
+    "rowState": {
+      "working": "Working",
+      "attention": "Needs you",
+      "done": "Finished"
+    },
+    "agentSession": "Agent session",
+    "sessionUnavailable": "Could not open this agent session."
   }
 }

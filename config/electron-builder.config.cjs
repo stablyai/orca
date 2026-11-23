@@ -594,6 +594,11 @@ module.exports = {
         'journal file lock',
         context.packager
       )
+      await signMacStandaloneHelper(
+        join(resourcesDir, '..', 'MacOS', 'orca-screen-geometry'),
+        'orca-screen-geometry',
+        context.packager
+      )
       await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
       await signMacStandaloneHelper(
         join(resourcesDir, '..', 'MacOS', 'orca-notification-status'),
@@ -727,6 +732,10 @@ module.exports = {
     ],
     // macOS 26 UNUserNotificationCenter aborts helpers launched from Resources; execute from Contents/MacOS (#7929).
     extraFiles: [
+      {
+        from: 'native/screen-geometry-macos/.build/release/orca-screen-geometry',
+        to: 'MacOS/orca-screen-geometry'
+      },
       {
         from: 'native/notification-status-macos/.build/release/orca-notification-status',
         to: 'MacOS/orca-notification-status'

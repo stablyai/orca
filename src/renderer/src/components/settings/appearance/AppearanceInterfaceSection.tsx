@@ -21,7 +21,11 @@ import {
   getTypographyEntries,
   getZoomEntries
 } from './appearance-search'
-import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
+import {
+  getMenuBarIconEntries,
+  getSystemTrayEntries,
+  getNotchAgentStatusEntries
+} from './appearance-system-presence-search'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { useTranslate } from '@/i18n/use-translate'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
@@ -107,7 +111,8 @@ export function AppearanceInterfaceSection({
     ...getTitlebarEntries(),
     ...getReduceVisualEffectsEntries(),
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
-    ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
+    ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac }),
+    ...getNotchAgentStatusEntries()
   ]
   const showAdvanced = !isSearching || matchesSettingsSearch(searchQuery, advancedEntries)
 
@@ -340,6 +345,19 @@ export function AppearanceInterfaceSection({
               />
             </SearchableSetting>
           ) : null}
+
+          {getNotchAgentStatusEntries().map((entry) => (
+            <SearchableSetting key={entry.title} {...entry}>
+              <SettingsSwitchRow
+                label={entry.title}
+                description={entry.description}
+                checked={settings.showNotchAgentStatus === true}
+                onChange={() =>
+                  updateSettings({ showNotchAgentStatus: !settings.showNotchAgentStatus })
+                }
+              />
+            </SearchableSetting>
+          ))}
 
           {isDesktopMac ? (
             <SearchableSetting

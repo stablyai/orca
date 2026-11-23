@@ -4438,3 +4438,7 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
     animation: none;
   }
 }
+
+html[data-orca-notch] body {
+  background: transparent;
+}

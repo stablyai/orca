@@ -1,0 +1,204 @@
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status/contracts/agent-status-freshness'
+import {
+  EMPTY_NOTCH_SUMMARY,
+  buildNotchSummary,
+  type NotchStatusSummary,
+  type NotchStatusObservation
+} from '../../shared/notch/notch-status-summary'
+
+export type NotchStatusSource = {
+  getStatusSnapshot(): readonly NotchStatusObservation[]
+  subscribeStatusRowMutations(listener: () => void): () => void
+}
+
+export type NotchStatusServiceOptions = {
+  source: NotchStatusSource
+  acknowledgedAtByPaneKey?: Readonly<Record<string, number>>
+  /** Coalesces bursts; a hook storm across worktrees must not repaint per event. */
+  scheduleFlush?: (flush: () => void) => () => void
+}
+
+const MAX_ACKNOWLEDGEMENTS = 10_000
+const DEFAULT_FLUSH_DELAY_MS = 80
+
+function defaultScheduleFlush(flush: () => void): () => void {
+  const timer = setTimeout(flush, DEFAULT_FLUSH_DELAY_MS)
+  return () => clearTimeout(timer)
+}
+
+export class NotchStatusService {
+  private readonly source: NotchStatusSource
+  private readonly scheduleFlush: (flush: () => void) => () => void
+  private freshnessExpiry: ReturnType<typeof setTimeout> | null = null
+  private readonly listeners = new Set<(summary: NotchStatusSummary) => void>()
+  private readonly unsubscribes: (() => void)[] = []
+  private acknowledgedAtByPaneKey: Record<string, number> = {}
+  private summary: NotchStatusSummary = EMPTY_NOTCH_SUMMARY
+  private cancelPendingFlush: (() => void) | null = null
+  private flushPending = false
+  private started = false
+
+  constructor(options: NotchStatusServiceOptions) {
+    this.acknowledgedAtByPaneKey = { ...options.acknowledgedAtByPaneKey }
+    this.trimAcknowledgements()
+    this.source = options.source
+    this.scheduleFlush = options.scheduleFlush ?? defaultScheduleFlush
+  }
+
+  start(): void {
+    if (this.started) {
+      return
+    }
+    this.started = true
+    this.unsubscribes.push(this.source.subscribeStatusRowMutations(() => this.requestRecompute()))
+    this.recompute()
+  }
+
+  stop(): void {
+    this.cancelPendingFlush?.()
+    this.cancelPendingFlush = null
+    this.flushPending = false
+    if (this.freshnessExpiry) {
+      clearTimeout(this.freshnessExpiry)
+    }
+    this.freshnessExpiry = null
+    for (const unsubscribe of this.unsubscribes.splice(0)) {
+      unsubscribe()
+    }
+    this.listeners.clear()
+    this.started = false
+  }
+
+  getSummary(): NotchStatusSummary {
+    return this.summary
+  }
+
+  subscribe(listener: (summary: NotchStatusSummary) => void): () => void {
+    this.listeners.add(listener)
+    return () => {
+      this.listeners.delete(listener)
+    }
+  }
+
+  acknowledgePanes(paneKeys: readonly string[], acknowledgedAt: number): void {
+    let changed = false
+    for (const paneKey of paneKeys) {
+      if ((this.acknowledgedAtByPaneKey[paneKey] ?? 0) < acknowledgedAt) {
+        this.acknowledgedAtByPaneKey[paneKey] = acknowledgedAt
+        changed = true
+      }
+    }
+    this.trimAcknowledgements()
+    if (changed && this.started) {
+      this.recompute()
+    }
+  }
+
+  private requestRecompute(): void {
+    if (this.flushPending) {
+      return
+    }
+    this.flushPending = true
+    this.cancelPendingFlush = this.scheduleFlush(() => {
+      this.flushPending = false
+      this.cancelPendingFlush = null
+      this.recompute()
+    })
+  }
+
+  private recompute(): void {
+    const snapshot = this.source.getStatusSnapshot()
+    this.scheduleFreshnessExpiry(snapshot)
+    const next = buildNotchSummary({
+      snapshot,
+      acknowledgedAtByPaneKey: this.acknowledgedAtByPaneKey
+    })
+    if (summariesEqual(this.summary, next)) {
+      return
+    }
+    this.summary = next
+    for (const listener of this.listeners) {
+      try {
+        listener(next)
+      } catch (err) {
+        console.error('[notch] summary listener threw', err)
+      }
+    }
+  }
+
+  private scheduleFreshnessExpiry(snapshot: readonly NotchStatusObservation[]): void {
+    if (this.freshnessExpiry) {
+      clearTimeout(this.freshnessExpiry)
+    }
+    this.freshnessExpiry = null
+    const now = Date.now()
+    let next = Infinity
+    for (const entry of snapshot) {
+      if (
+        entry.state === 'done' ||
+        entry.providerSessionOnly ||
+        entry.restoredUnconfirmed ||
+        entry.structuredHost === 'owned' ||
+        entry.structuredHostOwned
+      ) {
+        continue
+      }
+      const observedAt =
+        entry.mirroredEvidenceReceivedAt ?? entry.evidenceObservedAt ?? entry.receivedAt
+      const expiresAt = observedAt + AGENT_STATUS_STALE_AFTER_MS + 1
+      if (expiresAt > now) {
+        next = Math.min(next, expiresAt)
+      }
+    }
+    if (Number.isFinite(next)) {
+      this.freshnessExpiry = setTimeout(
+        () => {
+          this.freshnessExpiry = null
+          if (this.started) {
+            this.recompute()
+          }
+        },
+        Math.min(2_147_483_647, Math.max(1, next - now))
+      )
+      this.freshnessExpiry.unref?.()
+    }
+  }
+
+  private trimAcknowledgements(): void {
+    const keys = Object.keys(this.acknowledgedAtByPaneKey)
+    if (keys.length > MAX_ACKNOWLEDGEMENTS) {
+      keys.sort((a, b) => this.acknowledgedAtByPaneKey[a] - this.acknowledgedAtByPaneKey[b])
+      for (const key of keys.slice(0, keys.length - MAX_ACKNOWLEDGEMENTS)) {
+        delete this.acknowledgedAtByPaneKey[key]
+      }
+    }
+  }
+}
+
+function summariesEqual(a: NotchStatusSummary, b: NotchStatusSummary): boolean {
+  if (
+    a.counts.working !== b.counts.working ||
+    a.counts.attention !== b.counts.attention ||
+    a.counts.done !== b.counts.done ||
+    a.sessions.length !== b.sessions.length
+  ) {
+    return false
+  }
+  return a.sessions.every((session, index) => {
+    const other = b.sessions[index]
+    return (
+      session.paneKey === other.paneKey &&
+      session.executionHostId === other.executionHostId &&
+      session.sessionId === other.sessionId &&
+      session.title === other.title &&
+      session.leafId === other.leafId &&
+      session.lane === other.lane &&
+      session.state === other.state &&
+      session.stateStartedAt === other.stateStartedAt &&
+      session.worktreeId === other.worktreeId &&
+      session.tabId === other.tabId &&
+      session.agentType === other.agentType &&
+      session.connectionId === other.connectionId
+    )
+  })
+}

@@ -1,0 +1,128 @@
+import { ipcMain } from 'electron'
+import {
+  type NotchFocusPaneRequest,
+  NOTCH_ACKNOWLEDGE_CHANNEL,
+  NOTCH_FOCUS_PANE_CHANNEL,
+  NOTCH_SET_EXPANDED_CHANNEL,
+  NOTCH_RENDERER_READY_CHANNEL,
+  NOTCH_SET_INTERACTIVE_CHANNEL
+} from '../../shared/notch/notch-snapshot'
+import {
+  isNotchRenderer,
+  publishNotchSnapshot,
+  setNotchExpanded,
+  setNotchInteractive
+} from '../notch/notch-window'
+import { getTrustedUIRendererWindow } from './ui'
+import type { NotchStatusService } from '../notch/notch-status-service'
+
+const MAX_ACK_PANE_KEYS = 512
+
+export type NotchFocusPaneArgs = NotchFocusPaneRequest
+
+function sanitizePaneKeys(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.filter(isNonEmptyString).slice(0, MAX_ACK_PANE_KEYS)
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 512
+}
+
+export type NotchHandlerOptions = {
+  getService: () => NotchStatusService | null
+  /** Raises the app window (reopening it if closed) and routes it to the pane. */
+  revealPane: (args: NotchFocusPaneArgs) => void
+  /** The app renderer's reveal listener is attached; deliver anything buffered. */
+  onRevealRendererReady: () => void
+}
+
+export function registerNotchHandlers({
+  getService,
+  revealPane,
+  onRevealRendererReady
+}: NotchHandlerOptions): void {
+  ipcMain.removeAllListeners('notch:ready')
+  ipcMain.on('notch:ready', (event) => {
+    if (isNotchRenderer(event.sender) && event.senderFrame === event.sender.mainFrame) {
+      publishNotchSnapshot()
+    }
+  })
+  ipcMain.removeAllListeners(NOTCH_ACKNOWLEDGE_CHANNEL)
+  ipcMain.removeAllListeners(NOTCH_SET_EXPANDED_CHANNEL)
+  ipcMain.removeAllListeners(NOTCH_FOCUS_PANE_CHANNEL)
+  ipcMain.removeAllListeners(NOTCH_SET_INTERACTIVE_CHANNEL)
+  ipcMain.removeAllListeners(NOTCH_RENDERER_READY_CHANNEL)
+
+  ipcMain.on(NOTCH_ACKNOWLEDGE_CHANNEL, (event, paneKeys: unknown) => {
+    if (event.senderFrame !== event.sender.mainFrame) {
+      return
+    }
+    if (
+      !isNotchRenderer(event.sender) &&
+      event.sender !== getTrustedUIRendererWindow()?.webContents
+    ) {
+      return
+    }
+    const service = getService()
+    if (!service) {
+      return
+    }
+    const sanitized = sanitizePaneKeys(paneKeys)
+    if (sanitized.length > 0) {
+      service.acknowledgePanes(sanitized, Date.now())
+    }
+  })
+
+  // Only the notch's own renderer may drive the window's size.
+  ipcMain.on(NOTCH_SET_EXPANDED_CHANNEL, (event, next: unknown) => {
+    if (event.senderFrame !== event.sender.mainFrame) {
+      return
+    }
+    if (
+      isNotchRenderer(event.sender) ||
+      (next === false && event.sender === getTrustedUIRendererWindow()?.webContents)
+    ) {
+      setNotchExpanded(next === true)
+    }
+  })
+
+  ipcMain.on(NOTCH_SET_INTERACTIVE_CHANNEL, (event, interactive: unknown) => {
+    if (event.senderFrame === event.sender.mainFrame && isNotchRenderer(event.sender)) {
+      setNotchInteractive(interactive === true)
+    }
+  })
+
+  ipcMain.on(NOTCH_FOCUS_PANE_CHANNEL, (event, args: unknown) => {
+    if (event.senderFrame !== event.sender.mainFrame || !isNotchRenderer(event.sender)) {
+      return
+    }
+    if (!isNonEmptyString(args)) {
+      return
+    }
+    const row = getService()
+      ?.getSummary()
+      .sessions.find((session) => session.paneKey === args)
+    if (row?.worktreeId && row.tabId) {
+      revealPane({
+        paneKey: row.paneKey,
+        worktreeId: row.worktreeId,
+        tabId: row.tabId,
+        leafId: row.leafId,
+        sessionId: row.sessionId,
+        executionHostId: row.executionHostId
+      })
+    }
+  })
+
+  ipcMain.on(NOTCH_RENDERER_READY_CHANNEL, (event) => {
+    if (
+      event.senderFrame === event.sender.mainFrame &&
+      event.sender === getTrustedUIRendererWindow()?.webContents
+    ) {
+      onRevealRendererReady()
+    }
+  })
+}

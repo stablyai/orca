@@ -9,7 +9,11 @@ import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { getStatusBarToggles } from './appearance-status-bar-search'
 import { getUsagePercentageDisplayEntry } from './appearance-usage-percentage-search'
 import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-format-search'
-import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
+import {
+  getMenuBarIconEntries,
+  getSystemTrayEntries,
+  getNotchAgentStatusEntries
+} from './appearance-system-presence-search'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { getAppIconEntries } from './appearance-app-icon-search'
 
@@ -305,6 +309,7 @@ export function getAppearancePaneSearchEntries(
     ...getSidebarEntries(),
     ...getAppIconEntries(),
     ...getSystemTrayEntries(options),
-    ...getMenuBarIconEntries(options)
+    ...getMenuBarIconEntries(options),
+    ...getNotchAgentStatusEntries()
   ]
 }

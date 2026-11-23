@@ -1,4 +1,5 @@
 import { app, nativeTheme, shell } from 'electron'
+import { initializeNotchAgentStatus } from '../notch/notch-desktop-lifecycle'
 import { performance } from 'node:perf_hooks'
 import { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
@@ -147,4 +148,5 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
     native: desktopCoreNative(store),
     registerCleanup: (cleanup) => app.once('will-quit', cleanup)
   })
+  initializeNotchAgentStatus()
 }

@@ -1550,6 +1550,14 @@
           "remote": "remoto",
           "gpu": "GPU"
         }
+      },
+      "notch": {
+        "title": "Mostrar status dos agentes no notch",
+        "description": "Veja os agentes em execução e as sessões que precisam de atenção sem abrir o Orca.",
+        "keyword": {
+          "agents": "agentes",
+          "status": "status"
+        }
       }
     },
     "browser": {
@@ -25643,5 +25651,21 @@
   },
   "agentCliUpdate": {
     "thisComputer": "Este computador"
+  },
+  "notch": {
+    "agentSession": "Sessão do agente",
+    "sessionList": "Sessões de agentes",
+    "sessionUnavailable": "Não foi possível abrir esta sessão do agente.",
+    "status": {
+      "working": "{{count}} em execução",
+      "attention": "{{count}} aguardando resposta",
+      "done": "Concluídos: {{count}}",
+      "idle": "Nenhum agente em execução"
+    },
+    "rowState": {
+      "working": "Em execução",
+      "attention": "Precisa de você",
+      "done": "Concluído"
+    }
   }
 }

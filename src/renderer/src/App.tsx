@@ -1,3 +1,4 @@
+import { useNotchRevealBridge } from './components/notch/useNotchRevealBridge'
 import { PluginUpdateReviewHost } from './components/plugins/dialogs/PluginUpdateReviewHost'
 import { useCallback, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
@@ -63,6 +64,7 @@ function App(): React.JSX.Element {
   const onboardingGate = useOnboardingAndFeatureTips()
 
   useAppShellServices()
+  useNotchRevealBridge()
   // Load drafts before the startup chain so no failed step can skip them.
   useEffect(startNativeChatDraftLoad, [])
   // Committed WSL moves only: the list is empty otherwise, and always with the internal gate closed.
