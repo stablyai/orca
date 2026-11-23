@@ -4440,6 +4440,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "Nach links scrollen · {{amount}} ausgeblendet",
+      "scrollRight": "Nach rechts scrollen · {{amount}} ausgeblendet"
+    },
     "link": {
       "pairTitle": "Computer koppeln",
       "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen, und öffne den Link dann erneut.",

@@ -4440,6 +4440,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "Sola kaydır · {{amount}} gizli",
+      "scrollRight": "Sağa kaydır · {{amount}} gizli"
+    },
     "link": {
       "pairTitle": "Bilgisayar eşleyin",
       "pairRequired": "Bu bağlantıyı açmak için bu telefonu bir bilgisayarla eşleyin, ardından bağlantıyı yeniden açın.",

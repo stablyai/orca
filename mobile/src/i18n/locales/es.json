@@ -4544,6 +4544,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "Desplazar a la izquierda · {{amount}} ocultos",
+      "scrollRight": "Desplazar a la derecha · {{amount}} ocultos"
+    },
     "link": {
       "pairTitle": "Vincular un ordenador",
       "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",

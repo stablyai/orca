@@ -4544,6 +4544,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "Défiler vers la gauche · {{amount}} masqués",
+      "scrollRight": "Défiler vers la droite · {{amount}} masqués"
+    },
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",

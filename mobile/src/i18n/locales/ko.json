@@ -4436,6 +4436,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "왼쪽으로 스크롤 · 숨겨진 봇 {{amount}}개",
+      "scrollRight": "오른쪽으로 스크롤 · 숨겨진 봇 {{amount}}개"
+    },
     "link": {
       "pairTitle": "컴퓨터 페어링",
       "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",

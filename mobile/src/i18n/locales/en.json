@@ -5713,6 +5713,8 @@
       "hide": "Hide {{name}}’s workspaces"
     },
     "section": {
+      "scrollLeft": "Scroll left · {{amount}} hidden",
+      "scrollRight": "Scroll right · {{amount}} hidden",
       "title": "Bots",
       "summary": "{{title}}, {{total}} bots, {{attention}} need you, {{unread}} unread, {{working}} working",
       "newBot": "New bot",
