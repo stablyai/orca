@@ -28,12 +28,13 @@ function guestWith(executeJavaScript: (code: string) => Promise<unknown>) {
 }
 
 it('reports a clean page only when the overlay host it armed is really gone, whatever the page claims', async () => {
-  let host: HTMLElement | null = null
+  const hosts: HTMLElement[] = []
   const guest = guestWith(async (code) => {
     if (code === 'arm') {
-      host = document.createElement('div')
+      const host = document.createElement('div')
       host.id = '__orca-grab-host'
       document.documentElement.appendChild(host)
+      hosts.push(host)
       // A page-substituted cleanup: claims success and leaves the overlay in place.
       return () => true
     }
@@ -42,7 +43,7 @@ it('reports a clean page only when the overlay host it armed is really gone, wha
   await expect(executeGrabScript(guest, 'arm', { overlayControl: true })).resolves.toBe(true)
   await expect(executeGrabScript(guest, '', { clean: true })).resolves.toBe(false)
 
-  host?.remove()
+  hosts[0]?.remove()
   await expect(executeGrabScript(guest, '', { clean: true })).resolves.toBe(true)
 })
 
