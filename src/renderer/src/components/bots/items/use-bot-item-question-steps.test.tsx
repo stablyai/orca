@@ -64,19 +64,60 @@ const bot: Bot = {
   updatedAt: NOW
 }
 
-// Every comment the item view's hook posts to the host: each one wakes the agent.
-it('holds a typed answer to one of several questions until the last is answered', () => {
-  const posted: string[] = []
-  const send = (text: string): void => {
-    posted.push(text)
+// The item view's hook over `ask`, with every comment it posts to the host: each one wakes the agent.
+function steps(uid: string, own = asking, shown = item) {
+  const posted: { text: string; paths: readonly string[] }[] = []
+  const send = (text: string, paths: readonly string[] = []): void => {
+    posted.push({ text, paths })
   }
-  const hook = renderHook(() => useBotItemQuestionSteps(bot, item, [asking], send, []))
+  // Its own item, so answers held on this device by another case don't carry over.
+  const hook = renderHook(() => useBotItemQuestionSteps(bot, { ...shown, uid }, [own], send, []))
+  return { hook, posted }
+}
+
+it('holds a typed answer to one of several questions until the last is answered', () => {
+  const { hook, posted: sent } = steps('typed')
   const first = hook.result.current.steps!
   act(() => hook.result.current.fromBox('the internal ones', [], `${first.askId}:${first.current}`))
-  expect(posted).toEqual([])
+  expect(sent).toEqual([])
 
   const next = hook.result.current.steps!
   expect(next.current).toBe(1)
   act(() => next.answer(next.current, 'Yes'))
-  expect(posted).toEqual([`${HOSTS} → the internal ones\n${GO} → Yes`])
+  expect(sent.map(({ text }) => text)).toEqual([`${HOSTS} → the internal ones\n${GO} → Yes`])
+})
+
+it('posts a typed answer with files at once, with the answers held so far', () => {
+  const { hook, posted } = steps('files')
+  const first = hook.result.current.steps!
+  act(() => first.answer(first.current, 'Yes'))
+  const next = hook.result.current.steps!
+  act(() =>
+    hook.result.current.fromBox('see the shot', ['/tmp/shot.png'], `${next.askId}:${next.current}`)
+  )
+  expect(posted).toEqual([
+    { text: `${HOSTS} → Yes\n${GO} → see the shot`, paths: ['/tmp/shot.png'] }
+  ])
+})
+
+it('sends the held answers when the owner sends them sooner', () => {
+  const { hook, posted } = steps('send-anyway')
+  const first = hook.result.current.steps!
+  act(() => hook.result.current.fromBox('the internal ones', [], `${first.askId}:${first.current}`))
+  expect(hook.result.current.steps!.heldCount).toBe(1)
+  act(() => hook.result.current.steps!.sendHeld())
+  expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → the internal ones`])
+})
+
+it('posts a typed answer to a single question at once', () => {
+  const single = { questions: [ask.questions[0]!] }
+  const own: BotItemEvent = { ...asking, data: { text: botItemAskText(single), ask: single } }
+  const { hook, posted } = steps('single', own, {
+    ...item,
+    question: { eventId: 'e2', text: botItemAskText(single) }
+  })
+  expect(hook.result.current.steps).toBeNull()
+  const line = hook.result.current.waitingLine!
+  act(() => hook.result.current.fromBox('the internal ones', [], line.id))
+  expect(posted.map(({ text }) => text)).toEqual(['the internal ones'])
 })
