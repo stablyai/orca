@@ -6048,6 +6048,66 @@ export class RelayAssignmentStore {
     })
   }
 
+  // Dormant edge moves (EdgeAssignments.moveDormantToEdge): whether the source cell admits from
+  // memory, read from the same cached set /v1/assign reads. Unknown refuses (as refuseReserveCell
+  // does): a reserve-mode row's counters cannot be judged without knowing its mode.
+  async dormantEdgeSourceMode(cellId: string): Promise<'db' | 'reserve'> {
+    const cells = await this.reserveModeCells()
+    if (cells === null) { throw new RelayCellInReserveModeError(null) }
+    return cells.has(cellId) ? 'reserve' : 'db'
+  }
+
+  // The region a dormant host is judged and recorded for on the edge: its last asked-for region,
+  // else its cell's. A dormant host makes no ask, so this stands in for the region its ask names.
+  async dormantHostRegion(identity: AssignmentIdentity, cellId: string): Promise<RelayRegion> {
+    const preference = (
+      await this.database.query(
+        `SELECT preferred_region FROM relay_assignment_region_preferences
+         WHERE user_id = ? AND relay_host_id = ?`,
+        [identity.userId, identity.relayHostId]
+      )
+    )[0]
+    if (preference) { return relayRegion(preference, 'preferred_region') }
+    return await this.cellRegion(this.database, cellId)
+  }
+
+  // One page of a cell's dormant candidates, in primary key order after `after`. Coarse on
+  // purpose: the dormant TTL, and on a database-mode cell no counters. Leases, the seat map and
+  // open migrations are judged by the move itself, under its row lock, so a page never decides
+  // anything. relay_assignments has no cell_id index: walking the primary key from the cursor
+  // keeps each page one bounded index range scan rather than a sort of the whole table.
+  async dormantAssignmentPage(
+    cellId: string,
+    after: AssignmentIdentity | undefined,
+    limit: number
+  ): Promise<{ admitMode: 'db' | 'reserve'; candidates: AssignmentIdentity[]; next?: AssignmentIdentity }> {
+    const admitMode = await this.dormantEdgeSourceMode(cellId)
+    const cutoff = this.now() - ASSIGNMENT_LIMITS.dormantTtlMs
+    const rows = await this.database.query(
+      `SELECT user_id, relay_host_id FROM relay_assignments
+       WHERE cell_id = ? AND last_activity_at <= ?
+         ${admitMode === 'db'
+           ? `AND reserved_controls = 0 AND reserved_splices = 0 AND reserved_invites = 0
+              AND pending_installs = 0 AND pending_confirmations = 0 AND migration_leases = 0`
+           : ''}
+         ${after ? 'AND (user_id > ? OR (user_id = ? AND relay_host_id > ?))' : ''}
+       ORDER BY user_id ASC, relay_host_id ASC
+       LIMIT ?`,
+      [
+        cellId,
+        cutoff,
+        ...(after ? [after.userId, after.userId, after.relayHostId] : []),
+        limit + 1
+      ]
+    )
+    const candidates = rows.slice(0, limit).map((row) => ({
+      userId: text(row, 'user_id'),
+      relayHostId: text(row, 'relay_host_id')
+    }))
+    const last = candidates.at(-1)
+    return rows.length > limit && last ? { admitMode, candidates, next: last } : { admitMode, candidates }
+  }
+
   async inspectRegionalRehomeControl(): Promise<RegionalRehomeControl> {
     const now = this.now()
     return await this.database.transaction(async (transaction) => {

@@ -1,4 +1,5 @@
 import {
+  ASSIGNMENT_LIMITS,
   AssignmentRequestSchema,
   IdleRegionalRehomeRequestSchema,
   type IdleRegionalRehomeRequest,
@@ -59,6 +60,7 @@ import { isRelayDatabaseTransientError } from './database.js'
 import {
   EDGE_CELL_ID,
   EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS,
+  EdgeDormantMoveRefusedError,
   EdgeHostLiveError,
   EdgeMoveDeferredError,
   EdgeMoveBusyError,
@@ -1357,6 +1359,145 @@ export function createRelayApp(
       return rejectAdminOperation(context, error, 409)
     }
   })
+  // Dark operator move of ONE dormant host onto the relay edge, so a GCE cell being retired reaches
+  // zero assignment rows: offline hosts never re-ask, so nothing else moves them. Deploy identity
+  // only (the /v1/admin/* middleware scopes every other identity to its own list). It is the ask's
+  // move (EdgeAssignments.moveDormantToEdge), refused unless the row is dormant under its lock.
+  app.post('/v1/admin/edge-move-dormant', async (context) => {
+    const bearer = readBearer(context.req.header('authorization'))
+    if (config.role !== 'director') { return context.json({ error: 'director_only' }, 404) }
+    if (!bearer || !(await verifyAdminToken(bearer))) {
+      return context.json({ error: 'invalid_token' }, 401)
+    }
+    if (requestTooLarge(context.req.header('content-length'))) {
+      return context.json({ error: 'request_too_large' }, 413)
+    }
+    const body = AdminDormantEdgeMoveSchema.safeParse(await context.req.json().catch(() => null))
+    if (!body.success) { return context.json({ error: 'invalid_request' }, 400) }
+    const { userId, relayHostId, sourceCellId } = body.data
+    const identity = { userId, relayHostId }
+    let admitMode: 'db' | 'reserve' | undefined
+    // One line per outcome, counts and reasons only: never a user, host or credential.
+    const log = (outcome: 'moved' | 'refused' | 'busy', reason?: string) => {
+      console.warn(
+        JSON.stringify({
+          event: 'orca_relay_edge_dormant_move',
+          outcome,
+          ...(reason === undefined ? {} : { reason }),
+          ...(admitMode === undefined ? {} : { admitMode })
+        })
+      )
+    }
+    const refuse = (reason: string): Response => {
+      log('refused', reason)
+      return context.json({ error: 'dormant_edge_move_refused', reason }, 409)
+    }
+    // As /v1/assign answers relay_edge_move_busy: a short Retry-After, never a wait on a lock or
+    // a slow edge, so a paced operator script backs off instead of piling pushes up.
+    const busy = (reason: string): Response => {
+      log('busy', reason)
+      context.header('Retry-After', String(EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS))
+      return context.json({ error: 'relay_edge_move_busy', reason }, 503)
+    }
+    const edge = operations.edgeAssignments
+    if (!edge) { return refuse('edge_not_configured') }
+    if (!edge.ready) { return refuse('edge_not_ready') }
+    // Mode off or down empties the cohort; down also means the edge is known dead.
+    if ((edge.config.control?.() ?? EDGE_CONTROL_DEFAULTS).mode !== 'on') { return refuse('edge_mode_not_on') }
+    if (edge.config.denyHosts.has(relayHostId)) { return refuse('host_denied') }
+    try {
+      admitMode = await operations.assignments.dormantEdgeSourceMode(sourceCellId)
+      const now = Date.now()
+      const shadow = operations.shadowSeats
+      // A live reserve-mode cell keeps activity in memory, so its row alone never proves a host
+      // dormant: only a complete seat map without the host does.
+      if (admitMode === 'reserve' && (!shadow || !shadow.isComplete())) { return refuse('seat_map_incomplete') }
+      if (shadow && shadow.seatsOf(userId, relayHostId).length > 0) { return refuse('host_seated') }
+      if (
+        shadow &&
+        shadow
+          .recentlyLeftOf(userId, relayHostId, now)
+          .some((entry) => entry.at > now - ASSIGNMENT_LIMITS.dormantTtlMs)
+      ) {
+        return refuse('host_recently_seated')
+      }
+      const region = await operations.assignments.dormantHostRegion(identity, sourceCellId)
+      // Only a host the cohort would take: anything else is moved back at its next ask (or, past
+      // the leave ceiling, re-placed without its edge row being read).
+      if (
+        !inEdgeCohort(edge.config, relayHostId, region, userId) ||
+        !mayBeOnEdge(edge.config, relayHostId, userId)
+      ) {
+        return refuse('not_in_cohort')
+      }
+      const moved = await edge.moveDormantToEdge(
+        identity,
+        Math.max(
+          mapEpochFloor(shadow, identity, now),
+          operations.reservePlacement?.rowEpochFloor(identity) ?? 0
+        ),
+        region,
+        { sourceCellId, staleCounters: admitMode === 'reserve' }
+      )
+      // Any later re-placement off the edge mints above the edge epoch, as after an ask's move.
+      operations.reservePlacement?.raiseEpochFloor(identity, moved.assignmentEpoch)
+      log('moved')
+      return context.json({ v: 1, moved: true, assignmentEpoch: moved.assignmentEpoch })
+    } catch (error) {
+      if (error instanceof EdgeDormantMoveRefusedError) { return refuse(error.reason) }
+      if (error instanceof EdgeMoveBusyError) { return busy('relay_edge_move_busy') }
+      if (error instanceof EdgeMoveDeferredError) {
+        // edge_busy: this director's locked pushes are at edgeLockedCallsMax. push_failed: the
+        // edge did not take it. Both roll back and are worth a retry; anything else is the row's.
+        if (error.reason === 'edge_busy' || error.reason === 'push_failed') { return busy(error.reason) }
+        return refuse(error.reason)
+      }
+      // Anything else answers as rebalance-dormant does (a retryable 503 for a database blip or an
+      // unreadable reserve-mode set, else 409 with the error code), logged by class only.
+      const unknownReserveSet = error instanceof RelayCellInReserveModeError && error.cellId === null
+      if (unknownReserveSet) {
+        log('busy', 'reserve_mode_unknown')
+      } else if (isRelayDatabaseTransientError(error)) {
+        log('busy', 'database_unavailable')
+      } else {
+        log('refused', 'operation_failed')
+      }
+      return rejectAdminOperation(context, error, 409)
+    }
+  })
+  // Pages a cell's dormant candidates for the operator script that drives edge-move-dormant (or
+  // rebalance-dormant): the move needs the exact identity, and relay_assignments can only be
+  // walked by its key. Deploy identity only, as host-whereabouts already answers user ids to
+  // its identities. Coarse (AssignmentStore.dormantAssignmentPage): every move re-judges its row.
+  app.post('/v1/admin/dormant-assignments', async (context) => {
+    const bearer = readBearer(context.req.header('authorization'))
+    if (config.role !== 'director') { return context.json({ error: 'director_only' }, 404) }
+    if (!bearer || !(await verifyAdminToken(bearer))) {
+      return context.json({ error: 'invalid_token' }, 401)
+    }
+    if (requestTooLarge(context.req.header('content-length'))) {
+      return context.json({ error: 'request_too_large' }, 413)
+    }
+    const body = AdminDormantAssignmentsSchema.safeParse(await context.req.json().catch(() => null))
+    if (!body.success) { return context.json({ error: 'invalid_request' }, 400) }
+    const after = body.data.cursor === undefined ? undefined : decodeDormantCursor(body.data.cursor)
+    if (after === null) { return context.json({ error: 'invalid_request' }, 400) }
+    try {
+      const page = await operations.assignments.dormantAssignmentPage(
+        body.data.cellId,
+        after,
+        body.data.limit ?? DORMANT_ASSIGNMENTS_PAGE_MAX
+      )
+      return context.json({
+        v: 1,
+        admitMode: page.admitMode,
+        candidates: page.candidates,
+        cursor: page.next ? encodeDormantCursor(page.next) : null
+      })
+    } catch (error) {
+      return rejectAdminOperation(context, error, 409)
+    }
+  })
   app.post('/v1/admin/admission-selector/apply', async (context) => {
     const bearer = readBearer(context.req.header('authorization'))
     if (config.role !== 'director') return context.json({ error: 'director_only' }, 404)
@@ -2055,6 +2196,45 @@ const AdminAssignmentMoveSchema = z
     targetCellId: z.string().min(1).max(128)
   })
   .strict()
+
+const AdminDormantEdgeMoveSchema = z
+  .object({
+    v: z.literal(1),
+    userId: z.string().min(1).max(256),
+    relayHostId: z.string().regex(/^[A-Za-z0-9_-]{16}$/),
+    // The cell the operator is retiring: a row found anywhere else (it moved meanwhile) is refused.
+    sourceCellId: z.string().min(1).max(128).refine((cellId) => cellId !== EDGE_CELL_ID)
+  })
+  .strict()
+
+// A page bound the director answers in one indexed range scan.
+const DORMANT_ASSIGNMENTS_PAGE_MAX = 100
+
+const AdminDormantAssignmentsSchema = z
+  .object({
+    v: z.literal(1),
+    cellId: z.string().min(1).max(128).refine((cellId) => cellId !== EDGE_CELL_ID),
+    limit: z.number().int().min(1).max(DORMANT_ASSIGNMENTS_PAGE_MAX).optional(),
+    cursor: z.string().min(1).max(1024).optional()
+  })
+  .strict()
+
+const DormantCursorSchema = z.tuple([z.string().min(1).max(256), z.string().regex(/^[A-Za-z0-9_-]{16}$/)])
+
+// Opaque to the script: the last key of the page, so the next page resumes after it.
+function encodeDormantCursor(after: { userId: string; relayHostId: string }): string {
+  return Buffer.from(JSON.stringify([after.userId, after.relayHostId])).toString('base64url')
+}
+
+// Null for anything this director did not encode.
+function decodeDormantCursor(cursor: string): { userId: string; relayHostId: string } | null {
+  try {
+    const parsed = DormantCursorSchema.safeParse(JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')))
+    return parsed.success ? { userId: parsed.data[0], relayHostId: parsed.data[1] } : null
+  } catch {
+    return null
+  }
+}
 
 const RuntimeStatusSchema = z.object({ v: z.literal(1) }).strict()
 
