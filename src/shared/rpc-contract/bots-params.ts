@@ -38,6 +38,7 @@ import {
 } from '../bots/bot-offer-answers'
 import { type BotCancelledWait, withBotCancelledWait } from '../bots/bot-cancelled-waits'
 import { OptionalBoolean, OptionalString, requiredString } from './rpc-param-primitives'
+import { AttachmentUploadIdParams } from './structured-agent-session/agent-session-attachment-params'
 import { ACCESS_REQUEST_TOKEN_PATTERN } from '../connector-bot-access-contract'
 
 /** Why a bots.* call refused. */
@@ -204,13 +205,16 @@ export const BotDelete = z.object({
 })
 
 /** A square PNG, base64, that becomes the bot's picture. */
-export const BotAvatarUpload = z.object({
-  botId: requiredString('Missing bot id'),
-  png: z
-    .string()
-    .min(1)
-    .max(Math.ceil(MAX_BOT_AVATAR_BYTES / 3) * 4)
-})
+const AvatarPng = z
+  .string()
+  .min(1)
+  .max(Math.ceil(MAX_BOT_AVATAR_BYTES / 3) * 4)
+export const BotAvatarUpload = z.union([
+  z.object({ botId: requiredString('Missing bot id'), png: AvatarPng }),
+  AttachmentUploadIdParams.extend({
+    botToken: z.string().min(1).max(200)
+  })
+])
 
 export const BotAvatarRead = z.object({ botId: requiredString('Missing bot id') })
 

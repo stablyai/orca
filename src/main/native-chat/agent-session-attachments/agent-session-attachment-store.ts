@@ -9,6 +9,7 @@ import {
   sanitizeAgentSessionAttachmentName,
   type AgentSessionAttachmentUploadCommitResult
 } from '../../../shared/agent-session/agent-session-attachments'
+import { readNodeFileWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
 import type { RuntimeFilePreviewResult } from '../../../shared/file-content/runtime-file-read'
 import { readAuthorizedDocPreviewFile } from '../../../shared/document-preview/doc-preview-file-access'
 import { renameFileWithWindowsRetryAsync } from '../../../shared/file-write/windows-retry-file-operations'
@@ -35,6 +36,7 @@ function isTooLarge(error: unknown): boolean {
 }
 
 type InFlightUpload = {
+  sessionId: string
   callerKey: string
   uploadDir: string
   name: string
@@ -81,6 +83,7 @@ export class AgentSessionAttachmentStore {
     const name = sanitizeAgentSessionAttachmentName(args.name)
     const uploadId = this.uploads.create((id) => ({
       callerKey: args.callerKey,
+      sessionId: args.sessionId,
       uploadDir: join(this.rootDir, id),
       name,
       expectedLength: args.byteLength,
@@ -123,6 +126,31 @@ export class AgentSessionAttachmentStore {
     }
     this.uploads.touch(args.uploadId)
     return { receivedBytes: upload.receivedLength }
+  }
+
+  /** Consume a complete upload without keeping a chat attachment. Only its caller and session may use it. */
+  async takeUploadBytes(
+    callerKey: string,
+    sessionId: string,
+    uploadId: string,
+    maxBytes: number
+  ): Promise<Buffer> {
+    const upload = this.requireOwned(uploadId, callerKey)
+    if (
+      upload.sessionId !== sessionId ||
+      upload.writing ||
+      upload.receivedLength !== upload.expectedLength ||
+      upload.expectedLength > maxBytes
+    ) {
+      throw new Error('Expected a complete upload from this chat within the file size limit.')
+    }
+    this.uploads.delete(uploadId)
+    try {
+      const part = join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
+      return (await readNodeFileWithinLimit(part, maxBytes, { regularFileOnly: true })).buffer
+    } finally {
+      await removeQuietly(upload.uploadDir)
+    }
   }
 
   async commitUpload(args: {

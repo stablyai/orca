@@ -978,6 +978,8 @@ const ORCA_CLI_BOTS_REFERENCE_MARKDOWN = [
   "",
   "In a Linear session, a `- [ ]` / `- [x]` checklist in an update or your final message becomes the session's plan.",
   "",
+  "From your own chat, run `ORCA bot avatar set --file <path>` to use a local picture. It must be a square PNG, 512 to 2000 pixels per side and up to 2 MiB.",
+  "",
   "## Take over a workspace",
   "",
   "A workspace under your home is yours, however it got there; moving it out only moves it. Take one over only when your owner hands it to you or agrees to your offer. Only a git worktree can move under your home; a folder workspace can't be taken over yet:",

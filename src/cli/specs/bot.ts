@@ -46,6 +46,13 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['bot', 'avatar', 'set'],
+    summary: "Set this bot's picture from a local PNG in its own chat",
+    usage: 'orca bot avatar set --file <path> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'file'],
+    notes: ['Use a square PNG, 512 to 2000 pixels per side, up to 2 MiB. Run on the bot’s host.']
+  },
+  {
     path: ['bot', 'chats'],
     summary:
       "List a bot's chats: each one's id, title, last activity, and what it was last asked and said",

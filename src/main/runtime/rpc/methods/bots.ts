@@ -1,7 +1,6 @@
 import {
   BotActivityRead,
   BotAvatarRead,
-  BotAvatarUpload,
   BotChatReset,
   BotDelete,
   BotRoster,
@@ -20,6 +19,7 @@ import { openEmptyBotChat, runtimeBotChatTreeHost } from '../../../bots/bot-chat
 import { forgetDeletedBotTools } from './bots-tools'
 import { composioBotsOf } from './bots-composio'
 import { ownerOnly } from './bots-caller-gates'
+import { BOT_AVATAR_UPLOAD_METHOD } from './bots-avatar-upload'
 import { BOT_CREATE_METHOD } from './bots-create'
 import { BOT_AGENT_CHOICES_METHOD } from './bots-agent-choices'
 import { BOT_CHATS_METHODS, botChatsSummary, readBotChats } from './bots-chats'
@@ -196,14 +196,7 @@ export const BOT_METHODS = [
       return own ? { projects, own } : { projects }
     }
   }),
-  defineMethod({
-    name: 'bots.avatar.upload',
-    permission: 'workspace',
-    params: BotAvatarUpload,
-    handler: async (params, { runtime }) => ({
-      bot: await runtime.bots.setAvatarImage(params.botId, Buffer.from(params.png, 'base64'))
-    })
-  }),
+  BOT_AVATAR_UPLOAD_METHOD,
   defineMethod({
     name: 'bots.avatar.read',
     permission: 'workspace',
