@@ -142,6 +142,15 @@ it('flags whether a reference came from a url so a bare word can still be text-s
   })
 })
 
+it('searches a digit-leading custom id as a reference and a date-like token as text', () => {
+  expect(parseClickUpSearchIntent('1ENG-7')).toMatchObject({
+    kind: 'reference',
+    reference: { kind: 'custom-id', customId: '1ENG-7' },
+    fromUrl: false
+  })
+  expect(parseClickUpSearchIntent('2024-01')).toEqual({ kind: 'text', text: '2024-01' })
+})
+
 it('drops done and closed tasks from an open list yet keeps paging while ClickUp has pages', () => {
   const task = (id: string, type: string) => ({ id, name: id, status: { status: id, type } })
   const payload = {

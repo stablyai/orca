@@ -12,6 +12,7 @@ import { ClickUpApiError, isClickUpAuthError, toClickUpDeadlineError } from './c
 import { mapClickUpViewer, mapClickUpWorkspaces } from './clickup-response-mapping'
 import { clearScannedClickUpPages } from './clickup-task-scan-cache'
 import {
+  type ClickUpAccountState,
   deleteToken,
   getAccountState,
   getCredentialError,
@@ -92,12 +93,42 @@ export async function getStatus(): Promise<ClickUpConnectionStatus> {
 
 /** The stored token and selection, or null when ClickUp is not connected. */
 export async function getContext(): Promise<ClickUpContext | null> {
-  const state = await getAccountState()
-  if (!state.viewer) {
-    return null
+  // One registry turn, so a reconnect cannot land between the two reads and pair one account's token with another's Workspace.
+  return inAccountOrder(async () => {
+    const state = await getAccountState()
+    if (!state.viewer) {
+      return null
+    }
+    const token = await readToken()
+    return token ? { token, viewer: state.viewer, workspaceId: state.selectedWorkspaceId } : null
+  })
+}
+
+/**
+ * Puts the metadata of the account that still owns the stored token back after a failed connect. When that fails
+ * too, the disk pairs the new metadata with the old token, so the token is removed to read as disconnected.
+ */
+async function restoreAccountState(
+  previous: ClickUpAccountState,
+  connectError: unknown
+): Promise<void> {
+  try {
+    await writeAccountState(previous)
+  } catch (restoreError) {
+    const errors = [connectError, restoreError]
+    try {
+      await deleteToken()
+    } catch (deleteError) {
+      errors.push(deleteError)
+    }
+    clearScannedClickUpPages()
+    throw new AggregateError(
+      errors,
+      `ClickUp connect failed and the previous account state could not be restored: ${
+        connectError instanceof Error ? connectError.message : String(connectError)
+      }`
+    )
   }
-  const token = await readToken()
-  return token ? { token, viewer: state.viewer, workspaceId: state.selectedWorkspaceId } : null
 }
 
 export async function connect(rawToken: string): Promise<ClickUpConnectResult> {
@@ -116,16 +147,23 @@ export async function connect(rawToken: string): Promise<ClickUpConnectResult> {
   }
   await inAccountOrder(async () => {
     const previous = await getAccountState()
-    await saveToken(token)
-    await writeAccountState({
-      version: 1,
-      viewer: account.viewer,
-      workspaces: account.workspaces,
-      selectedWorkspaceId: resolveSelectedWorkspaceId(
-        account.workspaces,
-        previous.selectedWorkspaceId
-      )
-    })
+    try {
+      // The token file is replaced atomically, so writing it last means a failure there leaves the old token in place
+      // and only the metadata has to be put back.
+      await writeAccountState({
+        version: 1,
+        viewer: account.viewer,
+        workspaces: account.workspaces,
+        selectedWorkspaceId: resolveSelectedWorkspaceId(
+          account.workspaces,
+          previous.selectedWorkspaceId
+        )
+      })
+      await saveToken(token)
+    } catch (error) {
+      await restoreAccountState(previous, error)
+      throw error
+    }
     clearScannedClickUpPages()
   })
   return { ok: true, viewer: account.viewer }

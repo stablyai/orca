@@ -63,6 +63,7 @@ export function useClickUpTaskList({ enabled, sourceContext, filter, query }: Cl
   }>({ scope: '', byName: new Map() })
   const forceNextLoadRef = useRef(false)
   // Why: a refresh refetches page zero only, so each later page is forced once to skip cache entries from before it.
+  // A new object marks each refresh, so a page that was requested before one is recognised and dropped.
   const refreshedPagesRef = useRef<{ key: string; pages: Set<number> } | null>(null)
   const pages = loaded.key === listKey ? loaded.pages : 0
 
@@ -155,7 +156,8 @@ export function useClickUpTaskList({ enabled, sourceContext, filter, query }: Cl
     if (nextPage === null || loadingMore || !sourceContext) {
       return
     }
-    const refreshed = refreshedPagesRef.current?.key === listKey ? refreshedPagesRef.current : null
+    const startedAfter = refreshedPagesRef.current
+    const refreshed = startedAfter?.key === listKey ? startedAfter : null
     try {
       const page = await withBusyFlag(setLoadingMore, () =>
         listClickUpTasks(
@@ -163,6 +165,9 @@ export function useClickUpTaskList({ enabled, sourceContext, filter, query }: Cl
           { sourceContext, force: refreshed !== null && !refreshed.pages.has(nextPage) }
         )
       )
+      if (refreshedPagesRef.current !== startedAfter) {
+        return
+      }
       refreshed?.pages.add(nextPage)
       setLoaded((current) =>
         current.key === listKey ? { key: listKey, pages: current.pages + 1 } : current

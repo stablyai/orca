@@ -130,10 +130,12 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
         )
       }
     } catch (err) {
-      // This read superseded the hydration read, so a failure here must still leave 'unread'.
-      if (clientRef.current === client && clickupStatusRequestIdRef.current === requestId) {
-        setClickUpConnection(reconcileClickUpReadFailure)
+      // A newer read owns the status now, so this failure must not surface after it succeeded.
+      if (clientRef.current !== client || clickupStatusRequestIdRef.current !== requestId) {
+        return
       }
+      // This read superseded the hydration read, so a failure here must still leave 'unread'.
+      setClickUpConnection(reconcileClickUpReadFailure)
       throw err
     }
   }, [

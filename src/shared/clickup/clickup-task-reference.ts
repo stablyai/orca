@@ -5,7 +5,8 @@ export type ClickUpTaskReference =
 
 // Raw ids run from the short legacy form (`9hz`) to the current nine characters.
 const RAW_TASK_ID_PATTERN = /^[0-9a-z]{3,12}$/
-const CUSTOM_TASK_ID_PATTERN = /^[A-Za-z][A-Za-z0-9_]+-\d+$/
+// ClickUp allows digits and underscores anywhere in a prefix; requiring a letter keeps dates and phone numbers such as `2024-01` from reading as task ids.
+const CUSTOM_TASK_ID_PATTERN = /^(?=[A-Za-z0-9_]*[A-Za-z])[A-Za-z0-9_]{2,}-\d+$/
 const WORKSPACE_ID_PATTERN = /^\d+$/
 export const HTTP_URL_INPUT_PATTERN = /^https?:\/\//i
 

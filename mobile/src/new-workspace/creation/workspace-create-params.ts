@@ -5,6 +5,7 @@ import type {
 } from '../../../../src/shared/worktree/create-types'
 import type { GitPushTarget as WorkspaceCreateGitPushTarget } from '../../../../src/shared/worktree/types'
 import type { RpcSendParams } from '../../../../src/shared/rpc-contract/rpc-send-params'
+import { clickupGitReferenceLabel } from '../../../../src/shared/clickup/clickup-task-reference'
 import {
   buildClickUpWorkspaceSource,
   buildJiraWorkspaceSource,
@@ -203,7 +204,7 @@ export function buildTaskWorkspaceCreateParams(args: {
       repo: `id:${targetRepoId}`,
       name: resolveWorkspaceCreateName({
         draft: workspaceName,
-        fallback: `cu-${item.source.id.toLowerCase()}`
+        fallback: clickupGitReferenceLabel(item.source.customId ?? item.source.id).toLowerCase()
       }),
       ...displayName,
       linkedWorkItem: buildClickUpWorkspaceSource(item.source),

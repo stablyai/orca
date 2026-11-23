@@ -32,6 +32,7 @@ export function useMobileTasksClickUpPagination(model: TaskListLoadingModel) {
     loadGenerationRef,
     loading,
     provider,
+    refreshing,
     revalidating,
     setClickUpLoadingMore,
     setClickUpNextPage,
@@ -48,6 +49,7 @@ export function useMobileTasksClickUpPagination(model: TaskListLoadingModel) {
       clickupNextPage === null ||
       clickupLoadingMore ||
       loading ||
+      refreshing ||
       revalidating
     ) {
       return
@@ -106,6 +108,7 @@ export function useMobileTasksClickUpPagination(model: TaskListLoadingModel) {
     loading,
     provider,
     queryClient,
+    refreshing,
     revalidating,
     tasksSupported
   ])

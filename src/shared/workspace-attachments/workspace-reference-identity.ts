@@ -1,3 +1,4 @@
+import { parseClickUpTaskReference } from '../clickup/clickup-task-reference'
 import { JIRA_ISSUE_KEY_PATTERN } from '../jira/jira-issue-url'
 import { parseLinearIssueInput } from '../linear/links'
 import { getTaskSourceCacheScope } from '../work-items/task-source-context'
@@ -180,6 +181,24 @@ function externalUrl(item: WorkspaceAttachment): string | undefined {
   }
 }
 
+/** Whether the identifier a ClickUp URL names is the one the stored reference carries. */
+function matchesClickUpUrlIdentifier(
+  urlIdentifier: string | undefined,
+  identifier: string | undefined
+): boolean {
+  const fromUrl = urlIdentifier ? parseClickUpTaskReference(urlIdentifier) : null
+  if (!fromUrl || !identifier) {
+    return false
+  }
+  const stored = parseClickUpTaskReference(identifier)
+  if (fromUrl.kind === 'id') {
+    // A task shown by its custom id still links to its raw-id URL, and only the API can tie the two together;
+    // only another raw id is a provable mismatch, so references saved with any other identifier keep their identity.
+    return stored?.kind !== 'id' || stored.id === fromUrl.id
+  }
+  return stored?.kind === 'custom-id' && stored.customId === fromUrl.customId
+}
+
 /** Provider-proven external identity, or undefined when the source cannot be proven. */
 export function getProvenWorkspaceReferenceIdentity(item: WorkspaceAttachment): string | undefined {
   const candidate = externalUrl(item)
@@ -190,9 +209,11 @@ export function getProvenWorkspaceReferenceIdentity(item: WorkspaceAttachment): 
       if (
         parsed.provider === item.provider &&
         parsed.type === item.type &&
-        (parsed.identifier
-          ? parsed.identifier === identifier?.toUpperCase()
-          : parsed.number === item.number)
+        (item.provider === 'clickup'
+          ? matchesClickUpUrlIdentifier(parsed.clickupIdentifier, identifier)
+          : parsed.identifier
+            ? parsed.identifier === identifier?.toUpperCase()
+            : parsed.number === item.number)
       ) {
         const url = new URL(parsed.url!)
         // These hosts route case-insensitively; stored URLs keep the user's casing.

@@ -1,3 +1,4 @@
+import { parseClickUpTaskReference } from '../../../../../../shared/clickup/clickup-task-reference'
 import { getWorkspaceReferenceIdentity } from '../../../../../../shared/workspace-attachments/workspace-reference-identity'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
@@ -13,6 +14,7 @@ import {
   matchesWorkspaceAttachmentIdentity,
   normalizeWorkspaceAttachments
 } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
+import { matchesClickUpWorkspaceReference } from './workspace-reference-details'
 
 export function getWorkspaceAttachmentSourceContext(
   provider: TaskProvider,
@@ -41,6 +43,33 @@ export function getWorkspaceAttachmentSourceContext(
     : null
 }
 
+/** A fetched ClickUp row lists its task by raw-id URL, so a custom-id query matches through the task, not through URL scope. */
+function matchesClickUpQueryResult(
+  query: WorkspaceAttachment,
+  result: WorkspaceAttachment
+): boolean {
+  const identifier = query.clickupIdentifier
+  const resultIdentifier = result.clickupIdentifier
+    ? parseClickUpTaskReference(result.clickupIdentifier)
+    : null
+  const resultUrl = result.url ? parseClickUpTaskReference(result.url) : null
+  const resultIdentity = result.taskSourceContext?.providerIdentity
+  if (!identifier || !result.url) {
+    return false
+  }
+  return matchesClickUpWorkspaceReference(query, identifier, {
+    id:
+      resultUrl?.kind === 'id'
+        ? resultUrl.id
+        : resultIdentifier?.kind === 'id'
+          ? resultIdentifier.id
+          : '',
+    customId: resultIdentifier?.kind === 'custom-id' ? resultIdentifier.customId : null,
+    url: result.url,
+    workspaceId: (resultIdentity?.provider === 'clickup' ? resultIdentity.workspaceId : null) ?? ''
+  })
+}
+
 export function matchesWorkspaceAttachmentQuery(
   query: WorkspaceAttachment,
   result: WorkspaceAttachment
@@ -51,6 +80,9 @@ export function matchesWorkspaceAttachmentQuery(
   // GitHub issues and PRs share numbers; GitLab issues and MRs have separate sequences.
   if (query.type !== result.type && (query.provider !== 'github' || query.url)) {
     return false
+  }
+  if (query.provider === 'clickup') {
+    return matchesClickUpQueryResult(query, result)
   }
   const identifier =
     query.identifier ?? query.linearIdentifier ?? query.jiraIdentifier ?? query.clickupIdentifier

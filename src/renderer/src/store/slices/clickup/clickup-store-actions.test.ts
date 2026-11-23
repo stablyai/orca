@@ -269,4 +269,99 @@ describe('ClickUp status writes', () => {
     expect(cachedStatuses(store, writer)).toEqual(['Open', 'Open'])
     expect(cachedStatuses(store, sibling)).toEqual(['In progress', 'Open'])
   })
+
+  it('restores each cached copy to the status it held before the write', async () => {
+    const store = createTestStore()
+    const writer = { sourceContext: sourceContext('p1') }
+    const sibling = { sourceContext: context({ projectId: 'p2' }) }
+    const writing = deferred<{ ok: false; error: string }>()
+    api.updateTask.mockReturnValue(writing.promise)
+    await cacheOpenTask(store, writer)
+    await cacheOpenTask(store, sibling, 'In progress')
+
+    const update = store
+      .getState()
+      .updateClickUpTaskStatus(task('Open'), statusOption('Done'), writer)
+    expect(cachedStatuses(store, sibling)).toEqual(['Done', 'Done'])
+    writing.resolve({ ok: false, error: 'rejected' })
+    await update
+
+    expect(cachedStatuses(store, writer)).toEqual(['Open', 'Open'])
+    expect(cachedStatuses(store, sibling)).toEqual(['In progress', 'In progress'])
+  })
+
+  it('reloads a list read that started before a successful write instead of caching the old status', async () => {
+    const store = createTestStore()
+    const writer = { sourceContext: sourceContext('p1') }
+    await cacheOpenTask(store, writer)
+    const earlyRead = deferred<{ tasks: ClickUpTask[]; nextPage: null }>()
+    api.listTasks.mockReturnValueOnce(earlyRead.promise)
+    const read = store
+      .getState()
+      .listClickUpTasks({ filter: ALL, page: 0 }, { ...writer, force: true })
+    api.updateTask.mockResolvedValue({ ok: true })
+    api.getTask.mockResolvedValue(task('Done'))
+    api.listTasks.mockResolvedValueOnce({ tasks: [task('Done')], nextPage: null })
+
+    await store.getState().updateClickUpTaskStatus(task('Open'), statusOption('Done'), writer)
+    earlyRead.resolve({ tasks: [task('Open')], nextPage: null })
+    const page = await read
+
+    expect(page.tasks[0]?.status.name).toBe('Done')
+    expect(api.listTasks).toHaveBeenCalledTimes(3)
+    expect(cachedStatuses(store, writer)[1]).toBe('Done')
+  })
+
+  it('keeps the written status over a read that cached the old one while the write was out', async () => {
+    const store = createTestStore()
+    const writer = { sourceContext: sourceContext('p1') }
+    await cacheOpenTask(store, writer)
+    const writing = deferred<{ ok: true }>()
+    api.updateTask.mockReturnValue(writing.promise)
+    api.getTask.mockResolvedValue(task('Done'))
+
+    const update = store
+      .getState()
+      .updateClickUpTaskStatus(task('Open'), statusOption('Done'), writer)
+    api.listTasks.mockResolvedValueOnce({ tasks: [task('Open')], nextPage: null })
+    await store.getState().listClickUpTasks({ filter: ALL, page: 0 }, { ...writer, force: true })
+    expect(cachedStatuses(store, writer)[1]).toBe('Open')
+    writing.resolve({ ok: true })
+    await update
+
+    expect(cachedStatuses(store, writer)[1]).toBe('Done')
+  })
+
+  it('leaves a copy that got a different newer status while the write was out', async () => {
+    const store = createTestStore()
+    const writer = { sourceContext: sourceContext('p1') }
+    await cacheOpenTask(store, writer)
+    const writing = deferred<{ ok: true }>()
+    api.updateTask.mockReturnValue(writing.promise)
+    api.getTask.mockResolvedValue(task('Done'))
+
+    const update = store
+      .getState()
+      .updateClickUpTaskStatus(task('Open'), statusOption('Done'), writer)
+    api.listTasks.mockResolvedValueOnce({ tasks: [task('Review')], nextPage: null })
+    await store.getState().listClickUpTasks({ filter: ALL, page: 0 }, { ...writer, force: true })
+    writing.resolve({ ok: true })
+    await update
+
+    expect(cachedStatuses(store, writer)[1]).toBe('Review')
+  })
+
+  it('caches a list read that no write overlapped', async () => {
+    const store = createTestStore()
+    const writer = { sourceContext: sourceContext('p1') }
+    api.updateTask.mockResolvedValue({ ok: true })
+    api.getTask.mockResolvedValue(task('Done'))
+    await store.getState().updateClickUpTaskStatus(task('Open'), statusOption('Done'), writer)
+    api.listTasks.mockResolvedValueOnce({ tasks: [task('Done')], nextPage: null })
+
+    await store.getState().listClickUpTasks({ filter: ALL, page: 0 }, writer)
+
+    expect(api.listTasks).toHaveBeenCalledTimes(1)
+    expect(cachedStatuses(store, writer)[1]).toBe('Done')
+  })
 })

@@ -1,26 +1,30 @@
 export type ClickUpTokenDialogConnectState = 'idle' | 'connecting' | 'error'
 
 export type ClickUpTokenDialogState = {
+  /** The owner the draft and error below belong to; a token typed for one runtime is never sent to another. */
+  ownerKey: string
   tokenDraft: string
   connectState: ClickUpTokenDialogConnectState
   connectError: string | null
 }
 
-export const CLOSED_CLICKUP_TOKEN_DIALOG_STATE: ClickUpTokenDialogState = Object.freeze({
-  tokenDraft: '',
-  connectState: 'idle',
-  connectError: null
-})
+export function closedClickUpTokenDialogState(ownerKey: string): ClickUpTokenDialogState {
+  return { ownerKey, tokenDraft: '', connectState: 'idle', connectError: null }
+}
 
 export function resolveClickUpTokenDialogState(
   state: ClickUpTokenDialogState,
-  open: boolean
+  open: boolean,
+  ownerKey: string
 ): ClickUpTokenDialogState {
+  if (state.ownerKey !== ownerKey) {
+    return closedClickUpTokenDialogState(ownerKey)
+  }
   if (open) {
     return state
   }
   if (state.tokenDraft === '' && state.connectState === 'idle' && state.connectError === null) {
     return state
   }
-  return CLOSED_CLICKUP_TOKEN_DIALOG_STATE
+  return closedClickUpTokenDialogState(ownerKey)
 }

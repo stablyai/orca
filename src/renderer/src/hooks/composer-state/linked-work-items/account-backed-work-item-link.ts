@@ -24,6 +24,8 @@ type AccountBackedWorkItemLinkInput = Pick<
   | 'setLinkedWorkItem'
   | 'setName'
   | 'setPushTarget'
+  | 'setReuseEligibleBranch'
+  | 'setReuseSelectedBranch'
   | 'smartSourceSelectionRef'
 >
 
@@ -48,6 +50,8 @@ export function useAccountBackedWorkItemLink(input: AccountBackedWorkItemLinkInp
     setLinkedWorkItem,
     setName,
     setPushTarget,
+    setReuseEligibleBranch,
+    setReuseSelectedBranch,
     smartSourceSelectionRef
   } = input
   return useCallback(
@@ -68,6 +72,9 @@ export function useAccountBackedWorkItemLink(input: AccountBackedWorkItemLinkInp
       setPushTarget(undefined)
       setBranchNameOverride(undefined)
       setBranchNameOverridePreservesNameEdits(false)
+      // Why (#5181): a linked task creates a fresh branch, so the branch picked for reuse no longer applies.
+      setReuseEligibleBranch(null)
+      setReuseSelectedBranch(false)
       setForkPushWarning(null)
       branchAutoNameRef.current = ''
       setLinkedWorkItem(linkedItem)
@@ -104,6 +111,8 @@ export function useAccountBackedWorkItemLink(input: AccountBackedWorkItemLinkInp
       setLinkedWorkItem,
       setName,
       setPushTarget,
+      setReuseEligibleBranch,
+      setReuseSelectedBranch,
       smartSourceSelectionRef
     ]
   )

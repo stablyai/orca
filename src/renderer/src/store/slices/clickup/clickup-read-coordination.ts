@@ -42,6 +42,8 @@ type InflightRead = { promise: Promise<unknown>; generation: number }
 const inflightReads = new Map<string, InflightRead>()
 let connectionGeneration = 0
 let statusReadGeneration = 0
+/** Counts the status writes that succeeded per runtime and Workspace prefix. */
+const statusWriteGenerations = new Map<string, number>()
 
 export function beginClickUpConnectionChange(): number {
   connectionGeneration += 1
@@ -55,6 +57,11 @@ export function currentClickUpConnectionGeneration(): number {
 
 export function isCurrentClickUpConnectionChange(generation: number): boolean {
   return generation === connectionGeneration
+}
+
+/** Called once a status write succeeded: reads that started before it may carry the old status. */
+export function noteClickUpStatusWrite(prefix: string): void {
+  statusWriteGenerations.set(prefix, (statusWriteGenerations.get(prefix) ?? 0) + 1)
 }
 
 export function nextClickUpStatusReadGeneration(): number {
@@ -180,15 +187,43 @@ type CachedReadArgs<T> = {
   force?: boolean
   /** A cancellable read is never shared: one caller aborting must not fail another that joined it. */
   signal?: AbortSignal
+  /** Rows that carry a task's status; such a read is repeated when a status write succeeded while it was out. */
+  carriesTaskStatus?: boolean
   peek: () => CacheEntry<T> | undefined
   store: (entry: CacheEntry<T>) => void
   load: () => Promise<T>
   get: () => AppState
 }
 
+/** A read is repeated at most this often, so a burst of writes cannot keep it looping. */
+const MAX_STATUS_WRITE_RELOADS = 2
+
+async function loadAcrossStatusWrites<T>(args: CachedReadArgs<T>): Promise<T> {
+  if (!args.carriesTaskStatus) {
+    return args.load()
+  }
+  const prefix = clickupWorkspaceCachePrefix(args.scope.runtimeContextKey, args.scope.workspaceKey)
+  const generation = connectionGeneration
+  for (let reloads = 0; ; reloads += 1) {
+    const written = statusWriteGenerations.get(prefix) ?? 0
+    const data = await args.load()
+    // Past the cap the result is used as is: a write that landed in between re-applied its status to the
+    // copies cached then, and a stale row left from a later burst is replaced by the next read after the TTL.
+    if (
+      (statusWriteGenerations.get(prefix) ?? 0) === written ||
+      reloads === MAX_STATUS_WRITE_RELOADS ||
+      generation !== connectionGeneration ||
+      args.signal?.aborted
+    ) {
+      return data
+    }
+  }
+}
+
 /**
  * Serves a fresh cache hit, joins an identical in-flight read, or loads and caches the shared result.
- * A connection change while the read is out discards its result instead of caching it.
+ * A connection change while the read is out discards its result instead of caching it, and a
+ * status write that succeeded meanwhile makes a status-carrying read load again.
  */
 export async function cachedClickUpRead<T>(args: CachedReadArgs<T>): Promise<T> {
   const { key, scope, get } = args
@@ -203,8 +238,7 @@ export async function cachedClickUpRead<T>(args: CachedReadArgs<T>): Promise<T> 
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: inflightReads is keyed by the cache key, and each key family always loads the same result type.
     return inflight.promise as Promise<T>
   }
-  const promise: Promise<T> = args
-    .load()
+  const promise: Promise<T> = loadAcrossStatusWrites(args)
     .then((data) => {
       if ((!shared || inflightReads.get(key)?.promise === promise) && canWriteRead(generation)) {
         args.store({ data, fetchedAt: Date.now() })

@@ -16,20 +16,55 @@ const EMPTY_STATE: AccountState = {
 const VIEWER_A = { id: '1', username: 'a', email: 'a@example.com' }
 
 const clickupRequest = vi.fn<(token: string, path: string) => Promise<unknown>>()
-const store: { token: string | null; state: AccountState; failDelete: boolean } = {
+const store: {
+  token: string | null
+  state: AccountState
+  failDelete: boolean
+  failSaveToken: boolean
+  // 1-based metadata write calls that fail; a failed write leaves an unreadable file, which reads as no account.
+  failingWrites: number[]
+  // Whether a failed write leaves an unreadable file (no account) instead of the previous content.
+  corruptFailedWrites: boolean
+  writeCalls: number
+  inOrder: boolean
+  readsInOrder: boolean[]
+} = {
   token: null,
   state: EMPTY_STATE,
-  failDelete: false
+  failDelete: false,
+  failSaveToken: false,
+  failingWrites: [],
+  corruptFailedWrites: true,
+  writeCalls: 0,
+  inOrder: false,
+  readsInOrder: []
 }
 
 vi.mock('./authenticated-request', () => ({ clickupRequest }))
 vi.mock('./clickup-account-store', () => ({
-  getAccountState: async () => store.state,
-  readToken: async () => store.token,
+  getAccountState: async () => {
+    store.readsInOrder.push(store.inOrder)
+    // The real store hides the metadata of an account whose token is gone.
+    return store.token ? store.state : EMPTY_STATE
+  },
+  readToken: async () => {
+    store.readsInOrder.push(store.inOrder)
+    return store.token
+  },
   getCredentialError: async () => undefined,
   getTokenProtection: async () => null,
-  inAccountOrder: async (run: () => Promise<unknown>) => run(),
+  inAccountOrder: async (run: () => Promise<unknown>) => {
+    store.inOrder = true
+    try {
+      return await run()
+    } finally {
+      store.inOrder = false
+    }
+  },
   saveToken: async (token: string) => {
+    if (store.failSaveToken) {
+      throw new Error('token write failed')
+    }
     store.token = token
   },
   deleteToken: async () => {
@@ -39,6 +74,12 @@ vi.mock('./clickup-account-store', () => ({
     store.token = null
   },
   writeAccountState: async (state: AccountState) => {
+    if (store.failingWrites.includes(++store.writeCalls)) {
+      if (store.corruptFailedWrites) {
+        store.state = EMPTY_STATE
+      }
+      throw new Error('metadata write failed')
+    }
     store.state = state
   }
 }))
@@ -62,6 +103,17 @@ beforeEach(() => {
     selectedWorkspaceId: '9001'
   }
   store.failDelete = false
+  store.failSaveToken = false
+  store.failingWrites = []
+  store.corruptFailedWrites = true
+  store.writeCalls = 0
+  store.inOrder = false
+  store.readsInOrder = []
+  clickupRequest.mockImplementation(async (_token, path) =>
+    path === '/user'
+      ? { user: { id: 2, username: 'b', email: 'b@example.com' } }
+      : { teams: [{ id: '7', name: 'Other' }] }
+  )
 })
 
 describe('testConnection racing the account changing', () => {
@@ -134,6 +186,93 @@ describe('disconnect', () => {
 
     await expect(disconnect()).rejects.toMatchObject({ code: 'EACCES' })
     expect(store.state.viewer).toEqual(VIEWER_A)
+  })
+})
+
+describe('connect failing to store the new account', () => {
+  const VIEWER_B = { id: '2', username: 'b', email: 'b@example.com' }
+
+  async function storedPair() {
+    const { getContext } = await import('./client')
+    return getContext()
+  }
+
+  it('keeps the previous token and account when the token cannot be written', async () => {
+    const { connect } = await import('./client')
+    store.failSaveToken = true
+
+    await expect(connect('token-b')).rejects.toThrow('token write failed')
+
+    expect(store.token).toBe('token-a')
+    expect(store.state.viewer).toEqual(VIEWER_A)
+    await expect(storedPair()).resolves.toMatchObject({ token: 'token-a', workspaceId: '9001' })
+  })
+
+  it('keeps the previous token and account when the metadata cannot be written', async () => {
+    const { connect } = await import('./client')
+    store.failingWrites = [1]
+
+    await expect(connect('token-b')).rejects.toThrow('metadata write failed')
+
+    expect(store.token).toBe('token-a')
+    expect(store.state.viewer).toEqual(VIEWER_A)
+    await expect(storedPair()).resolves.toMatchObject({ token: 'token-a', workspaceId: '9001' })
+  })
+
+  it('removes the old token and reports every failure when the put-back fails too', async () => {
+    const { connect, getContext, getStatus } = await import('./client')
+    store.failSaveToken = true
+    // The metadata write succeeds, the token write fails, and the put-back of the metadata fails too,
+    // leaving the new account's metadata beside the old token.
+    store.failingWrites = [2]
+    store.corruptFailedWrites = false
+
+    const outcome = expect(connect('token-b')).rejects
+    await outcome.toBeInstanceOf(AggregateError)
+    await outcome.toMatchObject({
+      errors: [
+        expect.objectContaining({ message: 'token write failed' }),
+        expect.objectContaining({ message: 'metadata write failed' })
+      ]
+    })
+
+    expect(store.token).toBeNull()
+    await expect(getContext()).resolves.toBeNull()
+    await expect(getStatus()).resolves.toMatchObject({ connected: false, viewer: null })
+  })
+
+  it('includes the token removal failure when that fails as well', async () => {
+    const { connect } = await import('./client')
+    store.failSaveToken = true
+    store.failingWrites = [2]
+    store.failDelete = true
+
+    await expect(connect('token-b')).rejects.toMatchObject({
+      errors: [
+        expect.objectContaining({ message: 'token write failed' }),
+        expect.objectContaining({ message: 'metadata write failed' }),
+        expect.objectContaining({ message: 'EACCES' })
+      ]
+    })
+  })
+
+  it('stores the new token and account together on success', async () => {
+    const { connect } = await import('./client')
+
+    await expect(connect('token-b')).resolves.toMatchObject({ ok: true, viewer: VIEWER_B })
+
+    expect(store.token).toBe('token-b')
+    expect(store.state.viewer).toEqual(VIEWER_B)
+  })
+})
+
+describe('getContext', () => {
+  it('reads the account metadata and the token in one registry turn', async () => {
+    const { getContext } = await import('./client')
+
+    await expect(getContext()).resolves.toMatchObject({ token: 'token-a', workspaceId: '9001' })
+
+    expect(store.readsInOrder).toEqual([true, true])
   })
 })
 

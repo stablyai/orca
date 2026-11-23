@@ -6,7 +6,7 @@ import type {
   ClickUpTaskUpdate
 } from '../../shared/clickup/clickup-types'
 import { clickupRequest } from './authenticated-request'
-import { isClickUpAuthError } from './clickup-api-error'
+import { ClickUpApiError, isClickUpAuthError } from './clickup-api-error'
 import { withClickUpContext } from './client'
 import { clearScannedClickUpPages } from './clickup-task-scan-cache'
 import { taskEndpoint } from './clickup-task-queries'
@@ -30,6 +30,7 @@ export async function addTaskComment(input: string, body: string): Promise<Click
   if (!text) {
     return taskProviderFailure('clickup.commentBodyRequired', 'Comment body is required.')
   }
+  let posted = false
   try {
     const result = await withClickUpContext(
       async (context) => {
@@ -37,6 +38,7 @@ export async function addTaskComment(input: string, body: string): Promise<Click
         if (!endpoint) {
           return taskIdRequired()
         }
+        posted = true
         const created = await clickupRequest<{ id?: unknown }>(context.token, endpoint, {
           method: 'POST',
           body: JSON.stringify({ comment_text: text, notify_all: false }),
@@ -52,6 +54,14 @@ export async function addTaskComment(input: string, body: string): Promise<Click
   } catch (error) {
     if (isClickUpAuthError(error)) {
       throw error
+    }
+    // Once the POST went out, a failure that is not a ClickUp rejection (the request or its reply was lost) says
+    // nothing about whether the comment landed, so it must not invite a blind retry that posts a duplicate.
+    if (posted && error instanceof Error && !(error instanceof ClickUpApiError)) {
+      return {
+        ok: false,
+        error: `ClickUp may have saved the comment even though the request failed (${error.message}). Check the thread before trying again.`
+      }
     }
     return error instanceof Error
       ? { ok: false, error: error.message }

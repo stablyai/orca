@@ -40,6 +40,33 @@ it('accepts underscores in custom id prefixes', () => {
   })
 })
 
+it('accepts digit-leading custom id prefixes', () => {
+  expect(parseClickUpTaskReference('1ENG-7')).toEqual({
+    kind: 'custom-id',
+    customId: '1ENG-7',
+    workspaceId: null
+  })
+  expect(parseClickUpTaskReference('https://app.clickup.com/t/9001/1eng-7')).toEqual({
+    kind: 'custom-id',
+    customId: '1ENG-7',
+    workspaceId: '9001'
+  })
+  expect(parseClickUpTaskReference('https://app.clickup.com/t/1ENG-7')).toEqual({
+    kind: 'custom-id',
+    customId: '1ENG-7',
+    workspaceId: null
+  })
+})
+
+it('keeps raw ids and date-like tokens out of the custom id pattern', () => {
+  expect(parseClickUpTaskReference('86abc12de')).toEqual({ kind: 'id', id: '86abc12de' })
+  expect(parseClickUpTaskReference('https://app.clickup.com/t/9001/86abc12de')).toEqual({
+    kind: 'id',
+    id: '86abc12de'
+  })
+  expect(parseClickUpTaskReference('2024-01')).toBeNull()
+})
+
 it('accepts the short raw ids ClickUp documents', () => {
   expect(parseClickUpTaskReference('9hz')).toEqual({ kind: 'id', id: '9hz' })
   expect(parseClickUpTaskReference('https://app.clickup.com/t/9hz')).toEqual({

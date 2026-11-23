@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { ExternalLink, LoaderCircle, Lock } from 'lucide-react'
 import {
   taskProviderErrorMessage,
@@ -23,8 +23,10 @@ import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useTranslate } from '@/i18n/use-translate'
 import { CLICKUP_APPS_SETTINGS_URL } from '../../../../../shared/clickup/clickup-links'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { getEnvironmentRuntimeIdentityKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import {
-  CLOSED_CLICKUP_TOKEN_DIALOG_STATE,
+  closedClickUpTokenDialogState,
   resolveClickUpTokenDialogState
 } from './clickup-token-dialog-state'
 
@@ -54,8 +56,14 @@ export function ClickUpTokenDialog({
   const mountedRef = useMountedRef()
   const tokenInputId = useId()
   const tokenErrorId = useId()
-  const [dialogState, setDialogState] = useState(CLOSED_CLICKUP_TOKEN_DIALOG_STATE)
-  const resolvedDialogState = resolveClickUpTokenDialogState(dialogState, open)
+  // The host, not its session generation: a reconnect of the same host keeps what was typed for it.
+  const ownerKey = getEnvironmentRuntimeIdentityKey(runtimeTargetEnvironmentId(owner))
+  const ownerKeyRef = useRef(ownerKey)
+  useEffect(() => {
+    ownerKeyRef.current = ownerKey
+  }, [ownerKey])
+  const [dialogState, setDialogState] = useState(() => closedClickUpTokenDialogState(ownerKey))
+  const resolvedDialogState = resolveClickUpTokenDialogState(dialogState, open, ownerKey)
   if (resolvedDialogState !== dialogState) {
     // Reset hidden drafts/errors before paint because parent closure can race a connect request.
     setDialogState(resolvedDialogState)
@@ -76,13 +84,15 @@ export function ClickUpTokenDialog({
       return
     }
     setDialogState((current) => ({ ...current, connectState: 'connecting', connectError: null }))
+    // The dialog may have moved to another owner by the time the request settles; its outcome is not theirs.
+    const isStale = (): boolean => !mountedRef.current || ownerKeyRef.current !== ownerKey
     try {
       const result = await connectClickUp(owner, token)
-      if (!mountedRef.current) {
+      if (isStale()) {
         return
       }
       if (result.ok) {
-        setDialogState(CLOSED_CLICKUP_TOKEN_DIALOG_STATE)
+        setDialogState(closedClickUpTokenDialogState(ownerKey))
         onOpenChange(false)
         onConnected?.()
         return
@@ -93,7 +103,7 @@ export function ClickUpTokenDialog({
         connectError: taskProviderErrorMessage(result)
       }))
     } catch (error) {
-      if (mountedRef.current) {
+      if (!isStale()) {
         setDialogState((current) => ({
           ...current,
           connectState: 'error',
@@ -149,6 +159,7 @@ export function ClickUpTokenDialog({
                 onChange={(event) => {
                   const nextDraft = event.target.value
                   setDialogState((current) => ({
+                    ownerKey: current.ownerKey,
                     tokenDraft: nextDraft,
                     connectState: current.connectState === 'error' ? 'idle' : current.connectState,
                     connectError: current.connectState === 'error' ? null : current.connectError

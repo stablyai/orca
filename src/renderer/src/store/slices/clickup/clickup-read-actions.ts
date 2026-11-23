@@ -41,6 +41,7 @@ export function createClickUpReadActions(
         scope,
         get,
         force: options.force,
+        carriesTaskStatus: true,
         peek: () => get().clickupListCache[key],
         store: (entry) =>
           set((state) => ({
@@ -63,6 +64,7 @@ export function createClickUpReadActions(
         get,
         force: options.force,
         signal: options.signal,
+        carriesTaskStatus: true,
         peek: () => get().clickupListCache[key],
         store: (entry) =>
           set((state) => ({
@@ -97,6 +99,7 @@ export function createClickUpReadActions(
         scope,
         get,
         force: options.force,
+        carriesTaskStatus: true,
         peek: () => get().clickupTaskCache[key],
         store: (entry) => {
           const task = entry.data
