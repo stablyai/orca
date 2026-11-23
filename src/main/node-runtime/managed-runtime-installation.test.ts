@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ManagedRuntimeInstallation } from './managed-runtime-installation'
 import {
   resolveInstalledRuntimeRelease,
+  runtimeReleaseId,
   writeRuntimeReleaseReceipt,
   type ManagedRuntime,
   type ManagedRuntimePin
@@ -70,6 +71,11 @@ function serve(bytes: Buffer = PINNED.bytes) {
   return vi.fn<Fetch>(async () => new Response(new Uint8Array(bytes)))
 }
 
+/** A download refused in a way that may pass (not a checksum mismatch), without network retries. */
+function refuse() {
+  return vi.fn<Fetch>(async () => new Response('denied', { status: 403 }))
+}
+
 function installation(
   fetcher: Fetch,
   options: {
@@ -97,6 +103,16 @@ async function settled(subject: ManagedRuntimeInstallation) {
 }
 
 const launches = () => resolveInstalledRuntimeRelease(root, PINNED.pin).release
+
+const recordFile = () => join(data, 'agent-runtimes', '.server-auto-update.json')
+
+async function writeRecord(fields: { attempts: number; lastAt: number }) {
+  await mkdir(join(data, 'agent-runtimes'), { recursive: true })
+  await writeFile(
+    recordFile(),
+    JSON.stringify({ releaseId: runtimeReleaseId(PINNED.pin), declined: false, ...fields })
+  )
+}
 
 /** A download the test lets through, or fails, when it chooses. */
 function heldServe() {
@@ -176,8 +192,7 @@ it('does not update again once the pinned release is installed', async () => {
 it('keeps the older release on failure and backs off before retrying', async () => {
   vi.useFakeTimers({ toFake: ['Date'] })
   await seedRelease(OLD)
-  // A download that doesn't match its pinned checksum fails without network retries.
-  const fetcher = serve(Buffer.from('not the pinned server'))
+  const fetcher = refuse()
   const subject = installation(fetcher)
   await subject.updateIfBehind()
   const failed = await settled(subject)
@@ -186,7 +201,7 @@ it('keeps the older release on failure and backs off before retrying', async () 
   expect(failed.operation?.error).toMatch(
     /^Couldn't update to 1\.5\.2, so 1\.5\.0 is still in use\./
   )
-  expect(failed.operation?.error).toMatch(/didn't match/)
+  expect(failed.operation?.error).toMatch(/Couldn't download Server/)
   // Settings still offers Update on the copy chats keep running.
   expect(failed).toMatchObject({ installedVersion: '1.5.0', installedCurrent: false })
   expect(launches()).toMatchObject({ version: '1.5.0', current: false })
@@ -208,6 +223,11 @@ it('keeps the older release on failure and backs off before retrying', async () 
   await subject.updateIfBehind()
   await settled(subject)
   expect(fetcher).toHaveBeenCalledTimes(3)
+  // Three automatic attempts are all; Update stays offered.
+  vi.setSystemTime(Date.now() + 30 * 24 * 60 * 60_000)
+  await subject.updateIfBehind()
+  expect(fetcher).toHaveBeenCalledTimes(3)
+  expect((await subject.status()).updatesAutomatically).toBeUndefined()
 })
 
 it('honors the kill switch', async () => {
@@ -239,7 +259,7 @@ it('leaves runtimes that do not follow their pin to Update', async () => {
   expect(fetcher).not.toHaveBeenCalled()
 })
 
-it('treats a Cancel as declining that release until Orca next starts', async () => {
+it('treats a Cancel of an automatic update as declining that release', async () => {
   vi.useFakeTimers({ toFake: ['Date'] })
   await seedRelease(OLD)
   const { promise: held, resolve: release } = Promise.withResolvers<void>()
@@ -263,7 +283,7 @@ it('treats a Cancel as declining that release until Orca next starts', async () 
 it('keeps its backoff across host restarts, so a failing update is not fetched on every start', async () => {
   vi.useFakeTimers({ toFake: ['Date'] })
   await seedRelease(OLD)
-  const fetcher = serve(Buffer.from('not the pinned server'))
+  const fetcher = refuse()
   const first = installation(fetcher)
   await first.updateIfBehind()
   expect((await settled(first)).operation?.phase).toBe('failed')
@@ -323,7 +343,7 @@ it('treats a Cancel of an Update the user pressed as declining it too', async ()
 
 it('offers no Update while an automatic one will run, and offers it again after a failure', async () => {
   await seedRelease(OLD)
-  const subject = installation(serve(Buffer.from('not the pinned server')))
+  const subject = installation(refuse())
   expect(await subject.status()).toMatchObject({
     installedVersion: '1.5.0',
     installedCurrent: false,
@@ -410,5 +430,152 @@ describe('the managed CLI, which follows its latest release', () => {
     await subject.updateIfBehind()
     expect((await settled(subject)).operation?.phase).toBe('succeeded')
     expect(held.fetcher).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('limits on automatic attempts', () => {
+  const day = 24 * 60 * 60_000
+
+  it('downloads a release that keeps failing at most three times in thirty days of restarts', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    await seedRelease(OLD)
+    const fetcher = refuse()
+    // An orcad that restarts every hour, each start running its check.
+    for (let hour = 0; hour < 30 * 24; hour += 1) {
+      const host = installation(fetcher)
+      await host.updateIfBehind()
+      if ((await host.status(false)).operation) {
+        await settled(host)
+      }
+      vi.setSystemTime(Date.now() + 60 * 60_000)
+    }
+    expect(fetcher).toHaveBeenCalledTimes(3)
+  })
+
+  it('gives up after one checksum mismatch, which recurs', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    await seedRelease(OLD)
+    const fetcher = serve(Buffer.from('not the pinned server'))
+    const subject = installation(fetcher)
+    await subject.updateIfBehind()
+    expect((await settled(subject)).operation?.error).toMatch(/didn't match/)
+    vi.setSystemTime(Date.now() + 30 * day)
+    await installation(fetcher).updateIfBehind()
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
+  it("gives up after one release that won't start on this host", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    await seedRelease(OLD)
+    const fetcher = serve()
+    const probe = runtime({
+      validate: async () => {
+        throw new Error('needs a newer C library')
+      }
+    })
+    const subject = installation(fetcher, { runtime: probe })
+    await subject.updateIfBehind()
+    expect((await settled(subject)).operation?.error).toMatch(/couldn't start on this host/)
+    vi.setSystemTime(Date.now() + 30 * day)
+    await installation(fetcher, { runtime: probe }).updateIfBehind()
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(launches()).toMatchObject({ version: '1.5.0' })
+  })
+
+  it('treats a record written by a clock that was ahead as written now', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    await seedRelease(OLD)
+    await writeRecord({ attempts: 1, lastAt: Date.now() + 365 * day })
+    const fetcher = serve()
+    await installation(fetcher).updateIfBehind()
+    expect(fetcher).not.toHaveBeenCalled()
+    vi.setSystemTime(Date.now() + 61 * 60_000)
+    const later = installation(fetcher)
+    await later.updateIfBehind()
+    expect((await settled(later)).operation?.phase).toBe('succeeded')
+  })
+
+  it('ignores a record whose time is not a finite number', async () => {
+    await seedRelease(OLD)
+    await writeFile(
+      recordFile(),
+      `{"releaseId":"${runtimeReleaseId(PINNED.pin)}","attempts":1,"lastAt":1e999,"declined":false}`
+    )
+    const fetcher = serve()
+    const subject = installation(fetcher)
+    await subject.updateIfBehind()
+    expect((await settled(subject)).operation?.phase).toBe('succeeded')
+  })
+
+  it('sweeps temporaries an interrupted write left, and forgets the record on Remove', async () => {
+    await seedRelease(OLD)
+    await writeRecord({ attempts: 1, lastAt: Date.now() })
+    await writeFile(`${recordFile()}.123-abc.tmp`, '{')
+    const subject = installation(serve())
+    await subject.status()
+    expect(existsSync(`${recordFile()}.123-abc.tmp`)).toBe(false)
+    subject.remove()
+    expect((await settled(subject)).operation?.phase).toBe('succeeded')
+    expect(existsSync(recordFile())).toBe(false)
+  })
+})
+
+describe('when Update is left out', () => {
+  it('offers Update once this process has run its check, as when the kill switch comes back on', async () => {
+    await seedRelease(OLD)
+    let enabled = false
+    const fetcher = serve()
+    const subject = installation(fetcher, { updatesEnabled: () => enabled })
+    await subject.updateIfBehind()
+    enabled = true
+    expect((await subject.status()).updatesAutomatically).toBeUndefined()
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it('offers Update when the check found new chats on another program', async () => {
+    await seedRelease(OLD)
+    let external = true
+    const subject = new ManagedRuntimeInstallation('server-agent', runtime(), {
+      dataDirectory: data,
+      program: 'server',
+      findExternal: async () => external,
+      fence: (work) => work(),
+      fetcher: serve()
+    })
+    await subject.updateIfBehind()
+    external = false
+    expect((await subject.status()).updatesAutomatically).toBeUndefined()
+  })
+
+  it('offers Update after an Update the user pressed fails while one was pending', async () => {
+    await seedRelease(OLD)
+    const subject = installation(refuse())
+    expect((await subject.status()).updatesAutomatically).toBe(true)
+    subject.install()
+    expect((await settled(subject)).operation?.phase).toBe('failed')
+    expect((await subject.status()).updatesAutomatically).toBeUndefined()
+    expect((await installation(refuse()).status()).updatesAutomatically).toBeUndefined()
+  })
+
+  it('reads a Cancel at once, before the outcome reaches clients', async () => {
+    await seedRelease(OLD)
+    const held = heldServe()
+    const subject = installation(held.fetcher)
+    expect((await subject.status()).updatesAutomatically).toBe(true)
+    subject.install()
+    const id = await runningId(subject)
+    const seen: (true | undefined)[] = []
+    subject.subscribe(() => {
+      void subject.status(false).then((state) => {
+        if (state.operation?.phase === 'cancelled') {
+          seen.push(state.updatesAutomatically)
+        }
+      })
+    })
+    const cancelled = subject.cancel(id)
+    held.release()
+    await cancelled
+    await vi.waitFor(() => expect(seen.length).toBeGreaterThan(0))
+    expect(seen).not.toContain(true)
   })
 })

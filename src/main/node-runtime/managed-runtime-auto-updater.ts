@@ -1,18 +1,34 @@
 // Decides when an installed copy is brought up to date without a click: a runtime that follows its
-// latest release retries hourly in memory; one kept at its pin remembers attempts on disk.
+// latest release retries hourly in memory; one kept at its pin keeps a record on disk.
 
 import type {
   ManagedRuntimeInstallState,
   ManagedRuntimeOperation
 } from '../../shared/agent-launch/installation/managed-runtime-install'
-import { autoUpdateRecordFile, PinnedRuntimeAutoUpdate } from './managed-runtime-auto-update'
-import type {
-  InstalledRuntimeReleases,
-  ManagedRuntime,
-  ManagedRuntimePin
-} from './managed-runtime-release'
+import {
+  autoUpdateRecordFile,
+  PinnedRuntimeAutoUpdate,
+  type InstalledRelease,
+  type InstallOutcome
+} from './managed-runtime-auto-update'
+import type { ManagedRuntime } from './managed-runtime-release'
+import { isFinalInstallFailure } from './managed-runtime-release-install'
 
 const LATEST_RETRY_MS = 60 * 60_000
+// An install nobody asked for keeps this much more free than one the user started: the old release
+// stays until the next start (about 1.7 GB under the root on Linux), and the user's own work needs room.
+const AUTOMATIC_FREE_SPACE_MARGIN_BYTES = 2 * 1024 ** 3
+
+/** What an install run carries about the automatic check. */
+export type AutomaticRunFlags = {
+  /** Started by the automatic check, not the user. */
+  automatic?: true
+  /** Stopped because automatic updates were turned off, not declined by the user. */
+  stoppedBySwitch?: true
+  /** Failed in a way that will recur, so no automatic attempt follows. */
+  finalFailure?: true
+  unwatch?: () => void
+}
 
 /** What the updater reads from, and starts installs on, in its installation. */
 export type AutoUpdateHost = {
@@ -20,14 +36,17 @@ export type AutoUpdateHost = {
   busy(): boolean
   /** Fresh status; `source` says whether new chats run Orca's copy. */
   status(): Promise<ManagedRuntimeInstallState>
-  releases(pin: ManagedRuntimePin | null): InstalledRuntimeReleases
-  install(): ManagedRuntimeOperation
+  install(options?: { automatic: true }): ManagedRuntimeOperation
+  /** Told when automatic updates are turned off; returns an unsubscribe. */
+  watchEnabled?: (onDisabled: () => void) => () => void
 }
 
 export class ManagedRuntimeAutoUpdater {
   /** One attempt per release per hour, so a failing update isn't redownloaded on every use. */
   private lastLatest: { version: string; at: number } | null = null
   private readonly pinned: PinnedRuntimeAutoUpdate | null
+  /** Whether this process has run its check; until then a due pinned update is still coming. */
+  private checked = false
 
   constructor(
     private readonly runtime: ManagedRuntime,
@@ -43,6 +62,7 @@ export class ManagedRuntimeAutoUpdater {
    *  touches a user's own, or updates a copy new chats don't run (another program, a signed-in agy). */
   async updateIfBehind(publishedRelease: () => Promise<boolean>): Promise<void> {
     const { runtime, host, pinned } = this
+    this.checked = true
     if ((!runtime.refreshPin && !pinned) || host.busy() || !host.enabled()) {
       return
     }
@@ -63,8 +83,8 @@ export class ManagedRuntimeAutoUpdater {
     }
     if (pinned) {
       const pin = runtime.pin()
-      if (pin && (await pinned.take(pin, host.releases(pin))) && !host.busy()) {
-        pinned.started(host.install().id)
+      if (pin && (await pinned.take(pin, state)) && !host.busy()) {
+        host.install({ automatic: true })
       }
       return
     }
@@ -76,33 +96,62 @@ export class ManagedRuntimeAutoUpdater {
     host.install()
   }
 
-  /** Whether clients may leave Update out: a pinned update that will still run by itself. */
+  /** Whether clients may leave Update out: this process's check is still to run and will fetch the pin. */
   async pending(
-    state: Pick<ManagedRuntimeInstallState, 'source'>,
-    releases: InstalledRuntimeReleases
-  ) {
+    state: Pick<ManagedRuntimeInstallState, 'source'> & InstalledRelease
+  ): Promise<boolean> {
     return (
+      !this.checked &&
       this.host.enabled() &&
       state.source === 'managed' &&
-      (await this.pinned?.pending(this.runtime.pin(), releases)) === true
+      (await this.pinned?.firstAttemptDue(this.runtime.pin(), state)) === true
     )
   }
 
-  /** The automatic install of the pin running now, which the kill switch may stop. */
-  isAutomatic(operationId: string): boolean {
-    return this.pinned?.running() === operationId
+  /** Marks a run the check started, and watches the kill switch while it runs. */
+  adopt(run: AutomaticRunFlags, options: { automatic: true } | undefined, stop: () => void): void {
+    if (options?.automatic) {
+      run.automatic = true
+      run.unwatch = this.host.watchEnabled?.(stop)
+    }
   }
 
-  settled(operation: ManagedRuntimeOperation, stoppedBySwitch: boolean): Promise<void> {
-    return this.pinned?.settled(this.runtime.pin(), operation, stoppedBySwitch) ?? Promise.resolve()
+  /** What an automatic install passes the installer. */
+  installOptions(run: AutomaticRunFlags): { freeSpaceMarginBytes?: number } {
+    return run.automatic ? { freeSpaceMarginBytes: AUTOMATIC_FREE_SPACE_MARGIN_BYTES } : {}
+  }
+
+  failed(run: AutomaticRunFlags, error: unknown): void {
+    run.finalFailure = isFinalInstallFailure(error) || undefined
+  }
+
+  /** Records how a run ended, before the outcome is published, so a status read it prompts sees it. */
+  ended(
+    run: AutomaticRunFlags,
+    kind: ManagedRuntimeOperation['kind'],
+    phase: ManagedRuntimeOperation['phase']
+  ): Promise<void> {
+    run.unwatch?.()
+    const outcome: InstallOutcome = {
+      kind,
+      phase,
+      automatic: run.automatic === true,
+      stoppedBySwitch: run.stoppedBySwitch === true,
+      finalFailure: run.finalFailure === true
+    }
+    return this.pinned?.settled(this.runtime.pin(), outcome) ?? Promise.resolve()
+  }
+
+  forget(): Promise<void> {
+    return this.pinned?.forget() ?? Promise.resolve()
   }
 
   /** A failed update says the older copy is still the one in use, so it doesn't read as broken. */
-  failureText(text: string): string {
+  failureText(text: string, before: InstalledRelease | null): string {
     const pin = this.runtime.pin()
-    const kept = this.pinned ? this.host.releases(pin).release : null
-    return pin && kept && !kept.current
-      ? `Couldn't update to ${pin.version}, so ${kept.version} is still in use. ${text}`
+    const kept = this.pinned && before && !before.installedCurrent ? before.installedVersion : null
+    return pin && kept
+      ? `Couldn't update to ${pin.version}, so ${kept} is still in use. ${text}`
       : text
   }
 }

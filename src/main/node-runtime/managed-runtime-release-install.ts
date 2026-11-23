@@ -27,6 +27,7 @@ import { extractPinnedZipMembers } from './pinned-zip-members'
 import {
   downloadFailureMessage,
   downloadVerifiedArchive,
+  ReleaseMismatchError,
   extractRuntimeArchive,
   RUNTIME_ARCHIVE_RETRY_DELAYS_MS
 } from './runtime-archive-download'
@@ -43,6 +44,8 @@ export type RuntimeReleaseInstall = {
   root: string
   pin: ManagedRuntimePin
   fetcher?: MainHttpClient['fetch']
+  /** Room left free after installing; defaults to a margin sized for an install the user asked for. */
+  freeSpaceMarginBytes?: number
   signal: AbortSignal
   publish: (patch: Partial<ManagedRuntimeOperation>) => void
   /** Mark committed immediately after publication, before fallible cleanup. */
@@ -93,8 +96,9 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
       : !('members' in pin)
         ? pin.archiveBytes * (1 + UNPACKED_RATIO)
         : pin.members.reduce((sum, m) => sum + m.bytes, pin.archiveBytes)
-  if (space && space.bavail * space.bsize < needed + FREE_SPACE_MARGIN_BYTES) {
-    const megabytes = Math.ceil((needed + FREE_SPACE_MARGIN_BYTES) / 1024 ** 2)
+  const margin = input.freeSpaceMarginBytes ?? FREE_SPACE_MARGIN_BYTES
+  if (space && space.bavail * space.bsize < needed + margin) {
+    const megabytes = Math.ceil((needed + margin) / 1024 ** 2)
     throw new Error(`${label} needs ${megabytes} MB of free disk space to install.`)
   }
   const staging = join(root, `.download-${process.pid}-${randomUUID()}`)
@@ -189,6 +193,18 @@ async function extractWholeArchive(
   await rm(archive, { force: true })
 }
 
+/** The downloaded release didn't start in its check, which retrying won't change. */
+class RuntimeStartRefusedError extends Error {}
+
+/** A failure that recurs on every attempt: the published archive isn't the pinned one, or the
+ *  release won't start on this host. Network, disk and deadline failures may pass. */
+export function isFinalInstallFailure(error: unknown): boolean {
+  return (
+    error instanceof RuntimeStartRefusedError ||
+    (error instanceof Error && error.cause instanceof ReleaseMismatchError)
+  )
+}
+
 export function installFailureText(label: string, error: unknown, deadline: AbortSignal): string {
   const message = error instanceof Error ? error.message : String(error)
   if (deadline.aborted) {
@@ -209,7 +225,7 @@ async function validate(input: RuntimeReleaseInstall, folder: string): Promise<v
     signal.throwIfAborted()
     console.warn(`[managed-runtime] ${input.agent} did not start from ${folder}:`, error)
     const observed = error instanceof ManagedRuntimeStartError ? error.failure : null
-    throw new Error(
+    throw new RuntimeStartRefusedError(
       `${runtime.label} couldn't start on this host, so it wasn't installed. This host may not support it.${observed ? ` ${startFailureText(observed)}` : ''}`,
       { cause: error }
     )

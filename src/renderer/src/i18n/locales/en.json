@@ -23858,6 +23858,7 @@
       "thisComputer": "this computer",
       "unavailable": "{{agent}} is not available on this host.",
       "update": "Update",
+      "updateTo": "Update to {{version}}",
       "verifying": "Checking the downloaded runtime.",
       "installTitle": "Install {{agent}} to start chatting",
       "continueTitle": "Install {{agent}} to continue",

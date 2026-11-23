@@ -17,7 +17,7 @@ import {
   type ManagedRuntime
 } from './managed-runtime-release'
 import { installFailureText, installRuntimeRelease } from './managed-runtime-release-install'
-import { ManagedRuntimeAutoUpdater } from './managed-runtime-auto-updater'
+import { ManagedRuntimeAutoUpdater, type AutomaticRunFlags } from './managed-runtime-auto-updater'
 
 const DEADLINE_MS = 45 * 60_000
 
@@ -32,17 +32,13 @@ export type ManagedRuntimeInstallationDeps = {
   /** Reject unless no host workload uses this runtime. */
   fence: (work: () => Promise<void>) => Promise<void>
   fetcher?: MainHttpClient['fetch']
+  /** Told when automatic updates are turned off while an automatic install runs; returns an unsubscribe. */
+  watchUpdatesEnabled?: (onDisabled: () => void) => () => void
   /** Shared with the agent's other installation, so a stream switching between them stays ordered. */
   revisions?: RevisionClock
 }
 
-type Run = {
-  id: string
-  controller: AbortController
-  committed: boolean
-  /** Stopped because automatic updates were turned off, not declined by the user. */
-  stoppedBySwitch?: true
-}
+type Run = { id: string; controller: AbortController; committed: boolean } & AutomaticRunFlags
 
 let releasesRevision = 0
 /** Rises whenever an install or removal settles, so answers that read Orca's copies retire. */
@@ -82,8 +78,8 @@ export class ManagedRuntimeInstallation {
       enabled: () => this.deps.updatesEnabled?.() !== false,
       busy: () => this.running !== null,
       status: () => this.status(),
-      releases: (pin) => this.readReleases(pin),
-      install: () => this.install()
+      install: (options) => this.install(options),
+      ...(deps.watchUpdatesEnabled && { watchEnabled: deps.watchUpdatesEnabled })
     })
     this.mutation = this.reclaim()
   }
@@ -121,7 +117,7 @@ export class ManagedRuntimeInstallation {
 
   private async readInstalledFacts(): Promise<InstalledFacts> {
     const pin = this.runtime.pin()
-    const { release, broken, unreadable } = this.readReleases(pin)
+    const { release, broken, unreadable } = resolveInstalledRuntimeRelease(this.root, pin)
     if (!unreadable) {
       this.deps.onRelease?.(release?.folder ?? null)
     }
@@ -130,20 +126,22 @@ export class ManagedRuntimeInstallation {
       throw new Error(`Couldn't read the installed ${this.runtime.label} files on this host.`)
     }
     const source = (await this.deps.findExternal()) ? 'external' : release ? 'managed' : null
-    const enabled = this.deps.updatesEnabled?.() !== false
-    // A pinned update that will still run needs no Update; after a failure or Cancel it does.
-    const pinPending = await this.autoUpdater.pending({ source }, { release, broken, unreadable })
+    const installed = {
+      installedVersion: release?.version ?? null,
+      installedCurrent: release?.current ?? false
+    }
+    // A pinned update this process will still run needs no Update; otherwise it does.
+    const pinPending = await this.autoUpdater.pending({ source, ...installed })
     return {
       available: pin !== null,
       version: pin?.version ?? null,
       ...(pin && { downloadBytes: pin.archiveBytes }),
-      installedVersion: release?.version ?? null,
-      installedCurrent: release?.current ?? false,
+      ...installed,
       ...(pin && !release?.current && broken.includes(pin.version) && { damaged: true }),
       canRemove: release !== null || broken.length > 0,
       source,
       // A copy Orca isn't keeping current offers its own Update.
-      ...(((this.runtime.refreshPin && enabled) || pinPending) && {
+      ...(((this.runtime.refreshPin && this.deps.updatesEnabled?.() !== false) || pinPending) && {
         updatesAutomatically: true as const
       })
     }
@@ -156,19 +154,14 @@ export class ManagedRuntimeInstallation {
   /** Turned off mid-download: stop the automatic install before it publishes, without declining it. */
   stopAutoUpdate(): void {
     const run = this.running
-    if (run && this.autoUpdater.isAutomatic(run.id) && !run.committed) {
+    if (run?.automatic && !run.committed) {
       run.stoppedBySwitch = true
       run.controller.abort()
     }
   }
 
-  /** The releases under the root, all Orca's, and which one launches run. */
-  private readReleases(pin = this.runtime.pin()) {
-    return resolveInstalledRuntimeRelease(this.root, pin)
-  }
-
   /** Join installs; canceled work must finish cleanup before another begins. */
-  install(): ManagedRuntimeOperation {
+  install(options?: { automatic: true }): ManagedRuntimeOperation {
     const { label } = this.runtime
     const pin = this.runtime.pin()
     // A runtime that follows its latest release looks it up when the install runs.
@@ -184,6 +177,7 @@ export class ManagedRuntimeInstallation {
       return current
     }
     const run: Run = { id: randomUUID(), controller: new AbortController(), committed: false }
+    this.autoUpdater.adopt(run, options, () => this.stopAutoUpdate())
     const operation: ManagedRuntimeOperation = {
       id: run.id,
       kind: 'install',
@@ -246,9 +240,11 @@ export class ManagedRuntimeInstallation {
     const settles =
       patch.phase === 'succeeded' || patch.phase === 'cancelled' || patch.phase === 'failed'
     if (operation?.id === run.id && (settles || !run.controller.signal.aborted)) {
+      if (settles) {
+        void this.autoUpdater.ended(run, operation.kind, patch.phase ?? 'failed')
+      }
       this.state.set({ ...operation, ...patch })
       if (settles) {
-        void this.autoUpdater.settled({ ...operation, ...patch }, run.stoppedBySwitch === true)
         // Reread the disk now so onRelease learns the outcome even when no client is watching.
         void this.status(false).catch(() => {})
         releasesRevision += 1
@@ -261,9 +257,8 @@ export class ManagedRuntimeInstallation {
     const deadline = AbortSignal.timeout(DEADLINE_MS)
     const signal = AbortSignal.any([run.controller.signal, deadline])
     // The release chats ran before this install; they may still be running it.
-    const previous = this.runtime.refreshPin
-      ? ((await this.facts?.read.catch(() => null))?.installedVersion ?? null)
-      : null
+    const before = (await this.facts?.read.catch(() => null)) ?? null
+    const previous = this.runtime.refreshPin ? (before?.installedVersion ?? null) : null
     try {
       await this.runtime.refreshPin?.(signal)
       const pin = this.runtime.pin()
@@ -277,6 +272,7 @@ export class ManagedRuntimeInstallation {
         root: this.root,
         pin,
         fetcher: this.deps.fetcher,
+        ...this.autoUpdater.installOptions(run),
         signal,
         publish: (patch) => this.publish(run, patch),
         commit: () => {
@@ -294,8 +290,9 @@ export class ManagedRuntimeInstallation {
       } else if (run.controller.signal.aborted) {
         this.publish(run, { phase: 'cancelled' })
       } else {
+        this.autoUpdater.failed(run, error)
         const text = installFailureText(this.runtime.label, error, deadline)
-        this.publish(run, { phase: 'failed', error: this.autoUpdater.failureText(text) })
+        this.publish(run, { phase: 'failed', error: this.autoUpdater.failureText(text, before) })
       }
     } finally {
       this.running = this.running === run ? null : this.running
@@ -305,6 +302,7 @@ export class ManagedRuntimeInstallation {
   private async runRemove(run: Run): Promise<void> {
     try {
       await this.deps.fence(() => rm(this.root, { recursive: true, force: true }))
+      await this.autoUpdater.forget().catch(() => undefined)
       this.publish(run, { phase: 'succeeded' })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -315,7 +313,7 @@ export class ManagedRuntimeInstallation {
   }
 
   private async reclaim(): Promise<void> {
-    const { release, unreadable } = this.readReleases()
+    const { release, unreadable } = resolveInstalledRuntimeRelease(this.root, this.runtime.pin())
     if (!unreadable) {
       this.deps.onRelease?.(release?.folder ?? null)
     }

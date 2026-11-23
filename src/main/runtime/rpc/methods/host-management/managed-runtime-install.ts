@@ -6,6 +6,7 @@ import {
   ManagedRuntimeCancelParams
 } from '../../../../../shared/rpc-contract/host-management/managed-runtime-install-params'
 import { ACP_LAUNCH_SPECS, acpLaunchSpecFor } from '../../../../acp/launch/acp-launch-registry'
+import type { ManagedCopySettings } from '../../../../acp/launch/acp-launch-contract'
 import {
   acpHostBackendInput,
   findHostProgram,
@@ -149,27 +150,26 @@ function acpInstallation(
     launchGate
       ? launchGate.run(() => stopStructuredAgentChats(agent, managedRuntime.label), work)
       : Promise.reject(new Error(`${managedRuntime.label} cannot be removed on this host.`))
-  // The chat host's own state root, where its launches look. Its kill switch is this host's own setting.
-  const store = runtime.requireStore()
-  const updatesAllowed = (settings: ReturnType<typeof store.getSettings>) =>
+  // The chat host's own state root, where its launches look. Its kill switch is this host's own
+  // setting, read when used: the store may not exist yet when this installation is created.
+  const updatesAllowed = (settings: ManagedCopySettings) =>
     spec.managedRuntimeUpdatesAllowed?.(settings) !== false
-  const installation = new ManagedRuntimeInstallation(agent, managedRuntime, {
+  return new ManagedRuntimeInstallation(agent, managedRuntime, {
     dataDirectory,
     program: 'server',
     findExternal,
-    updatesEnabled: () => updatesAllowed(store.getSettings()),
+    updatesEnabled: () => updatesAllowed(runtime.requireStore().getSettings()),
+    // Turned off while an automatic update downloads, it stops instead of finishing. Only changes the
+    // store publishes reach this; a hand edit of the settings file applies at the next check.
+    watchUpdatesEnabled: (onDisabled) =>
+      runtime.requireStore().onSettingsChanged?.((_updates, settings) => {
+        if (!updatesAllowed(settings)) {
+          onDisabled()
+        }
+      }) ?? (() => undefined),
     fence,
     revisions
   })
-  // Turned off mid-download, the automatic update stops instead of finishing.
-  if (managedRuntime.updatesToPin) {
-    store.onSettingsChanged?.((_updates, settings) => {
-      if (!updatesAllowed(settings)) {
-        installation.stopAutoUpdate()
-      }
-    })
-  }
-  return installation
 }
 
 /** These chats run the user's own install when the host has one, so Orca's copy is the fallback. */

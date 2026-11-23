@@ -22776,6 +22776,7 @@
       "thisComputer": "이 컴퓨터",
       "unavailable": "{{agent}}은(는) 이 호스트에서 사용할 수 없습니다.",
       "update": "업데이트",
+      "updateTo": "{{version}}(으)로 업데이트",
       "verifying": "다운로드한 런타임을 확인하는 중입니다.",
       "installTitle": "채팅을 시작하려면 {{agent}}을(를) 설치하세요",
       "continueTitle": "계속하려면 {{agent}}을(를) 설치하세요",
