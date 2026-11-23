@@ -222,7 +222,6 @@ export class UsageLimitAccountHolds {
       cut
     )
   }
-
   verdict(
     id: string,
     limited: { turnItemId: string; resetsAt: number } & SwitchReset,
@@ -232,8 +231,8 @@ export class UsageLimitAccountHolds {
     const moved = this.movedSince.get(id)
     const movedCut = moved?.cut === switchFreeIdentity(limited)
     const cut = movedCut ? { ...limited, resetsAt: Math.min(limited.resetsAt, moved.at) } : limited
+    const scope = this.scopes.get(id)
     let hold = this.holds.get(id)
-    // Nothing attributed and nothing held: the cut decides, and nothing is kept for it.
     if (!hold && !scope) {
       return { resetsAt: cut.resetsAt, unknownReset: false, awaitingReading: false }
     }
@@ -327,8 +326,6 @@ export class UsageLimitAccountHolds {
     return isAccountHoldSchedulable(cut, this.verdict(id, cut, now), now)
   }
 
-  /** Whether the send may go now; a due send short of a fresh reading asks until the service
-   *  starts one read per held reset. */
   ready(
     id: string,
     cut: { turnItemId: string; resetsAt: number } & SwitchReset,
@@ -336,8 +333,7 @@ export class UsageLimitAccountHolds {
     notBefore = 0
   ): boolean {
     const hold = this.verdict(id, cut, now)
-    const record = this.holds.get(id)
-    const scope = this.scopes.get(id)
+    const [record, scope] = [this.holds.get(id), this.scopes.get(id)]
     if (hold.unknownReset) {
       // The poller may be idle (unfocused, no viewer), and only a reading with room ends this.
       scope?.account?.refresh(UNKNOWN_RESET_ASK_MS)
@@ -346,7 +342,7 @@ export class UsageLimitAccountHolds {
     if (now < Math.max(hold.resetsAt + GRACE_MS, notBefore)) {
       return false
     }
-    const refresh = this.scopes.get(id)?.account?.refresh ?? this.scopes.get(id)?.bootstrap
+    const refresh = scope?.account?.refresh ?? scope?.bootstrap
     if (hold.awaitingReading && record && refresh && record.refreshedFor !== hold.resetsAt) {
       if (refresh()) {
         record.refreshedFor = hold.resetsAt
