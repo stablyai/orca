@@ -1,21 +1,45 @@
 import type { ChildProcessVerdictRead, SubprocessHandle } from './session-subprocess-handle'
 import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { SessionLaunchNote } from './session-launch-note'
+import { SessionRepaintNudge } from './session-repaint-nudge'
 
-export class SessionProcessInspection {
+export abstract class SessionProcessInspection {
   /** Main's launch note for this process; Session feeds it the output that can retire it. */
   readonly launchNote = new SessionLaunchNote()
 
   readonly processNameIsSpawnFile: boolean
   readonly shellIsRootChild: boolean
 
+  protected readonly repaintNudge = new SessionRepaintNudge()
+
+  abstract get isAlive(): boolean
+  abstract getAppliedSize(): { cols: number; rows: number } | null
+
   constructor(protected readonly subprocess: SubprocessHandle) {
     this.processNameIsSpawnFile = subprocess.processNameIsSpawnFile === true
     this.shellIsRootChild = subprocess.shellIsRootChild === true
   }
 
-  inspectChildProcesses(fresh?: boolean, ignoreDetached?: boolean): ChildProcessVerdictRead {
-    return this.subprocess.inspectChildProcesses?.(fresh, ignoreDetached) ?? 'unverifiable'
+  /** Redraws the program without input by moving only the PTY, never the grid attaches read. */
+  requestRepaint(): void {
+    if (this.isAlive) {
+      this.repaintNudge.request(
+        () => this.getAppliedSize(),
+        (cols, rows) => this.subprocess.resize(cols, rows),
+        () => this.isAlive
+      )
+    }
+  }
+
+  inspectChildProcesses(
+    fresh?: boolean,
+    ignoreDetached?: boolean,
+    jobMembershipOnly?: boolean
+  ): ChildProcessVerdictRead {
+    return (
+      this.subprocess.inspectChildProcesses?.(fresh, ignoreDetached, jobMembershipOnly) ??
+      'unverifiable'
+    )
   }
 
   observeForeground(): Promise<TerminalForegroundSample> {

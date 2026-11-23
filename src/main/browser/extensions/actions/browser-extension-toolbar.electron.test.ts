@@ -235,6 +235,9 @@ describe('extension toolbar, action popup and tab activation in a real Electron 
 
     expect(status.firstClick).toEqual({ ok: true })
     expect(status.popupBounds).toEqual({ width: 320, height: 240, rightAligned: true, below: true })
+    // Edit menu actions reach the extension page, which never hears Orca's renderer IPC.
+    expect(status.popupEditTarget).toBe(true)
+    expect(status.popoutEditTarget).toBe(true)
     // The popup has the extension APIs, sees the active tab and is not itself a tab.
     expect(status.popup).toEqual({ active: [page1], currentTab: null, hasActionApi: 'function' })
     expect(status.secondClick).toEqual({ ok: true })

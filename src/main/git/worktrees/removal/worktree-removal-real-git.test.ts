@@ -176,7 +176,8 @@ describe('worktree removal against the real Git binary', () => {
     const markerPath = join(worktreePath, '.git')
     const marker = await readFile(markerPath, 'utf8')
     const adminPath = marker.trim().replace(/^gitdir: /, '')
-    await writeFile(join(adminPath, 'gitdir'), `${join(markerPath, '.git')}\n`)
+    // Git strips literal "/.git" from admin gitdir entries, even on Windows.
+    await writeFile(join(adminPath, 'gitdir'), `${markerPath.replaceAll('\\', '/')}/.git\n`)
     await writeFile(join(worktreePath, 'untracked.txt'), 'keep this work\n')
     const row = (await listWorktreesStrict(repoPath)).find((entry) =>
       areWorktreePathsEqual(entry.path, markerPath)

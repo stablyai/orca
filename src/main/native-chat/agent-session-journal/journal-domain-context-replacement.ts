@@ -32,6 +32,7 @@ import { assertJournalFence } from './writing/journal-write-guards'
 import { queueClearRestatement, writeJournalDomainQueueClear } from './journal-domain-queue-clear'
 import { restoreRetainedFailures, retainedFailures } from './journal-domain-retained-failures'
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -200,7 +201,7 @@ export function replaceJournalDomainContext(
     const itemId = itemIds[index]!
     const stored = current.get(...prefix, itemId)
     const previous: AgentJournalRenderItem | undefined = stored
-      ? JSON.parse(String(stored.payload_json))
+      ? readJournalStoredItem(db, prefix, stored.payload_json)
       : undefined
     const tombstone = db
       .prepare(

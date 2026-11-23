@@ -35,6 +35,8 @@ type ImageViewerProps = {
   preferenceKey?: string | null
   // Omission disables PDF scroll memory because diff/conflict surfaces can share a path.
   scrollCacheKey?: string | null
+  /** A writable tab's id; only then can a PDF's form fields be filled in and saved. */
+  editFileId?: string | null
 }
 
 function formatByteSize(bytes: number): string {
@@ -56,7 +58,8 @@ export default function ImageViewer({
   mimeType = FALLBACK_IMAGE_MIME_TYPE,
   layout = 'fill',
   preferenceKey,
-  scrollCacheKey = null
+  scrollCacheKey = null,
+  editFileId = null
 }: ImageViewerProps): JSX.Element {
   const t = useTranslate()
   const [loaded, setLoaded] = useState<{ key: string | null; size: PanZoomSize } | null>(null)
@@ -106,6 +109,7 @@ export default function ImageViewer({
         filePath={filePath}
         preferenceKey={preferenceKey}
         scrollCacheKey={scrollCacheKey}
+        editFileId={editFileId}
       />
     )
   }

@@ -55,6 +55,72 @@ function stageArgs(db: OrchestrationDb, state: OrchestrationMailboxPointerState)
   }
 }
 
+describe('mailbox pointer receiver commands', () => {
+  it.each([
+    {
+      mailboxHandle: 'term-1',
+      heldDeliveryId: undefined,
+      commands: ['orca orchestration check --terminal term_current']
+    },
+    {
+      mailboxHandle: 'run:run-1',
+      heldDeliveryId: undefined,
+      commands: ['orca orchestration check --run run-1 --terminal term_current']
+    },
+    {
+      mailboxHandle: 'dispatch:dispatch-1',
+      heldDeliveryId: 'delivery_held',
+      commands: [
+        'orca orchestration check --terminal term_current',
+        'orca orchestration check --terminal term_current --ack delivery_held',
+        'orca orchestration check --terminal term_current'
+      ]
+    },
+    {
+      mailboxHandle: 'run:run-1',
+      heldDeliveryId: 'delivery_held',
+      commands: [
+        'orca orchestration check --run run-1 --terminal term_current',
+        'orca orchestration check --run run-1 --terminal term_current --ack delivery_held',
+        'orca orchestration check --run run-1 --terminal term_current'
+      ]
+    }
+  ])('names the resolved receiver for $mailboxHandle (held: $heldDeliveryId)', (input) => {
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const message = db.insertMessage({
+        from: 'term_sender',
+        to: input.mailboxHandle,
+        subject: 'mail'
+      })
+      const args = stageArgs(db, new OrchestrationMailboxPointerState())
+      const writePty = vi.fn<(ptyId: string, data: string) => WriteSettlement>(() =>
+        writeRefused('provider_refused_write')
+      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies only the deps staging reads.
+      stageOrchestrationMailboxPointer({
+        ...args,
+        mailboxHandle: input.mailboxHandle,
+        heldDeliveryId: input.heldDeliveryId,
+        deps: {
+          ...args.deps,
+          resolveSubmitTarget: () => ({
+            terminal: { ...TERMINAL, handle: 'term_current' },
+            processIncarnation: 'inc-1'
+          }),
+          writePty
+        },
+        messages: [{ id: message.id, type: 'status', sequence: 1 }]
+      } as never)
+
+      const pointer = writePty.mock.calls[0]?.[1] ?? ''
+      expect([...pointer.matchAll(/`([^`]+)`/g)].map((match) => match[1])).toEqual(input.commands)
+    } finally {
+      db.close()
+    }
+  })
+})
+
 describe('mailbox pointer staging watermark', () => {
   it('drains a delivery parked behind the watermark when the write is refused', () => {
     const db = new OrchestrationDb(':memory:')

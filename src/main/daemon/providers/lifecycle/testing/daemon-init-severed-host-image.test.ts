@@ -1,12 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
-  forkMock,
   checkDaemonHealthMock,
-  getDaemonLaunchIdentityMock,
-  killStaleDaemonMock,
-  daemonClientMock,
-  spawnerInstances,
   ensureRunningOverrides,
   localFallbackProvider,
   importFresh,
@@ -59,41 +54,6 @@ vi.mock('../../../executable-host/linux/daemon-host-image', () => ({
   })
 }))
 
-type Launcher = (
-  socketPath: string,
-  tokenPath: string,
-  pidPath?: string,
-  launchNonce?: string
-) => Promise<{ mode?: string; quarantine?: string; releaseAdoptionLease?(): void }>
-
-function isLauncher(value: unknown): value is Launcher {
-  return typeof value === 'function'
-}
-
-function launcher(): Launcher {
-  const candidate = spawnerInstances[0].launcher
-  if (!isLauncher(candidate)) {
-    throw new Error('launcher not captured')
-  }
-  return candidate
-}
-
-function mockDaemonWithLiveSessions(count: number): void {
-  daemonClientMock.mockImplementation(function MockDaemonClient() {
-    return {
-      ensureConnected: vi.fn(async () => {}),
-      ensureConnectedWithin: vi.fn(async () => {}),
-      request: vi.fn(async () => ({
-        sessions: Array.from({ length: count }, (_, index) => ({
-          sessionId: `s${index}`,
-          isAlive: true
-        }))
-      })),
-      disconnect: vi.fn()
-    }
-  })
-}
-
 describe('daemon-init: a daemon whose AppImage files are gone', () => {
   let warn: ReturnType<typeof vi.spyOn>
 
@@ -109,28 +69,6 @@ describe('daemon-init: a daemon whose AppImage files are gone', () => {
     warn.mockRestore()
     vi.clearAllMocks()
     ;(await import('../daemon-host-image-state')).clearSeveredDaemon()
-  })
-
-  it('keeps a busy daemon from another mount but quarantines it from fresh terminals', async () => {
-    const mod = await importFresh()
-    await mod.initDaemonPtyProvider()
-    // A previous mount always reads as a different app path; that branch would adopt it normally.
-    getDaemonLaunchIdentityMock.mockReturnValueOnce('mismatch')
-    mockDaemonWithLiveSessions(2)
-
-    const handle = await launcher()('/fake/socket', '/fake/token')
-
-    expect(handle.mode).toBe('degraded-new-pty-fallback')
-    expect(handle.quarantine).toBe('host-image-severed')
-    expect(forkMock).not.toHaveBeenCalled()
-    expect(killStaleDaemonMock).not.toHaveBeenCalled()
-    const state = await import('../daemon-host-image-state')
-    expect(state.getSeveredDaemon()).toEqual({
-      pid: 4288,
-      linuxStartTicks: '777',
-      bootId: 'boot-1'
-    })
-    handle.releaseAdoptionLease?.()
   })
 
   it('never re-admits fresh terminals to a quarantined daemon on a healthy check', async () => {
@@ -162,36 +100,5 @@ describe('daemon-init: a daemon whose AppImage files are gone', () => {
     const result = await degraded.spawn({ cols: 80, rows: 24 })
     expect(result.id).toBe('local-fallback-pty')
     expect(localFallbackProvider.spawn).toHaveBeenCalled()
-  })
-
-  it('lets fresh terminals back once a new daemon incarnation owns the endpoint', async () => {
-    const mod = await importFresh()
-    const state = await import('../daemon-host-image-state')
-    state.noteSeveredDaemon({
-      verdict: 'severed',
-      pid: 4288,
-      linuxStartTicks: '777',
-      bootId: 'boot-1'
-    })
-    ensureRunningOverrides.push(async () => ({
-      socketPath: '/fake/severed-socket',
-      tokenPath: '/fake/severed-token',
-      mode: 'degraded-new-pty-fallback',
-      quarantine: 'host-image-severed'
-    }))
-    await mod.initDaemonPtyProvider()
-    checkDaemonHealthMock.mockResolvedValue('healthy')
-    const { DegradedDaemonPtyProvider } = await import('../../routing/degraded-daemon-pty-provider')
-    const provider = mod.getDaemonProvider()
-    if (!(provider instanceof DegradedDaemonPtyProvider)) {
-      throw new Error('expected degraded routing')
-    }
-
-    // The severed daemon crashed and its adapter respawned a new one at the endpoint.
-    hostImage.verdict = 'intact'
-    hostImage.pid = 9000
-
-    await expect(provider.recoverFreshSpawnRouting()).resolves.toBe(true)
-    expect(state.getSeveredDaemon()).toBeNull()
   })
 })

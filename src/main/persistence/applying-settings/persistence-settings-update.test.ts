@@ -1,19 +1,14 @@
 import {
   closeTestStores,
-  testState,
   createStore,
-  writeDataFile,
-  makeRepo
+  readPersistedState,
+  testState,
+  writeDataFile
 } from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-
-import {
-  getLocalWorktreeScanGeneration,
-  isLocalWorktreeScanGenerationCurrent
-} from '../../workspaces/catalog/local-worktree-scan-generation'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -67,19 +62,28 @@ describe('Store', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('invalidates local worktree scans when the global Windows runtime changes', async () => {
-    writeDataFile({ repos: [makeRepo()] })
-    const store = await createStore()
-    const generation = getLocalWorktreeScanGeneration('r1')
+  it.each([
+    [{}, false],
+    [{ linuxTilingWindowMode: 'true' }, false],
+    [{ linuxTilingWindowMode: true }, true]
+  ])('loads tiling window mode from a saved profile with settings %j', (settings, expected) => {
+    writeDataFile({ settings })
+    expect(createStore().getSettings().linuxTilingWindowMode).toBe(expected)
+  })
 
+  it('persists tiling window mode as a strict boolean and preserves it on unrelated updates', () => {
+    const store = createStore()
+    store.updateSettings({ linuxTilingWindowMode: true })
     store.updateSettings({ theme: 'dark' })
-    expect(isLocalWorktreeScanGenerationCurrent('r1', generation)).toBe(true)
+    store.flushOrThrow()
+    expect(readPersistedState().settings.linuxTilingWindowMode).toBe(true)
 
     store.updateSettings({
-      localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+      // @ts-expect-error -- Settings updates can contain malformed values at runtime.
+      linuxTilingWindowMode: 'true'
     })
-
-    expect(isLocalWorktreeScanGenerationCurrent('r1', generation)).toBe(false)
+    store.flushOrThrow()
+    expect(readPersistedState().settings.linuxTilingWindowMode).toBe(false)
   })
 
   it('saves a pasted workspace directory with leading spaces as the absolute path it names', async () => {
@@ -123,44 +127,5 @@ describe('Store', () => {
     expect(updated.notifications.customSoundVolume).toBe(0)
     expect(updated.notifications.enabled).toBe(false)
     expect(updated.notifications.customSoundPath).toBe('/sounds/custom.wav')
-  })
-
-  it('repairs workspace cleanup rules when loading and when writing', async () => {
-    writeDataFile({
-      settings: {
-        workspaceCleanupPolicy: { merged: { enabled: true }, unchanged: { afterDays: -4 } }
-      },
-      repos: [
-        { ...makeRepo({ id: 'r1' }), workspaceCleanupPolicy: { mode: 'off', extra: 1 } },
-        { ...makeRepo({ id: 'r2', path: '/repo2' }), workspaceCleanupPolicy: { mode: 'sometimes' } }
-      ]
-    })
-    const store = await createStore()
-    const offRules = {
-      merged: { enabled: false },
-      unchanged: { enabled: false, afterDays: 1 },
-      inactive: { enabled: false, afterDays: 30, action: 'archive' },
-      automationRuns: { enabled: false },
-      orchestrationWorkers: { enabled: false },
-      keepWhen: 'any-local-files'
-    }
-    expect(store.getSettings().workspaceCleanupPolicy).toEqual({
-      ...offRules,
-      merged: { enabled: true }
-    })
-    expect(store.getRepo('r1')?.workspaceCleanupPolicy).toEqual({ mode: 'off' })
-    expect(store.getRepo('r2')).not.toHaveProperty('workspaceCleanupPolicy')
-
-    store.updateSettings({
-      // @ts-expect-error -- Malformed writes can arrive from untyped writers.
-      workspaceCleanupPolicy: { inactive: { enabled: true, action: 'delete', afterDays: 'soon' } }
-    })
-    expect(store.getSettings().workspaceCleanupPolicy).toEqual({
-      ...offRules,
-      inactive: { enabled: true, afterDays: 30, action: 'delete' }
-    })
-
-    store.updateRepo({ id: 'r1' }, { workspaceCleanupPolicy: null })
-    expect(store.getRepo('r1')).not.toHaveProperty('workspaceCleanupPolicy')
   })
 })

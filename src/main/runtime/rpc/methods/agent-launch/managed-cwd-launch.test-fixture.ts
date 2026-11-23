@@ -7,7 +7,7 @@ import type { WorktreeLineage } from '../../../../../shared/worktree/lineage-typ
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../../../shared/worktree/meta-types'
 import type { AgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store'
-import '../../../orca-runtime-tests/runtime-test-module-registration.spec'
+import '../../../construction/test-context/runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { addWorktree } from '../../../../git/worktrees/creation/worktree-add'
 import {
@@ -18,8 +18,8 @@ import { listWorktrees } from '../../../../git/worktrees/catalog/worktree-scan-c
 import {
   store,
   makeWorktreeMeta
-} from '../../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
-import { registerLivePty } from '../../../orca-runtime-tests/bind-first-pane.test-fixture'
+} from '../../../construction/test-context/orca-runtime-test-fixtures.spec'
+import { registerLivePty } from '../../../terminal/layout/bind-first-pane.test-fixture'
 import type { HostWorktreeTarget } from '../../../../../shared/worktree/host-qualified-identity'
 import { mergeWorktreeMetaForWrite } from '../../../../persistence/loading-store/worktree-metadata/worktree-meta-write-normalization'
 

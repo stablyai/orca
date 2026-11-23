@@ -31,7 +31,7 @@ export function createClaudeSessionJournalTranslator(
     ? createClaudeJournalTranslator({
         sink,
         delivery: attempt.delivery,
-        account: () => attempt.account,
+        account: () => attempt.launch?.account,
         model: () => {
           const session = currentSession()
           return (

@@ -10,6 +10,7 @@ import type {
   SkillSourceKind
 } from '../../../shared/skills/discovery/skills'
 import { buildSkillDiscoverySources, type SkillScanRoot } from './skill-discovery-sources'
+import { withoutLinkedDefaultHomes } from './skill-relocated-home-roots'
 import {
   sortDiscoveredSkills,
   sortSkillDiscoverySources,
@@ -50,7 +51,7 @@ import {
 
 // Share fixed home-root scans across workspace panes to bound repeated filesystem walks.
 export const SKILL_ROOT_SCAN_TTL_MS = 10_000
-// A scan builds 17 fixed roots + 7/repo + cwd/plugin roots; the cache must hold whole scans or evict itself. Beyond capacity LRU degrades to repeated repo walks.
+// A scan builds 26 fixed roots (+1 per relocated home others read) + 15/repo + cwd/plugin roots; the cache must hold whole scans or evict itself. Beyond capacity LRU degrades to repeated repo walks.
 const MAX_CACHED_SKILL_ROOTS = 1_024
 // Cap logged root ids as repos grow; hashed ids avoid exposing names and paths.
 export const MAX_LOGGED_ROOT_IDS = 12
@@ -266,7 +267,10 @@ export async function discoverSkills(args: {
     gateStopped && candidateRoots.some((root) => wslDistroForPath(root.path))
       ? await splitStoppedWslDistroRoots(candidateRoots, mayReadStopped)
       : { readable: candidateRoots, unavailable: [] }
-  const roots = readable.filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
+  // Fold only roots that may be touched, so a relocated home in a stopped distro stays down.
+  const roots = (
+    await waitForPromiseWithSignal(withoutLinkedDefaultHomes(readable), args.signal)
+  ).filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
   args.signal?.throwIfAborted()
   const scans = await waitForPromiseWithSignal(
     Promise.all(roots.map((root) => scanRootShared(root, refresh))),

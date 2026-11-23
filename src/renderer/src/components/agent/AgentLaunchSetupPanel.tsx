@@ -7,6 +7,7 @@ import { useSetupModelHighlight } from './use-setup-model-highlight'
 import { AgentPickerLegacyModelsToggle } from './AgentPickerLegacyModelsToggle'
 import { useLegacyModelsExpanded } from './use-legacy-models-expanded'
 import { AgentLaunchInstallPrompt } from './AgentLaunchInstallPrompt'
+import { retryAgentPickerCatalog } from './agent-launch-picker-acquisition'
 import {
   AgentPickerChoiceRows,
   AgentPickerSearchResults,
@@ -22,11 +23,13 @@ import {
   CommandGroup,
   CommandItem
 } from '@/components/ui/command'
+import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { NativeChatSessionOptionRows } from '../native-chat/session/options/controls/NativeChatSessionOptionRows'
 import { AgentLaunchSetupFooter, type AgentLaunchSetupFooterHandle } from './AgentLaunchSetupFooter'
+import { AgentLaunchSetupPermission } from './AgentLaunchSetupPermission'
 import {
   acceptAgentPickerArguments,
   applyAgentPickerEdit,
@@ -53,8 +56,8 @@ export type AgentLaunchSetupPanelProps = {
   terminalBlocked?: boolean
   onDraftChange: (draft: AgentPickerDraft, edit: AgentPickerEdit['kind']) => void
   onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
-  /** Select mode: a model pick, which takes the setup instead of only editing it. */
-  onPickModel?: (draft: AgentPickerDraft) => void
+  /** Select mode: a model pick, which takes the setup instead of only editing it. `close` when Enter picked it. */
+  onPickModel?: (draft: AgentPickerDraft, close: boolean) => void
   /** The owning popup takes initial focus through this ref. */
   searchInputRef?: Ref<HTMLInputElement>
   initialQuery?: string
@@ -83,6 +86,13 @@ export function AgentLaunchSetupPanel({
 }: AgentLaunchSetupPanelProps) {
   const t = useTranslate()
   const footer = useRef<AgentLaunchSetupFooterHandle>(null)
+  // Why: cmdk runs a row's onSelect for both Enter and a click; only Enter also closes.
+  const enterPick = useRef(false)
+  const takeEnterPick = () => {
+    const close = enterPick.current
+    enterPick.current = false
+    return close
+  }
   const editDraft = (edit: AgentPickerEdit) => {
     const current = getDraft()
     if (current) {
@@ -92,7 +102,7 @@ export function AgentLaunchSetupPanel({
   const pickModel = (edit: AgentPickerEdit) => {
     const current = getDraft()
     if (current && onPickModel) {
-      onPickModel(applyAgentPickerEdit(entry, current, edit))
+      onPickModel(applyAgentPickerEdit(entry, current, edit), takeEnterPick())
     } else {
       editDraft(edit)
     }
@@ -101,6 +111,7 @@ export function AgentLaunchSetupPanel({
   const state = agentLaunchSetupState(entry, draft, disabled)
   const { models, currentModel, hasModels, catalogPending, catalogMessage, modelInArguments } =
     state
+  const { ownerKey } = entry
   const installed = entry.surfaces.length > 0
   const searching = Boolean(search && modelQuery.trim())
   const results = searching && search ? searchAgentPickerModels(search.entries, modelQuery) : []
@@ -113,7 +124,9 @@ export function AgentLaunchSetupPanel({
       : []
   const choices = search?.choices ?? []
   const choiceResults = searching
-    ? choices.filter((choice) => choiceMatches(choice, modelQuery))
+    ? [...(search?.searchChoices ?? []), ...choices].filter((choice) =>
+        choiceMatches(choice, modelQuery)
+      )
     : []
   const choiceList = useRef<HTMLDivElement>(null)
   const [legacyExpanded, toggleLegacy] = useLegacyModelsExpanded(
@@ -139,7 +152,8 @@ export function AgentLaunchSetupPanel({
         ? setupRowKey(resultStart)
         : undefined
       : modelRows.start,
-    searching ? '' : modelQuery
+    searching ? '' : modelQuery,
+    models.length
   )
   const handleUse = (surface: AgentPickerSurface) => {
     const current = getDraft()
@@ -157,11 +171,7 @@ export function AgentLaunchSetupPanel({
         selection="palette"
         disabled={state.modelDisabled}
         data-current={current}
-        onSelect={() => {
-          if (!model.unlisted) {
-            pickModel({ kind: 'choice', patch: { model: model.id } })
-          }
-        }}
+        onSelect={() => model.unlisted || pickModel({ kind: 'choice', patch: { model: model.id } })}
       >
         <span className="min-w-0 flex-1 truncate">{model.label}</span>
         <span className="flex size-3.5 shrink-0 items-center justify-center">
@@ -183,14 +193,14 @@ export function AgentLaunchSetupPanel({
       : []
   return (
     <div
-      className="flex w-full flex-col"
+      // Why min-h-0: in a height-capped picker only the model list gives up room.
+      className="flex min-h-0 w-full flex-col"
       data-agent-launch-setup=""
       onKeyDownCapture={(event) => {
         if (isScreenSubmitShortcut(event)) {
           event.preventDefault()
           event.stopPropagation()
-          const primary = mode === 'select' ? draft.surface : entry.defaultSurface
-          const alternate = entry.surfaces.find((surface) => surface !== primary)
+          const alternate = entry.surfaces.find((surface) => surface !== entry.defaultSurface)
           if (alternate && !disabled && !event.repeat) {
             use(alternate)
           }
@@ -206,7 +216,7 @@ export function AgentLaunchSetupPanel({
           (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
         ) {
           event.preventDefault()
-          use(mode === 'select' ? draft.surface : entry.defaultSurface)
+          use(entry.defaultSurface)
         }
       }}
     >
@@ -216,7 +226,12 @@ export function AgentLaunchSetupPanel({
         shouldFilter={!search}
         ref={modelList}
         {...highlight.command}
+        onPointerDownCapture={() => {
+          enterPick.current = false
+        }}
         onKeyDownCapture={(event) => {
+          enterPick.current =
+            mode === 'select' && event.key === 'Enter' && !isImeOwnedKeyboardEvent(event)
           if (
             !disabled &&
             installed &&
@@ -229,7 +244,7 @@ export function AgentLaunchSetupPanel({
           ) {
             event.preventDefault()
             event.stopPropagation()
-            use(mode === 'select' ? draft.surface : entry.defaultSurface)
+            use(entry.defaultSurface)
           }
         }}
         onKeyDown={(event) => {
@@ -266,10 +281,23 @@ export function AgentLaunchSetupPanel({
         {!installed && !searching ? (
           <AgentLaunchInstallPrompt entry={entry} />
         ) : (
-          <CommandList className="max-h-56 scroll-py-0" data-focus-behavior="page">
+          <CommandList className="max-h-56 min-h-0 scroll-py-0" data-focus-behavior="page">
             {catalogMessage && !searching ? (
-              <div className="px-2.5 py-2 text-xs text-muted-foreground" role="status">
-                {catalogMessage}
+              <div
+                className="flex items-center gap-2 px-2.5 py-2 text-xs text-muted-foreground"
+                role="status"
+              >
+                <span className="min-w-0 flex-1">{catalogMessage}</span>
+                {state.catalogRetryable && ownerKey ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => retryAgentPickerCatalog(ownerKey, entry.agent)}
+                  >
+                    {t('agentPicker.retryModels', 'Retry')}
+                  </Button>
+                ) : null}
               </div>
             ) : null}
             {searching && !results.length && !agentResults.length && !choiceResults.length ? (
@@ -290,8 +318,8 @@ export function AgentLaunchSetupPanel({
                   choices={choiceResults}
                   current={search?.current}
                   disabled={disabled}
-                  onPick={(setup) => search?.onPick(setup)}
-                  onPickAgent={(candidate) => search?.onPickAgent(candidate)}
+                  onPick={(setup) => search?.onPick(setup, takeEnterPick())}
+                  onPickAgent={(candidate) => search?.onPickAgent(candidate, takeEnterPick())}
                 />
               ) : (
                 <>
@@ -321,7 +349,7 @@ export function AgentLaunchSetupPanel({
         )}
       </Command>
       {optionRows.length ? (
-        <div className="flex min-h-9 min-w-0 items-center border-t border-border px-2.5 py-1.5">
+        <div className="flex min-h-9 min-w-0 shrink-0 items-center border-t border-border px-2.5 py-1.5">
           <div className="min-w-0 flex-1">
             <NativeChatSessionOptionRows
               options={optionRows}
@@ -346,6 +374,9 @@ export function AgentLaunchSetupPanel({
       ) : null}
       {mode === 'select' ? (
         <>
+          {installed && !searching ? (
+            <AgentLaunchSetupPermission {...{ entry, draft, disabled }} onEdit={editDraft} />
+          ) : null}
           {installed || searching ? children : null}
           {choices.length && !searching ? (
             <AgentPickerChoiceRows

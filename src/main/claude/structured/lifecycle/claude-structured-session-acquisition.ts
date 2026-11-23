@@ -2,7 +2,7 @@ import type { AgentSessionAcquisition } from '../../../native-chat/agent-session
 import { openClaudeStreamJsonConnection } from '../../claude-stream-json-connection'
 import { claudeLaunchPermissions } from '../permissions/claude-structured-inbound-control'
 import * as replay from '../turns/claude-replay-turn-resolution'
-import { claudeStartedUnechoedSend } from '../turns/claude-command-lifecycle'
+import { claudeFrameSendFacts } from '../turns/claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from '../turns/claude-session-state-turn-over'
 import { settleClaudeTurnEndWaiters } from '../turns/claude-request-end-wait'
 import * as proof from '../startup/claude-structured-init-proof'
@@ -10,7 +10,7 @@ import { claudeConfigDirEnvPatch } from '../launch/claude-config-dir-pin'
 import { claudeProcessIdentity } from './claude-structured-owner-identity'
 import { ClaudePromptRegistry } from '../permissions/claude-prompt-registry'
 import { adoptClaudeStructuredSpawnOptions } from '../launch/claude-structured-spawn-options'
-import { observeClaudeExecutionModel } from '../turns/claude-structured-execution-observations'
+import { observeClaudeFrameModels } from '../turns/claude-structured-execution-observations'
 import { observeClaudeFastModeFacts } from '../launch/claude-structured-session-options'
 import {
   createClaudeSessionPublication,
@@ -99,11 +99,11 @@ export async function acquireClaudeSession({
         permissionMode: proof.readClaudeFrameString(message, 'permissionMode')
       }
       if (liveSession) {
-        liveSession.firstRootInit = firstRootInit
+        liveSession.firstRootInit ??= firstRootInit
       }
     }
     const permissionChanged = proof.observeClaudeReportedPermissionMode(observedOptions, message)
-    const modelReport = observeClaudeExecutionModel(liveSession, init?.model)
+    const modelReport = observeClaudeFrameModels(liveSession, message, init?.model)
     if (init) {
       initProof.resolve(init)
       if (liveSession) {
@@ -137,7 +137,7 @@ export async function acquireClaudeSession({
     const observedAt =
       startsTurn || message.type === 'result' ? { observedAt: deps.now?.() ?? Date.now() } : {}
     const requestedAt = turnOrigin?.requestedAt
-    const startedSend = !startsTurn && liveSession ? claudeStartedUnechoedSend(liveSession) : null
+    const sendFacts = claudeFrameSendFacts(liveSession, message, startsTurn)
     replay.withClaudeReplaySettlements(
       liveSession,
       settlements,
@@ -162,7 +162,7 @@ export async function acquireClaudeSession({
             ...(startsTurn ? { startsTurn: true } : {}),
             ...(requestedAt === null || requestedAt === undefined ? {} : { requestedAt }),
             ...(turnOrigin?.clientMessageId ? { clientMessageId: turnOrigin.clientMessageId } : {}),
-            ...(startedSend ? { startedSend } : {}),
+            ...sendFacts,
             ...observedAt
           })
           // Final snapshots and the turn settlement must reach the journal before its leaf can move.
@@ -189,7 +189,7 @@ export async function acquireClaudeSession({
     // Granted from this final launch before the connection can deliver a request.
     const permissions = claudeLaunchPermissions({ sessionId, prompts, emit }, launch)
     naming?.launch(launch)
-    attempt.account = launch.account
+    attempt.launch = launch
     observedLeafUuid = launch.resumeLeafUuid
     const connection = await withAgentSessionCreatePhase('spawn', input.recordPhase, () =>
       (deps.openConnection ?? openClaudeStreamJsonConnection)(
@@ -215,7 +215,7 @@ export async function acquireClaudeSession({
               callbacks.finishClose(sessionId, attempt)
               return
             }
-            childFailed(...startupExit.claudeStartupExit(error, attempt.connection, input.events))
+            childFailed(...startupExit.claudeStartupExit(error, attempt, input.events))
             if (exits.get(sessionId)?.connection === attempt.connection) {
               callbacks.finishClose(sessionId, attempt)
             } else {
@@ -297,7 +297,7 @@ export async function acquireClaudeSession({
     attempt.delivery.dispose()
     unbindReadingControl?.()
     throw await resolveClaudeAcquisitionError({
-      error: await startupExit.claudeStartupError(error, attempt.connection),
+      error: await startupExit.claudeStartupError(error, attempt),
       sessionId,
       sessions,
       attempt,

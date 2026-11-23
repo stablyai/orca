@@ -17,6 +17,7 @@ const sprintfRequire = dependencyRequire([
   'global-agent',
   'roarr'
 ])
+const picomatchRequire = dependencyRequire(['@parcel/watcher'])
 
 describe('installed dependency security patches', () => {
   it.each(['src/sprintf.js', 'dist/sprintf.min.js'])('bounds numeric precision in %s', (entry) => {
@@ -25,5 +26,12 @@ describe('installed dependency security patches', () => {
       expect(() => sprintf(`%.${'9'.repeat(500)}${type}`, 1.234)).not.toThrow()
       expect(sprintf(`%.${'9'.repeat(500)}${type}`, 1.234).length).toBeLessThan(110)
     }
+  })
+
+  it('collapses repeated wildcard extglobs in picomatch without nested quantifiers', () => {
+    const picomatch = picomatchRequire('picomatch')
+    expect(picomatch('+(*a)')('aaa')).toBe(true)
+    expect(picomatch('+(*a)')(`${'a'.repeat(40)}b`)).toBe(false)
+    expect(picomatch('+(*a)', { capture: true })('+(*a)')).toBe(true)
   })
 })

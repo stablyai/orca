@@ -23,6 +23,7 @@ import {
   currentRemoteAttempt,
   noteRemoteRunLinkPeerRun
 } from './remote-placements'
+import { recordMessageSenderDispatch } from '../messages/message-sender-dispatch'
 import {
   closeRemoteRunLink,
   getRemoteRunLink,
@@ -195,6 +196,10 @@ function importWorkerMail(
     payload: mail.message.payload ?? undefined,
     runId: link.run_id
   })
+  if (mail.dispatchId && mail.taskId) {
+    // After the insert, so its peer-Run queue trigger never carries a server's Dispatch onward.
+    recordMessageSenderDispatch(db, mail.id, mail.dispatchId)
+  }
   return { to, type: mail.message.type }
 }
 

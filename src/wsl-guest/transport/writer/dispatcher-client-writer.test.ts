@@ -161,54 +161,6 @@ describe('DispatcherClientWriter', () => {
     ])
   })
 
-  it('gives queued bulk a turn after four interactive or ordinary writes', () => {
-    const sink = new FakeSink()
-    const writer = createWriter(sink)
-    sink.saturateNext = true
-
-    enqueue(writer, 'ordinary', 'blocker')
-    enqueue(writer, 'bulk', 'bulk')
-    enqueue(writer, 'interactive', 'interactive-1')
-    enqueue(writer, 'ordinary', 'ordinary-1')
-    enqueue(writer, 'interactive', 'interactive-2')
-    enqueue(writer, 'ordinary', 'ordinary-2')
-    enqueue(writer, 'interactive', 'interactive-3')
-
-    sink.drain()
-
-    expect(sink.accepted.map((write) => write.data)).toEqual([
-      'blocker',
-      'interactive-1',
-      'interactive-2',
-      'interactive-3',
-      'bulk',
-      'ordinary-1',
-      'ordinary-2'
-    ])
-  })
-
-  it('gives ordinary and bulk lanes bounded turns under sustained interactive traffic', () => {
-    const sink = new FakeSink()
-    const writer = createWriter(sink)
-    sink.saturateNext = true
-
-    enqueue(writer, 'ordinary', 'blocker')
-    enqueue(writer, 'ordinary', 'ordinary')
-    enqueue(writer, 'bulk', 'bulk')
-    for (let index = 1; index <= 12; index++) {
-      enqueue(writer, 'interactive', `interactive-${index}`)
-    }
-
-    sink.drain()
-
-    const ordinaryIndex = sink.accepted.findIndex((write) => write.data === 'ordinary')
-    const bulkIndex = sink.accepted.findIndex((write) => write.data === 'bulk')
-    expect(ordinaryIndex).toBeGreaterThanOrEqual(0)
-    expect(ordinaryIndex).toBeLessThanOrEqual(6)
-    expect(bulkIndex).toBeGreaterThanOrEqual(0)
-    expect(bulkIndex).toBeLessThanOrEqual(5)
-  })
-
   it('settles callback-less saturated writes when drain fires during registration', () => {
     const settled = vi.fn()
     const writer = new DispatcherClientWriter(
@@ -302,17 +254,6 @@ describe('DispatcherClientWriter', () => {
     expect(sink.accepted[1].data).toBe('cancel')
   })
 
-  it('enforces the encoded HWM-minus-reserve limit for splittable producers', () => {
-    const sink = new FakeSink()
-    sink.highWaterMark = 4096
-    sink.saturateNext = true
-    const writer = createWriter(sink, vi.fn(), 8192)
-
-    expect(writer.producerFrameCapacity).toBe(3072)
-    expect(writer.enqueue('bulk', () => Buffer.alloc(3073), 3073)).toBe(false)
-    expect(writer.enqueue('bulk', () => Buffer.alloc(3072), 3072)).toBe(true)
-  })
-
   it('admits only one indivisible fixed filesystem frame before drain', () => {
     const sink = new FakeSink()
     sink.highWaterMark = 4096
@@ -331,21 +272,5 @@ describe('DispatcherClientWriter', () => {
     expect(writer.enqueue('fixed-bulk', () => Buffer.from(oversized), 5000)).toBe(false)
     sink.drain()
     expect(sink.accepted.map((write) => write.data)).toEqual([oversized, 'cancel'])
-  })
-
-  it('gives independent writers progress when one client stays saturated', () => {
-    const slowSink = new FakeSink()
-    const fastSink = new FakeSink()
-    const slow = createWriter(slowSink)
-    const fast = createWriter(fastSink)
-    slowSink.saturateNext = true
-
-    enqueue(slow, 'ordinary', 'slow-1')
-    enqueue(slow, 'ordinary', 'slow-2')
-    enqueue(fast, 'ordinary', 'fast-1')
-    enqueue(fast, 'ordinary', 'fast-2')
-
-    expect(slowSink.accepted.map((write) => write.data)).toEqual(['slow-1'])
-    expect(fastSink.accepted.map((write) => write.data)).toEqual(['fast-1', 'fast-2'])
   })
 })

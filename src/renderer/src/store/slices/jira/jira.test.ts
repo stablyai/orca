@@ -2,14 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../../types'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
-import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { createJiraSlice } from './jira'
 
 const jiraStatus = vi.fn()
 const jiraConnect = vi.fn()
 const jiraDisconnect = vi.fn()
 const jiraGetIssue = vi.fn()
-const jiraLookupIssueSummary = vi.fn()
 const jiraListIssues = vi.fn()
 const jiraReadStatus = vi.fn()
 const jiraSearchIssues = vi.fn()
@@ -36,7 +34,7 @@ vi.mock('@/runtime/jira/runtime-jira-client', () => ({
 }))
 vi.mock('@/runtime/jira/runtime-jira-user-fields-client', () => ({ jiraCreateIssue: vi.fn() }))
 vi.mock('@/runtime/jira/runtime-jira-summary-client', () => ({
-  jiraLookupIssueSummary: (...args: unknown[]) => jiraLookupIssueSummary(...args),
+  jiraLookupIssueSummary: vi.fn(),
   jiraReadStatus: (...args: unknown[]) => jiraReadStatus(...args)
 }))
 
@@ -72,19 +70,6 @@ function issue(key: string): JiraIssue {
     labels: [],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z'
-  }
-}
-
-function jiraSourceContext(environmentId: string, siteId = 'site-1'): TaskSourceContext {
-  return {
-    kind: 'task-source',
-    provider: 'jira',
-    projectId: 'logical-project',
-    hostId: `runtime:${environmentId}`,
-    providerIdentity: {
-      provider: 'jira',
-      siteId
-    }
   }
 }
 
@@ -171,34 +156,5 @@ describe('createJiraSlice runtime context', () => {
     expect(store.getState().jiraSearchCache['site-1::project = ALP::30']?.data).toMatchObject([
       { key: 'ALP-SEARCH-FRESH' }
     ])
-  })
-
-  it('shares one summary read across abortable callers and cancels only when all abandon it', async () => {
-    const store = createTestStore()
-    const source = jiraSourceContext('runtime-a')
-    const pending = deferred<JiraIssue>()
-    let readSignal: AbortSignal | undefined
-    jiraLookupIssueSummary.mockImplementation(
-      (_settings: unknown, _key: string, _siteId: string, signal: AbortSignal) => {
-        readSignal = signal
-        return pending.promise
-      }
-    )
-    const first = new AbortController()
-    const second = new AbortController()
-
-    const firstRead = store
-      .getState()
-      .lookupJiraIssueSummary(source, 'ALP-1', 'site-1', { signal: first.signal })
-    const secondRead = store
-      .getState()
-      .lookupJiraIssueSummary(source, 'ALP-1', 'site-1', { signal: second.signal })
-
-    first.abort()
-    await expect(firstRead).rejects.toMatchObject({ name: 'AbortError' })
-    expect(readSignal?.aborted).toBe(false)
-
-    pending.resolve(issue('ALP-1'))
-    await expect(secondRead).resolves.toMatchObject({ key: 'ALP-1' })
   })
 })

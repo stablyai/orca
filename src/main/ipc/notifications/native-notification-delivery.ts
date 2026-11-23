@@ -15,10 +15,15 @@ import {
   activeNotificationsById,
   logNativeNotificationFailure,
   retainNotificationUntilRelease,
-  waitForNotificationDisplay
+  trackNotificationDisplay
 } from './native-notification-lifecycle'
 import { recordNotificationDeliveryOutcome } from './notification-permission-probe'
 import { getTrustedUIRendererWindow } from '../ui'
+import {
+  cancelPendingDesktopNotification,
+  closeDesktopNotification,
+  showDesktopNotification
+} from '../../notifications/desktop-notification'
 
 export function deliverNativeNotification(
   args: NotificationDispatchRequest,
@@ -35,7 +40,7 @@ export function deliverNativeNotification(
   if (args.notificationId) {
     const previous = activeNotificationsById.get(args.notificationId)
     if (previous) {
-      previous.notification.close()
+      closeDesktopNotification(previous.notification)
       previous.release()
     }
   }
@@ -43,10 +48,15 @@ export function deliverNativeNotification(
   // Retain the notification and click handler through display lifetime.
   let clickHandler: (() => void) | null = null
   let failedHandler: ((_event: unknown, error?: string) => void) | null = null
+  const displayConfirmation = args.requireDisplayConfirmation
+    ? trackNotificationDisplay(notification)
+    : undefined
   const entryForId: { notification: Notification; release: () => void } | null = args.notificationId
     ? { notification, release: () => {} }
     : null
   const release = retainNotificationUntilRelease(notification, () => {
+    cancelPendingDesktopNotification(notification)
+    displayConfirmation?.cancel()
     if (clickHandler) {
       notification.removeListener('click', clickHandler)
       clickHandler = null
@@ -117,13 +127,10 @@ export function deliverNativeNotification(
     notification.on('click', clickHandler)
   }
 
-  const displayConfirmation = args.requireDisplayConfirmation
-    ? waitForNotificationDisplay(notification)
-    : null
-  notification.show()
+  showDesktopNotification(notification, displayConfirmation?.start)
 
   if (displayConfirmation) {
-    return displayConfirmation.then((displayed) => {
+    return displayConfirmation.result.then((displayed) => {
       if (!displayed) {
         release()
         return { delivered: false, reason: 'not-displayed' }

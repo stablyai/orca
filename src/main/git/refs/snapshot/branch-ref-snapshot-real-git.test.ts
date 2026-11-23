@@ -16,6 +16,7 @@ import {
   makeRequest
 } from '../../../runtime/rpc/methods/projects/repo-rpc.test-fixture'
 import type { Repo } from '../../../../shared/repository/repo-types'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 
 import { subscribeGitRefChanges } from '../git-ref-change-signal'
 import { resolveBranchSnapshotIdentity } from './branch-ref-snapshot-identity'
@@ -105,7 +106,7 @@ it('searches readable branch names while keeping branch actions unambiguous', as
   })
 })
 
-it('keeps ordinary branches available to a client without qualified-ref support', async () => {
+it('serves legacy, qualified and canonical ref names without mixing client capabilities', async () => {
   const { root } = await fixture()
   const repo: Repo = {
     id: 'snapshot-test',
@@ -117,25 +118,38 @@ it('keeps ordinary branches available to a client without qualified-ref support'
   const queries = new RuntimeRepositoryRefQueries({ resolveRepo: async () => repo })
   const dispatcher = repoDispatcher({
     getRuntimeId: () => 'snapshot-test',
-    searchRepoRefs: (repo, query, limit, qualified, namespace) =>
-      queries.search(repo, query, limit ?? 25, qualified, namespace)
+    searchRepoRefs: (repo, query, limit, form, namespace) =>
+      queries.search(repo, query, limit ?? 25, form, namespace)
   })
-  const response = await dispatcher.dispatch(
-    makeRequest('repo.searchRefs', {
-      repo: 'snapshot-test',
-      query: '',
-      limit: 20
-    }),
-    { clientCapabilities: [] }
-  )
-  const result = z
-    .object({ result: z.object({ refs: z.array(z.string()) }) })
-    .parse(response).result
-  expect(result.refs).toContain('main')
-  expect(result.refs).not.toContain('collision')
-  expect(result.refs).not.toContain('refs/heads/collision')
-  expect(result.refs).not.toContain('refs/heads/Feature/emoji😀')
-  expect(result.refs.some((ref) => ref.startsWith('refs/'))).toBe(false)
+  const search = async (query: string, clientCapabilities: string[]) =>
+    z
+      .object({ result: z.object({ refs: z.array(z.string()) }) })
+      .parse(
+        await dispatcher.dispatch(
+          makeRequest('repo.searchRefs', { repo: 'snapshot-test', query, limit: 20 }),
+          { clientCapabilities }
+        )
+      )
+      .result.refs.sort()
+  const ordinary = await search('', [])
+  expect(ordinary).toContain('main')
+  expect(ordinary).not.toContain('collision')
+  expect(ordinary.some((ref) => ref.startsWith('refs/'))).toBe(false)
+
+  const qualifiedOnly = ['repo.search-qualified-refs.v1']
+  expect(await search('ma', qualifiedOnly)).toEqual([
+    'main',
+    'refs/heads/origin/main',
+    'refs/remotes/origin/main'
+  ])
+  expect(await search('collision', qualifiedOnly)).toEqual(['refs/heads/collision'])
+  expect(await search('topic', qualifiedOnly)).toEqual(['team/fork/release/topic'])
+  expect(await search('ma', [...qualifiedOnly, 'repo.search-canonical-refs.v1'])).toEqual([
+    'refs/heads/main',
+    'refs/heads/origin/main',
+    'refs/remotes/origin/main'
+  ])
+
   await git(root, 'update-ref', 'refs/heads/origin/a', 'HEAD')
   await git(root, 'update-ref', 'refs/remotes/origin/a', 'HEAD')
   await git(root, 'update-ref', 'refs/remotes/origin/b', 'HEAD')
@@ -182,7 +196,9 @@ it('shares linked checkout branches while reading current branch and occupancy p
   expect(mainBranches.branches[0]).toBe('main')
   expect(linkedBranches.current).toBe('other')
   expect(linkedBranches.branches[0]).toBe('other')
-  expect(linkedBranches.worktreePaths?.other).toBe(await realpath(linked))
+  expect(normalizeRuntimePathForComparison(linkedBranches.worktreePaths?.other ?? '')).toBe(
+    normalizeRuntimePathForComparison(await realpath(linked))
+  )
   await git(root, 'branch', 'fresh')
   expect(await searchBaseRefDetails(nested, 'fresh', 20)).toEqual([
     { refName: 'refs/heads/fresh', localBranchName: 'fresh' }
@@ -196,7 +212,11 @@ it('fences all live repositories for own writes from linked, known and unknown p
   roots.push(linkedParent)
   const linked = join(linkedParent, 'checkout')
   await git(root, 'worktree', 'add', '-qb', 'linked-scope', linked)
-  expect((await listLocalBranches(root)).worktreePaths?.['linked-scope']).toBe(linked)
+  expect(
+    normalizeRuntimePathForComparison(
+      (await listLocalBranches(root)).worktreePaths?.['linked-scope'] ?? ''
+    )
+  ).toBe(normalizeRuntimePathForComparison(linked))
   await searchBaseRefDetails(other, '', 20)
   const a = await resolveBranchSnapshotIdentity(root, {})
   const b = await resolveBranchSnapshotIdentity(other, {})

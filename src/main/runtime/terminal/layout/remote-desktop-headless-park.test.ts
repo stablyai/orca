@@ -4,7 +4,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 
 import { publishHeadlessRuntimeGraph } from '../../session-graph/headless-runtime-graph'
 
-import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../construction/test-context/runtime-store-partial-fixture'
 
 // Headless hosts keep a parked viewer's grid until another viewer or phone takes it (#15997).
 

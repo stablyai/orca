@@ -32,6 +32,8 @@ export type StructuredAgentSessionMutationContext = {
   sessions: Map<string, StructuredAgentSessionHostSession>
   publish: (sessionId: string, journal: StructuredAgentSessionHostSession['journal']) => void
   publishConversationName?: (sessionId: string) => void
+  /** A guess at the next prompt in the old context no longer fits once it is gone. */
+  clearPromptSuggestion?: (sessionId: string) => void
   /** For callers outside session serialization. */
   conversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession>
   /** Display-admitted child records used by command admission. */

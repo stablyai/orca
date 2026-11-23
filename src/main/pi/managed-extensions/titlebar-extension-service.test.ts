@@ -207,7 +207,7 @@ describe('PiTitlebarExtensionService', () => {
   // Windows symlinks need privileges; junction predicate tests cover ordering separately.
 
   describe('per-agent default source dir (no cross-agent fallback)', () => {
-    it('bare-shell prep does not create missing ~/.pi or ~/.omp homes (#10196)', () => {
+    it('leaves missing agent homes and an installed Pi home without its CLI untouched', () => {
       const fakeHome = mkdtempSync(join(tmpdir(), 'orca-no-eager-agent-home-'))
       expect(existsSync(join(fakeHome, '.pi'))).toBe(false)
       expect(existsSync(join(fakeHome, '.omp'))).toBe(false)
@@ -230,6 +230,16 @@ describe('PiTitlebarExtensionService', () => {
           expect.stringContaining('omp-managed-status-extension')
         )
         expect(existsSync(ompEnv.ORCA_OMP_STATUS_EXTENSION!)).toBe(true)
+
+        const piAgentDir = join(fakeHome, '.pi', 'agent')
+        mkdirSync(piAgentDir, { recursive: true })
+        const existingPiEnv = svc.buildPtyEnv('pty-bare-pi-with-home', undefined, 'pi', {
+          materializeDefaultHome: false,
+          cliOnPath: false
+        })
+
+        expect(existingPiEnv).toEqual({})
+        expect(existsSync(join(piAgentDir, 'extensions'))).toBe(false)
       } finally {
         homedirOverride.current = ''
         rmSync(fakeHome, { recursive: true, force: true })

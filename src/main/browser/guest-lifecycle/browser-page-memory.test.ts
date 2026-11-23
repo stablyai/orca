@@ -55,6 +55,7 @@ function attach(id: number, partition = 'persist:profile') {
     getType: () => 'webview',
     isDestroyed: () => destroyed,
     isLoading: () => false,
+    isLoadingMainFrame: () => false,
     isDevToolsOpened: () => false,
     debugger: { isAttached: () => false },
     loadURL: vi.fn(() => load),
@@ -275,4 +276,24 @@ it('does not leave an agent hold for an untracked popup after its operation ends
   first.finishLoad()
   await waitForBrowserPageReady(pageId, first.guest)
   expect(reserveBrowserPageDiscard(pageId, first.guest)).toBe(true)
+})
+
+it('admits a loaded page while only a subframe loads, and still waits on a main-frame load', async () => {
+  let mainFrameLoading = false
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: native event fixture exposes the page gate's exact surface.
+  const guest = Object.assign(new EventEmitter(), {
+    id: 30,
+    isDestroyed: () => false,
+    isLoading: () => true,
+    isLoadingMainFrame: () => mainFrameLoading
+  }) as unknown as Electron.WebContents
+  await expect(waitForBrowserPageReady(pageId, guest)).resolves.toBeUndefined()
+  mainFrameLoading = true
+  const action = vi.fn()
+  const pending = waitForBrowserPageReady(pageId, guest).then(action)
+  await Promise.resolve()
+  expect(action).not.toHaveBeenCalled()
+  guest.emit('did-finish-load')
+  await pending
+  expect(action).toHaveBeenCalledOnce()
 })

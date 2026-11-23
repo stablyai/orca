@@ -26,8 +26,8 @@ import {
   registerTerminalSideEffectFactConsumer
 } from '../../pty-transport/output/terminal-side-effect-facts-handler'
 import { dispatchTerminalNotification } from '../../notifications/dispatch-terminal-notification'
-import { hasPendingHookLaneCompletion } from '@/hooks/agent-hook-completion-notifications'
-import { hookLaneTitleTurnEndEvidence } from '@/hooks/agent-hook-turn-end-ownership'
+import { hasPendingHookLaneCompletion } from '@/components/terminal-pane/agent-completion/hook-lane/agent-hook-completion-notifications'
+import { hookLaneTitleTurnEndEvidence } from '@/components/terminal-pane/agent-completion/hook-lane/agent-hook-turn-end-ownership'
 import { acquireHiddenRendererPtyDeliveryClaim } from '../../pty-transport/delivery/pty-renderer-delivery-claims'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 

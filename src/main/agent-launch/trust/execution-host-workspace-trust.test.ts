@@ -17,7 +17,7 @@ import {
   applyWorkspaceTrustOnThisHost,
   type WorkspaceTrustHost
 } from './execution-host-workspace-trust'
-const INHERITING_PRESETS: readonly AgentTrustPreset[] = ['claude', 'copilot', 'qoder']
+const INHERITING_PRESETS: readonly AgentTrustPreset[] = ['claude', 'copilot', 'qoder', 'qwen-code']
 
 let root: string
 

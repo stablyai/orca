@@ -1,6 +1,6 @@
 // Reads PowerShell in its own quoting, so its strings, escapes and comments can't pass for commands.
 
-// The common pattern's PowerShell launch options: flags, and options that take one value.
+// PowerShell launch options: flags, and options that take one value.
 const POWERSHELL_FLAGS = new Set(['-mta', '-nologo', '-noninteractive', '-noprofile', '-sta'])
 const POWERSHELL_OPTIONS_WITH_VALUE = new Set([
   '-configurationname',

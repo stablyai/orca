@@ -20,8 +20,15 @@ import {
 import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
+import { receiptMailboxOwnershipHold } from '../../orchestration/mailbox/delivery-hold/receipt-mailbox-ownership'
 
 const DIALOG_HOLD_RECHECK_MS = 2000
+const CORROBORATED_HOLDS: ReadonlySet<MailboxDeliveryHold['kind']> = new Set([
+  'prompt',
+  'draft',
+  'blocked',
+  'overlay'
+])
 
 export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
   protected resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
@@ -131,11 +138,37 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     return this.deliveryRefusal(ptyId) === null
   }
 
-  /** Why delivery would hold mail for this worker terminal now, for a send receipt: the gate's own reason. */
-  readTerminalMailHold(terminalHandle: string): MailboxDeliveryHold | null {
-    const ptyId = this.getOrchestrationMailboxTerminalForHandle(terminalHandle)?.ptyId
-    const refusal = ptyId ? this.deliveryRefusal(ptyId) : null
-    return refusal === 'no-terminal' ? null : refusal
+  /** Why delivery would not type a note for this mailbox now, for a send receipt: the gates' own reads,
+   *  through the terminal delivery resolves (a Run's current coordinator, a Dispatch's assignee),
+   *  once that terminal is shown to read the mailbox. */
+  readTerminalMailHold(mailbox: string): MailboxDeliveryHold | null {
+    const terminal = this.orchestrationMailboxDeliveryTarget.resolveTerminal(mailbox)
+    if (!terminal) {
+      return null
+    }
+    const db = this._orchestrationDb
+    const notRead = db ? receiptMailboxOwnershipHold(db, terminal, mailbox) : null
+    if (notRead) {
+      return notRead
+    }
+    const refusal = this.deliveryRefusal(terminal.ptyId)
+    if (refusal === 'no-terminal') {
+      return null
+    }
+    if (isMailboxTerminalTakingInput(terminal)) {
+      return refusal
+    }
+    // Without live status, only holds Orca read on screen or from the agent stay true once status arrives.
+    return refusal && CORROBORATED_HOLDS.has(refusal.kind)
+      ? refusal
+      : { kind: 'unverified', terminal: terminal.handle }
+  }
+
+  /** Whether a waiting `check --wait` takes mail of this type stored for this mailbox, as arrival would. */
+  hasMessageWaiterFor(mailbox: string, messageType: string): boolean {
+    return [...(this.messageWaiters.get(mailbox) ?? [])].some(
+      (waiter) => !waiter.typeFilter || waiter.typeFilter.includes(messageType)
+    )
   }
 
   private deliveryRefusal(ptyId: string): MailboxDeliveryHold | 'no-terminal' | null {

@@ -35,6 +35,22 @@ export function pathWithoutBash(scratch: string): string {
   return bin
 }
 
+/** A PATH whose `cat` reports uutils `version`; 0.8 and 0.9 refuse to relay, as they stall. */
+export function pathWithUutilsCat(scratch: string, version: string, withGnucat: boolean): string {
+  const bin = mkdtempSync(join(scratch, 'bin-'))
+  symlinkSync(commandPath('bash'), join(bin, 'bash'))
+  const relay = /^0\.[89]\./.test(version) ? 'exit 1' : `exec ${commandPath('cat')} "$@"`
+  writeFileSync(
+    join(bin, 'cat'),
+    `#!/bin/sh\n[ "$1" = --version ] && echo "cat (uutils coreutils) ${version}" && exit 0\n${relay}\n`,
+    { mode: 0o755 }
+  )
+  if (withGnucat) {
+    symlinkSync(commandPath('gnucat') || commandPath('cat'), join(bin, 'gnucat'))
+  }
+  return bin
+}
+
 /** A PATH whose `bash` runs the relay script through `sed`, standing in for an older or stripped build. */
 export function pathWithEditedBash(scratch: string, sedExpression: string): string {
   const bin = pathWithoutBash(scratch)

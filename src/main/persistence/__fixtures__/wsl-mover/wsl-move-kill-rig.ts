@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { wslMoveJournalKey } from '../../../../shared/wsl-move/wsl-move-cutover'
-import { createStore, testState } from '../../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../../persistence-test-harness'
 import type { Store } from '../../loading-store/store'
 import {
   listWslMoveCutoverChain,
@@ -68,7 +68,8 @@ export function wslMoveRigTempDir(prefix: string): string {
   return dir
 }
 
-export function removeWslMoveRigDirs(): void {
+export async function removeWslMoveRigDirs(): Promise<void> {
+  await closeTestStores()
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -106,9 +107,9 @@ export function createWslMoveKillRig(): WslMoveRig {
   world.deps.quiesce = {
     sleepWorkspaces: async (ids) => (at('sleep'), quiesce.sleepWorkspaces(ids)),
     livePtyIds: quiesce.livePtyIds,
-    captureRestoreHints: async (panes, distro) => (
+    captureRestoreHints: async (panes, distro, mappedDrives) => (
       at('restore-hints'),
-      quiesce.captureRestoreHints(panes, distro)
+      quiesce.captureRestoreHints(panes, distro, mappedDrives)
     ),
     proveExited: async (scope) => (at('prove-exited'), quiesce.proveExited(scope))
   }

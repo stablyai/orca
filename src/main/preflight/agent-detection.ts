@@ -26,6 +26,8 @@ import {
   findRunnableLocalCommand,
   isCommandAvailable
 } from '../ipc/preflight/preflight-command-exec'
+import { buildLocalPreflightEnv } from '../ipc/preflight/preflight-local-env'
+import { withConfiguredProxyEnv } from '../network/configured-proxy-child-env'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import {
   detectRemoteWindowsTerminalCapabilities,
@@ -180,7 +182,10 @@ async function isGlabAuthenticated(probe: CommandRuntime): Promise<boolean> {
   try {
     await (probe.wslTarget
       ? execCommandInWslOrThrow(probe.wslTarget, `${quotePosixShell('glab')} auth status`)
-      : execLocalPreflightCommandOrThrow(probe.binary ?? 'glab', ['auth', 'status']))
+      : execLocalPreflightCommandOrThrow(probe.binary ?? 'glab', ['auth', 'status'], {
+          // `auth status` calls the GitLab API, so it needs the Settings proxy too.
+          env: withConfiguredProxyEnv(buildLocalPreflightEnv())
+        }))
     return true
   } catch (error) {
     const stdout = (error as { stdout?: string }).stdout ?? ''

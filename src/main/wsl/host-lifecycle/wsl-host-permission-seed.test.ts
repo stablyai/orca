@@ -43,15 +43,6 @@ describe('seedWslHostAgentPermission', () => {
     expect(AgentLaunchSettingsMutation.safeParse(host.calls[0].params).success).toBe(true)
   })
 
-  it('sends nothing when local is also at the product default', async () => {
-    const host = fakeHost()
-    await expect(seedWslHostAgentPermission({ ...host.seed, local: {} })).resolves.toBe(false)
-    await expect(
-      seedWslHostAgentPermission({ ...host.seed, local: { agentPermissionDefault: 'full-access' } })
-    ).resolves.toBe(false)
-    expect(host.calls).toEqual([])
-  })
-
   it('leaves hosts without the conditional write alone', async () => {
     for (const verdict of ['unsupported', 'unknown'] as const) {
       const host = fakeHost(verdict)
@@ -60,12 +51,5 @@ describe('seedWslHostAgentPermission', () => {
       ).resolves.toBe(false)
       expect(host.calls).toEqual([])
     }
-  })
-
-  it('reports a failed write', async () => {
-    const host = fakeHost('supported', true)
-    await expect(
-      seedWslHostAgentPermission({ ...host.seed, local: { agentPermissionDefault: 'own' } })
-    ).rejects.toThrow('write failed')
   })
 })

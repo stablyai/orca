@@ -88,6 +88,7 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
       next?: AgentJournalSubmission
     ): Promise<StructuredAgentSessionOutgrownChild> => {
       const session = await unlessStopping(sessionId)
+      const { launchTools } = deps
       const outcome = await retireOutgrownStructuredAgentSessionChild(sessionId, session, {
         next,
         requiresModelTransitionRestart: (submission) =>
@@ -115,6 +116,7 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
           return input.stopOutgrownAgent(sessionId)
         },
         launchAccountHome: launchAccountHome(sessionId),
+        ...(launchTools ? { launchToolsChanged: () => launchTools.changed(sessionId) } : {}),
         now,
         logger: deps.logger
       })

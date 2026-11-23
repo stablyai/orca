@@ -50,11 +50,23 @@ function agentDescriptions(agent: string): Partial<Record<AgentChatPermissionMod
   return AGENT_DESCRIPTIONS.get(agent) ?? OTHER_AGENT_DESCRIPTIONS
 }
 
+/** A mode's name and what it does on `agent`, for surfaces that list the modes themselves. */
+export function agentChatPermissionModeCopy(
+  agent: string,
+  mode: AgentChatPermissionMode
+): { label: string; description: string } {
+  return {
+    label: MODE_COPY[mode].label,
+    description: agentDescriptions(agent)[mode] ?? MODE_COPY[mode].description
+  }
+}
+
 export function structuredAgentSessionPermissionDescriptor(state: {
   record: StructuredAgentSessionOptionRecord
   permissionMode: string | null
   permissionOwnSupported?: boolean | null
   launchPermissionMode?: string
+  runningPermissionMode?: string
   reportedPermissionMode?: string | null
 }): SessionOptionDescriptor | null {
   const support = agentChatPermissionModes(state.record.agent)
@@ -73,13 +85,12 @@ export function structuredAgentSessionPermissionDescriptor(state: {
         : current === 'read-only'
           ? 'Read only'
           : (current ?? 'Permissions')
-  // Claude applies a pick on reacquisition; Codex can apply one to its reused child.
-  const activeValue =
-    state.record.agent === 'claude' &&
-    state.launchPermissionMode !== undefined &&
-    state.launchPermissionMode !== current
-      ? state.launchPermissionMode
-      : undefined
+  // A pick the running child has not applied yet takes effect with the next message. Hosts
+  // without a running report only prove Claude's, which applies a pick by restarting.
+  const running =
+    state.runningPermissionMode ??
+    (state.record.agent === 'claude' ? state.launchPermissionMode : undefined)
+  const activeValue = running !== undefined && running !== current ? running : undefined
   return {
     description: label,
     id: AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
@@ -90,8 +101,7 @@ export function structuredAgentSessionPermissionDescriptor(state: {
       currentValue: current,
       choices: support.modes.map((value) => ({
         value,
-        label: MODE_COPY[value].label,
-        description: agentDescriptions(state.record.agent)[value] ?? MODE_COPY[value].description
+        ...agentChatPermissionModeCopy(state.record.agent, value)
       }))
     },
     valueSource: activeValue === undefined ? 'applied' : 'dispatched',

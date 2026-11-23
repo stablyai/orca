@@ -82,6 +82,22 @@ it('protects only the current document, never earlier history', () => {
     audible = true
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('audio')
     audible = false
+    Reflect.set(mainFrame, 'frames', undefined)
+    guest.emit('frame-created')
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('frames')
+    Object.defineProperty(mainFrame, 'frames', {
+      configurable: true,
+      get: () => {
+        throw new Error('Render frame was disposed before WebFrameMain could be accessed')
+      }
+    })
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('frames')
+    Object.defineProperty(mainFrame, 'frames', {
+      configurable: true,
+      writable: true,
+      value: frames
+    })
+    expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')
     frames.push({})
     guest.emit('frame-created')
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('frames')

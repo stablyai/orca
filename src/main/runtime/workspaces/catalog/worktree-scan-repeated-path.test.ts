@@ -32,7 +32,7 @@ import {
   partialRuntimeStore,
   storeWorktreeMeta,
   type PartialRuntimeStore
-} from '../../orca-runtime-tests/runtime-store-partial-fixture'
+} from '../../construction/test-context/runtime-store-partial-fixture'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 
 const REPO_ID = 'repo-local'

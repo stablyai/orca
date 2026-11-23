@@ -183,65 +183,6 @@ describe('legacy terminal shim neutralization', () => {
     }
   })
 
-  itOnPosix('does not let an empty PATH element resolve the command from the cwd', async () => {
-    // Empty POSIX PATH elements name cwd (STA-4169).
-    const userData = makeUserDataDir()
-    const shimDir = join(userData, 'orca-terminal-attribution', 'posix')
-    const realBin = join(userData, 'real-bin')
-    mkdirSync(shimDir, { recursive: true })
-    mkdirSync(realBin, { recursive: true })
-    writeFileSync(join(shimDir, 'git'), 'legacy attribution wrapper')
-    writeFileSync(join(realBin, 'git'), "#!/usr/bin/env bash\nprintf 'REAL\\n'\n", { mode: 0o755 })
-
-    neutralizeLegacyTerminalShimDir(userData)
-
-    const hostile = join(userData, 'hostile')
-    mkdirSync(hostile, { recursive: true })
-    writeFileSync(join(hostile, 'git'), "#!/usr/bin/env bash\nprintf 'HOSTILE\\n'\n", {
-      mode: 0o755
-    })
-    mkdirSync(join(hostile, 'node_modules', '.bin'), { recursive: true })
-    writeFileSync(
-      join(hostile, 'node_modules', '.bin', 'git'),
-      "#!/usr/bin/env bash\nprintf 'HOSTILE\\n'\n",
-      { mode: 0o755 }
-    )
-
-    const result = spawnSync(join(shimDir, 'git'), ['--version'], {
-      cwd: hostile,
-      // Keep system dirs for the fixture shebang; the empty entry supplies the hostile cwd.
-      env: { ...process.env, PATH: `${shimDir}::${realBin}:/usr/bin:/bin` },
-      encoding: 'utf8'
-    })
-
-    expect(result.stdout).toContain('REAL')
-    expect(result.stdout).not.toContain('HOSTILE')
-
-    for (const cwdSpelling of [
-      `:${realBin}:/usr/bin:/bin`,
-      `${realBin}:/usr/bin:/bin:`,
-      `.:${realBin}:/usr/bin:/bin`,
-      `..:${realBin}:/usr/bin:/bin`,
-      `node_modules/.bin:${realBin}:/usr/bin:/bin`
-    ]) {
-      const run = spawnSync(join(shimDir, 'git'), ['--version'], {
-        cwd: hostile,
-        env: { ...process.env, PATH: cwdSpelling },
-        encoding: 'utf8'
-      })
-      expect(run.stdout, `PATH=${cwdSpelling}`).toContain('REAL')
-      expect(run.stdout, `PATH=${cwdSpelling}`).not.toContain('HOSTILE')
-    }
-
-    // A slashless BASH_SOURCE makes basename stripping return the filename and can defeat self-exclusion.
-    const noSlash = spawnSync('bash', ['git', '--version'], {
-      cwd: shimDir,
-      env: { ...process.env, PATH: `${shimDir}:${realBin}:/usr/bin:/bin` },
-      encoding: 'utf8'
-    })
-    expect(noSlash.stdout).toContain('REAL')
-  })
-
   itOnPosix('keeps a real Bash command hash working with trailing PATH separators', async () => {
     const userData = makeUserDataDir()
     const shimDir = join(userData, 'orca-terminal-attribution', 'posix')

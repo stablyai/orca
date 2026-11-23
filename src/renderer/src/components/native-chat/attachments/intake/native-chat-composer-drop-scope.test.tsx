@@ -35,11 +35,14 @@ const intake = vi.hoisted(() => {
     pick: vi.fn()
   }
 })
-vi.mock('@/store', () => ({
-  useAppStore: Object.assign((select: () => unknown) => select(), {
-    getState: () => ({ tabsByWorktree: {} })
-  })
-}))
+vi.mock('@/store', () => {
+  const state = { tabsByWorktree: {} }
+  return {
+    useAppStore: Object.assign((select: (s: typeof state) => unknown) => select(state), {
+      getState: () => state
+    })
+  }
+})
 // Keeps the real notice strings so the silent-failure guards assert what users see.
 vi.mock('../uploads/native-chat-attachment-owner', async (importOriginal) => ({
   ...(await importOriginal<typeof AttachmentOwnerModule>()),
@@ -52,6 +55,8 @@ vi.mock('electron', () => ({
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() } }))
 vi.mock('@/i18n/i18n', () => ({
+  // The composer's agent logos load the agent catalog, whose labels read the language.
+  i18n: { language: 'en' },
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
     fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values?.[name]))
 }))
@@ -235,7 +240,6 @@ describe('native chat composer drop scoping', () => {
     await dropTwoImages(target)
 
     expect(electron.send).not.toHaveBeenCalled()
-    expect(view.container.querySelector('[data-composer-scope-key]')).toBeNull()
     expect(readNativeChatAttachmentCache('chat-a').map(({ path }) => path)).toEqual([
       '/repro/first.png',
       '/repro/second.png'
@@ -260,7 +264,6 @@ describe('native chat composer drop scoping', () => {
     await settleAttachments()
 
     expect(electron.send).not.toHaveBeenCalled()
-    expect(view.container.querySelector('[data-composer-scope-key]')).toBeNull()
     expect(readNativeChatAttachmentCache('agent-session:s1').map(({ path }) => path)).toEqual([
       '/repro/first.png',
       '/repro/second.png'

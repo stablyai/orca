@@ -19,6 +19,7 @@ const plan: OrcaUninstallPlan = {
   backgroundService: { location: 'launchd', state: 'present', detail: null },
   hookScripts: { location: '~/.orca/agent-hooks', state: 'present', detail: null },
   hosts: [],
+  terminalDaemon: null,
   otherOrcaBuildName: null,
   appPath: null,
   removeAppCommand: null

@@ -2,7 +2,7 @@ import type { PermissionMode, PermissionResult } from '@anthropic-ai/claude-agen
 import type { ClaudePendingPrompt } from './claude-prompt-registry'
 import type { ClaudeSession } from '../claude-structured-session-state'
 
-/** This process's requested mode, else its first init's; anything else asks for each edit. */
+/** This process's requested mode, else the mode it opened in; anything else asks for each edit. */
 export function claudePlanApprovalMode(
   session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit'>
 ): PermissionMode {

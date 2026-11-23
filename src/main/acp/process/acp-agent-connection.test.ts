@@ -121,6 +121,41 @@ describe('ACP process-owning connection', () => {
     await expect(connection.close()).resolves.toBe(true)
   })
 
+  it('redacts credentials the agent printed from the stderr its exit reports (#41170)', async () => {
+    const { connection, child } = fixture()
+    await connection.start(start)
+    const rejected = connection.prompt([...prompt]).catch((error: unknown) => String(error))
+    child.stderr.write('OPENROUTER_API_KEY=sk-or-v1-0123456789abcdef0123456789abcdef\n')
+    child.emit('exit', 1, null)
+    child.emit('close', 1, null)
+    const reason = await rejected
+    expect(reason).not.toContain('0123456789abcdef')
+    expect(connection.stderrTail()).not.toContain('0123456789abcdef')
+  })
+
+  it('drops a credential the stderr tail cut through, which redaction can no longer recognise', async () => {
+    const { connection, child } = fixture()
+    await connection.start(start)
+    child.stderr.write(`sk-or-v1-${'0'.repeat(30)}${'Q7'.repeat(12)}\n`)
+    // Leaves the last 24 key characters and their newline at the start of the 8 KiB tail.
+    child.stderr.write(`${'x'.repeat(8166)}\n`)
+    child.emit('exit', 1, null)
+    child.emit('close', 1, null)
+    expect(connection.stderrTail()).not.toContain('Q7Q7')
+  })
+
+  it('drops a private key body the stderr tail cut from its BEGIN marker', async () => {
+    const { connection, child } = fixture()
+    await connection.start(start)
+    const body = `${'K9'.repeat(32)}\n`.repeat(4)
+    child.stderr.write(`-----BEGIN PRIVATE KEY-----\n${body}-----END PRIVATE KEY-----\n`)
+    // Leaves part of the second body line, the last two and the END marker in the 8 KiB tail.
+    child.stderr.write(`${'x'.repeat(8025)}\n`)
+    child.emit('exit', 1, null)
+    child.emit('close', 1, null)
+    expect(connection.stderrTail()).not.toContain('K9K9')
+  })
+
   it('ends a turn signed out at a sign-in prompt line and never retains its URL', async () => {
     const said: string[] = []
     const onExit = vi.fn((error: Error) => said.push(error.message))

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/class-names'
-import { useRuntimeFileListForWorktree } from '../../quick-open-file-list'
+import { useRuntimeFileListForWorktree } from '../../file-actions/quick-open/quick-open-file-list'
 import { createTabEntryAllowAbsolutePathsSelector } from './tab-create-entry-local-path'
 import { getTabEntryOptions } from './tab-create-entry-classifier'
 import { isTabEntryAbsolutePathLike } from './tab-create-entry-path-validation'
@@ -22,7 +22,10 @@ import {
 import { dropFileEntriesCoveredByTabResults } from './open-tab-entry-dedupe'
 import { placeHistoryRowsInEntryOptions } from './tab-create-entry-history-placement'
 import { useOmniboxBrowserHistory } from './use-omnibox-browser-history'
-import { useTabEntryMenuReturnFocus } from './use-tab-entry-menu-return-focus'
+import {
+  useTabEntryMenuOpenFocus,
+  useTabEntryMenuReturnFocus
+} from './use-tab-entry-menu-return-focus'
 import { activateOpenTabSearchResult } from './open-tab-selection-routing'
 import { useTabCreateEntrySearchResults } from './use-tab-create-entry-search-results'
 import { DEFAULT_SEARCH_ENGINE } from '../../../../../shared/browser/navigation/browser-url'
@@ -49,6 +52,7 @@ export default function TabBarCreateEntry(props: TabBarCreateEntryProps): React.
 function TabBarCreateEntrySession({
   agentOptions = EMPTY_AGENT_OPTIONS,
   agentPickerEntries,
+  excludedTabId,
   groupId,
   menuOpen,
   menuOptions = EMPTY_MENU_OPTIONS,
@@ -86,6 +90,7 @@ function TabBarCreateEntrySession({
   const terminalQueryMode = rawQueryOversized || forcedSearch.forced
   const tabResults = useTabCreateEntrySearchResults({
     enabled: menuOpen && !terminalQueryMode,
+    excludedTabId,
     query,
     worktreeId,
     retainedResultId: pinnedOptionId
@@ -109,13 +114,7 @@ function TabBarCreateEntrySession({
 
   useTabEntryMenuReturnFocus(inputRef, menuOpen)
 
-  useEffect(() => {
-    if (!menuOpen) {
-      return
-    }
-    const focusFrame = requestAnimationFrame(() => inputRef.current?.focus())
-    return () => cancelAnimationFrame(focusFrame)
-  }, [menuOpen])
+  useTabEntryMenuOpenFocus(inputRef, menuOpen)
 
   const matchingMenuOptions = useMemo(
     () =>

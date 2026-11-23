@@ -66,26 +66,48 @@ describe.skipIf(process.platform === 'win32')('omp wrapper under a user alias na
 })
 
 describe.skipIf(process.platform === 'win32' || !zshAvailable)('OMP wrapper global aliases', () => {
-  it.each(['--help', '-v', 'models'])('parses with hostile global alias %s', (token) => {
+  it('starts the wrapper with global aliases and keeps them intact', () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-omp-global-alias-'))
     roots.push(root)
+    const bin = join(root, 'bin')
+    mkdirSync(bin)
+    writeFileSync(join(bin, 'omp'), '#!/bin/sh\nprintf "omp args=[%s]\\n" "$*"\n', { mode: 0o755 })
+    const extension = join(root, 'status-extension')
+    writeFileSync(extension, '')
+
     const startup = join(root, 'startup.zsh')
     writeFileSync(
       startup,
       [
-        `alias -g -- ${token}='${token} 2>&1 | cat'`,
+        "alias -g -- --help='--help 2>&1 | cat'",
+        "alias -g -- -v='-v 2>&1 | cat'",
+        "alias -g -- models='models 2>&1 | cat'",
         getPosixOmpShellWrapper(),
-        `if ! __orca_omp_should_skip_extension '${token}'; then exit 1; fi`,
-        'printf "parsed\\n"',
-        `alias -g -- '${token}'`
+        "omp '--help'",
+        "omp '-v'",
+        "omp 'models'",
+        "alias -g -- '--help' '-v' 'models'"
       ].join('\n')
     )
     const result = spawnSync('/bin/zsh', ['-f', startup], {
       encoding: 'utf8',
-      env: { ...process.env, HOME: root, ZDOTDIR: root }
+      env: {
+        ...process.env,
+        HOME: root,
+        ZDOTDIR: root,
+        PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
+        ORCA_OMP_STATUS_EXTENSION: extension
+      }
     })
+
     expect(result.status, result.stderr).toBe(0)
-    expect(result.stdout).toContain('parsed')
-    expect(result.stdout).toContain('2>&1 | cat')
+    expect(result.stdout.split('\n').slice(0, 3)).toEqual([
+      'omp args=[--help]',
+      'omp args=[-v]',
+      'omp args=[models]'
+    ])
+    expect(result.stdout).toContain("--help='--help 2>&1 | cat'")
+    expect(result.stdout).toContain("-v='-v 2>&1 | cat'")
+    expect(result.stdout).toContain("models='models 2>&1 | cat'")
   })
 })

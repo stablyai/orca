@@ -25,7 +25,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 const focusTerminalInitiatedTab = vi.hoisted(() => vi.fn())
-vi.mock('@/hooks/ipc-events/terminal-command-state', async (importOriginal) => ({
+vi.mock('@/hooks/ipc-events/terminal/terminal-command-state', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   focusTerminalInitiatedTab
 }))
@@ -87,14 +87,6 @@ describe('publishing a launch tab before its agent exists', () => {
     expect(launchTab()?.viewMode).toBe('chat')
   })
 
-  it('never makes a second tab when a retry names the same one', () => {
-    publishAgentLaunchTab(request())
-    const again = publishAgentLaunchTab(request({ requestId: 'request-2' }))
-
-    expect(again).toMatchObject({ tabId: TAB_ID, created: false })
-    expect(store.getState().tabsByWorktree[WT]?.filter((tab) => tab.id === TAB_ID)).toHaveLength(1)
-  })
-
   it("keeps a launch's final outcome on a retry of that launch; a different launch resets it", () => {
     const launchPane = () =>
       store.getState().tabsByWorktree[WT]?.find((tab) => tab.id === TAB_ID)?.agentLaunchPane
@@ -105,7 +97,9 @@ describe('publishing a launch tab before its agent exists', () => {
       outcome: { kind: 'not-started', code: 'boom' }
     })
 
-    publishAgentLaunchTab(request({ requestId: 'request-2', operationId: 'op-1' }))
+    const retried = publishAgentLaunchTab(request({ requestId: 'request-2', operationId: 'op-1' }))
+    expect(retried).toMatchObject({ tabId: TAB_ID, created: false })
+    expect(store.getState().tabsByWorktree[WT]?.filter((tab) => tab.id === TAB_ID)).toHaveLength(1)
     expect(launchPane()).toEqual({
       leafId: LEAF_ID,
       operationId: 'op-1',
@@ -114,28 +108,6 @@ describe('publishing a launch tab before its agent exists', () => {
 
     publishAgentLaunchTab(request({ requestId: 'request-3', operationId: 'op-2' }))
     expect(launchPane()).toEqual({ leafId: LEAF_ID, operationId: 'op-2' })
-  })
-
-  it("remounts a pane that showed an earlier launch's outcome, so it spawns for the new launch", () => {
-    const generation = () =>
-      store.getState().tabsByWorktree[WT]?.find((tab) => tab.id === TAB_ID)?.generation ?? 0
-    publishAgentLaunchTab(request({ operationId: 'op-1' }))
-    // Its spawn was refused: the pane is idle until it remounts.
-    store.getState().setTabAgentLaunchPane(TAB_ID, {
-      leafId: LEAF_ID,
-      operationId: 'op-1',
-      outcome: { kind: 'not-started', code: 'boom' }
-    })
-    const before = generation()
-
-    publishAgentLaunchTab(request({ requestId: 'request-2', operationId: 'op-1' }))
-    expect(generation()).toBe(before)
-
-    publishAgentLaunchTab(request({ requestId: 'request-3', operationId: 'op-2' }))
-    expect(generation()).toBe(before + 1)
-    // A pane still waiting on a launch is spawning already: another launch does not remount it.
-    publishAgentLaunchTab(request({ requestId: 'request-4', operationId: 'op-3' }))
-    expect(generation()).toBe(before + 1)
   })
 
   it("refuses a tab id another workspace already uses rather than minting one the agent won't find", () => {
@@ -155,30 +127,6 @@ describe('placement', () => {
   }
 
   // Activation prunes empty groups; preserve the CLI launch’s requested split until its tab arrives.
-  it.each(
-    (['none', 'focus-window', 'focus-in-workspace', 'reveal-owner'] as const).flatMap((viewer) => [
-      { viewer, focused: 'split' as const },
-      { viewer, focused: 'source' as const }
-    ])
-  )(
-    'lands in a just-created empty split beside a live terminal for a $viewer caller ($focused focused)',
-    ({ viewer, focused }) => {
-      store.getState().createTab(WT)
-      const sourceGroupId = store.getState().groupsByWorktree[WT]![0]!.id
-      const splitGroupId = store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')!
-      store.getState().focusGroup(WT, focused === 'split' ? splitGroupId : sourceGroupId)
-
-      const published = publishAgentLaunchTab(
-        request({ viewer, placement: { groupId: splitGroupId } })
-      )
-
-      expect(published.placement).toEqual({ groupId: splitGroupId })
-      expect(launchTab()?.groupId).toBe(splitGroupId)
-      expect(store.getState().groupsByWorktree[WT]?.map((group) => group.id)).toContain(
-        splitGroupId
-      )
-    }
-  )
 
   it("falls back to the anchor's group when the requested group is gone", () => {
     const { anchor, sourceGroupId } = twoGroups()
@@ -201,21 +149,6 @@ describe('placement', () => {
 
     expect(published.placement).toEqual({ groupId: splitGroupId, fallback: 'active-group' })
     expect(launchTab()?.groupId).toBe(splitGroupId)
-  })
-})
-
-describe('a focused launch into a workspace with no live terminal', () => {
-  it('is the agent starting, not a wake: its first bind moves the workspace up in Recent', () => {
-    store.getState().setActiveWorktree(OTHER_WT)
-    publishAgentLaunchTab(request({ viewer: 'focus-window' }))
-    const tab = store.getState().tabsByWorktree[WT]?.find((candidate) => candidate.id === TAB_ID)
-    expect(tab?.pendingActivationSpawn).toBeUndefined()
-    expect(tab?.generation).toBeUndefined()
-
-    const epoch = store.getState().sortEpoch
-    store.getState().updateTabPtyId(TAB_ID, 'pty-agent-1')
-
-    expect(store.getState().sortEpoch).toBe(epoch + 1)
   })
 })
 

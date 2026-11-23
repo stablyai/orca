@@ -18,7 +18,10 @@ import {
 export async function applyAcpMessageOptions(
   session: AcpStructuredSession,
   options: AgentSessionExecutionOptions | undefined,
-  setOption: (key: 'model' | 'effort' | 'fastMode', value: string) => Promise<unknown>,
+  setOption: (
+    key: 'interactionMode' | 'model' | 'effort' | 'fastMode',
+    value: string
+  ) => Promise<unknown>,
   isCurrent: () => boolean,
   signal?: AbortSignal,
   /** The agent's own model command when its model option is absent or rejects the value. */
@@ -27,15 +30,17 @@ export async function applyAcpMessageOptions(
   if (!options) {
     return true
   }
-  for (const key of ['model', 'effort', 'fastMode'] as const) {
+  for (const key of ['interactionMode', 'model', 'effort', 'fastMode'] as const) {
     const value = options[key]
     if (
       value === undefined ||
-      session.options.appliedInput.get(key) === value ||
-      (key === 'fastMode'
-        ? !session.options.write(key, value)
-        : session.options.matchesNativeRestoredOption(key, value) ||
-          (key === 'effort' && !session.options.offersEffort(value)))
+      (key === 'interactionMode'
+        ? !session.options.needsInteractionMode(value)
+        : session.options.appliedInput.get(key) === value ||
+          (key === 'fastMode'
+            ? !session.options.write(key, value)
+            : session.options.matchesNativeRestoredOption(key, value) ||
+              (key === 'effort' && !session.options.offersEffort(value))))
     ) {
       continue
     }

@@ -18,6 +18,7 @@ type ArtifactPublishButtonMocks = {
   closePopover: ((event: Event) => void) | null
   state: {
     orcaProfileAuthStatus: Record<string, unknown>
+    orcaProfileSignInProgress?: { link: string } | null
     settings: { artifactSharingEnabled: boolean }
   }
 }
@@ -34,6 +35,7 @@ const mocks = vi.hoisted<ArtifactPublishButtonMocks>(() => ({
   closePopover: null,
   state: {
     orcaProfileAuthStatus: { configured: true, state: 'connected' },
+    orcaProfileSignInProgress: null,
     settings: { artifactSharingEnabled: true }
   }
 }))
@@ -110,6 +112,7 @@ describe('ArtifactPublishButton', () => {
     mocks.openPopover = null
     mocks.closePopover = null
     mocks.state.orcaProfileAuthStatus = { configured: true, state: 'connected' }
+    mocks.state.orcaProfileSignInProgress = null
     mocks.state.settings = { artifactSharingEnabled: true }
   })
 
@@ -127,5 +130,51 @@ describe('ArtifactPublishButton', () => {
     await waitFor(() => expect(mocks.publish).toHaveBeenCalledWith(createRequest))
     expect(screen.getByText('https://example.com')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Update shared content' })).toBeInTheDocument()
+  })
+
+  it('dismisses on window blur and webview focus without stealing focus back', () => {
+    const onOpenChange = vi.fn()
+    render(
+      <ArtifactPublishButton
+        sourceKey="/repo/report.html"
+        createRequest={vi.fn()}
+        open={true}
+        onOpenChange={onOpenChange}
+      />
+    )
+
+    window.dispatchEvent(new Event('blur'))
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+
+    const closeFocusEvent = new Event('focus', { cancelable: true })
+    mocks.closePopover?.(closeFocusEvent)
+    expect(closeFocusEvent.defaultPrevented).toBe(true)
+
+    onOpenChange.mockClear()
+    const webview = document.createElement('webview')
+    document.body.appendChild(webview)
+    try {
+      webview.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+      expect(onOpenChange).toHaveBeenCalledWith(false)
+    } finally {
+      webview.remove()
+    }
+  })
+
+  it('stays open on window blur while browser sign-in is in progress', () => {
+    mocks.state.orcaProfileAuthStatus = { configured: true, state: 'disconnected' }
+    mocks.state.orcaProfileSignInProgress = { link: 'https://auth.example.com' }
+    const onOpenChange = vi.fn()
+    render(
+      <ArtifactPublishButton
+        sourceKey="/repo/report.html"
+        createRequest={vi.fn()}
+        open={true}
+        onOpenChange={onOpenChange}
+      />
+    )
+
+    window.dispatchEvent(new Event('blur'))
+    expect(onOpenChange).not.toHaveBeenCalled()
   })
 })

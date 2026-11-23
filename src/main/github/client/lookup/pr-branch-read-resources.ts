@@ -88,7 +88,7 @@ export type PRBranchReadRequest = Pick<
   GitHubPRRefreshCandidate,
   'repoPath' | 'branch' | 'localGitOptions'
 > &
-  Partial<Pick<GitHubPRRefreshCandidate, 'connectionId' | 'linkedPRNumber'>>
+  Partial<Pick<GitHubPRRefreshCandidate, 'connectionId' | 'linkedPRNumber' | 'linkedPRUrl'>>
 
 export type PRBranchReadCompletion = (
   outcome: PRRefreshOutcome,

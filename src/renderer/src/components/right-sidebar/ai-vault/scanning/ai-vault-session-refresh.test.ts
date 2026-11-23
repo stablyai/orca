@@ -1,4 +1,4 @@
-import '@/store/slices/agent-status/accepted-agent-statuses'
+import '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'

@@ -66,16 +66,18 @@ export async function readSessionModels(
       known: (model: string) => boolean
     ) => void
     demanded: NonNullable<AgentModelCatalogProgress['demanded']>
-  }
+  },
+  onSessionStarted?: (sessionId: string) => void
 ): Promise<{ models: AgentSessionModelOption[]; attemptedModels: string[] }> {
   const initialized = await connection.initialize()
   assertStructuredAgentResolutionCurrent(operation)
   observeAcpForkSupport(spec.agent, initialized)
   const deletes = Boolean(initialized.agentCapabilities?.sessionCapabilities?.delete)
-  if (!deletes && !listing.sessionFolderArgs) {
+  if (!deletes && !listing.sessionFolderArgs && !listing.discardSession) {
     throw new Error(`${spec.agent} cannot delete a session, so it lists its models only in chats`)
   }
   const started = await startListingSession(connection, workspace, operation)
+  onSessionStarted?.(started.sessionId)
   let stopped = false
   const cleanup = async (): Promise<void> => {
     stopped = true

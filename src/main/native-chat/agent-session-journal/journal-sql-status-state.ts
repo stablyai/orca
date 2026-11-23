@@ -17,7 +17,10 @@ import { AGENT_STATUS_TOOL_NAME_MAX_LENGTH } from '../../../shared/agent-status/
 import { describeToolInput } from '../../../shared/native-chat/tools/native-chat-tool-summary'
 import type { JournalSqlStatusContext } from './journal-sql-status-context'
 import { readJournalSqlOrcaStopCut } from './journal-sql-status-cuts'
-import { readJournalSqlRequestStatus } from './journal-sql-status-requests'
+import {
+  readJournalSqlRequestStatus,
+  readJournalSqlTurnFailure
+} from './journal-sql-status-requests'
 import { readJournalSqlOpenAsyncQuestion } from './journal-sql-status-async-questions'
 
 export type { JournalStatusState } from './journal-status-state'
@@ -27,9 +30,10 @@ import type { JournalStatusState } from './journal-status-state'
 export function readJournalSqlStatusState(
   state: JournalSqlStatusContext,
   currentFence?: number | null,
-  scope?: StructuredAgentSessionWorkScope
+  scope?: StructuredAgentSessionWorkScope,
+  botSession = false
 ): JournalStatusState {
-  const requests = readJournalSqlRequestStatus(state, currentFence)
+  const requests = readJournalSqlRequestStatus(state, currentFence, botSession)
   if (!requests.hasRequest) {
     return {
       summary: { status: null, latestPrompt: '' },
@@ -102,9 +106,13 @@ export function readJournalSqlStatusState(
     currentFence,
     request
   )
+  const turnFailure =
+    turnOutcome === 'failure' ? readJournalSqlTurnFailure(state, floor, request) : undefined
   const openAsyncQuestion = readJournalSqlOpenAsyncQuestion(state, floor)
   return {
     latestRequest: requests.latestRequest,
+    ...(turnFailure ? { turnFailure } : {}),
+    ...(requests.quietAnswer ? { quietAnswer: true as const } : {}),
     owesWork: status !== 'idle' && owesWork,
     pendingPromptIds: status === 'attention' ? actionable.map((item) => item.itemId) : [],
     summary: {

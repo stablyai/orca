@@ -2,7 +2,7 @@ import {
   buildDashboardSnapshotFixture as buildDashboardSnapshot,
   buildDashboardBucketCountsFixture as buildDashboardBucketCounts
 } from './dashboard-snapshot.test-fixture'
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { describe, expect, it, vi } from 'vitest'
 import type { DashboardSnapshotInput as DashboardSnapshotState } from './build-dashboard-snapshot'
 

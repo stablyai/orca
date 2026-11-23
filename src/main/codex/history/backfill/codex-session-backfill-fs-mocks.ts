@@ -1,7 +1,10 @@
 import type * as NodeFs from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
 
+const scanDirectoryReads: string[] = []
+
 export const fsMockState = {
+  scanDirectoryReads,
   failLink: false,
   failLinkTransiently: false,
   failLinkPermission: false,
@@ -16,6 +19,7 @@ export const fsMockState = {
 }
 
 export function resetCodexSessionBackfillFsMocks(): void {
+  fsMockState.scanDirectoryReads = []
   fsMockState.failLink = false
   fsMockState.failLinkTransiently = false
   fsMockState.failLinkPermission = false
@@ -63,6 +67,7 @@ export function createNodeFsMock(actual: typeof NodeFs): typeof NodeFs {
 }
 
 export function createNodeFsPromisesMock(actual: typeof NodeFsPromises): typeof NodeFsPromises {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: wrappers forward the original overloaded arguments and preserve their return values.
   return {
     ...actual,
     mkdir: (...args: Parameters<typeof actual.mkdir>) => {
@@ -103,6 +108,10 @@ export function createNodeFsPromisesMock(actual: typeof NodeFsPromises): typeof 
         throw errnoError('EACCES: hardlink permission denied', 'EACCES')
       }
       return actual.link(...args)
+    },
+    readdir: (...args: Parameters<typeof actual.readdir>) => {
+      fsMockState.scanDirectoryReads.push(String(args[0]))
+      return actual.readdir(...args)
     },
     opendir: (...args: Parameters<typeof actual.opendir>) => {
       if (args[0] === fsMockState.failDirectoryPath) {

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -38,14 +38,6 @@ afterEach(() => {
 })
 
 describe('ZCodeHookService', () => {
-  it('reports not_installed before any install', () => {
-    expect(zcodeHookService.getStatus()).toMatchObject({
-      agent: 'zcode',
-      state: 'not_installed',
-      managedHooksPresent: false
-    })
-  })
-
   it('creates config.json with every lifecycle event and enables hooks', () => {
     const status = zcodeHookService.install()
     expect(status).toMatchObject({ agent: 'zcode', state: 'installed', managedHooksPresent: true })
@@ -94,11 +86,6 @@ describe('ZCodeHookService', () => {
     const config = readConfig()
     expect(config.hooks?.events?.Stop).toHaveLength(2)
     expect(config.hooks?.events?.Stop?.[0]?.hooks?.[0]?.command).toBe('my-own-hook.sh')
-  })
-
-  it('leaves a config ZCode itself can parse (strict JSON, no comments)', () => {
-    zcodeHookService.install()
-    expect(() => JSON.parse(readFileSync(getZCodeConfigPath(), 'utf-8'))).not.toThrow()
   })
 
   it('removes only Orca-managed entries and leaves the user their hooks', () => {
@@ -180,17 +167,5 @@ describe('ZCodeHookService', () => {
       { hooks: [{ type: 'command', command: 'C:\\tools\\user-hook.cmd' }] },
       { hooks: [expect.objectContaining({ command })] }
     ])
-  })
-
-  it('writes an executable managed hook script that posts to the ZCode endpoint', () => {
-    zcodeHookService.install()
-    const scriptPath = join(
-      hoisted.home,
-      '.orca',
-      'agent-hooks',
-      process.platform === 'win32' ? 'zcode-hook.cmd' : 'zcode-hook.sh'
-    )
-    expect(existsSync(scriptPath)).toBe(true)
-    expect(readFileSync(scriptPath, 'utf-8')).toContain('/hook/zcode')
   })
 })

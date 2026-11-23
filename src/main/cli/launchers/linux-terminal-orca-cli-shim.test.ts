@@ -1,4 +1,15 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  readSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -29,7 +40,43 @@ afterEach(async () => {
   await Promise.all(created.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
+function readOpenFile(fd: number): string {
+  const buffer = Buffer.alloc(64 * 1024)
+  const length = readSync(fd, buffer, 0, buffer.length, 0)
+  return buffer.subarray(0, length).toString('utf8')
+}
+
 describe('ensureLinuxTerminalOrcaCliShimDir', () => {
+  it.skipIf(process.platform === 'win32')(
+    'replaces an outdated shim without changing the file a running shell is reading',
+    async () => {
+      const first = await makeFixture()
+      const second = await makeFixture()
+      const shimDir = ensureLinuxTerminalOrcaCliShimDir({
+        userDataPath: first.userDataPath,
+        resourcesPath: first.resourcesPath,
+        appImagePath: null
+      })
+      const shimPath = join(shimDir!, 'orca')
+      const original = readFileSync(shimPath, 'utf8')
+      const reader = openSync(shimPath, 'r')
+      try {
+        ensureLinuxTerminalOrcaCliShimDir({
+          userDataPath: first.userDataPath,
+          resourcesPath: second.resourcesPath,
+          appImagePath: null
+        })
+
+        expect(readOpenFile(reader)).toBe(original)
+        expect(readFileSync(shimPath, 'utf8')).toContain(second.resourcesPath)
+        expect(statSync(shimPath).mode & 0o777).toBe(0o755)
+        expect(readdirSync(shimDir!)).toEqual(['orca'])
+      } finally {
+        closeSync(reader)
+      }
+    }
+  )
+
   it.skipIf(!canFenceAppImageRuntime)(
     'routes first-use AppImage terminals through a fenced current mount without a live endpoint',
     async () => {

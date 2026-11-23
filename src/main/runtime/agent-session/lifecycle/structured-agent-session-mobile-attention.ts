@@ -21,26 +21,43 @@ import {
 } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { isNotificationSourceEnabled } from '../../../../shared/notifications/notification-source-gate'
-import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
+import { botGroupRoomPaneKey } from '../../../../shared/bots/bot-group-room-pane-key'
+import type { BotGroup } from '../../../../shared/bots/bot-group'
 import { buildNotificationOptions } from '../../../ipc/notifications/notification-options'
 import type { MobileNotificationDispatchEvent } from '../../push/notifications/runtime-mobile-notification-controller'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import type { Bot } from '../../../../shared/bot-types'
+import { isBotAttentionSilenced } from '../../../../shared/bot-notifications'
 
 export type StructuredAttentionWorkspaceLabels = { repoLabel?: string; worktreeLabel?: string }
+
+export type BotGroupRoomOfSession = {
+  group: Pick<BotGroup, 'id' | 'folderWorkspaceId'>
+  threadId: string | undefined
+}
 
 export type StructuredAttentionMobileDeliveryDeps = {
   readNotificationSettings: () => NotificationSettings | undefined
   /** In-memory metadata only: a lookup that could wait would let the alert outlive its prompt. */
   readWorkspaceLabels: (scope: AgentSessionExecutionLocation) => StructuredAttentionWorkspaceLabels
-  /** In-memory only, like the labels: "Notify About Hidden Workspaces" is off and the Filters hide it. */
-  isWorkspaceMuted: (scope: AgentSessionExecutionLocation) => boolean
+  /** In-memory only, like the labels: the Filters hide it with "Notify About Hidden Workspaces" off, or its bot's switch is off. */
+  isMuted: (
+    scope: AgentSessionExecutionLocation,
+    news: NonNullable<ReturnType<typeof agentSessionAttentionNews>>
+  ) => boolean
   /** The dispatch context the session's chat row carries, by that row's pane key. */
   readOrchestration: (paneKey: string) => AgentStatusOrchestrationContext | undefined
+  /** The group room a member session talks in; null for any other session. */
+  readBotGroupRoom?: (sessionId: string) => BotGroupRoomOfSession | null
   dispatch: (event: MobileNotificationDispatchEvent) => void
   /** Withdraws a notification this host delivered; a no-op for one it never sent. */
   reconcile: (state: StructuredAttentionState) => void
-  now: () => number
+  now?: () => number
 }
 
 export type StructuredAttentionMobileDelivery = {
@@ -68,6 +85,22 @@ export function readStructuredAttentionWorkspaceLabels(
   }
 }
 
+/** Muted when the Filters hide its workspace with "Notify About Hidden Workspaces" off, or when its
+ *  bot's switch for that news is off (a bot run that couldn't finish is a failed turn in the bot's home). */
+export function isStructuredAttentionMuted(
+  deps: {
+    isWorkspaceMuted: (workspaceId: string) => boolean
+    bots: () => readonly Pick<Bot, 'folderWorkspaceId' | 'notifications'>[]
+  },
+  scope: AgentSessionExecutionLocation,
+  news: NonNullable<ReturnType<typeof agentSessionAttentionNews>>
+): boolean {
+  return (
+    deps.isWorkspaceMuted(scope.workspaceId) ||
+    isBotAttentionSilenced(deps.bots(), scope.workspaceId, news)
+  )
+}
+
 function readLabels(
   deps: StructuredAttentionMobileDeliveryDeps,
   scope: AgentSessionExecutionLocation
@@ -78,6 +111,28 @@ function readLabels(
     // A label is presentation: without one the alert still goes out, worded generically.
     return {}
   }
+}
+
+// A member runs in its bot's home but is answered in its room, so a tap opens the room.
+// Phones have no thread rooms yet: a thread member's tap keeps opening its own chat.
+function tapDestination(
+  deps: StructuredAttentionMobileDeliveryDeps,
+  scope: AgentSessionExecutionLocation,
+  sessionId: string,
+  paneKey: string
+): { worktreeId: string; paneKey: string } {
+  let room: BotGroupRoomOfSession | null = null
+  try {
+    room = deps.readBotGroupRoom?.(sessionId) ?? null
+  } catch {
+    // Navigation only: an unreadable room still alerts, opening the member's chat.
+  }
+  return room && !room.threadId
+    ? {
+        worktreeId: folderWorkspaceKey(room.group.folderWorkspaceId),
+        paneKey: botGroupRoomPaneKey(room.group.id)
+      }
+    : { worktreeId: scope.workspaceId, paneKey }
 }
 
 export function createStructuredAttentionMobileDelivery(
@@ -96,7 +151,7 @@ export function createStructuredAttentionMobileDelivery(
         sessionId
       )
       if (
-        deps.isWorkspaceMuted(scope) ||
+        deps.isMuted(scope, news) ||
         isCoordinatorOnlyChatNews(edge, news.agentState, () => deps.readOrchestration(paneKey))
       ) {
         return
@@ -110,6 +165,9 @@ export function createStructuredAttentionMobileDelivery(
         ...readLabels(deps, scope),
         agentState: news.agentState,
         ...(news.outcome ? { agentTurnOutcome: news.outcome } : {}),
+        ...(edge.type === 'completion' && edge.completion.failure
+          ? { agentFailure: edge.completion.failure }
+          : {}),
         ...(summary ? { agentType: summary.agent } : {}),
         ...(summary?.latestPrompt ? { agentPrompt: summary.latestPrompt } : {}),
         ...(summary?.lastAssistantMessage
@@ -128,13 +186,12 @@ export function createStructuredAttentionMobileDelivery(
       )
       deps.dispatch({
         type: 'notification',
-        emittedAt: deps.now(),
+        emittedAt: (deps.now ?? Date.now)(),
         source: 'agent-task-complete',
         ...(!desktopAllowed ? { desktopAllowed: false } : {}),
         title,
         body,
-        worktreeId: scope.workspaceId,
-        paneKey,
+        ...tapDestination(deps, scope, sessionId, paneKey),
         notificationId: attentionKey,
         attentionKey,
         ...(structuredAttentionOrigin(edge)

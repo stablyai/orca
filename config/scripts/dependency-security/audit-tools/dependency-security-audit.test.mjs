@@ -110,3 +110,20 @@ it.each(['bytes', 'registration', 'lock hash', 'unpatched snapshot'])(
     )
   }
 )
+
+it('accepts auditConfig.ignoreGhsas only when backed by a locked patch exception', () => {
+  const { root } = patchedWorkspace()
+  const ignoredReport = { ...audit(), advisories: {} }
+  expect(() => evaluateSecurityAudit(ignoredReport, '.', [exception], { root, today })).toThrow(
+    'Incomplete vulnerability report'
+  )
+  writeFileSync(
+    join(root, 'pnpm-workspace.yaml'),
+    stringify({
+      auditConfig: { ignoreGhsas: [exception.advisory] },
+      patchedDependencies: { 'example@1.2.3': 'example.patch' }
+    })
+  )
+  const findings = evaluateSecurityAudit(ignoredReport, '.', [exception], { root, today })
+  expect(findings.map((item) => item.blocking)).toEqual([false])
+})

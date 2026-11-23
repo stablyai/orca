@@ -6,6 +6,16 @@ import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/pairing/rel
 import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
 import type { NetworkSourceClass } from '../../transports/websocket/source-admission/network-source-class'
 
+export type DeviceOrcaAccount = { id: string; name: string; computer?: string }
+
+/** Who typed a device's messages: the account claim, its computer, and the relayed phone if any. */
+export type PairedDeviceTypist = DeviceOrcaAccount & { phone?: string }
+
+export type PairedDeviceAccountLookup = (
+  pairedDeviceId: string,
+  connectionClaim?: DeviceOrcaAccount | null
+) => PairedDeviceTypist | null
+
 export type DeviceEntry = {
   deviceId: string
   name: string
@@ -24,6 +34,9 @@ export type DeviceEntry = {
   pushRegistration?: MobilePushRegistration
   // Relayed phones lose access with their parent desktop grant.
   parentDeviceId?: string
+  // The Orca account a paired desktop says it is signed in to (a plain claim, set on each connect);
+  // names who typed its messages in a bot's Slack thread. A relayed phone reads its parent's.
+  orcaAccount?: DeviceOrcaAccount
   phoneKey?: string
   // Grant only at pairing; absent on older rows means no administrative powers.
   grants?: RuntimeDeviceGrant[]
@@ -50,6 +63,17 @@ export type DeviceEntry = {
   ticketFirstSeenAt?: number
   // A plain-http browser re-registers a session-only key from this link on each page load.
   servesSessionBrowsers?: true
+  // Minted by `orca pair` in a terminal this paired client opened; revoking that client revokes this.
+  createdByDeviceId?: string
+  // A phone's desktop installation (the one relaying it, or whose terminal minted its offer), whose
+  // current account claim names its messages; a shared parent row's last claim may be another's.
+  originClientInstanceId?: string
+}
+
+export type PendingOfferOptions = {
+  // Desktop UI only; absent keeps headless offers valid until scanned.
+  offerTtlMs?: number
+  createdByDeviceId?: string
 }
 
 export type TokenDeviceEntry = DeviceEntry & { token: string }

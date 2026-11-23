@@ -1,6 +1,6 @@
 import { isGeminiTerminalTitle as actualIsGeminiTerminalTitle } from '../../../../../../shared/agent-status/title/agent-title-core'
 import { vi } from 'vitest'
-import * as agentStatusStartupSnapshot from '@/hooks/ipc-events/agent-status-startup-snapshot'
+import * as agentStatusStartupSnapshot from '@/hooks/ipc-events/agent-status/agent-status-startup-snapshot'
 import { drainFakeTimerWork, flushAsyncTicks } from './pty-connection-test-async'
 import { takeTerminalTestPanes } from './pty-connection-test-pane-fixtures'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
@@ -45,7 +45,7 @@ export async function installTerminalTestGlobals(): Promise<void> {
   statusSnapshot.settle()
   resetStatusSnapshot = undefined
   // Import after resetModules so the seeded store and connection share one bridge.
-  const actual = await import('@/hooks/ipc-events/agent-status-startup-snapshot')
+  const actual = await import('@/hooks/ipc-events/agent-status/agent-status-startup-snapshot')
   resetStatusSnapshot = actual.registerAgentStatusStartupSnapshot()
   resetStatusSnapshot.settle()
   ;(globalThis as unknown as { window: unknown }).window = {
@@ -121,7 +121,7 @@ export async function loadFreshTerminalModules(): Promise<void> {
   vi.resetModules()
   freshModulesLoaded = true
   resetStatusSnapshot?.dispose()
-  const actual = await import('@/hooks/ipc-events/agent-status-startup-snapshot')
+  const actual = await import('@/hooks/ipc-events/agent-status/agent-status-startup-snapshot')
   resetStatusSnapshot = actual.registerAgentStatusStartupSnapshot()
   resetStatusSnapshot.settle()
 }

@@ -35,6 +35,7 @@ import {
   type StructuredAgentSessionAccountTransitionRead
 } from '../recovery/structured-agent-session-outgrown-child-host'
 import { structuredAgentSessionImmediatePermission } from '../options/structured-agent-session-launch-permission'
+import { closeWhatTheUserClosed } from '../structured-agent-session-user-closed-sends'
 import type { StructuredAgentSessionAcquireAborts } from '../startup/structured-agent-session-acquire-aborts'
 import { settleStructuredAgentSessionLeftovers } from '../termination/structured-agent-session-leftover-settlement'
 import { createStructuredAgentSessionRanRecorder } from '../options/structured-agent-session-ran-options'
@@ -93,6 +94,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   >
 }): StructuredAgentSessionConversationDelivery {
   const { deps, sessions } = input
+  const { launchTools } = deps
   const workHost = { store: deps.store, sessions }
   const outgrown = createStructuredAgentSessionOutgrownChildHost({
     deps,
@@ -104,6 +106,9 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       void loop.wake(sessionId)
     }
   })
+  const owesWork = async (sessionId: string, id: string): Promise<boolean> =>
+    sessions.has(sessionId) &&
+    (await structuredAgentSessionChildOwesWork(outgrown.retainedWork(sessionId, id)))
   const loop = new StructuredAgentSessionDeliveryLoop({
     activityChanged: (id) => sessions.get(id)?.workChanged?.(),
     sessions,
@@ -118,28 +123,19 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       const record = deps.store.getRecord(sessionId)
       return record ? structuredAgentSessionImmediatePermission(deps, record) : null
     },
-    retainedWork: async (sessionId, id) => {
-      const session = sessions.get(sessionId)
-      return (
-        !!session &&
-        (await structuredAgentSessionChildOwesWork(outgrown.retainedWork(sessionId, id)))
-      )
-    },
+    retainedWork: owesWork,
+    ...(launchTools
+      ? {
+          launchToolsRefreshDue: async (sessionId: string, id: string) =>
+            launchTools.outdated(sessionId) && !(await owesWork(sessionId, id))
+        }
+      : {}),
     readiness: input.readiness,
     startFlights: input.startFlights,
     deliveryOrder: input.deliveryOrder,
-    conversationFence: (sessionId) =>
-      structuredAgentSessionConversationFence(deps.store, sessionId),
-    closeWhatTheUserClosed: async (sessionId) => {
-      const session = sessions.get(sessionId)
-      const ended = session?.lastEndedChild
-      return !session || session.child || ended?.cause !== 'user-close'
-        ? true
-        : holdClosedStructuredAgentSessionSends(deps, sessionId, session.journal, {
-            mark: 'settled',
-            select: { acceptedThrough: ended.endedAt }
-          })
-    },
+    conversationFence: (id) => structuredAgentSessionConversationFence(deps.store, id),
+    closeWhatTheUserClosed: (sessionId) => closeWhatTheUserClosed(deps, sessions, sessionId),
+    turnContext: deps.turnContext,
     failureTextContext: async (sessionId) =>
       readStructuredAgentSessionFailureWordsContext(
         deps.store.getConversation(sessionId),

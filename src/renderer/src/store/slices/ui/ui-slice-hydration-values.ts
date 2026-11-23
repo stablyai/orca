@@ -167,7 +167,7 @@ export function hydrateOneShotNoticesSeen(
   }
 }
 
-/** Stale acks/marks are inert (paneKey reuse beats them via stateStartedAt); the sanitizers only bound growth past HYDRATE_MAX_AGE_MS. */
+/** Stale acks/marks/cutoffs are inert (paneKey reuse beats them via stateStartedAt); the sanitizers only bound growth. */
 export function hydrateAgentReadState(
   ui: PersistedUIState
 ): Pick<

@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Terminal } from 'lucide-react'
 import { agentPickerBlankTerminalMatches } from '@/lib/agent-catalog/agent-picker-search'
 import { AgentDefaultContextMenu } from './agent-combobox-items'
+import { AgentPickerResultsScroller } from './AgentPickerResultsScroller'
 import { AgentPickerMenuRow, type AgentPickerMenuLaunch } from './AgentLaunchPickerMenuRow'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { choiceMatches, type AgentPickerChoice } from './agent-picker-search-rows'
@@ -41,13 +42,18 @@ export function useRetiredAgentPickerDrafts(
       return
     }
     const state = useAppStore.getState()
-    const workspaces = new Set([
-      ...Object.values(selectWorktreesByRepo(state) ?? {})
-        .flat()
-        .map((row) => row.id),
-      ...(selectFolderWorkspaces(state) ?? []).map((row) => `folder:${row.id}`)
-    ])
-    const repos = new Set((state.repos ?? []).map((repo) => repo.id))
+    // Built only for drafts that name a workspace or repo; a new bot's picker names neither.
+    let workspaces: Set<string> | undefined
+    let repos: Set<string> | undefined
+    const hasWorkspace = (id: string) =>
+      (workspaces ??= new Set([
+        ...Object.values(selectWorktreesByRepo(state) ?? {})
+          .flat()
+          .map((row) => row.id),
+        ...(selectFolderWorkspaces(state) ?? []).map((row) => `folder:${row.id}`)
+      ])).has(id)
+    const hasRepo = (id: string) =>
+      (repos ??= new Set((state.repos ?? []).map((repo) => repo.id))).has(id)
     retireAgentPickerDrafts(
       entries,
       draftScope,
@@ -57,8 +63,8 @@ export function useRetiredAgentPickerDrafts(
           !(
             host?.kind === 'runtime' && state.removedRuntimeEnvironmentIds?.has(host.environmentId)
           ) &&
-          (!target.worktreeId || workspaces.has(target.worktreeId)) &&
-          (!target.repoId || repos.has(target.repoId))
+          (!target.worktreeId || hasWorkspace(target.worktreeId)) &&
+          (!target.repoId || hasRepo(target.repoId))
         )
       },
       mode
@@ -210,7 +216,7 @@ export function AgentLaunchPickerMenu({
           />
         </div>
       ) : null}
-      <div data-agent-picker-results className="max-h-64 overflow-y-auto scrollbar-sleek">
+      <AgentPickerResultsScroller>
         <div data-agent-picker-agent-results>
           {showBlankTerminal ? (
             <AgentDefaultContextMenu
@@ -289,7 +295,7 @@ export function AgentLaunchPickerMenu({
             </DropdownMenuItem>
           ) : null}
         </div>
-      </div>
+      </AgentPickerResultsScroller>
     </div>
   )
 }

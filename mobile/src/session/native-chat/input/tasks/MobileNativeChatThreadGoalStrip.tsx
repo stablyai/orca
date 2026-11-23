@@ -51,6 +51,12 @@ export function MobileNativeChatThreadGoalStrip({
     return null
   }
   const status = statusText(label, t)
+  const checks = goal.checks
+    ? t('chat.goal.checks', '{{count}} checks', {
+        count: goal.checks,
+        defaultValue_one: '{{count}} check'
+      })
+    : null
   // Goal times are host-stamped; read them on the host's clock.
   const elapsed = formatAgentSessionThreadGoalElapsed(
     agentSessionThreadGoalElapsedSeconds(goal, now - threadGoal.hostClockOffsetMs, runningTurn)
@@ -85,7 +91,10 @@ export function MobileNativeChatThreadGoalStrip({
             <ScrollView style={styles.objectiveScroll} nestedScrollEnabled>
               <Text style={[styles.text, styles.openText]}>
                 <Text style={styles.status}>{status}</Text> {goal.objective}
-                <Text style={styles.elapsed}>{` · ${elapsed}`}</Text>
+                <Text style={styles.elapsed}>{` · ${elapsed}${checks ? ` · ${checks}` : ''}`}</Text>
+                {goal.lastCheck
+                  ? `\n\n${t('chat.goal.last-check', 'Last goal check')}\n${goal.lastCheck}`
+                  : null}
               </Text>
             </ScrollView>
             <Pressable
@@ -132,7 +141,7 @@ export function MobileNativeChatThreadGoalStrip({
       ) : (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${status} ${goal.objective}, ${elapsed}`}
+          accessibilityLabel={`${status} ${goal.objective}, ${elapsed}${checks ? `, ${checks}` : ''}`}
           accessibilityHint={toggleLabel}
           accessibilityState={{ expanded }}
           style={({ pressed }) => [styles.line, pressed && styles.pressed]}
@@ -142,7 +151,9 @@ export function MobileNativeChatThreadGoalStrip({
           <Text style={[styles.text, styles.lineText]} numberOfLines={1} ellipsizeMode="tail">
             <Text style={styles.status}>{status}</Text> {goal.objective}
           </Text>
-          <Text style={[styles.text, styles.elapsed]}>{elapsed}</Text>
+          <Text style={[styles.text, styles.elapsed]}>
+            {checks ? `${elapsed} · ${checks}` : elapsed}
+          </Text>
           {chevron}
         </Pressable>
       )}

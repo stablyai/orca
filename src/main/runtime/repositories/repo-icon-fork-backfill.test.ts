@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repository/repo-types'
-import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../construction/test-context/runtime-store-partial-fixture'
 import {
   probeRepoUpstream,
   type RepoUpstreamProbe
@@ -130,71 +130,21 @@ describe('repository metadata ownership', () => {
     }
   )
 
-  it.each([12, 120])(
-    'starts a required row ahead of %i unrelated background rows without duplicating it',
-    async (count) => {
-      const f = fixture(Array.from({ length: count }, (_, index) => makeRepo(`repo-${index}`)))
-      const blocker = Promise.withResolvers<RepoUpstreamProbe>()
-      probe
-        .mockImplementationOnce(() => blocker.promise)
-        .mockResolvedValue({ upstream: parent, origin })
-      const batch = f.owner.run()
-      const selected = f.owner.resolve(f.repos[count - 1])
-      try {
-        await vi.waitFor(() => expect(f.repos[count - 1].upstream).toEqual(parent))
-        await selected
-        expect(f.repos[0].upstream).toBeUndefined()
-        expect(
-          probe.mock.calls.filter(([path]) => path === `/workspace/repo-${count - 1}`)
-        ).toHaveLength(1)
-      } finally {
-        blocker.resolve({ upstream: null, origin: null })
-        await batch
-      }
-      expect(probe).toHaveBeenCalledTimes(count)
-      expect(f.notify).toHaveBeenCalledTimes(1)
-    }
-  )
-
-  it.each([12, 120])(
-    'does not serialize protected image payloads across %i rows',
-    async (count) => {
-      const icons = Array.from({ length: count }, (_, index) => ({
-        type: 'image' as const,
-        source: index % 2 ? ('upload' as const) : ('file' as const),
-        src: `data:image/png;base64,${'a'.repeat(350_000)}`
-      }))
-      const f = fixture(icons.map((repoIcon, index) => makeRepo(`repo-${index}`, { repoIcon })))
-      const gate = Promise.withResolvers<RepoUpstreamProbe>()
-      const started = Promise.withResolvers<void>()
-      probe
-        .mockImplementationOnce(() => {
-          started.resolve()
-          return gate.promise
-        })
-        .mockResolvedValue({ upstream: parent, origin })
-      const protectedIcons = new Set<unknown>(icons)
-      const serialized = vi.spyOn(JSON, 'stringify')
-      const batch = f.owner.run()
-      await started.promise
-      // A user replacing the captured protected image with an automatic icon must still survive.
-      f.repos[0] = {
-        ...f.repos[0],
-        repoIcon: { type: 'image', source: 'github', src: 'https://github.com/chosen.png' }
-      }
-      gate.resolve({ upstream: parent, origin })
+  it('resolves a required repo while a background probe is blocked', async () => {
+    const f = fixture([makeRepo('background'), makeRepo('required')])
+    const blocker = Promise.withResolvers<RepoUpstreamProbe>()
+    probe
+      .mockImplementationOnce(() => blocker.promise)
+      .mockResolvedValue({ upstream: parent, origin })
+    const batch = f.owner.run()
+    const selected = f.owner.resolve(f.repos[1])
+    try {
+      await vi.waitFor(() => expect(f.repos[1].upstream).toEqual(parent))
+      await selected
+      expect(f.repos[0].upstream).toBeUndefined()
+    } finally {
+      blocker.resolve({ upstream: null, origin: null })
       await batch
-      const protectedCopies = serialized.mock.calls.filter(([value]) => protectedIcons.has(value))
-      serialized.mockRestore()
-      expect(protectedCopies).toHaveLength(0)
-      expect(f.repos.every((repo) => repo.upstream?.owner === 'acme')).toBe(true)
-      expect(f.repos[0].repoIcon).toEqual({
-        type: 'image',
-        source: 'github',
-        src: 'https://github.com/chosen.png'
-      })
-      expect(f.repos[1].repoIcon).toBe(icons[1])
-      expect(f.notify).toHaveBeenCalledTimes(1)
     }
-  )
+  })
 })

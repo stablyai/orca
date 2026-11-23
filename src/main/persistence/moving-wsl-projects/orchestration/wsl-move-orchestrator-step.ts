@@ -3,6 +3,7 @@
  * preview and, when it is clear, the move. Every wait re-reads the record, so a choice the user
  * made meanwhile (a release, Not now) wins over the step's stale view.
  */
+import { wslMoveStartFieldsOf } from '../../../../shared/wsl-move/wsl-move-request'
 import type {
   WslMovePreview,
   WslMoveResult
@@ -147,7 +148,8 @@ export async function runWslMoveOrchestratorStep(
   }
   const started = record
   // The port re-checks this once it has the window's panes, just before the driver claims the run.
-  const result = await settle(() => ports.start(distro, () => !changedUnder(started)))
+  const fromPreview = wslMoveStartFieldsOf(preview.outcome === 'ready' ? preview : null)
+  const result = await settle(() => ports.start(distro, () => !changedUnder(started), fromPreview))
   if (!changedUnder(record)) {
     commit(apply(record, result), result)
   }

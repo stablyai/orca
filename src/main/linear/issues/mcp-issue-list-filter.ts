@@ -59,7 +59,13 @@ function nullableNamedFilter(value: string): object {
   return value === 'null' ? { null: true } : namedFilter(value)
 }
 
+// `open`: any state not done or canceled, for "what is still on my plate".
+const OPEN_STATE = 'open'
+
 function workflowStateFilter(value: string): object {
+  if (value.toLowerCase() === OPEN_STATE) {
+    return { type: { nin: ['completed', 'canceled'] } }
+  }
   const filter = namedFilter(value) as { or: object[] }
   filter.or.push({ type: { eqIgnoreCase: value } })
   return filter

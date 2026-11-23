@@ -72,7 +72,11 @@ export class TerminalSessionTeardown {
     if (!session.launchAgent && !immediate && process.platform === 'win32') {
       // The PTY job would also end `start /b` and GUI children, which a graceful close leaves running.
       if (session.beginTermination()) {
-        session.signalTerminationRoot()
+        try {
+          session.signalTerminationRoot()
+        } catch (error) {
+          return Promise.reject(error)
+        }
         session.scheduleForceDisposeFallback()
       }
       return

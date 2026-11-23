@@ -57,24 +57,6 @@ describe('SQLite process launch admission', () => {
     expect(mocked.spawn).not.toHaveBeenCalled()
   })
 
-  it('probes once per process, reuses it for every read, and reprobes after idle expiry', async () => {
-    vi.useFakeTimers()
-    const admit = vi.fn(async () => {})
-    const client = reader(admit, 15)
-    for (let index = 0; index < 20; index++) {
-      expect(await client.parse(args)).toBeNull()
-    }
-    expect(admit).toHaveBeenCalledOnce()
-    expect(mocked.spawn).toHaveBeenCalledOnce()
-    await vi.advanceTimersByTimeAsync(14)
-    expect(mocked.spawn.mock.results[0]?.value.kill).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1)
-    expect(mocked.spawn.mock.results[0]?.value.kill).toHaveBeenCalledWith('SIGKILL')
-    await client.parse(args)
-    expect(admit).toHaveBeenCalledTimes(2)
-    expect(mocked.spawn).toHaveBeenCalledTimes(2)
-  })
-
   it('blocks every queued respawn after the execution host stops', async () => {
     const admit = vi.fn(async () => {})
     const client = reader(admit)

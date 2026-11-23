@@ -15,10 +15,10 @@ import {
   shouldOfferWslHost,
   wslHostOfferFor,
   type ExistingWslHostOffer
-} from '../../wsl-host-offer'
-import type { WslHostOffer } from '../../wsl-host-offer-actions'
-import { resolveWslMappedDrivePath } from '../../wsl-mapped-drive-path'
-import { wslHostOfferProjectRef } from '../../wsl-host-offer-move'
+} from './wsl-host-offer'
+import type { WslHostOffer } from './wsl-host-offer-actions'
+import { resolveWslMappedDrivePath } from './wsl-mapped-drive-path'
+import { wslHostOfferProjectRef } from '../../../wsl-move/wsl-host-offer-move'
 
 type PendingOffer =
   | ({ kind: 'run-host' } & WslHostOffer)

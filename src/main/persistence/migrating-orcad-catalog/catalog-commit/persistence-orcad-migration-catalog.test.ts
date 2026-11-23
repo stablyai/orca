@@ -7,7 +7,13 @@ import {
   dormantState,
   manifest
 } from './persistence-orcad-migration-catalog-fixture'
-import { createStore, readDataFile, testState, writeDataFile } from '../../persistence-test-harness'
+import {
+  closeTestStores,
+  createStore,
+  readDataFile,
+  testState,
+  writeDataFile
+} from '../../persistence-test-harness'
 
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
@@ -31,7 +37,8 @@ describe('orcad migration catalog persistence', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-migration-catalog-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 

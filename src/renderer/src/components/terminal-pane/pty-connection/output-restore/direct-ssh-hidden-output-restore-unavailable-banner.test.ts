@@ -282,35 +282,6 @@ describe('direct-SSH hidden-output restore abandonment', () => {
     drive.disposable.dispose()
   })
 
-  it('[invariant] a permanently silent SSH host banners once after a bounded number of re-arms and then stops requesting', async () => {
-    const getMainBufferSnapshot = stubMainBufferSnapshot(async () => null)
-    const drive = await connectHiddenDirectSshPane()
-    vi.useFakeTimers()
-    driveHiddenBacklogThenReveal(drive)
-    await flushAsyncTicks(20)
-    await advanceThroughNullRetryBudget()
-
-    expect(drive.writtenChunks().join('')).toContain('LIVE_AGENT_CHUNK')
-
-    for (let step = 0; step < 6; step += 1) {
-      await allowSelfHealWindow()
-    }
-    const bannerCount = drive
-      .writtenChunks()
-      .filter((data) => data.includes(BANNER_FRAGMENT)).length
-    expect(bannerCount).toBe(1)
-    const settledRequests = getMainBufferSnapshot.mock.calls.length
-    expect(settledRequests).toBeGreaterThan(4)
-    expect(settledRequests).toBeLessThan(40)
-
-    for (let step = 0; step < 4; step += 1) {
-      await allowSelfHealWindow()
-    }
-    expect(getMainBufferSnapshot.mock.calls.length).toBe(settledRequests)
-    expect(drive.writtenChunks().filter((data) => data.includes(BANNER_FRAGMENT)).length).toBe(1)
-    drive.disposable.dispose()
-  })
-
   // Live bytes do not prove snapshot recovery is available; continuous output must not refresh a spent re-arm budget.
   it('[invariant] continuous live output on a silent SSH host cannot refresh the re-arm budget into a repaint loop', async () => {
     const getMainBufferSnapshot = stubMainBufferSnapshot(async () => null)

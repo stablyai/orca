@@ -395,7 +395,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       )
     })
 
-    it('keeps recovery persistence suspended across an adapter restart after seed failure', async () => {
+    it('protects recovered history through checkpoint and sleep after a failed seed and restart', async () => {
       const sessionId = 'cold-restore-seed-failure'
       const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
       mkdirSync(sessionDir, { recursive: true })
@@ -436,43 +436,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         expect(readFileSync(join(sessionDir, 'scrollback.bin'), 'utf8')).toContain(
           'recovered marker'
         )
-      } finally {
-        writeSyncSpy.mockRestore()
-      }
-    })
-
-    // Do not re-adopt panes suspended after seed failure: Wake must retain their restore history (#33425).
-    it('keeps a seed-failed session suspended when it is slept after an adapter restart', async () => {
-      const sessionId = 'cold-restore-seed-failure-sleep'
-      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
-      mkdirSync(sessionDir, { recursive: true })
-      writeFileSync(
-        join(sessionDir, 'meta.json'),
-        JSON.stringify({
-          cwd: '/tmp',
-          cols: 80,
-          rows: 24,
-          startedAt: '2026-07-10T08:00:00Z',
-          endedAt: null,
-          exitCode: null
-        })
-      )
-      writeFileSync(join(sessionDir, 'scrollback.bin'), 'recovered marker\r\n')
-
-      const first = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-      const originalWriteSync = HeadlessEmulator.prototype.writeSync
-      const writeSyncSpy = vi
-        .spyOn(HeadlessEmulator.prototype, 'writeSync')
-        .mockImplementation(function (this: HeadlessEmulator, data) {
-          return data.includes('recovered marker') ? false : originalWriteSync.call(this, data)
-        })
-      try {
-        await first.spawn({ cols: 80, rows: 24, sessionId })
-        lastSubprocess._simulateData('fresh-only output\r\n')
-        await first.disconnectOnly()
-
-        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-        await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+        // Sleep must not re-adopt the suspended session and overwrite its restore history (#33425).
         await historyAdapter.shutdown(sessionId, { immediate: true, keepHistory: true })
 
         expect(existsSync(join(sessionDir, 'checkpoint.json'))).toBe(false)

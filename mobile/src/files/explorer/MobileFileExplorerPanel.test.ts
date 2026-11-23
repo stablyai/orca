@@ -97,6 +97,17 @@ vi.mock('expo-router', () => ({
 }))
 
 vi.mock('lucide-react-native', () => ({
+  ArrowDown: 'ArrowDown',
+  ArrowDownUp: 'ArrowDownUp',
+  ArrowUp: 'ArrowUp',
+  Check: 'Check',
+  CircleSlash: 'CircleSlash',
+  CloudUpload: 'CloudUpload',
+  GitBranch: 'GitBranch',
+  GitPullRequestArrow: 'GitPullRequestArrow',
+  History: 'History',
+  Link: 'Link',
+  RefreshCw: 'RefreshCw',
   ChevronDown: 'ChevronDown',
   ChevronLeft: 'ChevronLeft',
   ChevronRight: 'ChevronRight',

@@ -182,6 +182,9 @@ export async function expectUsageLimitCompletionRollback({
   expect(journal.physicalCursor().epoch).toBe(physical)
   expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('provider-succeeded')
   expect(store.getRecord(HOST_TEST_SESSION)?.usageLimitContinueCancel).toBeUndefined()
+  expect(store.getOperationRow('desktop', request.envelope.clientOperationId)?.outcome).toEqual({
+    status: 'pending'
+  })
   await withTestAgentSessionDatabase(directory, (db) =>
     db.exec('DROP TRIGGER fail_rewind_completion')
   )
@@ -198,6 +201,11 @@ export async function expectUsageLimitCompletionRollback({
     agentJournalItemKey({ provider: 'orca', clientMessageId: 'kept-limit' })
   ])
   expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
+  expect(
+    store.getOperationRow('desktop', request.envelope.clientOperationId)?.outcome
+  ).toMatchObject({
+    status: 'succeeded'
+  })
   expect(replace).toHaveBeenCalledTimes(1)
   expect(rewind).toHaveBeenCalledTimes(1)
   replace.mockRestore()

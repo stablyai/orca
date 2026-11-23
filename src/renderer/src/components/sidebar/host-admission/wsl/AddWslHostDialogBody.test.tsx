@@ -49,33 +49,6 @@ describe('AddWslHostDialogBody', () => {
     progress = null
   })
 
-  it('names the install lock an Add waits on instead of the generic setup hint', async () => {
-    render(<Harness />)
-    const add = await screen.findByRole('button', { name: 'Add host' })
-    await waitFor(() => expect(add.hasAttribute('disabled')).toBe(false))
-    fireEvent.click(add)
-    await waitFor(() => expect(progress).not.toBeNull())
-    expect(screen.getByText(/Installing and starting the Orca server/)).toBeTruthy()
-
-    const waiting =
-      'Waiting for another Orca install in this distro to finish. If it doesn’t, Orca stops waiting in about 2 minutes.'
-    act(() =>
-      progress?.({
-        distro: 'Ubuntu',
-        detail: waiting,
-        detailCode: 'installLockWaitGivesUp',
-        detailParams: { count: 2 }
-      })
-    )
-    expect(screen.getByText(waiting)).toBeTruthy()
-    expect(screen.queryByText(/Installing and starting the Orca server/)).toBeNull()
-
-    // Once the lock is taken, the setup hint returns.
-    act(() => progress?.({ distro: 'Ubuntu', detail: null }))
-    expect(screen.queryByText(waiting)).toBeNull()
-    expect(screen.getByText(/Installing and starting the Orca server/)).toBeTruthy()
-  })
-
   // Another window's Add broadcasts to every window; it must not touch this dialog's wait.
   it('ignores another distro’s Add progress and matches its own case-insensitively', async () => {
     const hosts = window.api.runtimeEnvironments?.wslHosts

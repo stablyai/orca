@@ -240,7 +240,7 @@ async function runFixture(): Promise<FixtureResult> {
     rendererEntry(
       join(
         process.cwd(),
-        'src/renderer/src/components/browser-pane/browser-client-page-renderer-installation.ts'
+        'src/renderer/src/components/browser-pane/host-guest/client-pages/browser-client-page-renderer-installation.ts'
       )
     )
   )

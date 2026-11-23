@@ -110,7 +110,7 @@ export function PrTabEmptyState({ tab, branchCompare }: Props) {
           key="link"
           title={t(
             'pullRequest.prSidebarCreateEmptyState.linkExistingPullRequest',
-            'Link an existing pull request'
+            'Link pull request'
           )}
           leading={<Link2 size={18} color={colors.textSecondary} strokeWidth={2} />}
           navigates

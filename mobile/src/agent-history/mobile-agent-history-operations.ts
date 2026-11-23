@@ -3,6 +3,7 @@ import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import { connectionHostStatusRead } from '../query/host-status-query'
 import {
   agentHistoryHostStatusSchema,
+  agentHistoryProjectSetupsSchema,
   agentHistorySessionScanSchema,
   resumeMetadataListSchema,
   resumeRepoListSchema
@@ -26,6 +27,17 @@ export const agentHistoryCapabilityRead = connectionHostStatusRead(agentHistoryH
 
 // Live: resume quotes for the desktop's Windows shell setting, which can change while connected.
 export const agentHistoryHostStatusRead = connectionHostStatusRead(agentHistoryHostStatus, 'live')
+
+// Best-effort: a host that can't list setups leaves Project scoped to the active repo.
+export const agentHistoryProjectSetupsRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'projectHostSetup.agent-history-project-scope-or-skip',
+    method: 'projectHostSetup.list',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('agent-history-project-setups', agentHistoryProjectSetupsSchema)
+  })
+)
 
 export const agentHistorySessionScan = bindDeferredRpcOperation(
   defineRpcOperation({

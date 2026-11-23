@@ -18,11 +18,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
 import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
-import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
+import { presentGitHubPRMergeState } from '@/components/github/github-pr-merge-state'
 import { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-requests/merge/pull-request-merge-methods'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import { useTranslate } from '@/i18n/use-translate'
@@ -36,6 +36,7 @@ import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function PRActionsPanel({
   item,
+  headSha,
   repoPath,
   repoId,
   sourceContext,
@@ -45,6 +46,8 @@ export function PRActionsPanel({
   onMutated
 }: {
   item: GitHubWorkItem
+  /** Head from the loaded details; falls back to the list item's head. */
+  headSha: string | undefined
   repoPath: string | null
   repoId: string | null
   sourceContext?: TaskSourceContext | null
@@ -174,6 +177,7 @@ export function PRActionsPanel({
                     mergeDisabled,
                     method,
                     item,
+                    expectedHeadSha: headSha ?? item.headSha ?? null,
                     repoPath,
                     repoId,
                     sourceContext,

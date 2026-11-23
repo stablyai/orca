@@ -138,6 +138,7 @@ export function fakeClaude(
       initialization,
       pauseReading: () => {},
       resumeReading: () => {},
+      mcpServerStatus: async () => [],
       initializationResult: () => initialization.read(connection.calls),
       renameSession: async () => {},
       getContextUsage: async () => {

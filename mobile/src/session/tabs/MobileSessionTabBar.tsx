@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Plus } from 'lucide-react-native'
+import { Bell, Plus } from 'lucide-react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   Easing,
@@ -90,8 +90,15 @@ export function MobileSessionTabBar({
   const keepsKeyboard = useKeyboardPersistingTaps('handled')
   const now = useNow(60_000)
   const rows = useMemo(
-    () => visibleTabs.map((tab) => buildMobileSessionTabSummary(tab, terminals, now)),
-    [visibleTabs, terminals, now]
+    () =>
+      visibleTabs.map((tab) => {
+        const summary = buildMobileSessionTabSummary(tab, terminals, now)
+        // The tab on screen is being read (useMarkViewedAgentRead), so it never rings.
+        return summary.unread && tab.id === activeSessionTabId
+          ? { ...summary, unread: false }
+          : summary
+      }),
+    [visibleTabs, terminals, now, activeSessionTabId]
   )
   const activeIndex = rows.findIndex((row) => row.tab.id === activeSessionTabId)
   const active: MobileSessionTabSummary | undefined = rows[activeIndex]
@@ -173,8 +180,10 @@ export function MobileSessionTabBar({
   ]
     .filter(Boolean)
     .join(', ')
+  const anyUnread = rows.some((row) => row.unread)
   const countAccessibilityLabel = [
     countLabel,
+    anyUnread ? t('agents.list.unread', 'Unread') : null,
     othersNeedYou ? t('session.tabBar.anotherNeedsYou', 'another tab needs you') : null
   ]
     .filter(Boolean)
@@ -260,6 +269,7 @@ export function MobileSessionTabBar({
         <View style={styles.countBox}>
           <Text style={styles.countText}>{rows.length}</Text>
         </View>
+        {anyUnread ? <Bell size={12} color={colors.statusAmber} fill={colors.statusAmber} /> : null}
         {othersNeedYou ? <View style={styles.alert} /> : null}
       </Pressable>
       {/* A collapsed bar's + lives in the header's ⋯ menu. */}

@@ -8,7 +8,10 @@ import type { CheckMailReconciliation } from './check-mail-reconciliation'
 import { currentDispatchAssigneeRun } from './recipient-routing'
 import { callerHoldsDispatchPane, dispatchFenced } from './dispatch-mailbox-fence'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
-import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import type {
+  OrchestrationEntryCaller,
+  OrchestrationSessionCaller
+} from '../../../../orchestration/addressing/orchestration-caller-identity'
 import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import type { z } from 'zod'
 
@@ -20,6 +23,7 @@ export async function checkRunPendingMail(args: {
   handle: string
   paneKey: string | undefined
   callerSession: OrchestrationEntryCaller | undefined
+  reader: OrchestrationSessionCaller | undefined
   typeFilter: MessageType[] | undefined
   signal: AbortSignal | undefined
   revalidateConsumer: () => void
@@ -87,6 +91,7 @@ export async function checkRunPendingMail(args: {
   ) {
     const result = await checkWorkerMailbox({
       params: { ...params, ack: residualAck, wait: false },
+      reader: args.reader,
       runtime,
       db,
       handle,

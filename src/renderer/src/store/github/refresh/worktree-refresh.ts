@@ -1,3 +1,4 @@
+import { getWorktreeGitHubPRUrl } from '../../../../../shared/worktree/github-linked-item-url'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -277,6 +278,7 @@ export function buildPRRefreshCandidate(
     isSelected: state.activeWorktreeId === worktree.id,
     // Why: persisted linked PR metadata is exact; PR cache numbers are only fallback hints after branch-lookup misses.
     linkedPRNumber: worktree.linkedPR ?? null,
+    linkedPRUrl: getWorktreeGitHubPRUrl(worktree, worktree.linkedPR),
     fallbackPRNumber,
     fallbackPRSource,
     isBare: worktree.isBare,

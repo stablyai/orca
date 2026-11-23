@@ -92,6 +92,7 @@ const { syncCodexGlobalInstructionsIntoManagedHome } =
   await import('../../configuration/homes/codex-home-paths')
 const { markCopiedResource } =
   await import('../../configuration/homes/codex-managed-home-resource-copy-marker')
+const { snapshotCodexRuntimeHookTrustProvenance } = await import('./hook-trust-promotion')
 
 let fakeHomeDir: string
 let userDataDir: string
@@ -211,6 +212,20 @@ describe('STA-4737 promotion must not rebuild a system config it could not read'
 
     expect(realFs.readFileSync(systemConfigPath(), 'utf-8')).toBe(before)
   })
+})
+
+it('preserves the original hook trust provenance when its snapshot cannot be read', () => {
+  const provenancePath = join(runtimeHome(), '.orca-hook-trust-provenance.json')
+  const recorded = JSON.stringify({
+    version: 1,
+    entries: { 'orca-hooks:stop:0:0': { trustedHash: 'sha256:orca', enabled: true } }
+  })
+  realFs.writeFileSync(runtimeConfigPath(), 'model = "m"\n', 'utf-8')
+  realFs.writeFileSync(provenancePath, recorded, 'utf-8')
+  denials.deny(provenancePath)
+
+  expect(snapshotCodexRuntimeHookTrustProvenance(runtimeHome())).toBe(false)
+  expect(realFs.readFileSync(provenancePath, 'utf-8')).toBe(recorded)
 })
 
 describe('STA-4737 the resource sync must not delete a mirror whose source it could not read', () => {

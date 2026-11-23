@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { View } from 'react-native'
+import { Platform, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { triggerSelection } from '../../platform/haptics/haptics'
 import { colors, feedback, radii } from '../../theme/mobile-theme'
@@ -25,6 +25,7 @@ export type MobileSliderProps = {
 const THUMB = 26
 const TRACK_HEIGHT = 4
 const HEIGHT = 44
+const WEB = Platform.OS === 'web'
 
 /**
  * A stepped slider drawn like iOS's: a thin track filled blue up to a white thumb.
@@ -93,11 +94,29 @@ export function MobileSlider({
   const fraction = max > min ? (Math.min(max, Math.max(min, value)) - min) / (max - min) : 0
   const thumbLeft = Math.max(0, width - THUMB) * fraction
 
-  const stepBy = (direction: 1 | -1): void => {
-    const next = Math.min(max, Math.max(min, Number((value + direction * step).toFixed(6))))
+  const stepTo = (target: number): void => {
+    const next = Math.min(max, Math.max(min, Number(target.toFixed(6))))
     if (next !== value) {
       onValueChange(next)
       onSlidingComplete?.(next)
+    }
+  }
+  const stepBy = (direction: 1 | -1): void => stepTo(value + direction * step)
+  // React Native Web drops accessibility actions, so a page slider takes keys instead.
+  const keyTarget = (key: string): number | null => {
+    switch (key) {
+      case 'ArrowRight':
+      case 'ArrowUp':
+        return value + step
+      case 'ArrowLeft':
+      case 'ArrowDown':
+        return value - step
+      case 'Home':
+        return min
+      case 'End':
+        return max
+      default:
+        return null
     }
   }
 
@@ -119,6 +138,18 @@ export function MobileSlider({
             stepBy(-1)
           }
         }}
+        focusable={WEB && !disabled}
+        onKeyDown={
+          WEB && !disabled
+            ? (event) => {
+                const target = keyTarget(event.nativeEvent.key)
+                if (target !== null) {
+                  event.preventDefault()
+                  stepTo(target)
+                }
+              }
+            : undefined
+        }
         testID={testID}
       >
         <View style={styles.track}>

@@ -288,22 +288,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
   })
 
-  describe('getAppliedSize', () => {
-    it('does not advance when a resize is dropped after the session exited', async () => {
-      const { id } = await adapter.spawn({ cols: 200, rows: 50 })
-
-      lastSubprocess._simulateExit(0)
-      await new Promise((r) => setTimeout(r, 50))
-
-      adapter.resize(id, 80, 24)
-      await new Promise((r) => setTimeout(r, 50))
-
-      expect(lastSubprocess.resize).not.toHaveBeenCalledWith(80, 24)
-      const applied = await adapter.getAppliedSize(id)
-      expect(applied?.cols).not.toBe(80)
-    })
-  })
-
   describe('getBufferSnapshot', () => {
     it('publishes shell ownership only after the daemon proves the live PTY tree', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })

@@ -111,7 +111,8 @@ it('reports current visibility when registration completes, without treating reg
   expect(f.report).toHaveBeenCalledTimes(1)
 })
 
-it.each([200, 2000])('keeps ordinary activity and one due event page-local at N=%i', (count) => {
+it('keeps ordinary activity and one due event page-local among 2000 guests', () => {
+  const count = 2000
   const f = fixture()
   for (let id = 1; id <= count; id++) {
     f.add(id)

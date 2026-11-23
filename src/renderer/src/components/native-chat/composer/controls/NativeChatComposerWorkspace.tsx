@@ -14,6 +14,8 @@ import {
   type NativeChatComposerWorkspaceTarget
 } from './native-chat-composer-workspace'
 import { NativeChatComposerBranchPicker } from './NativeChatComposerBranchPicker'
+import { NativeChatSlackMirrorItem } from '../../slack-mirror/NativeChatSlackMirrorItem'
+import { NativeChatAntigravityAuthChip } from '../../antigravity-auth/NativeChatAntigravityAuthChip'
 
 // Trim to cap height so flex centering aligns glyphs with icons; clip x only to keep descenders.
 const FOOTER_TEXT =
@@ -168,6 +170,7 @@ export function NativeChatComposerWorkspace({
           </TooltipContent>
         </Tooltip>
       )}
+      <NativeChatSlackMirrorItem />
       {identity && (
         <div className="flex min-w-[min(100%,calc(var(--spacing)*18))] flex-1 items-center">
           {identity.kind === 'branch' &&
@@ -193,6 +196,9 @@ export function NativeChatComposerWorkspace({
           )}
         </div>
       )}
+      <span className="ml-auto flex min-w-0 shrink items-center empty:hidden">
+        <NativeChatAntigravityAuthChip textClassName={FOOTER_TEXT} />
+      </span>
     </div>
   )
 }

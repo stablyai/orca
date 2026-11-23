@@ -17,7 +17,7 @@ export function isWindowsOrcadCellId(id: string): id is WindowsOrcadCellId {
 /** Relay-to-managed conversion through the app (tests/e2e). */
 const WINDOWS_CONVERT_CELL_ID = 'orcad-convert'
 
-/** Bundled CLI cells: tests/e2e/ssh-orcad-windows-cli-matrix.spec.ts. */
+/** Descriptor compatibility for the retired bundled CLI cells. */
 const WINDOWS_CLI_MATRIX_CELL_IDS = ['orcad-cli-managed', 'orcad-cli-convert'] as const
 type WindowsCliMatrixCellId = (typeof WINDOWS_CLI_MATRIX_CELL_IDS)[number]
 

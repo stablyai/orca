@@ -200,7 +200,11 @@ export const GitGenerateCommitMessage = WorktreeSelector.extend({
   sourceControlAi: SourceControlAiSettings.optional(),
   sourceControlAiResolvedParams: ResolvedSourceControlAiGenerationParams.optional(),
   agentCmdOverrides: z.record(z.string(), z.string()).optional(),
-  defaultTuiAgent: OptionalTuiAgent.nullable(),
+  // Why: 'blank' (Blank terminal) picks the same fallback agent as null.
+  defaultTuiAgent: z.preprocess(
+    (value) => (value === 'blank' ? null : value),
+    OptionalTuiAgent.nullable()
+  ),
   commitMessageDiscoveryHostKey: z.string().optional()
 })
 

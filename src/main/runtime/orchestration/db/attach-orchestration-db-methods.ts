@@ -1,9 +1,14 @@
 import { attachCrewMutationNotifications } from '../crew/crew-mutation-notifications'
 import { attachAttemptObservationStore } from './attempt-observation-store'
+import { attachBotRequestStore } from './bot-requests/bot-request-store'
+import { attachBotConversationActsForStore } from './bot-requests/bot-conversation-acts-for-store'
+import { attachBotRunResendStore } from './bot-requests/bot-run-resend-store'
+import { attachBotRequestOutcomes } from './bot-requests/bot-request-outcomes'
 import { attachCoordinatorRunStore } from './coordinator-runs/coordinator-run-store'
 import { attachDecisionGateStore } from './decision-gates/decision-gate-store'
 import { attachDispatchCompletion } from './dispatch-context/dispatch-completion'
 import { attachDispatchContextStore } from './dispatch-context/dispatch-context-store'
+import { attachDispatchLinksById } from './dispatch-context/dispatch-links-by-id'
 import { attachDispatchLookup } from './dispatch-context/dispatch-lookup'
 import { attachDispatchDepth } from './dispatch-depth'
 import { attachWorkerReportSettlement } from './dispatch-context/worker-report-settlement'
@@ -63,6 +68,10 @@ import { attachWorkerTerminalTransfer } from './worker-terminal/worker-terminal-
 
 export function attachOrchestrationDbMethods(ctor: { prototype: object }): void {
   attachAttemptObservationStore(ctor)
+  attachBotRequestStore(ctor)
+  attachBotConversationActsForStore(ctor)
+  attachBotRunResendStore(ctor)
+  attachBotRequestOutcomes(ctor)
   attachCreateTables(ctor)
   attachSchemaMigrate(ctor)
   attachSchemaColumnProbes(ctor)
@@ -116,6 +125,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachWorkerTerminalAutoRelease(ctor)
   attachWorkerTerminalListing(ctor)
   attachDispatchContextStore(ctor)
+  attachDispatchLinksById(ctor)
   attachDispatchLookup(ctor)
   attachDispatchDepth(ctor)
   attachDispatchCompletion(ctor)

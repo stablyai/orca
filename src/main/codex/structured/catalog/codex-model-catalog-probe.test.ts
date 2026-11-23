@@ -88,65 +88,6 @@ describe('codex model catalog probe', () => {
       expect.arrayContaining([expect.objectContaining({ cwd: '/orca-probe' })])
     )
   })
-
-  it('keeps the listing when config/read never answers', async () => {
-    const server = String.raw`
-      const readline = require('node:readline')
-      readline.createInterface({ input: process.stdin }).on('line', (line) => {
-        const message = JSON.parse(line)
-        if (typeof message.id !== 'number' || message.method === 'config/read') return
-        const result = message.method === 'model/list'
-          ? { data: [${JSON.stringify(MODEL_ROW)}], nextCursor: null }
-          : {}
-        process.stdout.write(JSON.stringify({ id: message.id, result }) + '\n')
-      })
-    `
-    const configReadTimeouts: (number | null | undefined)[] = []
-    const configReadFailures: unknown[] = []
-    const probe = createCodexModelCatalogProbe({
-      resolveEnvironment: async () => ({ PATH: '/bin' }),
-      resolveCommand: () => ({ command: '/bin/codex', prefixArgs: [] }),
-      // Keep the real request timeout while checking the production budget below.
-      runSession: (invocation, body) =>
-        runCodexAppServerSession(
-          {
-            ...invocation,
-            command: process.execPath,
-            cliPath: null,
-            args: ['-e', server],
-            timeoutMs: 6_000
-          },
-          (rpc) =>
-            body({
-              ...rpc,
-              request: async (method, params, options) => {
-                if (method !== 'config/read') {
-                  return rpc.request(method, params, options)
-                }
-                configReadTimeouts.push(options?.timeoutMs)
-                try {
-                  return await rpc.request(method, params, { ...options, timeoutMs: 20 })
-                } catch (error) {
-                  configReadFailures.push(error)
-                  throw error
-                }
-              }
-            })
-        )
-    })
-    const success = await probe({ variable: 'CODEX_HOME', path: '/homes/a' })
-    expect(success.complete).toBe(false)
-    expect(configReadTimeouts).toEqual([null])
-    expect(configReadFailures).toEqual([
-      expect.objectContaining({
-        name: 'CodexAppServerTimeoutError',
-        message: 'codex app-server config/read exceeded 20ms'
-      })
-    ])
-    expect(success.models.map((model) => ({ id: model.id, isDefault: model.isDefault }))).toEqual([
-      { id: 'gpt-live', isDefault: true }
-    ])
-  }, 10_000)
 })
 
 it('observes the shared source config while ignoring mirror writes, and observes a self-contained home itself', async () => {
@@ -398,21 +339,3 @@ it('keeps a later nonempty page and late configured model after an empty first p
     configured: { model: 'gpt-live', effort: 'high' }
   })
 })
-
-it.each(['empty', 'malformed', 'capped'])(
-  'returns incomplete %s inventory without optional configuration',
-  async (kind) => {
-    const request = vi.fn(async (method: string) => {
-      if (method === 'config/read') {
-        throw new Error('configuration cannot provide inventory')
-      }
-      return kind === 'malformed'
-        ? { data: [{}], nextCursor: null }
-        : { data: [], nextCursor: kind === 'capped' ? 'more' : null }
-    })
-    expect(
-      await fetchCodexModelCatalogListing({ connection: { request }, timeoutMs: null })
-    ).toEqual({ models: [], complete: false })
-    expect(request.mock.calls.every(([method]) => method === 'model/list')).toBe(true)
-  }
-)

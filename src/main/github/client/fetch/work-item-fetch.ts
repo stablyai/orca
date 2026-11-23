@@ -8,9 +8,14 @@ import {
 } from '../../repositories/github-repository-identity'
 import { githubHostExecOptions } from '../../repositories/github-repository-host'
 import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
-import { githubPRStackExecutionScope, type GhExecOptions } from './../github-exec-scope'
+import {
+  githubPRStackExecutionScope,
+  ownerRepoFromPullRequestUrl,
+  type GhExecOptions
+} from './../github-exec-scope'
 import { resolvePullRequestLookupCandidates } from './../pull-request-lookup-candidates'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
+import { getCachedGitHubPRStackSummary } from './../lookup/pr-stack-summary-cache'
 import {
   WORK_ITEM_PR_DETAIL_JSON_FIELDS,
   usersFromUnknown,
@@ -20,7 +25,6 @@ import {
 import { mapIssueWorkItem, mapPullRequestWorkItem } from './../map/work-item'
 import { readCompletePRCheckObservation } from '../check/complete-pr-check-observation'
 import { summarizePRCheckRollup } from '../../../../shared/source-control/checks/pr-check-status'
-import { ownerRepoFromPullRequestUrl } from '../github-exec-scope'
 
 async function withCompletePRChecks(
   item: MainWorkItem,
@@ -171,22 +175,34 @@ export async function fetchPullRequestWorkItem(
       )
       // Best-effort merge metadata must not trigger a REST fallback that drops latestReviews.
       const baseRefName = typeof item.baseRefName === 'string' ? item.baseRefName : undefined
+      const executionScope = githubPRStackExecutionScope(connectionId, localGitOptions)
       try {
-        const mergeMetadata = await detectRepositoryMergeMetadata(
-          ownerRepo,
-          baseRefName,
-          ghOptions,
-          githubPRStackExecutionScope(connectionId, localGitOptions)
-        )
+        const [mergeMetadata, stack] = await Promise.all([
+          detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions, executionScope),
+          mapped.state === 'open'
+            ? getCachedGitHubPRStackSummary(ownerRepo, number, ghOptions, executionScope).catch(
+                () => undefined
+              )
+            : undefined
+        ])
+        // A stacked PR merges into the stack base, so its rules limit the methods. The queue flag
+        // stays on the immediate base: here it would offer auto-merge, which stacks refuse.
+        const { mergeMethodSettings } =
+          stack && stack.baseRefName !== baseRefName
+            ? await detectRepositoryMergeMetadata(
+                ownerRepo,
+                stack.baseRefName,
+                ghOptions,
+                executionScope
+              )
+            : mergeMetadata
         return {
           ...mapped,
           mergeQueueRequired: mergeMetadata.mergeQueueRequired,
           ...(mergeMetadata.autoMergeAllowed !== null
             ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed }
             : {}),
-          ...(mergeMetadata.mergeMethodSettings
-            ? { mergeMethodSettings: mergeMetadata.mergeMethodSettings }
-            : {})
+          ...(mergeMethodSettings ? { mergeMethodSettings } : {})
         }
       } catch {
         return mapped

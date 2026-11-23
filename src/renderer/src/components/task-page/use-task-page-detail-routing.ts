@@ -1,4 +1,4 @@
-import { useLinearCommittedState } from '@/hooks/linear-issue-committed-state'
+import { useLinearCommittedState } from '@/lib/work-items/linear/linear-issue-committed-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import {
   projectLinearIssue,
@@ -198,14 +198,23 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
       searchCache: s.jiraSearchCache
     }))
   )
-  const cachedSelectedJiraIssue = findTaskPageJiraIssue(
-    jiraCacheSnapshot.issueCache,
-    jiraCacheSnapshot.searchCache,
-    selectedJiraIssueKey,
-    {
-      sourceContext: jiraTaskSourceContext,
-      siteId: selectedJiraIssueFallback?.siteId ?? pageData.openJiraIssue?.siteId ?? null
-    }
+  const selectedJiraSiteId =
+    selectedJiraIssueFallback?.siteId ?? pageData.openJiraIssue?.siteId ?? null
+  const cachedSelectedJiraIssue = useMemo(
+    () =>
+      findTaskPageJiraIssue(
+        jiraCacheSnapshot.issueCache,
+        jiraCacheSnapshot.searchCache,
+        selectedJiraIssueKey,
+        { sourceContext: jiraTaskSourceContext, siteId: selectedJiraSiteId }
+      ),
+    [
+      jiraCacheSnapshot.issueCache,
+      jiraCacheSnapshot.searchCache,
+      selectedJiraIssueKey,
+      jiraTaskSourceContext,
+      selectedJiraSiteId
+    ]
   )
   const selectedJiraIssue = selectedJiraIssueKey
     ? (cachedSelectedJiraIssue ?? selectedJiraIssueFallback)

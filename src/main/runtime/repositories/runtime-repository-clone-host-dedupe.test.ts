@@ -129,7 +129,8 @@ describe('clone reuses only a project on this machine', () => {
 
       expect(second.id).toBe(first.id)
       expect(repos).toHaveLength(1)
-      expect(first.path).toBe(join(root, 'real', 'source'))
+      // Git for Windows answers `rev-parse --show-toplevel` with forward slashes.
+      expect(first.path).toBe(join(root, 'real', 'source').replaceAll('\\', '/'))
     })
 
     it('refuses a different repository at a saved project whose folder is gone', async () => {

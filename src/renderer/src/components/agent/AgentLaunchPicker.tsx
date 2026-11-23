@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import { AgentVariantIcon } from '@/components/agent/icons/AgentVariantIcon'
 import { useTranslate } from '@/i18n/use-translate'
 import { rowLabel } from './launch-menu/agent-menu-row-presentation'
@@ -38,10 +39,25 @@ import {
 } from './agent-launch-setup-state'
 import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
 import {
+  readAgentLaunchPickerPlacement,
+  type AgentLaunchPickerPlacement
+} from './agent-launch-picker-placement'
+import {
   agentPickerDraft,
   type AgentPickerDraft,
   type AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+
+/** A model's name as the agent's catalog lists it, else its id. */
+export function launchModelLabel(agent: string, model: string | undefined): string | undefined {
+  return (
+    getAgentSessionOptionLaunchCatalog(agent)?.models.find((entry) => entry.id === model)?.label ??
+    model
+  )
+}
+
+const AGENT_LAUNCH_PICKER_SIDE_OFFSET = 4
+const AGENT_LAUNCH_PICKER_COLLISION_PADDING = 8
 
 const portalOrInline = (node: ReactNode, container: HTMLElement | null | undefined) =>
   container ? createPortal(node, container) : container === undefined ? node : null
@@ -52,6 +68,8 @@ export const AgentLaunchPicker = memo(
     model,
     entries: suppliedEntries,
     triggerLabel,
+    triggerDetail,
+    inline,
     draftScope,
     worktreeId,
     value,
@@ -59,6 +77,7 @@ export const AgentLaunchPicker = memo(
     agent,
     disabled,
     setupDisabled,
+    selectAgentOnTab,
     portalContainer,
     emptyLabel,
     cli,
@@ -76,6 +95,9 @@ export const AgentLaunchPicker = memo(
     model: NewTabAgentMenuModel
     entries?: AgentPickerEntry[]
     triggerLabel?: string
+    /** Muted after triggerLabel, as the launch summary follows an agent's name. */
+    triggerDetail?: string
+    inline?: boolean
     draftScope?: object
     worktreeId?: string
     value?: AgentPickerDraft
@@ -84,6 +106,8 @@ export const AgentLaunchPicker = memo(
     disabled?: boolean
     /** Agents only: no models, effort or Open as. */
     setupDisabled?: boolean
+    /** Apply agent tabs directly and omit the launch surface footer. */
+    selectAgentOnTab?: boolean
     portalContainer?: HTMLElement | null
     emptyLabel?: string
     /** True when this launch is the terminal, so the closed field says "(CLI)". */
@@ -124,16 +148,25 @@ export const AgentLaunchPicker = memo(
     const [open, setOpenState] = useState(false)
     // Why: typing on the closed trigger opens the menu with that key already in the search field.
     const [initialQuery, setInitialQuery] = useState('')
+    const [placement, setPlacement] = useState<AgentLaunchPickerPlacement>()
     const setOpen = useCallback(
       (next: boolean) => {
         if (!next) {
           popupFocusReady.current = false
           setInitialQuery('')
+        } else if (trigger.current) {
+          setPlacement(
+            readAgentLaunchPickerPlacement(
+              trigger.current,
+              AGENT_LAUNCH_PICKER_SIDE_OFFSET + AGENT_LAUNCH_PICKER_COLLISION_PADDING,
+              inline
+            )
+          )
         }
         setOpenState(next)
         onOpenChange?.(next)
       },
-      [onOpenChange]
+      [inline, onOpenChange]
     )
     const [selected, setSelected] = useState<AgentPickerEntry['agent']>()
     const observedEntries = useAgentLaunchPickerInventory(
@@ -191,7 +224,11 @@ export const AgentLaunchPicker = memo(
       entry && draft && !setupDisabled && triggerLabel === undefined
         ? JSON.stringify([languageRevision, draft])
         : null
-    const pickedModel = usePickedAgentModel(entry, draft?.choices.model)
+    const pickedModel = usePickedAgentModel(
+      entry?.agent,
+      entry?.rows[0]?.executionHostId,
+      draft?.choices.model
+    )
     const summary = useMemo(() => {
       if (!entry || !summaryKey) {
         return ''
@@ -199,9 +236,8 @@ export const AgentLaunchPicker = memo(
       const [, parsed]: [unknown, AgentPickerDraft] = JSON.parse(summaryKey)
       return agentLaunchSetupSummary(entry, parsed, pickedModel).join(' · ')
     }, [entry, summaryKey, pickedModel])
-    // Only a dropdown with Open as names how the agent runs, as Open as does.
     const surface =
-      entry && !setupDisabled && !entry.textGeneration
+      entry && !setupDisabled && !selectAgentOnTab && !entry.textGeneration
         ? cli
           ? 'terminal'
           : (draft?.surface ?? entry.defaultSurface)
@@ -228,27 +264,26 @@ export const AgentLaunchPicker = memo(
           onSelect: onSelectBlankTerminal
         }
       : null
-    // A search result is a cmdk row, which does not close the menu as a menu item does.
-    const extraChoices = [...(blankTerminal ? [blankTerminal] : []), ...(choices ?? [])].map(
-      (choice) => ({
-        ...choice,
-        onSelect: () => {
-          choice.onSelect()
-          setOpen(false)
-        }
-      })
-    )
+    // A search result or rail tile does not close the menu as a menu item does.
+    const closing = (choice: AgentPickerChoice): AgentPickerChoice => ({
+      ...choice,
+      onSelect: () => {
+        choice.onSelect()
+        setOpen(false)
+      }
+    })
     return (
-      <div className="space-y-2">
-        <DropdownMenu open={open} onOpenChange={setOpen}>
+      <div className={inline ? 'min-w-0 max-w-full' : 'space-y-2'}>
+        <DropdownMenu open={open} onOpenChange={setOpen} modal={!inline}>
           <DropdownMenuTrigger asChild>
             <Button
               ref={trigger}
               type="button"
               data-agent-launch-picker-trigger="true"
-              aria-label={t('agentPicker.select', 'Select agent')}
+              aria-label={inline ? undefined : t('agentPicker.select', 'Select agent')}
               variant="outline"
-              className="w-full min-w-0"
+              size={inline ? 'xs' : 'default'}
+              className={inline ? 'min-w-0 max-w-full' : 'w-full min-w-0'}
               disabled={disabled || model.state !== 'settled'}
               onKeyDown={(event) => {
                 if (open) {
@@ -277,17 +312,32 @@ export const AgentLaunchPicker = memo(
               {agent ? <AgentVariantIcon agent={agent} size={14} /> : null}
               <span className="min-w-0 flex-1 truncate text-left">
                 {triggerLabel ?? agentLabel}
-                {!triggerLabel && agent && summary ? (
+                {triggerLabel && triggerDetail ? (
+                  <span className="text-muted-foreground"> · {triggerDetail}</span>
+                ) : !triggerLabel && agent && summary ? (
                   <span className="text-muted-foreground"> · {summary}</span>
                 ) : null}
               </span>
-              <ChevronDown className="size-3.5 text-muted-foreground" />
+              <ChevronDown
+                className={inline ? 'size-3 opacity-60' : 'size-3.5 text-muted-foreground'}
+              />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             portalContainer={portalContainer}
-            align="start"
-            collisionPadding={tabbed ? 8 : undefined}
+            align={inline ? 'end' : 'start'}
+            collisionBoundary={placement?.boundary}
+            sideOffset={AGENT_LAUNCH_PICKER_SIDE_OFFSET}
+            collisionPadding={tabbed ? AGENT_LAUNCH_PICKER_COLLISION_PADDING : undefined}
+            side={tabbed ? placement?.side : undefined}
+            // Why: capped to the chosen side's room, so Radix never flips on the content's height.
+            style={
+              tabbed && placement
+                ? {
+                    maxHeight: `min(${inline ? '22rem' : `${placement.maxHeight}px`}, var(--radix-dropdown-menu-content-available-height, ${placement.maxHeight}px))`
+                  }
+                : undefined
+            }
             variant={tabbed ? 'picker' : 'default'}
             onOpenAutoFocus={(event) => {
               popupFocusReady.current = true
@@ -299,7 +349,7 @@ export const AgentLaunchPicker = memo(
             className={
               tabbed
                 ? // Why 26rem: Codex's widest effort row plus Fast measures 404px; narrow windows cap it.
-                  'w-(--radix-dropdown-menu-trigger-width) max-w-(--radix-dropdown-menu-content-available-width) min-w-[min(26rem,var(--radix-dropdown-menu-content-available-width))] overflow-hidden'
+                  `w-(--radix-dropdown-menu-trigger-width) max-w-(--radix-dropdown-menu-content-available-width) min-w-[min(26rem,var(--radix-dropdown-menu-content-available-width))] flex flex-col ${inline ? '' : 'overflow-hidden'}`
                 : 'min-w-64'
             }
           >
@@ -311,6 +361,7 @@ export const AgentLaunchPicker = memo(
                 draftForEntry={draftForEntry}
                 draftScope={draftScope ?? ownDraftScope}
                 disabled={disabled}
+                selectAgentOnTab={selectAgentOnTab}
                 initialQuery={initialQuery}
                 searchInputRef={setSearchInput}
                 defaultAgent={defaultAgent}
@@ -318,7 +369,8 @@ export const AgentLaunchPicker = memo(
                 onPaneChange={selectAgent}
                 onPick={pick}
                 onClose={close}
-                choices={extraChoices}
+                choices={choices?.map(closing)}
+                blankTerminal={blankTerminal ? closing(blankTerminal) : undefined}
               />
             ) : model.state === 'settled' ? (
               <AgentLaunchPickerMenu

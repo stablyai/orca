@@ -1,3 +1,7 @@
+import {
+  structuredAgentSessionPromptStanding,
+  releasedThroughFence
+} from '../agent-session-wire/observations/structured-agent-session-prompt-standing'
 import { readJournalSqlCurrentWork } from './journal-sql-current-work'
 export { readJournalSqlCurrentWork } from './journal-sql-current-work'
 import {
@@ -10,6 +14,8 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import { latestStructuredAgentSessionTurn } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { StructuredAgentSessionWorkPolicy } from '../agent-session-wire/observations/structured-agent-session-work-policy'
 import type { JournalSqlStatusContext } from './journal-sql-status-context'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { JournalCurrentWorkAuthority, JournalObserverResult } from './journal-observer-read'
 import type {
   JournalSqlWorkRead,
@@ -23,7 +29,8 @@ import { readJournalSqlInput } from './journal-sql-input-reads'
 /** The same finished work state serves observers and action readers. */
 export function readJournalSqlWorkState(
   context: JournalSqlStatusContext,
-  work: StructuredAgentSessionWorkPolicy
+  work: StructuredAgentSessionWorkPolicy,
+  authority: JournalCurrentWorkAuthority
 ): JournalObserverResult['work'] {
   const boundary = context.select({ kind: 'boundary' })[Symbol.iterator]().next().value?.item
   const actionablePrompts = [...context.select({ kind: 'pending-prompts' })].flatMap(({ item }) => {
@@ -34,7 +41,31 @@ export function readJournalSqlWorkState(
   const owed = context
     .recoverableSubmissions()
     .filter((send) => (floor === 0 || (send.acceptedSequence ?? 0) > floor) && work.owesSend(send))
+  const promptStandings = {
+    cursor: { epoch: context.scope.epoch, sequence: context.sequence },
+    items: Object.fromEntries(
+      [...context.select({ kind: 'pending-prompts' })].map(({ item }) => [
+        item.itemId,
+        structuredAgentSessionPromptStanding(
+          {
+            item: context.displayed,
+            itemFence: context.itemFence,
+            hasRecordedItem: () => true
+          },
+          item.itemId,
+          {
+            liveFence: work.liveFence,
+            ownerUnverifiable: !work.allowsObservation(),
+            ended: authority.ended,
+            replaced: authority.replaced,
+            releasedThroughFence: releasedThroughFence(authority)
+          }
+        )
+      ])
+    )
+  }
   return {
+    promptStandings,
     commandAdmission: {
       promptPending: actionablePrompts.some((item) => item.sequence > floor),
       owesSend: owed.length > 0,
@@ -47,6 +78,7 @@ export function readJournalSqlWorkState(
     owedEnteredSubmissions: owedPhaseSubmissions(context, work, 'entered-submissions'),
     owedSendingSubmissions: owedPhaseSubmissions(context, work, 'sending-submissions'),
     activeTurn: work.activeTurn(),
+    activeTurnOpener: work.activeTurn() ? newestTurnOpener(context) : null,
     latestTurn: work.publishedLatestTurn(
       latestStructuredAgentSessionTurn(boundary ? [boundary] : [])
     ),
@@ -91,7 +123,7 @@ function readWork(
 ): JournalWorkReadResult {
   switch (operation.kind) {
     case 'input': {
-      const state = readJournalSqlWorkState(context, work)
+      const state = readJournalSqlWorkState(context, work, authority)
       return readJournalSqlWorkInput(context, authority, operation, state, () =>
         journalDomainInputEligibility(context.scope, authority, context, work)
       )
@@ -99,7 +131,7 @@ function readWork(
     case 'opening-send':
       return { kind: 'opening-send', opening: journalOpeningSend(context, work, operation.fence) }
     case 'state':
-      return { kind: 'state', state: readJournalSqlWorkState(context, work) }
+      return { kind: 'state', state: readJournalSqlWorkState(context, work, authority) }
     case 'turn':
       return { kind: 'turn', activeTurn: work.activeTurn(), working: work.working() }
     case 'child-work': {
@@ -159,6 +191,8 @@ export function readJournalSqlWorkInput(
       operation.facts,
       operation.allowSteer,
       eligibility(),
+      undefined,
+      undefined,
       operation.awaitsAccountMove
     )
     return { kind: 'input', state, queue: { card: pick.kind === 'selected' ? pick.card : null } }
@@ -199,4 +233,14 @@ function journalOpeningSend(
     )
     return placed !== undefined && Number(placed.sequence) > settledAt
   })
+}
+
+/** The newest person's or mail's message that opened a turn, never one sent into a running turn. */
+function newestTurnOpener(context: JournalSqlStatusContext): AgentJournalRenderItem | null {
+  for (const { item } of context.select({ kind: 'users', floor: 0 })) {
+    if (isRootAgentJournalItem(item) && item.turnScope?.kind !== 'turn') {
+      return context.displayed(item.itemId) ?? item
+    }
+  }
+  return null
 }

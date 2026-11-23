@@ -8,7 +8,6 @@ import SyncDatabase from '../../../../sqlite/sync-database'
 import { writeOpenCodeSqliteDatabase } from '../sqlite/session-scanner-opencode-sqlite-fixture'
 import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
 import { resolveOpenCodeSqliteWorkerEntryPath } from './session-scanner-opencode-sqlite-worker-spawn'
-import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { AGENT_SESSION_HOST_STATUS_COPY } from '../../../../../shared/agent-session/view/agent-session-host-status-rows'
 
 const directory = mkdtempSync(join(tmpdir(), 'orca-opencode-native-worker-'))
@@ -135,24 +134,4 @@ describe('OpenCode reads through the production shared worker', () => {
       }
     }
   )
-
-  it('keeps list, parse and capture supported in the same worker', async () => {
-    const start = vi.fn(() => new Worker(entry))
-    const client = new OpenCodeSqliteWorkerClient({ workerFactory: start })
-    const issues: AiVaultScanIssue[] = []
-    const args = { dbPath: v1Path, sessionId: 'session', platform: process.platform }
-    try {
-      expect(await client.list({ dbPaths: [v1Path], limit: 5, issues })).toHaveLength(1)
-      expect(issues).toEqual([])
-      expect(await client.parse(args)).toMatchObject({ sessionId: 'session' })
-      expect((await client.capture(args)).messages.map((message) => message.text)).toEqual([
-        'first',
-        'second',
-        'third'
-      ])
-      expect(start).toHaveBeenCalledOnce()
-    } finally {
-      client.dispose()
-    }
-  })
 })

@@ -4,8 +4,8 @@ import type { JiraProjectReference } from '../../../../../shared/jira/jira-proje
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
 import { useAppStore } from '@/store/index'
-import { useJiraProjectInventory } from '../../use-jira-project-inventory'
-import { JiraProjectPicker } from '../../jira-project-picker'
+import { useJiraProjectInventory } from '../../task-page/jira/project-selection/use-jira-project-inventory'
+import { JiraProjectPicker } from '../../task-page/jira/project-selection/jira-project-picker'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { useTranslate } from '@/i18n/use-translate'
 

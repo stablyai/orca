@@ -8,6 +8,12 @@ import { PLUGIN_SOURCE_MODULES_SINCE } from '../../../shared/plugins/manifest/pl
 import { hashPluginTree } from '../artifacts/plugin-content-hash'
 import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import { createPluginFrameRequestHandler } from './plugin-frame-protocol'
+import {
+  PLUGIN_FRAME_MAX_IN_FLIGHT,
+  PLUGIN_FRAME_MAX_QUEUED,
+  PLUGIN_FRAME_MAX_STREAMS,
+  PLUGIN_FRAME_MAX_WAIT_MS
+} from './frame-serving/plugin-frame-admission'
 import { verifyPluginFrameTree } from './frame-serving/plugin-frame-integrity'
 import { createPluginSourceModuleCompiler } from './frame-serving/plugin-frame-module-transform'
 import { transpilePluginSource } from './source-transpilation/plugin-source-transpiler'
@@ -30,6 +36,7 @@ async function fixture(options: { installed: boolean }): Promise<ValidDiscovered
   )
   await writeFile(join(rootDir, 'src', 'label.ts'), "export const label: string = 'hi'\n")
   await writeFile(join(rootDir, 'src', 'page.ts'), "document.body.append('page')\n")
+  await writeFile(join(rootDir, 'src', 'clip.mp4'), Buffer.alloc(1024))
   const tree = await hashPluginTree(rootDir)
   return {
     pluginKey: PLUGIN_KEY,
@@ -96,5 +103,103 @@ describe('orca-plugin-frame source modules', () => {
     const script = await handle(new Request(`${url('src/page.ts')}?orca-module`))
     expect(script.headers.get('Content-Type')).toBe('text/javascript; charset=utf-8')
     expect(await script.text()).toContain("document.body.append('page')")
+  })
+})
+
+describe('orca-plugin-frame admission', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  async function blockedHandler(): Promise<{
+    handle: (request: Request) => Promise<Response>
+    log: ReturnType<typeof vi.fn>
+    compiling: () => number
+    peak: () => number
+    unblock: () => void
+  }> {
+    const plugin = await fixture({ installed: false })
+    let compiling = 0
+    let peak = 0
+    let unblock = (): void => {}
+    const blocked = new Promise<void>((resolve) => {
+      unblock = resolve
+    })
+    const log = vi.fn()
+    const handle = createPluginFrameRequestHandler(
+      {
+        findApprovedPluginByFrameKey: () => plugin,
+        verifyTree: verifyPluginFrameTree,
+        log,
+        compileSourceModule: async () => {
+          compiling += 1
+          peak = Math.max(peak, compiling)
+          await blocked
+          compiling -= 1
+          return 'export {}'
+        }
+      },
+      KEY
+    )
+    return { handle, log, compiling: () => compiling, peak: () => peak, unblock }
+  }
+
+  it('serves a burst up to the queue bound at the in-flight cap and refuses past it, logged once', async () => {
+    const frame = await blockedHandler()
+    const width = PLUGIN_FRAME_MAX_IN_FLIGHT + PLUGIN_FRAME_MAX_QUEUED
+    const responses = Array.from({ length: width }, () =>
+      frame.handle(new Request(url('src/label.ts')))
+    )
+    await vi.waitFor(() => expect(frame.compiling()).toBe(PLUGIN_FRAME_MAX_IN_FLIGHT))
+    const refused = await Promise.all([
+      frame.handle(new Request(url('src/label.ts'))),
+      frame.handle(new Request(url('src/label.ts')))
+    ])
+    expect(refused.map((response) => response.status)).toEqual([503, 503])
+    expect(frame.log).toHaveBeenCalledTimes(1)
+    expect(frame.log).toHaveBeenCalledWith(PLUGIN_KEY, expect.stringContaining('src/label.ts busy'))
+    frame.unblock()
+    const statuses = await Promise.all(responses.map(async (r) => (await r).status))
+    expect(statuses.every((status) => status === 200)).toBe(true)
+    expect(frame.peak()).toBe(PLUGIN_FRAME_MAX_IN_FLIGHT)
+  })
+
+  it('refuses streams past their own cap at once without holding up scripts', async () => {
+    const frame = await blockedHandler()
+    frame.unblock()
+    const held = await Promise.all(
+      Array.from({ length: PLUGIN_FRAME_MAX_STREAMS }, () =>
+        frame.handle(new Request(url('src/clip.mp4')))
+      )
+    )
+    expect(held.every((response) => response.status === 200)).toBe(true)
+    expect((await frame.handle(new Request(url('src/clip.mp4')))).status).toBe(503)
+    expect(frame.log).toHaveBeenCalledWith(PLUGIN_KEY, expect.stringContaining('streams open'))
+    expect((await frame.handle(new Request(url('src/label.ts')))).status).toBe(200)
+    await held[0].body?.cancel()
+    expect((await frame.handle(new Request(url('src/clip.mp4')))).status).toBe(200)
+    await Promise.all(held.slice(1).map((response) => response.body?.cancel()))
+  })
+
+  it('refuses a request that waits too long for a slot held open, logged despite open streams', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const frame = await blockedHandler()
+    const streams = await Promise.all(
+      Array.from({ length: PLUGIN_FRAME_MAX_STREAMS + 1 }, () =>
+        frame.handle(new Request(url('src/clip.mp4')))
+      )
+    )
+    expect(frame.log).toHaveBeenCalledWith(PLUGIN_KEY, expect.stringContaining('streams open'))
+    const held = Array.from({ length: PLUGIN_FRAME_MAX_IN_FLIGHT }, () =>
+      frame.handle(new Request(url('src/label.ts')))
+    )
+    await vi.waitFor(() => expect(frame.compiling()).toBe(PLUGIN_FRAME_MAX_IN_FLIGHT))
+    const waiting = frame.handle(new Request(url('src/label.ts')))
+    vi.advanceTimersByTime(PLUGIN_FRAME_MAX_WAIT_MS)
+    expect((await waiting).status).toBe(503)
+    expect(frame.log).toHaveBeenCalledWith(PLUGIN_KEY, expect.stringContaining('busy: waited'))
+    frame.unblock()
+    await Promise.all(held)
+    await Promise.all(streams.map((response) => response.body?.cancel()))
   })
 })

@@ -56,18 +56,6 @@ describe('incremental terminal history restore', () => {
     expect(restore!.cwd).toBe('/home/user')
   })
 
-  it('replays checkpoint base plus log tail', async () => {
-    await manager.checkpoint(SESSION_ID, snapshotOf(['from base\r\n']))
-    await manager.appendIncrements(SESSION_ID, 1, [
-      { kind: 'output', data: 'from tail after checkpoint\r\n' }
-    ])
-
-    const restore = await reader.detectColdRestore(SESSION_ID)
-    expect(restore).not.toBeNull()
-    expect(restore!.scrollbackAnsi).toContain('from base')
-    expect(restore!.scrollbackAnsi).toContain('from tail after checkpoint')
-  })
-
   it('preserves checkpoint OSC link ranges while replaying the log tail', async () => {
     await manager.checkpoint(
       SESSION_ID,

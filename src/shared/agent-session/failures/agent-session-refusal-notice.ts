@@ -188,7 +188,7 @@ function reasonParts(
  *  A failed start's refusal keeps the holder it named, which tells a chat from a terminal. */
 export function agentSessionRefusalCauseParts(
   failure: AgentSessionWriteFailure & AgentSessionRefusalHolder,
-  context: { agentName?: string } = {}
+  context: Pick<AgentSessionFailureWordsContext, 'agentName' | 'hostName'> = {}
 ): AgentSessionWriteNoticePart[] {
   const parts =
     failure.kind === 'refused'

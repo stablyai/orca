@@ -2,7 +2,7 @@ import { terminalPendingLabel } from './launch-menu/new-tab-agent-menu-model'
 import { useImperativeHandle, useRef, type Ref } from 'react'
 import { CornerDownLeft, MessageSquare, SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { useTranslate } from '@/i18n/use-translate'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import type { NativeChatComposerHandle } from '../native-chat/composer/native-chat-composer-types'
@@ -16,17 +16,22 @@ import { formatKeybinding } from '../../../../shared/keybindings/formatting'
 
 export type AgentLaunchSetupFooterHandle = { launch: (surface: AgentPickerSurface) => void }
 
-/** Chat and Terminal split the launch row. The filled button is the one Enter commits. */
-function AgentLaunchSurfaceButtons({
+/** Chat and Terminal split the row. The filled button is the one Enter commits. */
+export function AgentLaunchSurfaceButtons({
   entry,
+  surfaces = agentPickerButtonOrder(entry),
+  verb,
   disabled,
-  terminalBlocked,
+  unavailable,
   primary,
   onSelect
 }: {
   entry: AgentPickerEntry
+  surfaces?: readonly AgentPickerSurface[]
+  verb: 'launch' | 'open'
   disabled?: boolean
-  terminalBlocked?: boolean
+  /** Why a surface can't be chosen now; its button is disabled. */
+  unavailable?: Partial<Record<AgentPickerSurface, string>>
   primary: AgentPickerSurface
   onSelect: (surface: AgentPickerSurface) => void
 }): React.JSX.Element {
@@ -34,14 +39,20 @@ function AgentLaunchSurfaceButtons({
   const platform = getShortcutPlatform()
   const surfaceIcon = (surface: AgentPickerSurface) =>
     surface === 'chat' ? <MessageSquare /> : <SquareTerminal />
+  const surfaceLabel = (surface: AgentPickerSurface) =>
+    verb === 'open'
+      ? surface === 'chat'
+        ? t('agentPicker.openAsChat', 'Open as chat')
+        : t('agentPicker.openAsTerminal', 'Open as terminal')
+      : surface === 'chat'
+        ? t('agentPicker.launchChat', 'Launch chat')
+        : t('agentPicker.launchTerminal', 'Launch terminal')
   return (
     <div className="grid w-full max-w-full auto-cols-fr grid-flow-col gap-2">
-      {agentPickerButtonOrder(entry).map((next) => {
+      {surfaces.map((next) => {
         const isPrimary = next === primary
-        const label =
-          next === 'chat'
-            ? t('agentPicker.launchChat', 'Launch chat')
-            : t('agentPicker.launchTerminal', 'Launch terminal')
+        const label = surfaceLabel(next)
+        const reason = unavailable?.[next]
         return (
           <Button
             key={next}
@@ -52,11 +63,9 @@ function AgentLaunchSurfaceButtons({
             aria-keyshortcuts={
               isPrimary ? 'Enter' : platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter'
             }
-            disabled={disabled || (next === 'terminal' && terminalBlocked)}
-            aria-description={
-              next === 'terminal' && terminalBlocked ? terminalPendingLabel(t) : undefined
-            }
-            title={next === 'terminal' && terminalBlocked ? terminalPendingLabel(t) : undefined}
+            disabled={disabled || reason !== undefined}
+            aria-description={reason}
+            title={reason}
             variant={isPrimary ? 'default' : 'outline'}
             onClick={() => onSelect(next)}
           >
@@ -92,6 +101,7 @@ export function AgentLaunchSetupFooter({
   terminalBlocked?: boolean
   onLaunch: (surface: AgentPickerSurface, prompt?: string) => boolean | void | Promise<boolean>
 }): React.JSX.Element {
+  const t = useTranslate()
   const composer = useRef<NativeChatComposerHandle>(null)
   // Enter launches the default way; a Launch button names its own before it submits the prompt.
   const surface = useRef(entry.defaultSurface)
@@ -129,8 +139,9 @@ export function AgentLaunchSetupFooter({
         <AgentLaunchSurfaceButtons
           entry={entry}
           disabled={disabled}
+          verb="launch"
           primary={entry.defaultSurface}
-          terminalBlocked={terminalBlocked}
+          unavailable={terminalBlocked ? { terminal: terminalPendingLabel(t) } : undefined}
           onSelect={launch}
         />
       </div>

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
-import { removeDeliveredMobileDiffComments } from './mobile-diff-comments'
+import {
+  droppedAddedMobileDiffComment,
+  removeDeliveredMobileDiffComments
+} from './mobile-diff-comments'
 
 function comment(overrides: Partial<DiffComment> & Pick<DiffComment, 'id'>): DiffComment {
   const { id, ...rest } = overrides
@@ -27,5 +30,13 @@ describe('mobile diff comments', () => {
         [delivered]
       )
     ).toEqual([comment({ id: 'a', body: 'new note' }), comment({ id: 'b' })])
+  })
+
+  it('notices when an older host answers without the note this save added', () => {
+    const kept = comment({ id: 'kept' })
+    const fileNote = comment({ id: 'file', lineNumber: 0 })
+
+    expect(droppedAddedMobileDiffComment([kept], [kept, fileNote], [kept])).toBe(true)
+    expect(droppedAddedMobileDiffComment([kept], [kept, fileNote], [kept, fileNote])).toBe(false)
   })
 })

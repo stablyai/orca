@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { useAppStore } from '../../../store/index'
 import { captureWorkspaceEmptiedReaction } from '../../../lib/workspace/tabs/close/workspace-emptied-reaction'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
-import { useBulkTabCloseConfirmation } from '../../use-bulk-tab-close-confirmation'
+import { useBulkTabCloseConfirmation } from '../../terminal/tab-lifecycle/use-bulk-tab-close-confirmation'
 import type { BulkTabCloseScope } from '../../../../../shared/workspace-layout/tab-groups/bulk-tab-close-confirmation'
 
 export function useTabGroupCloseScopeCommands({

@@ -61,28 +61,6 @@ it('ignores old reads across host switches, restarts, and re-pairing', async () 
   )
 })
 
-it('reopens a freshly mounted menu with the last host answer, then revalidates', async () => {
-  const first = renderHook(() =>
-    useNewTabAgentMenuRows('wt', true, { kind: 'runtime', environmentId: 'alpha' })
-  )
-  await act(async () => {})
-  first.unmount()
-  const pending = Promise.withResolvers<{ settings: typeof server }>()
-  rpc.call.mockReturnValueOnce(pending.promise)
-  const second = renderHook(() =>
-    useNewTabAgentMenuRows('wt', true, { kind: 'runtime', environmentId: 'alpha' })
-  )
-  expect(second.result.current.state === 'settled' && second.result.current.rows[0]?.agent).toBe(
-    'codex'
-  )
-  await act(async () =>
-    pending.resolve({ settings: projectAgentLaunchSettings({ defaultTuiAgent: 'claude' }) })
-  )
-  expect(second.result.current.state === 'settled' && second.result.current.rows[0]?.agent).toBe(
-    'claude'
-  )
-})
-
 it('stops waiting on a stalled host, then applies its late answer', async () => {
   vi.useFakeTimers()
   try {

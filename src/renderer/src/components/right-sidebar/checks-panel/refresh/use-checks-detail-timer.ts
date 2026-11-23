@@ -81,8 +81,13 @@ export function useChecksDetailTimer({
       )
     }
     // Under a stretched or stopped cadence the window coming back still reads checks older than
-    // Default's delay, never sooner: the cadence slows the timer, not the user's return.
+    // Default's delay, never sooner: the cadence slows the timer, not the user's return. While
+    // GitHub checks are running a return pulls the poll forward (past the cooldown): GitHub shows
+    // a finish at once.
     const returnReadDue = (now: number): boolean => {
+      if (!isGitLabReview && policyRef.current.checksRunning()) {
+        return true
+      }
       const defaultDelay = ownerCadence() === 'default' ? null : policyDelay('default')
       return defaultDelay !== null && now - lastAttemptAtRef.current >= defaultDelay
     }

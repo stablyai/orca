@@ -29,7 +29,7 @@ import {
 } from '../rpc/server/runtime-rpc-mobile-ws-test-harness'
 import { makeStore } from '../rpc/server/runtime-rpc-worktree-store-fixtures'
 import { DECLARED_CLIENT_RECONNECT_GRACE_MS } from '../rpc/server/pairing/declared-desktop-clients'
-import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../construction/test-context/runtime-store-partial-fixture'
 
 vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const facade = getWorktreeListingMocks()

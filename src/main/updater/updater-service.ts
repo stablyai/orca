@@ -55,6 +55,12 @@ export function checkForUpdatesFromMenu(options?: UpdateCheckOptions): void {
   updater.checkForUpdatesFromMenu(options)
 }
 
+export function applyAutomaticUpdatesSetting(enabled: boolean | undefined): void {
+  if (enabled === true) {
+    updater.applyAutomaticUpdatesSetting()
+  }
+}
+
 export function downloadUpdate(): void {
   updater.downloadUpdate()
 }

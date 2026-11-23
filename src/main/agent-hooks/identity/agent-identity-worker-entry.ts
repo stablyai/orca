@@ -15,6 +15,9 @@ import {
   type AgentIdentityWorkerResponse,
   type ReverseLookupUnavailable
 } from './agent-identity-worker-protocol'
+import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
+
+installWorkerSendLedger('orca-agent-identity')
 
 /** Bump only with additive DDL below; a newer file opens read-only, never rebuilt. */
 const SCHEMA_VERSION = 1

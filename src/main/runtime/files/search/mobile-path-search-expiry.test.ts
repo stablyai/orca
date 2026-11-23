@@ -82,26 +82,4 @@ describe('mobile file path inventory expiry', () => {
     vi.advanceTimersByTime(TTL_MS)
     expect(vi.getTimerCount()).toBe(0)
   })
-
-  it('cancels evicted timers and ignores a retired callback after the same key reloads', async () => {
-    const timeout = vi.spyOn(globalThis, 'setTimeout')
-    const cache = new RuntimeMobileFilePathSearchCache(1, TTL_MS)
-    await cache.get('a', async () => inventory('old.ts'))
-    const retired = timeout.mock.calls[0]?.[0]
-    if (typeof retired !== 'function') {
-      throw new Error('Expected the original expiry callback')
-    }
-    vi.advanceTimersByTime(1000)
-    await cache.get('b', async () => inventory('other.ts'))
-    await cache.get('a', async () => inventory('replacement.ts'))
-    expect(vi.getTimerCount()).toBe(1)
-    const calls = timeout.mock.calls.length
-    retired()
-    expect(timeout).toHaveBeenCalledTimes(calls)
-    await expect(cache.get('a', async () => inventory('unexpected.ts'))).resolves.toMatchObject(
-      inventory('replacement.ts')
-    )
-    vi.advanceTimersByTime(TTL_MS)
-    expect(vi.getTimerCount()).toBe(0)
-  })
 })

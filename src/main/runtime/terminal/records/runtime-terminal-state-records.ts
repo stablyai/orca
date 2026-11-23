@@ -65,6 +65,8 @@ export type RuntimeLeafRecord = Readonly<RuntimeSyncedLeaf> &
     paneTitleUpdatedAt: number | null
   }
 
+export type AdoptedRootProcess = { incarnationId: string | null; pid: number }
+
 export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   readonly ptyId: string
   readonly incarnationId: PtyIncarnationId | null
@@ -120,6 +122,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   } | null
   lastAgentStatusStartedAtEpochMs: number | null
   lastAgentStatusRichInvalidatedAtEpochMs: number | null
+  /** While lastAgentStatus is permission: a waiting/blocked hook observed after this raised the block. */
+  permissionWaitHookedAfterEpochMs?: number
   /** When a replacement process took over this PTY id; earlier hooks describe its predecessor. */
   providerGenerationResetAtEpochMs?: number
   lastOscTitle: string | null
@@ -141,6 +145,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   outputObservedSince?: number | null
   /** See terminal-command-paint.ts; absent until the pane's first output, and again after a gap or a new process. */
   commandPaint?: TerminalCommandPaint
+  /** The root PID reattach discovery listed for this incarnation: an old owner's only terminal anchor. */
+  adoptedRootProcess?: AdoptedRootProcess | null
 }
 
 export type RuntimePtyTabCloseAuthority = {

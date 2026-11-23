@@ -10,7 +10,6 @@ import {
 } from '@/components/ui/context-menu'
 import { TabHoverCard } from '../strip/TabHoverCard'
 import '../../../../../shared/orca-profiles/constants'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { redactKagiSessionToken } from '../../../../../shared/browser/navigation/browser-url'
 import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
@@ -32,7 +31,7 @@ import { TabWorkspaceLayoutMenuSection } from '../pane-actions/TabWorkspaceLayou
 import { useTabStripPointerActivation } from '../strip/tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from '../strip/tab-context-menu-opening'
 import { cn } from '@/lib/class-names'
-import { BrowserFavicon } from '@/components/browser-favicon'
+import { BrowserFavicon } from '@/components/browser-pane/describe-page/browser-favicon'
 import { AgentCursorGlyph } from '../../browser-pane/agent-cursor/agent-cursor-glyph'
 import {
   useBrowserAgentControllerHost,
@@ -43,10 +42,7 @@ import { CloseSplitPaneMenuItem } from '../pane-actions/CloseSplitPaneMenuItem'
 import { useAppStore } from '@/store/index'
 
 import { formatBrowserTabUrlLabel, getBrowserTabLabel } from './browser-tab-label'
-
-function isBlankBrowserTab(tab: BrowserWorkspace): boolean {
-  return tab.url === ORCA_BROWSER_BLANK_URL || tab.url === 'about:blank'
-}
+import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 
 export default function BrowserTab({
   tab,
@@ -187,7 +183,7 @@ export default function BrowserTab({
       ) : (
         <BrowserFavicon
           faviconUrl={tab.faviconUrl}
-          loading={tab.loading && !tab.loadError && !isBlankBrowserTab(tab)}
+          loading={tab.loading && !tab.loadError && !isBlankBrowserUrl(tab.url)}
           className="size-3 mr-1"
           fallbackClassName="text-blue-500"
         />
@@ -248,7 +244,7 @@ export default function BrowserTab({
               programName={
                 agentDriving
                   ? agentDrivingLabel
-                  : isBlankBrowserTab(tab)
+                  : isBlankBrowserUrl(tab.url)
                     ? t('tabHoverCard.browser', 'Browser')
                     : formatBrowserTabUrlLabel(redactKagiSessionToken(tab.url), t)
               }

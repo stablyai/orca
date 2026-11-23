@@ -152,26 +152,19 @@ afterEach(() => {
 })
 
 describe('syncSystemCodexSessionsIntoManagedHome', () => {
-  it('does not overwrite runtime-owned session files', () => {
-    const relativeSessionPath = join('sessions', '2026', '05', '26', 'rollout-conflict.jsonl')
-    const systemSessionPath = join(getSystemCodexHomePath(), relativeSessionPath)
-    const runtimeSessionPath = join(getRuntimeCodexHomePath(), relativeSessionPath)
-    mkdirSync(dirname(systemSessionPath), { recursive: true })
-    mkdirSync(dirname(runtimeSessionPath), { recursive: true })
-    writeFileSync(systemSessionPath, '{"id":"system"}\n', 'utf-8')
-    writeFileSync(runtimeSessionPath, '{"id":"runtime"}\n', 'utf-8')
-
-    syncSystemCodexSessionsIntoManagedHome()
-
-    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"runtime"}\n')
-  })
-
-  it('preserves unchanged legacy copied sessions when relinking fails', () => {
+  it('preserves runtime-owned sessions and legacy copies when relinking fails', () => {
     const relativeSessionPath = join('2026', '05', '26', 'rollout-legacy-unlinked.jsonl')
     const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
     const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
     mkdirSync(dirname(systemSessionPath), { recursive: true })
     mkdirSync(dirname(runtimeSessionPath), { recursive: true })
+    const conflictName = 'rollout-conflict.jsonl'
+    const ownedSession = join(dirname(runtimeSessionPath), conflictName)
+    writeFileSync(join(dirname(systemSessionPath), conflictName), '{"id":"system"}\n', 'utf-8')
+    writeFileSync(ownedSession, '{"id":"runtime"}\n', 'utf-8')
+    syncSystemCodexSessionsIntoManagedHome()
+    expect(readFileSync(ownedSession, 'utf-8')).toBe('{"id":"runtime"}\n')
+
     writeFileSync(systemSessionPath, '{"id":"legacy"}\n', 'utf-8')
     writeFileSync(runtimeSessionPath, '{"id":"legacy"}\n', 'utf-8')
     writeLegacyCopyMarker(relativeSessionPath, systemSessionPath, runtimeSessionPath)

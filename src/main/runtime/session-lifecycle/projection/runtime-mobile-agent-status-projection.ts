@@ -45,10 +45,15 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
   ) {
     return status
   }
+  const titleConfirmsWait =
+    pty.lastAgentStatus === 'permission' &&
+    (status.state === 'waiting' || status.state === 'blocked')
   const richStatusCanOwnTitleInterval =
     codexHookReportsRunningTurn(status, agentStatusAuthorityObservedAt(status), pty) ||
     pty.lastAgentStatusRichInvalidatedAtEpochMs === null ||
-    agentStatusAuthorityObservedAt(status) > pty.lastAgentStatusRichInvalidatedAtEpochMs
+    agentStatusAuthorityObservedAt(status) > pty.lastAgentStatusRichInvalidatedAtEpochMs ||
+    (titleConfirmsWait &&
+      agentStatusAuthorityObservedAt(status) > (pty.permissionWaitHookedAfterEpochMs ?? Infinity))
   const titleEvidenceAt = pty.lastOscTitleEpochMs
   // Idle/shutdown titles describe presence, not a second end of an already completed turn.
   if (
@@ -86,9 +91,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     ...(state === 'done' ? completedTurnFields(status) : {})
   })
   const titleConfirmsState =
-    (pty.lastAgentStatus === 'working' && status.state === 'working') ||
-    (pty.lastAgentStatus === 'permission' &&
-      (status.state === 'blocked' || status.state === 'waiting'))
+    (pty.lastAgentStatus === 'working' && status.state === 'working') || titleConfirmsWait
   if (!titleConfirmsState) {
     // A repaint of the idle interval preceding this hook is not a new turn boundary.
     if (workingHookOwnsIdleTitleInterval(status, agentStatusAuthorityObservedAt(status), pty)) {

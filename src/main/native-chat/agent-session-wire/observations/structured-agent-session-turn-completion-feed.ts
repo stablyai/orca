@@ -33,6 +33,8 @@ export type StructuredAgentSessionTurnCompletionSubscriber = {
   includePrompts?: boolean
   /** In-process reconciliation on restore and prompt removal. */
   onState?: (state: StructuredAttentionState) => void
+  /** The session closed; a turn it was running ends with no completion. */
+  onClosed?: (sessionId: string) => void
 }
 
 type CompletionFeedCursor = { epoch: string; sequence: number }
@@ -91,9 +93,16 @@ export class StructuredAgentSessionTurnCompletionFeed {
     }
   }
 
-  /** Reattachments baseline silently instead of announcing old work. */
+  /** A closed session: its reattachment baselines silently instead of announcing old work. */
   forget(sessionId: string): void {
     this.baselines.delete(sessionId)
+    for (const subscriber of this.subscribers.values()) {
+      try {
+        subscriber.onClosed?.(sessionId)
+      } catch {
+        // One subscriber's bookkeeping cannot cost another its close.
+      }
+    }
   }
 
   /** When prompt and clean completion coincide, keep prompt identity; send completion only to legacy clients.
@@ -228,7 +237,9 @@ export class StructuredAgentSessionTurnCompletionFeed {
       outcome: request.outcome,
       completedAt: this.deps.now(),
       // Include attention here: remote clients receive status and completion streams unordered.
-      ...(state.summary.status === 'attention' ? { awaitingUser: true as const } : {})
+      ...(state.summary.status === 'attention' ? { awaitingUser: true as const } : {}),
+      ...(state.turnFailure ? { failure: state.turnFailure } : {}),
+      ...(state.quiet ? { quiet: true as const } : {})
     }
   }
 

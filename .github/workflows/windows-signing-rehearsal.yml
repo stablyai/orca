@@ -78,6 +78,11 @@ jobs:
           restore-keys: |
             electron-builder-win-
 
+      # Restore-keys bring back every older Electron zip; drop them so the next save keeps only this version.
+      - name: Prune stale Electron downloads
+        shell: bash
+        run: if [ -f config/scripts/electron-installation/prune-electron-download-cache.mjs ]; then node config/scripts/electron-installation/prune-electron-download-cache.mjs; fi
+
       # Why host-only: this job packages only for its own runner OS and
       # architecture, so the default host-scoped install is deliberate.
       - name: Install dependencies

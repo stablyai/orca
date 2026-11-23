@@ -193,7 +193,6 @@ export function useNativeChatHandOff({
         key={currentAttempt.operation}
         open
         request={request}
-        sourceWorkingDirectory={directory?.worktreePath}
         onOpenChange={(isOpen) => {
           if (!isOpen && active.current === currentAttempt) {
             retire()

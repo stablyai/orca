@@ -1,0 +1,422 @@
+// The rows of a bot's Needs you group: Orca's asks (approvals, then the rest, in botNow's order), then
+// the items the bot set to Needs you. Five rows, then Show N more; approvals never fold. Rows leave as
+// soon as their need clears where Orca reads it, and only focus that leaves with a row moves.
+import { memo, useLayoutEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
+import { botTarget, type BotOnHost } from '@/lib/bot-hosts'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { openBotHomeTab } from '@/lib/bot-catalog'
+import { reviewAccessRequest } from '@/lib/bot-access-requests'
+import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
+import type { Bot } from '../../../../shared/bot-types'
+import type { BotItem } from '../../../../shared/bots/bot-items'
+import type { BotSessionActivityRow } from '../../../../shared/bots/bot-activity-model'
+import type { BotAutomationRow } from '../../../../shared/bots/bot-automation-rows'
+import { CONNECTOR_SOURCE_NAMES } from '../../../../shared/connectors/external-conversation-link'
+import { approvalDetailPreview } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-detail-preview'
+import { manageConnectors } from './AddConnectorDialog'
+import { openBotAutomation } from './bot-automation-open'
+import { botWorkerRowOpener } from './bot-worker-open'
+import { botActivityRowTitle } from './bot-activity-row-title'
+import { botErrorMessage } from './bot-presentation'
+import type { BotConnectorEntry } from './bot-connector-entries'
+import { botConnectorTitleText } from './bot-connector-titles'
+import { botToolSignInFace, botToolSignInWords } from './bot-tool-sign-in-action'
+import { openBotSession } from './bot-session-open'
+import { useBotHostLabel } from './use-bot-host-label'
+import { useBotSessionPrompt } from './use-bot-session-prompt'
+import { useStructuredAgentSessionAsyncQuestionSkip } from '../native-chat/prompts/use-structured-agent-session-async-question-skip'
+import type { BotNeedView } from './use-bot-now'
+import { NEEDS_YOU_CAP, needsYouFold } from '../../../../shared/bots/needs-you-fold'
+import { useApprovalReports } from './use-approval-reports'
+import { NeedsYouRowCommit, useNeedsYouFocus, useNeedsYouRefocus } from './use-needs-you-focus'
+import { NeedRow, NeedRowBot, StoppedForSignInRow } from './BotNeedRow'
+
+type ReportApproval = (key: string, approval: boolean) => void
+
+/** Orca's asks as the group lists them, beside the items. */
+export type BotNeedsYouAsks = {
+  /** What needs the owner, as `botNow` reads it and the filter keeps. */
+  needs: readonly BotNeedView[]
+  /** Runs a sign-in stopped: listed after the asks as context, never counted. */
+  stoppedForSignIn: readonly BotAutomationRow[]
+  /** The item a worker's Dispatch is linked to, whose title its ask takes. */
+  itemOf: (dispatchId: string) => BotItem | null
+}
+
+/** A chat waiting on the owner, said as its prompt reads: an approval, a question, else waiting. */
+function SessionNeedRow({
+  bot,
+  needKey,
+  title,
+  sessionId,
+  onOpen,
+  onApproval
+}: {
+  bot: BotOnHost
+  needKey: string
+  title: string
+  sessionId: string
+  onOpen: () => void
+  onApproval: ReportApproval
+}): React.JSX.Element {
+  const t = useTranslate()
+  const { prompt } = useBotSessionPrompt(bot, sessionId)
+  const { awaiting, save } = useStructuredAgentSessionAsyncQuestionSkip(botTarget(bot), sessionId)
+  const approval = prompt?.body.kind === 'approval'
+  // Before paint, so an approval sorts first without showing in its old place.
+  useLayoutEffect(() => {
+    if (!approval) {
+      return undefined
+    }
+    onApproval(needKey, true)
+    return () => onApproval(needKey, false)
+  }, [approval, needKey, onApproval])
+  const action = { label: t('bots.needs.open', 'Open'), onOpen }
+  if (prompt?.body.kind === 'approval') {
+    const { body } = prompt
+    return (
+      <NeedRow
+        kind="approval"
+        title={title}
+        detail={permission(t, body.title || null)}
+        code={body.detail ? approvalDetailPreview(body.detail).split('\n')[0] : null}
+        action={action}
+      />
+    )
+  }
+  // The question the chat waits on without stopping, as its host publishes it; Skip settles it here.
+  const asked = prompt ? null : awaiting
+  return (
+    <NeedRow
+      kind="question"
+      title={title}
+      detail={
+        prompt?.body.kind === 'question'
+          ? prompt.body.question
+          : asked?.text || t('bots.needs.waiting', 'Waiting for you')
+      }
+      action={action}
+      skip={
+        asked && save
+          ? {
+              label: t('components.native-chat.question.skip', 'Skip'),
+              onOpen: () =>
+                void save(asked.itemId).catch((error: unknown) =>
+                  toast.error(botErrorMessage(error))
+                )
+            }
+          : null
+      }
+    />
+  )
+}
+
+/** "Permission · Bash" when the tool is known, else what any approval says. */
+function permission(t: Translate, tool: string | null): string {
+  return tool
+    ? t('bots.needs.permissionTool', 'Permission · {{tool}}', { tool })
+    : t('bots.needs.permission', 'Permission needed')
+}
+
+/** A worker's terminal or a terminal run asks in its own pane. */
+function paneOpener(row: BotSessionActivityRow, bot: BotOnHost): (() => void) | null {
+  switch (row.kind) {
+    case 'worker':
+      return botWorkerRowOpener(row, botTarget(bot))
+    case 'run':
+      return () => openBotAutomation(row.automationId, row.runId)
+    case 'thread':
+      return null
+  }
+}
+
+function SessionRowNeed({
+  bot,
+  needKey,
+  row,
+  itemOf,
+  onApproval
+}: {
+  bot: Bot
+  needKey: string
+  row: BotSessionActivityRow
+  itemOf: BotNeedsYouAsks['itemOf']
+  onApproval: ReportApproval
+}): React.JSX.Element {
+  const t = useTranslate()
+  const title = botActivityRowTitle(row)
+  const sessionId = row.kind === 'worker' ? null : row.sessionId
+  const hostLabel = useBotHostLabel(row.kind === 'worker' ? (row.hostId ?? 'local') : 'local')
+  if (sessionId) {
+    return (
+      <SessionNeedRow
+        bot={bot}
+        needKey={needKey}
+        title={title}
+        sessionId={sessionId}
+        onOpen={() => openBotSession(bot, sessionId)}
+        onApproval={onApproval}
+      />
+    )
+  }
+  const open = paneOpener(row, bot)
+  // An item's worker asks under the item's title, its own name first so two of them read apart.
+  const item = row.kind === 'worker' && row.dispatchId ? itemOf(row.dispatchId) : null
+  const tool = row.kind === 'worker' ? (row.tool ?? null) : null
+  const asks =
+    row.dot === 'permission'
+      ? permission(t, tool?.name ?? null)
+      : t('bots.needs.waiting', 'Waiting for you')
+  return (
+    <NeedRow
+      kind={row.dot === 'permission' ? 'approval' : 'question'}
+      title={item?.title ?? title}
+      worker={item ? title : null}
+      number={item?.number ?? null}
+      host={hostLabel ? <WorktreeHostContextBadge label={hostLabel} /> : null}
+      detail={
+        open
+          ? asks
+          : t('bots.needs.whereItRuns', '{{need}} · open it where it runs', { need: asks })
+      }
+      code={tool?.input ?? null}
+      action={open ? { label: t('bots.needs.open', 'Open'), onOpen: open } : null}
+    />
+  )
+}
+
+/** What a connector needs, in words: an app's sign-in or Slack's update, else sign in again or fix it. */
+function connectorNeed(entry: BotConnectorEntry, name: string, t: Translate): string {
+  if (entry.kind === 'slack' && entry.updateNeeded) {
+    return t('settings.bots.slackStatus.updateNeeded', 'Update needed')
+  }
+  const signIn =
+    entry.kind === 'app'
+      ? botToolSignInWords(botToolSignInFace(entry.tool, entry.problem, false, undefined), t, name)
+          .need
+      : null
+  return (
+    signIn ?? t('bots.needs.connector', '{{name}} needs you to sign in again or fix it.', { name })
+  )
+}
+
+const NeedItem = memo(function NeedItem({
+  bot,
+  need,
+  itemOf,
+  onApproval
+}: {
+  bot: Bot
+  need: BotNeedView
+  itemOf: BotNeedsYouAsks['itemOf']
+  onApproval: ReportApproval
+}): React.JSX.Element {
+  const t = useTranslate()
+  switch (need.kind) {
+    case 'chat': {
+      const title = t('bots.needs.chat', 'Your chat with {{name}}', { name: bot.name })
+      const onOpen = (): void => void openBotHomeTab(bot)
+      return bot.chatSessionId ? (
+        <SessionNeedRow
+          bot={bot}
+          needKey={need.key}
+          title={title}
+          sessionId={bot.chatSessionId}
+          onOpen={onOpen}
+          onApproval={onApproval}
+        />
+      ) : (
+        <NeedRow
+          kind="question"
+          title={title}
+          detail={t('bots.needs.waiting', 'Waiting for you')}
+          action={{ label: t('bots.needs.open', 'Open'), onOpen }}
+        />
+      )
+    }
+    case 'side-chat':
+      return (
+        <SessionNeedRow
+          bot={bot}
+          needKey={need.key}
+          title={need.title || t('bots.chats.untitled', 'New chat')}
+          sessionId={need.sessionId}
+          onOpen={() => openBotSession(bot, need.sessionId)}
+          onApproval={onApproval}
+        />
+      )
+    case 'session':
+      return (
+        <SessionRowNeed
+          bot={bot}
+          needKey={need.key}
+          row={need.row}
+          itemOf={itemOf}
+          onApproval={onApproval}
+        />
+      )
+    case 'connector': {
+      const name = botConnectorTitleText(need.connector.title)
+      return (
+        <NeedRow
+          kind="sign-in"
+          title={name}
+          detail={connectorNeed(need.connector, name, t)}
+          action={{
+            label: t('bots.needs.fixConnector', 'Open {{name}}', { name }),
+            onOpen: () => manageConnectors(bot, need.connector.key),
+            named: true
+          }}
+        />
+      )
+    }
+    case 'access': {
+      const { request } = need
+      return (
+        <NeedRow
+          kind="access"
+          title={t('bots.needs.access', '{{person}} asked for access', {
+            person: request.requester.name || request.requester.handle
+          })}
+          detail={`${CONNECTOR_SOURCE_NAMES[request.source]} · ${request.workspaceName}`}
+          action={{
+            label: t('bots.accessRequest.review', 'Review'),
+            onOpen: () => reviewAccessRequest(request)
+          }}
+        />
+      )
+    }
+  }
+})
+
+/** A group member's ask: its rows show the member's face. */
+function MemberNeedItem(props: React.ComponentProps<typeof NeedItem>): React.JSX.Element {
+  return (
+    <NeedRowBot.Provider value={props.bot}>
+      <NeedItem {...props} />
+    </NeedRowBot.Provider>
+  )
+}
+
+type GroupRow =
+  | { key: string; approval: boolean; need: BotNeedView }
+  | { key: string; approval: false; stopped: BotAutomationRow }
+  | { key: string; approval: false; item: BotItem }
+
+/** A worker's own dot says it waits on a permission; a chat's prompt says so once read. */
+function knownApproval(need: BotNeedView): boolean {
+  return need.kind === 'session' && need.row.kind === 'worker' && need.row.dot === 'permission'
+}
+
+const itemKey = (item: BotItem): string => `item:${item.uid}`
+const NO_ITEMS: readonly BotItem[] = []
+
+export function BotNeedsYouSection({
+  bot,
+  asks,
+  items = NO_ITEMS,
+  renderItem,
+  revealUid = null,
+  offline = false,
+  focusFallback
+}: {
+  /** The asks' bot, or in a group's merged list each ask's own, whose face its row then shows. */
+  bot: Bot | ((need: BotNeedView) => Bot)
+  asks: BotNeedsYouAsks
+  /** The items in Needs you, after the asks, in their group's order. */
+  items?: readonly BotItem[]
+  renderItem?: (item: BotItem) => React.ReactNode
+  /** The item Back returns to: shown even past the cap. */
+  revealUid?: string | null
+  /** The host is offline: the panel's controls are off, the footer too, so every row shows. */
+  offline?: boolean
+  /** Takes focus when the focused row leaves and no other row has a control. */
+  focusFallback?: React.RefObject<HTMLElement | null>
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  const { needs, stoppedForSignIn, itemOf } = asks
+  const [expanded, setExpanded] = useState(() => {
+    const at = revealUid ? items.findIndex((item) => item.uid === revealUid) : -1
+    return at >= 0 && needs.length + stoppedForSignIn.length + at >= NEEDS_YOU_CAP
+  })
+  const { approvals, report: onApproval } = useApprovalReports()
+  const rows = useMemo<GroupRow[]>(
+    () => [
+      ...needs.map((need) => ({
+        key: need.key,
+        approval: approvals.has(need.key) || knownApproval(need),
+        need
+      })),
+      ...stoppedForSignIn.map((row) => ({
+        key: `stopped:${row.key}`,
+        approval: false as const,
+        stopped: row
+      })),
+      ...items.map((item) => ({ key: itemKey(item), approval: false as const, item }))
+    ],
+    [needs, stoppedForSignIn, items, approvals]
+  )
+  const focus = useNeedsYouFocus()
+  const { cardRef, onFocus, onBlur } = focus
+  const fold = needsYouFold(rows, {
+    expanded,
+    focusedKey: focus.focusedKey,
+    showAll: offline
+  })
+  const rowCommitted = useNeedsYouRefocus(
+    focus,
+    fold.ordered.map((row) => row.key),
+    focusFallback
+  )
+  if (!fold.folds && expanded && !offline) {
+    // Too few rows to fold: when they grow back, the group starts folded again. Offline shows
+    // every row for now, so an opened group stays open for when the host is back.
+    setExpanded(false)
+  }
+  if (rows.length === 0) {
+    return null
+  }
+  const shown = new Set(fold.visible)
+  return (
+    <div ref={cardRef} className="contents" onFocus={onFocus} onBlur={onBlur}>
+      <NeedsYouRowCommit value={rowCommitted}>
+        {fold.ordered.map((row) => (
+          <div
+            key={row.key}
+            data-need-key={row.key}
+            // Folded rows stay mounted, so a chat that turns into an approval still sorts first.
+            hidden={!shown.has(row.key)}
+          >
+            {'need' in row ? (
+              typeof bot === 'function' ? (
+                <MemberNeedItem
+                  bot={bot(row.need)}
+                  need={row.need}
+                  itemOf={itemOf}
+                  onApproval={onApproval}
+                />
+              ) : (
+                <NeedItem bot={bot} need={row.need} itemOf={itemOf} onApproval={onApproval} />
+              )
+            ) : 'stopped' in row ? (
+              <StoppedForSignInRow row={row.stopped} />
+            ) : (
+              renderItem?.(row.item)
+            )}
+          </div>
+        ))}
+      </NeedsYouRowCommit>
+      {fold.hidden > 0 ? (
+        <button
+          type="button"
+          aria-expanded={false}
+          onClick={() => setExpanded(true)}
+          className="self-start py-0.5 pl-8 pr-2 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          {t('bots.items.group.showMore', 'Show {{count}} more', { count: fold.hidden })}
+        </button>
+      ) : null}
+    </div>
+  )
+}

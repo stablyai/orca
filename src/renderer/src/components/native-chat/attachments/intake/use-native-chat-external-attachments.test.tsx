@@ -2,7 +2,7 @@
 import type * as AttachmentOwnerModule from '../uploads/native-chat-attachment-owner'
 import type * as SessionAttachmentUploadModule from '../uploads/native-chat-session-attachment-upload'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, createElement } from 'react'
+import { act, createElement, useLayoutEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 
 import {
@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   resolveNativeChatAttachmentOwnerForWorktree: vi.fn(),
   prepareNativeChatSessionAttachmentUpload: vi.fn(),
   uploadNativeChatSessionAttachmentPaths: vi.fn(),
+  resolveNativeChatAgentStagingTarget: vi.fn(),
+  stageClientFilesForAgent: vi.fn(),
   toastLoading: vi.fn()
 }))
 
@@ -32,7 +34,12 @@ vi.mock('@/store', () => ({
 vi.mock('../uploads/native-chat-attachment-owner', async (importOriginal) => ({
   ...(await importOriginal<typeof AttachmentOwnerModule>()),
   resolveNativeChatAttachmentOwner: mocks.resolveNativeChatAttachmentOwner,
-  resolveNativeChatAttachmentOwnerForWorktree: mocks.resolveNativeChatAttachmentOwnerForWorktree
+  resolveNativeChatAttachmentOwnerForWorktree: mocks.resolveNativeChatAttachmentOwnerForWorktree,
+  resolveNativeChatAgentStagingTarget: mocks.resolveNativeChatAgentStagingTarget
+}))
+
+vi.mock('@/runtime/files/imports/agent-file-staging', () => ({
+  stageClientFilesForAgent: mocks.stageClientFilesForAgent
 }))
 
 vi.mock('../uploads/native-chat-session-attachment-upload', async (importOriginal) => ({
@@ -82,17 +89,17 @@ function Probe({
   setNotice: (notice: string | null) => void
   onReady: (api: HookApi) => void
 }): null {
-  onReady(
-    useNativeChatExternalAttachments({
-      terminalTabId: 'tab-1',
-      structuredWorktreeId,
-      structuredSession,
-      disabled,
-      attachResolvedPaths,
-      pendingChips,
-      setNotice
-    })
-  )
+  const api = useNativeChatExternalAttachments({
+    terminalTabId: 'tab-1',
+    structuredWorktreeId,
+    structuredSession,
+    disabled,
+    attachResolvedPaths,
+    pendingChips,
+    setNotice
+  })
+  // Hand each committed render's api to the test, never one from discarded render work.
+  useLayoutEffect(() => onReady(api))
   return null
 }
 
@@ -208,6 +215,55 @@ describe('useNativeChatExternalAttachments', () => {
     expect(notices.at(-1)).toBe(
       'This workspace changed hosts while attaching — drop the files again.'
     )
+  })
+
+  it('stages files dropped on a remote terminal chat in the worktree its agent reads', async () => {
+    const staging = {
+      environmentId: 'server-1',
+      worktreeId: 'repo::/srv/repo',
+      executionHostId: 'runtime:server-1' as const
+    }
+    const target = {
+      runtimeEnvironmentId: 'server-1',
+      worktreeId: 'repo::/srv/repo',
+      worktreePath: '/srv/repo'
+    }
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'remote', staging })
+    mocks.resolveNativeChatAgentStagingTarget.mockReturnValue(target)
+    mocks.stageClientFilesForAgent.mockResolvedValue({
+      staged: [
+        { sourcePath: '/client/notes.pdf', hostPath: '/srv/repo/.orca/drops/notes.pdf' },
+        { sourcePath: '/client/shot.png', hostPath: '/srv/repo/.orca/drops/shot.png' }
+      ],
+      skipped: [],
+      failed: []
+    })
+    const chips = noPendingChips()
+    const attachResolvedPaths = vi.fn()
+    const probe = await renderProbe({ attachResolvedPaths, pendingChips: chips })
+
+    await act(async () => {
+      probe.latest().attachExternalPaths(['/client/notes.pdf', '/client/shot.png'])
+    })
+
+    expect(chips.begin).toHaveBeenCalledWith(undefined, 'notes.pdf', true)
+    expect(chips.begin).toHaveBeenCalledWith(undefined, 'shot.png', true)
+    expect(mocks.stageClientFilesForAgent).toHaveBeenCalledWith(
+      target,
+      ['/client/notes.pdf', '/client/shot.png'],
+      expect.any(Function)
+    )
+    expect(chips.resolve).toHaveBeenCalledWith(
+      '2',
+      '/srv/repo/.orca/drops/shot.png',
+      null,
+      undefined
+    )
+    expect(chips.attachReferences).toHaveBeenCalledWith(
+      [{ id: '1', path: '/srv/repo/.orca/drops/notes.pdf' }],
+      undefined
+    )
+    expect(attachResolvedPaths).not.toHaveBeenCalled()
   })
 
   it('releases browser files a refused attach held, so none stay pinned in the page', async () => {

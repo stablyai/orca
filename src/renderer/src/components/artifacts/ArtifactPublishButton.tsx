@@ -10,7 +10,7 @@ import { useAppStore } from '@/store/index'
 import { ArtifactPublishedLinkPanel } from './ArtifactPublishedLinkPanel'
 import { getPublishedArtifactLink } from './artifact-published-link-client'
 import { publishArtifactFromSurface } from './artifact-publish-flow'
-import { OrcaSignInButton, OrcaSignInWaitNotice } from '../OrcaSignInProgress'
+import { OrcaSignInButton, OrcaSignInWaitNotice } from '../orca-profiles/OrcaSignInProgress'
 
 type PublishedLinkLookup = {
   key: string
@@ -53,7 +53,9 @@ export function ArtifactPublishButton({
   const [linkLookup, setLinkLookup] = useState<PublishedLinkLookup | null>(null)
   const lookupSequence = useRef(0)
   const popoverContentRef = useRef<HTMLDivElement>(null)
+  const dismissedByExternalFocusRef = useRef(false)
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
+  const signingIn = useAppStore((state) => Boolean(state.orcaProfileSignInProgress))
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const settings = useAppStore((state) => state.settings)
@@ -99,6 +101,37 @@ export function ArtifactPublishButton({
       lookupSequence.current += 1
     }
   }, [lookupKey, lookupRevision, open, sourceKey])
+
+  // Why: out-of-process <webview> and <iframe> clicks bypass Radix's document pointerdown outside-dismiss.
+  useEffect(() => {
+    if (!open || busy) {
+      return
+    }
+    dismissedByExternalFocusRef.current = false
+    const isEmbeddedPageElement = (target: EventTarget | null): boolean =>
+      target instanceof HTMLElement && (target.tagName === 'WEBVIEW' || target.tagName === 'IFRAME')
+    const dismiss = (): void => {
+      dismissedByExternalFocusRef.current = true
+      setOpen(false)
+    }
+    const handleWindowBlur = (): void => {
+      if (signingIn && !isEmbeddedPageElement(document.activeElement)) {
+        return
+      }
+      dismiss()
+    }
+    const handleFocusIn = (event: FocusEvent): void => {
+      if (isEmbeddedPageElement(event.target)) {
+        dismiss()
+      }
+    }
+    window.addEventListener('blur', handleWindowBlur)
+    document.addEventListener('focusin', handleFocusIn, true)
+    return () => {
+      window.removeEventListener('blur', handleWindowBlur)
+      document.removeEventListener('focusin', handleFocusIn, true)
+    }
+  }, [busy, open, setOpen, signingIn])
 
   const publish = async (): Promise<void> => {
     if (blocked || !signedIn || !sharingEnabled) {
@@ -164,6 +197,11 @@ export function ArtifactPublishButton({
           popoverContentRef.current?.focus({ preventScroll: true })
         }}
         onCloseAutoFocus={(event) => {
+          if (dismissedByExternalFocusRef.current) {
+            dismissedByExternalFocusRef.current = false
+            event.preventDefault()
+            return
+          }
           if (!anchorRef) {
             return
           }

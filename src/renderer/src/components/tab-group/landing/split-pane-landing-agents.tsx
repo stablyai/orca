@@ -1,12 +1,13 @@
 import { Bot, ChevronDown } from 'lucide-react'
 import { useAppStore } from '../../../store/index'
-import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
-import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
+import { useAgentDetectionTargetForWorktree } from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
 import { CommandGroup, CommandItem } from '@/components/ui/command'
 import {
   DropdownMenu,
@@ -18,12 +19,16 @@ import {
   QuickLaunchAgentMenuItems,
   useTabAgentMenuLaunch
 } from '../../agent/launch-menu/AgentMenuItems'
-import { rowId, rowLabel } from '../../agent/launch-menu/agent-menu-row-presentation'
+import {
+  rowId,
+  rowLabel,
+  rowStatusLabel
+} from '../../agent/launch-menu/agent-menu-row-presentation'
 import {
   readNewAgentTabDefault,
   resolveTerminalAgentTabShortcut
-} from '../../terminal-agent-tab-shortcut'
-import { launchAgentTabShortcut } from '../../agent-tab-shortcut-launch'
+} from '../../terminal/keyboard-shortcuts/terminal-agent-tab-shortcut'
+import { launchAgentTabShortcut } from '../../terminal/keyboard-shortcuts/agent-tab-shortcut-launch'
 import {
   LandingItemShortcut,
   landingQueryMatches,
@@ -47,7 +52,10 @@ export function LandingDefaultAgentItem({
   onPickerClosed: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const defaultAgent = useAppStore((state) => readNewAgentTabDefault(state, worktreeId))
+  // Host statuses decide whether the default opens as chat; the live route reads them from their owner.
+  const defaultAgent = useAppStoreWithHostStatuses((state) =>
+    readNewAgentTabDefault(state, worktreeId)
+  )
   const shortcut = useOptionalShortcutLabel('tab.newAgent')
   const agentLabel = defaultAgent
     ? (getAgentCatalog().find((entry) => entry.id === defaultAgent)?.label ?? defaultAgent)
@@ -167,6 +175,9 @@ export function LandingAgentResults({
         >
           <AgentIcon agent={row.agent} size={16} />
           <span className="min-w-0 flex-1 truncate">{rowLabel(row, t)}</span>
+          {rowStatusLabel(row, t) ? (
+            <span className="text-xs text-muted-foreground">{rowStatusLabel(row, t)}</span>
+          ) : null}
         </CommandItem>
       ))}
     </CommandGroup>

@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithSerializeAgentPromptSubmission } from './terminal-agent-status-and-submission'
+import { OrcaRuntimeWithHookSilentSendGuard } from './terminal-hook-silent-send-guard'
 import type { RuntimeTerminalPromptDelivery } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import type {
   AgentPromptTurnStartEvidence,
@@ -7,7 +7,7 @@ import type {
 import { verifyAgentPromptSubmission } from './agent-prompt-submission-verification'
 import { AgentPromptRequestCorrelation } from './agent-prompt-request-correlation'
 
-export abstract class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWithSerializeAgentPromptSubmission {
+export abstract class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWithHookSilentSendGuard {
   private readonly agentPromptCorrelation = new AgentPromptRequestCorrelation()
 
   getTerminalPromptRequestBinding(handle: string): {

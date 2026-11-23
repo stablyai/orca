@@ -12,7 +12,7 @@ import {
 import type { OrchestrationWorkerLaunchReceipt } from './launch/worker-launch-preferences'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { replaceDispatchCapabilities } from '../../../../../orchestration/terminal-authority/views/worker-terminal-redaction'
-import { redactString } from '../../../../../../observability/redactor'
+import { redactString } from '../../../../../../../shared/observability/redactor'
 
 type WorkerStartFailureArgs = {
   runtime: OrcaRuntimeService

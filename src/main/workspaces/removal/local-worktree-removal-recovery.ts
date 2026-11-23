@@ -128,7 +128,8 @@ export async function recoverPartialLocalWorktreeRemoval(
     await removeLocalWorktreePath(
       args.canonicalWorktreePath,
       args.localWorktreeGitOptions,
-      args.signal
+      args.signal,
+      { markerLast: true }
     )
   } catch (error) {
     throwIfSignalAborted(args.signal)

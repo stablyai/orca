@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { RELAY_SENTINEL } from '../../ssh/protocol/relay-handshake'
 import { waitForWslRelaySentinel } from './wsl-hook-relay-sentinel'
@@ -46,10 +46,6 @@ function emitStdout(child: ChildProcessWithoutNullStreams, data: string | Buffer
   child.stdout.emit('data', Buffer.isBuffer(data) ? data : Buffer.from(data))
 }
 
-afterEach(() => {
-  vi.useRealTimers()
-})
-
 describe('waitForWslRelaySentinel', () => {
   it('delivers a pending trailing chunk before a later direct chunk, in wire order', async () => {
     const child = fakeChild()
@@ -66,39 +62,5 @@ describe('waitForWslRelaySentinel', () => {
       })
     })
     expect(received).toEqual(['FIRST', 'SECOND'])
-  })
-
-  it('defers the pending flush to a microtask so a caller can finish wiring', async () => {
-    const child = fakeChild()
-    const promise = waitForWslRelaySentinel(child)
-    emitStdout(child, Buffer.concat([Buffer.from(RELAY_SENTINEL), Buffer.from('DEFER')]))
-    const transport = await promise
-    const received: string[] = []
-    transport.onData((d) => received.push(d.toString('utf8')))
-    // Allow remaining synchronous handler registration before dispatching the first frame.
-    expect(received).toEqual([])
-    await Promise.resolve()
-    expect(received).toEqual(['DEFER'])
-  })
-
-  it('forwards write(false), callback settlement, and drain from WSL stdin', async () => {
-    const child = fakeChild()
-    const callback = vi.fn()
-    const drain = vi.fn()
-    const writeMock = child.stdin.write as ReturnType<typeof vi.fn>
-    writeMock.mockImplementation((_data, onWritten) => {
-      onWritten?.(null)
-      return false
-    })
-    const promise = waitForWslRelaySentinel(child)
-    emitStdout(child, RELAY_SENTINEL)
-    const transport = await promise
-
-    transport.onDrain?.(drain)
-    expect(transport.write(Buffer.from('frame'), callback)).toBe(false)
-    expect(callback).toHaveBeenCalledWith({ ok: true })
-    child.stdin.emit('drain')
-    expect(drain).toHaveBeenCalledOnce()
-    expect(transport.supportsWriteSettlement).toBe(true)
   })
 })

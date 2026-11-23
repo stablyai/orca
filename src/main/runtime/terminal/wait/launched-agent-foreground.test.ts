@@ -3,7 +3,10 @@ import type { RemoteForegroundEvidence } from '../../../../shared/terminal/pty/f
 import type { ProcessTableRow } from '../../../../shared/process-observation/tables/process-table-snapshot'
 import type * as TerminalForegroundGroup from '../../../pty/process-retirement/terminal-process-rows'
 
-import { readLaunchedAgentForeground } from './launched-agent-foreground'
+import {
+  readAdoptedRootAgentForeground,
+  readLaunchedAgentForeground
+} from './launched-agent-foreground'
 
 const paneTerminal = vi.hoisted(() => {
   const state: { rows: ProcessTableRow[] | null } = { rows: null }
@@ -130,5 +133,54 @@ describe('owner-held recipient observations', () => {
     ).toBe('unknown')
     expect(cachedName).not.toHaveBeenCalled()
     expect(inventory).not.toHaveBeenCalled()
+  })
+})
+
+describe('an old owner’s rest-title read from the root PID discovery listed', () => {
+  afterEach(() => {
+    paneTerminal.rows = null
+  })
+
+  it('keeps the shell in front of this terminal even when the owner names an agent', async () => {
+    // A background driver under bash runs Claude on another terminal; input to this one reaches bash.
+    paneTerminal.rows = [
+      { pid: 100, ppid: 1, pgid: 100, tpgid: 100, tty: 'pts/1', stat: 'S+', command: 'bash' },
+      {
+        pid: 200,
+        ppid: 100,
+        pgid: 200,
+        tpgid: 100,
+        tty: 'pts/1',
+        stat: 'S',
+        command: 'python3 pty-driver.py'
+      }
+    ]
+    const owner = { confirmForegroundProcess: async () => 'claude' }
+    await expect(readAdoptedRootAgentForeground(owner, 100, 'pty-1', 'claude')).resolves.toBe(
+      'shell'
+    )
+  })
+
+  it('confirms the agent by its owner-held name once it leads this terminal', async () => {
+    paneTerminal.rows = [
+      { pid: 100, ppid: 1, pgid: 100, tpgid: 300, tty: 'pts/1', stat: 'S+', command: 'bash' },
+      { pid: 300, ppid: 100, pgid: 300, tpgid: 300, tty: 'pts/1', stat: 'S+', command: 'claude' }
+    ]
+    await expect(
+      readAdoptedRootAgentForeground(
+        { confirmForegroundProcess: async () => 'claude' },
+        100,
+        'pty-1',
+        'claude'
+      )
+    ).resolves.toBe('agent')
+    await expect(
+      readAdoptedRootAgentForeground(
+        { confirmForegroundProcess: async () => 'less' },
+        100,
+        'pty-1',
+        'claude'
+      )
+    ).resolves.toBe('unknown')
   })
 })

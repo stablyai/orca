@@ -50,21 +50,3 @@ it('a close stops a start the provider never answers instead of queueing behind 
   expect(signal?.aborted).toBe(true)
   expect((await attaching).ok).toBe(false)
 })
-
-it('a close while the attach still probes the previous owner asks no adapter to start', async () => {
-  const state = hostTestState()
-  // Test adapters that ignore signals; host admission must still prevent late spawn.
-  const host = openHost(state)
-  const runtimeState = host.collaboratorsForTests().runtimeState
-  const probe = runtimeState.probeOwner.bind(runtimeState)
-  let closing: Promise<void> | undefined
-  runtimeState.probeOwner = async (sessionId) => {
-    closing ??= host.close(SESSION, 'user-close')
-    return probe(sessionId)
-  }
-  expect(await host.attach(CALLER, attachParams()).catch((error: unknown) => error)).toMatchObject({
-    name: 'AgentSessionPreSpawnError'
-  })
-  await closing
-  expect(state.acquire).not.toHaveBeenCalled()
-})

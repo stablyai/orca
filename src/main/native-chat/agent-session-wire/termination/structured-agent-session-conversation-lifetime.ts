@@ -187,6 +187,7 @@ export function createStructuredAgentSessionConversationLifetime(
     isDisposed: () => disposed,
     deliveryActive: host.deliveryActive,
     childWorkOpen: host.childWorkOpen,
+    viewed: host.viewed,
     store: {
       getConversation: (sessionId) => deps().store.getConversation(sessionId),
       replacedRuntime: (sessionId) => deps().store.replacedRuntime(sessionId)
@@ -198,8 +199,7 @@ export function createStructuredAgentSessionConversationLifetime(
     stopAgent: (sessionId) => stopAgent(sessionId, { cause: 'evict', resting: true }),
     // Word handed-over and queued startup failures from the same hostStopped fact.
     stopStartingAgent: (sessionId) => stopAgent(sessionId, { cause: 'host-stop' }),
-    startTimed: (sessionId, child) =>
-      host.context().runtimeState.startupAttempts.onClock(sessionId, child),
+    startTimed: (id, child) => host.context().runtimeState.startupAttempts.onClock(id, child),
     closeConversation: (sessionId) => closeConversation(sessionId, true),
     logger: deps().logger,
     ...deps().idleSweep

@@ -23,6 +23,11 @@ import {
   type AcpStructuredSessionAdapterDeps
 } from './acp-structured-session-adapter-deps'
 import { readAcpLiveOptions } from '../options/acp-live-options'
+import {
+  acpPermissionWritesSettled,
+  acpRunningPermission,
+  applyAcpLivePermissionMode
+} from '../options/acp-live-permission-mode'
 import { acpControlsSettled, writeAcpSessionOption } from '../options/acp-session-option-write'
 import { acpOptionWriteBound, withAcpModelFallback } from '../turns/acp-model-command'
 import {
@@ -130,6 +135,8 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
         return rejectedAcpDispatch(session)
       }
       await acpControlsSettled(session, signal)
+      // A mode picked before this send must reach the agent before the prompt does.
+      await acpPermissionWritesSettled(session)
       input.signal?.throwIfAborted()
       await input.beforeDispatch?.()
       input.signal?.throwIfAborted()
@@ -177,6 +184,29 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   awaitStoppedRequestEnd = stop.requestEndWait((id) => this.children.sessions.get(id), this.graceMs)
 
   settlePermissionTransition = stop.acpPermissionTransition((id) => this.live(id), this.graceMs)
+
+  permissionModeRequiresAcquisition: NonNullable<
+    SessionAdapter['permissionModeRequiresAcquisition']
+  > = (sessionId, mode) => {
+    const session = this.children.sessions.get(sessionId)
+    return childState.isAcpReadySession(session)
+      ? acpRunningPermission(session) !== mode
+      : undefined
+  }
+
+  runningPermissionMode: NonNullable<SessionAdapter['runningPermissionMode']> = (sessionId) => {
+    const session = this.children.sessions.get(sessionId)
+    return childState.isAcpReadySession(session)
+      ? (acpRunningPermission(session) ?? undefined)
+      : undefined
+  }
+
+  applyPermissionMode: NonNullable<SessionAdapter['applyPermissionMode']> = async (input) => {
+    const session = this.live(input.sessionId)
+    if (session.fence === input.fence) {
+      await applyAcpLivePermissionMode(session, input.mode, this.writeBound(session))
+    }
+  }
 
   answerPrompt: SessionAdapter['answerPrompt'] = (input) =>
     this.live(input.sessionId).prompts.answer(input)

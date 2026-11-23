@@ -121,27 +121,20 @@ describe('removeWorktreeSymlinks', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it('unlinks configured symlinks from the worktree', async () => {
+  it('unlinks configured symlinks while preserving regular files', async () => {
     writeFileSync(join(primary, '.env'), 'SECRET=1\n')
     mkdirSync(join(primary, 'node_modules'))
     symlinkSync(join(primary, '.env'), join(worktree, '.env'), 'file')
     symlinkSync(join(primary, 'node_modules'), join(worktree, 'node_modules'), 'dir')
+    writeFileSync(join(worktree, 'notes.txt'), 'local notes\n')
 
-    await removeWorktreeSymlinks(worktree, ['.env', 'node_modules'])
+    await removeWorktreeSymlinks(worktree, ['.env', 'node_modules', 'notes.txt'])
 
     expect(existsSync(join(worktree, '.env'))).toBe(false)
     expect(existsSync(join(worktree, 'node_modules'))).toBe(false)
     expect(statSync(join(primary, '.env')).isFile()).toBe(true)
     expect(statSync(join(primary, 'node_modules')).isDirectory()).toBe(true)
-  })
-
-  it('leaves a regular file at the configured path alone', async () => {
-    writeFileSync(join(worktree, '.env'), 'USER_WROTE_THIS=1\n')
-
-    await removeWorktreeSymlinks(worktree, ['.env'])
-
-    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
-    expect(statSync(join(worktree, '.env')).isFile()).toBe(true)
+    expect(readFileSync(join(worktree, 'notes.txt'), 'utf8')).toBe('local notes\n')
   })
 
   it('rejects unsafe paths without touching the filesystem', async () => {

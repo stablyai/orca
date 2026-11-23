@@ -18,6 +18,7 @@ import { stampWslOrchestrationCompatibilityHost } from '../../../pty/shell-start
 import { getRuntimeSourceStamp } from '../../../runtime/hosts/platform-probe/host-descriptor'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { buildPtyHostEnv } from './assembly'
+import { detectBareShellPluginAgentsOnPath } from '../../../agent-hooks/installation/bare-shell-plugin-agent-presence'
 import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import { runAsWslLaunchUserAct } from '../../../wsl/discovery/wsl-background-exec-gate'
 import {
@@ -241,6 +242,10 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
       launchAgent: args.launchAgent,
       launchCommand
     })
+    const agentStatusHooksEnabled = isAgentStatusHooksEnabled(ptySettings)
+    const agentsOnPath = agentStatusHooksEnabled
+      ? await detectBareShellPluginAgentsOnPath(ptySettings)
+      : undefined
     buildPtyHostEnv(sessionId, env, {
       isPackaged: getAppEnvironment().isPackaged(),
       resourcesPath: process.resourcesPath,
@@ -253,9 +258,9 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
       shellPath: args.shellOverride,
       isWsl,
       wslDistro,
-      agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
+      agentStatusHooksEnabled,
+      agentsOnPath,
       claudeSubagentNavigationEnabled: ptySettings?.claudeSubagentNavigationEnabled,
-      terminalInlineImages: ptySettings?.terminalInlineImages,
       disabledTuiAgents: ptySettings?.disabledTuiAgents,
       networkProxySettings: ptySettings,
       routeBrowserOpensToClient: deps.runtime?.shouldRelayTerminalBrowserOpens?.(),

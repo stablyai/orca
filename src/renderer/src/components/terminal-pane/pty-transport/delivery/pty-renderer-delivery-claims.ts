@@ -1,7 +1,7 @@
 import { redactPtyIdForDiagnostics } from '../../../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import { recordTerminalFreezeBreadcrumb } from '../../render-health/diagnostics/terminal-freeze-breadcrumbs'
 
-const hiddenClaimCounts = new Map<string, number>()
+const hiddenClaims = new Map<string, { count: number; graphics: number }>()
 
 type VisibilityClaim = { ptyId: string; visible: boolean }
 
@@ -15,11 +15,16 @@ export type RendererPtyVisibilityClaimOwner = object & {
 const visibilityClaimsByOwner = new Map<RendererPtyVisibilityClaimOwner, VisibilityClaim>()
 const visibleClaimCounts = new Map<string, number>()
 
-function sendHiddenState(ptyId: string, hidden: boolean): void {
+function sendHiddenState(ptyId: string, hidden: boolean, retainGraphics = false): void {
   recordTerminalFreezeBreadcrumb(hidden ? 'renderer-gate-mark' : 'renderer-gate-unmark', {
     id: redactPtyIdForDiagnostics(ptyId)
   })
-  ;(globalThis as { window?: Window }).window?.api?.pty?.setHiddenRendererPty?.(ptyId, hidden)
+  const pty = (globalThis as { window?: Window }).window?.api?.pty
+  if (retainGraphics) {
+    pty?.setHiddenRendererPty?.(ptyId, hidden, true)
+  } else {
+    pty?.setHiddenRendererPty?.(ptyId, hidden)
+  }
 }
 
 function sendVisibility(ptyId: string, visible: boolean): void {
@@ -28,13 +33,21 @@ function sendVisibility(ptyId: string, visible: boolean): void {
 
 /**
  * Holds a hidden-delivery claim until the returned release function runs.
- * Main sees only the first-acquire/last-release transitions for each PTY.
+ * Main sees the first acquire, last release, and changes to aggregate graphics retention.
  */
-export function acquireHiddenRendererPtyDeliveryClaim(ptyId: string): () => void {
-  const nextCount = (hiddenClaimCounts.get(ptyId) ?? 0) + 1
-  hiddenClaimCounts.set(ptyId, nextCount)
-  if (nextCount === 1) {
-    sendHiddenState(ptyId, true)
+export function acquireHiddenRendererPtyDeliveryClaim(
+  ptyId: string,
+  retainGraphics = false
+): () => void {
+  const claims = hiddenClaims.get(ptyId) ?? { count: 0, graphics: 0 }
+  const wasRetaining = claims.graphics > 0
+  claims.count += 1
+  if (retainGraphics) {
+    claims.graphics += 1
+  }
+  hiddenClaims.set(ptyId, claims)
+  if (claims.count === 1 || (!wasRetaining && retainGraphics)) {
+    sendHiddenState(ptyId, true, retainGraphics)
   }
 
   let released = false
@@ -43,20 +56,26 @@ export function acquireHiddenRendererPtyDeliveryClaim(ptyId: string): () => void
       return
     }
     released = true
-    const currentCount = hiddenClaimCounts.get(ptyId) ?? 0
-    if (currentCount <= 1) {
-      hiddenClaimCounts.delete(ptyId)
-      sendHiddenState(ptyId, false)
+    if (hiddenClaims.get(ptyId) !== claims) {
       return
     }
-    hiddenClaimCounts.set(ptyId, currentCount - 1)
+    claims.count -= 1
+    if (retainGraphics) {
+      claims.graphics -= 1
+    }
+    if (claims.count === 0) {
+      hiddenClaims.delete(ptyId)
+      sendHiddenState(ptyId, false)
+    } else if (retainGraphics && claims.graphics === 0) {
+      sendHiddenState(ptyId, true)
+    }
   }
 }
 
 /** Clears stale main state for a visible PTY without overriding another live
  * hidden owner that is still completing a pane-to-watcher handoff. */
 export function declareRendererPtyDeliveryVisible(ptyId: string): void {
-  if (!hiddenClaimCounts.has(ptyId)) {
+  if (!hiddenClaims.has(ptyId)) {
     sendHiddenState(ptyId, false)
   }
 }
@@ -123,7 +142,7 @@ export function releaseRendererPtyVisibilityClaim(owner: RendererPtyVisibilityCl
 
 /** Test seam: renderer reload naturally clears these module-scoped claims. */
 export function _resetPtyRendererDeliveryClaimsForTest(): void {
-  hiddenClaimCounts.clear()
+  hiddenClaims.clear()
   visibilityClaimsByOwner.clear()
   visibleClaimCounts.clear()
 }

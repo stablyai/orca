@@ -77,7 +77,8 @@ export function automaticSubmissionFixture(cleanups: (() => void)[]) {
         models: [],
         listedServiceTiers: []
       }
-    }
+    },
+    mailJoinsTurn: true
   }
   return {
     ...f,

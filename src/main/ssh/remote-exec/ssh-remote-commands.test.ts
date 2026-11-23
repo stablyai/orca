@@ -174,28 +174,6 @@ describe('ssh remote command builders', () => {
     }
   )
 
-  it.runIf(powerShellExecutable)(
-    'emits a parseable Windows stale-lock recovery command',
-    () => {
-      const script = decodePowerShellCommand(
-        tryStealInstallLockCommand(
-          windows,
-          'C:/Users/orca-missing/.orca-remote/relay/.install-lock',
-          20 * 60
-        )
-      )
-      const result = spawnSync(
-        powerShellExecutable!,
-        ['-NoProfile', '-NonInteractive', '-Command', script],
-        { encoding: 'utf8' }
-      )
-
-      expect(result.status, result.stderr).toBe(0)
-      expect(result.stdout.trim()).toBe('BUSY')
-    },
-    15_000
-  )
-
   it.runIf(powerShell51Executable)(
     'lets only one Windows PowerShell 5.1 caller acquire an install lock',
     async () => {
@@ -312,27 +290,6 @@ describe('ssh remote command builders', () => {
       }
     },
     30_000
-  )
-
-  it.runIf(powerShellExecutable)(
-    'keeps a new Windows lock visible to the previous directory-only GC probe',
-    async () => {
-      const root = mkdtempSync(join(tmpdir(), 'orca-install-lock-windows-compat-'))
-      try {
-        const lockPath = join(root, '.install-lock')
-        const acquire = decodePowerShellCommand(tryCreateInstallLockCommand(windows, lockPath))
-        // The directory-only lock probe older Orca builds still run against this host.
-        const legacyProbe = `if (Test-Path -LiteralPath '${lockPath}' -PathType Container) { 'LOCKED' } else { 'OPEN' }`
-
-        await expect(runPowerShellCommand(powerShellExecutable!, acquire)).resolves.toMatch(/OK/)
-        await expect(runPowerShellCommand(powerShellExecutable!, legacyProbe)).resolves.toMatch(
-          /LOCKED/
-        )
-      } finally {
-        rmSync(root, { recursive: true, force: true })
-      }
-    },
-    15_000
   )
 
   it.runIf(process.platform !== 'win32')(

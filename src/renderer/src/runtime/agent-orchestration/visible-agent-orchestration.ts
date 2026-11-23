@@ -15,7 +15,7 @@ import {
   structuredAgentSessionTabId
 } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { orchestrationContextsEqual } from '@/store/slices/agent-status/agent-status-orchestration-context'
+import { orchestrationContextsEqual } from '@/store/slices/agent-status/orchestration/agent-status-orchestration-context'
 import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionOwnerForTab,

@@ -1,3 +1,4 @@
+import { decodeSavedLocalPtyReference } from '../../restoring-sessions/saved-local-terminal-ids'
 import { normalizePersistedMobileClientTabSelections } from '../../../runtime/client/navigation/client-session-tab-selection-persistence'
 import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { normalizeFeatureInteractionTelemetryBuckets } from '../../../../shared/feature-education/interactions/feature-interactions'
@@ -9,6 +10,8 @@ import { normalizeOrcadMigrationStagedCatalogs } from '../../../../shared/orcad-
 import { normalizeWorkspaceLineageByChildKey } from '../../applying-settings/ui-interaction-merge'
 import { dropInferredParentsOverFolderParents } from '../workspace-lineage/folder-parent-lineage-persistence'
 import { normalizeCrossStoreLineageByChildKey } from '../../../../shared/worktree/lineage/cross-store-lineage-records'
+import { normalizePersistedBots } from '../../../../shared/bot-types'
+import { withBotAutomationAgents } from '../../../bots/bot-automation-agent-sync'
 import {
   normalizeSshRemotePtyLease,
   normalizeSshTarget
@@ -44,11 +47,40 @@ export function normalizeLoadedProfileState(
   const projectCatalog = normalizeLoadedProjectCatalog(parsed, markNeedsSave)
   // Normalize local first; host partitions drop global fields already owned here.
   const workspaceSession = normalizeLoadedLocalSession(parsed, defaults, markNeedsSave)
+  const bots = parsed.bots === undefined ? undefined : normalizePersistedBots(parsed.bots)
+  if (bots !== undefined && parsed.botsPermissionDefaultMigrated !== true) {
+    // Old bots were created with Ask; later explicit Ask overrides must survive reloads.
+    for (const bot of bots) {
+      if (bot.permissionMode === 'ask') {
+        delete bot.permissionMode
+      }
+    }
+    markNeedsSave()
+  }
   const workspaceLineageByChildKey = normalizeWorkspaceLineageByChildKey(
     parsed.workspaceLineageByChildKey
   )
   const worktreeLineageById = { ...parsed.worktreeLineageById }
   dropInferredParentsOverFolderParents(worktreeLineageById, workspaceLineageByChildKey)
+
+  const legacyPaneKeyAliasEntries = normalizeLegacyPaneKeyAliasEntries(
+    parsed.legacyPaneKeyAliasEntries
+  ).map((entry) => {
+    const decoded = decodeSavedLocalPtyReference(entry)
+    if (decoded !== entry) {
+      markNeedsSave()
+    }
+    return decoded
+  })
+  const migrationUnsupportedPtyEntries = normalizeMigrationUnsupportedPtyEntries(
+    parsed.migrationUnsupportedPtyEntries
+  ).map((entry) => {
+    const decoded = entry.source === 'local' ? decodeSavedLocalPtyReference(entry) : entry
+    if (decoded !== entry) {
+      markNeedsSave()
+    }
+    return decoded
+  })
 
   return {
     ...defaults,
@@ -113,12 +145,16 @@ export function normalizeLoadedProfileState(
       .map(normalizeSshRemotePtyLease)
       .filter((lease): lease is SshRemotePtyLease => lease !== null),
     sshPtyConsumerRecoveries: parsed.sshPtyConsumerRecoveries,
-    migrationUnsupportedPtyEntries: normalizeMigrationUnsupportedPtyEntries(
-      parsed.migrationUnsupportedPtyEntries
+    migrationUnsupportedPtyEntries,
+    legacyPaneKeyAliasEntries,
+    // Bots that switched agents before their automations followed: those catch up once.
+    automations: withBotAutomationAgents(
+      Array.isArray(parsed.automations) ? parsed.automations : [],
+      bots ?? [],
+      markNeedsSave
     ),
-    legacyPaneKeyAliasEntries: normalizeLegacyPaneKeyAliasEntries(parsed.legacyPaneKeyAliasEntries),
-    automations: Array.isArray(parsed.automations) ? parsed.automations : [],
     automationRuns: normalizeLoadedAutomationRuns(parsed, markNeedsSave),
+    ...(bots === undefined ? {} : { bots, botsPermissionDefaultMigrated: true as const }),
     orcadMigrationImportReceipts: normalizeOrcadMigrationImportReceipts(
       parsed.orcadMigrationImportReceipts
     ),

@@ -1,4 +1,14 @@
-import { lstat, mkdir, mkdtemp, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  symlink,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -74,32 +84,26 @@ async function exists(path: string): Promise<boolean> {
 }
 
 describe('deleteSkills', () => {
-  it('removes every placement and leaves no staged residue', async () => {
+  it('removes directory and file aliases while preserving unrelated files', async () => {
     const { home, stateDirectory, canonicalDirectory, file } = await fixture()
-    const aliasDirectory = join(home, '.claude', 'skills', 'demo')
+    const directoryAlias = join(home, '.claude', 'skills', 'demo')
+    const fileAliasDirectory = join(home, '.codex', 'skills', 'demo')
+    const fileAlias = join(fileAliasDirectory, 'SKILL.md')
+    const notes = join(fileAliasDirectory, 'notes.md')
     await mkdir(join(home, '.claude', 'skills'), { recursive: true })
-    await symlink(canonicalDirectory, aliasDirectory, 'dir')
+    await symlink(canonicalDirectory, directoryAlias, 'dir')
+    await mkdir(fileAliasDirectory, { recursive: true })
+    await symlink(file, fileAlias)
+    await writeFile(notes, 'kept')
 
     const result = await run(home, stateDirectory, await request(file))
     expect(result.skills[0].status).toBe('deleted')
     expect(await exists(canonicalDirectory)).toBe(false)
-    expect(await exists(aliasDirectory)).toBe(false)
+    expect(await exists(directoryAlias)).toBe(false)
+    expect(await exists(fileAlias)).toBe(false)
+    expect(await readFile(notes, 'utf8')).toBe('kept')
     expect(await readdir(join(home, '.agents', 'skills'))).toEqual([])
     expect(await exists(skillDeleteJournalPath(stateDirectory, canonicalDirectory))).toBe(false)
-  })
-
-  it('removes an alias-file symlink but keeps a directory that holds anything else', async () => {
-    const { home, stateDirectory, file } = await fixture()
-    const aliasDirectory = join(home, '.codex', 'skills', 'demo')
-    await mkdir(aliasDirectory, { recursive: true })
-    await symlink(file, join(aliasDirectory, 'SKILL.md'))
-    await writeFile(join(aliasDirectory, 'notes.md'), 'kept')
-
-    const result = await run(home, stateDirectory, await request(file))
-    expect(result.skills[0].status).toBe('deleted')
-    expect(await exists(join(aliasDirectory, 'SKILL.md'))).toBe(false)
-    // Unshared alias directories may still hold unrelated files.
-    expect(await exists(join(aliasDirectory, 'notes.md'))).toBe(true)
   })
 
   it('restores every staged placement when a later rename fails', async () => {

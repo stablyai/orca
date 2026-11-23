@@ -24,6 +24,7 @@ vi.mock('electron', () => ({
   }
 }))
 import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-checkpoint'
+import { createRendererShutdownCheckpointService } from '../core-desktop/renderer-shutdown-checkpoint-service'
 
 const AWAIT_CHANNEL = 'app:await-before-unload-checkpoint'
 
@@ -46,7 +47,9 @@ describe('registerRendererShutdownCheckpointHandler', () => {
           })
       )
     }
-    registerRendererShutdownCheckpointHandler(store as never)
+    registerRendererShutdownCheckpointHandler(
+      createRendererShutdownCheckpointService(store as never)
+    )
 
     syncHandlers.get('app:stage-before-unload-sync')?.({}, { sessions: [], ui: {} })
     const checkpoint = invokeHandlers.get(AWAIT_CHANNEL)?.()
@@ -69,7 +72,9 @@ describe('registerRendererShutdownCheckpointHandler', () => {
       flushPendingOrThrowAsync: vi.fn(() => Promise.reject(new Error('disk full')))
     }
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    registerRendererShutdownCheckpointHandler(store as never)
+    registerRendererShutdownCheckpointHandler(
+      createRendererShutdownCheckpointService(store as never)
+    )
 
     const event: { returnValue?: unknown } = {}
     syncHandlers.get('app:stage-before-unload-sync')?.(event, { sessions: [], ui: {} })

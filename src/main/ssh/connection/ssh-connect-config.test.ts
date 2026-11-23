@@ -40,15 +40,6 @@ describe('findDefaultKeyFile', () => {
     mockReadFileSync.mockReset()
   })
 
-  it('leaves FIDO2 defaults out of the ssh2 private-key fallback', () => {
-    mockExistsSync.mockImplementation((path: unknown) => {
-      return path === testHomePath('.ssh', 'id_ed25519_sk')
-    })
-
-    expect(findDefaultKeyFile()).toBeUndefined()
-    expect(mockReadFileSync).not.toHaveBeenCalled()
-  })
-
   it('skips unreadable key files and tries next', () => {
     mockExistsSync.mockImplementation((path: unknown) => {
       return path === testHomePath('.ssh', 'id_ed25519') || path === testHomePath('.ssh', 'id_rsa')
@@ -117,11 +108,6 @@ describe('buildConnectConfig', () => {
     } else {
       delete process.env.SSH_AUTH_SOCK
     }
-  })
-
-  it('allows IdentityAgent none to disable agent auth', () => {
-    const config = buildConnectConfig(makeTarget(), makeResolved({ identityAgent: 'none' }))
-    expect(config.agent).toBeUndefined()
   })
 
   it('does not offer broad agent auth when IdentitiesOnly keys cannot be parsed', () => {

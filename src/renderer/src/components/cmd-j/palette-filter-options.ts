@@ -16,7 +16,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { getProjectHeaderRevealTarget } from '../../../../shared/sidebar-list/sections/project-section-grouping'
 import type { ProjectGroupingModel } from '../../../../shared/sidebar-list/sections/project-section-grouping'
 import type { SidebarHostOption } from '../sidebar/worktree-list/controls/sidebar-host-options'
-import { translateHostDisplayLabel } from '../sidebar/execution-host-label'
+import { translateHostDisplayLabel } from '../../runtime/hosts/display/execution-host-label'
 import {
   expandEquivalentExecutionHostIds,
   pickerExecutionHosts

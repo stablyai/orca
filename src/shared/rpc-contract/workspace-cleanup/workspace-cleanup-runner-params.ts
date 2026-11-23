@@ -21,3 +21,14 @@ export const WorkspaceCleanupReportUnsavedEditorsParams = z
     reporterId: z.string().min(1).max(128).optional()
   })
   .strict()
+
+/** One settings view reading the host's Codex history size; the host stops a walk no view still waits for. */
+export const WorkspaceCleanupCodexHistoryDiskUsageParams = z
+  .object({ consumerId: z.string().min(1).max(128).optional() })
+  .strict()
+  .default({})
+
+/** That view stopped waiting (closed, hidden or switched host) before its size arrived. */
+export const WorkspaceCleanupReleaseCodexHistoryDiskUsageParams = z
+  .object({ consumerId: z.string().min(1).max(128) })
+  .strict()

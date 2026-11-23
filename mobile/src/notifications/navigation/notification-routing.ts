@@ -1,5 +1,6 @@
 import { parseExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
-import type { HostStackRouteTarget } from '../../navigation/host-stack-navigation'
+import { HOST_GROUP_ROUTE, type HostStackRouteTarget } from '../../navigation/host-stack-navigation'
+import { botGroupIdOfRoomPaneKey } from '../../../../src/shared/bots/bot-group-room-pane-key'
 import { mobileSessionRouteTarget } from '../../session/mobile-session-route'
 import type { HostCredentialStatus } from '../../host-catalog/host-profile'
 
@@ -46,19 +47,23 @@ export function getNotificationNavigationTarget(
   }
 
   const worktreeId = readNonEmptyString(record.worktreeId)
+  const paneKey = readNonEmptyString(record.paneKey)
+  const groupId = botGroupIdOfRoomPaneKey(paneKey)
   // Accept only relayed servers; unknown execution hosts retain the paired desktop route.
   const executionHost = parseExecutionHostId(readNonEmptyString(record.executionHost))
   const credentialStatus = options.credentialStatusByHostId?.get(hostId)
   return {
     hostId,
-    sessionTarget: worktreeId
-      ? mobileSessionRouteTarget({
-          hostId,
-          worktreeId,
-          paneKey: readNonEmptyString(record.paneKey) ?? undefined,
-          ...(executionHost?.kind === 'runtime' ? { executionHost: executionHost.id } : {})
-        })
-      : null,
+    sessionTarget: groupId
+      ? { name: HOST_GROUP_ROUTE, params: { hostId, groupId } }
+      : worktreeId
+        ? mobileSessionRouteTarget({
+            hostId,
+            worktreeId,
+            paneKey: paneKey ?? undefined,
+            ...(executionHost?.kind === 'runtime' ? { executionHost: executionHost.id } : {})
+          })
+        : null,
     ...(credentialStatus === 'missing'
       ? { credentialRecovery: 're-pair' as const }
       : credentialStatus === 'temporarily-unavailable'

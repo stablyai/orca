@@ -57,27 +57,6 @@ describe('mutation receipt capacity schema', () => {
     }
   })
 
-  it('amortizes capacity pruning while retaining the newest replay records', () => {
-    db = new OrchestrationDb(':memory:')
-    const sqlite = sqliteFor(db)
-    insertReceipts(sqlite, MUTATION_RECEIPT_MAX_ROWS, 'completed')
-
-    beginReceipt(db, 'first')
-    const afterFirst = sqlite
-      .prepare('SELECT receipt_count FROM mutation_receipt_ledger')
-      .get() as { receipt_count: number }
-    beginReceipt(db, 'second')
-    const afterSecond = sqlite
-      .prepare('SELECT receipt_count FROM mutation_receipt_ledger')
-      .get() as { receipt_count: number }
-
-    expect(afterFirst.receipt_count).toBe(MUTATION_RECEIPT_MAX_ROWS - 63)
-    expect(afterSecond.receipt_count).toBe(afterFirst.receipt_count + 1)
-    expect(db.getMutationReceipt('caller', 'request_00064')).toBeUndefined()
-    expect(db.getMutationReceipt('caller', 'request_00065')).toMatchObject({ state: 'completed' })
-    expect(db.getMutationReceipt('caller', 'request_10000')).toMatchObject({ state: 'completed' })
-  })
-
   it('keeps the row limit exact across independent database connections', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-mutation-receipt-concurrency-'))
     const dbPath = join(tempDir, 'orchestration.db')

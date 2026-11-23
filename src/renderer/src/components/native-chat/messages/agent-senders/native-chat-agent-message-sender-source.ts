@@ -3,7 +3,7 @@ import { useAppStateView } from '@/store/retained-views/app-state-view'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { readingAgentSenders } from '@/runtime/native-chat/agent-senders/agent-sender-index'
 import type { AppState } from '@/store/types'
-import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
+import { agentRowDisplayDotState } from '../../../../../../shared/agent-row-dot-state'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import {
   agentMessageSenderView,

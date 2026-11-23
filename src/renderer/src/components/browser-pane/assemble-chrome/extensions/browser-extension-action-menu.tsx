@@ -15,8 +15,8 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { browserExtensionRemovalDescription } from '@/components/browser-extension-removal-description'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
+import { browserExtensionRemovalDescription } from '@/components/browser-pane/assemble-chrome/extensions/browser-extension-removal-description'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { BrowserExtensionContextMenuItem } from '../../../../../../shared/browser/extensions/browser-extension-context-menu-types'

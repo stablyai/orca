@@ -24,7 +24,7 @@ import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { stopStructuredAgentSessionRuntime } from '../../../agent-session/installation/structured-agent-session-runtime'
 import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from '../../../agent-session/records/agent-session-record-store-test-harness'
 import { createStructuredAgentSessionLogger } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import { scriptedCodexTransport } from '../../../orca-runtime-tests/scripted-codex-transport.test-fixture'
+import { scriptedCodexTransport } from '../../../agent-session/testing/scripted-codex-transport.test-fixture'
 
 export const SESSION = 'session-integration-1'
 export const THREAD = 'thread-integration'

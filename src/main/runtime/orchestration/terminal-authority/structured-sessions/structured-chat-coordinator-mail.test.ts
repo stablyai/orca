@@ -21,7 +21,6 @@ import {
   coordinatorRunAndTask,
   clearChat,
   WAIT,
-  isMailPointer,
   isWholeMail,
   turnText
 } from './structured-chat-coordinator-mail-rig.test-fixture'
@@ -80,34 +79,26 @@ describe('a worker result reaches the structured chat that coordinates it', () =
 })
 
 describe("another agent's message in a structured chat", () => {
-  it('is shown whole in the chat but sent to the agent only as a pointer at check, unlike the person', async () => {
+  it('is sent to the agent exactly as the chat shows it, with no check needed', async () => {
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     await finishWorker(taskId)
     await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
 
-    // Dev builds run the CLI as `orca-dev`.
-    const pointer = turnText(chat.turns[0]!).replace('`orca-dev ', '`orca ')
-    expect(pointer).toBe(
-      `You have 1 orchestration message. Run \`orca orchestration check --run ${runId}\`.`
-    )
+    const sent = turnText(chat.turns[0]!)
+    expect(isWholeMail(sent)).toBe(true)
+    expect(sent).toContain('\nSubject: Done')
+    expect(sent).toContain('"outcome":"succeeded"')
+    expect(sent).not.toContain('orchestration check')
     const snapshot = await readTestHostJournal(host, COORDINATOR)
-    const card = snapshot.items.find(
-      (item) =>
-        item.body?.kind === 'message' &&
-        item.body.blocks.some((block) => block.type === 'text' && isWholeMail(block.text))
+    const shown = snapshot.items.flatMap((item) =>
+      item.body?.kind === 'message' && item.body.from?.kind === 'agent'
+        ? item.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+        : []
     )
-    expect(card?.body).toMatchObject({ from: { kind: 'agent' } })
+    expect(shown).toEqual([sent])
     await settleTurn(COORDINATOR, 0)
-    expect(unread(`run:${runId}`)).toHaveLength(1)
-
-    expect(await sendUserMessage(COORDINATOR, 'I approve the deploy')).toMatchObject({ ok: true })
-    await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
-    expect(turnText(chat.turns[1]!)).toBe('I approve the deploy')
-
-    const checked = await call('orchestration.check', {}, { sessionId: COORDINATOR })
-    expect(checked).toMatchObject({ runId, count: 1, messages: [{ type: 'worker_done' }] })
-    expect(unread(`run:${runId}`)).toEqual([])
+    await vi.waitFor(() => expect(unread(`run:${runId}`)).toEqual([]), WAIT)
   })
 })
 
@@ -125,18 +116,57 @@ describe('a /clear keeps the chat its orchestration address', () => {
     const next = connectionFor(cleared)
     expect(codex.connections.slice(opened)).toEqual([next])
     expect(next.methods.filter((method) => method.startsWith('thread/'))).toEqual(['thread/start'])
-    expect(isMailPointer(turnText(next.turns[0]!))).toBe(true)
+    expect(isWholeMail(turnText(next.turns[0]!))).toBe(true)
     await settleTurn(cleared, 0)
     await expect(
       call('orchestration.runCurrent', {}, { sessionId: cleared })
     ).resolves.toMatchObject({ run: { id: runId } })
-    await expect(call('orchestration.check', {}, { sessionId: cleared })).resolves.toMatchObject({
-      runId,
-      count: 1
-    })
+    await vi.waitFor(() => expect(unread(`run:${runId}`)).toEqual([]), WAIT)
     expect(db.getRunRaw(runId)).toMatchObject({
       coordinator_orca_session_id: COORDINATOR,
       consumer_generation: generation
     })
+  })
+})
+
+describe("mail sent to a coordinating chat's own address, outside its Run", () => {
+  const to = `orca_session_id:${COORDINATOR}`
+  /** Mail to the chat itself, tagged with no Run, as bot item mail and peers send it. */
+  const directMail = (id: string, from: string) =>
+    db.insertMessage({
+      id,
+      from,
+      to,
+      type: 'status',
+      subject: 'commented',
+      body: 'how about it?',
+      ...(from === 'orca:items' ? { orcaAuthored: 'item-mail' as const } : {})
+    })
+
+  it('delivers direct mail to the chat and exposes undelivered messages through the unbound check', async () => {
+    const chat = await openChat(COORDINATOR)
+    await coordinatorRunAndTask()
+
+    for (const [index, from] of ['orca:items', 'term_peer'].entries()) {
+      directMail(`msg_direct_${index}`, from)
+      runtime.notifyMessageArrived(to, 'status')
+      await vi.waitFor(() => expect(chat.turns).toHaveLength(index + 1), WAIT)
+      expect(turnText(chat.turns[index]!)).toContain('how about it?')
+      await settleTurn(COORDINATOR, index)
+      await vi.waitFor(() => expect(unread(to)).toEqual([]), WAIT)
+    }
+
+    directMail('msg_peer_2', 'term_peer')
+
+    const checked = await call(
+      'orchestration.check',
+      { run: 'run_unbound' },
+      { sessionId: COORDINATOR }
+    )
+    expect(checked).toMatchObject({
+      count: 1,
+      messages: [{ id: 'msg_peer_2', run_id: 'run_unbound' }]
+    })
+    expect(unread(to)).toEqual([])
   })
 })

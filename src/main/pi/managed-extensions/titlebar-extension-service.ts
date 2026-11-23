@@ -166,7 +166,7 @@ export class PiTitlebarExtensionService {
     ptyId: string,
     existingAgentDir: string | undefined,
     kind: PiAgentKind,
-    options?: { materializeDefaultHome?: boolean; configDirName?: string }
+    options?: { materializeDefaultHome?: boolean; configDirName?: string; cliOnPath?: boolean }
   ): Record<string, string> {
     const freshConfigEnv = kind === 'omp' ? this.buildFreshOmpEnv() : {}
     const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir(kind, options?.configDirName)
@@ -179,9 +179,9 @@ export class PiTitlebarExtensionService {
       }
     }
 
-    // Bare shells must not recreate deleted agent homes; materialize only on explicit opt-in (#10196).
+    // Bare shells must not recreate deleted agent homes (#10196) or write into one whose CLI is gone (#43445).
     const materializeDefaultHome = options?.materializeDefaultHome !== false
-    if (!existsSync(sourceAgentDir) && !materializeDefaultHome) {
+    if (!materializeDefaultHome && (options?.cliOnPath === false || !existsSync(sourceAgentDir))) {
       if (kind === 'omp') {
         const statusSource = withOrcaManagedExtensionMarker(getPiAgentStatusExtensionSource(kind))
         const statusExtensionPath = this.writeOmpFallbackStatusExtension(statusSource)

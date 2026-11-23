@@ -5,6 +5,7 @@ import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { recordFailedStartDispatchIdentity } from '../worker-terminal/failed-start-dispatch-identity'
 import { DISPATCH_CIRCUIT_BREAK_FAILURES } from '../dispatch-context/dispatch-circuit-breaker'
 import { mergeWorkerLaunchObservation } from '../../workers/launch/worker-launch-observation'
+import { WORKER_DISPATCH_COLUMN_LIST } from '../row-column-lists'
 
 export function retainWorkerLaunchObservation(
   this: OrchestrationDb,
@@ -177,9 +178,12 @@ export function getWorkerDispatch(
   this: OrchestrationDb,
   dispatchId: string
 ): WorkerDispatchRow | undefined {
-  return this.db
-    .prepare('SELECT * FROM worker_dispatches WHERE dispatch_id = ?')
-    .get(dispatchId) as WorkerDispatchRow | undefined
+  // An explicit projection, so SyncDatabase keeps this hot statement compiled; `SELECT *` is never cached.
+  const row = this.db
+    .prepare(`SELECT ${WORKER_DISPATCH_COLUMN_LIST} FROM worker_dispatches WHERE dispatch_id = ?`)
+    .get(dispatchId)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list is checked against WorkerDispatchRow, and projected-row-getters.test.ts verifies the returned row.
+  return row as WorkerDispatchRow | undefined
 }
 
 export type WorkerDispatchOutcomeMethods = {

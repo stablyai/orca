@@ -32,6 +32,7 @@ import type {
   WslMoveHost
 } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-ports'
 import { proveWslMoveTerminalsExited } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-exit-proof'
+import { wslMoveSleepFailures } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-sleep-failures'
 import {
   collectWslMoveGateInputs,
   listWslMovePanes,
@@ -62,6 +63,7 @@ import { inspectPtyProviderProcessForRenderer } from '../../providers/pty/proces
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { getTrustedUIRendererWebContents, getTrustedUIRendererWindow } from '../ui'
 import { registerWslMoveHandlers } from './wsl-move-handlers'
+import { wslMoveMappedDrivePorts } from './wsl-move-mapped-drive-ports'
 import { registerWslMoveOrchestrator } from './wsl-move-orchestrator-wiring'
 import { createWslMoveUndoPorts } from './wsl-move-undo-wiring'
 import { connectWslMoveHostService, type WslMoveHostConnectMode } from './wsl-move-host-connect'
@@ -179,6 +181,7 @@ export function createWslMoveDriverDeps(
     connectHost: (distro) => connectWslMoveHost(userDataPath, distro, hostConnect),
     isDistroRegistered: (distro, distroGuid) => isWslDistroRegistered(distro, distroGuid),
     exportManifest: (request) => exportWslMoveManifest(store, request),
+    ...wslMoveMappedDrivePorts(),
     gateInputs: (scope) => collectWslMoveGateInputs(facts, scope),
     listPanes: (scope) => listWslMovePanes(facts, scope),
     ...(process.platform === 'win32' ? { shellCwds: readWslMovePaneShellCwds } : {}),
@@ -192,16 +195,27 @@ export function createWslMoveDriverDeps(
         }
         // Main's pause barrier: keeps browser tabs and waits for the window's session to persist.
         const outcomes = await pauseWorkspacesForProjectMove(window, runtime, workspaceIds)
-        return {
-          failedWorktreeIds: outcomes
-            .filter((outcome) => outcome.failure || outcome.chatFailed || outcome.vmSuspendFailure)
-            .map((outcome) => outcome.worktreeId)
+        const failedWorktreeIds = await wslMoveSleepFailures(outcomes, {
+          store,
+          hasLiveTerminal: (worktreeId) => runtime.listWslMoveLiveTerminals([worktreeId]).length > 0
+        })
+        if (failedWorktreeIds.length > 0) {
+          console.warn(
+            '[wsl-move] Sleep left workspaces awake:',
+            outcomes.filter((outcome) => failedWorktreeIds.includes(outcome.worktreeId))
+          )
         }
+        return { failedWorktreeIds }
       },
       livePtyIds: (workspaceIds) =>
         runtime.listWslMoveLiveTerminals(workspaceIds).map((terminal) => terminal.ptyId),
-      captureRestoreHints: (panes, distro) =>
-        captureWslMoveRestoreHints(new HistoryReader(getDaemonHistoryDir()), panes, distro),
+      captureRestoreHints: (panes, distro, mappedDrives) =>
+        captureWslMoveRestoreHints(
+          new HistoryReader(getDaemonHistoryDir()),
+          panes,
+          distro,
+          mappedDrives
+        ),
       proveExited: async (scope) => {
         const fallback = await countInProcessFallbackTerminals()
         return proveWslMoveTerminalsExited(
@@ -218,7 +232,7 @@ export function createWslMoveDriverDeps(
       }
     },
     snapshots: store,
-    sleptScrollback: (panes, distro, migrationId, workspaceIds, reported) =>
+    sleptScrollback: (panes, distro, migrationId, workspaceIds, reported, mappedDrives) =>
       readWslMoveSleptScrollbackFromHistory(
         new HistoryReader(getDaemonHistoryDir()),
         withSleptSessionPanes(
@@ -227,7 +241,9 @@ export function createWslMoveDriverDeps(
         ),
         distro,
         wslMoveSleptSpoolRoot(userDataPath, migrationId),
-        (tabId) => wslMoveTabTitle(store.getWorkspaceSession(), tabId)
+        (tabId) => wslMoveTabTitle(store.getWorkspaceSession(), tabId),
+        () => new Date(),
+        mappedDrives
       ),
     shellHistory: (distro, worktrees) => buildWslMoveShellHistoryBlobs({ distro, worktrees }),
     // The pass reloads the window it held at commit (wsl-move-window-write-hold.ts).

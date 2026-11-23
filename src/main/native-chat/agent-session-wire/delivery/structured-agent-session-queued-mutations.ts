@@ -7,8 +7,10 @@ import type { AgentJournalSubmission } from '../../../../shared/agent-session/jo
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult,
+  AgentSessionQueuedSendReceipt,
   AgentSessionSendResult
 } from '../../../../shared/agent-session/agent-session-wire'
+import type { QueuedMessageRow } from '../../agent-session-journal/queued-messages/queued-message-table'
 import type {
   AgentSessionQueuedMessageDeleteResult,
   AgentSessionQueuedMessagesResumeResult
@@ -28,7 +30,7 @@ import {
   structuredQueueHold
 } from './structured-agent-session-queued-gate'
 import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { queuedMessageOwed } from './structured-agent-session-queued-mail'
+import { admitQueuedMessage } from './structured-agent-session-queued-mail'
 import { resumeStructuredQueue } from './structured-agent-session-queued-pause'
 import {
   mutateStructuredAgentSession,
@@ -49,6 +51,10 @@ function invalid(message: string): {
   refusal: { code: 'agent_session_operation_invalid'; message: string }
 } {
   return { ok: false, refusal: { code: 'agent_session_operation_invalid', message } }
+}
+
+function queuedReceipt(card: QueuedMessageRow): AgentSessionQueuedSendReceipt {
+  return { messageId: card.messageId, position: card.position, state: card.state }
 }
 
 async function submissionFor(
@@ -103,7 +109,9 @@ export function sendQueuedStructuredAgentMessage(
       result: (row) => journalRowReceiptResult(row, 'submission'),
       binding: { at: 'last', kinds: ['submission'], answer: 'journal-row' },
       unwritten: (value, ctx) =>
-        submissionRowReceipt(ctx, 'submission' in value ? value.submission : undefined)
+        'queued' in value
+          ? { kind: 'queued-draft', messageId }
+          : submissionRowReceipt(ctx, value.submission)
     },
     run: async (ctx): Promise<TurnOutcome<AgentSessionSendResult>> => {
       // Send-now overrides working/FIFO/stored holds, preserving stronger gates.
@@ -140,7 +148,8 @@ export function sendQueuedStructuredAgentMessage(
       if (row.body.command && work.working()) {
         return invalid("A command can't be sent while the agent is working.")
       }
-      // An earlier unechoed send never blocks: delivery orders handovers behind it and its opening turn.
+      // Work that can't take input yet (starting, stopping, a different Codex choice) gets the card
+      // as a steer: the queue hands it over once it can, or as the next message after this turn.
       if (
         (work.activeTurnId() !== null || work.queueState().owedEnteredSubmissions.length > 0) &&
         !canSteerStructuredQueuedMessage(
@@ -154,18 +163,12 @@ export function sendQueuedStructuredAgentMessage(
           row
         )
       ) {
-        return {
-          ok: false,
-          refusal: refuse(
-            'agent_session_operation_invalid',
-            { reason: 'turnActive' },
-            'The current turn cannot accept this queued message yet.'
-          )
-        }
+        const card = (await ctx.journal.queuedMessages.steerWhenReady(messageId)) ?? row
+        return { ok: true, value: { clientMessageId: operationId, queued: queuedReceipt(card) } }
       }
       const submissionId = operationId
-      const owed = queuedMessageOwed(context.deps, ctx.sessionId, row.body)
       try {
+        const owed = admitQueuedMessage(context.deps, ctx.sessionId, messageId, row.body)
         await ctx.journal.appendSubmission(
           {
             clientMessageId: submissionId,
@@ -218,6 +221,16 @@ export function sendQueuedStructuredAgentMessage(
     },
     // Replay the receipt’s original handoff, never the card’s newer handoff.
     replay: async (ctx, _outcome, receipt) => {
+      if (receipt?.kind === 'queued-draft') {
+        const card = await Promise.resolve(ctx.journal.queuedMessages.get(messageId))
+        const handedOff = card?.consumedAs
+          ? await ctx.journal.reads.submission(card.consumedAs)
+          : undefined
+        if (handedOff) {
+          return { clientMessageId: handedOff.clientMessageId, submission: handedOff }
+        }
+        return card ? { clientMessageId: operationId, queued: queuedReceipt(card) } : null
+      }
       const submission =
         receipt?.kind === 'journal-row' && receipt.epoch === ctx.journal.cursor().epoch
           ? (await ctx.journal.reads.input({ kind: 'submission-at', sequence: receipt.sequence }))

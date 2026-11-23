@@ -139,8 +139,18 @@ export function createDaemonPtySubprocessHandle(args: {
     shellIsRootChild: !reportsChildExitStatus,
     ...(process.platform === 'win32'
       ? {
-          inspectChildProcesses: (fresh?: boolean, ignoreDetached?: boolean) =>
-            inspectSpawnFileWindowsChildProcesses(proc, shellPath, fresh, ignoreDetached)
+          inspectChildProcesses: (
+            fresh?: boolean,
+            ignoreDetached?: boolean,
+            jobMembershipOnly?: boolean
+          ) =>
+            inspectSpawnFileWindowsChildProcesses(
+              proc,
+              shellPath,
+              fresh,
+              ignoreDetached,
+              jobMembershipOnly
+            )
         }
       : {}),
     shellPath: args.shellPath,

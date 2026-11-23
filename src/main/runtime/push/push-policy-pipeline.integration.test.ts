@@ -83,9 +83,10 @@ it('carries the native idle boundary through replay and push dispatch', async ()
         getSystemIdleTime: () => idle
       }),
     showNotification: () => false,
-    findWindowById: () => null,
-    onIpc: () => {},
-    removeIpcListener: () => {}
+    hasWindow: () => false,
+    hasLiveRenderer: () => false,
+    sendToWindow: () => false,
+    requestRenderer: () => Promise.reject(new Error('No renderer window available'))
   })
   const h = await pipeline()
   h.dispatch()

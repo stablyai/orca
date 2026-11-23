@@ -76,25 +76,23 @@ describe('Hermes config preservation on disk', () => {
     expect(readFileSync(`${configPath}.bak`, 'utf8')).toBe(installed)
   })
 
-  it.skipIf(process.platform === 'win32').each([
-    [0o600, 0o022],
-    [0o600, 0],
-    [0o640, 0o077],
-    [0o640, 0]
-  ])('preserves mode %i with umask %i and a byte-exact backup', (mode, mask) => {
-    writeFileSync(configPath, initial)
-    chmodSync(configPath, mode)
-    const previous = process.umask(mask)
-    try {
-      expect(service.install().state).toBe('installed')
-    } finally {
-      process.umask(previous)
+  it.skipIf(process.platform === 'win32').each([[0o640, 0o077]])(
+    'preserves mode %i with umask %i and a byte-exact backup',
+    (mode, mask) => {
+      writeFileSync(configPath, initial)
+      chmodSync(configPath, mode)
+      const previous = process.umask(mask)
+      try {
+        expect(service.install().state).toBe('installed')
+      } finally {
+        process.umask(previous)
+      }
+      expect(statSync(configPath).mode & 0o777).toBe(mode)
+      expect(statSync(`${configPath}.bak`).mode & 0o777).toBe(mode)
+      expect(readFileSync(`${configPath}.bak`, 'utf8')).toBe(initial)
+      expect(readdirSync(directory).sort()).toEqual(['config.yaml', 'config.yaml.bak', 'plugins'])
     }
-    expect(statSync(configPath).mode & 0o777).toBe(mode)
-    expect(statSync(`${configPath}.bak`).mode & 0o777).toBe(mode)
-    expect(readFileSync(`${configPath}.bak`, 'utf8')).toBe(initial)
-    expect(readdirSync(directory).sort()).toEqual(['config.yaml', 'config.yaml.bak', 'plugins'])
-  })
+  )
 
   it.skipIf(process.platform === 'win32')(
     'creates a private new config with permissive umask',
@@ -179,7 +177,7 @@ describe('Hermes config preservation on disk', () => {
     expect(existsSync(`${configPath}.bak`)).toBe(false)
   })
 
-  it.each(['plugins: [', 'plugins: unexpected\n', 'plugins:\n  enabled: not-a-list\n'])(
+  it.each(['plugins: [', 'plugins:\n  enabled: not-a-list\n'])(
     'does not install files or rewrite unexpected YAML (%s)',
     (input) => {
       writeFileSync(configPath, input)

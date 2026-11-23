@@ -14,7 +14,7 @@ export function wrapPosixHookCommand(
   scriptPath: string,
   env: Record<string, string> = {},
   // Gate events treat silence as denial, so missing scripts may need fallback stdout.
-  options: { fallbackStdout?: string; skipPaneGuard?: boolean; stdinMayStayOpen?: boolean } = {}
+  options: { fallbackStdout?: string; stdinMayStayOpen?: boolean } = {}
 ): string {
   // Keep arbitrary paths literal across shell metacharacters.
   const quoted = quotePosixShell(scriptPath)
@@ -30,7 +30,7 @@ export function wrapPosixHookCommand(
       ? drain
       : `printf '%s\\n' ${quotePosixShell(options.fallbackStdout)}; ${drain}`
   const guards = [
-    ...(options.skipPaneGuard ? [] : [POSIX_ORCA_PANE_GUARD]),
+    POSIX_ORCA_PANE_GUARD,
     `[ -f ${quoted} ]`,
     `[ -r ${quoted} ]`,
     `[ -x ${quoted} ]`

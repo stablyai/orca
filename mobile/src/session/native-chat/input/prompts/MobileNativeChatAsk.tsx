@@ -42,6 +42,8 @@ type Props = {
   /** Per question; structured prompts hide "Other…" where the provider takes no free text. */
   allowOther?: readonly boolean[]
   freeTextInputs?: readonly (AgentJournalFreeTextInput | undefined)[]
+  /** Tapping a choice is the whole answer: no Cancel or Skip, only the fold chevron. */
+  choiceOnly?: true
 }
 
 function confirmLabels(t: Translate) {
@@ -63,7 +65,8 @@ export function MobileNativeChatAsk({
   onCancel,
   onCollapse,
   allowOther,
-  freeTextInputs
+  freeTextInputs,
+  choiceOnly
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -323,34 +326,38 @@ export function MobileNativeChatAsk({
         ) : null}
       </ScrollView>
 
-      <View style={styles.footer}>
-        <Pressable
-          style={({ pressed }) => [styles.cancel, pressed && pressedStyle]}
-          onPress={() => void cancel()}
-          disabled={sending}
-          hitSlop={8}
-        >
-          <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
-        </Pressable>
-        {total > 1 ? (
-          <Text style={styles.progress}>
-            {index + 1}/{total}
-          </Text>
-        ) : null}
-        <Pressable
-          style={({ pressed }) => [
-            styles.next,
-            confirmSkips && styles.nextSkip,
-            pressed && pressedStyle
-          ]}
-          onPress={confirm}
-          disabled={submitting}
-        >
-          <Text style={[styles.nextText, confirmSkips && styles.nextSkipText]}>
-            {confirmLabels(t)[confirmLabel]}
-          </Text>
-        </Pressable>
-      </View>
+      {choiceOnly ? (
+        <View style={styles.choiceOnlyEnd} />
+      ) : (
+        <View style={styles.footer}>
+          <Pressable
+            style={({ pressed }) => [styles.cancel, pressed && pressedStyle]}
+            onPress={() => void cancel()}
+            disabled={sending}
+            hitSlop={8}
+          >
+            <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
+          </Pressable>
+          {total > 1 ? (
+            <Text style={styles.progress}>
+              {index + 1}/{total}
+            </Text>
+          ) : null}
+          <Pressable
+            style={({ pressed }) => [
+              styles.next,
+              confirmSkips && styles.nextSkip,
+              pressed && pressedStyle
+            ]}
+            onPress={confirm}
+            disabled={submitting}
+          >
+            <Text style={[styles.nextText, confirmSkips && styles.nextSkipText]}>
+              {confirmLabels(t)[confirmLabel]}
+            </Text>
+          </Pressable>
+        </View>
+      )}
       <MobileNativeChatOptionPreviewSheet
         options={q.options}
         viewedIndex={viewedOption}

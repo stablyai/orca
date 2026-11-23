@@ -87,7 +87,7 @@ beforeEach(async () => {
   const createClient = (signal?: AbortSignal) =>
     new (loadLinearSdk().LinearClient)({ apiKey: 'local-proof-only', signal })
   boundary.clients.mockImplementation((_workspace, signal) => [
-    { workspace, apiKey: 'local-proof-only', client: createClient(signal) }
+    { workspace, credential: { apiKey: 'local-proof-only' }, client: createClient(signal) }
   ])
   boundary.signing.mockImplementation((_entry, signal) => createClient(signal))
   boundary.status.mockReturnValue({ connected: true, workspaces: [workspace] })

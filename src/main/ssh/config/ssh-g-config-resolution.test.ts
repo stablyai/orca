@@ -6,7 +6,8 @@ import { join } from 'node:path'
 
 type NodeOsModule = typeof NodeOs
 
-const { existsSyncMock, homedirMock, userInfoMock } = vi.hoisted(() => ({
+const { existsSyncMock, homedirMock, runProcessMock, userInfoMock } = vi.hoisted(() => ({
+  runProcessMock: vi.fn(),
   existsSyncMock: vi.fn<(path: string) => boolean>(() => true),
   homedirMock: vi.fn<() => string>(() => '/home/env'),
   userInfoMock: vi.fn<() => { homedir: string; username?: string }>(() => ({
@@ -15,6 +16,7 @@ const { existsSyncMock, homedirMock, userInfoMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('node:fs', () => ({ existsSync: existsSyncMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 // Retain real os exports because site-policy fixtures need tmpdir.
 vi.mock('node:os', async (importOriginal) => ({
   ...(await importOriginal<NodeOsModule>()),
@@ -22,7 +24,31 @@ vi.mock('node:os', async (importOriginal) => ({
   userInfo: userInfoMock
 }))
 
-import { siteConfigMayRestrictHostKeys, splitIncludeArguments } from './ssh-g-config-resolution'
+import {
+  runSshG,
+  siteConfigMayRestrictHostKeys,
+  splitIncludeArguments
+} from './ssh-g-config-resolution'
+
+describe('runSshG', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    runProcessMock.mockReset()
+  })
+
+  it('runs the ssh named by ORCA_SYSTEM_SSH_PATH', async () => {
+    // Connections honor this override, so -G must resolve config with the same binary.
+    vi.stubEnv('ORCA_SYSTEM_SSH_PATH', '/opt/custom/bin/ssh')
+    runProcessMock.mockResolvedValue({ code: 0, stdout: 'hostname example.com\n', stderr: '' })
+
+    await expect(runSshG(['-G', '--', 'example'])).resolves.toMatchObject({
+      hostname: 'example.com'
+    })
+    expect(runProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({ program: '/opt/custom/bin/ssh' })
+    )
+  })
+})
 
 describe('siteConfigMayRestrictHostKeys', () => {
   let dir: string
@@ -63,6 +89,20 @@ describe('siteConfigMayRestrictHostKeys', () => {
     await writeFile(file, `Include ${join(dir, '?.conf')}\n`, 'utf-8')
 
     await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
+  })
+
+  it('stays strict for a nested Windows glob written with backslashes', async () => {
+    const file = join(dir, 'ssh_config')
+    await writeFile(file, 'Include config.d\\*\\10-strict.conf\n', 'utf-8')
+    const originalPlatform = process.platform
+    // splitIncludeArguments reads the platform per call; on POSIX it rejects `\` before the glob check.
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
   })
 
   it('follows a quoted Include path that contains a space', async () => {

@@ -81,9 +81,11 @@ Every plugin frame on desktop is an Electron `<webview>`:
   revoked); the iframe is never a fallback for a setup failure. On the guest path no `srcdoc` HTML is read,
   hashed or sent over IPC; the guest's own navigation is the one integrity check per open.
 - **Serving**: images, fonts and media stream from disk (one `Range: bytes=` answered with `206`, HEAD
-  from `stat`), up to 32 MiB a file; a session holds at most 32 requests at once (`503` past that).
-  Documents, scripts, styles, JSON, SVG and WASM are read whole (16 MiB cap). A declared HTML entry is a
-  document whatever its extension. Path segments ending in a dot or space are refused.
+  from `stat`), up to 32 MiB a file; a session holds at most 32 open streams (`503` past that). Other
+  requests are served 32 at a time, with up to 1024 more queued for up to 10 s each (`503` past either
+  bound). Refusals are logged once per burst as `busy`. Documents, scripts, styles, JSON, SVG and WASM
+  are read whole (16 MiB cap). A declared HTML entry is a document whatever its extension. Path segments
+  ending in a dot or space are refused.
 - **Source modules**: `.ts`, `.tsx`, `.mts` and `.jsx` are read whole (1 MiB cap), digest-checked like
   any script, then transpiled with sucrase on one shared, lazily started worker thread (types stripped, automatic JSX for `orca`, lines
   kept, inline source map) and served as `text/javascript`. Relative imports are rewritten to exact

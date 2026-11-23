@@ -25,7 +25,7 @@ import type {
   NativeChatLaunchDraft,
   NativeChatLaunchPrompt
 } from '@/components/native-chat/drafts/native-chat-launch-prompt'
-import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status/agent-status-contract'
+import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status/contracts/agent-status-contract'
 import type {
   TerminalTabCloseReason,
   TerminalTabRetirementPlan

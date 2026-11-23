@@ -26,6 +26,7 @@ const editsSchema = z
     timezone: z.string(),
     baseBranch: z.string(),
     setupDecision: z.enum(['inherit', 'run', 'skip']),
+    setupTrustHash: z.string(),
     reuseSession: z.boolean(),
     extraAgentArgs: z.string(),
     precheckCommand: z.string(),

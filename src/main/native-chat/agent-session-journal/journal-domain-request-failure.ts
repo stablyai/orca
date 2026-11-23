@@ -18,6 +18,7 @@ import {
 import { JournalSqlScope } from './journal-sql-scope'
 import type { JournalRequestMark } from './journal-request-failure'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 export class JournalDomainRequestFailure {
   private readonly scope: JournalSqlScope
@@ -54,7 +55,7 @@ export class JournalDomainRequestFailure {
 
   item(id: string): AgentJournalRenderItem | null {
     const row = this.row(id)
-    return row ? JSON.parse(String(row.payload_json)) : null
+    return row ? readJournalStoredItem(this.scope.db, this.scope.prefix, row.payload_json) : null
   }
 
   request(kind: JournalRequestMark['kind'], id: string): JournalRequestMark | null {
@@ -64,7 +65,9 @@ export class JournalDomainRequestFailure {
       return null
     }
     const row = this.row(itemId)
-    const item: AgentJournalRenderItem | null = row ? JSON.parse(String(row.payload_json)) : null
+    const item: AgentJournalRenderItem | null = row
+      ? readJournalStoredItem(this.scope.db, this.scope.prefix, row.payload_json)
+      : null
     if (!item || !row?.root || item.sequence <= this.floor) {
       return null
     }

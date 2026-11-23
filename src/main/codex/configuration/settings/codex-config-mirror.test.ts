@@ -7,7 +7,7 @@ import { join } from 'node:path'
 // Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
 vi.mock('../shared-server/codex-daemon-socket-path-guard', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  applyCodexDaemonSocketGuard: (config: string) => config
+  codexDaemonSocketPathExceedsLimit: () => false
 }))
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
@@ -77,6 +77,59 @@ afterEach(() => {
 })
 
 describe('syncSystemConfigIntoManagedCodexHome', () => {
+  it.each([
+    '[tui]\nmodel_availability_nux = { "gpt" = 4 }\n',
+    '[tui]\nmodel_availability_nux."gpt" = 4\n',
+    '[tui]\n"model_availability_nu\\u0078" = { "gpt" = 4 }\n',
+    'tui = { notifications = true }\n'
+  ])('leaves one model-tip table when ~/.codex is %j', (systemConfig) => {
+    const accountHome = join(userDataDir, 'codex-accounts', 'a', 'home')
+    mkdirSync(accountHome, { recursive: true })
+    writeFileSync(
+      join(accountHome, 'config.toml'),
+      ['[tui.model_availability_nux]', '"gpt" = 2', ''].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(getSystemConfigPath(), systemConfig, 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome({
+      runtimeHomePath: accountHome,
+      systemHomePath: getSystemCodexHomePath()
+    })
+
+    expect(readFileSync(join(accountHome, 'config.toml'), 'utf-8')).not.toContain(
+      '[tui.model_availability_nux]'
+    )
+  })
+
+  it("keeps Codex's own model-tip count in the managed home instead of resetting it", () => {
+    const accountHome = join(userDataDir, 'codex-accounts', 'a', 'home')
+    mkdirSync(accountHome, { recursive: true })
+    writeFileSync(
+      getSystemConfigPath(),
+      ['model = "gpt"', '', '[tui.model_availability_nux]', '"gpt" = 1', ''].join('\n'),
+      'utf-8'
+    )
+    const homes = { runtimeHomePath: accountHome, systemHomePath: getSystemCodexHomePath() }
+    syncSystemConfigIntoManagedCodexHome(homes)
+    const runtimePath = join(accountHome, 'config.toml')
+    expect(readFileSync(runtimePath, 'utf-8')).toContain('"gpt" = 1')
+
+    // Codex bumps the count in the home it runs in.
+    writeFileSync(
+      runtimePath,
+      readFileSync(runtimePath, 'utf-8').replace('"gpt" = 1', '"gpt" = 2'),
+      'utf-8'
+    )
+    syncSystemConfigIntoManagedCodexHome(homes)
+    const once = readFileSync(runtimePath, 'utf-8')
+    syncSystemConfigIntoManagedCodexHome(homes)
+
+    expect(once.match(/\[tui\.model_availability_nux\]/g)).toHaveLength(1)
+    expect(once).toContain('"gpt" = 2')
+    expect(readFileSync(runtimePath, 'utf-8')).toBe(once)
+  })
+
   it("keeps a shared account home's sqlite_home and never copies it into ~/.codex/config.toml", () => {
     const accountHome = join(userDataDir, 'codex-accounts', 'a', 'home')
     mkdirSync(accountHome, { recursive: true })

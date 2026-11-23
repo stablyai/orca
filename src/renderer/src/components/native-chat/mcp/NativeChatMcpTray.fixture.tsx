@@ -132,6 +132,15 @@ export const rowFailure = fixture({
   failure: { server: 'postgres', message: 'Server is still starting' }
 })
 
+// A Codex chat before its first message: project servers come from config, not a thread.
+export const codexBeforeStart = fixture({
+  servers: [
+    server('tracker', 'connected', { toolCount: 12 }),
+    server('docs', 'not-started', { canToggle: false }),
+    server('search', 'disabled', { canToggle: false })
+  ]
+})
+
 export const notRunning = fixture({ result: { status: 'not-running' } })
 
 export const readFailed = fixture({ result: { status: 'failed', message: null } })

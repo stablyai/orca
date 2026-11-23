@@ -217,8 +217,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
         return result
       },
       publish: () => args.publish(),
-      admissionFailed: () => gate.finish(false),
-      cleanupPushTargetRemote: () => cleanupRemovedWorktreePushTarget(args)
+      admissionFailed: () => gate.finish(false)
     })
     await waitForWorktreeRemovalAcceptance(args.target.id)
     return { removing: true, ...acceptedFields }

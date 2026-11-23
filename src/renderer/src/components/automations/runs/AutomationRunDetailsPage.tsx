@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import { ChevronDown, ChevronUp, ExternalLink, KeyRound, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { cn } from '@/lib/class-names'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -353,6 +353,7 @@ export function AutomationRunDetailsPage({
               <CommentMarkdown
                 variant="document"
                 content={content}
+                singleTildeStrikethrough={false}
                 className="text-sm leading-relaxed text-foreground"
               />
             </RunSection>

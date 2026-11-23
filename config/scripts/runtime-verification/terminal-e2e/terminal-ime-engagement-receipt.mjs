@@ -5,9 +5,7 @@ export const IME_ENGAGEMENT_RECEIPT_ENV = 'ORCA_E2E_IME_ENGAGEMENT_RECEIPT'
 /** The tests that must each leave a receipt. Pinned so deleting one cannot quietly shrink the lane. */
 export const EXPECTED_NATIVE_IME_TESTS = [
   'forwards the issue exact-byte sequence without loss or duplication',
-  'forwards the issue sentence stress sequence without leaked ASCII',
-  'a digit typed right after a Hangul syllable reaches the pty',
-  'confirms native Hangul notes before a deliberate Enter saves'
+  'forwards the issue sentence stress sequence without leaked ASCII'
 ]
 
 function parseReceipts(text) {

@@ -38,16 +38,21 @@ function store() {
   mocks.identity.mockResolvedValue(identity)
   return result
 }
-function snapshot(name: string): { snapshot: BranchRefSnapshot; oversized: boolean } {
-  const ref: BranchRef = {
+function snapshot(...names: string[]): { snapshot: BranchRefSnapshot; oversized: boolean } {
+  const refs = names.map((name): BranchRef => ({
     refName: `refs/heads/${name}`,
     label: name,
     searchName: name.toLowerCase(),
     oid: 'a'.repeat(40),
     committedAt: 0,
     symref: ''
-  }
-  return { snapshot: { refs: [ref] }, oversized: false }
+  }))
+  return { snapshot: { refs }, oversized: false }
+}
+async function searchNames(names: string[], query: string): Promise<string[]> {
+  mocks.read.mockResolvedValue(snapshot(...names))
+  const results = await store().search(identity, query, 20)
+  return results.map((result) => result.localBranchName)
 }
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -84,28 +89,6 @@ it('does not publish a capture that finishes after a ref change', async () => {
   old.resolve(snapshot('old'))
   expect(await result).toEqual([{ refName: 'refs/heads/old', localBranchName: 'old' }])
   expect(await value.search(identity, 'OLD', 20)).toEqual([])
-})
-
-it('serves a post-fence caller from the next physical read without making the earlier caller retry', async () => {
-  const value = store()
-  const started = deferred<void>()
-  const old = deferred<ReturnType<typeof snapshot>>()
-  mocks.read.mockImplementationOnce(() => {
-    started.resolve()
-    return old.promise
-  })
-  mocks.read.mockImplementationOnce(() => {
-    // Another event during the successor read must not prevent its response from settling.
-    publishGitRefChange(identity.commonDir)
-    return Promise.resolve(snapshot('fresh'))
-  })
-  const before = value.search(identity, '', 20)
-  await started.promise
-  publishGitRefChange(identity.commonDir)
-  const after = value.search(identity, '', 20)
-  old.resolve(snapshot('old'))
-  expect(await before).toEqual([{ refName: 'refs/heads/old', localBranchName: 'old' }])
-  expect(await after).toEqual([{ refName: 'refs/heads/fresh', localBranchName: 'fresh' }])
 })
 
 it('starts the new generation after an obsolete physical read fails', async () => {
@@ -219,6 +202,37 @@ it('shares a fill while independently projecting each caller query', async () =>
   fill.resolve(snapshot('topic'))
   expect(await matching).toEqual([{ refName: 'refs/heads/topic', localBranchName: 'topic' }])
   expect(await absent).toEqual([])
+})
+
+it('matches each slash-separated query token within the same branch segment', async () => {
+  mocks.read.mockResolvedValue(snapshot('feature/topic'))
+  expect(await store().search(identity, 'Feat/Top', 20)).toEqual([
+    { refName: 'refs/heads/feature/topic', localBranchName: 'feature/topic' }
+  ])
+  expect(await searchNames(['feature/topic'], 'feat//top')).toEqual(['feature/topic'])
+})
+
+it('requires one branch segment per token for slash-separated queries', async () => {
+  const names = ['feature/topic', 'feature/topic/x', 'a/feature/topic']
+  expect(await searchNames(names, 'top/feat')).toEqual([])
+  expect(await searchNames(names, 'feat/top/x')).toEqual(['feature/topic/x'])
+  expect(await searchNames(names, 'feat/top')).toEqual(['feature/topic'])
+})
+
+it('treats a trailing slash as a token in a non-final segment', async () => {
+  const names = ['feature/topic', 'a/feature/topic', 'feature', 'fix-feature-flag', 'x/feature']
+  expect(await searchNames(names, 'feat/')).toEqual(['feature/topic', 'a/feature/topic'])
+  expect(await searchNames(names, 'feature/')).toEqual(['feature/topic', 'a/feature/topic'])
+})
+
+it('treats a leading slash as a token in a non-first segment', async () => {
+  const names = ['main', 'domain-fix', 'origin/main', 'feature/x-main', 'main/x']
+  expect(await searchNames(names, '/main')).toEqual(['origin/main', 'feature/x-main'])
+})
+
+it('matches a bare slash query only as a substring', async () => {
+  expect(await searchNames(['main', 'feature/topic'], '/')).toEqual(['feature/topic'])
+  expect(await searchNames(['main', 'feature/topic'], '//')).toEqual([])
 })
 
 it('retries failed fills without extending the original metadata deadline', async () => {

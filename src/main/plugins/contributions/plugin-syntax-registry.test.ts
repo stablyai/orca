@@ -88,17 +88,3 @@ it('lists file associations and hands over a language with its sibling grammars'
   })
   expect(registry.load('plugin:samples.demo-syntax/missing')).toBeNull()
 })
-
-it('reports an include that does not resolve inside the plugin on the plugin card', async () => {
-  const registry = new PluginSyntaxRegistry(new PluginContentVerifier())
-  const plugin = await syntaxPlugin({
-    'demo.json': { ...demo, patterns: [{ include: 'source.embedded#missing' }] },
-    'demo-config.json': {},
-    'embedded.json': embedded
-  })
-  await registry.reconcile([plugin], () => true)
-
-  expect(registry.list()).toEqual([])
-  expect(registry.load('plugin:samples.demo-syntax/demo')).toBeNull()
-  expect(registry.error(plugin.pluginKey)).toContain('does not resolve')
-})

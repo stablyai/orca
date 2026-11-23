@@ -48,7 +48,7 @@ function openStore(dataFile: string): InstanceType<typeof Store> {
 }
 
 describe('persisted state survives a save/load round trip', () => {
-  it('keeps a #22551 settings-slot OpenCode Go key on disk until its new owner has it', () => {
+  it('keeps a #22551 settings-slot OpenCode Go key on disk until its new owner has it', async () => {
     const dataFile = join(
       realpathSync(mkdtempSync(join(tmpdir(), 'orca-legacy-opencode-go-key-'))),
       'state.json'
@@ -77,7 +77,7 @@ describe('persisted state survives a save/load round trip', () => {
     expect(loaded.getSettings().opencodeWorkspaceId).toBe('wrk_daemon')
     expect(loaded.getSettings()).not.toHaveProperty('opencodeGoApiKey')
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    loaded.migrateLegacyOpenCodeGoApiKey({
+    await loaded.migrateLegacyOpenCodeGoApiKey({
       has: () => false,
       read: () => null,
       save: () => {
@@ -94,15 +94,19 @@ describe('persisted state survives a save/load round trip', () => {
     expect(onDiskKey()).toBe(sealed)
 
     const saved: string[] = []
-    loaded.migrateLegacyOpenCodeGoApiKey({
+    await loaded.migrateLegacyOpenCodeGoApiKey({
       has: () => saved.length > 0,
       read: () => saved[0] ?? null,
-      save: (key) => saved.push(key)
+      save: (key) => {
+        saved.push(key)
+      }
     })
-    loaded.migrateLegacyOpenCodeGoApiKey({
+    await loaded.migrateLegacyOpenCodeGoApiKey({
       has: () => saved.length > 0,
       read: () => saved[0] ?? null,
-      save: (key) => saved.push(key)
+      save: (key) => {
+        saved.push(key)
+      }
     })
     expect(saved).toEqual(['fake-legacy-key'])
     loaded.flush()

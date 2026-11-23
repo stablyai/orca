@@ -12,6 +12,7 @@ import {
   resetPreGoneSystemMemorySamplingForTest,
   startPreGoneSystemMemorySampling
 } from '../memory/pre-gone-host-memory'
+import { preGonePtyTreeMemoryDetails } from '../memory/pre-gone-pty-tree-memory'
 
 type ProcessMetricLike = {
   pid?: unknown
@@ -312,5 +313,6 @@ export function buildProcessGoneCrashDetails(
     Object.assign(crashDetails, preGoneSampleDetails(preGoneSample, nowMs))
   }
   Object.assign(crashDetails, preGoneSystemMemoryDetails(nowMs))
+  Object.assign(crashDetails, preGonePtyTreeMemoryDetails(nowMs))
   return crashDetails
 }

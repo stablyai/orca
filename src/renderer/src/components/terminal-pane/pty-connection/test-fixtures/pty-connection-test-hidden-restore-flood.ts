@@ -23,6 +23,7 @@ import {
 } from './pty-connection-test-environment'
 import { connectMockPanePty } from './pty-connection-test-connect-mock-pane'
 import type { PtyModelRestoreReason } from '../../../../../../shared/terminal/replay/pty-model-restore-marker'
+import type { PtyDataMeta } from '../../pty-transport/delivery/pty-dispatcher'
 
 // Shared visible-pane driver for the hidden-restore flood/unhide suites (STA-4869).
 
@@ -52,13 +53,13 @@ export type PaneDrive = {
   pane: MockPane
   transport: MockTransport
   deps: PaneConnectionDeps
-  disposable: { dispose: () => void }
-  deliver: (data: string, seq: number) => void
+  disposable: { dispose: () => void; syncProcessTracking: () => void }
+  deliver: (data: string, seq?: number, meta?: PtyDataMeta) => void
   setVisible: (visible: boolean) => void
   writtenChunks: () => string[]
 }
 
-export function installHiddenRestoreFloodSuiteHooks(): void {
+export function installHiddenRestoreFloodSuiteHooks(mainHiddenGate = false): void {
   beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
@@ -66,6 +67,12 @@ export function installHiddenRestoreFloodSuiteHooks(): void {
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
+    if (mainHiddenGate) {
+      mockStoreState.settings = {
+        ...mockStoreState.settings,
+        terminalMainSideEffectAuthority: true
+      }
+    }
     bindPtyConnectionTestMocks({
       getState: () => mockStoreState,
       getTransportQueue: () => transportFactoryQueue,
@@ -86,7 +93,7 @@ export function installHiddenRestoreFloodSuiteHooks(): void {
 export async function connectVisiblePane(): Promise<PaneDrive> {
   const transport = createMockTransport(PTY_ID)
   const captured: {
-    current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
+    current: ((data: string, meta?: PtyDataMeta) => void) | null
   } = { current: null }
   transport.connect.mockImplementation(async ({ callbacks }: { callbacks?: ConnectCallbacks }) => {
     captured.current = callbacks?.onData ?? null
@@ -113,7 +120,8 @@ export async function connectVisiblePane(): Promise<PaneDrive> {
     transport,
     deps,
     disposable,
-    deliver: (data, seq) => captured.current?.(data, { seq, rawLength: data.length }),
+    deliver: (data, seq, meta) =>
+      captured.current?.(data, { seq, rawLength: data.length, ...meta }),
     setVisible: (visible) => {
       deps.isVisibleRef.current = visible
     },

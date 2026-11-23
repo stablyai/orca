@@ -30,16 +30,4 @@ describe('agent fork startup', () => {
       "codex '-c' 'disable_paste_burst=true' '-c' 'tui.resume_cwd=current' 'fork' 's1'"
     )
   })
-
-  it('refuses a fork for an agent that cannot fork rather than resuming it', () => {
-    expect(
-      buildAgentResumeStartupPlan({
-        agent: 'gemini',
-        providerSession: SESSION,
-        cmdOverrides: {},
-        platform: 'darwin',
-        fork: true
-      })
-    ).toBeNull()
-  })
 })

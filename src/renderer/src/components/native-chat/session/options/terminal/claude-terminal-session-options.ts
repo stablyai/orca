@@ -1,5 +1,6 @@
 import { getAgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog'
 import type { CatalogModel } from '../../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
+import { withoutClaudeVendor } from '../../../../../../../shared/agent-session/options/model-catalog/model-id-label'
 import type { SessionOptionValue } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { stripScrollbackAnsi } from '../../terminal/assembly/native-chat-scrape-fallback'
 
@@ -128,11 +129,6 @@ function modelNameTokens(value: string): string[] {
       .toLowerCase()
       .match(/[a-z]+|\d+(?:\.\d+)*[a-z]*/g) ?? []
   )
-}
-
-// Listed labels may carry the vendor (`Claude Opus 5.5`) that the banner omits (`Opus 5.5`).
-function withoutClaudeVendor(value: string): string {
-  return value.replace(/^claude\s+/i, '')
 }
 
 /** Match a whole leading family and ordered variant tokens, allowing inserted versions without claiming vendor slugs or other context sizes. */

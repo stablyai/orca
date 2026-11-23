@@ -1,8 +1,9 @@
-import { app, BaseWindow, BrowserWindow, protocol, ipcMain, session } from 'electron'
+import { app, BaseWindow, BrowserWindow, protocol, ipcMain, session, webContents } from 'electron'
 import { renameSync, writeFileSync } from 'node:fs'
 import '../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../../shared/browser/browser-session-partition'
 import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
+import { resolveNativeEditTarget } from '../../../menu/app-menu-selection-item'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { initializeBrowserExtensionSupport } from '../browser-extension-startup'
@@ -11,6 +12,8 @@ import { attachBrowserExtensionsToProfileSession } from '../profile-sessions/bro
 import { addUnpackedBrowserExtension } from '../browser-extension-management'
 import { recordActiveBrowserPage } from '../tabs-and-windows/browser-extension-tab-model'
 import { trackBrowserExtensionMainWindow } from '../tabs-and-windows/browser-extension-window-model'
+import { electronRuntimeDesktopSurface } from '../../../host/electron-runtime-desktop-surface'
+import { setRuntimeDesktopSurface } from '../../../runtime/construction/runtime-desktop-surface'
 import {
   activateBrowserExtensionAction,
   getBrowserExtensionToolbarState
@@ -97,6 +100,17 @@ async function waitFor<T>(read: () => T | null, timeoutMs = 15_000): Promise<T> 
   }
 }
 
+function routesEditToWindowContents(window: BrowserWindow): boolean {
+  // Pin focus to this window, as the menu handler sees it, since background windows never take OS focus.
+  const getFocusedWebContents = webContents.getFocusedWebContents
+  webContents.getFocusedWebContents = () => window.webContents
+  try {
+    return resolveNativeEditTarget(window) === window.webContents
+  } finally {
+    webContents.getFocusedWebContents = getFocusedWebContents
+  }
+}
+
 async function run(): Promise<void> {
   await app.whenReady()
   initializeBrowserExtensionSupport({ enabled: true })
@@ -116,6 +130,7 @@ async function run(): Promise<void> {
     webPreferences: { contextIsolation: true, sandbox: true, webviewTag: true }
   })
   trackBrowserExtensionMainWindow(host)
+  setRuntimeDesktopSurface(electronRuntimeDesktopSurface)
   status.hostWindowId = host.id
   // Stands in for the renderer's tab model: activation requests make the page active and reply.
   const send = host.webContents.send.bind(host.webContents)
@@ -204,6 +219,14 @@ async function run(): Promise<void> {
     rightAligned: bounds.x + bounds.width === content.x + anchor.x + anchor.width,
     below: bounds.y >= content.y + anchor.y + anchor.height
   }
+  status.popupEditTarget = routesEditToWindowContents(popupWindow)
+  const popout = await waitFor(
+    () =>
+      BrowserWindow.getAllWindows().find((window) =>
+        window.webContents.getURL().endsWith('/page.html')
+      ) ?? null
+  )
+  status.popoutEditTarget = routesEditToWindowContents(popout)
   // A second click on the same button closes it.
   status.secondClick = activateBrowserExtensionAction({
     browserPageId: 'page-1',

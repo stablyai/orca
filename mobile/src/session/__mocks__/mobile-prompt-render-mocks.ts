@@ -60,7 +60,13 @@ vi.mock('lucide-react-native', () =>
       'Square',
       'X',
       'Check',
-      'CircleHelp'
+      'CircleHelp',
+      // The automation mark's icon table is read when its module loads.
+      'Clock',
+      'Hourglass',
+      'Play',
+      'Webhook',
+      'Zap'
     ].map((x) => [x, x])
   )
 )
@@ -87,6 +93,9 @@ vi.mock('../native-chat/input/session-options/MobileNativeChatSessionOptionPicke
 }))
 vi.mock('../native-chat/mcp/MobileNativeChatMcpTray', () => ({
   MobileNativeChatMcpTray: 'McpTray'
+}))
+vi.mock('../native-chat/usage/MobileNativeChatAccountUsageSheet', () => ({
+  MobileNativeChatAccountUsageSheet: 'AccountUsageSheet'
 }))
 vi.mock('../native-chat/composer/menus/MobileNativeChatComposerMenu', () => ({
   MobileNativeChatComposerSuggestions: 'Suggestions'

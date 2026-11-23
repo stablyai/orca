@@ -27,7 +27,7 @@ import {
   shouldRemoveProjectFromContextMenu
 } from './worktree-context-menu-policy'
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
-import { selectWorkspaceShowsUnread } from '../../worktree-card-slot-rollup'
+import { selectWorkspaceShowsUnread } from '../../workspace-card/slots/worktree-card-slot-rollup'
 import {
   useWorktreeParentPickerTransition,
   type PendingParentPicker

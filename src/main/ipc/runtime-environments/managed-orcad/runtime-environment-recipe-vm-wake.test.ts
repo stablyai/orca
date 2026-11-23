@@ -122,21 +122,7 @@ describe('a request to a recipe VM environment', () => {
     }
   )
 
-  // A phone gives up after 30 seconds, so its open is held for less.
-
-  // A Disconnect made before the open holds: no client's open wakes the VM behind that server.
-  it('refuses an open of a server the user disconnected, before waking anything', async () => {
-    recordVm('suspended')
-    markRuntimeEnvironmentManuallyDisconnected(VM_ENVIRONMENT.id)
-    try {
-      await expect(codeOf('wake')).resolves.toBe('runtime_manually_disconnected')
-    } finally {
-      clearRuntimeEnvironmentManualDisconnect(VM_ENVIRONMENT.id)
-    }
-  })
-
-  // The fence after a wake is the pairing that wake made, never whatever is current afterwards.
-  it('reports the pairing a wake made while the open was held, and nothing otherwise', async () => {
+  it('reports the pairing revision only for an open that created or restarted its server', async () => {
     recordVm('suspended')
     forgetRecipeVmWakePairingsForTests()
     holdOpen.mockImplementationOnce(async () => {
@@ -150,13 +136,6 @@ describe('a request to a recipe VM environment', () => {
     await expect(prepareRecipeVm(userDataPath, VM_ENVIRONMENT, 'wake')).resolves.toEqual({
       wokenPairingRevision: null
     })
-  })
-
-  // A resume that kept its saved pairing leaves the revision as it was; it is still a new wake.
-  it('reports a wake that kept the pairing an earlier wake made', async () => {
-    recordVm('suspended')
-    forgetRecipeVmWakePairingsForTests()
-    noteRecipeVmWakePairing(VM_ENVIRONMENT.id, 7)
     holdOpen.mockImplementationOnce(async () => {
       noteRecipeVmWakePairing(VM_ENVIRONMENT.id, 7, true)
       return 'up'
@@ -174,13 +153,18 @@ describe('a request to a recipe VM environment', () => {
     })
   })
 
-  it('cancels an open the user disconnected while it waited, without stopping the wake', async () => {
+  it('refuses an open before waking and cancels a waiting open on disconnect', async () => {
     recordVm('suspended')
-    holdOpen.mockImplementationOnce(async () => {
-      markRuntimeEnvironmentManuallyDisconnected(VM_ENVIRONMENT.id)
-      return 'up'
-    })
     try {
+      markRuntimeEnvironmentManuallyDisconnected(VM_ENVIRONMENT.id)
+      await expect(codeOf('wake')).resolves.toBe('runtime_manually_disconnected')
+      expect(holdOpen).not.toHaveBeenCalled()
+
+      clearRuntimeEnvironmentManualDisconnect(VM_ENVIRONMENT.id)
+      holdOpen.mockImplementationOnce(async () => {
+        markRuntimeEnvironmentManuallyDisconnected(VM_ENVIRONMENT.id)
+        return 'up'
+      })
       await expect(codeOf('wake')).resolves.toBe('runtime_manually_disconnected')
     } finally {
       clearRuntimeEnvironmentManualDisconnect(VM_ENVIRONMENT.id)

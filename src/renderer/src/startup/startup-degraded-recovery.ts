@@ -13,8 +13,8 @@ import {
 import {
   collectTerminalProviderSnapshotPtyIds,
   refreshTerminalProviderSnapshotCapabilities
-} from '../components/terminal/terminal-provider-snapshot-capability'
-import { probeTerminalProviderGoneSessions } from '../components/terminal/terminal-provider-gone-sessions'
+} from '../components/terminal/provider-snapshots/terminal-provider-snapshot-capability'
+import { probeTerminalProviderGoneSessions } from '../components/terminal/provider-snapshots/terminal-provider-gone-sessions'
 
 type DegradedStartupRecoveryArgs = {
   error: unknown

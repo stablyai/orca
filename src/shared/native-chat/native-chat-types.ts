@@ -1,3 +1,9 @@
+import type { BotTidyUpNote } from '../bots/bot-tidy-up'
+import type { TookOverNotice } from './took-over-notice'
+import type {
+  NativeChatBotCardFields,
+  NativeChatBotMessageCardFields
+} from './bot-cards/native-chat-bot-card-fields'
 import type { AgentSessionForkedFromMark } from '../agent-session/conversation-naming/agent-session-fork-name'
 import type { AgentSessionProviderContextBoundary } from '../agent-session/conversation-context/agent-session-provider-context'
 // IPC-serializable conversation contract: plain JSON only, no classes/Maps/Dates. Sources prefer transcripts, then hooks,
@@ -20,7 +26,19 @@ import type {
 } from '../agent-session/journal/agent-session-journal-types'
 import type { AgentType } from '../agent-status/contracts/agent-status-types'
 import type { NativeChatToolMetadata } from './tools/native-chat-tool-identity'
+import type {
+  AgentJournalAutomationSavedItem,
+  AgentJournalWaitEndedItem,
+  AutomationRunNotStartedRow
+} from '../agent-journal-orca-card-items'
+import type { AutomationRunMessage } from '../automations/automation-run-message'
+import type { WaitEnding } from '../automation-once'
 import type { AgentMessageSource } from '../agent-session/journal/agent-session-message-source'
+import type { ConnectorMessageAsker } from '../connector-message-asker'
+import type { OtherPersonTypist } from '../agent-session/journal/agent-journal-typed-by'
+import type { BotItemNoteView } from '../bots/bot-item-note'
+import type { BotContextNote } from '../bots/bot-context-note'
+import type { AutomationResultNote } from '../bots/bot-automation-result-note'
 
 export const NATIVE_CHAT_SOURCES = ['transcript', 'hook', 'scrape'] as const
 export type NativeChatSource = (typeof NATIVE_CHAT_SOURCES)[number]
@@ -61,7 +79,15 @@ export type NativeChatTextBlock = {
   forkedFrom?: AgentSessionForkedFromMark
   /** On a usage-limit line: the turn the limit ended, which its Continue picks up. */
   usageLimitTurnItemId?: string
-}
+  /** On an automation's result note: the run and its result. */
+  automationResult?: AutomationResultNote
+  /** Set by the list projection: a later /clear means this unread note will never reach the agent. */
+  automationResultCleared?: true
+  /** A turn that carried an edited SOUL.md or MEMORY.md to a bot; read with `readBotContextNote`. */
+  botContext?: BotContextNote
+  /** A tidy-up changed the bot's memory: the line offers its summary. */
+  tidyUp?: BotTidyUpNote
+} & NativeChatBotCardFields
 
 /** Tool arguments remain unknown because provider shapes differ; renderers preview the serialized payload. */
 export type NativeChatToolCallBlock = NativeChatToolMetadata & {
@@ -212,6 +238,8 @@ export type NativeChatBlock =
 
 /** Structured rows preserve journal producer linkage; terminal-backed rows omit it. */
 export type NativeChatMessage = AgentJournalProducerLinkage & {
+  /** Client projection: this answer preceded a goal check grouped into its goal row. */
+  goalCheckAnswer?: true
   /** Stable dedup/list identity across re-reads and appends. */
   id: string
   role: NativeChatRole
@@ -235,6 +263,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   parentId?: string
   /** How a user message was delivered when it was not an ordinary prompt. */
   sentAs?: AgentJournalMessageSendMode
+  /** On a person's message: how many automation result notes went to the agent with it. */
+  automationResultsCarried?: number
   /** Its text was shortened to fit the copy sent to this client; the host keeps it whole. */
   shortened?: true
   /** The journal row's own lifecycle; absent means unknown, never live. */
@@ -245,9 +275,34 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   command?: { name: string }
   /** On a user-role message another agent sent through Orca: who, as the journal recorded it. */
   from?: AgentMessageSource
+  /** On a user-role message Orca delivered from a connector: who asked and where, for its tag. */
+  asker?: ConnectorMessageAsker
+  /** On a person's message typed by someone other than the host's owner, on their paired computer. */
+  typedByOther?: OtherPersonTypist
+  /** What the chat draws in place of its text, which stays the readable form copy and titles use:
+   *  a Slack message's markup as Slack shows it (see `slackMarkupShownText`). Display only. */
+  drawnMarkdown?: string
+  /** On Orca's own turn to a bot it just created: a notice row, never the person's bubble. On an
+   *  owner's card answer: nothing, since the card shows its receipt. On Orca's turn handing the bot a
+   *  workspace: a divider, and the owner's goal as their words. */
+  orcaNotice?: 'bot-created' | 'card-answer' | 'took-over'
+  /** Beside `took-over`: what its divider and goal show. */
+  tookOver?: TookOverNotice
+  /** On a bot automation run's message: the run, drawn as the automation's row, never the person's. */
+  automationRun?: AutomationRunMessage
   /** Projected creation fact, never a user turn or provider input. */
   agentStartDispatchId?: string
   agentStart?: true
+  /** Projected fact: this chat's agent created or edited an automation; drawn as its card. */
+  automationSaved?: Omit<AgentJournalAutomationSavedItem, 'kind'>
+  /** On a wait's creation row: how it ended, read from its run or ended card in this chat. */
+  savedWaitEnded?: WaitEnding
+  /** Projected fact: a wait this chat's bot kept has ended; drawn as its card. */
+  waitEnded?: Omit<AgentJournalWaitEndedItem, 'kind'>
+  /** Projected fact: a bot automation run no chat took; drawn as its Couldn't start row. */
+  automationRunNotStarted?: AutomationRunNotStartedRow
+  /** Projected fact: item changes; drawn as one quiet item line, or the owner's comment. */
+  botItemNote?: BotItemNoteView
   /** On a creation fact: the agent was launched on its own, not started as a supervised worker. */
   agentHandoff?: true
   /** On a worker's creation fact: a message continued a finished worker, in its reopened conversation or a fresh one. */
@@ -273,7 +328,11 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   foldedJournalPosition?: AgentJournalPosition
   /** Private presentation row; raw host messages never publish this fold-only marker. */
   unpairedToolResults?: true
-}
+  /** Presentation only: drawn inside the row with this id, about the same Dispatch or run. */
+  mergedInto?: string
+  /** Presentation only: the earlier rows this one stands for (`mergedInto` it), newest first. */
+  mergedEvents?: readonly NativeChatMessage[]
+} & NativeChatBotMessageCardFields
 
 /** Split reasoning and its answer share the provider's row identity. */
 export function nativeChatSemanticRowId(message: NativeChatMessage): string {

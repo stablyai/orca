@@ -1,9 +1,8 @@
 import { getBrowserProcessUserAgentIdentity } from '../../../identity/browser-process-user-agent'
 import type { BrowserSessionRequestUserAgentResolver } from '../../../identity/requests/browser-session-ua'
-import { isGoogleAuthUrl } from '../../../identity/browser-google-auth-ua'
 import {
   desktopUserAgentMetadata,
-  googleAuthTabIdentity,
+  distinctSiteTabIdentities,
   resolveBrowserTabIdentity
 } from '../../../identity/browser-tab-identity'
 import type { BrowserTabIdentity } from '../../../identity/browser-tab-identity'
@@ -19,34 +18,32 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     request: Parameters<BrowserSessionRequestUserAgentResolver>[0]
   ): BrowserTabIdentity {
     const processIdentity = getBrowserProcessUserAgentIdentity()
-    const googleAuth = googleAuthTabIdentity()
     const pendingNavigation =
       request.webContentsId === undefined
         ? undefined
         : this.pendingNavigationByGuestId.get(request.webContentsId)
-    // Only a UA distinct from the process UA can mark a request as part of sign-in.
-    const authUaIsDistinct = googleAuth.userAgent !== processIdentity.userAgent
-    if (
-      authUaIsDistinct &&
-      request.currentUserAgent === googleAuth.userAgent &&
-      (!pendingNavigation || isGoogleAuthUrl(pendingNavigation.currentUrl))
-    ) {
-      return googleAuth
-    }
     const standingOverride =
       request.webContentsId === undefined
         ? undefined
         : this.standingCdpUserAgentOverride(request.webContentsId)
-    if (
-      authUaIsDistinct &&
-      !standingOverride &&
-      request.effectiveUserAgent === googleAuth.userAgent &&
-      (!pendingNavigation || isGoogleAuthUrl(pendingNavigation.currentUrl))
-    ) {
-      return googleAuth
-    }
-    if (authUaIsDistinct && standingOverride?.userAgent === googleAuth.userAgent) {
-      return googleAuth
+    // A request carrying a site's pinned UA comes from that site's tab, e.g. a sign-in subresource.
+    for (const site of distinctSiteTabIdentities(processIdentity.userAgent)) {
+      const siteUserAgent = site.identity.userAgent
+      const navigationStaysOnSite =
+        !pendingNavigation || site.matchesUrl(pendingNavigation.currentUrl)
+      if (request.currentUserAgent === siteUserAgent && navigationStaysOnSite) {
+        return site.identity
+      }
+      if (
+        !standingOverride &&
+        request.effectiveUserAgent === siteUserAgent &&
+        navigationStaysOnSite
+      ) {
+        return site.identity
+      }
+      if (standingOverride?.userAgent === siteUserAgent) {
+        return site.identity
+      }
     }
     // Shared/service workers lack a guest ID and retain the process identity.
     // Derive mobile identity from the standing override, never an unapplied preset.
@@ -73,9 +70,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     const identity = this.resolveGuestTabIdentity(guest, url)
     // Mobile identity needs CDP metadata that setUserAgent cannot supply.
     const webContentsUserAgent =
-      identity.kind === 'google-auth'
-        ? identity.userAgent
-        : getBrowserProcessUserAgentIdentity().userAgent
+      identity.kind === 'site' ? identity.userAgent : getBrowserProcessUserAgentIdentity().userAgent
     let presentedByWebContents = guest.getUserAgent()
     if (!sameDocument && presentedByWebContents !== webContentsUserAgent) {
       guest.setUserAgent(webContentsUserAgent)

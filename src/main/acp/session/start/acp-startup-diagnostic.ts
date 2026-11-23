@@ -4,7 +4,7 @@ import {
   providerDiagnosticOf,
   withProviderDiagnostic
 } from '../../../../shared/agent-session/failures/agent-session-failure'
-import { redactString, redactValue } from '../../../observability/redactor'
+import { redactString, redactValue } from '../../../../shared/observability/redactor'
 import type { AcpDialect } from '../../acp-dialects/acp-dialect'
 import type { AcpStructuredConnection } from '../../process/acp-structured-connection'
 import { AcpAgentError, acpErrorDataWords } from '../../transport/acp-errors'

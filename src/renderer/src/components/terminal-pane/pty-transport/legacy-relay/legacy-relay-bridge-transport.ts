@@ -236,14 +236,14 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     ownsRecovery: () => (bridged() ? false : (inner.ownsRecovery?.() ?? false)),
     retryRecovery: () => (bridged() ? false : (inner.retryRecovery?.() ?? false)),
     reopenAfterHostReturned: () => !bridged() && (inner.reopenAfterHostReturned?.() ?? false),
-    setOutputPaused: (paused) => {
+    setOutputPaused: (paused, replayNeeded) => {
       if (!bridged()) {
         return inner.setOutputPaused?.(paused) ?? false
       }
       if (!api) {
         return false
       }
-      api.setOutputPaused({ ptyId, paused })
+      api.setOutputPaused({ ptyId, paused, ...(replayNeeded ? { replayNeeded } : {}) })
       return true
     },
     connect: (options) => {

@@ -1,4 +1,7 @@
-import { replaceTabBuckets, replaceRecordEntries } from '@/store/keyed-record-transitions'
+import {
+  replaceTabBuckets,
+  replaceRecordEntries
+} from '@/store/record-transitions/keyed-record-transitions'
 import { isDecorativeAgentTitleFrameChange } from '../../../../../../shared/agent-status/title/agent-decorative-title-signature'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { detectAgentStatusFromTitle } from '../../../../../../shared/agent-status/title/agent-title-status'

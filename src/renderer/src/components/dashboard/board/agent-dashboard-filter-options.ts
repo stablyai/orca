@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { translateWorkspaceBoardStatusLabel } from '@/components/sidebar/workspace-board-status-label'
+import { translateWorkspaceBoardStatusLabel } from '@/components/sidebar/workspace-status/presentation/workspace-board-status-label'
 import type {
   DashboardCard,
   DashboardFilterOption

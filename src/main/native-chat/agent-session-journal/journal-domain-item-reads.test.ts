@@ -1,3 +1,6 @@
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import type {
@@ -275,10 +278,50 @@ it('exports visible rows and sends after the newest clear across bounded query p
   seed(row('orca:rejected', 401, user('rejected')), { hidden: true })
   send(submission('rejected', 4, 401), 4)
 
-  const context = read({ kind: 'continuation-context' }).context
+  const { context } = read({ kind: 'continuation-context' })
   expect(context.cursor).toEqual({ epoch: 'epoch', sequence: 900 })
   expect(context.items.map((item) => item.itemId)).toEqual([...tail, 'orca:after'])
   expect(context.submissions.map((entry) => entry.clientMessageId)).toEqual(['after', 'rejected'])
+})
+
+it('exports a large tool output as an excerpt and spills its whole stored bytes once', () => {
+  const { seed, read } = chat()
+  // Text slicing in SQLite stops at NUL; byte slicing must carry everything after it.
+  const output = `start ${'😀é-abc\n'.repeat(3_100_000)}\u0000after NUL end`
+  seed(
+    row('tool', 1, {
+      kind: 'tool-call',
+      name: 'Read',
+      input: {},
+      state: 'completed',
+      output: { head: output, byteLength: 34_100_020, digest: 'd', truncated: false }
+    })
+  )
+
+  const { context } = read({ kind: 'continuation-context' })
+  expect(context.continued).toEqual([
+    { index: 0, itemId: 'tool', revision: 1, field: 'output', bytes: 34_100_020 }
+  ])
+  const { body } = context.items[0]
+  const excerpt = body.kind === 'tool-call' ? body.output!.head : ''
+  expect(excerpt.startsWith('start 😀é-abc')).toBe(true)
+  expect(excerpt.endsWith('after NUL end')).toBe(true)
+  expect(excerpt.length).toBeLessThan(64 * 1024)
+  const dir = mkdtempSync(join(tmpdir(), 'orca-spill-'))
+  try {
+    const path = join(dir, 'whole.spill')
+    const spill = (revision: number, at = path) =>
+      read({
+        kind: 'continuation-spill',
+        spill: { itemId: 'tool', revision, field: 'output', path: at }
+      }).bytes
+    expect(spill(1)).toBe(34_100_020)
+    expect(readFileSync(path).equals(Buffer.from(output, 'utf8'))).toBe(true)
+    expect(spill(2, join(dir, 'revised.spill'))).toBeNull()
+    expect(existsSync(join(dir, 'revised.spill'))).toBe(false)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 it('visits every item after a grouped import, placement revisions and command rejection', () => {

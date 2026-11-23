@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { identityFixture, identityGraph, LEAF, PANE } from '../query/terminal-identity.test-fixture'
-import { TEST_WORKTREE_ID } from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
+import { TEST_WORKTREE_ID } from '../../construction/test-context/orca-runtime-test-fixtures.spec'
 import { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 
 it('retains pane-issued process identity across reload with exact first-match and SSH precedence in either context', async () => {
