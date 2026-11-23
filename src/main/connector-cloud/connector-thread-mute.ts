@@ -106,14 +106,8 @@ export function handleThreadMute(
   // waits its turn, so it is decided on what that one left and never overtakes it.
   const ahead = deps.waiting.get(id)
   if (ahead) {
-    const after = ahead.catch(() => undefined)
-    return {
-      decided: hold(
-        deps,
-        id,
-        after.then(() => decideNow(deps, delivery, record, userId))
-      )
-    }
+    const waited = deps.queued(key, () => ahead.catch(() => undefined))
+    return { decided: hold(deps, id, afterWait(waited, deps, delivery, record, userId)) }
   }
   const thread = deps.read(key)
   if (thread === 'not_bot') {
@@ -133,13 +127,22 @@ export function handleThreadMute(
     return null
   }
   const linkedAt = deps.queued(key)
-  return {
-    decided: hold(
-      deps,
-      id,
-      linkedAt.then(() => decideNow(deps, delivery, record, userId))
-    )
-  }
+  return { decided: hold(deps, id, afterWait(linkedAt, deps, delivery, record, userId)) }
+}
+
+/** Decides a reply once its wait in the thread's queue is over; one a Stop settled while it waited
+ *  is refused as the Stop refused it, never sent into a new queue. */
+async function afterWait(
+  waited: Promise<unknown>,
+  deps: ThreadMuteDeps,
+  delivery: SendDelivery,
+  record: RecordHandled,
+  userId: string
+): Promise<ConnectorDeliveryResult | 'send'> {
+  const wait = (await waited) as { outcome?: string } | undefined
+  return wait?.outcome === 'refused'
+    ? (wait as ConnectorDeliveryResult)
+    : await decideNow(deps, delivery, record, userId)
 }
 
 async function decideNow(
@@ -193,10 +196,9 @@ function applyStep(
     return { decided: record(async () => ACCEPTED) }
   }
   if (step === 'unmute_and_send') {
-    // Saved before it goes on, so its turn's receipt never stands for an unmute a crash lost; its
-    // batch's follow-ups wait with it and still go as one turn.
-    // Unmuted now; its save runs in the thread's queue just ahead of it, so it is on disk before the
-    // turn is admitted, and a Stop cancels both as it would any queued message.
+    // Unmuted now and goes on with its batch; the save's wait runs in the thread's queue just ahead
+    // of its turn, so a save that works is on disk before the turn is admitted. A Stop cancels the
+    // turn as it would any queued message; the unmute stays.
     const saving = deps.write(key, false)
     void deps
       .queued(key, () => saving)

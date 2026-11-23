@@ -342,3 +342,24 @@ describe('a silenced reply resent after an unmute', () => {
     expect(muted).toBe(false)
   })
 })
+
+describe('a held reply whose thread is stopped while it waits', () => {
+  // The Stop settles its wait in the thread's queue as refused: it is refused too, never sent on.
+  it('is refused as the Stop refused it', async () => {
+    const stopped = { outcome: 'refused', reason: 'conversation_cancelled' }
+    const outcome = handleThreadMute(
+      {
+        read: () => null,
+        write: async () => {},
+        botNames: () => [],
+        otherBotNames: () => [],
+        queued: async () => stopped,
+        waiting: new Map(),
+        react: async () => {}
+      },
+      send('@sam be quiet') as Parameters<typeof handleThreadMute>[1],
+      (handled) => handled()
+    )
+    expect(await outcome?.decided).toEqual(stopped)
+  })
+})

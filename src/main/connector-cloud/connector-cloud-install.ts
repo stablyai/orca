@@ -209,13 +209,7 @@ function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore)
   const unsaved = new Set<string>()
   return {
     waiting: new Map(),
-    // A thread whose save failed reads as muted, as its disk may still say, so the resent command or
-    // mention that changed it decides again and saves.
-    read: (key) => {
-      const thread = readThreadMute(store, key)
-      const unsavedHere = unsaved.has(JSON.stringify([key.source, key.externalId]))
-      return thread && thread !== 'not_bot' && unsavedHere ? { ...thread, muted: true } : thread
-    },
+    read: (key) => readThreadMute(store, key),
     write: async (key, muted) => {
       const id = JSON.stringify([key.source, key.externalId])
       // Already so and saved: nothing to do. One whose save failed is saved again.
