@@ -897,14 +897,13 @@ jobs:
           status=0
           pnpm run build:packages || exit 1
 
-          # beforePack validates out/mobile-web (and mobile_web_app checks determinism); skip the
-          # duplicate second rebuild in verify-mobile-web-app-bundle.mjs here.
+          # CLI emission writes out/main entries that electron-vite replaces, so keep CLI before
+          # electron-vite while overlapping WSL guest and mobile-web builds. beforePack validates
+          # out/mobile-web (and mobile_web_app checks determinism), so skip the duplicate rebuild.
           pids=()
-          (node config/scripts/cli-build/build-cli.mjs && pnpm run prepare:cli-output) &
+          (node config/scripts/cli-build/build-cli.mjs && pnpm run prepare:cli-output && node config/scripts/development/launch/run-electron-vite-targets-in-parallel.mjs) &
           pids+=("$!")
           node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/remote-host-build/wsl-guest/build-wsl-guest.mjs &
-          pids+=("$!")
-          node config/scripts/development/launch/run-electron-vite-targets-in-parallel.mjs &
           pids+=("$!")
           node config/scripts/build/mobile-web-app/build-mobile-web-app-bundle.mjs &
           pids+=("$!")

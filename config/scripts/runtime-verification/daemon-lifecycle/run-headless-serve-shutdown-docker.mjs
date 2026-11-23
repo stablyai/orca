@@ -158,10 +158,18 @@ try {
       ])
     }))
   })
-  const results = await Promise.all(runs.map((entry) => entry.promise))
+  const results = await Promise.allSettled(runs.map((entry) => entry.promise))
   const failedSignals = []
-  for (const [index, result] of results.entries()) {
+  for (const [index, outcome] of results.entries()) {
     const { entrypoint, signal } = runs[index]
+    if (outcome.status === 'rejected') {
+      process.stderr.write(
+        `${entrypoint}:${signal} launch error: ${outcome.reason?.message ?? String(outcome.reason)}\n`
+      )
+      failedSignals.push(`${entrypoint}:${signal}:error`)
+      continue
+    }
+    const result = outcome.value
     process.stdout.write(result.stdout)
     process.stderr.write(result.stderr)
     if (result.status !== 0) {
