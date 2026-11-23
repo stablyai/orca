@@ -24,9 +24,11 @@ const buttonVariants = cva(
         'outline-strong': `${outlineButtonClasses} border-muted-foreground/75 hover:border-muted-foreground dark:border-muted-foreground/60 dark:hover:border-muted-foreground`,
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         // A notice's one solid call to action, filled with the theme's accent (its link colour, which
-        // each theme sets). Hover mixes 12% toward the foreground: a 90% tint drops light text under 4.5:1.
+        // each theme sets) and the label derived for it. Hover moves 12% toward the neutral opposite of
+        // that label, so it darkens under a light label and lightens under a dark one; a plain tint or
+        // a fixed direction would drop the label under 4.5:1 on some accents.
         'theme-accent':
-          'bg-theme-accent text-primary-foreground hover:bg-[color-mix(in_srgb,var(--color-theme-accent)_88%,var(--foreground))]',
+          'bg-theme-accent text-theme-accent-foreground hover:bg-[color-mix(in_srgb,var(--color-theme-accent)_88%,oklch(from_var(--theme-accent-foreground)_calc(1_-_l)_0_0))]',
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         // A row action over its hovered row's accent fill, where ghost's accent hover would not show.
         'ghost-on-accent': `text-accent-foreground hover:bg-foreground/10 ${disabledOnAccentButtonClasses}`,
