@@ -169,6 +169,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     forkNamed && text === primary ? <ForkMarkedName name={text} /> : text
   const rowTitle = `${shownText(leadingText)}${trailingText ? ` - ${shownText(trailingText)}` : ''}`
   const model = agent.entry.model?.trim() ?? ''
+  // The model is secondary to the name: always in the hover, inline only when the card asks for it.
+  const hoverTitle = model ? `${rowTitle}\n${model}` : rowTitle
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
 
@@ -250,7 +252,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           )}
           <span
             className="min-w-0 flex-1 truncate"
-            title={sendTargetDisabledReason ? undefined : rowTitle}
+            title={sendTargetDisabledReason ? undefined : hoverTitle}
           >
             <span className={leadClassName}>{shownNode(leadingText)}</span>
             {trailingText && (
