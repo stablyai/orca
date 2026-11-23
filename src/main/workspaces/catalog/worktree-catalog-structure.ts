@@ -10,7 +10,9 @@ function sameRow(a: GitWorktreeInfo, b: GitWorktreeInfo): boolean {
     a.isMainWorktree === b.isMainWorktree &&
     a.isSparse === b.isSparse &&
     a.locked === b.locked &&
-    a.prunable === b.prunable
+    a.lockReason === b.lockReason &&
+    a.prunable === b.prunable &&
+    a.prunableReason === b.prunableReason
   )
 }
 

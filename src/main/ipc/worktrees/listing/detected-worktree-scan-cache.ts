@@ -115,10 +115,15 @@ export async function listDetectedGitWorktrees(
       kind: 'desktop',
       maxAgeMs: DETECTED_WORKTREE_SCAN_CACHE_TTL_MS,
       needsHygieneClaim: needsWorktreeCatalogHygieneClaim(repo),
-      staleWhileRevalidate: {
-        minScanMs: STALE_WHILE_REVALIDATE_MIN_SCAN_MS,
-        maxStaleMs: STALE_WHILE_REVALIDATE_MAX_MS
-      }
+      // A deferred WSL refresh would skip the stopped-distro admission above and boot the distro (E9).
+      ...(wslDistroForPath(repo.path, localWorktreeGitOptions.wslDistro)
+        ? {}
+        : {
+            staleWhileRevalidate: {
+              minScanMs: STALE_WHILE_REVALIDATE_MIN_SCAN_MS,
+              maxStaleMs: STALE_WHILE_REVALIDATE_MAX_MS
+            }
+          })
     },
     {
       scan: async () => {

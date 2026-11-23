@@ -5,6 +5,7 @@ import {
   invalidateWorktreeCatalogForRepo,
   readWorktreeCatalog
 } from './repo-worktree-catalog-owner'
+import { onWorktreeCatalogRevalidated } from './repo-worktree-catalog-freshness'
 
 const repo: Repo = {
   id: 'freshness-repo',
@@ -57,6 +58,8 @@ describe('worktree catalog freshness', () => {
 
   it('serves rows from a scan slower than the window, then revalidates aged rows once without waiting', async () => {
     const scans = controlledScans()
+    const notified: string[] = []
+    const stopListening = onWorktreeCatalogRevalidated((repoId) => notified.push(repoId))
     const first = read(scans.plan)
     await vi.waitFor(() => expect(scans.pending).toHaveLength(1))
     await scans.finish('/repos/freshness/v1', 6_000)
@@ -76,6 +79,7 @@ describe('worktree catalog freshness', () => {
     await scans.finish('/repos/freshness/v2', 26_000)
     const refreshed = (await read(scans.plan)).observation
     expect(refreshed?.outcome).toMatchObject({ worktrees: [{ path: '/repos/freshness/v2' }] })
+    expect(notified).toEqual([repo.id])
 
     // A mutation overtakes the published rows: readers wait for truth instead of serving them.
     invalidateWorktreeCatalogForRepo(repo.id)
@@ -90,5 +94,22 @@ describe('worktree catalog freshness', () => {
     expect((await afterMutation).observation?.outcome).toMatchObject({
       worktrees: [{ path: '/repos/freshness/v3' }]
     })
+    expect(notified).toEqual([repo.id])
+
+    // A scan another reader started still tells readers that were served stale rows.
+    vi.setSystemTime(40_000)
+    const strict = readWorktreeCatalog(
+      repo,
+      'local:default',
+      { kind: 'runtime', maxAgeMs: 0 },
+      scans.plan
+    )
+    await vi.waitFor(() => expect(scans.pending).toHaveLength(1))
+    expect((await read(scans.plan)).stale).toBe(true)
+    expect(scans.pending).toHaveLength(1)
+    await scans.finish('/repos/freshness/v4', 45_000)
+    await strict
+    expect(notified).toEqual([repo.id, repo.id])
+    stopListening()
   })
 })

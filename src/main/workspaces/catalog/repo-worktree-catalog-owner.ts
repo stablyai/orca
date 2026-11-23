@@ -13,9 +13,11 @@ import type {
 } from './repo-worktree-catalog-observation'
 import {
   acceptable,
+  backgroundProbe,
   cancelRevalidation,
   revalidateInBackground,
   servesStale,
+  settleServedStale,
   type RevalidationSlot
 } from './repo-worktree-catalog-freshness'
 import {
@@ -113,7 +115,7 @@ function resolveEntry(repo: Repo, runtimeKey: string): Entry {
       failure: null,
       flight: null,
       verifierProbe: null,
-      revalidation: { timer: null }
+      revalidation: { timer: null, served: null }
     }
     entries.set(key, entry)
   }
@@ -205,14 +207,9 @@ function publish(
     entry.failure = null
   }
   if (isCurrent(entry, observation)) {
+    settleServedStale(entry.revalidation, entry.repoId, observation)
     plan.observed?.(observation)
   }
-}
-
-/** Background flights still fingerprint before their scan, so verifier readers can keep reusing rows. */
-function backgroundProbe(entry: Entry): Promise<string | null> | null {
-  const probe = entry.verifierProbe?.() ?? null
-  return probe === 'in-flight' ? null : probe
 }
 
 /** The sole owner of a repo's raw worktree rows: readers state what they accept and share its one flight. */
@@ -259,8 +256,7 @@ export async function readWorktreeCatalog(
             slot: entry.revalidation,
             flightRunning: () => entry.flight !== null,
             stillServed: () => entry.success === success && isCurrent(entry, success),
-            start: () => launch(backgroundProbe(entry)).promise,
-            published: (fresh) => entry.success === fresh && isCurrent(entry, fresh)
+            start: () => launch(backgroundProbe(entry.verifierProbe, success)).promise
           },
           success,
           now
