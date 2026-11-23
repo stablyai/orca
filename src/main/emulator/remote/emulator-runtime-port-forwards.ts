@@ -3,7 +3,8 @@ import type { BrowserNetworkTunnelOpen } from '../../../shared/browser/network/t
 import type { BrowserNetworkTunnelDuplex } from '../../browser/network/tunnels/browser-network-tunnel-duplex'
 import { pipeUpstreamToClient } from '../../browser/network/tunnels/remote-browser-socks-upstream'
 
-const MAX_FORWARDS = 16
+// Idle forwards are just loopback listeners; a runtime would need this many helper ports to hit it.
+const MAX_FORWARDS = 64
 
 type Forward = {
   server: Server
@@ -14,7 +15,7 @@ type Forward = {
 
 /**
  * Loopback listeners on this machine that each reach one port on a paired runtime's loopback.
- * Panes keep the URLs they were given, so a forward stays open until the cap evicts an idle one.
+ * Panes keep the URLs they were given, even while parked, so a forward is never closed under them.
  */
 export class EmulatorRuntimePortForwards {
   private readonly forwards = new Map<number, Forward>()
@@ -28,7 +29,7 @@ export class EmulatorRuntimePortForwards {
     if (existing) {
       return existing.localPort
     }
-    if (this.forwards.size >= MAX_FORWARDS && !this.evictIdleForward()) {
+    if (this.forwards.size >= MAX_FORWARDS) {
       return Promise.reject(new Error('Too many emulator stream forwards'))
     }
     const forward: Forward = {
@@ -88,17 +89,6 @@ export class EmulatorRuntimePortForwards {
       },
       () => socket.destroy()
     )
-  }
-
-  // A shown pane reconnects its stream every second, so a forward without sockets has no viewer.
-  private evictIdleForward(): boolean {
-    for (const [remotePort, forward] of this.forwards) {
-      if (forward.sockets.size === 0) {
-        this.closeForward(remotePort, forward)
-        return true
-      }
-    }
-    return false
   }
 
   private closeForward(remotePort: number, forward: Forward): void {
