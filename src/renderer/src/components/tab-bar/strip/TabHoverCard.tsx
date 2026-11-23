@@ -9,7 +9,8 @@ export function TabHoverCard({
   programName,
   description,
   alert,
-  showWhenUnclipped = false
+  showWhenUnclipped = false,
+  programNameIsProse = false
 }: {
   children: ReactNode
   title: string
@@ -19,8 +20,11 @@ export function TabHoverCard({
   description?: string | (() => string)
   /** Controls below the program row; the card then stays open under the pointer. */
   alert?: ReactNode | ((dismiss: () => void) => ReactNode)
-  /** The program row says something the tab cannot, so the card opens even for a full title. */
+  /** The card says something the tab cannot (a program row, a group room's members), so it opens
+   *  even for a full title. */
   showWhenUnclipped?: boolean
+  /** The program row is a sentence or name list, so it wraps at words instead of anywhere. */
+  programNameIsProse?: boolean
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLElement>(null)
@@ -97,7 +101,9 @@ export function TabHoverCard({
             <span className="flex h-4 min-w-4 shrink-0 items-center justify-center" aria-hidden>
               {icon}
             </span>
-            <span className="min-w-0 break-all">{programName}</span>
+            <span className={`min-w-0 ${programNameIsProse ? 'break-words' : 'break-all'}`}>
+              {programName}
+            </span>
           </div>
           {typeof alert === 'function' ? alert(dismiss) : alert}
         </div>

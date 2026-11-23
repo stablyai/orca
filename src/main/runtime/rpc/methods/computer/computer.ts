@@ -4,8 +4,7 @@ import {
   callComputerSidecarLaunchApp,
   callComputerSidecarListApps,
   callComputerSidecarListWindows,
-  callComputerSidecarSnapshot,
-  resetComputerSidecarForTest
+  callComputerSidecarSnapshot
 } from '../../../../computer/sidecar-transport/sidecar-client'
 import { defineMethod } from '../../core'
 import {
@@ -28,10 +27,6 @@ import {
   ComputerCapabilitiesParams,
   ComputerPermissionsStatusParams
 } from '../../../../../shared/rpc-contract/computer/computer-params'
-
-export function resetComputerSessionsForTest(): void {
-  resetComputerSidecarForTest()
-}
 
 export const COMPUTER_METHODS = [
   defineMethod({

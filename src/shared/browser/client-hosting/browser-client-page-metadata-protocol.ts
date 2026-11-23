@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MAX_REMOTE_TAB_FAVICON_URL_LENGTH } from '../browser-favicon-url'
 
 const Identity = z.string().min(1).max(256)
 const Generation = z.number().int().min(1).max(0xffff_ffff)
@@ -15,7 +16,9 @@ export const BrowserClientPageMetadataParams = z.object({
   title: z.string().max(4096),
   loading: z.boolean(),
   canGoBack: z.boolean(),
-  canGoForward: z.boolean()
+  canGoForward: z.boolean(),
+  /** From `remoteTabFaviconUrl`; older desktops omit it. */
+  faviconUrl: z.string().max(MAX_REMOTE_TAB_FAVICON_URL_LENGTH).nullable().optional()
 })
 
 export type BrowserClientPageMetadataParams = z.infer<typeof BrowserClientPageMetadataParams>

@@ -38,52 +38,17 @@ import { WslHostPhoneGate } from '../../wsl/host-lifecycle/wsl-host-phone-reach'
 import { readWslHostRecordsQuietly } from '../../wsl/host-lifecycle/wsl-host-connection-record'
 import { retireRemovedRuntimeEnvironment } from '../runtime-environments/catalog/runtime-environment-removal-cleanup'
 import { getRuntimeEnvironmentStatus } from '../runtime-environments/status/runtime-environment-status-probe'
-import { callRuntimeEnvironment } from '../runtime-environments/requests/runtime-environment-transport-routing'
-import { isRemoteRuntimeConnectionReady } from '../runtime-environments/connections/runtime-environment-request-connections'
-import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { reconcileWslHostBridgePorts } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { requestOrcadTerminalCensus } from '../../managed-server/lifecycle/orcad-terminal-census-client'
-import type { WslHostRuntimeAccess } from '../../wsl/host-lifecycle/wsl-host-server-stop'
 import { changesWslHostAccounts } from '../../wsl/orcad/wsl-orcad-host-account-push'
 import {
   addWslHostThenSeedPermission,
   pushHostAccounts,
+  pushHostChatAutoName,
   seedHostPermission
 } from './wsl-host-desktop-settings-push'
 import { wslHostConnectOptions } from '../../wsl/host-lifecycle/wsl-host-connect-request'
 import { wireWslNodeRuntimePrefetch } from '../../wsl/execution/wsl-node-runtime-prefetch'
-
-function wslHostRuntimeAccess(getUserDataPath: () => string): WslHostRuntimeAccess {
-  return {
-    isReady: async (environmentId) =>
-      isRemoteRuntimeConnectionReady(
-        environmentId,
-        getPreferredPairedRuntimeConnection(
-          await resolveEnvironment(getUserDataPath(), environmentId)
-        )
-      ),
-    call: async (environmentId, method, params) => {
-      const response = await callRuntimeEnvironment(
-        getUserDataPath(),
-        environmentId,
-        method,
-        params
-      )
-      if (!response.ok) {
-        throw new Error(response.error.message)
-      }
-      return response.result
-    },
-    census: async (environmentId) =>
-      requestOrcadTerminalCensus(
-        getPreferredPairedRuntimeConnection(
-          await resolveEnvironment(getUserDataPath(), environmentId)
-        ),
-        0
-      )
-  }
-}
+import { wslHostRuntimeAccess } from './wsl-host-runtime-access'
 
 type WslHostHandlerArgs = {
   hostInitialization?: Promise<void>
@@ -120,6 +85,7 @@ async function createService(args: WslHostHandlerArgs): Promise<WslHostService |
         reconnect: true
       }).catch(() => {})
       pushHostAccounts(args.getUserDataPath, environmentId, distro)
+      pushHostChatAutoName(args.getUserDataPath, environmentId, args.store)
       void automationWake?.learn(environmentId)
     },
     removed: (environmentId) => {
@@ -181,6 +147,13 @@ async function startService(args: WslHostHandlerArgs): Promise<WslHostService | 
       for (const status of created.getStatuses()) {
         if (status.state === 'ready') {
           pushHostAccounts(args.getUserDataPath, status.environmentId, status.distro)
+        }
+      }
+    }
+    if ('nativeChatAutoName' in updates) {
+      for (const status of created.getStatuses()) {
+        if (status.state === 'ready') {
+          pushHostChatAutoName(args.getUserDataPath, status.environmentId, args.store)
         }
       }
     }
@@ -273,7 +246,12 @@ export async function registerWslHostHandlers(args: WslHostHandlerArgs): Promise
     'wslHosts:connect',
     (
       _event,
-      request: { environmentId: string; intent?: unknown; withdrawPendingRemoval?: unknown }
+      request: {
+        environmentId: string
+        intent?: unknown
+        pastUncountedTerminals?: unknown
+        withdrawPendingRemoval?: unknown
+      }
     ) => wsl.connect(request.environmentId, wslHostConnectOptions(request))
   )
   const capability = (): WslHostCapability => ({

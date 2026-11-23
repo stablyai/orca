@@ -1,3 +1,4 @@
+import { fileStatSignature } from '../../filesystem/file-stat-signature'
 import {
   existsSync,
   lstatSync,
@@ -60,8 +61,10 @@ export async function claudeStateFileAsync(
 // Cache large, frequently rewritten state files across account-list refreshes.
 const logins = new Map<
   string,
-  { mtimeMs: number; size: number; readAt: number; login: ClaudeFolderLogin | null }
+  { signature: string; readAt: number; login: ClaudeFolderLogin | null }
 >()
+const loginObservations = new Map<string, { generation: number; readers: number }>()
+let loginObservationSequence = 0
 
 /** Missing organization IDs permit an email-only match. */
 export function isSameClaudeLogin(
@@ -94,54 +97,84 @@ export function readClaudeFolderLogin(stateFile: string, maxAgeMs = 0): ClaudeFo
   if (recent && Date.now() - recent.readAt < maxAgeMs) {
     return recent.login
   }
-  let stat: { mtimeMs: number; size: number }
+  const observation = loginObservations.get(stateFile)
+  if (observation) {
+    observation.generation = ++loginObservationSequence
+  }
+  pendingLogins.delete(stateFile)
+  let signature: string
   try {
-    stat = statSync(stateFile)
+    signature = fileStatSignature(statSync(stateFile, { bigint: true }))
   } catch {
     logins.delete(stateFile)
     return null
   }
-  if (recent?.mtimeMs === stat.mtimeMs && recent.size === stat.size) {
+  if (recent?.signature === signature) {
     recent.readAt = Date.now()
     return recent.login
   }
   const read = readClaudeProfileObject(stateFile)
   const login = read.kind === 'present' ? claudeStateLogin(read.value) : null
-  logins.set(stateFile, { mtimeMs: stat.mtimeMs, size: stat.size, readAt: Date.now(), login })
+  logins.set(stateFile, { signature, readAt: Date.now(), login })
   return login
 }
 
 // Concurrent chat reads of one state-file revision share a single read and parse.
 const pendingLogins = new Map<
   string,
-  { mtimeMs: number; size: number; login: Promise<ClaudeFolderLogin | null> }
+  { signature: string; generation: number; login: Promise<ClaudeFolderLogin | null> }
 >()
 
 /** Avoid blocking main on state files across WSL shares. */
 export async function readClaudeFolderLoginAsync(
   stateFile: string
 ): Promise<ClaudeFolderLogin | null> {
-  const current = await stat(stateFile).catch(() => null)
+  const observation = loginObservations.get(stateFile) ?? { generation: 0, readers: 0 }
+  loginObservations.set(stateFile, observation)
+  observation.readers += 1
+  try {
+    return await readObservedLogin(stateFile, observation, ++loginObservationSequence)
+  } finally {
+    observation.readers -= 1
+    if (observation.readers === 0) {
+      loginObservations.delete(stateFile)
+    }
+  }
+}
+
+async function readObservedLogin(
+  stateFile: string,
+  observation: { generation: number; readers: number },
+  generation: number
+): Promise<ClaudeFolderLogin | null> {
+  const current = await stat(stateFile, { bigint: true }).catch(() => null)
+  if (observation.generation > generation) {
+    return pendingLogins.get(stateFile)?.login ?? logins.get(stateFile)?.login ?? null
+  }
+  observation.generation = generation
   if (!current) {
     logins.delete(stateFile)
     pendingLogins.delete(stateFile)
     return null
   }
+  const signature = fileStatSignature(current)
   const recent = logins.get(stateFile)
-  if (recent?.mtimeMs === current.mtimeMs && recent.size === current.size) {
+  if (recent?.signature === signature) {
+    pendingLogins.delete(stateFile)
     return recent.login
   }
   const pending = pendingLogins.get(stateFile)
-  if (pending?.mtimeMs === current.mtimeMs && pending.size === current.size) {
+  if (pending?.signature === signature) {
+    pending.generation = generation
     return pending.login
   }
-  const read = { mtimeMs: current.mtimeMs, size: current.size, login: readStateLogin(stateFile) }
+  const read = { signature, generation, login: readStateLogin(stateFile) }
   pendingLogins.set(stateFile, read)
   const login = await read.login
   // A read superseded by a newer revision (or a deleted file) must not repopulate the cache.
-  if (pendingLogins.get(stateFile) === read) {
+  if (observation.generation === read.generation && pendingLogins.get(stateFile) === read) {
     pendingLogins.delete(stateFile)
-    logins.set(stateFile, { mtimeMs: read.mtimeMs, size: read.size, readAt: Date.now(), login })
+    logins.set(stateFile, { signature: read.signature, readAt: Date.now(), login })
   }
   return login
 }

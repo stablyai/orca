@@ -18,26 +18,45 @@ import { AccountSwitchSection } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { useCodexSwitcherController } from './use-codex-switcher-controller'
 import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
+import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
+import { getAccountOwnerKey } from './owner-account-rows'
 
-export function CodexSwitcherMenu({
-  codex,
-  ownerUsage,
-  compact,
-  iconOnly,
-  asSubmenu = false,
-  triggerContent
-}: {
+type CodexSwitcherProps = {
   codex: ProviderRateLimits
-  ownerUsage?: OwnerUsageRateLimits
-  compact: boolean
-  iconOnly: boolean
+  ownerUsage: OwnerUsageRateLimits
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
-}): React.JSX.Element {
+}
+
+export function CodexSwitcherMenu(props: CodexSwitcherProps): React.JSX.Element {
+  const t = useTranslate()
+  const owner = props.ownerUsage.owner
+  if (!owner) {
+    return (
+      <ProviderDetailsMenu
+        provider={props.codex}
+        asSubmenu={props.asSubmenu}
+        triggerContent={props.triggerContent}
+        ariaLabel={t(
+          'auto.components.status.bar.StatusBar.ba55303942',
+          'Open Codex details and account switcher'
+        )}
+      />
+    )
+  }
+  return <CodexSwitcherForOwner {...props} owner={owner} key={getAccountOwnerKey(owner)} />
+}
+
+function CodexSwitcherForOwner({
+  codex,
+  ownerUsage,
+  asSubmenu = false,
+  triggerContent,
+  owner
+}: CodexSwitcherProps & { owner: AccountOwner }): React.JSX.Element {
   const t = useTranslate()
   const {
     activeTarget,
-    activeUsage,
     canRedeemReset,
     confirmedResetAccountId,
     handleConfirmReset,
@@ -56,6 +75,7 @@ export function CodexSwitcherMenu({
     providerAccountHostLabel,
     reauthenticatingAccountId,
     resetConfirmOpen,
+    rosterKnown,
     resetCreditCount,
     resetCreditExpiry,
     selectedGroup,
@@ -64,7 +84,7 @@ export function CodexSwitcherMenu({
     setSkipFutureResetConfirm,
     skipFutureResetConfirm,
     switchGroups
-  } = useCodexSwitcherController(codex, ownerUsage)
+  } = useCodexSwitcherController(codex, ownerUsage, owner)
 
   const isBusy = isSwitching || reauthenticatingAccountId !== null
   const rows = (selectedGroup?.targets ?? []).map((target) => {
@@ -120,10 +140,8 @@ export function CodexSwitcherMenu({
     active: boolean,
     inactiveUsage: (typeof rows)[number]['inactiveUsage']
   ): React.ReactNode {
-    if (active && activeUsage) {
-      return (
-        <AccountUsageGauge limits={activeUsage} isFetching={activeUsage.status === 'fetching'} />
-      )
+    if (active) {
+      return <AccountUsageGauge limits={codex} isFetching={codex.status === 'fetching'} />
     }
     if (inactiveUsage?.isFetching && !inactiveUsage.rateLimits) {
       return <InlineUsageSkeleton />
@@ -136,8 +154,6 @@ export function CodexSwitcherMenu({
   return (
     <ProviderDetailsMenu
       provider={codex}
-      compact={compact}
-      iconOnly={iconOnly}
       asSubmenu={asSubmenu}
       triggerContent={triggerContent}
       ariaLabel={t(
@@ -146,7 +162,7 @@ export function CodexSwitcherMenu({
       )}
       variant="account"
       accountLabel={
-        activeUsage
+        rosterKnown
           ? (activeTarget?.label ??
             t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
           : undefined
@@ -154,6 +170,11 @@ export function CodexSwitcherMenu({
       panelFooter={
         resetCreditCount !== null ? (
           <CodexResetCredits
+            unsupportedRuntime={
+              owner.wslHostDistro !== null || selectedGroup?.runtimeTarget.runtime === 'wsl'
+                ? 'wsl'
+                : undefined
+            }
             resetCreditCount={resetCreditCount}
             resetCreditExpiry={resetCreditExpiry}
             canRedeemReset={canRedeemReset}
@@ -174,7 +195,7 @@ export function CodexSwitcherMenu({
         ) : undefined
       }
       topContent={
-        !hasActiveRuntimeEnvironment ? (
+        !hasActiveRuntimeEnvironment && owner.wslHostDistro === null ? (
           <AccountRuntimeToggle
             groups={switchGroups}
             value={selectedGroup?.key ?? selectedRuntimeKey}
@@ -203,29 +224,33 @@ export function CodexSwitcherMenu({
           : {})}
       />
       {open ? <CodexRestartStatusPrompt /> : null}
-      <AccountSwitchSection
-        heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
-        targets={selectedGroup?.targets ?? []}
-        panelShowsActiveAccount={activeUsage !== null}
-        onOpenSettings={() => {
-          openSettingsTarget({
-            pane: 'accounts',
-            repoId: null,
-            sectionId: 'accounts-codex'
-          })
-          openSettingsPage()
-        }}
-      >
-        {rows.filter((row) => !row.showSignInAction).map(renderRow)}
-        {unavailableUsageRows.length > 0 ? (
-          <>
-            <DropdownMenuLabel className="mt-1">
-              {t('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')}
-            </DropdownMenuLabel>
-            {unavailableUsageRows.map(renderRow)}
-          </>
-        ) : null}
-      </AccountSwitchSection>
+      {/* Why: until the host lists its accounts, the empty roster's only row would claim "System default". */}
+      {rosterKnown ? (
+        <AccountSwitchSection
+          heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
+          targets={selectedGroup?.targets ?? []}
+          panelShowsActiveAccount
+          onOpenSettings={() => {
+            openSettingsTarget({
+              pane: 'accounts',
+              repoId: null,
+              sectionId: 'accounts-codex',
+              hostScope: owner.target
+            })
+            openSettingsPage()
+          }}
+        >
+          {rows.filter((row) => !row.showSignInAction).map(renderRow)}
+          {unavailableUsageRows.length > 0 ? (
+            <>
+              <DropdownMenuLabel className="mt-1">
+                {t('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')}
+              </DropdownMenuLabel>
+              {unavailableUsageRows.map(renderRow)}
+            </>
+          ) : null}
+        </AccountSwitchSection>
+      ) : null}
     </ProviderDetailsMenu>
   )
 }

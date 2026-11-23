@@ -4,6 +4,7 @@ import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
 import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
 import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
 import {
+  acpHostProgramTakesNewChats,
   resolveAcpLaunchCommand,
   selectAcpHostAccountHome,
   selectAcpHostAccountHomeForCatalog
@@ -28,7 +29,10 @@ import {
 } from '../model-catalog/structured-agent-model-catalog-discovery'
 import { resolveStructuredAgentCommand } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
-import { claudeManagedPlatform } from '../../../claude/managed-runtime/claude-managed-runtime'
+import {
+  isManagedAgentCli,
+  managedAgentCli
+} from '../../../managed-agent-cli/managed-agent-cli-registry'
 import type {
   StructuredAgentAccountHomeRequest,
   StructuredAgentChatProgram,
@@ -42,7 +46,7 @@ export type StructuredAgentRuntimeCatalogEntry =
 
 // Why the host's data folder: a start runs Orca's installed release before PATH.
 function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
-  const { managedRuntime } = spec
+  const { agent, managedRuntime } = spec
   return {
     resolve: (shellEnv, commandSettings) => {
       const env = { ...shellEnv, ...spec.env }
@@ -50,11 +54,12 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
       return { ...resolveAcpLaunchCommand(spec, env, options), env }
     },
     ...(managedRuntime ? { installable: () => managedRuntime.pin() !== null } : {}),
+    // Hosts without the user's own install can install Orca's copy.
+    ...(isManagedAgentCli(agent) ? { installable: () => managedAgentCli(agent).available() } : {}),
     ...(spec.hostBackend
       ? {
-          hostAlternative: async (shellEnv, settings) =>
-            (await selectAcpHostAccountHome(spec, shellEnv, getProfileUserDataPath(), settings)) !==
-            null,
+          hostAlternative: (shellEnv, settings) =>
+            acpHostProgramTakesNewChats(spec, shellEnv, getProfileUserDataPath(), settings),
           ...(managedRuntime ? { onlyHostAlternative: () => managedRuntime.pin() === null } : {})
         }
       : {})
@@ -69,8 +74,8 @@ function cliChatProgram(agent: 'claude' | 'codex'): StructuredAgentChatProgram {
       const options = { pathEnv, ...(homePath ? { homePath } : {}) }
       return { ...resolveStructuredAgentCommand(agent, commandSettings, options), env }
     },
-    // Hosts without the user's own Claude can install Orca's copy.
-    ...(agent === 'claude' ? { installable: () => claudeManagedPlatform() !== null } : {})
+    // Hosts without the user's own install can install Orca's copy.
+    installable: () => managedAgentCli(agent).available()
   }
 }
 
@@ -111,9 +116,12 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
           spec.hostBackend.spec.permissionModeConfig?.values[permissionMode] !== undefined)
           ? await hostLaunchEnvironment(spec.agent)
               .then((env) =>
-                (purpose === 'catalog'
-                  ? selectAcpHostAccountHomeForCatalog
-                  : selectAcpHostAccountHome)(spec, env, stateDirectory, hostSettings())
+                purpose === 'catalog'
+                  ? selectAcpHostAccountHomeForCatalog(spec, env, stateDirectory, hostSettings())
+                  : // A chat starting is someone using the agent, so its program may be asked.
+                    selectAcpHostAccountHome(spec, env, stateDirectory, hostSettings(), {
+                      startsProgram: true
+                    })
               )
               .catch(() => null)
           : null
@@ -204,5 +212,16 @@ export function structuredAgentRuntimeMetadata(
 ): StructuredAgentRuntimeMetadata | null {
   return (
     STRUCTURED_AGENT_RUNTIME_METADATA.find(({ definition }) => definition.agent === agent) ?? null
+  )
+}
+
+/** The seed options `agent` still registers: a key it stopped offering would refuse the create. */
+export function supportedStructuredSeedOptions(
+  agent: string,
+  options: Readonly<Record<string, string>> | undefined
+): Record<string, string> {
+  const definition = structuredAgentRuntimeMetadata(agent)?.definition
+  return Object.fromEntries(
+    Object.entries(options ?? {}).filter(([key]) => definition?.restingOptions.acceptsKey(key))
   )
 }

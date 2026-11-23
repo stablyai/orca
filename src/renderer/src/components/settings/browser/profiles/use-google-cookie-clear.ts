@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import {
   parseExecutionHostId,
   type ExecutionHostId
@@ -35,12 +36,10 @@ export function useGoogleCookieClear(hostId: ExecutionHostId, profileId: string,
     const environment = s.runtimeEnvironments.find((entry) => entry.id === environmentId)
     return environment?.pairingRevision ?? environment?.createdAt
   })
-  const supported = useAppStore((s) =>
-    environmentId
-      ? s.runtimeStatusByEnvironmentId
-          .get(environmentId)
-          ?.status?.capabilities?.includes(BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY) === true
-      : false
+  const supported = useRuntimeHostStatusSelector(
+    environmentId,
+    (entry) =>
+      entry?.status?.capabilities?.includes(BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY) === true
   )
   const [available, setAvailable] = useState<boolean | undefined>()
   useEffect(() => {

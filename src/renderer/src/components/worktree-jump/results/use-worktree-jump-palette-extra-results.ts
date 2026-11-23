@@ -1,13 +1,15 @@
 import { useMemo } from 'react'
 import { usePaletteExtraSources } from '@/components/cmd-j/palette-extra-sources'
-import type { PaletteExtraSource } from '@/components/cmd-j/palette-extra-results'
+import {
+  BOT_PALETTE_SOURCE_ID,
+  type PaletteExtraSource
+} from '@/components/cmd-j/palette-extra-results'
 import { comparePaletteRankedItems } from '@/lib/workspace/search/palette/cmd-j-section-leadership'
 import {
   encodePaletteIdentity,
   preparePaletteActivity,
   type PaletteSearchContext
 } from '../../../../../shared/palette-match/palette-ranking'
-import type { Worktree } from '../../../../../shared/worktree/types'
 import type { ExtraPaletteItem } from '../worktree-jump-palette-model'
 import type { WorktreeJumpPaletteLocalState } from '../state/use-worktree-jump-palette-local-state'
 
@@ -18,20 +20,34 @@ export function useWorktreeJumpPaletteExtraResults({
   paletteSearchContext,
   visible,
   filterActive,
-  taskSourceUrl
+  taskSourceUrl,
+  scoped
 }: Pick<WorktreeJumpPaletteLocalState, 'paletteSearchQuery' | 'taskSourceUrl'> & {
   paletteSearchContext: PaletteSearchContext
   visible: boolean
   filterActive: boolean
+  /** Showing only bots: filters are paused and only the Bots source lists. */
+  scoped: boolean
 }) {
-  const sources = usePaletteExtraSources({ query: paletteSearchQuery, visible })
+  const { sources: allSources, hidesWorkspace: hidesPaletteWorkspace } = usePaletteExtraSources({
+    query: paletteSearchQuery,
+    visible,
+    scoped
+  })
+  // Host/project chips filter workspaces, not bots; issue/PR URLs still scope every source.
+  const sources = useMemo(
+    () =>
+      allSources.filter((source) =>
+        scoped
+          ? source.id === BOT_PALETTE_SOURCE_ID
+          : !taskSourceUrl && (!filterActive || source.id === BOT_PALETTE_SOURCE_ID)
+      ),
+    [allSources, filterActive, scoped, taskSourceUrl]
+  )
   const hasQuery = paletteSearchQuery.length > 0
-  // Filters and issue/PR URLs scope the palette to workspaces.
-  const suppressed = filterActive || Boolean(taskSourceUrl)
+  const botSource = allSources.find((source) => source.id === BOT_PALETTE_SOURCE_ID)
+  const botCatalogSize = botSource?.catalogSize ?? 0
   const extraSections = useMemo<PaletteExtraSection[]>(() => {
-    if (suppressed) {
-      return []
-    }
     const ranked = (item: ExtraPaletteItem) => ({
       rank: item.result.rank,
       order: item.result.order,
@@ -54,16 +70,8 @@ export function useWorktreeJumpPaletteExtraResults({
         return { source, items }
       })
       .filter((section) => section.items.length > 0)
-  }, [hasQuery, paletteSearchContext, sources, suppressed])
-  const hidesPaletteWorkspace = useMemo(() => {
-    const predicates = sources.flatMap((source) =>
-      source.hidesWorkspace ? [source.hidesWorkspace] : []
-    )
-    return predicates.length
-      ? (worktree: Worktree) => predicates.some((predicate) => predicate(worktree))
-      : null
-  }, [sources])
-  return { extraSections, hidesPaletteWorkspace }
+  }, [hasQuery, paletteSearchContext, sources])
+  return { extraSections, hidesPaletteWorkspace, botCatalogSize }
 }
 
 export type WorktreeJumpPaletteExtraResults = ReturnType<typeof useWorktreeJumpPaletteExtraResults>

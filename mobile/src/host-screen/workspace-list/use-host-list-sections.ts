@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-list/feed/sidebar-inputs-switch'
 import { buildSidebarFeedRows } from '../../../../src/shared/sidebar-list/feed/sidebar-feed-rows'
 import { repoIconFeedKey } from '../../../../src/shared/sidebar-list/catalog/repo-icon-data-urls-contract'
@@ -28,8 +28,18 @@ import {
 import { useHostRepoIconDataUrls } from '../catalog/use-host-repo-icon-data-urls'
 import type { HostSidebarFeed } from '../sidebar-feed/use-host-sidebar-feed'
 import type { HostScreenState } from '../use-host-screen-state'
+import {
+  buildHostBotSections,
+  isProjectListRow,
+  type HostBotListing
+} from '../../bots/host-bot-sections'
+import { usePublishedBotStatuses } from '../../bots/use-published-bot-statuses'
+import { useHostBotChatListInputs } from '../../bots/use-host-bot-chat-trees'
+import { drawBotRow } from '../../bots/host-bot-row-draw'
+import type { LastVisitedWorktreeOnHost } from '../../worktree/row-presentation/host-list-highlight'
 import { indexHiddenProjects } from '../../../../src/shared/project/catalog/hidden-projects'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host/execution-host'
+import { getMobileUiRevision, subscribeMobileUiLanguage } from '../../i18n/mobile-i18n'
 
 export type HostListSectionsInputs = {
   client: RpcClient | null
@@ -42,7 +52,19 @@ export type HostListSectionsInputs = {
   hostPlatform: NodeJS.Platform | null
   /** The host's own store identity (status.get), for parents on another machine. */
   hostInstallationId: string | undefined
+  /** The paired host's capabilities, which say whether it relays a server's reads. */
+  hostCapabilities: readonly string[]
   state: HostScreenState
+  /** Each host's bots, which lead the list in place of their folder rows. */
+  bots: readonly HostBotListing[]
+}
+
+// What the list builders read beyond the screen's inputs: the rows the Bots sections take, and this phone's highlight.
+type BaseListInputs = HostListSectionsInputs & {
+  /** The host's rows before the Bots sections took theirs. */
+  allHostRows: readonly Worktree[]
+  botListedIdentities: ReadonlySet<string>
+  lastVisited: LastVisitedWorktreeOnHost | null
 }
 
 export type HostListSections = {
@@ -68,12 +90,24 @@ function useFilterRepos(
   )
 }
 
+/** The stores the host's list spans, by the identities the host checked. */
+function useLineageStores({
+  hostInstallationId,
+  state
+}: Pick<HostListSectionsInputs, 'hostInstallationId' | 'state'>): MobileLineageStores {
+  return useMemo(
+    () => ({ ownInstallationId: hostInstallationId, servers: state.serverWorkspaces.hosts }),
+    [hostInstallationId, state.serverWorkspaces.hosts]
+  )
+}
+
 function useLegacyHostListSections({
   displayWorktrees,
+  allHostRows,
   hostContextOf,
   hostInstallationId,
   state
-}: HostListSectionsInputs): HostListSections {
+}: BaseListInputs): HostListSections {
   const projectCatalog = useMemo(
     () =>
       buildProjectSectionCatalog(
@@ -93,12 +127,10 @@ function useLegacyHostListSections({
   )
   const collapsedGroups = useCollapsedGroups(state)
   const rowFilters = useMemo(() => rowFiltersForView(state.view), [state.view])
-  const lineageStores = useMemo<MobileLineageStores>(
-    () => ({ ownInstallationId: hostInstallationId, servers: state.serverWorkspaces.hosts }),
-    [hostInstallationId, state.serverWorkspaces.hosts]
-  )
+  const lineageStores = useLineageStores({ hostInstallationId, state })
   const sectionsResult = useWorkspaceSections({
     displayWorktrees,
+    allHostRows,
     hostContextOf,
     sortMode: state.view.sortBy,
     filters: rowFilters,
@@ -121,13 +153,14 @@ const PHONE_FEED_LINEAGE = { acceptLegacyLineage: true }
 
 function useFeedHostListSections({
   client,
-  hostId,
   feed,
   displayWorktrees,
   hostContextOf,
   hostPlatform,
-  state
-}: HostListSectionsInputs): HostListSections {
+  state,
+  botListedIdentities,
+  lastVisited
+}: BaseListInputs): HostListSections {
   const collapsedGroups = useCollapsedGroups(state)
   const domains = feed?.kind === 'ready' ? feed.domains : null
   // The catalog installed with the rows; a desktop that predates it answers mobileRelay.projectSections.
@@ -150,10 +183,15 @@ function useFeedHostListSections({
   )
   const built = useMemo(
     // The phone keeps nesting by an older server's edges without instance ids, as it always has.
-    () => (domains ? buildSidebarFeedRows(domains, catalog, view, PHONE_FEED_LINEAGE) : null),
-    [domains, catalog, view]
+    () =>
+      domains
+        ? buildSidebarFeedRows(domains, catalog, view, {
+            ...PHONE_FEED_LINEAGE,
+            botListedWorktreeIdentities: botListedIdentities
+          })
+        : null,
+    [domains, catalog, view, botListedIdentities]
   )
-  const lastVisited = useLastVisitedWorktreeOnHost(hostId)
   // Fall back only after an unreadable feed; before the first read, wait or retain the installed feed to avoid flashing a different list shape.
   const preFeed = feed?.kind === 'reopen'
   const sections = useMemo(
@@ -215,6 +253,74 @@ function useFeedHostListSections({
   return { sections, rawSections: sections, uniqueRepos, repoById, collapsedGroups, projectOrderBy }
 }
 
-export const useHostListSections = ORCA_SIDEBAR_INPUTS_IS_MAIN
+const useBaseHostListSections = ORCA_SIDEBAR_INPUTS_IS_MAIN
   ? useFeedHostListSections
   : useLegacyHostListSections
+
+export function useHostListSections(inputs: HostListSectionsInputs): HostListSections {
+  const { bots, displayWorktrees, state } = inputs
+  const collapsedGroups = useCollapsedGroups(state)
+  const lastVisited = useLastVisitedWorktreeOnHost(inputs.hostId)
+  const lineageStores = useLineageStores(inputs)
+  const chatInputs = useHostBotChatListInputs({
+    client: inputs.client,
+    pairedHostId: inputs.hostId,
+    hostCapabilities: inputs.hostCapabilities,
+    listings: bots,
+    collapsedGroups
+  })
+  const uiRevision = useSyncExternalStore(subscribeMobileUiLanguage, getMobileUiRevision)
+  const botSections = useMemo(
+    () =>
+      buildHostBotSections({
+        rows: displayWorktrees,
+        listings: bots,
+        collapsedGroups,
+        repoHostIdByRepoId: state.repoHostIdByRepoId,
+        search: state.search,
+        drawRow: drawBotRow(lastVisited),
+        lineageStores,
+        ...chatInputs
+      }),
+    [
+      displayWorktrees,
+      bots,
+      collapsedGroups,
+      state.repoHostIdByRepoId,
+      state.search,
+      lastVisited,
+      lineageStores,
+      chatInputs,
+      // Status lines are translated while drawn, so a language switch draws them again.
+      uiRevision
+    ]
+  )
+  usePublishedBotStatuses(inputs.hostId, bots, botSections.sections)
+  // Left out before the list is planned, as the desktop's are, so counts and empty sections follow its rules.
+  const listRows = useMemo(
+    () =>
+      botSections.listedIdentities.size === 0
+        ? displayWorktrees
+        : displayWorktrees.filter((row) =>
+            isProjectListRow(row, botSections.listedIdentities, state.repoHostIdByRepoId)
+          ),
+    [displayWorktrees, botSections, state.repoHostIdByRepoId]
+  )
+  const base = useBaseHostListSections({
+    ...inputs,
+    displayWorktrees: listRows,
+    allHostRows: displayWorktrees,
+    botListedIdentities: botSections.listedIdentities,
+    lastVisited
+  })
+  return useMemo(() => {
+    if (botSections.sections.length === 0) {
+      return base
+    }
+    return {
+      ...base,
+      sections: [...botSections.sections, ...base.sections],
+      rawSections: [...botSections.sections, ...base.rawSections]
+    }
+  }, [base, botSections])
+}

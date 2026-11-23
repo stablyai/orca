@@ -13,10 +13,8 @@ import type {
   BrowserNetworkLogResult
 } from '../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../browser-error'
-import {
-  assertAgentBrowserPassthroughStaysOnPage,
-  parseShellArgs
-} from './protocol/agent-browser-passthrough-arguments'
+import { parseShellArgs } from '../../../shared/shell-args'
+import { assertAgentBrowserPassthroughStaysOnPage } from './protocol/agent-browser-passthrough-arguments'
 import { agentBrowserCookieSetArguments } from './protocol/agent-browser-cookie-set-arguments'
 import { AgentBrowserBridgeInteractionCommands } from './commands/agent-browser-bridge-interaction-commands'
 import { sendGuestCdpCommand } from '../cdp/debugger/guest-cdp-command'

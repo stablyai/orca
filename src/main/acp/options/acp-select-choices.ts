@@ -5,6 +5,8 @@ import {
   type SessionConfigSelectOption,
   type SessionModelState
 } from '../generated/acp-protocol.generated'
+import type { AcpDialect } from '../acp-dialects/acp-dialect'
+import { isAgentSessionInteractionMode } from '../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 
 type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
 
@@ -42,6 +44,18 @@ export function acpListedModels(
       })) ?? [])
 }
 
+/** The options with a mode the agent reported apart from them; null when it lists no mode select. */
+export function acpWithCurrentMode(
+  options: readonly SessionConfigOption[],
+  modeId: string
+): SessionConfigOption[] | null {
+  const isMode = (option: SessionConfigOption): option is SelectOption =>
+    option.category === 'mode' && option.type === 'select'
+  return options.some(isMode)
+    ? options.map((option) => (isMode(option) ? { ...option, currentValue: modeId } : option))
+    : null
+}
+
 /** An agent may list an on/off thinking switch beside its effort levels; effort is the longer menu. */
 export function acpEffortOption(options: readonly SessionConfigOption[]): SelectOption | null {
   let effort: SelectOption | null = null
@@ -55,4 +69,18 @@ export function acpEffortOption(options: readonly SessionConfigOption[]): Select
     }
   }
   return effort
+}
+
+/** The agent's own mode value for Orca's interaction mode, when its mode select offers it. */
+export function acpInteractionModeValue(
+  interactionModes: AcpDialect['interactionModes'],
+  modeOption: SelectOption | null,
+  value: string
+): string | null {
+  const native = isAgentSessionInteractionMode(value) ? interactionModes?.[value] : undefined
+  return native &&
+    modeOption &&
+    acpSelectChoices(modeOption).some((choice) => choice.value === native)
+    ? native
+    : null
 }

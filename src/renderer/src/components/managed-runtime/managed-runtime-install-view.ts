@@ -104,13 +104,34 @@ function settledView(
     note
   })
   const install = t('components.managed-runtime.installShort', 'Install')
-  // A copy found outside Orca already runs; Orca's own, once installed, runs first.
+  // A copy found outside Orca runs; with Orca's already installed, installing again changes nothing.
   if (state.source === 'external') {
     return view(
       t('components.managed-runtime.external', 'Uses the copy of {{agent}} found on this host.', {
         agent
       }),
-      state.available ? t('components.managed-runtime.installManaged', "Install Orca's copy") : null
+      // The user's own copy outranks one Orca keeps updated, so installing Orca's adds nothing.
+      state.available && state.installedVersion === null && !state.updatesAutomatically
+        ? t('components.managed-runtime.installManaged', "Install Orca's copy")
+        : null
+    )
+  }
+  if (state.installedVersion !== null && state.updatesAutomatically) {
+    // Behind, the menu's install is an update to the newer release, so it says so.
+    const menu = !state.available
+      ? null
+      : !state.installedCurrent && state.version !== null
+        ? t('components.managed-runtime.updateTo', 'Update to {{version}}', {
+            version: state.version
+          })
+        : t('components.managed-runtime.reinstall', 'Reinstall {{agent}}', { agent })
+    return view(
+      t('components.managed-runtime.installedByOrca', 'Installed by Orca · {{version}}', {
+        version: state.installedVersion
+      }),
+      null,
+      null,
+      menu
     )
   }
   if (state.installedVersion !== null) {
@@ -123,7 +144,13 @@ function settledView(
       : state.available
         ? reinstall
         : null
-    const status = t('components.managed-runtime.installed', 'Installed')
+    const status = t(
+      'components.managed-runtime.installedByOrca',
+      'Installed by Orca · {{version}}',
+      {
+        version: state.installedVersion
+      }
+    )
     return state.installedCurrent
       ? view(status, null, null, label)
       : { ...view(status, label), prominent: true }

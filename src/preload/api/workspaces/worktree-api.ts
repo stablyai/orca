@@ -160,6 +160,8 @@ export type WorktreeApi = {
     worktreeId: string
     parentWorktreeId?: string
     noParent?: boolean
+    /** Apply only while the current parent is this workspace key. */
+    ifParentWorkspace?: string
   }) => Promise<{ lineage: WorktreeLineage | null; workspaceLineage?: WorkspaceLineage | null }>
   persistSortOrder: (args: { orderedIds: string[]; hostIds?: string[] }) => Promise<void>
   /** Last failure output; memory-only, cleared on restart or when the failure clears. */
@@ -213,7 +215,8 @@ export type FolderWorkspacesApi = {
         | 'lastActivityAt'
         | 'diffComments'
       >
-    >
+    > &
+      DiffCommentBaseMutation
   }) => Promise<FolderWorkspace | null>
   delete: (args: {
     folderWorkspaceId: string

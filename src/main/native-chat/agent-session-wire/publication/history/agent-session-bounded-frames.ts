@@ -27,16 +27,20 @@ export function subscriberHistoryReader(subscriber: {
   readForkMarker?: () => ForkMarker | undefined
   readHistorySnapshot?: HistoryReader['snapshot']
   readQueueSourceIds?: HistoryReader['queueSourceIds']
+  stopped?: AbortSignal
 }): HistoryReader {
   const reader = subscriber.boundedFrames ? BOUNDED_FRAME_READER : CLIENT_HISTORY_READER
   return withForkMarker(
-    subscriber.readHistorySnapshot
-      ? {
-          ...reader,
-          snapshot: subscriber.readHistorySnapshot,
-          queueSourceIds: subscriber.readQueueSourceIds
-        }
-      : reader,
+    {
+      ...reader,
+      ...(subscriber.readHistorySnapshot
+        ? {
+            snapshot: subscriber.readHistorySnapshot,
+            queueSourceIds: subscriber.readQueueSourceIds
+          }
+        : {}),
+      ...(subscriber.stopped ? { signal: subscriber.stopped } : {})
+    },
     subscriber.readForkMarker
   )
 }

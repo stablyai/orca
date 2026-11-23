@@ -6,6 +6,7 @@ import type {
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { ProviderTimelineTextChannel } from './provider-timeline-event'
 import type { ProviderTimelineRowId } from './provider-timeline-rows'
+import { JOURNAL_TEXT_TAIL_WRITES } from '../agent-session-journal/journal-text-tail-writes'
 
 export type ProviderTimelineStream = {
   id: string
@@ -57,4 +58,24 @@ export function providerTimelineTextBody(
     role: stream.channel === 'assistant' ? 'assistant' : 'reasoning',
     blocks: [{ type: 'text', text }]
   }
+}
+
+/** One save of a stream's text; `final` is its last, which folds any appended tail. */
+export function providerTimelineTextResolution(
+  stream: ProviderTimelineStream,
+  text: string,
+  final: boolean
+) {
+  return {
+    kind: 'text-snapshot' as const,
+    identity: stream.row.identity,
+    body: providerTimelineTextBody(stream, text),
+    scopeItemIds: stream.scopeItemIds,
+    ...(final ? { final: true as const } : {})
+  }
+}
+
+/** Close saves owed text; with tails on, also one last whole save that folds the saved tail. */
+export function providerTimelineCloseSaves(stream: ProviderTimelineStream, owed: number): boolean {
+  return owed !== stream.queuedLength || (JOURNAL_TEXT_TAIL_WRITES && stream.queuedLength > 0)
 }

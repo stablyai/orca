@@ -22,3 +22,29 @@ export function projectSessionTabsForClient(
     clientCapabilities
   )
 }
+
+/** Desktops show chat status from the status feed, never from tabs[].chatStatus; its freshness
+ *  stamps alone would turn version-only frames into full desktop reconciles. Phones keep it. */
+export function projectSessionTabsForInventoryStream(
+  snapshot: RuntimeMobileSessionTabsResult,
+  clientKind: 'mobile' | 'runtime' | undefined,
+  clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2]
+): RuntimeMobileSessionTabsResult {
+  const projected = projectSessionTabsForClient(snapshot, clientKind, clientCapabilities)
+  if (
+    clientKind === 'mobile' ||
+    !projected.tabs.some((tab) => tab.type === 'agent-session' && tab.chatStatus)
+  ) {
+    return projected
+  }
+  return {
+    ...projected,
+    tabs: projected.tabs.map((tab) => {
+      if (tab.type !== 'agent-session' || !tab.chatStatus) {
+        return tab
+      }
+      const { chatStatus: _phoneOnly, ...desktop } = tab
+      return desktop
+    })
+  }
+}

@@ -12,6 +12,7 @@ export type AutomationRunWorkspaceRecord = Pick<
   | 'terminalPaneKey'
   | 'terminalPtyId'
   | 'dispatchedAt'
+  | 'handledInTurn'
 > &
   Partial<Pick<AutomationRun, 'outputSnapshot'>>
 
@@ -84,7 +85,12 @@ export function getAutomationRunViewState({
     return {
       availability: 'chat',
       actionLabel: translate('auto.components.automations.runViewState.viewRun', 'View run'),
-      statusLabel: translate('auto.components.automations.runViewState.runOpen', 'Run is open'),
+      statusLabel: run.handledInTurn
+        ? translate(
+            'auto.components.automations.runViewState.handledInTurn',
+            'Answered in the bot’s conversation'
+          )
+        : translate('auto.components.automations.runViewState.runOpen', 'Run is open'),
       canOpen: true
     }
   }

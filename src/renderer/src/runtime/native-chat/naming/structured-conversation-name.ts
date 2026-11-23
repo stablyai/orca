@@ -28,9 +28,9 @@ import {
 const noSubscription = (): (() => void) => () => {}
 
 /**
- * The owning host's saved name for one native chat, read from that host's status feed. The feed
- * keeps a closed chat's summary, so the name outlives tabs and Vault results; null while unnamed,
- * unpublished, or from a host that predates the field.
+ * The owning host's saved name for one native chat, read from that host's status feed. Its naming
+ * snapshot carries every saved chat's name, so the name outlives tabs and Vault results; null while
+ * unnamed, unpublished, or from a host that predates the field.
  */
 export function useStructuredConversationName(
   executionHostId: string | null | undefined,

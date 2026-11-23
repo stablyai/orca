@@ -45,6 +45,7 @@ import { useAiVaultScanProgress } from '../scanning/ai-vault-scan-progress-store
 import { aiVaultLocalScanKey } from '../../../../../../shared/ai-vault/scanning/ai-vault-local-scan-key'
 import { useAiVaultPanelWorkspace } from '../scope/use-ai-vault-panel-workspace'
 import { useAiVaultPanelQuery } from '../scope/use-ai-vault-panel-query'
+import { useAiVaultGroupRoomRows } from './use-ai-vault-group-room-rows'
 import {
   aiVaultPanelKeyboardRootProps,
   type AiVaultSessionListKeyboard
@@ -231,7 +232,9 @@ export default function AiVaultPanel({
     activeProjectKey,
     sessionProjectById,
     projectLabelByKey,
-    hideEmptySessions
+    hideEmptySessions,
+    // A group room's member rows list once, in the group's home.
+    roomRows: useAiVaultGroupRoomRows()
   })
   const searchHitHostLabels = useMemo(
     () => (searching ? aiVaultSearchHitHostLabels(filteredSessions, hostScopeOptions, t) : null),
@@ -302,7 +305,11 @@ export default function AiVaultPanel({
       ) : null}
 
       {!searching && <AiVaultScanIssueBanners scanResult={scanResult} />}
-      <AiVaultPanelSearch search={search} noAgents={agents.length === 0}>
+      <AiVaultPanelSearch
+        search={search}
+        noAgents={agents.length === 0}
+        listed={filteredSessions.length > 0}
+      >
         {searching
           ? filteredSessions.length > 0 && (
               <AiVaultSessionListBar
@@ -320,10 +327,11 @@ export default function AiVaultPanel({
                 onChange={setSort}
               />
             )}
-        {(!searching || sessions.length > 0 || search.loading) && (
+        {(!searching || filteredSessions.length > 0 || search.loading) && (
           <AiVaultSessionVirtualList
             key={searching ? 'search' : 'history'}
-            resultsKey={searching ? search.resultsKey : undefined}
+            // Title matches stay put when an empty reply lands, so only hits reset scroll and selection.
+            resultsKey={listMode === 'search-hits' ? search.resultsKey : undefined}
             stale={stale}
             searchHits={searching ? searchHits : undefined}
             searchHitHostLabels={searchHitHostLabels}

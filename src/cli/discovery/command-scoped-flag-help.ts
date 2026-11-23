@@ -4,10 +4,23 @@ import { COMPUTER_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/computer/computer
 const FILE_OPEN_FOCUS_HELP =
   "--focus                Bring the user to the file (switches Orca's window to its worktree)"
 
+const BOT_ITEM_TITLE_HELP = "--title <text>         The item's title"
+
 const AGENT_ID_FLAG_HELP =
   "--id <id>              The agent's orca_session_id: ID; also accepted positionally"
 
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  'bot item add': {
+    title: BOT_ITEM_TITLE_HELP,
+    for: '--for bot:<name>       Make the item for another bot'
+  },
+  'bot item set': {
+    title: BOT_ITEM_TITLE_HELP,
+    comment: '--comment <text>       Add a comment with this change'
+  },
+  'bot item comment': { text: "--text <text>          The comment's text" },
+  'bot item link': { ref: '--ref <ref>            A worker, PR, URL or file to link' },
+  'bot item list': { cursor: '--cursor <c>           Cursor printed with the previous page' },
   'agent list': {
     state: '--state <state>        Only agents in this state: working, blocked, waiting or done'
   },
@@ -73,7 +86,8 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     name: '--name <display name>  Plugin name shown in Orca'
   },
   'environment update': {
-    force: '--force                Restart over running terminals instead of deferring the update'
+    force: '--force                Restart over running terminals instead of deferring the update',
+    yes: '--yes                  With --force, accept that uncounted terminals the server runs itself end'
   },
   'environment recover': {
     'accept-changed-state':

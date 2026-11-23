@@ -86,6 +86,16 @@ export function splitWorktreeIdForFilesystem(worktreeId: string): ParsedWorktree
   }
 }
 
+/** Folder-project workspaces on one directory differ only by instance suffix; they share the repo and cwd. */
+export function worktreeIdsShareCheckout(left: string, right: string): boolean {
+  return worktreeIdsEqual(checkoutWorktreeId(left), checkoutWorktreeId(right))
+}
+
+function checkoutWorktreeId(worktreeId: string): string {
+  const parsed = splitWorktreeIdForFilesystem(worktreeId)
+  return parsed ? composeWorktreeId(parsed.repoId, parsed.worktreePath) : worktreeId
+}
+
 export function getWorktreePathBasenameFromId(worktreeId: string): string | null {
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
   const normalizedPath = parsed?.worktreePath.trim().replace(/[\\/]+$/g, '') ?? ''

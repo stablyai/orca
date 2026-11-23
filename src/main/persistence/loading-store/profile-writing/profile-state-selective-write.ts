@@ -6,6 +6,8 @@ import type {
 } from './profile-state-authority'
 import type { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+import type { ProfileStateDomainPatch } from '../../profile-state/documents/profile-state-domain-patches'
+import type { WorkspaceSessionSaveCandidate } from './workspace-session-save-baseline'
 
 export type SelectiveProfileStateWriteResult = {
   handled: boolean
@@ -16,6 +18,8 @@ export type SelectiveProfileStateWriteResult = {
 
 export type PreparedSelectiveProfileStateWrite = {
   replacements: ProfileStateDomainReplacement[]
+  patches: ProfileStateDomainPatch[]
+  sessionCandidates: WorkspaceSessionSaveCandidate[]
   automationRuns: readonly AutomationRun[] | undefined
   consumedAutomationRuns: boolean
   protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
@@ -68,7 +72,8 @@ export function prepareSelectiveProfileStateWrite(
   authority: ProfileStatePersistenceAuthority | undefined,
   serialization: StateSerializationSecretHandlingOperations,
   dirtyDomains: ReadonlySet<string> | null,
-  pendingAutomationRunsAfter: readonly AutomationRun[] | undefined
+  pendingAutomationRunsAfter: readonly AutomationRun[] | undefined,
+  patchSessions = false
 ): PreparedSelectiveProfileStateWrite | undefined {
   if (
     !authority ||
@@ -84,13 +89,19 @@ export function prepareSelectiveProfileStateWrite(
   const serializableDomains = useAutomationDelta
     ? new Set([...dirtyDomains].filter((domain) => domain !== 'automationRuns'))
     : dirtyDomains
-  const built = serialization.buildStateDomainsToSave(serializableDomains)
+  // Run-row deltas travel in their own command, which carries no patches.
+  const built = serialization.buildStateDomainsToSave(
+    serializableDomains,
+    patchSessions ? (useAutomationDelta ? 'whole' : 'patch') : undefined
+  )
   if (built === undefined) {
     return undefined
   }
-  const { replacements, protectedSecretUpdates } = built
+  const { replacements, patches, sessionCandidates, protectedSecretUpdates } = built
   return {
     replacements,
+    patches,
+    sessionCandidates,
     automationRuns: useAutomationDelta ? pendingAutomationRunsAfter : undefined,
     consumedAutomationRuns: pendingAutomationRunsAfter !== undefined,
     protectedSecretUpdates

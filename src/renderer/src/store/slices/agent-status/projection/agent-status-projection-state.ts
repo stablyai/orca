@@ -75,6 +75,8 @@ export class AgentStatusProjectionState {
   nextRank = 0
   nextRowRevision = 0
   freshEvidence = 0
+  /** Bumped when a source gains or loses its workspace row. */
+  rowOwnersRevision = 0
   readonly candidates = new Map<string, Candidate>()
   deadCandidates = new KeyedDeadlines()
   freshCandidates = new KeyedDeadlines()
