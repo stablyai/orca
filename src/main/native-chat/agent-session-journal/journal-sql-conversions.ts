@@ -50,8 +50,9 @@ export class JournalSqlConversions {
   // A deferred chat's size, kept until its original changes, so a retry only measures free space.
   // `used` is a stopped attempt's requirement, growing with each stop.
   private readonly sizes = new Map<string, ChatSize>()
-  // The last chat skipped keeps its size: a retry stops at it, so it isn't sized again unchanged.
-  private lastSkipped?: ChatSize & { sessionId: string }
+  // The last two chats skipped keep their size: each retry (the pass's, the cleanup proof's)
+  // stops at one, so it isn't sized again while unchanged.
+  private readonly skippedSizes = new Map<string, ChatSize>()
   private retryAt = 0
   private retryDelay = 60_000
   private closed = false
@@ -103,6 +104,7 @@ export class JournalSqlConversions {
     const result = this.convert(sessionId, promotion.signal)
       .then((epoch) => {
         this.sizes.delete(sessionId)
+        this.skippedSizes.delete(sessionId)
         if (epoch !== null) {
           this.rememberReady(sessionId, epoch)
         }
@@ -116,7 +118,11 @@ export class JournalSqlConversions {
           // Other skipped chats are measured again when retried; only a stopped attempt's usage stays.
           const sized = this.sizes.get(sessionId)
           if (sized && isJournalConversionStorageError(error)) {
-            this.lastSkipped = { ...sized, sessionId }
+            this.skippedSizes.delete(sessionId)
+            this.skippedSizes.set(sessionId, sized)
+            if (this.skippedSizes.size > 2) {
+              this.skippedSizes.delete(this.skippedSizes.keys().next().value!)
+            }
           }
           this.sizes.delete(sessionId)
         }
@@ -285,11 +291,14 @@ export class JournalSqlConversions {
     if (promotion.aborted) {
       return open
     }
-    const sized =
-      sessionId === undefined
-        ? undefined
-        : (this.sizes.get(sessionId) ??
-          (this.lastSkipped?.sessionId === sessionId ? this.lastSkipped : undefined))
+    let sized = sessionId === undefined ? undefined : this.sizes.get(sessionId)
+    if (sessionId !== undefined && !sized) {
+      // A kept size comes back as the chat's entry, so a stop records its requirement as usual.
+      sized = this.skippedSizes.get(sessionId)
+      if (sized) {
+        this.sizes.set(sessionId, sized)
+      }
+    }
     const storage = await this.storage(sessionId, sized?.sizedAt).catch((error: unknown) => {
       if (promotion.aborted) {
         return null

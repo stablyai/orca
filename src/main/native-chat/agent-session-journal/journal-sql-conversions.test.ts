@@ -337,7 +337,7 @@ describe('JournalSqlConversions storage guard', () => {
     expect(deferPass).toHaveBeenCalledTimes(3)
   })
 
-  it('the last skipped chat keeps its size, so an unchanged retry does not size it again', async () => {
+  it('the last two skipped chats keep their size, so unchanged retries do not size them again', async () => {
     const asked: [string | undefined, string | undefined][] = []
     const { conversions } = conversion((sessionId, sizedAt) => {
       if (sessionId === undefined) {
@@ -348,17 +348,49 @@ describe('JournalSqlConversions storage guard', () => {
         ? { freeBytes: LOW.freeBytes, totalBytes: LOW.totalBytes, sizedAt }
         : { ...LOW, sizedAt: 'v1' }
     })
-    await expect(conversions.ensure('b', false)).rejects.toEqual(deferred)
-    await expect(conversions.ensure('b', false)).rejects.toEqual(deferred)
-    // Another skip takes the one kept size, so 'b' is sized again next time.
-    await expect(conversions.ensure('c', false)).rejects.toEqual(deferred)
-    await expect(conversions.ensure('b', false)).rejects.toEqual(deferred)
+    // The pass and the cleanup proof each retry their own skipped chat.
+    for (const sessionId of ['a', 'b', 'a', 'b']) {
+      await expect(conversions.ensure(sessionId, false)).rejects.toEqual(deferred)
+    }
+    // A third skipped chat takes the oldest kept size.
+    for (const sessionId of ['c', 'a']) {
+      await expect(conversions.ensure(sessionId, false)).rejects.toEqual(deferred)
+    }
     expect(asked).toEqual([
+      ['a', undefined],
       ['b', undefined],
+      ['a', 'v1'],
       ['b', 'v1'],
       ['c', undefined],
-      ['b', undefined]
+      ['a', undefined]
     ])
+  })
+
+  it('a skipped chat admitted on its kept size still records a stop', async () => {
+    let now = 1_000
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    let free = 20 * GB
+    let checks = 0
+    // A 10 GB chat is skipped at 20 GB free, then admitted at 26 GB on its kept size, and stops
+    // at 9 GB: the next try needs twice its 10 GB above the floor, not the same 26 GB again.
+    const { conversions, writes } = conversion((sessionId, sizedAt) => {
+      if (sessionId !== undefined) {
+        return sizedAt === 'v1'
+          ? { freeBytes: free, totalBytes: 1000 * GB, sizedAt }
+          : { freeBytes: free, totalBytes: 1000 * GB, remainingBytes: 10 * GB, sizedAt: 'v1' }
+      }
+      return ++checks === 2
+        ? { freeBytes: 9 * GB, totalBytes: 1000 * GB }
+        : { freeBytes: free, totalBytes: 1000 * GB }
+    }, 3)
+    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
+    free = 26 * GB
+    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
+    expect(writes).toContain('import-page')
+    now += 60_000
+    writes.length = 0
+    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
+    expect(writes).not.toContain('import-page')
   })
 
   it('a stopped chat never needs more than the room its attempt started with', async () => {
