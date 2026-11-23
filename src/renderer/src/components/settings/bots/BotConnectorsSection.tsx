@@ -1,4 +1,5 @@
 import React from 'react'
+import { BotFeishuCard } from '@/components/bots/feishu/BotFeishuCard'
 import { Plus } from 'lucide-react'
 import { AddConnectorButton } from '@/components/bots/AddConnectorButton'
 import { BotAppBrandLogo } from '@/components/bots/apps/BotAppBrandLogo'
@@ -56,6 +57,8 @@ function BotConnectorEntryCard({
 }): React.JSX.Element | null {
   const { title } = entry
   switch (entry.kind) {
+    case 'feishu-local':
+      return <BotFeishuCard bot={bot} state={entry.state} />
     case 'slack':
       return <BotSlackCard bot={bot} teamId={entry.teamId} title={title} />
     case 'linear':

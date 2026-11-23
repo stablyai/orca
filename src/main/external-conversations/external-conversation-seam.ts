@@ -315,7 +315,7 @@ export class ExternalConversationSeam {
         : []
     const delivered = await this.chatDeliveries.deliver(host.chat, key, chat, {
       ...message,
-      signal,
+      signal: message.transportSignal ? AbortSignal.any([signal, message.transportSignal]) : signal,
       ...(images.length > 0 ? { images } : {})
     })
     // Its outbox row may have committed even when the send was then rejected: watch from now on.

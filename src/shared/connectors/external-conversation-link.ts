@@ -1,11 +1,12 @@
 import type { NativeChatAgent } from '../agent-launch/permissions/agent-chat-permission-support'
 
 /** Where a connector conversation comes from. */
-export const CONNECTOR_SOURCES = ['slack', 'github', 'linear', 'discord'] as const
+export const CONNECTOR_SOURCES = ['slack', 'github', 'linear', 'discord', 'feishu-local'] as const
 export type ConnectorSource = (typeof CONNECTOR_SOURCES)[number]
 
 /** How agent-facing text names where a conversation comes from. */
 export const CONNECTOR_SOURCE_NAMES: Record<ConnectorSource, string> = {
+  'feishu-local': 'Feishu',
   slack: 'Slack',
   github: 'GitHub',
   linear: 'Linear',

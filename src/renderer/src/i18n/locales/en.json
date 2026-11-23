@@ -27231,6 +27231,33 @@
     "terminalUnverifiable": "Orca couldn't check whether the WSL distro {{distro}} is running, so it didn't start this terminal. Start the distro, then try again."
   },
   "bots": {
+    "feishu": {
+      "who": "Only the owner can ask, from the direct message verified in connection settings.",
+      "verificationFailed": "Could not verify the original DM. Check the app’s permission to read private messages, then send the code again.",
+      "name": "Feishu",
+      "chat": "Feishu DM",
+      "choose": "Choose a Feishu CLI profile on the computer that runs this bot.",
+      "connecting": "Starting the Feishu listener…",
+      "create": "To create a personal app, run the following once on the bot’s computer with a new profile name. Follow the CLI’s browser setup, then refresh.",
+      "disconnect": "Disconnect Feishu",
+      "error": "Check that lark-cli is installed on this host and the profile is available for this bot.",
+      "expired": "Pairing expired. Disconnect and select the profile again.",
+      "hostError": "Could not read the bot’s host.",
+      "line": "Private messages through Feishu CLI on this host",
+      "listening": "Listening for text messages in your verified Feishu DM.",
+      "loading": "Checking the host…",
+      "noProfiles": "No Feishu profile available",
+      "pair": "Pair my DM",
+      "pairing": "Send this code from your own Feishu account in a direct message to the app. It expires in five minutes.",
+      "paused": "This bot is paused or disabled.",
+      "profile": "Feishu CLI profile",
+      "refresh": "Refresh profiles",
+      "retrying": "Retrying. Check the CLI profile, permissions and long-connection subscription on the bot’s computer.",
+      "review": "A delivery could not be confirmed. Check the original DM and the native chat before resending.",
+      "scopes": "Enable long connections and the Receive message event. Grant permission to read DMs and send messages as the app.",
+      "settings": "Connection settings",
+      "title": "Feishu on this host"
+    },
     "row": {
       "deleteTitle": "Delete {{name}}?",
       "deleteDescription": "Its folder stays at {{path}}, with its soul and memory.",

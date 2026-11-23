@@ -18,6 +18,8 @@ export type BotConnectorId = BotConnector['id']
 /** What a connector does for a bot, as Add connector and the chat's Connect card word it. */
 export function connectorDescription(id: BotConnectorId): string {
   switch (id) {
+    case 'feishu-local':
+      return translate('bots.feishu.line', 'Private messages through Feishu CLI on this host')
     case 'webhooks':
       return translate(
         'bots.connectors.webhooks',

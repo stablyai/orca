@@ -168,6 +168,7 @@ import {
   ConnectorConnectStart,
   ConnectorConnectWait
 } from './bots-connector-setup-params'
+import { FeishuLocalBot, FeishuLocalConnect } from './bots-feishu-local-params'
 import { BotImportDoneCard, BotImportPlanCard, BotImportSources } from './bots-import-params'
 import {
   BotItemsAdd,
@@ -1269,6 +1270,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.create': BotCreate,
   'bots.createOffer': BotCreateOfferRequest,
   'bots.delete': BotDelete,
+  'bots.feishuLocal.connect': FeishuLocalConnect,
+  'bots.feishuLocal.profiles': null,
+  'bots.feishuLocal.remove': FeishuLocalBot,
+  'bots.feishuLocal.state': FeishuLocalBot,
   'bots.github.setDefaultBot': BotGitHubDefaultBot,
   'bots.github.state': null,
   'bots.github.unlink': BotGitHubUnlink,

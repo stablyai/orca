@@ -96,6 +96,7 @@ import { BOT_RUN_SEND_AGAIN_METHOD } from './bots-run-send-again'
 import { BOT_ACCESS_METHODS } from './bots-access'
 import { BOT_SLACK_METHODS } from './bots-slack'
 import { BOT_LINEAR_METHODS } from './bots-linear'
+import { BOT_FEISHU_LOCAL_METHODS } from './bots-feishu-local'
 import { BOT_GITHUB_METHODS } from './bots-github'
 import { BOT_CONNECT_METHODS } from './bots-connect'
 import { BOT_LOOK_AROUND_METHODS } from './bots-look-around'
@@ -165,6 +166,7 @@ const BOT_RPC_METHODS = [
   ...BOT_ACCESS_METHODS,
   ...BOT_SLACK_METHODS,
   ...BOT_LINEAR_METHODS,
+  ...BOT_FEISHU_LOCAL_METHODS,
   ...BOT_GITHUB_METHODS,
   ...BOT_CONNECT_METHODS,
   ...BOT_LOOK_AROUND_METHODS,

@@ -8,11 +8,11 @@ import { createCanonicalOrcaSessionResolver } from '../runtime/orchestration/add
 import { readAgentSessionRecordStore } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
 import { BotItemsHost, type BotItemsHostDeps } from './bot-items-runtime'
 import type { BotWorkRuntime } from './bot-work-runtime'
-import { BotsDbWorkerClient } from './db-worker/bots-db-worker-client'
 
 /** The runtime's items host, reading its store, records and bots per call. */
 export function runtimeBotItems(runtime: {
   workRuntime: BotWorkRuntime
+  db: BotItemsHostDeps['db']
   bots: () => readonly Bot[]
   store: () => RuntimeStore | null
   notify: (scope: BotChangeScope) => void
@@ -26,7 +26,7 @@ export function runtimeBotItems(runtime: {
   }
   return new BotItemsHost({
     workRuntime: runtime.workRuntime,
-    db: new BotsDbWorkerClient(),
+    db: runtime.db,
     bots: runtime.bots,
     githubCache: () => runtime.store()?.getGitHubCache() ?? { pr: {}, issue: {} },
     automations: () => runtime.store()?.listAutomations?.() ?? [],

@@ -9,7 +9,7 @@ import { useBotSlack } from '@/lib/bot-slack-state'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   botConnectorEntries as sharedBotConnectorEntries,
-  type BotConnectorEntry
+  type BotConnectorEntry as SharedEntry
 } from '../../../../shared/bots/bot-connector-entries'
 import type { BotGitHubView } from '@/lib/bot-github-state'
 import type { BotLinearView } from '@/lib/bot-linear-state'
@@ -25,10 +25,18 @@ import { slackCardFace } from './slack/BotSlackCard'
 import { botConnectorTitleSeparator } from './bot-connector-titles'
 import { translate } from '@/i18n/i18n'
 
-export type {
-  BotConnectorEntry,
-  ComposioProblem
-} from '../../../../shared/bots/bot-connector-entries'
+import { useFeishuState } from './feishu/feishu-local-client'
+import type { FeishuLocalState } from '../../../../shared/bots/feishu-local'
+export type BotConnectorEntry =
+  | SharedEntry
+  | {
+      kind: 'feishu-local'
+      key: string
+      needsOwner: boolean
+      title: SharedEntry['title']
+      state: FeishuLocalState
+    }
+export type { ComposioProblem } from '../../../../shared/bots/bot-connector-entries'
 
 /** What the list is built from: the stores each connector's row reads. */
 export type BotConnectorSources = {
@@ -63,6 +71,7 @@ export function useBotConnectorInventory(
   bot: Bot | null,
   appsCheck: Extract<BotToolsCheck, 'apps' | 'finished'>
 ): BotConnectorInventory {
+  const feishu = useFeishuState(bot)
   const shown = bot !== null
   const slack = useBotSlack(bot)
   const hostId = bot?.hostId ?? ownBotHost().hostId
@@ -92,11 +101,21 @@ export function useBotConnectorInventory(
     if (tools.status !== 'ready') {
       unresolved.push('app')
     }
+    const entries = botConnectorEntries(bot, { slack, linear, github, google, composio, tools }, t)
+    if (feishu && feishu.status !== 'off') {
+      entries.push({
+        kind: 'feishu-local',
+        key: 'feishu-local',
+        title: { service: 'Feishu', name: null },
+        state: feishu,
+        needsOwner: ['expired', 'review', 'pairing'].includes(feishu.status)
+      })
+    }
     return {
-      entries: botConnectorEntries(bot, { slack, linear, github, google, composio, tools }, t),
+      entries,
       unresolved
     }
-  }, [bot, slack, linear, github, google, composio, tools, t])
+  }, [bot, slack, linear, github, google, composio, tools, t, feishu])
 }
 
 /** The list itself, from the bot and its sources. */

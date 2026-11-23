@@ -1,11 +1,15 @@
 import { useBotHostHas } from '@/lib/bot-host-status'
-import { BOTS_CONNECTORS_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
+import {
+  BOTS_CONNECTORS_RUNTIME_CAPABILITY,
+  BOTS_FEISHU_LOCAL_CAPABILITY
+} from '../../../../shared/bot-runtime-capabilities'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import type { ComponentType } from 'react'
-import { Webhook } from 'lucide-react'
+import { useFeishuState } from './feishu/feishu-local-client'
+import { Send, Webhook } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useBotGitHub } from '@/lib/bot-github-state'
 import { useBotLinear } from '@/lib/bot-linear-state'
@@ -18,7 +22,7 @@ import { SlackIcon } from '../icons/SlackIcon'
 import { useWebhooksConnector } from './webhooks/use-webhooks-connector'
 
 export type BotConnector = {
-  id: 'slack' | 'discord' | 'google' | 'linear' | 'github' | 'webhooks'
+  id: 'feishu-local' | 'slack' | 'discord' | 'google' | 'linear' | 'github' | 'webhooks'
   label: string
   Icon: ComponentType<{ className?: string }>
   /** False shows the connector as "Coming soon"; see useBotConnectorAvailable for Linear and GitHub. */
@@ -30,6 +34,15 @@ export type BotConnector = {
 /** Where people can reach a bot, in the order every connector list shows them. */
 export const BOT_CONNECTORS: readonly BotConnector[] = [
   { id: 'slack', label: 'Slack', Icon: SlackIcon, available: true, add: 'link' },
+  {
+    id: 'feishu-local',
+    get label() {
+      return translate('bots.feishu.name', 'Feishu')
+    },
+    Icon: Send,
+    available: true,
+    add: 'link'
+  },
   { id: 'discord', label: 'Discord', Icon: DiscordIcon, available: false, add: 'link' },
   { id: 'google', label: 'Google', Icon: GoogleIcon, available: true, add: 'link' },
   { id: 'linear', label: 'Linear', Icon: LinearIcon, available: true, add: 'link' },
@@ -84,15 +97,25 @@ export function useBotConnectorState(bot: Bot): {
   const accountAvailable = useBotConnectorAvailable(bot.hostId)
   const webhooks = useWebhooksConnector(bot)
   // Slack, Linear and GitHub set up on the bot's host; an older one can't from here.
+  const feishu = useFeishuState(bot)
+  const hasFeishu = useBotHostHas(bot.hostId, BOTS_FEISHU_LOCAL_CAPABILITY)
   const setUpHere = useBotHostHas(bot.hostId, BOTS_CONNECTORS_RUNTIME_CAPABILITY)
   return {
-    catalog: BOT_CONNECTORS.filter((connector) => connector.id !== 'webhooks' || webhooks !== null),
+    catalog: BOT_CONNECTORS.filter(
+      (connector) =>
+        (connector.id !== 'webhooks' || webhooks !== null) &&
+        (connector.id !== 'feishu-local' || hasFeishu)
+    ),
     available: (connector) =>
       connector.id === 'webhooks'
         ? webhooks !== null
         : accountAvailable(connector) && (setUpHere || connector.id === 'google'),
     added: (connector) =>
-      connector.id === 'webhooks' ? webhooks === 'added' : connectorAdded(bot, connector.id)
+      connector.id === 'feishu-local'
+        ? !!feishu && feishu.status !== 'off'
+        : connector.id === 'webhooks'
+          ? webhooks === 'added'
+          : connectorAdded(bot, connector.id)
   }
 }
 

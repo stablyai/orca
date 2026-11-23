@@ -181,13 +181,17 @@ export function installExternalConversations(
 function connectorReplyOutbox(
   store: ExternalConversationLinkStore,
   runtime: {
+    feishuLocal?: { repliesFilled(): void } | null
     getConnectorCloud?: () => { repliesFilled(): void } | null
     structuredAgentSessionLaunchContinuation?: { continued: Promise<unknown> }
   },
   signal: AbortSignal
 ): { fill: ConversationReplyFill; admitted: (sessionId: string) => void } {
   const journal = () => getStructuredAgentSessionHost()?.deps.store.connectorReplies() ?? null
-  const filled = () => runtime.getConnectorCloud?.()?.repliesFilled()
+  const filled = () => {
+    runtime.getConnectorCloud?.()?.repliesFilled()
+    runtime.feishuLocal?.repliesFilled()
+  }
   const usageLimitDisposition = async (sessionId: string, turnItemId: string) =>
     getStructuredAgentSessionHost()?.usageLimitContinue.disposition(sessionId, turnItemId)
   const fill = conversationReplyFill(

@@ -117,7 +117,10 @@ export function createConnectorCloud({
       orcaVersion: environment.getVersion(),
       hostName: () => runtime.readMachineName(),
       seam: () => runtime.getExternalConversationSeam(),
-      resetConversations: () => runtime.getExternalConversationSeam()?.resetAccount(),
+      resetConversations: () => {
+        runtime.getExternalConversationSeam()?.resetAccount()
+        runtime.feishuLocal?.rewatch()
+      },
       conversationHost: () => runtimeConversationHost(runtime),
       bots: () =>
         connectorBots(

@@ -157,7 +157,7 @@ export function conversationReplyFill(
     for (const row of markerMayQuiet ? own : []) {
       const key = keyOf(row.account, row.deliveryId)
       if (
-        isSlackDirectMessage(row.conversation) &&
+        (isSlackDirectMessage(row.conversation) || row.conversation.source === 'feishu-local') &&
         !ownerAsked.has(key) &&
         (await askedByOwner?.(turn.sessionId, row.messageId).catch(() => false))
       ) {

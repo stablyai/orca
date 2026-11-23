@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { BotFeishuSetup } from './feishu/BotFeishuSetup'
 import { botTarget } from '@/lib/bot-hosts'
 import { toast } from 'sonner'
 import { readBotGitHub } from '@/lib/bot-github-state'
@@ -68,6 +69,9 @@ export function useConnectorSetup(bot: Bot): {
   }
   const dialogs = (
     <>
+      {setupOpen === 'feishu-local' ? (
+        <BotFeishuSetup key={bot.id} bot={bot} onClose={() => setSetupOpen(null)} />
+      ) : null}
       <BotSlackSetupDialog
         bot={bot}
         open={setupOpen === 'slack'}

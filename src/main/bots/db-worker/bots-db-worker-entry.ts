@@ -1,6 +1,8 @@
 // The bots DB worker: every bot SQLite store's SQL runs here, off the runtime's thread. One request
 // at a time (the client serializes them), each answered by one store call.
 import { parentPort } from 'node:worker_threads'
+import { FeishuInbox } from '../../feishu-local/feishu-inbox'
+import { isFeishuOp } from '../../feishu-local/feishu-store-ops'
 import { BotItemError } from '../bot-item-error'
 import { callBotItemsOp, isBotItemsOp } from '../bot-items-ops'
 import { BotItemsStore } from '../bot-items-store'
@@ -30,6 +32,20 @@ function openItems(path: string): OpenStore {
 
 /** Each store this worker hosts, by the name requests carry. */
 const STORES: Record<BotsDbStoreName, (path: string) => OpenStore> = {
+  feishu: (path) => {
+    const store = new FeishuInbox(path)
+    return {
+      dispose: () => store.close(),
+      call: (op, args) => {
+        if (!isFeishuOp(op)) {
+          return { found: false }
+        }
+        const run: (...args: never[]) => unknown = store[op]
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the typed client forwards the argument tuple belonging to this operation.
+        return { found: true, value: run.apply(store, args as never[]) }
+      }
+    }
+  },
   items: openItems
 }
 

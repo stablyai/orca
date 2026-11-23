@@ -22,10 +22,11 @@ export function installOrcadConnector(
     // orcad applies no persisted proxy, so it connects once its RPC is up. Call it after RPC and
     // automations register their cleanups: cleanups run newest first, so the fence comes before both.
     connect: () => {
-      registerCleanup(() => {
+      registerCleanup(async () => {
         stopping = true
         runtime.getConnectorCloud()?.fence()
         host.stop()
+        await runtime.feishuLocal?.stop()
       })
       runtime.getConnectorCloud()?.connect()
     }

@@ -104,6 +104,7 @@ export type Delivery =
  *  they wrote and what came before, which the agent reads instead. `note` follows either: the bot's
  *  automations the message also matches. `memorySource` labels an event no one asked through. */
 export type ConnectorMessage = {
+  transportSignal?: AbortSignal
   text: string
   asker?: ConnectorAsker
   note?: string
@@ -128,7 +129,7 @@ export type ConnectorLaterText = {
 /** What a connector start carries: the bot's home and its agent, checked by the seam, and who asked. */
 export type ConnectorStartInput = Pick<
   ConnectorMessage,
-  'asker' | 'note' | 'sent' | 'later' | 'reply'
+  'asker' | 'note' | 'sent' | 'later' | 'reply' | 'transportSignal'
 > & {
   agent: string
   target: ExternalConversationBot

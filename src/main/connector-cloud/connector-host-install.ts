@@ -1,4 +1,5 @@
 // The connector and what moves with it, on any host: the desktop app, Electron `orca serve` and orcad.
+import { FeishuLocalHost } from '../feishu-local/feishu-local-host'
 import { BotAvatarSync } from './bot-avatar-sync'
 import { withBotsCloudClient } from './bots-cloud-client'
 import { createConnectorCloud } from './connector-cloud-install'
@@ -47,6 +48,11 @@ export function installConnectorHost({
   kind,
   isFenced
 }: ConnectorHostOptions): ConnectorHost {
+  runtime.feishuLocal = new FeishuLocalHost(
+    runtime,
+    userDataPath,
+    store.getProfileStorageDirectory()
+  )
   const gitHubInstallations = new ConnectorGitHubInstallations({
     account: () => connectorAccount(userDataPath),
     fetchState: () =>
