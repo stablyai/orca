@@ -134,7 +134,7 @@ export function useWorkerDockOwnerActions(
     }
     const { token } = dialog
     void acknowledge([{ dispatchId: shown.dispatchId, settlement: shown.settlement }], false).then(
-      () => updateDialog(token, { result: { ...shown, acknowledged: false } }),
+      () => updateDialog(token, { result: { ...shown, acknowledged: false }, error: null }),
       (value) =>
         dialogToken.current === token
           ? updateDialog(token, { error: message(value) })

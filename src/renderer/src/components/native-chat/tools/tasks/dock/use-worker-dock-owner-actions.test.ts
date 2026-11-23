@@ -78,6 +78,16 @@ it('applies a result read only to the dialog that opened it, and restores the sh
     settlements: [{ dispatchId: 'b', settlement: 'settlement:b' }],
     acknowledged: false
   })
+  await settle(() =>
+    last('orchestration.workerDockAcknowledge').reject(new Error('b restore failed'))
+  )
+  expect(hook.result.current.dialog?.error).toBe('b restore failed')
+  act(() => hook.result.current.restore())
+  await settle(() => last('orchestration.workerDockAcknowledge').resolve(undefined))
+  expect(hook.result.current.dialog).toMatchObject({
+    result: { acknowledged: false },
+    error: null
+  })
 })
 
 it('offers Retry only for the failure it retries', async () => {
