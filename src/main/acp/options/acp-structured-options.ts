@@ -78,6 +78,7 @@ export class AcpStructuredOptions {
     const settled = (): void => {
       this.unsettled.delete(native)
       this.invalidateInput(key)
+      this.reconcileObservedConfig()
     }
     native.then(settled, settled)
   }
@@ -167,40 +168,45 @@ export class AcpStructuredOptions {
       return
     }
     this.configOptions = configOptions
-    if (this.writing === 0 && this.unsettled.size === 0) {
-      if (this.select('model')) {
-        this.unobservedCurrent.delete('model')
-      }
-      if (this.effortOption()) {
-        this.unobservedCurrent.delete('effort')
-      }
-      const mode = this.select('mode')?.currentValue
-      if (mode && mode !== (this.dialect.interactionModes?.plan ?? 'plan')) {
-        this.buildMode = mode
-      }
-      const appliedMode = this.appliedInput.get('interactionMode')
-      if (appliedMode !== undefined && this.currentInteractionMode() !== appliedMode) {
-        this.appliedInput.delete('interactionMode')
-      }
-    }
+    this.reconcileObservedConfig()
     const proof = this.selectorProof
-    if (!proof || this.writing > 0) {
-      return
-    }
-    // A role or :level selector carries thinking too; missing values are no concrete change.
-    const now = this.currentValues()
-    const drifted = (key: string) =>
-      now[key] !== undefined && proof[key] !== undefined && now[key] !== proof[key]
-    if (drifted('model') || drifted('effort')) {
-      this.selectorProof = null
-      this.appliedInput.delete('model')
-      this.appliedInput.delete('effort')
+    if (proof && this.writing === 0) {
+      // A role or :level selector carries thinking too; missing values are no concrete change.
+      const now = this.currentValues()
+      const drifted = (key: string) =>
+        now[key] !== undefined && proof[key] !== undefined && now[key] !== proof[key]
+      if (drifted('model') || drifted('effort')) {
+        this.selectorProof = null
+        this.appliedInput.delete('model')
+        this.appliedInput.delete('effort')
+      }
     }
   }
 
   adoptModel(modelId: string): void {
     if (this.models) {
       this.models = { ...this.models, currentModelId: modelId }
+    }
+    this.reconcileObservedConfig()
+  }
+
+  private reconcileObservedConfig(): void {
+    if (this.writing !== 0 || this.unsettled.size !== 0) {
+      return
+    }
+    if (this.select('model')) {
+      this.unobservedCurrent.delete('model')
+    }
+    if (this.effortOption()) {
+      this.unobservedCurrent.delete('effort')
+    }
+    const mode = this.select('mode')?.currentValue
+    if (mode) {
+      this.adoptBuildMode(mode)
+    }
+    const appliedMode = this.appliedInput.get('interactionMode')
+    if (appliedMode !== undefined && this.currentInteractionMode() !== appliedMode) {
+      this.appliedInput.delete('interactionMode')
     }
   }
 

@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { NewSessionResponseSchema } from '../generated/acp-protocol.generated'
+import { writeAcpSessionOption } from '../options/acp-session-option-write'
 import { AcpStructuredOptions } from '../options/acp-structured-options'
 import { AcpTimelineTranslator } from '../timeline/acp-timeline-translator'
 import { ANTIGRAVITY_ACP_DIALECT } from './antigravity-dialect'
@@ -433,4 +434,120 @@ it('tracks Antigravity invoke_subagent, manage_subagents, and swarm lifecycles a
       outcome: 'succeeded'
     }
   ])
+})
+
+it('reconciles native mode baseline and clears stale interactionMode proof when setModel completes', async () => {
+  const options = new AcpStructuredOptions(ANTIGRAVITY_ACP_DIALECT)
+  const modeMenu = {
+    id: 'mode',
+    name: 'Mode',
+    category: 'mode' as const,
+    type: 'select' as const,
+    currentValue: 'plan',
+    options: [
+      { value: 'default', name: 'Default' },
+      { value: 'auto', name: 'Auto' },
+      { value: 'plan', name: 'Plan' }
+    ]
+  }
+  options.adoptSession(
+    NewSessionResponseSchema.parse({
+      sessionId: 'agy-set-model',
+      models: {
+        currentModelId: 'gemini-4-carbon',
+        availableModels: [
+          { modelId: 'gemini-4-carbon', name: 'Gemini 4 Carbon' },
+          { modelId: 'gemini-pro-orchestrator', name: 'Orchestrator (Carbon)' }
+        ]
+      },
+      configOptions: [modeMenu]
+    }),
+    'new'
+  )
+  options.adoptOwnWrite('interactionMode', 'plan')
+
+  let startedSetModel!: () => void
+  const setModelStarted = new Promise<void>((resolve) => {
+    startedSetModel = resolve
+  })
+  let finishSetModel!: () => void
+  const modelWrite = options.write('model', 'gemini-pro-orchestrator')
+  expect(modelWrite).toEqual({ method: 'model', modelId: 'gemini-pro-orchestrator' })
+
+  const pending = writeAcpSessionOption(
+    {
+      setConfigOption: async () => ({ configOptions: [] }),
+      setModel: () =>
+        new Promise<{}>((resolve) => {
+          startedSetModel()
+          finishSetModel = () => resolve({})
+        })
+    },
+    options,
+    modelWrite!,
+    { agent: 'antigravity', timeoutMs: 1_000, key: 'model', value: 'gemini-pro-orchestrator' }
+  )
+
+  await setModelStarted
+  // Native mode notification arrives while setModel is in flight (options.writing > 0).
+  options.adoptConfigOptions([{ ...modeMenu, currentValue: 'auto' }])
+  finishSetModel()
+  await pending
+
+  expect(options.observedCurrent({ ask: 'default', auto: 'auto' }).reportedPermissionMode).toBe(
+    'auto'
+  )
+  expect(options.needsInteractionMode('plan')).toBe(true)
+  expect(options.write('interactionMode', 'default')).toEqual({
+    method: 'config',
+    configId: 'mode',
+    value: 'auto'
+  })
+})
+
+it('preserves auto build mode across plan toggles and rejects plan when mode option is absent', () => {
+  const options = new AcpStructuredOptions(ANTIGRAVITY_ACP_DIALECT)
+  const modeMenu = {
+    id: 'mode',
+    name: 'Mode',
+    category: 'mode' as const,
+    type: 'select' as const,
+    currentValue: 'default',
+    options: [
+      { value: 'default', name: 'Default' },
+      { value: 'accept-edits', name: 'Accept Edits' },
+      { value: 'auto', name: 'Auto' },
+      { value: 'plan', name: 'Plan' }
+    ]
+  }
+  options.adoptSession(
+    NewSessionResponseSchema.parse({ sessionId: 'agy-modes', configOptions: [modeMenu] }),
+    'new'
+  )
+  options.adoptBuildMode('auto')
+  expect(options.needsInteractionMode('plan')).toBe(true)
+  expect(options.write('interactionMode', 'plan')).toEqual({
+    method: 'config',
+    configId: 'mode',
+    value: 'plan'
+  })
+
+  options.adoptOwnWrite('interactionMode', 'plan')
+  options.adoptConfigOptions([{ ...modeMenu, currentValue: 'plan' }])
+  expect(options.observedCurrent({ ask: 'default', auto: 'auto' }).reportedPermissionMode).toBe(
+    'auto'
+  )
+  expect(options.write('interactionMode', 'default')).toEqual({
+    method: 'config',
+    configId: 'mode',
+    value: 'auto'
+  })
+
+  // Missing mode selector: plan is required-to-fail, build mode is skipped.
+  options.adoptSession(
+    NewSessionResponseSchema.parse({ sessionId: 'agy-no-mode', configOptions: [] })
+  )
+  expect(options.write('interactionMode', 'plan')).toBeNull()
+  expect(options.needsInteractionMode('plan')).toBe(true)
+  expect(options.needsInteractionMode('default')).toBe(false)
 })

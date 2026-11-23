@@ -95,7 +95,7 @@ export function acpSessionUpdate(
       const tasks = (call ? (dialect.toolBackgroundTasks?.(update, call) ?? []) : []).filter(
         (task) => !subagents.has(task.taskId)
       )
-      const planText = body ? dialect.toolPlan?.(update, body)?.trim() : undefined
+      const planText = call ? dialect.toolPlan?.(update, call)?.trim() : undefined
       const planEvents: ProviderTimelineEvent[] = planText
         ? [
             {
