@@ -185,6 +185,43 @@ export function useNativeChatPacedText(
 
   const source = drawsWhole ? savedText : text
   const behind = shown < source.length
+  // QA DIAGNOSTIC ONLY (never on the PR branch).
+  useEffect(() => {
+    console.debug(
+      '[qa-paced] mount',
+      JSON.stringify({
+        k: rowKey,
+        t: Math.round(performance.now()),
+        init: initial.shown,
+        text: text.length,
+        dw: !!initial.drawsWhole,
+        streaming
+      })
+    )
+    return () =>
+      console.debug(
+        '[qa-paced] unmount',
+        JSON.stringify({ k: rowKey, t: Math.round(performance.now()) })
+      )
+  }, [])
+  useLayoutEffect(() => {
+    if (text.length > 1000) {
+      console.debug(
+        '[qa-paced] commit',
+        JSON.stringify({
+          k: rowKey,
+          t: Math.round(performance.now()),
+          text: text.length,
+          source: source.length,
+          shown,
+          streaming,
+          rev: rowRevision,
+          dw: drawsWhole,
+          arr: pace.current.arrivals.map((a) => [a.from, a.to, Math.round(a.at)])
+        })
+      )
+    }
+  })
   // The length on screen; a tick that holds a partial word renders nothing, so it is not timed.
   const onScreen = useRef(initial.shown)
   useLayoutEffect(() => {
@@ -202,6 +239,15 @@ export function useNativeChatPacedText(
       return playNativeChatTextReveal(
         () => pace.current,
         (next) => {
+          console.debug(
+            '[qa-paced] tick',
+            JSON.stringify({
+              k: rowKey,
+              t: Math.round(performance.now()),
+              shown: next.shown,
+              source: next.source.length
+            })
+          )
           pace.current = next
           reveals?.drawn.set(rowKey, next)
           setShown(next.shown, true)
