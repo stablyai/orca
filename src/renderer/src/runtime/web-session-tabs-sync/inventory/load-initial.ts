@@ -2,8 +2,6 @@ import {
   captureBrowserInitializationDelivery,
   recordBrowserInitializationReceipt
 } from '../tab-projection/browser-initialization-presentation'
-import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
-import { copyWebClientChatReadMarksOnce } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
 import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { useAppStore } from '../../../store/index'
@@ -176,10 +174,6 @@ export function loadInitialWebSessionTabs({
         },
         applicable
       )
-      // The host's chat tabs are here now: copy this browser's own read marks to their conversations.
-      if (initialInventoryStillCurrent && isWebClientLocation()) {
-        copyWebClientChatReadMarksOnce(useAppStore)
-      }
     })
     .catch((error) => {
       if (isCurrent()) {

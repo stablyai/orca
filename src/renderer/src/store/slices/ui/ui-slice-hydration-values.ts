@@ -171,12 +171,24 @@ export function hydrateAgentReadState(
   | 'acknowledgedAgentsByPaneKey'
   | 'activityClearedAtByPaneKey'
   | 'manuallyUnreadTurnsByPaneKey'
-  | 'chatReadMarksCopiedHere'
+  | 'chatReadMarkKeysCopiedHere'
 > {
+  const activityClearedAtByPaneKey = sanitizePaneKeyTimestampRecord(ui.activityClearedAtByPaneKey)
+  const manuallyUnreadTurnsByPaneKey = sanitizePaneKeyTimestampRecord(
+    ui.manuallyUnreadTurnsByPaneKey
+  )
+  // A copied key whose original is gone from both records can never copy again, so it drops.
+  const copied = Object.entries(
+    sanitizePaneKeyTimestampRecord(ui.chatReadMarkKeysCopiedHere)
+  ).filter(
+    ([key]) =>
+      activityClearedAtByPaneKey[key] !== undefined ||
+      manuallyUnreadTurnsByPaneKey[key] !== undefined
+  )
   return {
     acknowledgedAgentsByPaneKey: sanitizePaneKeyTimestampRecord(ui.acknowledgedAgentsByPaneKey),
-    activityClearedAtByPaneKey: sanitizePaneKeyTimestampRecord(ui.activityClearedAtByPaneKey),
-    manuallyUnreadTurnsByPaneKey: sanitizePaneKeyTimestampRecord(ui.manuallyUnreadTurnsByPaneKey),
-    chatReadMarksCopiedHere: ui.chatReadMarksCopiedHere === true
+    activityClearedAtByPaneKey,
+    manuallyUnreadTurnsByPaneKey,
+    chatReadMarkKeysCopiedHere: Object.fromEntries(copied)
   }
 }

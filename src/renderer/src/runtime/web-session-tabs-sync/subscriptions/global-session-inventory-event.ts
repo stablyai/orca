@@ -2,8 +2,6 @@ import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/e
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { recheckUnconfirmedStructuredAgentLaunches } from '../../../lib/agent-session/launch/structured-agent-session-launch-unconfirmed-recheck'
 import { useAppStore } from '../../../store/index'
-import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
-import { copyWebClientChatReadMarksOnce } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
 import { recoverMirroredTerminalOrphansBeforeApply } from '../terminal-handles/mirror-terminal-orphan-recovery'
 import { queueAcceptedWebSessionTerminalSnapshot } from '../terminal-handles/web-session-terminal-handle-events'
 import {
@@ -167,10 +165,6 @@ export function handleGlobalSessionInventoryEvent({
         },
         freshSnapshots
       )
-      // A stream census can overtake the initial listAll; either one completes the host's chat tabs.
-      if (isWebClientLocation()) {
-        copyWebClientChatReadMarksOnce(useAppStore)
-      }
       const freshSet = new Set(freshSnapshots)
       for (const { index, snapshot } of applicable) {
         if (unchanged[index]) {

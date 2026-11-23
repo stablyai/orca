@@ -5,6 +5,9 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch-publication'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { AppState } from '../../../store/types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { copyWebClientChatReadMarks } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
 import { useAppStore } from '../../../store/index'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
@@ -61,7 +64,7 @@ export function applyWebSessionTabsStorePatch(
   const runStorePatch = (
     state: AppState,
     changedAgentPaneKeys: Set<string>
-  ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> => {
+  ): AppState | Partial<AppState> => {
     const patch = buildPatch(state, changedAgentPaneKeys)
     markHostMirrorPatchFullResync(state, patch)
     mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
@@ -196,13 +199,17 @@ export function applyWebSessionTabsStorePatch(
         }
       }
     }
+    const delivered: (readonly Tab[])[] = []
     for (const key of new Set(affectedWorkspaces)) {
-      retireRemovedNativeChatTabs(
-        state.unifiedTabsByWorktree[key] ?? [],
-        (patch.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree)[key] ?? []
-      )
+      const after = (patch.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree)[key] ?? []
+      retireRemovedNativeChatTabs(state.unifiedTabsByWorktree[key] ?? [], after)
+      delivered.push(after)
     }
-    return patch
+    // In the same commit as the tabs, so no subscriber sees a chat before its marks.
+    const copied = isWebClientLocation()
+      ? copyWebClientChatReadMarks(state, delivered.flat())
+      : null
+    return copied ? { ...patch, ...copied } : patch
   }
 
   useAppStore.getState().updateAgentStatusState(runStorePatch)

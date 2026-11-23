@@ -153,7 +153,7 @@ export function usePersistedUIWriter(): void {
       activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
       // Retain explicit mark-unread across restart.
       manuallyUnreadTurnsByPaneKey: s.manuallyUnreadTurnsByPaneKey,
-      chatReadMarksCopiedHere: s.chatReadMarksCopiedHere
+      chatReadMarkKeysCopiedHere: s.chatReadMarkKeysCopiedHere
     }))
   )
   useEffect(() => {

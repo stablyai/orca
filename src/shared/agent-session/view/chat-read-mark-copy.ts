@@ -1,6 +1,18 @@
 import type { Tab } from '../../workspace-layout/tab-groups/tab-types'
 import { chatPaneAddressTabId, chatPaneKey } from './structured-agent-session-projection'
 
+type ChatTab = Pick<Tab, 'id' | 'contentType' | 'entityId'>
+
+/** The key a chat tab's read marks were saved under before pane keys followed the conversation, or
+ *  null when that key is already the conversation's. */
+export function chatTabReadMarkKey(tab: ChatTab): string | null {
+  if (tab.contentType !== 'agent-session') {
+    return null
+  }
+  const address = chatPaneAddressTabId(tab.entityId)
+  return tab.id === address ? null : `${tab.id}${chatPaneKey(tab.entityId).slice(address.length)}`
+}
+
 export type ChatReadMarkRecords = Readonly<Record<string, Readonly<Record<string, number>>>>
 
 /**
@@ -12,20 +24,16 @@ export type ChatReadMarkRecords = Readonly<Record<string, Readonly<Record<string
  */
 export function copyChatReadMarksToConversationKeys<R extends ChatReadMarkRecords>(
   records: R,
-  tabs: Iterable<Pick<Tab, 'id' | 'contentType' | 'entityId'>>
+  tabs: Iterable<ChatTab>
 ): Partial<{ [K in keyof R]: Record<string, number> }> | null {
   const added: Partial<Record<keyof R, Record<string, number>>> = {}
   let changed = false
   for (const tab of tabs) {
-    if (tab.contentType !== 'agent-session') {
-      continue
-    }
-    const address = chatPaneAddressTabId(tab.entityId)
-    if (tab.id === address) {
+    const tabKey = chatTabReadMarkKey(tab)
+    if (tabKey === null) {
       continue
     }
     const key = chatPaneKey(tab.entityId)
-    const tabKey = `${tab.id}${key.slice(address.length)}`
     for (const name in records) {
       const record = records[name]
       const value = record[tabKey]
