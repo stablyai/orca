@@ -15,6 +15,7 @@ import {
   type HeldLoopbackReturn
 } from '../orca-profiles/cloud-auth/loopback-callback'
 import { createOrcaCloudPkceSecrets } from '../orca-profiles/cloud-auth/profile-cloud-pkce'
+import { GOOGLE_CLIENT_ENDED } from './google-account-tokens'
 import { checkGoogleServices } from './google-readiness'
 import {
   readGoogleAccount,
@@ -54,7 +55,7 @@ export type GoogleSignInDeps = {
 export type GoogleSignInOptions = {
   /** A loopback port on the calling client; its browser returns there and the client relays the address. */
   callerLoopbackPort?: number
-  /** Pre-selects the account, e.g. for Reconnect. */
+  /** Pre-selects the account, e.g. for Reconnect; a saved one signs in through its own app. */
   loginHint?: string
   /** The services asked for; the base set (who signed in, name lookup) always comes too. */
   choices: readonly GoogleServiceChoice[]
@@ -62,8 +63,27 @@ export type GoogleSignInOptions = {
   openBrowser: boolean
 }
 
+/** The app a sign-in goes through: its id and secret, and the Cloud project its APIs are checked in. */
+type GoogleSignInClient = Pick<GoogleClientConfig, 'clientId' | 'clientSecret' | 'projectId'>
+
+/**
+ * A saved account signs in again through the app it signed in with, which may not be this
+ * computer's app now (Google can refuse the account there); a new account uses this computer's.
+ */
+async function signInClient(
+  deps: GoogleSignInDeps,
+  loginHint: string | undefined
+): Promise<GoogleSignInClient | null> {
+  const saved = loginHint ? await readGoogleAccount(loginHint) : null
+  // An app Google no longer knows can't sign the account in again.
+  if (saved && saved.reason !== GOOGLE_CLIENT_ENDED) {
+    return { ...saved.client, ...(saved.projectId ? { projectId: saved.projectId } : {}) }
+  }
+  return deps.client()
+}
+
 function authorizeUrl(
-  client: GoogleClientConfig,
+  client: GoogleSignInClient,
   args: {
     redirectUri: string
     state: string
@@ -100,7 +120,7 @@ export async function runGoogleSignIn(
   options: GoogleSignInOptions,
   channel: CallerOwnedSignInChannel<GoogleSignInPrompt, string>
 ): Promise<GoogleAccountRecord> {
-  const client = await deps.client()
+  const client = await signInClient(deps, options.loginHint)
   if (!client) {
     throw new Error(NO_GOOGLE_CLIENT)
   }
@@ -211,7 +231,7 @@ export async function runGoogleSignIn(
 
 async function finishGoogleSignIn(
   deps: GoogleSignInDeps,
-  client: GoogleClientConfig,
+  client: GoogleSignInClient,
   asked: readonly GoogleServiceChoice[],
   args: { code: string; codeVerifier: string; redirectUri: string; signal: AbortSignal }
 ): Promise<GoogleAccountRecord> {
