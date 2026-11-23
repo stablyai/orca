@@ -38,14 +38,17 @@ export function WorkerDockHeader({
   return (
     <div
       data-worker-dock-header=""
-      className={cn('flex shrink-0 items-center gap-1 pr-2', narrow ? 'min-h-11' : 'min-h-9')}
+      className={cn(
+        'flex shrink-0 items-center gap-1 rounded-t-xl pr-2 hover:bg-accent',
+        narrow ? 'min-h-11' : 'min-h-9'
+      )}
     >
       <button
         ref={summary}
         type="button"
         aria-expanded={expanded}
         aria-controls={expanded ? listId : undefined}
-        className="flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-lg pl-3 pr-2 sm:pl-4 text-left text-xs font-medium text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        className="flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-lg pl-3 pr-2 sm:pl-4 text-left text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         onClick={() => {
           onToggle()
         }}
