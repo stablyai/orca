@@ -112,6 +112,7 @@ export function createConnectorCloud({
     isBotWork: (pr) => runtime.isBotWorkPullRequest(pr),
     runs: (automationId) => store.listAutomationRuns(automationId)
   }
+  const muteDeps = threadMuteDeps(runtime, store)
   return new ConnectorCloud({
     userDataPath,
     origin: resolveConnectorOrigin(process.env, environment.isPackaged()),
@@ -171,9 +172,7 @@ export function createConnectorCloud({
         }),
       // Connectors off: no seam, so no bot thread to mute.
       threadMute: (delivery) =>
-        runtime.getExternalConversationSeam()
-          ? handleThreadMute(threadMuteDeps(runtime, store), delivery)
-          : null,
+        runtime.getExternalConversationSeam() ? handleThreadMute(muteDeps, delivery) : null,
       webhookNotice: async (delivery) => webhooks.notice(delivery),
       prEvent: (delivery) => prWaker.handle(delivery.deliveryId, delivery.event),
       helloAnswered: (answer) => {
@@ -206,6 +205,7 @@ export function createConnectorCloud({
 /** A bot thread's mute as its link keeps it, and its emoji posted as the bot. */
 function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore): ThreadMuteDeps {
   return {
+    waiting: new Map(),
     read: (key) => readThreadMute(store, key),
     write: (key, muted) => {
       writeLinkFact(store, key, { muted: muted ? true : undefined })

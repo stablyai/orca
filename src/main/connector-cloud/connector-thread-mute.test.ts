@@ -65,6 +65,7 @@ describe('a muted thread', () => {
             },
             botNames: () => ['reviewer'],
             queued: async () => {},
+            waiting: new Map(),
             react: async (_bot, _key, _ref, emoji) => {
               reacted.push(emoji)
             }
@@ -104,7 +105,7 @@ describe('a muted thread', () => {
 describe('a reply in the same poll as its thread’s start', () => {
   // The start writes the thread's link only once its queued delivery runs: its replies wait for it,
   // then a mute mutes and anything else goes on to the chat.
-  const replyAfterStart = async (text: string) => {
+  const replyAfterStart = async (text: string, waiting = new Map<string, Promise<unknown>>()) => {
     let linked = false
     let muted = false
     const result = await handleThreadMute(
@@ -117,6 +118,7 @@ describe('a reply in the same poll as its thread’s start', () => {
         queued: async () => {
           linked = true
         },
+        waiting,
         react: async () => {}
       },
       send(text) as Parameters<typeof handleThreadMute>[1]
@@ -127,6 +129,11 @@ describe('a reply in the same poll as its thread’s start', () => {
   it('mutes on a mute and sends anything else on', async () => {
     expect(await replyAfterStart('mute')).toEqual({ result: { outcome: 'accepted' }, muted: true })
     expect(await replyAfterStart('@sam be quiet')).toEqual({ result: 'send', muted: false })
-    expect(await replyAfterStart('later reply')).toEqual({ result: 'send', muted: false })
+    // An ordinary reply goes on at once, batched as ever, unless one waits ahead of it.
+    expect(await replyAfterStart('later reply')).toEqual({ result: null, muted: false })
+    const behind = new Map([
+      [JSON.stringify(['slack', conversation.externalId]), Promise.resolve()]
+    ])
+    expect(await replyAfterStart('later reply', behind)).toEqual({ result: 'send', muted: false })
   })
 })

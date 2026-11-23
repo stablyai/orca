@@ -180,6 +180,8 @@ export type ThreadMuteDeps = {
   botNames: (botId: string) => string[]
   /** Settles after the thread's queued deliveries, as a start in the same poll writes its link. */
   queued: (key: ConnectorConversation) => Promise<unknown>
+  /** Each unlinked thread's newest reply still waiting for its link, by conversation. */
+  waiting: Map<string, Promise<unknown>>
   react: (
     botId: string,
     key: ConnectorConversation,
@@ -208,13 +210,27 @@ export function handleThreadMute(
       ? applyStep(deps, delivery, userId, thread)
       : null
   }
-  // No link yet: a start in the same poll is still writing it, so its replies, a mute among them
-  // and those after one, wait for it and are then decided as any other.
-  return deps.queued(key).then(async (): Promise<ConnectorDeliveryResult | 'send'> => {
+  // No link yet: a start in the same poll is still writing it. A likely command, and every reply
+  // behind one, waits for it and is then decided as any other; the rest go on now, batched as ever.
+  const id = JSON.stringify([key.source, key.externalId])
+  if (!deps.waiting.has(id) && !mayBeThreadMuteCommand(delivery.text)) {
+    return null
+  }
+  const linkedAt = deps.queued(key)
+  deps.waiting.set(id, linkedAt)
+  const decided = linkedAt.then(async (): Promise<ConnectorDeliveryResult | 'send'> => {
     const linked = deps.read(key)
     const settled = linked && linked !== 'not_bot' && applyStep(deps, delivery, userId, linked)
     return settled ? await settled : 'send'
   })
+  void decided
+    .catch(() => undefined)
+    .finally(() => {
+      if (deps.waiting.get(id) === linkedAt) {
+        deps.waiting.delete(id)
+      }
+    })
+  return decided
 }
 
 function applyStep(
