@@ -35,6 +35,7 @@ function placeComposingKeyboardProxy(proxy: HTMLTextAreaElement): void {
 export function ComposingKeyboardProxy({
   className,
   onCompositionEnd,
+  onInput,
   ...props
 }: ComponentProps<'textarea'>): React.JSX.Element {
   return (
@@ -54,7 +55,14 @@ export function ComposingKeyboardProxy({
         event.currentTarget.dataset.composing = ''
         placeComposingKeyboardProxy(event.currentTarget)
       }}
+      // Placed again on input: compositionupdate fires before the new text widens the chip.
       onCompositionUpdate={(event) => placeComposingKeyboardProxy(event.currentTarget)}
+      onInput={(event) => {
+        if ('composing' in event.currentTarget.dataset) {
+          placeComposingKeyboardProxy(event.currentTarget)
+        }
+        onInput?.(event)
+      }}
       onCompositionEnd={(event) => {
         delete event.currentTarget.dataset.composing
         onCompositionEnd?.(event)
