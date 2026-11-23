@@ -10,6 +10,7 @@ import {
   requestGrabExecution,
   grabDocumentScope,
   retireGrabOverlay,
+  whenGrabScriptLaneIdle,
   type GrabDocumentScope
 } from '../../../element-grab/grab-guest-execution'
 import { buildGuestOverlayScript } from '../../../element-grab/grab-guest-script'
@@ -61,7 +62,18 @@ async function sendLabelAvoidArea(
   )
 }
 
+const LABEL_SYNC_ATTEMPTS = 4
+
+type LabelSync = {
+  guest: Electron.WebContents
+  scope: GrabDocumentScope
+  dirty: boolean
+  done: Promise<boolean>
+}
+
 export abstract class BrowserManagerGrab extends BrowserManagerViewport {
+  /** One advisory footprint delivery per page; a newer footprint joins it instead of racing it. */
+  private readonly labelSyncByTabId = new Map<string, LabelSync>()
   /** The annotate palette's footprint per page, re-sent to each newly armed picker. */
   private readonly grabLabelAvoidAreaByTabId = new Map<
     string,
@@ -94,9 +106,44 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
       this.grabLabelAvoidAreaByTabId.delete(browserTabId)
     }
     if (guest) {
-      return sendLabelAvoidArea(guest, area)
+      return this.syncLabelAvoidArea(browserTabId, guest, grabDocumentScope(guest))
     }
     return true
+  }
+
+  /** Busy execution delays the footprint instead of failing it; each attempt reads the newest one. */
+  private syncLabelAvoidArea(
+    browserTabId: string,
+    guest: Electron.WebContents,
+    scope: GrabDocumentScope
+  ): Promise<boolean> {
+    const running = this.labelSyncByTabId.get(browserTabId)
+    if (running && running.guest === guest && running.scope === scope) {
+      running.dirty = true
+      return running.done
+    }
+    const sync: LabelSync = { guest, scope, dirty: true, done: Promise.resolve(false) }
+    this.labelSyncByTabId.set(browserTabId, sync)
+    const isCurrent = (): boolean => this.labelSyncByTabId.get(browserTabId) === sync
+    sync.done = (async (): Promise<boolean> => {
+      // Starts after the caller's synchronous turn so a footprint set in the same turn joins this attempt.
+      await Promise.resolve()
+      let applied = false
+      for (let attempt = 0; sync.dirty && attempt < LABEL_SYNC_ATTEMPTS && isCurrent(); attempt++) {
+        sync.dirty = false
+        const area = this.grabLabelAvoidAreaByTabId.get(browserTabId)?.area ?? null
+        applied = await sendLabelAvoidArea(guest, area, scope)
+        if (!applied && !guest.isDestroyed() && scope.current) {
+          sync.dirty = true
+          await whenGrabScriptLaneIdle(guest)
+        }
+      }
+      if (isCurrent()) {
+        this.labelSyncByTabId.delete(browserTabId)
+      }
+      return applied
+    })()
+    return sync.done
   }
 
   /** Authorize tools for browsing and document guests; documents stay outside browsing maps. */
@@ -163,11 +210,9 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
       }
       return false
     }
-    const area = this.grabLabelAvoidAreaByTabId.get(browserTabId)?.area
-    if (armed && area) {
-      if (!(await sendLabelAvoidArea(guest, area, scope))) {
-        return false
-      }
+    // Advisory: a busy lane delays the footprint but never turns a completed arm into a failure.
+    if (armed && this.grabLabelAvoidAreaByTabId.has(browserTabId)) {
+      void this.syncLabelAvoidArea(browserTabId, guest, scope)
     }
     if (armed) {
       if (host) {

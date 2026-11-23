@@ -8,6 +8,7 @@ import {
 } from '../../../document-preview/doc-preview-grant-registry'
 import { buildDocPreviewUrl } from '../../../../../shared/document-preview/doc-preview-scheme'
 import { attachGrabExecutionTransport } from '../../../element-grab/testing/grab-execution-transport-fixture'
+import { executeGrabScript } from '../../../element-grab/grab-guest-execution'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromWebContents: () => null },
@@ -59,6 +60,71 @@ describe('palette footprint ownership', () => {
 
       await expect(manager.setGrabLabelAvoidArea('preview-page', null, 23)).resolves.toBe(false)
       await expect(manager.setGrabLabelAvoidArea('preview-page', null, 17)).resolves.toBe(true)
+    } finally {
+      dispose()
+    }
+  })
+
+  it('keeps a completed arm successful while the footprint lane is busy, then applies the newest footprint', async () => {
+    const manager = new BrowserManager()
+    const grant = mintDocPreviewGrant({
+      owner: { kind: 'ssh', connectionId: 'synthetic-host' },
+      root: '/synthetic/docs',
+      entryRelativePath: 'index.html',
+      browserPageId: 'preview-page'
+    })
+    const labels: string[] = []
+    let releaseHold: ((value: boolean) => void) | undefined
+    let hold: Promise<boolean | null> | undefined
+    const guest = attachGrabExecutionTransport(
+      Object.assign(new EventEmitter(), {
+        isDestroyed: () => false,
+        getURL: () => buildDocPreviewUrl(grant.id, 'index.html'),
+        setWindowOpenHandler: () => {},
+        setWebRTCIPHandlingPolicy: () => {},
+        executeJavaScript: async (code: string): Promise<unknown> => {
+          if (code.includes('__orca-grab-host')) {
+            // Another script request queues behind the arm and holds the lane once it ends.
+            hold = executeGrabScript(contents, 'hold')
+            return () => true
+          }
+          if (code === 'hold') {
+            return new Promise<boolean>((resolve) => {
+              releaseHold = resolve
+            })
+          }
+          if (code.includes('setLabelAvoidArea')) {
+            labels.push(code)
+          }
+          return true
+        }
+      })
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the document policy, picker and footprint delivery only use the members above.
+    const contents = guest as unknown as Electron.WebContents
+    const dispose = installDocPreviewGuestPolicy(contents, { id: 17, send: () => {} })
+    const area = (x: number) => ({
+      x,
+      y: 20,
+      width: 100,
+      height: 40,
+      frameWidth: 640,
+      frameHeight: 480
+    })
+    try {
+      await expect(manager.setGrabLabelAvoidArea('preview-page', area(111), 17)).resolves.toBe(true)
+      labels.length = 0
+
+      await expect(manager.setGrabMode('preview-page', true, contents)).resolves.toBe(true)
+      const newest = manager.setGrabLabelAvoidArea('preview-page', area(333), 17)
+      await Promise.resolve()
+      expect(labels).toEqual([])
+
+      releaseHold?.(true)
+      await expect(hold).resolves.toBe(true)
+      await expect(newest).resolves.toBe(true)
+      expect(labels.at(-1)).toContain('"x":333')
+      expect(labels.some((code) => code.includes('"x":111'))).toBe(false)
     } finally {
       dispose()
     }

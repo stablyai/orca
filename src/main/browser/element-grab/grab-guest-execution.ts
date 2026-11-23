@@ -2,38 +2,16 @@ import { sendPrivate, retireGrabOverlay, type GrabDocumentScope } from './grab-d
 export { retireGrabOverlay, restoreGrabCapture } from './grab-document-scope'
 export type { GrabDocumentScope } from './grab-document-scope'
 import { randomUUID } from 'node:crypto'
-import type { WebContents, WebFrameMain } from 'electron'
+import type { WebContents } from 'electron'
 import {
   GRAB_EXECUTION_REQUEST,
   GRAB_EXECUTION_REPORT,
-  type GrabExecutionResult,
-  type GrabPickOperation
+  type GrabExecutionResult
 } from '../../../shared/browser/element-grab/grab-execution-protocol'
-
-type Options = {
-  worldId?: number
-  background?: boolean
-  loadedOnly?: boolean
-  signal?: AbortSignal
-  selection?: boolean
-  scope?: GrabDocumentScope
-  clean?: boolean
-  overlayControl?: boolean
-  capturePick?: 'held' | 'hover'
-  pick?: { selectionId: string; operation: GrabPickOperation; captureId?: string }
-}
-type Task = {
-  id: string
-  code: string
-  options: Options
-  frame: WebFrameMain | null
-  documentId: string | null
-  started: boolean
-  live: boolean
-  timer?: ReturnType<typeof setTimeout>
-  resolve: (result: GrabExecutionResult) => void
-  stopWaiting: () => void
-}
+import type {
+  GrabExecutionOptions as Options,
+  GrabExecutionTask as Task
+} from './grab-guest-execution-types'
 
 const sessions = new WeakMap<WebContents, GrabGuestExecution>()
 
@@ -44,12 +22,32 @@ class GrabGuestExecution {
   private selection: Task | null = null
   private waiting: Task | null = null
   private waitingSelection: Task | null = null
+  private readonly scriptIdle = new Set<() => void>()
 
   constructor(private readonly guest: WebContents) {
     guest.on('ipc-message', this.onReport)
     guest.on('did-start-navigation', this.onNavigation)
     guest.on('render-process-gone', this.retire)
     guest.once('destroyed', this.destroy)
+  }
+
+  /** Resolves once the script lane has no active or waiting request, or the document retires. */
+  whenScriptLaneIdle(): Promise<void> {
+    if (!this.script && !this.waiting) {
+      return Promise.resolve()
+    }
+    return new Promise((resolve) => this.scriptIdle.add(resolve))
+  }
+
+  private notifyScriptIdle(): void {
+    if (this.script || this.waiting) {
+      return
+    }
+    const waiters = [...this.scriptIdle]
+    this.scriptIdle.clear()
+    for (const resolve of waiters) {
+      resolve()
+    }
   }
 
   run(code: string, options: Options): Promise<GrabExecutionResult> {
@@ -190,6 +188,7 @@ class GrabGuestExecution {
       clearTimeout(next.timer)
       this.begin(next)
     }
+    this.notifyScriptIdle()
   }
 
   private readonly onReport = (
@@ -266,6 +265,7 @@ class GrabGuestExecution {
         this.finish(task, { ok: false }, true)
       }
     }
+    this.notifyScriptIdle()
   }
 
   private readonly destroy = (): void => {
@@ -304,6 +304,10 @@ function getSession(guest: WebContents): GrabGuestExecution {
     sessions.set(guest, session)
   }
   return session
+}
+
+export function whenGrabScriptLaneIdle(guest: WebContents): Promise<void> {
+  return guest.isDestroyed() ? Promise.resolve() : getSession(guest).whenScriptLaneIdle()
 }
 
 export function grabDocumentScope(guest: WebContents): GrabDocumentScope {
