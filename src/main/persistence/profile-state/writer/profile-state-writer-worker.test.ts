@@ -183,10 +183,14 @@ describe('persistent profile state write worker', () => {
     expect(readState(f.path, f.profileId)).toEqual({ settings: { theme: 'dark' } })
   })
 
-  it('reopens after an indeterminate write when the transaction did not commit', async () => {
-    const f = fixture()
-    const interruptedPath = join(f.root, 'recoverable-interrupted-worker.cjs')
-    const interruptedMarker = join(f.root, 'interrupted-once')
+  async function interruptedAuthority(
+    root: string,
+    f: ReturnType<typeof fixture>,
+    afterCommit: boolean
+  ) {
+    const interruptedPath = join(root, 'interrupted-worker.cjs')
+    const marker = JSON.stringify(join(root, 'interrupted-once'))
+    const exitOnce = `if (!require('node:fs').existsSync(${marker})) { require('node:fs').writeFileSync(${marker}, ''); process.exit(17) }`
     await build({
       entryPoints: [
         resolve('src/main/persistence/profile-state/writer/profile-state-writer-worker-entry.ts')
@@ -203,7 +207,7 @@ describe('persistent profile state write worker', () => {
             builder.onLoad({ filter: /profile-state-write-transaction\.ts$/ }, (args) => ({
               contents: readFileSync(args.path, 'utf8').replace(
                 "db.exec('COMMIT')",
-                `if (!require('node:fs').existsSync(${JSON.stringify(interruptedMarker)})) { require('node:fs').writeFileSync(${JSON.stringify(interruptedMarker)}, 'interrupted'); process.exit(17) }\n    db.exec('COMMIT')`
+                afterCommit ? `db.exec('COMMIT'); ${exitOnce}` : `${exitOnce}; db.exec('COMMIT')`
               ),
               loader: 'ts'
             }))
@@ -219,10 +223,28 @@ describe('persistent profile state write worker', () => {
       .writeSerializedDomains([{ domain: 'settings', payload: '{"interrupted":true}' }])
       .catch((error: unknown) => error)
     expect(profileStateWriterFailureOutcome(failure)).toBe('indeterminate')
+    return authority
+  }
+
+  it('reopens after an indeterminate write only when the transaction did not commit', async () => {
+    const rolledBack = fixture()
+    const recovered = await interruptedAuthority(rolledBack.root, rolledBack, false)
     await expect(
-      authority.writeSerializedDomains([{ domain: 'settings', payload: '{"recovered":true}' }])
+      recovered.writeSerializedDomains([{ domain: 'settings', payload: '{"recovered":true}' }])
     ).resolves.toBeUndefined()
-    await authority.close()
-    expect(readState(f.path, f.profileId)).toEqual({ settings: { recovered: true } })
+    await recovered.close()
+    expect(readState(rolledBack.path, rolledBack.profileId)).toEqual({
+      settings: { recovered: true }
+    })
+
+    const committed = fixture()
+    const refused = await interruptedAuthority(committed.root, committed, true)
+    await expect(
+      refused.writeSerializedDomains([{ domain: 'settings', payload: '{"overwrite":true}' }])
+    ).rejects.toMatchObject({ code: 'profile-state-revision-conflict' })
+    await refused.close().catch(() => {})
+    expect(readState(committed.path, committed.profileId)).toEqual({
+      settings: { interrupted: true }
+    })
   })
 })

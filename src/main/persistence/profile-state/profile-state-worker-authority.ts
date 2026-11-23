@@ -86,14 +86,15 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     if (this.stopping) {
       await this.stopping
     }
-    if (this.writer) {
-      return this.writer.abort()
-    }
+    // Set first so the aborted writer's indeterminate fault is not recovered by a reopen.
     this.stoppedFailure ??= new ProfileStateWriterError(
       'profile-state-writer-aborted',
       'Profile state writer was aborted',
       'known-failure'
     )
+    if (this.writer) {
+      return this.writer.abort()
+    }
   }
 
   assertCurrentRevision(): Promise<void> {
@@ -287,7 +288,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   private handleIndeterminateWriterFailure(writer: ProfileStateWriteWorkerClient): void {
     const stopping = closeIndeterminateProfileStateWriter(
       writer,
-      () => this.writer === writer && !this.stopping && !this.closing,
+      () => this.writer === writer && !this.stopping && !this.closing && !this.stoppedFailure,
       (revision) => {
         if (this.writer === writer && !this.closing) {
           this.writer = null
