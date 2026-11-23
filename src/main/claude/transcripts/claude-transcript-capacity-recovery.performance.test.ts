@@ -7,6 +7,10 @@ import * as claudeImport from '../../native-chat/agent-session-journal/history-i
 import { catchUpClaudeTranscript } from './claude-transcript-catch-up'
 import '../../native-chat/agent-session-journal/history-import/journal-claude-import-worker.test-fixture'
 import {
+  claudeImportWorkerEntry,
+  setClaudeImportWorkerEntry
+} from '../../native-chat/agent-session-journal/history-import/journal-claude-import-worker'
+import {
   chat,
   closeClaudeCatchUpChats,
   PROVIDER,
@@ -157,6 +161,62 @@ it('persists the recovery receipt across reopen', async () => {
   })
   await c.reopen()
   expect(await catchUpClaudeTranscript(input)).toBe(true)
+})
+
+it('certifies a recovery the import worker refused, so an unchanged reopen does not retry', async () => {
+  const c = await chat('batch')
+  await writeFile(
+    c.filePath,
+    [
+      '{"type":"assistant","uuid":"old-leaf","message":{"content":"Old answer"}}',
+      ...Array.from({ length: 12 }, (_, index) => `{"type":"progress","uuid":"noise-${index}"}`),
+      '{"type":"assistant","uuid":"new-answer","parentUuid":"old-leaf","message":{"content":"New answer"}}',
+      ''
+    ].join('\n')
+  )
+  const input = {
+    sessionId: SESSION,
+    providerSessionId: PROVIDER,
+    leafUuid: 'old-leaf',
+    claudeConfigDir: c.config,
+    cwd: c.cwd,
+    sink: c.deferred.sink,
+    maxBytes: 128
+  }
+  expect(await catchUpClaudeTranscript(input)).toMatchObject({ kind: 'capacity' })
+  const entry = claudeImportWorkerEntry()
+  setClaudeImportWorkerEntry(`${c.filePath}.missing-worker.js`)
+  try {
+    await catchUpClaudeTranscript({ ...input, mode: 'recovery', maxBytes: 4096 })
+  } finally {
+    setClaudeImportWorkerEntry(entry)
+  }
+  expect(await c.journal.reads.historyOrigin()).toMatchObject({
+    raw: { sourceFrontier: 'new-answer', sourceConsumedBytes: (await stat(c.filePath)).size }
+  })
+  await c.reopen()
+  expect(await catchUpClaudeTranscript(input)).toBe(true)
+})
+
+it('keeps every sibling of one assistant message across 20k rows', async () => {
+  const c = await chat('batch')
+  const rows = Array.from({ length: 20_000 }, (_, index) =>
+    JSON.stringify({
+      type: 'assistant',
+      uuid: `part-${index}`,
+      parentUuid: index ? `part-${index - 1}` : null,
+      message: { id: 'one-message', content: 'x' }
+    })
+  )
+  await writeFile(c.filePath, `${rows.join('\n')}\n`)
+  const imported = await claudeImport.importClaudeTranscript({
+    agent: 'claude',
+    filePath: c.filePath,
+    sessionId: PROVIDER,
+    limits: { inlineHeadBytes: 1024 },
+    retainedBytes: 64 * 1024 * 1024
+  })
+  expect(imported.items).toHaveLength(20_000)
 })
 
 it('bounds one-pass recovery reads while selecting the active item window', async () => {

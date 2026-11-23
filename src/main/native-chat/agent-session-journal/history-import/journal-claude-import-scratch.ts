@@ -132,7 +132,13 @@ export function createClaudeImportScratch(options: ClaudeImportScratchOptions = 
     throw new ClaudeImportResourceError('Claude history import needs more free disk space.')
   }
   const root = mkdtempSync(join(parent, OPERATION_PREFIX))
-  writeFileSync(join(root, 'owner'), String(process.pid), { mode: 0o600 })
+  try {
+    writeFileSync(join(root, 'owner'), String(process.pid), { mode: 0o600 })
+  } catch (error) {
+    // An ownerless folder could never be proven dead, so it must not outlive this attempt.
+    rmSync(root, REMOVAL)
+    throw error
+  }
   let closeDatabase: (() => void) | undefined
   let closed = false
   const settle = () => {
@@ -164,7 +170,8 @@ export function createClaudeImportScratch(options: ClaudeImportScratchOptions = 
     allowanceBytes(): number {
       return Math.max(
         0,
-        Math.min(quotaBytes - othersBytes - bytes(root), freeBytes(root) - reserveBytes)
+        // Recounted per batch so imports sharing the folder share one quota.
+        Math.min(quotaBytes - bytes(parent), freeBytes(root) - reserveBytes)
       )
     },
     async close(): Promise<void> {

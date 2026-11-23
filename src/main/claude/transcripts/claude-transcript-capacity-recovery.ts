@@ -8,6 +8,9 @@ import {
   type NativeCopyOrigin
 } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import { prepareJsonlTranscriptImport } from '../../native-chat/agent-session-journal/history-import/journal-jsonl-import'
+import { stat } from 'node:fs/promises'
+import { ClaudeImportResourceError } from '../../native-chat/agent-session-journal/history-import/journal-claude-import-resource-error'
+import { readClaudeTranscriptFrontier } from './claude-transcript-tail'
 import { journalLifecycleItemMutation } from '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import {
   continuedOutsideNotice,
@@ -17,6 +20,21 @@ import {
   type HistoryCatchUpPlan,
   type HistoryCatchUpReplacementPlan
 } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
+
+async function probeRefusedSource(filePath: string, check: () => void) {
+  const { size, mtimeMs } = await stat(filePath)
+  check()
+  const sourceFrontier = await readClaudeTranscriptFrontier({
+    filePath,
+    consumedBytes: size,
+    check
+  })
+  const after = await stat(filePath)
+  // A write during the probe leaves the stretch for the next open.
+  return after.size === size && after.mtimeMs === mtimeMs
+    ? { sourceFrontier, sourceConsumedBytes: size, sourceMtimeMs: mtimeMs }
+    : undefined
+}
 
 export async function prepareClaudeTranscriptCapacityRecovery(
   input: {
@@ -84,7 +102,15 @@ export async function prepareClaudeTranscriptCapacityRecovery(
       previous.providerHandle.sessionId === input.providerSessionId
         ? previous.ids
         : []
-    const historyOrigin: NativeCopyOrigin | undefined = prepared.ok
+    // Refused scratch or worker certifies the unchanged source with one bounded probe, so a reopen
+    // doesn't repeat the refused import; unreadable or changed sources stay uncertified.
+    const receipt = prepared.ok
+      ? prepared
+      : prepared.cause instanceof ClaudeImportResourceError
+        ? await probeRefusedSource(input.filePath, check)
+        : undefined
+    check()
+    const historyOrigin: NativeCopyOrigin | undefined = receipt
       ? {
           version: 1,
           kind: 'native_copy',
@@ -96,9 +122,9 @@ export async function prepareClaudeTranscriptCapacityRecovery(
             leafUuid: input.leafUuid || null
           },
           ids,
-          sourceFrontier: prepared.sourceFrontier,
-          sourceConsumedBytes: prepared.sourceConsumedBytes,
-          sourceMtimeMs: prepared.sourceMtimeMs
+          sourceFrontier: receipt.sourceFrontier,
+          sourceConsumedBytes: receipt.sourceConsumedBytes,
+          sourceMtimeMs: receipt.sourceMtimeMs
         }
       : undefined
     return batch.finish('claude-history-unloaded', input.physicalCursor, historyOrigin)

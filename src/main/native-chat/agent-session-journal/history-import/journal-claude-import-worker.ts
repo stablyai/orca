@@ -14,6 +14,40 @@ import type {
 type ImportResult = Extract<ClaudeImportWorkerResponse, { kind: 'imported' }>['result']
 
 let entryOverride: string | undefined
+let queue: Promise<void> = Promise.resolve()
+
+/** One importer per host keeps scratch accounting simple and the heavy host from piling up. */
+async function takeTurn(signal: AbortSignal | undefined): Promise<() => void> {
+  const previous = queue
+  let release = () => {}
+  queue = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  if (!signal) {
+    await previous
+    return release
+  }
+  let onAbort = () => {}
+  try {
+    await Promise.race([
+      previous,
+      new Promise<never>((_, reject) => {
+        onAbort = () => reject(signal.reason)
+        signal.addEventListener('abort', onAbort, { once: true })
+        if (signal.aborted) {
+          onAbort()
+        }
+      })
+    ])
+  } catch (error) {
+    // Later imports still wait for the one ahead of this cancelled turn.
+    void previous.then(release)
+    throw error
+  } finally {
+    signal.removeEventListener('abort', onAbort)
+  }
+  return release
+}
 
 /** Tests bundle the entry themselves; the app builds it beside the main entry. */
 export function setClaudeImportWorkerEntry(path: string | undefined): void {
@@ -21,7 +55,7 @@ export function setClaudeImportWorkerEntry(path: string | undefined): void {
 }
 
 // A missing entry fails the spawn, which degrades like any unavailable worker.
-function workerEntry(): string {
+export function claudeImportWorkerEntry(): string {
   return (
     entryOverride ??
     resolveWorkerThreadEntryPath(
@@ -37,9 +71,21 @@ export async function importClaudeTranscriptInWorker(
 ): Promise<ImportResult> {
   const { signal, ...work } = input
   signal?.throwIfAborted()
+  const release = await takeTurn(signal)
+  try {
+    return await runImportWorker(work, signal)
+  } finally {
+    release()
+  }
+}
+
+async function runImportWorker(
+  work: ClaudeImportWork,
+  signal: AbortSignal | undefined
+): Promise<ImportResult> {
   let worker: ReturnType<typeof spawnHeavyWorker>
   try {
-    worker = spawnHeavyWorker(workerEntry(), {
+    worker = spawnHeavyWorker(claudeImportWorkerEntry(), {
       name: 'orca-claude-history-import',
       workerData: work
     })

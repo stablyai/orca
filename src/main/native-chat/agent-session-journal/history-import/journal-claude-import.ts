@@ -4,6 +4,7 @@ import { setImmediate } from 'node:timers/promises'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES,
+  readClaudeTranscriptFrontier,
   readClaudeTranscriptWindow
 } from '../../../claude/transcripts/claude-transcript-tail'
 import { claudeRecord } from '../../../claude/structured/journal/claude-structured-item-translation'
@@ -137,17 +138,23 @@ async function importClaudeWindow(input: ImportInput, scan: ImportScan, graph: C
       endBytes: snapshot.size,
       maxBytes: input.maxBytes
     }
-    let sourceFrontier: string | undefined
     const first = await readClaudeTranscriptWindow({
       ...range,
       select: () => true,
       visit(row, position) {
-        if (sourceFrontier === undefined && typeof row.uuid === 'string' && row.uuid) {
-          sourceFrontier = row.uuid
-        }
         scan.record(row, position)
         return false
       }
+    })
+    // The same bounded probe an unchanged reopen repeats, so the receipt compares equal.
+    const sourceFrontier = await readClaudeTranscriptFrontier({
+      filePath: input.filePath,
+      consumedBytes: first.consumedBytes,
+      maxBytes: Math.min(
+        input.maxBytes ?? CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES,
+        CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES
+      ),
+      check: scan.check
     })
     await scan.select()
     const retained = await retainNewest(input, scan, graph, () => '#-1')

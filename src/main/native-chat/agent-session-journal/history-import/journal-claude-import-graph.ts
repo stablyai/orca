@@ -69,6 +69,8 @@ export function createClaudeImportGraph(options: ClaudeImportScratchOptions = {}
       CREATE TABLE tool_uses (position INTEGER NOT NULL, tool_id TEXT NOT NULL, PRIMARY KEY(position, tool_id));
       CREATE TABLE tool_results (tool_id TEXT NOT NULL, position INTEGER NOT NULL, PRIMARY KEY(tool_id, position));
       CREATE TABLE selected (seq INTEGER PRIMARY KEY, position INTEGER NOT NULL UNIQUE);
+      CREATE TABLE expanded (assistant_id TEXT PRIMARY KEY, chunk INTEGER NOT NULL);
+      CREATE INDEX expanded_chunk ON expanded(chunk);
     `)
   } catch (error) {
     void scratch.close()
@@ -91,7 +93,12 @@ export function createClaudeImportGraph(options: ClaudeImportScratchOptions = {}
       throw storageFailure(error)
     }
   }
-  write(limitPages)
+  try {
+    write(limitPages)
+  } catch (error) {
+    void scratch.close()
+    throw error
+  }
   const insert = db.prepare(`INSERT INTO rows
     (position, line_index, uuid, parent_uuid, logical_parent_uuid, type, assistant_id, candidate, raw_payload)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -189,16 +196,19 @@ export function createClaudeImportGraph(options: ClaudeImportScratchOptions = {}
       }
       // Selection order is the work queue: each chunk adds assistant siblings and tool results,
       // which later chunks close in turn, as nested tool forks need.
+      // Each assistant message expands once, as the walker deletes a group after using it.
+      const expand = db.prepare(`INSERT OR IGNORE INTO expanded (assistant_id, chunk)
+        SELECT DISTINCT r.assistant_id, ?3 FROM selected s JOIN rows r ON r.position = s.position
+          WHERE s.seq > ?1 AND s.seq <= ?2 AND r.assistant_id IS NOT NULL`)
       const close = db.prepare(`INSERT OR IGNORE INTO selected (position)
-        SELECT x.position FROM selected s JOIN rows r ON r.position = s.position
-          JOIN rows x ON x.assistant_id = r.assistant_id
-          WHERE s.seq > ?1 AND s.seq <= ?2 AND r.assistant_id IS NOT NULL
+        SELECT x.position FROM expanded e JOIN rows x ON x.assistant_id = e.assistant_id
+          WHERE e.chunk = ?3
         UNION ALL
         SELECT t.position FROM selected s JOIN tool_uses u ON u.position = s.position
           JOIN tool_results t ON t.tool_id = u.tool_id
           WHERE s.seq > ?1 AND s.seq <= ?2`)
       const last = db.prepare('SELECT max(seq) AS seq FROM selected')
-      for (let seq = 0; ;) {
+      for (let seq = 0, chunk = 0; ; chunk += 1) {
         check()
         const tail = last.get()?.seq
         if (typeof tail !== 'number' || seq >= tail) {
@@ -208,7 +218,10 @@ export function createClaudeImportGraph(options: ClaudeImportScratchOptions = {}
         const from = seq
         const to = Math.min(seq + BATCH_ROWS, tail)
         seq = to
-        write(() => close.run(from, to))
+        write(() => {
+          expand.run(from, to, chunk)
+          close.run(from, to, chunk)
+        })
         write(() => {
           db.exec('COMMIT')
           limitPages()

@@ -76,7 +76,8 @@ export async function readClaudeTranscriptFrontier(input: {
   const range = {
     ...input,
     endBytes: input.consumedBytes,
-    maxBytes: input.maxBytes ?? CLAUDE_TRANSCRIPT_WINDOW_RAW_MAX_BYTES
+    // Ordinary catch-up's bound: an unchanged reopen must not cost a recovery-sized read.
+    maxBytes: input.maxBytes ?? CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES
   }
   await visitClaudeTranscriptTail(range, (row) => {
     if (typeof row.uuid !== 'string' || !row.uuid) {

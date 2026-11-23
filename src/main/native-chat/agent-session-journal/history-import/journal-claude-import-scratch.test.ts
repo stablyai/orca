@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createClaudeImportScratch } from './journal-claude-import-scratch'
 import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
+import { createClaudeImportGraph } from './journal-claude-import-graph'
 
 let parent: string
 
@@ -54,4 +55,19 @@ it('refuses admission inside the free-space reserve without leaving an operation
     createClaudeImportScratch({ parent, reserveBytes: Number.MAX_SAFE_INTEGER })
   ).toThrow(ClaudeImportResourceError)
   expect(readdirSync(parent)).toEqual([])
+})
+
+it('shares one quota between imports that grow at the same time', async () => {
+  const first = createClaudeImportScratch({ parent, quotaBytes: 1024 * 1024 })
+  const second = createClaudeImportScratch({ parent, quotaBytes: 1024 * 1024 })
+  writeFileSync(first.filename, Buffer.alloc(768 * 1024))
+  expect(second.allowanceBytes()).toBeLessThan(256 * 1024)
+  await Promise.all([first.close(), second.close()])
+})
+
+it('removes its database when the quota refuses the first write batch', async () => {
+  expect(() => createClaudeImportGraph({ parent, quotaBytes: 1024 })).toThrow(
+    ClaudeImportResourceError
+  )
+  await vi.waitFor(() => expect(readdirSync(parent)).toEqual([]))
 })
