@@ -29,3 +29,14 @@ it('shows the target with its padding when it cannot fit together with the secti
 it('only aligns the section when there is no target', () => {
   expect(settingsSectionRevealDelta({ ...view, sectionTop: 500, targetBottom: null })).toBe(468)
 })
+
+it('keeps the section top on screen when section and target fit a 200px view (190px apart)', () => {
+  const delta = settingsSectionRevealDelta({
+    sectionTop: 500,
+    sectionMarginTop: 32,
+    targetBottom: 690,
+    viewHeight: 200
+  })
+  expect(500 - delta).toBe(0)
+  expect(200 - (690 - delta)).toBe(10)
+})
