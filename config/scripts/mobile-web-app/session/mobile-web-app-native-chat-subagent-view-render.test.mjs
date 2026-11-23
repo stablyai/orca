@@ -32,6 +32,7 @@ import { MobileNativeChatRowOverlaysHost } from './src/session/native-chat/trans
 import { MobileNativeChatBackgroundTasks } from './src/session/native-chat/input/tasks/MobileNativeChatBackgroundTasks'
 import { useMobileNativeChatSubagents } from './src/session/native-chat/subagents/use-mobile-native-chat-subagents'
 import { publishPageStorage } from './src/mobile-web-shell/bridge/page-storage/page-async-storage'
+import { HostStatusGatesContext } from './src/components/host-connection/host-protocol-gates-context'
 import { RpcClientProvider } from './src/transport/connection/client-context.web'
 
 publishPageStorage({}, () => true, 'host', '')
@@ -79,9 +80,18 @@ function Chat() {
     </View>
   </MobileNativeChatRowOverlaysHost>
 }
+const compatibleHost = {
+  hostCapabilities: [],
+  floatingWorkspaceEnabled: false,
+  desktopAppVersion: null,
+  compatVerdict: { kind: 'allowed' },
+  hostProtocolWindow: {},
+  statusPending: false,
+  statusReadable: true
+}
 const metrics = { frame: { x: 0, y: 0, width: 390, height: 780 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }
 createRoot(document.getElementById('root')).render(
-  <RpcClientProvider client={bridge}><SafeAreaProvider initialMetrics={metrics}><Chat /></SafeAreaProvider></RpcClientProvider>
+  <RpcClientProvider client={bridge}><HostStatusGatesContext.Provider value={compatibleHost}><SafeAreaProvider initialMetrics={metrics}><Chat /></SafeAreaProvider></HostStatusGatesContext.Provider></RpcClientProvider>
 )
 `
 
