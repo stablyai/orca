@@ -53,6 +53,7 @@ export type TerminalCreateOptions = {
    *  `agentArgs`, so not part of `callerSuppliedLaunch`. */
   accountEnv?: Record<string, string>
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
+  appliedSessionOptions?: Record<string, SessionOptionValue>
   launchPreferences?: AgentLaunchPreferences
   terminalKittyKeyboardProtocol?: boolean
   terminalImageViewerSupported?: boolean

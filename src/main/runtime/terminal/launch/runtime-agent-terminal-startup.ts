@@ -241,6 +241,7 @@ async function buildRuntimeAgentTerminalStartupOptions(
     ...(env ? { env } : {}),
     launchConfig: startupPlan.launchConfig,
     launchAgent: agent,
+    appliedSessionOptions: startupPlan.sessionOptions,
     startupCommandDelivery: startupPlan.startupCommandDelivery,
     // A bare command the user typed stays out of launch accounting, as before.
     ...(opts.startupAgent ? { telemetry: agentStartedTelemetry(agent, opts.launchSource) } : {})

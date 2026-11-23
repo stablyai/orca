@@ -36,7 +36,10 @@ import type {
   RuntimeMobileSessionTabMove,
   RuntimeTerminalDriverState
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type { RuntimeTerminalPresentation } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type {
+  RuntimeTerminalCreateRequestPayload,
+  RuntimeTerminalPresentation
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type {
   AgentListPublication,
   AgentPaneActivityChange
@@ -90,6 +93,7 @@ export type RuntimeNotifier = {
       launchConfig?: SleepingAgentLaunchConfig
       launchToken?: string
       launchAgent?: TuiAgent
+      sessionOptions?: RuntimeTerminalCreateRequestPayload['sessionOptions']
       viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
       afterTabId?: string

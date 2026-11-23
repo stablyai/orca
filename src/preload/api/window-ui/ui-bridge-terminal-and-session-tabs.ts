@@ -42,6 +42,7 @@ export const uiTerminalAndSessionTabsApi = {
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
       launchAgent?: TuiAgent
+      sessionOptions?: RuntimeTerminalCreateRequestPayload['sessionOptions']
       viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
       afterTabId?: string
@@ -72,6 +73,7 @@ export const uiTerminalAndSessionTabsApi = {
         resumeProviderSession?: AgentProviderSessionMetadata
         launchToken?: string
         launchAgent?: TuiAgent
+        sessionOptions?: RuntimeTerminalCreateRequestPayload['sessionOptions']
         viewMode?: 'terminal' | 'chat'
         targetGroupId?: string
         afterTabId?: string

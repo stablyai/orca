@@ -10,6 +10,7 @@ import type { SplitTerminalPaneDetail } from '@/constants/terminal'
 import { singlePaneLayoutSnapshot } from '@/store/terminals/layout/terminal-single-pane-layout'
 import { verifyTerminalRevealIdentity } from '@/lib/workspace/tabs/terminal-reveal-identity'
 import { insertUnifiedTabAfterAnchor } from '@/lib/workspace/tabs/unified-tab-anchor-insertion'
+import { recordAgentTabAppliedSessionOptions } from '@/lib/agent-session/launch/record-agent-tab-applied-session-options'
 import { tryMakePaneKey } from '../agent-status/agent-status-routing'
 import { registerLaunchRecipe } from './launch-recipe-registration'
 import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-session/launch/pane/agent-launch-pane-closes'
@@ -37,6 +38,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         resumeProviderSession,
         launchToken,
         launchAgent,
+        sessionOptions,
         viewMode,
         targetGroupId,
         afterTabId,
@@ -177,6 +179,9 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
             store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
           }
           if (leafId && ptyId) {
+            if (!splitFromLeafId && launchAgent && sessionOptions) {
+              recordAgentTabAppliedSessionOptions(tab.id, launchAgent, sessionOptions)
+            }
             const launchPaneKey = tryMakePaneKey(tab.id, leafId)
             if (launchConfig) {
               registerLaunchRecipe({
