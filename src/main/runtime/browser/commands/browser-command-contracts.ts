@@ -70,5 +70,8 @@ export type RuntimeBrowserCommandHost = {
   readBrowserTabBar?(worktreeId: string | undefined): BrowserTabBarEntry[]
   retireRuntimeOwnedBrowserSessionTab?(worktreeId: string, browserPageId: string): boolean | void
   /** Persist/start only when no host window exists; hasStartable reads saved tabs either way. */
-  serveBrowserTabs?: Pick<ServeBrowserTabs, 'opened' | 'start' | 'hasStartable' | 'savedWorktreeOf'>
+  serveBrowserTabs?: Pick<
+    ServeBrowserTabs,
+    'opened' | 'start' | 'hasStartable' | 'savedWorktreeOf' | 'profileChanged' | 'pagesInProfile'
+  >
 }

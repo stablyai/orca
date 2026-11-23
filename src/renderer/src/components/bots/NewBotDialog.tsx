@@ -28,7 +28,7 @@ import { BotRunsOnPicker } from './BotRunsOnPicker'
 import { BotImportNudge } from './BotImportNudge'
 import { openCreatedBot } from './bot-create-open'
 import { NewBotPictureButton } from './NewBotPictureButton'
-import { useNewBotPicture } from './use-new-bot-picture'
+import { useNewBotHostLooks, useNewBotPicture } from './use-new-bot-picture'
 import { useBotAvatarIntakeState } from './use-bot-avatar-intake'
 import { useBotAgentMenu } from './use-bot-agent-choices'
 import { useBotCreateHost } from './bot-create-hosts'
@@ -38,10 +38,7 @@ import {
 } from '../../../../shared/execution-host/execution-host'
 import { useBotAgentSetup } from './use-bot-agent-setup'
 import { proposalCreateParams, type BotProposal } from '../../../../shared/bots/bot-proposal'
-import {
-  BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
-  BOTS_TEMPLATES_RUNTIME_CAPABILITY
-} from '../../../../shared/bot-runtime-capabilities'
+import { BOTS_TEMPLATES_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import { useBotHostHas } from '@/lib/bot-host-status'
 import { Button } from '@/components/ui/button'
 import { DEFAULT_BOT_AVATAR_COLOR } from '../../../../shared/bots/bot-avatar-color'
@@ -49,16 +46,24 @@ import { botTemplate, type BotTemplateSkill } from '../../../../shared/bots/bot-
 import { NewBotTemplateParts } from './NewBotTemplateParts'
 import type { BotCreateParams } from '../../../../shared/rpc-contract/bots-params'
 import { NewBotProposalFields, NewBotTakesOver } from './NewBotProposalFields'
-import { NewBotPurposeField, PURPOSE_MAX_LENGTH } from './NewBotPurposeField'
+import { NewBotPurposeField } from './NewBotPurposeField'
 import { BotCreateButton } from './BotCreateButton'
 import { BARE_HEADING_CLASS, keyboardNavMarkerHandlers } from './new-bot-bare-fields'
 import { openBotTemplates } from './templates/bot-templates-open'
 import { pictureTintFor } from './avatar-picture-tint'
-import { draftOf, editedProposal, templateIdentity } from './new-bot-draft'
+import {
+  canonicalDraft,
+  draftOf,
+  editedProposal,
+  templateIdentityTooLong,
+  shownDraft,
+  shownTemplateIdentity
+} from './new-bot-draft'
 import { botShareErrorMessage } from './sharing/bot-share-error-copy'
 import {
   createNewBotFromShare,
   freeBotName,
+  sharedLook,
   sharedMascot,
   sharedPicturePng,
   type NewBotShareSource
@@ -126,6 +131,8 @@ export function NewBotDialog({
   )
   const [addHostMode, setAddHostMode] = useState<AddRemoteHostMode | null>(null)
   const [draft, setDraft] = useState(() => draftOf(proposal, initialPurpose))
+  const shown = shownDraft(proposal, draft, t)
+  const keepDraft = (next: typeof draft): void => setDraft(canonicalDraft(proposal, next, t))
   const hostChoice = useBotCreateHost(open, hosts, offerHostId)
   const { hostId, blocked } = hostChoice.host
   const hostBots = useHostBots(hostId)
@@ -139,18 +146,15 @@ export function NewBotDialog({
   const trimmedName = name.trim()
   const createdBot = useRef(false)
   const picture = useNewBotPicture(
-    useBotHostHas(hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY),
+    useNewBotHostLooks(hostId),
     fromShare ? sharedMascot(fromShare.review) : proposal?.mascot,
-    fromShare && sharedPicturePng(fromShare.review)
+    fromShare && sharedPicturePng(fromShare.review),
+    fromShare && sharedLook(fromShare.review)
   )
   // Pasted, dropped and uploaded pictures, from the dialog and the picture popover alike.
   const intake = useBotAvatarIntakeState({ onPicture: picture.placeUpload, undoable: false })
-  const prefilledIdentity = templateIdentity(proposal)
-  // An edited template identity becomes the bot's purpose, so it keeps the purpose's limit.
-  const identityTooLong =
-    prefilledIdentity !== undefined &&
-    draft.purpose.trim() !== prefilledIdentity &&
-    draft.purpose.trim().length > PURPOSE_MAX_LENGTH
+  const shownIdentity = shownTemplateIdentity(proposal, t)
+  const identityTooLong = templateIdentityTooLong(proposal, draft.purpose, t)
   const nameInvalid = submitted && !trimmedName
   // From Bot templates itself (Blank bot), the row would only lead back to it.
   const fromTemplates = useAppStore((state) => state.activeModal === 'bot-templates')
@@ -206,7 +210,7 @@ export function NewBotDialog({
           picture
         )
       } else {
-        const made = editedProposal(proposal, draft, trimmedName)
+        const made = editedProposal(proposal, draft, trimmedName, t)
         const offerHere = hostId === (offerHostId ?? LOCAL_EXECUTION_HOST_ID)
         bot = await createBot(hostId, {
           ...(made
@@ -223,6 +227,7 @@ export function NewBotDialog({
           ...agentSetup.setup,
           avatar: picture.avatar,
           avatarColor: picture.avatarColor,
+          avatarOutfit: picture.avatarOutfit,
           ...(takingOver ? { takingOver } : {})
         })
         bot = await picture.saveUpload(bot)
@@ -352,10 +357,10 @@ export function NewBotDialog({
               </NewBotPictureButton>
               {fromShare ? null : (
                 <NewBotPurposeField
-                  value={draft.purpose}
-                  prefilled={prefilledIdentity}
+                  value={shown.purpose}
+                  prefilled={shownIdentity}
                   tooLong={submitted && identityTooLong}
-                  onChange={(purpose) => setDraft({ ...draft, purpose })}
+                  onChange={(purpose) => keepDraft({ ...draft, purpose })}
                 />
               )}
             </div>
@@ -390,9 +395,9 @@ export function NewBotDialog({
             ) : proposal ? (
               <div className="border-t border-border pt-4">
                 <NewBotProposalFields
-                  draft={draft}
+                  draft={shown}
                   worktrees={proposal.worktrees}
-                  onChange={(fields) => setDraft({ ...draft, ...fields })}
+                  onChange={(fields) => keepDraft({ ...draft, ...fields })}
                 />
               </div>
             ) : null}

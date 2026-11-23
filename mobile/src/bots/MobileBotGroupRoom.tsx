@@ -1,3 +1,4 @@
+import { botFailureMessage } from './bot-failure-message'
 import { MobileBotGroupTranscript } from './MobileBotGroupTranscript'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileBotGroupReader } from './MobileBotGroupTurns'
@@ -136,10 +137,13 @@ export function MobileBotGroupRoom({
       )
       const refused = result.results.find((result) => !result.ok)
       if (refused) {
-        setError(refused.refusal?.message ?? 'Stop could not be confirmed.')
+        setError(
+          refused.refusal?.message ??
+            t('bots.groups.stopCouldNotBeConfirmed', 'Stop could not be confirmed.')
+        )
       }
     } catch (error) {
-      setError(String(error))
+      setError(botFailureMessage(error) ?? String(error))
     }
   }
   // The host takes a post to bots on other computers only from its own window, as the desktop says.
@@ -155,7 +159,7 @@ export function MobileBotGroupRoom({
       const result = groupNewThread.interpret(await groupNewThread.request(client, { groupId }))
       setThreadId(result.threadId)
     } catch (error) {
-      setError(String(error))
+      setError(botFailureMessage(error) ?? String(error))
     } finally {
       setStartingThread(false)
     }
@@ -310,7 +314,7 @@ export function MobileBotGroupRoom({
             return true
           } catch (error) {
             composerDraft.restoreRefused(text)
-            setError(String(error))
+            setError(botFailureMessage(error) ?? String(error))
             return false
           }
         }}

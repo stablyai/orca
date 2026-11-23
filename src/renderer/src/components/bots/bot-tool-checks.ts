@@ -1,5 +1,6 @@
 // What a bot's tools are and what is wrong with them, read on the host that runs it: the tools
 // themselves cheaply, and a check that starts the servers only for readers that show it.
+import { translate } from '@/i18n/i18n'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useBots } from '@/lib/bot-catalog'
 import { botRefKey, callBotRpc, isSameBot, type BotRef } from '@/lib/bot-hosts'
@@ -251,7 +252,15 @@ export function useBotTools(
           }
         }
         void held.problems.then(showProblems, () =>
-          showProblems(unconfirmed(own, 'The native check did not finish. Check again to retry.'))
+          showProblems(
+            unconfirmed(
+              own,
+              translate(
+                'bots.tools.checkUnfinished',
+                'The native check did not finish. Check again to retry.'
+              )
+            )
+          )
         )
       },
       (error: unknown) =>
