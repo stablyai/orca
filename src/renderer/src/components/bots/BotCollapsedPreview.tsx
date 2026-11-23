@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { HoverCardContent } from '@/components/ui/hover-card'
@@ -11,10 +11,9 @@ import {
   subscribeToBotChanges
 } from '@/lib/bot-catalog-snapshot'
 import {
-  botPreviewCapacity,
   botPreviewFacts,
   botPreviewSignal,
-  collapsedBotPreview
+  rankBotsForPreview
 } from '../../../../shared/bots/bot-collapsed-preview'
 import type { Bot } from '../../../../shared/bot-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
@@ -33,6 +32,7 @@ import { openBotHomePanelFromSidebar } from './BotRow'
 import { botErrorMessage } from './bot-presentation'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotHomeWorkers } from './use-bot-sidebar-arrangement'
+import { useBotPreviewScroll } from './use-bot-preview-scroll'
 
 export function useBotPreviewFacts(rows: { bot: Bot; home: FolderWorkspace }[]) {
   const homes = useMemo(() => rows.map(({ home }) => home), [rows])
@@ -106,33 +106,26 @@ export function BotCollapsedPreview({
         : null
     })
   )
-  const ref = useRef<HTMLSpanElement>(null)
-  const [width, setWidth] = useState(0)
   const [openCardKey, setOpenCardKey] = useState<string | null>(null)
-  useLayoutEffect(() => {
-    const node = ref.current
-    if (!node) {
-      return
-    }
-    const observer = new ResizeObserver(([entry]) => setWidth(entry!.contentRect.width))
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [])
   const current = facts.find(
     ({ bot }) =>
       activeChat?.workspaceId === folderWorkspaceKey(bot.folderWorkspaceId) &&
       activeChat.hostId === bot.hostId
   )
-  const preview = collapsedBotPreview(facts, botPreviewCapacity(width, facts.length), current)
-  if (
-    openCardKey !== null &&
-    !preview.shown.some(({ bot }) => botSidebarEntryKey(bot) === openCardKey)
-  ) {
+  const { previewRef, trackRef, trackWidth, badgeWidth, visibleCount, firstVisible } =
+    useBotPreviewScroll(facts.length, current && botSidebarEntryKey(current.bot))
+  const ranked = rankBotsForPreview(facts)
+  const hidden =
+    ranked.length > visibleCount
+      ? [...ranked.slice(0, firstVisible), ...ranked.slice(firstVisible + visibleCount)]
+      : []
+  if (openCardKey !== null && !ranked.some(({ bot }) => botSidebarEntryKey(bot) === openCardKey)) {
     setOpenCardKey(null)
   }
-  const hiddenAttention = preview.hidden.filter((fact) => botPreviewSignal(fact) === 'attention')
+  const hiddenAttention = hidden.filter((fact) => botPreviewSignal(fact) === 'attention')
+  const hiddenSignal = hidden[0] ? botPreviewSignal(hidden[0]) : null
   const overflowLabel = t('bots.section.showMore', 'Show {{count}} more bots', {
-    count: preview.hidden.length,
+    count: hidden.length,
     defaultValue_one: 'Show {{count}} more bot'
   })
   const openChat = (bot: Bot): void => {
@@ -151,12 +144,17 @@ export function BotCollapsedPreview({
   }
   return (
     <span
-      ref={ref}
-      className="pointer-events-none flex min-w-0 flex-1 items-center justify-start overflow-hidden p-1"
+      ref={previewRef}
+      className="pointer-events-none relative isolate flex min-w-0 flex-1 items-center justify-center gap-1 pr-1 pl-0.5"
       data-bot-preview=""
     >
-      <span className="isolate flex items-center gap-1">
-        {preview.shown.map((fact) => {
+      <span
+        ref={trackRef}
+        className="scrollbar-none relative flex min-w-0 items-center gap-1 overflow-x-auto p-1"
+        style={trackWidth === undefined ? undefined : { width: trackWidth }}
+        data-bot-preview-track=""
+      >
+        {ranked.map((fact) => {
           const key = botSidebarEntryKey(fact.bot)
           const isCurrent = fact === current
           const cardOpen = key === openCardKey
@@ -205,35 +203,36 @@ export function BotCollapsedPreview({
             </ActivityThreadHoverCardRoot>
           )
         })}
-        {preview.hidden.length > 0 ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label={
-                  hiddenAttention.length === 0
-                    ? overflowLabel
-                    : `${overflowLabel} · ${t('bots.connectors.needYou', '{{count}} need you', {
-                        count: hiddenAttention.length,
-                        defaultValue_one: '{{count}} needs you'
-                      })}`
-                }
-                className={cn(
-                  FACE_CLASS_NAME,
-                  'flex items-center justify-center bg-muted text-3xs font-medium text-muted-foreground ring-sidebar hover:ring-sidebar-ring'
-                )}
-                onClick={onExpand}
-              >
-                +{preview.hidden.length}
-                <PreviewPip signal={preview.hiddenSignal} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {preview.hidden.map((fact) => label(fact, t)).join(', ')}
-            </TooltipContent>
-          </Tooltip>
-        ) : null}
       </span>
+      {hidden.length > 0 ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label={
+                hiddenAttention.length === 0
+                  ? overflowLabel
+                  : `${overflowLabel} · ${t('bots.connectors.needYou', '{{count}} need you', {
+                      count: hiddenAttention.length,
+                      defaultValue_one: '{{count}} needs you'
+                    })}`
+              }
+              className={cn(
+                FACE_CLASS_NAME,
+                'flex items-center justify-center bg-muted text-3xs font-medium text-muted-foreground tabular-nums ring-sidebar hover:ring-sidebar-ring'
+              )}
+              style={{ width: badgeWidth }}
+              onClick={onExpand}
+            >
+              +{hidden.length}
+              <PreviewPip signal={hiddenSignal} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {hidden.map((fact) => label(fact, t)).join(', ')}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
     </span>
   )
 }

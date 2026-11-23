@@ -47,7 +47,7 @@ import { useBotSidebarArrangement } from './use-bot-sidebar-arrangement'
 import { ImportBotDialog } from './ImportBotDialog'
 import { botErrorMessage } from './bot-presentation'
 import { BotCollapsedPreview, useBotPreviewFacts } from './BotCollapsedPreview'
-import { collapsedBotPreview } from '../../../../shared/bots/bot-collapsed-preview'
+import { summarizeBotPreview } from '../../../../shared/bots/bot-collapsed-preview'
 import { openBotTemplates } from './templates/bot-templates-open'
 import { BotSidebarSearchButton, BotSidebarSearchHost } from './BotSidebarSearch'
 import { useBotCollapseAll } from './use-bot-collapse-all'
@@ -120,7 +120,7 @@ export function SidebarBotsSection({
   }
   const collapseAll = useBotCollapseAll(entries, savedEntries)
   const facts = useBotPreviewFacts(rows)
-  const preview = collapsedBotPreview(facts)
+  const preview = summarizeBotPreview(facts)
   // Bots reorder through the project-group header drag: one root bucket, each bot's order saved on its host.
   const botIdsByBucket = useMemo(
     () => new Map([[ROOT_PROJECT_GROUP_HEADER_BUCKET, entries.map(({ id }) => id)]]),
