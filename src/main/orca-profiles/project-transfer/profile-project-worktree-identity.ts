@@ -1,5 +1,5 @@
 import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 
 import type { Repo } from '../../../shared/repository/repo-types'
 import {

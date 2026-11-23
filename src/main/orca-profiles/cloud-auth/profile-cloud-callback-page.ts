@@ -1,3 +1,5 @@
+import type { ConnectCurrentOrcaProfileResult } from '../../../shared/orca-profiles/orca-profiles'
+
 export const ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS = {
   'cache-control': 'no-store',
   'content-security-policy':
@@ -7,56 +9,21 @@ export const ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS = {
   'x-content-type-options': 'nosniff'
 } as const
 
-export type OrcaCloudCallbackOutcome =
-  | { status: 'connected' }
-  | { status: 'cancelled' }
-  | { status: 'failed'; error: string }
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
-}
+// The standalone loopback callback mirrors renderer tokens without loading external assets.
+const escapeHtml = (text: string): string =>
+  text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`)
 
 const CHECK_MARK = '<path d="m5 12 4 4L19 6"></path>'
 const CROSS_MARK = '<path d="M18 6 6 18"></path><path d="m6 6 12 12"></path>'
 
-const CALLBACK_COPY = {
-  connected: {
-    title: 'Signed in to Orca',
-    message: 'You can close this tab and return to the app.',
-    tone: 'success',
-    markPath: CHECK_MARK
-  },
-  cancelled: {
-    title: 'Orca sign-in was cancelled',
-    message: 'Orca stopped waiting for this sign-in. Return to Orca to sign in again.',
-    tone: 'neutral',
-    markPath: CROSS_MARK
-  },
-  failed: {
-    title: 'Orca could not finish signing in',
-    message: 'Return to Orca and try again.',
-    tone: 'error',
-    markPath: CROSS_MARK
-  }
-} as const
-
-// The standalone loopback callback mirrors renderer tokens without loading external assets.
-export function orcaCloudCallbackPage(outcome: OrcaCloudCallbackOutcome): string {
-  const { title, message, tone, markPath } = CALLBACK_COPY[outcome.status]
-  const detail =
-    outcome.status === 'failed' ? `<p class="detail">${escapeHtml(outcome.error)}</p>` : ''
+function pageStart(title: string): string {
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
-    <title>${title}</title>
+    <title>${escapeHtml(title)}</title>
     <style>
       :root {
         --background: #fff;
@@ -64,7 +31,6 @@ export function orcaCloudCallbackPage(outcome: OrcaCloudCallbackOutcome): string
         --muted-foreground: #737373;
         --border: #e5e5e5;
         --success: #15803d;
-        --destructive: #e40014;
       }
       @media (prefers-color-scheme: dark) {
         :root {
@@ -73,7 +39,6 @@ export function orcaCloudCallbackPage(outcome: OrcaCloudCallbackOutcome): string
           --muted-foreground: #a1a1a1;
           --border: rgb(255 255 255 / 0.07);
           --success: #86efac;
-          --destructive: #ff6568;
         }
       }
       * { box-sizing: border-box; }
@@ -100,10 +65,12 @@ export function orcaCloudCallbackPage(outcome: OrcaCloudCallbackOutcome): string
         place-items: center;
         border: 1px solid var(--border);
         border-radius: 999px;
-        color: var(--success);
       }
-      .mark.neutral { color: var(--muted-foreground); }
-      .mark.error { color: var(--destructive); }
+      .mark.success { color: var(--success); }
+      .mark.failed { color: var(--muted-foreground); }
+      .mark.waiting { border-top-color: var(--foreground); animation: spin 0.9s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .mark.waiting { animation: none; } }
       .mark svg { width: 22px; height: 22px; }
       h1 {
         margin: 0;
@@ -118,24 +85,92 @@ export function orcaCloudCallbackPage(outcome: OrcaCloudCallbackOutcome): string
         font-size: 15px;
         line-height: 1.5;
       }
-      .detail {
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 12px;
-        overflow-wrap: anywhere;
-      }
     </style>
   </head>
   <body>
-    <main>
-      <div class="mark ${tone}" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          ${markPath}
-        </svg>
-      </div>
-      <h1>${title}</h1>
-      <p>${message}</p>
-      ${detail}
-    </main>
-  </body>
+`
+}
+
+function pageMain(
+  heading: string,
+  line: string | null,
+  mark: 'success' | 'failed' | 'waiting' | 'neutral',
+  className = ''
+): string {
+  const icon =
+    mark === 'waiting' || mark === 'neutral'
+      ? ''
+      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${mark === 'success' ? CHECK_MARK : CROSS_MARK}</svg>`
+  return `    <main${className ? ` class="${className}"` : ''}>
+      <div class="mark ${mark}" aria-hidden="true">${icon}</div>
+      <h1>${escapeHtml(heading)}</h1>
+${line === null ? '' : `      <p>${escapeHtml(line)}</p>\n`}    </main>
+`
+}
+
+const PAGE_END = `  </body>
 </html>`
+
+/** A whole page with one heading; `heading` is escaped, though it should be a fixed string of ours. */
+export function orcaCallbackSuccessPage(
+  heading: string,
+  line = 'You can close this tab and return to the app.'
+): string {
+  return `${pageStart(heading)}${pageMain(heading, line, 'success')}${PAGE_END}`
+}
+
+/**
+ * A page sent in two parts: the neutral first part as soon as the browser is back, and the outcome
+ * once the work it waits on is done, which hides the first part (no script runs on these pages).
+ */
+export const orcaCallbackReceivedPage = (): string =>
+  `${pageStart('Orca')}${pageMain('Finishing sign-in…', null, 'waiting', 'received')}`
+
+/** `ok: null` is no outcome yet, e.g. the tab stopped waiting while Orca still finishes. */
+export function orcaCallbackOutcome(outcome: {
+  ok: boolean | null
+  heading: string
+  line: string
+}): string {
+  const mark = outcome.ok === null ? 'neutral' : outcome.ok ? 'success' : 'failed'
+  return `    <style>.received { display: none; }</style>
+${pageMain(outcome.heading, outcome.line, mark)}${PAGE_END}`
+}
+
+export type OrcaCloudCallbackOutcome =
+  | { status: 'connected' }
+  | { status: 'cancelled' }
+  | { status: 'failed'; error: string }
+
+/** A connect that ended signed in (even through a newer tab) shows success; any other end but a failure is neutral. */
+export function orcaCloudCallbackOutcomeOf(
+  result: ConnectCurrentOrcaProfileResult
+): OrcaCloudCallbackOutcome {
+  if (result.status === 'failed') {
+    return { status: 'failed', error: result.error }
+  }
+  return { status: result.auth.state === 'connected' ? 'connected' : 'cancelled' }
+}
+
+/** How an Orca sign-in tab ends once the app has exchanged (or failed to exchange) its code. */
+export function orcaCloudCallbackOutcome(outcome: OrcaCloudCallbackOutcome): string {
+  if (outcome.status === 'connected') {
+    return orcaCallbackOutcome({
+      ok: true,
+      heading: 'Signed in to Orca',
+      line: 'You can close this tab and return to the app.'
+    })
+  }
+  if (outcome.status === 'cancelled') {
+    return orcaCallbackOutcome({
+      ok: null,
+      heading: 'Orca sign-in was cancelled',
+      line: 'Orca stopped waiting for this sign-in. Return to Orca to sign in again.'
+    })
+  }
+  return orcaCallbackOutcome({
+    ok: false,
+    heading: 'Orca could not finish signing in',
+    line: `Return to Orca and try again. (${outcome.error})`
+  })
 }

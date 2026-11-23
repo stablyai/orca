@@ -1,5 +1,5 @@
 import { cancelUnreadResponseBody } from '../../../lib/unread-response-body'
-import { readFetchResponseJsonWithinLimit } from '../../../../shared/fetch-response-body'
+import { readFetchResponseJsonWithinLimit } from '../../../../shared/network/fetch-response-body'
 import { RelayRegionCatalogSchema, type RelayRegionCatalog } from './relay-region-probe'
 
 const CATALOG_MAX_BYTES = 16 * 1024

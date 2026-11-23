@@ -1,6 +1,6 @@
 // Type-only, so the cycle back through workspace-cleanup-filter-model erases at build.
 import type { WorkspaceCleanupBrowseState } from './workspace-cleanup-browse-state'
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { HostedReviewProvider } from '../source-control/hosted-review/hosted-review-contracts'
 import { getWorkspaceCleanupCandidateHostId } from './workspace-cleanup-host-identity'
 import type { WorktreeAtRiskLocalFiles } from '../worktree/removal/at-risk-local-files'

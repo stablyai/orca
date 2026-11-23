@@ -1,5 +1,5 @@
 // Windowless main-owned layout fixture: apply in memory and notify writes so terminal listings refresh.
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
@@ -9,7 +9,7 @@ import { resolveHostId } from '../../../persistence/loading-store/workspace-sess
 import {
   withDurableRuntimeStore,
   withRuntimePaneAdmission
-} from '../../orca-runtime-tests/runtime-durable-store-fixture'
+} from '../../construction/test-context/runtime-durable-store-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
 export const REPO = {

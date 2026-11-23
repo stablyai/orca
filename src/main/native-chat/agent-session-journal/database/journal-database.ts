@@ -11,6 +11,7 @@ import {
 } from './journal-database-schema'
 import { ensurePRWatchTables } from '../../../github/pr-watch/pr-watch-tables'
 import { JournalUnreleasedSchemaError } from '../replay/journal-open-failure'
+import { readForgottenJournalChats } from '../journal-forgotten-chats'
 import { ensureQueuedMessagesTable } from '../queued-messages/queued-message-schema'
 import { ensureCommandReceiptsTable } from '../writing/command-receipt-schema'
 import { ensureAgentSessionAttachmentClaimTables } from '../../agent-session-attachments/agent-session-attachment-claims'
@@ -37,9 +38,13 @@ export function journalDatabaseHoldsAgentSessions(dbPath: string): boolean {
         .all()
         .map(({ name }) => name)
     )
-    return ['agent_session_records', 'agent_session_tabs'].some(
-      (table) =>
-        tables.has(table) && db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get() !== undefined
+    return (
+      ['agent_session_records', 'agent_session_tabs'].some(
+        (table) =>
+          tables.has(table) && db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get() !== undefined
+      ) ||
+      // Deleted chats whose rows are still being removed: opening the store finishes them.
+      (tables.has('agent_session_store_meta') && readForgottenJournalChats(db, null).length > 0)
     )
   } finally {
     db.close()

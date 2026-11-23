@@ -9,10 +9,10 @@ import type {
   BuiltInWorktreeVisibilitySourceId,
   CustomWorktreeVisibilitySource,
   ExternalWorktreeVisibility,
-  Repo
+  Repo,
+  WorktreeVisibilityDefaults
 } from '../../../../../../shared/repository/repo-types'
 import type { DetectedWorktree } from '../../../../../../shared/worktree/types'
-import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
 import {
   createWorktreeVisibilitySourceMatcher,
   effectiveDefaultBuiltInWorktreeSourceVisibility,

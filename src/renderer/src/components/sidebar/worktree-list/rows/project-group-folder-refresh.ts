@@ -4,7 +4,7 @@ import type { AppState } from '@/store/types'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison

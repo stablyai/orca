@@ -10,6 +10,7 @@ import { prepareWorkerStart } from '../../../rpc/methods/orchestration/worker/wo
 import { resolveFederatedWorkerStartBudgets } from '../../../rpc/methods/orchestration/worker/start/launch/worker-start-budgets'
 import { OrchestrationError } from '../../orchestration-error'
 import { prepareWorkerStartCard } from '../../workers/launch/worker-start-card'
+import { workerLaunchAgent } from '../../workers/launch/worker-launch-observation'
 import { getOrchestrationPeerCapabilityCache } from '../orchestration-peer-capability-cache'
 import type { OrchestrationWorkerServer } from '../environment-transport'
 import {
@@ -17,11 +18,20 @@ import {
   releaseRemotePlacement,
   reserveRemotePlacement
 } from '../../db/remote-owned/remote-placements'
-import { refuseTaskOfClosedPairing } from '../../db/remote-owned/remote-placement-hold'
+import {
+  markRemotePlacementNeverSent,
+  refuseTaskOfClosedPairing
+} from '../../db/remote-owned/remote-placement-hold'
 import { openRemoteRunLink } from '../../db/remote-owned/remote-run-links'
 import { callRemoteOwnedServer } from './remote-owned-calls'
+import { resolveCrossMachineChildParent } from '../cross-machine-child-parent'
 import { remoteForwardKey } from './remote-forward-caller'
-import { errorData, inServerTerms, serverNeverAnswered } from './remote-owned-answers'
+import {
+  errorData,
+  failedBeforeSending,
+  inServerTerms,
+  serverNeverAnswered
+} from './remote-owned-answers'
 
 type StartParams = z.infer<typeof WorkerStartParams>
 type StartContext = Pick<
@@ -61,6 +71,7 @@ const StartedOnServer = z.object({
   dispatchId: z.string().min(1),
   run: z.object({ id: z.string().min(1) }).optional(),
   agent: z.string().nullable().optional(),
+  launch: z.unknown().optional(),
   state: z.string().optional()
 })
 
@@ -88,6 +99,11 @@ export async function startRemoteOwnedWorker(
   )
   const db = runtime.getOrchestrationDb()
   const server = await runtime.resolveOrchestrationWorkerServer(params.on!)
+  // This caller's workspace is here, so a server's new-child nests under it across machines.
+  const crossStoreParent =
+    params.worktree === 'new-child'
+      ? await resolveCrossMachineChildParent(runtime, params.from, ctx.orchestrationCaller)
+      : undefined
   const { run } = bindRun()
   // An older CLI sends no request ID; the start still runs, but a retry cannot find it.
   const forward = remoteForwardKey(runtime, ctx, params.from, callerRequestId ?? randomUUID())!
@@ -98,7 +114,7 @@ export async function startRemoteOwnedWorker(
   const link = openRemoteRunLink(db, run.id, server, (handle, type) =>
     runtime.notifyMessageArrived(handle, type)
   )
-  const { task } = reserveRemotePlacement(db, {
+  const { task, nothingSent } = reserveRemotePlacement(db, {
     link,
     taskId,
     requestKey: forward.key,
@@ -126,6 +142,7 @@ export async function startRemoteOwnedWorker(
     parent: _parent,
     ...options
   } = params
+  const startCard = prepareWorkerStartCard(runtime, ctx.orchestrationCaller)
   let receipt: unknown
   try {
     receipt = await callRemoteOwnedServer(runtime, link, {
@@ -136,7 +153,8 @@ export async function startRemoteOwnedWorker(
         ...(params.retryOf
           ? { task: task.id }
           : { spec: task.spec, ...(task.task_title ? { taskTitle: task.task_title } : {}) }),
-        adoptTaskId: task.id
+        adoptTaskId: task.id,
+        ...(crossStoreParent ? { crossStoreParent } : {})
       },
       timeoutMs: budgets.attachDeadlineMs,
       requestId: forward.key,
@@ -148,19 +166,22 @@ export async function startRemoteOwnedWorker(
       taskId,
       error,
       key: forward.key,
-      createdByStart: !existingTask
+      createdByStart: !existingTask,
+      nothingSent
     })
     throw inServerTerms(error, { server: server.name, forward })
   }
   const started = StartedOnServer.safeParse(receipt)
   if (started.success) {
+    // The server's receipt names the agent in its launch, as a local start's does.
+    const agent = started.data.agent ?? workerLaunchAgent(started.data.launch)
     const recorded = recordRemoteStart(db, {
       conversationId: link.conversation_id,
       taskId,
       dispatchId: started.data.dispatchId,
       requestKey: forward.key,
       peerRunId: started.data.run?.id,
-      agent: started.data.agent ?? null
+      agent
     })
     if (!recorded) {
       // A reset already removed the reservation; a re-made pairing keeps it, so a later start of the Task there is refused here.
@@ -170,18 +191,14 @@ export async function startRemoteOwnedWorker(
         { server: server.name }
       )
     }
-    // As local and attached starts do: a start the server could not ready leaves no card.
-    if (started.data.state === 'ready') {
-      prepareWorkerStartCard(
-        runtime,
-        ctx.orchestrationCaller
-      )({
-        dispatchId: started.data.dispatchId,
-        workerAddress: `dispatch:${started.data.dispatchId}`,
-        task: task.spec,
-        agent: started.data.agent ?? null
-      })
-    }
+    startCard({
+      // As local and attached starts do: a start the server could not ready leaves no card.
+      ready: started.data.state === 'ready',
+      dispatchId: started.data.dispatchId,
+      taskId: task.id,
+      workerAddress: `dispatch:${started.data.dispatchId}`,
+      task: task.spec
+    })
   }
   const answer = inServerTerms(receipt, { server: server.name, forward })
   return withRun(
@@ -207,6 +224,7 @@ function settleUnansweredStart(
     key: string
     error: unknown
     createdByStart: boolean
+    nothingSent: boolean
   }
 ): void {
   const db = runtime.getOrchestrationDb()
@@ -226,5 +244,7 @@ function settleUnansweredStart(
   } else if (!outcomeUnknown) {
     // The server's ordinary start refused it, which a start that had launched answers with a receipt.
     releaseRemotePlacement(db, start.taskId, start.key, { createdByStart: start.createdByStart })
+  } else if (start.nothingSent && failedBeforeSending(start.error)) {
+    markRemotePlacementNeverSent(db, start.taskId, start.key)
   }
 }

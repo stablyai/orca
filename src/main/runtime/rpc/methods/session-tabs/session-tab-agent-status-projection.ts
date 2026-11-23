@@ -1,4 +1,4 @@
-import { AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
@@ -7,7 +7,7 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type { TabGroupLayoutNode } from '../../../../../shared/tab-types'
+import type { TabGroupLayoutNode } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   clientRendersStructuredAgent,
   supportsStructuredAgentSessions

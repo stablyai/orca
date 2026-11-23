@@ -10,11 +10,7 @@ import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { FeatureTipActions } from './FeatureTipActions'
 import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
-import {
-  FeatureTipDialogFrame,
-  FeatureTipEyebrow,
-  FeatureTipSettingsLine
-} from './FeatureTipDialogFrame'
+import { FeatureTipDialogFrame, FeatureTipSettingsLine } from './FeatureTipDialogFrame'
 import { SessionSearchFeatureTipVisual } from './SessionSearchFeatureTipVisual'
 import type { SessionSearchTipStage } from './use-session-search-tip-setup'
 
@@ -125,7 +121,6 @@ export function SessionSearchTipDialog({
     >
       <DialogHeader className="gap-4 text-left">
         <div>
-          <FeatureTipEyebrow label={getLocalizedFeatureTipCopy(tip).eyebrow} />
           <DialogTitle className="text-2xl font-semibold leading-tight tracking-tight md:text-[1.75rem]">
             {copy.title}
           </DialogTitle>

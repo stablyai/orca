@@ -7,7 +7,7 @@
 //   G1_ADMIN_KEY_FILE=<file with the edge admin signing key> G1_ADMIN_ISSUER=<edge ADMIN_ISSUER> \
 //   npx tsx test/g1-front-door.ts
 // Optional: G1_JWT_KEYS (default spike/.keys.json: the test JWKS the staging edge trusts),
-// G1_JWT_ISSUER, G1_INGRESS_NAME (default cn), G1_HOLD_MS, G1_PREAUTH_PROBES (default 0: skip),
+// G1_JWT_ISSUER, G1_INGRESS_NAME (default cn), G1_HOLD_MS,
 // G1_OUT (write the results as JSON), G1_PHASES (default g1,g4). Prints no secrets or tokens.
 // G4 (folded in): a burst of G4_HANDSHAKES (300) handshakes, G4_CONCURRENCY (25) at a time, then
 // G4_SOCKETS (50) parallel control sockets held G4_HOLD_MS (60 s). Every request reaches Cloudflare
@@ -28,7 +28,6 @@ import {
   newHost,
   oversizeControl,
   phoneHello,
-  preauthStatus,
   sha,
   sleep,
   unauthenticatedControl,
@@ -47,7 +46,6 @@ const ADMIN = { key: readFileSync(required('G1_ADMIN_KEY_FILE'), 'utf8').trim(),
 const KEYS = process.env.G1_JWT_KEYS ?? new URL('../spike/.keys.json', import.meta.url).pathname
 const INGRESS_NAME = process.env.G1_INGRESS_NAME ?? 'cn'
 const HOLD_MS = Number(process.env.G1_HOLD_MS ?? 10 * 60_000)
-const PREAUTH_PROBES = Number(process.env.G1_PREAUTH_PROBES ?? 0)
 const ACCOUNT: Account = {
   user: `user-g1-${randomBytes(4).toString('hex')}`,
   epoch: 1,
@@ -184,13 +182,6 @@ async function g1(key: KeyLike): Promise<void> {
   await waitFor(() => idlePhone.state.closed !== null, 45_000)
   record('G1.9 after the hold, the edge close code reaches the phone (4408 peer dropped, not 1006)', idlePhone.state.closed === 4408, `phone close=${idlePhone.state.closed} reason=${idlePhone.state.reason}`)
 
-  // G1.10 Optional: pre-auth limiting through the front door (keyed on this client's address).
-  if (PREAUTH_PROBES > 0) {
-    const probeHost = newHost().relayHostId
-    const statuses: number[] = []
-    for (let i = 0; i < PREAUTH_PROBES; i++) { statuses.push(await preauthStatus(FRONT, probeHost)) }
-    record('G1.10 pre-auth probes through the front door (informational)', statuses.includes(426), `first=${statuses[0]} limitedFrom=${statuses.indexOf(429)} last=${statuses.at(-1)}`)
-  }
 }
 
 // ---- G4: the zone's view of traffic concentrated on the front door's few egress IPs ----

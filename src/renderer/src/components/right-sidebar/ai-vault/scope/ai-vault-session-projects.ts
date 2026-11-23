@@ -6,7 +6,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { ProjectHostSetupProjection } from '../../../../../../shared/project/host-setup/project-host-setup-projection'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'

@@ -1,10 +1,14 @@
-import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
 } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+import {
+  collectMembershipRewrites,
+  type MembershipRewrites
+} from './workspace-session-membership-rewrites'
 import { pruneTabGroupLayoutAfterRetirement } from './mobile-session-terminal-retirement'
 
 function collectLeafIds(node: TerminalPaneLayoutNode | null, ids: Set<string>): void {
@@ -146,9 +150,11 @@ function rebaseIncarnationBindings(
   return Object.keys(retained).length > 0 ? retained : undefined
 }
 
+/** `rewrites`, when given, collects what the rebase changed beyond `incoming`. */
 export function rebaseWorkspaceSessionTerminalMembership(
   incoming: WorkspaceSessionState,
-  prior: WorkspaceSessionState | undefined
+  prior: WorkspaceSessionState | undefined,
+  rewrites?: MembershipRewrites
 ): WorkspaceSessionState {
   if (!prior?.terminalTopologyRevisionByRepoId) {
     return incoming
@@ -172,6 +178,7 @@ export function rebaseWorkspaceSessionTerminalMembership(
   let includeTabGroups = incoming.tabGroups !== undefined
   let includeTabGroupLayouts = incoming.tabGroupLayouts !== undefined
   let rebasedMembership = false
+  const rebased: { worktreeId: string; tabIds: string[] }[] = []
   const worktreeIds = new Set([
     ...Object.keys(prior.tabsByWorktree),
     ...Object.keys(incoming.tabsByWorktree)
@@ -186,6 +193,14 @@ export function rebaseWorkspaceSessionTerminalMembership(
     }
     rebasedMembership = true
     const currentTabs = prior.tabsByWorktree[worktreeId] ?? []
+    if (rewrites) {
+      rebased.push({
+        worktreeId,
+        tabIds: [...currentTabs, ...(incoming.tabsByWorktree[worktreeId] ?? [])].map(
+          (tab) => tab.id
+        )
+      })
+    }
     const candidateTabsById = new Map(
       (incoming.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
     )
@@ -274,7 +289,15 @@ export function rebaseWorkspaceSessionTerminalMembership(
         }
       : {})
   }
-  return rebasedMembership
-    ? { ...next, terminalPtyIncarnationsByPaneKey: rebaseIncarnationBindings(next, prior) }
-    : next
+  if (!rebasedMembership) {
+    return next
+  }
+  const rebasedNext = {
+    ...next,
+    terminalPtyIncarnationsByPaneKey: rebaseIncarnationBindings(next, prior)
+  }
+  if (rewrites) {
+    collectMembershipRewrites(incoming, rebasedNext, rebased, rewrites)
+  }
+  return rebasedNext
 }

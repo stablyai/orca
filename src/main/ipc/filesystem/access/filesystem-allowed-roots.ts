@@ -1,6 +1,9 @@
 import { isAbsolute, resolve } from 'node:path'
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
-import { computeWorkspaceRootWithin, getWorktreePathSettings } from '../../worktree-logic'
+import {
+  computeWorkspaceRootWithin,
+  getWorktreePathSettings
+} from '../../worktrees/paths/worktree-logic'
 import { wslHomeUnlessStopped } from '../../../wsl/discovery/wsl-home-unless-stopped'
 import { getWorktreeMirrorDistroForRuntime } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/execution-host/local-project-runtime-resolution'
@@ -13,7 +16,7 @@ import {
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { hasRemoteFilesystemOwner } from '../../remote-filesystem-owner'
+import { hasRemoteFilesystemOwner } from './remote-filesystem-owner'
 
 type FolderScopeStore = Pick<RuntimeStore, 'getRepos'> &
   Partial<Pick<RuntimeStore, 'getProjectGroups' | 'getFolderWorkspaces'>>

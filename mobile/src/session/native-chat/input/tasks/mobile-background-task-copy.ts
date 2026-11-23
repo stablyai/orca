@@ -1,7 +1,7 @@
 import type {
   BackgroundTaskCopyId,
   BackgroundTaskSay
-} from '../../../../../../src/shared/background-task-copy'
+} from '../../../../../../src/shared/agent-status/presentation/background-tasks/background-task-copy'
 import { translate } from '../../../../i18n/mobile-i18n'
 
 export const sayMobileBackgroundTask: BackgroundTaskSay = (id, values) => {

@@ -3,7 +3,7 @@ import {
   agentPermissionHostPlatform,
   permissionEnvNameMatches
 } from '../permissions/agent-permission-env'
-import type { GlobalSettings } from '../../global-settings-types'
+import type { GlobalSettings } from '../../settings/global-settings-types'
 import { isTuiAgent } from '../catalog/tui-agent-config'
 import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from '../permissions/tui-agent-permissions'
 import {

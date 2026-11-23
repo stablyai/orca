@@ -1,4 +1,5 @@
 import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
+import { quoteMarkdownNoteExcerpt } from '../../../../../../shared/file-review/diff-comments-format'
 import { getDiffCommentLineLabel } from '../../../source-control/review/comments/diff-comment-compat'
 
 const MAX_EXCERPT_LINES = 8
@@ -179,7 +180,7 @@ function escapeMarkdownReviewNoteBody(body: string): string {
 
 function formatMarkdownReviewNoteDetails(note: MarkdownReviewNote, content: string): string {
   const excerpt = note.selectedText
-    ? quoteMarkdownReviewText(getMarkdownReviewHighlightedText(content, note))
+    ? quoteMarkdownNoteExcerpt(getMarkdownReviewHighlightedText(content, note))
     : getMarkdownReviewExcerpt(content, note)
   const parts = [
     getDiffCommentLineLabel(note),
@@ -187,10 +188,6 @@ function formatMarkdownReviewNoteDetails(note: MarkdownReviewNote, content: stri
     `User comment: "${escapeMarkdownReviewNoteBody(note.body)}"`
   ]
   return parts.filter((part): part is string => part !== null).join('\n')
-}
-
-function quoteMarkdownReviewText(text: string): string {
-  return `> ${text.replace(/\r\n|\r|\n/g, '\n> ')}`
 }
 
 export function formatMarkdownReviewNotes(

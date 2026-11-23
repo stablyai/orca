@@ -9,14 +9,14 @@ import {
 import { detectAgentStatusFromTitle } from '../../../../../../shared/agent-status/title/agent-title-status'
 import { getAgentLabel } from '../../../../../../shared/agent-status/title/agent-title-identity'
 import { jcodePaneTitleStatus } from '../../../../../../shared/agent-status/title/providers/jcode-terminal-title'
-import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
   AgentStatusState,
   AgentType
 } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { FIRST_PANE_ID } from '../../../../../../shared/pane-key'
+import { FIRST_PANE_ID } from '../../../../../../shared/workspace-layout/pane-key'
 import {
   resolveRuntimePaneTitleLeafIdFromRoot,
   resolveRuntimePaneTitleLeafIdFromSparseSlots,

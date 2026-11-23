@@ -8,7 +8,7 @@ import type {
   ComputerListWindowsResult,
   ComputerProviderCapabilities,
   ComputerSnapshotResult
-} from '../../../shared/computer-use-runtime-types'
+} from '../../../shared/computer/computer-use-runtime-types'
 import {
   actionCapabilityKey,
   bridgeTool,

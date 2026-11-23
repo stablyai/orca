@@ -15,9 +15,9 @@ import { startTerminalTabProviderRetirement } from './terminal-tab-close-provide
 import { stopLegacyRelayBridgedShellsForTab } from './legacy-relay-bridged-tab-close'
 import { commitTerminalSurfaceClose } from './terminal-surface-close-intent'
 import { recordTerminalTabCloseThroughLayoutOwner } from './terminal-tab-close-layout-owner'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { omitUnverifiedPtyLossTabIds } from '../pty/terminal-unverified-pty-loss'
-import { removePaneKeysByTabPrefix } from '../../slices/agent-status/agent-status-pane-keyed-records'
+import { removePaneKeysByTabPrefix } from '../../slices/agent-status/pane-authority/agent-status-pane-keyed-records'
 import { removeTabsAttention } from '../../slices/workspace-attention/subject-attention-transitions'
 import { omitRecordKeys } from '../../slices/worktrees/teardown/record-key-omission'
 import { deleteNativeChatComposerDraftsForTab } from '@/components/native-chat/drafts/native-chat-composer-draft-removal'
@@ -26,7 +26,7 @@ import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-session/launch/pane
 import { settleAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent-launch-pane-start'
 import { settleAttentionRemovedBy } from '../../slices/workspace-attention/attention-removal-follow-up'
 import { runAsAutomaticDeselection } from '../../workspaces/selection/active-worktree-deselection-intent'
-import { recordDraft, tabBucketDraft } from '../../keyed-record-transitions'
+import { recordDraft, tabBucketDraft } from '../../record-transitions/keyed-record-transitions'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,

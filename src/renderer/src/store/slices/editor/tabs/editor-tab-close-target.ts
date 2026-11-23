@@ -1,6 +1,6 @@
 import type { OpenFile } from '../types/open-file'
 import type { AppState } from '../../../types'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { editorBufferIdOfView, editorBufferSiblingViewIds } from '../buffers/editor-buffer-views'
 import { needsSavePromptOnClose } from '../buffers/editor-buffer-close-rule'
 import {

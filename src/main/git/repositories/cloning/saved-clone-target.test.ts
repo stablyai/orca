@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { reuseSavedCloneTarget } from './saved-clone-target'
 

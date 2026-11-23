@@ -1,5 +1,5 @@
 import { emulatorDevicePreference } from '../../emulator/emulator-opening-preference'
-import type { BrowserWindow } from 'electron'
+import { getRuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
 import type { EmulatorBridge } from '../../emulator/emulator-bridge'
 import { EmulatorError } from '../../emulator/emulator-errors'
 import { emulatorFailureText } from '../../../shared/emulator/emulator-failure-copy'
@@ -14,7 +14,7 @@ import { assertWorktreeInputNotShadowedByDeviceHub } from '../../emulator/emulat
 import type { EmulatorActiveSession, EmulatorSessionInfo } from '../../emulator/emulator-types'
 import type { SimulatorDevice } from '../../emulator/simctl-simulator-devices'
 import type { EmulatorDevice } from '../../emulator/backends/emulator-backend'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 
 type EmulatorHostSettings = Pick<
   GlobalSettings,
@@ -29,7 +29,7 @@ export type RuntimeEmulatorCommandHost = {
   getEmulatorBridge(): EmulatorBridge | null
   resolveEmulatorWorkspaceId(selector: string): Promise<string>
   resolveEmulatorCleanupWorkspaceId(selector: string): Promise<string>
-  getAuthoritativeWindow(): BrowserWindow
+  getAuthoritativeWindowId(): number
   getSettings(): EmulatorHostSettings
   updateEmulatorSettings?(updates: Pick<GlobalSettings, 'mobileEmulatorRecentDevices'>): void
 }
@@ -86,13 +86,15 @@ export class RuntimeEmulatorCommands {
 
   async emulatorType(params: {
     text: string
+    paste?: boolean
     device?: string
     emulator?: string
     worktree?: string
   }): Promise<{ ok: true }> {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveWorktreeId(params.worktree)
-    await bridge.type(params.text, { device: params.device ?? params.emulator, worktreeId })
+    const target = { device: params.device ?? params.emulator, worktreeId }
+    await bridge.type(params.text, target, params.paste === true)
     return RuntimeEmulatorCommands.OK
   }
 
@@ -121,6 +123,15 @@ export class RuntimeEmulatorCommands {
       worktreeId
     })
     return RuntimeEmulatorCommands.OK
+  }
+
+  // The pane sends physical keys only once the simulator's hardware layout matches the Mac's.
+  async emulatorSyncKeyboardLayout(params: {
+    worktree?: string
+  }): Promise<{ physicalKeys: boolean }> {
+    const bridge = this.requireEmulatorBridge()
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
+    return { physicalKeys: await bridge.syncKeyboardLayout({ worktreeId }) }
   }
 
   // Pane touches skip main, so the pane asks whether the active simulator still accepts input.
@@ -291,7 +302,11 @@ export class RuntimeEmulatorCommands {
   // Shutdown may already have destroyed the window; send best-effort.
   private sendToRenderer(channel: string, payload: unknown): void {
     try {
-      this.host.getAuthoritativeWindow().webContents.send(channel, payload)
+      getRuntimeDesktopSurface().sendToWindow(
+        this.host.getAuthoritativeWindowId(),
+        channel,
+        payload
+      )
     } catch {}
   }
 

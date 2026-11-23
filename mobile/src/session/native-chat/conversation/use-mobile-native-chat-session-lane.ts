@@ -1,6 +1,10 @@
 import { useCallback } from 'react'
+import type { MobileSessionItemLink } from '../../mobile-session-item-target'
 import type { MobileComposerWriter } from '../composer/drafts/mobile-native-chat-draft-store'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
+import { useMobileWorkerApprovals } from '../input/prompts/use-mobile-worker-approvals'
+import { useMobilePairedServerAsks } from '../input/prompts/use-mobile-paired-server-asks'
+import type { MobileNativeChatController } from '../mobile-native-chat-controller-contract'
 import type { StructuredAgentSessionHostSupport } from '../agent-session/mobile-structured-agent-session-host-support'
 import type { ConnectionState } from '../../../transport/connection/connection-state'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
@@ -24,8 +28,10 @@ export function useMobileNativeChatSessionLane({
   connState,
   onSendError,
   onQueuedEditNotice,
-  onActionResolved
+  onActionResolved,
+  itemLink
 }: {
+  itemLink?: MobileSessionItemLink
   client: RpcClient | null
   pairedHostClient: RpcClient | null
   hostId: string
@@ -45,6 +51,11 @@ export function useMobileNativeChatSessionLane({
   structuredSession: ReturnType<typeof useMobileStructuredAgentSession>
   session: ReturnType<typeof useMobileNativeChatSession>
   sessionCommands: ReturnType<typeof useMobileStructuredSessionCommands>
+  /** What the chat's controller shows from this lane as is. */
+  controllerFields: Pick<
+    MobileNativeChatController,
+    'nativeChatSessionCommands' | 'nativeChatWorkerApprovals'
+  >
 } {
   const appendComposerText: MobileComposerWriter = Object.assign(
     useCallback((text: string) => appendComposerTextRef.current(text), [appendComposerTextRef]),
@@ -68,6 +79,7 @@ export function useMobileNativeChatSessionLane({
     transcriptPath: structured ? null : (resolution?.transcriptPath ?? null)
   })
   const structuredSession = useMobileStructuredAgentSession({
+    itemLink,
     client,
     hostId,
     pairedHostClient,
@@ -87,9 +99,29 @@ export function useMobileNativeChatSessionLane({
     onQueuedEditNotice,
     ...(onActionResolved ? { onActionResolved } : {})
   })
+  // A coordinator's workers report to its session, on the host that runs them.
+  const workerApprovals = useMobileWorkerApprovals({
+    client,
+    connState,
+    // A terminal chat's id is its agent's own, never an Orca session a worker reports to.
+    sessionId: structured ? sessionId : null,
+    onAnswered: onActionResolved,
+    onAnswerError: onSendError
+  })
+  // Asks from paired servers' agents wait in this agent's Home chat on its host.
+  const pairedServerAsks = useMobilePairedServerAsks({
+    client,
+    connState,
+    sessionId: structured ? sessionId : null,
+    onAnswerError: onSendError
+  })
   return {
     structuredSession,
     session: structured ? structuredSession.session : bridgeSession,
-    sessionCommands
+    sessionCommands,
+    controllerFields: {
+      nativeChatSessionCommands: sessionCommands,
+      nativeChatWorkerApprovals: { ...workerApprovals, pairedServerAsks }
+    }
   }
 }

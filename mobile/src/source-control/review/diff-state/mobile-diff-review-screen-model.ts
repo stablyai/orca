@@ -48,6 +48,7 @@ export type ReviewDiffState =
       truncated: boolean
     }
   | { kind: 'binary'; itemKey: string }
+  | { kind: 'image'; itemKey: string; dataUri: string }
   | { kind: 'too-large'; itemKey: string; byteLength?: number }
   | { kind: 'deleted'; itemKey: string }
   | { kind: 'error'; itemKey: string; message: string }

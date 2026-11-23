@@ -1,4 +1,4 @@
-// Why 3 s: Claude records a hook's answer at once (probe F2); longer means it was not taken.
+// Why 3 s: Claude repaints and records a close at once; an allowed tool's result can come much later.
 const WAIT_MS = 3_000
 const RETRY_MS = 100
 

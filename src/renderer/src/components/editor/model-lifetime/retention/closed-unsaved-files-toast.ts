@@ -8,6 +8,11 @@ import {
 } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import { createUntitledMarkdownFile } from '@/lib/editor/file-operations/create-untitled-markdown'
 import { translate } from '@/i18n/i18n'
+import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
+import {
+  recordSelfWrite,
+  SELF_WRITE_REMOTE_TTL_MS
+} from '../../external-changes/editor-self-write-registry'
 
 function closedUnsavedFilesToastTitle(count: number, workspace: string): string {
   return translate(
@@ -21,9 +26,10 @@ function closedUnsavedFilesToastTitle(count: number, workspace: string): string 
   )
 }
 
-/** Recovery creates new files only in the active workspace, never at the removed paths. */
+/** Recovery creates new files only in the active workspace, never at the removed paths; `asDirtyDrafts` keeps the text unsaved in an empty untitled file. */
 export async function reopenClosedUnsavedFiles(
-  closed: readonly ClosedUnsavedFile[]
+  closed: readonly ClosedUnsavedFile[],
+  { asDirtyDrafts = false }: { asDirtyDrafts?: boolean } = {}
 ): Promise<ClosedUnsavedFile[]> {
   const failed: ClosedUnsavedFile[] = []
   for (const file of closed) {
@@ -60,7 +66,9 @@ export async function reopenClosedUnsavedFiles(
         context.connectionId,
         context.target,
         {
-          recoveredDocument: { originalPath: file.filePath, content: file.content },
+          recoveredDocument: asDirtyDrafts
+            ? { originalPath: file.filePath }
+            : { originalPath: file.filePath, content: file.content },
           operationProvenance,
           expectedSshConnectionGeneration: context.expectedSshConnectionGeneration,
           expectedSshTargetId: context.expectedSshTargetId,
@@ -73,7 +81,19 @@ export async function reopenClosedUnsavedFiles(
             )
         }
       )
-      useAppStore.getState().openFile(fileInfo, { preview: false, focusEditor: true })
+      const store = useAppStore.getState()
+      const fileId = store.openFile(fileInfo, { preview: false, focusEditor: !asDirtyDrafts })
+      if (asDirtyDrafts) {
+        const runtimeEnvironmentId = useAppStore
+          .getState()
+          .openFiles.find((open) => open.id === fileId)?.runtimeEnvironmentId
+        // Why: our own create's watcher echo would otherwise flag the dirty tab as changed on disk.
+        recordSelfWrite(fileInfo.filePath, '', runtimeEnvironmentId, SELF_WRITE_REMOTE_TTL_MS)
+        // Why: this create made the file empty; without that baseline every save is refused as stale.
+        store.setLastKnownDiskSignature(fileId, getDiskBaselineSignature(''))
+        store.setEditorDraft(fileId, file.content)
+        store.markFileDirty(fileId, true)
+      }
     } catch (error) {
       failed.push(file)
       console.warn('[editor] could not reopen closed unsaved file', {
@@ -82,7 +102,7 @@ export async function reopenClosedUnsavedFiles(
       })
     }
   }
-  if (failed.length > 0) {
+  if (failed.length > 0 && !asDirtyDrafts) {
     toast.error(
       translate(
         'components.workspace.delete.unsavedEdits.reopenFailed',

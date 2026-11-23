@@ -1,12 +1,12 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type { TabGroupLayoutNode } from '../../../../../shared/tab-types'
+import type { TabGroupLayoutNode } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { resetWebSessionFocusIntentForTests } from '../navigation/web-session-focus-intent'
 import { resetWebSessionCloseIntentForTests } from '../closing/web-session-close-intent'
 import { resetWebSessionReorderIntentForTests } from '../navigation/web-session-reorder-intent'
 import { resetWebAgentSessionHandoffsForTests } from '../../hosted-terminals/creation/agent-launch/web-agent-session-handoff'
 import { resetWebRuntimeInitialTerminalBootstrapForTests } from '../initial-terminal/web-runtime-initial-terminal-bootstrap'
-import { resetWebSessionTabsSnapshotFreshnessForTests } from '../tracking-lifecycle'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from '../tracking/tracking-lifecycle'
 import type { WebSessionTabsSyncState } from '../state'
 import '../../browser/creation/web-runtime-browser-creation'
 
@@ -55,6 +55,8 @@ export function makeState(
     agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     agentStatusEpoch: 0,
     browserCertificateFailuresByPageId: {},
+    browserAudiblePageIds: {},
+    browserAudioMutedTabIds: {},
     browserPagesByWorkspace: {},
     browserTabsByWorktree: {},
     groupsByWorktree: {},

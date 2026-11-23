@@ -2,7 +2,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   authorityKey,
   SELF_LOCAL_AUTHORITY

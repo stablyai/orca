@@ -6,7 +6,10 @@ import {
   projectHostSetupProjectionFromRepos
 } from '../host-setup/project-host-setup-projection'
 import type { ProjectHostSetupProjection } from '../host-setup/project-host-setup-projection'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../execution-host/execution-host'
 
 /** A catalog's project rows and the host setups that place them. */
 export type ProjectCatalogRows = {

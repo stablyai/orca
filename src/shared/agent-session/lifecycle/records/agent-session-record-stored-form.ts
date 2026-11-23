@@ -51,19 +51,33 @@ export function decodePersistedAgentSessionRecord<L extends PersistedAgentSessio
   if (!providerHandleChain) {
     throw new Error('agent_session_provider_handle_invalid')
   }
-  const { sleptAt, lastTurn, ...rest } = record
+  const {
+    sleptAt,
+    lastTurn,
+    instructionsKey,
+    asyncQuestionsSkippedThrough: skipped,
+    ...rest
+  } = record
   const validSleep = typeof sleptAt === 'number' && Number.isFinite(sleptAt) && sleptAt > 0
+  const validKey =
+    typeof instructionsKey === 'string' &&
+    instructionsKey.length > 0 &&
+    instructionsKey.length <= 128
   const lease = normalizeLegacyHandoffLease(record.lease)
   return {
     record: {
       ...rest,
       ...(validSleep ? { sleptAt } : {}),
+      ...(validKey ? { instructionsKey } : {}),
       ...(isAgentSessionLastTurn(lastTurn) ? { lastTurn } : {}),
+      ...(typeof skipped === 'string' && skipped ? { asyncQuestionsSkippedThrough: skipped } : {}),
       providerHandleChain,
       lease: { ...lease, deathEvidence: decodeDeathEvidence(lease.deathEvidence) }
     },
     normalized:
-      leaseCarriesLegacyHandoffValues(record.lease) || (sleptAt !== undefined && !validSleep)
+      leaseCarriesLegacyHandoffValues(record.lease) ||
+      (sleptAt !== undefined && !validSleep) ||
+      (instructionsKey !== undefined && !validKey)
   }
 }
 

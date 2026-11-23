@@ -2,7 +2,10 @@ import { projectGroupHookTrustKey } from '../../../../shared/workspace-setup/hoo
 import type { AppState } from '../types'
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project/groups/project-groups'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { catalogOwnsHost } from './project-group-owner-routing'
 import type { RepoSlice } from '../repos/repo-state'
 import '../../../../shared/folder-workspaces/folder-workspace-execution-host'

@@ -9,7 +9,7 @@ export { JiraApiError } from './jira-api-error'
 import {
   readFetchResponseBytesWithinLimit,
   readFetchResponseJsonWithinLimit
-} from '../../shared/fetch-response-body'
+} from '../../shared/network/fetch-response-body'
 
 // Electron's Chrome UA triggers Atlassian XSRF rejection on token-authenticated writes; no-check does not bypass it.
 const JIRA_API_USER_AGENT = 'Orca'

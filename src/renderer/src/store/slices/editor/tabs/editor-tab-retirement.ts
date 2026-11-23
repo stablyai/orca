@@ -1,11 +1,12 @@
 import { closedEditorTabOrder } from '../closing/recently-closed-editor-tabs'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '../../../types'
 import type { EditorSet, EditorGet } from '../types/editor-set-get'
 import { createRecentlyClosedTabPositionIndex } from '../../tabs/recently-closed-tab-position'
 import { pushRecentlyClosedTabKind } from '../../tabs/recently-closed-tabs'
 import { MAX_RECENT_CLOSED_EDITOR_TABS } from '../types/open-file'
 import { isEditorTabContentType } from './editor-tab-content-type'
+import { notifyHostOfMirroredEditorClose } from '@/runtime/web-session-tabs-sync/closing/close-mirrored-editor-tab'
 import {
   editorContentIsReferenced,
   editorPlacementIndex,
@@ -79,6 +80,13 @@ export function editorTabsRetirement(
         ...closedEditorTabOrder(state, closedIdsByWorkspace)
       }
     })
+    // The tabs already left the strip, so closeFile can no longer name the host's tabs. The last view
+    // of a file dirty when the close began (Save with only the host's draft) keeps its host tab.
+    for (const { file, tab } of closed) {
+      if (!file.isDirty || placements.workspacesByEntityId.get(tab.entityId)?.has(tab.worktreeId)) {
+        notifyHostOfMirroredEditorClose(before, tab.worktreeId, file.id, tab.id)
+      }
+    }
     const released = new Map(closed.map(({ file, tab }) => [file.id, tab.worktreeId]))
     for (const [id, workspaceId] of released) {
       releaseUnreferencedEditorContent(get, id, workspaceId)

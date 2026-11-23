@@ -2,7 +2,7 @@ import {
   canonicalTabGap,
   visibleLayoutGroups
 } from '../client-views/workspace-layout-client-visibility'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { insertTabIdIntoOrder } from '../tab-groups/tab-order'
 import { collectLayoutLeafIdsInOrder } from '../terminal-topology/terminal-pane-tree'
 import type {

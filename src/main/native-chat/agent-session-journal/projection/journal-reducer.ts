@@ -34,7 +34,7 @@ import {
 import { applyJournalDispatchRow } from './journal-dispatch-reducer'
 
 import { journalItemExecutionFence } from './journal-item-provenance'
-import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../shared/native-chat/native-chat-pull-request-event'
+import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { retireRewoundJournalSubmission } from '../context-epochs/journal-rewind-submission-retirement'
 
 import {

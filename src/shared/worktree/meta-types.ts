@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { TaskSourceContext } from '../work-items/task-source-context'
 import type { EphemeralVmCheckoutMode } from '../workspace-setup/orca-yaml-hook-types'
 import type {
@@ -11,10 +11,10 @@ import type {
   WorkspaceStatus
 } from './types'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
-import type { OrcaWorkspaceLayout } from '../orca-workspace-layout'
+import type { OrcaWorkspaceLayout } from './paths/orca-workspace-layout'
 import type { DiffComment, MobileDiffReviewState } from '../file-review/diff-comment-types'
 import type { SmartTier } from '../sidebar-list/sorting/sort-stamps'
-import type { ExternalConversationLink } from '../external-conversation-link'
+import type { ExternalConversationLink } from '../connectors/external-conversation-link'
 
 export type ArchivedCheckout = {
   branch: string

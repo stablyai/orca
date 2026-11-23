@@ -1,4 +1,4 @@
-import { replaceTabBuckets } from '@/store/keyed-record-transitions'
+import { replaceTabBuckets } from '@/store/record-transitions/keyed-record-transitions'
 import { getFirstTerminalTabOwnerWorktreeId } from '../ownership/terminal-tab-owner-index'
 import type {
   TerminalLayoutSnapshot,

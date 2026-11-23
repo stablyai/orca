@@ -1,4 +1,7 @@
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 
 function addRuntimeExecutionHost(ids: Set<string>, hostId: string | null | undefined): void {

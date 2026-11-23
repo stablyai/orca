@@ -1,9 +1,9 @@
 import type { AppState } from '@/store/types'
-import type { DashboardFilterOptions } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardFilterOptions } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { DEFAULT_WORKSPACE_STATUSES } from '../../../../../shared/workspace/status/workspace-status-defaults'
 import { boundedLabel } from './dashboard-card-labels'
 import type { ActiveDashboardWorkspace } from './dashboard-snapshot-workspaces'
-import { translateWorkspaceBoardStatusLabel } from '@/components/sidebar/workspace-board-status-label'
+import { translateWorkspaceBoardStatusLabel } from '@/components/sidebar/workspace-status/presentation/workspace-board-status-label'
 
 export function buildDashboardSnapshotFilterOptions(
   state: Partial<Pick<AppState, 'workspaceStatuses'>>,

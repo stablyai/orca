@@ -2,7 +2,7 @@ import type { MarkdownDocState } from '../../files/session-documents/session-doc
 import type { MobileSessionTab } from './mobile-session-tabs'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { selectBulkCloseTabs } from './mobile-tab-close-selection'
-import { closeTabsAfterConfirmation } from '../../../../src/shared/bulk-tab-close-confirmation'
+import { closeTabsAfterConfirmation } from '../../../../src/shared/workspace-layout/tab-groups/bulk-tab-close-confirmation'
 import { translate } from '../../i18n/mobile-i18n'
 
 type BulkCloseSheetDeps = {

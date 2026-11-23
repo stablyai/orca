@@ -2,7 +2,7 @@ import { vi, type Mock } from 'vitest'
 import { create } from 'zustand'
 import { createBrowserSlice } from './create-browser-slice'
 import type { AppState } from '../../types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -21,6 +21,7 @@ export type BrowserMockApi = {
     sessionImportFromBrowser: Mock
     sessionImportFromBrowserForClientHost: Mock
     sessionClearDefaultCookies: Mock
+    sessionClearDefaultCookiesForClientHost: Mock
     notifyActiveTabChanged: Mock
   }
   runtimeEnvironments: { call: Mock }
@@ -41,6 +42,7 @@ export function createBrowserMockApi(runtimeEnvironmentTransportCall: Mock): Bro
       // Why: null means this desktop hosts no pages for the server, so the RPC path runs.
       sessionImportFromBrowserForClientHost: vi.fn().mockResolvedValue(null),
       sessionClearDefaultCookies: vi.fn().mockResolvedValue(false),
+      sessionClearDefaultCookiesForClientHost: vi.fn().mockResolvedValue(null),
       notifyActiveTabChanged: vi.fn().mockResolvedValue(undefined)
     },
     runtimeEnvironments: {

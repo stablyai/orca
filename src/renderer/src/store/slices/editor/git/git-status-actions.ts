@@ -11,7 +11,7 @@ import {
   getKnownGitHead
 } from './branch-compare-state'
 import { closeDroppedEditorFileTabsThroughLayoutOwner } from '../tabs/editor-tab-close-through-layout-owner'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 
 export function createGitStatusActions(
   set: EditorSet,

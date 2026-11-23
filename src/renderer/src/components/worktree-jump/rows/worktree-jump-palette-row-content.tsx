@@ -1,5 +1,5 @@
 import React from 'react'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { PaletteHostBadge } from '@/components/cmd-j/palette-host-badge'

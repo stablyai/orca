@@ -1,6 +1,6 @@
 import type { RuntimeCapability } from '../../../shared/remote-runtime/protocol/protocol-version'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import {
   LAYOUT_INTENTS_RUNTIME_CAPABILITY,
   LAYOUT_REOPEN_HELD_PANES_CAPABILITY

@@ -5,7 +5,7 @@ import {
   getRepoRegistrationHostIds
 } from '../../../../../../shared/repository/repo-host-identity'
 import '@/lib/workspace/creation/new-workspace-composer-repo'
-import { getNewWorkspaceDialogEligibleRepos } from '../../../../../../shared/new-workspace-dialog-repo'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../../../shared/new-workspace/new-workspace-dialog-repo'
 import { useAppStore } from '@/store'
 import {
   getRepoWorkspaceCreationTargetHint,

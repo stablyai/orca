@@ -1,5 +1,5 @@
 import React from 'react'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { AutomationListRow } from '../listing/automation-list-row-identity'
 import type {

@@ -12,7 +12,12 @@ export const BRIDGE_ROUTE_PARAM_CLEAR = 'route-param-clear'
 export const BRIDGE_OPEN_ROUTE_PARAM = 'open'
 
 // Close the clearable-param set so the page can consume only shell-provided requests, not edit arbitrary native route state.
-export const BRIDGE_CLEARABLE_ROUTE_PARAMS = ['paneKey', BRIDGE_OPEN_ROUTE_PARAM] as const
+export const BRIDGE_CLEARABLE_ROUTE_PARAMS = [
+  'paneKey',
+  'botItem',
+  'homeDraft',
+  BRIDGE_OPEN_ROUTE_PARAM
+] as const
 
 export type BridgeClearableRouteParam = (typeof BRIDGE_CLEARABLE_ROUTE_PARAMS)[number]
 

@@ -1,4 +1,5 @@
 /** The renderer's half of a committed WSL move's desktop rewrite, as carried over IPC. */
+import type { WslMappedDrive } from './wsl-mapped-drive-paths'
 
 /** The renderer-side stores, in run order; main registers each so the ledger waits on it. */
 export const WSL_MOVE_RENDERER_REWRITE_STORE_IDS = [
@@ -24,6 +25,8 @@ export type WslMovePendingRendererRewrite = {
   scopeFolderWorkspaceIds: string[]
   /** The moved projects' directories on the host, for stores keyed by a bare file path. */
   scopeRootPaths: string[]
+  /** The move's mapped drives, from its journal: `W:\x` paths and `w:/x` keys moved too. */
+  mappedDrives?: WslMappedDrive[]
 }
 
 export type WslMoveRecordStoreRewrittenRequest = {

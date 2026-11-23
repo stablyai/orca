@@ -8,6 +8,10 @@ import {
 } from '../controls/sidebar-filter-actions'
 import { useShallow } from 'zustand/react/shallow'
 import type { AppState } from '@/store/types'
+import {
+  readRuntimeStatuses,
+  type RuntimeStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   activeWorkspaceRowFilterKeys,
@@ -20,7 +24,7 @@ import {
   getWorktreeExecutionHostId,
   getSettingsFocusedExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   isAutomationGeneratedWorkspace,
   isCliCreatedWorkspace,
@@ -39,6 +43,7 @@ export type SidebarWorktreeFilters = ReturnType<typeof useSidebarWorktreeFilters
 
 type RevealContext = {
   state: AppState
+  statuses: RuntimeStatuses
   worktree: Worktree
   repo: Repo | undefined
   targetHostId: ExecutionHostId
@@ -80,11 +85,8 @@ const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContex
       state.setHideDetachedHeadWorkspaces(false)
     }
   },
-  hideWorkspacesFromOtherDevices: ({ state, worktree }) => {
-    const pairedDeviceIds = getPairedDeviceIdsByEnvironment(
-      state.runtimeEnvironments,
-      state.runtimeStatusByEnvironmentId
-    )
+  hideWorkspacesFromOtherDevices: ({ state, statuses, worktree }) => {
+    const pairedDeviceIds = getPairedDeviceIdsByEnvironment(state.runtimeEnvironments, statuses)
     if (isWorkspaceOwnedBySomeoneElse(worktree, pairedDeviceIds)) {
       state.setHideWorkspacesFromOtherDevices(false)
     }
@@ -126,6 +128,7 @@ export function useSidebarWorktreeFilters() {
     const repo = state.repos.find((candidate) => candidate.id === worktree.repoId)
     const context = {
       state,
+      statuses: readRuntimeStatuses(),
       worktree,
       repo,
       targetHostId: getRevealTargetHostId(state, worktree, repo)

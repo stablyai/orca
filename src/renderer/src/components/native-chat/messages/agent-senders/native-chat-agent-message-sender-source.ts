@@ -1,17 +1,16 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { useAppStateView } from '@/store/retained-views/app-state-view'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { readingAgentSenders } from '@/runtime/native-chat/agent-senders/agent-sender-index'
 import type { AppState } from '@/store/types'
-import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
+import { agentRowDisplayDotState } from '../../../../../../shared/agent-row-dot-state'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import {
   agentMessageSenderView,
   type AgentMessageSenderView
-} from '../../../../../../shared/agent-session/agent-message-presentation'
+} from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 
 const EMPTY_VIEW: AgentMessageSenderView = Object.freeze({})
-let rowBuilds = 0
-/** Counts addressed sender presentations built for owning render tests. */
-export const agentMessageSenderRowBuildsForTest = () => rowBuilds
 export type SenderLocation = {
   /** A fallback endpoint supplies its kind, never an earlier actor's activity. */
   activity?: false
@@ -54,7 +53,6 @@ export function readAgentMessageSenderRow(
       progress: presentation.progress
     }
     senderViews.set(row, view)
-    rowBuilds++
   }
   return view
 }
@@ -90,7 +88,7 @@ export function useAgentMessageSenderSource(
   return useLeasedSenderSelector(leaseLocate, selected)
 }
 
-/** Location changes and the addressed row are both part of the selected value. */
+/** Notified only when an addressed row, a sender answer it read, or tabs and owners change. */
 export function useLeasedSenderSelector<T>(
   locate: LocateSender | readonly LocateSender[],
   select: (state: AppState) => T
@@ -104,33 +102,32 @@ export function useLeasedSenderSelector<T>(
       const refresh = () => {
         const state = store.getState()
         const locators = typeof locate === 'function' ? [locate] : locate
-        const keys = new Set(
-          locators.flatMap((locator) => {
+        const [{ rows, next }, senders] = readingAgentSenders(() => ({
+          rows: locators.flatMap((locator) => {
             const location = locator(state)
-            return location ? [location.paneKey] : []
-          })
-        )
-        for (const [key, stop] of stops) {
-          if (!keys.has(key)) {
+            return location ? [`row\0${location.paneKey}`] : []
+          }),
+          next: select(state)
+        }))
+        const channels = new Set(['sender-locations', ...rows, ...senders])
+        for (const [channel, stop] of stops) {
+          if (!channels.has(channel)) {
             stop()
-            stops.delete(key)
+            stops.delete(channel)
           }
         }
-        for (const key of keys) {
-          if (!stops.has(key)) {
-            stops.set(key, projection.subscribe(`row\0${key}`, refresh))
+        for (const channel of channels) {
+          if (!stops.has(channel)) {
+            stops.set(channel, projection.subscribe(channel, refresh))
           }
         }
-        const next = select(state)
         if (next !== value) {
           value = next
           notify()
         }
       }
       refresh()
-      const stopLocations = projection.subscribe('sender-locations', refresh)
       return () => {
-        stopLocations()
         for (const stop of stops.values()) {
           stop()
         }
@@ -140,6 +137,23 @@ export function useLeasedSenderSelector<T>(
   )
   const getSnapshot = useCallback(() => select(store.getState()), [store, select])
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
+
+/** The card's runtime target, stable across renders that rebuild an equal one. */
+export function useStableSenderTarget(
+  target: RuntimeClientTarget | undefined
+): RuntimeClientTarget | undefined {
+  const kind = target?.kind
+  const environmentId = target?.kind === 'environment' ? target.environmentId : undefined
+  return useMemo<RuntimeClientTarget | undefined>(
+    () =>
+      kind === 'local'
+        ? { kind: 'local' }
+        : environmentId !== undefined
+          ? { kind: 'environment', environmentId }
+          : undefined,
+    [kind, environmentId]
+  )
 }
 
 export function useAgentMessageSenderSources(

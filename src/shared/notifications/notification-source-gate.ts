@@ -1,10 +1,7 @@
 import { isAgentNeedsInputAlert } from './mobile-push-alert'
-import type { NotificationSettings } from './notification-settings-types'
+import type { HostNotificationSettings } from './notification-settings-types'
 
-type SourceGateSettings = Pick<
-  NotificationSettings,
-  'enabled' | 'agentTaskComplete' | 'agentNeedsInput' | 'terminalBell'
->
+type SourceGateSettings = HostNotificationSettings
 
 /** The desktop's per-source preferences; paired phones receive an alert only when this allows it. */
 export function isNotificationSourceEnabled(

@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { BellRing, Upload } from 'lucide-react'
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { usesCustomNotificationSound } from '../../../../shared/notifications/notification-settings-types'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,7 +13,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { sendNotificationSettingsTestNotification } from '@/components/notifications/notification-test-delivery'
-import { getNotificationSoundOptions } from '@/components/notification-sound-options'
+import { getNotificationSoundOptions } from '@/components/notifications/notification-sound-options'
 import {
   MacNotificationPermissionCard,
   useMacNotificationPermissionState

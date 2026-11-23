@@ -1,6 +1,11 @@
 import * as z from 'zod'
 import { ChoicePatch, OptionKey } from '../agent-launch/agent-launch-settings-params'
 import { AGENT_PERMISSION_CHOICES } from '../../agent-launch/permissions/tui-agent-permission-choice'
+import {
+  AutomationBotTarget,
+  AutomationEventTriggers,
+  AutomationOnceParam
+} from '../automation-bot-params'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import {
   OptionalBoolean,
@@ -10,8 +15,8 @@ import {
   requiredNumber,
   requiredString
 } from '../rpc-param-primitives'
-import { normalizeExecutionHostId } from '../../execution-host'
-import { isValidAutomationSchedule } from '../../automations/scheduling/automation-schedule-parsing'
+import { normalizeExecutionHostId } from '../../execution-host/execution-host'
+import { getAutomationScheduleInputError } from '../../automations/scheduling/automation-schedule-parsing'
 import {
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   normalizeAutomationPrecheckTimeoutSeconds
@@ -34,12 +39,12 @@ export const ExecutionHostId = requiredString('Missing host id').transform((valu
   return hostId
 })
 
-export const AutomationSchedule = requiredString('Missing trigger').refine(
-  isValidAutomationSchedule,
-  {
-    message: 'Invalid automation trigger'
+export const AutomationSchedule = requiredString('Missing trigger').superRefine((value, ctx) => {
+  const message = getAutomationScheduleInputError(value)
+  if (message) {
+    ctx.addIssue({ code: 'custom', message })
   }
-)
+})
 
 export const AutomationPrecheck = z
   .object({
@@ -262,6 +267,9 @@ export const AutomationCreate = z.object({
   launchSetupPatch: AutomationLaunchSetupPatch.optional(),
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
+  bot: AutomationBotTarget.optional(),
+  on: AutomationEventTriggers,
+  once: AutomationOnceParam,
   repo: OptionalString,
   workspace: OptionalString,
   workspaceMode: AutomationWorkspaceMode,
@@ -270,11 +278,18 @@ export const AutomationCreate = z.object({
   setupTrustHash: z.string().max(128).optional(),
   reuseSession: OptionalBoolean,
   timezone: OptionalString,
+  timezoneExplicit: OptionalBoolean,
   rrule: AutomationSchedule,
   dtstart: requiredNumber('Missing trigger start time'),
   enabled: OptionalBoolean,
   missedRunGraceMinutes: OptionalPositiveInt,
-  destination: Destination
+  destination: Destination,
+  // The native chat whose agent ran the command, to show the saved automation there.
+  callerSessionId: OptionalString,
+  // No --runs-in was given: it runs in the calling chat when that is one of the bot's own.
+  runsInDefault: z.literal(true).optional(),
+  // What a CLI from before runsInDefault sends for a wait given no --runs-in.
+  waitInCallerChat: z.literal(true).optional()
 })
 
 export const AutomationUpdateFields = z.object({
@@ -286,6 +301,9 @@ export const AutomationUpdateFields = z.object({
   launchSetupPatch: AutomationLaunchSetupPatch.optional(),
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
+  bot: AutomationBotTarget.optional(),
+  on: AutomationEventTriggers,
+  once: AutomationOnceParam,
   repo: OptionalString,
   workspace: OptionalString,
   workspaceMode: AutomationWorkspaceMode,
@@ -295,6 +313,7 @@ export const AutomationUpdateFields = z.object({
   setupTrustHash: z.string().max(128).optional(),
   reuseSession: OptionalBoolean,
   timezone: OptionalString,
+  timezoneExplicit: OptionalBoolean,
   rrule: AutomationSchedule.optional(),
   dtstart: requiredNumber('Missing trigger start time').optional(),
   enabled: OptionalBoolean,
@@ -306,6 +325,7 @@ export const AutomationUpdate = z.object({
   updates: AutomationUpdateFields,
   expectedOwner: ExpectedOwner,
   destination: Destination,
+  callerSessionId: OptionalString,
   // An edit relying on the current new-per-run mode is refused if the stored mode changed first.
   expectedWorkspaceMode: z.literal('new_per_run').optional()
 })

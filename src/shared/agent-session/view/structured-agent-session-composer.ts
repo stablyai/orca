@@ -1,4 +1,5 @@
 import { agentSessionInteractionCommand } from '../options/permissions/agent-session-interaction-mode'
+import { withoutClaudeVendor } from '../options/model-catalog/model-id-label'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type {
   SessionOptionDescriptor,
@@ -9,8 +10,8 @@ import {
   CONVERSATION_COMMANDS,
   STRUCTURED_AGENT_SESSION_SLASH_COMMANDS
 } from './structured-agent-session-slash-menu'
-import type { AgentSessionConversationCommand } from '../agent-session-conversation-command'
-import type { AgentSessionThreadGoalChange } from '../agent-session-thread-goal-wire'
+import type { AgentSessionConversationCommand } from '../conversation-context/agent-session-conversation-command'
+import type { AgentSessionThreadGoalChange } from '../thread-goals/agent-session-thread-goal-wire'
 import type { AgentSessionSlashCommand } from '../agent-session-wire'
 import {
   structuredComposerFailure,
@@ -259,11 +260,14 @@ export async function dispatchStructuredAgentSessionComposerCommand(
     }
   }
   const normalized = command.argument.toLowerCase()
+  // Claude rows read `Opus 5.5`; still accept the official `Claude Opus 5.5`.
+  const unvendored = controller.agent === 'claude' ? withoutClaudeVendor(normalized) : normalized
   const choice =
     descriptor?.kind.type === 'select'
       ? descriptor.kind.choices.find(
           (entry) =>
-            entry.value.toLowerCase() === normalized || entry.label.toLowerCase() === normalized
+            entry.value.toLowerCase() === normalized ||
+            [normalized, unvendored].includes(entry.label.toLowerCase())
         )
       : undefined
   const value = choice?.value ?? command.argument

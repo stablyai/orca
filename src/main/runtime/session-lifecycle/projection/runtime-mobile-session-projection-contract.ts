@@ -4,14 +4,15 @@ import type { BrowserTabInfo } from '../../../../shared/browser/runtime/runtime-
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionClientTab,
-  RuntimeMobileSessionTerminalTab
+  RuntimeMobileSessionTerminalTab,
+  RuntimeMobileTerminalTheme
 } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncedTab
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
+import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { RuntimeAgentRowSnapshot } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import type {
   RuntimeLeafRecord,
@@ -71,6 +72,8 @@ export type RuntimeMobileSessionProjectionHost = {
     validGroupIds: ReadonlySet<string>
   ): TabGroupLayoutNode | null
   collectTabIds(tabs: readonly RuntimeMobileSessionClientTab[]): Set<string>
+  /** This host's own palette, for a terminal row no window themed. */
+  hostTerminalTheme?(): RuntimeMobileTerminalTheme | undefined
 }
 
 export type RuntimeMobileSessionProjectionInput = {

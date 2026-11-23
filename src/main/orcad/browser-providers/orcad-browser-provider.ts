@@ -5,22 +5,27 @@ import { posix, win32 } from 'node:path'
 import {
   setRuntimeBrowserUnavailableCause,
   type RuntimeBrowserCommandsFactory,
+  type RuntimeBrowserIdentity,
   type RuntimeBrowserUnavailableCause
 } from '../../runtime/browser/installation/runtime-browser-commands-factory'
 import { ExternalChromiumBrowserProcess } from './chromium/external-chromium-browser-process'
 import type { ExternalChromiumLaunch } from './chromium/external-chromium-browser-session'
 import { resolveOrcadAgentBrowserBinary } from './orcad-agent-browser-binary'
 import { ElectronServeBrowserProcess } from './electron/electron-serve-browser-process'
+import { electronSidecarIdentity } from './electron/electron-sidecar-identity'
+import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../../shared/browser/runtime/browser-runtime-capabilities'
 import { watchOrcadBrowserInstallPark } from './orcad-browser-install-park'
 import { openServeBundlePark } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
 import { ORCAD_BROWSER_PARK_LABEL } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 import { errorMessage } from '../../../shared/errors/error-message'
+import { ORCA_SERVE_APPIMAGE_ENV } from '../../../shared/remote-runtime/serve-supervisor/orcad-server-launch-env'
 
 export type OrcadBrowserProvider = {
   kind: 'electron' | 'chromium'
   factory: RuntimeBrowserCommandsFactory
   isAvailable(): boolean
   supportsGoogleCookieClear?(): boolean
+  identity?(): RuntimeBrowserIdentity | null
   stop(): Promise<void>
 }
 
@@ -90,11 +95,14 @@ export function installedElectronCandidates(
       ...(environment.ProgramFiles ? [joinPath(environment.ProgramFiles, 'Orca', 'Orca.exe')] : [])
     ]
   }
+  const servedAppImage = environment[ORCA_SERVE_APPIMAGE_ENV]
   return [
     joinPath(homePath, '.local', 'bin', 'orca-ide'),
     '/usr/local/bin/orca-ide',
     '/usr/bin/orca-ide',
-    '/opt/Orca/orca-ide'
+    '/opt/Orca/orca-ide',
+    // Last: hosts where an installer copy already works keep it.
+    ...(servedAppImage && posix.isAbsolute(servedAppImage) ? [servedAppImage] : [])
   ]
 }
 
@@ -113,7 +121,7 @@ async function isScriptShim(path: string): Promise<boolean> {
   }
 }
 
-/** Require installer-owned paths; arbitrary AppImage locations cannot establish ownership. */
+/** Require installer-owned paths or the AppImage serve runs from; never guess other AppImage locations. */
 export async function resolveInstalledElectronExecutable(
   candidates: string[] = installedElectronCandidates(process.platform, homedir(), process.env)
 ): Promise<string | null> {
@@ -177,7 +185,9 @@ async function startElectronServeProvider(
   const installPark = park ? watchOrcadBrowserInstallPark(helper, { park, parked }) : null
   return {
     kind: 'electron',
-    supportsGoogleCookieClear: () => processHandle.supportsGoogleCookieClear(),
+    supportsGoogleCookieClear: () =>
+      processHandle.sidecarWith(BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY) !== null,
+    identity: () => electronSidecarIdentity(processHandle),
     factory: (host) => processHandle.createCommands(host),
     isAvailable: () => processHandle.isAvailable(),
     stop: async () => {

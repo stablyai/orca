@@ -1,5 +1,5 @@
 import { dirname, join } from 'node:path'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import {
   KeyedJsonRowCache,
   parseKeyedJsonRows,
@@ -26,13 +26,13 @@ export function getGithubCacheDatabaseFile(dataFile: string): string {
 /**
  * Next-launch copy of the PR/issue caches, one row per entry, so a save rewrites only entries
  * whose content changed. Disposable: a corrupt or mismatched database rebuilds empty and the
- * next poll refills it. No handle outlives a call (profile moves, Windows).
+ * next poll refills it. The writer keeps its connection between routine saves; its owner closes
+ * it before maintenance, freeze or quit can move the profile (Windows).
  */
-function githubCacheRows(dataFile: string): KeyedJsonRowCache {
+export function openGitHubCacheRows(dataFile: string): KeyedJsonRowCache {
   return new KeyedJsonRowCache(getGithubCacheDatabaseFile(dataFile), {
     schemaVersion: GITHUB_CACHE_SCHEMA_VERSION,
     busyTimeoutMs: GITHUB_CACHE_ROUTINE_BUSY_TIMEOUT_MS,
-    holdConnection: false,
     legacyPath: getGithubCacheFile(dataFile)
   })
 }
@@ -54,7 +54,7 @@ export type StoredGitHubCache = {
  * saves nothing this session, so neither the rows nor an unread sidecar are lost.
  */
 export function readGitHubCacheDatabase(dataFile: string): StoredGitHubCache {
-  const loaded = githubCacheRows(dataFile).load(parseGitHubCacheSidecar)
+  const loaded = openGitHubCacheRows(dataFile).load(parseGitHubCacheSidecar)
   if (loaded.kind === 'unavailable') {
     return { cache: null, fromSidecar: false, sidecarHash: null, unavailable: true }
   }
@@ -89,11 +89,11 @@ export function readGitHubCacheDatabase(dataFile: string): StoredGitHubCache {
  * then removes the sidecar if it is still that file. Throws on a failed commit, busy included.
  */
 export function writeGitHubCacheDatabase(
-  dataFile: string,
+  rows: KeyedJsonRowCache,
   cache: GitHubCache,
   options: { busyTimeoutMs: number; importedLegacyFileHash: string | null }
 ): void {
-  githubCacheRows(dataFile).write(githubCacheRowsOf(cache), {
+  rows.write(githubCacheRowsOf(cache), {
     busyTimeoutMs: options.busyTimeoutMs,
     importReceipt: options.importedLegacyFileHash ?? undefined
   })

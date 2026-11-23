@@ -9,7 +9,7 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { DesktopSidebarFacts } from '../../../../../../shared/sidebar-list/feed-facts/desktop-sidebar-facts'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 

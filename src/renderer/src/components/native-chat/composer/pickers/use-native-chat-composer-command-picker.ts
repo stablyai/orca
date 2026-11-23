@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { prepareQueuedMessageEditText } from '../../../../../../shared/queued-message-edit-command'
+import { prepareQueuedMessageEditText } from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit-command'
 import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
 import {
   useNativeChatPickerState,
@@ -11,6 +11,8 @@ import {
 } from './use-native-chat-resume-command'
 import type { NativeChatStructuredComposerTransport } from '../submit/native-chat-structured-composer-transport'
 import { useNativeChatSideChatCommand } from './use-native-chat-side-chat-command'
+import { useNativeChatMentionNameMatches } from '../../native-chat-composer-room'
+import type { NativeChatComposerRoom } from '../native-chat-composer-types'
 
 type PickerArgs = Parameters<typeof useNativeChatPickerState>[0]
 type ResumeArgs = Parameters<typeof useNativeChatResumeCommand>[0]
@@ -24,6 +26,7 @@ export function useNativeChatComposerCommandPicker(
     | 'onPickerDemand'
     | 'skillsChecking'
     | 'launchWorktreeId'
+    | 'mentionNameMatches'
     | keyof ResumeArgs['editor']
   > &
     Pick<ResumeArgs, 'editor' | 'setNotice'> & {
@@ -31,9 +34,10 @@ export function useNativeChatComposerCommandPicker(
       /** An edit saves into a queued message; a launch prompt has no session to resume and
        *  lists its workspace's skills. */
       mode?: 'edit' | 'launch'
+      room: NativeChatComposerRoom | undefined
     }
 ): { picker: NativeChatPickerState; orcaCommands: NativeChatResumeCommand } {
-  const { structuredTransport, editor, setNotice, mode, ...pickerArgs } = args
+  const { structuredTransport, editor, setNotice, mode, room, ...pickerArgs } = args
   const { agent, terminalTabId } = pickerArgs
   const { agentCommands, sessionSkills } = useNativeChatComposerCatalog(agent, structuredTransport)
   const reported = structuredTransport?.sessionCommands
@@ -63,6 +67,7 @@ export function useNativeChatComposerCommandPicker(
     agentCommands,
     commandAvailable,
     sessionSkills,
+    mentionNameMatches: useNativeChatMentionNameMatches(room),
     onPickerDemand: structuredTransport?.setCommandsMenuOpen,
     skillsChecking: structuredTransport?.commandsChecking === true,
     ...(!structuredTransport?.setCommandsMenuOpen && structuredTransport?.refreshCommands

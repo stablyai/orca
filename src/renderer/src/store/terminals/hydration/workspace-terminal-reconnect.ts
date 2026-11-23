@@ -4,7 +4,11 @@ import { buildWorktreeByIdIndex } from './workspace-terminal-worktree-index'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from '../terminal-state'
 import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
-import { markFullResync, recordDraft, tabBucketDraft } from '../../keyed-record-transitions'
+import {
+  markFullResync,
+  recordDraft,
+  tabBucketDraft
+} from '../../record-transitions/keyed-record-transitions'
 
 export function createWorkspaceTerminalReconnectActions(
   set: TerminalStoreSet,

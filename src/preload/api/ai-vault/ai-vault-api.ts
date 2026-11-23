@@ -27,7 +27,10 @@ import type {
   AiVaultPrepareSessionResumeRequest,
   AiVaultPrepareSessionResumeResult
 } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import type { ExecutionHostId, ExecutionHostScope } from '../../../shared/execution-host'
+import type {
+  ExecutionHostId,
+  ExecutionHostScope
+} from '../../../shared/execution-host/execution-host'
 import type {
   AiVaultScanProgress,
   AiVaultScanProgressUpdate

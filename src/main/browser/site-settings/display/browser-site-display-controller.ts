@@ -14,7 +14,7 @@ import {
   normalizeBrowserPageZoomLevel,
   type BrowserPageZoomDirection
 } from '../../../../shared/browser/site-settings/browser-page-zoom'
-import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
 import { errorMessage } from '../../../../shared/errors/error-message'
 
 type TrackedGuest = {

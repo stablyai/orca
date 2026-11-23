@@ -9,7 +9,7 @@ import { dispatchAgentHookTerminalLifecycle } from '../../agent-completion/agent
 import {
   hookLaneOwnsAgentTurnEnds,
   hookLaneTitleTurnEndEvidence
-} from '@/hooks/agent-hook-turn-end-ownership'
+} from '@/components/terminal-pane/agent-completion/hook-lane/agent-hook-turn-end-ownership'
 import { absorbBurstBellForHookOwnedIdle } from '../notifications/agent-task-complete-notify'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../../shared/agent-status/title/agent-title-owner'
 import { isAgentTaskCompleteTrackingEnabled } from '../notifications/agent-task-complete-settings'

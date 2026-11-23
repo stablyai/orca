@@ -13,6 +13,7 @@ import { findLinkedWorktreeGitDirectory } from '../../../../shared/git/worktrees
 import { windowsLongPathGitArgs } from '../../../../shared/git/compatibility/windows-long-path-git-args'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import { getGitCurrentBranchName } from '../../../../shared/git/refs/git-current-branch'
 import {
   getErrorCode,
   gitExecOptions,
@@ -26,6 +27,7 @@ import {
   verifyWorktreePreparationLockAtPath,
   WorktreePreparationLockOwnershipError
 } from './worktree-preparation-lock'
+import { restoreMissingGitlink } from './worktree-preparation-gitlink'
 import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/host-routing/wsl-linked-worktree-git-routing'
 
 export function gitCleanupOptions(
@@ -63,23 +65,18 @@ async function verifyDiscardPreparationOwner(
       throw error
     }
     const signal = AbortSignal.timeout(options.timeout ?? WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS)
-    const absent = await waitForPromiseWithSignal(
-      lstat(toHostFilesystemPath(hostPath)),
-      signal
-    ).then(
-      () => false,
-      (failure: unknown) => {
-        if (getErrorCode(failure) === 'ENOENT') {
-          return true
-        }
-        throw failure
-      }
-    )
-    if (!absent) {
+    const absent = (path: string): Promise<boolean> =>
+      waitForPromiseWithSignal(pathAbsent(path), signal)
+    const checkoutAbsent = await absent(hostPath)
+    // A crash can leave the checkout without its gitlink; only the admin backlink can prove ownership.
+    if (!checkoutAbsent && !(await absent(join(hostPath, '.git')))) {
       throw error
     }
     const gitDir = await findLinkedWorktreeGitDirectory(hostRepo, hostPath, { ...options, signal })
     if (!gitDir) {
+      if (!checkoutAbsent) {
+        throw error
+      }
       if (
         originalLockPath === null ||
         (originalLockPath && (await pathAbsent(dirname(originalLockPath))))
@@ -104,6 +101,9 @@ async function verifyDiscardPreparationOwner(
       verifyWorktreePreparationLockAtPath(lockPath, expectedLockReason, signal),
       signal
     )
+    if (!checkoutAbsent) {
+      await restoreMissingGitlink(hostPath, gitDir, signal)
+    }
     return gitDir
   }
 }
@@ -256,15 +256,10 @@ export async function removeFailedFinalization(
 ): Promise<boolean> {
   let branchAttached = false
   if (moved) {
-    try {
-      const { stdout } = await gitExecFileAsync(
-        ['symbolic-ref', '--short', 'HEAD'],
-        gitCleanupOptions(cleanupPath, options)
-      )
-      branchAttached = stdout.trim() === branch
-    } catch {
-      // Detached or no longer readable.
-    }
+    branchAttached =
+      (await getGitCurrentBranchName((args) =>
+        gitExecFileAsync(args, gitCleanupOptions(cleanupPath, options))
+      )) === branch
   }
   const removed = await performDiscardPreparedWorktree(
     repoPath,

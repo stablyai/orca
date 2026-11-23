@@ -31,5 +31,11 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   redriveMailbox: (mailboxHandle: string, reservedTypes?: ReadonlySet<string>) => void
+} & OrchestrationPointerPty
+
+/** How delivery writes a pointer into its PTY and times the Enter after it. */
+export type OrchestrationPointerPty = {
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
+  /** Enter's delay after `pointer` when the PTY's host is Windows; null keeps the default. */
+  getWindowsPointerEnterDelayMs: (ptyId: string, pointer: string) => number | null
 }

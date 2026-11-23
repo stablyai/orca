@@ -16,6 +16,15 @@ export function parseSettingsTitleTargetId(targetId: string): string | null {
 }
 
 const SETTINGS_GROUP_CARD_SELECTOR = '[data-settings-group-card]'
+const SETTINGS_TARGET_LOOSE_ATTRIBUTE = 'data-settings-target-loose'
+
+function isBorderedSettingsCard(element: HTMLElement): boolean {
+  const style = getComputedStyle(element)
+  return (
+    Number.parseFloat(style.borderLeftWidth) > 0 &&
+    Number.parseFloat(style.borderTopLeftRadius) >= 8
+  )
+}
 
 // Rows sit at different insets (nested rows, sub-fields), so measure the gap from the row to
 // its card's inner edges instead of assuming one gutter.
@@ -25,11 +34,7 @@ function findEnclosingSettingsCard(element: HTMLElement): HTMLElement | null {
     return groupCard
   }
   for (let node = element.parentElement; node; node = node.parentElement) {
-    const style = getComputedStyle(node)
-    if (
-      Number.parseFloat(style.borderLeftWidth) > 0 &&
-      Number.parseFloat(style.borderTopLeftRadius) >= 8
-    ) {
+    if (isBorderedSettingsCard(node)) {
       return node
     }
   }
@@ -52,6 +57,10 @@ export function applySettingsTargetHighlightBleed(target: HTMLElement): void {
   }
   const card = findEnclosingSettingsCard(target)
   if (!card) {
+    // No card edges to bleed to, so CSS grows a halo; a highlighted card keeps its own edges.
+    if (!target.matches(SETTINGS_GROUP_CARD_SELECTOR) && !isBorderedSettingsCard(target)) {
+      target.setAttribute(SETTINGS_TARGET_LOOSE_ATTRIBUTE, '')
+    }
     return
   }
   const cardRect = card.getBoundingClientRect()
@@ -66,6 +75,7 @@ export function applySettingsTargetHighlightBleed(target: HTMLElement): void {
 export function clearSettingsTargetHighlightBleed(target: HTMLElement): void {
   target.style.removeProperty('--settings-target-bleed-left')
   target.style.removeProperty('--settings-target-bleed-right')
+  target.removeAttribute(SETTINGS_TARGET_LOOSE_ATTRIBUTE)
 }
 
 const SETTINGS_TARGET_REVEAL_EVENT = 'orca-settings-target-reveal'

@@ -1,12 +1,12 @@
 import {
   AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
-} from '../../../../../shared/agent-session/agent-session-create-capabilities'
+} from '../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import {
   AGENT_SESSION_AGENTS_METHOD,
   decodeAgentSessionAgentsResult
-} from '../../../../../shared/agent-session/agent-session-registered-agents'
-import { nativeChatForkRequiresInheritedOriginal } from '../../../../../shared/native-chat/native-chat-fork-offer'
+} from '../../../../../shared/agent-session/agent-discovery/agent-session-registered-agents'
+import { nativeChatForkRequiresInheritedOriginal } from '../../../../../shared/native-chat/transcript/turns/native-chat-fork-offer'
 import { runtimeEnvironmentCapabilityProof } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { structuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'

@@ -1,6 +1,6 @@
 import type { AppState } from '../../types'
 import type { TabsSlice, TabsSliceSet } from './tabs-slice-contract'
-import { replaceRecordEntries } from '../../keyed-record-transitions'
+import { replaceRecordEntries } from '../../record-transitions/keyed-record-transitions'
 
 function previewActiveSurfacePatch(
   state: AppState,

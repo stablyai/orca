@@ -113,7 +113,9 @@ export function evaluateProcessGrowth(
 /** Descendant counts per root pid from a pid/ppid table. */
 export function countDescendantsByRoot(
   rows: readonly { pid: number; ppid: number }[],
-  roots: readonly number[]
+  roots: readonly number[],
+  /** Subtrees left out of every count; walking stops at them. */
+  skip: ReadonlySet<number> = new Set()
 ): Map<number, number> {
   const children = new Map<number, number[]>()
   for (const row of rows) {
@@ -134,7 +136,7 @@ export function countDescendantsByRoot(
     const stack = [...(children.get(root) ?? [])]
     while (stack.length > 0) {
       const pid = stack.pop()
-      if (pid === undefined || seen.has(pid)) {
+      if (pid === undefined || seen.has(pid) || skip.has(pid)) {
         continue
       }
       seen.add(pid)

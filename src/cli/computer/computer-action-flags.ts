@@ -2,7 +2,7 @@ import {
   computerUseClickModifiersValidationMessage,
   computerUseHotkeyValidationMessage,
   computerUsePressKeyValidationMessage
-} from '../../shared/computer-use-key-spec'
+} from '../../shared/computer/computer-use-key-spec'
 import {
   getOptionalNonNegativeIntegerFlag,
   getOptionalNumberFlag,

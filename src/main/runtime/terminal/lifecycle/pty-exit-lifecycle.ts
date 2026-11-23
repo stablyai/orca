@@ -1,5 +1,4 @@
-import { RuntimePtyExitSurfaceReads } from './pty-exit-surface-reads'
-import type { RuntimeTerminalResolvePane } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import { RuntimeTerminalWorkerModelWait } from './terminal-worker-model-wait'
 
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 
@@ -14,24 +13,13 @@ import type { RetiredTerminalSurface } from '../surface/mobile-session-terminal-
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { exitedSplitPaneFacts } from './exited-split-pane-rule'
 
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
-export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceReads {
-  abstract resolveTerminalPane(paneKey: string): RuntimeTerminalResolvePane
-
+export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerModelWait {
   protected abstract pruneDisconnectedPtyRecords(): void
-
-  protected abstract failActiveDispatchOnExit(
-    handle: string,
-    paneKey: string | null,
-    cause: TerminalExitCause,
-    lastOutput?: string
-  ): void
-
-  protected abstract readPtyLastOutput(ptyId: string | null | undefined): string | undefined
 
   protected abstract pruneDisconnectedPtyTranscript(pty: RuntimePtyWorktreeRecord): void
 
@@ -59,6 +47,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
       viewShown?: boolean
       /** Its host went away (a WSL bridge pane's distro stopped): keep the pane to cold-restore, as after a daemon crash. */
       hostLost?: boolean
+      /** Its pane is starting again in place because the host no longer had its process (a daemon crash). */
+      paneRespawning?: boolean
     } = {}
   ): Promise<void> {
     const pty = this.ptysById.get(ptyId)
@@ -119,19 +109,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
       this.clearLiveProgramStatusFacet(ptyId)
     }
     for (const paneKey of exitPaneKeys) {
-      try {
-        const current = this.resolveTerminalPane(paneKey)
-        if (
-          current.ptyId &&
-          (current.ptyId !== ptyId ||
-            (exitIncarnationId &&
-              current.incarnationId &&
-              current.incarnationId !== exitIncarnationId))
-        ) {
-          exitPaneKeys.delete(paneKey)
-        }
-      } catch {
-        /* A closed pane has no successor process to protect. */
+      if (this.paneHasSuccessorProcess(paneKey, ptyId, exitIncarnationId)) {
+        exitPaneKeys.delete(paneKey)
       }
     }
     if (processDeathCertified && exitPaneKeys.size > 0) {
@@ -205,6 +184,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
       this.ptyOutputSequenceById.delete(ptyId)
       this.providerSequenceInitializedPtys.delete(ptyId)
       this.providerSequenceOffsetByPtyId.delete(ptyId)
+      this.reattachedProviderSequenceByPtyId.delete(ptyId)
       this.providerSnapshotPreferredPtys.delete(ptyId)
       this.providerModeTrackersByPtyId.delete(ptyId)
       this.providerModeSnapshotScansByPtyId.delete(ptyId)
@@ -328,7 +308,21 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
       })
     }
     for (const surface of preservesAbnormalSshSurface ? [] : exitedSurfaces) {
-      this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCause, lastOutput)
+      this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCause, lastOutput, {
+        paneRespawning: options.paneRespawning === true && pty?.connectionId == null
+      })
+    }
+    // A restart, sleep or recovery in place keeps a coordinator's Runs; any other end retires them.
+    if (
+      !preservesAbnormalSshSurface &&
+      !preservesIntentionallyStoppedSurface &&
+      options.hostLost !== true &&
+      options.paneRespawning !== true
+    ) {
+      // The panes read before retirement too: a pane with no issued handle, or one main's close
+      // already dropped, leaves no exited surface.
+      const exitedPanes = new Set([...exitPaneKeys, ...exitedSurfaces.map((s) => s.paneKey)])
+      this.retireExitedCoordinatorRuns(exitedPanes, ptyId, exitIncarnationId)
     }
     this.pruneDisconnectedPtyRecords()
     if (pty && endedOnItsOwn && !preservesIntentionallyStoppedSurface) {

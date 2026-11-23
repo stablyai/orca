@@ -1,11 +1,11 @@
 import type { AppState } from '../../../types'
-import type { Tab, TabGroup } from '../../../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { PersistedOpenFile } from '../../../../../../shared/workspace-session/workspace-session-state-types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
 import type { OpenFile } from '../types/open-file'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
 import { buildOwnedEditorFileId, runtimeOwnerKey } from './editor-file-ids'
-import { recordDraft, tabBucketDraft } from '../../../keyed-record-transitions'
+import { recordDraft, tabBucketDraft } from '../../../record-transitions/keyed-record-transitions'
 
 export function shouldHydrateWithOwnedEditorFileId(
   worktreeId: string,

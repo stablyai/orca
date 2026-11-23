@@ -2,12 +2,13 @@ import {
   selectRuntimeAwareSshStatus,
   type RuntimeAwareSshStatusState
 } from '@/store/slices/ssh/runtime-environment-ssh-selectors'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { connectRuntimeEnvironmentSshTarget } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
 import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,
   parseExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 
@@ -28,6 +29,7 @@ export function getRepoSshConnection(repo: RepoSshFields): RepoSshConnection | n
 /** Gate workspace creation with the repo owner’s SSH state, never this client’s map (#25887). Unreachable/unhydrated server state cannot prove a gate; let that server decide. */
 export function selectRepoSshGateInput(
   state: RuntimeAwareSshStatusState,
+  statuses: RuntimeStatuses,
   repo: RepoSshFields
 ): { connectionId: string | null; status: SshConnectionStatus | null } {
   const connection = getRepoSshConnection(repo)
@@ -40,7 +42,12 @@ export function selectRepoSshGateInput(
       status: state.sshConnectionStates.get(connection.targetId)?.status ?? null
     }
   }
-  const status = selectRuntimeAwareSshStatus(state, connection.environmentId, connection.targetId)
+  const status = selectRuntimeAwareSshStatus(
+    state,
+    statuses,
+    connection.environmentId,
+    connection.targetId
+  )
   return status === null
     ? { connectionId: null, status: null }
     : { connectionId: connection.targetId, status }

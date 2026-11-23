@@ -21,7 +21,7 @@ import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibilit
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { refreshLocalStructuredSessionWorktreeTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
-import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { OrchestrationPartyLocationResult } from '../../../../../shared/orchestration/orchestration-caller-status'

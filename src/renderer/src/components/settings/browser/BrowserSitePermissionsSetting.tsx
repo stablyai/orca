@@ -15,11 +15,11 @@ import {
   browserExternalAppPermissionLabel,
   browserSitePermissionLabel,
   browserSitePermissionSiteName
-} from '../../browser-pane/browser-site-permission-copy'
+} from '../../browser-pane/page-prompts/browser-site-permission-copy'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
 import { getBrowserSitePermissionsSearchEntry } from './browser-site-permissions-search'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '../../../store/index'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'

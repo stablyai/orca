@@ -68,39 +68,44 @@ export function areWorktreePathsEqual(
 
 export function dedupeWorktreesByPath<T extends { path: string }>(
   worktrees: readonly T[],
-  platform = process.platform
+  platform = process.platform,
+  merge: (kept: T, duplicate: T) => T = (kept) => kept
 ): T[] {
   // Key absolute paths once; only host-dependent relative paths require pairwise comparison.
   const unique: T[] = []
-  const posixKeys = new Set<string>()
-  const windowsKeys = new Set<string>()
-  const windowsPaths: string[] = []
-  const relativePaths: string[] = []
-  const matchesAny = (paths: string[], pathValue: string): boolean =>
-    paths.some((existing) => areWorktreePathsEqual(existing, pathValue, platform))
+  const posixKeys = new Map<string, number>()
+  const windowsKeys = new Map<string, number>()
+  const windowsIndexes: number[] = []
+  const relativeIndexes: number[] = []
+  const findMatch = (indexes: number[], pathValue: string): number | undefined =>
+    indexes.find((index) => areWorktreePathsEqual(unique[index].path, pathValue, platform))
 
   for (const worktree of worktrees) {
     const pathValue = worktree.path
+    let match: number | undefined
     if (looksLikePosixAbsolutePath(pathValue)) {
       const key = canonicalWorktreePath(pathValue, platform)
-      if (!posixKeys.has(key)) {
-        posixKeys.add(key)
-        unique.push(worktree)
+      match = posixKeys.get(key)
+      if (match === undefined) {
+        posixKeys.set(key, unique.length)
       }
-      continue
-    }
-    if (platform === 'win32' || isWindowsAbsolutePathLike(pathValue)) {
+    } else if (platform === 'win32' || isWindowsAbsolutePathLike(pathValue)) {
       const key = canonicalWorktreePath(pathValue, 'win32')
-      if (!windowsKeys.has(key) && !matchesAny(relativePaths, pathValue)) {
-        windowsKeys.add(key)
-        windowsPaths.push(pathValue)
-        unique.push(worktree)
+      match = windowsKeys.get(key) ?? findMatch(relativeIndexes, pathValue)
+      if (match === undefined) {
+        windowsKeys.set(key, unique.length)
+        windowsIndexes.push(unique.length)
       }
-      continue
+    } else {
+      match = findMatch(relativeIndexes, pathValue) ?? findMatch(windowsIndexes, pathValue)
+      if (match === undefined) {
+        relativeIndexes.push(unique.length)
+      }
     }
-    if (!matchesAny(relativePaths, pathValue) && !matchesAny(windowsPaths, pathValue)) {
-      relativePaths.push(pathValue)
+    if (match === undefined) {
       unique.push(worktree)
+    } else {
+      unique[match] = merge(unique[match], worktree)
     }
   }
   return unique

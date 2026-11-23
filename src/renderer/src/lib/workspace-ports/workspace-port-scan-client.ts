@@ -13,7 +13,7 @@ import type {
   WorkspacePortPageProbeResult,
   WorkspacePortScanResult
 } from '../../../../shared/workspace/ports/workspace-ports'
-import { normalizeExecutionHostId } from '../../../../shared/execution-host'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/workspace-ports-runtime-capabilities'
 import { translate } from '@/i18n/i18n'
 

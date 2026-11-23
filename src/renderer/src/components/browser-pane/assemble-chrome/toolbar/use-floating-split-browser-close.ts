@@ -2,7 +2,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { resolveBrowserSourceUnifiedTab } from '@/lib/browser/workspace/browser-workspace-source-resolution'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 import { useAppStore } from '@/store/index'
-import { isFloatingWorkspaceId } from '../../../../../../shared/floating-workspace-worktree'
+import { isFloatingWorkspaceId } from '../../../../../../shared/workspace/identity/floating-workspace-worktree'
 import type { BrowserChromeToolAction } from './browser-chrome-toolbar'
 
 /** The floating panel's one tab row shows only the focused split, so a browser in another split needs its own close button. */

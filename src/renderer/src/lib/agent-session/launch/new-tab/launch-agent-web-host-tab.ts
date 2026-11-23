@@ -1,4 +1,3 @@
-import { agentTabLaunchStore } from './launch-agent-execution-context'
 import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import { readHostAgentStartupSettings } from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
@@ -6,18 +5,16 @@ import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-la
 import { sourceControlActionAgentArgs } from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { readLaunchPermissionChoice } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { resolveHostAgentStartupShell } from '../../../../../../shared/shell/launch/windows-terminal-shell'
-import type { AgentLaunchChoices } from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
 import { structuredAgentLabel } from '../structured-agent-session-launch-label'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
-import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { agentSessionCreateCapabilities } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-request'
-import { AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { pairedAgentLaunchInputs } from '../routing/paired-agent-launch-inputs'
 import { createWebRuntimeSessionTerminalResult } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { completeWebHostAgentLaunch } from '@/lib/agent-session/launch/new-tab/web-host-agent-launch-completion'
 import { deliverCreatedWebRuntimeAgentSessionPrompt } from '@/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery'
 import type { CreateWebRuntimeSessionTerminalOnHostArgs } from '@/runtime/hosted-terminals/creation/terminal-create-contracts'
@@ -30,7 +27,7 @@ import {
 } from '../prompt/launch-agent-startup-prompt-plan'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { LaunchAgentStartupPromptPlan } from '../prompt/launch-agent-startup-prompt-plan'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { translate } from '@/i18n/i18n'
@@ -45,7 +42,6 @@ export async function launchAgentInWebHostTab(args: {
   groupId?: string
   cwd?: string | null
   trustWorktreeId?: string
-  buildStartup: (choices: AgentLaunchChoices | undefined) => LaunchAgentStartupPromptPlan
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   prompt: string
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
@@ -81,9 +77,7 @@ export async function launchAgentInWebHostTab(args: {
   const hasPrompt = prompt.length > 0
   const pairingRevision = environmentId ? getRuntimeEnvironmentRevision(environmentId) : undefined
   const runtimeId = environmentId
-    ? lastVerifiedRuntimeStatus(
-        useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
-      )?.runtimeId
+    ? lastVerifiedRuntimeStatus(readRuntimeStatuses().get(environmentId))?.runtimeId
     : undefined
   let legacyPreparationCancelled = false
   let startup: LaunchAgentStartupPromptPlan
@@ -109,9 +103,7 @@ export async function launchAgentInWebHostTab(args: {
     }
     // Why: prompt delivery is client-owned; the host supplies launch settings.
     const hostStatus = environmentId
-      ? lastVerifiedRuntimeStatus(
-          useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
-        )
+      ? lastVerifiedRuntimeStatus(readRuntimeStatuses().get(environmentId))
       : undefined
     const platform = args.launchPlatform ?? hostStatus?.hostPlatform
     startup = planHostedAgentPrompt(agent, prompt, promptDelivery, {
@@ -157,9 +149,7 @@ export async function launchAgentInWebHostTab(args: {
               })
             : null
           const status = environmentId
-            ? lastVerifiedRuntimeStatus(
-                useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
-              )
+            ? lastVerifiedRuntimeStatus(readRuntimeStatuses().get(environmentId))
             : undefined
           if (args.isCancelled?.()) {
             throw new DOMException('Agent launch cancelled', 'AbortError')
@@ -211,12 +201,8 @@ export async function launchAgentInWebHostTab(args: {
               isFollowupPath: TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
             })
           } else {
-            // Why: unavailable host recipes retain the existing no-refusal compatibility launch.
-            const preferences = await ensureAgentLaunchPreferences(
-              agentTabLaunchStore(useAppStore.getState(), args),
-              { kind: 'git-worktree', worktreeId }
-            )
-            startup = args.buildStartup(preferences.agentLaunchChoices)
+            // Why: this desktop's launch settings must never build a command the paired host runs (#38866).
+            throw new Error(failureMessage)
           }
         } catch (error) {
           legacyPreparationCancelled = error instanceof Error && error.name === 'AbortError'

@@ -6,7 +6,7 @@ import { resolveTerminalPasteRuntime } from '@/components/terminal-pane/input/pa
 import { TERMINAL_PASTE_MAX_BYTES } from '@/components/terminal-pane/input/paste/terminal-paste-limits'
 import { pasteTerminalText } from '@/components/terminal-pane/input/paste/terminal-bracketed-paste'
 import { isTerminalPanePasteFocusCurrent } from '@/components/terminal-pane/input/paste/terminal-paste-target-state'
-import type { DashboardCardTerminalInput } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardCardTerminalInput } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 
 export type PreviewTerminalPasteSource = 'keyboard' | 'app-menu' | 'right-click'
 

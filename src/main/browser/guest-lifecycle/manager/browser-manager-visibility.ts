@@ -154,6 +154,10 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     this.agentActivity.handOver(fromPageId, toPageId)
   }
 
+  protected isAgentCommandRunning(guestWebContentsId: number): boolean {
+    return this.agentActivity.isExecuting(this.pageIdForGuest(guestWebContentsId))
+  }
+
   /** The page shows "An agent is using this page": a command is queued or one settled within the idle window. */
   isAgentUsingPage(browserPageId: string): boolean {
     return this.agentActivity.isActive(browserPageId)
@@ -221,9 +225,12 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
   // Agent input moves Chromium focus into the guest; the pane restores the user's focus.
   guardUserFocusForAgentInput(guestWebContentsId: number): Promise<() => void> {
     const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
-    const renderer = browserPageId ? this.resolveRendererForBrowserTab(browserPageId) : null
-    if (!browserPageId || !renderer || renderer.isDestroyed()) {
-      return Promise.reject(focusGuardUnavailableError())
+    if (!browserPageId) {
+      return Promise.reject(focusGuardUnavailableError('missing_page'))
+    }
+    const renderer = this.resolveRendererForBrowserTab(browserPageId)
+    if (!renderer) {
+      return Promise.reject(focusGuardUnavailableError('missing_renderer'))
     }
     return guardPaneFocusForAgentInput(renderer, browserPageId)
   }

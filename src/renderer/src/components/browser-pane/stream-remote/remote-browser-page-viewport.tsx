@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
+import { BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { Globe, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -11,11 +13,18 @@ import type {
 import type { RemoteBrowserPageHandle } from '@/store/slices/browser/browser-slice-contract'
 import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser/navigation/browser-url'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
-import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
+import type { BrowserScreencastPointer } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
+import {
+  getRemoteBrowserFrameCursor,
+  getRemoteBrowserFrameStyle
+} from './remote-browser-frame-style'
+import { RemoteBrowserLinkStatusBubble } from './remote-browser-link-status-bubble'
+import BrowserFind from '../assemble-chrome/find/BrowserFind'
+import type { RemoteBrowserPageFind } from './use-remote-browser-page-find'
 import { MarkupOverlay } from '../annotate/MarkupOverlay'
 import type { MarkupModeController } from '../annotate/capture/useMarkupMode'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
-import { ReopenBrowserPageOnServerButton } from '../ReopenBrowserPageOnServerButton'
+import { ReopenBrowserPageOnServerButton } from '../navigate/reopen-on-server/ReopenBrowserPageOnServerButton'
 import { resolveActiveBrowserLoadFailure } from '../navigate/browser-load-failure-for-url'
 import { BrowserNewTabPage } from '../new-tab/BrowserNewTabPage'
 import {
@@ -24,18 +33,26 @@ import {
 } from './remote-browser-stream-status'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RemoteBrowserRuntimeTarget } from './remote-browser-page-input-model'
+import { useWorkspaceDocPageFileDrop } from '../navigate/browser-page-workspace-file-drop'
+import {
+  BrowserPageFeedbackBadge,
+  type BrowserPageFeedbackBadgeHandle
+} from '../assemble-chrome/feedback/browser-page-feedback-badge'
 
 export function RemoteBrowserPageViewport({
   remoteViewportRef,
+  attachFileDrop,
   imageRef,
+  feedbackBadgeRef,
+  find,
   frameUrl,
   frameMetadata,
+  pagePointer,
   busy,
   markup,
   browserTab,
   remoteError,
   streamStatus,
-  remoteCertificateTrustSupported,
   certificateFailure,
   remotePageHandle,
   activeRuntimeEnvironmentId,
@@ -51,18 +68,25 @@ export function RemoteBrowserPageViewport({
   handleRemotePointerUp,
   handleRemoteContextMenu,
   handleRemoteScreenshotKeyDown,
-  handleRemoteScreenshotPaste
+  handleRemoteScreenshotPaste,
+  handleRemotePointerMove,
+  annotateOverlays
 }: {
   remoteViewportRef: React.RefObject<HTMLDivElement | null>
+  /** Sets remoteViewportRef too; takes files dragged in from this computer. */
+  attachFileDrop: (root: HTMLElement | null) => void
   imageRef: React.RefObject<HTMLImageElement | null>
+  feedbackBadgeRef: React.RefObject<BrowserPageFeedbackBadgeHandle | null>
+  find: RemoteBrowserPageFind
   frameUrl: string | null
   frameMetadata: BrowserScreencastFrameMetadata | null
+  /** The host page's cursor and hovered link; null from hosts that don't report them. */
+  pagePointer: BrowserScreencastPointer | null
   busy: boolean
   markup: MarkupModeController
   browserTab: BrowserPageState
   remoteError: string | null
   streamStatus: RemoteBrowserStreamStatus
-  remoteCertificateTrustSupported: boolean
   certificateFailure: BrowserCertificateFailure | null
   remotePageHandle: RemoteBrowserPageHandle | null
   activeRuntimeEnvironmentId: string
@@ -80,9 +104,37 @@ export function RemoteBrowserPageViewport({
   handleRemoteContextMenu: (event: React.MouseEvent<HTMLImageElement>) => void
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
   handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
+  /** Takes pointer leaves too, which move the page's pointer off it. */
+  handleRemotePointerMove: (event: React.PointerEvent<HTMLImageElement>) => void
+  annotateOverlays: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
-  const remoteFrameStyle = useMemo(() => getRemoteBrowserFrameStyle(frameMetadata), [frameMetadata])
+  // Why: runtimes predating browser.certificate-trust.v1 can't honor a proceed request, so hide "Proceed Anyway" until support is advertised.
+  const remoteCertificateTrustSupported = useRuntimeEnvironmentCapability(
+    certificateFailure?.challengeId ? remotePageHandle?.environmentId : null,
+    BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY
+  )
+  const fileDrop = useWorkspaceDocPageFileDrop(browserTab.id, worktreeId, remoteViewportRef)
+
+  // Transfer viewport focus to the first image, which owns remote key input.
+  const hasStreamFrame = frameUrl !== null
+  useEffect(() => {
+    if (!hasStreamFrame || document.activeElement !== remoteViewportRef.current) {
+      return
+    }
+    imageRef.current?.focus()
+  }, [hasStreamFrame, imageRef, remoteViewportRef])
+
+  const hasViewportPreset = Boolean(browserTab.viewportPresetId)
+  const remoteFrameStyle = useMemo(
+    () => getRemoteBrowserFrameStyle(frameMetadata, hasViewportPreset),
+    [frameMetadata, hasViewportPreset]
+  )
+  const pageCursor = pagePointer?.cursor
+  const remoteImageStyle = useMemo(
+    () => ({ ...remoteFrameStyle, cursor: getRemoteBrowserFrameCursor(pageCursor) }),
+    [pageCursor, remoteFrameStyle]
+  )
   // Why: hosts clear the error when a re-attempt starts; hold it until this pane's command settles.
   const [standingFailure, setStandingFailure] = useState(browserTab.loadError)
   if (
@@ -99,11 +151,19 @@ export function RemoteBrowserPageViewport({
 
   return (
     <div
-      ref={remoteViewportRef}
+      ref={attachFileDrop}
       tabIndex={-1}
       // Why a size container: the frame letterboxes itself in cq units of this pane.
       className="@container-size relative min-h-0 flex-1 overflow-hidden bg-background"
+      {...fileDrop}
     >
+      <BrowserPageFeedbackBadge ref={feedbackBadgeRef} />
+      <BrowserFind
+        browserPageId={browserTab.id}
+        isOpen={find.findOpen}
+        onClose={find.closeFind}
+        webviewRef={find.findTargetRef}
+      />
       {markup.isActive && markup.baseImage ? (
         // Why the frame's own box: markup draws over the letterboxed page, not the whole pane.
         <div className="absolute top-0 left-0" style={remoteFrameStyle}>
@@ -122,12 +182,17 @@ export function RemoteBrowserPageViewport({
           src={frameUrl}
           alt=""
           tabIndex={0}
-          style={remoteFrameStyle}
-          className="absolute top-0 left-0 max-w-none cursor-default bg-white outline-none"
+          style={remoteImageStyle}
+          className="absolute top-0 left-0 max-w-none bg-white outline-none"
           onPointerDown={handleRemotePointerDown}
+          onPointerMove={handleRemotePointerMove}
+          onPointerLeave={handleRemotePointerMove}
           onPointerUp={handleRemotePointerUp}
           onContextMenu={handleRemoteContextMenu}
-          onKeyDown={handleRemoteScreenshotKeyDown}
+          onKeyDown={(event) => {
+            find.closeFindOnPageEscape(event)
+            handleRemoteScreenshotKeyDown(event)
+          }}
           onPaste={handleRemoteScreenshotPaste}
           draggable={false}
         />
@@ -156,6 +221,12 @@ export function RemoteBrowserPageViewport({
       {isBlankBrowserUrl(browserTab.url) ? (
         <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={onNavigateToUrl} />
       ) : null}
+      {annotateOverlays}
+      <RemoteBrowserLinkStatusBubble
+        browserPageId={browserTab.id}
+        targetUrl={pagePointer?.targetUrl ?? ''}
+        viewportRef={remoteViewportRef}
+      />
       {showRemoteFailureOverlay && loadError ? (
         <BrowserLoadFailureOverlay
           loadError={loadError}

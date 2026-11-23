@@ -1,5 +1,5 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { JiraIssueKeyCasing } from '../../../../../shared/ui-chrome-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { JiraIssueKeyCasing } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'

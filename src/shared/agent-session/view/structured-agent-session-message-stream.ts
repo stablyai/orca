@@ -7,8 +7,8 @@ import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item
 import {
   isAgentSessionContextClear,
   isNativeChatContextClear
-} from '../agent-session-context-clear'
-import { isNativeChatProviderRetryRow } from '../../native-chat/native-chat-provider-retry-runs'
+} from '../conversation-context/agent-session-context-clear'
+import { isNativeChatProviderRetryRow } from '../../native-chat/transcript/notices/native-chat-provider-retry-runs'
 import {
   compareNativeChatTranscriptMessages,
   sameNativeChatRowPlacement

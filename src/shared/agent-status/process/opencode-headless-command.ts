@@ -1,4 +1,7 @@
-import { extractLeadingEnvAssignments } from '../../shell/launch/command-environment'
+import {
+  ENV_VALUE_FLAGS,
+  extractLeadingEnvAssignments
+} from '../../shell/launch/command-environment'
 import { getCommandTokenPathBasename } from '../../shell/command-resolution/command-token-scanner'
 import type { AgentStartupShell } from '../../agent-launch/startup/tui-agent-startup-shell'
 
@@ -17,7 +20,6 @@ const RUN_VALUE_FLAGS = new Set([
   '--title'
 ])
 
-const ENV_VALUE_FLAGS = new Set(['-u', '--unset', '-C', '--chdir', '-P'])
 const ENV_EMPTY_FLAGS = new Set(['-i', '--ignore-environment', '-'])
 
 function envCommandPosition(tokens: readonly string[], offset: number): number {

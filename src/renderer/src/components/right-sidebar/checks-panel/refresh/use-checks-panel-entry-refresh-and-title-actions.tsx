@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import React, { useCallback, useEffect, useRef } from 'react'

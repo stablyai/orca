@@ -1,5 +1,9 @@
-import { renderOrchestrationArgv, type OrchestrationAgentView } from '../agent-view'
-import type { WorkerStartReceipt } from './worker-output'
+import {
+  formatAgentFieldsText,
+  renderOrchestrationArgv,
+  type OrchestrationAgentView
+} from '../agent-view'
+import { formatLinkedItem, type WorkerStartReceipt } from './worker-output'
 
 type LaunchChoice = {
   agent?: string | null
@@ -9,6 +13,9 @@ type LaunchChoice = {
 
 export type WorkerStartAgentReceipt = WorkerStartReceipt & {
   runId?: string
+  readyBy?: string
+  blockedReason?: string
+  screen?: string
   mode?: { mode?: string; preferred?: string; detail: string }
   launch?: { requested?: LaunchChoice; effective?: LaunchChoice }
   recovery?: string
@@ -16,6 +23,10 @@ export type WorkerStartAgentReceipt = WorkerStartReceipt & {
   turnStart?: string
   next?: string
   keptOpen?: true
+  /** `--for`: whether the worker was linked to that question, and why not. */
+  forQuestion?: { question: string; linked: boolean; why?: string }
+  /** Started without `--for` by a caller holding an unanswered question. */
+  openQuestion?: string
 }
 
 // A hook-capable agent that has not shown its turn yet is usually slow, not dead; a resend duplicates the task.
@@ -24,6 +35,16 @@ export function isUnobservedTurnStart(value: WorkerStartAgentReceipt): boolean {
     value.state === 'outcome_unknown' &&
     (value.turnStart === 'unobserved' || value.stage === 'turn_start_unobserved')
   )
+}
+
+/** Its agent wasn't ready at the budget; Orca still waits on it and types the task in once it is. */
+export function isAwaitingAgent(value: Pick<WorkerStartAgentReceipt, 'state'>): boolean {
+  return value.state === 'starting'
+}
+
+/** A start whose worker is or may be live: a non-zero exit would read as a failure to retry. */
+export function isLiveWorkerStart(value: WorkerStartAgentReceipt): boolean {
+  return value.state === 'ready' || isUnobservedTurnStart(value) || isAwaitingAgent(value)
 }
 
 type WorkerStartFields = {
@@ -45,6 +66,9 @@ type WorkerStartFields = {
   residualResources?: string[]
   nextCommands?: string[]
   keptOpen?: true
+  linkedItem?: WorkerStartReceipt['linkedItem']
+  questionNotLinked?: string
+  reminder?: string
   next?: string
 }
 
@@ -79,6 +103,15 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
           value.state !== 'ready' && !unobserved && residual.length ? residual : undefined,
         nextCommands: value.state === 'ready' || unobserved ? undefined : value.nextCommands,
         keptOpen: value.keptOpen,
+        linkedItem: value.linkedItem,
+        readyBy: value.readyBy,
+        blockedReason: value.blockedReason,
+        screen: value.screen,
+        questionNotLinked:
+          value.forQuestion && !value.forQuestion.linked
+            ? `${value.forQuestion.question}: ${value.forQuestion.why ?? 'not linked'}`
+            : undefined,
+        reminder: value.openQuestion,
         next: unobserved
           ? `Task typed in but the worker hasn't been seen starting; don't resend or abandon it. End your turn; Orca wakes you when it reports. If nothing arrives, run ${renderOrchestrationArgv(['orca', 'orchestration', 'worker-show', '--dispatch', value.dispatchId])}.`
           : value.recovery
@@ -86,21 +119,32 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
             : value.next
       }
     },
+    text: ({ linkedItem, ...fields }) =>
+      linkedItem
+        ? `${formatLinkedItem(linkedItem)}\n${formatAgentFieldsText(fields)}`
+        : formatAgentFieldsText(fields),
     failure: (value) =>
       value.state === 'ready'
         ? undefined
-        : isUnobservedTurnStart(value)
+        : isAwaitingAgent(value)
           ? {
-              // The worker is likely starting; a non-zero exit reads as a failure to retry.
               level: 'warning',
               exitCode: 0,
-              code: 'turn_start_unobserved',
-              message: "task typed in; the worker may still be starting. Don't resend."
+              code: 'agent_not_ready',
+              message: `worker ${value.dispatchId} is live; its agent isn't ready yet. Don't start this task again.`
             }
-          : {
-              code: value.state === 'outcome_unknown' ? 'start_outcome_unknown' : 'start_failed',
-              message: `${value.failedStage ?? 'start'}: ${value.lastError ?? value.state}`
-            }
+          : isUnobservedTurnStart(value)
+            ? {
+                // The worker is likely starting; a non-zero exit reads as a failure to retry.
+                level: 'warning',
+                exitCode: 0,
+                code: 'turn_start_unobserved',
+                message: "task typed in; the worker may still be starting. Don't resend."
+              }
+            : {
+                code: value.state === 'outcome_unknown' ? 'start_outcome_unknown' : 'start_failed',
+                message: `${value.failedStage ?? 'start'}: ${value.lastError ?? value.state}`
+              }
   }
 
 /** A send a finished worker took as its next Task: worker-start's receipt plus where it went. */

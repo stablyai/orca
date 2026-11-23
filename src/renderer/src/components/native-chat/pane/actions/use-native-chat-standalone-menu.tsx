@@ -1,4 +1,4 @@
-import { NativeChatCliForkMenuItems } from '../../../tab-bar/NativeChatCliForkMenuItems'
+import { NativeChatCliForkMenuItems } from '../../../tab-bar/session-actions/NativeChatCliForkMenuItems'
 import { AgentSessionContextCopyMenuItem } from '../../../terminal-pane/clipboard/AgentSessionContextCopyMenuItem'
 import { useNativeChatQuickCommandsMenu } from './use-native-chat-quick-commands-menu'
 import {

@@ -6,7 +6,7 @@ import {
   getLocalExecutionHostLabel,
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { withRepoHostOwnership } from '@/store/slices/worktrees/listing/worktree-host-ownership'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import { getPinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'

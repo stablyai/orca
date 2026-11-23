@@ -6,7 +6,7 @@ import {
   getRootProjectEntryKey,
   getRootProjectEntryRank,
   type RootProjectEntry
-} from '../../../../../../shared/root-project-order'
+} from '../../../../../../shared/sidebar-list/sections/root-project-order'
 import { getDistinctProjectGroups } from '../../../../../../shared/project/groups/project-groups'
 import { getLogicalRepoOrderRankById } from '../../../../../../shared/sidebar-list/sections/project-section-order'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'

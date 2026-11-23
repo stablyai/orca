@@ -1,8 +1,8 @@
 /** How Claude closed a permission prompt, from what its transcript records for that tool call
- *  (probes 2026-11-10/11, Claude 2.1.322): the hook decision it took, written as soon as it takes
- *  it, and the tool_result: a hook's deny message verbatim, the user's No, the 2:00 safety-check
- *  block, or the command's own output, which is an error when an allowed command fails. Hook events
- *  do not say this: a deny or a No fires no PostToolUse or PostToolUseFailure. */
+ *  (probes 2026-11-10/11/15, Claude 2.1.322): the hook decision it took, written with the
+ *  tool_result, so an allowed command's only once it finishes, and that tool_result: a hook's deny
+ *  message verbatim, the user's No, the 2:00 safety-check block, or the command's own output, which
+ *  is an error when an allowed command fails. Hook events do not say this: a deny or a No fires no PostToolUse or PostToolUseFailure. */
 import { open, stat, type FileHandle } from 'node:fs/promises'
 import type { WorkerApprovalOutcome } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
@@ -118,7 +118,7 @@ export function claudeToolClose(result: ClaudeToolResult, ourDeny: string | null
 }
 
 /** Whether Claude took Orca's hook answer for this call. Its record of the hook decision says so
- *  outright, before the tool even runs; without one (an older Claude), only a result that answer
+ *  outright; without one (an older Claude), only a result that answer
  *  alone gives: our deny text, or, after an allow, anything but a person's No or the auto-block,
  *  since an allowed command that fails records an error result too. */
 export function claudeTookHookAnswer(

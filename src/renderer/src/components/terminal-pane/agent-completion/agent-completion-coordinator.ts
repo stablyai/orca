@@ -1,5 +1,4 @@
 import type { AgentStatus } from '../../../../../shared/agent-status/title/agent-title-core'
-import type { RecognizedAgentProcess } from '../../../../../shared/agent-status/process/agent-process-recognition'
 import type {
   AgentCompletionCoordinator,
   AgentCompletionCoordinatorOptions,
@@ -16,6 +15,7 @@ import {
 import { createAgentCompletionTitleObserver } from './agent-completion-title-observer'
 import { createAgentCompletionHookObserver } from './agent-completion-hook-observer'
 import { createAgentCompletionLifecycle } from './agent-completion-lifecycle'
+import type { ProcessMonitorState } from './agent-completion-process-types'
 
 type CompletionSource = 'hook' | 'title' | 'process-exit'
 
@@ -43,18 +43,18 @@ export function createAgentCompletionCoordinator(
     pendingHookDonePayload: null
   }
   // Why: output/title activity can arrive before async PTY bind; only re-arm cadence after bind starts process tracking.
-  const processState = {
+  const processState: ProcessMonitorState = {
     disposed: false,
     inspectionInFlight: false,
     inspectionGeneration: 0,
     consecutiveInspectionErrors: 0,
     pollTrackingStarted: false,
-    pollTimer: null as ReturnType<typeof setTimeout> | null,
-    pollTimerTier: null as 'active' | 'idle' | 'hidden' | 'no-evidence' | null,
+    pollTimer: null,
+    pollTimerTier: null,
     lastPaneActivityAt: null,
     hasAgentRunEvidence: false,
     pendingProcessExit: null,
-    lastForegroundAgent: null as RecognizedAgentProcess | null,
+    lastForegroundAgent: null,
     processSession: 0
   }
   const titleClaim = createTitleCompletionClaim({
@@ -166,7 +166,6 @@ export function createAgentCompletionCoordinator(
   processMonitor = createAgentCompletionProcessMonitor({
     options,
     state: processState,
-    identityScope,
     pendingTitle,
     establishAgentEvidence,
     clearAgentRunEvidence,
@@ -277,7 +276,7 @@ export function createAgentCompletionCoordinator(
     consumePendingStampedTailForAgent,
     consumeStampedTailForCurrentCoordinator,
     clearOriginStampedTail: () => identityScope.clearOriginStampedTail(),
-    clearProcessExitCompletion: () => identityScope.clearProcessExitCompletion(),
+    retirePreviousTurnCompletion: () => identityScope.retirePreviousTurnCompletion(),
     recordWorkingBoundary,
     dropPendingTitle
   })

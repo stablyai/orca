@@ -1,3 +1,4 @@
+import type { BotChangeScope } from '../../../../shared/bots/bot-change-scope'
 import type { WorkspaceMetadataSet } from '../../../../shared/worktree/metadata/workspace-metadata-set'
 import type { WorkspaceCleanupRunFinishedEvent } from '../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import type {
@@ -14,6 +15,7 @@ import type {
   AgentLaunchTabPublishRequest
 } from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education/feature-education-telemetry'
+import type { RendererTerminalSplitRequest } from '../../../../shared/workspace-layout/terminal-topology/renderer-terminal-split-request'
 import type { TerminalRevealIdentity } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
 import type { TerminalPaneRevealTarget } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
 import type {
@@ -56,6 +58,10 @@ export type RuntimeNotifier = {
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void
   browserProfilesChanged?(): void
+  /** A bot, its automations or its Activity's work changed; debounced by the runtime. */
+  botsChanged?(scope: BotChangeScope): void
+  orchestrationSessionWorkersChanged?(sessionId: string): void
+  peerMailReturned?(): void
   workspaceCleanupRunFinished?(run: WorkspaceCleanupRunFinishedEvent['run']): void
   activateWorktree(
     repoId: string,
@@ -115,6 +121,8 @@ export type RuntimeNotifier = {
   agentLaunchPaneVerdict?(event: AgentLaunchPaneVerdictEvent): void
   /** A launch's recipe when no reveal carried it, so resume can replay it. */
   rememberLaunchRecipe?(recipe: PaneLaunchRecipe): void
+  /** A terminal worker's restart resume now waits on a person beside the cut chats. */
+  restartOffersChanged?(): void
   resolveLegacyWorkerTerminalRecovery?(
     paneKey: string,
     resolution: 'adopted' | 'exited' | 'rolled_back',
@@ -124,16 +132,7 @@ export type RuntimeNotifier = {
   splitTerminal(
     tabId: string,
     paneRuntimeId: number,
-    opts: {
-      direction: 'horizontal' | 'vertical'
-      command?: string
-      worktreeId?: string
-      sourceLeafId?: string
-      telemetrySource?: TerminalPaneSplitSource
-      newLeafId?: string
-      /** An agent's split: the new pane leaves the user's active pane and keyboard focus alone. */
-      activate?: false
-    }
+    opts: Omit<RendererTerminalSplitRequest, 'tabId' | 'paneRuntimeId'>
   ): void
   /** `recordInteraction: false` marks a title the host applied, not one the user typed. */
   renameTerminal(tabId: string, title: string | null, options?: { recordInteraction: false }): void

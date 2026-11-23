@@ -1,4 +1,4 @@
-import { parseExecutionHostId } from '../../execution-host'
+import { parseExecutionHostId } from '../../execution-host/execution-host'
 
 const SSH_PTY_ID_PREFIX = 'ssh:'
 const SSH_PTY_ID_SEPARATOR = '@@'

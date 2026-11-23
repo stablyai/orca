@@ -16,7 +16,10 @@ import {
   resolveIndexedRepoOwner
 } from '../lib/workspace/ownership/repo-owner-index'
 import '../lib/workspace/ownership/workspace-catalog-owner-index'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'

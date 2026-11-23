@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import type { PersistedUIState } from '../../../src/shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../src/shared/orca-profiles/persisted-ui-state-types'
 import type { RepoIcon } from '../../../src/shared/repository/appearance/repo-icon'
 import {
   hostUnionArms,
@@ -69,6 +69,9 @@ export const hostRepoCatalogSchema = z
   .looseObject({ repos: hostRepoCatalogRepos })
   .transform((reply) => reply.repos)
 
+/** Image icons' ids by `hostId|repoId` (repoIconFeedKey); older hosts send none. */
+export const hostRepoIconIdsSchema = z.record(z.string(), z.string())
+
 // Snapshot reads: `unchanged` names the catalog the caller holds; older hosts always answer repos.
 export const hostRepoCatalogSnapshotSchema = z.union([
   z
@@ -77,12 +80,14 @@ export const hostRepoCatalogSnapshotSchema = z.union([
   z
     .looseObject({
       repos: hostRepoCatalogRepos,
-      snapshotId: salvagedOptional('snapshotId', z.string().min(1).max(128))
+      snapshotId: salvagedOptional('snapshotId', z.string().min(1).max(128)),
+      repoIconIds: salvagedOptional('repoIconIds', hostRepoIconIdsSchema)
     })
-    .transform(({ repos, snapshotId }) => ({
+    .transform(({ repos, snapshotId, repoIconIds }) => ({
       kind: 'catalog' as const,
       repos,
-      snapshotId: snapshotId ?? null
+      snapshotId: snapshotId ?? null,
+      repoIconIds: repoIconIds ?? {}
     }))
 ])
 

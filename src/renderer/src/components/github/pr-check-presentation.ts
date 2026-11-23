@@ -1,6 +1,6 @@
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { getCheckConclusion } from '@/components/pr-check-counts'
+import { getCheckConclusion } from '@/components/github/pr-check-counts'
 import type {
   PRCheckAnnotation,
   PRCheckDetail,

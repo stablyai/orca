@@ -3,8 +3,8 @@ import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/settings/native-chat-shell-environment'
 import { createStructuredAgentEnvironmentResolvers } from '../environment/structured-agent-shell-environment'
 import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/runtime-auth/environment'
 import type { RateLimitService } from '../../../rate-limits/service/rate-limit-service'
@@ -60,6 +60,8 @@ type AccountSettings = Partial<
     | 'nativeChatInheritShellEnvironment'
     | 'nativeChatShellEnvironmentVariables'
     | 'agentDefaultEnv'
+    | 'httpProxyUrl'
+    | 'httpProxyBypassRules'
   >
 >
 
@@ -137,7 +139,11 @@ export function usageLimitAccountSources(deps: UsageLimitAccountSourceDeps): {
       const scope = JSON.stringify([home, 'subscription'])
       if (!reading) {
         // No reading has said where it was taken yet (a headless start polls nothing on its own).
-        return { scope, bootstrap: () => service.requestUsageReading(provider) }
+        return {
+          scope,
+          bootstrap: (notWithinMs) =>
+            service.requestUsageReading(provider, notWithinMs === undefined ? {} : { notWithinMs })
+        }
       }
       if ((await canonicalHome(reading.home)) !== home) {
         return { scope }

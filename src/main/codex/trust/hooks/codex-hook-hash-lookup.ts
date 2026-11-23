@@ -38,9 +38,12 @@ const derivations = new Map<string, Promise<CodexHookAnswer>>()
 let appPathReady: Promise<unknown> | null = null
 
 /** App main only; pathReady must settle without rejecting. */
-export function startCodexHookHashLookup(pathReady: Promise<unknown>): void {
+export function startCodexHookHashLookup(
+  pathReady: Promise<unknown>,
+  maintenanceReady: Promise<unknown> = pathReady
+): void {
   appPathReady = pathReady
-  void sweepStaleCodexScratchHomes()
+  void maintenanceReady.then(() => sweepStaleCodexScratchHomes())
 }
 
 /** Reuse known answers or query Codex in app main, deduplicated per binary. */

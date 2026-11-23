@@ -2,7 +2,7 @@ import { isAgentPermissionChoice } from '../permissions/tui-agent-permission-cho
 import { projectAgentLaunchProfile } from '../choices/agent-launch-profile'
 import { structuredLaunchSeedOptions } from '../../native-chat/input/session-options/native-chat-session-option-defaults'
 import { isAgentChatPermissionChoice } from '../permissions/agent-chat-permission-mode'
-import type { GlobalSettings } from '../../global-settings-types'
+import type { GlobalSettings } from '../../settings/global-settings-types'
 import type { TuiAgent } from '../catalog/tui-agent'
 import type { AgentPickerEntry } from './agent-launch-picker'
 

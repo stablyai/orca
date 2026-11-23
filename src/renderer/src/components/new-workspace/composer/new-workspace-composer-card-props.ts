@@ -3,7 +3,7 @@ import type {
   AgentPickerEntry
 } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
-import type { ComposerAgentRows } from '@/hooks/composer-state/composer-agent-rows-target'
+import type { ComposerAgentRows } from '@/hooks/composer-state/card-projection/composer-agent-rows-target'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
 import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import type { ProjectHostSetupOption } from '@/lib/workspace/creation/project-host-setup-options'
@@ -22,7 +22,7 @@ import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/s
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { AddRepoDialogEntryRequest } from '@/components/sidebar/project-admission/dialog/add-repo-dialog-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 import type { EphemeralVmRecipeOption } from '../run-target/run-target-options'
 

@@ -11,6 +11,30 @@ type HostCodexManagedHomeOwnershipOptions = {
 
 export const MISSING_MANAGED_HOME_MESSAGE = 'Managed Codex home directory does not exist on disk.'
 
+export const MANAGED_HOME_MARKER = '.orca-managed-home'
+/**
+ * Replaces the marker before a Windows home gets junctions: older builds refuse to use or delete
+ * a home without the first one, and their recursive delete would follow a junction into ~/.codex.
+ */
+export const LINKED_MANAGED_HOME_MARKER = '.orca-managed-home-linked'
+
+// The linked marker is read second: a share pass renames the first into it, never back, so a
+// rename landing between the two reads still finds one of them.
+function readMarker(home: string): { isFile: boolean; contents: string } {
+  for (const name of [MANAGED_HOME_MARKER, LINKED_MANAGED_HOME_MARKER]) {
+    const path = join(home, name)
+    try {
+      const isFile = lstatSync(path).isFile()
+      return { isFile, contents: isFile ? readFileSync(path, 'utf-8') : '' }
+    } catch (error) {
+      if (name === LINKED_MANAGED_HOME_MARKER || !isDefinitiveAbsence(error)) {
+        throw error
+      }
+    }
+  }
+  throw new Error('unreachable')
+}
+
 /** Only `untrusted` may clear selection; `indeterminate` must refuse use without erasing state. */
 export type HostCodexManagedHomeVerdict =
   | { kind: 'owned'; homePath: string }
@@ -127,12 +151,12 @@ function evaluate({
     }
   }
 
-  const markerPath = join(canonicalCandidate, '.orca-managed-home')
   let markerIsRegularFile: boolean
   let markerContents: string
   try {
-    markerIsRegularFile = lstatSync(markerPath).isFile()
-    markerContents = markerIsRegularFile ? readFileSync(markerPath, 'utf-8') : ''
+    const marker = readMarker(canonicalCandidate)
+    markerIsRegularFile = marker.isFile
+    markerContents = marker.contents
   } catch (error) {
     // A missing ownership marker disproves trust; an unreadable one leaves it unknown.
     if (isDefinitiveAbsence(error)) {
@@ -175,3 +199,6 @@ export function assertOwnedHostCodexManagedHomePath(
   }
   throw new ManagedCodexHomeTemporarilyUnavailableError(undefined, { cause: verdict.error })
 }
+
+/** An account folder whose home may be Orca's, before ownership is checked. */
+export type CodexAccountHomeCandidate = { accountsRoot: string; accountId: string }

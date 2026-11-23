@@ -120,3 +120,23 @@ export function piSettingsMayPickModel(text: string): boolean {
   }
   return settings === null || setsAny(settings, PI_MODEL_SETTINGS)
 }
+
+/** Treat malformed project settings as a possible model override. */
+function jsonSettingsMayPickModel(text: string, keys: readonly string[]): boolean {
+  const errors: ParseError[] = []
+  const settings = record(parseJsonc(text, errors, { allowTrailingComma: true }))
+  return errors.length > 0 || settings === null || setsAny(settings, keys)
+}
+
+// Cursor's model and its per-model effort parameters.
+const CURSOR_MODEL_SETTINGS = ['model', 'selectedModel', 'modelParameters'] as const
+
+export function cursorCliConfigMayPickModel(text: string): boolean {
+  return jsonSettingsMayPickModel(text, CURSOR_MODEL_SETTINGS)
+}
+
+const COPILOT_MODEL_SETTINGS = ['model', 'autoTier'] as const
+
+export function copilotSettingsMayPickModel(text: string): boolean {
+  return jsonSettingsMayPickModel(text, COPILOT_MODEL_SETTINGS)
+}

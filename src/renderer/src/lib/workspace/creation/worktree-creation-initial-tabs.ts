@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { WorktreeDefaultTabsLaunch } from '../../../../../shared/worktree/creation/launch-types'
 import type { CreatedWorktreeResult } from '@/store/slices/worktrees/create/worktree-create-payload'
 import type { WorktreeActivationOptions } from '../activation/worktree-activation-surface-selection'

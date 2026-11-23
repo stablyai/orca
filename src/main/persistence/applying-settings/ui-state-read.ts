@@ -1,7 +1,8 @@
 import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
 import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-listing/file-explorer-display-root'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import { getDefaultUIState, normalizeAgentActivityDisplayMode } from '../../../shared/constants'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import { getDefaultUIState } from '../../../shared/orca-profiles/constants'
+import { normalizeAgentActivityDisplayMode } from '../../../shared/agent-status/presentation/agent-activity-display-mode'
 import { normalizeWorktreeCardProperties } from '../../../shared/worktree/row-display/card-properties'
 import {
   normalizeWorkspaceStatuses,
@@ -12,12 +13,13 @@ import { normalizeUsagePercentageDisplay } from '../../../shared/agent-usage/dis
 import { normalizeStatusBarUsageMode } from '../../../shared/status-bar/status-bar-usage-mode'
 import { normalizeStatusBarUsageFormat } from '../../../shared/status-bar/status-bar-usage-format'
 import { clampMarkdownTocPanelWidth } from '../../../shared/editor/markdown/markdown-toc-panel-width'
+import { normalizeSidebarBotsHeight } from '../../../shared/sidebar-bots-height'
 import { clampCombinedDiffFileTreeWidth } from '../../../shared/source-control/diff/combined-diff-file-tree-width'
 import {
   normalizeVisibleExecutionHostIds,
   normalizeExecutionHostOrder
-} from '../../../shared/execution-host'
-import { normalizeManualRepoOrder } from '../../../shared/manual-repo-order'
+} from '../../../shared/execution-host/execution-host'
+import { normalizeManualRepoOrder } from '../../../shared/repository/manual-repo-order'
 import { normalizeBrowserPageZoomLevel } from '../../../shared/browser/site-settings/browser-page-zoom'
 import { normalizeFeatureTipIds } from '../../../shared/feature-education/feature-tips'
 import { normalizeContextualTourIds } from '../../../shared/feature-education/contextual-tours/contextual-tours'
@@ -25,6 +27,7 @@ import { normalizeFeatureInteractions } from '../../../shared/feature-education/
 import {
   normalizeGroupBy,
   normalizeProjectOrderBy,
+  normalizeNotificationsMutedByWorktree,
   normalizeRightSidebarExplorerView,
   normalizeRightSidebarTab,
   normalizeShowDotfilesByWorktree,
@@ -54,6 +57,8 @@ export function getPersistedUI(
     workspaceStatuses: normalizeWorkspaceStatuses(state.ui?.workspaceStatuses),
     workspaceBoardOpacity: clampWorkspaceBoardOpacity(state.ui?.workspaceBoardOpacity),
     workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(state.ui?.workspaceBoardColumnWidth),
+    sidebarBotsHeight: normalizeSidebarBotsHeight(state.ui?.sidebarBotsHeight) ?? undefined,
+    sidebarProjectsFirst: state.ui?.sidebarProjectsFirst === true,
     syncTaskStatusFromWorkspaceBoard: state.ui?.syncTaskStatusFromWorkspaceBoard === true,
     usagePercentageDisplay: normalizeUsagePercentageDisplay(state.ui?.usagePercentageDisplay),
     statusBarUsageMode: normalizeStatusBarUsageMode(state.ui?.statusBarUsageMode),
@@ -74,6 +79,9 @@ export function getPersistedUI(
     ),
     gitGraphFiltersByWorktree: normalizeGitGraphFilters(state.ui?.gitGraphFiltersByWorktree),
     showDotfilesByWorktree: normalizeShowDotfilesByWorktree(state.ui?.showDotfilesByWorktree),
+    notificationsMutedByWorktree: normalizeNotificationsMutedByWorktree(
+      state.ui?.notificationsMutedByWorktree
+    ),
     featureTipsSeenIds: normalizeFeatureTipIds(state.ui?.featureTipsSeenIds),
     contextualToursSeenIds: normalizeContextualTourIds(state.ui?.contextualToursSeenIds),
     featureInteractions: normalizeFeatureInteractions(state.ui?.featureInteractions),
