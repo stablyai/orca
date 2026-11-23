@@ -6550,6 +6550,8 @@
       "chat": "Your chat with {{name}}",
       "access": "{{person}} asked for access",
       "connector": "{{name}} needs you to sign in again or fix it.",
+      "signIn": "{{name}} needs you to sign in.",
+      "signInAgain": "{{name}} needs you to sign in again.",
       "fixConnector": "Open {{name}}",
       "runSignIn": "Couldn’t run until you sign in.",
       "openRun": "Open run",

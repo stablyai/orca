@@ -143,9 +143,15 @@ export function MobileBotGoogleConnect(props: {
   }
 
   // Signed in, nobody else asks: Google turns on with no question; with an app only, the setup's sign-in.
+  // Only on a status read since this opened, not one another surface kept.
+  const [openedAt] = useState(Date.now)
+  const { refresh } = props.google
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
   const started = useRef(false)
   useEffect(() => {
-    if (started.current || !props.online) {
+    if (started.current || !props.online || props.google.readAt < openedAt) {
       return
     }
     if (host === 'connected' && !warning) {
@@ -180,7 +186,7 @@ export function MobileBotGoogleConnect(props: {
       <>
         {cancelHeader}
         {props.banner}
-        {failed || (status === null && props.google.unread) ? (
+        {failed || (props.google.unread && (status === null || props.google.readAt < openedAt)) ? (
           <MobileStateView
             title={t('bots.errors.generic', 'Something went wrong. Try again.')}
             action={
