@@ -1,3 +1,4 @@
+import { resolveCallerPassthroughPaths } from '../../../browser/agent-browser/protocol/agent-browser-passthrough-paths'
 import { agentBrowserCookieSetArguments } from '../../../browser/agent-browser/protocol/agent-browser-cookie-set-arguments'
 import { agentBrowserSetMediaArguments } from '../../../browser/agent-browser/protocol/agent-browser-set-media-arguments'
 import { agentBrowserWaitArguments } from '../../../browser/agent-browser/protocol/agent-browser-wait-arguments'
@@ -125,7 +126,9 @@ export function externalChromiumCommandArguments(
     case 'browserExec': {
       const args = splitAgentBrowserCommandLine(text('command'), { keepEmptyWords: true })
       assertAgentBrowserPassthroughStaysOnPage(args)
-      return args
+      return resolveCallerPassthroughPaths(args, {
+        cwd: typeof params.cwd === 'string' ? params.cwd : undefined
+      })
     }
     case 'browserSetViewport':
       if (
