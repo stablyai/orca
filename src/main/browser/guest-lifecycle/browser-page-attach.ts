@@ -3,6 +3,10 @@ import { randomUUID } from 'node:crypto'
 import { BrowserError } from '../browser-error'
 import { waitForBrowserGuestLoad } from './browser-guest-load'
 import {
+  loadPageWhenReady,
+  whenBrowserExtensionsReadyForPage
+} from '../extensions/profile-sessions/browser-extension-page-start'
+import {
   claims,
   pages,
   retiredGuests,
@@ -207,10 +211,15 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
     guest.on('did-stop-loading', stopped)
     guest.once('destroyed', dispose)
   }
-  const promise = waitForBrowserGuestLoad(guest, () =>
+  const load = (): Promise<void> =>
     snapshot
       ? guest.navigationHistory.restore({ entries: snapshot.entries, index: snapshot.index })
       : guest.loadURL(url ?? attach.url)
+  // Why: a request in flight when the profile's first webRequest extension loads is dropped by Electron.
+  const extensionsReady = whenBrowserExtensionsReadyForPage(guest)
+  const promise = waitForBrowserGuestLoad(
+    guest,
+    extensionsReady ? () => loadPageWhenReady(guest, extensionsReady, load) : load
   ).then(() => {
     if (pages.get(attach.pageId) !== page || page.guest !== guest) {
       throw new Error('Browser page replaced')
