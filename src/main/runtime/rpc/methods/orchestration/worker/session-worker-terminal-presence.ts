@@ -14,6 +14,7 @@ export type TerminalPresenceReads = Pick<
   | 'getTerminalHandleForPaneKey'
   | 'resolveTerminalHandleByProcessIncarnation'
   | 'resolveTerminalIdentity'
+  | 'knowsNonLocalTerminalHost'
 >
 
 export type TerminalPresenceCandidate = {
@@ -28,7 +29,8 @@ function readsTerminalPresence(
     typeof runtime.refreshAuthoritativeTerminalInventory === 'function' &&
     typeof runtime.getTerminalHandleForPaneKey === 'function' &&
     typeof runtime.resolveTerminalHandleByProcessIncarnation === 'function' &&
-    typeof runtime.resolveTerminalIdentity === 'function'
+    typeof runtime.resolveTerminalIdentity === 'function' &&
+    typeof runtime.knowsNonLocalTerminalHost === 'function'
   )
 }
 
@@ -71,18 +73,28 @@ function missingFromGraph(
 }
 
 /**
- * For each worker, whether this host can't find its terminal. One controller census serves the whole read: it is
- * taken only when some worker can be looked for, every worker is then checked against the graph it settled with no
- * wait in between, and a census that can't vouch for every host, or a graph reload before the checks end, keeps all
- * of them unconfirmed.
+ * For each worker, whether this host can't find its terminal. One local controller census, at most a second old and
+ * shared with other reads, serves the whole read: it is taken only when some worker can be looked for, every worker
+ * is then checked against the graph it settled, and a census that can't vouch for this host, or a controller swap or
+ * graph reload before the checks end, keeps all of them unconfirmed.
  */
 export async function terminalsProvenAbsent(
   runtime: Partial<TerminalPresenceReads>,
   candidates: readonly TerminalPresenceCandidate[]
 ): Promise<boolean[]> {
   const unconfirmed = candidates.map(() => false)
-  const eligible = candidates.map(mayBeAbsent)
-  if (!eligible.includes(true) || !readsTerminalPresence(runtime)) {
+  if (!readsTerminalPresence(runtime)) {
+    return unconfirmed
+  }
+  // A legacy row with no host scope reads as local, but its terminal may sit on an SSH host the census never asks.
+  const unscopedMayBeRemote =
+    candidates.some((candidate) => !candidate.durable.resource?.hostScope) &&
+    runtime.knowsNonLocalTerminalHost()
+  const eligible = candidates.map(
+    (candidate) =>
+      mayBeAbsent(candidate) && (!!candidate.durable.resource?.hostScope || !unscopedMayBeRemote)
+  )
+  if (!eligible.includes(true)) {
     return unconfirmed
   }
   let isCensusCurrent: (() => boolean) | null

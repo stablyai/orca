@@ -40,6 +40,8 @@ const HEALTH_SETTINGS = [
   // Why: a saved Gemini Enterprise choice keeps chats off the host's agy (hostAlternative).
   'antigravityChatAuth',
   'antigravityManagedAgyEnabled',
+  // Why: choosing Orca's Google sign-in moves new chats off a signed-in agy (hostAlternative).
+  'antigravityGoogleSignIn',
   ...SHELL_SETTINGS
 ] as const satisfies readonly (keyof GlobalSettings)[]
 

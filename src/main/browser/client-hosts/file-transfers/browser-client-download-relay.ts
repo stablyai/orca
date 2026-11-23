@@ -11,11 +11,16 @@ import {
 } from '../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
 import type { BrowserClientHostedPageInventory } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserDownloadFinishedEvent } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
+import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import type { BrowserClientFileChannelTransport } from './browser-client-file-channel-transport'
-import type { BrowserClientDownloadRouteOutcome } from './browser-client-download-routing'
+import type {
+  BrowserClientDownloadRouteInput,
+  BrowserClientDownloadRouteOutcome
+} from './browser-client-download-routing'
 
 export const BROWSER_CLIENT_FILE_CHANNEL_WRITE_METHOD = 'browser.clientHost.fileChannel.write'
 export const BROWSER_CLIENT_FILE_CHANNEL_ABORT_METHOD = 'browser.clientHost.fileChannel.abort'
+export const BROWSER_CLIENT_FILE_CHANNEL_BEGIN_METHOD = 'browser.clientHost.fileChannel.begin'
 
 type RelayFilesystem = {
   // will-download must setSavePath synchronously, so create the directory before returning.
@@ -77,7 +82,7 @@ export class BrowserClientDownloadRelay {
     }
   }
 
-  route(input: { guestWebContentsId: number }): BrowserClientDownloadRouteOutcome {
+  route(input: BrowserClientDownloadRouteInput): BrowserClientDownloadRouteOutcome {
     const page = this.options.resolvePage(input.guestWebContentsId)
     if (!page) {
       return { kind: 'unowned' }
@@ -92,13 +97,28 @@ export class BrowserClientDownloadRelay {
       directory: path.join(this.options.stagingRoot, transferId),
       stagingPath: path.join(this.options.stagingRoot, transferId, 'download'),
       canceled: false,
-      aborting: null
+      aborting: null,
+      begun: Promise.resolve(null)
     }
     try {
       this.filesystem.mkdirSync(transfer.directory)
     } catch {
       return { kind: 'unavailable' }
     }
+    // Tells the page's host what started this download before any byte arrives. Only an older host
+    // that lacks the method lets it go the ordinary way; any other failure fails the download, so a
+    // download the host would have claimed never lands in the workspace instead.
+    transfer.begun = this.options.transport
+      .request(BROWSER_CLIENT_FILE_CHANNEL_BEGIN_METHOD, {
+        ...fileChannelAuthority(page),
+        transferId,
+        filename: (input.filename || 'download').slice(0, 255),
+        documentUrl: (input.documentUrl ?? '').slice(0, 8192)
+      })
+      .then(
+        () => null,
+        (error: unknown) => (hasRuntimeRpcErrorCode(error, 'method_not_found') ? null : error)
+      )
     return {
       kind: 'remote',
       route: {
@@ -118,6 +138,9 @@ export class BrowserClientDownloadRelay {
   ): Promise<NonNullable<BrowserDownloadFinishedEvent['remoteDestination']>> {
     const { transferId, stagingPath } = transfer
     try {
+      if ((await transfer.begun) !== null) {
+        throw new Error('browser_client_download_begin_failed')
+      }
       assertNotCanceled(transfer)
       if (
         (await this.filesystem.size(stagingPath)) > BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES
@@ -220,6 +243,8 @@ type StagedTransfer = {
   stagingPath: string
   canceled: boolean
   aborting: Promise<void> | null
+  /** Why the host couldn't be told the download began; null when it was, or predates `begin`. */
+  begun: Promise<unknown>
 }
 
 function assertNotCanceled(transfer: StagedTransfer): void {

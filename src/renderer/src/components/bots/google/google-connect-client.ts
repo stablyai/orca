@@ -5,9 +5,10 @@ import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { googleSignInRunError } from './google-copy'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
-import { botHostUnroutedMessage, openOnServer } from '@/lib/bot-host-page'
+import { botHostUnroutedMessage, openBotHostPageOrSay, openOnServer } from '@/lib/bot-host-page'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import type { GoogleClientView } from '../../../../../shared/google/google-client-config'
@@ -22,6 +23,7 @@ import { googleAppExportFileName } from '../../../../../shared/google/google-con
 import type { GoogleServiceChoice } from '../../../../../shared/google/google-scopes'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { Bot } from '../../../../../shared/bot-types'
+import { errorMessage } from '../../../../../shared/errors/error-message'
 import { googleReachAreas, type GoogleReachArea } from '../../../../../shared/bots/bot-access-reach'
 import { botConnectorRowKey, forgetBotConnectorPage } from '../bot-connector-page'
 
@@ -74,10 +76,6 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
 async function supportsGoogle(target: RuntimeClientTarget): Promise<boolean> {
   return (
     target.kind === 'local' ||
@@ -104,7 +102,7 @@ export async function refreshGoogle(
         }
       : { status: 'update-server' }
   } catch (error) {
-    view = { status: 'failed', error: errorText(error) }
+    view = { status: 'failed', error: errorMessage(error) }
   }
   publish(target, view, read)
   return view
@@ -231,9 +229,20 @@ type SignInRun = {
   target: RuntimeClientTarget
   flowId: string | null
   cancelled: boolean
+  /** Where Google's page opened, for Open again. */
+  reopen: (url: string) => void
 }
 
 let running: SignInRun | null = null
+
+function nextStatus(run: SignInRun, status: GoogleSignInStatus): Promise<GoogleSignInStatus> {
+  return callRuntimeRpc<GoogleSignInStatus>(
+    run.target,
+    'google.signIn.wait',
+    { flowId: status.flowId, afterRevision: status.revision },
+    { timeoutMs: SIGN_IN_WAIT_MS }
+  )
+}
 
 /** Follows the flow until Google's link is ready, or it ends first. */
 async function settle(run: SignInRun, first: GoogleSignInStatus): Promise<GoogleSignInStatus> {
@@ -245,12 +254,7 @@ async function settle(run: SignInRun, first: GoogleSignInStatus): Promise<Google
     status.phase !== 'cancelled' &&
     !run.cancelled
   ) {
-    status = await callRuntimeRpc<GoogleSignInStatus>(
-      run.target,
-      'google.signIn.wait',
-      { flowId: status.flowId, afterRevision: status.revision },
-      { timeoutMs: SIGN_IN_WAIT_MS }
-    )
+    status = await nextStatus(run, status)
   }
   return status
 }
@@ -261,19 +265,14 @@ async function untilSettled(run: SignInRun, first: GoogleSignInStatus): Promise<
     if (status.phase === 'failed' || status.phase === 'cancelled' || run.cancelled) {
       throw new Error(
         run.cancelled || status.phase === 'cancelled'
-          ? 'The Google sign-in was cancelled.'
-          : (status.error ?? 'The Google sign-in failed. Try again.')
+          ? googleSignInRunError('cancelled')
+          : (status.error ?? googleSignInRunError('failed'))
       )
     }
-    status = await callRuntimeRpc<GoogleSignInStatus>(
-      run.target,
-      'google.signIn.wait',
-      { flowId: status.flowId, afterRevision: status.revision },
-      { timeoutMs: SIGN_IN_WAIT_MS }
-    )
+    status = await nextStatus(run, status)
   }
   if (!status.account) {
-    throw new Error('Google signed in, but the host sent no account.')
+    throw new Error(googleSignInRunError('noAccount'))
   }
   return status.account
 }
@@ -285,13 +284,14 @@ async function untilSettled(run: SignInRun, first: GoogleSignInStatus): Promise<
  */
 export async function connectGoogle(
   target: RuntimeClientTarget,
-  request: { services: readonly GoogleServiceChoice[]; account?: string },
+  // `bot`: whose workspace a server's page opens in.
+  request: { services: readonly GoogleServiceChoice[]; account?: string; bot?: BotRef },
   onPrompt: (prompt: GoogleSignInPrompt, way: GoogleSignInWay) => void
 ): Promise<GoogleAccountView> {
   if (running) {
-    throw new Error('A Google sign-in is already running. Finish or cancel it first.')
+    throw new Error(googleSignInRunError('alreadyRunning'))
   }
-  const run: SignInRun = { target, flowId: null, cancelled: false }
+  const run: SignInRun = { target, flowId: null, cancelled: false, reopen: openInMyBrowser }
   running = run
   try {
     const started = await callRuntimeRpc<GoogleSignInStatus>(target, 'google.signIn.start', {
@@ -310,7 +310,12 @@ export async function connectGoogle(
       target.kind === 'environment' && !isPairedWebClientWindow()
         ? toRuntimeExecutionHostId(target.environmentId)
         : null
-    const onServer = serverHost !== null && openOnServer(serverHost, waiting.prompt.authorizeUrl)
+    const onServer =
+      serverHost !== null && openOnServer(serverHost, waiting.prompt.authorizeUrl, request.bot)
+    // Its return reaches only the server's loopback, so it never reopens in the system browser.
+    run.reopen = onServer
+      ? (url) => void openBotHostPageOrSay(serverHost, url, { bot: request.bot, local: 'system' })
+      : run.reopen
     if (serverHost !== null && !onServer) {
       await callRuntimeRpc(target, 'google.signIn.cancel', { flowId: started.flowId }).catch(
         () => {}
@@ -332,11 +337,15 @@ export async function connectGoogle(
   }
 }
 
+/** Open again: Google's page where this sign-in opened it, or the person's browser with none running. */
+export const openGoogleSignInAgain = (url: string): void =>
+  (running?.reopen ?? openInMyBrowser)(url)
+
 /** Finishes the running sign-in with the address its browser ended on; the host checks it. */
 export async function finishGoogleSignInWithAddress(address: string): Promise<void> {
   const run = running
   if (!run?.flowId) {
-    throw new Error('No Google sign-in is waiting. Start again.')
+    throw new Error(googleSignInRunError('notWaiting'))
   }
   await callRuntimeRpc<GoogleSignInStatus>(run.target, 'google.finishSignIn', {
     flowId: run.flowId,

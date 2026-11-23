@@ -1,3 +1,4 @@
+import { noteQuestionEdge } from '../../db/messages/question-edges'
 import type { PointerDeliveryDependencies } from './mailbox-pointer-delivery-contract'
 import {
   hasUnfilteredOrchestrationWaiter,
@@ -21,11 +22,11 @@ import { stageOrchestrationMailboxPointer } from './mailbox-pointer-stage'
 
 const DEFAULT_POINTER_ENTER_DELAY_MS = 500
 
-function pointerEnterDelayMs(): number {
+function pointerEnterDelayMs(hostDelayMs: number | null): number {
   const configured = Number(process.env.ORCA_E2E_ORCHESTRATION_POINTER_ENTER_DELAY_MS)
   return Number.isFinite(configured) && configured >= 1 && configured <= 60_000
     ? configured
-    : DEFAULT_POINTER_ENTER_DELAY_MS
+    : (hostDelayMs ?? DEFAULT_POINTER_ENTER_DELAY_MS)
 }
 
 export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMessageWaiter> {
@@ -148,7 +149,8 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       messages: unread,
       heldDeliveryId,
       newestSequence,
-      enterDelayMs: pointerEnterDelayMs(),
+      enterDelayMs: (pointer) =>
+        pointerEnterDelayMs(this.deps.getWindowsPointerEnterDelayMs(ptyId, pointer)),
       settle: (ptyId, flight) => this.settle(ptyId, flight),
       redrive: (redriveMailbox, force) => this.redrive(redriveMailbox, force)
     })
@@ -161,6 +163,9 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   retirePty(ptyId: string): void {
     this.coldParkedPtys.delete(ptyId)
     const { flight, releasedMailboxes } = this.state.retirePty(ptyId)
+    if (flight) {
+      noteQuestionEdge({ kind: 'pane', ptyId })
+    }
     if (flight?.enterTimer != null) {
       clearTimeout(flight.enterTimer)
     }
@@ -220,8 +225,14 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     }
   }
 
+  /** A pointer is being typed into this terminal now; a flight waiting for its agent to rest is not. */
+  handingOver(ptyId: string): boolean {
+    return this.state.hasFlight(ptyId) && !this.state.isDeferred(ptyId)
+  }
+
   private settle(ptyId: string, flight: OrchestrationMailboxDeliveryFlight): void {
     const parked = this.state.settleFlight(ptyId, flight)
+    noteQuestionEdge({ kind: 'pane', ptyId })
     if (!parked) {
       return
     }

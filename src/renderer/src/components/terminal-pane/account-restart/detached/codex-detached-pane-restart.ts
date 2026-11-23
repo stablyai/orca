@@ -18,11 +18,7 @@ import { ptyDataHandlers } from '../../pty-transport/shutdown/pty-shutdown-data-
 import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { buildPaneIdentityEnv, getWorkspacePath } from './detached-pane-restart-spawn-context'
 import { restartPaneOwner } from '../pane-ownership/codex-restart-main-pane'
-import {
-  hasFreeDetachedRestartSlot,
-  holdDetachedRestartSlot,
-  resetDetachedRestartSlotsForTests
-} from './detached-pane-restart-slots'
+import { hasFreeDetachedRestartSlot, holdDetachedRestartSlot } from './detached-pane-restart-slots'
 import {
   killReplacedCodexPanePty,
   reapUnboundCodexPty,
@@ -34,11 +30,6 @@ import type { AppState } from '@/store/types'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 
 const inFlightPtyIds = new Set<string>()
-
-export function resetDetachedCodexPaneRestartClaimsForTests(): void {
-  inFlightPtyIds.clear()
-  resetDetachedRestartSlotsForTests()
-}
 
 export async function sweepUnclaimedCodexPaneRestarts(onSettled?: () => void): Promise<void> {
   const restarts: Promise<void>[] = []

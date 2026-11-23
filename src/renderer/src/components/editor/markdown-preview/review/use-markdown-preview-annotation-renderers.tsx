@@ -3,6 +3,7 @@ import { cloneElement, isValidElement, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { Check, Copy, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
 import {
   formatMarkdownReviewCardQuote,
   getMarkdownReviewCardQuote,
@@ -259,10 +260,13 @@ export function useMarkdownPreviewAnnotationRenderers({
             })
           : rendered
       }
-      const hasReviewNotes = getMarkdownCommentsForRange(range).length > 0
       return (
         <div
-          className={`markdown-annotation-block ${hasReviewNotes ? 'has-review-notes' : ''}`.trim()}
+          className={cn(
+            'markdown-annotation-block',
+            getMarkdownCommentsForRange(range).length > 0 && 'has-review-notes',
+            activeAnnotationBlockKey === blockKey && 'is-adding-note'
+          )}
           data-source-line={range.startLine}
           data-source-end-line={range.endLine}
           data-annotation-block-key={blockKey}
@@ -273,17 +277,24 @@ export function useMarkdownPreviewAnnotationRenderers({
         </div>
       )
     },
-    [getMarkdownCommentsForRange, handleAnnotatedMarkdownBlockClick, renderAnnotationControls]
+    [
+      activeAnnotationBlockKey,
+      getMarkdownCommentsForRange,
+      handleAnnotatedMarkdownBlockClick,
+      renderAnnotationControls
+    ]
   )
 
   return useMemo(
     () => ({
+      activeAnnotationBlockKey,
       renderAnnotationControls,
       wrapAnnotatedBlock,
       getMarkdownCommentsForRange,
       handleAnnotatedMarkdownBlockClick
     }),
     [
+      activeAnnotationBlockKey,
       getMarkdownCommentsForRange,
       handleAnnotatedMarkdownBlockClick,
       renderAnnotationControls,

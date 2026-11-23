@@ -68,10 +68,16 @@ export const HERMES_LAUNCH_SPEC: AcpLaunchSpec = {
     values: { ask: 'ask', 'accept-edits': 'workspace_session', 'full-access': 'session' },
     fullAccessAnswersRequests: true
   },
-  // Hermes cannot delete sessions, so a listing session would stay in the profile's store.
+  // Only a session lists models, and Hermes stores it at session/new without an ACP delete, so its
+  // own CLI deletes the listing session once the process exits.
   modelDiscovery: {
-    kind: 'unavailable',
-    reason: 'Hermes lists its models only inside a session it cannot delete'
+    kind: 'session',
+    listingNamesConfiguredModel: false,
+    inPrivateFolder: true,
+    listsOnDemand: true,
+    discardSession: async ({ sessionId, runAgent }) => {
+      await runAgent(['sessions', 'delete', '--yes', sessionId])
+    }
   },
   instructions: deliverHermesInstructions,
   instructionsInWorkspace: true,

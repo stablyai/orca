@@ -2,8 +2,8 @@
 
 import { readAttachmentTextChunk } from './agent-session-attachment-text-read'
 import type { AttachmentTextRequest } from '../../../shared/attachment-text/attachment-text-source'
-import { randomUUID } from 'node:crypto'
-import { appendFile, mkdir, rm, writeFile } from 'node:fs/promises'
+import { createHash, randomUUID } from 'node:crypto'
+import { access, appendFile, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import {
   sanitizeAgentSessionAttachmentName,
@@ -56,13 +56,17 @@ export class AgentSessionAttachmentStore {
     onExpire: (upload) => void removeQuietly(upload.uploadDir)
   })
 
+  // Latest content write per folder, and pending writes by file so a re-send queues nothing.
+  private readonly contentWrites = new Map<string, Promise<void>>()
+  private readonly pendingContent = new Set<string>()
+
   constructor(
     readonly rootDir: string,
     private readonly options: AgentSessionAttachmentStoreOptions
   ) {}
 
   isUploadInFlight(uploadId: string): boolean {
-    return this.uploads.has(uploadId)
+    return this.uploads.has(uploadId) || this.contentWrites.has(uploadId)
   }
 
   async startUpload(args: {
@@ -173,6 +177,47 @@ export class AgentSessionAttachmentStore {
     return finalPath
   }
 
+  /** Same bytes on the same UTC day, same path, so a re-sent image keeps one file. A reused folder is
+   *  at most a day old, so the sweep cannot have marked it. The write finishes in the background;
+   *  reads of the path wait for it through `whenWritten`. */
+  storeContent(bytes: Buffer, extension: string): string {
+    const day = Math.floor(Date.now() / (24 * 60 * 60 * 1000))
+    const digest = createHash('sha256').update(bytes).update(`:${day}`).digest('hex')
+    const uploadId = [
+      digest.slice(0, 8),
+      digest.slice(8, 12),
+      digest.slice(12, 16),
+      digest.slice(16, 20),
+      digest.slice(20, 32)
+    ].join('-')
+    const uploadDir = join(this.rootDir, uploadId)
+    const path = join(uploadDir, `image${extension}`)
+    if (this.pendingContent.has(path)) {
+      return path
+    }
+    // One write per folder at a time: concurrent ones would share its part file.
+    const written = (this.contentWrites.get(uploadId) ?? Promise.resolve())
+      .then(() => writeContent(uploadDir, path, bytes))
+      // Once more, in case a sweep removed a crash-left part folder mid-write.
+      .catch(() => writeContent(uploadDir, path, bytes))
+      .catch(() => {})
+    this.contentWrites.set(uploadId, written)
+    this.pendingContent.add(path)
+    void written.then(() => {
+      this.pendingContent.delete(path)
+      if (this.contentWrites.get(uploadId) === written) {
+        this.contentWrites.delete(uploadId)
+      }
+    })
+    return path
+  }
+
+  /** Settles once a pending `storeContent` write of this store path has finished or failed. */
+  async whenWritten(filePath: string): Promise<void> {
+    const uploadId = parseAgentSessionAttachmentStorePath(this.rootDir, filePath)?.uploadId
+    await (uploadId ? this.contentWrites.get(uploadId) : undefined)
+  }
+
   async abortUpload(args: { callerKey: string; uploadId: string }): Promise<{ aborted: true }> {
     const upload = this.uploads.peek(args.uploadId)
     if (upload) {
@@ -197,6 +242,7 @@ export class AgentSessionAttachmentStore {
     ) {
       throw new Error(NOT_AN_IMAGE)
     }
+    await this.whenWritten(filePath)
     let read: Awaited<ReturnType<typeof readAuthorizedDocPreviewFile>>
     try {
       read = await readAuthorizedDocPreviewFile({
@@ -235,6 +281,30 @@ export class AgentSessionAttachmentStore {
       throw new Error(NOT_FOUND)
     }
     return upload
+  }
+}
+
+async function writeContent(uploadDir: string, path: string, bytes: Buffer): Promise<void> {
+  if (
+    await access(path).then(
+      () => true,
+      () => false
+    )
+  ) {
+    return
+  }
+  const partPath = join(uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
+  try {
+    await mkdir(uploadDir, { recursive: true })
+    await writeFile(partPath, bytes)
+    await renameFileWithWindowsRetryAsync(partPath, path)
+  } catch (error) {
+    // Leave no part-only folder for a later write of the same bytes to reuse while the sweep removes it.
+    const entries = await readdir(uploadDir).catch(() => [])
+    if (entries.every((entry) => entry === AGENT_SESSION_ATTACHMENT_PART_FILE)) {
+      await removeQuietly(uploadDir)
+    }
+    throw error
   }
 }
 

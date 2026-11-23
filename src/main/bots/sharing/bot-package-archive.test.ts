@@ -270,6 +270,14 @@ describe('bot package export and archive', () => {
 })
 
 describe('what a bot export may read', () => {
+  it("carries the mascot's tile color and outfit", async () => {
+    const home = join(root, 'home')
+    await writeHome(home)
+    const dressed = { ...bot, avatarColor: '#f4c4cf', avatarOutfit: 'tie' }
+    const shareable = await readBotShareable({ bot: dressed, home, automations: [] })
+    expect(shareable.avatar).toEqual({ mascot: 'H1', color: '#f4c4cf', outfit: 'tie' })
+  })
+
   it("shares the copy of a same-named skill that the bot's own agent loads", async () => {
     const home = join(root, 'home')
     await writeHome(home)
@@ -300,7 +308,11 @@ describe('what a bot export may read', () => {
       join(home, '.agents/skills/triage/SKILL.md'),
       '---\nname: triage\ndescription: Sort issues\n---\n'
     )
-    await symlink(join(home, '.agents/skills/triage'), join(home, '.claude/skills/triage'))
+    await symlink(
+      join(home, '.agents/skills/triage'),
+      join(home, '.claude/skills/triage'),
+      'junction'
+    )
     for (const agent of ['claude', 'codex'] as const) {
       const shareable = await readBotShareable({ bot: { ...bot, agent }, home, automations: [] })
       expect(shareable.skills.map((skill) => skill.homePath)).toEqual(['.agents/skills/triage'])
@@ -313,18 +325,18 @@ describe('what a bot export may read', () => {
     expect(within('C:\\orca\\bots\\a\\skills', 'C:\\orca\\bots\\a\\skills\\x', win32)).toBe(true)
   })
 
-  it('never follows a link out of the bot home', async () => {
+  it('never follows a directory link out of the bot home', async () => {
     const home = join(root, 'home')
     await writeHome(home)
     const outside = join(root, 'outside')
     await mkdir(join(outside, 'secret-skill'), { recursive: true })
-    await writeFile(join(outside, 'roster.md'), 'Private client roster: Ada, Bo.\n')
     await writeFile(
       join(outside, 'secret-skill', 'SKILL.md'),
       "---\nname: secret-skill\ndescription: Not the bot's\n---\n"
     )
     await rm(join(home, '.claude', 'skills'), { recursive: true })
-    await symlink(outside, join(home, '.claude', 'skills'))
+    // A junction needs no Windows symlink privilege; POSIX ignores the type.
+    await symlink(outside, join(home, '.claude', 'skills'), 'junction')
     const shareable = await readBotShareable({ bot, home, automations: [] })
     expect(shareable.skills).toEqual([])
     expect(shareable.leftOut).toContainEqual({
@@ -332,7 +344,15 @@ describe('what a bot export may read', () => {
       name: '.claude/skills',
       why: 'linked'
     })
+  })
 
+  // File links need the Windows symlink privilege, which stock hosts lack.
+  it.skipIf(process.platform === 'win32')('refuses a SOUL.md that is a link', async () => {
+    const home = join(root, 'home')
+    await writeHome(home)
+    const outside = join(root, 'outside')
+    await mkdir(outside, { recursive: true })
+    await writeFile(join(outside, 'roster.md'), 'Private client roster: Ada, Bo.\n')
     await rm(join(home, 'SOUL.md'))
     await symlink(join(outside, 'roster.md'), join(home, 'SOUL.md'))
     await expect(readBotShareable({ bot, home, automations: [] })).rejects.toThrow(
@@ -340,23 +360,22 @@ describe('what a bot export may read', () => {
     )
   })
 
-  it('never reads a tools file through a link', async () => {
-    const outside = join(root, 'outside-tools')
-    await mkdir(outside, { recursive: true })
-    await writeFile(
-      join(outside, 'bot-tools.json'),
-      JSON.stringify({ servers: [{ name: 'outside-tool', url: 'https://tools.example.com/mcp' }] })
-    )
-    const linkedFile = join(root, 'home-a')
-    await writeHome(linkedFile)
-    await rm(join(linkedFile, '.orca', 'bot-tools.json'))
-    await symlink(join(outside, 'bot-tools.json'), join(linkedFile, '.orca', 'bot-tools.json'))
-    const linkedFolder = join(root, 'home-b')
-    await writeHome(linkedFolder)
-    await rm(join(linkedFolder, '.orca'), { recursive: true })
-    await symlink(outside, join(linkedFolder, '.orca'))
-    for (const home of [linkedFile, linkedFolder]) {
-      const shareable = await readBotShareable({ bot, home, automations: [] })
+  it.skipIf(process.platform === 'win32')(
+    'never reads a tools file through a file link',
+    async () => {
+      const outside = join(root, 'outside-tools')
+      await mkdir(outside, { recursive: true })
+      await writeFile(
+        join(outside, 'bot-tools.json'),
+        JSON.stringify({
+          servers: [{ name: 'outside-tool', url: 'https://tools.example.com/mcp' }]
+        })
+      )
+      const linkedFile = join(root, 'home-a')
+      await writeHome(linkedFile)
+      await rm(join(linkedFile, '.orca', 'bot-tools.json'))
+      await symlink(join(outside, 'bot-tools.json'), join(linkedFile, '.orca', 'bot-tools.json'))
+      const shareable = await readBotShareable({ bot, home: linkedFile, automations: [] })
       expect(shareable.tools).toEqual([])
       expect(shareable.leftOut).toContainEqual({
         kind: 'tool',
@@ -364,6 +383,26 @@ describe('what a bot export may read', () => {
         why: 'linked'
       })
     }
+  )
+
+  it('never reads a tools file through a directory link', async () => {
+    const outside = join(root, 'outside-tools')
+    await mkdir(outside, { recursive: true })
+    await writeFile(
+      join(outside, 'bot-tools.json'),
+      JSON.stringify({ servers: [{ name: 'outside-tool', url: 'https://tools.example.com/mcp' }] })
+    )
+    const linkedFolder = join(root, 'home-b')
+    await writeHome(linkedFolder)
+    await rm(join(linkedFolder, '.orca'), { recursive: true })
+    await symlink(outside, join(linkedFolder, '.orca'), 'junction')
+    const shareable = await readBotShareable({ bot, home: linkedFolder, automations: [] })
+    expect(shareable.tools).toEqual([])
+    expect(shareable.leftOut).toContainEqual({
+      kind: 'tool',
+      name: '.orca/bot-tools.json',
+      why: 'linked'
+    })
   })
 
   it('never packs a skill nested inside another one, which is its own part', async () => {

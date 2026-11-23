@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight, Lightbulb } from 'lucide-react-native'
 import { botGroupRowLine } from '../../../src/shared/bots/bot-sidebar-entries'
 import type { Worktree, WorktreeRowView } from '../worktree/workspace-list/workspace-list-types'
 import { formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
-import { mobileBotRowLine, mobileBotRowLineText } from './mobile-bot-row-line'
+import { mobileBotRowLine, mobileBotRowLineText, mobileBotRowNeedsYou } from './mobile-bot-row-line'
 import { colors, feedback, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { AgentSpinner } from '../agents/presentation/AgentSpinner'
@@ -40,9 +40,18 @@ export function MobileBotHomeRow({
   const bot = view.botFacts!
   // The desktop row's line, from its Chat's and threads' agent rows; waits while nothing works.
   const line = mobileBotRowLine(bot, item.agents ?? [], now)
+  // The line's count, so the badge never disagrees with it; a down host's row keeps its last, greyed.
+  const needsYou = mobileBotRowNeedsYou(bot.line, item.agents ?? [], now)
   // A down server's bot shows only where it runs and that computer's word: its last activity isn't live.
   const down = bot.host?.word !== undefined
-  const preview = down ? '' : line ? mobileBotRowLineText(line, now) : bot.statusLine
+  const asking = !down && line?.kind === 'needYouElsewhere'
+  const lineText = line ? mobileBotRowLineText(line, now) : bot.statusLine
+  // The line names who waits on an access answer, since nothing else on the row says it.
+  const preview = down
+    ? ''
+    : asking && bot.askedForAccess
+      ? `${lineText} · ${t('bots.needs.access', '{{person}} asked for access', { person: bot.askedForAccess })}`
+      : lineText
   const age =
     !down && line?.kind === 'activity' && line.at !== null ? formatTimeAgo(line.at, now) : null
   // The desktop's mark before a thread's label, which leads an activity line.
@@ -55,6 +64,7 @@ export function MobileBotHomeRow({
       title={item.displayName}
       unread={item.unread}
       preview={preview}
+      asking={asking}
       previewLeading={
         <>
           {bot.host ? (
@@ -76,7 +86,7 @@ export function MobileBotHomeRow({
       onLongPress={onLongPress}
       titleTrailing={
         <>
-          {bot.needsYou ? <MobileBotNeedsYouCount count={bot.needsYou} /> : null}
+          {needsYou > 0 ? <MobileBotNeedsYouCount count={needsYou} /> : null}
           {bot.upNext ? <MobileBotUpNextCount count={bot.upNext} /> : null}
           {/* A folded bot always keeps its chevron, so it can unfold before its chats are read; a
               down host's bot is its row alone. */}
@@ -231,6 +241,7 @@ export function MobileBotRowView({
   title,
   unread,
   preview,
+  asking = false,
   previewLeading = null,
   age,
   active = false,
@@ -245,6 +256,8 @@ export function MobileBotRowView({
   title: string
   unread: boolean
   preview: string
+  /** The line says what waits on the owner, in the asking colour. */
+  asking?: boolean
   /** Drawn before the preview, e.g. a server bot's computer. */
   previewLeading?: React.ReactNode
   age: string | null
@@ -258,6 +271,7 @@ export function MobileBotRowView({
   onLongPress?: () => void
   titleTrailing?: React.ReactNode
 }) {
+  const t = useMobileTranslation()
   return (
     <Pressable
       onPress={onPress}
@@ -265,7 +279,9 @@ export function MobileBotRowView({
       delayLongPress={400}
       disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel={[title, preview, unread ? 'Unread' : ''].filter(Boolean).join(', ')}
+      accessibilityLabel={[title, preview, unread ? t('bots.chats.unread', 'Unread') : '']
+        .filter(Boolean)
+        .join(', ')}
       style={({ pressed }) => [
         styles.row,
         active && styles.active,
@@ -284,7 +300,10 @@ export function MobileBotRowView({
         </View>
         <View style={styles.activity}>
           {previewLeading}
-          <Text numberOfLines={1} style={[styles.preview, unread && styles.previewUnread]}>
+          <Text
+            numberOfLines={1}
+            style={[styles.preview, unread && styles.previewUnread, asking && styles.previewAsking]}
+          >
             {preview}
           </Text>
           {age ? <Text style={styles.age}>{age}</Text> : null}
@@ -339,6 +358,7 @@ const styles = themedStyleSheet(() => ({
   activity: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 3 },
   preview: { flex: 1, fontSize: 13, color: colors.textMuted },
   previewUnread: { color: colors.textSecondary },
+  previewAsking: { color: colors.agentQuestion },
   age: { fontSize: 11, color: colors.textMuted },
   active: { backgroundColor: colors.bgPanel },
   dimmed: { opacity: 0.6 },

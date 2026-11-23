@@ -62,7 +62,3 @@ export function mergeRetainedTerminalRetirementProofs(
     merged.every((proof, index) => proof === snapshot.retiredTerminalSurfaces?.[index])
   return unchanged ? snapshot : { ...snapshot, retiredTerminalSurfaces: merged }
 }
-
-export function clearRetainedTerminalRetirementProofsForTests(): void {
-  retainedByKey.clear()
-}
