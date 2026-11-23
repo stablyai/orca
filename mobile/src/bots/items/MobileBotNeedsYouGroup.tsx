@@ -3,7 +3,7 @@
 // the ask was made, or an access request's decision; a row the phone can't reach is dimmed and says so.
 import { useMemo, useState, type ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { CircleHelp, Shield, UserPlus } from 'lucide-react-native'
+import { CircleAlert, CircleHelp, KeyRound, Shield, UserPlus } from 'lucide-react-native'
 import { CONNECTOR_SOURCE_NAMES } from '../../../../src/shared/connectors/external-conversation-link'
 import { accessRequestPerson } from '../../../../src/shared/bots/bot-access-request'
 import { needsYouFold } from '../../../../src/shared/bots/needs-you-fold'
@@ -21,13 +21,19 @@ import type { Translate } from '../../i18n/mobile-i18n'
 import { colors, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { chatSessionId, type PhoneAsk } from './phone-needs-you-asks'
+import { chatSessionId, phoneAskCounts, type PhoneAsk } from './phone-needs-you-asks'
+import type { PhoneConnectorNeed } from '../connectors/phone-connector-needs'
 import type { ConnectorAccessRequest } from '../../../../src/shared/connector-bot-access-contract'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { useOptionalHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
 import { structuredAgentSessionHostSupport } from '../../session/native-chat/agent-session/mobile-structured-agent-session-host-support'
 import { useMobileStructuredAsyncQuestions } from '../../session/native-chat/agent-session/use-mobile-structured-async-questions'
 import { MobileBotTextButton } from '../MobileBotTextButton'
+import type { MobileBotAvatarSource } from '../host-bot-row-facts'
+import { MobileBotItemOwnerLine } from './MobileBotItemRow'
+
+/** In a group's list: the member an ask is from. */
+export type PhoneAskOwner = { name: string; avatar: MobileBotAvatarSource }
 
 type Row = { key: string; approval: boolean; ask?: PhoneAsk; item?: BotItem }
 
@@ -62,6 +68,7 @@ function askLine(ask: PhoneAsk, t: Translate, question: string | undefined): str
 function AskRow({
   ask,
   botName,
+  owner,
   client,
   disabled,
   onOpen,
@@ -69,6 +76,7 @@ function AskRow({
 }: {
   ask: PhoneAsk
   botName: string
+  owner: PhoneAskOwner | undefined
   client: RpcClient | null
   disabled: boolean
   onOpen: () => void
@@ -87,19 +95,28 @@ function AskRow({
   )
   const asked = ask.approval ? undefined : asyncQuestionSkip?.awaiting
   const save = asyncQuestionSkip?.save
-  const title = askRowTitle(ask, botName, t)
+  const title = askRowTitle(ask, owner?.name ?? botName, t)
+  const line = askLine(ask, t, asked?.text)
+  const command = ask.tool?.input ? (
+    <Text style={styles.command} numberOfLines={1}>
+      {ask.tool.input}
+    </Text>
+  ) : null
   return (
     <ListRow
       title={title}
       marker={ask.number === null ? undefined : formatBotItemNumber(ask.number)}
-      subtitle={askLine(ask, t, asked?.text)}
+      subtitle={owner ? undefined : line}
       subtitleLines={1}
       detail={
-        ask.tool?.input ? (
-          <Text style={styles.command} numberOfLines={1}>
-            {ask.tool.input}
-          </Text>
-        ) : undefined
+        owner ? (
+          <>
+            <MobileBotItemOwnerLine owner={owner} line={line} />
+            {command}
+          </>
+        ) : (
+          (command ?? undefined)
+        )
       }
       leading={
         ask.approval ? (
@@ -169,6 +186,51 @@ function AccessAskRow({
   )
 }
 
+/** A connector to sign in to or fix: a tap opens its page in Settings › Connectors. */
+function ConnectorAskRow({
+  need,
+  disabled,
+  onOpen
+}: {
+  need: PhoneConnectorNeed
+  disabled: boolean
+  onOpen: () => void
+}) {
+  const t = useMobileTranslation()
+  return (
+    <ListRow
+      title={need.title}
+      subtitle={need.need}
+      subtitleLines={2}
+      leading={<KeyRound size={17} strokeWidth={2.1} color={colors.agentQuestion} />}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={t('bots.needs.fixConnector', 'Open {{name}}', { name: need.title })}
+      onPress={onOpen}
+    />
+  )
+}
+
+/** A run a sign-in stopped, its mark muted: context for the sign-in above it, not a need of its own. */
+function StoppedAskRow({ title, onOpen }: { title: string; onOpen: (() => void) | null }) {
+  const t = useMobileTranslation()
+  return (
+    <ListRow
+      title={title}
+      subtitle={t('bots.needs.runSignIn', 'Couldn’t run until you sign in.')}
+      subtitleLines={1}
+      leading={<CircleAlert size={17} strokeWidth={2.1} color={colors.textMuted} />}
+      disabled={!onOpen}
+      accessibilityRole="button"
+      accessibilityLabel={t('bots.needs.actionFor', '{{action}}: {{title}}', {
+        action: t('bots.needs.openRun', 'Open run'),
+        title
+      })}
+      onPress={onOpen ?? undefined}
+    />
+  )
+}
+
 export function MobileBotNeedsYouGroup({
   botName,
   asks,
@@ -176,11 +238,14 @@ export function MobileBotNeedsYouGroup({
   disabled,
   renderItem,
   onOpenAsk,
+  ownerOf,
   client,
   onSkipFailed
 }: {
   botName: string
   asks: readonly PhoneAsk[]
+  /** In a group's list: the member each ask is from, named under its title. */
+  ownerOf?: (ask: PhoneAsk) => PhoneAskOwner | undefined
   items: readonly BotItem[]
   /** Offline or the read failed: rows stay, taps wait. */
   disabled: boolean
@@ -206,7 +271,7 @@ export function MobileBotNeedsYouGroup({
   return (
     <>
       <SectionHeader
-        title={`${botItemStatusName('needs_you', t)} ${botNeedsYouCount(asks.length, items.length)}`}
+        title={`${botItemStatusName('needs_you', t)} ${botNeedsYouCount(asks.filter(phoneAskCounts).length, items.length)}`}
         expanded={!folded}
         onToggle={() => setFolded(!folded)}
       />
@@ -216,7 +281,20 @@ export function MobileBotNeedsYouGroup({
             ...fold.ordered
               .filter((row) => shown.has(row.key))
               .map((row) =>
-                row.ask?.open && 'access' in row.ask.open ? (
+                row.ask?.open && 'connector' in row.ask.open ? (
+                  <ConnectorAskRow
+                    key={row.key}
+                    need={row.ask.open.connector}
+                    disabled={disabled}
+                    onOpen={() => onOpenAsk(row.ask!)}
+                  />
+                ) : row.ask?.open && 'stopped' in row.ask.open ? (
+                  <StoppedAskRow
+                    key={row.key}
+                    title={row.ask.title}
+                    onOpen={disabled ? null : () => onOpenAsk(row.ask!)}
+                  />
+                ) : row.ask?.open && 'access' in row.ask.open ? (
                   <AccessAskRow
                     key={row.key}
                     request={row.ask.open.access}
@@ -228,6 +306,7 @@ export function MobileBotNeedsYouGroup({
                     key={row.key}
                     ask={row.ask}
                     botName={botName}
+                    owner={ownerOf?.(row.ask)}
                     client={client}
                     disabled={disabled}
                     onOpen={() => onOpenAsk(row.ask!)}

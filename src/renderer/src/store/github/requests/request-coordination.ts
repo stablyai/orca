@@ -94,19 +94,6 @@ export function ownsInflightRequest<T extends { requestId: number }>(
   return registry.get(key)?.requestId === requestId
 }
 
-export function _getGitHubPRRequestGenerationCountForTest(): number {
-  return prRequestGenerations.size
-}
-
-export function _getGitHubPRRefreshStartedEntryCountForTest(): number {
-  return prRefreshStartedHostedReviewEntries.size
-}
-
-export function _clearGitHubPRRefreshStartedEntriesForTest(): void {
-  prRefreshStartedHostedReviewEntries.clear()
-  prRefreshStartedLinkedReviewScopes.clear()
-}
-
 const PROVIDER_REQUEST_CONCURRENCY = 8
 let providerRequestsInFlight = 0
 const providerRequestWaiters: (() => void)[] = []

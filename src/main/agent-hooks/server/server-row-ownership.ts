@@ -141,6 +141,35 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     return true
   }
 
+  /** A Codex question, or a wait over one, keeps its row identical across hooks, so their arrival renews its freshness.
+   *  Orca's own restatements, polls and replays are no evidence that the agent still runs. */
+  protected commitAppliedStatusRow(
+    before: EnrichedAgentHookEventPayload | null | undefined,
+    row: EnrichedAgentHookEventPayload,
+    fromAgentHook: boolean
+  ): void {
+    if (
+      this.commitStatusRowMutation(before, row) ||
+      !fromAgentHook ||
+      !row.hookEventName ||
+      row.isReplay === true ||
+      row.restoredUnconfirmed === true ||
+      row.providerSessionOnly === true ||
+      row.payload.agentType !== 'codex' ||
+      row.payload.state !== 'waiting'
+    ) {
+      return
+    }
+    this.emitStatusFreshnessObservation({
+      paneKey: row.paneKey,
+      state: row.payload.state,
+      receivedAt: row.receivedAt,
+      observedInCurrentRuntime: true,
+      ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
+      ...(row.terminalHandle ? { terminalHandle: row.terminalHandle } : {})
+    })
+  }
+
   /** Facet-only ticks reach row/window readers, without triggering enriched transition subscribers. */
   protected republishProgramStatusFacet(paneKey: string): void {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.

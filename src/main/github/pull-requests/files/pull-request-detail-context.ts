@@ -15,10 +15,13 @@ import { githubHostExecOptions } from '../../repositories/github-repository-host
 import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../api/rate-limit'
 import { getWorkItemParticipants } from '../../work-items/work-item-participants'
+import { githubBodyImageCandidates } from '../../attachments/body-image-urls'
+import type { PRDetailMetadata } from './pull-request-file-data'
 
 function detailContextQuery(includeContext: boolean): string {
   const context = includeContext
     ? `pullRequest(number: $number) {
+      body headRefOid baseRefOid
       participants(first: 100) {
         nodes { login avatarUrl(size: 48) ... on User { name } }
       }
@@ -58,6 +61,11 @@ const participantsSchema = z.object({
     z.object({ login: z.string(), avatarUrl: z.string(), name: z.string().nullish() }).nullable()
   )
 })
+const metadataSchema = z.object({
+  body: z.string(),
+  headRefOid: z.string().min(1),
+  baseRefOid: z.string().min(1)
+})
 const filesSchema = z.object({
   id: z.string(),
   files: z.object({
@@ -80,12 +88,13 @@ export type PRFileViewedStatesResult = {
 type PRDetailContext = {
   participants: GitHubAssignableUser[]
   viewedStates: PRFileViewedStatesResult | null
+  metadata?: PRDetailMetadata
 }
 
 function sourceFailed(
   envelope: z.infer<typeof envelopeSchema>,
-  source: string,
-  alias = 'pullRequest'
+  alias: 'pullRequest' | 'viewedPullRequest',
+  ...fields: string[]
 ): boolean {
   return Boolean(
     envelope.errors?.some(
@@ -93,7 +102,8 @@ function sourceFailed(
         !path?.length ||
         path[0] !== 'repository' ||
         (path[1] !== 'pullRequest' && path[1] !== 'viewedPullRequest') ||
-        (path[1] === alias && (path.length < 3 || path[2] === source))
+        (path[1] === alias &&
+          (path.length < 3 || (typeof path[2] === 'string' && fields.includes(path[2]))))
     )
   )
 }
@@ -151,18 +161,24 @@ async function readPRDetailContext(
       const pr = envelope.data?.repository?.pullRequest
       if (firstPage) {
         const participants = participantsSchema.safeParse(pr?.participants)
-        if (participants.success && !sourceFailed(envelope, 'participants')) {
+        if (participants.success && !sourceFailed(envelope, 'pullRequest', 'participants')) {
           result.participants = participants.data.nodes.flatMap((user) =>
             user?.login ? [{ ...user, name: user.name ?? null }] : []
           )
         }
+        const metadata = metadataSchema.safeParse(pr)
+        // Attachment URLs still need the rendered body from the REST read.
+        if (
+          metadata.success &&
+          !sourceFailed(envelope, 'pullRequest', 'body', 'headRefOid', 'baseRefOid') &&
+          githubBodyImageCandidates(metadata.data.body).size === 0
+        ) {
+          const { body, headRefOid, baseRefOid } = metadata.data
+          result.metadata = { body, headSha: headRefOid, baseSha: baseRefOid }
+        }
       }
       const files = filesSchema.safeParse(envelope.data?.repository?.viewedPullRequest)
-      if (
-        !files.success ||
-        sourceFailed(envelope, 'files', 'viewedPullRequest') ||
-        sourceFailed(envelope, 'id', 'viewedPullRequest')
-      ) {
+      if (!files.success || sourceFailed(envelope, 'viewedPullRequest', 'files', 'id')) {
         break
       }
       for (const file of files.data.files.nodes) {
@@ -211,6 +227,7 @@ export async function getPRDetailContext(
     ))
   return {
     participants,
-    viewedStates: context.viewedStates ?? null
+    viewedStates: context.viewedStates ?? null,
+    metadata: context.metadata
   }
 }

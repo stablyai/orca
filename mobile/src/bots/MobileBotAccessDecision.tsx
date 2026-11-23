@@ -1,27 +1,32 @@
-// The desktop's "Give access" confirm on the phone: who asked and where, the warning in its tone, and
-// what they would reach. As a sheet, Decline answers here too; closing any other way leaves the request
+// The desktop's "Give access" confirm on the phone: who would get access and where, the warning in its
+// tone, and what they would reach. As a sheet, Decline answers here too; closing any other way leaves the request
 // waiting.
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { Laptop, Mail, ShieldAlert, ShieldOff, type LucideIcon } from 'lucide-react-native'
 import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-access-contract'
-import { BOT_ACCESS_COPY, botAccessCopy } from '../../../src/shared/bots/bot-access-copy'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import type { BotPanelOpen } from './MobileBotPanel'
 import {
   accessDecisionCopy,
+  accessRequestExpiredLine,
+  accessRequestGrant,
   phoneAccessHost,
   type AccessDecisionRow,
-  type PhoneAccessBot
+  type PhoneAccessBot,
+  type PhoneAccessGrant
 } from './bot-access-request-copy'
 import { readConnectionStatusProbe } from '../transport/connection/runtime-status-probe'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import { MobileConnectorSourceIcon } from './MobileConnectorSourceIcon'
+import { mobileBotAccessCopy } from './mobile-bot-access-copy'
 
 const ROW_ICONS: Partial<Record<AccessDecisionRow['kind'], LucideIcon>> = {
   computer: Laptop,
@@ -42,13 +47,13 @@ function RowIcon({ row }: { row: AccessDecisionRow }) {
 }
 
 export function MobileBotAccessDecisionContent({
-  request,
+  grant,
   bot,
   onGrant,
   onDecline,
   onClose
 }: {
-  request: ConnectorAccessRequest
+  grant: PhoneAccessGrant
   bot: PhoneAccessBot
   onGrant: () => void
   /** Decline in place of Cancel, where nothing else beside the confirm declines. */
@@ -56,7 +61,8 @@ export function MobileBotAccessDecisionContent({
   onClose: () => void
 }) {
   useMobileColorScheme()
-  const copy = accessDecisionCopy(request, bot)
+  const t = useMobileTranslation()
+  const copy = accessDecisionCopy(grant, bot, t)
   const tone = copy.tone === 'high' ? colors.statusRed : colors.statusAmber
   return (
     <ConfirmContent
@@ -71,17 +77,19 @@ export function MobileBotAccessDecisionContent({
       details={
         <>
           <Text style={styles.warning}>{copy.warning}</Text>
-          <SectionHeader title={botAccessCopy('whatTheyCanDo', { person: copy.firstName })} first />
+          <SectionHeader title={copy.whatTheyCanDo} first />
           <ListGroup>
             {copy.rows.map((row) => (
               <ListRow key={row.kind} title={row.text} leading={<RowIcon row={row} />} />
             ))}
           </ListGroup>
-          <Text style={styles.footer}>{BOT_ACCESS_COPY.removeAnyTime}</Text>
+          <Text style={styles.footer}>{mobileBotAccessCopy(t, 'removeAnyTime')}</Text>
         </>
       }
-      {...(onDecline ? { cancelLabel: BOT_ACCESS_COPY.decline, onCancelPress: onDecline } : {})}
-      confirmLabel={BOT_ACCESS_COPY.confirm}
+      {...(onDecline
+        ? { cancelLabel: mobileBotAccessCopy(t, 'decline'), onCancelPress: onDecline }
+        : {})}
+      confirmLabel={mobileBotAccessCopy(t, 'confirm')}
       destructive
       onConfirm={onGrant}
       onCancel={onClose}
@@ -94,11 +102,43 @@ export function MobileBotAccessDecisionContent({
 export function useBotAccessDecisionSheet(
   {
     accessRequests: access,
-    client
-  }: { accessRequests: BotAccessRequests | null; client: RpcClient | null },
-  bot: Omit<PhoneAccessBot, 'accessHost'>
+    client,
+    open
+  }: {
+    accessRequests: BotAccessRequests | null
+    client: RpcClient | null
+    /** What the panel opened on: an access request, from its push, opens here once read. */
+    open: BotPanelOpen | null
+  },
+  bot: Omit<PhoneAccessBot, 'accessHost'>,
+  showToast: (message: string) => void
 ): { review: (request: ConnectorAccessRequest) => void; sheet: ReactNode } {
+  const t = useMobileTranslation()
   const [reviewing, setReviewing] = useState<ConnectorAccessRequest | null>(null)
+  // An access open waits for a read that landed after it, so a request newer than the last read is found.
+  const [asked, setAsked] = useState<{ open: BotPanelOpen; after: number } | null>(null)
+  // The open whose request was gone by the time its read landed.
+  const [missing, setMissing] = useState<BotPanelOpen | null>(null)
+  if (open && 'access' in open && asked?.open !== open) {
+    setAsked({ open, after: access?.reads ?? 0 })
+  } else if (asked && asked.open !== open) {
+    // Closed or moved on before its read landed: a later open isn't this push's.
+    setAsked(null)
+  } else if (asked && 'access' in asked.open && access && access.reads > asked.after) {
+    const id = asked.open.access
+    setAsked({ open: asked.open, after: Number.POSITIVE_INFINITY })
+    const request = access.requests.find((entry) => entry.requestId === id)
+    if (request) {
+      setReviewing(request)
+    } else {
+      setMissing(asked.open)
+    }
+  }
+  useEffect(() => {
+    if (missing) {
+      showToast(accessRequestExpiredLine(t))
+    }
+  }, [missing, showToast, t])
   // Answered elsewhere, or no longer read: nothing is left to decide.
   if (reviewing && !access?.requests.some((request) => request.requestId === reviewing.requestId)) {
     setReviewing(null)
@@ -113,7 +153,7 @@ export function useBotAccessDecisionSheet(
     <BottomDrawer visible={reviewing !== null} onClose={close}>
       {shown ? (
         <MobileBotAccessDecisionContent
-          request={shown}
+          grant={accessRequestGrant(shown)}
           bot={{
             ...bot,
             accessHost: phoneAccessHost(client ? readConnectionStatusProbe(client) : undefined)

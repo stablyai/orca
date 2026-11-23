@@ -2,12 +2,16 @@ import { MobileNativeChatComposerMenuReservation } from '../field/MobileNativeCh
 import type { RefObject } from 'react'
 import { MobileNativeChatComposerMenuLayer } from './MobileNativeChatComposerMenuLayer'
 import { Pressable, ScrollView, StyleSheet, Text, View, type HostInstance } from 'react-native'
-import { AtSign, FileText, Package, Terminal } from 'lucide-react-native'
+import { AtSign, FileText, Folder, Package, Terminal } from 'lucide-react-native'
 import type { NativeChatPickerItem } from '../../../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
+import { isFolderPath } from '../../../../../../src/shared/quick-open/quick-open-folder-paths'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { COMPOSER_MENU_MAX_HEIGHT } from './mobile-native-chat-composer-menu-size'
+import type { BotChatRow } from '../../../../../../src/shared/bots/bot-chat-row'
+import type { MentionBot } from './use-mobile-native-chat-mention-bots'
+import { MobileNativeChatComposerBotRow } from './MobileNativeChatComposerBotRows'
 
 /** A room member `@` names instead of a file, e.g. a bot in a group. */
 export type ComposerRoomMention = { name: string; icon?: React.ReactNode }
@@ -16,8 +20,36 @@ export type ComposerMenuRow =
   | NativeChatPickerItem
   | { kind: 'file'; id: string; path: string }
   | { kind: 'member'; id: string; name: string; icon?: React.ReactNode }
+  | MentionBotRow
 
-const HEADINGS = { command: 'Commands', skill: 'Skills', file: 'Files', member: 'Bots' } as const
+/** The chat's host's bots under `@`, and one level down a bot's chats. */
+export type MentionBotRow =
+  | { kind: 'bot'; id: string; bot: MentionBot; chats: boolean }
+  | { kind: 'bot-back'; id: string; bot: MentionBot }
+  | { kind: 'bot-chat'; id: string; bot: MentionBot; chat: BotChatRow }
+  | {
+      kind: 'bot-chats-state'
+      id: string
+      bot: MentionBot
+      state: 'loading' | 'error' | 'none' | 'no-match'
+    }
+
+export function isMentionBotRow(row: ComposerMenuRow): row is MentionBotRow {
+  return (
+    row.kind === 'bot' ||
+    row.kind === 'bot-back' ||
+    row.kind === 'bot-chat' ||
+    row.kind === 'bot-chats-state'
+  )
+}
+
+const HEADINGS: Partial<Record<ComposerMenuRow['kind'], string>> = {
+  command: 'Commands',
+  skill: 'Skills',
+  file: 'Files',
+  member: 'Bots',
+  bot: 'Bots'
+}
 
 export function MobileNativeChatComposerSuggestions({
   anchorRef,
@@ -26,6 +58,7 @@ export function MobileNativeChatComposerSuggestions({
   anchorRef: RefObject<HostInstance | null>
   rows: readonly ComposerMenuRow[]
   onPick: (row: ComposerMenuRow) => void
+  onOpenBotChats?: (row: Extract<ComposerMenuRow, { kind: 'bot' }>) => void
   nestedScrollEnabled?: boolean
 }) {
   return (
@@ -43,10 +76,12 @@ export function MobileNativeChatComposerSuggestions({
 export function MobileNativeChatComposerMenu({
   rows,
   onPick,
+  onOpenBotChats,
   nestedScrollEnabled
 }: {
   rows: readonly ComposerMenuRow[]
   onPick: (row: ComposerMenuRow) => void
+  onOpenBotChats?: (row: Extract<ComposerMenuRow, { kind: 'bot' }>) => void
   nestedScrollEnabled?: boolean
 }): React.JSX.Element {
   useMobileColorScheme()
@@ -57,14 +92,23 @@ export function MobileNativeChatComposerMenu({
         nestedScrollEnabled={nestedScrollEnabled}
         style={styles.scroll}
       >
-        {rows.map((row, index) => (
-          <View key={row.id}>
-            {rows[index - 1]?.kind !== row.kind ? (
-              <Text style={styles.heading}>{HEADINGS[row.kind]}</Text>
-            ) : null}
-            <MenuRow row={row} onPick={onPick} />
-          </View>
-        ))}
+        {rows.map((row, index) => {
+          const heading = rows[index - 1]?.kind !== row.kind ? HEADINGS[row.kind] : undefined
+          return (
+            <View key={row.id}>
+              {heading ? <Text style={styles.heading}>{heading}</Text> : null}
+              {isMentionBotRow(row) ? (
+                <MobileNativeChatComposerBotRow
+                  row={row}
+                  onPick={onPick}
+                  onOpenChats={onOpenBotChats}
+                />
+              ) : (
+                <MenuRow row={row} onPick={onPick} />
+              )}
+            </View>
+          )
+        })}
       </ScrollView>
     </View>
   )
@@ -74,7 +118,7 @@ function MenuRow({
   row,
   onPick
 }: {
-  row: ComposerMenuRow
+  row: Exclude<ComposerMenuRow, MentionBotRow>
   onPick: (row: ComposerMenuRow) => void
 }): React.JSX.Element {
   useMobileColorScheme()
@@ -85,7 +129,9 @@ function MenuRow({
         ? Terminal
         : row.kind === 'member'
           ? AtSign
-          : FileText
+          : isFolderPath(row.path)
+            ? Folder
+            : FileText
   const description = row.kind === 'file' || row.kind === 'member' ? null : row.description
   const label = row.kind === 'file' ? row.path : row.kind === 'member' ? row.name : row.token
   return (

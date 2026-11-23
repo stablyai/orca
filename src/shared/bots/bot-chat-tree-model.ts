@@ -231,10 +231,12 @@ export function botChatTreeDispatchWorker(
       dispatchId: dispatch.id
     }
   }
+  const state = workerState(worker)
   return {
     key,
     title: clipActivityTitle(worker.title),
-    state: workerState(worker),
+    state,
+    ...(state === 'running' && worker.backgroundWait ? { waitsOnBackground: true as const } : {}),
     startedAt: worker.startedAt,
     // The list's own order and cursor read this time.
     ...(dispatch.settled ? { settledAt: dispatch.at } : {}),

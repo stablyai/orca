@@ -3,6 +3,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { openBotAutomation } from '@/components/bots/bot-automation-open'
 import { useBotForWorkspace } from '@/components/bots/bot-workspace'
 import { useBotActivity } from '@/components/bots/use-bot-activity'
+import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   AUTOMATION_RESULT_NOTE_COPY as COPY,
   type AutomationResultNote
@@ -46,6 +47,7 @@ export function NativeChatAutomationResultRow({
 }): React.JSX.Element {
   const t = useTranslate()
   useTranslation()
+  const owner = useNativeChatVisualOwner()
   const { say } = useAutomationRunWording(NO_RULES)
   const { open, setOpen } = useNativeChatDisclosure(`automation-result:${note.runId}`, false)
   const finished = note.outcome === 'finished'
@@ -86,7 +88,13 @@ export function NativeChatAutomationResultRow({
           <button
             type="button"
             className={RUN_LINK_BUTTON}
-            onClick={() => openBotAutomation(note.automationId, note.runId)}
+            onClick={() =>
+              openBotAutomation(
+                getRuntimeTargetHostId(owner?.target ?? { kind: 'local' }),
+                note.automationId,
+                note.runId
+              )
+            }
           >
             {t('components.native-chat.automationResult.openRun', COPY.openRun)}
           </button>

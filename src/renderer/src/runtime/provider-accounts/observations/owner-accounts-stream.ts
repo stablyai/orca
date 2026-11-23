@@ -105,19 +105,23 @@ export function readOwnerAccounts(environmentId: OwnerAccountsKey): OwnerAccount
   return streams.get(environmentId)?.state ?? null
 }
 
-/** Changes with every publish, so a slow direct read can tell that newer state arrived. */
-export function readOwnerAccountsRevision(environmentId: OwnerAccountsKey): number | null {
-  return streams.get(environmentId)?.revision ?? null
+export type OwnerAccountsStreamToken = { stream: Stream; revision: number }
+
+export function currentOwnerAccountsStream(
+  environmentId: OwnerAccountsKey
+): OwnerAccountsStreamToken | null {
+  const stream = streams.get(environmentId)
+  return stream ? { stream, revision: stream.revision } : null
 }
 
-/** A direct read of the host (forced refresh) lands where every reader sees it, unless the stream moved on. */
+// Bind a direct refresh to the original subscription and its last observation.
 export function applyOwnerAccountsSnapshot(
   environmentId: OwnerAccountsKey,
   snapshot: ProviderAccountsSnapshot,
-  readAtRevision?: number | null
+  startedOn: OwnerAccountsStreamToken | null
 ): void {
   const stream = streams.get(environmentId)
-  if (stream && (readAtRevision === undefined || stream.revision === readAtRevision)) {
+  if (stream && stream === startedOn?.stream && stream.revision === startedOn.revision) {
     publish(stream, snapshotState(snapshot))
   }
 }

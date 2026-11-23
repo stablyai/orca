@@ -12,29 +12,41 @@ type Handlers = {
   onClosedAfterSnapshot?: () => void
 }
 
-type Watcher = { target: RuntimeClientTarget; handlers: Handlers }
+type Watcher = { target: RuntimeClientTarget; handlers: Handlers; closed: boolean }
 
 const localOwner = { target: { kind: 'local' as const }, wslHostDistro: null }
 
 const mocks = vi.hoisted(() => {
-  const state: { owner: RuntimeClientTarget; watchers: Watcher[]; callRuntimeRpc: Mock } = {
+  const state: {
+    owner: RuntimeClientTarget | null
+    distro: string | null
+    watchers: Watcher[]
+    callRuntimeRpc: Mock
+  } = {
     owner: { kind: 'local' },
+    distro: null,
     watchers: [],
     callRuntimeRpc: vi.fn()
   }
   return state
 })
 
-vi.mock('../../../runtime/provider-accounts/ownership/use-active-account-owner', () => ({
-  useActiveAccountOwner: () => ({ target: mocks.owner, wslHostDistro: null })
+vi.mock('@/runtime/provider-accounts/ownership/use-active-account-owner', () => ({
+  useActiveAccountOwner: () =>
+    mocks.owner ? { target: mocks.owner, wslHostDistro: mocks.distro } : null
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mocks.callRuntimeRpc
 }))
 vi.mock('@/runtime/provider-accounts/observations/runtime-provider-accounts-client', () => ({
   watchProviderAccounts: (target: RuntimeClientTarget, handlers: Handlers) => {
-    mocks.watchers.push({ target, handlers })
-    return { close: () => {} }
+    const watcher = { target, handlers, closed: false }
+    mocks.watchers.push(watcher)
+    return {
+      close: () => {
+        watcher.closed = true
+      }
+    }
   }
 }))
 vi.mock('../../../store/index', () => ({
@@ -67,13 +79,150 @@ function snapshot(rateLimits: ProviderAccountsSnapshot['rateLimits']): ProviderA
 
 const local = createEmptyRateLimitState({ claude: provider('claude', 11) })
 
-describe('owner usage', () => {
+describe('useOwnerUsageRateLimits', () => {
   beforeEach(() => {
     mocks.owner = { kind: 'local' }
+    mocks.distro = null
     mocks.watchers.length = 0
     mocks.callRuntimeRpc.mockReset()
   })
   afterEach(() => cleanup())
+
+  it('never shows server A numbers under server B', () => {
+    mocks.owner = { kind: 'environment', environmentId: 'mini' }
+    const { result, rerender } = renderHook(() => useOwnerUsageRateLimits(local))
+    const first = mocks.watchers[0]
+    act(() =>
+      first.handlers.onSnapshot(
+        snapshot(createEmptyRateLimitState({ claude: provider('claude', 90) }))
+      )
+    )
+    mocks.owner = { kind: 'environment', environmentId: 'devbox' }
+    rerender()
+    expect(first.closed).toBe(true)
+    expect(result.current.rateLimits.claude?.session).toBeNull()
+    act(() =>
+      first.handlers.onSnapshot(
+        snapshot(createEmptyRateLimitState({ claude: provider('claude', 91) }))
+      )
+    )
+    expect(result.current.rateLimits.claude?.session).toBeNull()
+  })
+
+  it('does not retain A across an intervening owner with no snapshot', () => {
+    mocks.owner = { kind: 'environment', environmentId: 'mini' }
+    const { result, rerender } = renderHook(() => useOwnerUsageRateLimits(local))
+    act(() =>
+      mocks.watchers[0].handlers.onSnapshot(
+        snapshot(createEmptyRateLimitState({ claude: provider('claude', 90) }))
+      )
+    )
+    mocks.owner = { kind: 'environment', environmentId: 'devbox' }
+    rerender()
+    mocks.owner = { kind: 'environment', environmentId: 'mini' }
+    rerender()
+    expect(result.current.rateLimits.claude?.session).toBeNull()
+    act(() =>
+      mocks.watchers[2].handlers.onSnapshot(
+        snapshot(createEmptyRateLimitState({ claude: provider('claude', 20) }))
+      )
+    )
+    expect(result.current.rateLimits.claude?.session?.usedPercent).toBe(20)
+    act(() => mocks.watchers[2].handlers.onError(new Error('offline')))
+    expect(result.current.rateLimits.claude?.session).toBeNull()
+  })
+  it('ignores a refresh from an earlier activation after returning to the same owner', async () => {
+    mocks.owner = { kind: 'environment', environmentId: 'mini' }
+    let resolveRefresh: (value: ProviderAccountsSnapshot) => void = () => {}
+    mocks.callRuntimeRpc.mockReturnValue(
+      new Promise<ProviderAccountsSnapshot>((resolve) => {
+        resolveRefresh = resolve
+      })
+    )
+    const { result, rerender } = renderHook(() => useOwnerUsageRateLimits(local))
+    const pending = result.current.refreshRemote?.()
+    mocks.owner = { kind: 'environment', environmentId: 'devbox' }
+    rerender()
+    mocks.owner = { kind: 'environment', environmentId: 'mini' }
+    rerender()
+    act(() =>
+      mocks.watchers[2].handlers.onSnapshot(
+        snapshot(createEmptyRateLimitState({ claude: provider('claude', 20) }))
+      )
+    )
+    await act(async () => {
+      resolveRefresh(snapshot(createEmptyRateLimitState({ claude: provider('claude', 99) })))
+      await pending
+    })
+    expect(result.current.rateLimits.claude?.session?.usedPercent).toBe(20)
+  })
+  it('withholds local usage and refresh when a visible owner has no account transport', async () => {
+    mocks.owner = null
+    const { result } = renderHook(() => useOwnerUsageRateLimits(local))
+    expect(result.current.rateLimits.claude?.session).toBeNull()
+    expect(result.current.remoteOwner?.environmentId).toBeNull()
+    await result.current.refreshRemote?.()
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+    expect(mocks.watchers).toEqual([])
+  })
+
+  it('withholds every WSL quota across refreshes, settings updates and owner changes', async () => {
+    mocks.owner = { kind: 'local' }
+    const { result, rerender } = renderHook(() => useOwnerUsageRateLimits(local))
+    expect(result.current.rateLimits).toBe(local)
+    mocks.distro = 'Ubuntu'
+    rerender()
+    expect(result.current.rateLimits.claude?.session).toBeNull()
+    expect(result.current.rateLimits.codex?.session).toBeNull()
+    expect(result.current.rateLimits.inactiveClaudeAccounts).toEqual([])
+    expect(result.current.rateLimits.inactiveCodexAccounts).toEqual([])
+    await act(async () => {
+      await result.current.refreshRemote?.()
+    })
+    expect(result.current.rateLimits.claude?.session).toBeNull()
+    rerender()
+    expect(result.current.rateLimits.claude?.session).toBeNull()
+    mocks.distro = 'Debian'
+    rerender()
+    expect(result.current.rateLimits.codex?.session).toBeNull()
+    mocks.distro = null
+    rerender()
+    expect(result.current.rateLimits).toBe(local)
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+    expect(mocks.watchers).toEqual([])
+  })
+
+  it('never retains a paired snapshot when a WSL chat becomes visible', () => {
+    mocks.owner = { kind: 'environment', environmentId: 'mini' }
+    const { result, rerender } = renderHook(() => useOwnerUsageRateLimits(local))
+    const paired = mocks.watchers[0]
+    act(() =>
+      paired.handlers.onSnapshot(
+        snapshot(createEmptyRateLimitState({ claude: provider('claude', 90) }))
+      )
+    )
+    mocks.owner = { kind: 'local' }
+    mocks.distro = 'Ubuntu'
+    rerender()
+    expect(paired.closed).toBe(true)
+    expect(result.current.rateLimits.claude?.session).toBeNull()
+    act(() =>
+      paired.handlers.onSnapshot(
+        snapshot(createEmptyRateLimitState({ claude: provider('claude', 99) }))
+      )
+    )
+    expect(result.current.rateLimits.claude?.session).toBeNull()
+    mocks.distro = null
+    mocks.owner = { kind: 'environment', environmentId: 'mini' }
+    rerender()
+    expect(result.current.rateLimits.claude?.session).toBeNull()
+    act(() =>
+      mocks.watchers[1].handlers.onSnapshot(
+        snapshot(createEmptyRateLimitState({ claude: provider('claude', 20) }))
+      )
+    )
+    expect(result.current.rateLimits.claude?.session?.usedPercent).toBe(20)
+  })
 
   it('reads the Settings host instead of the focused workspace host', () => {
     mocks.owner = { kind: 'environment', environmentId: 'focused-other-host' }

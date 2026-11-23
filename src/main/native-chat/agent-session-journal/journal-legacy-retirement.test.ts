@@ -4,12 +4,14 @@ import Database from '../../sqlite/sync-database'
 import { journalDomainImportState } from './journal-domain-import-rows'
 import { initializeJournalDomainDatabase } from './database/journal-domain-database'
 import {
+  cleanup,
   continueInOlderOrca,
   fakeLease,
   olderOrcaChat,
   profile
 } from './journal-legacy-retirement.test-fixture'
 import { JournalLegacyIneligibleError } from './journal-legacy-retention-error'
+import { setLegacyJournalRetirementHost } from './journal-legacy-retirement-outcome'
 import { readLegacyProofSessions } from './journal-legacy-content-proof'
 
 function rename(filename: string, sessionId: string, name: string) {
@@ -346,6 +348,13 @@ it('finishes removing the absorbed WAL a removal left behind its main file, and 
   await launch().run()
   expect(existsSync(`${filename}-wal`)).toBe(true)
   save(retiring(wal.ino))
+  // Finishing the removal deletes too, so a build that keeps the file keeps these, and says so.
+  const deferred: string[] = []
+  setLegacyJournalRetirementHost({ report: async (event) => deferred.push(event.defer) > 0 })
+  cleanup.push(() => setLegacyJournalRetirementHost(undefined))
+  await launch('1.0.1', true, undefined, undefined, false).run()
+  expect(existsSync(`${filename}-wal`)).toBe(true)
+  expect(deferred).toEqual(['leftover_files'])
   await launch().run()
   expect(existsSync(`${filename}-wal`)).toBe(false)
 })
@@ -380,11 +389,10 @@ it('backs off, with no durable commit, while the source readers stay busy', asyn
   }
   // 1, 2 and 4 minute waits: four tries in ten minutes, never one per tick.
   expect(recycle.mock.calls.length).toBeLessThanOrEqual(4)
-  expect(
-    db
-      .prepare("SELECT 1 FROM agent_session_store_meta WHERE key='journal.legacy-retirement.v2'")
-      .get()
-  ).toBeUndefined()
+  const saved = db
+    .prepare("SELECT value FROM agent_session_store_meta WHERE key='journal.legacy-retirement.v2'")
+    .get()
+  expect(saved && JSON.parse(String(saved.value)).phase).not.toBe('retiring')
   expect(existsSync(filename)).toBe(true)
 })
 

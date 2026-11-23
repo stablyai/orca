@@ -20,7 +20,7 @@ import type { MobilePushDeliveryMode } from './mobile-push-delivery-policy'
 
 const PUSH_RETRY_DELAY_MS = 2_000
 // Split requests at the gateway's per-send limit so extra paired phones still receive notifications.
-const MAX_REGISTRATIONS_PER_SEND = 20
+export const MAX_REGISTRATIONS_PER_SEND = 20
 
 export type PushDispatcherRegistry = {
   listDevices(): readonly { deviceId: string; pushRegistration?: MobilePushRegistration }[]
@@ -259,7 +259,7 @@ export class PushDispatcher {
             this.outcomes.record(entry.status)
           }
         }
-        this.dropDeadRegistrations(targets, result.results)
+        dropDeadPushRegistrations(this.registry, targets, result.results)
         return new Set(
           result.results.flatMap((entry) =>
             entry.status === 'queued' ? [entry.registrationId] : []
@@ -278,30 +278,32 @@ export class PushDispatcher {
     }
     return NOTHING_QUEUED
   }
+}
 
-  private dropDeadRegistrations(
-    targets: readonly PushTarget[],
-    results: readonly { registrationId: string; status: string }[]
-  ): void {
-    for (const result of results) {
-      if (result.status !== 'dead') {
-        continue
-      }
-      const target = targets.find(
-        (entry) => entry.registration.registrationId === result.registrationId
-      )
-      if (
-        !target ||
-        this.registry.listDevices().find((device) => device.deviceId === target.deviceId)
-          ?.pushRegistration !== target.registration
-      ) {
-        continue
-      }
-      try {
-        this.registry.setPushRegistration(target.deviceId, null)
-      } catch (error) {
-        console.warn('[push] Failed to drop a dead push registration:', error)
-      }
+/** Forgets registrations the gateway reports dead, unless the device re-registered since. */
+export function dropDeadPushRegistrations(
+  registry: PushDispatcherRegistry,
+  targets: readonly { deviceId: string; registration: MobilePushRegistration }[],
+  results: readonly { registrationId: string; status: string }[]
+): void {
+  for (const result of results) {
+    if (result.status !== 'dead') {
+      continue
+    }
+    const target = targets.find(
+      (entry) => entry.registration.registrationId === result.registrationId
+    )
+    if (
+      !target ||
+      registry.listDevices().find((device) => device.deviceId === target.deviceId)
+        ?.pushRegistration !== target.registration
+    ) {
+      continue
+    }
+    try {
+      registry.setPushRegistration(target.deviceId, null)
+    } catch (error) {
+      console.warn('[push] Failed to drop a dead push registration:', error)
     }
   }
 }

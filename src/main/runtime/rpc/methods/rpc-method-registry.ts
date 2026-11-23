@@ -1,6 +1,7 @@
 import { STATUS_METHODS } from './host-management/status'
 import { DESKTOP_WINDOW_METHODS } from './host-management/desktop-window'
 import { SIDEBAR_INPUT_METHODS } from './sidebar-inputs/sidebar-inputs'
+import { SIDEBAR_REPO_ICON_METHODS } from './sidebar-inputs/sidebar-repo-icons'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad/orcad-terminal-census'
 import { ORCAD_MIGRATION_METHODS } from './orcad/orcad-migration'
 import { SESSION_TERMINAL_SCROLLBACK_METHODS } from './terminal/session-terminal-scrollback'
@@ -25,6 +26,7 @@ import { BROWSER_CLIENT_FILE_CHANNEL_METHODS } from './browser/browser-client-fi
 import { BROWSER_NETWORK_TUNNEL_METHODS } from './browser/browser-network-tunnel'
 import { ORCHESTRATION_METHODS } from './orchestration/orchestration'
 import { NOTIFICATION_METHODS } from './notifications/notifications'
+import { PAIRED_SERVER_ASKS_METHODS } from './paired-server-asks/paired-server-asks-methods'
 import { STATS_METHODS } from './host-management/stats'
 import { USAGE_ANALYTICS_METHODS } from './host-management/usage-analytics'
 import { DIAGNOSTICS_METHODS } from './host-management/diagnostics'
@@ -102,6 +104,7 @@ import { BOT_WORK_METHODS } from './bots-work'
 import { BOT_ITEMS_METHODS } from './bots-items'
 import { BOT_CONNECTOR_OFFER_METHOD } from './bots-connector-offer'
 import { GOOGLE_SETUP_METHODS } from './bots-google-setup'
+import { GOOGLE_SETUP_SAVED_KEY_METHODS } from './bots-google-setup-saved-key'
 import { BOT_REQUEST_OUTCOME_METHOD } from './bots-request-outcome'
 import { WORKTREE_RELEASE_BOT_HOME_METHOD } from './bots-home-release'
 import { BOT_CREATE_OFFER_METHOD } from './bots-create-offer'
@@ -126,6 +129,7 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/fee
 // Keep registration order and the full RPC/security surface visible in one manifest.
 const CORE_RPC_METHODS = [
   ...STATUS_METHODS,
+  ...PAIRED_SERVER_ASKS_METHODS,
   ...DESKTOP_WINDOW_METHODS,
   ...ORCAD_TERMINAL_CENSUS_METHODS,
   ...ORCAD_MIGRATION_METHODS,
@@ -169,6 +173,7 @@ const BOT_RPC_METHODS = [
   ...BOT_ITEMS_METHODS,
   BOT_CONNECTOR_OFFER_METHOD,
   ...GOOGLE_SETUP_METHODS,
+  ...GOOGLE_SETUP_SAVED_KEY_METHODS,
   BOT_REQUEST_OUTCOME_METHOD,
   WORKTREE_RELEASE_BOT_HOME_METHOD,
   BOT_CREATE_OFFER_METHOD,
@@ -250,6 +255,7 @@ const SERVICE_RPC_METHODS = [
   ...MOBILE_PROJECT_SECTIONS_METHODS,
   // Switch point: a window-fed build publishes no sidebar input.
   ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? SIDEBAR_INPUT_METHODS : []),
+  ...SIDEBAR_REPO_ICON_METHODS,
   ...UPDATER_METHODS,
   ...AUTOMATIC_WORK_METHODS
 ] as const
