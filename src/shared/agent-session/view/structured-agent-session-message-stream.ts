@@ -1,4 +1,5 @@
 import { noteRevisedInPlace, positionsRevisedFrom } from './revised-in-place-lists'
+import { onlyStreamedTextChanged } from './structured-agent-session-streamed-text-rows'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -83,8 +84,8 @@ function reuseMessages(
   items: readonly AgentJournalRenderItem[],
   projectItems: StructuredAgentSessionItemProjector
 ): MessageStream | null {
-  // Stopped sends are placed among the rows, so only a revision in place (a reply's streamed text)
-  // keeps them where they were; any other change places them again.
+  // Stopped sends are placed among the rows, so only a revision of a reply's streamed text keeps
+  // them where they were; any other change (a turn's opener corrected) places them again.
   if (
     items.length < previous.items.length ||
     (previous.hasStoppedSends && items.length !== previous.items.length)
@@ -99,6 +100,9 @@ function reuseMessages(
     const item = items[index]!
     if (before === item) {
       continue
+    }
+    if (previous.hasStoppedSends && !onlyStreamedTextChanged(before, item)) {
+      return null
     }
     if (
       !drawsOnlyItsOwnRow(before) ||

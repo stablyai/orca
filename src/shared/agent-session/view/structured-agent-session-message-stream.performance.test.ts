@@ -58,6 +58,11 @@ it('projects only the streaming row while a stopped send is held, not the histor
   }
   // Each window projects the revised row's before and after: 2 visits, not the 402-row history.
   expect(visited).toBe(40)
+  // A revision beside streamed text (here the stopped send's own row) places stopped sends again.
+  visited = 0
+  const reworded = row(agentJournalSubmissionKey('stopped-send'), 401, 'user', 'Never mind, really')
+  project([...history.slice(0, -1), reworded, reply('The reply')], optimistic, submissions)
+  expect(visited).toBeGreaterThan(400)
   expect(latest.at(-1)?.blocks).toEqual([
     { type: 'text', text: `The reply${' and more'.repeat(20)}` }
   ])
