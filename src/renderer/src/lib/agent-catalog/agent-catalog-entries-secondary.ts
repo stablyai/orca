@@ -10,6 +10,12 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       homepageUrl: 'https://aider.chat/docs/'
     },
     {
+      id: 'gray',
+      label: translate('auto.lib.agent.catalog.gray_label', 'Gray'),
+      cmd: 'gray',
+      homepageUrl: 'https://gray.alignment.id'
+    },
+    {
       id: 'goose',
       label: translate('auto.lib.agent.catalog.8da11d876c', 'Goose'),
       cmd: 'goose',

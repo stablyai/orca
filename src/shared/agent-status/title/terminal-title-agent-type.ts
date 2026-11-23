@@ -1,5 +1,6 @@
 import { collectExplicitAgentTitleEvidence } from './agent-title-evidence'
 import { isQoderTerminalTitle } from './providers/qoder-terminal-title'
+
 import { isJcodeIdentityTerminalTitle } from './providers/jcode-terminal-title'
 import {
   AGY_AGENT_NAME_RE,
@@ -105,6 +106,9 @@ function computeAgentLabel(title: string): string | null {
   ) {
     return 'Claude Code'
   }
+  if (title.endsWith(' · gray') && collectExplicitAgentTitleEvidence(title).agent === 'gray') {
+    return 'Gray'
+  }
   // The π/Pi/OMP brand owns identity; its session label may name other agents.
   const piBrand = getPiCompatibleTitleBrand(title)
   if (piBrand) {
@@ -208,6 +212,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TerminalAgent>> = {
   'OpenCode 2': 'opencode2',
   'MiMo Code': 'mimo-code',
   Aider: 'aider',
+  Gray: 'gray',
   Cursor: 'cursor',
   Droid: 'droid',
   Hermes: 'hermes',

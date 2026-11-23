@@ -1,3 +1,5 @@
+import type { TerminalAgent } from '../identity/terminal-agent'
+import { containsAgentSpinnerGlyph } from './agent-title-glyphs'
 import type { AgentStatusState, AgentType } from '../contracts/agent-status-types'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import { getPiCompatibleSyntheticAgentStatus } from './providers/pi-compatible-synthetic-title'
@@ -129,4 +131,33 @@ export function shouldDriveSyntheticAgentTitleFromHook(
     return false
   }
   return state !== 'working' || profile.synthesizeWorkingTitle !== false
+}
+
+export function agentForSyntheticTitle(text: string): TerminalAgent | null {
+  const trimmed = text.trim()
+  if (/[\\/]/.test(trimmed)) {
+    return null
+  }
+  const normalized = trimmed.replace(/^[^\p{L}\p{N}]+/u, '').toLowerCase()
+  for (const agent of SYNTHETIC_AGENT_TITLE_AGENTS) {
+    const profile = SYNTHETIC_AGENT_TITLE_PROFILES[agent]
+    const emittedLabels = [profile.permissionLabel, profile.idleLabel]
+    if (profile.synthesizeWorkingTitle !== false) {
+      // Working labels are emitted only as spinner frames; a bare name is free text.
+      if (
+        profile.synthesizeTerminalTitle !== false &&
+        containsAgentSpinnerGlyph(trimmed) &&
+        normalized === profile.workingLabel.toLowerCase()
+      ) {
+        return agent
+      }
+    }
+    if (
+      profile.synthesizeTerminalTitle !== false &&
+      emittedLabels.some((label) => normalized === label.toLowerCase())
+    ) {
+      return agent
+    }
+  }
+  return null
 }

@@ -1,4 +1,5 @@
 import { isQoderTerminalTitle } from './providers/qoder-terminal-title'
+import { collectExplicitAgentTitleEvidence } from './agent-title-evidence'
 import { isJcodeIdentityTerminalTitle } from './providers/jcode-terminal-title'
 import { getPiStateTitleBrand } from './providers/pi-state-title-marker'
 import {
@@ -72,6 +73,9 @@ function computeAgentLabel(title: string): string | null {
     title.startsWith('* ')
   ) {
     return 'Claude Code'
+  }
+  if (title.endsWith(' · gray') && collectExplicitAgentTitleEvidence(title).agent === 'gray') {
+    return 'Gray'
   }
   const piBrand = getPiStateTitleBrand(title) ?? getPiCompatibleTitleBrand(title)
   if (piBrand) {

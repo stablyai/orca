@@ -21,6 +21,7 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   gemini: 'gemini-cli',
   antigravity: 'antigravity',
   aider: null,
+  gray: null,
   goose: 'goose',
   amp: 'amp',
   kilo: 'kilo',

@@ -16,6 +16,7 @@ export const TITLE_AGENT_LABEL_TO_TYPE: Record<string, AgentType> = {
   Antigravity: 'antigravity',
   OpenCode: 'opencode',
   Aider: 'aider',
+  Gray: 'gray',
   Cursor: 'cursor',
   Droid: 'droid',
   Hermes: 'hermes',

@@ -15,6 +15,7 @@ export type TuiAgent =
   | 'gemini'
   | 'antigravity'
   | 'aider'
+  | 'gray'
   | 'goose'
   | 'amp'
   | 'kilo' // Kilocode

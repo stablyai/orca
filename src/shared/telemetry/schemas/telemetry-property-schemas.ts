@@ -26,6 +26,7 @@ export const AGENT_KIND_VALUES = [
   'gemini',
   'antigravity',
   'aider',
+  'gray',
   'goose',
   'amp',
   'kilo',

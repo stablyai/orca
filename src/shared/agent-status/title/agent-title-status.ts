@@ -1,6 +1,7 @@
 import { getDeepSeekBuildTitleStatus } from './providers/dsb-terminal-title'
 import { qoderTitleStatus } from './providers/qoder-terminal-title'
 import { isJcodeIdentityTerminalTitle } from './providers/jcode-terminal-title'
+import { grayTitleStatus } from './providers/gray-terminal-title'
 import { cursorTitleStatus } from './providers/cursor-terminal-title'
 import {
   AGY_AGENT_NAME_RE,
@@ -271,6 +272,14 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
     if (geminiGlyphStatus) {
       return geminiGlyphStatus
     }
+  }
+
+  if (title.endsWith(' · gray') && resolveExplicitTerminalTitleAgentType(title) === 'gray') {
+    return (
+      getWrapperTitleSegments(title)
+        .map(grayTitleStatus)
+        .find((status) => status !== null) ?? null
+    )
   }
 
   // Resolve synthetic Pi/OMP idle/permission labels before generic Pi/braille checks.

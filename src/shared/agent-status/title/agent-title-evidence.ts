@@ -3,8 +3,7 @@ import {
   GEMINI_IDLE,
   GEMINI_PERMISSION,
   GEMINI_SILENT_WORKING,
-  GEMINI_WORKING,
-  containsAgentSpinnerGlyph
+  GEMINI_WORKING
 } from './agent-title-glyphs'
 import {
   isClaudeIdentityFrameSegment,
@@ -30,11 +29,9 @@ import {
 } from './providers/pi-compatible-synthetic-title'
 import { isDshTerminalTitle } from './providers/dsh-terminal-title'
 import { hasQoderTitleLabelPayload, isQoderTerminalTitle } from './providers/qoder-terminal-title'
+import { grayTitleStatus } from './providers/gray-terminal-title'
 import { isJcodeIdentityTerminalTitle } from './providers/jcode-terminal-title'
-import {
-  SYNTHETIC_AGENT_TITLE_AGENTS,
-  SYNTHETIC_AGENT_TITLE_PROFILES
-} from './synthetic-agent-title'
+import { agentForSyntheticTitle } from './synthetic-agent-title'
 import type { TerminalAgent } from '../identity/terminal-agent'
 import {
   agentForNativeFrame,
@@ -88,35 +85,6 @@ function getEvidenceTitleSegments(title: string): string[] {
     }
   }
   return segments
-}
-
-function agentForSyntheticTitle(text: string): TerminalAgent | null {
-  const trimmed = text.trim()
-  if (/[\\/]/.test(trimmed)) {
-    return null
-  }
-  const normalized = trimmed.replace(/^[^\p{L}\p{N}]+/u, '').toLowerCase()
-  for (const agent of SYNTHETIC_AGENT_TITLE_AGENTS) {
-    const profile = SYNTHETIC_AGENT_TITLE_PROFILES[agent]
-    const emittedLabels = [profile.permissionLabel, profile.idleLabel]
-    if (profile.synthesizeWorkingTitle !== false) {
-      // Working labels are emitted only as spinner frames; a bare name is free text.
-      if (
-        profile.synthesizeTerminalTitle !== false &&
-        containsAgentSpinnerGlyph(trimmed) &&
-        normalized === profile.workingLabel.toLowerCase()
-      ) {
-        return agent
-      }
-    }
-    if (
-      profile.synthesizeTerminalTitle !== false &&
-      emittedLabels.some((label) => normalized === label.toLowerCase())
-    ) {
-      return agent
-    }
-  }
-  return null
 }
 
 function collectVendorMarkers(segments: readonly string[]): TerminalAgent[] {
@@ -269,6 +237,7 @@ function collectObserverAnchors(title: string): TerminalAgent[] {
         ? 'dsb'
         : null) ??
       agentForNativeFrame(segment) ??
+      (grayTitleStatus(segment) ? 'gray' : null) ??
       (isJcodeIdentityTerminalTitle(segment) ? 'jcode' : null) ??
       agentForWholeTitle(segment) ??
       agentForSyntheticTitle(segment) ??
@@ -296,9 +265,12 @@ function collectTitleEvidence(title: string, nativeFrames: boolean): AgentTitleE
 
   const segments = getEvidenceTitleSegments(title)
   const vendorMarkers = collectVendorMarkers(segments)
-  const anchoredNames = nativeFrames
-    ? collectObserverAnchors(title)
-    : collectAnchoredNames(segments, vendorMarkers)
+  const observerAnchors =
+    nativeFrames || title.endsWith(' · gray') ? collectObserverAnchors(title) : []
+  const anchoredNames =
+    nativeFrames || observerAnchors.includes('gray')
+      ? observerAnchors
+      : collectAnchoredNames(segments, vendorMarkers)
   const anchoredSet = new Set(anchoredNames)
   const anchoredLabelNames = namesConsumedByAnchoredLabels(segments, anchoredSet)
   const freeTextNames = namesIn(title).filter(

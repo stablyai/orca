@@ -23,6 +23,7 @@ const TUI_AGENT_KIND_BY_AGENT = {
   gemini: 'gemini',
   antigravity: 'antigravity',
   aider: 'aider',
+  gray: 'gray',
   goose: 'goose',
   amp: 'amp',
   kilo: 'kilo',

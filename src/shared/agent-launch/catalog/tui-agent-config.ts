@@ -180,6 +180,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'aider',
     promptInjectionMode: 'stdin-after-start'
   },
+  gray: { detectCmd: 'gray', promptInjectionMode: 'stdin-after-start' },
   goose: {
     detectCmd: 'goose',
     promptInjectionMode: 'stdin-after-start'
