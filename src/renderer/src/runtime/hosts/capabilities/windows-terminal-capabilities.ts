@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  isWindowsTerminalCapabilityReprobeActive,
-  startWindowsTerminalCapabilityReprobe
-} from './windows-terminal-capability-reprobe'
+import { startWindowsTerminalCapabilityReprobe } from './windows-terminal-capability-reprobe'
 import { readWindowsTerminalCapabilities } from './windows-terminal-capability-read'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
@@ -173,9 +170,6 @@ export function loadWindowsTerminalCapabilities(
   return nextPendingCapabilities
 }
 
-/** Matches the re-probe ceiling, so a reused answer is never older than an unsettled re-probe would allow. */
-const REMOUNT_CAPABILITY_REUSE_MS = 5 * 60_000
-
 export function selectWindowsTerminalCapabilitiesForOwner(
   state: WindowsTerminalCapabilityHookState,
   enabled: boolean,
@@ -196,7 +190,7 @@ export function useWindowsTerminalCapabilities(
   target: RuntimeClientTarget = { kind: 'local' },
   sshConnectionId?: string | null,
   /** A strip remounting after its workspace released it; new mounts keep the cache TTL. */
-  reuseRecentAnswerOnMount = false
+  reuseCachedAnswerOnMount = false
 ): WindowsTerminalCapabilities {
   const targetKind = target.kind
   const targetEnvironmentId = target.kind === 'environment' ? target.environmentId : null
@@ -238,18 +232,9 @@ export function useWindowsTerminalCapabilities(
     subscribersByOwnerKey.set(resolvedOwnerKey, subscribers)
     const reprobe: { stop: (() => void) | null } = { stop: null }
     const isLocalOwner = resolvedTarget.kind === 'local' && !sshConnectionIdKey
-    // A returning tab strip reuses a recent answer while a mounted consumer's re-probe owns the host; a settled
-    // re-probe stops probing, so past its ceiling the return refreshes as before.
-    const cacheAgeMs =
-      Date.now() -
-      (cachedCapabilitiesByOwnerKey.get(resolvedOwnerKey)?.loadedAt ?? Number.NEGATIVE_INFINITY)
-    const ownedByLiveReprobe =
-      reuseRecentAnswerOnMount &&
-      !forceRefreshOnMount &&
-      isLocalOwner &&
-      cacheAgeMs < REMOUNT_CAPABILITY_REUSE_MS &&
-      isWindowsTerminalCapabilityReprobeActive(resolvedOwnerKey)
-    const mountLoad = ownedByLiveReprobe
+    // On main a released strip stayed mounted and never re-probed; returning reads the shared answer the same way.
+    const reuseCachedAnswer = reuseCachedAnswerOnMount && !forceRefreshOnMount && hasOwnerCache
+    const mountLoad = reuseCachedAnswer
       ? Promise.resolve(cached)
       : loadWindowsTerminalCapabilities({
           force: forceRefreshOnMount,
@@ -292,7 +277,7 @@ export function useWindowsTerminalCapabilities(
     resolvedOwnerKey,
     resolvedTarget,
     sshConnectionIdKey,
-    reuseRecentAnswerOnMount
+    reuseCachedAnswerOnMount
   ])
 
   return selectWindowsTerminalCapabilitiesForOwner(state, enabled, resolvedOwnerKey)
