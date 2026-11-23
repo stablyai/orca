@@ -2,18 +2,22 @@ import type { RootProjectHeaderDrag } from './root-project-header-drop'
 import type { PointerEvent } from 'react'
 
 import type { ProjectHeaderDragBucketKey, ProjectHeaderDragRect } from './project-header-drop'
+import type { ProjectHeaderGroupMove } from './project-header-group-move'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 
 export type RepoDragState = {
   draggingRepoId: string | null
   dropIndex: number | null
   dropIndicatorY: number | null
+  /** Group the drop would move the project into; its header shows the drop target. */
+  dropTargetGroupId: string | null
 }
 
 export const INITIAL_REPO_DRAG_STATE: RepoDragState = {
   draggingRepoId: null,
   dropIndex: null,
-  dropIndicatorY: null
+  dropIndicatorY: null,
+  dropTargetGroupId: null
 }
 
 export type UseRepoHeaderDragArgs = RootProjectHeaderDrag & {
@@ -22,8 +26,11 @@ export type UseRepoHeaderDragArgs = RootProjectHeaderDrag & {
   repoById: ReadonlyMap<string, Repo>
   getLiveRepos: () => readonly Repo[]
   usesProjectGroupOrdering: boolean
+  canReorder: boolean
+  /** Present when projects can move between project groups by drag. */
+  groupMove?: ProjectHeaderGroupMove
   onCommitRepoOrder: (orderedIds: string[]) => void
-  onCommitProjectGroupOrder: (project: Repo, projectGroupId: string | null, order: number) => void
+  onCommitProjectGroupOrder: (project: Repo, projectGroupId: string | null, order?: number) => void
   getScrollContainer: () => HTMLElement | null
 }
 
@@ -39,6 +46,10 @@ export type ProjectHeaderDragSession = {
   sidebarRepoHeaderIds: readonly string[]
   rootProjectHeaderKeys?: readonly string[]
   rootProjectHeaderHostId?: string
+  /** Innermost project group around the dragged header in the rendered list. */
+  sourceGroupId: string | null
+  /** Host section the dragged header sits in, when the list is split by host. */
+  sourceHostId?: string
   pointerId: number
   headerRects: ProjectHeaderDragRect[]
   handleEl: HTMLElement

@@ -7505,7 +7505,9 @@
           "92154beb7e": "New workspace",
           "addProject": "Add project",
           "expandAllProjects": "Expand all projects",
-          "collapseAllProjects": "Collapse all projects"
+          "collapseAllProjects": "Collapse all projects",
+          "newProjectGroupDesc": "Create an empty group. Drag projects into it or use Move to group.",
+          "newProjectGroupFailed": "Could not create group"
         },
         "SidebarNav": {
           "80611a8b10": "Search",
@@ -8602,7 +8604,8 @@
           "addRemoteHost": "Add remote host…",
           "browseFolder": "Browse folder…",
           "cloneFromUrl": "Clone from URL…",
-          "createNewProject": "Create new project…"
+          "createNewProject": "Create new project…",
+          "newProjectGroup": "New project group…"
         }
       },
       "shared": {

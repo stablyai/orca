@@ -9,8 +9,7 @@ export function renderWorktreeSidebarDropIndicators(args: {
   const { headerDrag, worktreeDragState } = args
   return (
     <>
-      {headerDrag.canReorderRepoHeaders &&
-      headerDrag.repoDrag.state.draggingRepoId !== null &&
+      {headerDrag.repoDrag.state.draggingRepoId !== null &&
       headerDrag.repoDrag.state.dropIndicatorY !== null ? (
         <WorktreeSidebarDropIndicator y={headerDrag.repoDrag.state.dropIndicatorY} />
       ) : null}

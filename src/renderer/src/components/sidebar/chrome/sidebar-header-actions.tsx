@@ -1,14 +1,17 @@
-import React, { useCallback, useRef } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { FolderPlus, Plus } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatOptionalPrimaryShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { openWorkspaceCreationComposerWithTourHandoff } from '../../contextual-tours/workspace-creation-tour-handoff'
 import type { AddRepoDialogEntryRequest } from '../project-admission/dialog/add-repo-dialog-types'
 import { AddProjectMenu } from '../project-admission/menu/AddProjectMenu'
 import SidebarWorkspaceOptionsMenu from '../worktree-list/controls/SidebarWorkspaceOptionsMenu'
+import { ProjectGroupNameDialog } from '../worktree-list/rows/ProjectGroupNameDialog'
 
 function AddProjectButton({
   preserveWorkspaceBoardOpen,
@@ -19,6 +22,9 @@ function AddProjectButton({
 }): React.JSX.Element {
   const t = useTranslate()
   const openModal = useAppStore((s) => s.openModal)
+  const createProjectGroup = useAppStore((s) => s.createProjectGroup)
+  // Host the empty group is created on; null while the name dialog is closed.
+  const [newGroupHostId, setNewGroupHostId] = useState<ExecutionHostId | null>(null)
   const label = t('auto.components.sidebar.SidebarHeader.addProject', 'Add project')
   const handleOpenEntryRequest = useCallback(
     (entryRequest: AddRepoDialogEntryRequest) => {
@@ -26,28 +32,57 @@ function AddProjectButton({
     },
     [openModal]
   )
+  const handleSubmitNewGroup = useCallback(
+    async (name: string) => {
+      if (newGroupHostId && !(await createProjectGroup(name, newGroupHostId))) {
+        toast.error(
+          t('auto.components.sidebar.SidebarHeader.newProjectGroupFailed', 'Could not create group')
+        )
+      }
+    },
+    [createProjectGroup, newGroupHostId, t]
+  )
 
   return (
-    <AddProjectMenu
-      side="bottom"
-      align="start"
-      tooltipLabel={label}
-      tooltipSide="bottom"
-      preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
-      onOpenChange={onMenuOpenChange}
-      onOpenEntryRequest={handleOpenEntryRequest}
-    >
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        type="button"
-        className="text-muted-foreground"
-        aria-label={label}
-        data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
+    <>
+      <AddProjectMenu
+        side="bottom"
+        align="start"
+        tooltipLabel={label}
+        tooltipSide="bottom"
+        preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+        onOpenChange={onMenuOpenChange}
+        onOpenEntryRequest={handleOpenEntryRequest}
+        onCreateProjectGroup={setNewGroupHostId}
       >
-        <FolderPlus className="size-3.5" strokeWidth={2.25} />
-      </Button>
-    </AddProjectMenu>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          type="button"
+          className="text-muted-foreground"
+          aria-label={label}
+          data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
+        >
+          <FolderPlus className="size-3.5" strokeWidth={2.25} />
+        </Button>
+      </AddProjectMenu>
+      <ProjectGroupNameDialog
+        open={newGroupHostId !== null}
+        title={t('auto.components.sidebar.WorktreeList.13757c053c', 'New Project Group')}
+        description={t(
+          'auto.components.sidebar.SidebarHeader.newProjectGroupDesc',
+          'Create an empty group. Drag projects into it or use Move to group.'
+        )}
+        initialName=""
+        confirmLabel={t('auto.components.sidebar.ProjectGroupNameDialog.create', 'Create')}
+        onOpenChange={(open) => {
+          if (!open) {
+            setNewGroupHostId(null)
+          }
+        }}
+        onSubmit={handleSubmitNewGroup}
+      />
+    </>
   )
 }
 

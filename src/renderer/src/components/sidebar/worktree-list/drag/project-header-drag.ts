@@ -5,10 +5,7 @@ import {
 import { measureRootProjectHeaderDragRects } from './root-project-header-drop'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
-import {
-  computeProjectHeaderDropPreview,
-  measureProjectHeaderDragRects
-} from './project-header-drop'
+import { measureProjectHeaderDragRects } from './project-header-drop'
 import { commitProjectHeaderDragDrop } from './project-header-drag-commit'
 import {
   INITIAL_REPO_DRAG_STATE,
@@ -19,6 +16,14 @@ import {
   type UseRepoHeaderDragArgs
 } from './project-header-drag-contract'
 import { createProjectHeaderDragSession } from './project-header-drag-start'
+import {
+  computeProjectHeaderDrop,
+  getRepoDragStateForDrop,
+  isSameRepoDragState,
+  NO_PROJECT_HEADER_DROP,
+  type ProjectHeaderDrop,
+  type ProjectHeaderDropResult
+} from './project-header-group-move'
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
 import { hasPointerBeenReleased } from './header-drag-pointer-release'
 import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
@@ -32,6 +37,8 @@ export function useRepoHeaderDrag({
   repoById,
   getLiveRepos,
   usesProjectGroupOrdering,
+  canReorder,
+  groupMove,
   onCommitRepoOrder,
   onCommitProjectGroupOrder,
   rootProjectHeaderKeys,
@@ -40,8 +47,11 @@ export function useRepoHeaderDrag({
 }: UseRepoHeaderDragArgs): RepoHeaderDragController {
   const [state, setState] = useState<RepoDragState>(INITIAL_REPO_DRAG_STATE)
   const [sessionArmed, setSessionArmed] = useState(false)
-  const latestDropIndexRef = useRef<number | null>(null)
-  latestDropIndexRef.current = state.dropIndex
+  const latestDropRef = useRef<ProjectHeaderDrop | null>(null)
+  const dropModeRef = useRef({ canReorder, groupMove })
+  useLayoutEffect(() => {
+    dropModeRef.current = { canReorder, groupMove }
+  }, [canReorder, groupMove])
   const orderedIdsRef = useRef(orderedRepoIds)
   orderedIdsRef.current = orderedRepoIds
   const sidebarRepoHeaderIdsByBucketRef = useRef(sidebarRepoHeaderIdsByBucket)
@@ -85,41 +95,26 @@ export function useRepoHeaderDrag({
     return rects
   }, [])
 
-  const computeDrop = useCallback(
-    (pointerY: number): { dropIndex: number; dropIndicatorY: number } | null => {
-      const session = dragSessionRef.current
-      const container = getContainerRef.current()
-      if (!session || !container) {
-        return null
-      }
-      return computeProjectHeaderDropPreview({
-        pointerY,
-        containerTop: container.getBoundingClientRect().top,
-        scrollTop: container.scrollTop,
-        rects: session.headerRects,
-        sidebarRepoHeaderIds: session.sidebarRepoHeaderIds,
-        contentBottom: container.scrollHeight
-      })
-    },
-    []
-  )
+  const computeDrop = useCallback((pointerY: number): ProjectHeaderDropResult => {
+    const session = dragSessionRef.current
+    const container = getContainerRef.current()
+    return session && container
+      ? computeProjectHeaderDrop({
+          session,
+          container,
+          pointerY,
+          canReorder: dropModeRef.current.canReorder,
+          groupMove: dropModeRef.current.groupMove,
+          rootProjectHeaderKeys: rootDragRef.current.rootProjectHeaderKeys
+        })
+      : NO_PROJECT_HEADER_DROP
+  }, [])
 
-  const applyDrop = useCallback(
-    (repoId: string, drop: { dropIndex: number; dropIndicatorY: number } | null) => {
-      latestDropIndexRef.current = drop?.dropIndex ?? null
-      const nextState: RepoDragState = drop
-        ? { draggingRepoId: repoId, ...drop }
-        : { draggingRepoId: repoId, dropIndex: null, dropIndicatorY: null }
-      setState((prev) =>
-        prev.draggingRepoId === nextState.draggingRepoId &&
-        prev.dropIndex === nextState.dropIndex &&
-        prev.dropIndicatorY === nextState.dropIndicatorY
-          ? prev
-          : nextState
-      )
-    },
-    []
-  )
+  const applyDrop = useCallback((repoId: string, result: ProjectHeaderDropResult) => {
+    latestDropRef.current = result.drop
+    const next = getRepoDragStateForDrop(repoId, result)
+    setState((prev) => (isSameRepoDragState(prev, next) ? prev : next))
+  }, [])
 
   const cancelAutoscroll = useCallback(() => {
     if (autoscrollFrameIdRef.current !== null) {
@@ -146,20 +141,18 @@ export function useRepoHeaderDrag({
       if (session.promoted) {
         clickSwallowTimeoutRef.current = swallowNextClickOnDragHandle(session.handleEl)
       }
-      const sidebarDropIndex =
-        commit && session.promoted && latestDropIndexRef.current !== null
-          ? latestDropIndexRef.current
-          : null
+      const drop = commit && session.promoted ? latestDropRef.current : null
+      latestDropRef.current = null
       dragSessionRef.current = null
       setState(INITIAL_REPO_DRAG_STATE)
       setSessionArmed(false)
-      if (sidebarDropIndex === null) {
+      if (!drop) {
         return
       }
-
       commitProjectHeaderDragDrop({
         session,
-        sidebarDropIndex,
+        drop,
+        groupMove: dropModeRef.current.groupMove,
         onCommitRootProjectOrder: rootDragRef.current.onCommitRootProjectOrder,
         orderedRepoIds: orderedIdsRef.current,
         repoById: repoByIdRef.current,
@@ -245,7 +238,7 @@ export function useRepoHeaderDrag({
           } catch {}
         }
         refreshHeaderRects()
-        setState({ draggingRepoId: session.repo.id, dropIndex: null, dropIndicatorY: null })
+        setState({ ...INITIAL_REPO_DRAG_STATE, draggingRepoId: session.repo.id })
       }
       refreshHeaderRects()
       applyDrop(session.repo.id, computeDrop(e.clientY))
@@ -311,6 +304,8 @@ export function useRepoHeaderDrag({
       repo,
       rootProjectHeaderKeys: rootDragRef.current.rootProjectHeaderKeys,
       sidebarRepoHeaderIdsByBucket: sidebarRepoHeaderIdsByBucketRef.current,
+      canReorder: dropModeRef.current.canReorder,
+      groupMove: dropModeRef.current.groupMove,
       getScrollContainer: getContainerRef.current
     })
     if (!session) {
