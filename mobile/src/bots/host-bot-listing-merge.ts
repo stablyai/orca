@@ -22,7 +22,7 @@ export function mergeHostBotListing(
         }
       : {}
   const threadFacts =
-    kept && !threads
+    kept && (!threads || (listing.kind === 'listed' && listing.workerStatus === 'unavailable'))
       ? {
           ...(kept.links ? { links: kept.links } : {}),
           ...(kept.ownChats ? { ownChats: kept.ownChats } : {})
@@ -32,6 +32,31 @@ export function mergeHostBotListing(
     ...previous.filter((entry) => entry.hostId !== listing.hostId),
     { ...listing, ...threadFacts, ...lineage, ...(groups ? { groups } : {}) }
   ]
+}
+
+/** Hydrates a late cached lineage into its newer, still-degraded server listing. */
+export function mergeKeptServerBotListing(
+  live: HostBotListing | undefined,
+  kept: Extract<HostBotListing, { kind: 'listed' }>
+): HostBotListing {
+  if (
+    live?.kind !== 'listed' ||
+    live.workerStatus !== 'unavailable' ||
+    live.installationId !== kept.installationId
+  ) {
+    return kept
+  }
+  return {
+    ...kept,
+    ...live,
+    workspaceLineage: kept.workspaceLineage,
+    worktreeLineage: kept.worktreeLineage,
+    ...(kept.groups ? { groups: kept.groups } : {}),
+    ...(kept.links ? { links: kept.links } : {}),
+    ...(kept.ownChats ? { ownChats: kept.ownChats } : {}),
+    ...(kept.unseen ? { unseen: kept.unseen } : {}),
+    ...(kept.accessRequests ? { accessRequests: kept.accessRequests } : {})
+  }
 }
 
 /** Only retry the full listing for groups when the required lineage read also succeeded. */

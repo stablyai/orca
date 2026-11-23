@@ -182,7 +182,10 @@ function startBotListingReads(args: {
       }
       apply(host.hostId, listing, withThreads)
       // A failed or unlisted read drops the timer; the read that follows a reconnect sets it again.
-      countTimers.readAfter(host, listing?.kind === 'listed' ? listing : null)
+      countTimers.readAfter(
+        host,
+        listing?.kind === 'listed' && listing.workerStatus === 'available' ? listing : null
+      )
     } while (askedAgain.get(host.hostId))
     askedAgain.delete(host.hostId)
   }

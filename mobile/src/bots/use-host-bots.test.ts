@@ -6,7 +6,11 @@ import {
   rpcSuccess
 } from '../mobile-web-shell/test-support/bridge-host-test-fakes'
 import { readHostBotListing, type ListingTarget } from './use-host-bots'
-import { listingNeedsGroupsRetry, mergeHostBotListing } from './host-bot-listing-merge'
+import {
+  listingNeedsGroupsRetry,
+  mergeHostBotListing,
+  mergeKeptServerBotListing
+} from './host-bot-listing-merge'
 
 const TARGET: ListingTarget = {
   hostId: 'ssh:server-1',
@@ -98,6 +102,26 @@ describe('readHostBotListing', () => {
       kind: 'listed',
       workerStatus: 'unavailable',
       bots: [{ id: 'bot-1', name: 'Refreshed bot' }],
+      workspaceLineage: { folder: { childWorkspaceKey: 'child', parentWorkspaceKey: 'parent' } },
+      worktreeLineage: { child: { worktreeId: 'child', parentWorktreeId: 'parent' } }
+    })
+  })
+
+  it('hydrates cached worker detail without replacing fresher unavailable bot data', async () => {
+    const listing = await readWithUnavailableLineage('Fresh bot')
+    expect(listing).not.toBeNull()
+    const live = listing as Extract<HostBotListing, { kind: 'listed' }>
+    const hydrated = mergeKeptServerBotListing(live, {
+      ...live,
+      bots: [{ ...BOT, name: 'Saved bot' }],
+      workerStatus: 'available',
+      workspaceLineage: { folder: { childWorkspaceKey: 'child', parentWorkspaceKey: 'parent' } },
+      worktreeLineage: { child: { worktreeId: 'child', parentWorktreeId: 'parent' } }
+    })
+
+    expect(hydrated).toMatchObject({
+      workerStatus: 'unavailable',
+      bots: [{ id: 'bot-1', name: 'Fresh bot' }],
       workspaceLineage: { folder: { childWorkspaceKey: 'child', parentWorkspaceKey: 'parent' } },
       worktreeLineage: { child: { worktreeId: 'child', parentWorktreeId: 'parent' } }
     })

@@ -65,7 +65,12 @@ export function useHostBotChatTrees(args: {
     const wanted = new Map<string, WantedBotChatTree>()
     const reread: ExecutionHostId[] = []
     for (const listing of listings) {
-      if (!client || listing.kind !== 'listed' || listing.offline) {
+      if (
+        !client ||
+        listing.kind !== 'listed' ||
+        listing.offline ||
+        listing.workerStatus === 'unavailable'
+      ) {
         continue
       }
       const { hostId } = listing
