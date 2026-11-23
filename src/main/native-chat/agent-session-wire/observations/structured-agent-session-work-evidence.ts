@@ -17,7 +17,8 @@ export type StructuredAgentSessionWorkEvidence = {
 }
 
 /** Replaced runtimes granted all fences through this boundary. */
-export type StructuredAgentSessionReplacedEnd = { fence: number }
+/** `kept`: the replaced run's writer was reattached; its fence is still live, not ended. */
+export type StructuredAgentSessionReplacedEnd = { fence: number; kept?: true }
 
 export type StructuredAgentSessionSeenEnd = {
   fence: number

@@ -76,6 +76,7 @@ export function structuredAgentSessionReplacedRuntimeEnded(
 ): boolean {
   return (
     replaced !== undefined &&
+    !replaced.kept &&
     lease.runtimeFence <= replaced.fence &&
     lease.claimStatus !== 'conflicted'
   )
@@ -94,6 +95,20 @@ function structuredAgentSessionHandsOver(
   )
 }
 
+/** A reattached kept writer has run since before the replaced run's fence: its turn is current. */
+function keptWriterLiveFence(
+  facts: Pick<StructuredAgentSessionWorkFacts, 'runningTurn' | 'itemFence'>,
+  liveFence: number | null,
+  replaced: StructuredAgentSessionReplacedEnd | undefined
+): number | null {
+  if (liveFence === null || !replaced?.kept) {
+    return liveFence
+  }
+  const running = facts.runningTurn()
+  const turnFence = running ? facts.itemFence(running.item.itemId) : undefined
+  return Math.min(liveFence, replaced.fence, turnFence ?? replaced.fence)
+}
+
 /** Live-work policy reads only named facts from its caller's snapshot. */
 export class StructuredAgentSessionWorkPolicy {
   readonly scope: StructuredAgentSessionWorkScope = {
@@ -101,17 +116,25 @@ export class StructuredAgentSessionWorkPolicy {
     owesSend: (submission) => this.owesSend(submission)
   }
 
+  readonly liveFence: number | null
+  private readonly replaced?: StructuredAgentSessionReplacedEnd
+
   constructor(
     private readonly facts: StructuredAgentSessionWorkFacts,
-    readonly liveFence: number | null,
+    liveFence: number | null,
     /** Invalidate cached work with journal cursor and observed generation-end revision, even if lease writes fail. */
     readonly revision = 0,
     private readonly ended?: StructuredAgentSessionSeenEnd,
-    private readonly replaced?: StructuredAgentSessionReplacedEnd,
+    replaced?: StructuredAgentSessionReplacedEnd,
     private readonly ownerUnverifiable = false,
     /** Missing child evidence conservatively holds every unanswered send. */
     private readonly heldSends?: () => ReadonlySet<string> | undefined
-  ) {}
+  ) {
+    this.liveFence = keptWriterLiveFence(facts, liveFence, replaced)
+    if (!replaced?.kept) {
+      this.replaced = replaced
+    }
+  }
 
   allowsObservation(): boolean {
     return !this.ownerUnverifiable
