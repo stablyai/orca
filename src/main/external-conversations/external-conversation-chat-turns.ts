@@ -8,7 +8,8 @@ import type { LinkedConversation } from './external-conversation-links'
 import { conversationPane } from './external-conversation-types'
 import { isConversationReport } from './external-conversation-turn-opener'
 import { ToldWorkLinks } from './external-conversation-told-work-links'
-import { recordLaunches, wokenTurn } from './external-conversation-wake-answers'
+import { ToldTurns } from './external-conversation-told-turns'
+import { recordLaunches, TurnEndRecords, wokenTurn } from './external-conversation-wake-answers'
 import { ConversationWorkers } from './external-conversation-workers'
 import type { ChatTurnsDeps } from './external-conversation-chat-turns-deps'
 import {
@@ -36,7 +37,8 @@ export class ChatTurns {
   private readonly startedAt = new Map<string, number>()
   private readonly leadState = new Map<string, AgentStatusState>()
   // Chats whose current turn the conversation was told of.
-  private readonly told = new Set<string>()
+  private readonly told: ToldTurns
+  private readonly recorded = new TurnEndRecords()
   private readonly toldLinks: ToldWorkLinks
   private readonly prompts: PromptTurns
   readonly workers: ConversationWorkers
@@ -44,6 +46,7 @@ export class ChatTurns {
   constructor(private readonly deps: ChatTurnsDeps) {
     this.workers = new ConversationWorkers(deps)
     this.toldLinks = new ToldWorkLinks(deps.workLinks)
+    this.told = new ToldTurns(deps)
     this.prompts = new PromptTurns({
       ...deps,
       turnOf: (paneKey) => this.turnOf(paneKey),
@@ -126,7 +129,11 @@ export class ChatTurns {
     if (this.prompts.adopted.has(paneKey)) {
       return true
     }
-    this.told.add(paneKey)
+    const { sessionId } = linked.link
+    this.told.add(
+      paneKey,
+      !this.deps.chatTurnDelivered(sessionId) && !this.deps.runningTurnReported(sessionId)
+    )
     const deliveryId = this.deps.chatTurnDelivery(linked.link.sessionId, at)
     this.deps.emit({
       kind: 'turn-started',
@@ -266,24 +273,30 @@ export class ChatTurns {
       return
     }
     const heardSoFar = heard
-    void news.readTurn().then(async (turn) => {
+    // Read now: a run recorded while the end was read stays recorded.
+    const read = this.recorded.read(
+      paneKey,
+      () => news.readTurn(),
+      (turn) => {
+        const current = this.deps.linkedFor(paneKey)
+        if (!shared && current) {
+          recordLaunches(this.deps, current, turn.launches)
+        }
+      }
+    )
+    void read.then(async (turn) => {
+      const link = this.deps.linkedFor(paneKey)?.link ?? linked.link
       // Mail finishing what its conversation asked (its workers' reports, another bot's answer to its
       // request) woke the chat, so the answer goes back there; other mail is answered in Orca.
       const opener = turn.opener ?? turn.latestOpener
       const reported =
         origin === 'local' && !shared && Boolean(opener && isConversationReport(opener.body))
-      // Read now: a run recorded while the end was read stays recorded.
-      const current = this.deps.linkedFor(paneKey)
-      const link = current?.link ?? linked.link
       const woken = origin === 'local' && !shared && wokenTurn(turn, link)
       // A wake-up the thread saw start that turned out not to be only its own (someone in Orca
       // steered in, or another run finished into it) ends in Orca.
       const revokedWake =
         heardSoFar && origin === 'local' && !reported && turn.wake !== undefined && !woken
       const heard = heardSoFar && !revokedWake
-      if (!shared && current) {
-        recordLaunches(this.deps, current, turn.launches)
-      }
       const reply = turnReply(linked.link, turn)
       const links = readOnce(() => this.toldLinks.next(paneKey, linked.link))
       const fill = this.deps.replyFill?.()
@@ -328,6 +341,7 @@ export class ChatTurns {
   clear(): void {
     this.startedAt.clear()
     this.told.clear()
+    this.recorded.clear()
     this.prompts.clear()
     this.toldLinks.clear()
     this.leadState.clear()

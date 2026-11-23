@@ -148,6 +148,11 @@ function harness() {
         says?: string
         prompt?: PendingPrompt
         promptAgent?: string
+        /** Mid-turn: whether the thread is still told of it, before and after a message drops the
+         *  wake-up's names. */
+        told?: (number | null)[]
+        /** The end's journal read waits until `release` runs. */
+        hold?: { release?: () => void }
       }
     ) {
       leadStartedAt = at
@@ -161,6 +166,11 @@ function harness() {
         }
         chat.news({ kind: 'prompt', sessionId: SESSION })
         await flush()
+      }
+      if (opts.told) {
+        opts.told.push(chat.toldTurn(PANE))
+        active = wakeRow(at, [])
+        opts.told.push(chat.toldTurn(PANE))
       }
       if (opts.from === 'thread') {
         nextOrigin = 'delivery'
@@ -177,7 +187,13 @@ function harness() {
         sessionId: SESSION,
         outcome: 'success',
         at: at + 5,
-        readTurn: async () => ({ ...wake, ...words, ...launches })
+        readTurn: async () => {
+          const hold = opts.hold
+          if (hold) {
+            await new Promise<void>((resolve) => (hold.release = resolve))
+          }
+          return { ...wake, ...words, ...launches }
+        }
       })
       await flush()
     },
@@ -283,6 +299,33 @@ describe('a background run answers the conversation it was launched for', () => 
     await t.turn(31, { woke: ['thread-build'], steered: true, says: 'Did it your way.' })
     expect(t.said()).toEqual(['Retrying.'])
     expect(t.link().wakeAnswers?.runs).not.toContain('follow-up')
+  })
+
+  it('stops telling the thread of a wake-up the moment a message drops its names', async () => {
+    const t = harness()
+    await t.turn(10, {
+      from: 'thread',
+      launches: [{ run: 'worker-retry', sends: ['thread'] }],
+      says: 'Retrying.'
+    })
+    const told: (number | null)[] = []
+    await t.turn(21, { woke: ['worker-retry'], told })
+    expect(told).toEqual([21, null])
+  })
+
+  it('posts a quick wake-up whose launching turn’s end is still being read', async () => {
+    const t = harness()
+    const hold: { release?: () => void } = {}
+    await t.turn(10, {
+      from: 'thread',
+      launches: [{ run: 'quick-job', sends: ['thread'] }],
+      says: 'Started.',
+      hold
+    })
+    await t.turn(21, { woke: ['quick-job'], says: 'Quick job done.' })
+    hold.release?.()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(t.said()).toEqual(['Started.', 'Quick job done.'])
   })
 
   it('saves the record only when a launch adds to it', async () => {

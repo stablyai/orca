@@ -107,3 +107,26 @@ export function wokenRunningTurn(
     )
   )
 }
+
+/** A chat's turn ends, each read and its launches recorded in turn order, so a wake-up is judged
+ *  after the turn that launched its runs recorded them. */
+export class TurnEndRecords {
+  private readonly last = new Map<string, Promise<void>>()
+
+  read<T>(paneKey: string, read: () => Promise<T>, record: (turn: T) => void): Promise<T> {
+    const turn = (this.last.get(paneKey) ?? Promise.resolve()).then(read).then((ended) => {
+      record(ended)
+      return ended
+    })
+    const settled = turn.then(
+      () => undefined,
+      () => undefined
+    )
+    this.last.set(paneKey, settled)
+    return turn
+  }
+
+  clear(): void {
+    this.last.clear()
+  }
+}

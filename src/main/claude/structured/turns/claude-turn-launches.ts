@@ -93,8 +93,8 @@ export class ClaudeTurnLaunches {
   }
 }
 
-/** A message someone sent the root agent, as the stream echoes it: not a tool result, not Claude's
- *  own notice. */
+/** A message someone sent the root agent, as the stream echoes it (text, an image, any block but a
+ *  tool result), not Claude's own notice. */
 export function isRootInput(frame: Record<string, unknown>): boolean {
   if (frame.type !== 'user' || frame.parent_tool_use_id || isClaudeInjectedUserMessage(frame)) {
     return false
@@ -105,6 +105,6 @@ export function isRootInput(frame: Record<string, unknown>): boolean {
   return (
     typeof content === 'string' ||
     (Array.isArray(content) &&
-      content.some((block) => block && typeof block === 'object' && block.type === 'text'))
+      content.some((block) => block && typeof block === 'object' && block.type !== 'tool_result'))
   )
 }

@@ -172,3 +172,15 @@ it('names nothing on a wake-up after a message reached Claude between turns', ()
   const turns = replay({ 11: (send) => send(echo('late-echo')) })
   expect(turns.at(-1)?.wokenBy).toBeUndefined()
 })
+
+it('drops a wake-up’s names when an image someone sent reaches it', () => {
+  const image = {
+    ...echo('image-echo'),
+    message: {
+      role: 'user',
+      content: [{ type: 'image', source: { type: 'base64', data: 'AA==' } }]
+    }
+  }
+  const turns = replay({ 18: (send) => send(image) })
+  expect(turns.at(-1)?.wokenBy).toBeUndefined()
+})
