@@ -63,6 +63,21 @@ describe('automation schedules', () => {
     )
     expect(next).toBe(new Date('2028-02-29T00:00:00').getTime())
   })
+
+  // A daily cron time in a DST gap runs once, later; one in an overlap runs once, first (#47793).
+  it.each([
+    ['30 2 * * *', '2027-03-13T12:00:00Z', ['2027-03-14T07:30:00Z', '2027-03-15T06:30:00Z']],
+    ['30 1 * * *', '2027-11-06T12:00:00Z', ['2027-11-07T05:30:00Z', '2027-11-08T06:30:00Z']]
+  ])('runs cron %s once per day across DST after %s', (cron, from, expected) => {
+    const dtstart = Date.parse('2027-01-01T00:00:00Z')
+    let after = Date.parse(from)
+    const runs: string[] = []
+    for (let i = 0; i < expected.length; i += 1) {
+      after = nextAutomationOccurrenceAfter(cron, dtstart, after, 'America/New_York')
+      runs.push(new Date(after).toISOString().replace('.000Z', 'Z'))
+    }
+    expect(runs).toEqual(expected)
+  })
 })
 
 // New input refuses RRULE parts the scheduler would drop; stored rules keep running with their cadence label (#45519).

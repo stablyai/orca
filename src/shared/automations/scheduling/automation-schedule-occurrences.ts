@@ -1,46 +1,94 @@
 import type { AutomationSchedulePreset } from '../automation-definition'
-import { parseSchedule, type ParsedRrule } from './automation-schedule-parsing'
-import { cronMatches, floorToMinute } from './automation-cron-occurrence'
+import {
+  parseSchedule,
+  type ParsedCron,
+  type ParsedRrule,
+  type ParsedSchedule
+} from './automation-schedule-parsing'
+import { cronDateMatches, cronMatches, floorToMinute } from './automation-cron-occurrence'
 import { automationScheduleCalendar, type ScheduleCalendar } from './automation-schedule-calendar'
 
 const MINUTE_MS = 60 * 1000
 // Why: valid cron expressions like Feb 29 can have an 8-year gap across non-leap centuries.
 const CRON_SCAN_DAYS = 9 * 366
 const CRON_SCAN_MINUTES = CRON_SCAN_DAYS * 24 * 60
+const RRULE_SCAN_DAYS = 370
 const DAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as const
 
-function dayMatches(rule: ParsedRrule, calendar: ScheduleCalendar, timestamp: number): boolean {
-  if (rule.freq === 'DAILY') {
-    return true
+/** Wall times on matching days; `atTime` moves a skipped time forward and runs a repeated one once. */
+type DaySchedule = {
+  times: (readonly [hour: number, minute: number])[]
+  dayMatches: (day: number) => boolean
+  scanDays: number
+}
+
+function rruleDaySchedule(rule: ParsedRrule, calendar: ScheduleCalendar): DaySchedule {
+  return {
+    times: [[rule.byHour, rule.byMinute]],
+    dayMatches: (day) =>
+      rule.freq === 'DAILY' || rule.byDay.includes(DAY_CODES[calendar.fields(day).weekday]),
+    scanDays: RRULE_SCAN_DAYS
   }
-  const code = DAY_CODES[calendar.fields(timestamp).weekday]
-  return rule.byDay.includes(code)
+}
+
+// Why: fixed cron hours name wall times, so they follow the RRULE DST rules; an every-hour cron
+// keeps walking real minutes, like FREQ=HOURLY.
+function cronDaySchedule(rule: ParsedCron, calendar: ScheduleCalendar): DaySchedule | null {
+  if (rule.hours.size === 24) {
+    return null
+  }
+  const times: (readonly [number, number])[] = []
+  for (const hour of rule.hours) {
+    for (const minute of rule.minutes) {
+      times.push([hour, minute])
+    }
+  }
+  return {
+    times,
+    dayMatches: (day) => cronDateMatches(rule, day, calendar),
+    scanDays: CRON_SCAN_DAYS
+  }
+}
+
+function daySchedule(rule: ParsedSchedule, calendar: ScheduleCalendar): DaySchedule | null {
+  if (rule.kind === 'cron') {
+    return cronDaySchedule(rule, calendar)
+  }
+  return rule.freq === 'HOURLY' ? null : rruleDaySchedule(rule, calendar)
 }
 
 function scanDayCandidates(
-  rule: ParsedRrule,
+  schedule: DaySchedule,
   calendar: ScheduleCalendar,
   anchor: number,
   direction: 1 | -1
 ): number | null {
   let day = calendar.startOfDay(anchor)
-  for (let i = 0; i < 370; i += 1) {
-    const candidate = calendar.atTime(day, rule.byHour, rule.byMinute)
-    if (dayMatches(rule, calendar, candidate)) {
-      if (direction === 1 && candidate > anchor) {
-        return candidate
+  for (let i = 0; i < schedule.scanDays; i += 1) {
+    let best: number | null = null
+    for (const [hour, minute] of schedule.dayMatches(day) ? schedule.times : []) {
+      const candidate = calendar.atTime(day, hour, minute)
+      const inRange = direction === 1 ? candidate > anchor : candidate <= anchor
+      if (inRange && (best === null || (direction === 1 ? candidate < best : candidate > best))) {
+        best = candidate
       }
-      if (direction === -1 && candidate <= anchor) {
-        return candidate
-      }
+    }
+    if (best !== null) {
+      return best
     }
     day = calendar.addDays(day, direction)
   }
   return null
 }
 
-function hourlyMatches(rule: ParsedRrule, calendar: ScheduleCalendar, timestamp: number): boolean {
-  return calendar.fields(timestamp).minute === rule.byMinute
+function minuteMatcher(
+  rule: ParsedSchedule,
+  calendar: ScheduleCalendar
+): (timestamp: number) => boolean {
+  if (rule.kind === 'cron') {
+    return (timestamp) => cronMatches(rule, timestamp, calendar)
+  }
+  return (timestamp) => calendar.fields(timestamp).minute === rule.byMinute
 }
 
 // Why: walk absolute minutes; recomposing local fields can't address the second pass of a fall-back hour.
@@ -128,15 +176,11 @@ export function nextAutomationOccurrenceAfter(
 ): number {
   const rule = parseSchedule(rrule)
   const calendar = automationScheduleCalendar(timezone)
-  if (rule.kind === 'cron') {
-    return nextMatchingMinute(dtstart, after, (candidate) => cronMatches(rule, candidate, calendar))
+  const schedule = daySchedule(rule, calendar)
+  if (schedule === null) {
+    return nextMatchingMinute(dtstart, after, minuteMatcher(rule, calendar))
   }
-  if (rule.freq === 'HOURLY') {
-    return nextMatchingMinute(dtstart, after, (candidate) =>
-      hourlyMatches(rule, calendar, candidate)
-    )
-  }
-  const candidate = scanDayCandidates(rule, calendar, Math.max(dtstart - 1, after), 1)
+  const candidate = scanDayCandidates(schedule, calendar, Math.max(dtstart - 1, after), 1)
   if (candidate === null) {
     throw new Error('Unable to compute next automation run.')
   }
@@ -154,14 +198,10 @@ export function latestAutomationOccurrenceAtOrBefore(
   }
   const rule = parseSchedule(rrule)
   const calendar = automationScheduleCalendar(timezone)
-  if (rule.kind === 'cron') {
-    return latestMatchingMinute(dtstart, now, (candidate) => cronMatches(rule, candidate, calendar))
+  const schedule = daySchedule(rule, calendar)
+  if (schedule === null) {
+    return latestMatchingMinute(dtstart, now, minuteMatcher(rule, calendar))
   }
-  if (rule.freq === 'HOURLY') {
-    return latestMatchingMinute(dtstart, now, (candidate) =>
-      hourlyMatches(rule, calendar, candidate)
-    )
-  }
-  const candidate = scanDayCandidates(rule, calendar, now, -1)
+  const candidate = scanDayCandidates(schedule, calendar, now, -1)
   return candidate !== null && candidate >= dtstart ? candidate : null
 }

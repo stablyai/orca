@@ -28,7 +28,7 @@ describe.skipIf(process.platform === 'win32')('cron occurrence local-time contro
     vi.unstubAllEnvs()
   })
 
-  it('skips the wall-clock hour that local spring-forward removes', () => {
+  it('runs a daily time that local spring-forward removes once, an hour later', () => {
     vi.stubEnv('TZ', 'America/New_York')
     // Precondition: the stub took and 2026-03-08 really does lose an hour here.
     expect(new Date(2026, 2, 8, 12).getTimezoneOffset()).toBe(
@@ -41,10 +41,10 @@ describe.skipIf(process.platform === 'win32')('cron occurrence local-time contro
         new Date(2026, 0, 1).getTime(),
         new Date(2026, 2, 8, 0, 0).getTime()
       )
-    ).toBe(new Date(2026, 2, 9, 2, 30).getTime())
+    ).toBe(new Date('2026-03-08T03:30:00-04:00').getTime())
   })
 
-  it('fires both repeats of the wall-clock hour local fall-back replays', () => {
+  it('runs a daily time that local fall-back replays once, on the first pass', () => {
     vi.stubEnv('TZ', 'America/New_York')
     expect(new Date(2026, 10, 1, 12).getTimezoneOffset()).toBe(
       new Date(2026, 10, 1, 0).getTimezoneOffset() + 60
@@ -61,13 +61,8 @@ describe.skipIf(process.platform === 'win32')('cron occurrence local-time contro
       first
     )
 
-    expect(new Date(first).getHours()).toBe(1)
-    expect(new Date(second).getHours()).toBe(1)
-    expect(second - first).toBe(60 * 60 * 1000)
-
-    expect(
-      nextAutomationOccurrenceAfter('30 1 * * *', new Date(2026, 0, 1).getTime(), second + 5_000)
-    ).toBe(new Date(2026, 10, 2, 1, 30).getTime())
+    expect(first).toBe(new Date('2026-11-01T01:30:00-04:00').getTime())
+    expect(second).toBe(new Date('2026-11-02T01:30:00-05:00').getTime())
   })
 
   it('advances hourly schedules through both passes of the fall-back hour', () => {
