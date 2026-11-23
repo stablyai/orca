@@ -33,8 +33,9 @@ export const HERMES_CLIENT_ENV_PASSTHROUGH: readonly string[] = [
   'ORCA_AGENT_HOOK_VERSION'
 ]
 
-/** Where, under the plugin, Orca writes each chat's tool environment, named `<session id>.json`. */
-export const HERMES_SESSION_ENV_DIR = 'sessions'
+/** Where, under the profile's home, Orca writes each chat's tool environment, named
+ *  `<session id>.json`: outside the plugin, so removing the plugin never strips a running chat. */
+export const HERMES_SESSION_ENV_DIR = 'orca-sessions'
 /** The Hermes session ids Orca writes and the plugin reads as file names. */
 export const HERMES_SESSION_ID_PATTERN = '[A-Za-z0-9_-][A-Za-z0-9_.-]{0,199}'
 
@@ -92,7 +93,9 @@ EVENTS = ${JSON.stringify(HERMES_EVENTS)}
 # Why: the gateway runs every chat's tools, so its own environment names no chat. Orca writes each
 # chat's here, by Hermes session id, and Hermes asks for it at every tool spawn.
 SESSION_ENV_NAMES = ${JSON.stringify(SHARED_TOOL_PROCESS_SESSION_ENV_NAMES)}
-SESSION_ENV_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "${HERMES_SESSION_ENV_DIR}")
+# <home>/plugins/orca-status/__init__.py → <home>/<sessions dir>
+SESSION_ENV_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "${HERMES_SESSION_ENV_DIR}")
+LOADED_MARK = os.path.join(SESSION_ENV_DIR, "${HERMES_PLUGIN_LOADED_PREFIX}%d" % os.getpid())
 SESSION_ID = re.compile(r"${HERMES_SESSION_ID_PATTERN}")
 GENERATION = "${GENERATION_PLACEHOLDER}"
 # Why: hook args/results can include full tool payloads. Bound traversal before
@@ -279,21 +282,29 @@ def register(ctx: Any) -> None:
     for event_name in EVENTS:
         ctx.register_hook(event_name, _make_hook(event_name))
     # Hermes before 0.23.1 has no per-session env: its chats' tools keep no Orca identity.
-    if hasattr(ctx, "register_session_env"):
-        try:
-            ctx.register_session_env(SESSION_ENV_NAMES, _session_env)
-        except ValueError:
-            # Another plugin holds one of these names; status hooks still report.
-            return
-        _mark_loaded()
-
-
-def _mark_loaded() -> None:
-    # Orca reads the gateway's mark to know its tools get this plugin's session env.
+    if not hasattr(ctx, "register_session_env"):
+        return
+    # Orca reads this process's mark to know its tools get this plugin's session env, so the mark
+    # exists only while the env is registered: gone before a retry, and when Hermes unloads it.
+    _unmark_loaded()
+    try:
+        ctx.register_session_env(SESSION_ENV_NAMES, _session_env)
+    except ValueError:
+        # Another plugin holds one of these names; status hooks still report.
+        return
+    if hasattr(ctx, "on_unload"):
+        ctx.on_unload(_unmark_loaded)
     try:
         os.makedirs(SESSION_ENV_DIR, exist_ok=True)
-        with open(os.path.join(SESSION_ENV_DIR, "${HERMES_PLUGIN_LOADED_PREFIX}%d" % os.getpid()), "w", encoding="utf-8") as f:
+        with open(LOADED_MARK, "w", encoding="utf-8") as f:
             f.write(GENERATION)
+    except OSError:
+        pass
+
+
+def _unmark_loaded() -> None:
+    try:
+        os.remove(LOADED_MARK)
     except OSError:
         pass
 `

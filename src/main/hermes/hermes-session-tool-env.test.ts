@@ -6,7 +6,7 @@ import { publishHermesSessionToolEnv } from './hermes-session-tool-env'
 import { HERMES_PLUGIN_GENERATION } from './hermes-managed-plugin-source'
 
 let home: string
-const file = () => join(home, 'plugins', 'orca-status', 'sessions', 'local-abc.json')
+const file = () => join(home, 'orca-sessions', 'local-abc.json')
 const publish = (token: string, live: () => boolean, bot?: { agentVersion?: string }) =>
   publishHermesSessionToolEnv({
     env: { HERMES_HOME: home },
@@ -16,7 +16,7 @@ const publish = (token: string, live: () => boolean, bot?: { agentVersion?: stri
     mustReach: bot !== undefined,
     ...(bot?.agentVersion ? { agentVersion: bot.agentVersion } : {})
   })
-const sessionsDir = () => join(home, 'plugins', 'orca-status', 'sessions')
+const sessionsDir = () => join(home, 'orca-sessions')
 // This test process stands in for the gateway: alive, and named by the profile's pid file.
 const markGateway = async (generation: string) => {
   await writeFile(join(home, 'gateway.pid'), JSON.stringify({ pid: process.pid }))

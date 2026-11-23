@@ -50,7 +50,7 @@ export const publishHermesSessionToolEnv: PublishSharedToolProcessSessionEnv = a
       'botToolsGatewayOutdated'
     )
   }
-  const dir = join(pluginDir, HERMES_SESSION_ENV_DIR)
+  const dir = join(home, HERMES_SESSION_ENV_DIR)
   const file = join(dir, `${providerSessionId}.json`)
   const publication = Symbol(providerSessionId)
   await inTurn(file, async () => {

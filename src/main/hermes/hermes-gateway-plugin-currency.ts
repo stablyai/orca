@@ -2,12 +2,15 @@
 // plugin marks each process it loads in (`.loaded-<pid>`, holding its generation); the gateway's
 // control socket reloads plugins in place, so a gateway that predates an update needs no restart.
 import { createHash } from 'node:crypto'
-import { readdir, readFile, realpath, rm } from 'node:fs/promises'
+import { readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { connect } from 'node:net'
 import { basename, dirname, join, resolve } from 'node:path'
 import {
+  getPluginInitSource,
+  getPluginManifest,
   HERMES_PLUGIN_GENERATION,
   HERMES_PLUGIN_LOADED_PREFIX,
+  HERMES_PLUGIN_MARKER,
   HERMES_PLUGIN_NAME,
   HERMES_SESSION_ENV_DIR
 } from './hermes-managed-plugin-source'
@@ -19,9 +22,10 @@ const MAX_RESPONSE_BYTES = 512 * 1024
 export type HermesGatewayPluginState = 'current' | 'noGateway' | 'stale'
 
 const checks = new Map<string, Promise<HermesGatewayPluginState>>()
-/** Gateways already sent a reload this run: one that can't mark itself (an older Hermes, a clashing
- *  plugin) is never reloaded again, since every reload briefly drops every session's env. */
-const reloaded = new Set<number>()
+/** Each profile's gateways already sent a reload of this build's plugin this run: one that can't
+ *  mark itself (an older Hermes, a clashing plugin) isn't reloaded again, since every reload briefly
+ *  drops every session's env. Hermes reloads one profile per request, so the key names both. */
+const reloaded = new Set<string>()
 
 /** Reloads the serving gateway's plugins, once per gateway, when it runs an older plugin than this
  *  build's. Concurrent checks of one home share an answer. */
@@ -43,11 +47,17 @@ async function checkGateway(home: string): Promise<HermesGatewayPluginState> {
   if (await runsCurrentPlugin(home, pids)) {
     return 'current'
   }
-  if (pids.every((pid) => reloaded.has(pid))) {
+  // A reload loads what is on disk: an older Orca's copy there (this build's install may not
+  // have run yet) is replaced first, and a plugin Orca doesn't manage is never reloaded.
+  if (!(await pluginFilesCurrent(home))) {
     return 'stale'
   }
-  for (const pid of pids) {
-    reloaded.add(pid)
+  const keys = pids.map((pid) => `${home}\0${pid}`)
+  if (keys.every((key) => reloaded.has(key))) {
+    return 'stale'
+  }
+  for (const key of keys) {
+    reloaded.add(key)
   }
   await reloadGatewayPlugins(home)
   return (await runsCurrentPlugin(home, pids)) ? 'current' : 'stale'
@@ -105,7 +115,7 @@ function isAlive(pid: number): boolean {
 
 /** Also drops the marks of processes that ended, so they don't pile up. */
 async function runsCurrentPlugin(home: string, gatewayPids: readonly number[]): Promise<boolean> {
-  const dir = join(home, 'plugins', HERMES_PLUGIN_NAME, HERMES_SESSION_ENV_DIR)
+  const dir = join(home, HERMES_SESSION_ENV_DIR)
   const names = await readdir(dir).catch((): string[] => [])
   let current = false
   for (const name of names) {
@@ -121,6 +131,19 @@ async function runsCurrentPlugin(home: string, gatewayPids: readonly number[]): 
     }
   }
   return current
+}
+
+async function pluginFilesCurrent(home: string): Promise<boolean> {
+  const dir = join(home, 'plugins', HERMES_PLUGIN_NAME)
+  const init = await readFile(join(dir, '__init__.py'), 'utf-8').catch(() => null)
+  if (init === null || !init.includes(HERMES_PLUGIN_MARKER)) {
+    return false
+  }
+  if (!init.includes(HERMES_PLUGIN_GENERATION)) {
+    await writeFile(join(dir, 'plugin.yaml'), getPluginManifest(), 'utf-8')
+    await writeFile(join(dir, '__init__.py'), getPluginInitSource(), 'utf-8')
+  }
+  return true
 }
 
 /** Hermes' own route: the profile's gateway, else the root gateway serving that profile. */
