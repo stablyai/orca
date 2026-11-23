@@ -23,6 +23,8 @@ type HeldPrint = {
   guestWebContentsId: number
   bytes: Buffer
   expiry: NodeJS.Timeout
+  // A read has begun, so a save is underway.
+  reading: boolean
 }
 
 const viewersByGuestId = new Map<number, Set<BrowserPrintViewer>>()
@@ -66,15 +68,18 @@ export function printForBrowserViewer(
   void frame
     .printToPDF({ printBackground: true, preferCSSPageSize: true })
     .then((bytes) => {
-      // The device may have stopped streaming the page while it rendered.
-      const current = viewers()
-      if (current.length === 0) {
+      // The device may have stopped streaming the page while it rendered. One stream reads it,
+      // as the last slice releases it.
+      const viewer = viewers().at(-1)
+      if (!viewer) {
         return
       }
-      // A save in progress keeps its print; the oldest beyond a few is dropped to bound memory.
+      // A save underway keeps its print; the oldest unread beyond a few is dropped to bound memory.
       const waiting = [...heldPrints].filter(
         ([, held]) =>
-          held.guestWebContentsId === guestWebContentsId && held.pairedDeviceId === pairedDeviceId
+          !held.reading &&
+          held.guestWebContentsId === guestWebContentsId &&
+          held.pairedDeviceId === pairedDeviceId
       )
       for (const [printId] of waiting.slice(
         0,
@@ -87,11 +92,10 @@ export function printForBrowserViewer(
         pairedDeviceId,
         guestWebContentsId,
         bytes,
-        expiry: expireHeldPrint(printId)
+        expiry: expireHeldPrint(printId),
+        reading: false
       })
-      for (const viewer of current) {
-        viewer.print({ type: 'print', printId, title })
-      }
+      viewer.print({ type: 'print', printId, title })
     })
     .catch((error: unknown) => {
       console.warn('[browser] Could not print a server page for its viewer', error)
@@ -111,6 +115,7 @@ export function readBrowserPrintPdf(
   const start = Math.min(Math.max(0, Math.floor(params.offset ?? 0)), held.bytes.length)
   const chunk = held.bytes.subarray(start, start + PRINT_READ_CHUNK_BYTES)
   const eof = start + chunk.length >= held.bytes.length
+  held.reading = true
   if (eof) {
     forgetHeldPrint(params.printId)
   } else {
