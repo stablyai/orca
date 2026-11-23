@@ -130,14 +130,18 @@ export class JournalLegacyRetirement {
         await this.outcome(failed).catch(() => {})
       }
       this.later()
-      if (this.diagnosed !== String(error)) {
-        this.diagnosed = String(error)
+      const message = error instanceof Error ? error.message : String(error)
+      if (this.diagnosed !== message) {
+        this.diagnosed = message
         this.report(error)
       }
     }
   }
 
   private async attempt(): Promise<void> {
+    if (this.done && !this.reporter.hasUnsent) {
+      return
+    }
     if (this.launchReport.reported || this.stopped.signal.aborted) {
       return
     }
@@ -153,8 +157,8 @@ export class JournalLegacyRetirement {
     }
     // No other Orca runs this profile while we hold its lock, so an absent original stays absent.
     if (!(await legacyFilePresent(this.filename))) {
-      const saved = await readRetirementState(this.writer)
-      this.reporter.saved(saved.reported)
+      const { reported, retirement } = await readRetirementState(this.writer)
+      this.reporter.saved(reported)
       if (await legacyCompanionsPresent(this.filename)) {
         // Finishing a removal cut short deletes too, so a build that keeps the file keeps these.
         if (!this.deletes) {
@@ -162,7 +166,7 @@ export class JournalLegacyRetirement {
           return this.outcome({ outcome: 'deferred', defer: 'leftover_files' })
         }
         this.leftovers = true
-        await removeLeftoverLegacyCompanions(this.filename, absorbedWal(saved.retirement))
+        await removeLeftoverLegacyCompanions(this.filename, absorbedWal(retirement))
         // A WAL this store never proved absorbed stays, so the file isn't fully gone.
         if (await legacyCompanionsPresent(this.filename)) {
           this.done = true
@@ -170,9 +174,7 @@ export class JournalLegacyRetirement {
         }
       }
       this.done = true
-      return this.outcome({
-        outcome: deletedBefore(saved.retirement) ? 'deleted_before' : 'absent'
-      })
+      return this.outcome({ outcome: deletedBefore(retirement) ? 'deleted_before' : 'absent' })
     }
     // None of these change while this process runs, so a refusal here waits for the next launch.
     if (this.version === null) {
@@ -243,7 +245,7 @@ export class JournalLegacyRetirement {
     }
     const signal = AbortSignal.any([recycled.signal, this.stopped.signal])
     let lease: Awaited<ReturnType<typeof acquireJournalLegacyFileLock>> | undefined
-    let removal: Partial<LegacyJournalRetirementOutcome> | undefined
+    let removal: Partial<LegacyJournalRetirementOutcome>
     try {
       // One full-sync commit makes every converted row durable before the original goes.
       const destination = await legacyDestinationIdentity(journalDomainDatabasePath(this.directory))
@@ -296,9 +298,7 @@ export class JournalLegacyRetirement {
       }
     }
     // Reported once the lock and the reader gate are released: reporting waits on the writer.
-    if (removal) {
-      await this.outcome(removal)
-    }
+    await this.outcome(removal)
   }
 
   /** The proof finished and this build keeps the file: saved, so later launches don't walk again. */

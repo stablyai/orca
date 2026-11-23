@@ -1,5 +1,5 @@
 // @orca-isolated-worker -- Suite hooks own the temporary SQL worker bundle.
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -28,7 +28,9 @@ import {
   retireAgentSessionRecordStore
 } from './agent-session-record-store-slot'
 import * as startupOpen from './local-agent-session-record-store-startup-open'
-import { agentSessionRecordStoreHostServing } from './agent-session-record-store-serving'
+import { chatJournalHostServing } from '../../../startup/runtime-startup/chat-journal-startup'
+import { mainProcessState } from '../../../startup/main-process-state'
+import { startOrcadAgentSessionRecordStoreOpen } from '../../../orcad/host-lifecycle/orcad-lifecycle'
 import { markHostShuttingDown } from '../../../startup/quit/host-shutdown-state'
 import { OrcaRuntimeWithGetWorktreePs } from '../../workspaces/process-listing/workspace-process-listing'
 
@@ -37,7 +39,13 @@ vi.mock('../../../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => profile.directory
 }))
 
+vi.mock('../../rpc/methods/host-management/managed-runtime-install', () => ({
+  reclaimManagedRuntimeReleasesAtLaunch: () => {},
+  startManagedRuntimeAutoUpdates: () => {}
+}))
+
 afterEach(async () => {
+  mainProcessState.core.runtime = null
   await retireAgentSessionRecordStore(async (opened) => opened?.journalDatabase.close())
   setLegacyJournalRetirementHost(undefined)
   vi.unstubAllEnvs()
@@ -45,12 +53,6 @@ afterEach(async () => {
 })
 
 it('reaches old-history retirement at serving on empty profiles through both hosts, unless shutting down', async () => {
-  for (const [host, argument] of [
-    ['src/main/startup/runtime-startup/chat-journal-startup.ts', 'state.core.runtime'],
-    ['src/main/backend/core-runtime-activation.ts', 'runtime']
-  ] as const) {
-    expect(readFileSync(host, 'utf8')).toContain(`agentSessionRecordStoreHostServing(${argument})`)
-  }
   vi.stubEnv('ORCA_APP_VERSION', '1.0.1')
   vi.stubEnv('ORCA_BACKGROUND_LAUNCH', '1')
   vi.stubEnv('ORCA_JOURNAL_NATIVE_LOCK_TEST', '0')
@@ -67,48 +69,60 @@ it('reaches old-history retirement at serving on empty profiles through both hos
     startPullRequestWatches: () => {}
   }
 
-  for (const present of [false, true]) {
-    const root = mkdtempSync(join(tmpdir(), 'orca-old-history-serving-'))
-    profile.directory = root
-    const lock = acquireOrcadInstanceLock(root, {
-      machineIdentity: () => 'temporary-test-machine',
-      startedAtMs: () => null,
-      incarnation: () => null
-    })
-    try {
-      expect(ownsOrcadProfileDirectory(root)).toBe(true)
-      const filename = journalDatabasePath(root)
-      if (present) {
-        openJournalDatabase(filename).db.close()
-      }
-      const domainFile = await initializeJournalDomainDatabase(root)
-      const { db } = openJournalDomainDatabase(domainFile)
+  Object.assign(mainProcessState.core, { runtime })
+  const hosts = [
+    async () => chatJournalHostServing(),
+    async () => {
+      const handle = await startOrcadAgentSessionRecordStoreOpen(null)
+      expect(handle.open.persisted).toBe(false)
+      expect(handle.open.opened).toBeNull()
+      handle.serving(runtime)
+    }
+  ]
+  for (const serve of hosts) {
+    for (const present of [false, true]) {
+      const root = mkdtempSync(join(tmpdir(), 'orca-old-history-serving-'))
+      profile.directory = root
+      const lock = acquireOrcadInstanceLock(root, {
+        machineIdentity: () => 'temporary-test-machine',
+        startedAtMs: () => null,
+        incarnation: () => null
+      })
       try {
+        expect(ownsOrcadProfileDirectory(root)).toBe(true)
+        const filename = journalDatabasePath(root)
+        if (present) {
+          openJournalDatabase(filename).db.close()
+        }
+        const domainFile = await initializeJournalDomainDatabase(root)
+        const { db } = openJournalDomainDatabase(domainFile)
+        try {
+          expect(
+            db
+              .prepare('SELECT value FROM agent_session_store_meta WHERE key = ?')
+              .get(JOURNAL_LEGACY_CONVERTED_BY)?.value
+          ).toBe('1.0.1')
+        } finally {
+          db.close()
+        }
+        expect(hasPersistedStructuredAgentSessionStore(root)).toBe(false)
+        expect(peekOpenedAgentSessionRecordStore()).toBeNull()
+        const events: LegacyJournalRetirementEvent[] = []
+        setLegacyJournalRetirementHost({ report: async (event) => events.push(event) > 0 })
+        await serve()
+        await vi.waitFor(() => expect(events).toHaveLength(1), { timeout: 10_000 })
+        expect(events).toMatchObject([
+          { outcome: present ? 'deferred' : 'absent', defer: present ? 'same_version' : 'none' }
+        ])
         expect(
-          db
-            .prepare('SELECT value FROM agent_session_store_meta WHERE key = ?')
-            .get(JOURNAL_LEGACY_CONVERTED_BY)?.value
-        ).toBe('1.0.1')
+          log.mock.calls.flat().some((line) => String(line).includes('old chat journal:'))
+        ).toBe(true)
+        expect(existsSync(filename)).toBe(present)
       } finally {
-        db.close()
+        await retireAgentSessionRecordStore(async (opened) => opened?.journalDatabase.close())
+        lock.release()
+        rmSync(root, { recursive: true, force: true })
       }
-      expect(hasPersistedStructuredAgentSessionStore(root)).toBe(false)
-      expect(peekOpenedAgentSessionRecordStore()).toBeNull()
-      const events: LegacyJournalRetirementEvent[] = []
-      setLegacyJournalRetirementHost({ report: async (event) => events.push(event) > 0 })
-      agentSessionRecordStoreHostServing(runtime)
-      await vi.waitFor(() => expect(events).toHaveLength(1), { timeout: 10_000 })
-      expect(events).toMatchObject([
-        { outcome: present ? 'deferred' : 'absent', defer: present ? 'same_version' : 'none' }
-      ])
-      expect(log.mock.calls.flat().some((line) => String(line).includes('old chat journal:'))).toBe(
-        true
-      )
-      expect(existsSync(filename)).toBe(present)
-    } finally {
-      await retireAgentSessionRecordStore(async (opened) => opened?.journalDatabase.close())
-      lock.release()
-      rmSync(root, { recursive: true, force: true })
     }
   }
 
@@ -116,7 +130,9 @@ it('reaches old-history retirement at serving on empty profiles through both hos
   profile.directory = shutdownRoot
   try {
     markHostShuttingDown()
-    agentSessionRecordStoreHostServing(runtime)
+    for (const serve of hosts) {
+      await serve()
+    }
     let openedOnShutdown = false
     await retireAgentSessionRecordStore(async (opened) => {
       openedOnShutdown = opened !== null

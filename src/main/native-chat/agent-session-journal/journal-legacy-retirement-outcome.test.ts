@@ -77,7 +77,7 @@ it('reports a store that never had the file as absent, with counts unknown rathe
   expect(legacyJournalRetirementSchema.safeParse(events[0]).success).toBe(true)
 })
 
-it('reports non-ownership once per launch without reading or writing the store after refused sends', async () => {
+it('reports non-ownership once per launch without store writes, including ownership lost before a pending resend', async () => {
   const held = await profile()
   const snapshot = () =>
     companions(journalDomainDatabasePath(held.root)).map((name) => readFileSync(name))
@@ -96,7 +96,19 @@ it('reports non-ownership once per launch without reading or writing the store a
     .spyOn(console, 'warn')
     .mockImplementation(() => {})
     .mockClear()
-  const launch = held.launch('1.0.1', false, undefined, undefined, false)
+  let owns = true
+  let ownershipChecks = 0
+  const ownership = () => {
+    ownershipChecks++
+    return owns
+  }
+  const launch = held.launch('1.0.0', ownership, undefined, undefined, false)
+  await launch.run()
+  expect(events).toMatchObject([{ outcome: 'deferred', defer: 'same_version' }])
+  expect(snapshot()).toEqual(before)
+  events.length = 0
+  log.mockClear()
+  owns = false
   await launch.run()
   await launch.run()
   accepts = true
@@ -117,6 +129,16 @@ it('reports non-ownership once per launch without reading or writing the store a
     })
   }
   expect(snapshot()).toEqual(before)
+  owns = true
+  const completed = held.launch('1.0.0', ownership, undefined, undefined, false)
+  await completed.run()
+  const checksAfterCompletion = ownershipChecks
+  const afterCompletion = snapshot()
+  owns = false
+  await completed.run()
+  await completed.run()
+  expect(ownershipChecks).toBe(checksAfterCompletion)
+  expect(snapshot()).toEqual(afterCompletion)
   expect(held.errors).toEqual([])
 })
 

@@ -226,6 +226,10 @@ export class LegacyJournalRetirementReporter {
     }
   }
 
+  get hasUnsent(): boolean {
+    return this.unsent !== null
+  }
+
   /** A report the usage client refused (no consent yet, say) goes once it would take it. */
   async resendUnsent(): Promise<void> {
     if (this.unsent && host?.accepting?.() === true) {

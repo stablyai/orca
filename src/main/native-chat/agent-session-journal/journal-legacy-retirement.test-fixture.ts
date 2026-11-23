@@ -182,7 +182,7 @@ export async function profile(
   /** A launch of the Orca at `version`, owning the profile unless told otherwise. */
   const launch = (
     version = '1.0.1',
-    owns = true,
+    owns: boolean | (() => boolean) = true,
     lock = native ? acquireJournalLegacyFileLock : fakeLease,
     eligibility?: ConstructorParameters<typeof JournalLegacyRetirement>[9],
     // A build that deletes unless a test says otherwise: most of these test what the proof requires.
@@ -195,7 +195,7 @@ export async function profile(
       conversions,
       async () => true,
       (error) => errors.push(error),
-      () => owns,
+      typeof owns === 'function' ? owns : () => owns,
       lock,
       undefined,
       eligibility ?? (native ? undefined : { check: async () => {}, present: () => {} }),

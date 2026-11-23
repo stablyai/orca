@@ -1,5 +1,4 @@
 import type { BackendCoreHost } from './core-runtime'
-import { agentSessionRecordStoreHostServing } from '../runtime/agent-session/records/agent-session-record-store-serving'
 import type { OrcadHandle } from '../orcad/serve-startup/orcad-start-contract'
 import type { BackendCoreProfileShutdown } from './core-profile-shutdown'
 import { prepareBackendDaemon } from './core-daemon-startup'
@@ -332,8 +331,7 @@ export async function activateBackendRuntime(
 
   await new ServeReadinessPublisher().publish(readiness, servePublishMode(options))
   // Background chat-journal maintenance, CI-line watches and runtime release reclaim start once this host is serving.
-  chatJournal.serving()
-  agentSessionRecordStoreHostServing(runtime)
+  chatJournal.serving(runtime)
   const { reclaimManagedRuntimeReleasesAtLaunch, startManagedRuntimeAutoUpdates } =
     await import('../runtime/rpc/methods/host-management/managed-runtime-install')
   reclaimManagedRuntimeReleasesAtLaunch(runtime)

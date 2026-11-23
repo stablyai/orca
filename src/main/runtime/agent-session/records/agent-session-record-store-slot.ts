@@ -97,10 +97,6 @@ export function openAgentSessionRecordStoreOnce(
         return opened
       },
       (error: unknown) => {
-        location.logger.error('old chat journal: deferred (reason open_failed)', {
-          scope: 'old-chat-history-cleanup-open',
-          error
-        })
         // Failed opens must leave the next caller able to retry.
         if (opening === slot && !slot.retire) {
           opening = null
