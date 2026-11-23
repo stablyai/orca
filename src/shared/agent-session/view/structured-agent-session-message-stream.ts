@@ -1,3 +1,4 @@
+import { agentJournalSubmissionsDifferOnlyInStamp } from '../journal/agent-session-journal-written-stamp'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -165,29 +166,6 @@ function reuseMessages(
   }
 }
 
-/** Messages never read the written stamp, so a stamp-only restatement keeps the projection. */
-function submissionsDifferOnlyInStamp(
-  previous: readonly AgentJournalSubmission[],
-  next: readonly AgentJournalSubmission[]
-): boolean {
-  if (previous.length !== next.length) {
-    return false
-  }
-  for (let index = 0; index < next.length; index += 1) {
-    const before = previous[index]
-    const after = next[index]
-    if (
-      before !== after &&
-      (before.writtenAt === after.writtenAt ||
-        JSON.stringify({ ...before, writtenAt: undefined }) !==
-          JSON.stringify({ ...after, writtenAt: undefined }))
-    ) {
-      return false
-    }
-  }
-  return true
-}
-
 /** One consumer's messages across commits: re-derive only revised or appended items when nothing else can
  * change, else project in full. */
 export function createStructuredAgentSessionMessageProjection(
@@ -202,7 +180,7 @@ export function createStructuredAgentSessionMessageProjection(
     if (
       previous &&
       previous.submissions !== submissions &&
-      submissionsDifferOnlyInStamp(previous.submissions, submissions)
+      agentJournalSubmissionsDifferOnlyInStamp(previous.submissions, submissions)
     ) {
       previous = { ...previous, submissions }
     }
