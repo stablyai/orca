@@ -184,18 +184,11 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
       if (!host) {
         return
       }
-      const started = performance.now()
-      const owedMail = this.getExistingOrchestrationDb()?.getStructuredMailSendSessions() ?? []
-      const woken = await redriveWaitingChatMail(host, owedMail, (sessionId) =>
-        this.redriveStructuredSessionMail(sessionId)
+      await redriveWaitingChatMail(
+        host,
+        this.getExistingOrchestrationDb()?.getStructuredMailSendSessions() ?? [],
+        (sessionId) => this.redriveStructuredSessionMail(sessionId)
       )
-      if (owedMail.length > 0) {
-        console.info('[orchestration] restart mail pass', {
-          owedMail: owedMail.length,
-          woken,
-          ms: Math.round(performance.now() - started)
-        })
-      }
     } catch (error: unknown) {
       console.warn('[orchestration] waking chat mail after a restart failed', error)
     }
