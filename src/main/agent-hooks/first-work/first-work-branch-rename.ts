@@ -215,7 +215,7 @@ async function runAutoRename(
   const resolvedParams = resolveTextGenerationParams(settings, hostKey, 'branchName', repo)
   if (!resolvedParams.ok) {
     if (skipsInheritedAgentFailure(origin, attempt, resolvedParams)) {
-      return skippedInheritedAgent(resolvedParams.error, failed)
+      return skippedInheritedAgent(resolvedParams.error, 'branch', defer)
     }
     deps.setRenameError(worktreeId, resolvedParams.error)
     return failed(`no generation agent: ${resolvedParams.error}`, true)

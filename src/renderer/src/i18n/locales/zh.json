@@ -6428,6 +6428,8 @@
           "reasonProjectMoving": "项目正在移动中",
           "reasonHistoryUnreadable": "Orca 无法读取此工作区的历史记录。请重试",
           "reasonInterrupted": "Orca 未能完成分支命名。请重试",
+          "reasonDefaultAgentSkipped": "默认代理跳过了此分支的自动命名。请重试以查看原因",
+          "reasonDefaultAgentSkippedTitle": "默认代理跳过了此工作区标题的自动命名。请重试以查看原因",
           "reasonBranchPushed": "该分支已推送，因此 Orca 保留了其名称",
           "reasonBranchRenamed": "该分支已被重命名，因此 Orca 保留了其名称",
           "reasonNameChosen": "此分支名称是手动指定的，因此 Orca 予以保留",

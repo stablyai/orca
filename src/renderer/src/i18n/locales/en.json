@@ -7208,6 +7208,8 @@
           "reasonProjectMoving": "A project move is in progress.",
           "reasonHistoryUnreadable": "Orca couldn't read this workspace's history. Try again.",
           "reasonInterrupted": "Orca couldn't finish naming the branch. Try again.",
+          "reasonDefaultAgentSkipped": "The default agent skipped auto-naming this branch. Try again to find out why.",
+          "reasonDefaultAgentSkippedTitle": "The default agent skipped auto-naming this workspace title. Try again to find out why.",
           "reasonBranchPushed": "The branch was pushed, so Orca kept its name.",
           "reasonBranchRenamed": "The branch was renamed, so Orca kept its name.",
           "reasonNameChosen": "This branch name was chosen by hand, so Orca kept it.",

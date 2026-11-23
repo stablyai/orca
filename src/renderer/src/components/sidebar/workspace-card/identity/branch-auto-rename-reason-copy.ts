@@ -40,6 +40,16 @@ export function branchAutoRenameReasonText(
             'auto.components.sidebar.AutoRenameFailedDialog.reasonInterrupted',
             "Orca couldn't finish naming the branch. Try again."
           )
+        case 'default-agent-skipped':
+          return t(
+            'auto.components.sidebar.AutoRenameFailedDialog.reasonDefaultAgentSkipped',
+            'The default agent skipped auto-naming this branch. Try again to find out why.'
+          )
+        case 'default-agent-skipped-title':
+          return t(
+            'auto.components.sidebar.AutoRenameFailedDialog.reasonDefaultAgentSkippedTitle',
+            'The default agent skipped auto-naming this workspace title. Try again to find out why.'
+          )
       }
       return null
     case 'ineligible':

@@ -21,14 +21,16 @@ export function skipsInheritedAgentFailure(
 }
 
 /**
- * Keeps the seed name and leaves any badge as it is. The outcome stays a failure, not a kept name,
- * so a failure dialog that is already open keeps offering Try again, which reports the reason.
+ * Keeps the seed name and leaves any badge as it is. A retryable reason, not the stored error, so an
+ * open failure dialog doesn't re-date an older error and keeps Try again, which reports the cause.
  */
 export function skippedInheritedAgent(
   error: string,
-  failed: FirstWorkVerdictBuilders['failed']
+  subject: 'branch' | 'title',
+  defer: FirstWorkVerdictBuilders['defer']
 ): FirstWorkRenameVerdict {
-  return failed(`inherited agent unavailable: ${error}`, true)
+  const reason = subject === 'branch' ? 'default-agent-skipped' : 'default-agent-skipped-title'
+  return defer(reason, `inherited agent unavailable: ${error}`, true)
 }
 
 /** What the generator names from: the event's prompt, or a click-time lookup. */
@@ -51,7 +53,11 @@ export type FirstWorkVerdictBuilders = {
     log: string,
     clearError?: boolean
   ) => FirstWorkRenameVerdict
-  defer: (reason: BranchAutoRenameDeferredReason, log: string) => FirstWorkRenameVerdict
+  defer: (
+    reason: BranchAutoRenameDeferredReason,
+    log: string,
+    settles?: boolean
+  ) => FirstWorkRenameVerdict
   failed: (log: string, settles: boolean) => FirstWorkRenameVerdict
 }
 
@@ -67,9 +73,9 @@ export function verdictBuilders(
       console.info(`[auto-branch-rename] skip (${log}) for ${worktreeId}`)
       return { outcome: { kind: 'ineligible', reason }, settles: true }
     },
-    defer: (reason, log) => {
+    defer: (reason, log, settles = false) => {
       console.info(`[auto-branch-rename] retry-later (${log}) for ${worktreeId}`)
-      return { outcome: { kind: 'deferred', reason }, settles: false }
+      return { outcome: { kind: 'deferred', reason }, settles }
     },
     failed: (log, settles) => {
       console.info(`[auto-branch-rename] failed (${log}) for ${worktreeId}`)

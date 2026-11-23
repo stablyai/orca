@@ -42,7 +42,7 @@ export async function runFolderWorkspaceTitleAutoRename(
   const resolvedParams = resolveTextGenerationParams(settings, 'local', 'branchName', null)
   if (!resolvedParams.ok) {
     if (skipsInheritedAgentFailure(origin, attempt, resolvedParams)) {
-      return skippedInheritedAgent(resolvedParams.error, failed)
+      return skippedInheritedAgent(resolvedParams.error, 'title', defer)
     }
     deps.setRenameError(worktreeId, resolvedParams.error)
     return failed(`no generation agent: ${resolvedParams.error}`, true)

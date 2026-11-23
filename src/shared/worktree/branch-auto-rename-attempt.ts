@@ -15,6 +15,9 @@ export type BranchAutoRenameDeferredReason =
   | 'project-moving'
   | 'history-unreadable'
   | 'interrupted'
+  /** An automatic attempt left the seed name because the inherited agent can't run; Try again reports why. */
+  | 'default-agent-skipped'
+  | 'default-agent-skipped-title'
 
 export type BranchAutoRenameOutcome =
   | { kind: 'renamed' }

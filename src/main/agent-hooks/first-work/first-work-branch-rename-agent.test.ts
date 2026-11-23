@@ -90,8 +90,10 @@ describe('automatic naming with an inherited agent that cannot name', () => {
 
     expect(launches()).toBe(0)
     expect(setRenameError).not.toHaveBeenCalled()
-    // A failure dialog already following this attempt keeps its Try again.
-    expect(finished).toMatchObject([{ outcome: { kind: 'failed' } }])
+    // A retryable reason of its own: an open dialog keeps Try again and doesn't re-date an older error.
+    expect(finished).toMatchObject([
+      { outcome: { kind: 'deferred', reason: 'default-agent-skipped' } }
+    ])
     // Settled: a later message does not try again.
     const gitCalls = gitExecFileAsyncMock.mock.calls.length
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
@@ -108,6 +110,7 @@ describe('automatic naming with an inherited agent that cannot name', () => {
   })
 
   it('keeps a folder workspace title and launches nothing', async () => {
+    const finished = recordFinished()
     const { deps, setRenameError, setDisplayName } = setup(
       inheritedDefault('gemini'),
       FOLDER_WORKTREE_ID
@@ -118,6 +121,9 @@ describe('automatic naming with an inherited agent that cannot name', () => {
     expect(launches()).toBe(0)
     expect(setDisplayName).not.toHaveBeenCalled()
     expect(setRenameError).not.toHaveBeenCalled()
+    expect(finished).toMatchObject([
+      { outcome: { kind: 'deferred', reason: 'default-agent-skipped-title' } }
+    ])
   })
 
   it('still reports the reason when the user presses Try again on a folder workspace', async () => {

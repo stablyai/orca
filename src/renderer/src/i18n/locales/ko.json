@@ -6253,6 +6253,8 @@
           "reasonProjectMoving": "프로젝트 이동이 진행 중입니다.",
           "reasonHistoryUnreadable": "Orca가 이 워크스페이스의 기록을 읽을 수 없습니다. 다시 시도하세요.",
           "reasonInterrupted": "Orca가 브랜치 이름 짓기를 마치지 못했습니다. 다시 시도하세요.",
+          "reasonDefaultAgentSkipped": "기본 에이전트가 이 브랜치의 자동 이름 지정을 건너뛰었습니다. 이유를 확인하려면 다시 시도하세요.",
+          "reasonDefaultAgentSkippedTitle": "기본 에이전트가 이 워크스페이스 제목의 자동 이름 지정을 건너뛰었습니다. 이유를 확인하려면 다시 시도하세요.",
           "reasonBranchPushed": "브랜치가 푸시되어 Orca가 이름을 유지했습니다.",
           "reasonBranchRenamed": "브랜치 이름이 변경되어 Orca가 이름을 유지했습니다.",
           "reasonNameChosen": "이 브랜치 이름은 직접 정한 것이라 Orca가 유지했습니다.",
