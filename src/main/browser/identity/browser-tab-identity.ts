@@ -4,7 +4,12 @@ import { release } from 'node:os'
 import { app } from 'electron'
 import { loadWindowsNativeRegistry } from '../../windows/windows-native-registry'
 import type { BrowserProcessUserAgentIdentity } from './browser-process-user-agent'
-import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
+import {
+  chromeShapedSiteUserAgent,
+  googleAuthUserAgent,
+  isChromeShapedSiteUrl,
+  isGoogleAuthUrl
+} from './browser-site-user-agent'
 
 type UserAgentBrand = { brand: string; version: string }
 
@@ -26,12 +31,33 @@ export type UserAgentMetadata = CdpUserAgentMetadata & {
 export type BrowserTabIdentity =
   /** Chromium's desktop client hints; temporary CDP overrides restate them. */
   | { kind: 'process'; userAgent: string }
-  /** Electron's own UA on Google sign-in hosts, with the same desktop client hints. */
-  | { kind: 'google-auth'; userAgent: string }
+  /** A host-pinned UA (Google sign-in, Chase) with the same desktop client hints. */
+  | { kind: 'site'; userAgent: string }
   | { kind: 'mobile'; userAgent: string; userAgentMetadata: UserAgentMetadata }
 
-export function googleAuthTabIdentity(): BrowserTabIdentity {
-  return { kind: 'google-auth', userAgent: googleAuthUserAgent() }
+type SiteTabIdentity = Extract<BrowserTabIdentity, { kind: 'site' }>
+
+export function googleAuthTabIdentity(): SiteTabIdentity {
+  return { kind: 'site', userAgent: googleAuthUserAgent() }
+}
+
+function chromeShapedSiteTabIdentity(): SiteTabIdentity {
+  return { kind: 'site', userAgent: chromeShapedSiteUserAgent() }
+}
+
+const SITE_TAB_IDENTITY_RULES = [
+  { identity: googleAuthTabIdentity, matchesUrl: isGoogleAuthUrl },
+  { identity: chromeShapedSiteTabIdentity, matchesUrl: isChromeShapedSiteUrl }
+]
+
+/** Only a UA distinct from the process UA can mark a tab's request as belonging to its site. */
+export function distinctSiteTabIdentities(
+  processUserAgent: string
+): { identity: SiteTabIdentity; matchesUrl: (url: string) => boolean }[] {
+  return SITE_TAB_IDENTITY_RULES.map((rule) => ({
+    identity: rule.identity(),
+    matchesUrl: rule.matchesUrl
+  })).filter((rule) => rule.identity.userAgent !== processUserAgent)
 }
 
 // Desktop presets preserve process identity; only mobile presets replace it.
@@ -46,6 +72,9 @@ export function resolveBrowserTabIdentity(args: {
   }
   if (args.mobile) {
     return buildMobileTabIdentity(args.processIdentity.userAgent)
+  }
+  if (isChromeShapedSiteUrl(args.url)) {
+    return chromeShapedSiteTabIdentity()
   }
   return { kind: 'process', userAgent: args.processIdentity.userAgent }
 }

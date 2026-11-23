@@ -21,7 +21,7 @@ import type {
   ExternalAutomationJob,
   ExternalAutomationManager
 } from '../../../../../shared/automations/external/external-automation'
-import type { SshConnectionState } from '../../../../../shared/ssh-types'
+import type { SshConnectionState } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { ExternalAutomationListEntry } from '../external/external-automation-list-entries'
 import type { ExternalAutomationScope } from '../external/external-automation-scope-client'
 import {

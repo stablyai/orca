@@ -19,7 +19,7 @@ import {
 } from '../../shared/artifacts/artifact-sharing-gate'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { formatArtifactListPage, formatArtifactShared } from './artifact-format'
 import { printResult } from '../output/command-result-output'
 

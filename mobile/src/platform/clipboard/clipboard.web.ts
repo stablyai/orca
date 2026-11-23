@@ -2,8 +2,8 @@ import { useMemo } from 'react'
 import {
   readStagedMediaItem,
   releaseAllStagedMedia
-} from '../../mobile-web-shell/bridge/staged-media-bytes'
-import { useNativeVerbs } from '../../mobile-web-shell/bridge/use-native-verbs'
+} from '../../mobile-web-shell/bridge/native-capabilities/staged-media-bytes'
+import { useNativeVerbs } from '../../mobile-web-shell/bridge/native-capabilities/use-native-verbs'
 import type { ClipboardImage, ClipboardReader, ClipboardWriter } from './clipboard'
 
 // Use native clipboard verbs: navigator.clipboard requires a secure context unavailable under iOS’s custom scheme. Ungranted writes reject for callers to report.

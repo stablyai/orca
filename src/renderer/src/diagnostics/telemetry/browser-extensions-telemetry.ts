@@ -1,4 +1,4 @@
-import type { EventProps } from '../../../../shared/telemetry-events'
+import type { EventProps } from '../../../../shared/telemetry/telemetry-event-classification'
 import { track } from './telemetry'
 
 export function trackBrowserExtensionsBannerAction(

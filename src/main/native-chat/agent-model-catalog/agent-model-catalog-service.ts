@@ -1,6 +1,7 @@
 import { onAgentsRefreshedOnHost } from '../../preflight/agents-refreshed-on-host'
+import { onManagedRuntimeReleasesChanged } from '../../node-runtime/managed-runtime-installation'
 import { onLiveAccount } from './agent-model-catalog-running-account'
-import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { readAccountList } from './agent-model-catalog-account-list'
 import { captureAgentModelCatalogRead } from './agent-model-catalog-operation'
@@ -25,7 +26,7 @@ import {
   agentModelCatalogMemoryBinding,
   type AgentModelCatalogBinding
 } from './agent-model-catalog-snapshot'
-import { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import { AgentModelCatalogAdmission } from './agent-model-catalog-admission'
 import {
   AGENT_MODEL_CATALOG_PICKER_WAIT_MS,
   waitForAgentModelCatalogRead,
@@ -38,9 +39,11 @@ export function createAgentModelCatalogService(
   const unbindRefresh = onAgentsRefreshedOnHost((userInitiated) =>
     deps.store.refreshInputs(userInitiated)
   )
+  // A listing that failed because the agent was missing must rerun once Orca installs it.
+  const unbindReleases = onManagedRuntimeReleasesChanged(() => deps.store.refreshInputs(false))
   const tasks = new Set<Promise<unknown>>()
   const lifetime = new AbortController()
-  const admission = new PrioritySemaphore(2)
+  const admission = new AgentModelCatalogAdmission()
 
   const bindings = new Map<string, AgentModelCatalogBinding>()
   const requestKey = agentModelCatalogRequestKey.bind(null, deps)
@@ -155,6 +158,7 @@ export function createAgentModelCatalogService(
       lifetime.abort()
       unbindRetirement()
       unbindRefresh()
+      unbindReleases()
       retireContext()
       deps.store.clearPartialAttempts()
       await Promise.allSettled(tasks)

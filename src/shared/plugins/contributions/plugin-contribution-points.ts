@@ -92,7 +92,7 @@ export const PLUGIN_RESERVED_CONTRIBUTION_POINTS = {
 
 export type PluginReservedContributionPoint = keyof typeof PLUGIN_RESERVED_CONTRIBUTION_POINTS
 
-/** The intended shape of each reserved point, in the order the references list them. */
+/** The intended shape of each reserved point. */
 export const PLUGIN_PLANNED_CONTRIBUTION_POINTS: Readonly<
   Record<PluginReservedContributionPoint, string>
 > = {

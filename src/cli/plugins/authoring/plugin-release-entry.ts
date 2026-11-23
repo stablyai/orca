@@ -1,7 +1,7 @@
 import {
   pluginCatalogReleaseForHead,
   type PluginCatalogReleaseReport
-} from '../../../main/plugins/plugin-catalog-release-entry'
+} from '../../../main/plugins/catalog/plugin-catalog-release-entry'
 import type { PluginValidationReport } from './plugin-folder-validation'
 
 export type PluginReleaseEntryResult = PluginCatalogReleaseReport & {

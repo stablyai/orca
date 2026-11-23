@@ -4,10 +4,14 @@ import type {
   GoogleCookieClearResult
 } from '../../../../../shared/browser/cookies/browser-google-cookie-clear'
 import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
-import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
+import type { ConfirmationDialogContextValue } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store/index'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
@@ -17,7 +21,7 @@ function remoteGoogleCookieClearAvailable(environmentId: string): boolean {
   const environment = state.runtimeEnvironments.find((entry) => entry.id === environmentId)
   return (
     !!environment &&
-    state.runtimeStatusByEnvironmentId
+    readRuntimeStatuses()
       .get(environmentId)
       ?.status?.capabilities?.includes(BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY) === true
   )

@@ -12,13 +12,13 @@ import { useTranslate } from '@/i18n/use-translate'
 import type {
   BrowserPasswordFieldFocusEvent,
   BrowserPasswordSuggestion
-} from '../../../../../shared/browser-passwords-types'
+} from '../../../../../shared/browser/passwords/browser-passwords-types'
 import {
   clearBrowserPasswordFocusedField,
   isBrowserPasswordFillClickAllowed,
   useBrowserPasswordPageState
 } from './browser-password-page-store'
-import { useGuestEscape } from '../host-guest/use-guest-escape'
+import { useGuestEscape } from '../host-guest/input/use-guest-escape'
 
 function hostOf(origin: string): string {
   try {

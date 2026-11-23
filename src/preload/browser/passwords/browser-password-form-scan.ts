@@ -6,7 +6,7 @@
 import type {
   BrowserPasswordFieldRole,
   BrowserPasswordFormSummary
-} from '../../../shared/browser-passwords-types'
+} from '../../../shared/browser/passwords/browser-passwords-types'
 import { isCredentialInputType, type PasswordFieldDescriptor } from './browser-password-field-rules'
 import {
   parsePasswordForm,

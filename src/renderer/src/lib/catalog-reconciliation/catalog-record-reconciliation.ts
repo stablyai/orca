@@ -1,4 +1,4 @@
-import { structuralValuesEqual } from '../../../../shared/structural-value-equality'
+import { structuralValuesEqual } from '../../../../shared/collections/structural-value-equality'
 
 /**
  * Reuses equal record values from `previous` — and the whole map when nothing

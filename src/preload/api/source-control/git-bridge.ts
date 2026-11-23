@@ -1,3 +1,4 @@
+import type { GitBlameResult } from '../../../shared/git/blame/git-blame-types'
 import type {
   GitCommitAction,
   GitCommitActionResult
@@ -271,5 +272,11 @@ export const gitApi = {
     worktreePath: string
     sha: string
     connectionId?: string
-  }): Promise<string | null> => ipcRenderer.invoke('git:remoteCommitUrl', args)
+  }): Promise<string | null> => ipcRenderer.invoke('git:remoteCommitUrl', args),
+  blame: (args: {
+    worktreePath: string
+    filePath: string
+    knownHeadOid?: string
+    connectionId?: string
+  }): Promise<GitBlameResult> => ipcRenderer.invoke('git:blame', args)
 } satisfies PreloadApi['git']

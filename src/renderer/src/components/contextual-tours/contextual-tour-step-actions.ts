@@ -1,4 +1,4 @@
-import type { ContextualTourStepAction } from '../../../../shared/contextual-tours'
+import type { ContextualTourStepAction } from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 import type { RequestActiveTerminalPaneSplitDetail } from '@/constants/terminal'
 import { trackBrowserExtensionsWebStoreOpened } from '@/diagnostics/telemetry/browser-extensions-telemetry'
 

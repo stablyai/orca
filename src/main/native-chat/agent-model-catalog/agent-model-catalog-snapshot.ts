@@ -4,11 +4,11 @@ import {
 } from './agent-model-catalog-read-scope'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session/records/agent-session-record-launch-directory'
-import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import { agentModelCatalogResultFromEntry } from './agent-model-catalog-entry'
 import { agentModelCatalogDefaultFollowsAccount } from './agent-model-catalog-workspace'
-import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import type {
   AgentModelCatalogReadParams,
   AgentModelCatalogServiceDeps
@@ -230,7 +230,11 @@ export function projectAgentModelCatalogSnapshot(
     deps.agentReadsProjectModelConfig?.(params.agent) === false
       ? { defaultHoldsInEveryWorkspace: true as const }
       : {}),
-    ...(result && ((independent && !params.legacy) || bound.folder !== undefined || bound.exact)
+    ...(result &&
+    ((independent && !params.legacy) ||
+      deps.listsInChatFolder?.has(params.agent) ||
+      bound.folder !== undefined ||
+      bound.exact)
       ? { modelsDifferByWorkspace: true as const }
       : {}),
     ...(!params.savedOnly &&

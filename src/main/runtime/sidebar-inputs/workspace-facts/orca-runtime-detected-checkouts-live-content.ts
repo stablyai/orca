@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithWorkspaceReviewFacts } from './orca-runtime-workspace-review-facts'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import type { WorkspaceLiveContent } from '../../../../shared/sidebar-list/feed-facts/workspace-live-content'
 import { runtimeVisibleRepos } from '../../workspaces/catalog/runtime-visible-catalog'

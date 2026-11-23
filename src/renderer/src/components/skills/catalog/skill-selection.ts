@@ -1,4 +1,4 @@
-import type { DiscoveredSkill } from '../../../../../shared/skills'
+import type { DiscoveredSkill } from '../../../../../shared/skills/discovery/skills'
 
 /** Share collapses lowercase names to satisfy publishing constraints; Delete uses null collision keys to keep distinct files. */
 export type SkillSelectionPolicy = {

@@ -1,9 +1,9 @@
-import { relativePathInsideRoot } from '../../../../../shared/cross-platform-path'
+import { relativePathInsideRoot } from '../../../../../shared/file-access/cross-platform-path'
 import type {
   DiscoveredSkill,
   SkillDiscoverySource,
   SkillSourceKind
-} from '../../../../../shared/skills'
+} from '../../../../../shared/skills/discovery/skills'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

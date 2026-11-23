@@ -36,7 +36,7 @@
 
 Ajanlarınızı telefonunuzdan izleyin ve yönlendirin - bir ajan işini bitirdiğinde bildirim alın, nerede olursanız olun takip talimatı gönderin.
 
-[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://orca.dev/download/android) · [Dokümanlar →](https://orca.dev/docs/mobile)
+[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Google Play](https://play.google.com/store/apps/details?id=dev.orca.app) · [Android APK](https://orca.dev/download/android) · [Dokümanlar →](https://orca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -234,7 +234,7 @@ yay -S stably-orca-bin
 Ajanlarınızı telefonunuzdan izlemek ve yönlendirmek için masaüstü uygulamanızla eşleştirin.
 
 - **iOS:** [App Store'dan indirin](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [APK'yı indirin](https://orca.dev/download/android) · [Kurulum rehberi](https://orca.dev/docs/android-apk)
+- **Android:** [Google Play](https://play.google.com/store/apps/details?id=dev.orca.app) · [APK'yı indirin](https://orca.dev/download/android) · [Kurulum rehberi](https://orca.dev/docs/android-apk)
 
 ---
 

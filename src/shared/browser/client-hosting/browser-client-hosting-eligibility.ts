@@ -1,4 +1,4 @@
-import '../../protocol-version'
+import '../../remote-runtime/protocol/protocol-version'
 import {
   BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,

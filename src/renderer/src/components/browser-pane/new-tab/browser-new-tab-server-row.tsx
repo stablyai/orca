@@ -1,14 +1,14 @@
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { BrowserFavicon } from '@/components/browser-favicon'
+import { BrowserFavicon } from '@/components/browser-pane/describe-page/browser-favicon'
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-ports/workspace-port-localhost-label-selector'
 import { addressForPort } from '@/lib/workspace-ports/workspace-port-urls'
 import {
   openWorkspacePortInBrowser,
   resolveWorkspacePortBrowserUrl
 } from '@/lib/workspace-ports/workspace-port-actions'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { BrowserNewTabRow } from './browser-new-tab-row'
 import type { BrowserNewTabServer } from './use-browser-new-tab-servers'
 

@@ -1,4 +1,4 @@
-import { resolveRuntimePaneTitleForLeaf } from '../../../../../shared/runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleForLeaf } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
 
 /** Undefined preserves single-pane tab-title fallback; null suppresses unattributable split titles so siblings cannot inherit the focused pane’s name. */

@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { mapSettledWithConcurrency } from '../../../../../shared/map-with-concurrency'
+import { mapSettledWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageDeleteResult,
@@ -107,7 +107,8 @@ export function useStructuredAgentSessionQueuedMessages(args: {
       ...projectQueuedMessageCards(queuedMessages, submissions, {
         // A command card offers no send while the agent works.
         agentWorking: isWorking,
-        queuePaused: queuePause !== null
+        queuePaused: queuePause !== null,
+        steersInTranscript: true
       }),
       ...sendingQueuedMessageCards(
         pendingQueueSendsOnTheirWay(

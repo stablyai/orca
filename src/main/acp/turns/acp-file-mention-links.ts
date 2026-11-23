@@ -1,7 +1,7 @@
 import { realpath, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { nativeChatTextAttachmentParts } from '../../../shared/native-chat-text-attachment-references'
+import { nativeChatTextAttachmentParts } from '../../../shared/native-chat/attachments/native-chat-text-attachment-references'
 import type { ContentBlock } from '../generated/acp-protocol.generated'
 
 const TRAILING_PUNCTUATION = /[.,;:!?)\]}`"'*]+$/

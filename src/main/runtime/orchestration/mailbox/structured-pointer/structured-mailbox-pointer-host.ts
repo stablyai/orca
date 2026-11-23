@@ -1,25 +1,30 @@
+import { structuredAgentSessionSendBlock } from '../../../../native-chat/agent-session-wire/operations/structured-agent-session-send-preparation'
+import type {
+  ChatMailAdmitFacts,
+  UsageLimitContinueOff
+} from '../delivery-hold/mailbox-delivery-hold'
 /** Adapt host reads/sends for the pure structured-pointer policy; do not decide delivery here. */
 
 import '../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-admission'
 import { AGENT_SESSION_NOT_ATTACHED } from '../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-refusals'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-host-contract'
+import type {
+  StructuredMailboxPointerHost,
+  StructuredMailOwner
+} from './structured-mailbox-pointer-host-contract'
 import type { StructuredSendAnswer as StructuredMailSendState } from '../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-send-answer'
-import type { AgentJournalSnapshot } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { mintAgentSessionOperationId } from './structured-pointer-operation-id'
-import {
-  structuredSessionGateFacts,
-  type StructuredSessionGateFacts
-} from './structured-session-pointer-delivery'
+import { failureHoldsMail } from '../../../../native-chat/agent-session-journal/queued-messages/queued-message-pause'
+import type { StructuredSessionGateFacts } from './structured-session-pointer-delivery'
 import {
   sendAgentTurn,
   type StructuredSessionTurnOutcome
 } from '../../turn-delivery/send-agent-turn'
 import { subscribeForRedrive } from './structured-session-journal-redrive'
-import { structuredAgentSessionSendBlock } from '../../../../native-chat/agent-session-wire/operations/structured-agent-session-send-preparation'
-import type { ChatMailAdmitFacts } from '../delivery-hold/mailbox-delivery-hold'
-import type { AgentSessionJournal } from '../../../../native-chat/agent-session-journal/journal-store'
+import type { JournalPublication } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-conversations'
+import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { isAgentSessionContextClear } from '../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 
 /** Names the dispatch a nudge belongs to on the operation row it writes. */
 export function structuredPointerCallerKey(dispatchId: string): string {
@@ -31,52 +36,19 @@ export function structuredSessionPointerCallerKey(sessionId: string): string {
   return `trusted-local:orchestration:session:${sessionId}`
 }
 
-/** Use the full reduced timeline: a busy turn's revised lifecycle item can lie outside any tail page. */
+/** Current-work selects the live turn and actionable prompts in one reader snapshot. */
 export async function readStructuredSessionGateFacts(
   sessionId: string
 ): Promise<StructuredSessionGateFacts | null> {
-  const snapshot = await readSessionJournal(sessionId)
-  if (!snapshot) {
-    return null
-  }
-  // The host's projection of current work: an agent that ended is idle, whatever its rows say.
-  const work = getStructuredAgentSessionHost()?.currentWork(sessionId)
-  return structuredSessionGateFacts(snapshot.items, work?.scope)
-}
-
-/** The facts the pointer's admission and the chat's queue gate act on, read without sending. */
-export async function readStructuredMailAdmitFacts(
-  sessionId: string
-): Promise<ChatMailAdmitFacts | null> {
   const host = getStructuredAgentSessionHost()
   if (!host) {
-    return { attached: false }
+    return null
   }
   try {
-    await host.journalCurrentRead(sessionId)
-  } catch (error) {
-    return (error as Error)?.message === AGENT_SESSION_NOT_ATTACHED.code
-      ? { attached: false }
+    const work = await host.currentWorkAtRest(sessionId)
+    return work
+      ? { turnRunning: work.activeTurnId() !== null, awaitingHuman: work.hasActionablePrompt() }
       : null
-  }
-  const block = structuredAgentSessionSendBlock(host.deps.store.getRecord(sessionId))
-  return {
-    attached: true,
-    fenced: (host.deps.store.getConversation(sessionId)?.currentFence ?? null) !== null,
-    refusal: block ? block.refusal.message : null,
-    // Agent mail queues behind a prompt the person must answer first (shouldQueueStructuredAgentSessionSend).
-    behindPrompt: host.currentWork(sessionId)?.hasActionablePrompt() === true
-  }
-}
-
-async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapshot | null> {
-  const host = getStructuredAgentSessionHost()
-  if (!host) {
-    return null
-  }
-  try {
-    // Opens a conversation the idle sweep closed; that starts no agent.
-    return await host.journalCurrentRead(sessionId)
   } catch (error) {
     // Not attached is a retain reason, not a failure; anything else is still unreadable.
     if ((error as Error)?.message !== AGENT_SESSION_NOT_ATTACHED.code) {
@@ -84,6 +56,73 @@ async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapsh
     }
     return null
   }
+}
+
+/** The pointer and queue admission read the same current-work owner without sending. */
+export async function readStructuredMailAdmitFacts(
+  sessionId: string
+): Promise<ChatMailAdmitFacts | null> {
+  const host = getStructuredAgentSessionHost()
+  if (!host) {
+    return { attached: false }
+  }
+  let work
+  try {
+    work = await host.currentWorkAtRest(sessionId)
+  } catch (error) {
+    return (error as Error)?.message === AGENT_SESSION_NOT_ATTACHED.code
+      ? { attached: false }
+      : null
+  }
+  const block = structuredAgentSessionSendBlock(host.deps.store.getRecord(sessionId))
+  const failedTurn = work?.activeTurnId() ? null : await readFailedTurnHold(host, sessionId)
+  return {
+    attached: true,
+    fenced: (host.deps.store.getConversation(sessionId)?.currentFence ?? null) !== null,
+    refusal: block ? block.refusal.message : null,
+    behindPrompt: work?.hasActionablePrompt() === true,
+    ...(failedTurn ? { failedTurn } : {})
+  }
+}
+
+/** Send admission queues agent mail behind a usage-limited last turn; say whether Orca will lift it. */
+async function readFailedTurnHold(
+  host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
+  sessionId: string
+): Promise<NonNullable<Extract<ChatMailAdmitFacts, { attached: true }>['failedTurn']> | null> {
+  try {
+    const { journal } = await host.conversation(sessionId)
+    if (!(await journal.queuedMessages.pauses()).some(failureHoldsMail)) {
+      return null
+    }
+    const cut = await journal.reads.usageLimitCut()
+    if (!cut) {
+      return {}
+    }
+    const state = host.usageLimitContinue.readState(sessionId, cut)
+    if (!state) {
+      return { usageLimit: { state: 'none' } }
+    }
+    return state.state === 'off'
+      ? { usageLimit: { ...state, off: usageLimitContinueOff(host, sessionId) } }
+      : { usageLimit: state }
+  } catch {
+    // An unreadable journal proves nothing about a failure.
+    return null
+  }
+}
+
+/** Why the host publishes `off`: only the setting means a person must continue the chat. */
+function usageLimitContinueOff(
+  host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
+  sessionId: string
+): UsageLimitContinueOff {
+  const continues = host.deps.usageLimitAutoContinue
+  if (continues?.isEnabled() !== true) {
+    return 'setting'
+  }
+  const workspaceId = host.deps.store.getRecord(sessionId)?.location.workspaceId
+  return workspaceId !== undefined && continues.isWorkspaceAsleep(workspaceId) ? 'asleep' : 'other'
 }
 
 /** The host that admitted the send answers for it; this lane only acts on that answer. */
@@ -103,8 +142,23 @@ async function observeMailSend(
   }
 }
 
-export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHost {
+export function createStructuredMailboxPointerHost(
+  owner?: StructuredMailOwner
+): StructuredMailboxPointerHost {
   return {
+    narrowBatch: owner?.narrowBatch,
+    mailHeld: owner?.mailHeld,
+    async observeMail(attempt) {
+      const host = getStructuredAgentSessionHost()
+      try {
+        if (host) {
+          return await host.mailObservation(attempt)
+        }
+      } catch {
+        // An unreadable source never proves acceptance or a person's deletion.
+      }
+      return { epoch: '', state: { kind: 'unreadable' }, body: null, withdrawal: 'unknown' }
+    },
     observe(sessionId, operationId) {
       return observeMailSend(sessionId, operationId)
     },
@@ -116,12 +170,11 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
     async withdraw(sessionId, operationId) {
       const host = getStructuredAgentSessionHost()
       if (!host) {
-        return false
+        return { kind: 'unreadable' }
       }
       const fence = host.deps.store.getConversation(sessionId)?.currentFence
       if (fence === undefined) {
-        // No conversation is left to hand the card over.
-        return true
+        return { kind: 'unreadable' }
       }
       const fields = { messageId: operationId }
       const result = await host
@@ -142,25 +195,40 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
           }
         )
         .catch(() => null)
-      // Already handed over, or never a card (sent at once), counts as done: nothing is left to hand over twice.
-      return result?.ok === true
+      if (!result?.ok) {
+        return { kind: 'unreadable' }
+      }
+      // A no-op may have lost to handoff; only the host's send answer can settle that attempt.
+      return result.value.deleted ? { kind: 'withdrawn' } : observeMailSend(sessionId, operationId)
     },
 
     watchJournal(sessionId, onActivity) {
       const host = getStructuredAgentSessionHost()
-      let seen: string | undefined
+      let source: object | null = null
       // Only what mail waits on: a card handed over, deleted or edited (each moves the queue's
       // revision without adding a card, so a new card, the lane's own included, changes nothing),
       // handoffs settling, an accepted turn, a /clear, a new item. A streamed token changes none.
-      const relevant = (journal: AgentSessionJournal) => {
-        const order = journal.inputOrder
-        const state = journal.queuedMessages.inputState()
-        const cleared = state.queuePauseMarks.cleared?.sequence
-        const changes = state.queue.revision - state.queue.cards.size
-        const key = `${state.epoch}:${changes}:${order.unsettledSubmissions().length}:${order.links.version()}:${order.links.acceptedHandover()}:${cleared}:${state.items.size}`
-        const changed = key !== seen
-        seen = key
-        return changed
+      const relevant = (publication: JournalPublication) => {
+        const replaced = publication.source !== source
+        source = publication.source
+        const commit = publication.commit
+        if (!commit) {
+          return replaced && source !== null
+        }
+        const cards = commit.publication?.cards ?? []
+        const inserted = new Set(commit.publication?.insertedCardIds)
+        const changedInput =
+          commit.inputChanged &&
+          (cards.length === 0 || cards.some((card) => !inserted.has(card.messageId)))
+        return (
+          replaced ||
+          changedInput ||
+          commit.publication?.items.some(
+            (item) => readAgentJournalTurn(item.body) || isAgentSessionContextClear(item.body)
+          ) === true ||
+          commit.items.some((item) => item.deleted) ||
+          (commit.publication?.insertedItemIds?.length ?? 0) > 0
+        )
       }
       return host ? subscribeForRedrive(host, sessionId, onActivity, relevant) : () => {}
     },
@@ -195,6 +263,7 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
               if (!input.stillOwed()) {
                 throw new StructuredMailObsoleteError()
               }
+              owner?.beforeSend(input)
             }
           }
         })

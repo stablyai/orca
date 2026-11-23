@@ -10,7 +10,7 @@ import {
   isSafeGrokSessionId,
   resolveGrokChatHistoryPathSync,
   resolveGrokSessionsDir
-} from '../grok-session-paths'
+} from './providers/grok/grok-session-paths'
 import { readFirstString } from './interactive-tool'
 import { parseAgentHookJson } from './request-body'
 import { GROK_HOME_ENVELOPE_MAX_LENGTH, GROK_SESSION_CWD_MAX_LENGTH } from './listener-limits'

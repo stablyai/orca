@@ -3,7 +3,7 @@ import type { RelayOriginPoolOptions } from './relay-origin-pool-options'
 import { RelayControlOrigin } from './relay-control-origin'
 import type { RelayControlClient } from '../control-channel/relay-control-client'
 import type { RelayDrainMessage } from '../control-channel/relay-control-protocol'
-import type { RelayHostCloseReason } from '../../../../shared/relay-host-close-reason'
+import type { RelayHostCloseReason } from '../../../../shared/remote-runtime/relay/relay-host-close-reason'
 import { RelayRetrySchedule } from '../authentication/relay-retry-schedule'
 import {
   RelayHttpError,

@@ -2,19 +2,19 @@ import {
   isBundledSkillLeaveReason,
   type BundledSkillOutcome,
   type BundledSkillPlan
-} from '../../../../../shared/bundled-skill-plan'
+} from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import type {
   BundledSkillLocation,
   BundledSkillLocationState
-} from '../../../../../shared/bundled-skill-locations'
+} from '../../../../../shared/skills/bundled/bundled-skill-locations'
 import {
   bundledSkillInstallAgents,
   bundledSkillOutcomeText,
   summarizeBundledSkillPlan,
   type BundledSkillPlanState,
   type BundledSkillResultSummary
-} from '../../../../../shared/bundled-skill-summary'
-import { SKILL_INSTALL_PROVIDERS } from '../../../../../shared/skill-install-providers'
+} from '../../../../../shared/skills/bundled/bundled-skill-summary'
+import { SKILL_INSTALL_PROVIDERS } from '../../../../../shared/skills/installation/skill-install-providers'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

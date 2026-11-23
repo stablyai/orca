@@ -7,7 +7,7 @@ import {
   MobileLoadErrorState,
   MobileOfflineState,
   MobileStateView
-} from '../components/MobileStateView'
+} from '../components/feedback/MobileStateView'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { connectionRetryAction } from '../transport/connection/connection-retry-action'
@@ -21,7 +21,7 @@ import {
   resolveMobileSourceControlReviewInputs
 } from './workflows/mobile-source-control-primary-action'
 import { MobileSourceControlModals } from './panel/MobileSourceControlModals'
-import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
+import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { MobileSourceControlHubCommitsPage } from './panel/MobileSourceControlHubCommitsPage'
 import { MobileSourceControlNextStepBar } from './panel/MobileSourceControlNextStepBar'
 import { useMobileSourceControlNextStep } from './panel/use-mobile-source-control-next-step'
@@ -35,10 +35,10 @@ import {
   type SourceControlHubRouteTab
 } from './panel/mobile-source-control-hub-tab'
 import { groupMobileSourceControlMenu } from './workflows/mobile-source-control-actions'
-import { useMobilePrSidebarController } from './review/use-mobile-pr-sidebar-controller'
-import { MobilePrTabBody } from '../components/MobilePRSidebar'
-import { MobilePrTabSheets } from '../components/pr-sidebar/MobilePrTabSheets'
-import { PrTabScreenView } from '../components/pr-sidebar/PrTabScreenView'
+import { useMobilePrSidebarController } from './review/pull-request/use-mobile-pr-sidebar-controller'
+import { MobilePrTabBody } from './review/pull-request/MobilePRSidebar'
+import { MobilePrTabSheets } from './review/pull-request/MobilePrTabSheets'
+import { PrTabScreenView } from './review/pull-request/PrTabScreenView'
 import {
   useMobileSourceControlPrTab,
   type MobilePrTabOpeners

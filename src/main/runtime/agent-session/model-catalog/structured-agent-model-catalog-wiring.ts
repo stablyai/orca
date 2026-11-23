@@ -48,10 +48,12 @@ export function registeredModelCatalogDiscovery(
   probes: Record<string, AgentModelCatalogProbe>
   listingNamesConfiguredModel: Set<string>
   listsInChatFolder: Set<string>
+  listsOnDemand: Set<string>
 } {
   const probes: Record<string, AgentModelCatalogProbe> = {}
   const listingNamesConfiguredModel = new Set<string>()
   const listsInChatFolder = new Set<string>()
+  const listsOnDemand = new Set<string>()
   for (const registration of registrations) {
     const { agent } = registration.definition
     const discovery = registration.modelCatalog(context)
@@ -63,9 +65,12 @@ export function registeredModelCatalogDiscovery(
       if (discovery.listsInChatFolder) {
         listsInChatFolder.add(agent)
       }
+      if (discovery.listsOnDemand) {
+        listsOnDemand.add(agent)
+      }
     }
   }
-  return { probes, listingNamesConfiguredModel, listsInChatFolder }
+  return { probes, listingNamesConfiguredModel, listsInChatFolder, listsOnDemand }
 }
 
 /** Build the existing catalog from late-bound session access; no journal is needed for discovery. */

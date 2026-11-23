@@ -1,4 +1,4 @@
-import type { SshTarget } from '../../../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
@@ -55,10 +55,7 @@ export function SshManagedHostRemoveDialog({
             {t('auto.components.settings.SshDestructiveActionDialog.895b216267', 'Cancel')}
           </Button>
           <Button onClick={openManagedServers}>
-            {t(
-              'auto.components.settings.sshManagedHostRemove.2ca95e9fd7',
-              'Open remote Orca servers'
-            )}
+            {t('auto.components.settings.sshManagedHostRemove.2ca95e9fd7', 'Manage remote servers')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,9 +1,12 @@
 import { useMemo, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
-import type { ProjectHostSetup } from '../../../../../shared/project-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
 import { Button } from '../../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../ui/collapsible'
@@ -53,7 +56,8 @@ function getRemoveProjectDescription(
 
 function selectSetupHostLabel(state: AppState, setup: ProjectHostSetup, t: Translate): string {
   const label = selectExecutionHostDisplayLabel(state, setup.hostId, {
-    sshEnvironmentId: setup.runtimeOwnerEnvironmentId ?? null
+    sshEnvironmentId: setup.runtimeOwnerEnvironmentId ?? null,
+    t
   })
   const parsed = parseExecutionHostId(setup.hostId)
   const rawId =

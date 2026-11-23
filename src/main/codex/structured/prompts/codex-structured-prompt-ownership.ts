@@ -56,7 +56,7 @@ async function cancelCodexConversation(
   const { request, sessions, requestTimeoutMs } = input
   const stoppedAt = request.stoppedAt ?? Date.now()
   const generation = session.acquisitionGeneration
-  const liveTurnId = request.resolveLiveTurnId?.() ?? null
+  const liveTurnId = (await request.resolveLiveTurnId?.()) ?? null
   // A command's journal turn can exist before its interruptible provider turn.
   const target = liveTurnId === null ? codexStopTarget(session) : { turnId: liveTurnId }
   // Opening waits can outlive their session; recheck ownership after awaiting.

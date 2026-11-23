@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { WslHostDistro } from '../../../../../../shared/wsl-host-types'
+import type { WslHostDistro } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 
 /** Refresh WSL distros on focus, visibility or demand; avoid polling that repeatedly spawns Windows processes. */
 export function useWslDistroList(enabled: boolean): {

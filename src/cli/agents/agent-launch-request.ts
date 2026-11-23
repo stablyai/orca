@@ -18,9 +18,9 @@ import {
   AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_PI_MODEL_RUNTIME_CAPABILITY
 } from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
-import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/structured-agent-session-mutation'
-import { parseAgentSessionOperationTimestamp } from '../../shared/agent-session/agent-session-host-authority'
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
+import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
+import { parseAgentSessionOperationTimestamp } from '../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import {
@@ -29,9 +29,9 @@ import {
   getRequiredStringFlagAllowingEmpty,
   rejectValuelessFlag
 } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { withCliAgentLaunchRecovery } from './agent-launch-recovery'
 
 type Flags = Map<string, string | boolean>

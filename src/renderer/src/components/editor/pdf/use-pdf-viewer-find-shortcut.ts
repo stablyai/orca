@@ -1,7 +1,7 @@
 import { useEffect, type RefObject } from 'react'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
-import { isEventTargetInsideFloatingWorkspacePanel } from '@/components/floating-terminal/floating-workspace-terminal-actions'
+import { isEventTargetInsideFloatingWorkspacePanel } from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'

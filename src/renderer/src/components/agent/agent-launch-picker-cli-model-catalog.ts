@@ -5,7 +5,7 @@ import { agentPickerModelFromCatalogModel } from '../../../../shared/agent-launc
 import {
   catalogModelsFromModelDiscovery,
   mergeDiscoveredCatalogModels
-} from '../../../../shared/native-chat/input/native-chat-discovered-catalog-models'
+} from '../../../../shared/native-chat/input/session-options/native-chat-discovered-catalog-models'
 import { isNativeChatSupportedAgent } from '../../../../shared/native-chat/native-chat-agent-support'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import { discoverRuntimeCommitMessageModels } from '@/runtime/source-control/git/runtime-git-generation-client'

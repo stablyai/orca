@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import type { WindowMaterial } from '../../../shared/window-material'
+import type { WindowMaterial } from '../../../shared/app-lifecycle/windows/window-material'
 import { MAC_BLUR_VIBRANCY } from './window-material-options'
 
 const createdMaterials = new WeakMap<BrowserWindow, WindowMaterial>()

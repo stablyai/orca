@@ -14,9 +14,6 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
   | 'agentSurfaceRows'
   | 'agentPickerDraft'
   | 'agentSetupDisabled'
-  | 'selectedRepoIsGit'
-  | 'selectedProjectId'
-  | 'projectOptions'
   | 'onQuickAgentChange'
   | 'agentRows'
   | 'onOpenAgentSettings'
@@ -38,9 +35,6 @@ export function NewWorkspaceComposerAgentSection({
   agentSurfaceRows,
   agentPickerDraft,
   agentSetupDisabled,
-  selectedRepoIsGit,
-  selectedProjectId,
-  projectOptions,
   onQuickAgentChange,
   onOpenAgentSettings,
   createDisabled,
@@ -87,12 +81,6 @@ export function NewWorkspaceComposerAgentSection({
           value={agentPickerDraft}
           cli={agentSurfaceRows?.selection.cli === true}
           setupDisabled={agentSetupDisabled}
-          matchTriggerWidth={
-            selectedRepoIsGit &&
-            projectOptions?.find((option) => option.id === selectedProjectId)?.kind !==
-              'project-group'
-          }
-          onOpenAgentSettings={onOpenAgentSettings}
           onTriggerEnter={createDisabled ? undefined : onCreate}
           emptyLabel={t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
           defaultAgent={defaultTuiAgent}
@@ -105,12 +93,12 @@ export function NewWorkspaceComposerAgentSection({
       <div className="!mb-2">
         <Button
           type="button"
-          variant="ghost"
+          variant="disclosure"
           size="sm"
           onClick={onToggleAdvanced}
           disabled={advancedLocked}
           aria-expanded={advancedOpen}
-          className="-ml-2 text-xs focus-visible:ring-inset"
+          className="-ml-2"
         >
           {t('auto.components.NewWorkspaceComposerCard.f0470c7383', 'Advanced')}
           <ChevronDown

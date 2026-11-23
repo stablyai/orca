@@ -1,5 +1,8 @@
 // Restored tunnels bypass SSH connect; perform its update check once per server/session in the background.
-import type { SshManagedServerUpdateNote, SshTarget } from '../../../shared/ssh-types'
+import type {
+  SshManagedServerUpdateNote,
+  SshTarget
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   checkManagedServerUpdate,
   type ManagedServerUpdateDeps
@@ -83,9 +86,4 @@ async function runRedeploy(
     console.warn('[ssh] Could not redeploy a stopped managed Orca server:', error)
     return false
   }
-}
-
-export function resetManagedOrcadRestoreUpdatesForTests(): void {
-  checked.clear()
-  redeploying.clear()
 }

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useLocalSearchParams } from 'expo-router'
-import { NewWorktreeModalController } from '../components/NewWorktreeModalController'
+import { NewWorktreeModalController } from './creation/modal/NewWorktreeModalController'
 import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
 import { useHostLabelById } from './use-host-label-by-id'
 import { useHostWorktreeRows } from './use-host-worktree-rows'
@@ -9,7 +9,7 @@ import { firstParam } from '../navigation/route-param-reader'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'
 import { openExternalLink } from '../platform/external-links/external-link'
 import { useHostClient } from '../transport/connection/host-client-hooks'
-import { useHostProtocolGates } from '../components/host-protocol-gates-context'
+import { useHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
 
 // Use a transparent drawer page; close returns to its opener and creation replaces it with the new workspace session.
 export function NewWorkspacePageScreen() {

@@ -1,4 +1,4 @@
-import { buildJiraCreateTextAdf } from '@/components/jira-create-adf'
+import { buildJiraCreateTextAdf } from '@/components/task-page/jira/creation/jira-create-adf'
 import type { JiraCreateField } from '../../../../../../shared/jira/jira-types'
 
 // 'assignee' is system here because the dialog renders a dedicated picker for it.

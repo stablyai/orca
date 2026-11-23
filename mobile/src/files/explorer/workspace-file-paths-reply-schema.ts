@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { salvagedOptional, salvagingArray } from '../../../../src/shared/zod-salvage'
+import { salvagedOptional, salvagingArray } from '../../../../src/shared/validation/zod-salvage'
 
 // Keep legacy missing/unreadable file lists empty; validate the container before projecting nonempty relative paths.
 export const workspaceFilePathsSchema = z

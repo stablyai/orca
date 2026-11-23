@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
-import { resolveWindowsShellStartupFamily } from '../../../shared/windows-terminal-shell'
+import { resolveWindowsShellStartupFamily } from '../../../shared/shell/launch/windows-terminal-shell'
 import {
   resolveProfileLoadingFallbackShell,
   resolveProfileLoadingShell
@@ -263,9 +263,4 @@ export function resolveLoginShellEnvironment(
   options: ResolveLoginShellEnvironmentOptions = {}
 ): Promise<NodeJS.ProcessEnv> {
   return captureLoginShellEnvironment(options).then((capture) => capture.env)
-}
-
-export function resetLoginShellEnvironmentCacheForTests(): void {
-  environmentCache.clear()
-  cacheRevision++
 }

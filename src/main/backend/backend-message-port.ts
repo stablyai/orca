@@ -1,4 +1,4 @@
-import type { BackendPort } from '../../shared/backend-port-rpc'
+import type { BackendPort } from '../../shared/backend/backend-port-rpc'
 
 export type BackendNativePort = {
   postMessage(message: unknown): void

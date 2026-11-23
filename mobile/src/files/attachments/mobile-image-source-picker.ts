@@ -6,7 +6,7 @@ import {
   CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
   assertClipboardImageBase64LengthWithinLimit,
   assertClipboardImageByteLengthWithinLimit
-} from '../../../../src/shared/clipboard-image'
+} from '../../../../src/shared/clipboard/clipboard-image'
 import { MobileImageBase64Accumulator } from './mobile-image-base64-accumulator'
 import { isPickedImageMime } from '../../platform/media-picking/mobile-picked-file-name'
 // Import permission errors from the Expo-free contract so page-side catches cannot pull native picker code into the bundle.

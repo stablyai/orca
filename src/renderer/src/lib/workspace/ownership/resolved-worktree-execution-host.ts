@@ -3,9 +3,12 @@ import {
   parseExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+} from '../../../../../shared/execution-host/execution-host'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   findIndexedFolderWorkspaceOwner,
   findIndexedProjectGroupOwner
@@ -14,7 +17,7 @@ import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-reco
 import { resolveQualifiedWorktreeExecutionOwner } from './qualified-worktree-execution-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 function getResolvedFolderHost(
   state: WorktreeRuntimeOwnerState,

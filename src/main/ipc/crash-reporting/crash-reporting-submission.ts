@@ -1,13 +1,13 @@
 import os from 'node:os'
 import { app } from 'electron'
-import type { CrashReportDiagnosticBundle } from '../../../shared/crash-reporting-diagnostic-bundle'
+import type { CrashReportDiagnosticBundle } from '../../../shared/crash-reporting/crash-reporting-diagnostic-bundle'
 import {
   type CrashReportSubmitArgs,
   type CrashReportSubmitResult,
   formatCrashReportText,
   formatUncapturedCrashReportText
-} from '../../../shared/crash-reporting'
-import { submitFeedback } from '../feedback'
+} from '../../../shared/crash-reporting/crash-reporting'
+import { submitFeedback } from '../feedback/feedback'
 import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
 import {
   diagnosticBundleForReportOnlyRetry,

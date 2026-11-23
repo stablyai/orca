@@ -1,6 +1,9 @@
 // Apply routed-partition commands first while carrying in-memory editor views through saved-session loads.
 
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type {
   LayoutApplyOutcome,
@@ -163,9 +166,14 @@ function written(
         ]
       : []
   )
+  const writtenWorkspaces = new Map(
+    applied.flatMap(({ hostId, change }) =>
+      change.workspaces ? [[hostId, change.workspaces] as const] : []
+    )
+  )
   if (sessionRestores.length === 0) {
-    return { value, persist: false }
+    return { value, persist: false, writtenWorkspaces }
   }
   const restores = [...viewRestores, ...sessionRestores]
-  return { value, rollback: () => restores.forEach((restore) => restore()) }
+  return { value, rollback: () => restores.forEach((restore) => restore()), writtenWorkspaces }
 }

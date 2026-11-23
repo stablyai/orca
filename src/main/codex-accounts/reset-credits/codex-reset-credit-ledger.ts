@@ -1,13 +1,13 @@
-import type { CodexManagedAccount } from '../../../shared/managed-account-types'
+import type { CodexManagedAccount } from '../../../shared/agent-accounts/managed-account-types'
 import type {
   CodexResetCreditAttemptLedger,
   DurableCodexResetCreditAttempt
-} from '../../../shared/codex-reset-credit-attempt-ledger'
-import type { CodexResetCreditExpectedScope } from '../../../shared/codex-reset-credit-scope'
+} from '../../../shared/agent-accounts/codex/codex-reset-credit-attempt-ledger'
+import type { CodexResetCreditExpectedScope } from '../../../shared/agent-accounts/codex/codex-reset-credit-scope'
 import type {
   CodexRateLimitResetOutcome,
   RateLimitRuntimeTarget
-} from '../../../shared/rate-limit-types'
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { Store } from '../../persistence/loading-store/store'
 import { profileStateWriterFailureOutcome } from '../../persistence/profile-state/writer/profile-state-writer-errors'
 

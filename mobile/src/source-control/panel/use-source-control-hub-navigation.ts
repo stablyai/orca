@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useOptionPager } from '../../components/bottom-drawer/BottomDrawer'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import type { SourceControlHubRouteTab, SourceControlHubTab } from './mobile-source-control-hub-tab'
-import type { PrTabScreen } from '../../components/pr-sidebar/use-mobile-pr-tab'
+import type { PrTabScreen } from '../review/pull-request/use-mobile-pr-tab'
 
 // Screens pushed over the hub: Commits, and the PR tab's Checks and Comments.
 export type SourceControlHubScreen = 'commits' | PrTabScreen

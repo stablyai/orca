@@ -1,7 +1,7 @@
 // Resolve readVisual scratch roots from host records; clients supply only session id/bare name.
 // Older hosts lack the method (mobile may see forbidden); clients show unavailable.
 
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import {
   ReadVisualParams,
   type AgentSessionReadVisualResult

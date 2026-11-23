@@ -9,15 +9,16 @@ import {
 import {
   getConnectionExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import type { ExactWorkerProviderSession } from '../../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { isLocalHookConnectionId } from '../../../../../shared/wsl-hook-relay-contract'
+import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
+import { isLocalHookConnectionId } from '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { DispatchContextRow } from '../orchestration-records'
 import type { WorkerTerminalResourceRow } from '../../terminal-authority/release/worker-terminal-ownership'
 import type { OrchestrationDb } from '../orchestration-db'
-import { parseOrcaSessionAddress } from '../../../../../shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
 
 /** The conversation a closed terminal worker reopens in, as the resume path takes it. */
@@ -37,6 +38,31 @@ export function getFollowUpDispatch(
   return db.db
     .prepare('SELECT * FROM dispatch_contexts WHERE follow_up_of_dispatch_id = ?')
     .get(dispatchId) as DispatchContextRow | undefined
+}
+
+/** Whether a report's task id names a Task from earlier in its Dispatch's follow-up chain, which a
+ *  worker that ran them all may still quote. Its own Task, or any other, is not. */
+export function isEarlierTaskOfDispatch(
+  db: { getDispatchContextById(dispatchId: string): DispatchContextRow | undefined },
+  dispatch: Pick<DispatchContextRow, 'id' | 'task_id' | 'follow_up_of_dispatch_id'>,
+  taskId: string
+): boolean {
+  const seen = new Set([dispatch.id])
+  for (
+    let earlier = dispatch.follow_up_of_dispatch_id
+      ? db.getDispatchContextById(dispatch.follow_up_of_dispatch_id)
+      : undefined;
+    earlier && !seen.has(earlier.id);
+    earlier = earlier.follow_up_of_dispatch_id
+      ? db.getDispatchContextById(earlier.follow_up_of_dispatch_id)
+      : undefined
+  ) {
+    if (earlier.task_id === taskId) {
+      return taskId !== dispatch.task_id
+    }
+    seen.add(earlier.id)
+  }
+  return false
 }
 
 export type WorkerLineage = {
@@ -119,7 +145,8 @@ export function recordWorkerResumeSession(
   const connectionId = isLocalHookConnectionId(session.connectionId)
     ? null
     : (session.connectionId ?? null)
-  const { launchConfig } = session
+  const launchConfig =
+    session.launchConfig ?? recordedLaunchConfigOf(db, resourceId, session, connectionId)
   const value = JSON.stringify({
     agent: session.agent,
     providerSession: session.providerSession,
@@ -132,6 +159,23 @@ export function recordWorkerResumeSession(
       'UPDATE worker_terminal_resources SET resume_session = ? WHERE id = ? AND resume_session IS NOT ?'
     )
     .run(value, resourceId, value)
+}
+
+/** The recipe this row already holds for the same conversation: a capture after the agent exited no
+ *  longer reads its launch, but the conversation it reports is still the one that launch started. */
+function recordedLaunchConfigOf(
+  db: OrchestrationDb,
+  resourceId: string,
+  session: ExactWorkerProviderSession,
+  connectionId: string | null
+): SleepingAgentLaunchConfig | undefined {
+  const stored = readWorkerResumeSession(db.getWorkerTerminalResource(resourceId))
+  return stored &&
+    stored.agent === session.agent &&
+    stored.captureHostId === getConnectionExecutionHostId(connectionId) &&
+    agentProviderSessionsEqual(session.agent, stored.providerSession, session.providerSession)
+    ? stored.launchConfig
+    : undefined
 }
 
 /** A reopened worker keeps its conversation until its own pane reports one. */

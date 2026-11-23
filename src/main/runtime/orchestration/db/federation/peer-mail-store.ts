@@ -3,6 +3,7 @@ import type { MessageInsert } from '../messages/message-insert'
 import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
+import { NOT_CLIENT_ENVIRONMENT_SQL } from '../../federation/client-asks/client-ask-environment'
 
 export type PeerMailConversationRow = {
   conversation_id: string
@@ -68,27 +69,30 @@ export function getPeerMailConversation(
 export function listHomePeerMailEnvironments(this: OrchestrationDb): string[] {
   const statement = this.db.prepare(
     `SELECT DISTINCT environment_id FROM peer_mail_conversations
-     WHERE role = 'home' AND environment_id IS NOT NULL`
+     WHERE role = 'home' AND environment_id IS NOT NULL AND ${NOT_CLIENT_ENVIRONMENT_SQL}`
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT over this table returns exactly these columns.
   const rows = statement.all() as { environment_id: string }[]
   return rows.map((row) => row.environment_id)
 }
 
-/** Conversations a paired Orca opened here that hold replies it has not acknowledged yet. */
+/** Conversations a paired Orca opened here that hold replies it has not acknowledged yet, and, for a
+ *  paired computer that takes asks (`clientEnvironmentId`), this Orca's conversations holding asks for it. */
 export function listPeerConversationIdsWithPendingReplies(
   this: OrchestrationDb,
-  peerFingerprint: string
+  peerFingerprint: string,
+  clientEnvironmentId: string | null = null
 ): string[] {
   const statement = this.db.prepare(
     `SELECT DISTINCT c.conversation_id FROM federation_relay_items i
      JOIN peer_mail_conversations c ON c.conversation_id = i.dispatch_id
-     WHERE i.direction = 'to_home' AND i.acked_at IS NULL
-       AND c.role = 'peer' AND c.peer_fingerprint = ?
+     WHERE i.acked_at IS NULL AND c.peer_fingerprint = ?1
+       AND ((i.direction = 'to_home' AND c.role = 'peer' AND c.environment_id IS NULL)
+         OR (?2 IS NOT NULL AND i.direction = 'to_worker' AND c.role = 'home' AND c.environment_id = ?2))
      ORDER BY c.conversation_id`
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT over this table returns exactly these columns.
-  const rows = statement.all(peerFingerprint) as { conversation_id: string }[]
+  const rows = statement.all(peerFingerprint, clientEnvironmentId) as { conversation_id: string }[]
   return rows.map((row) => row.conversation_id)
 }
 
@@ -110,6 +114,81 @@ export function isPeerMailSenderLabel(this: OrchestrationDb, label: string): boo
   )
 }
 
+/** The 'peer' conversation a paired Orca opened, created on its first mail; refused for another server's. */
+function openPeerConversation(
+  db: OrchestrationDb,
+  conversationId: string,
+  peerFingerprint: string,
+  // Set when the far side is a server this Orca dials: the server opened it for its agents' asks.
+  environmentId: string | null = null
+): void {
+  const conversation = db.getPeerMailConversation(conversationId)
+  if (
+    conversation &&
+    (conversation.role !== 'peer' || conversation.peer_fingerprint !== peerFingerprint)
+  ) {
+    throw new OrchestrationError(
+      'request_mismatch',
+      `Conversation ${conversationId} belongs to another server. Nothing was delivered.`,
+      { effectsApplied: false }
+    )
+  }
+  if (!conversation) {
+    db.db
+      .prepare(
+        `INSERT INTO peer_mail_conversations (conversation_id, role, peer_fingerprint, environment_id)
+         VALUES (?, 'peer', ?, ?)`
+      )
+      .run(conversationId, peerFingerprint, environmentId)
+  }
+}
+
+/** Refuses, before anything is admitted, a conversation that is a coordinated Run's or another server's. */
+export function assertPeerMailConversation(
+  this: OrchestrationDb,
+  conversationId: string,
+  peerFingerprint: string
+): void {
+  if (this.getPeerRunForConversation(conversationId)) {
+    throw new OrchestrationError(
+      'request_mismatch',
+      `Conversation ${conversationId} belongs to a coordinated Run. Nothing was delivered.`,
+      { effectsApplied: false }
+    )
+  }
+  const conversation = this.getPeerMailConversation(conversationId)
+  if (
+    conversation &&
+    (conversation.role !== 'peer' || conversation.peer_fingerprint !== peerFingerprint)
+  ) {
+    throw new OrchestrationError(
+      'request_mismatch',
+      `Conversation ${conversationId} belongs to another server. Nothing was delivered.`,
+      { effectsApplied: false }
+    )
+  }
+}
+
+/** Files mail a bot admitted through its own path under the conversation it came on; once per id. */
+export function linkPeerMailMessage(
+  this: OrchestrationDb,
+  params: {
+    conversationId: string
+    peerFingerprint: string
+    messageId: string
+    senderLabel: string
+    environmentId?: string
+  }
+): void {
+  openPeerConversation(this, params.conversationId, params.peerFingerprint, params.environmentId)
+  this.db
+    .prepare(
+      `INSERT OR IGNORE INTO peer_mail_messages (message_id, conversation_id, sender_label, remote_party)
+       VALUES (?, ?, ?, NULL)`
+    )
+    .run(params.messageId, params.conversationId, params.senderLabel)
+}
+
 /** Stores mail that crossed from a paired Orca once; a replayed id is a duplicate, even after a reset removed its row. */
 export function insertPeerMailMessage(
   this: OrchestrationDb,
@@ -117,6 +196,8 @@ export function insertPeerMailMessage(
     conversationId: string
     /** Only a 'peer' conversation is created here, by the paired Orca that opened it. */
     peerFingerprint?: string
+    /** With `peerFingerprint`: the server this Orca dials that opened it. */
+    environmentId?: string
     remoteParty: string | null
     message: MessageInsert & { id: string; from: string }
   }
@@ -134,25 +215,12 @@ export function insertPeerMailMessage(
       )
     }
     if (params.peerFingerprint !== undefined) {
-      const conversation = this.getPeerMailConversation(params.conversationId)
-      if (
-        conversation &&
-        (conversation.role !== 'peer' || conversation.peer_fingerprint !== params.peerFingerprint)
-      ) {
-        throw new OrchestrationError(
-          'request_mismatch',
-          `Conversation ${params.conversationId} belongs to another server. Nothing was delivered.`,
-          { effectsApplied: false }
-        )
-      }
-      if (!conversation) {
-        this.db
-          .prepare(
-            `INSERT INTO peer_mail_conversations (conversation_id, role, peer_fingerprint)
-             VALUES (?, 'peer', ?)`
-          )
-          .run(params.conversationId, params.peerFingerprint)
-      }
+      openPeerConversation(
+        this,
+        params.conversationId,
+        params.peerFingerprint,
+        params.environmentId
+      )
     }
     if (this.getPeerMailMessage(params.message.id)) {
       this.db.exec('RELEASE peer_mail_insert')
@@ -182,6 +250,8 @@ export type PeerMailStoreMethods = {
   getPeerMailMessage: typeof getPeerMailMessage
   isPeerMailSenderLabel: typeof isPeerMailSenderLabel
   insertPeerMailMessage: typeof insertPeerMailMessage
+  assertPeerMailConversation: typeof assertPeerMailConversation
+  linkPeerMailMessage: typeof linkPeerMailMessage
 }
 
 export function attachPeerMailStore(ctor: { prototype: object }): void {
@@ -192,6 +262,8 @@ export function attachPeerMailStore(ctor: { prototype: object }): void {
     listPeerConversationIdsWithPendingReplies,
     getPeerMailMessage,
     isPeerMailSenderLabel,
-    insertPeerMailMessage
+    insertPeerMailMessage,
+    assertPeerMailConversation,
+    linkPeerMailMessage
   })
 }

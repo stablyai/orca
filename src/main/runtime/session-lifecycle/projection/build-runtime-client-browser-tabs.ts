@@ -1,6 +1,7 @@
 import type { RuntimeBrowserClientPage } from '../../browser/client-pages/runtime-browser-page-registry'
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
-import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import { remoteTabFaviconUrl } from '../../../../shared/browser/browser-favicon-url'
+import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 
 export function buildRuntimeClientBrowserTabs(
   pages: readonly RuntimeBrowserClientPage[],
@@ -21,6 +22,7 @@ export function buildRuntimeClientBrowserTabs(
       executionHostKey: page.executionHostKey,
       placement: page.placement,
       url: page.url,
+      faviconUrl: remoteTabFaviconUrl(page.faviconUrl),
       initializationState,
       loading:
         initializationState === 'pending'

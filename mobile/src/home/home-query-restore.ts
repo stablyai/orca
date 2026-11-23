@@ -14,7 +14,7 @@ import { homeStatsKey, homeStatsQuery } from '../stats/home-stats-summary-read'
 import {
   homeWorktreeCountsQuery,
   type HomeWorktreeCounts
-} from '../worktree/home-host-worktree-fetch'
+} from '../worktree/catalog/home-host-worktree-fetch'
 
 // Where Home kept its counts before the device store: read once to seed the store, then removed.
 const LEGACY_SNAPSHOT_KEY = 'orca:home-snapshot:v1'

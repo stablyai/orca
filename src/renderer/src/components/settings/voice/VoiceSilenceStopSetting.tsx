@@ -1,10 +1,10 @@
 import { useId } from 'react'
-import type { VoiceSettings } from '../../../../../shared/speech-types'
+import type { VoiceSettings } from '../../../../../shared/speech/speech-types'
 import {
   STOP_AFTER_SILENCE_SECONDS_CHOICES,
   stopAfterSilenceSeconds,
   type StopAfterSilenceSeconds
-} from '../../../../../shared/dictation-silence-stop'
+} from '../../../../../shared/speech/dictation/dictation-silence-stop'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatMinutesDuration, uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'

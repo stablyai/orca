@@ -14,7 +14,7 @@ export type SessionSearchRootListing = { root: string; files: number }
 /** Use session-list roots; the indexer owns scan limits, scope and cancellation. */
 export type SessionSearchScanRoots = Omit<
   AiVaultScanOptions,
-  'signal' | 'limit' | 'unlimited' | 'limitPerAgent' | 'scopePaths'
+  'signal' | 'limit' | 'unlimited' | 'limitPerAgent' | 'scopePaths' | 'statCache'
 >
 
 export type SessionSearchDiscovery = {
@@ -27,10 +27,14 @@ export type SessionSearchDiscovery = {
 /** Infinity sweeps every candidate; finite limits use the sidebar’s newest-per-root rule. */
 export async function discoverSessionSearchCandidates(
   roots: SessionSearchScanRoots,
-  args: { limitPerAgent: number; signal?: AbortSignal }
+  args: {
+    limitPerAgent: number
+    statCache?: AiVaultScanOptions['statCache']
+    signal?: AbortSignal
+  }
 ): Promise<SessionSearchDiscovery> {
   const issues: AiVaultScanIssue[] = []
-  const options: AiVaultScanOptions = { ...roots, signal: args.signal }
+  const options: AiVaultScanOptions = { ...roots, statCache: args.statCache, signal: args.signal }
   const discoveries = await discoverAiVaultSessionSources({
     options,
     limitPerAgent: args.limitPerAgent,

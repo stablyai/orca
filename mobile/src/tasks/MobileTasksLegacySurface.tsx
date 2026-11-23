@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { describeLoadError } from '../components/load-error-description'
+import { describeLoadError } from '../components/feedback/load-error-description'
 import {
   MobileTasksOfflineBanner,
   mobileTasksListShowsError
@@ -10,8 +10,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { View, Text, Pressable } from 'react-native'
 import { AlertTriangle, GitBranch } from 'lucide-react-native'
 import { colors, pressedStyle } from '../theme/mobile-theme'
-import { ActionSheetModal } from '../components/ActionSheetModal'
-import { ConfirmModal } from '../components/ConfirmModal'
+import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
+import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawerModalHost } from '../components/bottom-drawer/bottom-drawer-modal-host'
 import { styles } from './mobile-tasks-legacy-styles'

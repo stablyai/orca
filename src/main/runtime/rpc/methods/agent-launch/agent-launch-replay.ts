@@ -14,7 +14,7 @@ import {
 import type {
   AgentSessionOperationOutcome,
   AgentSessionOperationRefusalCode
-} from '../../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+} from '../../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import { resolveAgentSessionReplayOutcome } from '../../../../native-chat/agent-session-wire/operations/structured-agent-session-replay-outcome'
 import type { TerminalSpawnDispatch } from '../../../../agent-launch/agent-launch-not-started'
 import type { RpcContext } from '../../core'
@@ -177,14 +177,12 @@ export async function admitAgentLaunchOperation(
   const callerKey = agentLaunchOperationCallerKey(context)
   // The ledger alone: admitting a terminal launch has no use for the chat host.
   const store = await context.runtime.openAgentSessionRecordStore()
-  const { decision: admitted, claim } = await store.admitAndClaimOperation(
-    { callerKey, operationId, fingerprint, now },
-    // A fresh row, or a replayed one no one has answered yet, leaves the right to run open.
-    (decision) =>
-      decision.decision === 'admit' ||
-      (decision.decision === 'replay' &&
-        answerFromRecordedRow(operationId, decision.row.outcome) === null)
-  )
+  const { decision: admitted, claim } = await store.admitAndClaimOperation({
+    callerKey,
+    operationId,
+    fingerprint,
+    now
+  })
   if (admitted.decision === 'refused') {
     return refusal(operationId, admitted.code, `was refused: ${admitted.code}`)
   }

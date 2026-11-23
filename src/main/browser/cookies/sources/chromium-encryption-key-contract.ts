@@ -1,4 +1,4 @@
-import type { LinuxCookieKeyFailure } from '../../../../shared/browser-workspace-types'
+import type { LinuxCookieKeyFailure } from '../../../../shared/browser/workspaces/browser-workspace-types'
 
 export type EncryptionKeyResult =
   | {

@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'

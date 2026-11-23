@@ -1,5 +1,5 @@
 import type { BrowserClientInitializationOwner } from '../../client-hosts/commands/browser-client-host-command-state'
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
+import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
 import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent

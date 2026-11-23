@@ -1,7 +1,14 @@
-import type { BrowserWindow } from 'electron'
+import {
+  admitBrowserPageAttach,
+  isBrowserPageAttachMarker,
+  associateBrowserPageAttach,
+  closeBrowserMemoryRenderer,
+  startBrowserPageAttach
+} from '../../browser/guest-lifecycle/browser-page-memory'
+import { app, type BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
-import { normalizeBrowserNavigationUrl } from '../../../shared/browser-url'
+import { normalizeBrowserNavigationUrl } from '../../../shared/browser/navigation/browser-url'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-session-registry'
 import {
@@ -12,7 +19,7 @@ import {
   browserRouteSessionRegistry,
   browserRouteWebContentsRegistry
 } from '../../browser/routing/sessions/browser-route-session-runtime'
-import '../../../shared/constants'
+import '../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../shared/browser/browser-blank-page'
 import {
   DOC_PREVIEW_PARTITION,
@@ -28,6 +35,9 @@ import { registerHostFrameNavigationGuard } from './host-frame-navigation-guard'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { parseChromeExtensionUrl } from '../../../shared/browser/extensions/browser-extension-url'
 import { getBrowserExtensionSessionForProfile } from '../../browser/extensions/profile-sessions/browser-extension-session-loader'
+import { isBrowserExtensionEnabledInProfile } from '../../browser/extensions/web-store/browser-extension-webstore-service'
+import { isBrowserExtensionSupportEnabled } from '../../browser/extensions/browser-extension-support'
+import { holdWebviewFirstLoadForExtensions } from '../../browser/extensions/profile-sessions/browser-extension-page-start'
 import { installBrowserJavaScriptDialogs } from '../../browser/guest-lifecycle/prompts/browser-javascript-dialogs'
 import { installNativeChatVisualGuestTheme } from '../../host/native-chat-visual-guest-theme'
 import {
@@ -37,6 +47,13 @@ import {
   PLUGIN_FRAME_GUEST_RENDERER_ARGUMENTS
 } from '../../plugins/panels/guest-isolation/plugin-frame-guest-registry'
 import { attachBrowserPasswordGuest } from '../../browser-passwords/browser-password-guest-service'
+import {
+  admitBrowserExtensionSidePanelAttach,
+  isBrowserExtensionSidePanelAttachMarker,
+  startBrowserExtensionSidePanelGuest
+} from '../../browser/extensions/side-panel/browser-extension-side-panel-attach'
+import { associateBrowserExtensionSidePanelGuest } from '../../browser/extensions/side-panel/browser-extension-side-panel-guests'
+import { WEB_CONTENTS_MAX_LISTENERS_PER_EVENT } from '../web-contents-listener-budget'
 
 /** orca-preview is outside normal browser URL admission; require the doc partition and a main-minted user-preview grant. */
 function isAdmissibleDocPreviewAttach(partition: string, src: string): boolean {
@@ -49,17 +66,20 @@ function isAdmissibleDocPreviewAttach(partition: string, src: string): boolean {
 
 /**
  * Why its own rule: extension pages (options, tabs.create) are not typed URLs, so they attach only
- * in a local browser-profile partition whose session has that extension loaded — i.e. installed
- * and enabled for that profile. Route, SSH and doc-preview partitions never qualify.
+ * in a local browser-profile partition with that extension installed and enabled. Route, SSH and
+ * doc-preview partitions never qualify.
  */
-function isAdmissibleExtensionPageAttach(partition: string, src: string): boolean {
+function isAdmissibleExtensionPageAttach(profileId: string | null, src: string): boolean {
   const extensionUrl = parseChromeExtensionUrl(src)
-  if (!extensionUrl || !browserSessionRegistry.isAllowedPartition(partition)) {
+  if (!extensionUrl || !profileId || !isBrowserExtensionSupportEnabled()) {
     return false
   }
-  const profile = browserSessionRegistry.listProfiles().find((p) => p.partition === partition)
-  const sess = profile ? getBrowserExtensionSessionForProfile(profile.id) : null
-  return Boolean(sess?.extensions.getExtension(extensionUrl.extensionId))
+  // Loaded covers one Settings is still turning on; enabled covers one its profile has yet to load.
+  return Boolean(
+    getBrowserExtensionSessionForProfile(profileId)?.extensions.getExtension(
+      extensionUrl.extensionId
+    ) || isBrowserExtensionEnabledInProfile(profileId, extensionUrl.extensionId)
+  )
 }
 
 export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): void {
@@ -77,7 +97,19 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     }
   })
   // These WebContents own every preview and its failure sink; destruction leaves no readers.
+  const mainWebContentsId = mainWindow.webContents.id
+  const associateCreatedGuest = (_event: Electron.Event, guest: Electron.WebContents): void => {
+    // Each browser subsystem watches a page's lifetime, so a restore alone passes Node's default 10.
+    if (guest.getType() === 'webview') {
+      guest.setMaxListeners(WEB_CONTENTS_MAX_LISTENERS_PER_EVENT)
+    }
+    associateBrowserPageAttach(guest)
+    associateBrowserExtensionSidePanelGuest(guest)
+  }
+  app.on('web-contents-created', associateCreatedGuest)
   mainWindow.webContents.on('destroyed', () => {
+    app.off('web-contents-created', associateCreatedGuest)
+    closeBrowserMemoryRenderer(mainWebContentsId)
     setDocPreviewFailureSink(null)
     revokeAllDocPreviewGrants()
   })
@@ -90,6 +122,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
   const pluginFrameGuestPreload = join(__dirname, 'plugin-frame-guest-preload.js')
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     const src = typeof params.src === 'string' ? params.src : ''
+    let attachArgument: string | null = null
     const normalizedSrc = normalizeBrowserNavigationUrl(src)
     const partition = typeof webPreferences.partition === 'string' ? webPreferences.partition : ''
     // Plugin partitions are their own rule: never a browser guest, never another plugin's origin.
@@ -103,20 +136,43 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
       delete params.allowpopups
       return
     }
-    const isProfilePartition = browserSessionRegistry.isAllowedPartition(partition)
+    const profileId = browserSessionRegistry.profileIdForPartition(partition)
+    const isProfilePartition = profileId !== null
     const isRoutePartition = browserRouteSessionRegistry.isAllowedPartition(partition)
     // Direct-SSH partitions exist only after proxy verification; renderer URLs need no main-side grants, like profile partitions.
     const isLocalSshPartition = isLocalSshBrowserPartition(partition)
+    if (isBrowserPageAttachMarker(src)) {
+      try {
+        attachArgument = admitBrowserPageAttach(src, mainWindow.webContents.id, partition)
+      } catch {
+        event.preventDefault()
+        return
+      }
+    }
     const isDocPreviewAttach = isAdmissibleDocPreviewAttach(partition, src)
-    const isExtensionPageAttach = isAdmissibleExtensionPageAttach(partition, src)
+    const isExtensionPageAttach = isAdmissibleExtensionPageAttach(profileId, src)
+    // Why a main-minted marker: main must know a panel guest before it loads, and picks its page.
+    let isSidePanelAttach = false
+    if (isBrowserExtensionSidePanelAttachMarker(src)) {
+      if (
+        !profileId ||
+        !isBrowserExtensionSupportEnabled() ||
+        !admitBrowserExtensionSidePanelAttach(src, mainWindow.webContents.id, partition)
+      ) {
+        event.preventDefault()
+        return
+      }
+      isSidePanelAttach = true
+    }
 
     // Require an allowlisted src/partition; renderer mistakes must not grant preload/Node authority.
     if (
       !isDocPreviewAttach &&
       !isExtensionPageAttach &&
-      (!normalizedSrc ||
+      !isSidePanelAttach &&
+      ((!normalizedSrc && !attachArgument) ||
         (!isProfilePartition && !isRoutePartition && !isLocalSshPartition) ||
-        (isRoutePartition && normalizedSrc !== ORCA_BROWSER_BLANK_URL))
+        (isRoutePartition && normalizedSrc !== ORCA_BROWSER_BLANK_URL && !attachArgument))
     ) {
       event.preventDefault()
       return
@@ -129,6 +185,9 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     delete (webPreferences as Record<string, unknown>).preloadURL
     // Electron 43 omits inherited arguments; clear defensively so future inheritance cannot leak browser-host identity.
     delete webPreferences.additionalArguments
+    if (attachArgument || isSidePanelAttach) {
+      delete params.src
+    }
     webPreferences.nodeIntegration = false
     // Iframes need the passkey watch and framed extension pages; sandboxed, it only runs the preloads per frame.
     webPreferences.nodeIntegrationInSubFrames = !isDocPreviewAttach
@@ -142,10 +201,19 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     Object.assign(webPreferences, ORCA_BROWSER_GUEST_WEB_PREFERENCES)
     // Preserve only the registry-validated partition so isolated profiles keep their storage.
     webPreferences.partition = partition
+    if (profileId) {
+      // A profile starts its extensions with its first tab, not at launch.
+      browserSessionRegistry.attachExtensions(profileId)
+      holdWebviewFirstLoadForExtensions(mainWindow.webContents, profileId, params)
+    }
   })
 
   mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
     if (attachPluginFrameGuest(guest, mainWindow.webContents)) {
+      return
+    }
+    // Side panels keep the action popup's own link and navigation policy, not a tab's.
+    if (startBrowserExtensionSidePanelGuest(guest)) {
       return
     }
     if (isDocPreviewSession(guest.session)) {
@@ -161,10 +229,13 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     browserManager.attachGuestPolicies(guest)
     installBrowserJavaScriptDialogs(guest, () => browserManager.resolvePagePromptTarget(guest))
     // Route guests stay blank until exact main-owned registration and override generic popup routing.
-    browserRouteWebContentsRegistry.attachGuest(guest)
+    const routeGuest = browserRouteWebContentsRegistry.attachGuest(guest)
     // Proxies cannot block WebRTC UDP; enforce it per WebContents.
     enforceLocalSshWebRtcPolicyForGuest(guest)
     attachBrowserPasswordGuest(guest)
+    if (!routeGuest) {
+      startBrowserPageAttach(guest)
+    }
   })
 }
 

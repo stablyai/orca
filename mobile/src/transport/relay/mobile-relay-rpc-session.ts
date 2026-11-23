@@ -2,8 +2,8 @@ import type { MobileRelayRpcSession } from './mobile-relay-rpc-session-contract'
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../src/shared/abort-signal-reason'
-import { sharedPromiseSettlementWaiters } from '../../../../src/shared/promise-settlement-waiters'
+} from '../../../../src/shared/concurrency/abort-signal-reason'
+import { sharedPromiseSettlementWaiters } from '../../../../src/shared/concurrency/promise-settlement-waiters'
 import {
   PairingGetEndpointsResultSchema,
   type DeviceResumeConfirmed,
@@ -29,7 +29,7 @@ import {
   RpcSessionLivenessWatchdog
 } from '../rpc/rpc-session-liveness-watchdog'
 import { settleMobileRuntimeCapabilities } from '../connection/mobile-runtime-capability-negotiation'
-import type { RelayHostCloseReason } from '../../../../src/shared/relay-host-close-reason'
+import type { RelayHostCloseReason } from '../../../../src/shared/remote-runtime/relay/relay-host-close-reason'
 
 import type { ConnectionLogSink } from '../../diagnostics/connection/connection-log-types'
 import type { ConnectionState } from '../connection/connection-state'

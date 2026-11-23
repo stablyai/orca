@@ -99,3 +99,80 @@ export const antigravitySignIn = defineFixture({
     </div>
   )
 })
+
+export const conversationInOtherFolder = defineFixture({
+  width: 720,
+  render: () => (
+    <div className="native-chat-appearance p-4">
+      <NativeChatComposerNotices
+        notices={structuredSessionNotices({
+          launch: {
+            lifecycle: 'failed',
+            failure: {
+              kind: 'refused',
+              code: 'agent_session_identity_required',
+              details: { reason: 'transcriptUnreadable', otherFolder: true }
+            },
+            retry: () => {}
+          },
+          agentLabel: 'Claude',
+          sessionError: null,
+          composerError: null
+        })}
+      />
+    </div>
+  )
+})
+
+function codexTooOld(phase: 'idle' | 'running' | 'failed', hostName = 'this computer') {
+  return defineFixture({
+    width: 720,
+    render: () => (
+      <div className="native-chat-appearance p-4">
+        <NativeChatComposerNotices
+          notices={structuredSessionNotices({
+            launch: {
+              lifecycle: 'failed',
+              failure: {
+                kind: 'refused',
+                code: 'agent_session_operation_invalid',
+                details: {
+                  agentInstallation: {
+                    agent: 'codex',
+                    installedVersion: '0.130.0',
+                    minimumVersion: '0.136.0'
+                  }
+                }
+              },
+              retry: () => {}
+            },
+            agentLabel: 'Codex',
+            hostName,
+            sessionError: null,
+            composerError: null,
+            setup: {
+              signIn: null,
+              install: null,
+              update: {
+                update: null,
+                run:
+                  phase === 'running'
+                    ? { phase }
+                    : phase === 'failed'
+                      ? { phase, output: 'npm error code EACCES', finishedAt: 0 }
+                      : null,
+                start: async () => false,
+                openFailure: () => {}
+              }
+            }
+          })}
+        />
+      </div>
+    )
+  })
+}
+
+export const codexTooOldUpdate = codexTooOld('idle')
+export const codexTooOldUpdating = codexTooOld('running')
+export const codexTooOldUpdateFailed = codexTooOld('failed')
+export const codexTooOldOnServer = codexTooOld('idle', 'Build server')

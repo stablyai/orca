@@ -1,5 +1,5 @@
-import type { GlobalSettings } from '../../shared/global-settings-types'
-import { voiceModelUnloadDelayMs } from '../../shared/voice-model-unload'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
+import { voiceModelUnloadDelayMs } from '../../shared/speech/models/voice-model-unload'
 import { findSpeechSttService, getSpeechSttService } from './speech-runtime-service'
 
 type SpeechWarmupStore = {

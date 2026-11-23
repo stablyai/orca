@@ -1,6 +1,9 @@
 import { sha256 } from '@noble/hashes/sha256'
 import { describe, expect, it, vi } from 'vitest'
 import { computeMobileWebBundleId } from '../../../../src/shared/mobile-web-bundle/manifest-contract'
+import { createFakeGenerationFileSystem } from '../../mobile-web-shell/generations/generation-file-system-fake'
+import { createGenerationStore } from '../../mobile-web-shell/generations/generation-store'
+import { deriveHostCacheKey } from '../../mobile-web-shell/generations/host-cache-key'
 import { fetchMobileWebBundle } from './mobile-web-bundle-fetch'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
 
@@ -157,5 +160,34 @@ describe('fetchMobileWebBundle', () => {
     const failed = fetchMobileWebBundle({ client: host.client })
     await expect(failed).rejects.toThrow(/index\.html hashed [0-9a-f]{64}, not/)
     expect(await refusalOf(failed)).toBe('asset-checksum-mismatch')
+  })
+
+  it('reads only what a failed fetch of the same build did not verify', async () => {
+    const store = createGenerationStore({ fileSystem: createFakeGenerationFileSystem() })
+    const hostKey = deriveHostCacheKey('host-a')
+    let linkUp = false
+    const host = bundleHost(
+      { 'a.txt': 'aaaaaaaa', 'b.txt': 'bb' },
+      {
+        intercept: (call) =>
+          !linkUp && paramField(call.params, 'path') === 'b.txt' ? new Error('link cut') : undefined
+      }
+    )
+    const fetchBuild = async () =>
+      fetchMobileWebBundle({
+        client: host.client,
+        reusable: await store.openReusableAssets(hostKey, host.manifest)
+      })
+
+    await expect(fetchBuild()).rejects.toThrow('link cut')
+    linkUp = true
+    host.calls.length = 0
+    const fetched = await fetchBuild()
+
+    expect(fetched.reused).toEqual(['a.txt'])
+    expect(host.calls.map((call) => paramField(call.params, 'path') ?? call.method)).toEqual([
+      'mobileWeb.bundle.manifest',
+      'b.txt'
+    ])
   })
 })

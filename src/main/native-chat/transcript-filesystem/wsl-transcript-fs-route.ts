@@ -1,4 +1,4 @@
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 
 /** Isolate distro/spelling consistently across gate and process ownership.
  * wsl$ and wsl.localhost remain distinct: provider behavior may differ, so each has its own deadlines. */

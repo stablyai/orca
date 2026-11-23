@@ -1,24 +1,26 @@
 import type { TerminalForegroundObservation } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
-import { pruneRetiredPtyIncarnations } from '../../../shared/retired-pty-incarnations'
+import { pruneRetiredPtyIncarnations } from '../../../shared/terminal/pty/lifecycle/retired-pty-incarnations'
 import { getInspectableTerminalHostSession } from './terminal-host-session-access'
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
-import type { RemoteForegroundEvidence } from '../../../shared/foreground-process-evidence'
-import { getCheapProcessTableSnapshot } from '../../../shared/cheap-process-table-snapshot-reader'
-import { getStrictProcessTableSnapshotWithAge } from '../../../shared/process-table-snapshot-reader'
+import type { RemoteForegroundEvidence } from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
+import { getStrictProcessTableSnapshotWithAge } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
 import { resolveRemoteForegroundEvidence } from '../../providers/foreground/agent-process-batch'
-import { buildPaneProcessFingerprint } from '../../providers/foreground/posix-pane-fingerprint'
 import type { Session } from '../sessions/session'
 import { resolveSpawnFileForegroundFromRows } from '../pty-subprocess/spawn-file-foreground-process'
 import { inspectSpawnFileChildProcessesFromRows } from '../pty-subprocess/spawn-file-child-processes'
 import {
   clearSteadyStateAnchor,
-  getSteadyStateAnchor,
+  readAnchoredForeground,
   rememberSteadyStateAnchor
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
-import type { PtyProcessInspectionOptions } from '../../providers/pty/process-inspection'
+import { readProvenIdleShell, rememberIdleShellProof } from './terminal-host-idle-shell-proof'
+import {
+  steadyPollJudgesByJobMembership,
+  type PtyProcessInspectionOptions
+} from '../../providers/pty/process-inspection'
 
 export type TerminalHostProcessInspection = {
   foregroundObservation?: TerminalForegroundObservation
@@ -30,7 +32,7 @@ export type TerminalHostProcessInspection = {
 
 type RetiredIncarnation = { incarnationId: string; code: number; expiresAt: number }
 
-/** Cheap POSIX polls reuse anchored identity; unresolved reads escalate to full evidence capture. */
+/** Cheap POSIX polls reuse anchored identity from per-pid reads; a mismatch escalates to full evidence capture. */
 export type TerminalHostInspectionTier = 'full' | 'cheap'
 
 export async function inspectTerminalHostProcess(args: {
@@ -41,6 +43,8 @@ export async function inspectTerminalHostProcess(args: {
   foregroundOnly?: boolean
   /** The caller is a self-correcting poll that only reads the process name, never evidence. */
   steadyState?: boolean
+  /** A steady poll from a pane tracking no agent; Windows skips the Store-shell table read. */
+  jobMembershipOnly?: boolean
   ignoreDetached?: boolean
   retiredIncarnation?: RetiredIncarnation
   authorityGeneration: string
@@ -94,6 +98,23 @@ export async function inspectTerminalHostProcess(args: {
       }
     }
   }
+  // Idle shell panes poll forever; a recent full capture plus the PTY's foreground group answers them in O(1).
+  if (
+    args.steadyState === true &&
+    args.jobMembershipOnly === true &&
+    incarnationMatches &&
+    process.platform === 'darwin' &&
+    !session.processNameIsSpawnFile
+  ) {
+    const shell = await readProvenIdleShell(
+      session,
+      () => !args.currentSession || args.currentSession() === session
+    )
+    if (shell !== null) {
+      args.onTier?.('cheap')
+      return { foregroundProcess: shell, hasChildProcesses: false }
+    }
+  }
   if (args.steadyState === true && incarnationMatches) {
     const anchored = await readAnchoredForeground(session)
     if (anchored !== null) {
@@ -121,13 +142,18 @@ export async function inspectTerminalHostProcess(args: {
     // A steady-state poll never decides adoption or close, so it may read the cached process table.
     childProcessEvidence = await session.inspectChildProcesses(
       args.steadyState !== true,
-      args.ignoreDetached === true
+      args.ignoreDetached === true,
+      steadyPollJudgesByJobMembership(args, foregroundProcess)
     )
     // Windows cannot provide this POSIX evidence; avoid spawning an MSYS ps.exe console.
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {
     try {
+      const outputChunks = session.outputChunks
       const snapshot = await getStrictProcessTableSnapshotWithAge()
+      if (process.platform === 'darwin' && !session.processNameIsSpawnFile) {
+        rememberIdleShellProof(session, snapshot.rows, snapshot.capturedAgeMs, outputChunks)
+      }
       if (session.processNameIsSpawnFile) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)
         foregroundProcess = observed.available ? observed.processName : foregroundProcess
@@ -177,26 +203,6 @@ export async function inspectTerminalHostProcess(args: {
         : childProcessEvidence !== 'no-children',
     ...(childProcessEvidence === undefined ? {} : { childProcessEvidence }),
     foregroundProcessEvidence: evidence
-  }
-}
-
-/** Reuse identity only while the pane fingerprint and raw foreground name still match the full capture. */
-async function readAnchoredForeground(session: Session): Promise<string | null> {
-  const anchor = getSteadyStateAnchor(session)
-  if (process.platform === 'win32' || !anchor) {
-    return null
-  }
-  if (session.getForegroundProcess({ rawFallback: true }) !== anchor.rawFallback) {
-    return null
-  }
-  try {
-    const observed = await buildPaneProcessFingerprint(
-      await getCheapProcessTableSnapshot(),
-      session.pid
-    )
-    return observed !== null && observed === anchor.fingerprint ? anchor.agentName : null
-  } catch {
-    return null
   }
 }
 

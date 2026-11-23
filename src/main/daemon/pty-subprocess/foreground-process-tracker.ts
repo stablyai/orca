@@ -20,7 +20,7 @@ import {
 import {
   shouldInspectOuterWrapperForegroundName,
   shouldInspectOuterWrapperForegroundProcess
-} from '../../../shared/foreground-wrapper-agent'
+} from '../../../shared/agent-status/process/foreground-wrapper-agent'
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import { resolveFallbackForegroundProcess } from './foreground-fallback-process'
 import { parsePtySessionId } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'

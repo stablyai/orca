@@ -9,7 +9,7 @@ import {
 import { recordSessionScanIssue, scanIssueTextFromError } from '../../parsing/session-scan-issues'
 import { discoverOpenCodeSessions } from './sqlite/session-scanner-opencode-sqlite-discovery'
 import { listOpenCode2SqliteSessionsViaWorker } from './reader-transport/session-scanner-opencode-sqlite-worker-spawn'
-import { isOpenCodeV2DatabaseName } from '../../../../shared/opencode-database-name'
+import { isOpenCodeV2DatabaseName } from '../../../../shared/agent-session/lifecycle/provider-handles/opencode-database-name'
 import type { AiVaultScanOptions, SessionFileDiscovery } from '../../session-scanner-types'
 import { scopeWalksAgentFiles } from '../../scope/session-scope-cwd'
 
@@ -35,6 +35,7 @@ export function opencodeDiscoveries(
           limitPerAgent: limit,
           issues,
           scopePaths: options.scopePaths,
+          statCache: options.statCache,
           signal: options.signal
         })
       ),

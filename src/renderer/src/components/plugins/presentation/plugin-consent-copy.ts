@@ -29,7 +29,7 @@ export function pluginTrustWarnings(trust: PluginTrust, t: Translate = translate
     warnings.push(
       t(
         'auto.components.settings.PluginConsentDialog.fullAccessWarning',
-        'Full access: runs as a normal program and can read your files, use the network, run other programs and control Orca, including your terminals and agents.'
+        'Full access: runs as a normal program and can read your files, use your saved logins and SSH keys, use the network, run other programs and control Orca, including your terminals and agents.'
       )
     )
   }

@@ -2,16 +2,16 @@ import type { CommandHandler } from '../../dispatch/dispatch'
 import { printResult } from '../../output/command-result-output'
 import { withReceiptNext } from '../receipt-next-text'
 import { getOptionalStringFlag, getPresentStringFlag } from '../../arguments/flags'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import type { RuntimeClient } from '../../runtime/client'
-import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { getOptionalPositiveIntegerValueFlag } from '../numeric-flags'
 import { isDevCliInvocation } from '../recovery/runtime-compatibility'
 import { resolveCoordinatorTerminalHandle } from '../identity/terminal-identity'
 import { formatWorkerStart, type WorkerReleaseReceipt } from './worker-output'
-import { isUnobservedTurnStart, WORKER_START_VIEW } from './worker-start-agent-view'
+import { isLiveWorkerStart, WORKER_START_VIEW } from './worker-start-agent-view'
 import {
   printOrchestrationResult,
   renderOrchestrationArgv,
@@ -47,6 +47,8 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     const taskTitle = getOptionalStringFlag(flags, 'task-title')
     const deps = getOptionalStringFlag(flags, 'deps')
     const parent = getOptionalStringFlag(flags, 'parent')
+    const item = getOptionalStringFlag(flags, 'item')
+    const forQuestion = getOptionalStringFlag(flags, 'for')
     const result = await callOrchestrationMutation<{
       runId: string
       taskId: string
@@ -66,6 +68,9 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       ...(taskTitle ? { taskTitle } : {}),
       ...(deps ? { deps } : {}),
       ...(parent ? { parent } : {}),
+      // The host checks the caller is a bot's own chat and the item is open, then records it.
+      ...(item ? { origin: `bot-item:${item}` } : {}),
+      ...(forQuestion ? { forQuestion } : {}),
       on: getOptionalStringFlag(flags, 'on'),
       worktree: getOptionalStringFlag(flags, 'worktree'),
       name: getOptionalStringFlag(flags, 'name'),
@@ -90,8 +95,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       process.exitCode = 1
     }
     const keepOpenState =
-      (flags.has('keep-open') || startsInNewWorkspace(flags)) &&
-      (result.result.state === 'ready' || isUnobservedTurnStart(result.result))
+      (flags.has('keep-open') || startsInNewWorkspace(flags)) && isLiveWorkerStart(result.result)
         ? await keepWorkerOpen(client, result.result.dispatchId)
         : undefined
     const renderedResult = {
@@ -136,7 +140,7 @@ function startsInNewWorkspace(flags: Map<string, string | boolean>): boolean {
 }
 
 // Every host version serves workerRetain, so older servers keep the worker open too.
-async function keepWorkerOpen(client: RuntimeClient, dispatch: string): Promise<string> {
+export async function keepWorkerOpen(client: RuntimeClient, dispatch: string): Promise<string> {
   try {
     const { result } = await client.call<WorkerReleaseReceipt>('orchestration.workerRetain', {
       dispatch

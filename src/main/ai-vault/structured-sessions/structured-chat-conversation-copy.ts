@@ -1,6 +1,6 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { agentForksThroughChat } from '../../../shared/agent-launch/startup/agent-resume-argv'
-import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult

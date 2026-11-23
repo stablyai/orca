@@ -1,5 +1,5 @@
 // WSL opt-in: one exec asks both "is the pinned runtime cached?" and "is this slot complete?".
-import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
+import type { NodeRuntimeTarget } from '../../../shared/node-runtime/node-runtime-pin'
 import type { OrcadHostTransport } from './orcad-host-transport'
 import { REMOTE_NODE_RUNTIME_READY } from './orcad-remote-node-runtime-report'
 import { probeRemoteInstallCompleteCommand } from './remote-install-completeness-command'

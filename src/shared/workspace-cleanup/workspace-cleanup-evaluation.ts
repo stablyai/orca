@@ -37,6 +37,7 @@ export type WorkspaceCleanupKeepCause =
   | 'archive-unavailable'
   | 'archive-script'
   | 'removing'
+  | 'folder-workspace-sibling'
 
 export type WorkspaceCleanupWaiting = { elapsedDays: number; afterDays: number }
 
@@ -190,4 +191,29 @@ export function evaluateWorkspaceCleanup(
   return policy.inactiveActionSupported
     ? { action: 'archive', reason }
     : { action: 'keep', cause: 'archive-unavailable', reason }
+}
+
+export type WorkspaceCleanupFolderVerdict = {
+  /** Host identity: a same-id worktree on another host is a different sibling. */
+  identity: string
+  /** The other worktrees listed under the same folder workspace, by host identity. */
+  folderSiblings: readonly string[]
+  evaluation: WorkspaceCleanupEvaluation
+}
+
+/** A folder workspace needs every repo's checkout: its worktrees go together or not at all. */
+export function keepFolderWorkspaceSiblings(
+  verdicts: readonly WorkspaceCleanupFolderVerdict[]
+): WorkspaceCleanupEvaluation[] {
+  // A sibling with no verdict here (another host's, say) is not known to go, so it stays.
+  const going = new Set(
+    verdicts
+      .filter(({ evaluation }) => evaluation.action !== 'keep' || evaluation.cause === 'removing')
+      .map((verdict) => verdict.identity)
+  )
+  return verdicts.map(({ folderSiblings, evaluation }) =>
+    evaluation.action !== 'keep' && folderSiblings.some((id) => !going.has(id))
+      ? { action: 'keep', cause: 'folder-workspace-sibling', reason: evaluation.reason }
+      : evaluation
+  )
 }

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { SourceControlGroupOrder } from '../../../../src/shared/ui-chrome-types'
+import type { SourceControlGroupOrder } from '../../../../src/shared/ui-chrome/ui-chrome-types'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { buildMobileSourceControlSections } from './mobile-git-status'
 import type { MobileGitStatusEntry } from '../git/git-status-reply-schema'

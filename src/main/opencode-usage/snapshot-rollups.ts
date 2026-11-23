@@ -7,7 +7,7 @@ import type {
   OpenCodeUsageScope,
   OpenCodeUsageSessionRow,
   OpenCodeUsageSummary
-} from '../../shared/opencode-usage-types'
+} from '../../shared/agent-usage/analytics/opencode-usage-types'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from './types'
 
 function addCost(left: number | null, right: number | null): number | null {

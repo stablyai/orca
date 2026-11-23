@@ -6,11 +6,11 @@ import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibilit
 import type {
   EnvironmentDoctorCheck,
   EnvironmentDoctorResult
-} from '../../../../shared/environment-doctor-types'
+} from '../../../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 import {
   ENVIRONMENT_DOCTOR_METHOD,
   ENVIRONMENT_DOCTOR_RUNTIME_CAPABILITY
-} from '../../../../shared/environment-doctor-runtime'
+} from '../../../../shared/workspace-setup/environment-doctor/environment-doctor-runtime'
 import {
   awaitVmEnvironmentCheckDecision,
   beginVmEnvironmentCheckRun,

@@ -11,7 +11,7 @@ import {
   pluginGitFetchCommitArgs
 } from '../../../shared/plugins/installation/plugin-git-arguments'
 import { gitExecFileAsync, gitExecFileAsyncBuffer } from '../../git/command-runner/git-exec-file'
-import { MAX_PLUGIN_TOTAL_BYTES } from '../plugin-content-hash'
+import { MAX_PLUGIN_TOTAL_BYTES } from '../artifacts/plugin-content-hash'
 import { materializePluginGitTree, type PluginGitBytesRunner } from './plugin-git-tree'
 
 const PLUGIN_GIT_TIMEOUT_MS = 120_000

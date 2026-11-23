@@ -10,7 +10,7 @@ import {
   getRequiredStringFlag,
   getRequiredStringFlagAllowingEmpty
 } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { getBrowserCommandTarget } from './browser-command-target'
 
 function getOptionalCookieExpiry(flags: Map<string, string | boolean>): number | undefined {

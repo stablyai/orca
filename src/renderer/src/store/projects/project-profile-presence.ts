@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
-import type { Repo } from '../../../../shared/repo-types'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 
 export function formatProjectPresenceProfileNames(profileNames: readonly string[]): string {

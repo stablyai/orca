@@ -11,7 +11,7 @@ import type {
   GitHubWorkItem,
   ListWorkItemsResult
 } from '../../../shared/github/work-items/work-item-types'
-import type { GitHubCreateIssueResult } from '../../../shared/issue-mutation-types'
+import type { GitHubCreateIssueResult } from '../../../shared/work-items/issue-mutation-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { PreloadApi } from '../../api-types'
 
@@ -26,6 +26,7 @@ export const ghPullRequestsAndWorkItemsApi = {
     repoId?: string | null
     branch: string
     linkedPRNumber?: number | null
+    linkedPRUrl?: string
     fallbackPRNumber?: number | null
     acceptMergedFallbackPR?: boolean
     currentHeadOid?: string | null
@@ -53,6 +54,7 @@ export const ghPullRequestsAndWorkItemsApi = {
     repoId?: string | null
     sourceContext?: TaskSourceContext | null
     number: number
+    ownerRepo?: GitHubOwnerRepo
   }) => ipcRenderer.invoke('gh:issue', args),
   workItem: (args: {
     repoPath: string
@@ -207,5 +209,6 @@ export const ghPullRequestsAndWorkItemsApi = {
     prNumber: number
     method?: 'merge' | 'squash' | 'rebase'
     prRepo?: GitHubOwnerRepo | null
+    expectedHeadSha?: string | null
   }): Promise<{ ok: true } | { ok: false; error: string }> => ipcRenderer.invoke('gh:mergePR', args)
 } satisfies Partial<PreloadApi['gh']>

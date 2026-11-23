@@ -1,7 +1,7 @@
 import {
   CODEX_MINIMUM_SUPPORTED_VERSION,
   parseCodexCliVersion
-} from '../../../../shared/codex-cli-installation'
+} from '../../../../shared/agent-launch/startup/codex-cli-installation'
 import {
   checkAgentCliVersion,
   readAgentCliVersion,

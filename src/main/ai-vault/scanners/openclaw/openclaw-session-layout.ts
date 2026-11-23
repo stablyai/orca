@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
-import { resolveAbsoluteDirOverride } from '../../../../shared/absolute-dir-override'
+import { resolveAbsoluteDirOverride } from '../../../../shared/file-access/absolute-dir-override'
 import type { AiVaultAgentSource } from '../../discovery/session-scanner-agent-sources'
 import { pathSegments } from '../../discovery/session-file-discovery'
 

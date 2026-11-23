@@ -1,5 +1,5 @@
-import { yieldToEventLoop } from '../../../../../shared/event-loop-yield'
-import { getUtf8ChunkEndIndex } from '../../../../../shared/utf8-byte-limits'
+import { yieldToEventLoop } from '../../../../../shared/concurrency/event-loop-yield'
+import { getUtf8ChunkEndIndex } from '../../../../../shared/text/utf8-byte-limits'
 import {
   createTextControlCancelledResult,
   createTextControlPastedResult,

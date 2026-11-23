@@ -1,4 +1,4 @@
-import { disambiguateSubagentLabels } from '../../../../../shared/native-chat/transcript/native-chat-subagent-items'
+import { disambiguateSubagentLabels } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-items'
 import type { NativeChatSubagentEntry } from '../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatSubagentRow } from '../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { nativeChatSubagentChain } from './native-chat-subagent-scope'

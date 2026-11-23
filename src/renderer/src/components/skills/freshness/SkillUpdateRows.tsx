@@ -3,15 +3,15 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 import type {
   BundledSkillOutcome,
   BundledSkillPlan
-} from '../../../../../shared/bundled-skill-plan'
+} from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import {
   bundledSkillOutcomeText,
   bundledSkillPlanState
-} from '../../../../../shared/bundled-skill-summary'
+} from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import type {
   BundledSkillPlanSkillSummary,
   BundledSkillPlanState
-} from '../../../../../shared/bundled-skill-summary'
+} from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'

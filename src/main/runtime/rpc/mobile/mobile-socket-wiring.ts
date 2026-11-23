@@ -9,7 +9,8 @@ import type { E2EEKeypair } from '../server/pairing/e2ee-keypair'
 import { E2EEChannel } from './e2ee/e2ee-channel'
 import type { E2EEAuthenticatedDevice } from '../server/mobile-e2ee-authenticated-device'
 import { createMobileE2EEOutboundMemoryBudget } from './e2ee/mobile-e2ee-outbound-memory-budget'
-import type { RuntimeCapability } from '../../../../shared/protocol-version'
+import type { RuntimeCapability } from '../../../../shared/remote-runtime/protocol/protocol-version'
+import { countIdleBlockingConnections } from './mobile-socket-idle-passive'
 import type { RpcBinarySender } from '../transports/rpc-binary-sender'
 import type { NetworkSourceClass } from '../transports/websocket/source-admission/network-source-class'
 
@@ -162,6 +163,14 @@ export class MobileSocketWiring {
 
   get connectionCount(): number {
     return this.connectionIds.size
+  }
+
+  /** Connections that keep a managed server from idling out; passive watchers don't, but a
+   *  socket still in its handshake does, since it can't have declared itself yet. */
+  get idleBlockingConnectionCount(): number {
+    return countIdleBlockingConnections(this.connectionIds.keys(), (ws) =>
+      this.authenticatedSockets.get(ws)
+    )
   }
 
   terminateDeviceConnections(deviceId: string): number {

@@ -4,7 +4,7 @@ import type {
 } from './agent-model-catalog-service-contract'
 import type { AgentModelCatalogReadOperation } from './agent-model-catalog-operation'
 import { agentModelCatalogReadRecords } from './agent-model-catalog-read-scope'
-import { usesModelSpecificAcpEfforts } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+import { usesModelSpecificAcpEfforts } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import type {
   AgentModelCatalogLaunch,
   AgentModelCatalogRefresh,

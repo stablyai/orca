@@ -8,7 +8,7 @@ import { useMobileSourceControlCommitRunners } from '../commits/use-mobile-sourc
 import { useMobileSourceControlActionSheetRunners } from './use-mobile-source-control-action-sheet-runners'
 import { useMobileStageAllRunner } from './use-mobile-stage-all-runner'
 import { useMobileConflictRunners } from '../conflicts/use-mobile-conflict-runners'
-import type { RuntimeGitLocalBranches } from '../../../../src/shared/runtime-worktree-contracts'
+import type { RuntimeGitLocalBranches } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import type { MobileGitStatusHostPayload as MobileGitStatusResult } from '../git/git-status-reply-schema'
 import type { LoadStatusOptions } from '../changes/mobile-source-control-screen-state'
 import type {

@@ -24,7 +24,7 @@ import {
 } from './diagnostic-bundle-upload'
 import { setActiveSink, startSpan } from './tracer'
 import { setSecurePathHardeningReporter } from '../../shared/secure-storage/secure-path-hardening-report'
-import { withTimeout } from '../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 
 const CI_ENV_VARS = [
   'CI',

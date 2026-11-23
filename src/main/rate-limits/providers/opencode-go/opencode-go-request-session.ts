@@ -6,7 +6,7 @@ import {
   normalizeProxyBypassRules,
   normalizeProxyUrl,
   type NetworkProxySettings
-} from '../../../../shared/network-proxy'
+} from '../../../../shared/network/network-proxy'
 
 export const OPENCODE_BASE_URL = 'https://opencode.ai'
 

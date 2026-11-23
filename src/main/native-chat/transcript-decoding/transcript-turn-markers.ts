@@ -1,6 +1,6 @@
 // Share provider boundary predicates so visible interruption rows and lifecycle settlement agree.
 
-import { extractString } from '../../../shared/trimmed-string'
+import { extractString } from '../../../shared/text/trimmed-string'
 
 export function claudeInterruptedMessageId(record: Record<string, unknown>): string | undefined {
   if (record.type !== 'user') {

@@ -1,4 +1,7 @@
-import { replaceRecordEntries, replaceTabBuckets } from '@/store/keyed-record-transitions'
+import {
+  replaceRecordEntries,
+  replaceTabBuckets
+} from '@/store/record-transitions/keyed-record-transitions'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
@@ -10,17 +13,13 @@ import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shu
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import '../../slices/agent-status/agent-status'
-import {
-  collectHibernatedCompletionEvidenceForWorktree,
-  collectSleepingAgentSessionRecordsForWorktree
-} from '../../slices/agent-status/agent-status-recovery-collection'
+import { collectSleepingAgentSessionRecordsForWorktree } from '../../slices/agent-status/sleep-recovery/agent-status-recovery-collection'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from '../terminal-state'
 import { equalStringSets, sortedUniquePtyIds } from '../pty/terminal-pty-identities'
 import { resolveTerminalPtyOwner } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { resolveTerminalTeardownOwner } from './terminal-teardown-owner'
-import { removePanesAttention } from '../../slices/workspace-attention/subject-attention-transitions'
 import { settleAttentionRemovedBy } from '../../slices/workspace-attention/attention-removal-follow-up'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { recordPaneSleepThroughLayoutOwner } from './terminal-sleep-layout-owner'
 
 export function createTerminalPaneHibernationActions(
@@ -77,13 +76,8 @@ export function createTerminalPaneHibernationActions(
           captureMode: 'completed-agent-hibernation'
         }
       )
-      const retainedCompletionEvidence = collectHibernatedCompletionEvidenceForWorktree(
-        state,
-        worktreeId,
-        paneKeys
-      )
       if (!sleepingAgentSessionRecords[opts.paneKey]) {
-        // Why: killing the PTY with no persisted resume record strands the pane unwakeable; abort instead of hibernating unrecoverably.
+        // Killing without a persisted resume record would strand the pane.
         throw new Error('agent_hibernation_capture_missing')
       }
       const capture = shutdownBufferCaptures.get(opts.tabId)
@@ -245,14 +239,11 @@ export function createTerminalPaneHibernationActions(
                   runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId
                 }
               : {}),
-            ...removePanesAttention(s, new Set([opts.paneKey])),
             lastTerminalInputAtByPaneKey: nextLastTerminalInputAtByPaneKey
           }
         })
       )
-      get().dropHibernatedAgentStatusPane(worktreeId, opts.paneKey, {
-        retainedCompletionEvidence
-      })
+      get().dropHibernatedAgentStatusPane(worktreeId, opts.paneKey)
     }
   }
 }

@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { agentSessionWriteNoticeText } from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
@@ -34,6 +34,7 @@ import {
   type QueuedMessageCard
 } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { NativeChatAgentMessageSenders } from '@/components/native-chat/messages/agent-senders/NativeChatAgentMessageSenders'
+import { NativeChatTypedByQueuedLine } from '@/components/native-chat/NativeChatTypedByTag'
 import { NativeChatPendingIcon } from '@/components/native-chat/queue/NativeChatPendingIcon'
 import type { QueuedMessagesPendingAction } from '@/components/native-chat/queue/use-structured-agent-session-queued-messages'
 import { useNativeChatClippedLine } from '@/components/native-chat/queue/use-native-chat-clipped-line'
@@ -75,10 +76,7 @@ export function queuedMessageCardCaption(
               'components.native-chat.queuedMessages.pausedSendFailedWaiting',
               "Couldn't send — press Send to retry once the agent finishes."
             )
-          : t(
-              'components.native-chat.queuedMessages.pausedSendFailed',
-              "Couldn't send — press Send to retry."
-            )
+          : t('components.native-chat.queuedMessages.couldNotSend', "Couldn't send")
       }
       return t('components.native-chat.queuedMessages.paused', 'Paused')
     case 'sending':
@@ -113,7 +111,7 @@ export function queuedMessageCardSendNow(
     label: t('components.native-chat.queuedMessages.steer', 'Steer'),
     hint: t(
       'components.native-chat.queuedMessages.steerHint',
-      'Submit without interrupting the model'
+      'Send now, while the agent keeps working'
     )
   }
 }
@@ -165,6 +163,7 @@ export function NativeChatQueuedMessageCard({
   const line = queuedMessageCardLine(card, nativeChatImageLabelCopy(t))
   const returned = card.state === 'returned'
   const attention = queuedMessageCardNeedsAttention(card)
+  const failed = attention && caption !== null
   const sendNow = queuedMessageCardSendNow(card, agentWorking, t)
   const busy = pending !== null
   const isMac = isMacPlatform()
@@ -174,6 +173,8 @@ export function NativeChatQueuedMessageCard({
   const textId = useId()
   const sender = card.from ? (
     <NativeChatAgentMessageSenders from={card.from} chatWorktreeId={chatWorktreeId} queued />
+  ) : card.typedByOther ? (
+    <NativeChatTypedByQueuedLine typist={card.typedByOther} />
   ) : null
   if (editor) {
     return (
@@ -229,17 +230,17 @@ export function NativeChatQueuedMessageCard({
         <div className="min-w-0 flex-1">
           {sender}
           {expanded ? null : (
-            <p ref={measureLine} className="truncate text-sm" title={line}>
+            <p ref={measureLine} className="truncate text-sm text-foreground" title={line}>
               {line}
             </p>
           )}
           {caption ? (
             <p
-              className={
-                returned
-                  ? 'truncate text-xs text-destructive'
-                  : 'truncate text-xs text-muted-foreground'
-              }
+              className={cn(
+                'truncate text-xs',
+                returned ? 'text-destructive' : 'text-muted-foreground',
+                failed && !card.waitsForAgent && 'can-hover:pointer-fine:@max-[400px]:sr-only'
+              )}
             >
               {attention && drag?.grip ? (
                 <AlertCircle
@@ -270,22 +271,27 @@ export function NativeChatQueuedMessageCard({
                     type="button"
                     variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
                     size="xs"
+                    data-queued-message-send
                     onClick={onSteer}
                     disabled={steerHeld || busy}
                   >
                     <NativeChatPendingIcon pending={pending === 'send'} className="size-3">
-                      {sendNow.steers ? (
+                      {failed && drag?.grip ? (
+                        <AlertCircle className="size-3 text-destructive" />
+                      ) : sendNow.steers ? (
                         <CornerDownRight className="size-3" />
                       ) : (
                         <Send className="size-3" />
                       )}
                     </NativeChatPendingIcon>
-                    {sendNow.label}
+                    {failed
+                      ? t('components.native-chat.queuedMessages.retry', 'Retry')
+                      : sendNow.label}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4}>
                   <span className="flex items-center gap-2">
-                    <span>{sendNow.hint}</span>
+                    <span>{failed ? caption : sendNow.hint}</span>
                     {showsSteerShortcut ? (
                       <ShortcutKeyCombo
                         keys={isMac ? ['⌘', '⇧', '⏎'] : ['Ctrl', 'Shift', 'Enter']}
@@ -314,8 +320,8 @@ export function NativeChatQueuedMessageCard({
                 {t('components.native-chat.queuedMessages.delete', 'Delete')}
               </TooltipContent>
             </Tooltip>
-            {/* A command's text is not a draft: edited, it would become a message. */}
-            {!card.command && onEdit ? (
+            {/* The host refuses these edits: a command would become a message, a run the owner's words. */}
+            {!card.notEditable && onEdit ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -345,7 +351,7 @@ export function NativeChatQueuedMessageCard({
       {expanded ? (
         <p
           id={textId}
-          className="scrollbar-sleek mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap break-words pl-5.5 text-sm"
+          className="scrollbar-sleek mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap break-words pl-5.5 text-sm text-foreground"
           style={nativeChatTextHasUnkernedRun(line) ? NATIVE_CHAT_UNKERNED_CSS : undefined}
         >
           {line}

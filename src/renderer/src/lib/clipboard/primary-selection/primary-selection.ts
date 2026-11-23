@@ -1,4 +1,4 @@
-import type { ReadClipboardTextOptions } from '../../../../../shared/clipboard-text'
+import type { ReadClipboardTextOptions } from '../../../../../shared/clipboard/clipboard-text'
 
 export const PRIMARY_SELECTION_MAX_LENGTH = 65_536
 const PRIMARY_SELECTION_MAX_BYTES = PRIMARY_SELECTION_MAX_LENGTH * 4
@@ -110,10 +110,4 @@ export async function readPrimarySelectionText(): Promise<string> {
   } catch {
     return primarySelectionText
   }
-}
-
-export function resetPrimarySelectionForTests(): void {
-  enabled = false
-  primarySelectionText = ''
-  nativePasteSuppressionUntil = 0
 }

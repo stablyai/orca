@@ -1,4 +1,4 @@
-import type { DiscoveredSkill } from '../../../../../shared/skills'
+import type { DiscoveredSkill } from '../../../../../shared/skills/discovery/skills'
 
 /** Mirrors `PLUGIN_NAME_PATTERN` in `skill-bundle-manifest.ts`: lowercase
  *  alphanumerics plus `.`/`-`, no `--`/`..`, no leading or trailing separator. */

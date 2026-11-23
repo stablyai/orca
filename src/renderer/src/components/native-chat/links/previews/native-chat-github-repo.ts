@@ -12,10 +12,10 @@ import type { AppState } from '@/store/types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { FILE_LINK_CONTEXT_INPUT_KEYS } from '../actions/native-chat-file-link-context'
 import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
-import { authorityKey } from '../../../../../../shared/host-authority'
+import { authorityKey } from '../../../../../../shared/execution-host/host-authority'
 import { githubPreviewRepoAuthorityKey } from './native-chat-github-route-repo'
-import type { Repo } from '../../../../../../shared/repo-types'
-import { isUnresolvedOwnerHostId } from '../../../../../../shared/execution-host'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import { isUnresolvedOwnerHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   githubHostFromIdentityKey,
   githubRepoIdentityKey,

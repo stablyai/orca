@@ -5,7 +5,7 @@ import {
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
-import { projectResolvedWorktreeLineage } from '../../../../../../shared/resolved-worktree-lineage'
+import { projectResolvedWorktreeLineage } from '../../../../../../shared/worktree/lineage/resolved-worktree-lineage'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import {
@@ -14,12 +14,12 @@ import {
   type PairedServerWorkspaceRow
 } from '../../../../../../shared/sidebar-list/feed-facts/paired-server-rows'
 import { describePairedServerHosts } from '../../../../../../shared/remote-runtime/host-catalog/paired-server-hosts'
-import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 import { validCrossStoreLineage } from '../../../../../../shared/worktree/lineage/cross-store-lineage-records'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { folderLineageEdgeOf } from '../../../../../../shared/worktree/lineage/folder-lineage-parents'
 
 /** The paired-server rows the window fetched itself, keyed by host-qualified id, for these hosts. */

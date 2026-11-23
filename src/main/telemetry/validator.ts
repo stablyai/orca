@@ -2,10 +2,10 @@
 
 import {
   commonPropsSchema,
-  eventSchemas,
   type EventName,
   type EventProps
-} from '../../shared/telemetry-events'
+} from '../../shared/telemetry/telemetry-event-classification'
+import { eventSchemas } from '../../shared/telemetry/telemetry-event-registry'
 
 export type ValidationResult<N extends EventName> =
   | { ok: true; props: EventProps<N> }

@@ -1,5 +1,5 @@
-import { sameRuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
+import { sameRuntimeBrowserPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { admitModernAdoptions } from './runtime-browser-client-page-modern-adoption'
 import { BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserClientHostedPageInventory } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'

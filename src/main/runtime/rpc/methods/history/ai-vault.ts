@@ -1,5 +1,6 @@
 import { prepareStructuredChatCliFork } from '../../../../ai-vault/structured-sessions/structured-chat-cli-fork'
 import { writeAiVaultSessionHandoffSnapshot } from '../../../../ai-vault/session-handoff-snapshot'
+import { prepareAiVaultSessionHandoffPrompts } from '../../../../ai-vault/session-handoff-prompt'
 import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusRequestSchema,
@@ -15,8 +16,8 @@ import { conditionalAiVaultListResult } from '../../../../ai-vault/listing/sessi
 import { restampAiVaultListResult } from '../../../../ai-vault/listing/session-list-results'
 import { copyStructuredChatConversation } from '../../../../ai-vault/structured-sessions/structured-chat-conversation-copy'
 import type { AiVaultPrepareSessionResumeArgs } from '../../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { isWslUncPath } from '../../../../../shared/wsl-paths'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import { describeAiVaultScanError } from '../../../../../shared/ai-vault/scanning/ai-vault-scan-error-message'
 import {
   assertLegacyAiVaultResumeAllowed,
@@ -26,7 +27,7 @@ import {
 import {
   ensureStructuredAgentSessionHostUnlessRefused,
   tryEnsureStructuredAgentSessionHostForResume
-} from '../../../agent-session/structured-agent-session-host-refusal'
+} from '../../../agent-session/installation/structured-agent-session-host-refusal'
 import {
   clientOpensStructuredChatFromHistory,
   supportsStructuredAgentSessions
@@ -35,6 +36,7 @@ import {
   AiVaultDeleteSessionParams,
   AiVaultListSessionsParams,
   AiVaultPrepareSessionHandoffParams,
+  AiVaultPrepareSessionHandoffPromptParams,
   AiVaultPrepareSessionResumeParams,
   AiVaultSessionTitlesParams
 } from '../../../../../shared/rpc-contract/ai-vault/ai-vault-params'
@@ -171,6 +173,12 @@ export const AI_VAULT_METHODS = [
     permission: 'workspace',
     params: AiVaultPrepareSessionHandoffParams,
     handler: (params) => writeAiVaultSessionHandoffSnapshot(params)
+  }),
+  defineMethod({
+    name: 'aiVault.prepareSessionHandoffPrompt',
+    permission: 'workspace',
+    params: AiVaultPrepareSessionHandoffPromptParams,
+    handler: (params) => prepareAiVaultSessionHandoffPrompts(params)
   }),
   defineMethod({
     name: 'aiVault.deleteSession',

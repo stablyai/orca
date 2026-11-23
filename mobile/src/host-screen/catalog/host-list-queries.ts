@@ -3,8 +3,8 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../src/shared/execution-host'
-import { MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY } from '../../../../src/shared/mobile-desktop-relay-contract'
+} from '../../../../src/shared/execution-host/execution-host'
+import { MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/relay/mobile-desktop-relay-contract'
 import type { MobileRelayHost } from '../../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { Query, QueryClient } from '@tanstack/react-query'
 import { defineHostQuery } from '../../query/host-query'
@@ -16,14 +16,15 @@ import {
   NO_SERVER_WORKSPACES,
   ServerRowSnapshots,
   type ServerWorkspaces
-} from '../../worktree/server-workspaces'
+} from '../../worktree/execution-hosts/server-workspaces'
 import {
   readWorktreeCatalogSnapshot,
   type WorktreeCatalogSnapshot
-} from '../../worktree/worktree-catalog-snapshot-client'
-import type { Worktree } from '../../worktree/workspace-list-types'
+} from '../../worktree/catalog/worktree-catalog-snapshot-client'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import {
   hostRepoCatalogRepos,
+  hostRepoIconIdsSchema,
   hostSshTargetSummarySchema,
   type HostRepoCatalogRow
 } from '../host-screen-reply-schema'
@@ -173,7 +174,11 @@ export const hostServerWorkspacesQuery = defineHostQuery<{ deltas: boolean }, Se
   }
 })
 
-export type HostRepoCatalog = { snapshotId: string | null; catalog: HostRepoCatalogRow[] }
+export type HostRepoCatalog = {
+  snapshotId: string | null
+  catalog: HostRepoCatalogRow[]
+  repoIconIds: Readonly<Record<string, string>>
+}
 
 async function readHostRepoCatalog(
   client: RpcClient,
@@ -189,7 +194,7 @@ async function readHostRepoCatalog(
   }
   const { value } = repos
   if (value.kind === 'catalog') {
-    return { snapshotId: value.snapshotId, catalog: value.repos }
+    return { snapshotId: value.snapshotId, catalog: value.repos, repoIconIds: value.repoIconIds }
   }
   // An unchanged reply for a token the cache no longer holds asks again in full.
   return value.snapshotId === held?.snapshotId ? held : readHostRepoCatalog(client, undefined)
@@ -204,8 +209,13 @@ export const hostRepoCatalogQuery = defineHostQuery<typeof NO_HOST_LIST_INPUT, H
   refetchOnWindowFocus: true,
   signal: { events: ['reposChanged'] },
   persist: {
-    version: 1,
-    dataSchema: z.object({ snapshotId: z.string().nullable(), catalog: hostRepoCatalogRepos })
+    // 2: icon ids; a version-1 cache would hold a snapshot id without them.
+    version: 2,
+    dataSchema: z.object({
+      snapshotId: z.string().nullable(),
+      catalog: hostRepoCatalogRepos,
+      repoIconIds: hostRepoIconIdsSchema
+    })
   }
 })
 

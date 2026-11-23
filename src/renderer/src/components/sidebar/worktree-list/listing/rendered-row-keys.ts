@@ -1,5 +1,5 @@
 import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 
 export function collectRenderedSidebarRowKeys(sectionRows: readonly HostSectionRow[]): Set<string> {

@@ -3,12 +3,14 @@ import {
   openTestJournalHostDatabase
 } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
-import { pinTestJournalInputMode } from '../../../agent-session-journal/replay/journal-historical-inputs.test-support'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { HOST_TEST_NOW, HOST_TEST_THREAD } from './structured-agent-session-host-test-data'
+} from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import {
+  HOST_TEST_NOW,
+  HOST_TEST_THREAD
+} from './structured-agent-session-host-test-data.test-fixture'
 import type { StructuredAgentSessionHost } from '../structured-agent-session-host'
 
 export function seedQueuedRigLegacyJournal(
@@ -29,7 +31,5 @@ export function seedQueuedRigLegacyJournal(
     },
     now: () => HOST_TEST_NOW
   })
-  // Attaching opens the journal; the pin keeps it writing inputs, as a build from before conversion did.
-  return (host) =>
-    pinTestJournalInputMode(host.collaboratorsForTests().sessions.get(sessionId)!.journal)
+  return () => {}
 }

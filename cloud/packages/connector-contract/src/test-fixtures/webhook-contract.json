@@ -1,0 +1,676 @@
+{
+  "about": "Expected webhook contract values read independently by cloud and desktop tests; no source imports cross the package boundary.",
+  "constants": {
+    "WEBHOOK_HOOK_ID_PATTERN": "^wh_[A-Za-z0-9]{16}$",
+    "WEBHOOK_CALL_ID_PATTERN": "^call_[A-Za-z0-9]{20}$",
+    "WEBHOOK_ADAPTERS": ["standard", "github", "sentry", "linear", "pagerduty", "stripe"],
+    "WEBHOOK_CALL_STATES": [
+      "queued",
+      "ignored",
+      "paused",
+      "delivered",
+      "cancelled",
+      "waiting_capacity",
+      "started",
+      "folded",
+      "refused",
+      "missed",
+      "unavailable",
+      "completed",
+      "failed",
+      "unverifiable"
+    ],
+    "WEBHOOK_RUN_CAPS": {
+      "hookDefault": 200,
+      "account": 300
+    },
+    "WEBHOOK_NOTICE_CONDITIONS": ["refusal_burst", "cap_reached"],
+    "WEBHOOK_FILTER_LIMITS": {
+      "maxWhere": 8,
+      "maxValues": 10,
+      "maxPick": 12,
+      "maxPathLength": 200,
+      "maxValueLength": 200,
+      "maxSubjectLength": 256,
+      "maxRuleBytes": 2560
+    },
+    "WEBHOOK_WHERE_OPS": ["=", "!=", "in", "contains", "exists", "!exists"]
+  },
+  "names": [
+    {
+      "hookId": "wh_7Kx2pQ9mZbV4tL1r",
+      "ruleId": "wh-wh_7Kx2pQ9mZbV4tL1r",
+      "actorId": "webhook:wh_7Kx2pQ9mZbV4tL1r"
+    },
+    {
+      "hookId": "wh_0000000000000000",
+      "ruleId": "wh-wh_0000000000000000",
+      "actorId": "webhook:wh_0000000000000000"
+    }
+  ],
+  "patterns": {
+    "hookIds": [
+      {
+        "name": "hook",
+        "input": "wh_7Kx2pQ9mZbV4tL1r",
+        "readable": true
+      },
+      {
+        "name": "short hook",
+        "input": "wh_short",
+        "readable": false
+      },
+      {
+        "name": "long hook",
+        "input": "wh_7Kx2pQ9mZbV4tL1ra",
+        "readable": false
+      },
+      {
+        "name": "wrong prefix",
+        "input": "call_7Kx2pQ9mZbV4tL1r",
+        "readable": false
+      }
+    ],
+    "callIds": [
+      {
+        "name": "call",
+        "input": "call_0123456789abcdefABCD",
+        "readable": true
+      },
+      {
+        "name": "short call",
+        "input": "call_1",
+        "readable": false
+      },
+      {
+        "name": "long call",
+        "input": "call_0123456789abcdefABCD0",
+        "readable": false
+      },
+      {
+        "name": "invalid alphabet",
+        "input": "call_0123456789abcdefABC_",
+        "readable": false
+      }
+    ]
+  },
+  "ruleBytes": [
+    {
+      "name": "plain",
+      "rule": {
+        "id": "wh-wh_7Kx2pQ9mZbV4tL1r",
+        "automationId": "auto-1",
+        "botId": "bot-1",
+        "source": "webhook",
+        "event": "call",
+        "rev": 1,
+        "graceMinutes": 720,
+        "textContains": "plain"
+      },
+      "bytes": 155
+    },
+    {
+      "name": "escaped UTF-8",
+      "rule": {
+        "id": "wh-wh_7Kx2pQ9mZbV4tL1r",
+        "automationId": "auto-1",
+        "botId": "bot-1",
+        "source": "webhook",
+        "event": "call",
+        "rev": 1,
+        "graceMinutes": 720,
+        "textContains": "\"\\😀"
+      },
+      "bytes": 158
+    },
+    {
+      "name": "control character",
+      "rule": {
+        "id": "wh-wh_7Kx2pQ9mZbV4tL1r",
+        "automationId": "auto-1",
+        "botId": "bot-1",
+        "source": "webhook",
+        "event": "call",
+        "rev": 1,
+        "graceMinutes": 720,
+        "textContains": "\u0001"
+      },
+      "bytes": 156
+    }
+  ],
+  "messages": {
+    "startRequests": [
+      {
+        "name": "bound run",
+        "input": {
+          "v": 1,
+          "runId": "run-1"
+        },
+        "readable": true
+      },
+      {
+        "name": "missing run",
+        "input": {
+          "v": 1
+        },
+        "readable": false
+      },
+      {
+        "name": "empty run",
+        "input": {
+          "v": 1,
+          "runId": ""
+        },
+        "readable": false
+      },
+      {
+        "name": "new version",
+        "input": {
+          "v": 2,
+          "runId": "run-1"
+        },
+        "readable": false
+      }
+    ],
+    "startAnswers": [
+      {
+        "name": "grant",
+        "input": {
+          "started": true,
+          "runId": "run-1"
+        },
+        "readable": true
+      },
+      {
+        "name": "older grant",
+        "input": {
+          "started": true
+        },
+        "readable": true
+      },
+      {
+        "name": "capacity hold",
+        "input": {
+          "started": false,
+          "retryAt": 1800000000000
+        },
+        "readable": true
+      },
+      {
+        "name": "missing retry time",
+        "input": {
+          "started": false
+        },
+        "readable": false
+      }
+    ],
+    "startConflicts": [
+      {
+        "name": "another run",
+        "input": {
+          "error": "started_for_another_run",
+          "runId": "run-1"
+        },
+        "readable": true
+      },
+      {
+        "name": "missing run",
+        "input": {
+          "error": "started_for_another_run"
+        },
+        "readable": false
+      }
+    ],
+    "startSettled": [
+      {
+        "name": "settled",
+        "input": {
+          "error": "settled"
+        },
+        "readable": true
+      },
+      {
+        "name": "unknown error",
+        "input": {
+          "error": "other"
+        },
+        "readable": false
+      }
+    ],
+    "notices": [
+      {
+        "name": "refusal burst",
+        "input": {
+          "deliveryId": "notice:1",
+          "seq": 1,
+          "expiresAt": 1800000060000,
+          "conversation": {
+            "source": "webhook",
+            "externalId": "notice:1"
+          },
+          "kind": "webhook_notice",
+          "hookId": "wh_7Kx2pQ9mZbV4tL1r",
+          "botId": "bot-1",
+          "condition": "refusal_burst",
+          "count": 10,
+          "at": 1800000000000
+        },
+        "readable": true,
+        "output": {
+          "deliveryId": "notice:1",
+          "expiresAt": 1800000060000,
+          "conversation": {
+            "source": "webhook",
+            "externalId": "notice:1"
+          },
+          "kind": "webhook_notice",
+          "hookId": "wh_7Kx2pQ9mZbV4tL1r",
+          "botId": "bot-1",
+          "condition": "refusal_burst",
+          "count": 10,
+          "at": 1800000000000
+        }
+      },
+      {
+        "name": "cap reached",
+        "input": {
+          "deliveryId": "notice:1",
+          "seq": 1,
+          "expiresAt": 1800000060000,
+          "conversation": {
+            "source": "webhook",
+            "externalId": "notice:1"
+          },
+          "kind": "webhook_notice",
+          "hookId": "wh_7Kx2pQ9mZbV4tL1r",
+          "botId": "bot-1",
+          "condition": "cap_reached",
+          "count": 10,
+          "at": 1800000000000
+        },
+        "readable": true,
+        "output": {
+          "deliveryId": "notice:1",
+          "expiresAt": 1800000060000,
+          "conversation": {
+            "source": "webhook",
+            "externalId": "notice:1"
+          },
+          "kind": "webhook_notice",
+          "hookId": "wh_7Kx2pQ9mZbV4tL1r",
+          "botId": "bot-1",
+          "condition": "cap_reached",
+          "count": 10,
+          "at": 1800000000000
+        }
+      },
+      {
+        "name": "unknown condition",
+        "input": {
+          "deliveryId": "notice:1",
+          "seq": 1,
+          "expiresAt": 1800000060000,
+          "conversation": {
+            "source": "webhook",
+            "externalId": "notice:1"
+          },
+          "kind": "webhook_notice",
+          "hookId": "wh_7Kx2pQ9mZbV4tL1r",
+          "botId": "bot-1",
+          "condition": "new_condition",
+          "count": 10,
+          "at": 1800000000000
+        },
+        "readable": false
+      },
+      {
+        "name": "negative count",
+        "input": {
+          "deliveryId": "notice:1",
+          "seq": 1,
+          "expiresAt": 1800000060000,
+          "conversation": {
+            "source": "webhook",
+            "externalId": "notice:1"
+          },
+          "kind": "webhook_notice",
+          "hookId": "wh_7Kx2pQ9mZbV4tL1r",
+          "botId": "bot-1",
+          "condition": "refusal_burst",
+          "count": -1,
+          "at": 1800000000000
+        },
+        "readable": false
+      }
+    ],
+    "views": [
+      {
+        "name": "hook",
+        "input": {
+          "hookId": "wh_7Kx2pQ9mZbV4tL1r",
+          "automationId": "auto-1",
+          "botId": "bot-1",
+          "state": "live",
+          "epoch": 1,
+          "hostGen": 0,
+          "keyGeneration": 2,
+          "url": "https://connector.orca.dev/hooks/wh_7Kx2pQ9mZbV4tL1r",
+          "adapter": "github",
+          "previousKeyExpiresAt": 1800000000000,
+          "lastCall": {
+            "at": 1800000000000,
+            "state": "queued",
+            "signatureValid": true
+          },
+          "pendingCalls": 1
+        },
+        "readable": true
+      },
+      {
+        "name": "never sent a call",
+        "input": {
+          "hookId": "wh_7Kx2pQ9mZbV4tL1r",
+          "automationId": "auto-1",
+          "botId": "bot-1",
+          "state": "live",
+          "epoch": 1,
+          "hostGen": 0,
+          "keyGeneration": 2,
+          "url": "https://connector.orca.dev/hooks/wh_7Kx2pQ9mZbV4tL1r",
+          "adapter": null,
+          "previousKeyExpiresAt": 1800000000000,
+          "lastCall": null,
+          "pendingCalls": 1
+        },
+        "readable": true
+      },
+      {
+        "name": "deleted state",
+        "input": {
+          "hookId": "wh_7Kx2pQ9mZbV4tL1r",
+          "automationId": "auto-1",
+          "botId": "bot-1",
+          "state": "deleted",
+          "epoch": 1,
+          "hostGen": 0,
+          "keyGeneration": 2,
+          "url": "https://connector.orca.dev/hooks/wh_7Kx2pQ9mZbV4tL1r",
+          "adapter": "github",
+          "previousKeyExpiresAt": 1800000000000,
+          "lastCall": {
+            "at": 1800000000000,
+            "state": "queued",
+            "signatureValid": true
+          },
+          "pendingCalls": 1
+        },
+        "readable": false
+      },
+      {
+        "name": "negative pending calls",
+        "input": {
+          "hookId": "wh_7Kx2pQ9mZbV4tL1r",
+          "automationId": "auto-1",
+          "botId": "bot-1",
+          "state": "live",
+          "epoch": 1,
+          "hostGen": 0,
+          "keyGeneration": 2,
+          "url": "https://connector.orca.dev/hooks/wh_7Kx2pQ9mZbV4tL1r",
+          "adapter": "github",
+          "previousKeyExpiresAt": 1800000000000,
+          "lastCall": {
+            "at": 1800000000000,
+            "state": "queued",
+            "signatureValid": true
+          },
+          "pendingCalls": -1
+        },
+        "readable": false
+      }
+    ],
+    "callLogs": [
+      {
+        "name": "calls and refusals",
+        "input": {
+          "calls": [
+            {
+              "kind": "call",
+              "callId": "call_0123456789abcdefABCD",
+              "receivedAt": 1800000000000,
+              "state": "started",
+              "runId": "run-1"
+            },
+            {
+              "kind": "refused",
+              "minute": 1799999940000,
+              "count": 6
+            }
+          ]
+        },
+        "readable": true
+      },
+      {
+        "name": "unknown row kind",
+        "input": {
+          "calls": [
+            {
+              "kind": "other",
+              "minute": 1,
+              "count": 1
+            }
+          ]
+        },
+        "readable": false
+      }
+    ],
+    "envelopes": [
+      {
+        "name": "json body",
+        "input": {
+          "receivedAt": 1800000000000,
+          "contentType": "application/json",
+          "headers": {
+            "user-agent": "GitHub-Hookshot"
+          },
+          "body": {
+            "kind": "json",
+            "value": {
+              "action": "opened"
+            }
+          },
+          "truncated": false
+        },
+        "readable": true
+      },
+      {
+        "name": "form body",
+        "input": {
+          "receivedAt": 1800000000000,
+          "contentType": "application/x-www-form-urlencoded",
+          "headers": {
+            "user-agent": "GitHub-Hookshot"
+          },
+          "body": {
+            "kind": "form",
+            "value": {
+              "a": ["1", "2"]
+            }
+          },
+          "truncated": false
+        },
+        "readable": true
+      },
+      {
+        "name": "unknown body kind",
+        "input": {
+          "receivedAt": 1800000000000,
+          "contentType": "application/json",
+          "headers": {
+            "user-agent": "GitHub-Hookshot"
+          },
+          "body": {
+            "kind": "binary",
+            "value": ""
+          },
+          "truncated": false
+        },
+        "readable": false
+      },
+      {
+        "name": "1024-character header value",
+        "input": {
+          "receivedAt": 1800000000000,
+          "contentType": "application/json",
+          "headers": {
+            "x-long": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "body": {
+            "kind": "json",
+            "value": {
+              "action": "opened"
+            }
+          },
+          "truncated": false
+        },
+        "readable": true
+      },
+      {
+        "name": "1025-character header value",
+        "input": {
+          "receivedAt": 1800000000000,
+          "contentType": "application/json",
+          "headers": {
+            "x-long": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "body": {
+            "kind": "json",
+            "value": {
+              "action": "opened"
+            }
+          },
+          "truncated": false
+        },
+        "readable": false
+      }
+    ]
+  },
+  "acknowledgments": [
+    {
+      "name": "taken call",
+      "input": {
+        "v": 1,
+        "helloRev": 1,
+        "acks": [
+          {
+            "deliveryId": "trigger:call_0123456789abcdefABCD",
+            "step": "done",
+            "result": {
+              "outcome": "accepted"
+            }
+          }
+        ]
+      },
+      "readable": true
+    }
+  ],
+  "routes": {
+    "hookId": "wh_7Kx2pQ9mZbV4tL1r",
+    "callId": "call_0123456789abcdefABCD",
+    "paths": {
+      "hooks": "/v1/connector/webhooks",
+      "hook": "/v1/connector/webhooks/wh_7Kx2pQ9mZbV4tL1r",
+      "state": "/v1/connector/webhooks/wh_7Kx2pQ9mZbV4tL1r/state",
+      "reveal": "/v1/connector/webhooks/wh_7Kx2pQ9mZbV4tL1r/reveal",
+      "rotate": "/v1/connector/webhooks/wh_7Kx2pQ9mZbV4tL1r/rotate",
+      "secret": "/v1/connector/webhooks/wh_7Kx2pQ9mZbV4tL1r/secret",
+      "sample": "/v1/connector/webhooks/wh_7Kx2pQ9mZbV4tL1r/sample",
+      "calls": "/v1/connector/webhooks/wh_7Kx2pQ9mZbV4tL1r/calls",
+      "envelope": "/v1/connector/webhook-calls/call_0123456789abcdefABCD/envelope",
+      "start": "/v1/connector/webhook-calls/call_0123456789abcdefABCD/start"
+    },
+    "operations": {
+      "mint": {
+        "method": "POST",
+        "route": "hooks",
+        "body": {
+          "v": 1,
+          "operationId": "op-1",
+          "automationId": "auto-1",
+          "botId": "bot-1"
+        }
+      },
+      "list": {
+        "method": "GET",
+        "route": "hooks"
+      },
+      "get": {
+        "method": "GET",
+        "route": "hook"
+      },
+      "remove": {
+        "method": "DELETE",
+        "route": "hook"
+      },
+      "setState": {
+        "method": "PUT",
+        "route": "state",
+        "body": {
+          "v": 1,
+          "operationId": "op-1",
+          "state": "paused"
+        }
+      },
+      "reveal": {
+        "method": "POST",
+        "route": "reveal",
+        "body": {
+          "v": 1
+        }
+      },
+      "rotate": {
+        "method": "POST",
+        "route": "rotate",
+        "body": {
+          "v": 1,
+          "operationId": "op-1",
+          "stopNow": false
+        }
+      },
+      "setSecret": {
+        "method": "PUT",
+        "route": "secret",
+        "body": {
+          "v": 1,
+          "operationId": "op-1",
+          "adapter": "github",
+          "generate": true
+        }
+      },
+      "sample": {
+        "method": "POST",
+        "route": "sample",
+        "body": {
+          "v": 1,
+          "operationId": "op-1"
+        }
+      },
+      "calls": {
+        "method": "GET",
+        "route": "calls"
+      },
+      "envelope": {
+        "method": "GET",
+        "route": "envelope"
+      },
+      "start": {
+        "method": "POST",
+        "route": "start",
+        "body": {
+          "v": 1,
+          "runId": "run-1"
+        }
+      }
+    }
+  }
+}

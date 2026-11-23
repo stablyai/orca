@@ -1,22 +1,28 @@
 import type {
   BackendConnectionListener,
   BackendConnectionPurpose
-} from '../../../shared/backend-service-contract'
+} from '../../../shared/backend/backend-service-contract'
 import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageSnapshot
-} from '../../../shared/claude-usage-types'
-import type { CodexUsageBreakdownKind, CodexUsageSnapshot } from '../../../shared/codex-usage-types'
+} from '../../../shared/agent-usage/analytics/claude-usage-types'
+import type {
+  CodexUsageBreakdownKind,
+  CodexUsageSnapshot
+} from '../../../shared/agent-usage/analytics/codex-usage-types'
 import type {
   OpenCodeUsageBreakdownKind,
   OpenCodeUsageSnapshot
-} from '../../../shared/opencode-usage-types'
-import type { MuseUsageBreakdownKind, MuseUsageSnapshot } from '../../../shared/muse-usage-types'
+} from '../../../shared/agent-usage/analytics/opencode-usage-types'
+import type {
+  MuseUsageBreakdownKind,
+  MuseUsageSnapshot
+} from '../../../shared/agent-usage/analytics/muse-usage-types'
 import type {
   CodexRateLimitResetResult,
   RateLimitRuntimeTarget,
   RateLimitState
-} from '../../../shared/rate-limit-types'
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export type UsageProviderSnapshot = {
   scanState: unknown

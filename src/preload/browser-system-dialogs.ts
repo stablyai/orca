@@ -2,12 +2,12 @@ import type { ContextBridge, IpcRenderer } from 'electron'
 import {
   BROWSER_PASSKEY_REQUEST_CANCEL_CHANNEL,
   BROWSER_PASSKEY_REQUEST_PENDING_CHANNEL
-} from '../shared/browser-passkey-request'
+} from '../shared/browser/prompts/browser-passkey-request'
 import {
   BROWSER_AGENT_LEAD_CHANNEL,
   BROWSER_AGENT_LEAD_QUERY_CHANNEL,
   BROWSER_PRINT_REFUSED_CHANNEL
-} from '../shared/browser-system-dialogs'
+} from '../shared/browser/guest-lifecycle/browser-system-dialogs'
 import { installBrowserPasskeyRequestWatch } from './browser/passkeys/browser-passkey-request-watch'
 import { installBrowserPrintGuard } from './browser/printing/browser-print-guard'
 

@@ -3,9 +3,10 @@ import {
   filterEnabledTuiAgents,
   isTuiAgentEnabled
 } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { useWorktreeMap } from '@/store/slices/worktrees/listing/use-worktree-catalog'
@@ -46,7 +47,7 @@ export function useAutomationsPageStoreState() {
   const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const settings = useAppStore((s) => s.settings)
   const selectedId = useAppStore((s) => s.selectedAutomationId)
   const setSelectedId = useAppStore((s) => s.setSelectedAutomationId)

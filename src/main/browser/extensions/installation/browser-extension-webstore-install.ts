@@ -1,4 +1,5 @@
 import { recordBrowserExtensionInstalled } from '../../../telemetry/browser-extensions-banner'
+import { startBrowserExtensionsForSettings } from '../profile-sessions/browser-extension-idle-profiles'
 import { randomUUID } from 'node:crypto'
 import { rename, rm, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
@@ -11,7 +12,10 @@ import {
 } from './browser-extension-archive'
 import type { VerifiedCrx } from './browser-extension-crx'
 import { getBrowserExtensionInstallStore } from './browser-extension-install-store'
-import { refuseOrcaFileCollisions } from './browser-extension-load-directory'
+import {
+  forgetPreparedBrowserExtensionDirectory,
+  refuseOrcaFileCollisions
+} from './browser-extension-load-directory'
 import {
   readBrowserExtensionManifest,
   type BrowserExtensionManifestSummary
@@ -137,6 +141,7 @@ export async function commitStagedWebStoreExtension(
     // Same version already in use: keep the loaded folder untouched.
     await discardStagedWebStoreExtension(staged)
   } else {
+    forgetPreparedBrowserExtensionDirectory(target)
     await rm(target, { recursive: true, force: true })
     await rename(staged.directory, target)
   }
@@ -158,6 +163,7 @@ export async function commitStagedWebStoreExtension(
       await reloadBrowserExtensionWhereEnabled(record)
     }
     if (enableInProfileId) {
+      await startBrowserExtensionsForSettings(enableInProfileId)
       await loadBrowserExtensionIntoProfile(enableInProfileId, record)
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, enableInProfileId, extensionId, true)
@@ -167,6 +173,7 @@ export async function commitStagedWebStoreExtension(
     if (replaced) {
       store.save(replaced)
       await reloadBrowserExtensionWhereEnabled(replaced).catch(() => {})
+      forgetPreparedBrowserExtensionDirectory(target)
       await rm(target, { recursive: true, force: true })
     } else if (!previous) {
       await unloadBrowserExtensionEverywhere(extensionId)
@@ -175,6 +182,7 @@ export async function commitStagedWebStoreExtension(
     throw error
   }
   if (replaced && isOwnedVersionFolder(extensionId, replaced.path)) {
+    forgetPreparedBrowserExtensionDirectory(replaced.path)
     await rm(replaced.path, { recursive: true, force: true, maxRetries: 3 })
   }
   if (getHeldBrowserExtensionUpdate(extensionId)?.version === record.version) {

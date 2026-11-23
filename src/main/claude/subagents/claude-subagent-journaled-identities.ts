@@ -6,9 +6,10 @@ import {
 } from '../background-tasks/claude-background-task-identity'
 import { isBackgroundTaskBlock } from '../../../shared/native-chat/native-chat-types'
 import type { AgentJournalProducerLinkage } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { namedSubagents } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
-import type { StructuredAgentSessionLinkageJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
+import { namedSubagents } from '../../../shared/native-chat/transcript/subagents/native-chat-subagent-items'
+import type { JournalItemLinkageVisitor } from '../../native-chat/agent-session-journal/journal-store-contracts'
 import { isBoundedClaudeTaskId } from '../background-tasks/claude-background-task-frames'
+import type { JournalThreadGoalSource } from '../../native-chat/agent-session-journal/projection/journal-thread-goal-source'
 
 type Reading = {
   canonicalByToolUse: Map<string, string>
@@ -18,46 +19,124 @@ type Reading = {
   subagents: Set<string>
 }
 
+/** The saved facts a Claude acquisition reads in one observation, before translating. */
+export type ClaudeJournalSnapshot = {
+  canonicalByToolUse: [toolUseId: string, agentId: string][]
+  attemptByAgent: [agentId: string, attempt: number][]
+  parents: [
+    agentId: string,
+    runs: [run: string | undefined, linkage: AgentJournalProducerLinkage][]
+  ][]
+  backgrounds: [
+    taskId: string,
+    index: {
+      latest?: ClaudeBackgroundTaskDescriptor
+      unresolved?: ClaudeBackgroundTaskDescriptor
+      aliases: [string, ClaudeBackgroundTaskDescriptor][]
+    }
+  ][]
+  subagents: string[]
+  threadGoal: JournalThreadGoalSource
+}
+
+/** One row's contribution, stored beside it so a snapshot never decodes bodies. */
+export function claudeAgentRowFacts({
+  agentId,
+  providerParentRef,
+  producerKind,
+  attempt
+}: AgentJournalProducerLinkage): {
+  agentId: string
+  parentRef: string | null
+  attempt: number
+} | null {
+  if (producerKind !== 'agent' || agentId === undefined) {
+    return null
+  }
+  // Provisional self-stamps do not establish aliases.
+  const aliases =
+    providerParentRef !== undefined &&
+    agentId !== providerParentRef &&
+    isBoundedClaudeTaskId(agentId) &&
+    isBoundedClaudeTaskId(providerParentRef)
+  return { agentId, parentRef: aliases ? providerParentRef : null, attempt: attempt ?? 1 }
+}
+
+/** The memory journal's fold; the SQL journal reads the same facts from claudeAgentRowFacts columns. */
+type ClaudeLinkageJournal = {
+  visitItemsWithLinkage(visit: JournalItemLinkageVisitor): void
+  threadGoalSource(): JournalThreadGoalSource
+}
+
+/** Visit visible items in insertion order, as the memory journal does. */
+export function readClaudeJournalSnapshot(journal: ClaudeLinkageJournal): ClaudeJournalSnapshot {
+  const reading = read(journal)
+  return {
+    canonicalByToolUse: [...reading.canonicalByToolUse],
+    attemptByAgent: [...reading.attemptByAgent],
+    parents: [...reading.parents].map(([id, runs]) => [id, [...runs]]),
+    backgrounds: [...reading.backgrounds].map(([id, index]) => [
+      id,
+      {
+        ...index,
+        aliases: [...index.aliases]
+      }
+    ]),
+    subagents: [...reading.subagents],
+    threadGoal: journal.threadGoalSource()
+  }
+}
+
 /** Cache per bound journal epoch; reads before binding must not populate the cache. */
 export class ClaudeJournaledSubagents {
-  private journal: StructuredAgentSessionLinkageJournal | null = null
-  private epoch: string | null = null
+  private snapshot: ClaudeJournalSnapshot | null = null
   private reading: Reading | null = null
 
-  constructor(private readonly bound: () => StructuredAgentSessionLinkageJournal | null) {}
+  constructor(private readonly current: () => ClaudeJournalSnapshot | null) {}
 
   canonical = (toolUseId: string): string | null =>
-    this.current()?.canonicalByToolUse.get(toolUseId) ?? null
+    this.read()?.canonicalByToolUse.get(toolUseId) ?? null
 
   /** Zero means no journaled attempt. */
-  attempt = (agentId: string): number => this.current()?.attemptByAgent.get(agentId) ?? 0
+  attempt = (agentId: string): number => this.read()?.attemptByAgent.get(agentId) ?? 0
 
   parent = (taskId: string, run?: string): string | undefined =>
     (run === undefined
-      ? [...(this.current()?.parents.get(taskId)?.values() ?? [])].at(-1)
-      : this.current()?.parents.get(taskId)?.get(run)
+      ? [...(this.read()?.parents.get(taskId)?.values() ?? [])].at(-1)
+      : this.read()?.parents.get(taskId)?.get(run)
     )?.parentAgentId
 
   background = (taskId: string, run?: string): ClaudeBackgroundTaskDescriptor | undefined =>
-    selectClaudeBackgroundTask(this.current()?.backgrounds.get(taskId), run)
+    selectClaudeBackgroundTask(this.read()?.backgrounds.get(taskId), run)
 
-  isSubagent = (taskId: string): boolean => this.current()?.subagents.has(taskId) === true
+  isSubagent = (taskId: string): boolean => this.read()?.subagents.has(taskId) === true
 
-  private current(): Reading | null {
-    const journal = this.bound()
-    if (!journal) {
-      return null
-    }
-    if (!this.reading || journal !== this.journal || journal.epoch !== this.epoch) {
-      this.journal = journal
-      this.epoch = journal.epoch
-      this.reading = read(journal)
+  /** Dereference the acquisition's current snapshot; a replacement swaps it whole. */
+  private read(): Reading | null {
+    const snapshot = this.current()
+    if (snapshot !== this.snapshot) {
+      this.snapshot = snapshot
+      this.reading = snapshot && {
+        canonicalByToolUse: new Map(snapshot.canonicalByToolUse),
+        attemptByAgent: new Map(snapshot.attemptByAgent),
+        parents: new Map(snapshot.parents.map(([id, runs]) => [id, new Map(runs)])),
+        backgrounds: new Map(
+          snapshot.backgrounds.map(([id, index]) => [
+            id,
+            {
+              ...index,
+              aliases: new Map(index.aliases)
+            }
+          ])
+        ),
+        subagents: new Set(snapshot.subagents)
+      }
     }
     return this.reading
   }
 }
 
-function read(journal: StructuredAgentSessionLinkageJournal): Reading {
+function read(journal: Pick<ClaudeLinkageJournal, 'visitItemsWithLinkage'>): Reading {
   const reading: Reading = {
     canonicalByToolUse: new Map(),
     attemptByAgent: new Map(),
@@ -89,24 +168,16 @@ function read(journal: StructuredAgentSessionLinkageJournal): Reading {
   return reading
 }
 
-function readAgentRow(
-  reading: Reading,
-  { agentId, providerParentRef, producerKind, attempt }: AgentJournalProducerLinkage
-): void {
-  if (producerKind !== 'agent' || agentId === undefined) {
+function readAgentRow(reading: Reading, linkage: AgentJournalProducerLinkage): void {
+  const facts = claudeAgentRowFacts(linkage)
+  if (!facts) {
     return
   }
   reading.attemptByAgent.set(
-    agentId,
-    Math.max(attempt ?? 1, reading.attemptByAgent.get(agentId) ?? 1)
+    facts.agentId,
+    Math.max(facts.attempt, reading.attemptByAgent.get(facts.agentId) ?? 1)
   )
-  // Provisional self-stamps do not establish aliases.
-  if (
-    providerParentRef !== undefined &&
-    agentId !== providerParentRef &&
-    isBoundedClaudeTaskId(agentId) &&
-    isBoundedClaudeTaskId(providerParentRef)
-  ) {
-    reading.canonicalByToolUse.set(providerParentRef, agentId)
+  if (facts.parentRef !== null) {
+    reading.canonicalByToolUse.set(facts.parentRef, facts.agentId)
   }
 }

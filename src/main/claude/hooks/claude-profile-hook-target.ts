@@ -1,7 +1,7 @@
 import { statSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import type { AgentHookInstallStatus } from '../../../shared/agent-hook-listener/configuration/agent-hook-types'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import { getConfigPath, type ClaudeCompatibleHookSettings } from './hook-settings'
 
 function sameFile(left: string, right: string): boolean {

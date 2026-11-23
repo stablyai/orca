@@ -4,12 +4,8 @@ import type {
   AutomationUpdateInput
 } from '../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
-import {
-  buildWorkspaceRunContext,
-  type WorkspaceRunContext
-} from '../../shared/work-items/task-source-context'
+import type { WorkspaceRunContext } from '../../shared/work-items/task-source-context'
 import type { AutomationDestination } from '../../shared/automations/ownership/automation-owner-precondition'
-import type { ProjectHostSetup } from '../../shared/project-types'
 import type { CommandHandler } from '../dispatch/dispatch'
 import {
   formatAutomationList,
@@ -18,6 +14,8 @@ import {
   formatAutomationRuns,
   formatAutomationRunsPage,
   formatAutomationShow,
+  printAutomationResult,
+  type AutomationListPayload,
   type AutomationShowPayload
 } from './automation-format'
 import { printResult } from '../output/command-result-output'
@@ -33,29 +31,42 @@ import {
   readAllAutomationRuns,
   readAutomationRunsPage
 } from './automation-runs-paging'
-import { RuntimeClientError } from '../runtime/types'
-import {
-  getOptionalWorktreeSelector,
-  resolveCurrentWorktreeSelector
-} from '../workspace-selection/workspace-selector'
-import {
-  assertWorkspaceTargetFlagsCompatible,
-  hasWorkspaceProjectTarget,
-  resolveProjectCreateTarget
-} from '../workspaces/worktree-project-target'
+import { RuntimeClientError } from '../runtime/connection/types'
+import { resolveCurrentWorktreeSelector } from '../workspace-selection/workspace-selector'
+import { getExplicitTarget } from './automation-target-flags'
 import {
   getEnabledFlag,
   getOptionalProviderFlag,
   getPrecheckFlag,
   getProviderFlag,
   getReuseSessionFlag,
-  getScheduleFlag,
   getSourceContextFlag,
   getWorkspaceModeFlag
 } from './automation-handler-flags'
 import { getExtraAgentArgsFlag } from './automation-extra-agent-args-flag'
 import { assertAutomationFieldsSupported } from './automation-host-support'
 import { assertAutomationSetupMode, getAutomationSetupFlag } from './automation-setup-flag'
+import { getTimezoneFlags } from './automation-timezone-flag'
+import {
+  createBotAutomation,
+  editedBotTarget,
+  editNeedsBot,
+  getBotAgentSetupEdit,
+  getBotTargetEditFlags,
+  getBotTargetFlags
+} from './automation-bot-create'
+import { findBot } from '../bots/bot'
+import { writeStdoutLine } from '../output/stdout-line'
+import { printSavedAutomation } from '../webhooks/webhooks'
+import {
+  AUTOMATION_EVENT_TRIGGER_HANDLERS,
+  getCreateScheduleFlag,
+  getEditScheduleFlag,
+  getEventTriggersFlag,
+  withWontFire
+} from './automation-event-triggers-cli'
+import { callerChat } from './automation-caller-chat'
+import { getOnceFlags } from './automation-once-flag'
 
 type AutomationCreateParams = Omit<AutomationCreateInput, 'projectId' | 'timezone'> & {
   destination?: AutomationDestination
@@ -74,27 +85,9 @@ async function resolveDefaultTarget(
   cwd: string,
   client: Parameters<CommandHandler>[0]['client']
 ): Promise<{ repo?: string; workspace?: string; runContext?: WorkspaceRunContext }> {
-  assertWorkspaceTargetFlagsCompatible(flags)
-  const repo = getOptionalStringFlag(flags, 'repo')
-  if (repo && getOptionalStringFlag(flags, 'workspace')) {
-    throw new RuntimeClientError('invalid_argument', 'Use either --repo or --workspace, not both.')
-  }
-  if (hasWorkspaceProjectTarget(flags) && getOptionalStringFlag(flags, 'workspace')) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Use either --workspace or project target flags, not both.'
-    )
-  }
-  const projectTarget = await resolveProjectCreateTarget(flags, client)
-  if (projectTarget) {
-    return {
-      repo: projectTarget.repoSelector,
-      runContext: buildAutomationRunContextFromSetup(projectTarget.setup)
-    }
-  }
-  const workspace = await getOptionalWorktreeSelector(flags, 'workspace', cwd, client)
-  if (repo || workspace || client.isRemote) {
-    return repo || workspace ? { repo, workspace } : {}
+  const target = await getExplicitTarget(flags, cwd, client)
+  if (target.repo || target.workspace || client.isRemote) {
+    return target
   }
   try {
     return { workspace: await resolveCurrentWorktreeSelector(cwd, client, 'workspace') }
@@ -106,33 +99,6 @@ async function resolveDefaultTarget(
   }
 }
 
-async function getExplicitTarget(
-  flags: Map<string, string | boolean>,
-  cwd: string,
-  client: Parameters<CommandHandler>[0]['client']
-): Promise<{ repo?: string; workspace?: string; runContext?: WorkspaceRunContext }> {
-  assertWorkspaceTargetFlagsCompatible(flags)
-  const repo = getOptionalStringFlag(flags, 'repo')
-  if (repo && getOptionalStringFlag(flags, 'workspace')) {
-    throw new RuntimeClientError('invalid_argument', 'Use either --repo or --workspace, not both.')
-  }
-  if (hasWorkspaceProjectTarget(flags) && getOptionalStringFlag(flags, 'workspace')) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Use either --workspace or project target flags, not both.'
-    )
-  }
-  const projectTarget = await resolveProjectCreateTarget(flags, client)
-  if (projectTarget) {
-    return {
-      repo: projectTarget.repoSelector,
-      runContext: buildAutomationRunContextFromSetup(projectTarget.setup)
-    }
-  }
-  const workspace = await getOptionalWorktreeSelector(flags, 'workspace', cwd, client)
-  return { repo, workspace }
-}
-
 // Read the authoritative owner for fencing; older hosts omit it and impose no precondition.
 async function resolveAutomationMutationState(
   client: Parameters<CommandHandler>[0]['client'],
@@ -142,39 +108,28 @@ async function resolveAutomationMutationState(
   return result.result
 }
 
-function buildAutomationRunContextFromSetup(setup: ProjectHostSetup): WorkspaceRunContext {
-  const runContext = buildWorkspaceRunContext({
-    projectId: setup.projectId,
-    hostId: setup.hostId,
-    projectHostSetupId: setup.id,
-    repoId: setup.repoId,
-    path: setup.path
-  })
-  if (!runContext) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      `Project host setup is missing automation run context fields: ${setup.id}`
-    )
-  }
-  return runContext
-}
-
 export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
+  ...AUTOMATION_EVENT_TRIGGER_HANDLERS,
   'automations list': async ({ client, json }) => {
-    const result = await client.call<{ automations: Automation[] }>('automation.list')
-    printResult(result, json, formatAutomationList)
+    const listed = await client.call<AutomationListPayload>('automation.list')
+    printAutomationResult(await withWontFire(client, listed), json, formatAutomationList)
   },
   'automations show': async ({ flags, client, json }) => {
     const result = await client.call<AutomationShowPayload>('automation.show', {
       id: getRequiredStringFlag(flags, 'id')
     })
-    printResult(result, json, formatAutomationShow)
+    printAutomationResult(result, json, formatAutomationShow)
   },
   'automations create': async ({ flags, client, cwd, json }) => {
     const setupDecision = getAutomationSetupFlag(flags)
-    const schedule = getScheduleFlag(flags, true)
-    if (!schedule) {
-      throw new RuntimeClientError('invalid_argument', 'Missing required --trigger')
+    const on = getEventTriggersFlag(flags)
+    const once = getOnceFlags(flags)
+    const schedule = getCreateScheduleFlag(flags, on, once)
+    const bot = await getBotTargetFlags(flags, client, on, schedule, once)
+    if (bot) {
+      const saved = await createBotAutomation(client, flags, bot, schedule, on, once)
+      printSavedAutomation(saved, json, on)
+      return
     }
     const target = await resolveDefaultTarget(flags, cwd, client)
     const sourceContext = getSourceContextFlag(flags)
@@ -196,7 +151,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       workspaceMode,
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
       reuseSession: getReuseSessionFlag(flags),
-      timezone: getOptionalStringFlag(flags, 'timezone'),
+      ...getTimezoneFlags(flags),
       enabled: getEnabledFlag(flags),
       missedRunGraceMinutes: getOptionalPositiveIntegerFlag(flags, 'missed-run-grace-minutes'),
       ...schedule
@@ -206,13 +161,21 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     if (writer !== client) {
       await assertAutomationFieldsSupported(writer, create)
     }
-    const result = await writer.call<{ automation: Automation }>('automation.create', params)
-    printResult(result, json, formatAutomationShow)
+    // The caller's chat lives on this client's host, so only a local write names it.
+    const result = await writer.call<{ automation: Automation }>('automation.create', {
+      ...params,
+      ...(writer === client ? callerChat() : {})
+    })
+    printAutomationResult(result, json, formatAutomationShow)
   },
   'automations edit': async ({ flags, client, cwd, json }) => {
     const setupDecision = getAutomationSetupFlag(flags)
     const target = await getExplicitTarget(flags, cwd, client)
-    const schedule = getScheduleFlag(flags, false)
+    const schedule = getEditScheduleFlag(flags)
+    const on = getEventTriggersFlag(flags)
+    const once = getOnceFlags(flags)
+    const botEdits = getBotTargetEditFlags(flags)
+    const agentEdit = getBotAgentSetupEdit(flags)
     const sourceContext = getSourceContextFlag(flags)
     const id = getRequiredStringFlag(flags, 'id')
     // Built before the owner read so a contradictory flag still fails without a runtime call.
@@ -230,9 +193,11 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       workspaceMode: getWorkspaceModeFlag(flags),
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
       reuseSession: getReuseSessionFlag(flags),
-      timezone: getOptionalStringFlag(flags, 'timezone'),
+      ...getTimezoneFlags(flags),
       enabled: getEnabledFlag(flags),
       missedRunGraceMinutes: getOptionalPositiveIntegerFlag(flags, 'missed-run-grace-minutes'),
+      ...(on ? { on } : {}),
+      ...(once ? { once } : {}),
       ...schedule
     } satisfies AutomationUpdateParams
     await assertAutomationFieldsSupported(client, updates)
@@ -244,6 +209,12 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       setupDecision,
       updates.workspaceMode ?? (target.workspace ? 'existing' : current.workspaceMode)
     )
+    // The host takes the whole target, so the saved bot and the unchanged field go with the edit.
+    const liveBot =
+      current.bot && editNeedsBot(current, agentEdit)
+        ? await findBot(client, current.bot.botId)
+        : undefined
+    const bot = editedBotTarget(current, botEdits, agentEdit, liveBot)
     // Owner fencing covers the source host; moves must fence the destination too.
     const destination = await resolveAutomationDestination(client, target)
     const result = await client.call<{ automation: Automation }>('automation.update', {
@@ -252,9 +223,17 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       ...(destination ? { destination } : {}),
       // A setup choice that relies on the current mode must not land after a switch to existing.
       ...(setupDecision && !updates.workspaceMode ? { expectedWorkspaceMode: 'new_per_run' } : {}),
-      updates
+      updates: bot ? { ...updates, bot } : updates,
+      ...callerChat()
     })
-    printResult(result, json, formatAutomationShow)
+    printSavedAutomation(result, json, on, current)
+    const pinned = result.result.automation.bot?.agentSetup
+    // Only a setup taken from the bot's current agent is a pin; another agent was asked for.
+    if (liveBot && pinned?.agent === liveBot.agent && !json) {
+      writeStdoutLine(
+        `Pinned to ${liveBot.name}'s current agent (${pinned.agent}): this automation keeps it when ${liveBot.name} switches agents; --agent bot follows ${liveBot.name} again.`
+      )
+    }
   },
   'automations remove': async ({ flags, client, json }) => {
     const id = getRequiredStringFlag(flags, 'id')

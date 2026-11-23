@@ -5,7 +5,7 @@ import {
   ORCAD_TERMINAL_CENSUS_METHOD,
   OrcadTerminalCensusParamsSchema,
   type OrcadTerminalCensus
-} from '../../../../../shared/orcad-terminal-census'
+} from '../../../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 
 const SPAWN_SETTLE_MS = 10_000
 const UNVERIFIABLE: OrcadTerminalCensus = {
@@ -28,7 +28,8 @@ export const ORCAD_TERMINAL_CENSUS_METHODS = [
       const admissionClosedUntil = admission.close(params.closeAdmissionForMs)
       // A spawn admitted before the close may still be starting; count only once it has.
       if (admissionClosedUntil > 0 && !(await admission.waitForSpawnsToSettle(SPAWN_SETTLE_MS))) {
-        return { ...UNVERIFIABLE, admissionClosedUntil }
+        // The unsettled spawn may be an in-process terminal, so no count of them holds either.
+        return { ...UNVERIFIABLE, inProcessSessions: null, admissionClosedUntil }
       }
       return { ...(await countTerminals(params, runtime)), admissionClosedUntil }
     }

@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 

@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { agentSessionThrownFailure } from '../../../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { agentSessionWriteFailureText } from '../../../messages/notices/agent-session-write-notice-text'
-import { SessionOptionApplyError } from '../../../../../../../shared/native-chat/input/native-chat-session-option-apply-failure'
+import { SessionOptionApplyError } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-apply-failure'
 import { sessionOptionApplyErrorText } from './native-chat-session-option-apply-error-text'
 
 /** Translate host log errors through the failure table; local errors are already user-facing. */

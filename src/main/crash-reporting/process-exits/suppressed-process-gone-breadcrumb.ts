@@ -1,4 +1,4 @@
-import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting'
+import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 import type { ExpectedTeardownScope } from './process-gone-classification'
 
 function safeString(value: unknown): string | undefined {

@@ -1,4 +1,4 @@
-import type { BrowserLoadError } from '../../browser-workspace-types'
+import type { BrowserLoadError } from '../workspaces/browser-workspace-types'
 
 export type BrowserGuestMetadata = {
   browserPageId: string

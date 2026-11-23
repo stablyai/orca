@@ -1,4 +1,7 @@
-import type { DiscoveredSkill, SkillDiscoverySource } from '../../../../shared/skills'
+import type {
+  DiscoveredSkill,
+  SkillDiscoverySource
+} from '../../../../shared/skills/discovery/skills'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { agentReadsSkill } from './agent-skill-coverage'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'

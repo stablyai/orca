@@ -15,14 +15,12 @@ import {
   buildPluginPanelShellHtml,
   type PluginFrameSurface
 } from '../../../shared/plugins/frames/plugin-panel-shell'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
-import type { PluginHostCaller } from '../plugin-service-host-call'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
+import type { PluginHostCaller } from '../runtime/plugin-service-host-call'
 import { getPluginHostMethodSpec } from '../../../shared/plugins/workers/plugin-host-api'
-import type { PluginContentVerifier } from '../plugin-content-integrity'
-import {
-  PLUGIN_PANEL_ENTRY_MAX_BYTES,
-  readContainedPluginArtifactText
-} from '../plugin-artifact-validation'
+import type { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
+import { PLUGIN_PANEL_ENTRY_MAX_BYTES } from '../../../shared/plugins/frames/plugin-frame-entry-limits'
+import { readContainedPluginArtifactText } from '../artifacts/plugin-contained-artifact'
 import {
   PluginPanelSessions,
   type PluginPanelSessionBinding,

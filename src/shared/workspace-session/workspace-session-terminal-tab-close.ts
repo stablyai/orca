@@ -1,5 +1,11 @@
-import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from '../tab-types'
+import type {
+  Tab,
+  TabGroup,
+  TabGroupLayoutNode,
+  WorkspaceVisibleTabType
+} from '../workspace-layout/tab-groups/tab-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
+import { forgetDesktopRelayKeys } from './desktop-relay-ownership'
 
 export type WorkspaceSessionTerminalTabCloseResult = {
   session: WorkspaceSessionState
@@ -232,7 +238,8 @@ export function closeTerminalTabInWorkspaceSession(
   const nextLayout = pruneGroupLayout(session.tabGroupLayouts?.[worktreeId], validGroupIds)
 
   const next: WorkspaceSessionState = {
-    ...session,
+    // A closed tab's relay id stays gone even if a window still sends it.
+    ...forgetDesktopRelayKeys(session, [tabId]),
     tabsByWorktree: {
       ...session.tabsByWorktree,
       [worktreeId]: (session.tabsByWorktree[worktreeId] ?? []).filter((tab) => tab.id !== tabId)

@@ -3,14 +3,14 @@ import type {
   BrowserCookieImportResult,
   BrowserPage,
   BrowserSessionProfile
-} from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type {
   BrowserSlice,
   BrowserCookieImportExecutionResult,
@@ -136,15 +136,18 @@ export function getBrowserProfilesForHost(
   )
 }
 
+/** The host whose browser profiles a host's pages use: only paired runtimes keep their own; every other host renders on this desktop's. */
+export function getBrowserProfileHostId(hostId: ExecutionHostId): ExecutionHostId {
+  return parseExecutionHostId(hostId)?.kind === 'runtime' ? hostId : LOCAL_EXECUTION_HOST_ID
+}
+
 /** The host's chosen default profile for new tabs, or null for Default. */
 export function getDefaultBrowserProfileForHost(
   state: Pick<AppState, 'settings'>,
   hostId: ExecutionHostId
 ): string | null {
-  // Why: only paired runtimes keep their own profiles; every other host renders on this desktop's.
-  const profileHostId =
-    parseExecutionHostId(hostId)?.kind === 'runtime' ? hostId : LOCAL_EXECUTION_HOST_ID
-  const profileId = state.settings?.browserDefaultProfileIdByHostId?.[profileHostId]
+  const profileId =
+    state.settings?.browserDefaultProfileIdByHostId?.[getBrowserProfileHostId(hostId)]
   return typeof profileId === 'string' ? profileId : null
 }
 

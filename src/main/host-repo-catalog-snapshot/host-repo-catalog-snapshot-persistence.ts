@@ -1,4 +1,4 @@
-import type { HostRepoCatalogSnapshot } from '../../shared/host-repo-catalog-snapshot'
+import type { HostRepoCatalogSnapshot } from '../../shared/execution-host/host-repo-catalog-snapshot'
 import type { StoreRuntimeState } from '../persistence/loading-store/store-runtime-state'
 import type { WriteSchedulingOperations } from '../persistence/loading-store/profile-writing/write-scheduling'
 import { scheduleSave } from '../persistence/loading-store/profile-writing/write-scheduling'

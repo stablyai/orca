@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import { getDefaultSettings } from '../../../../shared/constants'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { ThemeStep } from './ThemeStep'
 import { seedPluginThemes } from './onboarding-theme-fixture-themes'
 

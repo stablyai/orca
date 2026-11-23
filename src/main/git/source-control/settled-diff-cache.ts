@@ -1,4 +1,4 @@
-import { BoundedMap } from '../../../shared/bounded-map'
+import { BoundedMap } from '../../../shared/collections/bounded-map'
 import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
 import type { GitLineStats } from '../../../shared/git/status/git-uncommitted-line-stats'
 import {

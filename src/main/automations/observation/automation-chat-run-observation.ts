@@ -4,7 +4,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { createAutomationOutputSnapshotBuffer } from '../launch/automation-launch'
 import type { AutomationRunCompletionObservation } from './run-completion-watcher'
 

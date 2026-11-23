@@ -1,6 +1,6 @@
 import { memo, useSyncExternalStore } from 'react'
 import { Text, View } from 'react-native'
-import { DICTATION_GRAPES } from '../../../src/shared/dictation-audio-meter'
+import { DICTATION_GRAPES } from '../../../src/shared/speech/dictation/dictation-audio-meter'
 import {
   useMobileDictationMeterState,
   type MobileDictationMeter

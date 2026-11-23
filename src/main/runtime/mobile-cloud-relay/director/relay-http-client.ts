@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { E2EEKeypair } from '../../rpc/server/pairing/e2ee-keypair'
 import { cancelUnreadResponseBody } from '../../../lib/unread-response-body'
-import { parseRetryAfterHeaderMs } from '../../../../shared/retry-after-header'
+import { parseRetryAfterHeaderMs } from '../../../../shared/network/retry-after-header'
 import {
   RelayAssignAbortedError,
   RelayAssignRateLimitedError,
@@ -38,12 +38,37 @@ const AssignmentResponseSchema = z
       .string()
       .min(1)
       .max(8 * 1024),
-    regionCorrection: RelayRegionCorrectionResponseSchema.optional().catch(undefined)
+    regionCorrection: RelayRegionCorrectionResponseSchema.optional().catch(undefined),
+    // Validated per entry in relayAlternateCellUrls so a bad entry never rejects the assignment.
+    alternateCellUrls: z.unknown().optional(),
+    // Validated in relayAuthOrigin so a bad value never rejects the assignment.
+    authOrigin: z.unknown().optional()
   })
   .strict()
 
+// Mirror relay-contract RELAY_HOST_CAPABILITY_ORIGIN_ALTERNATES and
+// RELAY_HOST_CAPABILITY_FRONT_DOOR_AUTH. A header, not a body key, so an older director ignores it;
+// a director sends alternateCellUrls / authOrigin only when it sees the matching capability.
+export const RELAY_ASSIGN_CAPABILITY_HEADERS = {
+  'x-orca-host-capabilities': 'origin-alternates-v1, front-door-auth-v1'
+} as const
+
+// Mirror relay-contract AssignmentResponse.alternateCellUrls: at most two origins.
+const RELAY_MAX_ALTERNATE_CELL_URLS = 2
+
 export type RelayAuthorization = z.infer<typeof RelayTokenResponseSchema>
-export type RelayAssignment = z.infer<typeof AssignmentResponseSchema>
+export type RelayAssignment = Omit<
+  z.infer<typeof AssignmentResponseSchema>,
+  'alternateCellUrls' | 'authOrigin'
+> & {
+  // Other origins reaching the same host session as cellUrl, in preference order; never cellUrl.
+  // RelayControlOrigin resumes the control on these when the cellUrl path stalls (desktop only).
+  alternateCellUrls?: string[]
+  // A second origin for relay token renewal (the front door this assignment routes through), which
+  // serves /v1/desktop/auth/refresh and /v1/desktop/auth/relay-token. Only ever cellUrl or one of
+  // alternateCellUrls, so credentials go nowhere the relay JWT does not already go.
+  authOrigin?: string
+}
 
 export class RelayHttpError extends Error {
   constructor(
@@ -97,6 +122,47 @@ function isAllowedRelayOrigin(value: string): boolean {
   } catch {
     return false
   }
+}
+
+function isCanonicalHttpsOrigin(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && url.origin === value
+  } catch {
+    return false
+  }
+}
+
+// Drop entries that are invalid, duplicate, or equal to cellUrl instead of failing the answer.
+function relayAlternateCellUrls(value: unknown, cellUrl: string): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined
+  }
+  const kept: string[] = []
+  for (const entry of value.slice(0, RELAY_MAX_ALTERNATE_CELL_URLS)) {
+    if (
+      typeof entry === 'string' &&
+      entry.length <= 2048 &&
+      entry !== cellUrl &&
+      !kept.includes(entry) &&
+      isCanonicalHttpsOrigin(entry)
+    ) {
+      kept.push(entry)
+    }
+  }
+  return kept.length > 0 ? kept : undefined
+}
+
+// Keep authOrigin only when it is a canonical https origin this assignment already connects to.
+function relayAuthOrigin(
+  value: unknown,
+  cellUrl: string,
+  alternateCellUrls: string[] | undefined
+): string | undefined {
+  if (typeof value !== 'string' || !isCanonicalHttpsOrigin(value)) {
+    return undefined
+  }
+  return value === cellUrl || alternateCellUrls?.includes(value) ? value : undefined
 }
 
 export async function exchangeRelayAuthorization(input: {
@@ -175,7 +241,8 @@ async function sendRelayAssignment(
     method: 'POST',
     headers: {
       authorization: `Bearer ${input.relayToken}`,
-      'content-type': 'application/json'
+      'content-type': 'application/json',
+      ...RELAY_ASSIGN_CAPABILITY_HEADERS
     },
     signal: AbortSignal.timeout(input.requestDeadlineMs ?? RELAY_HTTP_REQUEST_DEADLINE_MS),
     body: JSON.stringify({
@@ -207,5 +274,16 @@ async function sendRelayAssignment(
   if (!parsed.success || !isAllowedRelayOrigin(parsed.data.cellUrl)) {
     throw new RelayHttpError('assignment', 502)
   }
-  return parsed.data
+  const {
+    alternateCellUrls: rawAlternateCellUrls,
+    authOrigin: rawAuthOrigin,
+    ...assignment
+  } = parsed.data
+  const alternateCellUrls = relayAlternateCellUrls(rawAlternateCellUrls, assignment.cellUrl)
+  const authOrigin = relayAuthOrigin(rawAuthOrigin, assignment.cellUrl, alternateCellUrls)
+  return {
+    ...assignment,
+    ...(alternateCellUrls ? { alternateCellUrls } : {}),
+    ...(authOrigin ? { authOrigin } : {})
+  }
 }

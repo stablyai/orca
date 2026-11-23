@@ -1,4 +1,4 @@
-import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
 import { join, resolve } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { lstat, readdir } from '../../../filesystem/asar-transparent-fs'
@@ -7,8 +7,10 @@ import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { CLIENT_REMOVAL_HOME } from '../../../workspaces/removal/worktree-removal-home-guard'
 import {
   assertWorktreeUnlockedForRemoval,
+  differentCheckoutAtPathError,
   unregisteredFolderRefusal
 } from '../../../../shared/worktree/removal/removal'
+import { readCheckoutMarkerState } from '../../../workspaces/removal/worktree-removal-gitdir-identity'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canSafelyRemoveOrphanedWorktreeDirectory,
@@ -49,10 +51,55 @@ export async function removeWindowsCheckout(
   force: boolean,
   options: RemoveWorktreeOptions
 ): Promise<void> {
+  let pinnedMarker = options.expectedMarker
+  let forbidMarker = options.forbidAnyMarker ?? false
   await removeHostCheckout(
     root,
-    (checkClean) => authorizeWindowsCheckout(repo, root, force, options, false, checkClean),
-    options.checkoutDeleteSignal
+    async (checkClean) => {
+      if (pinnedMarker === undefined && !forbidMarker) {
+        const initial = await readCheckoutMarkerState(root, options)
+        if (initial.kind === 'file') {
+          pinnedMarker = initial.identity
+        } else if (initial.kind === 'other') {
+          throw differentCheckoutAtPathError(root)
+        }
+      }
+      return authorizeWindowsCheckout(
+        repo,
+        root,
+        force,
+        {
+          ...options,
+          ...(pinnedMarker !== undefined ? { expectedMarker: pinnedMarker } : {}),
+          ...(forbidMarker ? { forbidAnyMarker: true } : {})
+        },
+        false,
+        checkClean
+      )
+    },
+    options.checkoutDeleteSignal,
+    async (): Promise<boolean> => {
+      if (forbidMarker) {
+        if (!(await nativeWindowsMarkerMissing(root, options))) {
+          throw differentCheckoutAtPathError(root)
+        }
+        return false
+      }
+      if (pinnedMarker !== undefined) {
+        const current = await readCheckoutMarkerState(root, options)
+        throwIfSignalAborted(options.checkoutDeleteSignal)
+        if (current.kind === 'absent') {
+          return false
+        }
+        if (current.kind !== 'file' || current.identity !== pinnedMarker) {
+          throw differentCheckoutAtPathError(root)
+        }
+        return true
+      }
+      const markerMissing = await nativeWindowsMarkerMissing(root, options)
+      throwIfSignalAborted(options.checkoutDeleteSignal)
+      return !markerMissing
+    }
   )
 }
 
@@ -167,6 +214,35 @@ async function authorizeWindowsCheckoutReads(
     }
     return false
   }
+  const verifyPinnedMarker = async (): Promise<boolean> => {
+    if (options.forbidAnyMarker) {
+      if (!(await nativeWindowsMarkerMissing(root, options))) {
+        throw differentCheckoutAtPathError(root)
+      }
+      return false
+    }
+    if (options.expectedMarker !== undefined) {
+      const markerState = await readCheckoutMarkerState(root, options)
+      checkStopped()
+      if (markerState.kind === 'absent') {
+        if (beforeTeardown) {
+          const names = await readdir(root)
+          checkStopped()
+          if (names.length > 0) {
+            throw unregisteredFolderRefusal(root)
+          }
+        }
+        return false
+      }
+      if (markerState.kind !== 'file' || markerState.identity !== options.expectedMarker) {
+        throw differentCheckoutAtPathError(root)
+      }
+    }
+    return true
+  }
+  if (!(await verifyPinnedMarker())) {
+    return false
+  }
   const safe = await canSafelyRemoveOrphanedWorktreeDirectory(root, repo, CLIENT_REMOVAL_HOME)
   checkStopped()
   if (!safe) {
@@ -198,6 +274,9 @@ async function authorizeWindowsCheckoutReads(
     await assertWorktreeCleanForRemoval(root, force, options, admin)
     checkStopped()
     return authorizeWindowsCheckoutReads(repo, root, force, options, beforeTeardown, false)
+  }
+  if (!(await verifyPinnedMarker())) {
+    return false
   }
   checkStopped()
   return true

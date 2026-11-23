@@ -1,15 +1,17 @@
 import { randomBytes } from 'node:crypto'
-import type { RuntimeTransportMetadata } from '../../../../shared/runtime-bootstrap'
+import type { RuntimeTransportMetadata } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
 import type { RpcTransport } from '../transport'
 import type { WebSocket } from 'ws'
 import type { DeviceRegistry } from './pairing/device-registry'
+import { RuntimeClientConnectionLog } from './runtime-rpc-client-connection-log'
 import type { E2EEKeypair } from './pairing/e2ee-keypair'
 import type { RuntimeHostDescriptor } from '../../../../shared/remote-runtime/host-status/runtime-host-descriptor'
 import type { UnpairedDeviceAuthThrottle } from '../mobile/unpaired-device-auth-throttle'
-import type { MobileSocketWiring } from '../mobile/mobile-socket-wiring'
+import type { AuthenticatedMobileSocket, MobileSocketWiring } from '../mobile/mobile-socket-wiring'
+import { isIdlePassiveSocket } from '../mobile/mobile-socket-idle-passive'
 import type { MobileDesktopRelay } from '../../mobile-desktop-relay/mobile-desktop-relay'
 import type { MobileRelayHostCatalog } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
 import { RelayRevokeOutbox } from '../../mobile-cloud-relay/pairing/relay-revoke-outbox'
@@ -79,6 +81,7 @@ export class RuntimeRpcState {
   protected transports: RuntimeTransportMetadata[] = []
   protected metadataOwnershipWatch: RuntimeMetadataOwnershipWatch | null = null
   protected mobileSocketWiring: MobileSocketWiring | null = null
+  protected clientConnectionLog: RuntimeClientConnectionLog | null = null
   // Rebind swaps transports inside session wiring so captured relay sockets remain attached.
   protected detachWebSocketWiring: (() => void) | null = null
   protected mobileRelayPairingProvider: MobileRelayPairingProvider | null = null
@@ -94,12 +97,14 @@ export class RuntimeRpcState {
   protected mobileRelayPairingOfferQueue: Promise<void> = Promise.resolve()
   protected mobileRelayPairingOfferInFlight: {
     generation: number
+    createdByDeviceId: string | undefined
     address: string | null
     rotate: boolean
     request: Promise<MobilePairingOffer>
   } | null = null
   protected mobilePairingOfferGeneration = 0
   protected onUnpairedDeviceAuthFailure: (() => void) | null = null
+  protected onPairedDevicesChanged: (() => void) | null = null
   protected unpairedDeviceAuthThrottle: UnpairedDeviceAuthThrottle | null = null
   protected readonly binaryMessageRouter = new RuntimeBinaryMessageRouter()
   protected readonly wsDispatchAbortStates = new Map<
@@ -163,6 +168,14 @@ export class RuntimeRpcState {
     this.runtime.configureNotificationDismissalStore(userDataPath)
   }
 
+  /** A passive watcher's requests are not use either, or opening one would reset the idle clock. */
+  protected trackSocketRequest<T>(
+    socket: Pick<AuthenticatedMobileSocket, 'clientCapabilities'>,
+    work: () => Promise<T>
+  ): Promise<T> {
+    return isIdlePassiveSocket(socket) ? work() : this.trackClientRequest(work)
+  }
+
   /** Counts a client message for idle exit, from receipt until its dispatch settles. */
   protected trackClientRequest<T>(work: () => Promise<T>): Promise<T> {
     this.clientRequestsInFlight += 1
@@ -171,5 +184,12 @@ export class RuntimeRpcState {
       this.clientRequestsInFlight -= 1
       this.lastClientRequestAt = Date.now()
     })
+  }
+
+  /** One log per socket wiring: a relay close that lands after stop must not touch a later session's counts. */
+  protected startClientConnectionLog(): RuntimeClientConnectionLog {
+    this.clientConnectionLog?.close()
+    this.clientConnectionLog = new RuntimeClientConnectionLog()
+    return this.clientConnectionLog
   }
 }

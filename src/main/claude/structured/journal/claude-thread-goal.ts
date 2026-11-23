@@ -5,7 +5,12 @@ import type {
   AgentJournalThreadGoal
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { claudeRecord, claudeText } from './claude-structured-item-translation'
+import {
+  claudeRecord,
+  claudeText,
+  type ClaudeMessageEnvelope
+} from './claude-structured-item-translation'
+import { sliceAtCodeUnitLimit } from '../../../../shared/text/surrogate-safe-text-slice'
 import { isRootClaudeFrame } from '../turns/claude-turn-opening'
 import type { ClaudeGoalBackgroundWork } from '../../background-tasks/claude-background-task-tracker'
 
@@ -56,6 +61,13 @@ function goalRow(text: string, goal: AgentJournalThreadGoal | null): GoalStatusB
 }
 
 type GoalRowWrite = { identity: AgentJournalItemIdentity; body: GoalStatusBody }
+
+/** A settled goal's row; with `stopped`, the writer picks and `adopt` records its reading. */
+export type ClaudeGoalSettlement = {
+  ran: GoalRowWrite | null
+  stopped?: GoalRowWrite | null
+  adopt?: (stopped: boolean) => void
+}
 type SavedGoal = {
   goal: AgentJournalThreadGoal | null
   row: { identity: AgentJournalItemIdentity; text: string } | null
@@ -111,6 +123,27 @@ export class ClaudeThreadGoal {
     return goalRow(text, next)
   }
 
+  goalCheckText(envelope: ClaudeMessageEnvelope): string | null {
+    const goal = this.current
+    const text = claudeText(claudeRecord(envelope.content[0])?.text)
+    if (!goal || goal.status !== 'active' || !text) {
+      return null
+    }
+    const shortened = sliceAtCodeUnitLimit(goal.objective, 500)
+    const labels = [goal.objective]
+    if (shortened.length < goal.objective.length) {
+      labels.push(`${shortened}… [+${goal.objective.length - shortened.length} chars]`)
+    }
+    const prefix = labels
+      .map((label) => `Stop hook feedback:\n[${label}]: `)
+      .find((value) => text.startsWith(value))
+    if (!prefix) {
+      return null
+    }
+    const reason = text.slice(prefix.length).trim()
+    return /\n\[[^\n]+\]: /u.test(reason) ? null : reason
+  }
+
   observe(message: Record<string, unknown>): void {
     const reply = claudeRecord(message.message)
     if (
@@ -128,11 +161,12 @@ export class ClaudeThreadGoal {
     result: Record<string, unknown>,
     end: {
       backgroundWork: ClaudeGoalBackgroundWork
-      stoppedByPerson: boolean
+      /** Whether a person's Stop could have decided the ending turn. */
+      stoppable: boolean
       turnStartedAt: number | null
     },
     observedAt: number
-  ): GoalRowWrite | null {
+  ): ClaudeGoalSettlement | null {
     if (!isRootClaudeFrame(result)) {
       return null
     }
@@ -151,25 +185,40 @@ export class ClaudeThreadGoal {
       result.subtype === 'success' &&
       result.is_error !== true &&
       (result.terminal_reason === undefined || result.terminal_reason === 'completed') &&
-      end.backgroundWork === 'exited' &&
-      !end.stoppedByPerson
-    const next: AgentJournalThreadGoal = {
+      end.backgroundWork === 'exited'
+    const reading = (status: 'complete' | 'active'): AgentJournalThreadGoal => ({
       ...goal,
-      status: met ? 'complete' : 'active',
+      status,
       timeUsedSeconds: goal.timeUsedSeconds + Math.max(0, Math.floor((observedAt - since) / 1000)),
       updatedAt: observedAt
+    })
+    const active = reading('active')
+    // Reuse the persisted row identity across restarts.
+    const activeRow = this.row
+      ? { identity: this.row.identity, body: goalRow(this.row.text, active) }
+      : null
+    this.known = active
+    if (!met) {
+      return { ran: activeRow }
     }
-    this.known = next
-    if (met) {
-      this.row = null
-      return sessionId && uuid
+    const complete = reading('complete')
+    const completeRow =
+      sessionId && uuid
         ? {
-            identity: { provider: 'claude', sessionId, uuid: `${uuid}:goal` },
-            body: goalRow(`Goal complete: ${goal.objective}`, next)
+            identity: { provider: 'claude' as const, sessionId, uuid: `${uuid}:goal` },
+            body: goalRow(`Goal complete: ${goal.objective}`, complete)
           }
         : null
+    const adopt = (stopped: boolean) => {
+      if (!stopped && this.known === active) {
+        this.known = complete
+        this.row = null
+      }
     }
-    // Reuse the persisted row identity across restarts.
-    return this.row ? { identity: this.row.identity, body: goalRow(this.row.text, next) } : null
+    if (!end.stoppable) {
+      adopt(false)
+      return { ran: completeRow }
+    }
+    return { ran: completeRow, stopped: activeRow, adopt }
   }
 }

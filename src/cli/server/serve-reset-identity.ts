@@ -1,6 +1,6 @@
 import type { CommandHandler } from '../dispatch/dispatch'
-import { RuntimeClientError } from '../runtime/types'
-import { resolveLaunchUserDataPath } from '../runtime/launch-user-data-path'
+import { RuntimeClientError } from '../runtime/connection/types'
+import { resolveLaunchUserDataPath } from '../runtime/profile/launch-user-data-path'
 import { pluginDevWatchConfirmFor } from '../plugins/dev-watch/plugin-dev-watch-approval'
 
 const RESET_WARNING =

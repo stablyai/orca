@@ -2,7 +2,7 @@ import type { WorktreeDeleteState, WorktreeDeleteStateTarget } from './worktree-
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 
 type DeleteStateKeyState = Parameters<typeof findKnownWorktreeById>[0]

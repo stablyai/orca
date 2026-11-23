@@ -1,4 +1,4 @@
-import { sharedPromiseSettlementWaiters } from '../../../../src/shared/promise-settlement-waiters'
+import { sharedPromiseSettlementWaiters } from '../../../../src/shared/concurrency/promise-settlement-waiters'
 import { hostStatusProbe } from '../../transport/connection/host-status-probe-operations'
 import { readHostStatusReply } from '../../query/host-status-query'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'

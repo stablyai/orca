@@ -1,8 +1,8 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
-import type { WslHostAddResult } from '../../../../../../shared/wsl-host-types'
-import { WSL_HOST_ADD_REFUSAL_COPY } from '../../../../../../shared/wsl-host-failure-copy'
+import type { WslHostAddResult } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import { WSL_HOST_ADD_REFUSAL_COPY } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
 
 /** Adds a WSL distro as a host, then refreshes the hosts the window lists. */
 export async function addWslHostDistro(args: {

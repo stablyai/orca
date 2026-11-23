@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import {
   AGENT_OUTPUT_FAILURE_COPY as EN,
   type AgentOutputFailureCode
-} from '../../../../shared/agent-output-failure-copy'
+} from '../../../../shared/text-generation/output/agent-output-failure-copy'
 
 type CopyValues = Record<string, string | number>
 

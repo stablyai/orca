@@ -7,7 +7,7 @@ export function getRuntimeEnvironmentRegistryRoot(): string {
 }
 
 /** The pairing a call to this environment should pin; throws for an environment no longer paired. */
-export function readRegisteredPairingRevision(environmentId: string): number {
-  const environment = resolveEnvironment(getRuntimeEnvironmentRegistryRoot(), environmentId)
+export async function readRegisteredPairingRevision(environmentId: string): Promise<number> {
+  const environment = await resolveEnvironment(getRuntimeEnvironmentRegistryRoot(), environmentId)
   return environment.pairingRevision ?? environment.createdAt
 }

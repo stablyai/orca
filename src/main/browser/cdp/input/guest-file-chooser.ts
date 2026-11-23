@@ -1,5 +1,5 @@
 import type { WebContents } from 'electron'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { BrowserError } from '../../browser-error'
 import { acquireElectronDebugger } from '../debugger/electron-debugger-lease'
 import { sendGuestCdpCommand } from '../debugger/guest-cdp-command'

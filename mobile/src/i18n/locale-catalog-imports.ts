@@ -1,4 +1,4 @@
-import type { SupportedUiLocale } from '../../../src/shared/ui-locale'
+import type { SupportedUiLocale } from '../../../src/shared/i18n/ui-locale'
 import type { LocaleCatalog } from './bundled-locale-catalogs'
 
 export { importBundledLocaleCatalog as importLocaleCatalog } from './bundled-locale-catalogs'

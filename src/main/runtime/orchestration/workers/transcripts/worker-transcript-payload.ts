@@ -4,6 +4,7 @@ import type {
   NativeChatMessage
 } from '../../../../../shared/native-chat/native-chat-types'
 import { boundSubagentEntryId } from '../../../../native-chat/subagent-entry-id-bounds'
+import { sliceAtCodeUnitLimit } from '../../../../../shared/text/surrogate-safe-text-slice'
 import { boundWorkerTranscriptActivityBlock } from './worker-transcript-activity-block-bounds'
 import { replaceDispatchCapabilities } from '../../terminal-authority/views/worker-terminal-redaction'
 
@@ -17,6 +18,7 @@ const MAX_WORKER_TRANSCRIPT_INPUT_NODES = 100
 const MAX_WORKER_TRANSCRIPT_METADATA_CHARS = 512
 const MAX_WORKER_TRANSCRIPT_RESPONSE_BYTES = 512 * 1024
 const TRUNCATION_MARKER = '\n… (truncated)'
+const WIRE_SIZE_CLIPPED_WARNING = 'Transcript response was clipped to the wire-size limit.'
 
 type TranscriptBoundState = {
   warnings: Set<string>
@@ -45,7 +47,7 @@ export function boundWorkerTranscriptMessages(
     const next = boundMessage(message, transcriptPath, state)
     const serializedBytes = Buffer.byteLength(JSON.stringify(next), 'utf8') + 1
     if (bounded.length > 0 && bytes + serializedBytes > MAX_WORKER_TRANSCRIPT_RESPONSE_BYTES) {
-      markClipped(state, 'Transcript response was clipped to the wire-size limit.')
+      markClipped(state, WIRE_SIZE_CLIPPED_WARNING)
       return { messages: bounded, limited: true, warnings: [...state.warnings] }
     }
     bounded.push(next)
@@ -54,27 +56,71 @@ export function boundWorkerTranscriptMessages(
   return { messages: bounded, limited: state.clipped, warnings: [...state.warnings] }
 }
 
+/** Select the page, then bound it, so the byte budget trims only this page; resume at `end`. */
+export function pageWorkerTranscriptMessages(args: {
+  messages: readonly NativeChatMessage[]
+  start: number
+  limit: number | undefined
+  /** Archives were bounded when saved; bounding again would re-clip their markers. */
+  alreadyBounded?: boolean
+}): { messages: NativeChatMessage[]; end: number; limited: boolean; warnings: string[] } {
+  const start = Math.min(args.start, args.messages.length)
+  const selected = args.messages.slice(start, start + clampWorkerTranscriptLimit(args.limit))
+  const page = args.alreadyBounded
+    ? { messages: selected, limited: false, warnings: [] }
+    : boundWorkerTranscriptMessages(selected)
+  const end = start + page.messages.length
+  return {
+    messages: page.messages,
+    end,
+    limited: page.limited || end < args.messages.length,
+    warnings: page.warnings
+  }
+}
+
 /** Apply message bounds newest-first for archives; forward-page head bounds would lose the worker's final answer. */
 export function boundWorkerTranscriptTail(
   messages: readonly NativeChatMessage[],
   maxBytes: number
 ): { messages: NativeChatMessage[]; limited: boolean; warnings: string[] } {
+  const tail = boundNewestFirst(messages, maxBytes, undefined)
+  return { messages: tail.messages, limited: tail.cut, warnings: tail.warnings }
+}
+
+/** A first page is the transcript's newest messages, so the byte budget drops its oldest, never the latest work. */
+export function boundWorkerTranscriptNewest(
+  messages: readonly NativeChatMessage[],
+  transcriptPath: string
+): { messages: NativeChatMessage[]; limited: boolean; warnings: string[] } {
+  const tail = boundNewestFirst(messages, MAX_WORKER_TRANSCRIPT_RESPONSE_BYTES, transcriptPath)
+  return {
+    messages: tail.messages,
+    limited: tail.cut || tail.clipped,
+    warnings: tail.cut ? [...new Set([...tail.warnings, WIRE_SIZE_CLIPPED_WARNING])] : tail.warnings
+  }
+}
+
+function boundNewestFirst(
+  messages: readonly NativeChatMessage[],
+  maxBytes: number,
+  transcriptPath: string | undefined
+): { messages: NativeChatMessage[]; cut: boolean; clipped: boolean; warnings: string[] } {
   const state: TranscriptBoundState = { warnings: new Set<string>(), clipped: false }
   const keptReversed: NativeChatMessage[] = []
   let bytes = 2
-  let limited = false
+  let cut = false
   for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const next = boundMessage(messages[index]!, undefined, state)
+    const next = boundMessage(messages[index]!, transcriptPath, state)
     const serializedBytes = Buffer.byteLength(JSON.stringify(next), 'utf8') + 1
     if (keptReversed.length > 0 && bytes + serializedBytes > maxBytes) {
-      limited = true
+      cut = true
       break
     }
     keptReversed.push(next)
     bytes += serializedBytes
   }
   keptReversed.reverse()
-  return { messages: keptReversed, limited, warnings: [...state.warnings] }
+  return { messages: keptReversed, cut, clipped: state.clipped, warnings: [...state.warnings] }
 }
 
 function boundMessage(
@@ -180,7 +226,7 @@ function clipMetadata(value: string, state: TranscriptBoundState): string {
     return redacted
   }
   markClipped(state, 'Oversized transcript metadata was clipped.')
-  return redacted.slice(0, MAX_WORKER_TRANSCRIPT_METADATA_CHARS)
+  return sliceAtCodeUnitLimit(redacted, MAX_WORKER_TRANSCRIPT_METADATA_CHARS)
 }
 
 function clipText(value: string, state: TranscriptBoundState): string {
@@ -189,7 +235,7 @@ function clipText(value: string, state: TranscriptBoundState): string {
     return redacted
   }
   markClipped(state, 'Oversized transcript text was clipped.')
-  return `${redacted.slice(0, MAX_WORKER_TRANSCRIPT_BLOCK_CHARS)}${TRUNCATION_MARKER}`
+  return `${sliceAtCodeUnitLimit(redacted, MAX_WORKER_TRANSCRIPT_BLOCK_CHARS)}${TRUNCATION_MARKER}`
 }
 
 function boundToolInput(
@@ -209,7 +255,7 @@ function boundToolInput(
     budget.remaining -= length
     if (length < redacted.length) {
       markClipped(state, 'Oversized tool input was clipped.')
-      return `${redacted.slice(0, length)}… (truncated)`
+      return `${sliceAtCodeUnitLimit(redacted, length)}… (truncated)`
     }
     return redacted
   }
@@ -239,7 +285,7 @@ function boundToolInput(
       break
     }
     const redactedKey = redactSensitiveText(rawKey, state.warnings)
-    const key = redactedKey.slice(0, Math.min(redactedKey.length, budget.remaining, 128))
+    const key = sliceAtCodeUnitLimit(redactedKey, Math.min(budget.remaining, 128))
     if (key.length < redactedKey.length) {
       markClipped(state, 'Oversized tool input was clipped.')
     }

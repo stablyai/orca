@@ -1,4 +1,4 @@
-import { abortSignalReason } from '../../../../src/shared/abort-signal-reason'
+import { abortSignalReason } from '../../../../src/shared/concurrency/abort-signal-reason'
 import { isLinkLocalEndpoint } from '../../../../src/shared/network/link-local-address'
 import type { HostProfile } from '../../host-catalog/host-profile'
 import type { RpcClient } from '../rpc/rpc-client-contract'

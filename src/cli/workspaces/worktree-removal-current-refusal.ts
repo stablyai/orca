@@ -1,6 +1,6 @@
 import { getOptionalStringFlag } from '../arguments/flags'
 import { assertLocalCwdWorktreeSelector } from '../hosts/local-environment-selector'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
 import { resolveCurrentWorktreeSelector } from '../workspace-selection/workspace-selector'
 import { quoteCliCommandArgument } from '../arguments/shell-command-quote'

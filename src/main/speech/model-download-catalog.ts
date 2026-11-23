@@ -1,4 +1,4 @@
-import type { SpeechModelDownloadFile, SpeechModelManifest } from '../../shared/speech-types'
+import type { SpeechModelDownloadFile, SpeechModelManifest } from '../../shared/speech/speech-types'
 
 type DownloadFileSpec = readonly [name: string, sizeBytes: number, sha256: string]
 

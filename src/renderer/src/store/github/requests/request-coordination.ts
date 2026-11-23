@@ -14,7 +14,7 @@ import type { GetProjectViewTableResult } from '../../../../../shared/github/pro
 import type { LinkedReviewClearScope } from '../pull-requests/linked-review-clear'
 import type { AppState } from '../../types'
 import { matchesRepoCacheEviction, type RepoCacheEviction } from '../cache/cache-identity'
-import type { PromiseSettlementWaiters } from '../../../../../shared/promise-settlement-waiters'
+import type { PromiseSettlementWaiters } from '../../../../../shared/concurrency/promise-settlement-waiters'
 
 export type InflightPR = {
   promise: Promise<PRInfo | null>
@@ -92,19 +92,6 @@ export function ownsInflightRequest<T extends { requestId: number }>(
   requestId: number
 ): boolean {
   return registry.get(key)?.requestId === requestId
-}
-
-export function _getGitHubPRRequestGenerationCountForTest(): number {
-  return prRequestGenerations.size
-}
-
-export function _getGitHubPRRefreshStartedEntryCountForTest(): number {
-  return prRefreshStartedHostedReviewEntries.size
-}
-
-export function _clearGitHubPRRefreshStartedEntriesForTest(): void {
-  prRefreshStartedHostedReviewEntries.clear()
-  prRefreshStartedLinkedReviewScopes.clear()
 }
 
 const PROVIDER_REQUEST_CONCURRENCY = 8

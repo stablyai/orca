@@ -1,4 +1,7 @@
-import { SERVE_USER_DATA_PATH_ENV, isSameUserDataPath } from '../../../shared/serve-user-data-path'
+import {
+  SERVE_USER_DATA_PATH_ENV,
+  isSameUserDataPath
+} from '../../../shared/remote-runtime/serve-supervisor/serve-user-data-path'
 
 /** Reject mismatched serve profiles before locking: a lock loss on the wrong profile can activate the user's desktop. */
 export function checkServeUserDataPath(options: {

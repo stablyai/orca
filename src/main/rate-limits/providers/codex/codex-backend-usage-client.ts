@@ -1,4 +1,4 @@
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { cancelUnreadResponseBody } from '../../../lib/unread-response-body'
 import { abortSignalWithTimeout } from '../../../lib/abort-signal-with-timeout'
 import {
@@ -135,17 +135,20 @@ export async function supplementCodexUsageWindows(
       return limits
     }
     const rateLimitResetCredits = backend.rateLimitResetCredits ?? limits.rateLimitResetCredits
+    const planType = backend.planType ?? limits.planType
     if (!backend.session) {
       const monthly = limits.weekly ? null : backend.monthly
-      return !monthly && rateLimitResetCredits === limits.rateLimitResetCredits
+      return !monthly &&
+        rateLimitResetCredits === limits.rateLimitResetCredits &&
+        planType === limits.planType
         ? limits
-        : { ...limits, monthly, rateLimitResetCredits }
+        : { ...limits, monthly, rateLimitResetCredits, planType }
     }
     return {
       ...limits,
       session: backend.session,
       weekly: backend.weekly ?? limits.weekly,
-      planType: backend.planType ?? limits.planType,
+      planType,
       ...(rateLimitResetCredits !== undefined ? { rateLimitResetCredits } : {}),
       updatedAt: backend.updatedAt
     }

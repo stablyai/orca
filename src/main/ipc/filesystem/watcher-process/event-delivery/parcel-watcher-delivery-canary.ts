@@ -9,7 +9,7 @@ import {
   hasShallowWatchDelivered,
   noteShallowWatchDelivered
 } from '../native-subscriptions/shallow-watch-delivery-probe'
-import { errorMessage } from '../../../../../shared/error-message'
+import { errorMessage } from '../../../../../shared/errors/error-message'
 
 const CANARY_INTERVAL_MS = 10_000
 const CANARY_EVENT_TIMEOUT_MS = 5_000

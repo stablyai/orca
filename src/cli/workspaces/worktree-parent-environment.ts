@@ -1,20 +1,20 @@
 import { isRecoverableRemoteRuntimeConnectionError } from '../../shared/remote-runtime/remote-runtime-client-error-classification'
 import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
-import type { RuntimeWorktreeRecord } from '../../shared/runtime-worktree-contracts'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeWorktreeRecord } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { CrossStoreParentRef } from '../../shared/worktree/lineage-types'
 import { crossStoreParentRefOfRow } from '../../shared/worktree/lineage/lineage-row-identity'
 import {
   supportsCrossStoreLineage,
   WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY
-} from '../../shared/worktree-runtime-capabilities'
+} from '../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { getOptionalParentSelector } from '../workspace-selection/caller-folder-workspace'
 import { getOptionalStringFlag } from '../arguments/flags'
 import { mayNameFolderWorkspace } from '../workspace-selection/folder-workspace-selector'
 import { isLocalEnvironmentSelector, LOCAL_ENVIRONMENT } from '../hosts/local-environment-selector'
 import { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import { RuntimeClientError } from '../runtime/connection/types'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 import { describeClientEnvironment, environmentLabel } from './workspace-address'
 import { attachCliErrorData } from './worktree-setup-decision-recovery'
@@ -28,8 +28,11 @@ function isCallerRelative(selector: string | undefined): boolean {
   return selector === 'active' || selector === 'current'
 }
 
-function savedParentEnvironment(userDataPath: string, value: string): ParentEnvironment {
-  const saved = listEnvironments(userDataPath)
+async function savedParentEnvironment(
+  userDataPath: string,
+  value: string
+): Promise<ParentEnvironment> {
+  const saved = await listEnvironments(userDataPath)
   const byId = saved.find((environment) => environment.id === value)
   const byName = saved.filter((environment) => environment.name === value)
   const found = byId ?? (byName.length === 1 ? byName[0] : undefined)
@@ -62,10 +65,10 @@ function savedParentEnvironment(userDataPath: string, value: string): ParentEnvi
  * same-environment parents. A caller-relative parent (active/current) is always on the caller's own
  * Orca, so against another environment it is implicitly `local`.
  */
-export function resolveParentEnvironment(
+export async function resolveParentEnvironment(
   flags: Map<string, string | boolean>,
   client: RuntimeClient
-): ParentEnvironment | undefined {
+): Promise<ParentEnvironment | undefined> {
   const parentSelector = getOptionalStringFlag(flags, 'parent-worktree')
   const value = getOptionalStringFlag(flags, 'parent-environment')
   if (flags.has('parent-environment')) {
@@ -82,7 +85,7 @@ export function resolveParentEnvironment(
   const named = value
     ? isLocalEnvironmentSelector(value)
       ? LOCAL
-      : savedParentEnvironment(client.userDataPath, value)
+      : await savedParentEnvironment(client.userDataPath, value)
     : undefined
   if (isCallerRelative(parentSelector) && named && named.route !== LOCAL_ENVIRONMENT) {
     throw new RuntimeClientError(
@@ -97,7 +100,8 @@ export function resolveParentEnvironment(
     )
   }
   const parentEnvironment = named ?? (isCallerRelative(parentSelector) ? LOCAL : undefined)
-  return parentEnvironment && parentEnvironment.route !== describeClientEnvironment(client).id
+  return parentEnvironment &&
+    parentEnvironment.route !== (await describeClientEnvironment(client)).id
     ? parentEnvironment
     : undefined
 }
@@ -120,7 +124,7 @@ async function assertChildSavesCrossStoreParents(client: RuntimeClient): Promise
   if (supportsCrossStoreLineage(status.capabilities)) {
     return
   }
-  const environment = describeClientEnvironment(client)
+  const environment = await describeClientEnvironment(client)
   throw new RuntimeClientError(
     'incompatible_runtime',
     `Update Orca in ${environmentLabel(environment)} to nest workspaces under a parent in another environment. Nothing was changed.`,
@@ -277,7 +281,7 @@ export async function callNamingParentEnvironment<
       throw error
     }
     const code = error.code
-    const environment = describeClientEnvironment(client)
+    const environment = await describeClientEnvironment(client)
     throw attachCliErrorData(
       error,
       searchedEnvironmentData(

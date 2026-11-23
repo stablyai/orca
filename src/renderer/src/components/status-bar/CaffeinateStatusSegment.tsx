@@ -23,8 +23,8 @@ import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode,
   type ComputerAwakeStatus
-} from '../../../../shared/computer-awake-mode'
-import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
+} from '../../../../shared/app-lifecycle/computer-awake-mode'
+import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './composition/status-bar-context-menu-policy'
 
 const INACTIVE_STATUS: ComputerAwakeStatus = {
   mode: 'off',
@@ -37,11 +37,7 @@ function activityLabel(active: boolean, t: Translate = translate): string {
     : t('auto.components.status.bar.CaffeinateStatusSegment.inactive', 'Inactive')
 }
 
-export function CaffeinateStatusSegment({
-  iconOnly
-}: {
-  iconOnly: boolean
-}): React.JSX.Element | null {
+export function CaffeinateStatusSegment(): React.JSX.Element | null {
   const t = useTranslate()
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
@@ -103,9 +99,7 @@ export function CaffeinateStatusSegment({
               aria-label={ariaLabel}
             >
               <Coffee className={`size-3 ${active ? 'text-foreground' : ''}`} />
-              {!iconOnly ? (
-                <span className="text-[11px] font-medium">{getAgentAwakeModeLabel(mode, t)}</span>
-              ) : null}
+              <span className="text-[11px] font-medium">{getAgentAwakeModeLabel(mode, t)}</span>
               <span
                 aria-hidden
                 className={`size-1.5 rounded-full ${

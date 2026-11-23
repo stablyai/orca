@@ -2,11 +2,11 @@ import React from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { openWslHostsExperimentalSetting } from '../../../sidebar/use-wsl-hosts-enabled'
+import { openWslHostsExperimentalSetting } from '../../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import {
   getWslHostsTurnedOffLabel,
   getWslHostsTurnOnLabel
-} from '../../../sidebar/wsl-host-row-status'
+} from '../../../sidebar/host-admission/wsl/wsl-host-row-status'
 import type { WslHostReadOutage } from '../../../wsl-host-stopped/use-stopped-wsl-host'
 import { WslHostStoppedNotice } from '../../../wsl-host-stopped/WslHostStoppedNotice'
 

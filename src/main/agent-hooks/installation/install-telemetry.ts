@@ -1,5 +1,5 @@
-import { errnoCodeOrUnknown } from '../../../shared/errno-code'
-import type { HookInstallAgent } from '../../../shared/telemetry-daemon-event-schemas'
+import { errnoCodeOrUnknown } from '../../../shared/errors/errno-code'
+import type { HookInstallAgent } from '../../../shared/telemetry/schemas/telemetry-daemon-event-schemas'
 import { track } from '../../telemetry/client'
 
 export function recordManagedHookInstallFailure(agent: HookInstallAgent, error: unknown): void {

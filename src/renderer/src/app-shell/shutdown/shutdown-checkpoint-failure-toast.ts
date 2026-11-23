@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { consumeShutdownCheckpointFailureReason } from '../../../../shared/renderer-shutdown-events'
+import { consumeShutdownCheckpointFailureReason } from '../../../../shared/app-lifecycle/shutdown/renderer-shutdown-events'
 
 export function showShutdownCheckpointFailureToast(
   canceledAction: 'quit' | 'reload' = 'quit'

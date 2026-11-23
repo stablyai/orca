@@ -1,7 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type { MobileRelayStatusDetail } from '../../../shared/remote-runtime/relay/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
-import type { RuntimePairingReach } from '../../../shared/runtime-pairing-reach'
+import type { RuntimePairingReach } from '../../../shared/remote-runtime/pairing/runtime-pairing-reach'
 import type { MobileRelayMintFailure } from '../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import type { PreloadApi } from '../../api-types'
 
@@ -85,6 +85,12 @@ export const mobileApi = {
       callback(detail)
     ipcRenderer.on('mobile:relayStatusChanged', listener)
     return () => ipcRenderer.removeListener('mobile:relayStatusChanged', listener)
+  },
+
+  onDevicesChanged: (callback: () => void): (() => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('mobile:devicesChanged', listener)
+    return () => ipcRenderer.removeListener('mobile:devicesChanged', listener)
   },
 
   consumePendingUnpairedDeviceAuthFailure: (): Promise<boolean> =>

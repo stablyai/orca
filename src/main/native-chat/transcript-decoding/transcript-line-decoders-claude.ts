@@ -6,21 +6,25 @@ import {
   type NativeChatMessage
 } from '../../../shared/native-chat/native-chat-types'
 import { asRecord } from '../../ai-vault/parsing/session-record-fields'
-import { extractString } from '../../../shared/trimmed-string'
+import { extractString } from '../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../ai-vault/parsing/session-json-object'
 import { timestampMs } from '../../ai-vault/parsing/session-record-time'
-import { imageSourcePathFromText } from '../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
+import { imageSourcePathFromText } from '../../../shared/native-chat/transcript/images/native-chat-image-transcript-markers'
 import { claudeContentBlocks } from './transcript-record-blocks'
+import { isClaudeToolResultContent } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-tool-content'
 import { isKnownRasterImageMimeType } from '../../../shared/file-preview/raster-image-preview-limits'
-import { unwrapClaudePastedContentBlock } from '../../../shared/claude-pasted-content'
-import { unwrapClaudeBashInputBlock } from '../../../shared/claude-bash-input'
+import { unwrapClaudePastedContentBlock } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-pasted-content'
+import { unwrapClaudeBashInputBlock } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-bash-input'
 import { claudeInterruptedMessageId } from './transcript-turn-markers'
 import { claudeStopHookFeedbackRow } from '../../claude/structured/journal/claude-stop-hook-feedback'
 import { structuredAgentSessionStatusBlock } from '../../../shared/agent-session/view/structured-agent-session-status-block'
 import {
   claudeMessageWithoutSyntheticText,
-  isClaudeInjectedUserMessage
+  isClaudeInjectedUserMessage,
+  isClaudeTaskNotificationTurnStart
 } from '../../claude/structured/journal/claude-internal-message-content'
+import { NATIVE_CHAT_PROVIDER_TURN_START_PRESENTATION } from '../../../shared/native-chat/transcript/turns/native-chat-provider-turn-start'
+import { claudeLocalCommandReplyText } from '../../claude/transcripts/claude-local-command-reply'
 
 const MAX_EDIT_PATCH_HUNKS = 40
 const MAX_EDIT_PATCH_HUNK_LINES = 400
@@ -84,14 +88,25 @@ export function decodeClaudeTranscriptLine(
     return null
   }
   const role = record.type
-  if (role !== 'user' && role !== 'assistant') {
-    return null
-  }
   const timestamp = parseTimestamp(record.timestamp)
   const recordMessageId = extractString(record.uuid) ?? fallbackId
   // parentUuid pairs local command output with its command row.
   const parentUuid = extractString(record.parentUuid)
   const parent = parentUuid ? { parentId: parentUuid } : {}
+  const commandReply = claudeLocalCommandReplyText(record)
+  if (commandReply) {
+    return {
+      id: recordMessageId,
+      role: 'system',
+      blocks: [{ type: 'text', text: commandReply, presentation: 'command-output' }],
+      timestamp,
+      source: 'transcript',
+      ...parent
+    }
+  }
+  if (role !== 'user' && role !== 'assistant') {
+    return null
+  }
   if (claudeInterruptedMessageId(record)) {
     // Render injected interruption text as quiet status rather than a user bubble.
     return {
@@ -137,6 +152,37 @@ export function decodeClaudeTranscriptLine(
     timestamp,
     source: 'transcript',
     ...parent
+  }
+}
+
+/** Chat reads keep where Claude resumed on its own, so journal-less turns split there as structured turns do. */
+export function decodeClaudeChatTranscriptLine(
+  line: string,
+  fallbackId: string
+): NativeChatMessage | null {
+  const record = line.includes('task-notification') ? parseJsonObject(line) : null
+  const content = asRecord(record?.message)?.content
+  // One row per record: a notification that also settles a waiting call keeps its results instead.
+  if (
+    !record ||
+    !isClaudeTaskNotificationTurnStart(record) ||
+    (Array.isArray(content) && content.some(isClaudeToolResultContent))
+  ) {
+    return decodeClaudeTranscriptLine(line, fallbackId)
+  }
+  return {
+    id: extractString(record.uuid) ?? fallbackId,
+    role: 'system',
+    // Harness text: clients that predate the marker strip it as an injected turn.
+    blocks: [
+      {
+        type: 'text',
+        text: '<task-notification>',
+        presentation: NATIVE_CHAT_PROVIDER_TURN_START_PRESENTATION
+      }
+    ],
+    timestamp: parseTimestamp(record.timestamp),
+    source: 'transcript'
   }
 }
 

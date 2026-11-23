@@ -14,7 +14,7 @@ import {
 } from './browser-host-page-initialization-admission'
 import { retireInitializationAuthority } from './browser-host-page-initialization-lifetime'
 import type { BrowserClientHostedPageInventory } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import type {
   BrowserHostLeaseIdentity,
   BrowserHostLeaseState

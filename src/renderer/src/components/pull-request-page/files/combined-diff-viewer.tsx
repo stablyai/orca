@@ -7,7 +7,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useTranslate } from '@/i18n/use-translate'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { useDocumentDarkTheme } from '@/hooks/theme/use-document-dark-theme'
 import { DiffSectionItem } from '@/components/editor/diff/sections/DiffSectionItem'
 import { CombinedDiffFileTree } from '../../editor/combined-diff/browse-files/combined-diff-file-tree'
 import { useCombinedDiffSectionIndexMap } from '../../editor/combined-diff/resolve-changes/use-combined-diff-section-index-map'
@@ -25,7 +25,7 @@ import {
   type PRFilesCombinedDiffViewerProps
 } from '@/components/github/pr-file-diff-mapping'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { prFilesDiffScrollTopCache, prFilesDiffViewStateCache } from '../cache/files-diff-view'
 import { PRFilesDiffToolbar } from './toolbar'
 import { addPullRequestLineComment } from './line-comment'

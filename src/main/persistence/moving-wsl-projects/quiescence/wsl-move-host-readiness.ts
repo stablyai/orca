@@ -5,15 +5,15 @@
  */
 import type { WslRunningDistrosRead } from '../../../wsl/discovery/wsl-background-distro-gate'
 import { wslMoveJournalKey } from '../../../../shared/wsl-move/wsl-move-cutover'
-import type { WslHostAddResult } from '../../../../shared/wsl-host-types'
+import type { WslHostAddResult } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { WslMoveHostReadiness } from '../orchestration/wsl-move-orchestrator-ports'
 
 export type WslMoveHostReadinessDeps = {
   readRunningDistros: () => Promise<WslRunningDistrosRead>
   isHostReady: (distro: string) => boolean
   /** E11: a Remove that could not prove the server stopped; such a host is never touched. */
-  removalPending: (distro: string) => boolean
-  hasHost: (distro: string) => boolean
+  removalPending: (distro: string) => boolean | Promise<boolean>
+  hasHost: (distro: string) => boolean | Promise<boolean>
   /** Connects an added host; called only for a confirmed-running distro. */
   connect: (distro: string) => Promise<void>
   /** Adds a host without starting a stopped distro. */
@@ -26,7 +26,7 @@ export async function prepareWslMoveHost(
   /** False once the user declined the distro (a Remove, a release) during the waits here. */
   stillWanted: () => boolean = () => true
 ): Promise<WslMoveHostReadiness> {
-  if (deps.removalPending(distro)) {
+  if (await deps.removalPending(distro)) {
     return 'failed'
   }
   const running = await deps
@@ -43,13 +43,16 @@ export async function prepareWslMoveHost(
     return 'ready'
   }
   // Re-read after the running-distro await: a Remove may have started, or finished, meanwhile.
-  if (deps.removalPending(distro) || !stillWanted()) {
+  if ((await deps.removalPending(distro)) || !stillWanted()) {
     return 'failed'
   }
   try {
-    if (deps.hasHost(distro)) {
+    if (await deps.hasHost(distro)) {
+      if (!stillWanted()) {
+        return 'failed'
+      }
       await deps.connect(distro)
-    } else if (!(await deps.add(distro)).ok) {
+    } else if (!stillWanted() || !(await deps.add(distro)).ok) {
       return 'failed'
     }
   } catch {

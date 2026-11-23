@@ -1,9 +1,15 @@
 import { readStructuredAgentLaunchRecords } from '../../agent-session/launch/structured-agent-session-launch-persistence'
 
-import { type ExecutionHostId, parseExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  type ExecutionHostId,
+  parseExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
-import { type WorkspaceKey, parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import {
+  type WorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 
 export type WorkspaceSessionHydrationOptions = {

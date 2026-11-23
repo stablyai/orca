@@ -1,4 +1,4 @@
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import {
   buildWorkspaceRows,
   type WorkspaceRowsSnapshot
@@ -7,7 +7,7 @@ import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qu
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import type { ResolvedWorktreeSnapshot } from '../../workspaces/catalog/runtime-resolved-worktree-cache'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { runtimeVisibleFolderWorkspaces } from '../../workspaces/catalog/runtime-visible-catalog'
 import type {
   ResolvedWorktreeRepoScans,

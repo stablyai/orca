@@ -1,7 +1,7 @@
 import type {
   CodexRateLimitResetOutcome,
   ProviderRateLimits
-} from '../../../../shared/rate-limit-types'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { cancelUnreadResponseBody } from '../../../lib/unread-response-body'
 import { abortSignalWithTimeout } from '../../../lib/abort-signal-with-timeout'
 import {

@@ -2,14 +2,17 @@ import { selectFolderWorkspaces } from '../workspaces/catalog/workspace-record-f
 import { removeWorkspaceUnreadState } from '../slices/workspace-attention/workspace-unread-removal'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { RepoSlice } from '../repos/repo-state'
+import type { FolderWorkspaceDeleteOptions, RepoSlice } from '../repos/repo-state'
 import { launchDraftSource } from '@/components/native-chat/drafts/native-chat-launch-draft-source'
 import * as chatDrafts from '../slices/worktrees/teardown/removed-worktree-chat-drafts'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { projectGroupHookOwner } from '../../../../shared/workspace-hook-owner'
-import { PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import { projectGroupHookOwner } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
+import { PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import {
   worktreeRemovalReplyTimeoutMs,
   isArchiveHookRemovalError
@@ -49,39 +52,17 @@ export function createFolderWorkspaceDeleteAction(
       { workspaceId: workspaceKey, executionHostId: ownerHostId }
     ])
     try {
-      const workspace = findFolderWorkspaceOwner(state, folderWorkspaceId, ownerHostId)
-      const group =
-        workspace &&
-        state.projectGroups.find(
-          (entry) =>
-            entry.id === workspace.projectGroupId && getRepoExecutionHostId(entry) === ownerHostId
-        )
-      const owner = group && projectGroupHookOwner(group)
-      const supported =
-        owner &&
-        (await resolveFolderSetupSupported(owner, PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY))
-      const runHooks =
-        supported && (await ensureHooksConfirmed(get, owner.id, 'archive', ownerHostId)) === 'run'
-      const request = {
-        folderWorkspaceId,
-        ...(supported
-          ? {
-              runHooks: Boolean(runHooks),
-              ...(options?.allowFailedArchiveHook ? { allowFailedArchiveHook: true } : {})
-            }
-          : {})
-      }
-      const deleted =
-        target.kind === 'local'
-          ? await window.api.folderWorkspaces.delete(request)
-          : (
-              await callRuntimeRpc<{ deleted: boolean }>(
-                target,
-                'folderWorkspace.delete',
-                request,
-                { timeoutMs: supported ? worktreeRemovalReplyTimeoutMs(Boolean(runHooks)) : 15_000 }
-              )
-            ).deleted
+      // Why no Archive prompt for a bot: its host RPC owns the removal and runs no Archive script.
+      const deleted = options?.remove
+        ? await options.remove()
+        : await deleteFolderWorkspaceOnOwner(
+            state,
+            get,
+            target,
+            folderWorkspaceId,
+            ownerHostId,
+            options
+          )
       if (!deleted) {
         return false
       }
@@ -112,7 +93,7 @@ export function createFolderWorkspaceDeleteAction(
     } catch (err) {
       console.error('Failed to delete folder workspace:', err)
       const error = readIpcErrorDetail(err) ?? (err instanceof Error ? err.message : String(err))
-      if (isArchiveHookRemovalError(error)) {
+      if (!options?.remove && isArchiveHookRemovalError(error)) {
         const { showDeleteWorktreeFailureToast } =
           await import('@/components/sidebar/workspace-actions/deletion/delete-worktree-failure-toast')
         showDeleteWorktreeFailureToast({
@@ -144,4 +125,47 @@ export function createFolderWorkspaceDeleteAction(
       return false
     }
   }
+}
+
+/** Ordinary folder delete: ask about the group's Archive script when it has one, then remove on the owner host. */
+async function deleteFolderWorkspaceOnOwner(
+  state: AppState,
+  get: Parameters<StateCreator<AppState>>[1],
+  target: NonNullable<ReturnType<typeof folderWorkspaceOwnerTarget>>,
+  folderWorkspaceId: string,
+  ownerHostId: ExecutionHostId,
+  options: FolderWorkspaceDeleteOptions | undefined
+): Promise<boolean> {
+  const workspace = findFolderWorkspaceOwner(state, folderWorkspaceId, ownerHostId)
+  const group =
+    workspace &&
+    state.projectGroups.find(
+      (entry) =>
+        entry.id === workspace.projectGroupId && getRepoExecutionHostId(entry) === ownerHostId
+    )
+  const owner = group && projectGroupHookOwner(group)
+  const supported =
+    owner &&
+    (await resolveFolderSetupSupported(owner, PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY))
+  const runHooks =
+    supported && (await ensureHooksConfirmed(get, owner.id, 'archive', ownerHostId)) === 'run'
+  const request = {
+    folderWorkspaceId,
+    ...(supported
+      ? {
+          runHooks: Boolean(runHooks),
+          ...(options?.allowFailedArchiveHook ? { allowFailedArchiveHook: true } : {})
+        }
+      : {})
+  }
+  if (target.kind === 'local') {
+    return window.api.folderWorkspaces.delete(request)
+  }
+  const reply = await callRuntimeRpc<{ deleted: boolean }>(
+    target,
+    'folderWorkspace.delete',
+    request,
+    { timeoutMs: supported ? worktreeRemovalReplyTimeoutMs(Boolean(runHooks)) : 15_000 }
+  )
+  return reply.deleted
 }

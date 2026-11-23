@@ -5,9 +5,9 @@ import {
   isLocalExecutionHost,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../execution-host'
-import type { GlobalSettings } from '../../global-settings-types'
-import { getHostDisplayLabelOverrides } from '../../host-setting-overrides'
+} from '../../execution-host/execution-host'
+import type { GlobalSettings } from '../../settings/global-settings-types'
+import { getHostDisplayLabelOverrides } from '../../execution-host/host-setting-overrides'
 
 export type HostContextLabelSources = {
   /** Explicit labels (SSH target names and per-host display overrides). */

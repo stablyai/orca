@@ -1,5 +1,5 @@
 import { posix, win32 } from 'node:path'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import { worktreeBaseRefFamily } from '../../../../shared/worktree/base-refs/base-ref'
 import type { PreparedCheckoutMissReason } from '../../../../shared/worktree/creation/create-timing-vocabulary'
 

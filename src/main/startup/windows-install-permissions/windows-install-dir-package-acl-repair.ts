@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { sanitizeCrashReportString } from '../../../shared/crash-report-redaction'
-import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting'
+import { sanitizeCrashReportString } from '../../../shared/crash-reporting/crash-report-redaction'
+import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import {
   installDirPackageGrants,
@@ -174,10 +174,6 @@ async function runRepair(args: WindowsInstallDirAclRepairArgs): Promise<void> {
 
 // Latch per process despite window reopen; ordinary install DACL is stable within a session.
 let repairStarted = false
-
-export function resetWindowsInstallDirAclRepairForTest(): void {
-  repairStarted = false
-}
 
 /** Defer Windows desktop writes; never throw into window creation. Return whether dispatched so process-latch refusals cannot leave callers awaiting onDone. */
 export function repairWindowsInstallDirPackageAcl(args: WindowsInstallDirAclRepairArgs): boolean {

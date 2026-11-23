@@ -1,9 +1,9 @@
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { GhAccountBinding } from '../../../../shared/github/accounts/account-binding'
 import { GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY } from '../../../../shared/work-items/task-source-runtime-capabilities'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
-import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '@/web/web-runtime-request-registry'
+import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '@/web/runtime/client/web-runtime-request-registry'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { emitGitHubWorkItemDetailsCacheMutation } from '@/lib/work-items/github/github-work-item-details-cache-events'
 import {

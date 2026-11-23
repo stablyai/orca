@@ -1,7 +1,7 @@
 import type {
   TransferOrcaProfileProjectArgs,
   TransferOrcaProfileProjectResult
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 import { getOrcaProfileListState, readProfileIndex } from '../profile-index-store'
 import { getOrcaProfileIndexPath } from '../profile-storage-paths'
 import {

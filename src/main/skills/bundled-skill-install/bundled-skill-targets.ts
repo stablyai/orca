@@ -3,8 +3,8 @@ import {
   nativeSkillPathSemantics,
   skillPathInside,
   skillPathsEqual
-} from '../../../shared/skill-path-containment'
-import type { SkillInstallProviderId } from '../../../shared/skill-install-providers'
+} from '../../../shared/skills/paths/skill-path-containment'
+import type { SkillInstallProviderId } from '../../../shared/skills/installation/skill-install-providers'
 import type { ResolvedSkillInstallDestination } from '../install/skill-install-destinations'
 import {
   resolveSkillProviderDestinations,

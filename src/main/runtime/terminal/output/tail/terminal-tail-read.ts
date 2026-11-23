@@ -2,7 +2,7 @@ import type {
   RuntimeTerminalRead,
   RuntimeTerminalRowMetadata,
   RuntimeTerminalState
-} from '../../../../../shared/runtime-terminal-contracts'
+} from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import {
   DEFAULT_TERMINAL_READ_LIMIT,
   MAX_TERMINAL_PREVIEW_CHARS,

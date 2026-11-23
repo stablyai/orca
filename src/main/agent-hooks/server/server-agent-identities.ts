@@ -9,8 +9,17 @@ import {
   type ProviderSessionSighting,
   type SettledAgentIdentityPlace
 } from '../identity/pane-agent-identities'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { OrcaSessionId } from '../../../shared/orca-session-address'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentSessionRecord
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentProviderKey } from '../identity/agent-provider-key'
+import { sleepingRecordOfKey, sleepingRecordOfPane } from '../identity/sleeping-agent-records'
+import {
+  isReverseLookupUnavailable,
+  type ReverseLookupUnavailable
+} from '../identity/agent-identity-worker-protocol'
+import type { OrcaSessionId } from '../../../shared/agent-session/identity/orca-session-address'
 
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -18,7 +27,7 @@ import {
   AgentIdentityWorkerClient,
   type AgentIdentityClient
 } from '../identity/agent-identity-worker-client'
-import { AgentHookServerState } from './server-state'
+import { AgentHookServerStatusQueries } from './server-status-queries'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
 
 type SleepingAgentSighting = Pick<
@@ -26,8 +35,16 @@ type SleepingAgentSighting = Pick<
   'agent' | 'providerSession' | 'connectionId'
 >
 
+/** One terminal agent conversation's own transcript, as the payload naming it reported it. */
+export type TerminalAgentTranscriptSource = {
+  key: AgentProviderKey
+  providerSession: AgentProviderSessionMetadata
+  /** The identity store generation that vouched for `key`. */
+  authority: number
+}
+
 /** Terminal agent ids are named when a row is admitted, so walks and publications only copy them. */
-export abstract class AgentHookServerAgentIdentities extends AgentHookServerState {
+export abstract class AgentHookServerAgentIdentities extends AgentHookServerStatusQueries {
   private identityPath: { from: string | null; path: string | null } = { from: null, path: null }
   protected readonly agentIdentities = new PaneAgentIdentities(
     // Read on every admission, so derived once per status path.
@@ -60,6 +77,11 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
   /** Window readers and session.tabs see a row's new id with no hook event attached, so no
    *  transition effect or enriched subscriber runs again. */
   protected abstract publishAgentIdentityProjection(row: EnrichedAgentHookEventPayload): void
+
+  protected abstract replaceTranscriptPollRow(
+    previous: EnrichedAgentHookEventPayload,
+    next: EnrichedAgentHookEventPayload
+  ): void
 
   /** A committed answer, or the end of the authority that gave one, re-stamps the current rows
    *  on its key and republishes each as a projection: status, clocks and order stay as they are. */
@@ -97,6 +119,7 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
           AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
         )
       ) {
+        this.replaceTranscriptPollRow(row, next)
         projections.push(next)
       }
     }
@@ -134,9 +157,11 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
   }
 
   /** Panes proven to run terminal agent `id` now; null when this host never minted it. A miss
-   *  in the live index awaits the store, since a dormant conversation keeps its id. */
+   *  in the live index awaits the store, since a dormant conversation keeps its id.
+   *  `includeSleeping` adds finished sleeping panes, as `worktree.ps` lists; they run nothing. */
   async terminalAgentPlaces(
-    id: string
+    id: string,
+    { includeSleeping = false }: { includeSleeping?: boolean } = {}
   ): Promise<{ paneKey: string; worktreeId?: string }[] | null> {
     const authority = this.agentIdentities.authority()
     const known = await this.agentIdentities.isTerminalIdentity(id)
@@ -149,20 +174,21 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
     for (const place of this.agentIdentities.placesOf(id)) {
       // Canonical rows are never hydrated; a legacy row counts only once this runtime observed it,
       // since a saved status (even Done) cannot prove its process survived Orca being closed.
+      // A sleeping row needs no such proof: it claims only a finished agent in a placed pane.
       const subject = place.canonical
         ? this.canonicalSubjectsByPane.get(place.paneKey)?.get(place.key)
         : undefined
       const row = place.canonical
         ? subject && this.canonicalStatusStore.getParent(subject)?.status
-        : this.runtimeObservedStatusPaneKeys.has(place.key)
-          ? this.state.lastStatusByPaneKey.get(place.key)
-          : undefined
+        : this.state.lastStatusByPaneKey.get(place.key)
+      const observed = place.canonical || this.runtimeObservedStatusPaneKeys.has(place.key)
+      const ended = row && 'agentPresence' in row && row.agentPresence?.ended === true
       // Resume seeds, exited agents and unconfirmed restored rows prove no running agent.
       if (
         row &&
+        ('paneSleep' in row && row.paneSleep ? includeSleeping : observed && !ended) &&
         row.providerSessionOnly !== true &&
-        row.restoredUnconfirmed !== true &&
-        !('agentPresence' in row && row.agentPresence?.ended === true)
+        row.restoredUnconfirmed !== true
       ) {
         places.push({
           paneKey: place.paneKey,
@@ -171,6 +197,110 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
       }
     }
     return places
+  }
+
+  /** Whether this host minted terminal agent `id`; undefined when the store cannot answer now. */
+  async isTerminalAgentId(id: string): Promise<boolean | undefined> {
+    return this.agentIdentities.isTerminalIdentity(id)
+  }
+
+  /** Orca ids this host linked to a provider's own session id; unavailable when this identity
+   *  file can't answer that by index; undefined when the store cannot answer now. */
+  async terminalAgentIdsOfProviderSession(
+    providerSessionId: string
+  ): Promise<OrcaSessionId[] | ReverseLookupUnavailable | undefined> {
+    return this.agentIdentities.idsOfProviderSession(providerSessionId)
+  }
+
+  /** Where terminal agent `id`'s transcript is: a current row carrying the id, in any state (a read
+   *  needs no running agent), else a sleeping record naming its provider key. The session id and
+   *  path come from one payload, never from a pane, so a row attributed to the wrong pane still
+   *  names its own conversation. null: nothing names it now; undefined: the store cannot answer.
+   *  `known` is an earlier answer: an id is never relinked, so while its store still stands a
+   *  recheck needs no second store question. */
+  async terminalAgentTranscriptSource(
+    id: string,
+    readSleeping: () => Readonly<Record<string, SleepingAgentSighting>>,
+    known?: TerminalAgentTranscriptSource
+  ): Promise<TerminalAgentTranscriptSource | ReverseLookupUnavailable | null | undefined> {
+    const authority = this.agentIdentities.authority()
+    const live = this.liveTranscriptSource(id, authority)
+    if (live?.providerSession.transcriptPath) {
+      return live
+    }
+    const linked =
+      known?.authority === authority
+        ? { key: known.key }
+        : await this.agentIdentities.providerKeyOf(id)
+    if (authority !== this.agentIdentities.generation) {
+      return undefined
+    }
+    if (!linked) {
+      return live ?? undefined
+    }
+    if (isReverseLookupUnavailable(linked)) {
+      return live ?? linked
+    }
+    const { key } = linked
+    const windows = process.platform === 'win32'
+    // Sleeping records carry no distro to prove a WSL path's owner.
+    if (!key || (windows && key.wslDistro !== '')) {
+      return live
+    }
+    const records = readSleeping()
+    if (live) {
+      // Recovery records belong to panes; unrelated saved agents must not slow a live read.
+      for (const place of this.agentIdentities.placesOf(id)) {
+        const record = sleepingRecordOfPane(records, place.paneKey, key, windows)
+        if (record?.providerSession.transcriptPath) {
+          return { key, providerSession: record.providerSession, authority }
+        }
+      }
+      return live
+    }
+    const record = sleepingRecordOfKey(records, key, windows)
+    if (record) {
+      return { key, providerSession: record.providerSession, authority }
+    }
+    return live
+  }
+
+  private liveTranscriptSource(
+    id: string,
+    authority: number
+  ): TerminalAgentTranscriptSource | null {
+    let best: { key: AgentProviderKey; row: EnrichedAgentHookEventPayload } | null = null
+    for (const place of this.agentIdentities.placesOf(id)) {
+      const subject = place.canonical
+        ? this.canonicalSubjectsByPane.get(place.paneKey)?.get(place.key)
+        : undefined
+      const status = subject && this.canonicalStatusStore.getParent(subject)?.status
+      const row = place.canonical
+        ? status && structuredStatusLegacyEvent(status)
+        : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+          (this.state.lastStatusByPaneKey.get(place.key) as
+            | EnrichedAgentHookEventPayload
+            | undefined)
+      const key = place.canonical
+        ? this.agentIdentities.canonicalIdentity(place.key)?.key
+        : row?.agentIdentity?.key
+      if (!row?.providerSession || !key) {
+        continue
+      }
+      // Rows of one conversation share its key; prefer one that reported the transcript path.
+      const hasPath = (candidate: EnrichedAgentHookEventPayload): boolean =>
+        Boolean(candidate.providerSession?.transcriptPath)
+      if (
+        !best ||
+        (hasPath(row) && !hasPath(best.row)) ||
+        (hasPath(row) === hasPath(best.row) && row.receivedAt > best.row.receivedAt)
+      ) {
+        best = { key, row }
+      }
+    }
+    return best?.row.providerSession
+      ? { key: best.key, providerSession: best.row.providerSession, authority }
+      : null
   }
 
   /** The pane's terminal agent id, keyed as Copy Session ID picks its id: a confirmed live row

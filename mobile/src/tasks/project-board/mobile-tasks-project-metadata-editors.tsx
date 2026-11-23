@@ -7,7 +7,7 @@ import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { Check } from 'lucide-react-native'
 import { MessageBox } from '../../components/composer-input/MessageBox'
 import { TextField } from '../../components/composer-input/TextField'
-import { MobileMarkdown } from '../../components/MobileMarkdown'
+import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
 import { styles } from '../mobile-tasks-legacy-styles'
 
 export function renderMobileTasksProjectLabelsEditor(model: ConnectionPresentationModel) {

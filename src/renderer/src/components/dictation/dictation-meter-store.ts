@@ -5,7 +5,7 @@ import {
   DEFAULT_DICTATION_METER,
   dictationMeterStatesEqual,
   type DictationMeterState
-} from '../../../../shared/dictation-audio-meter'
+} from '../../../../shared/speech/dictation/dictation-audio-meter'
 
 const dictationMeterStore = createStore<DictationMeterState>(() => DEFAULT_DICTATION_METER)
 

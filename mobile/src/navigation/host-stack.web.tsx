@@ -15,7 +15,7 @@ import {
   reportAfterFirstPaint,
   useRouteScreenPaintReporter,
   type PageFrameScheduler
-} from '../mobile-web-shell/bridge/page-first-paint'
+} from '../mobile-web-shell/bridge/page-lifecycle/page-first-paint'
 
 // Expo native-stack’s web view ignores animation and switches display; reuse StackRouter with a view that retains popped screens through their exit slide.
 export function HostStack({ animation }: { animation: HostStackAnimation }) {

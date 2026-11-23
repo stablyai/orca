@@ -1,11 +1,13 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { AppState } from '@/store/types'
-import type { DashboardCardTerminalInput } from '../../../../../shared/dashboard-snapshot'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import type { DashboardCardTerminalInput } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
-} from '../../../../../shared/execution-host'
-import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
+} from '../../../../../shared/execution-host/execution-host'
+import { parseAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import '@/lib/workspace/ownership/connection-context'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
@@ -27,7 +29,6 @@ export type DashboardCardTerminalInputState = Pick<
   | 'settings'
   | 'sshConnectionStates'
   | 'sshStateByEnvironment'
-  | 'runtimeStatusByEnvironmentId'
   | 'restoredRuntimeHostIdByWorkspaceSessionKey'
   | 'runtimeEnvironments'
   | 'runtimeEnvironmentCatalogHydrated'
@@ -35,8 +36,9 @@ export type DashboardCardTerminalInputState = Pick<
   | 'paneForegroundAgentByPaneKey'
   | 'agentStatusByPaneKey'
   | 'agentLaunchConfigByPaneKey'
->
+> & { runtimeStatusByEnvironmentId: RuntimeStatuses }
 
+const EMPTY_STATUSES = acceptedAgentStatuses()
 const EMPTY_RECORD = {} as Record<string, never>
 
 /** Missing store slices fall back per card instead of throwing and blanking the whole board. */
@@ -59,7 +61,7 @@ function withHydratedSlices(
     runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated ?? false,
     removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds ?? new Set(),
     paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey ?? EMPTY_RECORD,
-    agentStatusByPaneKey: state.agentStatusByPaneKey ?? EMPTY_RECORD,
+    agentStatusByPaneKey: state.agentStatusByPaneKey ?? EMPTY_STATUSES,
     agentLaunchConfigByPaneKey: state.agentLaunchConfigByPaneKey ?? EMPTY_RECORD
   }
 }
@@ -102,6 +104,7 @@ export function resolveDashboardCardTerminalInput(
   const hostPlatform = resolveTerminalInputHostPlatform({
     clientPlatform: args.clientPlatform,
     state,
+    statuses: state.runtimeStatusByEnvironmentId,
     worktreeId: args.worktreeId,
     transport: {
       getConnectionId: () => connectionId,
@@ -121,7 +124,7 @@ export function resolveDashboardCardTerminalInput(
     isWindowsClient: args.clientPlatform === 'win32',
     hostPlatform,
     foregroundAgent: state.paneForegroundAgentByPaneKey[args.paneKey]?.agent,
-    entry: state.agentStatusByPaneKey[args.paneKey]
+    entry: state.agentStatusByPaneKey.get(args.paneKey)
   })
   return {
     hostPlatform,

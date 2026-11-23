@@ -1,5 +1,5 @@
 /** Memoize session host facts for connect telemetry without extra probes; keys are local target ids. */
-import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
+import type { NodeRuntimeTarget } from '../../../shared/node-runtime/node-runtime-pin'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 
 export type SshHostPlatformFacts = {

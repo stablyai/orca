@@ -5,7 +5,7 @@ import type {
   ComputerUsePermissionId,
   ComputerUsePermissionState,
   ComputerUsePermissionStatus
-} from '../../../../../shared/computer-use-permissions-types'
+} from '../../../../../shared/computer/computer-use-permissions-types'
 import { useAppStore } from '@/store/index'
 import { Button } from '../../ui/button'
 import { Badge } from '../../ui/badge'

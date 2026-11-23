@@ -10,11 +10,11 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/native-chat-subagent-summary'
+import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import {
   subagentEntryRunsOn,
   subagentRoleLabel
-} from '../../../../../shared/native-chat/transcript/native-chat-subagent-entry-detail'
+} from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-entry-detail'
 import type { NativeChatSubagentEntry } from '../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatSubagentRow } from '../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { NativeChatSubagentStatusIcon } from './NativeChatSubagentStatusIcon'

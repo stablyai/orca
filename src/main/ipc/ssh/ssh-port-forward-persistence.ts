@@ -1,5 +1,4 @@
-import type { BrowserWindow } from 'electron'
-import type { SavedPortForward } from '../../../shared/ssh-types'
+import type { SavedPortForward } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { connectionManager, portForwardManager } from './ssh-ipc-context'
 import { broadcastPortForwards } from './ssh-renderer-broadcast'
@@ -47,10 +46,7 @@ export function savedPortForwardsAllLive(targetId: string): boolean {
   return saved.every((forward) => live.has(forwardKey(forward)))
 }
 
-export async function restorePortForwards(
-  targetId: string,
-  getMainWindow: () => BrowserWindow | null
-): Promise<void> {
+export async function restorePortForwards(targetId: string): Promise<void> {
   const target = getSshTargetRegistryStore()!.getTarget(targetId)
   if (!target?.portForwards?.length) {
     return
@@ -103,5 +99,5 @@ export async function restorePortForwards(
   }
 
   persistPortForwards(targetId)
-  broadcastPortForwards(getMainWindow, targetId)
+  broadcastPortForwards(targetId)
 }

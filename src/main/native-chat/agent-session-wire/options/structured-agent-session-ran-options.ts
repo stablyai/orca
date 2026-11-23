@@ -1,14 +1,14 @@
-// Fill unsaved choices from execution evidence, never startup/config reports or host defaults.
+// Fill unsaved choices from execution evidence, never startup/config reports or host defaults; and
+// receipt the host instructions a taken turn carried.
 
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
-import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
+import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession,
   StructuredAgentSessionProviderChild
 } from '../host/structured-agent-session-host-types'
 import { structuredAgentSessionOptionOverridesRefusal } from './structured-agent-session-option-intent'
-import { recordAgentSessionRanOptions } from '../../../runtime/agent-session/records/agent-session-record-options'
 
 type RanOptionsContext = {
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'logger' | 'agents' | 'modelCatalog'>
@@ -30,12 +30,20 @@ const childRuns = new WeakMap<
     reported?: RanOptions
     owed?: StructuredAgentSessionHandedOptions
     permission?: string | null
+    fallbackModel?: string
   }
 >()
 
 function currentChild(context: RanOptionsContext, sessionId: string, fence: number) {
   const child = context.sessions.get(sessionId)?.child
   return child?.fence === fence ? child : null
+}
+
+/** Moves the option stamp; the options read decides whether the fallback still outranks the selection. */
+export function structuredAgentSessionRuntimeFallbackModel(
+  child: StructuredAgentSessionProviderChild
+): string | undefined {
+  return child.phase === 'ready' ? childRuns.get(child)?.fallbackModel : undefined
 }
 
 /** The current child's startup report or applied evidence; never saved intent or send authority. */
@@ -52,6 +60,9 @@ export function noteStructuredAgentSessionRuntimeOptions(
   initial = false
 ): void {
   const previous = childRuns.get(child)
+  if ('fallbackModel' in reported) {
+    childRuns.set(child, { ...previous, fallbackModel: reported.fallbackModel })
+  }
   if (
     reported.reportedPermissionMode !== undefined &&
     (!initial || previous?.permission === undefined)
@@ -98,6 +109,8 @@ export type StructuredAgentSessionRanRecorder = (
 ) => ((handed: StructuredAgentSessionHandedOptions) => Promise<void>) & {
   prepareInput?: () => void
   checkpoint?: () => void
+  /** The host instructions the taken turn vouched for, by this owner; resolves whether written. */
+  instructions?: (key: string, context: string) => Promise<boolean>
 }
 
 /** Capture report identity at input to preserve early reports and avoid stale fallbacks. */
@@ -120,7 +133,22 @@ export function createStructuredAgentSessionRanRecorder(
       checkpoint: () => {
         const child = currentChild(context, sessionId, fence)
         checkpoint = { reported: child ? childRuns.get(child)?.reported : undefined }
-      }
+      },
+      instructions: (key: string, instructionsContext: string) =>
+        context.deps.store
+          .updateRecord(sessionId, {
+            kind: 'instructions-key',
+            receipt: { sessionId, fence, key, context: instructionsContext }
+          })
+          .then((record) => record.instructionsKey === key)
+          .catch((error: unknown) => {
+            context.deps.logger.warn('recording the instructions a turn carried failed', {
+              scope: 'ran-options',
+              sessionId,
+              error
+            })
+            return false
+          })
     }
   )
 }
@@ -166,13 +194,16 @@ export async function recordStructuredAgentSessionRanOptions(
     return
   }
   await store
-    .reviseSessionOptions(recordAgentSessionRanOptions, {
-      sessionId,
-      fence: child.fence,
-      model,
-      options: ran,
-      models: undefined,
-      now: context.now()
+    .updateRecord(sessionId, {
+      kind: 'ran-options',
+      args: {
+        sessionId,
+        fence: child.fence,
+        model,
+        options: ran,
+        models: undefined,
+        now: context.now()
+      }
     })
     .catch((error: unknown) =>
       logger.warn('recording the options a turn ran failed', {

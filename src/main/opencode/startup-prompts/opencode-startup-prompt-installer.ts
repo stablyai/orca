@@ -3,10 +3,10 @@ import {
   openCodeHookService,
   openCode2HookService
 } from '../status-hooks/hook-service'
-import { OPENCODE_STARTUP_PROMPT_PLUGIN_DIRECTORY } from '../../../shared/opencode-startup-prompt-install'
+import { OPENCODE_STARTUP_PROMPT_PLUGIN_DIRECTORY } from '../../../shared/agent-launch/plugins/opencode/opencode-startup-prompt-install'
 import { join } from 'node:path'
-import { resolveOpenCodeConfigDirectory } from '../../../shared/opencode-config-directory'
-import { isOverlayOpenCodePluginCurrent } from '../../../shared/opencode-installed-plugin'
+import { resolveOpenCodeConfigDirectory } from '../../../shared/agent-launch/plugins/opencode/opencode-config-directory'
+import { isOverlayOpenCodePluginCurrent } from '../../../shared/agent-launch/plugins/opencode/opencode-installed-plugin'
 import { getOpenCodeStartupPromptSource } from './opencode-startup-prompt-source'
 import { resolveOpenCodeSourceConfigDir } from '../../ipc/pty/host-env/pi-agent'
 import {

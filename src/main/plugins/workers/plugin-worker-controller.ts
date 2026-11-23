@@ -1,8 +1,8 @@
 import type { PluginCapabilityKind } from '../../../shared/plugins/capabilities/plugin-capabilities'
 import type { PluginHostCallOutcome } from '../../../shared/plugins/frames/plugin-protocol'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
-import { resolveContainedPluginArtifact } from '../plugin-artifact-validation'
-import type { PluginContentVerifier } from '../plugin-content-integrity'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
+import { resolveContainedPluginArtifact } from '../artifacts/plugin-contained-artifact'
+import type { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
 import { PluginWorkerManager } from './plugin-worker-manager'
 import type {
   PluginWorkerFactory,

@@ -1,4 +1,4 @@
-import { getHostOperationOwnership } from '../../../../../shared/host-operation-ownership'
+import { getHostOperationOwnership } from '../../../../../shared/execution-host/host-operation-ownership'
 import { callRuntimeRpc } from './runtime-rpc-call'
 import type { HostRoute } from '../targets/runtime-client-target'
 import {

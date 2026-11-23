@@ -1,6 +1,6 @@
 import type { GitHubAssignableUser } from './pull-request-types'
 import type { GitHubWorkItem } from '../work-items/work-item-types'
-import { isClipboardTextByteLengthOverLimit } from '../../clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../clipboard/clipboard-text'
 
 type ReviewDisplayItem = Pick<GitHubWorkItem, 'reviewDecision' | 'reviewRequests' | 'latestReviews'>
 export type GitHubPRPrimaryReviewer = Pick<GitHubAssignableUser, 'login' | 'avatarUrl'> & {

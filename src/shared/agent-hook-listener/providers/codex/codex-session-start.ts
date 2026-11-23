@@ -7,7 +7,7 @@ import {
   sameAgentStatusTerminalOwner
 } from '../../../agent-status/identity/agent-status-terminal-owner'
 import type { AgentLeadStatusResolution } from '../../../agent-status/lifecycle/agent-lead-status-fold'
-import { codexRosterToSnapshots, type CodexSubagentRoster } from '../../../codex-subagent-roster'
+import { codexRosterToSnapshots, type CodexSubagentRoster } from './codex-subagent-roster'
 import type { AgentHookEventPayload } from '../../listener-event'
 import type { HookListenerState } from '../../listener-state'
 import {

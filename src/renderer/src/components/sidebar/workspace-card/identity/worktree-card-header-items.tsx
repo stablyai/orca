@@ -1,15 +1,14 @@
 import React from 'react'
-import { AlertCircle, FolderMinus, House, Server, ServerOff, Star, Trash2 } from 'lucide-react'
+import { FolderMinus, House, Server, ServerOff, Star, Trash2 } from 'lucide-react'
 
-import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import { ProjectChip } from '@/components/repo/project-chip'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { AgentCommandFailedChip } from '@/components/agent-command-failure/AgentCommandFailedChip'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import type { Repo } from '../../../../../../shared/repo-types'
-import { resolveRepoHeaderColor } from '../../worktree-list/rows/project-header-color'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import { formatSparseDirectoryPreview } from '../controller/worktree-card-model'
 
@@ -18,26 +17,12 @@ export function WorktreeCardRepoChip({ repo }: { repo: Repo }): React.JSX.Elemen
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span
-          className="inline-flex h-4 max-w-24 shrink-0 items-center justify-center gap-0.5 rounded-[4px] border border-worktree-sidebar-border bg-worktree-sidebar-accent/55 px-0.5"
+        <ProjectChip
+          repo={repo}
           aria-label={t('auto.components.sidebar.WorktreeCard.35ccfe2475', 'Project {{value0}}', {
             value0: repo.displayName
           })}
-        >
-          {/* Why: emoji glyphs scale with font size (0.9em), so pin it to fit the 12px icon box. */}
-          <span className="inline-flex size-3 shrink-0 items-center justify-center text-2xs">
-            <RepoIconGlyph
-              repoIcon={repo.repoIcon}
-              color={resolveRepoHeaderColor(repo.badgeColor)}
-              className="size-full"
-              iconClassName="size-3"
-            />
-          </span>
-          {/* Why: the default folder icon is the same for every project, so the name tells them apart. */}
-          <span className="min-w-0 truncate text-3xs leading-none text-muted-foreground lowercase">
-            {repo.displayName}
-          </span>
-        </span>
+        />
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8}>
         {repo.displayName}
@@ -102,32 +87,20 @@ export function WorktreeCardRenameErrorButton({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    // Errors can contain raw agent output; open a dialog rather than a tooltip.
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          onPointerDown={onPointerDown}
-          onClick={onOpen}
-          onDoubleClick={onOpen}
-          className="h-4 shrink-0 gap-0.5 rounded !px-0.5 text-[10px] font-medium leading-none text-destructive border border-destructive/40 bg-destructive/10 hover:bg-destructive/15 hover:text-destructive has-[>svg]:!px-0.5"
-          aria-label={t(
-            'auto.components.sidebar.WorktreeCard.02e19349f4',
-            'Auto-rename failed: view error'
-          )}
-        >
-          <AlertCircle className="size-2.5" />
-          {t('auto.components.sidebar.WorktreeCard.74522ee457', 'rename failed')}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="right" sideOffset={8}>
-        {t(
-          'auto.components.sidebar.WorktreeCard.4eba2ea99e',
-          'Auto-name failed. Click to see details.'
-        )}
-      </TooltipContent>
-    </Tooltip>
+    <AgentCommandFailedChip
+      onPointerDown={onPointerDown}
+      onOpen={onOpen}
+      tooltipSide="right"
+      ariaLabel={t(
+        'auto.components.sidebar.WorktreeCard.02e19349f4',
+        'Auto-rename failed: view error'
+      )}
+      label={t('auto.components.sidebar.WorktreeCard.74522ee457', 'rename failed')}
+      tooltip={t(
+        'auto.components.sidebar.WorktreeCard.4eba2ea99e',
+        'Auto-name failed. Click to see details.'
+      )}
+    />
   )
 }
 

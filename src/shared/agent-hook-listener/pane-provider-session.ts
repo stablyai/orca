@@ -1,6 +1,6 @@
 import type { AgentHookSource } from './transport/agent-hook-relay'
 import { readAgentEffortLevel } from '../agent-launch/choices/agent-effort-level'
-import { readClaudePermissionMode } from '../agent-session/lifecycle/provider-session-live-settings'
+import { readClaudePermissionMode } from '../agent-session/lifecycle/resume/provider-session-live-settings'
 import {
   extractAgentProviderSession,
   readPathFromKeys,

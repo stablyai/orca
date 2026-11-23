@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import { nativeChatDockedTaskList } from '../../../../../../shared/native-chat/input/native-chat-task-list-state'
+import { nativeChatDockedTaskList } from '../../../../../../shared/native-chat/input/task-lists/native-chat-task-list-state'
 import { NativeChatTaskList } from './NativeChatTaskList'
 
 export function NativeChatDockedTaskList({

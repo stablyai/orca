@@ -3,8 +3,8 @@ import {
   buildNativeChatStartupMenuPrompt,
   STARTUP_MENU_DESCRIPTION_MAX,
   type NativeChatStartupMenuChoice
-} from '../../../../shared/native-chat/input/native-chat-approval-envelope'
-import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/native-chat/input/approvals/native-chat-approval-envelope'
+import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import { findTerminalWaitBlockedSignal } from '../../agent-state-rules/blocked-text-layer'

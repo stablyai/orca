@@ -4,7 +4,7 @@ export type AutomationPaneTab = 'overview' | 'runs'
 /** Top-level surface within Automations. */
 export type AutomationsPageView = 'automations' | 'runs' | 'run'
 
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { AutomationRunPageOrigin } from '../../store/slices/ui/automations-page-location'
 
 export type {

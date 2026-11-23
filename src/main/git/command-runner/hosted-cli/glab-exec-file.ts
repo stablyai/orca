@@ -1,4 +1,5 @@
-import { addWslEnvKeys } from '../../../../shared/wsl-env'
+import { addWslEnvKeys } from '../../../../shared/shell/wsl/wsl-env'
+import { withConfiguredProxyEnv } from '../../../network/configured-proxy-child-env'
 import { extractExecError, parseRetryAfterMs } from '../process-capture/exec-error'
 import { resolveCommand } from '../host-routing/wsl-command-resolution'
 import { resolveDefaultWslCliFallback } from './default-wsl-cli-fallback'
@@ -51,6 +52,8 @@ export async function glabExecFileAsync(
   options: GlabExecOptions = {}
 ): Promise<{ stdout: string; stderr: string }> {
   ;({ args, options } = redirectPortedHostnameToEnv(args, options))
+  // WSLENV is not extended, so wsl.exe-routed glab keeps the distro's proxy like WSL terminals.
+  const env = withConfiguredProxyEnv(options.env)
   let resolved = resolveCommand('glab', args, options.cwd, options.wslDistro)
   const timeoutMs = options.timeout ?? DEFAULT_GLAB_EXEC_TIMEOUT_MS
   let lastError: unknown
@@ -66,7 +69,7 @@ export async function glabExecFileAsync(
           encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
           maxBuffer: options.maxBuffer,
           timeout: timeoutMs,
-          env: options.env,
+          env,
           signal: options.signal,
           onDeadlineKill: () => logHostedCliDeadlineKill('glab', resolved.binary, args, timeoutMs)
         },

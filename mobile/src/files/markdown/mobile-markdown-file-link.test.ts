@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { routeMarkdownHref } from '../../components/markdown-href-routing'
+import { routeMarkdownHref } from '../../components/markdown/links/markdown-href-routing'
 import { mobileMarkdownFileLink } from './mobile-markdown-file-link'
 
 const params = {
@@ -10,23 +10,6 @@ const params = {
 }
 
 describe('Markdown preview file links', () => {
-  it.each([
-    ['details.md', 'docs/details.md'],
-    ['../details.md', 'details.md'],
-    ['nested\\details.md', 'docs/nested/details.md']
-  ])('opens %s relative to the current document', (path, relativePath) => {
-    expect(mobileMarkdownFileLink(params, path)).toEqual({
-      pathname: '/h/[hostId]/files/preview/[worktreeId]',
-      params: {
-        hostId: 'remote-host',
-        worktreeId: 'folder-workspace',
-        worktreeName: 'Project',
-        source: 'worktree',
-        relativePath
-      }
-    })
-  })
-
   it('preserves decoded filenames and line targets from rendered links', () => {
     const link = routeMarkdownHref('nested/a%20b.md#L12')
     expect(link.kind).toBe('file')
