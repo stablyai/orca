@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Cookie, CookiesSetDetails, Session } from 'electron'
+import type { Cookie, Session } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as FsPromises from 'node:fs/promises'
 import type * as SecureFile from '../../../../shared/secure-storage/secure-file'
@@ -9,8 +9,7 @@ import { setSecretStore } from '../../../../shared/secure-storage/secret-store'
 import type { CdpCookie } from '../browser-cdp-cookie'
 import type * as ClearStore from '../browser-cookie-clear-store'
 import type * as Trackers from './browser-session-cookie-tracker'
-
-type Listener = (event: unknown, cookie: Cookie, cause: string, removed: boolean) => void
+import { fakeSession, sessionCookie } from './testing/fake-cookie-session.test-fixture'
 
 const sessions = new Map<string, ReturnType<typeof fakeSession>>()
 type FakeIo = {
@@ -81,117 +80,20 @@ vi.mock('../browser-cookie-clear-store', async (importOriginal) => ({
         return requireCdpCookies(io.cdpReply)
       }
       return (await target.cookies.get()).map(
-        ({ name, value, domain, path, secure, httpOnly }) => ({
+        ({ name, value, domain, path, secure, httpOnly, session }) => ({
           name,
           value,
           domain,
           path,
           secure,
           httpOnly,
-          session: true
+          session
         })
       )
     },
     dispose: () => {}
   })
 }))
-
-function fakeSession() {
-  let jar: Cookie[] = []
-  // Set while a test holds the jar's reads, as a slow cookie store would.
-  let held: Promise<void> | null = null
-  let flushHeld: Promise<void> | null = null
-  let failingReads = 0
-  const listeners = new Set<Listener>()
-  // Chromium reports cookie changes on their own channel, after the call that made them.
-  const emitLater = (cookie: Cookie, removed: boolean) =>
-    setImmediate(() => listeners.forEach((listener) => listener({}, cookie, 'explicit', removed)))
-  return {
-    names: () => jar.map((cookie) => cookie.name).sort(),
-    holdReads: () => {
-      let release = () => {}
-      held = new Promise((resolve) => (release = resolve))
-      return () => {
-        held = null
-        release()
-      }
-    },
-    holdFlush: () => {
-      let release = () => {}
-      flushHeld = new Promise((resolve) => (release = resolve))
-      return () => {
-        flushHeld = null
-        release()
-      }
-    },
-    failNextRead: () => {
-      failingReads += 1
-    },
-    cookies: {
-      get: async () => {
-        await held
-        if (failingReads > 0) {
-          failingReads -= 1
-          throw new Error('cookie store unavailable')
-        }
-        return jar.map((cookie) => ({ ...cookie }))
-      },
-      set: async (details: CookiesSetDetails) => {
-        if (rejectedSets.has(details.name ?? '')) {
-          throw new Error('Failed to set cookie')
-        }
-        const cookie: Cookie = {
-          name: details.name ?? '',
-          value: details.value ?? '',
-          domain: details.domain ?? new URL(details.url).hostname,
-          hostOnly: !details.domain,
-          path: details.path ?? '/',
-          secure: details.secure ?? false,
-          httpOnly: details.httpOnly ?? false,
-          session: true,
-          sameSite: details.sameSite ?? 'unspecified'
-        }
-        // As Chromium does: a set replaces the cookie with the same name, domain and path.
-        jar = jar.filter(
-          (old) =>
-            old.name !== cookie.name || old.domain !== cookie.domain || old.path !== cookie.path
-        )
-        jar.push(cookie)
-        emitLater(cookie, false)
-      },
-      remove: async (url: string, name: string) => {
-        const host = new URL(url).hostname
-        const removed = jar.filter(
-          (cookie) => cookie.name === name && cookie.domain?.replace(/^\./, '') === host
-        )
-        jar = jar.filter((cookie) => !removed.includes(cookie))
-        removed.forEach((cookie) => emitLater(cookie, true))
-      },
-      flushStore: async () => {
-        await flushHeld
-      },
-      on: (_event: string, listener: Listener) => listeners.add(listener),
-      off: (_event: string, listener: Listener) => listeners.delete(listener)
-    },
-    clearStorageData: async () => {
-      const removed = jar
-      jar = []
-      removed.forEach((cookie) => emitLater(cookie, true))
-    }
-  }
-}
-
-function sessionCookie(name: string, domain: string): CdpCookie {
-  return {
-    name,
-    value: `${name}-value`,
-    domain,
-    path: '/',
-    secure: true,
-    httpOnly: false,
-    session: true
-  }
-}
 
 const PARTITION = 'persist:browser-profile-default'
 let directory: string
@@ -230,7 +132,7 @@ async function launch(
   }
   vi.resetModules()
   lastTrackers = await import('./browser-session-cookie-tracker')
-  const jar = fakeSession()
+  const jar = fakeSession(rejectedSets)
   sessions.set(PARTITION, jar)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every Session member this code path calls.
   const target = jar as unknown as Session
@@ -290,6 +192,12 @@ afterEach(() => {
   vi.useRealTimers()
   rmSync(directory, { recursive: true, force: true })
 })
+
+/** What the snapshot file holds (the fake secret store seals as plain text). */
+function storedCookies(): CdpCookie[] {
+  const persisted = JSON.parse(readFileSync(snapshotFile(), 'utf8'))
+  return JSON.parse(Buffer.from(persisted.cookies, 'base64').toString('utf8'))
+}
 
 async function saveSnapshot(cookies: CdpCookie[]): Promise<void> {
   const { snapshots } = await launch()
@@ -794,6 +702,43 @@ describe('session cookie snapshot with a cookie launch could not restore', () =>
     ])
   })
 
+  it('a persistent cookie that replaced it settles it, so the old session one is not kept', async () => {
+    const { jar } = await partlyRestored()
+
+    const expirationDate = Date.now() / 1000 + 3600
+    await jar.cookies.set({
+      url: 'https://example.com/',
+      name: 'sid',
+      expirationDate,
+      secure: true
+    })
+    await settle()
+    await elapse(30_000)
+
+    expect(io.cdpReads).toBe(1)
+    expect(storedCookies().map((cookie) => cookie.name)).toEqual(['other'])
+  })
+
+  it('an opaque-partition twin keeps its saved value at quit when the unpartitioned one changes', async () => {
+    const opaque: CdpCookie = { ...sessionCookie('sid', 'example.com'), partitionKeyOpaque: true }
+    await saveSnapshot([sessionCookie('sid', 'example.com'), opaque])
+    const { jar, restore } = await launch({ unrestorable: ['sid'] })
+
+    await jar.cookies.set({
+      url: 'https://example.com/',
+      name: 'sid',
+      value: 'newer',
+      secure: true
+    })
+    await settle()
+    await restore.flushBrowserSessionCookiesOnQuit()
+
+    expect(storedCookies().map((cookie) => [cookie.value, cookie.partitionKeyOpaque])).toEqual([
+      ['newer', undefined],
+      ['sid-value', true]
+    ])
+  })
+
   it('a real sign-out elsewhere and a newer value for it still stick', async () => {
     const { jar } = await partlyRestored()
 
@@ -925,6 +870,25 @@ describe('a cookie clear, quit and retirement at the real callers', () => {
     await settle()
     await elapse(30_000)
     expect((await launch()).jar.names()).toEqual(['after'])
+  })
+
+  it('a whole clear of an unread file whose removal failed still saves cookies set meanwhile', async () => {
+    await saveSnapshot([sessionCookie('sid', 'example.com')])
+    const { jar, target, clear } = await launch({ unreadable: true })
+    const releaseFlush = jar.holdFlush()
+    const clearing = clear.clearBrowserCookieJar(target)
+    await settle()
+    // Set after the native clear, while the file is still unread: the event isn't recorded.
+    await jar.cookies.set({ url: 'https://example.org/', name: 'during', secure: true })
+    await settle()
+    io.rmFailures = 1
+    releaseFlush()
+    await expect(clearing).rejects.toThrow('EBUSY')
+
+    await elapse(30_000)
+
+    expect(storedCookies().map((cookie) => cookie.name)).toEqual(['during'])
+    expect((await launch()).jar.names()).toEqual(['during'])
   })
 
   it('a route jar being retired is not restored again until its release', async () => {

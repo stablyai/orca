@@ -99,7 +99,9 @@ async function commitClear(
       tracker.unrestored.set(key, left)
     }
   }
-  const wasUnread = tracker.savedFile === 'unread'
+  // Changes went unrecorded while the file was unread: whether or not the removal lands, the
+  // next save reads the whole jar.
+  tracker.fullRead ||= tracker.savedFile === 'unread'
   try {
     await writeTrackedSnapshot(tracker, kept)
   } catch (error) {
@@ -110,8 +112,6 @@ async function commitClear(
     scheduleSave(tracker)
     throw error
   }
-  // Committed. Changes went unrecorded while the file was unread: the next save reads the jar.
-  tracker.fullRead ||= wasUnread
   scheduleSave(tracker)
   return true
 }

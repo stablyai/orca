@@ -129,7 +129,8 @@ export function withUnrestoredCookies(
       .filter((member) => !holdsCookie(cookies, member))
       .map((member) => {
         const [only, ...more] = liveByScope?.get(key) ?? []
-        const newer = only && more.length === 0 && !member.partitionKey
+        const newer =
+          only && more.length === 0 && !member.partitionKey && !member.partitionKeyOpaque
         return newer && sameCookieAttributes(member, only)
           ? { ...member, value: only.value }
           : member

@@ -302,9 +302,10 @@ async function readSessionCookies(tracker: SessionCookieTracker): Promise<CdpCoo
       }
       const store = openCookieClearStore(tracker.target)
       try {
-        const live = (await store.readAllCdpCookies()).filter((cookie) => cookie.session === true)
+        const live = await store.readAllCdpCookies()
+        // Before filtering: a persistent cookie that replaced an unrestored one settles it too.
         forgetObservedUnrestored(tracker.unrestored, live)
-        return live
+        return live.filter((cookie) => cookie.session === true)
       } finally {
         store.dispose()
       }
