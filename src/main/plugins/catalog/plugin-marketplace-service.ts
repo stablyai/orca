@@ -184,6 +184,11 @@ export class PluginMarketplaceService {
     }
   }
 
+  /** Installation must settle the refresh a cached preview skipped, without fetching again. */
+  async waitForSourceRefresh(sourceId: string): Promise<void> {
+    await this.refreshChains.get(sourceId)
+  }
+
   /** See sharedSourceRefresh: one update review's previews share one catalog fetch. */
   readonly refreshSourceShared = sharedSourceRefresh((sourceId) => this.refreshSource(sourceId))
 

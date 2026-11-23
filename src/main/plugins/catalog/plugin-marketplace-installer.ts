@@ -167,7 +167,16 @@ export class PluginMarketplaceInstaller {
       stillAllowed?: () => boolean
     } = {}
   ): Promise<PluginMarketplaceInstallResult> {
-    const listing = await this.requireListing(preview.marketplaceSourceId, preview.pluginKey)
+    const sourceId = preview.marketplaceSourceId
+    try {
+      await this.marketplace.waitForSourceRefresh(sourceId)
+    } catch {
+      return { ok: false, error: 'marketplace refresh failed; review the plugin again' }
+    }
+    const listing = await this.marketplace.findPlugin(sourceId, preview.pluginKey)
+    if (!listing || listing.marketplaceCommit !== preview.marketplaceCommit) {
+      return { ok: false, error: 'marketplace changed after preview; review the plugin again' }
+    }
     const blockedReason =
       listing.blockedByKillList?.reason ?? this.blockedPluginReason(preview.pluginKey)
     if (blockedReason) {
@@ -182,11 +191,8 @@ export class PluginMarketplaceInstaller {
     if (incompatible) {
       return { ok: false, error: incompatible }
     }
-    if (listing.marketplaceCommit !== preview.marketplaceCommit) {
-      return { ok: false, error: 'marketplace changed after preview; review the plugin again' }
-    }
     const sourceState = (await this.marketplace.listSources()).find(
-      (source) => source.id === preview.marketplaceSourceId
+      (source) => source.id === sourceId
     )
     if (!sourceState) {
       return { ok: false, error: 'marketplace source is no longer configured' }
