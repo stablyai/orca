@@ -17,8 +17,6 @@ const NOTCH_OUTER_WING_BREATHING_ROOM = 4
 export const NOTCH_OUTER_WING_PADDING = TOP_SHOULDER_RADIUS + NOTCH_OUTER_WING_BREATHING_ROOM
 /** Camera-facing edge: keeps the counter cluster clear of the physical cutout. */
 export const NOTCH_INNER_WING_PADDING = 12
-/** An empty continuation beside the camera, just enough to finish the silhouette. */
-export const NOTCH_FAKE_WING_WIDTH = 28
 
 const IDLE_WING_MIN_WIDTH = 46
 const IDLE_WING_BASE_WIDTH = 28
@@ -93,13 +91,8 @@ export function balanceWings(presentation: NotchPresentation, wings: BalancedWin
   if (presentation !== 'notch') {
     return wings
   }
-  if (wings.left > 0 && wings.right === 0) {
-    return { left: wings.left, right: NOTCH_FAKE_WING_WIDTH }
-  }
-  if (wings.left === 0 && wings.right > 0) {
-    return { left: NOTCH_FAKE_WING_WIDTH, right: wings.right }
-  }
-  return wings
+  const width = Math.max(wings.left, wings.right)
+  return { left: width, right: width }
 }
 
 export type BarLeadingOffsetArgs = {
@@ -161,7 +154,7 @@ export function buildCollapsedBarLayout({
   const showsIdleMark = leftLanes.length === 0 && rightLanes.length === 0
 
   const rawWings: BalancedWings = {
-    // The idle moon lives on the left wing only, so the right stays collapsed when quiet.
+    // The idle glyph lives on the left; balancing preserves matching clearance on both sides.
     left: statusWingWidth({
       visibleIndicatorCount: leftLanes.length,
       showsIdleMark,

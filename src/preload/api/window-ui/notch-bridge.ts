@@ -23,6 +23,7 @@ export const notchApi: NotchApi = {
   },
   setViewedPanes: (keys) => ipcRenderer.send(NOTCH_VIEWED_PANES_CHANNEL, keys),
   acknowledgePanes: (keys) => ipcRenderer.send(NOTCH_ACKNOWLEDGE_CHANNEL, keys),
+  toggleExpanded: () => ipcRenderer.send(NOTCH_SET_EXPANDED_CHANNEL, 'toggle'),
   setExpanded: (expanded) => ipcRenderer.send(NOTCH_SET_EXPANDED_CHANNEL, expanded),
   setInteractive: (interactive) => ipcRenderer.send(NOTCH_SET_INTERACTIVE_CHANNEL, interactive),
   focusPane: (target) => ipcRenderer.send(NOTCH_FOCUS_PANE_CHANNEL, target),

@@ -4,6 +4,7 @@ export type NotchApi = {
   onSnapshot: (listener: (snapshot: NotchSnapshot) => void) => () => void
   setViewedPanes: (paneKeys: readonly string[]) => void
   acknowledgePanes: (paneKeys: readonly string[]) => void
+  toggleExpanded: () => void
   setExpanded: (expanded: boolean) => void
   setInteractive: (interactive: boolean) => void
   focusPane: (paneKey: string) => void

@@ -172,11 +172,11 @@ export function createNotchWindow(options: NotchWindowOptions): BrowserWindow | 
     const isExpanded = expanded
     const rect = isExpanded
       ? expandedWindowRect(metrics, rows.length)
-      : collapsedWindowRect(metrics, layout)
+      : collapsedWindowRect(metrics)
     revision += 1
     const snapshot = toNotchSnapshot(
       summary,
-      layout,
+      { ...layout, leadingOffset: layout.leadingOffset + metrics.panelOriginX - rect.x },
       {
         presentation: metrics.presentation,
         topGap: metrics.topGap,

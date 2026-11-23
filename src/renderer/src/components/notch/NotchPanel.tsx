@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { NotchBar } from './NotchBar'
 import { NotchSessionList } from './NotchSessionList'
 import type { NotchRow, NotchSnapshot } from '../../../../shared/notch/notch-snapshot'
@@ -14,12 +14,39 @@ function activateRow(row: NotchRow): void {
 export function NotchPanel({ snapshot }: { snapshot: NotchSnapshot }): React.JSX.Element {
   const { layout, metrics, rows, expanded } = snapshot
 
-  const toggle = useCallback(() => {
-    window.api.notch?.setExpanded(!expanded)
-  }, [expanded])
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cancelClose = useCallback(() => {
+    if (closeTimer.current !== null) {
+      clearTimeout(closeTimer.current)
+      closeTimer.current = null
+    }
+  }, [])
+  useEffect(() => cancelClose, [cancelClose])
 
-  const enterPainted = useCallback(() => window.api.notch?.setInteractive(true), [])
-  const leavePainted = useCallback(() => window.api.notch?.setInteractive(false), [])
+  const toggle = useCallback(() => {
+    cancelClose()
+    window.api.notch?.toggleExpanded()
+  }, [cancelClose])
+
+  const enterPainted = useCallback(() => {
+    cancelClose()
+    window.api.notch?.setInteractive(true)
+  }, [cancelClose])
+  const enterBar = useCallback(() => {
+    enterPainted()
+    if (rows.length > 0) {
+      window.api.notch?.setExpanded(true)
+    }
+  }, [enterPainted, rows.length])
+  const leavePainted = useCallback(() => {
+    window.api.notch?.setInteractive(false)
+    cancelClose()
+    // Bridge the gap between the bar and the list without leaving an unattended panel open.
+    closeTimer.current = setTimeout(() => {
+      closeTimer.current = null
+      window.api.notch?.setExpanded(false)
+    }, 160)
+  }, [cancelClose])
 
   return (
     <div
@@ -28,11 +55,11 @@ export function NotchPanel({ snapshot }: { snapshot: NotchSnapshot }): React.JSX
       style={{ paddingTop: metrics.topGap }}
     >
       <div className="flex flex-col">
-        <div className="flex" style={{ paddingLeft: expanded ? layout.leadingOffset : 0 }}>
+        <div className="flex" style={{ paddingLeft: layout.leadingOffset }}>
           <button
             type="button"
             onClick={toggle}
-            onMouseEnter={enterPainted}
+            onMouseEnter={enterBar}
             onMouseLeave={leavePainted}
             className="pointer-events-auto cursor-default focus-visible:outline-none"
             aria-expanded={expanded}

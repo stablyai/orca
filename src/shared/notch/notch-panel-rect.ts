@@ -5,7 +5,8 @@ import {
   PILL_BOTTOM_INSET,
   PILL_TOP_GAP,
   TOP_SHOULDER_RADIUS,
-  type CollapsedBarLayout,
+  statusWingWidth,
+  wingPadding,
   type NotchPresentation
 } from './notch-bar-geometry'
 
@@ -69,7 +70,7 @@ function hasHardwareNotch(display: NotchDisplayInfo): display is NotchDisplayInf
 /** Resolves presentation and every fixed measurement for one display. */
 export function computeNotchPanelMetrics(display: NotchDisplayInfo): NotchPanelMetrics {
   const { bounds } = display
-  const panelWidth = Math.min(EXPANDED_PANEL_WIDTH, Math.max(1, bounds.width))
+  const basePanelWidth = Math.min(EXPANDED_PANEL_WIDTH, Math.max(1, bounds.width))
   const panelOriginY = bounds.y
 
   if (hasHardwareNotch(display)) {
@@ -78,12 +79,21 @@ export function computeNotchPanelMetrics(display: NotchDisplayInfo): NotchPanelM
     const barHeight = display.safeAreaTop
     const notchWidth = Math.max(trailing - leading, MIN_NOTCH_WIDTH)
     const notchCenterX = (leading + trailing) / 2
+    const maxWingWidth = statusWingWidth({
+      visibleIndicatorCount: 2,
+      showsIdleMark: false,
+      padding: wingPadding('notch', 'left')
+    })
+    const panelWidth = Math.min(
+      bounds.width,
+      Math.max(basePanelWidth, notchWidth + maxWingWidth * 2)
+    )
     return {
       presentation: 'notch',
       topGap: 0,
       barHeight,
       notchWidth,
-      notchLeadingX: leading,
+      notchLeadingX: notchCenterX - notchWidth / 2,
       panelWidth,
       // Centre the wide card on the camera housing, then keep it on this display.
       panelOriginX: clamp(
@@ -109,8 +119,8 @@ export function computeNotchPanelMetrics(display: NotchDisplayInfo): NotchPanelM
     barHeight,
     notchWidth: 0,
     notchLeadingX: null,
-    panelWidth,
-    panelOriginX: bounds.x + bounds.width / 2 - panelWidth / 2,
+    panelWidth: basePanelWidth,
+    panelOriginX: bounds.x + bounds.width / 2 - basePanelWidth / 2,
     // Auto-hidden menu bars can report zero even on a display with a physical camera cutout.
     panelOriginY:
       display.safeAreaTop === 0
@@ -127,23 +137,20 @@ export function computeNotchPanelMetrics(display: NotchDisplayInfo): NotchPanelM
 export type WindowRect = { x: number; y: number; width: number; height: number }
 
 function toIntegerRect(rect: WindowRect): WindowRect {
-  // Electron's setBounds truncates; rounding first stops a half-pixel drifting the bar.
+  // Enclose fractional display coordinates; the renderer preserves the remaining offset.
   return {
-    x: Math.round(rect.x),
+    x: Math.floor(rect.x),
     y: Math.round(rect.y),
-    width: Math.max(1, Math.round(rect.width)),
+    width: Math.max(1, Math.ceil(rect.x + rect.width) - Math.floor(rect.x)),
     height: Math.max(1, Math.round(rect.height))
   }
 }
 
-export function collapsedWindowRect(
-  metrics: NotchPanelMetrics,
-  layout: CollapsedBarLayout
-): WindowRect {
+export function collapsedWindowRect(metrics: NotchPanelMetrics): WindowRect {
   return toIntegerRect({
-    x: metrics.panelOriginX + layout.leadingOffset,
+    x: metrics.panelOriginX,
     y: metrics.panelOriginY,
-    width: layout.barWidth,
+    width: metrics.panelWidth,
     height: metrics.topGap + metrics.barHeight
   })
 }

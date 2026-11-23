@@ -9,6 +9,7 @@ import {
   NOTCH_SET_INTERACTIVE_CHANNEL
 } from '../../shared/notch/notch-snapshot'
 import {
+  isNotchExpanded,
   isNotchRenderer,
   publishNotchSnapshot,
   setNotchExpanded,
@@ -99,7 +100,7 @@ export function registerNotchHandlers({
       isNotchRenderer(event.sender) ||
       (next === false && event.sender === getTrustedUIRendererWindow()?.webContents)
     ) {
-      setNotchExpanded(next === true)
+      setNotchExpanded(next === 'toggle' ? !isNotchExpanded() : next === true)
     }
   })
 

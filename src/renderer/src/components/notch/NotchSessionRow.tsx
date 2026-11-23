@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useNow } from '@/lib/window-activity/use-now'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
@@ -20,6 +21,7 @@ export function NotchSessionRow({
   row: NotchRow
   onActivate: (row: NotchRow) => void
 }): React.JSX.Element {
+  const pointerPressed = useRef(false)
   const elapsed = formatNotchElapsedSince(row.stateStartedAt, useNow(1000))
   // A row with no pane to route to still lists, but must not look actionable.
   const actionable = row.worktreeId !== null && row.tabId !== null
@@ -34,7 +36,22 @@ export function NotchSessionRow({
     <button
       type="button"
       disabled={!actionable}
-      onClick={() => onActivate(row)}
+      onPointerDown={(event) => {
+        pointerPressed.current = event.isPrimary && event.button === 0
+      }}
+      onPointerCancel={() => {
+        pointerPressed.current = false
+      }}
+      onPointerLeave={() => {
+        pointerPressed.current = false
+      }}
+      onClick={(event) => {
+        const accepted = event.detail === 0 || pointerPressed.current
+        pointerPressed.current = false
+        if (accepted) {
+          onActivate(row)
+        }
+      }}
       style={{ height: SESSION_ROW_HEIGHT }}
       aria-label={`${row.title} — ${state}${row.agentType ? ` — ${row.agentType}` : ''}`}
       className="flex w-full items-center gap-2.5 rounded-md px-2.5 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"

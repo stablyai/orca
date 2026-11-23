@@ -77,10 +77,15 @@ function fixture(notch: boolean, expanded: boolean, idle = false) {
     notchLeadingX: metrics.notchLeadingX,
     notchWidth: metrics.notchWidth
   })
-  const rect = expanded
-    ? expandedWindowRect(metrics, rows.length)
-    : collapsedWindowRect(metrics, layout)
-  const snapshot = toNotchSnapshot(current, layout, metrics, idle ? [] : rows, expanded, 1)
+  const rect = expanded ? expandedWindowRect(metrics, rows.length) : collapsedWindowRect(metrics)
+  const snapshot = toNotchSnapshot(
+    current,
+    { ...layout, leadingOffset: layout.leadingOffset + metrics.panelOriginX - rect.x },
+    metrics,
+    idle ? [] : rows,
+    expanded,
+    1
+  )
   return defineFixture({
     width: rect.width + 32,
     render: () => (
