@@ -129,7 +129,7 @@ export type UpdateStatus = (
       /** Optional so older paired clients retain the diagnostic and install retry. */
       installBlock?: UpdateInstallBlock
     }
-) & { source?: UpdateSource; automaticDownload?: boolean }
+) & { source?: UpdateSource; automaticDownload?: boolean; requiredByTeam?: boolean }
 
 export type ReleaseBuildListResult =
   | { ok: true; channel: ReleaseChannel; builds: ReleaseBuild[] }

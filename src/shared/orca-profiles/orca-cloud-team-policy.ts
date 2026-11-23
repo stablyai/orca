@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { pluginMarketplaceGitSourceSchema } from '../plugins/catalog/plugin-marketplace'
 import { isQualifiedPluginKey } from '../plugins/manifest/plugin-manifest'
+import { isValidAppVersion } from '../app-lifecycle/identity/app-version'
 import type { OrcaCloudCapabilities } from './orca-cloud-capabilities'
 import type { OrcaProfileAuthStatus } from './orca-profiles'
 
@@ -47,7 +48,12 @@ export const orcaCloudTeamPolicySchema = z.object({
   internalCatalogs: z.array(pluginMarketplaceGitSourceSchema).optional(),
   requiredPlugins: z.array(z.string().refine(isQualifiedPluginKey)).optional(),
   updateChannel: z.enum(['stable', 'rc']).optional(),
-  updateDelayDays: z.number().int().min(0).max(90).optional()
+  updateDelayDays: z.number().int().min(0).max(90).optional(),
+  minimumVersion: z.string().max(64).refine(isValidAppVersion).optional(),
+  forceUpdates: z.boolean().optional(),
+  forceUpdateDelayDays: z.number().int().min(0).max(30).optional(),
+  forceUsesMemberDelay: z.boolean().optional(),
+  restartDeadlineHours: z.number().int().min(1).max(168).optional()
 })
 
 export type OrcaCloudTeamPolicy = z.infer<typeof orcaCloudTeamPolicySchema>

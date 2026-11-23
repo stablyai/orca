@@ -13,6 +13,7 @@ import type { TeamUpdateApproval, TeamUpdatePolicy } from '../releases/updater-r
 
 export const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 export const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
+export const TEAM_POLICY_CHECK_RETRY_MS = 15_000
 // #7576: back off persistent feed failures up to this cap; completed checks reset the cadence.
 export const MAX_AUTO_UPDATE_RETRY_INTERVAL_MS = 6 * 60 * 60 * 1000
 export const NUDGE_POLL_INTERVAL_MS = 30 * 60 * 1000
@@ -131,6 +132,7 @@ export abstract class UpdaterState {
   protected getReleaseChannelOverride: (() => ReleaseChannel | null) | null = null
   protected getTeamUpdatePolicy: (() => TeamUpdatePolicy | undefined) | null = null
   protected teamUpdateApproval: TeamUpdateApproval | null = null
+  protected teamPolicyCheckPending = false
   protected teamControlledPrerelease = false
   protected implicitInstallOnQuit = false
   protected macTeamDownloadDeferred = false

@@ -1,10 +1,19 @@
 import { isDeepStrictEqual } from 'node:util'
 import type { OrcaCloudTeamPolicy } from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import type { UpdateCheckVariant } from '../lifecycle/updater-types'
-import { isPrereleaseVersion } from './updater-fallback'
+import { compareVersions, isPrereleaseVersion, isValidVersion } from './updater-fallback'
 import { normalizeTagToVersion } from '../../../shared/updater/release-channel'
 
-export type TeamUpdatePolicy = Pick<OrcaCloudTeamPolicy, 'updateChannel' | 'updateDelayDays'> & {
+export type TeamUpdatePolicy = Pick<
+  OrcaCloudTeamPolicy,
+  | 'updateChannel'
+  | 'updateDelayDays'
+  | 'minimumVersion'
+  | 'forceUpdates'
+  | 'forceUpdateDelayDays'
+  | 'forceUsesMemberDelay'
+  | 'restartDeadlineHours'
+> & {
   orgIds: readonly string[]
 }
 
@@ -14,7 +23,38 @@ export type TeamUpdateApproval = {
 }
 
 export function managesUpdates(policy: TeamUpdatePolicy | undefined): boolean {
-  return policy?.updateChannel !== undefined || policy?.updateDelayDays !== undefined
+  return (
+    policy?.updateChannel !== undefined ||
+    policy?.updateDelayDays !== undefined ||
+    policy?.minimumVersion !== undefined ||
+    policy?.forceUpdates === true
+  )
+}
+
+export function sameTeamUpdatePolicy(
+  left: TeamUpdatePolicy | undefined,
+  right: TeamUpdatePolicy | undefined
+): boolean {
+  return (
+    isDeepStrictEqual(left?.orgIds, right?.orgIds) &&
+    left?.updateChannel === right?.updateChannel &&
+    left?.updateDelayDays === right?.updateDelayDays &&
+    left?.minimumVersion === right?.minimumVersion &&
+    left?.forceUpdates === right?.forceUpdates &&
+    left?.forceUpdateDelayDays === right?.forceUpdateDelayDays &&
+    left?.forceUsesMemberDelay === right?.forceUsesMemberDelay &&
+    left?.restartDeadlineHours === right?.restartDeadlineHours
+  )
+}
+
+export function requiredMinimumVersion(
+  policy: TeamUpdatePolicy | undefined,
+  currentVersion: string
+): string | undefined {
+  const minimum = policy?.minimumVersion
+  return minimum && isValidVersion(currentVersion) && compareVersions(currentVersion, minimum) < 0
+    ? minimum
+    : undefined
 }
 
 export function teamAllowsUpdate(
@@ -26,9 +66,7 @@ export function teamAllowsUpdate(
   return (
     !managesUpdates(policy) ||
     (routineRelease &&
-      isDeepStrictEqual(approval?.policy?.orgIds, policy?.orgIds) &&
-      approval?.policy?.updateChannel === policy?.updateChannel &&
-      approval?.policy?.updateDelayDays === policy?.updateDelayDays &&
+      sameTeamUpdatePolicy(approval?.policy, policy) &&
       approval?.tags.some((tag) => normalizeTagToVersion(tag) === version) === true)
   )
 }
@@ -47,15 +85,34 @@ export function releaseSelectionPolicy({
   includePrerelease: boolean
   ignoreDelay: boolean
   getUpdateDelayDays: (() => number) | null
-}): { isPerfCheck: boolean; includePrerelease: boolean; delayDays: number } {
+}): {
+  isPerfCheck: boolean
+  includePrerelease: boolean
+  delayDays: number
+  minimumVersion?: string
+} {
   const isPerfCheck = variant === 'perf' && !managesUpdates(team)
-  let delayDays = team?.updateDelayDays ?? 0
-  if (team?.updateDelayDays === undefined && !isPerfCheck && !ignoreDelay) {
+  const minimumVersion = requiredMinimumVersion(team, version)
+  const forced = team?.forceUpdates === true
+  const usesMemberDelay = forced
+    ? team.forceUsesMemberDelay === true || team.forceUpdateDelayDays === undefined
+    : team?.updateDelayDays === undefined && !isPerfCheck && (!ignoreDelay || !!minimumVersion)
+  let memberDelay = 0
+  if (usesMemberDelay) {
     try {
-      delayDays = getUpdateDelayDays?.() ?? 0
+      memberDelay = getUpdateDelayDays?.() ?? 0
     } catch {
       // A settings read failure must not block updates entirely.
     }
+  }
+  let delayDays = memberDelay
+  if (forced) {
+    const forceDelay = team.forceUpdateDelayDays
+    delayDays = usesMemberDelay
+      ? Math.min(memberDelay, forceDelay ?? memberDelay)
+      : (forceDelay ?? 0)
+  } else if (team?.updateDelayDays !== undefined) {
+    delayDays = Math.min(team.updateDelayDays, 30)
   }
   return {
     isPerfCheck,
@@ -63,6 +120,7 @@ export function releaseSelectionPolicy({
       team?.updateChannel !== undefined
         ? team.updateChannel === 'rc'
         : isPerfCheck || includePrerelease || isPrereleaseVersion(version),
-    delayDays
+    delayDays,
+    ...(minimumVersion ? { minimumVersion } : {})
   }
 }

@@ -25631,6 +25631,9 @@
       "installing": "Installing Orca {{version}}…",
       "restarting": "Orca will restart automatically."
     },
+    "teamRequired": {
+      "summary": "Your team requires Orca {{version}}. Restart to update."
+    },
     "remoteUpdateBusy": "This server is already updating. Check again once it finishes."
   },
   "jira": {

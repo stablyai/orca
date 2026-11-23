@@ -2,7 +2,12 @@ import { app, powerMonitor } from 'electron'
 import type { BrowserWindow } from 'electron'
 import type { ReleaseBuild, ReleaseChannel } from '../../../shared/updater/release-channel'
 import type { ReleaseBuildListOptions } from '../releases/updater-release-build-cache'
-import type { TeamUpdatePolicy } from '../releases/updater-release-policy'
+import {
+  managesUpdates,
+  requiredMinimumVersion,
+  sameTeamUpdatePolicy,
+  type TeamUpdatePolicy
+} from '../releases/updater-release-policy'
 import type {
   LinuxPackageInstallInstructions,
   UpdateCheckOptions,
@@ -18,7 +23,7 @@ import { createUpdaterDiagnosticLogger } from '../linux-package/linux-package-in
 import { registerAutoUpdaterHandlers } from '../updater-events'
 import { getServeUpdateHandoffFailure } from '../serve-update-handoff'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
-import { AUTO_UPDATE_CHECK_INTERVAL_MS } from './updater-state'
+import { AUTO_UPDATE_CHECK_INTERVAL_MS, TEAM_POLICY_CHECK_RETRY_MS } from './updater-state'
 import { UpdaterDownloadInstall } from './updater-download-install'
 import { configureMacShipItScheduling } from '../mac-install/macos-shipit-scheduling'
 import { handleElectronUpdaterProxyLogin } from './electron-updater-proxy-session'
@@ -36,6 +41,7 @@ export type UpdaterSetupOptions = {
   setDismissedUpdateNudgeId?: (id: string | null) => void
   getReleaseChannelOverride?: () => ReleaseChannel | null
   getTeamUpdatePolicy?: () => TeamUpdatePolicy | undefined
+  onTeamUpdatePolicyChanged?: (listener: () => void) => void
   getUpdateDelayDays?: () => number
   getAutomaticUpdates?: () => boolean
   installMode?: UpdateInstallMode
@@ -48,6 +54,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       this.autoUpdater.autoInstallOnAppQuit =
         !this.isMacStagingDeferredToInstall() &&
         !this.shouldDeferTeamMacStaging() &&
+        !this.isRequiredTeamUpdate(this.getPendingInstallVersion()) &&
         this.allowsCurrentTeamUpdate(this.getPendingInstallVersion())
     }
   }
@@ -205,6 +212,22 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     this.autoUpdaterInitialized = true
     autoUpdater.on('login', handleElectronUpdaterProxyLogin)
 
+    let previousPolicy = this.getTeamUpdatePolicy?.()
+    opts?.onTeamUpdatePolicyChanged?.(() => {
+      const next = this.getTeamUpdatePolicy?.()
+      const checkNeeded =
+        (managesUpdates(previousPolicy) || managesUpdates(next)) &&
+        !sameTeamUpdatePolicy(previousPolicy, next)
+      previousPolicy = next
+      if (!checkNeeded) {
+        return
+      }
+      this.teamPolicyCheckPending = true
+      if (!this.runBackgroundUpdateCheck()) {
+        this.scheduleAutomaticUpdateCheck(TEAM_POLICY_CHECK_RETRY_MS)
+      }
+    })
+
     registerAutoUpdaterHandlers({
       autoUpdater,
       clearBackgroundCheckLaunchPending: () => this.clearBackgroundCheckLaunchPending(),
@@ -294,7 +317,11 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     const lastUpdateCheckAt = opts?.getLastUpdateCheckAt?.() ?? null
     const msSinceLastCheck =
       lastUpdateCheckAt === null ? Number.POSITIVE_INFINITY : Date.now() - lastUpdateCheckAt
-    if (msSinceLastCheck >= AUTO_UPDATE_CHECK_INTERVAL_MS) {
+    if (
+      msSinceLastCheck >= AUTO_UPDATE_CHECK_INTERVAL_MS ||
+      previousPolicy?.forceUpdates ||
+      requiredMinimumVersion(previousPolicy, app.getVersion())
+    ) {
       this.runBackgroundUpdateCheck()
       this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
     } else {

@@ -4,7 +4,8 @@ import { withUpdaterSpan } from '../../observability/instrumentation'
 import {
   AUTO_UPDATE_CHECK_INTERVAL_MS,
   AUTO_UPDATE_RETRY_INTERVAL_MS,
-  MAX_AUTO_UPDATE_RETRY_INTERVAL_MS
+  MAX_AUTO_UPDATE_RETRY_INTERVAL_MS,
+  TEAM_POLICY_CHECK_RETRY_MS
 } from './updater-state'
 import { UpdaterCheckFailure } from './updater-check-failure'
 import { getDelayedUpdateWakeDelayMs } from '../releases/updater-release-delay'
@@ -23,6 +24,9 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
         MAX_AUTO_UPDATE_RETRY_INTERVAL_MS
       )
       this.consecutiveAutomaticRetrySchedules += 1
+    }
+    if (this.teamPolicyCheckPending) {
+      effectiveDelayMs = Math.min(effectiveDelayMs, TEAM_POLICY_CHECK_RETRY_MS)
     }
     if (this.autoUpdateCheckTimer) {
       clearTimeout(this.autoUpdateCheckTimer)
@@ -73,6 +77,7 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
       this.sendStatus({ state: 'not-available' })
       return false
     }
+    this.teamPolicyCheckPending = false
     // Set the campaign before events; persist its ID so the card remains dismissible after relaunch.
     this.activeUpdateNudgeId = nudgeId
     // Track launch before delayed checking events so rapid focus/resume cannot start duplicates.

@@ -8,9 +8,8 @@ import { toDelayedUpdate } from './updater-release-delay'
 import { updateDelayDaysToMs } from '../../../shared/updater/update-delay'
 import { isMissingUpdateManifestFailure } from './updater-fallback'
 import { releaseSelectionPolicy } from './updater-release-policy'
-import type { CheckFailureSource } from '../lifecycle/updater-state'
+import { ReleaseFeedPreflightError, type CheckFailureSource } from '../lifecycle/updater-state'
 import type { UpdateCheckVariant } from '../lifecycle/updater-types'
-import { ReleaseFeedPreflightError } from '../lifecycle/updater-state'
 import { UpdaterInstallExecution } from '../lifecycle/updater-install-execution'
 
 export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
@@ -121,7 +120,7 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
     // Pin the concrete tag because latest/download can move between check and download; stable checks exclude prereleases.
     const currentVersion = app.getVersion()
     const team = this.getTeamUpdatePolicy?.()
-    const { isPerfCheck, includePrerelease, delayDays } = releaseSelectionPolicy({
+    const { isPerfCheck, includePrerelease, delayDays, minimumVersion } = releaseSelectionPolicy({
       team,
       variant,
       version: currentVersion,
@@ -138,6 +137,7 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
       {
         includePrerelease,
         ...(isPerfCheck ? { releaseFilter: 'perf' as const } : {}),
+        ...(minimumVersion ? { minimumVersion } : {}),
         ...(delayDays > 0 ? { minReleaseAgeMs: updateDelayDaysToMs(delayDays), now } : {})
       }
     )
@@ -211,16 +211,20 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
         'Unable to find latest version on GitHub'
       )
     }
-    if (isPerfCheck) {
+    if (isPerfCheck || minimumVersion) {
       this.clearPrereleaseFallbackContext()
       this.clearPublishingWindowLastGoodCheck()
       if (releaseTagsResult.state === 'no-newer') {
         console.info(
-          `[updater] perf release not found: current=${currentVersion} includePrerelease=${includePrerelease}`
+          `[updater] matching release not found: current=${currentVersion} includePrerelease=${includePrerelease}`
         )
         return 'not-available'
       }
-      throw new Error('Could not resolve perf update feed')
+      throw new Error(
+        isPerfCheck
+          ? 'Could not resolve perf update feed'
+          : 'Could not resolve the required update feed'
+      )
     }
     this.clearPrereleaseFallbackContext()
     this.clearPublishingWindowLastGoodCheck()

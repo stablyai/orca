@@ -114,13 +114,14 @@ export function UpdateCardStateContent({
         </div>
       )
     }
-    return hasStartedDownload && !status.automaticDownload ? (
+    return hasStartedDownload && !status.automaticDownload && !status.requiredByTeam ? (
       <div className="p-4">
         <p className="text-sm">{t('auto.components.UpdateCard.09a55c39b5', 'Installing...')}</p>
       </div>
     ) : (
       <UpdateReadyToInstallContent
         version={status.version}
+        requiredByTeam={status.requiredByTeam}
         onRestart={onInstallRetry}
         onClose={onCollapse}
       />

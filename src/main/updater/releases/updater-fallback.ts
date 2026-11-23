@@ -10,7 +10,11 @@ export const isPrereleaseVersion = isPrereleaseAppVersion
 export const isValidVersion = isValidAppVersion
 
 export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean {
-  if (left.source !== right.source || left.automaticDownload !== right.automaticDownload) {
+  if (
+    left.source !== right.source ||
+    left.automaticDownload !== right.automaticDownload ||
+    left.requiredByTeam !== right.requiredByTeam
+  ) {
     return false
   }
   switch (left.state) {

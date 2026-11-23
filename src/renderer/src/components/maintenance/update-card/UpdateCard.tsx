@@ -71,13 +71,18 @@ export function UpdateCard(): React.JSX.Element | null {
     const timer = window.setTimeout(() => setAutoDismissed(true), 3000)
     return () => window.clearTimeout(timer)
   }, [shouldAutoDismissLatest])
+  const restartAfterDownload =
+    status.state === 'downloaded' &&
+    !status.installing &&
+    !status.automaticDownload &&
+    !status.requiredByTeam
   useEffect(() => {
-    if (status.state === 'downloaded' && !status.automaticDownload && hasStartedDownload.current) {
+    if (restartAfterDownload && hasStartedDownload.current) {
       void window.api.updater.quitAndInstall().catch((error) => {
         setInstallError(String((error as Error)?.message ?? error))
       })
     }
-  }, [status.state, status.automaticDownload])
+  }, [restartAfterDownload])
 
   const prefersReducedMotion = usePrefersReducedMotion()
   const clearAnimationTimers = useCallback(() => {
@@ -199,7 +204,7 @@ export function UpdateCard(): React.JSX.Element | null {
     }, 150)
   }
   const handleKeyDown = (event: React.KeyboardEvent): void => {
-    if (event.key !== 'Escape') {
+    if (event.key !== 'Escape' || (status.state === 'downloaded' && status.requiredByTeam)) {
       return
     }
     event.preventDefault()
