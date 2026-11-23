@@ -138,6 +138,14 @@ function scanFields(fields: Fields, scalarLimit: number, maxDepth: number) {
       case 'nullValue':
         assign(parent, null)
         break
+      // Packed values and number text repeat the events above; whitespace carries nothing.
+      case 'keyValue':
+      case 'stringValue':
+      case 'startNumber':
+      case 'numberChunk':
+      case 'numberValue':
+      case 'whitespace':
+        break
     }
   }
 
