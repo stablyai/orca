@@ -3,6 +3,8 @@ import { appendFile, readFile, unlink } from 'node:fs/promises'
 const NEWLINE = 0x0a
 /** Past this, an unfinished line moves to disk; real JSONL lines stay far below it. */
 export const RELAY_LINE_SPILL_BYTES = 4 * 1024 * 1024
+/** A rebuilt line this large costs that much daemon memory at once, so it is logged. */
+const LARGE_LINE_WARN_BYTES = 64 * 1024 * 1024
 
 type LineReaderOptions = {
   /** Private scratch file for one unfinished line; removed once the line completes. */
@@ -11,6 +13,7 @@ type LineReaderOptions = {
   /** True while disk work is in flight; the owner stops reading stdout meanwhile. */
   onBusy: (busy: boolean) => void
   spillBytes?: number
+  onLargeLine?: (bytes: number) => void
 }
 
 /**
@@ -166,6 +169,10 @@ export class ProviderRelayLineReader {
     this.partialBytes = 0
     this.spilled = false
     this.spillBroken = false
-    this.options.onLine(Buffer.concat(parts).toString('utf8'))
+    const whole = Buffer.concat(parts)
+    if (whole.length > LARGE_LINE_WARN_BYTES) {
+      this.options.onLargeLine?.(whole.length)
+    }
+    this.options.onLine(whole.toString('utf8'))
   }
 }

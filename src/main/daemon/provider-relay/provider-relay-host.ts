@@ -121,6 +121,7 @@ export class ProviderRelayHost {
       chatKey,
       managed,
       spoolPath: join(directory, `${relayId}.ndjson`),
+      log: this.options.log,
       onSettled: () => {
         this.removeIfFinished(relay)
         this.expireWhenAbandoned(relay)

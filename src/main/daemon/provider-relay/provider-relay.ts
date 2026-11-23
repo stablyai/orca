@@ -22,6 +22,7 @@ type RelayOptions = {
   spoolPath: string
   /** Test seam; defaults to the reader's own spill size. */
   lineSpillBytes?: number
+  log?: (event: string, details?: Record<string, unknown>) => void
   /** The agent exited or its stdout ended: the record may now be finished or expire. */
   onSettled: () => void
   /** No client is attached anymore; an ended relay may now expire. */
@@ -78,7 +79,8 @@ export class ProviderRelay {
         this.readerBusy = busy
         this.updateReading()
       },
-      ...(options.lineSpillBytes ? { spillBytes: options.lineSpillBytes } : {})
+      ...(options.lineSpillBytes ? { spillBytes: options.lineSpillBytes } : {}),
+      onLargeLine: (bytes) => options.log?.('relay-large-line', { relayId: options.relayId, bytes })
     })
     stdout.on('data', (chunk: Buffer) => this.lines.push(chunk))
     stdout.once('end', () => void this.lines.end().then(() => this.stdoutDone()))
