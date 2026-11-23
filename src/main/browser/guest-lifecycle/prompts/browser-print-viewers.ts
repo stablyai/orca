@@ -19,13 +19,15 @@ export type BrowserPrintViewer = {
   print: (event: BrowserScreencastPrintResult) => void
 }
 
-/** One print per device and page, from rendering until it is read, released or expires. */
+/**
+ * One print per device and page, from rendering until it is read, released or expires. A print
+ * delivered to the device outlives its stream: the save dialog may be open across a reconnect.
+ */
 type PrintSlot = {
   pairedDeviceId: string
   guestWebContentsId: number
   // Null while the PDF renders.
   bytes: Buffer | null
-  reading: boolean
   expiry: NodeJS.Timeout
 }
 
@@ -60,14 +62,6 @@ export function addBrowserPrintViewer(
     if (viewers.size === 0 && viewersByGuestId.get(guestWebContentsId) === viewers) {
       viewersByGuestId.delete(guestWebContentsId)
     }
-    // A device that stopped streaming the page won't ask for a print it hasn't started reading.
-    if (deviceViewers(guestWebContentsId, viewer.pairedDeviceId).length === 0) {
-      for (const [printId, slot] of slotsOf(guestWebContentsId, viewer.pairedDeviceId)) {
-        if (!slot.reading) {
-          forgetPrint(printId)
-        }
-      }
-    }
   }
 }
 
@@ -94,7 +88,6 @@ export function printForBrowserViewer(
     pairedDeviceId,
     guestWebContentsId,
     bytes: null,
-    reading: false,
     expiry: expirePrint(printId)
   }
   slots.set(printId, slot)
@@ -136,7 +129,6 @@ export function readBrowserPrintPdf(
   if (eof) {
     forgetPrint(params.printId)
   } else {
-    slot.reading = true
     clearTimeout(slot.expiry)
     slot.expiry = expirePrint(params.printId)
   }
