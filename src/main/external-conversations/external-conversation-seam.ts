@@ -180,7 +180,7 @@ export class ExternalConversationSeam {
     })
     this.chatDeliveries.stopFollowing()
     const release = this.events.watch(listener)
-    this.deps.slackMirror?.()?.flushHeld()
+    this.deps.watched?.()
     return release
   }
 

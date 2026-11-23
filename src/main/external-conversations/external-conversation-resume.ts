@@ -18,9 +18,14 @@ export async function chatAwaitsResume(
     if (work && (work.working() || work.hasActionablePrompt())) {
       return false
     }
+    const { journal } = await chat.conversation(sessionId)
     // Any failed pause, including one that lets other agents' mail run past it (#47220).
-    const pauses = await (await chat.conversation(sessionId)).journal.queuedMessages.pauses()
-    return pauses.some((pause) => pause.reason === 'failed')
+    const pauses = await journal.queuedMessages.pauses()
+    // Or its newest turn an Orca quit, crash or update cut, which its conversation reads as failed.
+    return (
+      pauses.some((pause) => pause.reason === 'failed') ||
+      (await journal.reads.orcaStopCut()) !== null
+    )
   } catch {
     return false
   }
