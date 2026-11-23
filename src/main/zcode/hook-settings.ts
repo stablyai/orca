@@ -48,6 +48,31 @@ export function getZCodeRemoteConfigPath(remoteHome: string): string {
   return `${remoteHome.replace(/\/$/, '')}/.zcode/cli/config.json`
 }
 
+/** The npm zcode-app-cli distribution reads only setting.json, so hooks in config.json never fire for it. */
+export function getZCodeNpmSettingsPath(): string {
+  return (
+    process.env.ZCODE_CLI_SETTINGS_FILE?.trim() || join(homedir(), '.zcode', 'cli', 'setting.json')
+  )
+}
+
+export function getZCodeRemoteNpmSettingsPath(remoteHome: string): string {
+  return `${remoteHome.replace(/\/$/, '')}/.zcode/cli/setting.json`
+}
+
+export type ZCodeSettingsFile = {
+  path: string
+  /** That CLI creates its settings on first launch; an earlier stub would pre-empt that launch's migration. */
+  createIfMissing: boolean
+}
+
+/** Every file a ZCode build on this machine reads: upstream's, then the npm distribution's. */
+export function getZCodeSettingsFiles(): [ZCodeSettingsFile, ZCodeSettingsFile] {
+  return [
+    { path: getZCodeConfigPath(), createIfMissing: true },
+    { path: getZCodeNpmSettingsPath(), createIfMissing: false }
+  ]
+}
+
 export function getZCodeManagedScriptFileName(): string {
   return process.platform === 'win32' ? `${ZCODE_SCRIPT_BASE}.cmd` : `${ZCODE_SCRIPT_BASE}.sh`
 }

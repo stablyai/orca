@@ -1,5 +1,9 @@
+import { basename } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
+import type {
+  AgentHookInstallState,
+  AgentHookInstallStatus
+} from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
 import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
 import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
@@ -15,13 +19,14 @@ import {
 import { buildPosixAgentHookPostCommand } from '../agent-hooks/installation/scripts/hook-post-command'
 import {
   applyZCodeManagedHooks,
-  getZCodeConfigPath,
   getZCodeManagedCommand,
   getZCodeManagedScriptFileName,
   getZCodeManagedScriptPath,
   getZCodePosixManagedScriptFileName,
   getZCodeRemoteConfigPath,
   getZCodeRemoteManagedCommand,
+  getZCodeRemoteNpmSettingsPath,
+  getZCodeSettingsFiles,
   isZCodeHooksEnabled,
   readManagedZCodeHookEvents,
   removeZCodeManagedHooks,
@@ -31,7 +36,8 @@ import {
 import {
   parseZCodeConfigText,
   readZCodeConfigSource,
-  serializeZCodeConfig
+  serializeZCodeConfig,
+  type ZCodeConfigSource
 } from './hook-config-json'
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
@@ -96,36 +102,73 @@ function buildStatus(
   return { ...base, state: 'partial', managedHooksPresent: true, detail: reasons.join('; ') }
 }
 
+function statusOfSettings(
+  source: ZCodeConfigSource | null,
+  configPath: string,
+  scriptFileName: string
+): AgentHookInstallStatus {
+  return source
+    ? buildStatus(source.config, configPath, scriptFileName)
+    : zcodeHookError(configPath, `Could not read ZCode ${basename(configPath)}`)
+}
+
+const ZCODE_HOOK_STATUS_SEVERITY: Record<AgentHookInstallState, number> = {
+  error: 3,
+  not_installed: 2,
+  partial: 1,
+  installed: 0,
+  skipped: 0
+}
+
+/** Each ZCode build reads its own file; report the one still needing repair, most severe first. */
+function combineZCodeHookStatuses(
+  official: AgentHookInstallStatus,
+  npm: AgentHookInstallStatus
+): AgentHookInstallStatus {
+  const worst = [official, npm].toSorted(
+    (a, b) => ZCODE_HOOK_STATUS_SEVERITY[b.state] - ZCODE_HOOK_STATUS_SEVERITY[a.state]
+  )[0]
+  return worst.state === 'installed'
+    ? official
+    : { ...worst, managedHooksPresent: official.managedHooksPresent || npm.managedHooksPresent }
+}
+
 export class ZCodeHookService {
   async refreshManagedScripts(): Promise<void> {
     await refreshManagedScriptIfPresent(getZCodeManagedScriptPath(), getManagedScript())
   }
 
   getStatus(): AgentHookInstallStatus {
-    const configPath = getZCodeConfigPath()
-    const source = readZCodeConfigSource(configPath)
-    if (!source) {
-      return zcodeHookError(configPath, 'Could not read ZCode config.json')
-    }
-    return buildStatus(source.config, configPath, getZCodeManagedScriptFileName())
+    const scriptFileName = getZCodeManagedScriptFileName()
+    const [config, npmSettings] = getZCodeSettingsFiles()
+    const sources = [config, npmSettings].map(({ path }) => readZCodeConfigSource(path))
+    const official = statusOfSettings(sources[0], config.path, scriptFileName)
+    const npmSource = sources[1]
+    const npm =
+      npmSource?.text === null && !npmSettings.createIfMissing
+        ? null
+        : statusOfSettings(npmSource, npmSettings.path, scriptFileName)
+    return npm ? combineZCodeHookStatuses(official, npm) : official
   }
 
   install(): AgentHookInstallStatus {
-    const configPath = getZCodeConfigPath()
-    const scriptPath = getZCodeManagedScriptPath()
-    const source = readZCodeConfigSource(configPath)
-    if (!source) {
-      return zcodeHookError(configPath, 'Could not read ZCode config.json')
-    }
-
     const scriptFileName = getZCodeManagedScriptFileName()
-    const command = getZCodeManagedCommand(scriptPath)
-    const nextConfig = applyZCodeManagedHooks(source.config, command, scriptFileName)
-    // Write script before publishing config references so no event points at a missing file.
-    writeManagedScript(scriptPath, getManagedScript())
-    writeHooksJson(configPath, nextConfig, {
-      serialized: serializeZCodeConfig(source.text, nextConfig)
-    })
+    const command = getZCodeManagedCommand(getZCodeManagedScriptPath())
+    for (const { path, createIfMissing } of getZCodeSettingsFiles()) {
+      const source = readZCodeConfigSource(path)
+      if (!source) {
+        return zcodeHookError(path, `Could not read ZCode ${basename(path)}`)
+      }
+      if (source.text === null && !createIfMissing) {
+        continue
+      }
+      const nextConfig = applyZCodeManagedHooks(source.config, command, scriptFileName)
+      // Write script before publishing config references so no event points at a missing file.
+      writeManagedScript(getZCodeManagedScriptPath(), getManagedScript())
+      writeHooksJson(path, nextConfig, {
+        serialized: serializeZCodeConfig(source.text, nextConfig, path)
+      })
+    }
     return this.getStatus()
   }
 
@@ -146,8 +189,21 @@ export class ZCodeHookService {
       const nextConfig = applyZCodeManagedHooks(config, command, remoteScriptFileName)
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
       await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig, {
-        serialized: serializeZCodeConfig(body, nextConfig)
+        serialized: serializeZCodeConfig(body, nextConfig, remoteConfigPath)
       })
+
+      const npmSettingsPath = getZCodeRemoteNpmSettingsPath(remoteHome)
+      const npmSettingsBody = await readTextFileRemote(sftp, npmSettingsPath)
+      if (npmSettingsBody !== null) {
+        const npmSettings = parseZCodeConfigText(npmSettingsBody, 'remote ZCode setting.json')
+        if (!npmSettings) {
+          return zcodeHookError(npmSettingsPath, 'Could not parse remote ZCode setting.json')
+        }
+        const npmNextConfig = applyZCodeManagedHooks(npmSettings, command, remoteScriptFileName)
+        await writeHooksJsonRemote(sftp, npmSettingsPath, npmNextConfig, {
+          serialized: serializeZCodeConfig(npmSettingsBody, npmNextConfig, npmSettingsPath)
+        })
+      }
 
       return {
         agent: 'zcode',
@@ -162,19 +218,21 @@ export class ZCodeHookService {
   }
 
   remove(): AgentHookInstallStatus {
-    const configPath = getZCodeConfigPath()
-    const source = readZCodeConfigSource(configPath)
-    if (!source) {
-      return zcodeHookError(configPath, 'Could not read ZCode config.json')
-    }
-    const { config: nextConfig, changed } = removeZCodeManagedHooks(
-      source.config,
-      getZCodeManagedScriptFileName()
-    )
-    if (changed) {
-      writeHooksJson(configPath, nextConfig, {
-        serialized: serializeZCodeConfig(source.text, nextConfig)
-      })
+    const scriptFileName = getZCodeManagedScriptFileName()
+    for (const { path } of getZCodeSettingsFiles()) {
+      const source = readZCodeConfigSource(path)
+      if (!source) {
+        return zcodeHookError(path, `Could not read ZCode ${basename(path)}`)
+      }
+      if (source.text === null) {
+        continue
+      }
+      const { config: nextConfig, changed } = removeZCodeManagedHooks(source.config, scriptFileName)
+      if (changed) {
+        writeHooksJson(path, nextConfig, {
+          serialized: serializeZCodeConfig(source.text, nextConfig, path)
+        })
+      }
     }
     return this.getStatus()
   }

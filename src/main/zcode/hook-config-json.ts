@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { basename } from 'node:path'
 import { applyEdits, modify, parse as parseJsonc, type ParseError } from 'jsonc-parser'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { isPlainObject } from '../agent-hooks/installation/configuration/hooks-json-read'
@@ -33,8 +34,12 @@ export function readZCodeConfigSource(configPath: string): ZCodeConfigSource | n
     // Only definitive absence is a fresh install; unreadable files must never be replaced by stub configs.
     return isDefinitiveAbsence(error) ? { text: null, config: {} } : null
   }
-  const config = parseZCodeConfigText(text, 'ZCode config.json')
+  const config = parseZCodeConfigText(text, zcodeSettingsName(configPath))
   return config === null ? null : { text, config }
+}
+
+function zcodeSettingsName(configPath: string): string {
+  return `ZCode ${basename(configPath)}`
 }
 
 const JSON_EDIT_FORMATTING = { formattingOptions: { insertSpaces: true, tabSize: 2 } } as const
@@ -45,12 +50,16 @@ function editJsonPath(text: string, path: readonly string[], value: unknown): st
 }
 
 /** Edit original JSON text so user key order/indentation survive. ZCode uses strict JSON.parse, so JSONC comments are unsupported. */
-export function serializeZCodeConfig(originalText: string | null, nextConfig: ZCodeConfig): string {
+export function serializeZCodeConfig(
+  originalText: string | null,
+  nextConfig: ZCodeConfig,
+  configPath: string
+): string {
   if (originalText === null) {
     return `${JSON.stringify(nextConfig, null, 2)}\n`
   }
 
-  const previous = parseZCodeConfigText(originalText, 'ZCode config.json') ?? {}
+  const previous = parseZCodeConfigText(originalText, zcodeSettingsName(configPath)) ?? {}
   const previousEvents = readZCodeEventMap(previous)
   const nextEvents = readZCodeEventMap(nextConfig)
 
