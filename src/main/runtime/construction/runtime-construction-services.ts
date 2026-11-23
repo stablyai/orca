@@ -9,6 +9,7 @@ import type {
   RuntimeVisibleTerminalState,
   RuntimeLeafRecord
 } from '../terminal/records/runtime-terminal-state-records'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
 import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
@@ -182,7 +183,8 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
     terminalHandle: string
   ): OrchestrationCompatibilityTerminalAuthority | null
   abstract getOrchestrationFleetAgentStatusSnapshot(
-    context?: IdentityRead
+    context?: IdentityRead,
+    rows?: AgentStatusIpcPayload[]
   ): ReturnType<typeof readOrchestrationFleetAgentStatusSnapshot>
   protected abstract assertStableReadyGraph(expectedGraphEpoch: number): void
   protected abstract getValidatedExplicitWorktreeIdSelector(
