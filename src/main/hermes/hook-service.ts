@@ -1,4 +1,5 @@
 import { rmSync } from 'node:fs'
+import { dirname } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 
 import type {
@@ -23,6 +24,7 @@ import {
   updateConfigContent
 } from './hermes-config-yaml'
 import { getHermesHome } from './hermes-default-home'
+import { ensureHermesGatewayPluginCurrent } from './hermes-gateway-plugin-currency'
 import {
   getConfigPath,
   getPluginDir,
@@ -95,6 +97,18 @@ function updateManagedProfiles(
       console.warn(`[hermes] skipped profile ${home}:`, error)
     }
   }
+}
+
+/** A gateway already running keeps the plugin it loaded, so the one just written reaches its tools only after a reload. */
+function reloadStaleGateway(home: string): void {
+  void ensureHermesGatewayPluginCurrent(home).then(
+    (state) => {
+      if (state === 'stale') {
+        console.warn(`[hermes] the gateway for ${home} still runs an older Orca plugin`)
+      }
+    },
+    (error: unknown) => console.warn(`[hermes] could not check the gateway for ${home}:`, error)
+  )
 }
 
 async function writeRemoteHome(
@@ -186,7 +200,11 @@ export class HermesHookService {
     if (next.content !== parsed.content) {
       writeConfigFile(configPath, next.content)
     }
-    updateManagedProfiles(refreshProfileOrcaStatusContent, writePluginFiles)
+    reloadStaleGateway(dirname(configPath))
+    updateManagedProfiles(refreshProfileOrcaStatusContent, (pluginDir) => {
+      writePluginFiles(pluginDir)
+      reloadStaleGateway(dirname(dirname(pluginDir)))
+    })
     return this.getStatus()
   }
 
