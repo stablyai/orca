@@ -35,6 +35,7 @@ import { prepareRecipientContent, reviewOf, type BotRecipientContent } from './b
 import { BotShareReviews } from './bot-share-reviews'
 import { listedShareOwner } from './bot-share-stop'
 import { botSharePartFiles } from './bot-share-part-view'
+import { BotShareSkillReads, type BotShareSkillsRead } from './bot-share-skill-reads'
 import type { BotShareable } from './bot-share-sources'
 import type { BotSharePicks } from '../../../shared/bots/bot-share-picks'
 import type { BotSharePicksStore } from './bot-share-picks-store'
@@ -46,12 +47,15 @@ export type BotSharePrepared = { candidate: BotShareCandidateSummary; last?: Bot
 
 export class BotShareService {
   private readonly reviews = new BotShareReviews()
+  /** The skills each open Share dialog listed, so its picks don't walk every skill folder again. */
+  private readonly skillReads = new BotShareSkillReads()
 
   constructor(
     private readonly deps: {
       client: BotShareClient
       candidates: BotShareCandidates
-      readShareable: (bot: Bot) => Promise<BotShareable>
+      /** With a dialog's `session` and `reuseSkills`, the skills as that dialog last listed them. */
+      readShareable: (bot: Bot, skills?: BotShareSkillsRead) => Promise<BotShareable>
       /** Each bot's last published picks; absent in tests that don't publish. */
       picks?: BotSharePicksStore
       /** Where a received bot downloads; absent where nothing is received (tests of sharing). */
@@ -60,17 +64,20 @@ export class BotShareService {
   ) {}
 
   /** The candidate the owner reviews. A local preview uses a temporary package id until publish. With
-   *  `last`, it is built from the picks and note the bot was last published with, when there are any. */
+   *  `last`, it is built from the picks and note the bot was last published with, when there are any.
+   *  With the dialog's `session` and `reuseSkills` (a pick), the skills are listed as it last listed them. */
   async prepare(
     bot: Bot,
     selection: BotShareSelection,
-    options: { setupNote?: string; last?: boolean; localOnly?: boolean } = {}
+    options: { setupNote?: string; last?: boolean; localOnly?: boolean } & BotShareSkillsRead = {}
   ): Promise<BotSharePrepared> {
+    // Before any await, so the dialog's builds replace each other in the order they were asked for.
+    const skills = this.skillReads.forBuild(bot.id, options)
     const saved = options.last ? ((await this.deps.picks?.get(bot.id)) ?? undefined) : undefined
     const found = options.localOnly
       ? null
       : await this.deps.client.findPackageId(botPackageName(bot.id))
-    const shareable = await this.deps.readShareable(bot)
+    const shareable = await this.deps.readShareable(bot, skills)
     const last = saved && restoredPicks(saved, shareable)
     const candidate = await this.deps.candidates.prepare({
       bot,
