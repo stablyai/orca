@@ -14,8 +14,14 @@ import {
 import { browserClientPageRetainedKey } from './browser-client-page-retained-key'
 import { retireBrowserGuestMetadata } from '../metadata/browser-guest-metadata-cache'
 import {
+  resolveBrowserClientPageRetainedLimits,
+  type BrowserClientPageRetainedLimits
+} from './browser-client-page-retained-limits'
+import {
   retainBrowserClientPagePaint,
-  createBrowserClientPageLoadCommitHandler
+  createBrowserClientPageLoadCommitHandler,
+  forgetBrowserClientPageGuestActivity,
+  trackBrowserClientPageGuestActivity
 } from './browser-client-page-paint-retention'
 import { rekeyBrowserClientRetainedPage } from './browser-client-page-retained-rekey'
 import type { BrowserClientRetainedRendererPage as RetainedPage } from './browser-client-page-retained-state'
@@ -31,14 +37,8 @@ import {
   type BrowserClientPageRendererMemoryProfile
 } from './browser-client-page-retained-memory-profile'
 
-const DEFAULT_MAX_PAGES = 256
-const DEFAULT_MAX_PAGES_PER_PARTITION = 64
-const DEFAULT_ATTACH_TIMEOUT_MS = 5_000
-
 export class BrowserClientPageRetainedRegistry {
-  private readonly maxPages: number
-  private readonly maxPagesPerPartition: number
-  private readonly attachTimeoutMs: number
+  private readonly limits: BrowserClientPageRetainedLimits
   private readonly pages = new Map<string, RetainedPage>()
   private readonly partitionCounts = new Map<string, number>()
   private root: HTMLDivElement | null = null
@@ -48,25 +48,13 @@ export class BrowserClientPageRetainedRegistry {
     private readonly options: {
       document: Document
       createWebview?: () => Electron.WebviewTag
+      onPageMounted?: (page: { browserPageId: string; pageHostGeneration: number }) => void
       maxPages?: number
       maxPagesPerPartition?: number
       attachTimeoutMs?: number
     }
   ) {
-    this.maxPages = options.maxPages ?? DEFAULT_MAX_PAGES
-    this.maxPagesPerPartition = options.maxPagesPerPartition ?? DEFAULT_MAX_PAGES_PER_PARTITION
-    this.attachTimeoutMs = options.attachTimeoutMs ?? DEFAULT_ATTACH_TIMEOUT_MS
-    if (
-      !Number.isInteger(this.maxPages) ||
-      this.maxPages < 1 ||
-      !Number.isInteger(this.maxPagesPerPartition) ||
-      this.maxPagesPerPartition < 1 ||
-      this.maxPagesPerPartition > this.maxPages ||
-      !Number.isFinite(this.attachTimeoutMs) ||
-      this.attachTimeoutMs <= 0
-    ) {
-      throw new Error('browser_client_page_renderer_registry_limits_invalid')
-    }
+    this.limits = resolveBrowserClientPageRetainedLimits(options)
   }
 
   mountPage(candidate: RendererPageIdentity): Promise<{ webContentsId: number }> {
@@ -92,12 +80,16 @@ export class BrowserClientPageRetainedRegistry {
         }
         return Promise.resolve({ webContentsId: existing.webContentsId })
       }
-      return Promise.reject(new Error('browser_client_page_renderer_page_retiring'))
+      // Main remounts a key only after its old guest is gone, as when Memory Saver remakes a page.
+      if (hasBrowserClientPageAttachedGuest(existing.webview)) {
+        return Promise.reject(new Error('browser_client_page_renderer_page_retiring'))
+      }
+      this.releasePage(existing)
     }
-    if (this.pages.size >= this.maxPages) {
+    if (this.pages.size >= this.limits.maxPages) {
       return Promise.reject(new Error('browser_client_page_renderer_capacity'))
     }
-    if ((this.partitionCounts.get(identity.partition) ?? 0) >= this.maxPagesPerPartition) {
+    if ((this.partitionCounts.get(identity.partition) ?? 0) >= this.limits.maxPagesPerPartition) {
       return Promise.reject(new Error('browser_client_page_renderer_partition_capacity'))
     }
     return this.createPage(identity, key).mount
@@ -109,6 +101,10 @@ export class BrowserClientPageRetainedRegistry {
   ): BrowserClientPageVisibleAttachment {
     const page = findBrowserClientRetainedPageForAttachment(this.pages, identity)
     return attachBrowserClientRetainedPage(page, this.pages, container)
+  }
+
+  hasAttachedPage(identity: Pick<RendererPageIdentity, 'browserPageId' | 'pageHostGeneration'>) {
+    return findBrowserClientRetainedPageForAttachment(this.pages, identity)?.status === 'attached'
   }
 
   findAttachedWebview(browserPageId: string): Electron.WebviewTag | null {
@@ -204,7 +200,7 @@ export class BrowserClientPageRetainedRegistry {
       rejectMount,
       attachTimer: setTimeout(
         () => this.failAttachment(page, 'browser_client_page_renderer_attach_timeout'),
-        this.attachTimeoutMs
+        this.limits.attachTimeoutMs
       ),
       onAttached,
       releasePreparation,
@@ -253,7 +249,9 @@ export class BrowserClientPageRetainedRegistry {
     page.releasePreparation()
     page.status = 'attached'
     page.webContentsId = webContentsId
+    trackBrowserClientPageGuestActivity(page)
     page.resolveMount({ webContentsId })
+    this.options.onPageMounted?.(page.identity)
   }
 
   private failAttachment(page: RetainedPage, errorCode: string): void {
@@ -298,6 +296,7 @@ export class BrowserClientPageRetainedRegistry {
       return
     }
     retireBrowserGuestMetadata(page.webview, page.webContentsId)
+    forgetBrowserClientPageGuestActivity(page)
     releaseBrowserClientRetainedRendererPage(page)
     this.pages.delete(page.key)
     const nextCount = (this.partitionCounts.get(page.identity.partition) ?? 1) - 1
@@ -310,6 +309,7 @@ export class BrowserClientPageRetainedRegistry {
 
   private disconnectPage(page: RetainedPage): void {
     retireBrowserGuestMetadata(page.webview, page.webContentsId)
+    forgetBrowserClientPageGuestActivity(page)
     // Registry disposal or guest loss may precede pane detach; stop rect reads for the disconnected host now.
     page.visibleAttachment?.stopTrackingViewport()
     page.visibleAttachment = null
