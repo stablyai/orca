@@ -11,7 +11,7 @@ import type { AgentSessionFailureFact } from '../../shared/agent-session/failure
 import {
   latestStructuredAgentSessionAssistantMessage,
   latestStructuredAgentSessionFailure,
-  structuredAgentSessionTurnAssistantMessage
+  structuredAgentSessionTurnReply
 } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
 import type { ConversationChat } from './external-conversation-chat'
 import {
@@ -30,10 +30,11 @@ export type EndedChatTurn = {
   /** The turn's opening message by position, for when `opener` can't be resolved. */
   latestOpener?: AgentJournalRenderItem | null
   /** The turn row's journal key, the connector deliveries it answered, and the root prose written
-   *  inside it (design item 125). */
+   *  inside it (design item 125), and whether a tool call ran inside it. */
   turnItemId?: string
   stamps?: ConnectorReplyStamp[]
   turnProse?: string
+  turnToolsRan?: boolean
 }
 
 export async function endedTurn(
@@ -111,15 +112,18 @@ function outboxTurn(
   submissions: AgentJournalSnapshot['submissions'],
   opener: AgentJournalRenderItem | null | undefined,
   turnId: string
-): Pick<EndedChatTurn, 'turnItemId' | 'stamps' | 'turnProse'> {
+): Pick<EndedChatTurn, 'turnItemId' | 'stamps' | 'turnProse' | 'turnToolsRan'> {
   const turnItemId = endedChatTurnRow(items, turnId)?.itemId
-  return turnItemId
-    ? {
-        turnItemId,
-        stamps: connectorReplyTurnStamps({ items, submissions }, opener, turnItemId),
-        turnProse: structuredAgentSessionTurnAssistantMessage(items, turnItemId)
-      }
-    : {}
+  if (!turnItemId) {
+    return {}
+  }
+  const { prose, toolsRan } = structuredAgentSessionTurnReply(items, turnItemId)
+  return {
+    turnItemId,
+    stamps: connectorReplyTurnStamps({ items, submissions }, opener, turnItemId),
+    turnProse: prose,
+    turnToolsRan: toolsRan
+  }
 }
 
 /** The message that opened a turn, read from its own rows; undefined when they can't be read. */

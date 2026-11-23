@@ -26,6 +26,8 @@ export type EndedTurnReplies = {
   openerItemId?: string
   outcome: AgentJournalTurnOutcome
   prose: string
+  /** A tool call ran inside the turn. */
+  toolsRan?: boolean
   bot: boolean
   failure?: ConnectorFailure
   links: ConnectorWorkLink[]
@@ -169,6 +171,7 @@ export function conversationReplyFill(
         ...(outcome === 'failed' && turn.failure ? { failure: turn.failure } : {}),
         ...(turn.links.length > 0 ? { links: turn.links } : {}),
         ...(outcome === 'answered' && turn.tookMs !== undefined ? { tookMs: turn.tookMs } : {}),
+        ...(outcome === 'no_answer' && turn.toolsRan ? { toolsRan: true as const } : {}),
         ...(turn.turnStartedAt === undefined ? {} : { turnStartedAt: turn.turnStartedAt })
       })
     }
