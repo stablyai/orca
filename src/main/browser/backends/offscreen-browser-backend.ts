@@ -12,7 +12,7 @@ import { browserSessionRegistry } from '../sessions/profiles/browser-session-reg
 import { installBrowserJavaScriptDialogs } from '../guest-lifecycle/prompts/browser-javascript-dialogs'
 import {
   loadPageWhenReady,
-  restoreHistoryBehind,
+  startHeldLoad,
   whenBrowserExtensionsStartFor
 } from '../extensions/profile-sessions/browser-extension-page-start'
 import type { ServeBrowserPageState } from '../../runtime/browser/headless/serve-browser-tab-layout'
@@ -180,14 +180,9 @@ export class OffscreenBrowserBackend implements BrowserBackend {
             )
         : loadOffscreenPageUrl(win, url)
     const loaded = extensionsReady
-      ? loadPageWhenReady(win.webContents, extensionsReady, (requested) => {
-          if (!requested) {
-            return load()
-          }
-          return freed
-            ? restoreHistoryBehind(win.webContents, freed, requested.url)
-            : loadOffscreenPageUrl(win, requested.url)
-        })
+      ? loadPageWhenReady(win.webContents, extensionsReady, (requested) =>
+          requested ? startHeldLoad(win.webContents, requested, freed ?? null) : load()
+        )
       : load()
     void loaded.catch((error) => {
       console.warn(

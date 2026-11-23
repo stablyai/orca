@@ -4,7 +4,7 @@ import { BrowserError } from '../browser-error'
 import { waitForBrowserGuestLoad } from './browser-guest-load'
 import {
   loadPageWhenReady,
-  restoreHistoryBehind,
+  startHeldLoad,
   whenBrowserExtensionsReadyForPage
 } from '../extensions/profile-sessions/browser-extension-page-start'
 import {
@@ -222,14 +222,9 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
     guest,
     extensionsReady
       ? () =>
-          loadPageWhenReady(guest, extensionsReady, (requested) => {
-            if (!requested) {
-              return load()
-            }
-            return snapshot
-              ? restoreHistoryBehind(guest, snapshot, requested.url)
-              : guest.loadURL(requested.url, requested.options)
-          })
+          loadPageWhenReady(guest, extensionsReady, (requested) =>
+            requested ? startHeldLoad(guest, requested, snapshot) : load()
+          )
       : load
   ).then(() => {
     if (pages.get(attach.pageId) !== page || page.guest !== guest) {

@@ -85,7 +85,9 @@ export function loadPageWhenReady(
     Reflect.deleteProperty(contents, 'loadURL')
     const queued = requested
     const outcome = contents.isDestroyed()
-      ? Promise.resolve()
+      ? queued
+        ? Promise.reject(new Error('The browser page closed while loading'))
+        : Promise.resolve()
       : load(queued ? { url: queued.url, options: queued.options } : null)
     queued?.settle(outcome)
     return outcome
@@ -99,12 +101,19 @@ function supersededLoadError(): Error {
   })
 }
 
-/** A load queued behind a restore lands after the saved back list, as if made after it. */
-export function restoreHistoryBehind(
+/**
+ * Starts a load queued during the hold. Behind saved history it lands after the back list, as if
+ * made after the restore, unless it carries request data that a history entry can't.
+ */
+export function startHeldLoad(
   contents: Electron.WebContents,
-  history: { entries: Electron.NavigationEntry[]; index: number },
-  url: string
+  requested: HeldLoad,
+  history: { entries: Electron.NavigationEntry[]; index: number } | null
 ): Promise<void> {
+  const { url, options } = requested
+  if (!history || options?.postData || options?.extraHeaders || options?.httpReferrer) {
+    return contents.loadURL(url, options)
+  }
   const entries = [...history.entries.slice(0, history.index + 1), { url, title: '' }]
   return contents.navigationHistory.restore({ entries, index: entries.length - 1 })
 }
@@ -129,8 +138,7 @@ export function holdWebviewFirstLoadForExtensions(
     void loadPageWhenReady(
       guest,
       Promise.all([whenAttached(embedder, guest), ready]),
-      (requested) =>
-        requested ? guest.loadURL(requested.url, requested.options) : guest.loadURL(src)
+      (requested) => (requested ? startHeldLoad(guest, requested, null) : guest.loadURL(src))
     ).catch(() => {})
   }
   app.on('web-contents-created', claim)
