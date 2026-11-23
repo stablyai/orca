@@ -1,7 +1,14 @@
-import { Check } from 'lucide-react'
-import { DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger
+} from '@/components/ui/dropdown-menu'
+import { HermesProfileItems } from '../hermes-profile-items'
 import { resolveTuiAgentLaunchRawArgs } from '../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
-import type { AgentPickerDraft, AgentPickerEntry } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
+} from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { NewTabAgentMenuRow } from '../../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import type { HermesLaunchProfiles } from '../../../../../shared/hermes/hermes-launch-profiles'
 import { useAppStore } from '@/store/index'
@@ -59,27 +66,11 @@ export function HermesProfileSubmenu({
         {children}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="min-w-0">
-        <DropdownMenuItem
-          variant="launch"
-          onSelect={() => {
-            launchProfile(null)
-          }}
-        >
-          {t('auto.components.agent.launchMenu.hermesDefaultProfile', 'Default')}
-          {profiles.active === null ? <Check className="ml-auto size-4 opacity-100" /> : null}
-        </DropdownMenuItem>
-        {profiles.profiles.map((profile) => (
-          <DropdownMenuItem
-            key={profile}
-            variant="launch"
-            onSelect={() => {
-              launchProfile(profile)
-            }}
-          >
-            {profile}
-            {profiles.active === profile ? <Check className="ml-auto size-4 opacity-100" /> : null}
-          </DropdownMenuItem>
-        ))}
+        <HermesProfileItems
+          profiles={profiles.profiles}
+          current={profiles.active}
+          onPick={launchProfile}
+        />
       </DropdownMenuSubContent>
     </DropdownMenuSub>
   )

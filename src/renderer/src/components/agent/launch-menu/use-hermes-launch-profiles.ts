@@ -9,7 +9,7 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host/execu
 import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { HermesLaunchProfiles } from '../../../../../shared/hermes/hermes-launch-profiles'
 
-/** One answer per pane host: the local install, a WSL distro or an SSH target. */
+/** One answer per pane host: the local install, a WSL distro, an SSH target or an Orca server. */
 const cacheByHost = new Map<string, HermesLaunchProfiles>()
 const CACHE_LIMIT = 16
 

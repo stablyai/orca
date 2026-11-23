@@ -19669,9 +19669,6 @@
         "AgentSettingsDialog": {
           "50cdb57c03": "Manage AI agents, set a default, and customize commands.",
           "fc0268e4ed": "Agents"
-        },
-        "launchMenu": {
-          "hermesDefaultProfile": "Default"
         }
       },
       "activity": {

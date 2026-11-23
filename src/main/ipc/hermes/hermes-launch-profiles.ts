@@ -103,18 +103,12 @@ async function listSshHermesLaunchProfiles(targetId: string): Promise<HermesLaun
       return null
     }
   )
-  // An absent store means the host runs only the default profile: the plain row stays right.
+  // An absent store or a refused listing leaves the row a plain launch.
   if (!browse) {
-    return { profiles: [], active: null }
-  }
-  const active = await readSshHomeTextFile(
-    connectionManager,
-    targetId,
-    '.hermes/active_profile'
-  ).catch((error: unknown) => {
-    console.warn('[hermes] could not read active_profile over SSH', targetId, error)
     return null
-  })
+  }
+  // The helper resolves null for an absent or unreadable file; it never rejects.
+  const active = await readSshHomeTextFile(connectionManager, targetId, '.hermes/active_profile')
   return {
     profiles: hermesProfileNames(
       browse.entries.filter((entry) => entry.isDirectory).map((entry) => entry.name)
@@ -139,14 +133,11 @@ async function listRuntimeHermesLaunchProfiles(
     console.warn('[hermes] could not list profiles on the runtime host', environmentId, error)
     return null
   })
-  if (!response || response.ok !== true) {
-    if (response && response.ok === false) {
-      console.warn(
-        '[hermes] runtime host refused the profile listing',
-        environmentId,
-        response.error
-      )
-    }
+  if (!response) {
+    return null
+  }
+  if (response.ok !== true) {
+    console.warn('[hermes] runtime host refused the profile listing', environmentId, response.error)
     return null
   }
   return { profiles: hermesProfileNames(readServerDirNames(response.result)), active: null }

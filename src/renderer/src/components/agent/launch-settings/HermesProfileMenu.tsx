@@ -1,11 +1,6 @@
-import { Check, ChevronDown } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { Button } from '../../ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '../../ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '../../ui/dropdown-menu'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   readHermesProfileArg,
@@ -18,6 +13,7 @@ import type {
   AgentPickerSurface
 } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import { useHermesLaunchProfiles } from '../launch-menu/use-hermes-launch-profiles'
+import { HermesProfileItems } from '../hermes-profile-items'
 
 /** A picked profile rides the pane's Arguments, which only a terminal launch reads; a chat would
  *  silently run the host's default profile, so the card refuses that surface instead. */
@@ -108,25 +104,7 @@ export function HermesProfileMenu({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" collisionPadding={8} className="min-w-0">
-          <DropdownMenuItem
-            onSelect={() => {
-              choose(null)
-            }}
-          >
-            {t('agentPicker.hermesDefaultProfile', 'Default')}
-            {picked === null ? <Check className="ml-auto size-4" /> : null}
-          </DropdownMenuItem>
-          {profiles.profiles.map((profile) => (
-            <DropdownMenuItem
-              key={profile}
-              onSelect={() => {
-                choose(profile)
-              }}
-            >
-              {profile}
-              {picked === profile ? <Check className="ml-auto size-4" /> : null}
-            </DropdownMenuItem>
-          ))}
+          <HermesProfileItems profiles={profiles.profiles} current={picked} onPick={choose} />
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

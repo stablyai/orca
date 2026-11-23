@@ -234,7 +234,7 @@ export function ProjectedAgentMenuItems({
   const desktopDefaultAgent = useAppStateValue((s) => s.settings?.defaultTuiAgent)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
   const shortcutLabels = useAgentMenuShortcutLabels(pickerInventory ? model : undefined)
-  // The quick-launch list owns the profile submenu: picker search already has a free-form Arguments field.
+  // Only the plain rows list expands a submenu; the picker card carries its own Profile row.
   const hermesRow =
     model.state === 'settled' && !pickerInventory
       ? model.rows.find((row) => row.agent === 'hermes' && row.kind === 'cli')

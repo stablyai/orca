@@ -360,7 +360,6 @@ export function AgentLaunchSetupPanel({
           onEdit={editDraft}
         />
       ) : null}
-      <HermesProfileMenu {...{ entry, draft, disabled, installed, searching }} onEdit={editDraft} />
       {mode === 'select' ? (
         <>
           {installed && !searching ? (
@@ -377,23 +376,29 @@ export function AgentLaunchSetupPanel({
           ) : null}
         </>
       ) : (
-        <AgentLaunchSetupFooter
-          ref={footer}
-          entry={entry}
-          terminalBlocked={terminalBlocked}
-          disabled={disabled}
-          surfaceUnavailable={hermesProfileSurfaceUnavailable(entry, draft, t)}
-          onLaunch={(surface, prompt) => {
-            const current = getDraft()
-            return current
-              ? onUse({
-                  ...acceptAgentPickerArguments(entry, current),
-                  surface,
-                  ...(prompt ? { prompt } : {})
-                })
-              : false
-          }}
-        />
+        <>
+          <HermesProfileMenu
+            {...{ entry, draft, disabled, installed, searching }}
+            onEdit={editDraft}
+          />
+          <AgentLaunchSetupFooter
+            ref={footer}
+            entry={entry}
+            terminalBlocked={terminalBlocked}
+            disabled={disabled}
+            surfaceUnavailable={hermesProfileSurfaceUnavailable(entry, draft, t)}
+            onLaunch={(surface, prompt) => {
+              const current = getDraft()
+              return current
+                ? onUse({
+                    ...acceptAgentPickerArguments(entry, current),
+                    surface,
+                    ...(prompt ? { prompt } : {})
+                  })
+                : false
+            }}
+          />
+        </>
       )}
     </div>
   )
