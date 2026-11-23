@@ -36,6 +36,7 @@ export function watchTeamPluginPolicy(
     const pluginSettings = [
       policy?.internalCatalogs,
       policy?.requiredPlugins,
+      policy?.requiredPluginRules,
       team?.flags[flags.plugins],
       team?.flags[flags.officialPlugins],
       team?.flags[flags.communityPlugins]

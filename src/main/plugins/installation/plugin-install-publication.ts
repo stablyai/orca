@@ -1,5 +1,6 @@
 import { readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
+import { requiredPluginInstallError } from './required-plugin-release-policy'
 import {
   PLUGIN_CONTENT_HASH_PATTERN,
   upsertPluginLock,
@@ -41,10 +42,18 @@ export async function publishPluginInstall(input: {
       : null
   // Same-byte reinstalls preserve immutable provenance; interrupted source changes must not appear published.
   const publishedEntry = existingProvenance ?? legacyCurrentEntry ?? input.entry
+  const policyError = requiredPluginInstallError(publishedEntry)
+  if (policyError) {
+    throw new Error(policyError)
+  }
   const nextLock = upsertPluginLock(currentLock, publishedEntry)
   // Provenance repairs crashes between pointer and global-index publication.
   if (!existingProvenance) {
     await writePluginInstallProvenance(input.pluginDir, publishedEntry)
+  }
+  const currentPolicyError = requiredPluginInstallError(publishedEntry)
+  if (currentPolicyError) {
+    throw new Error(currentPolicyError)
   }
   await writePluginCurrentPointer(input.pluginDir, input.entry.contentHash)
   try {

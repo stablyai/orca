@@ -17,6 +17,8 @@ import {
 } from '../../../shared/plugins/images/plugin-image-url'
 import type { PluginCatalogRelease } from '../../../shared/plugins/catalog/plugin-catalog-release'
 import { estimatePluginAddedAt } from '../../../shared/plugins/catalog/plugin-added-at'
+import type { RequiredPluginRule } from '../../../shared/orca-profiles/orca-cloud-team-policy'
+import { requiredPluginReleaseAllowed } from '../installation/required-plugin-release-policy'
 
 export type PluginMarketplaceSourceState = {
   id: string
@@ -135,9 +137,19 @@ export function pluginMarketplaceListing(input: {
   entry: PluginMarketplaceEntry
   hostVersion: string | null
   blocked: PluginKillListEntry | null
-}): PluginMarketplaceListing {
-  const { source, snapshot, entry, blocked } = input
-  const release = offeredCatalogRelease(entry.releases, input.hostVersion)
+  requiredRules?: readonly RequiredPluginRule[] | undefined
+}): PluginMarketplaceListing | null {
+  const { source, snapshot, entry, blocked, requiredRules } = input
+  const rules = requiredRules?.filter(({ pluginKey }) => pluginKey === entry.id)
+  const releases = rules?.length
+    ? entry.releases?.filter((release) =>
+        requiredPluginReleaseAllowed(rules, entry.id, release.version, source.source)
+      )
+    : entry.releases
+  const release = offeredCatalogRelease(releases, input.hostVersion)
+  if (rules?.length && !release) {
+    return null
+  }
   const official =
     isOfficialMarketplaceGitSource(source.source.url) &&
     snapshot.marketplace.owner.toLowerCase() === OFFICIAL_MARKETPLACE_OWNER &&
@@ -155,7 +167,7 @@ export function pluginMarketplaceListing(input: {
     categories: entry.categories,
     official,
     bundled: false,
-    ...(release ? { release, releases: entry.releases } : {}),
+    ...(release ? { release, releases } : {}),
     ...pluginCatalogListingDetails(release),
     ...pluginCatalogListingImages(release),
     ...(blocked

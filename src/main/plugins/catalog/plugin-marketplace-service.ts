@@ -218,7 +218,7 @@ export class PluginMarketplaceService {
             (!pluginKeys || pluginKeys.has(entry.id)) &&
             isMarketplaceListingSupported(entry.categories)
         )
-        .map((entry) => this.listingFromEntry(source, snapshot, entry))
+        .flatMap((entry) => this.listingFromEntry(source, snapshot, entry) ?? [])
     )
   }
 
@@ -317,13 +317,14 @@ export class PluginMarketplaceService {
     source: PluginMarketplaceRegisteredSource,
     snapshot: PluginMarketplaceCachedSnapshot,
     entry: PluginMarketplaceEntry
-  ): PluginMarketplaceListing {
+  ): PluginMarketplaceListing | null {
     return pluginMarketplaceListing({
       source,
       snapshot,
       entry,
       hostVersion: this.hostVersion,
-      blocked: this.getKillListEntry(entry.id)
+      blocked: this.getKillListEntry(entry.id),
+      requiredRules: this.teamPolicy.requiredPluginRules()
     })
   }
 }

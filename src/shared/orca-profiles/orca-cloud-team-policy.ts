@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { validRange } from 'semver'
 import { pluginMarketplaceGitSourceSchema } from '../plugins/catalog/plugin-marketplace'
 import { isQualifiedPluginKey } from '../plugins/manifest/plugin-manifest'
 import { isValidAppVersion } from '../app-lifecycle/identity/app-version'
@@ -43,11 +44,22 @@ export function getOrcaCloudTeamCapabilities(
     : undefined
 }
 
+const requiredPluginRuleSchema = z.object({
+  pluginKey: z.string().refine(isQualifiedPluginKey),
+  catalog: z.union([z.enum(['official', 'community']), pluginMarketplaceGitSourceSchema]),
+  version: z
+    .string()
+    .max(128)
+    .refine((range) => range.trim().length > 0 && validRange(range) !== null)
+})
+export type RequiredPluginRule = z.infer<typeof requiredPluginRuleSchema>
+
 export const orcaCloudTeamPolicySchema = z.object({
   orgIds: z.array(z.string().min(1)).min(1),
   reportingOrgIds: z.array(z.string().min(1)).optional(),
   internalCatalogs: z.array(pluginMarketplaceGitSourceSchema).optional(),
   requiredPlugins: z.array(z.string().refine(isQualifiedPluginKey)).optional(),
+  requiredPluginRules: z.array(requiredPluginRuleSchema).optional(),
   updateChannel: z.enum(['stable', 'rc']).optional(),
   updateDelayDays: z.number().int().min(0).max(90).optional(),
   minimumVersion: z.string().max(64).refine(isValidAppVersion).optional(),

@@ -159,6 +159,7 @@ export class PluginMarketplaceInstaller {
     options: {
       requireInstalled?: boolean
       requireMissing?: boolean
+      expectedInstalledContentHash?: string
       trigger?: PluginInstallTrigger
       stillAllowed?: () => boolean
     } = {}
@@ -213,7 +214,10 @@ export class PluginMarketplaceInstaller {
         return this.blockedPluginReason(key)
       },
       ...(options.requireInstalled ? { requireInstalled: true } : {}),
-      ...(options.requireMissing ? { requireMissing: true } : {})
+      ...(options.requireMissing ? { requireMissing: true } : {}),
+      ...(options.expectedInstalledContentHash
+        ? { expectedInstalledContentHash: options.expectedInstalledContentHash }
+        : {})
     })
     if (result.ok) {
       trackPluginInstalled({

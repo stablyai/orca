@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import type { OrcaCloudCapabilities } from '../../../shared/orca-profiles/orca-cloud-capabilities'
-import { OFFICIAL_MARKETPLACE_GIT_SOURCE } from '../../../shared/plugins/catalog/plugin-marketplace'
+import {
+  OFFICIAL_MARKETPLACE_GIT_SOURCE,
+  pluginMarketplaceListingSchema
+} from '../../../shared/plugins/catalog/plugin-marketplace'
 import { PluginMarketplaceService } from './plugin-marketplace-service'
 import { PluginMarketplaceStore } from './plugin-marketplace-store'
 
@@ -47,6 +50,76 @@ it('protects managed catalogs from both governing teams and blocks excluded sour
       'https://github.com/stablyai/orca-plugins.git',
       community.url
     ])
+  } finally {
+    await rm(pluginsDataDir, { recursive: true, force: true })
+  }
+})
+
+it('keeps discovery and install lookups within every governing version range and catalog', async () => {
+  const pluginsDataDir = await mkdtemp(join(tmpdir(), 'orca-plugin-range-'))
+  const store = new PluginMarketplaceStore(pluginsDataDir)
+  const internal = {
+    kind: 'git',
+    url: 'https://git.example.com/acme/catalog.git',
+    ref: 'main'
+  } as const
+  const other = { ...internal, url: 'https://git.example.com/other/catalog.git' }
+  const pluginKey = 'acme.theme'
+  const policy: NonNullable<OrcaCloudCapabilities['teamPolicy']> = {
+    orgIds: ['org_a', 'org_b'],
+    internalCatalogs: [internal, other],
+    requiredPlugins: [pluginKey],
+    requiredPluginRules: [
+      { pluginKey, catalog: internal, version: '^1.0.0' },
+      { pluginKey, catalog: internal, version: '>=1.3.0 <1.6.0' }
+    ]
+  }
+  const marketplace = new PluginMarketplaceService({
+    pluginsDataDir,
+    store,
+    hostVersion: '2.0.0',
+    getTeamCapabilities: () => ({
+      refreshedAt: 1,
+      flags: { team_settings: true },
+      teamPolicy: policy
+    })
+  })
+  try {
+    const catalog = pluginMarketplaceListingSchema.parse({
+      name: 'Themes',
+      owner: 'acme',
+      plugins: [
+        {
+          id: pluginKey,
+          categories: [],
+          source: { ...internal, url: 'https://git.example.com/acme/theme.git' },
+          releases: ['2.0.0', '1.8.0', '1.5.0', '1.4.0', '1.0.0'].map((version, index) => ({
+            version,
+            commit: String(index + 1).repeat(40),
+            contentHash: String(index + 1).repeat(64),
+            execution: 'data',
+            minimumOrca: version === '1.5.0' ? '3.0.0' : '1.0.0'
+          }))
+        }
+      ]
+    })
+    const internalSource = await store.addSource(internal)
+    const otherSource = await store.addSource(other)
+    for (const source of [internalSource, otherSource]) {
+      await store.writeSnapshot({ source, marketplace: catalog, marketplaceCommit: 'a'.repeat(40) })
+    }
+
+    const listings = await marketplace.listCachedPlugins()
+    expect(
+      listings.map(({ marketplaceSourceId, release }) => [marketplaceSourceId, release?.version])
+    ).toEqual([[internalSource.id, '1.4.0']])
+    expect(await marketplace.findPlugin(internalSource.id, pluginKey)).toMatchObject({
+      release: { version: '1.4.0' },
+      releases: [{ version: '1.5.0' }, { version: '1.4.0' }]
+    })
+    expect(await marketplace.findPlugin(otherSource.id, pluginKey)).toBeNull()
+    policy.requiredPluginRules?.push({ pluginKey, catalog: internal, version: '^2.0.0' })
+    expect(await marketplace.findPlugin(internalSource.id, pluginKey)).toBeNull()
   } finally {
     await rm(pluginsDataDir, { recursive: true, force: true })
   }

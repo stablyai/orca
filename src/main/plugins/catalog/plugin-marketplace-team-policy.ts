@@ -1,5 +1,8 @@
 import type { OrcaCloudCapabilities } from '../../../shared/orca-profiles/orca-cloud-capabilities'
-import { ORCA_CLOUD_TEAM_POLICY_FLAGS as flags } from '../../../shared/orca-profiles/orca-cloud-team-policy'
+import {
+  ORCA_CLOUD_TEAM_POLICY_FLAGS as flags,
+  type RequiredPluginRule
+} from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import {
   isOfficialMarketplaceGitSource,
   type PluginMarketplaceGitSource
@@ -24,6 +27,10 @@ export class PluginMarketplaceTeamPolicy {
       capabilities?.flags[flags.communityPlugins] !== false ||
       this.isManaged(marketplaceSourceId(source), capabilities)
     )
+  }
+
+  requiredPluginRules(): readonly RequiredPluginRule[] | undefined {
+    return this.getCapabilities?.()?.teamPolicy?.requiredPluginRules
   }
 
   isManaged(sourceId: string, capabilities = this.getCapabilities?.()): boolean {
