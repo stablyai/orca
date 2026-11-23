@@ -11,16 +11,13 @@ import { DeleteWorktreeLineageNotice } from './DeleteWorktreeLineageNotice'
 import { DeleteWorktreeDialogFooter } from './DeleteWorktreeDialogFooter'
 import { DeleteWorktreeDialogHeading } from './DeleteWorktreeDialogDescription'
 import { DeleteWorktreeTargetPreview } from './DeleteWorktreeTargetPreview'
-import {
-  DeleteWorktreeChangesSummary,
-  DeleteWorktreeUnknownChangesWarning
-} from './DeleteWorktreeChangesSummary'
+import { DeleteWorktreeChangesSummary } from './DeleteWorktreeChangesSummary'
 import { useRemovalUnsavedFiles } from './use-removal-unsaved-files'
 import { persistDeleteWorktreeConfirmSkipPreference } from './delete-worktree-preference-toast'
 import {
   countFolderWorkspaceDeletes,
   getDeleteWorktreeDialogCopy,
-  getDeleteWorktreeDialogHeading,
+  getDeleteWorktreeDialogTitle,
   getDeleteWorktreeLineageDialogDescription,
   isFolderWorkspaceDelete as getIsFolderWorkspaceDelete
 } from './delete-worktree-dialog-copy'
@@ -198,10 +195,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     deleteStateByWorktreeId,
     repoMap
   })
-  // Per-target hints only warn once changes are known; pending or failed checks still lose data.
-  const hasUnknownChangeState = [...dirtyChanges.checkStates].some(
-    ([key, state]) => state !== 'complete' && !dirtyChanges.counts.has(key)
-  )
 
   const handleOpenChange = useDeleteWorktreeDialogDismissal({
     isOpen,
@@ -296,7 +289,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     void detachChildren(() => handleDelete(canForceDelete))
   }
 
-  const { title, deleteLabel } = getDeleteWorktreeDialogHeading(
+  const title = getDeleteWorktreeDialogTitle(
     {
       isBatchDelete,
       deleteAllLineage,
@@ -307,12 +300,14 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     t
   )
   const errorToShow = isMainWorktree ? null : (detachError ?? deleteError)
+  const hasTargetList = isBatchDelete || childWorkspaceCount > 0
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
-        size={isBatchDelete || childWorkspaceCount > 0 ? 'list' : 'confirm'}
+        size={hasTargetList ? 'list' : 'confirm'}
         surface="security"
+        scrollable
         busy={isDeleting || isSavingForcePreference || isDetachingChildren}
         initialFocus="cancel"
       >
@@ -327,8 +322,13 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         />
 
         {isMainWorktree ? null : (
-          <div className="scrollbar-sleek flex max-h-[50vh] min-w-0 flex-col gap-3 overflow-y-auto">
-            {!isBatchDelete && hasUnknownChangeState && <DeleteWorktreeUnknownChangesWarning />}
+          <div
+            className={
+              hasTargetList
+                ? 'scrollbar-sleek flex h-48 max-h-[50vh] min-w-0 flex-col gap-3 overflow-y-auto *:shrink-0'
+                : 'flex min-w-0 flex-col empty:hidden'
+            }
+          >
             {isBatchDelete ? (
               <DeleteWorktreeTargetPreview
                 isBatchDelete
@@ -383,7 +383,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           isDetachingChildren={isDetachingChildren}
           deleteDisabled={preserveChildrenSelected && !canPreserveChildren}
           canForceDelete={canForceDelete}
-          deleteLabel={deleteLabel}
           onForceDelete={
             preserveChildrenSelected ? handleDetachAndDelete : () => handleDelete(true)
           }

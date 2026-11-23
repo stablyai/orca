@@ -78,8 +78,6 @@ function MobileNativeChatMessageImpl({
   unsentNotice,
   receipt,
   awaiting,
-  subagentGroupsOpen,
-  onToggleSubagentGroup,
   userMessageOpen,
   onToggleUserMessage
 }: {
@@ -115,8 +113,6 @@ function MobileNativeChatMessageImpl({
   unsentNotice?: string
   receipt?: NativeChatResolvedPrompt
   awaiting?: boolean
-  subagentGroupsOpen?: ReadonlySet<string>
-  onToggleSubagentGroup?: (groupId: string) => void
   userMessageOpen?: boolean
   onToggleUserMessage?: (messageId: string) => void
 }): React.JSX.Element {
@@ -263,8 +259,7 @@ function MobileNativeChatMessageImpl({
       <MobileNativeChatSubagentGroup
         key={`subagent-group:${block.groupId}`}
         block={block}
-        open={subagentGroupsOpen?.has(block.groupId) === true}
-        onToggle={onToggleSubagentGroup}
+        fontScale={fontScale}
       />
     ) : isSystem ? null : isUser && structuredActivityUi && Chat.isTextBlock(block) ? (
       <View key={textKey}>
@@ -320,6 +315,7 @@ function MobileNativeChatMessageImpl({
                 <MobileNativeChatPullRequestEventLine
                   block={pullRequestEvent}
                   messageId={message.id}
+                  timestamp={message.timestamp}
                   fontScale={fontScale}
                   onLongPress={onLongPress}
                 />
@@ -329,6 +325,7 @@ function MobileNativeChatMessageImpl({
                   fontScale={fontScale}
                   onLongPress={onLongPress}
                   cardId={message.id}
+                  timestamp={message.timestamp}
                 />
               ) : null}
               {isUser ? (

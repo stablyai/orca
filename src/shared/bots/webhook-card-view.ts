@@ -48,6 +48,16 @@ export function webhookAdapterName(adapter: WebhookAdapterId): string {
   }
 }
 
+/** Orca can make these secrets; for the others the owner pastes the sender's own. */
+export function webhookAdapterGeneratesSecret(adapter: WebhookAdapterId): boolean {
+  return adapter === 'standard' || adapter === 'github'
+}
+
+/** Every sender but GitHub can take a pasted secret; Standard Webhooks senders may make their own. */
+export function webhookAdapterTakesPastedSecret(adapter: WebhookAdapterId): boolean {
+  return adapter !== 'github'
+}
+
 /** What a hook's status says: its state, or when it was last called. Each platform words it. */
 export type WebhookStatusFact =
   | { kind: 'paused' | 'orphaned' | 'pending' | 'noCalls'; tone: 'neutral' }

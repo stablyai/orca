@@ -86,7 +86,8 @@ export function browserFrameMetadataEqual(
   return (
     a?.deviceWidth === b.deviceWidth &&
     a?.deviceHeight === b.deviceHeight &&
-    a?.pageScaleFactor === b.pageScaleFactor
+    a?.pageScaleFactor === b.pageScaleFactor &&
+    a?.zoomFactor === b.zoomFactor
   )
 }
 

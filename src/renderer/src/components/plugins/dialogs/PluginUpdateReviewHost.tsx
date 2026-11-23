@@ -24,23 +24,37 @@ function useHeldUpdateToast(): void {
       toast.dismiss(TOAST_ID)
       return
     }
-    toast.custom(
-      () => (
-        <PluginUpdateReviewToast
-          key={pluginUpdateReviewNoticesKey(notices)}
-          notices={notices}
-          onResolved={resolvePluginUpdateReviews}
-        />
-      ),
-      {
-        id: TOAST_ID,
-        duration: Infinity,
-        closeButton: false,
-        unstyled: true,
-        // Why: a swipe or Escape dismisses it too, and those notices are then handled.
-        onDismiss: () => resolvePluginUpdateReviews(notices)
+    let current = true
+    // Why shown again on resize: sonner measures a toast only when it is shown, and a stale height
+    // drops the hovered card under the window edge and overlaps the toasts stacked behind it.
+    // Why current: a resize from an older render must not bring back the notices it showed.
+    const show = (): void => {
+      if (!current) {
+        return
       }
-    )
+      toast.custom(
+        () => (
+          <PluginUpdateReviewToast
+            key={pluginUpdateReviewNoticesKey(notices)}
+            notices={notices}
+            onResolved={resolvePluginUpdateReviews}
+            onResize={show}
+          />
+        ),
+        {
+          id: TOAST_ID,
+          duration: Infinity,
+          closeButton: false,
+          unstyled: true,
+          // Why: a swipe or Escape dismisses it too, and those notices are then handled.
+          onDismiss: () => resolvePluginUpdateReviews(notices)
+        }
+      )
+    }
+    show()
+    return () => {
+      current = false
+    }
   }, [notices])
   // Why: the toast's tree must not outlive this host.
   useEffect(() => () => void toast.dismiss(TOAST_ID), [])

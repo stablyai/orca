@@ -8,6 +8,7 @@ import {
   type AgentKanbanCardEdge
 } from './agent-kanban-lane-tab-bridge'
 import { useAgentKanbanLaneVirtualizer } from './use-agent-kanban-lane-virtualizer'
+import type { DashboardLane } from './agent-board-projection'
 
 const EMPTY_PANE_KEYS: ReadonlySet<string> = new Set()
 
@@ -15,6 +16,7 @@ type PendingTabTarget = { paneKey: string; edge: AgentKanbanCardEdge; origin: Ev
 
 type AgentKanbanLaneCardListProps = {
   cards: DashboardCard[]
+  lane: DashboardLane
   scrollElement: HTMLDivElement | null
   repoIconsByRepoId: Record<string, RepoIcon | null> | undefined
   now: number
@@ -30,6 +32,7 @@ function laneRow(target: EventTarget): HTMLElement | null {
 /** Window one lane's cards in its existing scroller while keeping lane order, disclosure and Tab order logical. */
 export const AgentKanbanLaneCardList = memo(function AgentKanbanLaneCardList({
   cards,
+  lane: { indexes, paneKeys, subagentCounts },
   scrollElement,
   repoIconsByRepoId,
   now,
@@ -37,18 +40,6 @@ export const AgentKanbanLaneCardList = memo(function AgentKanbanLaneCardList({
   onOpenTerminal
 }: AgentKanbanLaneCardListProps): React.JSX.Element {
   const listRef = useRef<HTMLDivElement | null>(null)
-  const [previousPaneKeys, setPreviousPaneKeys] = useState(() => cards.map((card) => card.paneKey))
-  const paneKeys = useMemo(
-    () =>
-      cards.length === previousPaneKeys.length &&
-      cards.every((card, index) => card.paneKey === previousPaneKeys[index])
-        ? previousPaneKeys
-        : cards.map((card) => card.paneKey),
-    [cards, previousPaneKeys]
-  )
-  if (paneKeys !== previousPaneKeys) {
-    setPreviousPaneKeys(paneKeys)
-  }
   const indexByPaneKey = useMemo(
     () => new Map(paneKeys.map((paneKey, index) => [paneKey, index])),
     [paneKeys]
@@ -85,7 +76,7 @@ export const AgentKanbanLaneCardList = memo(function AgentKanbanLaneCardList({
   const dialogIndex = dialogPaneKey === null ? undefined : indexByPaneKey.get(dialogPaneKey)
   const pendingIndex = pendingTab ? indexByPaneKey.get(pendingTab.paneKey) : undefined
   const { virtualItems, totalSize, measureElement, scrollToIndex } = useAgentKanbanLaneVirtualizer({
-    cards,
+    subagentCounts,
     paneKeys,
     indexByPaneKey,
     scrollElement,
@@ -142,19 +133,19 @@ export const AgentKanbanLaneCardList = memo(function AgentKanbanLaneCardList({
         event.target,
         event.shiftKey,
         index,
-        cards.length
+        paneKeys.length
       )
       if (!bridge) {
         return
       }
       event.preventDefault()
       setPendingTab({
-        paneKey: cards[bridge.index].paneKey,
+        paneKey: paneKeys[bridge.index],
         edge: bridge.edge,
         origin: event.target
       })
     },
-    [cards, indexByPaneKey]
+    [paneKeys, indexByPaneKey]
   )
 
   return (
@@ -167,7 +158,7 @@ export const AgentKanbanLaneCardList = memo(function AgentKanbanLaneCardList({
       onKeyDown={handleKeyDown}
     >
       {virtualItems.map((virtualItem) => {
-        const card = cards[virtualItem.index]
+        const card = cards[indexes[virtualItem.index]]
         if (!card) {
           return null
         }
@@ -179,7 +170,7 @@ export const AgentKanbanLaneCardList = memo(function AgentKanbanLaneCardList({
             data-pane-key={card.paneKey}
             role="listitem"
             // Announce the full logical lane, not the mounted window.
-            aria-setsize={cards.length}
+            aria-setsize={paneKeys.length}
             aria-posinset={virtualItem.index + 1}
             className="absolute left-0 top-0 w-full"
             style={{ transform: `translateY(${virtualItem.start}px)` }}

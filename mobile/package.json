@@ -96,15 +96,15 @@
     "esbuild": "0.28.2",
     "expo-module-scripts": "^56.0.3",
     "happy-dom": "^21.0.4",
-    "oxfmt": "^0.74.0",
-    "oxlint": "1.91.0",
+    "oxfmt": "^0.79.0",
+    "oxlint": "1.94.0",
     "react-test-renderer": "19.3.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "typescript-api": "npm:typescript@6.0.3",
     "vite": "^8.3.6",
-    "vitest": "5.0.5",
+    "vitest": "5.1.0",
     "ws": "^8.22.2"
   },
-  "packageManager": "pnpm@12.14.0+sha512.c18ba6d87993d3d164cb5e8948f32b2c06ee854487e06cd8d86781342fb3e5bb4634367034711e86802baa9c37bea906ce1929ad08d70884c97d801df13389a6"
+  "packageManager": "pnpm@12.18.0+sha512.9d7882d5dc82147ecfc4e062aa34834e0ad0296710a1837a1115ae012127d36b7109e321ac1598a1dd0a65597681b1e99917e12ed0d749eae91187943363beb3"
 }

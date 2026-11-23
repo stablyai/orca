@@ -1,4 +1,8 @@
 import {
+  boundPayload,
+  PROVIDER_FRAME_PAYLOAD_LIMITS
+} from '../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
+import {
   agentSessionFailureFact,
   providerDiagnostic
 } from '../../../shared/agent-session/failures/agent-session-failure'
@@ -28,6 +32,7 @@ export class AcpTurnFailures {
   })
   private retryRun?: { item: string; turn: string | undefined; attempt: number }
   private retryRuns = 0
+  private lost?: Error
 
   constructor(
     private readonly sessionId: string,
@@ -39,10 +44,21 @@ export class AcpTurnFailures {
     return this.rows.has(turn)
   }
 
+  /** The agent's notice, once, that it dropped the session although its prompt then ended. */
+  takeSessionLoss(): Error | undefined {
+    const lost = this.lost
+    this.lost = undefined
+    return lost
+  }
+
   notification(
     turn: string | undefined,
     extension: AcpDialectNotification | undefined
   ): ProviderTimelineEvent[] {
+    const notice = extension?.disposition === 'map' ? extension.failure?.failureDetail : undefined
+    if (notice && this.dialect.sessionLostNotice?.(notice)) {
+      this.lost = new Error(notice)
+    }
     return turn &&
       extension?.disposition === 'map' &&
       (extension.failureDetail || extension.failure)
@@ -61,12 +77,9 @@ export class AcpTurnFailures {
     at: number,
     join: ProviderTimelineJoin
   ): ProviderTimelineEvent[] | undefined {
-    const cause =
-      update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text'
-        ? this.dialect.providerRetry?.(update.content.text)
-        : undefined
-    if (cause === undefined) {
-      if (this.retryRun && ACP_SUBSTANTIVE_UPDATES.includes(update.sessionUpdate)) {
+    const retry = this.dialect.providerRetry?.(update)
+    if (!retry) {
+      if (retry === null || ACP_SUBSTANTIVE_UPDATES.includes(update.sessionUpdate)) {
         this.retryRun = undefined
       }
       return undefined
@@ -80,9 +93,9 @@ export class AcpTurnFailures {
         attempt: 0
       }
     }
-    this.retryRun.attempt += 1
+    this.retryRun.attempt = retry.attempt ?? this.retryRun.attempt + 1
     const failure = agentSessionFailureFact('providerRetrying', {
-      retry: { cause, attempt: this.retryRun.attempt }
+      retry: { ...retry, attempt: this.retryRun.attempt }
     })
     return [
       {
@@ -96,6 +109,13 @@ export class AcpTurnFailures {
         join
       }
     ]
+  }
+
+  /** A failure reported mid-turn still fails a turn the agent closes with end_turn. */
+  ending(turn: string, reported: AcpTurnEnding): AcpTurnEnding {
+    return reported.stopReason === 'end_turn' && this.rows.has(turn)
+      ? { ...reported, stopReason: 'error' }
+      : reported
   }
 
   ended(turn: string, ending: AcpTurnEnding): ProviderTimelineEvent[] {
@@ -155,7 +175,15 @@ export class AcpTurnFailures {
                 text:
                   diagnostic?.text ??
                   this.dialect.failedTurnText?.(stopReason) ??
-                  `${this.agentName ?? 'The agent'} ended this turn with an error.`
+                  `${this.agentName ?? 'The agent'} ended this turn with an error.`,
+                // The agent's own line, under Details, behind the sentence drawn from it.
+                ...(evidence.frame && {
+                  providerFrame: {
+                    provider: this.agentName ?? 'agent',
+                    kind: 'failure-notice',
+                    payload: boundPayload(evidence.frame, PROVIDER_FRAME_PAYLOAD_LIMITS)
+                  }
+                })
               })
         },
         join

@@ -214,6 +214,10 @@ export function chatPromptFacts(chats: ConversationChatHost | undefined) {
       const item = currentChat(chats)?.publishedWork(sessionId)?.activeTurn?.item
       return item ? (readAgentJournalTurn(item.body)?.startedAt ?? item.observedAt) : null
     },
+    turnPlan: async (sessionId: string) => {
+      const reads = await currentChat(chats)?.journalReads(sessionId)
+      return (await reads?.latestTaskList()) ?? null
+    },
     resolvedPrompt: async (sessionId: string, itemId: string) => {
       const reads = await currentChat(chats)?.journalReads(sessionId)
       return (await reads?.item(itemId)) ?? null

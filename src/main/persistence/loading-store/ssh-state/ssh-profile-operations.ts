@@ -40,6 +40,8 @@ type SshProfileOperationsContext = {
   runtime: SshProfileOperationsRuntime
   scheduling: WriteSchedulingOperations
   repos: RepoLifecycleOperations
+  // The migration edits session entries in place, which an incremental save cannot see.
+  forgetSessionSaveBaseline: () => void
 }
 
 /** Re-adopting an SSH target rewrites every record that names the old target. */
@@ -65,9 +67,10 @@ export class SshProfileOperations {
   constructor(
     runtime: SshProfileOperationsRuntime,
     scheduling: WriteSchedulingOperations,
-    repos: RepoLifecycleOperations
+    repos: RepoLifecycleOperations,
+    forgetSessionSaveBaseline: () => void
   ) {
-    this[sshProfileOperationsContext] = { runtime, scheduling, repos }
+    this[sshProfileOperationsContext] = { runtime, scheduling, repos, forgetSessionSaveBaseline }
   }
 
   getSshTargets(): SshTarget[] {
@@ -142,7 +145,9 @@ export class SshProfileOperations {
       scheduleSave: () =>
         scheduleSave(this[sshProfileOperationsContext].scheduling, SSH_TARGET_REASSIGNMENT_DOMAINS)
     }
-    return reassignSshTargetIdOperation(operations, oldTargetId, newTargetId)
+    const repoIds = reassignSshTargetIdOperation(operations, oldTargetId, newTargetId)
+    this[sshProfileOperationsContext].forgetSessionSaveBaseline()
+    return repoIds
   }
 }
 

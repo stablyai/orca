@@ -1,5 +1,6 @@
 import { RelayOuterError } from '../../transport/encryption/mobile-relay-e2ee-link'
 import type { RelayRecoveryLog } from './mobile-relay-recovery-log'
+import { isExplicitCredentialRejection } from '../../transport/relay/relay-credential-eligibility'
 import { RelayDirectorHttpError } from '../../transport/relay/mobile-relay-resume-director'
 
 export function logRelayConnected(log: RelayRecoveryLog): void {
@@ -17,7 +18,8 @@ export function logRelayDialFailure(
   if (!error) {
     return
   }
-  const base = `${error.name}: ${String(error.message).slice(0, 80)}`
+  const credentialRejected = isExplicitCredentialRejection(error)
+  const base = `${error.name}: ${String(error.message).slice(0, 80)}${credentialRejected ? ' (relay-hello refusal)' : ''}`
   const detail =
     error instanceof RelayDirectorHttpError && error.retryAfterMs != null
       ? `${base}; retry-after=${error.retryAfterMs}ms`
@@ -25,7 +27,8 @@ export function logRelayDialFailure(
   log(source === 'dial' ? 'relay dial failed' : 'active relay session failed', detail, {
     level: 'error',
     code: source === 'dial' ? 'relay-dial-failed' : 'relay-session-failed',
-    ...(error instanceof RelayOuterError ? { relayCloseCode: error.code } : {})
+    ...(error instanceof RelayOuterError ? { relayCloseCode: error.code } : {}),
+    ...(credentialRejected ? { relayCredentialRejected: true } : {})
   })
 }
 

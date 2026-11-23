@@ -43,6 +43,7 @@ function failureMessage(reason: MobileWebShellFailureCause, t: Translate): strin
       return t('webShell.shellStateScreen.renderProcessGone', 'The workspace stopped responding.')
     case 'generation-unreadable':
     case 'document-load-failed':
+    case 'page-fault':
       return t(
         'webShell.shellStateScreen.documentLoadFailed',
         'The downloaded app could not be opened.'

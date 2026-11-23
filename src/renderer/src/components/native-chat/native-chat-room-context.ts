@@ -1,4 +1,5 @@
 import { createContext, type ReactNode } from 'react'
+import type { NativeChatRoomMemberMatch } from '../../../../shared/native-chat/input/native-chat-room-mentions'
 import type { NativeChatComposerRoom } from './composer/native-chat-composer-types'
 import type { NativeChatBotChatPicker } from './native-chat-mention-chats'
 import type { NativeChatMentionChatDrill } from './composer/pickers/use-native-chat-mention-chat-drill'
@@ -10,8 +11,15 @@ export const NativeChatRoomContext = createContext<{
   mentions: NativeChatComposerRoom['mentions']
   withFiles: boolean
   unavailable: readonly string[]
+  /** This chat's crew agents, listed above the bots; their values lead the `@` list. */
+  agents?: NativeChatComposerRoom['mentions']
   /** A bot's chats one level under its row; absent where none can be picked. */
   chats?: { picker: NativeChatBotChatPicker; drill: NativeChatMentionChatDrill }
+  /** How each listed member matched the query, for bolding its hits. */
+  matches?: readonly NativeChatRoomMemberMatch[]
+  /** Leading rows bare `@` lists under "Recent". */
+  recentCount?: number
+  query?: string
 } | null>(null)
 
 /** The owner's bots a chat's composers list under `@`; `token` is what picking one puts in the
@@ -20,6 +28,8 @@ export type NativeChatBotChatRoom = NativeChatComposerRoom & {
   /** What picking the member with this `@` menu value puts in the draft. */
   token?: (value: string) => string | undefined
   opened?: () => void
+  /** A message the chat took: what it names is recorded now, not when it was picked. */
+  sent?: (text: string) => void
 }
 
 /** A bot a draft names, as the chat can reach it now: its current name, its picture sized for a

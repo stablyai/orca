@@ -11,18 +11,29 @@ import { isGoogleTrigger } from './automation-google-triggers'
 import type { Automation } from './automations/automation-definition'
 import type { Bot } from './bot-types'
 import { CONNECTOR_SOURCE_NAMES } from './connectors/external-conversation-link'
+import {
+  hostNotSignedIn,
+  unknownHostSignInHint,
+  withServerSignInSteps
+} from './bots/host-orca-sign-in'
 
 // An older host's bots omit the connectors it doesn't have. webhooks: whether the Orca Cloud of the
 // bot's host takes webhooks; a webhook needs no account, so the cloud alone decides.
-// cloudSignedOut: the bot's host is signed out of Orca, so nothing reaches it through Orca Cloud.
+// cloudSignedOut: the bot's host isn't signed in to Orca Cloud (orcaCloudNeedsSignIn), so nothing
+// reaches it through Orca Cloud.
 export type BotConnectors = Pick<Bot, 'name'> &
   Partial<Pick<Bot, 'slack' | 'github' | 'linear' | 'google'>> & {
     webhooks?: boolean
     cloudSignedOut?: boolean
+    /** Its host is a headless Orca server by this name, whose signed-out copy names it; null on a
+     *  computer with Orca's window; absent from an older host, which didn't say. */
+    signInServer?: string | null
     /** Its host's Orca Cloud sends GitHub's newer events and label= (`triggers.github2`). */
     githubEvents2?: boolean
     /** Its host's Orca Cloud sends github.workflow_finished (`triggers.workflows`). */
     githubWorkflows?: boolean
+    /** Its host's Orca Cloud sends github.ci_finished (`triggers.ci_finished`). */
+    githubCiFinished?: boolean
   }
 
 type EventRule = Pick<AutomationEventTrigger, 'source' | 'event'>
@@ -89,10 +100,34 @@ function cloudEventNames(rules: readonly EventRule[]): string {
 
 function signedOutRefusal(bot: BotConnectors, rules: readonly EventRule[]): string {
   const offer = rules[0].source === 'webhook' ? 'webhook' : rules[0].source
-  return [
-    `This computer is signed out of Orca, and ${cloudEventNames(rules)} reach ${bot.name} through Orca Cloud, so nothing was saved.`,
-    `Run \`orca bot connectors --offer ${offer}\` to show your owner a Sign in line in this chat, then save it again once they say they're signed in.`
-  ].join(' ')
+  return withServerSignInSteps(
+    [
+      `${hostNotSignedIn(bot.signInServer)}, and ${cloudEventNames(rules)} reach ${bot.name} through Orca Cloud, so nothing was saved.`,
+      `Run \`orca bot connectors --offer ${offer}\` to show your owner a Sign in line in this chat, then save it again once they say they're signed in.`,
+      unknownHostSignInHint(bot.signInServer)
+    ]
+      .filter(Boolean)
+      .join(' '),
+    bot.signInServer,
+    bot.name,
+    'bot'
+  )
+}
+
+/** `trigger-options`' line for a bot whose host isn't signed in to Orca Cloud. */
+export function signedOutTriggerOptionsNote(bot: BotConnectors): string {
+  return withServerSignInSteps(
+    [
+      `${hostNotSignedIn(bot.signInServer)}, and Slack, GitHub, Linear and webhook events reach ${bot.name} through Orca Cloud: before saving one, run \`orca bot connectors --offer <source>\` so your owner sees a Sign in line in this chat, and save it once they say they're signed in.`,
+      // An older host doesn't say whether it is a headless server: keep its terminal sign-in in view.
+      unknownHostSignInHint(bot.signInServer)
+    ]
+      .filter(Boolean)
+      .join(' '),
+    bot.signInServer,
+    bot.name,
+    'bot'
+  )
 }
 
 /** Why these rules can't start this bot and what can instead; null when every rule can. */
@@ -141,7 +176,7 @@ export function botEventTriggerRefusal(
 export function wontFireNote(bot: BotConnectors, triggers: readonly EventRule[]): string | null {
   const cloud = bot.cloudSignedOut ? cloudEventRules(triggers) : []
   if (cloud.length > 0) {
-    return `won't fire while signed out of Orca (${cloud.map(({ source, event }) => `${source}.${event}`).join(', ')})`
+    return `won't fire until ${bot.signInServer ?? 'this computer'} signs in to Orca Cloud (${cloud.map(({ source, event }) => `${source}.${event}`).join(', ')})`
   }
   // Only a host that says its cloud stopped taking webhooks; an older one doesn't say.
   const unheard = unheardEventTriggers({ ...bot, webhooks: bot.webhooks ?? true }, triggers)

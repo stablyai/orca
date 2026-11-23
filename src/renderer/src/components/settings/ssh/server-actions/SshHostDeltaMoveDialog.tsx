@@ -155,7 +155,7 @@ export function SshHostDeltaMoveDialog({
             disabled={running || !preview || preview.added.length === 0 || blocked}
           >
             {running ? <Loader2 className="animate-spin" /> : null}
-            {t('auto.components.settings.deltaMove.confirm', 'Move the new projects')}
+            {t('auto.components.settings.deltaMove.confirm', 'Move new projects')}
           </Button>
         </DialogFooter>
       </DialogContent>

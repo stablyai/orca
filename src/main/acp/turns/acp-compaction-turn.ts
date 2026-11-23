@@ -20,7 +20,12 @@ export function acpCompactPrompt(instructions?: string, command?: string): Conte
   return [{ type: 'text', text: agentSessionCompactCommandText(instructions, command) }]
 }
 
-export type AcpCompaction = { reply: string; failure?: AcpTurnFailureEvidence }
+export type AcpCompaction = {
+  reply: string
+  failure?: AcpTurnFailureEvidence
+  startedId?: string
+  cancelledId?: string
+}
 
 export type AcpCompactionFrame = {
   failureDetail?: string
@@ -29,7 +34,29 @@ export type AcpCompactionFrame = {
 }
 
 /** Returns true when the update belongs to the compaction. */
-export function readAcpCompactionUpdate(compaction: AcpCompaction, update: SessionUpdate): boolean {
+export function readAcpCompactionUpdate(
+  compaction: AcpCompaction,
+  update: SessionUpdate,
+  dialect: Pick<AcpDialect, 'compactionUpdate'>
+): boolean {
+  const report =
+    update.sessionUpdate === 'compaction_update' ? update : dialect.compactionUpdate?.(update)
+  if (report) {
+    if (report.status === 'in_progress') {
+      compaction.startedId = report.compactionId
+    }
+    if (report.status === 'cancelled') {
+      compaction.cancelledId = report.compactionId
+    }
+    // Agents report a failed compaction here and still end the prompt normally.
+    if (report.status === 'failed') {
+      compaction.failure = mergeAcpTurnFailureEvidence(compaction.failure, {
+        stopReason: 'error',
+        failureDetail: report.error ?? undefined
+      })
+    }
+    return true
+  }
   if (update.sessionUpdate === 'agent_message_chunk') {
     if (update.content.type === 'text') {
       compaction.reply += update.content.text
@@ -43,7 +70,8 @@ export function readAcpCompactionUpdate(compaction: AcpCompaction, update: Sessi
 export function absorbAcpCompactionFrame(
   prompt: { compaction?: AcpCompaction; durationMs?: number },
   extension: AcpCompactionFrame | undefined,
-  update: SessionUpdate | undefined
+  update: SessionUpdate | undefined,
+  dialect: Pick<AcpDialect, 'compactionUpdate'>
 ): boolean {
   const { compaction } = prompt
   if (!compaction) {
@@ -66,7 +94,7 @@ export function absorbAcpCompactionFrame(
   if (extension?.failure || extension?.failureDetail) {
     return true
   }
-  return update !== undefined && readAcpCompactionUpdate(compaction, update)
+  return update !== undefined && readAcpCompactionUpdate(compaction, update, dialect)
 }
 
 export function acpCompactionEnd(
@@ -118,10 +146,14 @@ export function acpCompactionEnd(
   // Settlement already merged its detail behind the first diagnostic the agent reported.
   const words = reply?.detail ?? (compaction.failure?.text || input.failureDetail)
   const detail = words === undefined ? undefined : providerDiagnostic(words, 'person')
+  // A cancellation report for an earlier compaction, such as a stale recovery, does not end this one.
+  const cancelled =
+    compaction.cancelledId !== undefined && compaction.cancelledId === compaction.startedId
   const verdict = structuredCompactionOutcome({
-    // Normal completion implies compaction unless the reply says otherwise.
-    compacted: stopReason === 'end_turn' && reply === undefined,
-    interruptRequested: stopReason === 'cancelled',
+    // Normal completion implies compaction unless the reply or a report says otherwise.
+    compacted:
+      stopReason === 'end_turn' && reply === undefined && !compaction.failure && !cancelled,
+    interruptRequested: stopReason === 'cancelled' || cancelled,
     failed: detail ? { detail } : {}
   })
   if (verdict.outcome === 'cancellation') {

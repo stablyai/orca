@@ -30,6 +30,7 @@ import {
   type WorktreeRemovalWitnessScan
 } from '../../../workspaces/removal/worktree-removal-listing'
 import { pendingWorktreeRemovals } from '../../../workspaces/removal/worktree-removal-table'
+import type { WorktreeRowProjectionMemo } from './worktree-row-projection-memo'
 
 type RepoWorktreeRowStore = Pick<
   RuntimeStore,
@@ -70,6 +71,12 @@ export type RepoWorktreeRowDeps = {
   claimLineagePrune?: (scan: RuntimeWorktreeScanResult) => { scanGeneration: number } | null
   /** Folder workspaces are stamped from runtime-owned identity helpers, so the caller supplies them. */
   listFolderWorkspaces: (repo: Repo, repoOwnerCount: number) => Worktree[]
+  /** Owned by the catalog so unchanged rows survive between joins. */
+  rowMemo?: WorktreeRowProjectionMemo<RepoWorktreeRow>
+}
+
+export function worktreeRowMemoRepoKey(repo: Repo): string {
+  return `${getRepoExecutionHostId(repo)}\u0000${repo.id}`
 }
 
 /** Publish last-known persisted rows on unreachable/stalled scans, matching disconnected SSH listing behavior. */
@@ -152,12 +159,14 @@ export async function scanRepoWorktreeRows(
 
 /** The join half: a repo's rows from a scan and the metadata as it is now. Synchronous. */
 export function projectRepoWorktreeRows(
-  deps: Pick<RepoWorktreeRowDeps, 'store' | 'listFolderWorkspaces'>,
+  deps: Pick<RepoWorktreeRowDeps, 'store' | 'listFolderWorkspaces' | 'rowMemo'>,
   repo: Repo,
   scan: RepoWorktreeRowsScan | null,
   metaById: Record<string, WorktreeMeta>,
   repoOwnerCount = deps.store.getRepos().filter((candidate) => candidate.id === repo.id).length,
-  stamped?: ReadonlyMap<string, WorktreeMeta>
+  stamped?: ReadonlyMap<string, WorktreeMeta>,
+  // What the stamp loop already read for each unstamped row, so it isn't read twice.
+  ownedMeta?: ReadonlyMap<string, WorktreeMeta | undefined>
 ): RepoWorktreeRow[] {
   const { store } = deps
   if (isFolderRepo(repo)) {
@@ -179,18 +188,21 @@ export function projectRepoWorktreeRows(
     }))
   }
   const expectedHostId = getRepoExecutionHostId(repo)
-  const rows = (scan?.worktrees ?? []).map((gitWorktree) => {
+  const repoKey = worktreeRowMemoRepoKey(repo)
+  const rows = (scan?.worktrees ?? []).map((gitWorktree): RepoWorktreeRow => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
-    const known = stamped?.get(worktreeId) ?? metaById[worktreeId]
-    const meta =
-      readWorktreeMetaForHost(store, worktreeId, expectedHostId) ??
-      (isWorktreeMetaOwnedByRepo(repo, known, repoOwnerCount) ? known : undefined)
-    const merged = {
-      ...mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
-      hostId: meta?.hostId ?? expectedHostId
+    let meta: WorktreeMeta | undefined
+    if (ownedMeta?.has(worktreeId)) {
+      meta = ownedMeta.get(worktreeId)
+    } else {
+      const known = stamped?.get(worktreeId) ?? metaById[worktreeId]
+      meta =
+        readWorktreeMetaForHost(store, worktreeId, expectedHostId) ??
+        (isWorktreeMetaOwnedByRepo(repo, known, repoOwnerCount) ? known : undefined)
     }
-    return {
-      ...merged,
+    const build = (): RepoWorktreeRow => ({
+      ...mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
+      hostId: meta?.hostId ?? expectedHostId,
       parentWorktreeId: null,
       childWorktreeIds: [],
       lineage: null,
@@ -201,7 +213,21 @@ export function projectRepoWorktreeRows(
         isBare: gitWorktree.isBare,
         isMainWorktree: gitWorktree.isMainWorktree
       }
-    }
+    })
+    return deps.rowMemo
+      ? deps.rowMemo.rowFor(
+          repoKey,
+          worktreeId,
+          {
+            repoId: repo.id,
+            repoDisplayName: repo.displayName,
+            expectedHostId,
+            git: gitWorktree,
+            meta
+          },
+          build
+        )
+      : build()
   })
   if (expectedHostId !== LOCAL_EXECUTION_HOST_ID || !scan) {
     return rows
@@ -211,24 +237,42 @@ export function projectRepoWorktreeRows(
 
 /** Resolution owns durable identity stamping; memory projection never calls this wrapper. */
 export function joinRepoWorktreeRows(
-  deps: Pick<RepoWorktreeRowDeps, 'store' | 'listFolderWorkspaces'>,
+  deps: Pick<RepoWorktreeRowDeps, 'store' | 'listFolderWorkspaces' | 'rowMemo'>,
   repo: Repo,
   scan: RepoWorktreeRowsScan | null,
   metaById: Record<string, WorktreeMeta>,
   repoOwnerCount = deps.store.getRepos().filter((candidate) => candidate.id === repo.id).length
 ): RepoWorktreeRow[] {
-  const stamped = stampRepoWorktreeRows(deps, repo, scan, metaById, repoOwnerCount)
-  return projectRepoWorktreeRows(deps, repo, scan, metaById, repoOwnerCount, stamped)
+  const ownedMeta = new Map<string, WorktreeMeta | undefined>()
+  const stamped = stampRepoWorktreeRows(deps, repo, scan, metaById, repoOwnerCount, ownedMeta)
+  const rows = projectRepoWorktreeRows(
+    deps,
+    repo,
+    scan,
+    metaById,
+    repoOwnerCount,
+    stamped,
+    ownedMeta
+  )
+  if (deps.rowMemo && !isFolderRepo(repo)) {
+    deps.rowMemo.keepOnly(
+      worktreeRowMemoRepoKey(repo),
+      new Set((scan?.worktrees ?? []).map((git) => composeWorktreeId(repo.id, git.path)))
+    )
+  }
+  return rows
 }
 
 /** Read every scanned checkout's host metadata (which migrates it) and stamp missing identities.
- *  Returns only the rows stamped here; copying the whole metadata map would cost every repo. */
+ *  Returns only the rows stamped here; copying the whole metadata map would cost every repo.
+ *  `ownedMeta` receives what was read for each row left unstamped. */
 export function stampRepoWorktreeRows(
   deps: Pick<RepoWorktreeRowDeps, 'store'>,
   repo: Repo,
   scan: RepoWorktreeRowsScan | null,
   metaById: Record<string, WorktreeMeta>,
-  repoOwnerCount: number
+  repoOwnerCount: number,
+  ownedMeta?: Map<string, WorktreeMeta | undefined>
 ): Map<string, WorktreeMeta> {
   const stamped = new Map<string, WorktreeMeta>()
   if (isFolderRepo(repo)) {
@@ -242,6 +286,8 @@ export function stampRepoWorktreeRows(
       getRepoOwnedWorktreeMeta(repo, id, metaById, repoOwnerCount)
     if (!owned?.instanceId && (owned || (!metaById[id] && repoOwnerCount === 1))) {
       stamped.set(id, deps.store.setWorktreeMeta(hostWorktreeTarget({ id, hostId }), {}))
+    } else {
+      ownedMeta?.set(id, owned)
     }
   }
   return stamped

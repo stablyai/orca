@@ -19,6 +19,8 @@ import {
   readBrowserGuestDiscardProtection
 } from './browser-guest-discard-protection'
 import { readBrowserMemoryPageDiscardProtection } from '../../browser-page-memory'
+import { isBrowserClientPageGuest } from '../../../client-pages/lifecycle/browser-client-page-memory-registry'
+import { installBrowserNavigationStallWatchdog } from '../navigation/browser-navigation-stall-watchdog'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
   attachGuestPolicies(
@@ -44,6 +46,24 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     const disposeDiscardProtection = installBrowserGuestDiscardProtection(guest, () =>
       this.invalidateGuestMemoryProtection(guest)
     )
+    const disposeStallWatchdog = installBrowserNavigationStallWatchdog(guest, (stall) => {
+      const mappedPageId = this.tabIdByWebContentsId.get(guest.id)
+      if (!stall) {
+        this.pendingLoadStallsByGuestId.delete(guest.id)
+        // Cleanup unmaps a replaced guest before disposing it, so the clear goes to the page that saw the stall.
+        const stalledPageId = this.loadStallPageIdByGuestId.get(guest.id) ?? mappedPageId
+        this.loadStallPageIdByGuestId.delete(guest.id)
+        if (stalledPageId) {
+          this.sendLoadStall(stalledPageId, guest.id, null)
+        }
+      } else if (mappedPageId) {
+        this.loadStallPageIdByGuestId.set(guest.id, mappedPageId)
+        this.sendLoadStall(mappedPageId, guest.id, stall)
+      } else {
+        // Registration replays it, like a load failure that precedes it.
+        this.pendingLoadStallsByGuestId.set(guest.id, stall)
+      }
+    })
     const invalidate = (): void => this.invalidateGuestMemoryProtection(guest)
     const inPageNavigation = (_event: Electron.Event, _url: string, mainFrame: boolean): void => {
       if (mainFrame) {
@@ -87,6 +107,8 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       if (browserPageId) {
         this.notifyAudioStateChanged(browserPageId, event.audible)
       }
+      // Server pages and their popups have no renderer; viewers read their sound from session rows.
+      this.notifyBrowserGuestStateChanged(guest.id)
     }
     guest.on('audio-state-changed', forwardAudioState)
     const disposeDevToolsCloseShortcut = installGuestDevToolsCloseShortcut({
@@ -110,6 +132,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
         disposePopupPolicy,
         disposeNavigationPolicy,
         disposeDiscardProtection,
+        disposeStallWatchdog,
         disposeMetadata,
         () => guest.off('did-stop-loading', invalidate),
         () => guest.off('did-navigate', invalidate),
@@ -131,6 +154,26 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
         console.warn('[BrowserManager] Retired guest developer tools close failed')
       })
     })
+  }
+
+  /** A viewer's mute of a page this host runs; the window drawing it updates its tab, server pages republish. */
+  setGuestAudioMuted(guest: Electron.WebContents, muted: boolean): void {
+    guest.setAudioMuted(muted)
+    const browserPageId = this.tabIdByWebContentsId.get(guest.id)
+    if (browserPageId && this.offscreenGuestIds.has(guest.id)) {
+      if (muted) {
+        this.mutedOffscreenPageIds.add(browserPageId)
+      } else {
+        this.mutedOffscreenPageIds.delete(browserPageId)
+      }
+    }
+    if (browserPageId) {
+      this.resolveRendererForBrowserTab(browserPageId)?.send('browser:audio-muted-changed', {
+        browserPageId,
+        muted
+      })
+    }
+    this.notifyBrowserGuestStateChanged(guest.id)
   }
 
   protected notifyAudioStateChanged(browserPageId: string, audible: boolean): void {
@@ -164,7 +207,8 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     return readBrowserMemoryPageDiscardProtection(
       browserPageId,
       guest,
-      this.rendererWebContentsIdByTabId.get(browserPageId)
+      this.rendererWebContentsIdByTabId.get(browserPageId),
+      isBrowserClientPageGuest(browserPageId, guest.id)
     )
   }
 

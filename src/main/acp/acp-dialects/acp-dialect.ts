@@ -1,6 +1,8 @@
 import type { AgentSessionAccountKind } from '../../../shared/agent-session/failures/agent-session-availability'
 import type { AgentSessionContextUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import type { AgentSessionUsageLimit } from '../../../shared/agent-session/failures/agent-session-usage-limit'
+import type { AgentSessionProviderRetry } from '../../../shared/agent-session/failures/agent-session-failure'
+import type { AgentSessionInteractionMode } from '../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import type {
   AgentJournalThreadGoal,
   AgentJournalToolCallItem
@@ -16,9 +18,11 @@ import type { AgentSessionOptionChoice } from '../../../shared/agent-session/age
 import type {
   AvailableCommand,
   ClientCapabilities,
+  CompactionUpdate,
   InitializeResponse,
   ModelInfo,
   SessionNotification,
+  SessionUpdate,
   ToolCallUpdate
 } from '../generated/acp-protocol.generated'
 
@@ -59,6 +63,10 @@ export type AcpSubagentUpdate = {
   /** Spawning provider turn. */
   turn?: string
   result?: string
+  /** Why a failed subagent failed. */
+  error?: string
+  /** A completed subagent's final message, unlike `result` never posted as a reply row. */
+  reply?: string
   /** Ambiguous task reports apply only to known subagents. */
   knownOnly?: true
   /** The provider started this subagent again; reopens it after an ending. */
@@ -77,6 +85,8 @@ export type AcpChildSessionReport = {
   state?: NativeChatSubagentState
   /** The child began an execution. */
   started?: true
+  /** Why a failed child failed. */
+  error?: string
   update?: SessionNotification
 }
 
@@ -101,7 +111,10 @@ export type AcpDialectNotification =
       end?: Omit<AcpTurnEnding, 'at' | 'notSignedIn'>
       failureDetail?: string
       /** Replaces the update that reported it. */
-      failure?: Pick<AcpTurnEnding, 'stopReason' | 'failureDetail' | 'usageLimit' | 'notSignedIn'>
+      failure?: Pick<
+        AcpTurnEnding,
+        'stopReason' | 'failureDetail' | 'failureFrame' | 'usageLimit' | 'notSignedIn'
+      >
       usage?: AgentSessionContextUsage
       backgroundTasks?: AcpBackgroundTaskUpdate[]
       subagents?: AcpSubagentUpdate[]
@@ -117,6 +130,9 @@ export type AcpTurnEnding = {
   at: number
   durationMs?: number
   failureDetail?: string
+  /** The agent's own failure line, verbatim, kept under Details when `failureDetail` is a shorter
+   *  sentence drawn from it. */
+  failureFrame?: string
   notSignedIn?: boolean
   /** The agent had no model for the prompt; why (selection or sign-in) is unknown. */
   modelNotSelected?: boolean
@@ -124,6 +140,8 @@ export type AcpTurnEnding = {
   /** Structured error data shows the model provider failed; runtime only. */
   providerFailure?: boolean
   hookBlock?: AcpHookBlock
+  /** Orca asked the agent to stop this prompt, whatever reason it then gave. */
+  cancelRequested?: boolean
 }
 
 /** Undefined means a normally ended /compact succeeded. */
@@ -133,6 +151,14 @@ export type AcpCompactionReply = { outcome: 'skipped' | 'failed'; detail: string
 export type AcpModelCommandReply =
   | { applied: string }
   | { refused: 'notSignedIn' | 'modelUnavailable'; detail: string }
+
+/** A listed chat model and the choices a CLI model id encodes for it. */
+export type AcpListedChatModel = {
+  model: string
+  effort?: string
+  fastMode: 'true' | 'false'
+  thinking: 'true' | 'false'
+}
 
 /** Hooks interpret extensions; lifecycle and row identity stay shared. */
 export type AcpDialect = {
@@ -157,6 +183,9 @@ export type AcpDialect = {
     response(value: unknown, taskId: string): 'killed' | 'gone' | 'refused'
   }
   injectedPromptIdentity?: true
+  /** Calls still running at a prompt's end were backgrounded, and the agent later resumes work
+   *  unprompted to report them; that work arrives with no open turn. */
+  reactiveWakeups?: true
   /** Normalize before reading tools: rawOutput.stdout and rawOutput.exitCode. */
   normalizeToolUpdate?(update: ToolCallUpdate): ToolCallUpdate
   toolName?(update: ToolCallUpdate): string | undefined
@@ -188,8 +217,8 @@ export type AcpDialect = {
   /** The agent's own notification that a URL request it raised finished, carrying `elicitationId`. */
   elicitationComplete?(method: string): boolean
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
-  /** The cause, when this agent text only announces a retry of a failed model call. */
-  providerRetry?(text: string): string | undefined
+  /** A retry of a failed model call this update announces; null when the agent says retrying is over. */
+  providerRetry?(update: SessionUpdate): AgentSessionProviderRetry | null | undefined
   promptErrorDetail?(error: AcpAgentError): string | undefined
   promptFailure?(
     error: AcpAgentError,
@@ -198,6 +227,8 @@ export type AcpDialect = {
   authenticationRequired?(error: AcpAgentError): boolean
   /** The agent dropped this session; only a new child can reopen it. */
   sessionLost?(error: AcpAgentError, sessionId: string): boolean
+  /** A mapped failure notice says the agent dropped this session, though its prompt ends normally. */
+  sessionLostNotice?(notice: string): boolean
   /** The agent refused to reopen this session from `cwd` because it keeps it in another folder. */
   sessionInOtherFolder?(error: AcpAgentError, sessionId: string, cwd: string): boolean
   /** Reopening moves a session into the folder it is reopened from, so reopen it where it is listed. */
@@ -205,8 +236,17 @@ export type AcpDialect = {
   hookBlock?(meta: unknown): AcpHookBlock | undefined
   failedTurnText?(stopReason: string): string
   compactionReply?(text: string): AcpCompactionReply | undefined
+  /** The agent's own compaction report, read as the standard `compaction_update`. */
+  compactionUpdate?(update: SessionUpdate): CompactionUpdate | undefined
   /** The agent's own command for /compact. */
   compactCommand?: string
+  /** Orca's catalog ids (the agent CLI's) its chat server names differently, as the server's ids. */
+  chatModelIds?: ReadonlyMap<string, string>
+  /** Resolves a CLI model id the chat server does not list to a listed model plus its effort,
+   *  thinking and Fast; null if none. */
+  unlistedChatModel?(value: string, listed: readonly string[]): AcpListedChatModel | null
+  /** CLI efforts some of the chat server's models spell differently, as those models' ids. */
+  chatEffortIds?: ReadonlyMap<string, string>
   /** The agent's own model command resolves selections its model option cannot name. */
   modelCommand?: {
     /** Only the model option's own "unknown model" refusal sends the value to the command. */
@@ -220,14 +260,22 @@ export type AcpDialect = {
   }
   /** The agent reads a mentioned file only from a resource link, not from `@path` text. */
   linksFileMentions?: true
+  /** The agent advertises image prompts but drops image blocks, so images go as file references. */
+  dropsPromptImages?: true
   /** Hide these commands and reject command-only prompts before dispatch. */
   withheldCommands?: readonly string[]
   /** Which sign-in a not-signed-in chat needs; absent is the agent's usual one. */
   signInAccount?: AgentSessionAccountKind
+  /** A session row's own description when the row is one of the agent's skills; null for a command. */
+  skillDescription?(command: AvailableCommand): string | null
   /** Which session rows are the agent's own built-ins, as this process's initialize response proves. */
   builtinCommands?(initialized: InitializeResponse): (command: AvailableCommand) => boolean
   /** This agent's fast parameter, mapped to Orca's fast mode toggle. */
   fastConfigId?: string
+  /** This agent's on/off thinking parameter, written only for a CLI model id that names it. */
+  thinkingConfigId?: string
+  /** This agent's mode values, mapped to Orca's Build/Plan interaction mode. */
+  interactionModes?: Readonly<Record<AgentSessionInteractionMode, string>>
 }
 
 export type AcpChildStops = { subagents: boolean; backgroundTasks: boolean }

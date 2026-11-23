@@ -1,9 +1,11 @@
 // One item's page inside the bot panel, in the desktop's order: title, "Item · chat · when", description
 // (three lines, Show more), the close note, Status (and Snoozed while it is) and Chat, Done means, Links, Activity, and the comment
-// box docked at the bottom. Back returns to the list.
+// box docked at the bottom. The agent's question is answered in its comment, as on the desktop: quick
+// replies there, your own words in the box. Back returns to the list; up and down step through it, "4 of 6".
 import { useRef, useState } from 'react'
-import { Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native'
-import { ChevronLeft, House, MessageSquare } from 'lucide-react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
+import { House, MessageSquare } from 'lucide-react-native'
+import { BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 import {
   formatBotItemNumber,
   isBotItemLive,
@@ -15,18 +17,15 @@ import type { BotChatTreeWorker } from '../../../../src/shared/bots/bot-chat-tre
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { MobileEdgeFade } from '../../components/list/MobileEdgeFade'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileNativeChatFloatingControls } from '../../session/native-chat/lower-region/MobileNativeChatFloatingControls'
-import {
-  isAtTail,
-  type MobileScrollTailMetrics
-} from '../../session/native-chat/transcript/viewport/use-mobile-native-chat-tail-follow'
 import { MobileBotTextButton } from '../MobileBotTextButton'
+import type { BotItemQuestionStepsSend } from '../../../../src/shared/bots/use-bot-item-question-steps'
 import { MobileBotItemActivity } from './MobileBotItemActivity'
 import { MobileBotItemCommentBox, type BotItemCommentBoxHandle } from './MobileBotItemCommentBox'
 import { MobileBotItemLinks } from './MobileBotItemLinks'
@@ -34,12 +33,21 @@ import { botItemChatName, type BotItemSheet } from './MobileBotItemSheets'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
 import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
 import { useNow } from '../../hooks/use-now'
+import { useBotItemActivityFollow } from './use-bot-item-activity-follow'
 import { usePhoneBotItemView } from './use-phone-bot-item-view'
+import type { PhoneBotItemStepper } from './use-phone-bot-item-walk'
+import { MobileBotItemPageHeader } from './MobileBotItemPageHeader'
+import { MobileBotItemSubtitle } from './MobileBotItemSubtitle'
+import { usePhoneBotItemPendingComments } from './use-phone-bot-item-pending-comments'
+import { botItemCommentDraftKey, returnBotItemCommentDraft } from './bot-item-comment-drafts'
+import { useBotItemQuestionSteps } from './use-phone-bot-item-question-steps'
 
 const DESCRIPTION_LINES_HEIGHT = 3 * 20
 
 export function MobileBotItemPage({
   client,
+  hostKey,
+  hostId,
   bot,
   uid,
   reads,
@@ -50,11 +58,20 @@ export function MobileBotItemPage({
   onOpenChat,
   onOpenWorker,
   onOpenFile,
-  onCommentBoxHeight
+  onCommentBoxHeight,
+  stepper,
+  showToast
 }: {
   client: RpcClient | null
-  bot: { id: string; name: string }
+  /** The paired and execution host the item lives on; two hosts can hold the same bot and item ids. */
+  hostKey: string
+  /** That host's id, which the bot folder's file and skill reads go through. */
+  hostId: string
+  bot: { id: string; name: string; folderWorkspaceId: string; agent: string }
   uid: string
+  /** Up and down through the list the item opened from; null when it opened from elsewhere. */
+  stepper: PhoneBotItemStepper | null
+  showToast: (message: string) => void
   reads: number
   online: boolean
   hostName: string
@@ -71,13 +88,45 @@ export function MobileBotItemPage({
   const view = usePhoneBotItemView({ client, uid, reads })
   const now = useNow(60_000)
   const comment = useRef<BotItemCommentBoxHandle>(null)
-  const jump = useJumpToEnd()
-  const back = (
-    <Pressable onPress={onBack} accessibilityRole="button" hitSlop={8} style={styles.back}>
-      <ChevronLeft size={18} color={colors.textSecondary} />
-      <Text style={styles.backText}>{t('bots.items.tab', 'Items')}</Text>
-    </Pressable>
+  const lastEventId = view.events.at(-1)?.id ?? ''
+  const takesImages = useRouteCapability(BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY)
+  // One item on one host: its pending comments and its asks' held answers.
+  const itemKey = `${hostKey}\0${bot.id}\0${uid}`
+  const pending = usePhoneBotItemPendingComments({
+    client,
+    key: itemKey,
+    uid,
+    events: view.events,
+    hostName,
+    showToast,
+    returnText: (text) => returnBotItemCommentDraft(botItemCommentDraftKey(hostId, uid), text)
+  })
+  // From the comment box or a quick reply: shown at once, then sent to the host.
+  const jump = useBotItemActivityFollow({
+    scopeKey: itemKey,
+    hasItems: view.events.length + pending.shown.length > 0
+  })
+  const sendComment: BotItemQuestionStepsSend = (text, paths = [], ...rest) => {
+    pending.send(text, paths, lastEventId || null, ...rest)
+    jump.jumpToTail()
+  }
+  // `waitingLine`: the question the comment box names, until a reply is on its way.
+  const { steps, sent, quick, fromBox, waitingLine } = useBotItemQuestionSteps(
+    itemKey,
+    view.item,
+    view.events,
+    sendComment,
+    pending.shown
   )
+  const quickReplies = {
+    send: quick,
+    edit: (text: string) => comment.current?.fill(text),
+    recover: (text: string) => comment.current?.fill(text, true),
+    type: () => comment.current?.answer(),
+    steps,
+    sent
+  }
+  const back = <MobileBotItemPageHeader stepper={stepper} online={online} onBack={onBack} />
   const item = view.item
   if (!item) {
     return (
@@ -118,11 +167,14 @@ export function MobileBotItemPage({
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          onScroll={(event) => jump.measure(event.nativeEvent)}
-          onContentSizeChange={(_width, height) => jump.measure({ contentSize: { height } })}
-          onLayout={(event) =>
-            jump.measure({ layoutMeasurement: { height: event.nativeEvent.layout.height } })
-          }
+          onContentSizeChange={jump.onContentSizeChange}
+          onLayout={jump.onLayout}
+          onScroll={jump.onScroll}
+          onScrollToTop={jump.tail.releaseFollow}
+          onScrollBeginDrag={jump.tail.beginUserScroll}
+          onScrollEndDrag={jump.tail.endUserDrag}
+          onMomentumScrollBegin={jump.tail.beginMomentum}
+          onMomentumScrollEnd={jump.tail.endMomentum}
           scrollEventThrottle={32}
         >
           <View style={styles.head}>
@@ -130,17 +182,7 @@ export function MobileBotItemPage({
               <Text style={styles.number}>{formatBotItemNumber(item.number)} </Text>
               {item.title}
             </Text>
-            <Text style={styles.sub} numberOfLines={1}>
-              {t('bots.items.view.sub', 'Item {{number}} · {{chat}} · {{when}}', {
-                number: item.number,
-                chat: chatTitle,
-                when: new Intl.DateTimeFormat(getUiIntlLocale(), {
-                  weekday: 'short',
-                  hour: 'numeric',
-                  minute: '2-digit'
-                }).format(item.createdAt)
-              })}
-            </Text>
+            <MobileBotItemSubtitle item={item} chatTitle={chatTitle} />
             {item.description ? <ClampedDescription text={item.description} /> : null}
           </View>
           {view.failed ? (
@@ -240,12 +282,20 @@ export function MobileBotItemPage({
           <MobileBotItemActivity
             item={item}
             events={view.events}
-            onReply={() => comment.current?.focus()}
+            attachments={{ client, onOpenFile }}
+            pending={pending}
+            onReveal={jump.center}
+            itemScope={itemKey}
+            quickReplies={quickReplies}
+            repliesDisabled={!online || view.failed}
           />
         </ScrollView>
         {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}
         <MobileEdgeFade edge="bottom" color={colors.sheetSurface} />
-        <MobileNativeChatFloatingControls showJumpToTail={jump.shown} onJumpToTail={jump.toEnd} />
+        <MobileNativeChatFloatingControls
+          showJumpToTail={jump.tail.showJumpToTail}
+          onJumpToTail={jump.jumpToTail}
+        />
       </View>
       <View onLayout={(event) => onCommentBoxHeight(event.nativeEvent.layout.height)}>
         <MobileBotItemCommentBox
@@ -254,30 +304,20 @@ export function MobileBotItemPage({
           item={item}
           online={online && !view.failed}
           hostName={hostName}
+          question={
+            waitingLine && !pending.shown.some(({ failed }) => !failed)
+              ? { ...waitingLine, asker: item.owner.name ?? bot.name }
+              : null
+          }
+          attachTo={takesImages && !item.chat.gone ? item.chat.id : null}
+          hostId={hostId}
+          bot={bot}
+          onSend={fromBox}
+          showToast={showToast}
         />
       </View>
     </View>
   )
-}
-
-/** Chat's Scroll to latest, on a page that keeps its opening place: shown while the end is out of view. */
-function useJumpToEnd() {
-  const ref = useRef<ScrollViewInstance>(null)
-  const metrics = useRef<MobileScrollTailMetrics>({
-    contentOffset: { y: 0 },
-    contentSize: { height: 0 },
-    layoutMeasurement: { height: 0 }
-  })
-  const [shown, setShown] = useState(false)
-  return {
-    ref,
-    shown,
-    measure: (next: Partial<MobileScrollTailMetrics>) => {
-      metrics.current = { ...metrics.current, ...next }
-      setShown(!isAtTail(metrics.current))
-    },
-    toEnd: () => ref.current?.scrollToEnd({ animated: true })
-  }
 }
 
 /** The description's first three lines, then Show more; Markdown, as the desktop draws it. */
@@ -308,21 +348,11 @@ function ClampedDescription({ text }: { text: string }) {
 
 const styles = themedStyleSheet(() => ({
   page: { flex: 1, backgroundColor: colors.sheetSurface },
-  back: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    alignSelf: 'flex-start',
-    paddingVertical: spacing.xs,
-    marginBottom: spacing.xs
-  },
-  backText: { fontSize: typography.bodySize, color: colors.textSecondary },
   scroll: { flex: 1 },
   content: { gap: spacing.sm, paddingBottom: spacing.lg },
   head: { paddingHorizontal: spacing.xs, gap: spacing.xs },
   title: { fontSize: typography.titleSize, fontWeight: '600', color: colors.textPrimary },
   number: { fontWeight: '400', color: colors.textMuted, fontVariant: ['tabular-nums'] },
-  sub: { fontSize: typography.metaSize, color: colors.textMuted },
   description: { marginTop: spacing.xs, gap: spacing.xs },
   clamped: { maxHeight: DESCRIPTION_LINES_HEIGHT, overflow: 'hidden' },
   showMore: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },

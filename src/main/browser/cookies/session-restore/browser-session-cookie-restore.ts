@@ -3,15 +3,14 @@
  * that sign in with one sign out on every restart. Chrome keeps them when it restores the last
  * session, and Orca always restores its tabs, so Orca saves them itself and puts them back.
  */
-import { app, session, type Cookie, type Session } from 'electron'
-import { join } from 'node:path'
+import { session, type Session } from 'electron'
 import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { CdpCookie } from '../browser-cdp-cookie'
+import { isBrowserRoutePartition } from '../../routing/partitions/browser-route-identity'
 import { cdpCookieScopeKey, openCookieClearStore } from '../browser-cookie-clear-store'
 import { mergeCdpCookiesIntoSession } from '../browser-partition-cookie-copy'
 import { restoreUnpartitionedCookies } from './browser-session-cookie-unpartitioned-restore'
 import { withCookieMutationLock } from '../mutation/cookie-mutation-lock'
-import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { PrioritySemaphore } from '../../../../shared/concurrency/priority-semaphore'
 import {
   groupByScope,
@@ -24,62 +23,100 @@ import {
 import {
   readSessionCookieSnapshot,
   removeSessionCookieSnapshot,
+  routeSnapshotPath,
+  snapshotPath,
   writeSessionCookieSnapshot
 } from './browser-session-cookie-snapshot-file'
+import {
+  cancelPendingSave,
+  queueSnapshotWrite,
+  sessionCookieTrackers as trackers,
+  stopTrackingSessionCookies,
+  type SessionCookieTracker
+} from './browser-session-cookie-tracker'
 
-const SNAPSHOT_DIRECTORY = 'browser-session-cookies'
 // Chromium commits its own cookie store this often.
 const SAVE_DELAY_MS = 30_000
 // Each CDP read or partitioned restore opens a hidden renderer; managed profiles are unbounded in number.
 const HELPER_TARGET_CONCURRENCY = 2
 const helperTargetSlots = new PrioritySemaphore(HELPER_TARGET_CONCURRENCY)
+// Lower runs first: a restore holds a page's first load, a save does not.
+const RESTORE_PRIORITY = 0
+const SAVE_PRIORITY = 1
 
-type SessionCookieTracker = {
-  target: Session
-  filePath: string
-  /** What the file holds now, by scope. */
-  saved: Map<string, CdpCookie[]>
-  /** The file may hold cookies `saved` lacks (it could not be read), so the next save must rewrite it. */
-  savedStale: boolean
-  /** Set until the file has been read: a save before then would compare against nothing. */
-  reading: boolean
-  /** Scopes whose cookies changed since `saved` was read. */
-  changedScopes: Map<string, ScopeChange>
-  /** Set while a save reads: scopes that changed meanwhile, which the read may have missed. */
-  changedDuringSave: Map<string, ScopeChange> | null
-  timer: ReturnType<typeof setTimeout> | null
-  onChanged: (event: Electron.Event, cookie: Cookie, cause: string, removed: boolean) => void
-}
-
-let profileDirectory: string | null = null
 let quitting = false
-// Why keyed by file path: the same browser profile id ('default') exists in every Orca profile.
-const trackers = new Map<string, SessionCookieTracker>()
+const routeRestores = new Map<string, Promise<void>>()
 
-export function configureBrowserSessionCookieSnapshots(directory: string): void {
-  profileDirectory = directory
-}
-
-function snapshotPath(profileId: string): string {
-  return join(
-    profileDirectory ?? app.getPath('userData'),
-    SNAPSHOT_DIRECTORY,
-    `${encodeURIComponent(profileId)}.json`
-  )
-}
+type SnapshotTarget = { label: string; filePath: string; partition: string }
 
 /** Puts back each profile's saved session cookies; tracking starts first so no change is missed. */
 export async function restoreBrowserSessionCookies(
   profiles: readonly BrowserSessionProfile[]
 ): Promise<void> {
+  const targets = profiles.map((profile) => ({
+    label: profile.id,
+    filePath: snapshotPath(profile.id),
+    partition: profile.partition
+  }))
+  const restore = restoreSnapshotTargets(targets)
+  const restored = restore.catch(() => {})
+  for (const { filePath } of targets) {
+    const tracker = trackers.get(filePath)
+    if (tracker) {
+      tracker.restored = restored
+    }
+  }
+  await restore
+}
+
+/**
+ * SSH and This-device pages open their route partition on demand, so its saved session cookies
+ * go back before its first page loads. Once per launch: later pages share the live jar.
+ */
+export async function restoreBrowserRoutePartitionSessionCookies(partition: string): Promise<void> {
+  const filePath = routeSnapshotPath(partition)
+  let restore = routeRestores.get(filePath)
+  if (!restore) {
+    // Never rejects: a jar that can't be restored still opens, signed out.
+    restore = restoreSnapshotTargets([{ label: 'route partition', filePath, partition }]).catch(
+      (error: unknown) =>
+        console.warn('[browser-session-cookies] Route partition restore failed:', error)
+    )
+    routeRestores.set(filePath, restore)
+  }
+  return restore
+}
+
+/** For route partition storage being cleared: its saved session cookies go with it, before the jar is. */
+export async function forgetBrowserRoutePartitionSessionCookies(partition: string): Promise<void> {
+  if (!isBrowserRoutePartition(partition)) {
+    return
+  }
+  const filePath = routeSnapshotPath(partition)
+  stopTrackingSessionCookies(filePath)
+  try {
+    // File first: any restore that starts from here on reads nothing.
+    await removeSessionCookieSnapshot(filePath)
+  } finally {
+    // One that read it already (or ran past its page's timeout) finishes before the jar is cleared,
+    // and the next restore tracks the jar again even when the file could not go.
+    const restore = routeRestores.get(filePath)
+    await restore
+    // Only after it settles, so an overlapping retirement waits for the same restore.
+    if (routeRestores.get(filePath) === restore) {
+      routeRestores.delete(filePath)
+    }
+  }
+}
+
+async function restoreSnapshotTargets(targets: readonly SnapshotTarget[]): Promise<void> {
   const restores = await Promise.all(
-    profiles.map(async (profile) => {
-      const filePath = snapshotPath(profile.id)
-      const target = session.fromPartition(profile.partition)
+    targets.map(async (snapshotTarget) => {
+      const target = session.fromPartition(snapshotTarget.partition)
       // Why before the read: a restored tab's cookie change during a slow read must still be seen.
-      const tracker = track(filePath, target)
+      const tracker = track(snapshotTarget.filePath, target)
       tracker.reading = true
-      const snapshot = await readSessionCookieSnapshot(filePath)
+      const snapshot = await readSessionCookieSnapshot(snapshotTarget.filePath)
       const saved = snapshot ?? []
       tracker.saved = groupByScope(saved, cdpCookieScopeKey)
       tracker.savedStale = snapshot === null
@@ -87,12 +124,15 @@ export async function restoreBrowserSessionCookies(
       if (tracker.changedScopes.size > 0) {
         scheduleSave(tracker)
       }
-      return { profile, target, saved, tracker }
+      return { label: snapshotTarget.label, target, saved, tracker }
     })
   )
+  // A route partition cleared while its restore ran must not get its cookies back.
+  const current = (tracker: SessionCookieTracker): boolean =>
+    trackers.get(tracker.filePath) === tracker
   const leftovers = await Promise.all(
     restores
-      .filter(({ saved }) => saved.length > 0)
+      .filter(({ saved, tracker }) => saved.length > 0 && current(tracker))
       .map(async (restore) => {
         try {
           return {
@@ -100,26 +140,30 @@ export async function restoreBrowserSessionCookies(
             saved: await restoreUnpartitionedCookies(restore.target, restore.saved)
           }
         } catch (error) {
-          console.warn(
-            '[browser-session-cookies] Restore failed for profile',
-            restore.profile.id,
-            error
-          )
+          console.warn('[browser-session-cookies] Restore failed for', restore.label, error)
           return restore
         }
       })
   )
-  await mapWithConcurrency(
-    leftovers.filter(({ saved }) => saved.length > 0),
-    HELPER_TARGET_CONCURRENCY,
-    async ({ profile, target, saved, tracker }) => {
+  await Promise.all(
+    leftovers.map(async ({ label, target, saved, tracker }) => {
+      if (saved.length === 0) {
+        return
+      }
+      // Shared with saves, so route partitions opening at once can't multiply hidden helpers.
+      const release = await helperTargetSlots.acquire(RESTORE_PRIORITY)
       let allWritten = false
       try {
+        if (!current(tracker)) {
+          return
+        }
         allWritten =
           (await mergeCdpCookiesIntoSession(saved, target, { sameJar: true })).copied ===
           saved.length
       } catch (error) {
-        console.warn('[browser-session-cookies] Restore failed for profile', profile.id, error)
+        console.warn('[browser-session-cookies] Restore failed for', label, error)
+      } finally {
+        release()
       }
       if (allWritten) {
         return
@@ -131,8 +175,18 @@ export async function restoreBrowserSessionCookies(
           noteScopeChange(tracker.changedScopes, key, 'other')
         }
       }
-    }
+    })
   )
+}
+
+/** Writes the file, then records what it holds: a failed write must leave the next save something to write. */
+export async function writeTrackedSnapshot(
+  tracker: SessionCookieTracker,
+  cookies: CdpCookie[]
+): Promise<void> {
+  await writeSessionCookieSnapshot(tracker.filePath, cookies)
+  tracker.saved = groupByScope(cookies, cdpCookieScopeKey)
+  tracker.savedStale = false
 }
 
 /** For a profile created after launch: nothing to restore yet. */
@@ -154,6 +208,8 @@ function track(filePath: string, target: Session): SessionCookieTracker {
     changedScopes: new Map(),
     changedDuringSave: null,
     timer: null,
+    saving: null,
+    restored: null,
     onChanged: (_event, cookie, cause, removed) => {
       // The insert that follows an overwrite says whether the value really changed.
       if (
@@ -187,16 +243,12 @@ function track(filePath: string, target: Session): SessionCookieTracker {
   return tracker
 }
 
-function scheduleSave(tracker: SessionCookieTracker): void {
+export function scheduleSave(tracker: SessionCookieTracker): void {
   if (!tracker.timer && !tracker.changedDuringSave && !tracker.reading) {
-    tracker.timer = setTimeout(() => void saveSessionCookies(tracker), SAVE_DELAY_MS)
-  }
-}
-
-function cancelPendingSave(tracker: SessionCookieTracker): void {
-  if (tracker.timer) {
-    clearTimeout(tracker.timer)
-    tracker.timer = null
+    tracker.timer = setTimeout(
+      () => void queueSnapshotWrite(tracker, () => saveSessionCookies(tracker)),
+      SAVE_DELAY_MS
+    )
   }
 }
 
@@ -211,10 +263,7 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
       const saved = groupByScope(cookies, cdpCookieScopeKey)
       // Sites often re-set a session cookie to the value it already had; skip the sealed write.
       if (tracker.savedStale || !sameSavedCookies(tracker.saved, saved)) {
-        await writeSessionCookieSnapshot(tracker.filePath, cookies)
-        // Only after the write: a failed one must leave the next save something to write.
-        tracker.saved = saved
-        tracker.savedStale = false
+        await writeTrackedSnapshot(tracker, cookies)
       }
       tracker.changedScopes = changedDuringSave
     }
@@ -242,7 +291,7 @@ async function readSessionCookies(tracker: SessionCookieTracker): Promise<CdpCoo
     return updated.cookies
   }
   // Why the slot before the lock: a queued save must not hold its profile's imports and clears.
-  const release = await helperTargetSlots.acquire(0)
+  const release = await helperTargetSlots.acquire(SAVE_PRIORITY)
   try {
     return await withCookieMutationLock(tracker.target, async () => {
       // A save still queued behind an import when quit starts must not open a CDP target.
@@ -291,22 +340,17 @@ export async function flushBrowserSessionCookiesOnQuit(): Promise<void> {
 
 /** For a browser profile being deleted. */
 export function forgetBrowserSessionCookies(profileId: string): void {
-  const warn = (error: unknown) =>
-    console.warn(
-      '[browser-session-cookies] Could not delete saved cookies for profile',
-      profileId,
-      error
-    )
   try {
     const filePath = snapshotPath(profileId)
-    const tracker = trackers.get(filePath)
-    if (tracker) {
-      cancelPendingSave(tracker)
-      tracker.target.cookies.off('changed', tracker.onChanged)
-      trackers.delete(filePath)
-    }
-    void removeSessionCookieSnapshot(filePath).catch(warn)
+    stopTrackingSessionCookies(filePath)
+    void removeSessionCookieSnapshot(filePath).catch((error: unknown) =>
+      warnForgetFailed(profileId, error)
+    )
   } catch (error) {
-    warn(error)
+    warnForgetFailed(profileId, error)
   }
+}
+
+function warnForgetFailed(label: string, error: unknown): void {
+  console.warn('[browser-session-cookies] Could not delete saved cookies for', label, error)
 }

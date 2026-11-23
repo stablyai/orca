@@ -186,6 +186,18 @@ export type BrowserCookieImportSummary = {
   }
 }
 
+/** `sshTargetId` fills that SSH host's page jar instead of the profile's own. */
+export type BrowserProfileCookieImportArgs = { profileId: string; sshTargetId?: string }
+
+/** A server profile's import on this desktop: its id names no local profile, so its metadata rides along. */
+export type BrowserClientHostCookieImportArgs = {
+  environmentId: string
+  profileId: string
+  profile?: { id: string; label: string; scope: BrowserSessionProfileScope }
+  /** Fills that page's own jar, which differs from the profile's when the page browses through another host. */
+  browserPageId?: string
+}
+
 export type BrowserCookieImportResult =
   | {
       ok: true

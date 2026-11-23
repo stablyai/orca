@@ -7,6 +7,7 @@ import { checkWorkerMailbox } from './check-worker'
 import { checkDirectMailbox } from './check-direct'
 import { withOwnDirectMail } from './check-own-direct-mail'
 import { CheckMailReconciliation } from './check-mail-reconciliation'
+import { callerMailTaker } from '../../../../orchestration/db/messages/mail-taker'
 import {
   checkedMailboxes,
   handsOverBatch,
@@ -96,7 +97,12 @@ export const ORCHESTRATION_CHECK_METHODS = [
       }
       // run_unbound is the id the caller's own direct mail (bot item mail) carries, not a Run.
       const unboundOnly = params.run === ORCHESTRATION_UNBOUND_RUN_ID
-      const reconciliation = new CheckMailReconciliation(runtime, db, signal)
+      const reconciliation = new CheckMailReconciliation(
+        runtime,
+        db,
+        callerMailTaker(caller),
+        signal
+      )
       try {
         if (!unboundOnly && (params.run || boundRun)) {
           const result = await checkRunMailbox({

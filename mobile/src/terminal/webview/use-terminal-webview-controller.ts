@@ -18,6 +18,7 @@ import { useTerminalWebViewReadyPromises } from './terminal-webview-ready-promis
 import { createTerminalDocumentWrites } from '../output-flow/terminal-output-ack'
 import { isTerminalGestureInput } from '../pointer-input/terminal-gesture-input'
 import { DEFAULT_TERMINAL_FONT_STYLE } from '../preferences/terminal-font-style'
+import { useTerminalDocumentSettingsSync } from './use-terminal-document-settings-sync'
 
 // Share readiness, queues, coalescing and imperative handles across hosts; only document command/notify transport differs.
 
@@ -35,6 +36,7 @@ export function useTerminalWebViewController(
 ) {
   const {
     terminalTheme,
+    hostSettings,
     interactionActive = true,
     textScale = 1,
     fontStyle = DEFAULT_TERMINAL_FONT_STYLE,
@@ -62,7 +64,6 @@ export function useTerminalWebViewController(
   const pendingMessages = useMemo(() => createTerminalWebViewPendingMessages(), [])
   const messageIdRef = useRef(0)
   const pendingPingIdRef = useRef<number | null>(null)
-  const terminalThemeKey = useMemo(() => JSON.stringify(terminalTheme ?? null), [terminalTheme])
   // Await init’s ready after its render chain so follow-up fit uses its measured cell box.
   const promises = useTerminalWebViewReadyPromises()
   const cellBoxRef = useRef<TerminalCellBox | null>(null)
@@ -220,9 +221,7 @@ export function useTerminalWebViewController(
     armWebReadyWatchdog()
   }, [armWebReadyWatchdog, pendingMessages, writeCoalescer])
 
-  useEffect(() => {
-    postMessage({ type: 'set-theme', terminalTheme })
-  }, [postMessage, terminalThemeKey, terminalTheme])
+  const hostSettingsRef = useTerminalDocumentSettingsSync(postMessage, terminalTheme, hostSettings)
 
   // The document ignores a repeat of what it already shows, so one effect can resend both.
   useEffect(() => {
@@ -269,6 +268,7 @@ export function useTerminalWebViewController(
           oscLinks,
           kittyKeyboardFlags: parseTerminalKittyKeyboardFlags(kittyFlags),
           terminalTheme,
+          ...hostSettingsRef.current,
           fontScale: textScale,
           fontStyle,
           preserveScroll,
@@ -305,6 +305,7 @@ export function useTerminalWebViewController(
       promises,
       sendToDocument,
       terminalTheme,
+      hostSettingsRef,
       textScale,
       fontStyle,
       writeCoalescer

@@ -1,5 +1,6 @@
 import { removeWorktreeViaStore } from '../terminal/input/dead-terminal'
 import { openSidebarWorkspaceComposer } from '../workspaces/sidebar/sidebar-project-dialog'
+import { dismissSetupScriptPrompts } from '../workspaces/sidebar/sidebar-setup-prompt'
 import type { Page } from '@stablyai/playwright-test'
 import { test } from '../desktop/electron-fixtures/orca-app'
 import { expect } from '@stablyai/playwright-test'
@@ -33,6 +34,7 @@ test('creates a worktree, keeps its terminal isolated, and switches back @golden
 }) => {
   test.setTimeout(180_000)
   await waitForSessionReady(orcaPage)
+  await dismissSetupScriptPrompts(orcaPage)
   const originalWorktreeId = await waitForActiveWorktree(orcaPage)
   await waitForActiveTerminalManager(orcaPage, 30_000)
   const parentPtyId = await waitForActivePanePtyId(orcaPage)

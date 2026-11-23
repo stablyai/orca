@@ -121,6 +121,16 @@ export function botChatsSummary(
   }
 }
 
+/** No turn and no provider session: older chats with history predate `lastTurn` but have a session. */
+export function botChatRecordEmpty(record: AgentSessionConversationView): boolean {
+  return (
+    !record.lastTurn &&
+    record.providerHandleChain.length === 0 &&
+    !record.conversationName &&
+    !record.forkedFrom
+  )
+}
+
 /** A record's row as the bot's chat list shows it, listed by its lineage's root; null for a record
  *  that is not an Orca chat or was cleared into a successor. Whether it takes mail is the caller's. */
 export function botChatRecordRow(

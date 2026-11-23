@@ -32,9 +32,11 @@ export const EVENT_WORDS: EventWords = {
     review_requested: 'your review is requested',
     assigned: "you're assigned an issue or pull request",
     ci_failed:
-      "a check, commit status or workflow run fails (once per commit, on the first to fail; the event names it). With subject=, on that pull request's latest commit; without, on any commit, a branch push's or a dispatched run's too",
+      "a check, commit status or workflow run finishes without passing: failed, cancelled, timed out or waiting for approval all count (once per commit, on the first; the event names it and how it ended). With subject=, on that pull request's latest commit; without, on any commit, a branch push's or a dispatched run's too",
     ci_passed:
-      "every check and commit status on a pull request's latest commit has finished and none failed (once per commit)",
+      "every check and commit status on a pull request's latest commit has finished and each passed, was skipped or was neutral (once per commit)",
+    ci_finished:
+      "every check and commit status on a pull request's latest commit has finished, whatever the result (once per commit); the event says result=passed or result=failed and names each check that did not pass and how it ended, or result=pending if CI is still running 6 hours after the push",
     pr_conflicted: 'a pull request gets merge conflicts with its base branch',
     pr_closed: 'a pull request is closed without merging',
     pr_ready: 'a draft pull request is marked ready for review',
@@ -61,7 +63,7 @@ export const SOURCE_NOTES: Partial<Record<AutomationEventSource, string>> = {
   slack:
     "slack.message counts only top-level posts, unless subject= names a thread: then each reply in that thread counts too. A reaction's text is its emoji, as :eyes:. A message from Slack writes a channel as <#C0123ABCD|name>; in= takes that id or the #name. A message that @-mentions the bot, or a DM to it, asks the bot directly; that needs no automation.",
   github:
-    "Only repos where the Orca GitHub app is installed. Your own pushes, comments, reviews and labels start nothing (the bot works as you), except CI results, a pull request's merge, close or conflicts, deployments, security alerts and finished workflow runs, and a pull request you open when from= names me; one your bot's own work opens as you never does. A comment that @-mentions the bot asks it directly instead. ci_passed and pr_conflicted follow one pull request, so they need subject=. ci_passed never fires on a repo with no CI checks. A conflict from a direct push to the base branch is noticed at the next merge or CI run on it.",
+    "Only repos where the Orca GitHub app is installed. Your own pushes, comments, reviews and labels start nothing (the bot works as you), except CI results, a pull request's merge, close or conflicts, deployments, security alerts and finished workflow runs, and a pull request you open when from= names me; one your bot's own work opens as you never does. A comment that @-mentions the bot asks it directly instead. ci_passed, ci_finished and pr_conflicted follow one pull request, so they need subject=. ci_passed and ci_finished never fire on a repo with no CI checks. A conflict from a direct push to the base branch is noticed at the next merge or CI run on it.",
   linear:
     'Only workspaces where the Orca Linear app is installed. Your own changes and comments start nothing (the bot can work as you); a comment that @-mentions Orca asks the bot directly instead.'
 }

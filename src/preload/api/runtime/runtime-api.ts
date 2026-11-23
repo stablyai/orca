@@ -100,6 +100,7 @@ export type RuntimeApi = {
     onOrchestrationSessionWorkersChanged?: (
       callback: (event: { sessionId: string }) => void
     ) => () => void
+    onPeerMailReturned?: (callback: () => void) => () => void
   }
   runtimeEnvironments: {
     desktopCreatedChatIds?: () => Promise<string[]>
@@ -135,6 +136,8 @@ export type RuntimeApi = {
       selector: string
       timeoutMs?: number
       observeOnly?: true
+      /** A user-requested check that probes now even while a recent failure is backing off. */
+      force?: true
     }) => Promise<RuntimeRpcResponse<RuntimeStatus>>
     onSharedControlDiagnostics?: (
       callback: (event: {
@@ -159,6 +162,10 @@ export type RuntimeApi = {
       timeoutMs?: number
       expectedEnvironmentPairingRevision?: number
       expectedEnvironmentRuntimeId?: string
+      /** A poll: no use of an idle WSL host, and never wakes one Orca stopped idle. */
+      background?: boolean
+      /** The user asked for it: it may wake a WSL host Orca stopped idle. */
+      wake?: boolean
     }) => Promise<RuntimeRpcResponse<unknown>>
     subscribeCrewAttempt?: (
       args: CrewSubscriptionAttemptArgs,
@@ -174,6 +181,8 @@ export type RuntimeApi = {
         timeoutMs?: number
         expectedEnvironmentPairingRevision?: number
         expectedEnvironmentRuntimeId?: string
+        background?: boolean
+        wake?: boolean
       },
       callbacks: {
         onResponse: (response: RuntimeRpcResponse<unknown>) => void

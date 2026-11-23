@@ -8,7 +8,7 @@ import { terminalPaneKeyboardLayout } from './mobile-terminal-pane-layout'
 import { colors, spacing, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import type { TerminalFrame } from '../../webview/terminal-webview-messages'
+import type { TerminalFrame, TerminalHostSettings } from '../../webview/terminal-webview-messages'
 import { TerminalWebView } from '../../webview/TerminalWebView'
 import type {
   TerminalFindResults,
@@ -31,6 +31,7 @@ type TerminalPaneViewProps = {
   onFrame?: (handle: string, frame: TerminalFrame) => void
   keyboardLift: number
   terminalTheme?: RuntimeMobileTerminalTheme
+  hostSettings?: TerminalHostSettings
   textScale: number
   fontStyle: TerminalFontStyle
   onRef: (handle: string, ref: TerminalWebViewHandle | null) => void
@@ -67,6 +68,7 @@ export function TerminalPaneView({
   onFrame,
   keyboardLift,
   terminalTheme,
+  hostSettings,
   textScale,
   fontStyle,
   onRef,
@@ -179,6 +181,7 @@ export function TerminalPaneView({
               keyboardLift > 0 && { transform: [{ translateY: -keyboardLift }] }
             ]}
             terminalTheme={terminalTheme}
+            hostSettings={hostSettings}
             textScale={textScale}
             fontStyle={fontStyle}
             shownAtMount={visible}

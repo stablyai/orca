@@ -22,6 +22,8 @@ import type {
 } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
+import type { RemoteDispatchRow } from '../../db/remote-owned/remote-dispatch-records'
+import { reportedDispatch, reportedRemoteDispatch } from './sender-reported-dispatch'
 import {
   resolveLineageRunningSession,
   type AgentSessionRecordReader
@@ -187,6 +189,8 @@ export type SenderObservation = {
   chat: ReturnType<typeof structuredChatNaming>
   terminal: TerminalSenderNaming | null
   dispatch: DispatchContextRow | null
+  /** A paired server's worker has no terminal or Dispatch here: its imported mail names the Dispatch it runs. */
+  remoteDispatch: RemoteDispatchRow | null
 }
 
 /** Resolve nullable sources once; a missing observation is shared by both projections. */
@@ -214,9 +218,19 @@ export function observeOrchestrationSender(
       : null
     : candidate
   let dispatch: DispatchContextRow | null | undefined = role
+  let remoteDispatch: RemoteDispatchRow | null | undefined
   return {
     chat,
     terminal,
+    get remoteDispatch() {
+      if (remoteDispatch === undefined) {
+        remoteDispatch =
+          db && !candidate && !this.dispatch
+            ? reportedRemoteDispatch(db, reportedDispatchId, party.address)
+            : null
+      }
+      return remoteDispatch
+    },
     get dispatch() {
       if (dispatch === undefined) {
         dispatch =
@@ -236,10 +250,22 @@ export function orchestrationSenderName(
   party: Party,
   sources: SenderNamingSources,
   reportedDispatchId?: string,
-  observation = observeOrchestrationSender(party, sources, reportedDispatchId),
-  taskName?: string | null
+  observation = observeOrchestrationSender(party, sources, reportedDispatchId)
 ): string | null {
   const { chat, terminal } = observation
+  return crewDisplayName(
+    liveSenderName(observation, sources),
+    observedTaskName(observation, sources.db),
+    chat?.fallback,
+    terminal?.agent ? formatAgentTypeLabel(terminal.agent) : null
+  )
+}
+
+/** The name the sender's live chat or terminal tab gives it; null once neither names it. */
+export function liveSenderName(
+  { chat, terminal }: Pick<SenderObservation, 'chat' | 'terminal'>,
+  sources: Pick<SenderNamingSources, 'generatedTitlesEnabled'>
+): string | null {
   const terminalName = terminal?.tab
     ? getAgentRowConversationName(
         terminal.tab,
@@ -249,23 +275,15 @@ export function orchestrationSenderName(
         terminal.providerSessionId
       )
     : null
-  const ownName = crewDisplayName(chat?.ownName, terminalName)
-  if (ownName) {
-    return ownName
-  }
-  return crewDisplayName(
-    taskName !== undefined ? taskName : observedTaskName(observation, sources.db),
-    chat?.fallback,
-    terminal?.agent ? formatAgentTypeLabel(terminal.agent) : null
-  )
+  return crewDisplayName(chat?.ownName, terminalName)
 }
 
 function observedTaskName(
   observation: SenderObservation,
   db: OrchestrationDb | null
 ): string | null {
-  const dispatch = observation.dispatch
-  const task = dispatch ? db?.getTask(dispatch.task_id) : null
+  const taskId = observation.dispatch?.task_id ?? observation.remoteDispatch?.task_id
+  const task = taskId ? db?.getTask(taskId) : null
   return task?.display_name || task?.task_title || null
 }
 
@@ -284,7 +302,10 @@ export function orchestrationSenderAgent(
   }
   try {
     const dispatch = observation.dispatch
-    return dispatch && sources.db
+    if (!dispatch) {
+      return observation.remoteDispatch?.agent ?? null
+    }
+    return sources.db
       ? (sources.dispatchLaunch ?? senderDispatchLaunch(sources.db))(dispatch)
       : null
   } catch (error) {
@@ -309,19 +330,4 @@ export function structuredChatNaming(
   const botName = homeBotName(sources.store, record.location.workspaceId)
   const ownName = botName || structuredChatDisplayName(tab?.customLabel, shownName, '') || null
   return { ownName, fallback, agent: record.provider, bot: Boolean(botName) }
-}
-
-/** Only the sender's own dispatch: a report's payload is the sender's to write. */
-function reportedDispatch(
-  db: OrchestrationDb,
-  dispatchId: string | undefined,
-  handle: string,
-  paneKey: string | undefined
-): DispatchContextRow | undefined {
-  const dispatch = dispatchId ? db.getDispatchContextById(dispatchId) : undefined
-  return dispatch &&
-    (dispatch.assignee_handle === handle ||
-      (paneKey !== undefined && dispatch.assignee_pane_key === paneKey))
-    ? dispatch
-    : undefined
 }

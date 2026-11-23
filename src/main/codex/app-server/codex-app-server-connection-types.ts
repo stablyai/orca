@@ -18,6 +18,8 @@ export type CodexAppServerConnectionHandlers = {
 
 export type CodexAppServerConnection = {
   readonly pid: number | undefined
+  /** The launcher's watcher process, when the launch reported one. */
+  readonly watcherPid?: number
   readonly closed: boolean
   request: (
     method: string,

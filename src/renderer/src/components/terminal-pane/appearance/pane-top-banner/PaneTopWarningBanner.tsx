@@ -91,7 +91,7 @@ export function PaneTopWarningBanner({
   onDontShowAgain,
   onShown
 }: {
-  title: string
+  title: React.ReactNode
   body?: React.ReactNode
   tone?: PaneTopBannerTone
   /** Replaces the warning icon; neutral and accent show none without it. */
@@ -125,8 +125,10 @@ export function PaneTopWarningBanner({
       <div className="@[44rem]:flex @[44rem]:items-center @[44rem]:gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2.5">
           {Icon ? (
+            // mt-px, not the 2px that centers the box: glyphs like Timer and TriangleAlert carry their
+            // weight low, so they sit optically centered on the first line only a pixel higher.
             <Icon
-              className={cn('mt-0.5 size-4 shrink-0', toneClasses.iconClass)}
+              className={cn('mt-px size-4 shrink-0', toneClasses.iconClass)}
               aria-hidden="true"
             />
           ) : null}

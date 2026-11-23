@@ -92,6 +92,7 @@ describe('DeliveryReceipts ledger capacity', () => {
     for (let i = 0; i < CONNECTOR_PENDING_RECEIPT_LIMIT; i++) {
       void before.run(KEY, String(i), 'connector.send', ['hello'], never)
     }
+    db.beginMutationReceipt(ORDINARY)
     db.close()
 
     const reopened = new OrchestrationDb(path)
@@ -113,19 +114,10 @@ describe('DeliveryReceipts ledger capacity', () => {
     })
     expect(executed).toBe(1)
     expect(reopened.countPendingMutationReceipts(['connector:slack'])).toBe(0)
-    reopened.close()
-  })
-
-  it('leaves other callers’ pending receipts alone', async () => {
-    const { db } = fileDb()
-    db.beginMutationReceipt(ORDINARY)
-    await new DeliveryReceipts(() => db).run(KEY, 'd1', 'connector.send', ['hello'], async () => ({
-      outcome: 'accepted'
-    }))
-    expect(db.getMutationReceipt(ORDINARY.callerFingerprint, ORDINARY.requestId)?.state).toBe(
+    expect(reopened.getMutationReceipt(ORDINARY.callerFingerprint, ORDINARY.requestId)?.state).toBe(
       'pending'
     )
-    db.close()
+    reopened.close()
   })
 })
 

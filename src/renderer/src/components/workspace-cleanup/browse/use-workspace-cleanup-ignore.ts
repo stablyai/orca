@@ -12,8 +12,9 @@ function describeError(err: unknown): string {
 
 /** Ignore keeps a row out of bulk delete until it changes; the row's Stop ignoring undoes it. */
 export function useWorkspaceCleanupIgnore(setSelectedIds: Dispatch<SetStateAction<Set<string>>>): {
-  ignoreCandidate: (candidate: WorkspaceCleanupCandidate) => void
-  restoreCandidate: (candidate: WorkspaceCleanupCandidate) => void
+  /** Resolve true once the change is recorded, so callers can react after it is visible. */
+  ignoreCandidate: (candidate: WorkspaceCleanupCandidate) => Promise<boolean>
+  restoreCandidate: (candidate: WorkspaceCleanupCandidate) => Promise<boolean>
 } {
   const dismissCandidates = useAppStore((s) => s.dismissWorkspaceCleanupCandidates)
   const restoreCandidates = useAppStore((s) => s.restoreWorkspaceCleanupCandidates)
@@ -21,26 +22,29 @@ export function useWorkspaceCleanupIgnore(setSelectedIds: Dispatch<SetStateActio
 
   const restoreCandidate = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
-      void restoreCandidates([candidate]).catch((err: unknown) => {
-        if (!mountedRef.current) {
-          return
-        }
-        toast.error(
-          translate(
-            'components.workspace.cleanup.browse.restoreFailed',
-            'Could not stop ignoring {{value0}}',
-            { value0: candidate.displayName }
-          ),
-          { description: describeError(err) }
-        )
-      })
+      return restoreCandidates([candidate])
+        .then(() => true)
+        .catch((err: unknown) => {
+          if (!mountedRef.current) {
+            return false
+          }
+          toast.error(
+            translate(
+              'components.workspace.cleanup.browse.restoreFailed',
+              'Could not stop ignoring {{value0}}',
+              { value0: candidate.displayName }
+            ),
+            { description: describeError(err) }
+          )
+          return false
+        })
     },
     [mountedRef, restoreCandidates]
   )
 
   const ignoreCandidate = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
-      void dismissCandidates([candidate])
+      return dismissCandidates([candidate])
         .then(() => {
           if (mountedRef.current) {
             setSelectedIds((current) => {
@@ -49,6 +53,7 @@ export function useWorkspaceCleanupIgnore(setSelectedIds: Dispatch<SetStateActio
               return next
             })
           }
+          return true
         })
         .catch((err: unknown) => {
           if (mountedRef.current) {
@@ -60,6 +65,7 @@ export function useWorkspaceCleanupIgnore(setSelectedIds: Dispatch<SetStateActio
               { description: describeError(err) }
             )
           }
+          return false
         })
     },
     [dismissCandidates, mountedRef, setSelectedIds]

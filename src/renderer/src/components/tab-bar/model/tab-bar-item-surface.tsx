@@ -11,6 +11,7 @@ import type { TabBarProps } from '../tab-bar-props'
 import type { TabBarRuntimeModel } from './use-tab-bar-runtime-model'
 import type { TabBarItemActions } from './use-tab-bar-item-actions'
 import TabBarItemRow from './TabBarItemRow'
+import { TAB_STRIP_WINDOW_SLOT_PX, type TabStripSegment } from '../strip/tab-strip-window'
 
 export type TabBarItemSurfaceProps = Pick<
   TabBarProps,
@@ -43,9 +44,12 @@ export function renderTabBarItems({
   actions,
   dropIndicatorByVisibleId,
   includeTopTabBorder,
-  activeClientHostedBrowserRowId
+  activeClientHostedBrowserRowId,
+  segments
 }: {
   items: TabBarItem[]
+  /** Mounted runs of `items`; gaps render as fixed-width spacers. */
+  segments: readonly TabStripSegment[]
   props: TabBarItemSurfaceProps
   runtime: TabBarItemSurfaceRuntime
   actions: TabBarItemActions
@@ -97,7 +101,7 @@ export function renderTabBarItems({
     return (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id
   }
 
-  return items.map((item, index) => {
+  function renderRow(item: TabBarItem, index: number): React.ReactNode {
     let canToggleViewMode = false
     let isChatView = false
     let viewModeTabId: string | undefined
@@ -147,5 +151,27 @@ export function renderTabBarItems({
         }
       />
     )
-  })
+  }
+
+  const rows: React.ReactNode[] = []
+  for (const segment of segments) {
+    if (segment.kind === 'gap') {
+      rows.push(
+        <div
+          key={`tab-strip-gap-${segment.start}`}
+          aria-hidden
+          data-tab-strip-gap=""
+          data-tab-strip-gap-start={segment.start}
+          data-tab-strip-gap-end={segment.end}
+          className="flex-none"
+          style={{ width: (segment.end - segment.start) * TAB_STRIP_WINDOW_SLOT_PX }}
+        />
+      )
+      continue
+    }
+    for (let index = segment.start; index < segment.end; index++) {
+      rows.push(renderRow(items[index], index))
+    }
+  }
+  return rows
 }

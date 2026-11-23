@@ -2,6 +2,7 @@ import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/comp
 import { usePRCheckRefreshOwner } from '@/lib/work-items/github/use-pr-check-refresh-owner'
 import { getChecksTabSummaryPresentation } from '@/components/github-item-dialog/inspect-pull-request/checks-tab-summary'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
@@ -133,14 +134,15 @@ export function ChecksTab({
   )
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   // Why: the fix agent runs on the repo's execution host, so its OS decides quoting (#27971).
   const fixChecksLaunchPlatform = useMemo(() => {
     if (!repo) {
       return undefined
     }
     const fact = resolveRepoExecutionHostPlatform(
-      { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },
+      { sshConnectionStates, sshStateByEnvironment },
+      runtimeStatusByEnvironmentId,
       repo,
       () =>
         getLocalRepoProjectExecutionRuntimeContext(
@@ -173,17 +175,8 @@ export function ChecksTab({
   const sorted = sortChecksBySeverity(list)
   const failedChecks = getBrokenChecks(list)
   const counts = getCheckCounts(list)
-  const overallCounts = getOverallCheckCounts(
-    list,
-    checkOwner,
-    resolvedChecksState.checkObservationOwner
-  )
-  const summaryLabel = getChecksSummaryLabel(
-    list,
-    checkOwner,
-    resolvedChecksState.checkObservationOwner,
-    t
-  )
+  const overallCounts = getOverallCheckCounts(list, checkOwner)
+  const summaryLabel = getChecksSummaryLabel(list, checkOwner, t)
   const { SummaryIcon, summaryColor } = getChecksTabSummaryPresentation(overallCounts)
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
 
