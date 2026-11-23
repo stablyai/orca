@@ -239,9 +239,17 @@ export function forgetNegativeCapabilityForLivePty(ptyId: string): boolean {
 export function settleUnansweredRevivedCapability(ptyIds: Iterable<string>): void {
   for (const id of ptyIds) {
     if (capabilityStillAwaited(id)) {
-      authoritativeSnapshotByPtyId.set(id, false)
+      settleCapabilityAnswer(id, false)
     }
   }
+  refreshEarliestUnknownCapabilityRetry()
+}
+
+// An answer ends any unknown retry for the id; a stale deadline would keep the inventory loop waking for nothing.
+function settleCapabilityAnswer(ptyId: string, authoritative: boolean): void {
+  authoritativeSnapshotByPtyId.set(ptyId, authoritative)
+  unknownCapabilityRetryAtByPtyId.delete(ptyId)
+  unknownCapabilityAttemptsByPtyId.delete(ptyId)
 }
 
 export function capabilityStillAwaited(ptyId: string): boolean {
@@ -262,12 +270,10 @@ export function recordRevivedCapabilityAnswers(resolved: readonly SnapshotCapabi
     if (authoritative) {
       changed.push(id)
     }
-    authoritativeSnapshotByPtyId.set(id, authoritative)
-    unknownCapabilityRetryAtByPtyId.delete(id)
-    unknownCapabilityAttemptsByPtyId.delete(id)
+    settleCapabilityAnswer(id, authoritative)
   }
+  refreshEarliestUnknownCapabilityRetry()
   if (changed.length > 0) {
-    refreshEarliestUnknownCapabilityRetry()
     publishTerminalProviderCapabilityChange(new Set(changed))
   }
   return changed
