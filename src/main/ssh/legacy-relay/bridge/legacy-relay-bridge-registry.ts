@@ -15,7 +15,7 @@ import type { SshConnection } from '../../connection/ssh-connection'
 import { waitForSentinel } from '../handshake/ssh-relay-sentinel'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { LegacyRelayClient } from './legacy-relay-client'
-import { createLegacyRelayCliServer } from '../cli/legacy-relay-cli-server'
+import { createLazyLegacyRelayCliServer } from './lazy-legacy-relay-cli-server'
 import { listLegacyRelayEndpoints, posixEndpointExited } from '../endpoints/legacy-relay-endpoints'
 import { LegacyRelayTargetBridge } from './legacy-relay-target-bridge'
 import { LegacyRelayHiddenOutput } from './legacy-relay-hidden-output'
@@ -116,7 +116,7 @@ function bridgeFor(targetId: string): LegacyRelayTargetBridge | null {
   const channels = legacyRelayChannels.for(targetId, () => installed.connection(targetId))
   const remoteCli = installed.remoteCli
   const cliServer = remoteCli
-    ? createLegacyRelayCliServer({
+    ? createLazyLegacyRelayCliServer({
         targetId,
         runtime: remoteCli.runtime,
         remoteCliControl: () => remoteCli.allowed(targetId),

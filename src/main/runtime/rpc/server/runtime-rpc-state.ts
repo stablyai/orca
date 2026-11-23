@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import type { RuntimeTransportMetadata } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
-import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
+import { DEFAULT_RPC_DISPATCHER_METHODS } from '../methods/lazy-rpc-method-groups'
 import type { RpcTransport } from '../transport'
 import type { WebSocket } from 'ws'
 import type { DeviceRegistry } from './pairing/device-registry'
@@ -139,7 +139,10 @@ export class RuntimeRpcState {
     methods
   }: OrcaRuntimeRpcServerOptions) {
     this.runtime = runtime
-    this.dispatcher = new RpcDispatcher({ runtime, methods: methods ?? ALL_RPC_METHODS })
+    this.dispatcher = new RpcDispatcher({
+      runtime,
+      ...(methods ? { methods } : DEFAULT_RPC_DISPATCHER_METHODS)
+    })
     this.userDataPath = userDataPath
     this.pid = pid
     this.platform = platform

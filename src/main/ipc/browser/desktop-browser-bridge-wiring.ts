@@ -29,7 +29,7 @@ import { executeDesktopBrowserBridgeRequest } from '../../browser/desktop-browse
 import { rendererResolveRemoteCliWorkspace } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-renderer-scope'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
-import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
+import type { LazyRpcMethodGroup } from '../../runtime/rpc/methods/lazy-rpc-method-groups'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
@@ -113,10 +113,18 @@ export function installDesktopBrowserBridge(options: {
   registerDesktopBrowserBridgeHostControlIpc(hostControlDeps)
   let dispatcher: RpcDispatcher | null = null
   const getDispatcher = (): RpcDispatcher => {
+    const bridgeLoader: LazyRpcMethodGroup = {
+      matches: (name) => isDesktopBrowserBridgeMethod(name),
+      load: async () =>
+        (await import('../../runtime/rpc/methods/browser-rpc-methods')).BROWSER_RPC_METHODS.filter(
+          (method) => isDesktopBrowserBridgeMethod(method.name)
+        )
+    }
     dispatcher ??= new RpcDispatcher({
       runtime,
       // Restrict the registry even if an upstream caller misroutes a method.
-      methods: ALL_RPC_METHODS.filter((method) => isDesktopBrowserBridgeMethod(method.name)),
+      methods: [],
+      lazyMethodLoaders: [bridgeLoader],
       callerScope: { kind: 'runtime-paired', grants: [] }
     })
     return dispatcher

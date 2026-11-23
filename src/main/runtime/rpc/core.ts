@@ -283,7 +283,7 @@ export type RpcAnyMethodDeclaration = RpcMethodDeclaration | RpcStreamingMethodD
 // The erased registry accepts unknown; the dispatcher always parses before invoking handlers.
 export type RpcMethod = RpcMethodWithParams<unknown>
 export type RpcStreamingMethod = RpcStreamingMethodWithParams<unknown>
-type RpcAnyMethod = RpcMethod | RpcStreamingMethod
+export type RpcAnyMethod = RpcMethod | RpcStreamingMethod
 
 // Erasure drops params types while preserving one-shot versus streaming dispatch.
 export function eraseRpcMethods(methods: readonly RpcMethodDeclaration[]): readonly RpcMethod[]
@@ -311,10 +311,16 @@ export function isStreamingMethod(method: RpcAnyMethod): method is RpcStreamingM
 
 export type RpcRegistry = ReadonlyMap<string, RpcAnyMethod>
 
-export function buildRegistry(methods: readonly RpcAnyMethodDeclaration[]): RpcRegistry {
-  const registry = new Map<string, RpcAnyMethod>()
+export function appendMethodsToRegistry(
+  registry: Map<string, RpcAnyMethod>,
+  methods: readonly RpcAnyMethodDeclaration[],
+  options?: { ignoreDuplicates?: boolean }
+): void {
   for (const method of eraseRpcMethods(methods)) {
     if (registry.has(method.name)) {
+      if (options?.ignoreDuplicates) {
+        continue
+      }
       throw new Error(`duplicate_rpc_method:${method.name}`)
     }
     // No orchestration method exists without its access check.
@@ -323,6 +329,11 @@ export function buildRegistry(methods: readonly RpcAnyMethodDeclaration[]): RpcR
     }
     registry.set(method.name, method)
   }
+}
+
+export function buildRegistry(methods: readonly RpcAnyMethodDeclaration[]): RpcRegistry {
+  const registry = new Map<string, RpcAnyMethod>()
+  appendMethodsToRegistry(registry, methods)
   return registry
 }
 

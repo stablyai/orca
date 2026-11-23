@@ -45,7 +45,6 @@ import { PluginStatusBarState } from '../../plugins/status-bar/plugin-status-bar
 import { createDesktopPluginAppearance } from '../../plugins/appearance/desktop-plugin-appearance'
 import { bindPluginEditorTypography } from '../../plugins/appearance/plugin-editor-typography'
 import { bindDesktopPluginNotices } from './desktop-plugin-notices'
-import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
 import { getActiveTeamCapabilities } from '../../orca-profiles/cloud-auth/active-team-capabilities'
 import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import { watchTeamPluginPolicy } from './team-plugin-policy-reconciliation'
@@ -261,7 +260,7 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     }
   })
   // Bound here, not in the IPC handlers: a headless serve never opens a window to register them.
-  const pluginDelegate = bindPluginRuntime(pluginService, runtime, agentHookServer, ALL_RPC_METHODS)
+  const pluginDelegate = bindPluginRuntime(pluginService, runtime, agentHookServer)
   bindPluginRpcServices(store, pluginService, {
     marketplace: core.pluginMarketplaceService,
     installer: core.pluginMarketplaceInstaller
