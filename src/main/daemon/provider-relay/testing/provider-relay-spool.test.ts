@@ -41,6 +41,7 @@ describe('provider relay spool', () => {
     await spool.detach()
     expect(spool.drained).toBe(true)
     expect(existsSync(path)).toBe(false)
+    await spool.dispose()
   })
 
   it('replays a detached line longer than a read chunk intact, multibyte characters included', async () => {
@@ -57,6 +58,7 @@ describe('provider relay spool', () => {
     await spool.detach()
     await spool.attach(0)
     expect(delivered).toEqual(['before', long, 'after'])
+    await spool.dispose()
   })
 
   it('keeps detached lines in memory when the spool file cannot be written, losing none', async () => {
@@ -73,6 +75,7 @@ describe('provider relay spool', () => {
     await spool.detach()
     await spool.attach(0)
     expect(delivered).toEqual([1, 2, 3])
+    await spool.dispose()
   })
 
   it('pauses the agent at the detached cap and resumes once a client attaches, never dropping a line', async () => {
@@ -93,5 +96,6 @@ describe('provider relay spool', () => {
     spool.ack(5)
     await spool.detach()
     expect(pressure).toEqual([true, false])
+    await spool.dispose()
   })
 })

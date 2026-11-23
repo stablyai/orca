@@ -78,6 +78,7 @@ describe('provider relay pending requests', () => {
       '{"type":"control_response","response":{"subtype":"success","request_id":"perm-1"}}\n'
     )
     expect(relay.info().pendingCount).toBe(0)
+    await relay.dispose()
   })
 
   it('pauses an agent owed 256 answers, and still drains its tail once it exits', async () => {
@@ -105,6 +106,7 @@ describe('provider relay pending requests', () => {
     }
     await tick()
     expect(stdout.isPaused()).toBe(false)
+    await relay.dispose()
   })
 
   it('pauses the agent once a megabyte sits unacked, and resumes once acked', async () => {
@@ -125,6 +127,7 @@ describe('provider relay pending requests', () => {
     expect(stdout.isPaused()).toBe(true)
     relay.ack(relay.info().nextSeq - 1)
     expect(stdout.isPaused()).toBe(false)
+    await relay.dispose()
   })
 
   it('detects a held request whose line spilled to disk once it is stitched back', async () => {
@@ -145,5 +148,6 @@ describe('provider relay pending requests', () => {
     }
     await vi.waitFor(() => expect(relay.info().pendingCount).toBe(1))
     expect(relay.info().nextSeq).toBe(2)
+    await relay.dispose()
   })
 })
