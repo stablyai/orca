@@ -247,10 +247,6 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
     await writeTrackedSnapshot(tracker, []).catch((error: unknown) =>
       console.warn('[browser-session-cookies] Save failed:', error)
     )
-    // Quit or a retirement may have started meanwhile: its own write must not queue behind a read.
-    if (quitting || trackers.get(tracker.filePath) !== tracker) {
-      return
-    }
   }
   if (!canSealSessionCookies()) {
     return
@@ -291,15 +287,19 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
 /** Sites that rotate a session cookie's value need no CDP read; anything else does, a few at a time. */
 async function readSessionCookies(tracker: SessionCookieTracker): Promise<CdpCookie[] | null> {
   const updated = await withCookieMutationLock(tracker.target, async () =>
-    savedCookiesAfterChanges(
-      tracker.saved,
-      tracker.changedScopes,
-      await tracker.target.cookies.get({ session: true })
-    )
+    // Quit or a retirement may have started meanwhile (a failed removal, the lock): its write
+    // must not queue behind this read.
+    quitting || trackers.get(tracker.filePath) !== tracker
+      ? null
+      : savedCookiesAfterChanges(
+          tracker.saved,
+          tracker.changedScopes,
+          await tracker.target.cookies.get({ session: true })
+        )
   )
   // After a clear of a file this launch couldn't read, changes went unrecorded: read it all.
-  if (updated.certain && !tracker.fullRead) {
-    return updated.cookies
+  if (!updated || (updated.certain && !tracker.fullRead)) {
+    return updated?.cookies ?? null
   }
   // Why the slot before the lock: a queued save must not hold its profile's imports and clears.
   const release = await helperTargetSlots.acquire(SAVE_PRIORITY)

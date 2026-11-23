@@ -342,6 +342,34 @@ describe('session cookie snapshot that a launch could not read', () => {
     }
   })
 
+  it('quit makes the last removal without waiting on a retry queued behind the cookie lock', async () => {
+    const { jar, target, clear, restore } = await savedButUnread()
+    io.rmFailures = 1
+    await expect(clear.clearBrowserCookieJar(target)).rejects.toThrow('EBUSY')
+    const { withCookieMutationLock } = await import('../mutation/cookie-mutation-lock')
+    let releaseLock = () => {}
+    // An import holds the jar's cookie lock, so the timer's retry waits for it after its failed removal.
+    const held = withCookieMutationLock(
+      target,
+      () => new Promise<void>((resolve) => (releaseLock = resolve))
+    )
+    io.rmFailures = 1
+    await vi.advanceTimersByTimeAsync(30_000)
+    await settle()
+    const releaseReads = jar.holdReads()
+    const quit = restore.flushBrowserSessionCookiesOnQuit()
+    releaseLock()
+    await held
+
+    try {
+      // Settles with every jar read still held.
+      await quit
+      expect(existsSync(snapshotFile())).toBe(false)
+    } finally {
+      releaseReads()
+    }
+  })
+
   it('a full clear whose removal failed gets one last try at quit', async () => {
     const { target, clear, restore } = await savedButUnread()
     io.rmFailures = 1
