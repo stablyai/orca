@@ -151,7 +151,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       return
     }
     const now = Date.now()
-    // Persist authority changes immediately to preserve spool replay filtering after a crash.
+    // Authority and lead-turn edges save at once: spool replay filtering and reattach restore read them after a crash.
     const urgent = this.currentAuthorityFingerprint() !== this.lastPersistedAuthorityFingerprint
     // A wall-clock rollback must not defer persistence indefinitely.
     const throttledAt = urgent
@@ -298,9 +298,9 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     return this.statusStore
   }
 
-  /** Revision counters and live tokens avoid per-event hashing or serialization. */
+  /** Revision counters (authority and lead-turn edges) avoid per-event hashing or serialization. */
   protected currentAuthorityFingerprint(): string {
-    return `${this.hydratedLaunchTokenHashByPaneKey.revision}:${this.persistedAuthorityCommitmentsByPaneKey.revision}:${this.statusAuthorityRevision}`
+    return `${this.hydratedLaunchTokenHashByPaneKey.revision}:${this.persistedAuthorityCommitmentsByPaneKey.revision}:${this.statusUrgentSaveRevision}`
   }
 
   private cancelStatusPersistTimer(): void {

@@ -13,7 +13,7 @@ import {
   restoredTerminalTailSeedAllowed
 } from './tail/terminal-tail-restore-seed'
 
-import { hookLeadTurnState } from '../wait/tui-idle-hook-lane'
+import { hookLeadTurnState } from '../../../../shared/agent-status/lifecycle/hook-lead-turn-state'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { restoreFromReattachedReadyScreen } from '../wait/reattached-ready-screen'
 import {
