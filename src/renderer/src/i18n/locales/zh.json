@@ -29554,6 +29554,21 @@
         "openInSlack": "在 Slack 中给它发消息",
         "cancel": "取消"
       },
+      "problem": {
+        "reconnecting": "正在等待 {{host}} 重新连接…",
+        "reconnectingNext": "{{host}} 恢复后，Slack 设置会自动重新开始。你无需从头开始，也无需粘贴令牌",
+        "offline": "Orca 无法连接到 {{host}}",
+        "offlineNext": "请确认 {{host}} 上的 Orca 正在运行，然后重新连接。{{host}} 恢复后，Slack 设置会重新开始",
+        "otherUser": "另一个 Slack 账号批准了此连接",
+        "otherUserNext": "登录了另一个 Slack 账号的人批准了 Slack 链接，因此 {{bot}} 无法以你的身份操作。请获取新链接，并在登录你自己的 Slack 账号后批准",
+        "expired": "Slack 链接在连接获得批准前已过期",
+        "expiredNext": "请获取新链接，并在 Slack 中批准此连接",
+        "tokenRejected": "Slack 拒绝了此工作区的令牌",
+        "tokenRejectedNext": "这通常发生在 Slack 应用被移除或令牌被撤销之后。请更换令牌，重新设置 {{bot}}",
+        "reconnect": "重新连接",
+        "replaceToken": "更换令牌",
+        "details": "详细信息"
+      },
       "connection": {
         "appSettings": "Slack 应用设置",
         "removeNote": "移除后，它将不再接收来自 Slack 的新工作。这不会删除 Slack 中的应用",
