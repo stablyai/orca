@@ -6234,14 +6234,12 @@
           "cloneFolderNotEmpty": "이 폴더에 \"{{value0}}\"이(가) 이미 있으므로 이 클론에는 별도의 폴더가 필요합니다."
         },
         "AutoRenameFailedDialog": {
-          "dismissing": "닫는 중…",
           "aed1623b1e": "닫기",
           "eab8b45238": "오류 복사",
           "a23b22d16f": "복사됨",
           "74fc00776f": "오류 세부정보",
           "ca3b225195": "브랜치 자동 이름 지정에 실패했습니다.",
           "couldNotGenerateBranchName": "Orca에서 첫 번째 에이전트 메시지를 바탕으로 <name>{{name}}</name>의 브랜치 이름을 생성하지 못했습니다.",
-          "dismiss": "닫기",
           "tryAgain": "다시 시도",
           "namingBranch": "브랜치 이름 짓는 중…",
           "errorDetailsAt": "오류 상세 · {{time}}",

@@ -12809,8 +12809,7 @@
           "a23b22d16f": "Copiado",
           "74fc00776f": "Detalhes do erro",
           "ca3b225195": "Falha na renomeação automática da branch",
-          "couldNotGenerateBranchName": "O Orca não conseguiu gerar um nome de branch para <name>{{name}}</name> a partir da primeira mensagem do agente.",
-          "dismissing": "Descartando…"
+          "couldNotGenerateBranchName": "O Orca não conseguiu gerar um nome de branch para <name>{{name}}</name> a partir da primeira mensagem do agente."
         },
         "CreateProjectLocationField": {
           "95548e33bf": "Escolher pasta pai...",

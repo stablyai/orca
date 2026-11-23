@@ -7215,14 +7215,12 @@
           "cloneFolderNotEmpty": "\"{{value0}}\" already exists in this folder, so this clone needs its own folder."
         },
         "AutoRenameFailedDialog": {
-          "dismissing": "Dismissing…",
           "aed1623b1e": "Close",
           "eab8b45238": "Copy error",
           "a23b22d16f": "Copied",
           "74fc00776f": "Error details",
           "ca3b225195": "Branch auto-name failed",
           "couldNotGenerateBranchName": "Orca couldn't generate a branch name for <name>{{name}}</name> from the first agent message.",
-          "dismiss": "Dismiss",
           "tryAgain": "Try again",
           "namingBranch": "Naming branch…",
           "errorDetailsAt": "Error details · {{time}}",
