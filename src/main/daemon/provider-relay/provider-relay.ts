@@ -44,8 +44,8 @@ export class ProviderRelay {
   private spoolPaused = false
   private readingPaused = false
   private failure: ProviderRelayFailure | null = null
-  /** An outcome nobody attached to see yet is kept, so a quick exit can still be read. */
-  private collected = false
+  /** The relay is kept until a client was actually sent its exit, so no outcome goes unseen. */
+  private exitDelivered = false
 
   constructor(private readonly options: RelayOptions) {
     this.relayId = options.relayId
@@ -106,9 +106,9 @@ export class ProviderRelay {
     return this.attachment?.clientId ?? null
   }
 
-  /** Ended, seen by a client and fully acked: nothing left that a client could still need. */
+  /** Ended, its exit sent to a client and fully acked: nothing left that a client could still need. */
   get finished(): boolean {
-    return this.collected && this.exitStatus !== null && this.stdoutEnded && this.spool.drained
+    return this.exitDelivered && this.stdoutEnded && this.spool.drained
   }
 
   async attach(
@@ -153,8 +153,6 @@ export class ProviderRelay {
     if (this.exitAnnounced) {
       this.sendExit()
     }
-    // Only a finished attach counts as seeing the outcome, so an exit during it can't remove the relay.
-    this.collected = true
     return this.attachResult(replayThroughSeq, pending, initializeResult !== null)
   }
 
@@ -310,11 +308,12 @@ export class ProviderRelay {
   }
 
   private sendExit(): void {
-    this.attachment?.send({
+    const sent = this.attachment?.send({
       type: 'event',
       event: 'relayExit',
       sessionId: this.relayId,
       payload: this.exitStatus
     })
+    this.exitDelivered ||= sent === true
   }
 }

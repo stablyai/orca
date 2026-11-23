@@ -42,6 +42,17 @@ export class SpoolFileIndex {
     this.lastSeq = kept.at(-2) ?? 0
   }
 
+  /** How many records after `seq` the file must still hold whole. */
+  countAfter(seq: number): number {
+    let count = 0
+    for (let at = this.head; at < this.entries.length; at += 2) {
+      if (this.entries[at] > seq) {
+        count++
+      }
+    }
+    return count
+  }
+
   clear(): void {
     this.entries = []
     this.head = 0

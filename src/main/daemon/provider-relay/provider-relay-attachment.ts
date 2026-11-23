@@ -49,11 +49,14 @@ export class ProviderRelayAttachment {
     }
   }
 
-  send(event: unknown): void {
+  /** True when the event was handed to the client's socket. */
+  send(event: unknown): boolean {
     const { socket, framing } = this.stream
-    if (!this.released && !socket.destroyed) {
-      socket.write(streamFramesFor(framing).control(event))
+    if (this.released || socket.destroyed) {
+      return false
     }
+    socket.write(streamFramesFor(framing).control(event))
+    return true
   }
 
   sendLine(event: ProviderRelayLineEvent, { seq, line }: ProviderRelayRecord): void {

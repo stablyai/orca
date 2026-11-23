@@ -146,7 +146,7 @@ export class ProviderRelaySpool {
         ? await replaySpoolFileRecords({
             path: this.options.path,
             after,
-            fileLast,
+            expected: this.fileIndex.countAfter(after),
             current,
             deliver: this.options.deliver,
             drained: this.options.drained
@@ -187,7 +187,8 @@ export class ProviderRelaySpool {
     }
     this.mode = 'attached'
     this.updatePressure()
-    return this.nextSeqValue - 1
+    // The last seq this attach really sent; a lost file's records are not claimed.
+    return after
   }
 
   /** A takeover holds live records back until its own replay, so none reaches the new client twice. */
