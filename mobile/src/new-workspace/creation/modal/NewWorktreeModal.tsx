@@ -32,6 +32,7 @@ import {
 } from '../forms/new-worktree-modal-types'
 import {
   buildNewWorkspaceProjectOptions,
+  orderNewWorkspaceProjectsByIds,
   orderNewWorkspaceProjectsByRecentActivity,
   buildNewWorkspaceRunTargetOptions,
   getNewWorkspaceRunTarget
@@ -239,24 +240,25 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
       })),
     [hostRepos]
   )
-  // Why: ordered from the projects and activity read as the picker opens, so rows don't shuffle under a finger as they update.
+  // Why: the order is read as the picker opens and then held, so rows don't shuffle under a finger as the lists update.
   const projectDrawerOpen = navigation.drawerView === 'project'
   const [wasProjectDrawerOpen, setWasProjectDrawerOpen] = useState(false)
-  const [orderBasis, setOrderBasis] = useState({ repos, activity: projectActivity })
+  const [projectOrder, setProjectOrder] = useState<readonly string[]>([])
   if (projectDrawerOpen !== wasProjectDrawerOpen) {
     setWasProjectDrawerOpen(projectDrawerOpen)
     if (projectDrawerOpen) {
-      setOrderBasis({ repos, activity: projectActivity })
+      setProjectOrder(
+        orderNewWorkspaceProjectsByRecentActivity(
+          buildNewWorkspaceProjectOptions(repos),
+          repos,
+          projectActivity ?? []
+        ).map((project) => project.id)
+      )
     }
   }
   const projectPickerItems = useMemo(
-    () =>
-      orderNewWorkspaceProjectsByRecentActivity(
-        buildNewWorkspaceProjectOptions(repos),
-        orderBasis.repos,
-        orderBasis.activity ?? []
-      ),
-    [orderBasis, repos, t]
+    () => orderNewWorkspaceProjectsByIds(buildNewWorkspaceProjectOptions(repos), projectOrder),
+    [projectOrder, repos, t]
   )
   const selectedProjectId = selectedRepo ? getProjectIdentityKey(selectedRepo) : null
   const selectedProject =

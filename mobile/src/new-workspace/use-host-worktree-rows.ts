@@ -10,7 +10,10 @@ import {
 } from '../host-screen/catalog/host-list-queries'
 import { relaysToServers } from '../worktree/execution-hosts/execution-host-scoped-rpc-client'
 
-type WorktreeRow = Pick<Worktree, 'path' | 'repoId' | 'branch' | 'lastActivityAt' | 'isArchived'>
+type WorktreeRow = Pick<
+  Worktree,
+  'path' | 'repoId' | 'branch' | 'hostId' | 'lastActivityAt' | 'isArchived'
+>
 
 const NO_ROWS: readonly WorktreeRow[] = []
 
