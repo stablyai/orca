@@ -49,6 +49,19 @@ describe('parsePluginGitInstallInput', () => {
     })
   })
 
+  it('reads a GitHub blob page as the repository, like GitLab', () => {
+    expect(parsePluginGitInstallInput('https://github.com/o/r/blob/main/README.md')).toEqual({
+      ok: true,
+      url: 'https://github.com/o/r',
+      ref: ''
+    })
+    expect(parsePluginGitInstallInput('https://github.com/o/r/blob/main/sub/dir/file.md')).toEqual({
+      ok: true,
+      url: 'https://github.com/o/r',
+      ref: ''
+    })
+  })
+
   it('reads a GitLab subgroup project named like a page kind', () => {
     expect(parsePluginGitInstallInput('https://gitlab.com/g/sub/releases/-/tree/main')).toEqual({
       ok: true,

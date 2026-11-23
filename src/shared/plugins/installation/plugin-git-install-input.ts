@@ -140,7 +140,7 @@ function readsPastGitLabMarker(hostname: string): boolean {
   return provider === 'github' || provider === 'gitea'
 }
 
-/** GitHub: /owner/repo/tree/<ref>; Gitea/Forgejo/Codeberg: /owner/repo/src/{branch,tag,commit}/<ref>. */
+/** GitHub: /owner/repo/{tree,commit}/<ref> and /blob/ pages; Gitea/Forgejo/Codeberg: /owner/repo/src/{branch,tag,commit}/<ref>. */
 function ownerRepoPageRef(
   segments: string[],
   hostname: string
@@ -148,6 +148,10 @@ function ownerRepoPageRef(
   const [kind, ...rest] = segments.slice(2)
   if (kind === 'tree' || kind === 'commit') {
     return { repositoryLength: 2, ref: decodeRef(rest) }
+  }
+  // Why no ref: a blob path mixes the ref and the file path, so only the repository is safe to read.
+  if (kind === 'blob') {
+    return { repositoryLength: 2, ref: '' }
   }
   if (
     kind === 'src' &&
