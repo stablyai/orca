@@ -7,14 +7,18 @@ import '../../../../../shared/new-workspace/new-workspace-dialog-repo'
 import { getProjectIdentityKey } from '../../../../../shared/project/host-setup/project-host-setup-projection'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
+  getOrcadSshDeployment,
   isEphemeralVmRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
 } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { isRepoHidden } from '../../../../../shared/project/catalog/hidden-projects'
 
-type RuntimeEnvironmentSource = Pick<PublicKnownRuntimeEnvironment, 'id' | 'source'>
+type RuntimeEnvironmentSource = Pick<
+  PublicKnownRuntimeEnvironment,
+  'id' | 'source' | 'orcadDeployment'
+>
 
-/** Per-workspace runtimes come in two kinds: runtime-owned SSH targets and ephemeral-VM Orca servers. */
+/** Per-workspace runtimes: runtime-owned SSH targets, and a recipe VM's Orca server, paired or deployed over its SSH target. */
 function isPerWorkspaceRuntimeRepo(
   repo: Repo,
   runtimeEnvironments: readonly RuntimeEnvironmentSource[]
@@ -27,7 +31,14 @@ function isPerWorkspaceRuntimeRepo(
     return false
   }
   const environment = runtimeEnvironments.find((entry) => entry.id === host.environmentId)
-  return environment ? isEphemeralVmRuntimeEnvironment(environment) : false
+  if (!environment) {
+    return false
+  }
+  // Why: the server Orca deploys over a recipe VM's SSH target is saved without the ephemeral-vm source.
+  return (
+    isEphemeralVmRuntimeEnvironment(environment) ||
+    isRuntimeOwnedSshTargetId(getOrcadSshDeployment(environment)?.sshTargetId)
+  )
 }
 
 /** Map hidden per-workspace-runtime repos to their visible project sibling so composer selection cannot fall back to another project. */
