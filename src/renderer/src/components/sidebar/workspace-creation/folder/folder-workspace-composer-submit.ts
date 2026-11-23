@@ -1,8 +1,5 @@
 import { toast } from 'sonner'
-import {
-  buildFolderWorkspaceStartupPayload,
-  buildFolderWorkspaceHostStartupPayload
-} from './folder-workspace-startup-payload'
+import * as startupPayload from './folder-workspace-startup-payload'
 import { reviewSetupTrustMismatch } from '@/store/slices/worktrees/create/created-worktree-setup-trust'
 import { projectGroupHookTrustKey } from '../../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
@@ -16,10 +13,7 @@ import '@/diagnostics/telemetry/telemetry'
 import { activateAndRevealFolderWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import './folder-workspace-source-repos'
-import {
-  resolveFolderWorkspaceName,
-  toFolderWorkspaceLinkedTask
-} from './folder-workspace-source-selection'
+import * as folderSource from './folder-workspace-source-selection'
 import {
   planAgentSessionLaunch,
   adoptAgentSessionLaunchVerdict
@@ -75,7 +69,7 @@ export async function submitFolderWorkspaceCreate({
   const chatSessionOptions = launchInputs
     ? launchInputs.chatSessionOptions
     : requestedChatSessionOptions
-  const workspaceName = resolveFolderWorkspaceName({
+  const workspaceName = folderSource.resolveFolderWorkspaceName({
     projectGroup,
     name,
     lastAutoName,
@@ -206,7 +200,7 @@ export async function submitFolderWorkspaceCreate({
     ...(setupSupported ? setupApproval : {}),
     ...(setupSupported && structuredLaunch ? { agentLaunchMode: 'structured' as const } : {}),
     ...(hostStartsTerminal
-      ? buildFolderWorkspaceHostStartupPayload({
+      ? startupPayload.buildFolderWorkspaceHostStartupPayload({
           quickAgent,
           note,
           launchDraftPrompt,
@@ -219,7 +213,7 @@ export async function submitFolderWorkspaceCreate({
     name: workspaceName,
     // Retain the SSH target even when another host owns the focused runtime.
     connectionId: projectGroup.connectionId ?? null,
-    linkedTask: toFolderWorkspaceLinkedTask(linkedWorkItem),
+    linkedTask: folderSource.toFolderWorkspaceLinkedTask(linkedWorkItem),
     ...(linkedTaskSourceContext ? { linkedTaskSourceContext } : {}),
     ...(quickAgent ? { createdWithAgent: quickAgent } : {}),
     ...(pendingFirstAgentMessageRename ? { pendingFirstAgentMessageRename: true } : {})
@@ -239,7 +233,7 @@ export async function submitFolderWorkspaceCreate({
   )
   const launchFailed = isCancelled()
 
-  const startup = buildFolderWorkspaceStartupPayload({
+  const startup = startupPayload.buildFolderWorkspaceStartupPayload({
     quickAgent,
     startupPlan,
     launchInputs,
