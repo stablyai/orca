@@ -58,6 +58,10 @@ export abstract class SessionProcessInspection {
     return this._outputChunks
   }
 
+  get shellPath(): string | undefined {
+    return this.subprocess.shellPath
+  }
+
   get inputWrites(): number {
     return this._inputWrites
   }

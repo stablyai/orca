@@ -26,6 +26,8 @@ import { steadyPollJudgesByJobMembership } from '../../providers/pty/process-ins
 const WINDOWS_FOREGROUND_REFRESH_SETTLE_MS = 1_000
 /** Longer than a cached census can lag: its 500 ms reuse window plus a slow scan. */
 const WINDOWS_IDLE_PROOF_QUIET_MS = 5_000
+/** Any `bin\\bash.exe`, without touching the disk; a direct MSYS bash just keeps its slow re-check too. */
+const MAY_BE_GIT_BASH_LAUNCHER = /(?:^|[\\/])bin[\\/]bash\.exe$/i
 
 export type TerminalHostProcessInspection = {
   foregroundObservation?: TerminalForegroundObservation
@@ -171,6 +173,8 @@ export async function inspectTerminalHostProcess(args: {
       childProcessEvidence === 'no-children' &&
       foregroundProcess !== null &&
       isShellProcess(foregroundProcess) &&
+      // The Git Bash launcher's census accepts any bash chain, so a nested bash at work reads as idle there.
+      !MAY_BE_GIT_BASH_LAUNCHER.test(session.shellPath ?? '') &&
       paneActivity(session) === activity &&
       readStartedAt - session.lastActivityAt > WINDOWS_IDLE_PROOF_QUIET_MS
     // Windows cannot provide this POSIX evidence; avoid spawning an MSYS ps.exe console.

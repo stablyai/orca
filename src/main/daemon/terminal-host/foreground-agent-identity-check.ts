@@ -1,4 +1,6 @@
-import { getFreshProcessTableSnapshot } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
+import { readFile } from 'node:fs/promises'
+import { parseLinuxProcStatStartTime } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
+import { captureProcessTable } from '../../../shared/process-observation/tables/process-table-ps-capture'
 import {
   ForegroundExitWatches,
   type ForegroundAgentIdentity
@@ -26,8 +28,19 @@ export async function isSameForegroundAgent(
     }
     return expected.identifiedAt !== undefined && created <= expected.identifiedAt
   }
-  const row = (await getFreshProcessTableSnapshot()).find((entry) => entry.pid === pid)
-  return row !== undefined && row.startTime !== undefined && row.startTime === expected.startTime
+  if (expected.startTime === undefined) {
+    return false
+  }
+  // One process, in the same start marker the full capture recorded: /proc ticks on Linux, ps lstart elsewhere.
+  const startTime =
+    process.platform === 'linux'
+      ? parseLinuxProcStatStartTime(await readFile(`/proc/${pid}/stat`, 'utf8'))
+      : (await captureProcessTable(['-o', 'lstart=', '-p', String(pid)])).trim()
+  return startTime !== null && normalizeSpaces(startTime) === normalizeSpaces(expected.startTime)
+}
+
+function normalizeSpaces(value: string): string {
+  return value.trim().replace(/\s+/g, ' ')
 }
 
 export function createForegroundExitWatches(
