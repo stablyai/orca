@@ -1,7 +1,8 @@
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
 
-export const HOST_SCREEN_LOCKED_MESSAGE =
-  "The host's screen is locked, so this page can't draw. Unlock the host to see it again."
+const HOST_SCREEN_LOCKED_MESSAGE =
+  "The host's screen is locked, so this page can't draw. Reconnect once the host is unlocked."
 const HOST_DISPLAY_ASLEEP_MESSAGE =
   "This page didn't draw on the host. The host's display may be asleep."
 
@@ -13,10 +14,12 @@ export type ScreencastWindowHostHold = {
 
 /** A window host's pages are webviews that draw only while its window is drawn and its screen is on and unlocked. */
 export function holdScreencastWindowHost(
-  windowId: number | null,
+  guest: { getType(): string },
+  host: Pick<RuntimeBrowserCommandHost, 'getAvailableAuthoritativeWindowId'>,
   onScreenLocked: (message: string) => void
 ): ScreencastWindowHostHold {
-  // Offscreen pages keep their own frame clock, so a headless host holds nothing.
+  // Offscreen pages, including those a serve host keeps after a desktop attaches, keep their own frame clock.
+  const windowId = guest.getType() === 'webview' ? host.getAvailableAuthoritativeWindowId() : null
   if (windowId === null) {
     return { release: () => {}, noFrameMessage: () => undefined }
   }

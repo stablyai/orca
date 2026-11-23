@@ -109,16 +109,11 @@ export class RuntimeBrowserScreencasts {
         for (const subscriber of pendingRecord.subscribers.values()) {
           subscriber.emit?.({ type: 'error', message })
         }
-        // Terminal errors must force newcomers onto a fresh stream.
-        if (pendingRecord.session) {
-          pendingRecord.stopping = true
-          pendingRecord.session.stop()
-        }
+        // Terminal errors must force newcomers onto a fresh stream; a starting one stops once started.
+        pendingRecord.stopping = true
+        pendingRecord.session?.stop()
       }
-      const windowHost = holdScreencastWindowHost(
-        this.host.getAvailableAuthoritativeWindowId(),
-        failStream
-      )
+      const windowHost = holdScreencastWindowHost(guest, this.host, failStream)
       // Active-tab covers hide the guest widget independently of the host.
       const releaseGuestThrottle = rendererPublicationThrottle.acquire(guest)
       const started = startBrowserScreencast(guest, {
@@ -156,6 +151,9 @@ export class RuntimeBrowserScreencasts {
       void record.started
         .then((session) => {
           record.session = session
+          if (record.stopping) {
+            session.stop()
+          }
           return session.done
         })
         .finally(() => {
