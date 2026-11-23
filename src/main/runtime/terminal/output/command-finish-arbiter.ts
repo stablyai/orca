@@ -69,8 +69,13 @@ export class CommandFinishArbiter {
     void this.decide(ptyId, mark)
   }
 
-  /** A command started: a mark still awaiting its read was the shell's, finishing the last one. */
-  noteCommandStarted(ptyId: string): void {
+  /** A command started after `lane` saw the pending mark: it was the shell's, finishing the last
+   *  command. Lanes read bytes at their own pace, so only a start the same lane saw after the mark
+   *  is later in byte order. */
+  noteCommandStarted(ptyId: string, lane: keyof CommandMarkLanes): void {
+    if (!this.pending.get(ptyId)?.lanes[lane]) {
+      return
+    }
     const mark = this.takeCurrent(ptyId)
     if (mark) {
       this.deps.finish(ptyId, mark.lanes)

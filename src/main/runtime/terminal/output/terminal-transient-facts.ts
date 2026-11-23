@@ -65,12 +65,12 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
   }
 
   protected noteCommandStarted(ptyId: string): void {
-    this.commandFinishes.noteCommandStarted(ptyId)
+    this.commandFinishes.noteCommandStarted(ptyId, 'authority')
   }
 
   protected noteCommandPaintMarks(ptyId: string, marks: CommandPaintMarks): void {
     if (marks.heldFinishStarted) {
-      this.commandFinishes.noteCommandStarted(ptyId)
+      this.commandFinishes.noteCommandStarted(ptyId, 'paint')
     }
     if (marks.finishHeld) {
       this.commandFinishes.note(ptyId, { paint: true })

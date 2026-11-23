@@ -39,14 +39,14 @@ function devinPane() {
   })
   const feed = (data: string, at: number) => {
     if (data.includes(START)) {
-      arbiter.noteCommandStarted('pty-1')
+      arbiter.noteCommandStarted('pty-1', 'authority')
     }
     if (data.includes(FINISH)) {
       arbiter.note('pty-1', { authority: { exitCode: 0 } })
     }
     const marks = observeTerminalCommandPaint(record, data, data, at)
     if (marks.heldFinishStarted) {
-      arbiter.noteCommandStarted('pty-1')
+      arbiter.noteCommandStarted('pty-1', 'paint')
     }
     if (marks.finishHeld) {
       arbiter.note('pty-1', { paint: true })
@@ -56,7 +56,7 @@ function devinPane() {
     answer(foreground)
     await new Promise((done) => setTimeout(done, 0))
   }
-  return { record, retired, feed, settle }
+  return { record, retired, feed, settle, arbiter }
 }
 
 describe('an OSC 133;D in a pane with an agent', () => {
@@ -110,6 +110,24 @@ describe('an OSC 133;D in a pane with an agent', () => {
     await settle('unknown')
     expect(retired).toEqual([])
     expect(isCurrentCommandStatus(record, 2_500)).toBe(true)
+  })
+})
+
+describe('lanes reading bytes at their own pace', () => {
+  it("does not take a start the tracker reads late, from before the agent's mark, as the shell's", async () => {
+    const { record, retired, arbiter, settle } = devinPane()
+    observeTerminalCommandPaint(record, `${START}devin`, 'devin', 1_000)
+    // Command paint reads the turn's own start and end before the lagging tracker reads that start.
+    observeTerminalCommandPaint(record, `${START}go`, 'go', 2_000)
+    const marks = observeTerminalCommandPaint(record, `READY${FINISH}`, 'READY', 3_000)
+    expect(marks.finishHeld).toBe(true)
+    arbiter.note('pty-1', { paint: true })
+    arbiter.noteCommandStarted('pty-1', 'authority')
+    arbiter.note('pty-1', { authority: { exitCode: 0 } })
+    await settle('agent')
+    expect(isShellInFront(record)).toBe(false)
+    expect(isCurrentCommandStatus(record, 2_500)).toBe(true)
+    expect(retired).toEqual([])
   })
 })
 
