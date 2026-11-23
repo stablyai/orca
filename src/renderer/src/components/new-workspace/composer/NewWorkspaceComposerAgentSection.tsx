@@ -2,6 +2,7 @@ import React from 'react'
 import { ChevronDown, Settings2 } from 'lucide-react'
 import type AgentCombobox from '@/components/agent/AgentCombobox'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
+import type { NewTabAgentMenuModel } from '@/components/agent/launch-menu/new-tab-agent-menu-model'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
@@ -30,6 +31,27 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
   ) => void
 }
 
+/** Agents to start where no host can be asked yet, such as a recipe's VM before create. */
+function plainAgentListModel(
+  agents: NewWorkspaceComposerAgentSectionProps['visibleQuickAgents'],
+  defaultTuiAgent: NewWorkspaceComposerAgentSectionProps['defaultTuiAgent']
+): NewTabAgentMenuModel {
+  const detectedIds = agents.map((agent) => agent.id)
+  return {
+    state: 'settled',
+    rows: detectedIds.map((agent) => ({ kind: 'terminal', agent })),
+    detection: {
+      detectedIds,
+      isLoading: false,
+      isRefreshing: false,
+      detectionFailed: false,
+      needsServerUpdate: false,
+      refresh: async () => detectedIds
+    },
+    defaultTuiAgent
+  }
+}
+
 export function NewWorkspaceComposerAgentSection({
   quickAgent,
   agentSurfaceRows,
@@ -42,6 +64,7 @@ export function NewWorkspaceComposerAgentSection({
   advancedOpen,
   advancedLocked = false,
   onToggleAdvanced,
+  visibleQuickAgents,
   defaultTuiAgent,
   handleSetDefaultAgent
 }: NewWorkspaceComposerAgentSectionProps): React.JSX.Element {
@@ -76,11 +99,13 @@ export function NewWorkspaceComposerAgentSection({
           </Tooltip>
         </div>
         <AgentLaunchPicker
-          model={agentSurfaceRows?.model ?? { state: 'loading', placeholderCount: 2 }}
+          model={
+            agentSurfaceRows?.model ?? plainAgentListModel(visibleQuickAgents, defaultTuiAgent)
+          }
           agent={quickAgent}
           value={agentPickerDraft}
           cli={agentSurfaceRows?.selection.cli === true}
-          setupDisabled={agentSetupDisabled}
+          setupDisabled={agentSetupDisabled || !agentSurfaceRows}
           onTriggerEnter={createDisabled ? undefined : onCreate}
           emptyLabel={t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
           defaultAgent={defaultTuiAgent}
