@@ -106,6 +106,16 @@ describe('emulator runtime port forwards', () => {
   })
 })
 
+describe('emulator runtime port forward retirement', () => {
+  it('rejects a forward closed before its listener binds instead of hanging', async () => {
+    const forward = new EmulatorRuntimePortForwards(() => Promise.reject(new Error('unused')))
+    const pending = forward.localPortFor(41_000)
+    forward.close()
+
+    await expect(pending).rejects.toThrow('Emulator stream forward closed')
+  })
+})
+
 describe('emulatorTunnelTargetAllowed', () => {
   const endpoints = ['http://127.0.0.1:3100/stream.mjpeg', 'ws://localhost:3101/ws', 'scrcpy://abc']
 

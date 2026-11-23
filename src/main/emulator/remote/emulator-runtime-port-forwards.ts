@@ -11,6 +11,8 @@ type Forward = {
   localPort: Promise<number>
   boundPort: number | null
   sockets: Set<Socket>
+  // A listen closed before it binds never calls back, so closing settles it here.
+  rejectPending: (error: Error) => void
 }
 
 /**
@@ -38,9 +40,11 @@ export class EmulatorRuntimePortForwards {
       ),
       localPort: Promise.resolve(0),
       boundPort: null,
-      sockets: new Set()
+      sockets: new Set(),
+      rejectPending: () => {}
     }
     forward.localPort = new Promise((resolve, reject) => {
+      forward.rejectPending = reject
       forward.server.once('error', reject)
       forward.server.listen(0, '127.0.0.1', () => {
         forward.server.off('error', reject)
@@ -96,6 +100,7 @@ export class EmulatorRuntimePortForwards {
       return
     }
     this.forwards.delete(remotePort)
+    forward.rejectPending(new Error('Emulator stream forward closed'))
     forward.server.close()
     for (const socket of forward.sockets) {
       socket.destroy()
