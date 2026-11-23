@@ -13,12 +13,20 @@ const MAX_FIELD_CHARS = 512
  *  file's identity and a hash of the bytes before the offset to prove it still fits. */
 export type TerminalAgentReadPosition = {
   offset: number
+  /** The offset lies inside a record too long to read; the page ends at that record's start. */
+  insideRecord?: true
   sourceFingerprint: string
   boundaryCheckpoint: string
 }
 
 type CursorOwner = { v: 1; o: string; k: AgentConversationKind }
-type TerminalCursorPayload = CursorOwner & { k: 'terminal'; p: number; f: string; c: string }
+type TerminalCursorPayload = CursorOwner & {
+  k: 'terminal'
+  p: number
+  r?: 1
+  f: string
+  c: string
+}
 
 export function encodeTerminalAgentReadCursor(
   orcaSessionId: string,
@@ -29,6 +37,7 @@ export function encodeTerminalAgentReadCursor(
     o: orcaSessionId,
     k: 'terminal',
     p: position.offset,
+    ...(position.insideRecord ? { r: 1 as const } : {}),
     f: position.sourceFingerprint,
     c: position.boundaryCheckpoint
   }
@@ -42,12 +51,18 @@ export function decodeTerminalAgentReadCursor(
   const payload = decodeOwnedPayload(cursor, orcaSessionId, 'terminal')
   if (
     !isPositiveSafeInteger(payload.p) ||
+    (payload.r !== undefined && payload.r !== 1) ||
     !isBoundedString(payload.f) ||
     !isBoundedString(payload.c)
   ) {
     throw invalidAgentReadCursor(orcaSessionId)
   }
-  return { offset: payload.p, sourceFingerprint: payload.f, boundaryCheckpoint: payload.c }
+  return {
+    offset: payload.p,
+    ...(payload.r === 1 ? { insideRecord: true } : {}),
+    sourceFingerprint: payload.f,
+    boundaryCheckpoint: payload.c
+  }
 }
 
 /** A cursor that no longer fits the agent's history; the caller starts over from the newest page. */

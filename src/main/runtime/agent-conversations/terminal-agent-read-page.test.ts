@@ -65,7 +65,11 @@ function readPage(
   })
 }
 
-/** Every page from the newest to the one with no cursor; `between` runs after each page. */
+const cursorOffset = (cursor: string): number =>
+  JSON.parse(Buffer.from(cursor.slice('oar1_'.length), 'base64url').toString()).p
+
+/** Every page from the newest to the one with no cursor, each cursor strictly older than the
+ *  last; `between` runs after each page. */
 async function readEveryPage(
   path: string,
   limit: number,
@@ -79,11 +83,21 @@ async function readEveryPage(
     if (page.nextCursor === null) {
       return pages
     }
+    if (cursor !== undefined) {
+      expect(cursorOffset(page.nextCursor)).toBeLessThan(cursorOffset(cursor))
+    }
     cursor = page.nextCursor
     between?.()
   }
   throw new Error('paging did not end')
 }
+
+const MIB = 1024 * 1024
+/** Non-message records filling `bytes`, longer than one scan window when over 8 MiB. */
+const metadataStretch = (bytes: number) =>
+  Array.from({ length: Math.ceil(bytes / 1_024) }, (_, index) =>
+    JSON.stringify({ type: 'summary', summary: 'x'.repeat(1_000), leafUuid: `s${index}` })
+  )
 
 const idOf = (entry: AgentReadEntry) => (entry.kind === 'message' ? entry.text.split(' ')[0] : '')
 const assembled = (pages: readonly TerminalAgentReadPage[]) =>
@@ -178,5 +192,35 @@ describe('readTerminalAgentPage', () => {
       })
     }
     expect((await readPage(path, 3, own)).entries.map(idOf)).toEqual(['e4', 'e5', 'e6'])
+  })
+
+  it('pages across non-message stretches longer than the scan window', async () => {
+    const path = transcriptFile([
+      message('e0'),
+      message('e1'),
+      ...metadataStretch(9 * MIB),
+      message('e2'),
+      message('e3'),
+      ...metadataStretch(9 * MIB)
+    ])
+    const pages = await readEveryPage(path, 5)
+
+    expect(pages.map((page) => page.entries.map(idOf))).toEqual([
+      [],
+      ['e2', 'e3'],
+      [],
+      ['e0', 'e1']
+    ])
+  })
+
+  it.each([
+    ['ends the file with its newline', '\n'],
+    ['is an unterminated trailing fragment', '']
+  ])('passes over a record longer than the scan window that %s', async (_case, newline) => {
+    const path = transcriptFile(['e0', 'e1', 'e2'].map((id) => message(id)))
+    appendFileSync(path, `{"type":"assistant","text":"${'x'.repeat(20 * MIB)}"}${newline}`)
+    const pages = await readEveryPage(path, 5)
+
+    expect(pages.map((page) => page.entries.map(idOf))).toEqual([[], [], ['e0', 'e1', 'e2']])
   })
 })

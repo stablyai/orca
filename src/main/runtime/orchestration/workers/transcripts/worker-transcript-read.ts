@@ -68,8 +68,9 @@ export async function readWorkerTranscript(args: {
   expectedSourceFingerprint?: string
   /** Hash of the bounded content immediately before a cursor offset. */
   expectedBoundaryCheckpoint?: string
-  /** Page backward: the newest messages before a prior page's `older` boundary. */
-  endingAt?: WorkerTranscriptOlderBoundary
+  /** Page backward (`orca agent read`): scan one bounded window, report the `older` boundary,
+   *  and with `endingAt` read the newest messages before a prior page's boundary. */
+  backward?: { endingAt?: WorkerTranscriptOlderBoundary }
 }): Promise<WorkerTranscriptReadResult> {
   const transcriptAgent = resolveNativeChatTranscriptAgent(args.agent)
   if (!transcriptAgent) {
@@ -100,9 +101,13 @@ export async function readWorkerTranscript(args: {
   const read = () => readResolvedWorkerTranscript(resolvedPath, decode, limit, args)
   // A first read of an unchanged file serves its settled page; any other read scans.
   return args.offset === undefined &&
-    args.endingAt === undefined &&
+    args.backward?.endingAt === undefined &&
     args.expectedSourceFingerprint === undefined
-    ? readInitialWorkerTranscriptReusing(resolvedPath, [limit, decode], read)
+    ? readInitialWorkerTranscriptReusing(
+        resolvedPath,
+        [limit, decode, ...(args.backward ? ['backward'] : [])],
+        read
+      )
     : read()
 }
 
@@ -112,7 +117,7 @@ async function readResolvedWorkerTranscript(
   limit: number,
   args: Pick<
     Parameters<typeof readWorkerTranscript>[0],
-    'agent' | 'offset' | 'expectedSourceFingerprint' | 'expectedBoundaryCheckpoint' | 'endingAt'
+    'agent' | 'offset' | 'expectedSourceFingerprint' | 'expectedBoundaryCheckpoint' | 'backward'
   >
 ): Promise<WorkerTranscriptReadResult> {
   try {
@@ -124,10 +129,12 @@ async function readResolvedWorkerTranscript(
         ? await readTailLocalWorkerTranscriptPage(filePath, {
             limit,
             decode,
-            turnObserver: args.endingAt ? null : nativeChatTurnEvidenceObserverForAgent(args.agent),
+            turnObserver: args.backward?.endingAt
+              ? null
+              : nativeChatTurnEvidenceObserverForAgent(args.agent),
             keep: (messages) =>
               (newestBound = boundWorkerTranscriptNewest(messages, filePath)).messages.length,
-            ...(args.endingAt ? { endingAt: args.endingAt } : {})
+            ...(args.backward ? { backward: args.backward } : {})
           })
         : await readForwardLocalWorkerTranscriptPage(
             filePath,

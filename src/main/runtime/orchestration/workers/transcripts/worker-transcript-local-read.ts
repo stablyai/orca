@@ -18,7 +18,8 @@ import {
   type WorkerTranscriptSourceIdentity
 } from './worker-transcript-source-identity'
 
-const MAX_TRANSCRIPT_SCAN_BYTES = 8 * 1024 * 1024
+// At least one accepted record (MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES) with its line end.
+export const MAX_TRANSCRIPT_SCAN_BYTES = 8 * 1024 * 1024
 
 type LocalTranscriptReadSuccess = {
   ok: true
@@ -36,8 +37,14 @@ type LocalTranscriptReadSuccess = {
   older?: WorkerTranscriptOlderBoundary | null
 }
 
-/** The start of the oldest message a tail page kept, and the hash of the bytes before it. */
-export type WorkerTranscriptOlderBoundary = { offset: number; boundaryCheckpoint: string }
+/** Where a backward page ends: normally the start of the oldest message the newer page kept;
+ *  `insideRecord` when the newer window held no line start, so the offset is inside a record
+ *  too long to read, whose start is further back. Plus the hash of the bytes before it. */
+export type WorkerTranscriptOlderBoundary = {
+  offset: number
+  insideRecord?: true
+  boundaryCheckpoint: string
+}
 
 type LocalTranscriptPage = Omit<LocalTranscriptReadSuccess, 'boundaryCheckpoint'>
 

@@ -10,15 +10,18 @@ import {
 } from './worker-transcript-local-checkpoint'
 import { workerTranscriptSourceChanged } from './worker-transcript-source-identity'
 import {
+  MAX_TRANSCRIPT_SCAN_BYTES,
   recordWarnings,
   sourceChanged,
   type LocalTranscriptReadResult,
   type WorkerTranscriptOlderBoundary
 } from './worker-transcript-local-read'
 
-/** The newest `limit` messages, of the file or (with `endingAt`) of the bytes before a prior
- *  page's older boundary. `keep` says how many of the newest fit the response; the older boundary
- *  is the oldest kept message's start, so messages the response drops stay for the next page. */
+type TailPage = Awaited<ReturnType<typeof readNativeChatTranscriptTailFile>>
+
+/** The newest `limit` messages of the file. With `backward`, the read pages backward: it scans
+ *  one bounded window, ends at `endingAt` when given, and reports where the next older page ends.
+ *  `keep` says how many of the newest fit the response, so messages it drops stay for that page. */
 export async function readTailLocalWorkerTranscriptPage(
   filePath: string,
   args: {
@@ -26,15 +29,15 @@ export async function readTailLocalWorkerTranscriptPage(
     decode: NativeChatLineDecoder
     turnObserver: ReturnType<typeof nativeChatTurnEvidenceObserverForAgent>
     keep: (messages: readonly NativeChatMessage[]) => number
-    endingAt?: WorkerTranscriptOlderBoundary
+    backward?: { endingAt?: WorkerTranscriptOlderBoundary }
   }
 ): Promise<LocalTranscriptReadResult> {
   const before = await readLocalTranscriptSourceIdentity(filePath)
   if (!before) {
     return { ok: false, reason: 'transcript_unreadable', warnings: [] }
   }
-  const end = args.endingAt?.offset
-  if (end !== undefined && before.size < end) {
+  const endingAt = args.backward?.endingAt
+  if (endingAt && before.size < endingAt.offset) {
     return sourceChanged()
   }
   const page = await readNativeChatTranscriptTailFile(
@@ -42,17 +45,18 @@ export async function readTailLocalWorkerTranscriptPage(
     args.limit,
     args.decode,
     false,
-    end,
+    endingAt?.offset,
     null,
     undefined,
     undefined,
     false,
-    args.turnObserver?.observe
+    args.turnObserver?.observe,
+    args.backward ? MAX_TRANSCRIPT_SCAN_BYTES : undefined
   )
   const after = await readLocalTranscriptSourceIdentity(filePath)
-  // A boundary is a record start, so a page ending there consumes exactly up to it.
+  // A record start ends a page exactly there; only an offset inside a record ends lower.
   if (
-    (end !== undefined && page.consumedTo !== end) ||
+    (endingAt && !endingAt.insideRecord && page.consumedTo !== endingAt.offset) ||
     workerTranscriptSourceChanged(before, after, page.consumedTo)
   ) {
     return sourceChanged()
@@ -62,25 +66,26 @@ export async function readTailLocalWorkerTranscriptPage(
     before,
     page.consumedTo
   )
-  if (
-    !boundaryCheckpoint ||
-    (args.endingAt && boundaryCheckpoint !== args.endingAt.boundaryCheckpoint)
-  ) {
+  const endCheckpoint =
+    endingAt && page.consumedTo !== endingAt.offset
+      ? await readLocalTranscriptPathBoundaryCheckpoint(filePath, before, endingAt.offset)
+      : boundaryCheckpoint
+  if (!boundaryCheckpoint || (endingAt && endCheckpoint !== endingAt.boundaryCheckpoint)) {
     return sourceChanged()
   }
   const dropped = page.messages.length - args.keep(page.messages)
-  const olderOffset = page.hasMore || dropped > 0 ? page.messageOffsets[dropped] : undefined
+  const olderEdge = args.backward ? olderPageEdge(page, dropped) : null
   let older: WorkerTranscriptOlderBoundary | null = null
-  if (olderOffset !== undefined) {
+  if (olderEdge) {
     const checkpoint = await readLocalTranscriptPathBoundaryCheckpoint(
       filePath,
       before,
-      olderOffset
+      olderEdge.offset
     )
     if (!checkpoint) {
       return sourceChanged()
     }
-    older = { offset: olderOffset, boundaryCheckpoint: checkpoint }
+    older = { ...olderEdge, boundaryCheckpoint: checkpoint }
   }
   const turn =
     page.malformedRecordCount || page.oversizedRecordCount
@@ -93,10 +98,36 @@ export async function readTailLocalWorkerTranscriptPage(
     boundaryCheckpoint,
     messages: page.messages,
     nextOffset: page.consumedTo,
-    limited: page.hasMore,
+    limited: args.backward ? older !== null : page.hasMore,
     clipping: [],
     warnings: recordWarnings(page.malformedRecordCount, page.oversizedRecordCount),
     ...(turn ? { turn } : {}),
-    older
+    ...(args.backward ? { older } : {})
   }
+}
+
+/** Where the next older page ends, strictly below this one's end; null once the file start was
+ *  read and nothing was dropped. */
+function olderPageEdge(
+  page: TailPage,
+  dropped: number
+): Pick<WorkerTranscriptOlderBoundary, 'offset' | 'insideRecord'> | null {
+  const { end, floor, oldestLineStart } = page.scan ?? { end: 0, floor: 0, oldestLineStart: 0 }
+  // The oldest kept message: dropped and unscanned older messages stay for the next page.
+  if (page.hasMore || dropped > 0 || (page.messages.length > 0 && oldestLineStart !== 0)) {
+    return { offset: page.messageOffsets[dropped]! }
+  }
+  if (oldestLineStart === 0) {
+    return null
+  }
+  // A window with no message: continue below its oldest complete line, so a record crossing the
+  // floor is read whole next time.
+  if (oldestLineStart !== null) {
+    return { offset: oldestLineStart }
+  }
+  if (page.consumedTo > floor && page.consumedTo < end) {
+    return { offset: page.consumedTo }
+  }
+  // No line starts in the window: one record longer than it, skipped one window per read.
+  return { offset: floor, insideRecord: true }
 }

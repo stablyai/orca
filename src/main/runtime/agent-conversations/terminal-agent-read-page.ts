@@ -44,12 +44,8 @@ export async function readTerminalAgentPage(args: {
     transcriptPath: args.transcriptPath,
     ...(args.wslDistro ? { wslDistro: args.wslDistro } : {}),
     limit: args.limit,
-    ...(position
-      ? {
-          endingAt: { offset: position.offset, boundaryCheckpoint: position.boundaryCheckpoint },
-          expectedSourceFingerprint: position.sourceFingerprint
-        }
-      : {})
+    backward: position ? { endingAt: position } : {},
+    ...(position ? { expectedSourceFingerprint: position.sourceFingerprint } : {})
   })
   if (!transcript.ok) {
     if (position && transcript.reason === 'source_changed') {
@@ -74,9 +70,8 @@ export async function readTerminalAgentPage(args: {
     limited: transcript.limited,
     nextCursor: older
       ? encodeTerminalAgentReadCursor(orcaSessionId, {
-          offset: older.offset,
-          sourceFingerprint: transcript.sourceFingerprint,
-          boundaryCheckpoint: older.boundaryCheckpoint
+          ...older,
+          sourceFingerprint: transcript.sourceFingerprint
         })
       : null,
     ...(state ? { state } : {})
