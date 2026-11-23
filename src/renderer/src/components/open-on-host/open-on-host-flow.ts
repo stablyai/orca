@@ -14,6 +14,7 @@ import {
   fetchRuntimeGit,
   getRuntimeGitUpstreamStatus
 } from '@/runtime/source-control/git/runtime-git-sync-client'
+import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
 import { useAppStore } from '@/store'
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import { ERROR_TOAST_DURATION } from '@/store/repos/repo-state'
@@ -124,6 +125,17 @@ export async function runOpenOnHost(
         )
       }
       if (plan.sync !== 'none') {
+        // Why: push sends HEAD to the snapshot's branch name, so a checkout switched since the dialog opened would push the wrong commits.
+        const live = await getRuntimeGitStatus(ctx, { includeLineStats: false })
+        if (branchDisplayName(live.branch ?? '') !== branchDisplayName(worktree.branch)) {
+          throw new Error(
+            translate(
+              'openOnHost.branchChanged',
+              'This workspace is no longer on {{branch}}. Reopen this dialog',
+              { branch: branchDisplayName(worktree.branch) }
+            )
+          )
+        }
         try {
           await useAppStore
             .getState()

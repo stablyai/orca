@@ -7,6 +7,7 @@ import {
   fetchRuntimeGit,
   getRuntimeGitUpstreamStatus
 } from '@/runtime/source-control/git/runtime-git-sync-client'
+import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { getRuntimeDefaultCreateProjectParent } from '../sidebar/project-admission/create/runtime-create-project-parent'
@@ -21,6 +22,10 @@ vi.mock('@/runtime/source-control/git/runtime-git-sync-client', async (importOri
   ...(await importOriginal<object>()),
   fetchRuntimeGit: vi.fn(),
   getRuntimeGitUpstreamStatus: vi.fn()
+}))
+vi.mock('@/runtime/source-control/git/runtime-git-status-client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getRuntimeGitStatus: vi.fn()
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -37,6 +42,7 @@ vi.mock('../sidebar/project-admission/create/runtime-create-project-parent', () 
 const fetch = vi.mocked(fetchRuntimeGit)
 const upstream = vi.mocked(getRuntimeGitUpstreamStatus)
 const rpc = vi.mocked(callRuntimeRpc)
+const gitStatus = vi.mocked(getRuntimeGitStatus)
 const activate = vi.mocked(activateAndRevealWorktree)
 const defaultParent = vi.mocked(getRuntimeDefaultCreateProjectParent)
 const toastError = vi.spyOn(toast, 'error')
@@ -119,6 +125,11 @@ beforeEach(() => {
     ahead: 0,
     behind: 0
   })
+  gitStatus.mockResolvedValue({
+    entries: [],
+    conflictOperation: 'unknown',
+    branch: 'refs/heads/feature/x'
+  })
   fetch.mockResolvedValue(undefined)
   pushBranch.mockResolvedValue(undefined)
   createWorktree.mockResolvedValue({ worktree: { id: 'w2', head: 'aaa' } })
@@ -183,6 +194,18 @@ describe('runOpenOnHost', () => {
     await runOpenOnHost(pushRequest)
     expect(pushBranch.mock.calls[0][2]).toBe(false)
     expect(pushBranch.mock.invocationCallOrder[0]).toBeLessThan(fetch.mock.invocationCallOrder[0])
+  })
+
+  it('does not push when the checkout switched branch since the dialog opened', async () => {
+    gitStatus.mockResolvedValue({
+      entries: [],
+      conflictOperation: 'unknown',
+      branch: 'refs/heads/feature/y'
+    })
+    expect(await runOpenOnHost(pushRequest)).toBeNull()
+    expect(pushBranch).not.toHaveBeenCalled()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(createWorktree).not.toHaveBeenCalled()
   })
 
   it('stops without opening when the push is rejected', async () => {

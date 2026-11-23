@@ -31432,6 +31432,7 @@
     "headMismatch": "{{host}}'s copy of {{branch}} is at a different commit than {{source}}",
     "hostCopyNotLoaded": "{{host}}'s copy of this project isn't loaded yet",
     "localCommitsStay_one": "Your {{count}} local commit stays on {{source}}",
-    "localCommitsStay_other": "Your {{count}} local commits stay on {{source}}"
+    "localCommitsStay_other": "Your {{count}} local commits stay on {{source}}",
+    "branchChanged": "This workspace is no longer on {{branch}}. Reopen this dialog"
   }
 }
