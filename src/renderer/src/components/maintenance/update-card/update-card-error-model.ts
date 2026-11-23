@@ -42,6 +42,9 @@ export function buildUpdateCardErrorModel(
   },
   t: Translate = translate
 ): UpdateErrorCardModel | null {
+  if (status.state === 'downloaded' && status.installing) {
+    return null
+  }
   if (
     (status.state === 'downloaded' || status.state === 'error') &&
     status.installOnQuit &&
@@ -107,7 +110,7 @@ export function buildUpdateCardErrorModel(
     return {
       title: t('auto.components.UpdateCard.4cf109845a', 'Update Error'),
       summary: message,
-      detail: message,
+      detail: installError ?? message,
       primaryAction: {
         label: t('auto.components.UpdateCard.2c2d3e03ca', 'Try Again'),
         onClick: onInstallRetry

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import type { ChangelogData, UpdateStatus } from '../../../../../shared/updater/update-status-types'
+import type { ChangelogData } from '../../../../../shared/updater/update-status-types'
+import type { RetainedUpdateTarget } from '../../../store/slices/ui/retained-update-target'
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { useAppStore } from '../../../store/index'
 import { Card } from '../../ui/card'
@@ -27,11 +28,12 @@ export function UpdateCard(): React.JSX.Element | null {
   const collapseAnimationTimerRef = useRef<number | null>(null)
   const [mediaFailed, setMediaFailed] = useState(false)
   const [mediaLoaded, setMediaLoaded] = useState(false)
+  const installTarget = useAppStore((state) => state.retainedUpdateTarget)
   const [installFailure, setInstallFailure] = useState<{
-    status: UpdateStatus
+    target: RetainedUpdateTarget
     message: string
   } | null>(null)
-  const installError = installFailure?.status === status ? installFailure.message : null
+  const installError = installFailure?.target === installTarget ? installFailure.message : null
   const [compatibilityRelaunching, setCompatibilityRelaunching] = useState(false)
   const [compatibilitySetupError, setCompatibilitySetupError] = useState<string | null>(null)
   const [autoDismissed, setAutoDismissed] = useState(false)
@@ -75,7 +77,7 @@ export function UpdateCard(): React.JSX.Element | null {
     return () => window.clearTimeout(timer)
   }, [shouldAutoDismissLatest])
   const installRequestPending = useRef(false)
-  const requestInstall = useCallback((target: UpdateStatus): void => {
+  const requestInstall = useCallback((target: RetainedUpdateTarget | null): void => {
     if (installRequestPending.current) {
       return
     }
@@ -84,21 +86,26 @@ export function UpdateCard(): React.JSX.Element | null {
     void window.api.updater
       .quitAndInstall()
       .catch((error: unknown) => {
-        setInstallFailure({
-          status: target,
-          message: error instanceof Error ? error.message : String(error)
-        })
+        if (target) {
+          setInstallFailure({
+            target,
+            message: error instanceof Error ? error.message : String(error)
+          })
+        }
       })
       .finally(() => {
         installRequestPending.current = false
       })
   }, [])
   useEffect(() => {
-    if (status.state === 'downloaded' && !status.automaticDownload && hasStartedDownload.current) {
-      hasStartedDownload.current = false
-      requestInstall(status)
+    if (status.state !== 'downloaded' || !hasStartedDownload.current) {
+      return
     }
-  }, [status, requestInstall])
+    hasStartedDownload.current = false
+    if (!status.installing && !status.automaticDownload) {
+      requestInstall(installTarget)
+    }
+  }, [status, installTarget, requestInstall])
 
   const prefersReducedMotion = usePrefersReducedMotion()
   const clearAnimationTimers = useCallback(() => {
@@ -165,7 +172,7 @@ export function UpdateCard(): React.JSX.Element | null {
         setCompatibilityRelaunching(false)
       })
   }
-  const handleInstallRetry = (): void => requestInstall(status)
+  const handleInstallRetry = (): void => requestInstall(installTarget)
   const quitToInstallStagedUpdate = window.api.updater.quitToInstallStagedUpdate
   const errorCard = buildUpdateCardErrorModel(
     {
@@ -180,16 +187,17 @@ export function UpdateCard(): React.JSX.Element | null {
       onRetryDownload: handleUpdate,
       onRecheck: () => void window.api.updater.check({ includePrerelease: false }),
       onInstallRetry: handleInstallRetry,
-      onQuitToInstall: quitToInstallStagedUpdate
-        ? (version) => {
-            void quitToInstallStagedUpdate(version).catch((error: unknown) => {
-              setInstallFailure({
-                status,
-                message: error instanceof Error ? error.message : String(error)
+      onQuitToInstall:
+        quitToInstallStagedUpdate && installTarget
+          ? (version) => {
+              void quitToInstallStagedUpdate(version).catch((error: unknown) => {
+                setInstallFailure({
+                  target: installTarget,
+                  message: error instanceof Error ? error.message : String(error)
+                })
               })
-            })
-          }
-        : undefined
+            }
+          : undefined
     },
     t
   )

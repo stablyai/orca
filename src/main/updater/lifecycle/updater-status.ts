@@ -107,7 +107,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
       this.updateInstallMode === 'interactive' &&
       this.autoUpdater?.autoInstallOnAppQuit === true &&
       this.availableVersion === version &&
-      isMacInstallerReady()
+      isMacInstallerReady(version)
     )
   }
 

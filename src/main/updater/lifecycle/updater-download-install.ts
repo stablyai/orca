@@ -184,7 +184,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     this.automaticDownloadVersion = automatic ? version : null
     this.downloadInFlight = true
     const localBuildDownload = this.activeUpdateSource === 'local'
-    beginMacUpdateDownload()
+    beginMacUpdateDownload(version)
     // Acknowledge acceptance before setup delays progress events so the card responds immediately.
     this.sendStatus({ state: 'downloading', percent: 0, version })
     const startDownload = (): void => {

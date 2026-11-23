@@ -86,6 +86,7 @@ export function registerMacUpdaterEvents({
 }
 
 let squirrelReady = false
+let macDownloadVersion: string | null = null
 let macInstallPreflightInProgress = false
 
 export function setMacInstallPreflightInProgress(value: boolean): void {
@@ -117,9 +118,10 @@ export function resetMacInstallState(): void {
   clearPendingInstallTimeout()
 }
 
-export function beginMacUpdateDownload(): void {
+export function beginMacUpdateDownload(version: string): void {
   resetMacInstallState()
   squirrelReady = false
+  macDownloadVersion = version
 }
 
 export function markMacQuitAndInstallInFlight(): void {
@@ -141,8 +143,8 @@ export function isMacQuitAndInstallInFlight(): boolean {
   return quitAndInstallInFlight
 }
 
-export function isMacInstallerReady(): boolean {
-  return squirrelReady
+export function isMacInstallerReady(version?: string): boolean {
+  return squirrelReady && (version === undefined || version === macDownloadVersion)
 }
 
 export function isWaitingForMacInstallerReadiness(

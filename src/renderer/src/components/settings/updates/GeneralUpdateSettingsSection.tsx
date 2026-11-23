@@ -44,12 +44,15 @@ export function GeneralUpdateSettingsSection({
   }
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
-  const [failedRestartStatus, setFailedRestartStatus] = useState<typeof updateStatus | null>(null)
+  const installTarget = useAppStore((s) => s.retainedUpdateTarget)
+  const [failedRestartTarget, setFailedRestartTarget] = useState<typeof installTarget>(null)
   const stagedQuitVersion =
     updateStatus.installOnQuit &&
     (updateStatus.state === 'error' ||
-      (updateStatus.state === 'downloaded' && failedRestartStatus === updateStatus))
-      ? updateStatus.version
+      (updateStatus.state === 'downloaded' &&
+        !updateStatus.installing &&
+        failedRestartTarget === installTarget))
+      ? installTarget?.version
       : undefined
   const quitToInstall = window.api.updater.quitToInstallStagedUpdate
   const now = useNow(
@@ -74,7 +77,7 @@ export function GeneralUpdateSettingsSection({
 
   const handleRestartToUpdate = (): void => {
     void window.api.updater.quitAndInstall().catch((error: unknown) => {
-      setFailedRestartStatus(updateStatus)
+      setFailedRestartTarget(installTarget)
       if (!updateStatus.installOnQuit) {
         toast.error(
           t(
