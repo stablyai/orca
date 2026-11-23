@@ -22,7 +22,6 @@ import * as resume from '../recovery/structured-agent-session-restart-resume-hos
 import type { StructuredAgentSessionRestartResume } from '../recovery/structured-agent-session-restart-resume-contract'
 import { structuredAgentSessionRestartResumeSurfaces } from '../recovery/structured-agent-session-restart-resume-wiring'
 import * as conversation from '../delivery/structured-agent-session-host-delivery'
-import { waitingCardsLookup } from '../delivery/structured-agent-session-waiting-cards'
 import { wireStructuredAgentSessionQueuedMessages as wireQueuedMessages } from '../delivery/structured-agent-session-queued-wiring'
 import * as sessionLogger from './structured-agent-session-logger'
 import { createStructuredAgentSessionWorkspaceSleeper } from '../termination/structured-agent-session-workspace-sleep'
@@ -312,7 +311,6 @@ export class StructuredAgentSessionHost {
   mailObservation = this.reads.mailObservation
   holdMailSources = this.reads.holdMailSources
   wakeQueuedMessages = (sessionId: string) => this.queued.refresh(sessionId)
-  sessionsWithWaitingQueuedMessages = waitingCardsLookup(this.sessions, this.conversation)
 
   private readonly startJournal = structuredAgentStartJournal(() => this.deps, this.conversation)
   captureAgentStartDestination = this.startJournal.captureAgentStartDestination

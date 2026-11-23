@@ -26,6 +26,7 @@ const WORKER_MAIL: AgentMessageSource = {
 }
 
 let custody: QueuedMessageOwed = 'owed'
+const owesMail = { getStructuredMailSendSessions: () => [HOST_TEST_SESSION] }
 let rig: QueuedMessageTestRig
 
 beforeEach(async () => {
@@ -67,7 +68,7 @@ it('hands an open idle chat the mail it walked past while a restart was restorin
   custody = 'owed'
   await vi.advanceTimersByTimeAsync(250)
   expect(await rig.handoff(mail)).toBeUndefined()
-  await redriveWaitingChatMail(rig.host, null, () => undefined)
+  await redriveWaitingChatMail(rig.host, owesMail, () => undefined)
   await eventually(async () => expect((await rig.handoff(mail))?.handedOverAt).toBeDefined())
 })
 
@@ -77,11 +78,7 @@ it('opens a chat nobody has open when it holds orchestration mail, and hands tha
   const sessions = rig.host.collaboratorsForTests().sessions
   expect(sessions.has(HOST_TEST_SESSION)).toBe(false)
 
-  await redriveWaitingChatMail(
-    rig.host,
-    { getStructuredMailSendSessions: () => [HOST_TEST_SESSION] },
-    () => undefined
-  )
+  await redriveWaitingChatMail(rig.host, owesMail, () => undefined)
   await eventually(async () => {
     const journal = sessions.get(HOST_TEST_SESSION)?.journal
     const linked = await journal?.reads.input({ kind: 'linked-to', messageId: mail })

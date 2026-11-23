@@ -1,20 +1,27 @@
+import { mapWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
 import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 
-/** After restoration, each chat with a waiting card gets one look at its mail and cards: mail walked
- *  past while restoration held custody has no later edge in an idle chat. A closed chat is opened
- *  only when it holds orchestration mail. */
+/** After restoration, each chat holding orchestration mail as a waiting card gets one look at its
+ *  mail and cards: mail walked past while restoration held custody has no later edge in an idle
+ *  chat. A closed chat is opened at rest, since its cards drain only while open; one that cannot be
+ *  opened or read is skipped. */
 export async function redriveWaitingChatMail(
-  host: Pick<
-    StructuredAgentSessionHost,
-    'sessionsWithWaitingQueuedMessages' | 'wakeQueuedMessages'
-  > | null,
+  host: Pick<StructuredAgentSessionHost, 'conversation' | 'wakeQueuedMessages'> | null,
   db: Pick<OrchestrationDb, 'getStructuredMailSendSessions'> | null,
   redriveMail: (sessionId: string) => void
 ): Promise<void> {
-  const owedMail = db?.getStructuredMailSendSessions() ?? []
-  for (const sessionId of (await host?.sessionsWithWaitingQueuedMessages(owedMail)) ?? []) {
-    redriveMail(sessionId)
-    host?.wakeQueuedMessages(sessionId)
+  if (!host || !db) {
+    return
   }
+  await mapWithConcurrency(db.getStructuredMailSendSessions(), 4, async (sessionId) => {
+    const cards = await host
+      .conversation(sessionId)
+      .then(({ journal }) => journal.queuedMessages.list())
+      .catch(() => [])
+    if (cards.some((card) => card.state === 'waiting')) {
+      redriveMail(sessionId)
+      host.wakeQueuedMessages(sessionId)
+    }
+  })
 }
