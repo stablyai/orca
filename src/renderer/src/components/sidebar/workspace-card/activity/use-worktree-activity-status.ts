@@ -1,5 +1,3 @@
-import { useMemo } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-sessions/structured-chat-slept-at'
@@ -27,7 +25,6 @@ function withoutStoppedHostPtys(
       const environmentId = parseRemoteRuntimePtyId(ptyId)?.environmentId
       return environmentId != null && environmentId !== stoppedEnvironmentId
     })
-    // Same array when nothing dropped, so useShallow keeps the card from re-rendering.
     if (kept.length > 0) {
       live[tabId] = kept.length === ptyIds.length ? ptyIds : kept
     }
@@ -61,43 +58,80 @@ export function selectWorktreeActivityPtyIds(
     : ptyIds
 }
 
-export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
-  const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId] ?? EMPTY_TABS)
-  const browserTabs = useAppStore((s) => s.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS)
-  const hasStructuredChat = useAppStore((s) =>
-    hasAwakeStructuredChat(s.unifiedTabsByWorktree[worktreeId], s.structuredChatSleptAtByPaneKey)
-  )
-  const runtimePaneTitlesForWorktree = useAppStore(
-    useShallow((s) => selectRuntimePaneTitlesForWorktree(s, worktreeId))
-  )
-  const ptyIdsForWorktree = useAppStore(
-    useShallow((s) => selectWorktreeActivityPtyIds(s, worktreeId))
-  )
-  const terminalLayoutRootsByTabId = useAppStore(
-    useShallow((s) => selectTerminalLayoutRootsForWorktree(s, worktreeId))
-  )
-  const summary = useAppStore(useShallow((s) => selectWorktreeAgentActivitySummary(s, worktreeId)))
+type StatusMemo = { inputs: readonly unknown[]; status: WorktreeStatus }
 
-  // Use common liveness and agent-row precedence so compact and detailed cards show the same status.
-  return useMemo(
-    () =>
-      resolveWorktreeStatus({
-        tabs,
-        browserTabs,
-        hasStructuredChat,
-        ptyIdsByTabId: ptyIdsForWorktree,
-        runtimePaneTitlesByTabId: runtimePaneTitlesForWorktree,
-        terminalLayoutRootsByTabId,
-        ...summary
-      }),
-    [
-      tabs,
-      browserTabs,
-      hasStructuredChat,
-      ptyIdsForWorktree,
-      runtimePaneTitlesForWorktree,
-      terminalLayoutRootsByTabId,
-      summary
-    ]
-  )
+// Every caller (sidebar cards, Bots rows, pickers) resolves the same ids on each store write; each
+// id re-resolves only when one of its own inputs changes.
+const statusMemoByWorktreeId = new Map<string, StatusMemo>()
+const STATUS_MEMO_LIMIT = 2000
+// One store write runs every mounted selector against one state; each id is checked once per write.
+let generation: { state: AppState; statusById: Map<string, WorktreeStatus> } | null = null
+
+export function selectWorktreeActivityStatus(
+  statusInputs: AppState,
+  worktreeId: string
+): WorktreeStatus {
+  if (generation?.state !== statusInputs) {
+    generation = { state: statusInputs, statusById: new Map() }
+  }
+  let status = generation.statusById.get(worktreeId)
+  if (status === undefined) {
+    status = resolveMemoizedStatus(statusInputs, worktreeId)
+    generation.statusById.set(worktreeId, status)
+  }
+  return status
+}
+
+function resolveMemoizedStatus(statusInputs: AppState, worktreeId: string): WorktreeStatus {
+  const summary = selectWorktreeAgentActivitySummary(statusInputs, worktreeId)
+  const inputs = [
+    statusInputs.tabsByWorktree[worktreeId] ?? EMPTY_TABS,
+    statusInputs.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
+    hasAwakeStructuredChat(
+      statusInputs.unifiedTabsByWorktree[worktreeId],
+      statusInputs.structuredChatSleptAtByPaneKey
+    ),
+    selectWorktreeActivityPtyIds(statusInputs, worktreeId),
+    selectRuntimePaneTitlesForWorktree(statusInputs, worktreeId),
+    selectTerminalLayoutRootsForWorktree(statusInputs, worktreeId),
+    summary
+  ] as const
+  const memo = statusMemoByWorktreeId.get(worktreeId)
+  if (memo && inputs.every((input, index) => input === memo.inputs[index])) {
+    return memo.status
+  }
+  const [
+    tabs,
+    browserTabs,
+    hasStructuredChat,
+    ptyIdsByTabId,
+    runtimePaneTitlesByTabId,
+    terminalLayoutRootsByTabId
+  ] = inputs
+  const status = resolveWorktreeStatus({
+    tabs,
+    browserTabs,
+    hasStructuredChat,
+    ptyIdsByTabId,
+    runtimePaneTitlesByTabId,
+    agentStatusPaneIdsByTabId: summary.agentStatusPaneIdsByTabId,
+    stalePaneIdsByTabId: summary.stalePaneIdsByTabId,
+    terminalLayoutRootsByTabId,
+    hasPermission: summary.hasPermission,
+    hasLiveWorking: summary.hasLiveWorking,
+    hasLiveMonitoring: summary.hasLiveMonitoring,
+    hasFailed: summary.hasFailed,
+    hasInterrupted: summary.hasInterrupted,
+    hasUnconfirmed: summary.hasUnconfirmed,
+    hasLiveDone: summary.hasLiveDone
+  })
+  if (!memo && statusMemoByWorktreeId.size >= STATUS_MEMO_LIMIT) {
+    statusMemoByWorktreeId.clear()
+  }
+  statusMemoByWorktreeId.set(worktreeId, { inputs, status })
+  return status
+}
+
+export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
+  return useAppStore((state) => selectWorktreeActivityStatus(state, worktreeId))
 }
