@@ -183,6 +183,8 @@ export async function commitStagedWebStoreExtension(
     }
   } catch (error) {
     if (replaced) {
+      // Why everywhere: a page that loaded the new copy before the failure may not have it on.
+      await unloadBrowserExtensionEverywhere(extensionId)
       store.save(replaced)
       await reloadBrowserExtensionWhereEnabled(replaced).catch(() => {})
       forgetPreparedBrowserExtensionDirectory(target)
