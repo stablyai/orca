@@ -5814,7 +5814,7 @@
           "connectHost": "SSH 호스트 연결 필요"
         },
         "SkillUpdateRow": {
-          "replaceWithOrca": "Orca 사본으로 교체(백업 보관)"
+          "replaceWithOrca": "이 Orca 버전의 사본으로 교체(백업 보관)"
         },
         "host": {
           "local": "이 컴퓨터",

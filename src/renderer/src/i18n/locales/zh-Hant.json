@@ -5459,7 +5459,7 @@
           "updateAction_other": "更新 {{count}} 個技能"
         },
         "SkillUpdateRow": {
-          "replaceWithOrca": "以 Orca 的副本取代（保留備份）"
+          "replaceWithOrca": "以此版本 Orca 的副本取代（保留備份）"
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "有可用更新",
