@@ -9,6 +9,9 @@ export const GOOGLE_TRIGGERS_RUNTIME_CAPABILITY = 'google.triggers.v1' as const
 /** A paired window that draws Google setup's Connect card, so a server posts it instead of a line. */
 export const GOOGLE_SETUP_CARDS_CLIENT_CAPABILITY = 'google.setupCards.v1' as const
 
+/** Google never sent the person back in time; often its own Access blocked page stopped them. */
+export const GOOGLE_SIGN_IN_EXPIRED = 'The Google sign-in expired. Start again in Orca.'
+
 /** What one harmless read per API found. */
 export type GoogleServiceState =
   | 'ready'

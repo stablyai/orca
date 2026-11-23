@@ -28720,7 +28720,13 @@
         "noAccount": "Google signed in, but the host sent no account.",
         "alreadyRunning": "A Google sign-in is already running. Finish or cancel it first.",
         "notWaiting": "No Google sign-in is waiting. Start again."
-      }
+      },
+      "accessBlocked": "Seeing ‘Access blocked’?",
+      "setUpNewApp": "Set up a new Google app",
+      "useAnother": "Use another account",
+      "useAnotherSignIn": "Sign in with Google",
+      "useAnotherSignInDetail": "Uses your current Google app",
+      "setUpNewAppDetail": "If your current app doesn’t work for this account or organization"
     },
     "googleSetup": {
       "receipt": {
