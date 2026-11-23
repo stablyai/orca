@@ -168,6 +168,8 @@ Ports: `ORCA ports --json` lists the listening ports Orca tied to the current wo
 
 Workspace cleanup: `ORCA workspace cleanup preview --json` shows what the user's cleanup rules would remove now and why each other workspace stays (`rows[].evaluation`). `ORCA workspace cleanup run --json` runs the rules now, on the same path as the scheduled runner (every workspace is re-checked right before removal, nothing is forced), and prints the finished run's rows. `ORCA workspace cleanup report --json` lists recent runs; `nextRunAt` is null when no rule is on. Rules live in Orca settings; these commands never change them. Run `run` only when the user asks for cleanup.
 
+For generic Git or directory cleanup, preserve registered Orca workspaces by execution host and canonical checkout path, including aliases and checkouts outside Orca's usual directories. Inspect the intended local, SSH, or paired host and include folder workspaces with `worktree ps`. A matching `worktree list` or `worktree ps` row is enough to protect a path. Missing rows, counts, and truncation cannot prove a path is unregistered, or that a scan succeeded. Resolution may also update or prune metadata. Preserve any candidate with incomplete discovery or unclear ownership. Recheck before any authorized removal, since that evidence describes only the instant it was collected.
+
 Use `repo set --external-worktree-visibility show` to show a repo's non-Orca worktrees.
 `hide` hides them; `inherit` clears the repo override and follows the global default.
 Per-worktree visibility rules still apply.

@@ -5,6 +5,8 @@
     "supported",
     "claude-code",
     "glm-agent",
+    "opencode-local-inference",
+    "wally-models",
     "codex",
     "cursor-cli",
     "codex-hot-swap",

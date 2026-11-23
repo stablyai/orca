@@ -192,6 +192,10 @@ orca orchestration reset --all
 
 `reset` affects runtime-global orchestration state. Do not run it while another coordinator is active unless that is the intended cleanup.
 
+## Verify the live Codex session
+
+The launch receipt's `launch.requested` and `launch.effective` fields describe the launch Orca accepted. If Codex reopened an existing conversation, check `/status` inside that exact worker terminal before reporting its active model or reasoning effort. If you require a fresh session, compare the Session ID with the previous one and check separately that the first task started in the new session. `/status` reports the CLI's settings. It cannot verify how much reasoning the provider used.
+
 ## Choosing the right command
 
 Use `orca orchestration send` for a one-way message to another agent. For ordinary mail, a chat receives the whole message with its sender header (a message too large for one chat message gets a note to run `orca orchestration check` instead), Orca never types your words into a terminal agent's input (it reads mail through `check`), and the receipt means the mail was stored, not read. A send to a finished worker's `dispatch:<id>` can instead start a follow-up Task, whose body the worker gets as its task; the receipt says which. Use `orca terminal send` for shells, dev servers and REPLs, never to message an agent.

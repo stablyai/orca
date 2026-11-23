@@ -1,0 +1,25 @@
+---
+title: Use Wally models in Orca
+description: Connect an agent to RunAnywhere's Wally model catalog from an Orca workspace.
+---
+
+Configure [Wally](https://runwally.com/) in the agent you launch from Orca. The agent connects to RunAnywhere using your Wally account or API key. Configure it on the machine that runs the agent, including the remote host for SSH or paired-server workspaces.
+
+## OpenCode's built-in provider
+
+Set `WALLY_API_KEY` in **Settings → Agents → OpenCode → Environment** for the execution host. Start a new OpenCode session in Orca and choose a `wally/` model, such as `wally/glm-5.3-flash`, using `/models`. If your OpenCode version lacks the Wally provider, use the compatible endpoint below.
+
+## Launch through the Wally CLI
+
+After installing Wally on the execution host, open a terminal in your Orca workspace and run:
+
+```bash
+wally account login
+wally opencode --cloud -m glm-5.3-flash
+```
+
+Wally also supports launching Claude Code and Codex. Use `wally claude-code --help` or `wally codex --help` for your installed CLI's options. The `--cloud` flag selects hosted inference. See [RunAnywhere's setup and model catalog](https://runanywhere.ai/blog/wally-catalog-ten-open-models).
+
+## Other OpenAI-compatible agents
+
+Set the agent's OpenAI-compatible base URL to `https://inference.runanywhere.ai/v1` and configure `WALLY_API_KEY` on the execution host. Use a model ID from the [Wally catalog](https://inference.runanywhere.ai/v1/models/catalog), and use that model's context and output limits. Enable image input only if the model lists it.

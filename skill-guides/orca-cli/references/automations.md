@@ -28,6 +28,13 @@ On a plain folder project, `new_per_run` creates separate Orca workspace entries
 
 Use `--extra-agent-args="--model opus --effort high --add-dir docs"` to add arguments after the host's default agent Arguments on every fresh run (always pass it with `=`, since the value starts with `--`). Only model and effort options, plus Claude's `--add-dir`, are accepted, for `antigravity`, `claude`, `codex`, `codebuddy`, `cursor`, `grok`, `omp`, and `pi` (`--model`, `--thinking`). Model or effort in the extras replaces the default's; a default Pi `--provider` stays and scopes the model. Extras can't be combined with `--reuse-session`. `--extra-agent-args=` on edit clears them.
 
+## Verify an edit or move a schedule
+
+1. On the owning host, save the output of `ORCA automations show <id> --json` and note the owner, project or bot, enabled state, trigger, time zone, workspace mode, and precheck. Read the same record after an edit. If the edit's result is uncertain, read it back before retrying. The saved definition alone cannot establish what an already running agent received.
+2. When replacing a schedule, create the replacement disabled and record the old and new IDs with their hosts. Preserve the paused state of intentionally paused jobs. Compare the intended wall-clock times in the saved schedule's zone, including daylight-saving changes if relevant. Use an explicit `--timezone` when the replacement host must keep the original schedule's zone.
+3. If the source was enabled, disable it and verify that state before enabling the replacement. Disabling a job does not stop work it already launched. Inspect recent runs and wait for any conflicting run and its delegated work to settle. If rolling back, verify the replacement is disabled before restoring the original enabled state. These checks cannot provide atomic cutover or exactly-once execution.
+4. Follow a specific run in `ORCA automations runs --id <id> --json` to the required downstream result. A launcher exit, preview, or no-op does not establish that fresh work ran or that the next scheduled run will succeed. Only make a bounded manual run if the user authorizes its actual effects. Manual runs bypass prechecks, including on disabled definitions.
+
 ## Bot automations and events
 
 A bot's automation names the bot instead of a provider and place, and can start on an event as well as (or instead of) a schedule:

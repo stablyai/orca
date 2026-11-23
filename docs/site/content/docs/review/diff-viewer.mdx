@@ -2,7 +2,9 @@
 title: Diff viewer
 ---
 
-Orca's diff viewer is designed for serious review of AI-generated code — not a quick glance. Every worktree has a built-in diff against its start-from ref.
+## Open a diff
+
+Select a worktree and open **Source Control** (`Cmd+Shift+G` on macOS, `Ctrl+Shift+G` on Windows and Linux). Click a changed file to open its diff in the editor. To review multiple files in one tab, click **View all** beside the relevant group of changes. If a file is already open for editing, use its **Changes** view to see the diff.
 
 ## Features
 
@@ -27,4 +29,7 @@ Combined diffs can show a collapsible file tree beside the hunks. Drag the tree'
 
 ## Keyboard shortcuts
 
-- `F7` / `Shift+F7` — next / previous change in the active editor.
+- `F7` / `Shift+F7` move to the next or previous change when the diff editor has focus.
+- `Cmd+Shift+A` on macOS or `Ctrl+Shift+A` on Windows and Linux adds a review note at the cursor. You can also click the **+** in the gutter. See [Annotate AI Diff](/docs/review/annotate-ai-diff).
+
+`j`, `k`, and `c` are no longer default diff shortcuts. To customize them, look for **Go to Next Change**, **Go to Previous Change**, and **Add Review Note** in [Settings → Shortcuts](/docs/settings#shortcuts).
