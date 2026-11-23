@@ -53,6 +53,7 @@ export function createAgentCompletionCoordinator(
     pollTimerTier: null,
     lastPaneActivityAt: null,
     readDueSince: null,
+    inputOnlyReadDue: false,
     unresolvedFollowUps: 0,
     idleShellUnproven: false,
     foregroundIsCommand: false,

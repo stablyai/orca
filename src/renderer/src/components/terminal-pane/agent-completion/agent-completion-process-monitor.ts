@@ -60,9 +60,9 @@ export function createAgentCompletionProcessMonitor({
     consumeReadDue
   } = createAgentCompletionPollScheduler({ options, state, pendingTitle, requestInspection })
 
-  function recordActivityUntil(until: number, eventAt: number): void {
+  function recordActivityUntil(until: number, eventAt: number, inputOnly = false): void {
     state.lastPaneActivityAt = Math.max(state.lastPaneActivityAt ?? until, until)
-    noteForegroundEvent(eventAt)
+    noteForegroundEvent(eventAt, inputOnly)
   }
 
   function observationPredatesActivity(result: TerminalProcessInspection): boolean {
@@ -282,13 +282,13 @@ export function createAgentCompletionProcessMonitor({
       recordActivityUntil(now, now)
     },
     // A command pane's 15 s re-check already answers input that prints nothing, so it never reads above main's pace.
-    // A shell keeps the fast read: input there may start an agent (`read -s -n1; run-agent`).
+    // Elsewhere input that prints nothing gets one read on main's 15 s grid (`read -s -n1; run-agent`); echo is output.
     recordInputActivity: () => {
       if (state.foregroundIsCommand && !state.lastForegroundAgent && !state.hasAgentRunEvidence) {
         return
       }
       const now = Date.now()
-      recordActivityUntil(now, now)
+      recordActivityUntil(now, now, true)
     },
     // Main reports hidden output only on the leading edge of its throttle window, so read after that window.
     recordHiddenOutputActivity: () => {

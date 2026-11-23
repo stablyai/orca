@@ -41,6 +41,7 @@ export function createAgentCompletionPollScheduler(args: {
       return false
     }
     return (
+      (state.inputOnlyReadDue && options.shouldPollProcessCadence?.() !== false) ||
       state.hasAgentRunEvidence ||
       state.lastForegroundAgent !== null ||
       (options.shouldPollProcessCadence?.() !== false &&
@@ -62,6 +63,9 @@ export function createAgentCompletionPollScheduler(args: {
     const ptyId = options.getPtyId()
     if (ptyId && options.isRemotePtyId?.(ptyId) === true) {
       return 'hidden'
+    }
+    if (state.inputOnlyReadDue && state.pendingProcessExit === null) {
+      return 'quiet-agent'
     }
     const now = Date.now()
     // A quiet pane reads only to retry an inconclusive read; a pending exit still confirms fast.
@@ -161,7 +165,8 @@ export function createAgentCompletionPollScheduler(args: {
   }
 
   /** Something that can change the foreground happened; read once after it settles. */
-  function noteForegroundEvent(at = Date.now()): void {
+  function noteForegroundEvent(at = Date.now(), inputOnly = false): void {
+    state.inputOnlyReadDue = inputOnly && (state.readDueSince === null || state.inputOnlyReadDue)
     state.readDueSince ??= at
     state.unresolvedFollowUps = 0
     scheduleNextPoll()
@@ -191,6 +196,9 @@ export function createAgentCompletionPollScheduler(args: {
       lastActivity !== null && lastActivity > Date.now() - PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
         ? lastActivity
         : null
+    if (state.readDueSince === null) {
+      state.inputOnlyReadDue = false
+    }
   }
 
   return {

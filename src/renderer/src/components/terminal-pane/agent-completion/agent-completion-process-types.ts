@@ -26,6 +26,8 @@ export type ProcessMonitorState = {
   lastPaneActivityAt: number | null
   /** Earliest event no read has answered yet; null means no read is due. */
   readDueSince: number | null
+  /** Only input that printed nothing is unanswered: main's 15 s re-check paced that, so reads keep its pace. */
+  inputOnlyReadDue: boolean
   unresolvedFollowUps: number
   /** No host proof that the shell is alone in front: a command may start an agent with no OS event, so a slow re-check stands in (never above main's). */
   idleShellUnproven: boolean

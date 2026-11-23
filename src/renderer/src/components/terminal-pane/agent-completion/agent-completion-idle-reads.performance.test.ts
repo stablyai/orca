@@ -43,20 +43,23 @@ describe('agent completion foreground reads at rest', () => {
     }
   })
 
-  it('never reads a command pane more often than the old 15 s pace while it receives input that prints nothing', async () => {
-    const { coordinator, inspectProcess } = startPane({
-      foregroundProcess: 'vim',
-      hasChildProcesses: true
-    })
-    await vi.advanceTimersByTimeAsync(15_000)
-    inspectProcess.mockClear()
+  it('never reads any pane more often than the old 15 s pace while it receives input that prints nothing', async () => {
+    for (const result of [
+      { foregroundProcess: 'vim', hasChildProcesses: true },
+      { foregroundProcess: 'zsh', hasChildProcesses: false, idleShellProven: true as const },
+      { foregroundProcess: 'codex', hasChildProcesses: true, foregroundExitWatched: true as const }
+    ]) {
+      const { coordinator, inspectProcess } = startPane(result)
+      await vi.advanceTimersByTimeAsync(15_000)
+      inspectProcess.mockClear()
 
-    for (let elapsed = 0; elapsed < TEN_MINUTES_MS; elapsed += 3_000) {
-      coordinator.observeInputActivity()
-      await vi.advanceTimersByTimeAsync(3_000)
+      for (let elapsed = 0; elapsed < TEN_MINUTES_MS; elapsed += 3_000) {
+        coordinator.observeInputActivity()
+        await vi.advanceTimersByTimeAsync(3_000)
+      }
+      // At most one read per 15 s grid tick in these 10 minutes, as before the change.
+      expect(inspectProcess.mock.calls.length).toBeLessThanOrEqual(41)
+      coordinator.dispose()
     }
-    // One read per 15 s grid tick in these 10 minutes, as before the change.
-    expect(inspectProcess).toHaveBeenCalledTimes(41)
-    coordinator.dispose()
   })
 })
