@@ -91,7 +91,6 @@ export function normalizeLoadedGlobalSettings(
 
   return {
     ...defaults.settings,
-    // Legacy stored booleans cannot distinguish opt-in from the old default; retain explicit true.
     ...normalizeLoadedWorkspaceDirSetting(
       stripRetiredGlobalSettings(parsed.settings),
       defaults.settings
@@ -171,7 +170,7 @@ export function normalizeLoadedGlobalSettings(
     minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
     // Default-on values round-trip off-platform; macOS consumers gate the actual effect.
     showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
-    showNotchAgentStatus: parsed.settings?.showNotchAgentStatus === true,
+    showNotchAgentStatus: parsed.settings?.showNotchAgentStatus !== false,
     linuxTilingWindowMode: parsed.settings?.linuxTilingWindowMode === true,
     ...migratedPortugueseUiLanguage,
     nativeChatInheritShellEnvironment: parsed.settings?.nativeChatInheritShellEnvironment !== false,

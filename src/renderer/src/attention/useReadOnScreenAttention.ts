@@ -14,7 +14,9 @@ import {
 
 export function useReadOnScreenAttention(): void {
   const showNotch =
-    useAppStore((state) => state.settings?.showNotchAgentStatus === true) &&
+    useAppStore(
+      (state) => state.settings !== null && state.settings.showNotchAgentStatus !== false
+    ) &&
     !isWebClientLocation() &&
     getRendererAppPlatform() === 'darwin'
   useEffect(() => {

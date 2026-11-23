@@ -351,9 +351,9 @@ export function AppearanceInterfaceSection({
               <SettingsSwitchRow
                 label={entry.title}
                 description={entry.description}
-                checked={settings.showNotchAgentStatus === true}
+                checked={settings.showNotchAgentStatus !== false}
                 onChange={() =>
-                  updateSettings({ showNotchAgentStatus: !settings.showNotchAgentStatus })
+                  updateSettings({ showNotchAgentStatus: settings.showNotchAgentStatus === false })
                 }
               />
             </SearchableSetting>

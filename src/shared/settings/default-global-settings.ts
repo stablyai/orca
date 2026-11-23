@@ -1,4 +1,5 @@
 import type { GlobalSettings } from './global-settings-types'
+import { DEFAULT_SYSTEM_PRESENCE_SETTINGS } from './default-system-presence-settings'
 import type { NotificationSettings } from '../notifications/notification-settings-types'
 import type { VoiceSettings } from '../speech/speech-types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from '../terminal/appearance/terminal-fonts'
@@ -133,9 +134,7 @@ export function buildDefaultSettings(args: {
     terminalScrollOnUserInput: true,
     windowBackgroundBlur: false,
     reduceVisualEffects: false,
-    minimizeToTrayOnClose: false,
-    // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
-    showMenuBarIcon: true,
+    ...DEFAULT_SYSTEM_PRESENCE_SETTINGS,
     terminalClipboardOnSelect: false,
     // Trim only the shared leading-space gutter, preserving relative indentation.
     terminalCopyTrimsGutter: true,

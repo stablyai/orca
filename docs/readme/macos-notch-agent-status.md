@@ -1,6 +1,6 @@
 # macOS agent status at the notch
 
-Enable **Settings → Appearance → Interface → Advanced → Show agent status at the notch** to monitor agents without keeping the main Orca window open. The feature is opt-in and only available in the macOS desktop app.
+The macOS desktop app shows agent status at the notch by default, without keeping the main Orca window open. Disable or re-enable it at **Settings → Appearance → Interface → Advanced → Show agent status at the notch**. A missing preference enables the indicator; a saved `false` remains disabled.
 
 The compact indicator separates working agents, sessions awaiting input, and unread completions. Hover over the indicator to expand the session list. Clicking the bar toggles the list; clicking a session returns to its terminal or chat. Leaving the indicator/list closes it after a short pointer-transition grace period. A completion leaves the list when the existing agent acknowledgement flow marks it read. Sessions already visible in the foreground Orca window are omitted from the indicator, including visible split panes and structured chats. Hidden tabs and workspaces remain listed. Switching apps, minimizing, or hiding Orca with Command+H brings those sessions back; this temporary suppression does not mark a completion read. The panel collapses when the user changes sessions or leaves Orca.
 

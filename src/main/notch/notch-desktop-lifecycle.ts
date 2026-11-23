@@ -56,7 +56,7 @@ export function syncNotchAgentStatus(): void {
   if (process.platform !== 'darwin' || state.isServeMode || !service) {
     return
   }
-  if (state.isQuitting || state.nativeSettings?.getSettings().showNotchAgentStatus !== true) {
+  if (state.isQuitting || state.nativeSettings?.getSettings().showNotchAgentStatus === false) {
     closeNotchWindow()
     service.stop()
     remoteSessions?.stop()
