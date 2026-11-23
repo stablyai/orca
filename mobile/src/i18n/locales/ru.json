@@ -2378,6 +2378,8 @@
       "editSavedArguments": "Измените их в разделе «Настройки» > «Агенты» > «Аргументы».",
       "emptyMessage": "Сообщение пустое, поэтому оно не отправлено.",
       "fullAccessAsRoot": "{{agent}} не может работать в режиме «Полный доступ» от root. Выберите для {{agent}} другой режим доступа в разделе «Настройки → Агенты» на компьютере с этим чатом, затем начните новый чат.",
+      "botToolsNeedStatusHooks": "Ботам {{agent}} нужны «Хуки статуса агентов»: через них инструменты бота действуют от имени бота. Включите их для {{agent}} в разделе «Агенты» настроек, затем начните новый чат.",
+      "botToolsGatewayOutdated": "Шлюз {{agent}} всё ещё работает со старой версией плагина Orca, поэтому инструменты этого бота не могут действовать от его имени. Выполните `hermes gateway stop`, затем начните новый чат.",
       "historyInOtherAccount": "История этого чата находится в другой учётной записи Claude. Вернитесь в неё, чтобы продолжить.",
       "historyTooLarge": "История разговора слишком велика для восстановления здесь.",
       "hostFault": "В Orca произошла ошибка, поэтому действие не выполнено.",
@@ -2995,6 +2997,7 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "Рабочее дерево удалено.",
+      "projectRemoved": "Проект удалён из Orca.",
       "folderWorkspaceRemoved": "Рабочее пространство папки удалено."
     },
     "nativeChatView": {
@@ -4348,7 +4351,6 @@
       "extraAgentArguments": "Дополнительные аргументы агента",
       "allAutomations": "Все автоматизации",
       "schedule": "Расписание",
-      "nextRun": "Следующий запуск",
       "agent": "Агент",
       "project": "Проект",
       "unavailable": "Недоступно",
@@ -4399,7 +4401,6 @@
       "newWorkspacePerRun": "Новая рабочая область для каждого запуска",
       "instructions": "Инструкции",
       "runNow": "Запустить сейчас",
-      "viewAllRuns": "Показать все запуски",
       "savedAgent": "{{agent}} (сохранён)",
       "chooseAProjectSetUpOnThisHost": "Выберите проект, настроенный на этом хосте.",
       "newAutomation": "Новая автоматизация",
@@ -4423,9 +4424,6 @@
       "letYourAgentsWorkOnASchedule": "Пусть агенты работают по расписанию",
       "createAnAutomationToRunATaskOnThisHost": "Создайте автоматизацию для выполнения задачи на этом хосте.",
       "nextDate": "Следующий: {{date}}",
-      "lastResult": "Последний: {{status}} · {{date}}",
-      "latestResultNotReported": "Последний результат не сообщён",
-      "sshTarget": " · SSH {{target}}",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Подключитесь к хосту заново для обновления или изменений. Сохранённая информация доступна ниже.",
       "recentRuns": "Недавние запуски",
       "outcome": "Результат",
@@ -4448,7 +4446,6 @@
       "fullOutputUnavailable": "Не удалось загрузить полный вывод.",
       "retryFullOutput": "Повторить",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "В загруженной истории нет подходящих запусков. Загрузите ещё, чтобы продолжить.",
-      "noMatchingRunsYet": "Подходящих запусков пока нет.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
       "scheduled": "По расписанию",
       "loadMoreRuns": "Загрузить ещё запуски",
@@ -4717,13 +4714,8 @@
       "folder": "Папка",
       "copyPath": "Копировать путь",
       "pathCopied": "Путь скопирован",
-      "off": "Выключено",
-      "lastLooked": "последний обзор {{when}}",
       "tidyNightLine": "Каждую ночь после 3:00",
       "tidyWeekLine": "Раз в неделю, после 3:00",
-      "today": "сегодня",
-      "yesterday": "вчера",
-      "lastTidied": "последняя уборка {{when}}",
       "withAccess": "{{service}}: доступ у {{people}}",
       "requests_one": "{{count}} запрос",
       "requests_other": "Запросов: {{count}}",
@@ -4862,15 +4854,16 @@
         "next": "Следующий элемент",
         "subWhere": "Элемент {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "Не сейчас"
-      },
       "write": {
         "offline": "{{host}} не в сети."
       },
       "thisComputer": "Компьютер",
       "readFailedClosedPage": "Не удалось прочитать больше закрытых элементов.",
-      "skillLimit": "Сообщение не отправлено. Выберите не больше {{limit}} файлов навыков и попробуйте снова."
+      "skillLimit": "Сообщение не отправлено. Выберите не больше {{limit}} файлов навыков и попробуйте снова.",
+      "ask": {
+        "notSentYet": "ещё не отправлено",
+        "replaced": "Агент задал новый вопрос. Прочитайте его, затем ответьте."
+      }
     },
     "needs": {
       "chat": "Ваш чат с {{name}}",
@@ -5305,6 +5298,7 @@
       "toolClaudePrepareFailed": "Не удалось подготовить {{name}} в Claude Code. Проверьте настройку инструмента.",
       "toolNameTaken": "У этого бота уже есть инструмент с именем {{name}}.",
       "toolNameTakenByAgent": "У вашего {{agent}} уже есть инструмент с именем {{name}}, и этот бот тоже его получает. Выберите другое имя через --name.",
+      "toolNameTakenByCodexStdio": "У вашего Codex уже есть локальный инструмент с именем {{name}}, поэтому {{name}} этого бота не может работать. Переименуйте инструмент этого бота.",
       "toolNotUpdated": "Инструмент не обновлён.",
       "toolSignInAddressIncomplete": "Вставьте полный адрес, на котором закончилась страница входа.",
       "toolSignInAddressWrong": "Это не тот адрес, на котором заканчивается этот вход. Начните заново кнопкой «Подключить», войдите и вставьте адрес из браузера.",
@@ -5414,6 +5408,13 @@
     },
     "share": {
       "signInOtherSite": "Компьютер прислал ссылку для входа на другой сайт, поэтому она не открыта."
+    },
+    "settingsPage": {
+      "off": "Выключено",
+      "lastLooked": "последний обзор {{when}}",
+      "today": "сегодня",
+      "yesterday": "вчера",
+      "lastTidied": "последняя уборка {{when}}"
     }
   },
   "sidebar": {

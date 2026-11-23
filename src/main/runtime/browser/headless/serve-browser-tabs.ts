@@ -159,6 +159,20 @@ export class ServeBrowserTabs {
     })
   }
 
+  /** Profiles that saved tabs name; a tab with no profile is Default's. */
+  savedProfileIds(): Set<string> {
+    if (!this.deps.backend()) {
+      return new Set()
+    }
+    return new Set(
+      [...new Set(this.deps.savedWorktreeIds())].flatMap((worktreeId) =>
+        (this.deps.session(worktreeId)?.browserTabsByWorktree?.[worktreeId] ?? []).flatMap((tab) =>
+          tab.sessionProfileId ? [tab.sessionProfileId] : []
+        )
+      )
+    )
+  }
+
   /** Whether the page's tab is saved, so a freed page can start again from it. */
   isSaved(page: { browserPageId: string; worktreeId: string }): boolean {
     return this.startableIn(page.worktreeId).some((saved) => saved.pageId === page.browserPageId)

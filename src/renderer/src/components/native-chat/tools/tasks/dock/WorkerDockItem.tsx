@@ -7,7 +7,6 @@ export function WorkerDockItem({
   index,
   identity,
   row,
-  retired,
   small,
   start,
   measure,
@@ -24,7 +23,6 @@ export function WorkerDockItem({
   index: number
   identity: { id: string; state: WorkerDockRowView['state']; heading: boolean; lead: boolean }
   row: WorkerDockRowView | undefined
-  retired: boolean
   small: boolean
   start: number
   measure: (element: HTMLDivElement | null) => void
@@ -73,7 +71,7 @@ export function WorkerDockItem({
       ) : null}
       {row ? (
         <WorkerDockRow
-          row={retired ? { ...row, retired: true } : row}
+          row={row}
           narrow={narrow}
           compact={compact}
           lead={identity.lead}

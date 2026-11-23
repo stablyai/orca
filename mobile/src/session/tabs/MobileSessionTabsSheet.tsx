@@ -1,8 +1,8 @@
-import { Fragment, useMemo, useRef, useState } from 'react'
+import { Fragment, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Bell, Plus, X } from 'lucide-react-native'
+import { Bell, Check, Columns2, CornerDownRight, Plus, X } from 'lucide-react-native'
 import { agentStatusGroup } from '../../agents/agent-list-rows'
-import { AgentStateDot } from '../../agents/presentation/AgentStateDot'
+import { AGENT_ATTENTION_COLOR, AgentStateDot } from '../../agents/presentation/AgentStateDot'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import {
   MobileSegmentedControl,
@@ -10,6 +10,7 @@ import {
 } from '../../components/controls/MobileSegmentedControl'
 import { ListGroup, SectionHeader } from '../../components/list/ListGroup'
 import { SwipeRowActions } from '../../components/list/SwipeRowActions'
+import { TailClippedText } from '../../components/list/TailClippedText'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useNow } from '../../hooks/use-now'
@@ -17,7 +18,7 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { formatTimeAgo } from '../../worktree/agent-lineage/agent-row-display'
+import { formatTimeAgo, type AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
 import { MobileForkMarkedName } from '../fork/MobileForkMarkedName'
 import { mobileForkAccessibleName } from '../fork/mobile-fork-marked-name'
 import type { MobileSessionController } from '../use-mobile-session-controller'
@@ -29,7 +30,9 @@ import {
 } from './mobile-session-tab-bar-mode'
 import {
   buildMobileSessionTabRow,
+  groupMobileSessionSplitTabs,
   isForkedChatTab,
+  type MobileSessionTabEntry,
   type MobileSessionTabGroup,
   type MobileSessionTabRow,
   type MobileSessionTabSummary
@@ -40,7 +43,12 @@ const TILE_SIZE = 34
 const TILE_DOT_RING = 2
 const GROUP_ORDER: readonly MobileSessionTabGroup[] = ['needs-you', 'working', 'other']
 
-/** Switcher sheet offering `Recent` (cross-workspace MRU) and `This workspace` (grouped + swipe close). */
+type Entry = MobileSessionTabEntry<MobileSessionTabRow>
+
+const entryGroup = (entry: Entry): MobileSessionTabGroup =>
+  entry.kind === 'tab' ? entry.tab.group : entry.group
+
+/** Switcher sheet: `Recent` (cross-workspace MRU) and `This workspace` (needs you first; tap to open, swipe to close). */
 export function MobileSessionTabsSheet({
   controller,
   tabs,
@@ -128,25 +136,31 @@ function MobileSessionTabsSheetContent({
       setLocalScope(next)
     }
   }
-
+  const rows = useMemo(() => tabs.map((tab) => buildMobileSessionTabRow(tab)), [tabs])
+  const entries = useMemo(() => groupMobileSessionSplitTabs(rows), [rows])
   // Sections hold still while the sheet is shown (closing included), so a row never moves under a finger.
   const [frozenGroups] = useState<ReadonlyMap<string, MobileSessionTabGroup>>(
-    () => new Map(tabs.map((tab) => [tab.tab.id, tab.group]))
+    () => new Map(entries.map((entry) => [entry.key, entryGroup(entry)]))
   )
-  const rows = useMemo(() => tabs.map((tab) => buildMobileSessionTabRow(tab)), [tabs])
   const sections = GROUP_ORDER.map((group) => ({
     group,
-    rows: rows.filter((row) => (frozenGroups.get(row.tab.id) ?? row.group) === group)
-  })).filter((section) => section.rows.length > 0)
+    entries: entries.filter((entry) => (frozenGroups.get(entry.key) ?? entryGroup(entry)) === group)
+  })).filter((section) => section.entries.length > 0)
   const sectionTitles: Record<MobileSessionTabGroup, string> = {
     'needs-you': t('session.tabsSheet.needsYou', 'Needs you'),
     working: t('session.tabsSheet.working', 'Working'),
     other: t('session.tabsSheet.everythingElse', 'Everything else')
   }
-  const workspaceCountTitle =
-    rows.length === 1
+  const title =
+    entries.length === 1
       ? t('session.tabBar.oneTab', '1 tab')
-      : t('session.tabBar.tabCount', '{{count}} tabs', { count: rows.length })
+      : t('session.tabBar.tabCount', '{{count}} tabs', { count: entries.length })
+  const open = (tab: MobileSessionTabSummary['tab']) => {
+    if (tab.id !== activeSessionTabId) {
+      switchSessionTab(tab)
+    }
+    onClose()
+  }
 
   const recentNeedsYou = (recentSessionCards ?? []).some(
     (card) =>
@@ -171,100 +185,132 @@ function MobileSessionTabsSheetContent({
     {
       value: 'workspace',
       label: t('session.tabsSheet.workspaceSegment', 'This workspace ({{count}})', {
-        count: rows.length
+        count: entries.length
       }),
       trailing: workspaceNeedsYou ? <View style={styles.segmentDot} /> : undefined
     }
   ]
 
-  const renderRow = (row: MobileSessionTabRow) => {
+  // Closing every pane closes the desktop tab, on hosts old and new.
+  const closePanes = async (panes: readonly MobileSessionTabRow[]) => {
+    for (const pane of panes) {
+      await handleCloseSessionTab(pane.tab)
+    }
+  }
+
+  const renderTab = (row: MobileSessionTabRow) => {
     const current = row.tab.id === activeSessionTabId
-    const badge = row.dotState && row.dotState !== 'idle' ? row.dotState : undefined
-    const unreadBell =
-      row.unread &&
-      row.group === 'other' &&
-      (!badge || (agentStatusGroup(badge) !== 'needs-you' && agentStatusGroup(badge) !== 'working'))
-    const time = current
-      ? t('session.tabsSheet.open', 'Open')
-      : row.timeAt !== null
-        ? formatTimeAgo(row.timeAt, now)
-        : ''
+    const time = row.timeAt !== null ? formatTimeAgo(row.timeAt, now) : ''
     return (
-      <SwipeRowActions
+      <SheetRow
         key={row.tab.id}
-        trailing={{
-          label: t('common.close', 'Close'),
-          accessibilityLabel: t('session.tabsSheet.closeTab', 'Close {{title}}', {
-            title: row.title
-          }),
-          icon: X,
-          background: colors.statusRed,
-          foreground: colors.onStatusRed,
-          onPress: () => void handleCloseSessionTab(row.tab)
-        }}
+        title={row.title}
+        accessibilityLabel={[
+          isForkedChatTab(row.tab) ? mobileForkAccessibleName(row.title) : row.title,
+          row.stateWord,
+          row.content,
+          row.unread ? t('agents.list.unread', 'Unread') : null,
+          time
+        ]
+          .filter(Boolean)
+          .join(', ')}
+        current={current}
+        onPress={() => open(row.tab)}
+        onSwipeClose={() => void handleCloseSessionTab(row.tab)}
       >
-        {(guardPress) => (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={[
-              isForkedChatTab(row.tab) ? mobileForkAccessibleName(row.title) : row.title,
-              row.detail,
-              row.unread ? t('agents.list.unread', 'Unread') : null,
-              time
-            ]
-              .filter(Boolean)
-              .join(', ')}
-            accessibilityState={{ selected: current }}
-            style={styles.row}
-            onPress={guardPress(() => {
-              if (!current) {
-                switchSessionTab(row.tab)
-              }
-              onClose()
-            })}
-          >
-            {({ pressed }) => (
-              <>
-                {current || pressed ? <View pointerEvents="none" style={styles.wash} /> : null}
-                <View style={styles.tile}>
-                  <MobileSessionTabMark row={row} size={17} />
-                  {unreadBell || badge ? (
-                    <View style={styles.tileBadge}>
-                      {unreadBell ? (
-                        <Bell
-                          size={10}
-                          color={colors.statusAmber}
-                          fill={colors.statusAmber}
-                          accessibilityLabel={t('agents.list.unread', 'Unread')}
-                        />
-                      ) : badge ? (
-                        <AgentStateDot state={badge} />
-                      ) : null}
-                    </View>
-                  ) : null}
-                </View>
-                <View style={styles.text}>
-                  <Text style={styles.title} numberOfLines={1}>
-                    {isForkedChatTab(row.tab) ? (
-                      <MobileForkMarkedName name={row.title} />
-                    ) : (
-                      row.title
-                    )}
-                  </Text>
-                  <Text style={styles.detail} numberOfLines={1}>
-                    {row.detail}
-                  </Text>
-                </View>
-                {time ? (
-                  <Text style={[styles.time, current && styles.timeCurrent]}>{time}</Text>
-                ) : null}
-              </>
-            )}
-          </Pressable>
-        )}
-      </SwipeRowActions>
+        <Tile
+          badge={row.dotState}
+          unreadBell={row.unread && row.group === 'other'}
+          mark={<MobileSessionTabMark row={row} size={17} />}
+        />
+        <View style={styles.text}>
+          <Text style={styles.title} numberOfLines={1}>
+            {isForkedChatTab(row.tab) ? <MobileForkMarkedName name={row.title} /> : row.title}
+          </Text>
+          <RowDetail row={row} />
+        </View>
+        {time ? <Text style={styles.time}>{time}</Text> : null}
+        {current ? <CurrentCheck /> : null}
+      </SheetRow>
     )
   }
+
+  const renderSplit = (entry: Extract<Entry, { kind: 'split' }>) => {
+    const { panes } = entry
+    const splitTitle = panes[0].title
+    const paneCount =
+      panes.length === 1
+        ? t('session.tabsSheet.panes_one', '{{count}} pane', { count: panes.length })
+        : t('session.tabsSheet.panes_other', '{{count}} panes', { count: panes.length })
+    const target =
+      panes.find((pane) => pane.tab.id === activeSessionTabId) ??
+      panes.find((pane) => pane.tab.isActive) ??
+      panes[0]
+    return [
+      <SheetRow
+        key={`split:${entry.key}`}
+        title={splitTitle}
+        accessibilityLabel={[
+          splitTitle,
+          paneCount,
+          entry.unread ? t('agents.list.unread', 'Unread') : null
+        ]
+          .filter(Boolean)
+          .join(', ')}
+        current={false}
+        onPress={() => open(target.tab)}
+        onSwipeClose={() => void closePanes(panes)}
+      >
+        <Tile
+          badge={entry.dotState}
+          unreadBell={entry.unread && entry.group === 'other'}
+          mark={<Columns2 size={17} color={colors.textSecondary} strokeWidth={2.1} />}
+        />
+        <View style={styles.text}>
+          <Text style={styles.title} numberOfLines={1}>
+            {splitTitle}
+          </Text>
+          <Text style={styles.detail} numberOfLines={1}>
+            {paneCount}
+          </Text>
+        </View>
+      </SheetRow>,
+      ...panes.map((row) => {
+        const current = row.tab.id === activeSessionTabId
+        return (
+          <SheetRow
+            key={row.tab.id}
+            title={row.title}
+            accessibilityLabel={[row.title, row.stateWord, row.content].filter(Boolean).join(', ')}
+            current={current}
+            pane
+            onPress={() => open(row.tab)}
+            onSwipeClose={() => void handleCloseSessionTab(row.tab)}
+          >
+            <View style={styles.paneMark}>
+              <CornerDownRight size={14} color={colors.textMuted} strokeWidth={2} />
+            </View>
+            <View style={styles.text}>
+              <Text style={styles.paneTitle} numberOfLines={1}>
+                {row.title}
+              </Text>
+              <RowDetail row={row} />
+            </View>
+            {current ? <CurrentCheck /> : null}
+          </SheetRow>
+        )
+      })
+    ]
+  }
+
+  const newTabButton = (
+    <NavBarButton
+      icon={Plus}
+      disabled={createTabBusy || connState !== 'connected'}
+      accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
+      onPress={onOpenNewTab}
+    />
+  )
 
   return (
     <>
@@ -280,25 +326,14 @@ function MobileSessionTabsSheetContent({
             style={styles.segmented}
             testIDPrefix="tabs-sheet-scope-"
           />
-          <NavBarButton
-            icon={Plus}
-            disabled={createTabBusy || connState !== 'connected'}
-            accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
-            onPress={onOpenNewTab}
-          />
+          {newTabButton}
         </View>
       ) : (
-        <View>
-          <SheetHeader title={workspaceCountTitle} subtitle={worktreeName || undefined} />
-          <View style={styles.newTab}>
-            <NavBarButton
-              icon={Plus}
-              disabled={createTabBusy || connState !== 'connected'}
-              accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
-              onPress={onOpenNewTab}
-            />
-          </View>
-        </View>
+        <SheetHeader
+          title={title}
+          subtitle={worktreeName || undefined}
+          trailingButtons={newTabButton}
+        />
       )}
       <View style={styles.body}>
         {activeScope === 'recent' ? (
@@ -310,7 +345,9 @@ function MobileSessionTabsSheetContent({
                 <SectionHeader title={sectionTitles[section.group]} first={index === 0} />
               ) : null}
               <ListGroup separatorInset={spacing.lg + TILE_SIZE + spacing.md}>
-                {section.rows.map(renderRow)}
+                {section.entries.flatMap((entry) =>
+                  entry.kind === 'tab' ? [renderTab(entry.tab)] : renderSplit(entry)
+                )}
               </ListGroup>
             </Fragment>
           ))
@@ -320,9 +357,109 @@ function MobileSessionTabsSheetContent({
   )
 }
 
+function SheetRow({
+  title,
+  accessibilityLabel,
+  current,
+  pane = false,
+  onPress,
+  onSwipeClose,
+  children
+}: {
+  title: string
+  accessibilityLabel: string
+  current: boolean
+  /** A split's pane, indented under its tab. */
+  pane?: boolean
+  onPress: () => void
+  onSwipeClose: () => void
+  children: ReactNode
+}) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
+  return (
+    <SwipeRowActions
+      trailing={{
+        label: t('common.close', 'Close'),
+        accessibilityLabel: t('session.tabsSheet.closeTab', 'Close {{title}}', { title }),
+        icon: X,
+        background: colors.statusRed,
+        foreground: colors.onStatusRed,
+        onPress: onSwipeClose
+      }}
+    >
+      {(guardPress) => (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={accessibilityLabel}
+          accessibilityState={{ selected: current }}
+          style={[styles.row, pane && styles.paneRow]}
+          onPress={guardPress(onPress)}
+        >
+          {({ pressed }) => (
+            <>
+              {pressed ? <View pointerEvents="none" style={styles.wash} /> : null}
+              {children}
+            </>
+          )}
+        </Pressable>
+      )}
+    </SwipeRowActions>
+  )
+}
+
+function Tile({
+  mark,
+  badge,
+  unreadBell
+}: {
+  mark: ReactNode
+  badge: AgentDotState | undefined
+  unreadBell: boolean
+}) {
+  const dot = badge && badge !== 'idle' ? badge : undefined
+  return (
+    <View style={styles.tile}>
+      {mark}
+      {unreadBell || dot ? (
+        <View style={styles.tileBadge}>
+          {unreadBell ? (
+            <Bell size={10} color={colors.statusAmber} fill={colors.statusAmber} />
+          ) : dot ? (
+            <AgentStateDot state={dot} />
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+// The second line only when it adds to the title; paths and URLs keep their end in view.
+function RowDetail({ row }: { row: MobileSessionTabRow }) {
+  if (!row.stateWord && !row.content) {
+    return null
+  }
+  if (!row.stateWord && row.tab.type !== 'terminal' && row.tab.type !== 'agent-session') {
+    return <TailClippedText style={styles.detail}>{row.content}</TailClippedText>
+  }
+  return (
+    <Text style={styles.detail} numberOfLines={1}>
+      {row.stateWord ? (
+        <Text style={row.group === 'needs-you' ? styles.stateNeedsYou : undefined}>
+          {row.stateWord}
+        </Text>
+      ) : null}
+      {row.stateWord && row.content ? ' · ' : ''}
+      {row.content}
+    </Text>
+  )
+}
+
+function CurrentCheck() {
+  return <Check size={18} color={colors.accentBlue} strokeWidth={2.6} />
+}
+
 const styles = themedStyleSheet(() => ({
-  // Over the fallback sheet header's empty trailing side, centred in its 52pt row.
-  newTab: { position: 'absolute', top: 8, right: spacing.xs },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -334,7 +471,7 @@ const styles = themedStyleSheet(() => ({
   body: { paddingBottom: spacing.lg },
   // Opaque so a swipe's action stays hidden until the row slides off it.
   row: {
-    minHeight: 60,
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
@@ -342,7 +479,9 @@ const styles = themedStyleSheet(() => ({
     paddingVertical: spacing.sm,
     backgroundColor: colors.sheetGroup
   },
-  // The tab you're in, or a pressed row, washed like a picked segment on a sheet group.
+  // Indented under its tab's tile, so the corner arrow points into the split.
+  paneRow: { minHeight: 44, paddingLeft: 34, gap: 10, paddingVertical: 6 },
+  // A pressed row, washed like a picked segment on a sheet group.
   wash: {
     position: 'absolute',
     top: 0,
@@ -368,9 +507,11 @@ const styles = themedStyleSheet(() => ({
     borderRadius: radii.pill,
     backgroundColor: colors.sheetGroup
   },
-  text: { flex: 1, minWidth: 0, gap: 2 },
-  title: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  paneMark: { width: 24, alignItems: 'center' },
+  text: { flex: 1, minWidth: 0, gap: 1 },
+  title: { fontSize: 15, fontWeight: '500', color: colors.textPrimary },
+  paneTitle: { fontSize: 14, color: colors.textPrimary },
   detail: { fontSize: 13, color: colors.textSecondary },
-  time: { fontSize: 12, color: colors.textMuted, fontVariant: ['tabular-nums'] },
-  timeCurrent: { fontWeight: '600', color: colors.accentBlue }
+  stateNeedsYou: { color: AGENT_ATTENTION_COLOR },
+  time: { fontSize: 12, color: colors.textMuted, fontVariant: ['tabular-nums'] }
 }))

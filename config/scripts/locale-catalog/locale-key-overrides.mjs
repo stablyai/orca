@@ -544,8 +544,6 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.WorktreeJumpPalette.739bda980c': { ja: 'プライマリ' },
   // "Dismiss" on a bot's create offer is sent to the bot as the owner's reply, so it reads 忽略, not 关闭.
   'components.native-chat.offerCard.dismiss': { zh: '忽略' },
-  // Branch auto-name "Dismiss" clears the saved error, beside its own Close (关闭) and "Dismissing…" (正在清除…).
-  'auto.components.sidebar.AutoRenameFailedDialog.dismiss': { zh: '清除' },
   // Bot statuses read as states (已完成), not the imperative button word 完成.
   'bots.items.status.done': { zh: '已完成' },
   'bots.webhooks.calls.completed': { zh: '已完成' },

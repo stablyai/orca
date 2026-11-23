@@ -20,11 +20,12 @@ import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduce
 import { useKeyboardPersistingTaps } from '../../platform/keyboard/keyboard-persisting-taps'
 import { useNow } from '../../hooks/use-now'
 import { agentStateLabel, type AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
-import { colors, feedback, spacing } from '../../theme/mobile-theme'
+import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import {
   buildMobileSessionTabSummary,
+  countMobileSessionDesktopTabs,
   isForkedChatTab,
   type MobileSessionTabSummary
 } from './mobile-session-tab-rows'
@@ -182,10 +183,11 @@ export function MobileSessionTabBar({
   )
 
   const status = active?.dotState && active.dotState !== 'idle' ? active.dotState : undefined
+  const tabCount = countMobileSessionDesktopTabs(rows)
   const countLabel =
-    rows.length === 1
+    tabCount === 1
       ? t('session.tabBar.oneTab', '1 tab')
-      : t('session.tabBar.tabCount', '{{count}} tabs', { count: rows.length })
+      : t('session.tabBar.tabCount', '{{count}} tabs', { count: tabCount })
   const tabLabel = [
     active && isForkedChatTab(active.tab) ? mobileForkAccessibleName(active.title) : active?.title,
     status ? agentStateLabel(status) : null
@@ -345,6 +347,8 @@ const styles = themedStyleSheet(() => ({
   },
   sideCell: {
     width: 46,
+    flexDirection: 'row',
+    gap: 2,
     alignItems: 'center',
     justifyContent: 'center',
     borderRightWidth: 1,
@@ -353,7 +357,35 @@ const styles = themedStyleSheet(() => ({
   // At the screen edge; in the top bar the hairline stays to part the cells from the round buttons.
   lastCell: { borderRightWidth: 0 },
   cellPressed: { backgroundColor: colors.translucentFill },
-  cellDisabled: { opacity: feedback.disabledOpacity }
+  cellDisabled: { opacity: feedback.disabledOpacity },
+  countBox: {
+    minWidth: 19,
+    height: 19,
+    paddingHorizontal: 3,
+    borderRadius: 6,
+    borderWidth: 1.8,
+    borderColor: colors.textPrimary,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  countText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    fontVariant: ['tabular-nums']
+  },
+  // Another tab needs you: a red dot on the count's corner, ringed in the bar's colour.
+  alert: {
+    position: 'absolute',
+    top: -6,
+    right: -7,
+    width: 9,
+    height: 9,
+    borderRadius: radii.pill,
+    backgroundColor: colors.statusRed,
+    borderWidth: 2,
+    borderColor: colors.bgPanel
+  }
 }))
 
 // The group room's thread bar draws its cells with these too.

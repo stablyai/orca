@@ -17,6 +17,7 @@ import { lookAroundSupported } from '../../shared/bots/bot-look-around'
 import type { Bot } from '../../shared/bot-types'
 import { nativeChatProseToMarkdown } from '../../shared/native-chat/transcript/row-content/native-chat-prose'
 import { fenceQuotedText } from '../../shared/quoted-text-fence'
+import { BOT_MEMORY_ARCHIVE_TOPIC } from '../../shared/bots/bot-memory-archive'
 import {
   slotTaken,
   withBackgroundRun,
@@ -38,7 +39,7 @@ export const TIDY_UP_CHATS = { max: 20, chars: 4_000, total: 40_000 } as const
 export const TIDY_UP_MEMORY_FILES = { topic: 3_000, topics: 12_000, archive: 6_000 } as const
 /** Its chats are read back this far the first time. */
 export const TIDY_UP_FIRST_LOOKBACK_MS = 24 * 60 * 60 * 1000
-export const TIDY_UP_ARCHIVE = 'archive'
+export const TIDY_UP_ARCHIVE = BOT_MEMORY_ARCHIVE_TOPIC
 const MAX_RUNS = 30
 const DAY_MS = 24 * 60 * 60 * 1000
 export const TIDY_UP_INDEX_BLOCK = 'MEMORY.md'

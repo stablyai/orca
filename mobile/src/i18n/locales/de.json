@@ -2238,6 +2238,8 @@
       "editSavedArguments": "Unter Einstellungen > Agenten > Argumente bearbeiten.",
       "emptyMessage": "Diese Nachricht ist leer und wurde daher nicht gesendet.",
       "fullAccessAsRoot": "{{agent}} verwendet keinen Vollzugriff, solange die Ausführung als root erfolgt. Unter Einstellungen → Agenten für den Computer, auf dem dieser Chat läuft, eine andere Berechtigung für {{agent}} auswählen und anschließend einen neuen Chat starten.",
+      "botToolsNeedStatusHooks": "{{agent}}-Bots brauchen Agentenstatus-Hooks: Über sie handeln die Werkzeuge eines Bots als dieser Bot. Aktiviere sie für {{agent}} unter Einstellungen → Agenten und starte dann einen neuen Chat.",
+      "botToolsGatewayOutdated": "Das Gateway von {{agent}} läuft noch mit einer älteren Version des Orca-Plugins, daher können die Werkzeuge dieses Bots nicht als der Bot handeln. Führe `hermes gateway stop` aus und starte dann einen neuen Chat.",
       "historyInOtherAccount": "Der Verlauf dieses Chats befindet sich in einem anderen Claude-Konto. Zu diesem Konto zurückwechseln, um den Chat fortzusetzen.",
       "historyTooLarge": "Der Verlauf dieser Unterhaltung ist zu groß, um ihn hier wiederherzustellen.",
       "hostFault": "Bei Orca ist ein Problem aufgetreten, daher wurde dies nicht übermittelt.",
@@ -2851,6 +2853,7 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "Der Worktree wurde gelöscht.",
+      "projectRemoved": "Das Projekt wurde aus Orca entfernt.",
       "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
     },
     "nativeChatView": {
@@ -4144,7 +4147,6 @@
       "extraAgentArguments": "Zusätzliche Agentenargumente",
       "allAutomations": "Alle Automatisierungen",
       "schedule": "Zeitplan",
-      "nextRun": "Nächste Ausführung",
       "project": "Projekt",
       "unavailable": "Nicht verfügbar",
       "workspace": "Arbeitsbereich",
@@ -4193,7 +4195,6 @@
       "newWorkspacePerRun": "Neuer Arbeitsbereich pro Ausführung",
       "instructions": "Anweisungen",
       "runNow": "Jetzt ausführen",
-      "viewAllRuns": "Alle Ausführungen anzeigen",
       "savedAgent": "{{agent}} (gespeichert)",
       "chooseAProjectSetUpOnThisHost": "Wähle ein auf diesem Host eingerichtetes Projekt.",
       "newAutomation": "Neue Automatisierung",
@@ -4218,9 +4219,6 @@
       "letYourAgentsWorkOnASchedule": "Lass deine Agenten nach Zeitplan arbeiten",
       "createAnAutomationToRunATaskOnThisHost": "Erstelle eine Automatisierung, um eine Aufgabe auf diesem Host auszuführen.",
       "nextDate": "Nächste: {{date}}",
-      "lastResult": "Zuletzt: {{status}} · {{date}}",
-      "latestResultNotReported": "Letztes Ergebnis nicht gemeldet",
-      "sshTarget": " · SSH {{target}}",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Verbinde dich erneut mit diesem Host, um zu aktualisieren oder Änderungen vorzunehmen. Gespeicherte Informationen bleiben unten verfügbar.",
       "recentRuns": "Letzte Ausführungen",
       "outcome": "Ergebnis",
@@ -4243,7 +4241,6 @@
       "fullOutputUnavailable": "Die vollständige Ausgabe konnte nicht geladen werden.",
       "retryFullOutput": "Erneut versuchen",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "Keine passenden Ausführungen im geladenen Verlauf. Lade weitere, um fortzufahren.",
-      "noMatchingRunsYet": "Noch keine passenden Ausführungen.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
       "scheduled": "Geplant",
       "loadMoreRuns": "Weitere Ausführungen laden",
@@ -4513,13 +4510,8 @@
       "folder": "Ordner",
       "copyPath": "Pfad kopieren",
       "pathCopied": "Pfad kopiert",
-      "off": "Aus",
-      "lastLooked": "zuletzt umgesehen {{when}}",
       "tidyNightLine": "Jede Nacht nach 3 Uhr",
       "tidyWeekLine": "Einmal pro Woche, nach 3 Uhr",
-      "today": "heute",
-      "yesterday": "gestern",
-      "lastTidied": "zuletzt aufgeräumt {{when}}",
       "withAccess": "{{service}}: {{people}} mit Zugriff",
       "requests_one": "{{count}} Anfrage",
       "requests_other": "{{count}} Anfragen",
@@ -4646,15 +4638,16 @@
         "next": "Nächstes Element",
         "subWhere": "Element {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "Nicht jetzt"
-      },
       "write": {
         "offline": "{{host}} ist offline."
       },
       "thisComputer": "Der Computer",
       "readFailedClosedPage": "Weitere geschlossene Elemente konnten nicht gelesen werden.",
-      "skillLimit": "Nachricht nicht gesendet. Wähle höchstens {{limit}} Skill-Dateien aus und versuche es erneut."
+      "skillLimit": "Nachricht nicht gesendet. Wähle höchstens {{limit}} Skill-Dateien aus und versuche es erneut.",
+      "ask": {
+        "notSentYet": "noch nicht gesendet",
+        "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann."
+      }
     },
     "needs": {
       "chat": "Dein Chat mit {{name}}",
@@ -5083,6 +5076,7 @@
       "toolClaudePrepareFailed": "{{name}} konnte in Claude Code nicht vorbereitet werden. Prüfe die Tool-Konfiguration.",
       "toolNameTaken": "Dieser Bot hat bereits ein Tool namens {{name}}.",
       "toolNameTakenByAgent": "Dein {{agent}} hat bereits ein Tool namens {{name}}, das dieser Bot ebenfalls bekommt. Wähle mit --name einen anderen Namen.",
+      "toolNameTakenByCodexStdio": "Dein Codex hat bereits ein lokales Tool namens {{name}}, daher kann {{name}} dieses Bots nicht laufen. Benenne das Tool dieses Bots um.",
       "toolNotUpdated": "Das Tool wurde nicht aktualisiert.",
       "toolSignInAddressIncomplete": "Füge die vollständige Adresse ein, auf der die Anmeldeseite geendet hat.",
       "toolSignInAddressWrong": "Das ist nicht die Adresse, auf der diese Anmeldung endet. Starte sie mit Verbinden neu, melde dich an und füge dann die Adresse aus deinem Browser ein.",
@@ -5192,6 +5186,13 @@
     },
     "share": {
       "signInOtherSite": "Der Computer hat einen Anmeldelink für eine andere Website gesendet, daher wurde er nicht geöffnet."
+    },
+    "settingsPage": {
+      "off": "Aus",
+      "lastLooked": "zuletzt umgesehen {{when}}",
+      "today": "heute",
+      "yesterday": "gestern",
+      "lastTidied": "zuletzt aufgeräumt {{when}}"
     }
   },
   "sidebar": {

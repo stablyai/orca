@@ -46,6 +46,8 @@ export type MobileBotRowFacts = {
   /** The first person asking for access, whom the Needs you line names. */
   askedForAccess?: string
   statusLine: string
+  /** What it's for, cut to show the match, when a search found it by that and not its name. */
+  searchPurpose?: string
   paused: boolean
   /** A server's bot: its computer, and that computer's word while it is down. */
   host?: { id: ExecutionHostId; label: string; word?: string }

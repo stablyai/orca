@@ -44,14 +44,15 @@ export function getCompactAgentStatus(
   presentation: ProgramStatusPresentation = resolveRowProgramStatus(agent).presentation,
   t?: Translate
 ): string | null {
+  const tr = t ?? translate
   return compactAgentStatusLine({
     entry: agent.entry,
     state: agent.state,
     presentation,
     now,
     labels: {
-      stopping: (t ?? translate)('components.native-chat.status.stopping', 'Stopping…'),
-      monitoring: agentStateLabel('monitoring')
+      stopping: tr('components.native-chat.status.stopping', 'Stopping…'),
+      monitoring: agentStateLabel('monitoring', tr)
     },
     ...(lastAssistantMessageOverride !== undefined
       ? { lastAssistantMessage: lastAssistantMessageOverride }

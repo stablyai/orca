@@ -33,6 +33,8 @@ export const CONNECTOR_CLOUD_FEATURES = [
   'triggers.github2',
   // github.workflow_finished and a rule's `run` (WORKFLOW_EVENT_KINDS in automation-github-triggers.ts).
   'triggers.workflows',
+  // github.ci_finished (CI_FINISHED_EVENT_KINDS in automation-github-triggers.ts).
+  'triggers.ci_finished',
   // A file's bytes go straight between the CLI and the source: reply and attach stage an `upload`
   // and post its `files`; read's `stream` answers a link to the bytes. No Orca size cap.
   'files.direct',

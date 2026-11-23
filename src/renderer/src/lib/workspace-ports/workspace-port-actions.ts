@@ -278,7 +278,8 @@ function workspacePortScanRequestKey(target: RuntimeClientTarget, repoId?: strin
 
 export async function scanWorkspacePortsForTarget(
   target: RuntimeClientTarget,
-  repoId?: string
+  repoId?: string,
+  options?: { background?: boolean }
 ): Promise<WorkspacePortScanResult> {
   const key = workspacePortScanRequestKey(target, repoId)
   const existing = inFlightWorkspacePortScans.get(key)
@@ -287,7 +288,7 @@ export async function scanWorkspacePortsForTarget(
   }
 
   // Coalesce same-tick surface refreshes to avoid duplicate lsof/netstat/RPC work.
-  const promise = runWorkspacePortScanForTarget(target, repoId).finally(() => {
+  const promise = runWorkspacePortScanForTarget(target, repoId, options).finally(() => {
     if (inFlightWorkspacePortScans.get(key) === promise) {
       inFlightWorkspacePortScans.delete(key)
     }
