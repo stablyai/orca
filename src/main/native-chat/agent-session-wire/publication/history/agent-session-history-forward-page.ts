@@ -1,14 +1,19 @@
 import type { AgentSessionHistoryResult } from '../../../../../shared/agent-session/agent-session-wire'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalSnapshot } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalSnapshot,
+  AgentJournalSubmission
+} from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReadSince } from '../../../agent-session-journal/journal-store-contracts'
 import { projectJournalBatch } from './agent-session-journal-batch'
 import { buildAgentSessionHistoryPage } from './agent-session-history-page-result'
 import {
   historyContentBytes,
+  type HistoryItemForm,
   type HistoryReader,
   measureHistoryItem,
   oversizedHistoryItem,
+  standaloneSubmissionBytes,
   submissionBytesByItemId
 } from './agent-session-history-page-bounds'
 
@@ -63,15 +68,23 @@ export function readAgentSessionForwardHistory(
     submissionBytes = submissionBytesByItemId(result.batch.submissions)
     return { ...result, batch: { ...result.batch, items: result.batch.items.map(reader.form) } }
   }
+  const stampedIds = (window: typeof rows) =>
+    new Set(
+      window.flatMap((row) => (row.kind === 'outcome' ? (row.writtenSubmissionIds ?? []) : []))
+    )
+  // Every returned submission counts once, including stamped ones sent without their message.
+  const pageBytes = (
+    items: readonly HistoryItemForm[],
+    batch: { removedItemIds: readonly string[]; submissions: readonly AgentJournalSubmission[] },
+    window: typeof rows
+  ) =>
+    historyContentBytes(items, batch.removedItemIds, submissionBytes) +
+    standaloneSubmissionBytes(items, batch.submissions, stampedIds(window), submissionBytes)
   let projected = project(rows)
   if (!projected.ok) {
     return source.reset(projected.reset)
   }
-  let contentBytes = historyContentBytes(
-    projected.batch.items,
-    projected.batch.removedItemIds,
-    submissionBytes
-  )
+  let contentBytes = pageBytes(projected.batch.items, projected.batch, rows)
   while (rows.length > 1 && contentBytes > reader.budgetBytes) {
     rows = rows.slice(0, Math.ceil(rows.length / 2))
     const shrunk = project(rows)
@@ -79,11 +92,7 @@ export function readAgentSessionForwardHistory(
       return source.reset(shrunk.reset)
     }
     projected = shrunk
-    contentBytes = historyContentBytes(
-      projected.batch.items,
-      projected.batch.removedItemIds,
-      submissionBytes
-    )
+    contentBytes = pageBytes(projected.batch.items, projected.batch, rows)
   }
   let items = projected.batch.items
   if (contentBytes > reader.budgetBytes) {
@@ -93,7 +102,7 @@ export function readAgentSessionForwardHistory(
         ? measureHistoryItem(oversizedHistoryItem(formed.item))
         : formed
     })
-    contentBytes = historyContentBytes(items, projected.batch.removedItemIds, submissionBytes)
+    contentBytes = pageBytes(items, projected.batch, rows)
   }
   if (contentBytes > reader.budgetBytes) {
     // A single row's semantic payload — in practice a pre-bounding oversized
@@ -112,9 +121,7 @@ export function readAgentSessionForwardHistory(
     page: buildAgentSessionHistoryPage({
       snapshot,
       submissions: projected.batch.submissions,
-      stampedSubmissionIds: new Set(
-        rows.flatMap((row) => (row.kind === 'outcome' ? (row.writtenSubmissionIds ?? []) : []))
-      ),
+      stampedSubmissionIds: stampedIds(rows),
       direction: 'after',
       items: items.map(({ item }) => item),
       removedItemIds: projected.batch.removedItemIds,

@@ -62,6 +62,27 @@ export function historyContentBytes(
   )
 }
 
+/** Stamped sends a page carries without their message, which the item count above never charges. */
+export function standaloneSubmissionBytes(
+  items: readonly HistoryItemForm[],
+  submissions: readonly AgentJournalSubmission[],
+  stampedIds: ReadonlySet<string>,
+  submissionBytes: ReadonlyMap<string, number>
+): number {
+  if (stampedIds.size === 0) {
+    return 0
+  }
+  const itemIds = new Set(items.map(({ item }) => item.itemId))
+  let total = 0
+  for (const submission of submissions) {
+    const key = agentJournalSubmissionKey(submission.clientMessageId)
+    if (stampedIds.has(submission.clientMessageId) && !itemIds.has(key)) {
+      total += submissionBytes.get(key) ?? 0
+    }
+  }
+  return total
+}
+
 // Snapshot arrays change with submissions, so cache serialization once per paged snapshot.
 const bytesBySubmissions = new WeakMap<
   readonly AgentJournalSubmission[],

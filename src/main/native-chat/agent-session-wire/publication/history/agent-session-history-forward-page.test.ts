@@ -33,7 +33,42 @@ const snapshot: AgentJournalSnapshot = {
   submissions: [stamped]
 }
 
+function readStampOnly(budgetBytes: number) {
+  return readAgentSessionForwardHistory(
+    {
+      readSince: () => ({
+        ok: true,
+        cursor: { epoch: 'e', sequence: 5 },
+        through: 5,
+        rows: [
+          {
+            kind: 'outcome',
+            epoch: 'e',
+            seq: 5,
+            itemIds: [],
+            submissionIds: [],
+            writtenSubmissionIds: ['c1']
+          }
+        ]
+      }),
+      canonicalItemId: (itemId) => itemId,
+      hasSubmission: () => true,
+      reset: (reset) => ({ ok: false, reset })
+    },
+    snapshot,
+    { epoch: 'e', sequence: 4 },
+    10,
+    { form: measureHistoryItem, budgetBytes },
+    () => snapshot
+  )
+}
+
 describe('forward history after a writtenAt stamp', () => {
+  // The stamped submission travels without its message, so its bytes must still count against the page.
+  it('never admits a stamp-only submission larger than the page budget', () => {
+    expect(readStampOnly(50)).toEqual({ ok: false, reset: 'cursor_compacted' })
+  })
+
   // Subscribers already hold the message; only the submission changed.
   it('delivers the stamped submission without resending its unchanged message', () => {
     const result = readAgentSessionForwardHistory(
