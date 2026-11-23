@@ -11,14 +11,21 @@ import { botItemCommentImages } from './bot-items'
 import { stripSentImagePromptMarkers } from '../native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 
 /** Per question line, the answer a comment names for it ("Question → answer"), else null. A line
- *  belongs to the question with the longest matching lead, as one question's words may lead another's. */
+ *  belongs to the question with the longest matching lead, as one question's words may lead another's;
+ *  questions whose first lines read the same take their answers in the ask's order. */
 export function botItemNamedAnswers(shape: BotItemQuestionShape, text: string): (string | null)[] {
   const heads = shape.decisions.map((decision) => `${botItemQuestionLine(decision.question)} →`)
   const answers: (string | null)[] = shape.decisions.map(() => null)
   for (const line of text.split('\n').map((l) => l.trim())) {
     let best = -1
     heads.forEach((head, index) => {
-      if (line.startsWith(head) && (best === -1 || head.length > heads[best].length)) {
+      if (!line.startsWith(head)) {
+        return
+      }
+      const longer = best === -1 || head.length > heads[best].length
+      const free =
+        head.length === heads[best]?.length && answers[best] !== null && answers[index] === null
+      if (longer || free) {
         best = index
       }
     })
@@ -73,4 +80,13 @@ export function botItemAnswerWords(
     words &&
     (stripSentImagePromptMarkers(words, botItemCommentImages(reply).length).trim() || words)
   )
+}
+
+/** Answers held for an earlier ask, less the lines a comment answered meanwhile: what recovering them
+ *  puts back in the box. */
+export function botItemUnsentAnswers(
+  held: readonly (string | null)[],
+  answered: readonly (string | null)[]
+): (string | null)[] {
+  return held.map((words, index) => (answered[index] ? null : words))
 }

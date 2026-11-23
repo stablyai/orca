@@ -190,7 +190,10 @@ export function createBotItemQuestionStepsHooks(
         skills?: readonly BotItemCommentSkill[]
       ) => {
         if (!waiting) {
-          send(text, paths, undefined, oneLine !== null && replyingTo === null, skills)
+          // Naming the question it answers, so a reply that lands after the agent asked anew is refused.
+          const answers =
+            oneLine !== null && replyingTo === oneLine.id ? oneLine.eventId : undefined
+          send(text, paths, answers, oneLine !== null && replyingTo === null, skills)
         } else if (replyingTo === `${askId}:${current}`) {
           settle(current, text, paths, skills)
         } else {

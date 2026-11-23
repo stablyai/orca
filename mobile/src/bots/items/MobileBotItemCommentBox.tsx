@@ -59,7 +59,7 @@ const NO_FILES: readonly never[] = []
 
 export type BotItemCommentBoxHandle = {
   /** Put `text` in the box in place of its words, to add to before sending; `plain`: as a comment
-   *  of its own, with "Replying to" hidden. */
+   *  of its own, with "Replying to" hidden; else as the answer, naming the question. */
   fill: (text: string, plain?: boolean) => void
   /** Focus the box to answer the waiting question in your own words, naming it. */
   answer: () => void
@@ -235,9 +235,7 @@ export function MobileBotItemCommentBox({
   }
   useImperativeHandle(ref, () => ({
     fill: (words, plain) => {
-      if (plain) {
-        setUnmarked(question?.id ?? null)
-      }
+      setUnmarked(plain ? (question?.id ?? null) : null)
       setText(`${words} `)
       input.current?.focus()
     },
