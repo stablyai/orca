@@ -1,5 +1,5 @@
 // @protected-copy: drawn inside the security-surface setup dialog
-import React, { useEffect, useId, useRef, useState } from 'react'
+import React, { useEffect, useId, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { SlackIcon } from '@/components/icons/SlackIcon'
 import { Button } from '@/components/ui/button'
@@ -28,7 +28,11 @@ import { ConnectorSetupDialog, useSetupStepAside } from '../connector-setup-surf
 import { forgetOpenedSlackPages, useBotSlackSetup } from './use-bot-slack-setup'
 import { useSlackHandOffOffer } from './use-slack-hand-off-offer'
 import { useBotHostOutage } from '../use-bot-host-outage'
-import { SlackSetupProblemStep, slackSetupProblem } from './SlackSetupProblem'
+import {
+  SlackSetupProblemStep,
+  slackSetupProblem,
+  useResumeWhenHostReturns
+} from './SlackSetupProblem'
 import { SlackCopyLink, SlackHandOffConfirm, SlackHandOffLines } from './slack-hand-off-parts'
 import { useBotHostLabel } from '../use-bot-host-label'
 import {
@@ -66,18 +70,7 @@ function BotSlackSetupFlow({
   const offer = useSlackHandOffOffer(bot, step)
   const outage = useBotHostOutage(bot.hostId)
   const problem = slackSetupProblem(step, outage)
-  // A failure while the server was away starts again once it is back, as the waiting line says.
-  const waitingForHost = problem?.kind === 'reconnecting' || problem?.kind === 'offline'
-  const waitedForHost = useRef(false)
-  const hostDown = outage !== null
-  useEffect(() => {
-    if (waitingForHost) {
-      waitedForHost.current = true
-    } else if (waitedForHost.current && step.kind === 'failed' && !hostDown) {
-      waitedForHost.current = false
-      void retry()
-    }
-  }, [waitingForHost, step.kind, hostDown, retry])
+  useResumeWhenHostReturns(problem, step, outage, { retry, setUp, handOff })
   // Back from Slack's page in Orca's browser once the install ends, or needs the owner. Stepping aside
   // mounts this flow anew, which checks again before it waits again: that is not an end.
   const settled =

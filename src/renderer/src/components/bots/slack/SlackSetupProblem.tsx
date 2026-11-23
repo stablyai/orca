@@ -1,6 +1,6 @@
 // @protected-copy: drawn inside the security-surface setup dialog
 // The Connect Slack dialog's known failures: what happened, one way forward, and the codes under Details.
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
@@ -17,7 +17,8 @@ const TOKEN_REJECTED_CODES: ReadonlySet<string> = new Set(['slack_refused', 'gra
 export type SlackSetupProblem =
   | { kind: 'reconnecting' | 'offline'; code: string; environmentId: string }
   | { kind: 'other-user' | 'expired'; teamId: string }
-  | { kind: 'token-rejected'; code: string; teamId?: string }
+  /** `mine`: this desktop's own token was refused, so the new one is saved here. */
+  | { kind: 'token-rejected'; code: string; teamId?: string; mine?: true }
 
 /** The step's known failure, or null for every other step, and for failures still said in one line. */
 export function slackSetupProblem(
@@ -37,12 +38,49 @@ export function slackSetupProblem(
         ? {
             kind: 'token-rejected',
             code: step.code,
-            ...(step.teamId ? { teamId: step.teamId } : {})
+            ...(step.teamId ? { teamId: step.teamId } : {}),
+            ...(step.local ? { mine: true as const } : {})
           }
         : null
-    default:
+    case 'checking':
+    case 'pick':
+    case 'token':
+    case 'setting-up':
+    case 'ready':
+    case 'waiting':
+    case 'uncertain':
+    case 'installed':
       return null
   }
+}
+
+/**
+ * A failure while the server was away runs again once it is back, as the waiting line says: the same
+ * step for the same workspace; only a failed first check starts over.
+ */
+export function useResumeWhenHostReturns(
+  problem: SlackSetupProblem | null,
+  step: BotSlackSetupStep,
+  outage: BotHostOutage | null,
+  run: {
+    retry: () => Promise<void>
+    setUp: (teamId: string) => Promise<void>
+    handOff: (teamId: string) => Promise<void>
+  }
+): void {
+  const waitingForHost = problem?.kind === 'reconnecting' || problem?.kind === 'offline'
+  const waited = useRef(false)
+  const hostDown = outage !== null
+  const { retry, setUp, handOff } = run
+  useEffect(() => {
+    if (waitingForHost) {
+      waited.current = true
+    } else if (waited.current && step.kind === 'failed' && !hostDown) {
+      waited.current = false
+      const team = step.teamId
+      void (team ? (step.handOff ? handOff : setUp)(team) : retry())
+    }
+  }, [waitingForHost, step, hostDown, retry, setUp, handOff])
 }
 
 function problemCode(problem: SlackSetupProblem): string {
@@ -150,7 +188,7 @@ export function SlackSetupProblemStep({
   hostName: string | null
   onClose: () => void
   onNewLink: (teamId: string) => void
-  onReplaceToken: (teamId: string | undefined) => void
+  onReplaceToken: (teamId: string | undefined, mine: boolean) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const [connecting, setConnecting] = useState(false)
@@ -188,7 +226,7 @@ export function SlackSetupProblemStep({
         )
       case 'token-rejected':
         return (
-          <Button autoFocus onClick={() => onReplaceToken(problem.teamId)}>
+          <Button autoFocus onClick={() => onReplaceToken(problem.teamId, problem.mine === true)}>
             {t('bots.slack.problem.replaceToken', 'Replace token')}
           </Button>
         )

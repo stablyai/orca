@@ -97,7 +97,13 @@ describe('Connect Slack error states', () => {
     expect(view.text).toContain('Slack rejected this workspace’s token.')
     expect(view.buttons).not.toContain('Try again')
     view.click('Replace token')
-    expect(view.onReplaceToken).toHaveBeenCalledWith('T1')
+    expect(view.onReplaceToken).toHaveBeenCalledWith('T1', false)
+  })
+
+  it('keeps a token this desktop handed over on this desktop when Slack rejects it', () => {
+    const view = show({ kind: 'failed', code: 'slack_refused', teamId: 'T1', local: true })
+    view.click('Replace token')
+    expect(view.onReplaceToken).toHaveBeenCalledWith('T1', true)
   })
 
   it('keeps Details collapsed until opened, and keeps codes out of the main text', () => {
