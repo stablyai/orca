@@ -1,14 +1,8 @@
 // The work record as this runtime reads it: links from the conversation store, workers from
 // orchestration, workspaces from the runtime's worktrees.
-import { existsSync } from 'node:fs'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  getRepoExecutionHostId,
-  getRepoRoutingConnectionId,
-  LOCAL_EXECUTION_HOST_ID
-} from '../../shared/execution-host/execution-host'
+import { getRepoRoutingConnectionId } from '../../shared/execution-host/execution-host'
 import { splitWorktreeId } from '../../shared/worktree/id'
-import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
 import {
   findLink,
   findLinkForSession,
@@ -34,7 +28,7 @@ import {
 } from './bot-work-record'
 import { BotWorkStore, botWorkStoreFile, type BotWorkHost } from './bot-work-store'
 import type { BotWorkWorkspaceShow } from './bot-work-workspace-show'
-import type { ScopedWorktreeReads } from '../runtime/workspaces/catalog/scoped-worktree-row-resolution'
+import { localWorktreeProvenGone, type BotWorkspaceReads } from './bot-workspace-reads'
 import { isInBotHome } from './bot-home-membership'
 import { readRemoteGitHubRepo, readRemoteWorkspace } from './bot-work-remote-workspace'
 import { readServerOwnedWorker } from './bot-work-server-owned-worker'
@@ -132,11 +126,11 @@ export async function readWorkers(
   return workers
 }
 
-/** `reads`: one batch's repo reads, shared by every workspace it reads. */
+/** `reads`: one batch's repo reads and path probes, shared by every workspace it reads. */
 export async function readWorkspace(
   runtime: BotWorkRuntime,
   worker: BotWorkWorker,
-  reads?: ScopedWorktreeReads
+  reads?: BotWorkspaceReads
 ): Promise<BotWorkWorkspace | 'gone' | null> {
   if (worker.host !== 'local') {
     return readRemoteWorkspace(runtime, worker)
@@ -148,7 +142,7 @@ export async function readWorkspace(
 async function readLocalWorkspace(
   runtime: BotWorkRuntime,
   worktreeId: string,
-  reads?: ScopedWorktreeReads
+  reads?: BotWorkspaceReads
 ): Promise<BotWorkWorkspace | 'gone' | null> {
   const store = runtime.linkStore()
   const parsed = splitWorktreeId(worktreeId)
@@ -159,17 +153,14 @@ async function readLocalWorkspace(
   if (!repo) {
     return null
   }
-  // Only this machine's own disk proves a deletion, with the repository still there: an SSH host,
-  // a stopped WSL distro or an unmounted drive proves nothing.
-  if (
-    getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
-    !parseWslUncPath(parsed.worktreePath) &&
-    existsSync(repo.path) &&
-    !existsSync(parsed.worktreePath)
-  ) {
+  if (await localWorktreeProvenGone(repo, parsed.worktreePath, reads)) {
     return 'gone'
   }
-  const worktree = await runtime.showManagedTerminalWorkspace(`id:${worktreeId}`, undefined, reads)
+  const worktree = await runtime.showManagedTerminalWorkspace(
+    `id:${worktreeId}`,
+    undefined,
+    reads?.worktrees
+  )
   // The PR the workspace's row shows: the desktop's cached read, never a GitHub call of its own.
   const pr = readWorkspaceReviewPR(worktree, repo, store.getGitHubCache().pr)
   return {

@@ -8,7 +8,7 @@ const LOCAL_WORKTREE_PATH_PROBE_CONCURRENCY = 2
 export const LOCAL_WORKTREE_PATH_PROBE_TIMEOUT_MS = 2_000
 const localWorktreePathProbeSemaphore = new PrioritySemaphore(LOCAL_WORKTREE_PATH_PROBE_CONCURRENCY)
 
-type LocalWorktreePathPresence = 'directory' | 'other' | 'missing' | 'unknown'
+export type LocalWorktreePathPresence = 'directory' | 'other' | 'missing' | 'unknown'
 
 async function probeLocalWorktreePath(
   pathValue: string,

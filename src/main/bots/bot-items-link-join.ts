@@ -15,10 +15,7 @@ import type { BotItemLinkRecord } from './bot-items-schema'
 import type { BotWorkWorker } from './bot-work-types'
 import { readWorkerDockReasons } from '../runtime/orchestration/dock/worker-dock-read'
 import { readWorkers, readWorkspace, type BotWorkRuntime } from './bot-work-runtime'
-import {
-  createScopedWorktreeReads,
-  type ScopedWorktreeReads
-} from '../runtime/workspaces/catalog/scoped-worktree-row-resolution'
+import { createBotWorkspaceReads, type BotWorkspaceReads } from './bot-workspace-reads'
 
 type CacheRecord<T> = Readonly<Record<string, { data: T | null; fetchedAt: number }>>
 
@@ -87,8 +84,8 @@ export class BotItemLinkJoin {
       return reads
     }
     // Links to one worker (a Dispatch and its follow-ups) read its workspace and report once; every
-    // workspace here reads its repo's worktrees once, not once per worker.
-    const worktreeReads = createScopedWorktreeReads()
+    // workspace here reads its repo's worktrees and probes each path once, not once per worker.
+    const worktreeReads = createBotWorkspaceReads()
     const prs = new Map<string, Promise<BotItemPullRequest | null>>()
     const reports = new Map<string, WorkerRead['report']>()
     await Promise.all(
@@ -127,7 +124,7 @@ export class BotItemLinkJoin {
   /** Server-hosted work shows no PR state until a remote PR read exists. */
   private async workerPr(
     worker: BotWorkWorker,
-    worktreeReads: ScopedWorktreeReads
+    worktreeReads: BotWorkspaceReads
   ): Promise<BotItemPullRequest | null> {
     if (worker.host !== 'local') {
       return { shown: false, reason: 'server' }
