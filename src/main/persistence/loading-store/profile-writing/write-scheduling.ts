@@ -1,7 +1,6 @@
 import type { StoreRuntimeState } from '../store-runtime-state'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
-import { enqueueWrite } from './primary-state-writes'
-import { isProfileStateRevisionConflict } from '../../profile-state/writer/profile-state-writer-reopen-policy'
+import { runScheduledSave } from './refused-save-retry'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   notifyWorkspaceSessionWritten,
@@ -53,8 +52,6 @@ export type WorktreeMetaWriteListener = (write: {
 
 const SAVE_DEBOUNCE_MS = 1_000
 const SAVE_MAX_WAIT_MS = 5_000
-const SAVE_RETRY_MS = 5_000
-const MAX_SAVE_RETRY_MS = 60_000
 
 type WriteSchedulingOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -179,7 +176,7 @@ function scheduleDomainSave(
   written?: WrittenWorkspaceScope,
   options?: StateWriteOptions
 ): void {
-  const { runtime } = owner[writeSchedulingOperationsContext]
+  const { runtime, writes } = owner[writeSchedulingOperationsContext]
   notifyWorkspaceSessionWritten(
     runtime,
     dirtyDomains,
@@ -226,47 +223,5 @@ function scheduleDomainSave(
   }
   const untilMaxWait = Math.max(0, runtime.firstPendingSaveAt + SAVE_MAX_WAIT_MS - now)
   const delay = Math.min(SAVE_DEBOUNCE_MS, untilMaxWait)
-  runtime.writeTimer = setTimeout(() => runScheduledSave(owner), delay)
-}
-
-function runScheduledSave(owner: WriteSchedulingOperations, retryDelayMs = SAVE_RETRY_MS): void {
-  const { runtime, writes } = owner[writeSchedulingOperationsContext]
-  runtime.writeTimer = null
-  runtime.firstPendingSaveAt = null
-  // A refused save leaves its changes unsaved; try the same save again instead of waiting for the next edit.
-  void enqueueWrite(writes, { skipIfClean: true }).catch((error: unknown) =>
-    retryRefusedSave(owner, error, retryDelayMs)
-  )
-}
-
-function retryRefusedSave(owner: WriteSchedulingOperations, error: unknown, delayMs: number): void {
-  const { runtime } = owner[writeSchedulingOperationsContext]
-  if (
-    runtime.writeTimer ||
-    runtime.writesFrozen ||
-    runtime.quitFlushStarted ||
-    runtime.profileMaintenancePending ||
-    !savingCanResume(runtime, error)
-  ) {
-    return
-  }
-  // A new edit re-arms the normal timer, which restarts this backoff.
-  const nextDelayMs = Math.min(delayMs * 2, MAX_SAVE_RETRY_MS)
-  runtime.writeTimer = setTimeout(() => runScheduledSave(owner, nextDelayMs), delayMs)
-}
-
-/** Saving stopped for good, or another process moved the profile on: retrying cannot succeed. */
-function savingCanResume(runtime: WriteSchedulingOperationsRuntime, error: unknown): boolean {
-  if (isProfileStateRevisionConflict(error)) {
-    return false
-  }
-  const authority = runtime.profileStateAuthority
-  try {
-    if (authority && 'assertWritable' in authority) {
-      authority.assertWritable()
-    }
-    return true
-  } catch {
-    return false
-  }
+  runtime.writeTimer = setTimeout(() => runScheduledSave(runtime, writes), delay)
 }

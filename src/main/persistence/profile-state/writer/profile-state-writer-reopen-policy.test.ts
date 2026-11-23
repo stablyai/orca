@@ -15,4 +15,17 @@ describe('profile save notice', () => {
     policy.recordSaved()
     expect(notices).toEqual(['disk-full', 'failing', null])
   })
+
+  it('reports a stopped writer once until a save lands again', () => {
+    const failures: unknown[] = []
+    const policy = new ProfileStateWriterReopenPolicy(() => ({
+      onFailure: (error) => failures.push(error)
+    }))
+    const conflict = new Error('profile-state-revision-conflict')
+    policy.reportStopped(conflict)
+    policy.reportStopped(conflict)
+    policy.recordSaved()
+    policy.reportStopped(conflict)
+    expect(failures).toHaveLength(2)
+  })
 })

@@ -14,6 +14,7 @@ import type {
 import { Store } from '../store'
 import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { profileStateWriterPatching } from '../../profile-state/documents/profile-state-patched-domains'
+import { ProfileStateWriterError } from '../../profile-state/writer/profile-state-writer-errors'
 
 export function deferred<T>() {
   let resolve!: (value: T) => void
@@ -119,7 +120,11 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
     await gate?.finish.promise
     if (write && this.failNext) {
       this.failNext = false
-      throw new Error('profile_state_write_failed')
+      throw new ProfileStateWriterError(
+        'profile-state-write-failed',
+        'profile_state_write_failed',
+        'known-failure'
+      )
     }
     operation()
   }

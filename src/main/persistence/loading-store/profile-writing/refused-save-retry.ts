@@ -1,0 +1,72 @@
+import type { StoreRuntimeState } from '../store-runtime-state'
+import { enqueueWrite, type PrimaryStateWriteOperations } from './primary-state-writes'
+import {
+  ProfileStateWriterError,
+  profileStateWriterFailureOutcome
+} from '../../profile-state/writer/profile-state-writer-errors'
+import { isProfileStateRevisionConflict } from '../../profile-state/writer/profile-state-writer-reopen-policy'
+
+const SAVE_RETRY_MS = 5_000
+const MAX_SAVE_RETRY_MS = 60_000
+
+type SaveRetryRuntime = Pick<
+  StoreRuntimeState,
+  | 'firstPendingSaveAt'
+  | 'profileMaintenancePending'
+  | 'profileStateAuthority'
+  | 'quitFlushStarted'
+  | 'writeTimer'
+  | 'writesFrozen'
+>
+
+/** The save timer's job; a refused save is tried again instead of waiting for the next edit. */
+export function runScheduledSave(
+  runtime: SaveRetryRuntime,
+  writes: PrimaryStateWriteOperations,
+  retryDelayMs = SAVE_RETRY_MS
+): void {
+  runtime.writeTimer = null
+  runtime.firstPendingSaveAt = null
+  void enqueueWrite(writes, { skipIfClean: true }).catch((error: unknown) =>
+    retryRefusedSave(runtime, writes, error, retryDelayMs)
+  )
+}
+
+/** Backs off to once a minute; a new edit re-arms the normal save timer, which restarts it. */
+export function retryRefusedSave(
+  runtime: SaveRetryRuntime,
+  writes: PrimaryStateWriteOperations,
+  error: unknown,
+  delayMs = SAVE_RETRY_MS
+): void {
+  if (
+    runtime.writeTimer ||
+    runtime.writesFrozen ||
+    runtime.quitFlushStarted ||
+    runtime.profileMaintenancePending ||
+    !savingCanResume(runtime, error)
+  ) {
+    return
+  }
+  const nextDelayMs = Math.min(delayMs * 2, MAX_SAVE_RETRY_MS)
+  runtime.writeTimer = setTimeout(() => runScheduledSave(runtime, writes, nextDelayMs), delayMs)
+}
+
+/** Only a save the writer refused can succeed later; a conflict or a stopped writer never will. */
+function savingCanResume(runtime: SaveRetryRuntime, error: unknown): boolean {
+  const refusedByWriter =
+    error instanceof ProfileStateWriterError ||
+    profileStateWriterFailureOutcome(error) === 'indeterminate'
+  if (!refusedByWriter || isProfileStateRevisionConflict(error)) {
+    return false
+  }
+  const authority = runtime.profileStateAuthority
+  try {
+    if (authority && 'assertWritable' in authority) {
+      authority.assertWritable()
+    }
+    return true
+  } catch {
+    return false
+  }
+}

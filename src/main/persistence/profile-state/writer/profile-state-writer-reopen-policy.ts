@@ -15,6 +15,7 @@ export class ProfileStateWriterReopenPolicy {
   private diskFull = false
   private writerDelayed = false
   private noticeShown: ProfileStateSaveNotice = null
+  private stopReported = false
 
   constructor(
     private readonly callbacks: () => {
@@ -85,6 +86,11 @@ export class ProfileStateWriterReopenPolicy {
   /** Saving stopped for good. A revision conflict after an interrupted write reports that write instead. */
   reportStopped(error: unknown): void {
     this.endRecovery()
+    // A conflicted writer stays open, so every later save is refused again; tell the user once.
+    if (this.stopReported) {
+      return
+    }
+    this.stopReported = true
     const cause =
       this.interrupted && isProfileStateRevisionConflict(error) ? this.interrupted : error
     reportTerminalReopenFailure(this.callbacks().onFailure, cause)
@@ -102,6 +108,7 @@ export class ProfileStateWriterReopenPolicy {
     // The acknowledged command is no longer slow; its own clear arrives a microtask later.
     this.writerDelayed = false
     this.interrupted = undefined
+    this.stopReported = false
     if (this.recovering) {
       this.endRecovery()
     }
@@ -129,6 +136,7 @@ export class ProfileStateWriterReopenPolicy {
   recordSuccess(): void {
     this.failure = undefined
     this.interrupted = undefined
+    this.stopReported = false
     // A bypass granted during a backoff must not carry over to a later, unrelated one.
     this.bypassOnce = false
   }

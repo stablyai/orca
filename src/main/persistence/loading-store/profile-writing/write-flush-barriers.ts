@@ -6,6 +6,7 @@ import {
 import type { StoreRuntimeState } from '../store-runtime-state'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
 import { enqueueWrite } from './primary-state-writes'
+import { retryRefusedSave } from './refused-save-retry'
 import { drainProfileStateOperations, runProfileStateFlush } from './profile-state-flush-lifetime'
 import type { PendingProfileStateFlushOptions } from './profile-state-flush-lifetime'
 
@@ -178,6 +179,10 @@ export async function flushCurrentStateAsync(
           fullCheckpoint,
           signal
         })
+      } catch (error) {
+        // This flush cancelled any pending retry; a refused save must still be retried without a new edit.
+        retryRefusedSave(runtime, writes, error)
+        throw error
       } finally {
         await (final
           ? runtime.activeViewPreference.flushAsync()
