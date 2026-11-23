@@ -272,7 +272,15 @@ function applyStep(
       return NOT_SAVED
     }
     const result = await record(async () => ACCEPTED)
-    if (ref && result.outcome === 'accepted') {
+    if (result.outcome !== 'accepted') {
+      // Refused after the save (the backlog filled meanwhile): put the thread back as it was, so a
+      // refused mute never stays in effect.
+      await deps
+        .write(key, thread.muted)
+        .catch((error: unknown) => console.warn('[connectors] could not undo a thread mute', error))
+      return result
+    }
+    if (ref) {
       // The emoji is the only answer: a failed one leaves the thread muted all the same.
       void deps
         .react(thread.botId, key, ref, MUTED_EMOJI)

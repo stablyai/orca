@@ -255,4 +255,32 @@ describe('a mute when the receipt backlog is full', () => {
     expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: false })
     expect(reacted).toEqual([])
   })
+
+  // The backlog filled between the check and the receipt: the saved mute is put back.
+  it('is undone when its receipt is refused after the save', async () => {
+    const store = await botHome({})
+    const receipts = new DeliveryReceipts(() => orchestration)
+    // Other threads fill the backlog while the mute's save is on its way to disk.
+    const flush = store.flushPendingOrThrowAsync.bind(store)
+    vi.spyOn(store, 'flushPendingOrThrowAsync').mockImplementationOnce(async (options) => {
+      for (let index = 0; index < CONNECTOR_PENDING_RECEIPT_LIMIT; index++) {
+        void receipts.run(
+          SECOND,
+          `pending-${index}`,
+          'connector.send',
+          ['x'],
+          () => new Promise(() => {})
+        )
+      }
+      await flush(options)
+    })
+    const { deliver, reacted } = connector(store, receipts)
+
+    expect(await deliver(send(FIRST, 'stop listening here'))).toEqual({
+      outcome: 'refused',
+      reason: 'delivery_backlog_full'
+    })
+    expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: false })
+    expect(reacted).toEqual([])
+  })
 })
