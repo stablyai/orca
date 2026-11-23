@@ -86,13 +86,11 @@ function observeDockFrame(element: HTMLDivElement | null, measure: () => void) {
     schedule()
   }
   observeChildren()
-  element.addEventListener('scroll', schedule)
   const mutations = new MutationObserver(observeChildren)
   mutations.observe(element, { childList: true, subtree: true })
   return () => {
     resize.disconnect()
     mutations.disconnect()
-    element.removeEventListener('scroll', schedule)
     cancelAnimationFrame(scheduled)
   }
 }
@@ -186,8 +184,6 @@ export function NativeChatWorkerDockFrame({ children }: { children: ReactNode })
     }
   }, [held])
   const pointer = useRef<number | null>(null)
-  const scrollEnd = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  useEffect(() => () => clearTimeout(scrollEnd.current), [])
   const roster = useMemo(() => ({ expanded, setExpanded }), [expanded])
   const scroll = useMemo(() => ({ ref: frame, shared: questions }), [questions])
   return (
@@ -197,7 +193,7 @@ export function NativeChatWorkerDockFrame({ children }: { children: ReactNode })
           <div
             ref={frame}
             data-native-chat-worker-dock=""
-            className="group/worker-dock scrollbar-sleek -mx-1.5 -mt-1.5 mb-1.5 min-h-0 overflow-hidden rounded-t-xl border-b border-border bg-muted/50 [overflow-anchor:none] has-[[data-native-chat-worker-approvals]]:overflow-y-auto"
+            className="group/worker-dock scrollbar-sleek -mx-1.5 -mt-1.5 mb-1.5 min-h-0 overflow-hidden overscroll-contain rounded-t-xl border-b border-border bg-muted/50 [overflow-anchor:none] has-[[data-native-chat-worker-approvals]]:overflow-y-auto"
             style={{
               maxHeight: height ?? 'min(40cqh, calc(100cqh - 180px))',
               scrollPaddingTop: 44
@@ -206,33 +202,6 @@ export function NativeChatWorkerDockFrame({ children }: { children: ReactNode })
               if (pointer.current === null) {
                 requestAnimationFrame(() => revealFocusedDockRow(frame.current))
               }
-            }}
-            onScroll={() => {
-              clearTimeout(scrollEnd.current)
-              scrollEnd.current = setTimeout(() => {
-                const element = frame.current
-                if (!element || pointer.current !== null) {
-                  return
-                }
-                const top =
-                  element.getBoundingClientRect().top +
-                  (element.querySelector('[data-worker-dock-header]')?.getBoundingClientRect()
-                    .height ?? 0)
-                const rows = [
-                  ...element.querySelectorAll<HTMLElement>(
-                    '[data-native-chat-worker-question-summary], [data-native-chat-background-tasks] [data-index]'
-                  )
-                ]
-                const first = rows.find((row) => row.getBoundingClientRect().bottom > top + 1)
-                if (
-                  !revealFocusedDockRow(element) &&
-                  first &&
-                  first.getBoundingClientRect().top < top - 1
-                ) {
-                  element.scrollTop += first.getBoundingClientRect().top - top
-                }
-                measure()
-              }, 100)
             }}
             onPointerDownCapture={(event) => {
               if (event.button === 0) {

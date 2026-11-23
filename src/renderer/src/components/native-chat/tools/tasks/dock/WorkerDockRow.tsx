@@ -95,7 +95,9 @@ export const WorkerDockRow = memo(function WorkerDockRow({
           : row.state === 'unavailable'
             ? CircleDashed
             : Circle
-  const tooltip = `${row.name} · ${row.title}${row.model ? ` · ${row.model}` : ''}${row.startedAt ? t('components.native-chat.workerDock.startedAt', ' · Started {{time}} · {{elapsed}} elapsed', { time: new Date(row.startedAt).toLocaleString(locale), elapsed }) : ''}${t('components.native-chat.workerDock.contactUnavailable', ' · Last confirmed contact unavailable')}`
+  // A remote chat's worker is shown, not driven, here: its row says where to act instead.
+  const remote = row.kind === 'worker' && row.ownerActionsAvailable === false
+  const tooltip = `${row.name} · ${row.title}${row.model ? ` · ${row.model}` : ''}${row.startedAt ? t('components.native-chat.workerDock.startedAt', ' · Started {{time}} · {{elapsed}} elapsed', { time: new Date(row.startedAt).toLocaleString(locale), elapsed }) : ''}${t('components.native-chat.workerDock.contactUnavailable', ' · Last confirmed contact unavailable')}${remote ? ` · ${t('components.native-chat.workerDock.remoteOwner', 'Stop or clear this from the computer it runs on')}` : ''}`
   const reason =
     (failed || row.state === 'unavailable' || row.state === 'stopping') && row.reason
       ? row.reason
@@ -172,7 +174,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
             'flex min-w-0 flex-1 items-start gap-2 px-4 py-2 text-left hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
             narrow ? 'pr-0' : 'items-center'
           )}
-          aria-label={`${row.name} · ${row.title} · ${state}${row.reason ? ` · ${row.reason}` : ''}`}
+          aria-label={`${row.name} · ${row.title} · ${state}${row.reason ? ` · ${row.reason}` : ''}${remote ? ` · ${t('components.native-chat.workerDock.remoteOwner', 'Stop or clear this from the computer it runs on')}` : ''}`}
           title={tooltip}
           onClick={(event) => onOpen(row, event.currentTarget)}
         >

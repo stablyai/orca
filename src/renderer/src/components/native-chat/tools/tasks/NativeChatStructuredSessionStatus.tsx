@@ -190,7 +190,6 @@ export function NativeChatStructuredSessionStatus(props: {
         isVisible={props.isVisible}
         sessionId={props.sessionId}
         workerRows={controlledWorkerRows}
-        ownerActionsAvailable={ownerActionsAvailable}
         workerIdentities={controlledWorkerIdentities}
         onOpenWorker={owner.open}
         onWorkerAction={owner.action}
