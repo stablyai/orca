@@ -71,7 +71,11 @@ export function createAgentStatusLaunchActions(
                 paneKey,
                 {
                   ...refreshedRecord,
-                  capturedAt: existingSleepingRecord.capturedAt
+                  capturedAt: existingSleepingRecord.capturedAt,
+                  // The same sleep keeps the handle main named the pane by, so its resume answers to it.
+                  ...(existingSleepingRecord.terminalHandle
+                    ? { terminalHandle: existingSleepingRecord.terminalHandle }
+                    : {})
                 }
               ]
             ])
