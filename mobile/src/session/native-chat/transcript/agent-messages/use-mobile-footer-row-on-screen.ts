@@ -78,10 +78,18 @@ export function createMobileFooterBlock(): MobileFooterBlock {
     next.forEach((id) => !before.has(id) && notify(id))
   }
   let stopViewport: (() => void) | undefined
+  // A reflow moves every row below it, each reporting its own layout: rebuild once per frame.
+  let frame: number | null = null
+  const updateSoon = (): void => {
+    frame ??= requestAnimationFrame(() => {
+      frame = null
+      update()
+    })
+  }
   return {
     onLayout: (event) => {
       total = event.nativeEvent.layout.height
-      update()
+      updateSoon()
     },
     rowLaidOut: (id, y, height) => {
       const before = bounds.get(id)
@@ -90,7 +98,7 @@ export function createMobileFooterBlock(): MobileFooterBlock {
       }
       bounds.set(id, { id, y, height })
       sorted = null
-      update()
+      updateSoon()
     },
     rowGone: (id) => {
       bounds.delete(id)
@@ -117,6 +125,10 @@ export function createMobileFooterBlock(): MobileFooterBlock {
         stopViewport?.()
         stopViewport = undefined
         viewport = undefined
+        if (frame !== null) {
+          cancelAnimationFrame(frame)
+          frame = null
+        }
       }
     }
   }

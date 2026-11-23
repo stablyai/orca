@@ -39,9 +39,9 @@ export type MobileWaitingAgentMailActionsValue = {
 export const MobileWaitingAgentMailContext =
   createContext<MobileWaitingAgentMailActionsValue | null>(null)
 
-// Taller than the buttons but no wider than half the gap between them: a tap meant for Edit must
-// never land on its neighbour Delete, which withdraws the unsent message.
-const ACTION_HIT_SLOP = { top: 12, bottom: 12, left: 2, right: 2 }
+// No further than half the gap to a neighbouring button, beside it or in the next row: a tap
+// meant for one must never land on another's Delete, which withdraws that unsent message.
+const ACTION_HIT_SLOP = { top: 6, bottom: 6, left: 2, right: 2 }
 
 const NOT_EDITABLE: MembershipStore = createMembershipStore(() => false)
 

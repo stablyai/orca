@@ -74,16 +74,17 @@ const MobileWaitingAgentMailRow = memo(function MobileWaitingAgentMailRow({
 }): React.JSX.Element | null {
   const { onScreen, ref, onLayout } = useMobileFooterRowOnScreen(block, message.id)
   const [height, setHeight] = useState<number | null>(null)
+  const held = !onScreen && height !== null
   const laidOut = (event: LayoutChangeEvent): void => {
     onLayout(event)
-    if (onScreen) {
+    // Every drawn layout, so a row that arrived off screen is windowed too.
+    if (!held) {
       setHeight(event.nativeEvent.layout.height)
     }
   }
   if (!message.from) {
     return null
   }
-  const held = !onScreen && height !== null
   return (
     <View
       ref={ref}
