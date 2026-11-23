@@ -16,7 +16,7 @@ import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 
-const host = vi.hoisted(() => ({ platform: 'darwin' as NodeJS.Platform }))
+const host = vi.hoisted((): { platform: NodeJS.Platform } => ({ platform: 'darwin' }))
 
 vi.mock('../../../terminal/input/pty-write-host-platform', () => ({
   resolvePtyWriteHostPlatform: () => host.platform
