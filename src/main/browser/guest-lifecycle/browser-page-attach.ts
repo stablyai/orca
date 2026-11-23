@@ -10,6 +10,7 @@ import {
   type Page
 } from './browser-page-memory-state'
 import { noteBrowserPageClosed, noteBrowserPageOpened } from './browser-page-partition-presence'
+import { retryFirstLoadIfStalled } from './browser-first-load-retry'
 
 type Attach = {
   pageId: string
@@ -151,7 +152,12 @@ export function associateBrowserPageAttach(guest: Electron.WebContents): boolean
 const pendingLoads = new WeakMap<Electron.WebContents, Attach>()
 
 /** Route pages call this only after their existing main-owned navigation grant. */
-export function startBrowserPageAttach(guest: Electron.WebContents, url?: string): boolean {
+export function startBrowserPageAttach(
+  guest: Electron.WebContents,
+  url?: string,
+  /** When the page opened before its profile's extensions loaded: settles once they have. */
+  lateExtensions?: Promise<void> | null
+): boolean {
   const attach = pendingLoads.get(guest)
   if (!attach) {
     return false
@@ -219,7 +225,7 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
   }
   const restore = (): Promise<void> =>
     guest.navigationHistory.restore({ entries: snapshot!.entries, index: snapshot!.index })
-  const promise = waitForBrowserGuestLoad(guest, () => {
+  const firstLoad = (): Promise<void> => {
     if (!snapshot) {
       return guest.loadURL(url ?? attach.url)
     }
@@ -229,7 +235,11 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
     // The back list comes back, then the entered address loads after it, as a new navigation would.
     void restore().catch(() => {})
     return guest.loadURL(attach.url)
-  }).then(() => {
+  }
+  if (lateExtensions) {
+    retryFirstLoadIfStalled(guest, lateExtensions, firstLoad)
+  }
+  const promise = waitForBrowserGuestLoad(guest, firstLoad).then(() => {
     if (pages.get(attach.pageId) !== page || page.guest !== guest) {
       throw new Error('Browser page replaced')
     }

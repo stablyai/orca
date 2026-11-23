@@ -10,8 +10,9 @@ import { whenBrowserExtensionsInSession } from './browser-extension-session-pres
 
 // Why bounded: slow restore hooks must not keep the page from loading.
 const FIRST_LOAD_WAIT_MS = 3_000
-// Why bounded at all: an extension load that never settles must not leave the page blank forever.
-const IN_SESSION_WAIT_LIMIT_MS = 20_000
+// Why this bound: inside the 8 s tab registration and 15 s recovery deadlines that wrap a page's
+// creation; a page opened at it whose first load stalls loads once more when they are ready.
+const IN_SESSION_WAIT_LIMIT_MS = 5_000
 
 /**
  * What a page opening in this profile must wait for before its first load, or null when its
@@ -46,7 +47,20 @@ function untilClosed(contents: Electron.WebContents, wait: Promise<void>): Promi
   })
 }
 
-const startWaits = new Map<string, { phase: object; wait: Promise<void> }>()
+type StartWait = { phase: object; wait: Promise<void>; loaded: Promise<void>; late: boolean }
+const startWaits = new Map<string, StartWait>()
+
+/**
+ * When this profile's wait gave up at its bound before its extensions were in the session: settles
+ * once they have loaded, for a page opened then to retry a first load that stalled. Null otherwise.
+ */
+export function whenLateBrowserExtensionsReadyForPage(
+  contents: Electron.WebContents
+): Promise<void> | null {
+  const profileId = getBrowserExtensionProfileIdForSession(contents.session)
+  const running = profileId ? startWaits.get(profileId) : undefined
+  return running?.late ? running.loaded : null
+}
 
 // One bounded wait per profile attach, so a later caller never extends the deadline.
 function whileExtensionsStart(profileId: string): Promise<void> | null {
@@ -62,8 +76,16 @@ function whileExtensionsStart(profileId: string): Promise<void> | null {
   const after = (ms: number): Promise<void> =>
     new Promise<void>((resolve) => timers.push(setTimeout(resolve, ms)))
   const loaded = whenBrowserExtensionProfileLoaded(profileId)
-  // Restore hooks get a short bound; the session step a long one, as a load started before it hangs.
-  const giveUp = Promise.race([loaded, after(IN_SESSION_WAIT_LIMIT_MS)])
+  const entry: StartWait = { phase, wait: Promise.resolve(), loaded, late: false }
+  const giveUp = Promise.race([
+    loaded,
+    after(IN_SESSION_WAIT_LIMIT_MS).then(() => {
+      entry.late = true
+      console.warn(
+        `[browser-extensions] Pages open before ${profileId}'s extensions finished loading`
+      )
+    })
+  ])
   const wait = Promise.all([
     Promise.race([
       whenBrowserExtensionProfileUnloaded(profileId).then(() => {
@@ -82,7 +104,8 @@ function whileExtensionsStart(profileId: string): Promise<void> | null {
       startWaits.delete(profileId)
     }
   })
-  startWaits.set(profileId, { phase, wait })
+  entry.wait = wait
+  startWaits.set(profileId, entry)
   return wait
 }
 

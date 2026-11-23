@@ -41,8 +41,6 @@ export class BrowserClientPageMemorySaver implements BrowserClientPageMemoryOwne
   private readonly waking = new Map<string, Promise<void>>()
   private readonly busy = new Map<string, number>()
   private readonly lifetime = new AbortController()
-  // Per wake, so closing a page that is waking (waiting for its extensions) cancels just that wake.
-  private readonly wakeAborts = new Map<string, AbortController>()
 
   constructor(
     private readonly host: {
@@ -142,10 +140,6 @@ export class BrowserClientPageMemorySaver implements BrowserClientPageMemoryOwne
 
   /** Brings a freed page back before a command that needs its guest; others act on the record. */
   async settleCommand(event: BrowserClientHostCommandEvent): Promise<'handled' | 'continue'> {
-    // Closing a page that is waking ends the wake rather than waiting it out.
-    if (event.command.type === 'closePage') {
-      this.wakeAborts.get(event.browserPageId)?.abort()
-    }
     // A view may be remaking the page; once it is back, the command acts on the live page.
     await this.waking.get(event.browserPageId)?.catch(() => {})
     const freed = this.freed.get(event.browserPageId)
@@ -231,25 +225,15 @@ export class BrowserClientPageMemorySaver implements BrowserClientPageMemoryOwne
     }
     let waking = this.waking.get(browserPageId)
     if (!waking) {
-      const wake = new AbortController()
-      const endWake = (): void => wake.abort()
-      this.lifetime.signal.addEventListener('abort', endWake, { once: true })
-      this.wakeAborts.set(browserPageId, wake)
-      waking = this.recreate(browserPageId, freed, wake.signal).finally(() => {
+      waking = this.recreate(browserPageId, freed).finally(() => {
         this.waking.delete(browserPageId)
-        this.wakeAborts.delete(browserPageId)
-        this.lifetime.signal.removeEventListener('abort', endWake)
       })
       this.waking.set(browserPageId, waking)
     }
     return waking
   }
 
-  private async recreate(
-    browserPageId: string,
-    freed: FreedPage,
-    signal: AbortSignal
-  ): Promise<void> {
+  private async recreate(browserPageId: string, freed: FreedPage): Promise<void> {
     await freed.retiring
     const { inventory } = freed
     const event: BrowserClientHostCommandEvent = {
@@ -270,7 +254,7 @@ export class BrowserClientPageMemorySaver implements BrowserClientPageMemoryOwne
           retireSupersededExecutionHostPages: async () => {}
         },
         event,
-        signal,
+        this.lifetime.signal,
         () => this.host.assertAvailable(),
         (created) => {
           if (this.freed.get(browserPageId) !== freed) {

@@ -32,7 +32,8 @@ export function startBrowserPageDeferredAttach({
     let preparedUrl = initialUrl
     for (
       let requestedUrl = webview.dataset.orcaAttachRequestedUrl;
-      requestedUrl && requestedUrl !== preparedUrl;
+      // A closed or replaced tab's webview leaves the document; re-preparing would recreate its page.
+      requestedUrl && requestedUrl !== preparedUrl && webview.isConnected;
       requestedUrl = webview.dataset.orcaAttachRequestedUrl
     ) {
       lastKnownWebviewUrlRef.current = requestedUrl
