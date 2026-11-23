@@ -76,7 +76,8 @@ export async function reconcileWorkerStartTimeout(
       workerDeathInferred: false,
       queryCommand
     },
-    nextSteps: [step]
+    // The generic timeout's retry steps don't apply: Orca already has the start.
+    nextSteps: []
   }
   if (error instanceof RuntimeRpcFailureError) {
     throw new RuntimeRpcFailureError({
