@@ -198,7 +198,7 @@ export function dispatchDelivery(
         if (result !== 'send') {
           return result
         }
-        const sent = dispatchDelivery(seam, host, alone, delivery, msLeft)
+        const sent = dispatchDelivery(seam, host, alone, delivery, msLeft, [], outboxAccount)
         return sent ? await sent.done : { outcome: 'unsupported' }
       })
       return { deliveryId, received: false, done }

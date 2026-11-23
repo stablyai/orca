@@ -117,7 +117,7 @@ export function mayBeThreadMuteCommand(text: string): boolean {
   const words = rest.split(' ')
   return (
     rest !== normalized(text) &&
-    [1, 2, 3].some((drop) => commandOf(words.slice(drop).join(' ')) !== null)
+    words.some((_word, drop) => drop > 0 && commandOf(words.slice(drop).join(' ')) !== null)
   )
 }
 
@@ -175,7 +175,8 @@ export const UNMUTED_EMOJI = ':loud_sound:'
 export type ThreadMuteDeps = {
   /** The thread's bot and whether it is muted; `not_bot` for another chat's link, null for none. */
   read: (key: ConnectorConversation) => { botId: string; muted: boolean } | 'not_bot' | null
-  write: (key: ConnectorConversation, muted: boolean) => void
+  /** Settles once the mute is on disk, so a command is never confirmed and then lost to a crash. */
+  write: (key: ConnectorConversation, muted: boolean) => Promise<void>
   /** The names people @mention the bot by. */
   botNames: (botId: string) => string[]
   /** Settles after the thread's queued deliveries, as a start in the same poll writes its link. */
@@ -249,10 +250,12 @@ function applyStep(
   if (step === 'send') {
     return null
   }
-  if (step !== 'silence') {
-    deps.write(key, step === 'mute')
-  }
+  const written = step === 'silence' ? null : deps.write(key, step === 'mute')
   if (step === 'unmute_and_send') {
+    // Its turn is the answer: an unmute lost to a crash leaves the thread muted, as it was.
+    void written?.catch((error: unknown) =>
+      console.warn('[connectors] could not save a thread unmute', error)
+    )
     return null
   }
   const ref = delivery.asker?.messageRef
@@ -264,5 +267,6 @@ function applyStep(
         console.warn('[connectors] could not react to a thread mute', error)
       )
   }
-  return Promise.resolve(ACCEPTED)
+  // A save that fails is refused, so the connector service sends the command again.
+  return (written ?? Promise.resolve()).then(() => ACCEPTED)
 }

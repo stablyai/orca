@@ -34,7 +34,7 @@ const FIRST_GITHUB_ANSWER_WAIT_MS = 3_000
 
 export type ConnectorCloudStore = ConnectorPlacesStore &
   ExternalConversationLinkStore &
-  Pick<RuntimeStore, 'getSettings' | 'onSettingsChanged'> &
+  Pick<RuntimeStore, 'getSettings' | 'onSettingsChanged' | 'flushPendingOrThrowAsync'> &
   Required<Pick<RuntimeStore, 'listAutomations' | 'listAutomationRuns'>>
 
 export type ConnectorCloudHost = {
@@ -207,8 +207,9 @@ function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore)
   return {
     waiting: new Map(),
     read: (key) => readThreadMute(store, key),
-    write: (key, muted) => {
+    write: async (key, muted) => {
       writeLinkFact(store, key, { muted: muted ? true : undefined })
+      await store.flushPendingOrThrowAsync?.()
     },
     queued: (key) => runtime.getExternalConversationSeam()?.queued(key) ?? Promise.resolve(),
     botNames: (botId) => {

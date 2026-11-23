@@ -60,7 +60,7 @@ describe('a muted thread', () => {
         handleThreadMute(
           {
             read: () => ({ botId: 'bot1', muted }),
-            write: (_key, next) => {
+            write: async (_key, next) => {
               muted = next
             },
             botNames: () => ['reviewer'],
@@ -111,7 +111,7 @@ describe('a reply in the same poll as its thread’s start', () => {
     const result = await handleThreadMute(
       {
         read: () => (linked ? { botId: 'bot1', muted } : null),
-        write: (_key, next) => {
+        write: async (_key, next) => {
           muted = next
         },
         botNames: () => [],
