@@ -65,15 +65,20 @@ export class ConversationChain {
   after(id: string, work?: () => Promise<unknown>): Promise<Delivery> {
     return this.enqueue(id, async (signal) => {
       const done = (work?.() ?? Promise.resolve()).catch(() => undefined)
-      await Promise.race([
-        done,
-        new Promise<void>((resolve) => {
-          signal.addEventListener('abort', () => resolve(), { once: true })
-          if (signal.aborted) {
-            resolve()
-          }
-        })
-      ])
+      let onAbort = (): void => {}
+      const stopped = new Promise<void>((resolve) => {
+        onAbort = resolve
+        signal.addEventListener('abort', onAbort, { once: true })
+        if (signal.aborted) {
+          resolve()
+        }
+      })
+      try {
+        await Promise.race([done, stopped])
+      } finally {
+        // Its lane may outlive it: a listener left on its signal would be kept as long as the lane.
+        signal.removeEventListener('abort', onAbort)
+      }
       return signal.aborted ? refused(refusalOf(signal)) : { outcome: 'accepted' }
     })
   }
