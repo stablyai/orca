@@ -11,6 +11,8 @@ export const inflightHostedReviewRequests = new Map<
     force: boolean
     /** A poll's request is refused for a stopped WSL distro, so an explicit Refresh must not join it. */
     wakeWslDistro: boolean
+    /** A timer's flight is refused by an idle-stopped WSL host; a counted read must not join it. */
+    background: boolean
     currentHeadOid: string | null
     generation: number
     startedAt: number
@@ -161,11 +163,17 @@ export function queueHostedReviewRevalidation(
 
 /** A forced request needs a forced flight; an explicit Refresh (wake) needs one that may start the WSL distro (E9). */
 export function canJoinHostedReviewFlight(
-  inflight: { force: boolean; wakeWslDistro: boolean; currentHeadOid?: string | null },
+  inflight: {
+    force: boolean
+    wakeWslDistro: boolean
+    background?: boolean
+    currentHeadOid?: string | null
+  },
   options:
     | {
         force?: boolean
         wakeWslDistro?: boolean
+        background?: boolean
         userRefresh?: boolean
         currentHeadOid?: string | null
       }
@@ -179,7 +187,8 @@ export function canJoinHostedReviewFlight(
       options.currentHeadOid !== inflight.currentHeadOid
     ) &&
     (!options?.force || inflight.force) &&
-    (!options?.wakeWslDistro || inflight.wakeWslDistro)
+    (!options?.wakeWslDistro || inflight.wakeWslDistro) &&
+    (!inflight.background || options?.background === true)
   )
 }
 
@@ -191,7 +200,9 @@ export function registerInflightHostedReviewRequest(
     ...entry
   }: {
     promise: Promise<HostedReviewInfo | null>
-    options: { force?: boolean; wakeWslDistro?: boolean; userRefresh?: boolean } | undefined
+    options:
+      | { force?: boolean; wakeWslDistro?: boolean; userRefresh?: boolean; background?: boolean }
+      | undefined
     currentHeadOid: string | null
     generation: number
     startedAt: number
@@ -200,7 +211,8 @@ export function registerInflightHostedReviewRequest(
   inflightHostedReviewRequests.set(requestKey, {
     ...entry,
     force: options?.force === true,
-    wakeWslDistro: options?.wakeWslDistro === true
+    wakeWslDistro: options?.wakeWslDistro === true,
+    background: options?.background === true
   })
   supersedeHostedReviewRevalidation(requestKey, {
     promise: entry.promise,

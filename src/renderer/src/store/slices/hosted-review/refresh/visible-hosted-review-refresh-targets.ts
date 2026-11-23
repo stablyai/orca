@@ -233,7 +233,7 @@ export function getVisibleHostedReviewRefreshTargets(
               active: selected,
               admissionTier: selected ? 'interactive' : 'background',
               // The selected workspace's 60 s timer is a poll: no use of an idle WSL host (#46567).
-              background: intent === 'timer'
+              background: intent === 'timer' || undefined
             }))
         const after = getState()
         if (runtime && outcome) {

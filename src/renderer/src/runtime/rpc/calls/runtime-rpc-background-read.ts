@@ -18,6 +18,11 @@ export function isBackgroundRuntimeRead(params: unknown): boolean {
   )
 }
 
+/** A caller's tag can add background, never remove what the params already say. */
+export function isBackgroundRuntimeCall(tagged: boolean | undefined, params: unknown): boolean {
+  return tagged === true || isBackgroundRuntimeRead(params)
+}
+
 /** A click or key in the last few seconds while this host owns the focused workspace: typing in
  *  another workspace must not wake an idle-stopped WSL host some background call targets. */
 export function hasRecentUserGestureFor(environmentId: string): boolean {

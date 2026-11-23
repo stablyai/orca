@@ -159,13 +159,7 @@ export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, 
     return lookup(
       state,
       cacheEntryReader('issueCache', cacheKey),
-      () =>
-        state.fetchIssue(repo.path, item.number, {
-          repoId: repo.id,
-          sourceContext,
-          ownerRepo,
-          background: request.background
-        }),
+      () => state.fetchIssue(repo.path, item.number, { repoId: repo.id, sourceContext, ownerRepo }),
       (issue) =>
         issue.number === item.number && matchesWorkspaceReferenceUrl(item, issue.url)
           ? { title: issue.title, url: issue.url, issueState: issue.state }

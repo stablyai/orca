@@ -8,7 +8,7 @@ import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/remote-
 import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call'
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
-import { hasRecentUserGestureFor, isBackgroundRuntimeRead } from './runtime-rpc-background-read'
+import { hasRecentUserGestureFor, isBackgroundRuntimeCall } from './runtime-rpc-background-read'
 import { captureRuntimeEnvironmentRequestRevision } from '../environment-revisions/runtime-environment-revision'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { ensureRuntimeEnvironmentCompatible } from '../compatibility/runtime-compatibility-probe'
@@ -47,7 +47,7 @@ export async function callRuntimeRpcResponse<TResult>(
   if (options.signal?.aborted) {
     throw createRuntimeRpcAbortError()
   }
-  const background = options.background ?? isBackgroundRuntimeRead(params)
+  const background = isBackgroundRuntimeCall(options.background, params)
   // Captured before any await: only a call made while the user acts may boot a stopped host.
   const wake =
     options.wake ??
