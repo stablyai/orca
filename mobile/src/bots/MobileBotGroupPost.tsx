@@ -46,6 +46,7 @@ export function MobileBotGroupPost({
       {message.turns.map((turn) => (
         <MobileBotGroupTurn
           key={turn.operationId}
+          groupId={message.groupId}
           turn={turn}
           client={client}
           folderId={bots.find((bot) => bot.id === turn.botId)?.folderWorkspaceId}

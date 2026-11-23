@@ -325,6 +325,7 @@ export function BotGroupChat({
                         <BotGroupTurn
                           key={turn.operationId}
                           hostId={data.group.hostId}
+                          groupId={data.group.id}
                           turn={turn}
                           tabId={tabId}
                           isVisible={isVisible}

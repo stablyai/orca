@@ -1,4 +1,5 @@
 import type { z } from 'zod'
+import { readBotGroupTurnRows } from './bot-group-turn-rows'
 import type {
   BotGroup,
   BotGroupCreate,
@@ -178,6 +179,8 @@ export class BotGroupRuntime {
     createBotGroupThread(this, groupId).then((made) => ({ ...made, group: this.named(made.group) }))
   read = (groupId: string, beforeSequence?: number, threadId?: string) =>
     readBotGroup(this, groupId, beforeSequence, threadId)
+  turnRows = (groupId: string, operationId: string) =>
+    readBotGroupTurnRows(this, groupId, operationId)
   stop = (groupId: string, botId?: string, threadId?: string) =>
     stopBotGroup(this, groupId, botId, threadId)
   resumePending = () => resumePendingGroupDeliveries(this)

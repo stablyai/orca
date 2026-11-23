@@ -29,6 +29,7 @@ function renderTurn(shown: Turn) {
     <TooltipProvider>
       <BotGroupTurn
         hostId="local"
+        groupId="group"
         turn={shown}
         files={null}
         roomLinks={{ onLinkClick: undefined, request: () => {}, rootRef: createRef() }}
@@ -54,4 +55,25 @@ it("draws the member's outfit as it was when the turn ran", async () => {
   await vi.waitFor(() =>
     expect(view.container.querySelector('img[src^="data:image/webp"]')).not.toBeNull()
   )
+})
+
+// #46084: a long turn's rows fell off the member chat's loaded page, so the room read "Starting…".
+it('draws an ended turn from its saved record when none of its rows are loaded', () => {
+  const unloaded = { ...turn, frozenItems: undefined }
+  const finished = renderTurn({
+    ...unloaded,
+    reply: 'Audit done.',
+    end: 'finished',
+    workedMs: 60_000
+  })
+  expect(finished.container.textContent).toContain('Audit done.')
+  expect(finished.container.textContent).toContain('Worked for 1m')
+  expect(finished.container.textContent).not.toContain('Starting')
+  finished.unmount()
+  const older = renderTurn({ ...unloaded, reply: null })
+  expect(older.container.textContent).toContain('Ended')
+  expect(older.container.textContent).toContain('Ended without a reply')
+  expect(older.container.textContent).not.toContain('Starting')
+  older.unmount()
+  expect(renderTurn(unloaded).container.textContent).toContain('Starting')
 })

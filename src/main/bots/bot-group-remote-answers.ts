@@ -1,5 +1,5 @@
 import { ZodError } from 'zod'
-import type { BotGroupMessage } from '../../shared/bots/bot-group'
+import { botGroupPageReply, type BotGroupMessage } from '../../shared/bots/bot-group'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import { botGroupRoomMailAddress } from '../../shared/bots/bot-group-room-mail'
 import type { BotGroupRuntime } from './bot-group-runtime'
@@ -16,7 +16,7 @@ const PAGE_ANSWER_MAX = 16_000
 /** Asks as a reader sees them: a `sending` ask whose handover is no longer running may or may not
  *  have reached its computer; its answer still lands if one comes. Long answers, remote ones and
  *  members' mailed answers alike, are shortened to the page's budget, newest posts first, so a
- *  page stays readable; the whole answer stays in mail. */
+ *  page stays readable; the whole answer stays in mail. Saved replies share that budget. */
 export function presentPageAnswers(messages: readonly BotGroupMessage[]): BotGroupMessage[] {
   let budget = PAGE_ANSWER_BUDGET
   const take = (text: string) => {
@@ -24,10 +24,24 @@ export function presentPageAnswers(messages: readonly BotGroupMessage[]): BotGro
     budget -= kept.length
     return kept
   }
+  // A saved reply comes cut to its turn's cap; past the page's budget only its cut mark remains, and
+  // opening the turn reads the rest.
+  const pageReply = (reply: string) => {
+    const cut = botGroupPageReply(reply)
+    if (cut.length > budget) {
+      return '…'
+    }
+    budget -= cut.length
+    return cut
+  }
   const shown = new Map<string, BotGroupMessage>()
   for (const message of messages.toReversed()) {
-    const turns = message.turns.some((turn) => turn.answer)
-      ? message.turns.map((turn) => (turn.answer ? { ...turn, answer: take(turn.answer) } : turn))
+    const turns = message.turns.some((turn) => turn.answer || turn.reply)
+      ? message.turns.map((turn) => ({
+          ...turn,
+          ...(turn.answer ? { answer: take(turn.answer) } : {}),
+          ...(turn.reply ? { reply: pageReply(turn.reply) } : {})
+        }))
       : message.turns
     if (!message.remoteAsks?.length) {
       shown.set(message.id, { ...message, turns })

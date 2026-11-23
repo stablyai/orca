@@ -117,6 +117,10 @@ const BotGroupTurnSchema = z.object({
   /** The finished reply, saved when the turn ended; null when it ended without one. Absent while
    *  the turn runs, and on turns saved before replies were. */
   reply: z.string().nullable().optional(),
+  /** How the turn ended and how long it worked, saved with `reply`; absent while it runs and on
+   *  turns saved before this was. The room draws an ended turn from these, never from loaded rows. */
+  end: z.enum(['finished', 'stopped', 'failed']).optional().catch(undefined),
+  workedMs: z.number().nonnegative().optional().catch(undefined),
   /** Its answer to another member's request: sent as mail, so its own chat shows only the call. */
   answer: z.string().optional(),
   /** The members its reply named, saved as their hand-offs were reserved: a replay wakes none. */
@@ -282,11 +286,62 @@ export function botGroupTurnReplyText(
   return said ? `${said}\n\n${answer}` : answer
 }
 
+/** The most of a saved reply a room page carries per turn; the turn's own rows hold the rest. */
+export const BOT_GROUP_PAGE_REPLY_MAX = 4_000
+
+const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/
+
+/** The fence of the code block `text` leaves open, if any: a block closes only on a bare fence of its
+ *  own character at least as long, so a longer block may hold shorter fences. */
+function openFence(text: string): string | null {
+  let open: string | null = null
+  for (const line of text.split('\n')) {
+    const match = FENCE.exec(line)
+    if (!match) {
+      continue
+    }
+    const [, fence, info] = match
+    if (open === null) {
+      open = fence
+    } else if (fence[0] === open[0] && fence.length >= open.length && !info.trim()) {
+      open = null
+    }
+  }
+  return open
+}
+
+/** `reply`'s last `max` characters from a whole line (mid-line only when one line is longer), after
+ *  "…"; a code block the cut began inside is reopened as plain text, so the rest still reads as code. */
+export function botGroupReplyTail(reply: string, max: number): string {
+  if (reply.length <= max) {
+    return reply
+  }
+  const end = reply.slice(-max)
+  const fromLine = end.slice(end.indexOf('\n') + 1)
+  const rest = fromLine.trim() ? fromLine : end
+  const open = openFence(reply.slice(0, reply.length - rest.length))
+  return `…\n\n${open ? `${open}text\n` : ''}${rest}`
+}
+
+/** A saved reply as a room page carries it. */
+export function botGroupPageReply(reply: string): string {
+  return botGroupReplyTail(reply, BOT_GROUP_PAGE_REPLY_MAX)
+}
+
+/** An ended turn's rows hold neither words nor work (a tool call, a subagent): it ended without a
+ *  reply, as the room says under it. */
+export function botGroupTurnShowsNothing(messages: readonly NativeChatMessage[]): boolean {
+  return !messages.some((message) =>
+    message.blocks.some((block) => block.type !== 'text' || block.text.trim())
+  )
+}
+
 /** A turn's rows as the room draws them on desktop and mobile: its answer to a member's request
- *  closes them, unless its own words already said it. */
+ *  closes them, unless its own words already said it. An ended turn whose loaded rows hold none of
+ *  its words draws its saved reply instead. */
 export function withBotGroupTurnAnswer(
   messages: NativeChatMessage[],
-  turn: Pick<BotGroupTurn, 'operationId' | 'answer'>
+  turn: Pick<BotGroupTurn, 'operationId' | 'answer' | 'reply'>
 ): NativeChatMessage[] {
   const words = messages
     .flatMap((message) =>
@@ -295,13 +350,16 @@ export function withBotGroupTurnAnswer(
         : []
     )
     .join('\n')
-  return turn.answer?.trim() && !holdsAnswer(words, turn.answer)
+  const answer = words.trim()
+    ? turn.answer
+    : (botGroupTurnReplyText(turn.reply, turn.answer) ?? undefined)
+  return answer?.trim() && !holdsAnswer(words, answer)
     ? [
         ...messages,
         {
           id: `${turn.operationId}:answer`,
           role: 'assistant',
-          blocks: [{ type: 'text', text: turn.answer }],
+          blocks: [{ type: 'text', text: answer }],
           timestamp: null,
           source: 'transcript'
         }

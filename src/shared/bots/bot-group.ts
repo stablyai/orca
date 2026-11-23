@@ -12,6 +12,7 @@ import { remoteAnswerLines, remoteMemberAsked } from './bot-group-remote-context
 import {
   BotGroupRemoteBotsSchema as RemoteBots,
   BotGroupReplyMode,
+  botGroupReplyTail,
   type BotGroup,
   type BotGroupMember,
   type BotGroupMessage
@@ -20,7 +21,10 @@ import {
 export {
   BotGroupReplyMode,
   botGroupOwnerMessageBlocks,
+  botGroupPageReply,
+  botGroupReplyTail,
   botGroupTurnReplyText,
+  botGroupTurnShowsNothing,
   withBotGroupTurnAnswer
 } from './bot-group-schema'
 export type {
@@ -121,6 +125,7 @@ export const BotGroupCreate = z.object({
 export const BotGroupRead = Room.extend({
   beforeSequence: z.number().int().positive().optional()
 })
+export const BotGroupTurnRows = GroupId.extend({ operationId: z.string().min(1) })
 export const BotGroupUpdate = Revision.extend({
   name: BotNameSchema.optional(),
   botIds: z.array(z.string().min(1)).min(1).max(32).optional(),
@@ -281,7 +286,7 @@ export function botGroupCompletedReply(
         : []
     )
     .join('\n')
-  return full ? { text: full.slice(-16_000), full, completedAt } : null
+  return full ? { text: botGroupReplyTail(full, 16_000), full, completedAt } : null
 }
 
 /** What a member has not seen: posts and replies since it was last asked (all, if new), newest kept

@@ -1,5 +1,7 @@
 import * as z from 'zod'
 import { BotGroupSchema, BotGroupMessageSchema } from '../../../src/shared/bots/bot-group-schema'
+import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { isAdmissibleAgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-schemas'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 
@@ -24,6 +26,21 @@ export const groupRead = bindDeferredRpcOperation(
         group: BotGroupSchema,
         messages: z.array(BotGroupMessageSchema),
         hasEarlier: z.boolean()
+      })
+    )
+  })
+)
+/** One turn's own rows, read once when its reader opens it. */
+export const groupTurnRows = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bot-groups.turn-rows',
+    method: 'bots.groups.turnRows',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant(
+      'turn-rows',
+      z.object({
+        items: z.array(z.custom<AgentJournalRenderItem>(isAdmissibleAgentJournalRenderItem))
       })
     )
   })

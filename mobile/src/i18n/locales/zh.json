@@ -585,6 +585,10 @@
       "streamEnded": "聊天记录流传输已结束",
       "streamFailed": "聊天记录流传输失败"
     },
+    "subagents": {
+      "noReply": "已结束，没有回复",
+      "stoppedBeforeReply": "回复前已停止"
+    },
     "subagentGroup": {
       "ran_one": "已运行 {{count}} 个子智能体",
       "ran_other": "已运行 {{count}} 个子智能体",
