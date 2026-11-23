@@ -1,4 +1,5 @@
-// Not `Map.groupBy`: the relay runs this core on Node 18, which lacks it.
+// Not `Map.groupBy`: the relay runs this core on Node 18 and the paired phone page on WebKit before
+// iOS 17.4; neither has it.
 export function groupedBy<T, K>(items: readonly T[], keyOf: (item: T) => K): Map<K, T[]> {
   const groups = new Map<K, T[]>()
   for (const item of items) {

@@ -28,7 +28,8 @@ import {
 } from '../src/mobile-web-shell/bridge/page-storage/page-device-store'
 import {
   RouteScreenPaintProvider,
-  createRouteScreenPaintReporter
+  createRouteScreenPaintReporter,
+  reportAfterFirstPaint
 } from '../src/mobile-web-shell/bridge/page-lifecycle/page-first-paint'
 import { PageFaultBoundary } from '../src/mobile-web-shell/bridge/page-lifecycle/page-fault-boundary'
 import type { BridgeUiLocale } from '../src/mobile-web-shell/bridge/protocol/bridge-envelope'
@@ -38,6 +39,11 @@ import { startPageLocaleCatalogs } from '../src/i18n/page-locale-catalog-source'
 import { getUiIntlLocale } from '../src/i18n/ui-intl-locale'
 import { readDeviceUiLocaleTags, resolveUiLocaleFromTags } from '../src/i18n/system-ui-locale'
 import { publishPageHostProfile } from '../src/mobile-web-shell/bridge/page-lifecycle/page-host-profile'
+import {
+  iosTooOldCopy,
+  renderIosTooOldPanel,
+  webKitRunsThePage
+} from '../src/mobile-web-shell/bridge/page-lifecycle/page-ios-too-old'
 import { publishExternalLinkOpener } from '../src/platform/external-links/external-link.web'
 import { publishHapticsNotifier } from '../src/platform/haptics/haptics.web'
 import { startBlurringOnKeyboardClose } from '../src/platform/keyboard/keyboard-close-blur.web'
@@ -54,6 +60,13 @@ import {
 import routeContext from './route-manifest'
 import { preloadBootRoutes } from './boot-route-preload'
 
+const PAGE_FRAMES = {
+  requestFrame: (callback: () => void) => requestAnimationFrame(callback),
+  cancelFrame: (handle: number) => {
+    cancelAnimationFrame(handle)
+  }
+}
+
 // The h/ tree omits the native root provider, so supply ExpoRoot’s wrapper after init gives us a client.
 // Router suspense handles pending chunks; rejected chunks belong to the outer fault boundary.
 function createRootProviders(
@@ -62,17 +75,9 @@ function createRootProviders(
   queryClient: QueryClient
 ) {
   // Wait for the second frame before dropping the shell’s cover; a React commit alone proves no paint.
-  const reportRouteScreenPaint = createRouteScreenPaintReporter(
-    {
-      requestFrame: (callback) => requestAnimationFrame(callback),
-      cancelFrame: (handle) => {
-        cancelAnimationFrame(handle)
-      }
-    },
-    () => {
-      client.notifyPagePainted()
-    }
-  )
+  const reportRouteScreenPaint = createRouteScreenPaintReporter(PAGE_FRAMES, () => {
+    client.notifyPagePainted()
+  })
   return function RootProviders({ children }: PropsWithChildren) {
     // Child-first effects prove router commit, possibly its suspense fallback; screen paint is reported separately.
     useEffect(() => {
@@ -171,6 +176,23 @@ bootstrapShellPage({
     client.onUiLocaleUpdate((locale) => {
       uiLocaleActivation = activatePageUiLocale(locale)
     })
+    // Before any route loads: on an older iOS their chunks fail to parse, and the shell would show
+    // only that the app could not be opened.
+    if (!webKitRunsThePage()) {
+      void settleLatest(() => uiLocaleActivation).then(() => {
+        const paint = () => {
+          renderIosTooOldPanel(container, iosTooOldCopy(navigator.userAgent))
+        }
+        paint()
+        subscribeMobileUiLanguage(paint)
+        subscribeMobileColorScheme(paint)
+        // The shell's cover stays up until the page reports painted.
+        reportAfterFirstPaint(PAGE_FRAMES, () => {
+          client.notifyPagePainted()
+        })
+      })
+      return
+    }
     // Publish plain-function seams before first render because effects and initial list paint already read them.
     publishPageHostProfile(session.host)
     publishExternalLinkOpener((url) => client.notifyExternalLink(url))

@@ -25,6 +25,7 @@ import {
   routePathnameFromKey
 } from '../../mobile-web-app/mobile-web-app-route-manifest.mjs'
 import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
+import { readMobileIosMinimum } from './mobile-web-ios-minimum.mjs'
 import { reactNativeSvgWebPlugin } from './react-native-svg-web-plugin.mjs'
 import { packageBuildPlugin } from './one-package-build-plugin.mjs'
 import { PAGE_GLOBALS_BANNER, bannerOnlyWhereScriptsRunFirst } from './page-globals-banner.mjs'
@@ -294,6 +295,8 @@ export function mobileWebAppBuildOptions(
     chunkNames: '[hash]',
     // Pinned rather than defaulted, so the entry is found by name and not by elimination.
     entryNames: ENTRY_CHUNK_NAME,
+    // Not an ios target: esbuild would turn \p{} literals into a new RegExp per call. verify holds
+    // the output to app.json's iOS minimum instead.
     target: ['es2022'],
     // Keep ESM tree shaking when a dependency also requires the same package.
     mainFields: ['browser', 'module', 'main'],
@@ -355,6 +358,8 @@ export function mobileWebAppBuildOptions(
       'process.env.NODE_ENV': '"production"',
       'process.env.EXPO_OS': '"web"',
       'process.env.EXPO_ROUTER_IMPORT_MODE': '"sync"',
+      // Named on the page an older iPhone gets instead of the app.
+      'process.env.ORCA_IOS_MINIMUM': JSON.stringify(readMobileIosMinimum()),
       // Only a switch asked for: an off build stays byte-identical, and its switch reads off.
       ...turnedOnDarkBuildDefines()
     }
@@ -583,6 +588,8 @@ export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
       (total, path) => total + (renamed.get(basename(path))?.bytes.byteLength ?? 0),
       0
     ),
+    // The scripts that run before any route, which old phones must still run to hear they are too old.
+    entryStaticAssets: [...closure].map((path) => `assets/${renamed.get(basename(path)).name}`),
     chunkCount: pageScriptCount(result.metafile),
     routeKeys: routes.map((route) => route.key),
     routeChunks: routeChunkNames(result.metafile, routes, renamed)
@@ -623,7 +630,8 @@ export async function buildMobileWebAppBundle({
   const [
     desktopVersion,
     protocolWindow,
-    { script, chunks, images, catalogChunks, entryStaticBytes, chunkCount, routeChunks, routeKeys },
+    // scriptFacts: entryStaticBytes, entryStaticAssets, chunkCount and routeChunks, returned as they are.
+    { script, chunks, images, catalogChunks, routeKeys, ...scriptFacts },
     catalogs,
     scrollbarStyle
   ] = await Promise.all([
@@ -678,10 +686,8 @@ export async function buildMobileWebAppBundle({
   return {
     manifest,
     outDir,
-    routeChunks,
     routeKeys,
-    entryStaticBytes,
-    chunkCount,
+    ...scriptFacts,
     // Everything the routes import that is not a script, which is the rest of the asset budget.
     imageCount: images.length,
     catalogChunkCount: catalogChunks.length,

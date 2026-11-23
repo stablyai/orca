@@ -31,7 +31,11 @@ export function clipUrlForMismatch(url: string): string {
 const HOST_AND_PORT_WITHOUT_SCHEME = /^[^/:]+:\d/
 
 export function isAbsoluteBrowserUrl(raw: string): boolean {
-  return raw.length <= MAX_URL_CHARS && !HOST_AND_PORT_WITHOUT_SCHEME.test(raw) && URL.canParse(raw)
+  return (
+    raw.length <= MAX_URL_CHARS &&
+    !HOST_AND_PORT_WITHOUT_SCHEME.test(raw) &&
+    parsedHref(raw) !== null
+  )
 }
 
 /** Path, query and fragment can each name the resource, so only URL spelling is normalized. */
@@ -41,5 +45,14 @@ export function isSameBrowserUrl(left: string, right: string): boolean {
 
 function comparableUrl(raw: string): string {
   // A guest before its first commit reports an empty URL, which matches nothing an agent can expect.
-  return URL.canParse(raw) ? new URL(raw).href : raw
+  return parsedHref(raw) ?? raw
+}
+
+// Not URL.canParse: the paired phone page loads this module, and WebKit lacks it before iOS 17.
+function parsedHref(raw: string): string | null {
+  try {
+    return new URL(raw).href
+  } catch {
+    return null
+  }
 }

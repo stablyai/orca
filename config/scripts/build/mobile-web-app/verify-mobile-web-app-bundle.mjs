@@ -7,6 +7,11 @@ import { buildMobileWebAppBundle } from './build-mobile-web-app-bundle.mjs'
 import { isDirectInvocation } from '../../tool-invocation/script-entry-detection.mjs'
 import { assertNoCarriageReturnsInSource } from './mobile-web-source-line-endings.mjs'
 import {
+  entryIosMinimum,
+  findFeaturesPastIosMinimum,
+  readMobileIosMinimum
+} from './mobile-web-ios-minimum.mjs'
+import {
   MOBILE_WEB_BUNDLE_DIR as defaultBundleDir,
   assertMobileWebBundleBuilt
 } from '../../desktop-distribution/runtime-verification/verify-packaged-mobile-web-bundle.cjs'
@@ -217,6 +222,33 @@ export function assertAssetCeilingFitsShell(
   return ceiling
 }
 
+// Every phone the App Store installs on loads this page; a feature its WebKit lacks fails the chunk or the call.
+async function assertWithinIosMinimum(bundleDir, manifest, entryStaticAssets) {
+  const minimum = readMobileIosMinimum()
+  const entryMinimum = entryIosMinimum(minimum)
+  const entry = new Set(entryStaticAssets)
+  const scripts = manifest.assets.filter((asset) => asset.contentType.startsWith('text/javascript'))
+  const found = []
+  for (const asset of scripts) {
+    const source = await readFile(join(bundleDir, asset.path), 'utf8')
+    const floor = entry.has(asset.path) ? entryMinimum : minimum
+    for (const feature of findFeaturesPastIosMinimum(source, asset.path, floor)) {
+      found.push({ ...feature, path: asset.path, floor })
+    }
+  }
+  if (found.length > 0) {
+    fail(
+      `the page uses ${String(found.length)} feature(s) older iOS lacks. app.json's ios.deploymentTarget ` +
+        `is ${minimum}, and the scripts that run before any route must also run on ${entryMinimum}:\n${found
+          .map(
+            ({ path, floor, feature, since, text }) =>
+              `  ${path} (held to iOS ${floor}): ${feature} needs iOS ${since}: ${text}`
+          )
+          .join('\n')}`
+    )
+  }
+}
+
 async function buildIntoScratch() {
   const scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-app-verify-'))
   try {
@@ -244,6 +276,8 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
       `${bundleDir} is stale: it carries buildId ${manifest.buildId}, a fresh build produces ${first.manifest.buildId}`
     )
   }
+  // After the buildId check, so the fresh build's entry closure names these very bytes.
+  await assertWithinIosMinimum(bundleDir, manifest, first.entryStaticAssets)
   if (
     first.catalogChunkCount > MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_CHUNKS ||
     first.catalogBytes > MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES

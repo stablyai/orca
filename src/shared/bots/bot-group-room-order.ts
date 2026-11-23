@@ -1,3 +1,4 @@
+import { groupedBy } from '../collections/grouped-by'
 import type { BotGroupMessage } from './bot-group-schema'
 
 type Line = Pick<BotGroupMessage, 'id' | 'sequence' | 'rootRequestId' | 'rootSequence'>
@@ -9,7 +10,7 @@ export function botGroupRoomOrder<T extends Line>(messages: readonly T[]): T[] {
   const rootOf = (line: T) =>
     line.rootRequestId !== undefined && line.rootRequestId !== line.id ? line.rootRequestId : null
   const loaded = new Set(messages.map((line) => line.id))
-  const continuing = Map.groupBy(
+  const continuing = groupedBy(
     messages.filter((line) => rootOf(line) !== null),
     (line) => rootOf(line) ?? ''
   )
