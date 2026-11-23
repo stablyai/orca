@@ -8125,7 +8125,7 @@
         "selfNote": "使用你自己的 Google 应用",
         "orca": "Orca 托管",
         "orcaNote": "使用 Google 登录",
-        "comingSoon": "即将推出"
+        "soon": "即将推出"
       },
       "importFromTeam": "导入团队提供的配置文件",
       "service": {

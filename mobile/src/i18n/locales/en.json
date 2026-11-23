@@ -7797,7 +7797,7 @@
         "selfNote": "Your own Google app.",
         "orca": "Orca hosted",
         "orcaNote": "Sign in with Google.",
-        "comingSoon": "Coming soon"
+        "soon": "Soon"
       },
       "importFromTeam": "Import a setup file from your team",
       "service": {

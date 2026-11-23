@@ -14,6 +14,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import type { Bot } from '../../../../../shared/bot-types'
 import { botErrorMessage } from '../bot-presentation'
 import { importGoogleApp } from './google-connect-client'
@@ -37,13 +38,13 @@ function HostOption({
 }): React.JSX.Element {
   const id = useId()
   return (
-    // Why bg on the disabled card: dimming the whole card let the page behind show through it.
-    <div
-      data-disabled={disabled ?? false}
-      className="group flex items-start gap-3 rounded-lg border border-border bg-dialog-surface p-3 has-[[data-state=checked]]:border-foreground/60 has-[[data-state=checked]]:bg-accent"
-    >
+    // Why the ring: a disabled radio's faded border all but vanishes on the light dialog.
+    <div className="flex items-start gap-3 rounded-lg border border-border p-3 has-[[data-state=checked]]:border-foreground/60 has-[[data-state=checked]]:bg-accent [&>[data-slot=radio-group-item]:disabled]:border-muted-foreground">
       <RadioGroupItem id={id} value={value} disabled={disabled} className="mt-0.5" />
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      {/* Why muted, not faded: fading the card let what's behind it show through. */}
+      <div
+        className={cn('flex min-w-0 flex-1 flex-col gap-0.5', disabled && 'text-muted-foreground')}
+      >
         <Label htmlFor={id} variant="control">
           {title}
           {badge}
@@ -108,7 +109,7 @@ export function GoogleHostChoiceDialog({
             {file.error}
           </p>
         ) : null}
-        <DialogFooter className="flex-row items-center justify-end">
+        <DialogFooter className="flex-row flex-wrap items-center justify-end">
           <Button
             variant="ghost"
             className="mr-auto"
