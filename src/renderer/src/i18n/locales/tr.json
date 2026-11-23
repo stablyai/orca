@@ -24530,7 +24530,10 @@
       "paused": "Duraklatıldı",
       "resumeShort": "Devam ettir",
       "runNow": "Şimdi çalıştır",
-      "running": "Çalışıyor"
+      "running": "Çalışıyor",
+      "deleting": "Siliniyor…",
+      "deleteFailed": "{{name}} silinemedi",
+      "deleteDescription": "<name/> ve çalıştırma geçmişini sil."
     },
     "cloudSignIn": {
       "eventsHostChat": "{{source}} olayları için {{host}} üzerinde Orca Cloud oturumu açılması gerekiyor. Oturum açıldığında bu kuralı kaydedeceğim.",

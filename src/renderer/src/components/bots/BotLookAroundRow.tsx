@@ -97,6 +97,7 @@ export function LookAroundRow({
   }
   return (
     <BotPanelRow
+      rowKey={row.key}
       icon={<BotRowStateIcon state={rowState} kind={<Eye className={ICON} />} />}
       title={name}
       state={rowState?.label}

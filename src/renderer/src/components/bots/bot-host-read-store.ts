@@ -1,6 +1,6 @@
 // One host read about a bot (its Activity, its chats tree, its Items), shared by every surface showing
 // that bot: one read at a time per bot, asks during it shared by one more after it.
-import { botRefKey, callBotRpc, type BotRef } from '@/lib/bot-hosts'
+import { botRefKey, type BotRef } from '@/lib/bot-hosts'
 import { reuseEqualJson } from '../../../../shared/reuse-equal-json'
 import type { BotChangeKind, BotChangeScope } from '../../../../shared/bots/bot-change-scope'
 import { BotReadMoreFailed } from '../../../../shared/bots/bot-read-more-failed'
@@ -10,6 +10,15 @@ import {
   type BotHostReadOptions,
   type BotReadAsk
 } from './bot-host-read-asks'
+import { callBotRpcWithAuthority, type BotReadAuthority } from './bot-read-authority'
+import {
+  BOT_READ_SETTLE_MS,
+  finishBotSettledWaiter,
+  type BotReadSettled,
+  type BotSettledWaiter
+} from './bot-read-settled'
+
+export type { BotReadSettled } from './bot-read-settled'
 
 type BotReadEntry<T> = {
   bot: BotRef
@@ -32,6 +41,8 @@ type BotReadEntry<T> = {
   parts: BotReadAsk
   /** Asks for more (`requestMore`) waiting on the next read, each told the value it lands. */
   more: ((value: T | null) => void)[]
+  /** `requestSettled` asks of this entry object; they never move to a later entry for the same bot. */
+  settled: Set<BotSettledWaiter<T>>
 }
 
 /** One host read about a bot (its Activity, its chats tree), shared by every surface showing that bot. */
@@ -43,6 +54,9 @@ export type BotHostRead<T> = {
   /** More of the value (its next page), read at once in turn with the rest; the value it lands, or
    *  null when that read failed or the last surface closed. */
   requestMore: (bot: BotRef) => Promise<T | null>
+  /** A whole read that starts after this ask and finishes within `BOT_READ_SETTLE_MS` of it; uncertain
+   *  when that read fails, the time runs out, or the last surface closes. Needs an open surface. */
+  requestSettled: (bot: BotRef) => Promise<BotReadSettled<T>>
   /** The parts a notice can have changed in the bot's value; null: read whole. */
   partsOf: (scope: BotChangeScope | undefined, bot: BotRef) => readonly string[] | null
   subscribe: (bot: BotRef, listener: () => void) => () => void
@@ -59,7 +73,8 @@ export type BotHostReadState = 'loading' | 'ready' | 'failed'
 
 export function createBotHostRead<T>(
   method: string,
-  pick: (result: never) => T,
+  /** The default read's value, from its reply and the host incarnation it was sent to. */
+  pick: (result: never, authority: BotReadAuthority) => T,
   failure: string,
   kinds: readonly BotChangeKind[],
   /** The least time between two reads' starts; asks in between share the one after it. */
@@ -70,6 +85,8 @@ export function createBotHostRead<T>(
   options?: BotHostReadOptions<T>
 ): BotHostRead<T> {
   const entries = new Map<string, BotReadEntry<T>>()
+  const readDefault = (bot: BotRef): Promise<{ result: never; authority: BotReadAuthority }> =>
+    callBotRpcWithAuthority<never>(bot, method, { botId: bot.id })
   // One value per bot, replaced by each read that lands.
   const lastValues = new Map<string, T>()
 
@@ -91,12 +108,19 @@ export function createBotHostRead<T>(
         again: false,
         startedAt: 0,
         parts: null,
-        more: []
+        more: [],
+        settled: new Set()
       }
       entries.set(key, entry)
     }
     return entry
   }
+
+  const finish = (
+    entry: BotReadEntry<T>,
+    waiter: BotSettledWaiter<T>,
+    settled: BotReadSettled<T>
+  ): void => finishBotSettledWaiter(entry.settled, waiter, settled)
 
   const read = async (key: string, entry: BotReadEntry<T>): Promise<void> => {
     const current = ++entry.latest
@@ -120,8 +144,8 @@ export function createBotHostRead<T>(
         entry.listeners.forEach((listener) => listener())
       }
     }
-    // A read's value: told to its surfaces when it changed (an unchanged answer tells no one).
-    const land = (value: T | null): void => {
+    // A read's value; true when its surfaces must be told (an unchanged answer tells no one).
+    const land = (value: T | null): boolean => {
       const first = !entry.landed
       entry.landed = true
       // Kept on every landing: a value `show` already put up lands unchanged, and is still the newest.
@@ -138,36 +162,58 @@ export function createBotHostRead<T>(
       if (value !== entry.value || entry.failure || first) {
         entry.value = value
         entry.failure = null
-        entry.listeners.forEach((listener) => listener())
+        return true
+      }
+      return false
+    }
+    // Waiters asked before this read began; decided before any listener runs, so one unsubscribing
+    // can't turn a success into a disposal. A result at or past a waiter's deadline is uncertain.
+    const settle = (settled: BotReadSettled<T>): void => {
+      if (entry.settled.size === 0) {
+        return
+      }
+      const at = performance.now()
+      for (const waiter of entry.settled) {
+        if (waiter.minSequence <= current) {
+          finish(entry, waiter, at >= waiter.deadline ? { ok: false } : settled)
+        }
       }
     }
+    const notify = (): void => entry.listeners.forEach((listener) => listener())
     try {
       const value = options
         ? await options.load(entry.bot, previous, ask, show, live, () => entry.again)
-        : await callBotRpc<never>(entry.bot, method, { botId: entry.bot.id }).then((result) =>
+        : await readDefault(entry.bot).then(({ result, authority }) =>
             // A reply no one shows any more is not compared.
-            live() ? reuseEqualJson(previous, pick(result)) : previous
+            live() ? reuseEqualJson(previous, pick(result, authority)) : previous
           )
       if (live()) {
-        land(value)
+        const changed = land(value)
         landed = value
+        settle(entry.value ? { ok: true, value: entry.value } : { ok: false })
+        if (changed) {
+          notify()
+        }
       }
     } catch (error) {
       console.error(failure, error)
+      let changed = false
       // What a read with a failed Show more read stands; that ask fails (its caller says so).
       if (error instanceof BotReadMoreFailed && live()) {
-        land(error.landed)
+        changed = land(error.landed)
       }
       // A failed read of only more fails just that ask (its caller says so); the list stands.
       const onlyMore = (!ask.whole && ask.parts.length === 0) || error instanceof BotReadMoreFailed
-      if (
-        !onlyMore &&
-        current === entry.latest &&
-        entries.get(key) === entry &&
-        entry.failure !== 'failed'
-      ) {
+      if (!onlyMore && live() && entry.failure !== 'failed') {
         entry.failure = 'failed'
-        entry.listeners.forEach((listener) => listener())
+        changed = true
+      }
+      // Any failed read is uncertain to a settled ask, a partial value landed or not.
+      if (live()) {
+        settle({ ok: false })
+      }
+      if (changed) {
+        notify()
       }
     } finally {
       waiters.forEach((tell) => tell(landed))
@@ -186,6 +232,26 @@ export function createBotHostRead<T>(
     if (entry.parts) {
       schedule(botRefKey(bot), entry)
     }
+  }
+
+  const requestSettled = (bot: BotRef): Promise<BotReadSettled<T>> => {
+    const entry = entries.get(botRefKey(bot))
+    // Only an entry a surface holds is ever disposed, so no ask may create or keep one by itself.
+    if (!entry || entry.listeners.size === 0) {
+      return Promise.resolve({ ok: false })
+    }
+    return new Promise((resolve) => {
+      const waiter: BotSettledWaiter<T> = {
+        minSequence: entry.latest + 1,
+        deadline: performance.now() + BOT_READ_SETTLE_MS,
+        timer: null,
+        resolve
+      }
+      // Armed at the ask: it covers a read still running, the minimum gap and the read itself.
+      waiter.timer = setTimeout(() => finish(entry, waiter, { ok: false }), BOT_READ_SETTLE_MS)
+      entry.settled.add(waiter)
+      request(bot)
+    })
   }
 
   const requestMore = (bot: BotRef): Promise<T | null> => {
@@ -230,6 +296,7 @@ export function createBotHostRead<T>(
     kinds,
     request,
     requestMore,
+    requestSettled,
     partsOf: (scope, bot) =>
       options?.partsOf(scope, bot.id, entries.get(botRefKey(bot))?.value ?? null) ?? null,
     subscribe: (bot, listener) => {
@@ -245,6 +312,9 @@ export function createBotHostRead<T>(
             clearTimeout(entry.timer)
           }
           entry.more.splice(0).forEach((tell) => tell(null))
+          for (const waiter of entry.settled) {
+            finish(entry, waiter, { ok: false })
+          }
           entries.delete(key)
         }
       }

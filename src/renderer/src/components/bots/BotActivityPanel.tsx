@@ -7,7 +7,9 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../shared/bot-types'
 import { ChatWorkersActivity } from './ChatWorkersActivity'
 import { BotUpNextSection } from './BotUpNextSection'
-import { useBotActivity } from './use-bot-activity'
+import { NO_ACTIVITY, useBotActivityAuthorityRead } from './use-bot-activity'
+import { useBotAutomationDelete } from './use-bot-automation-delete'
+import { hiddenAutomationCardKeys, withoutHiddenAutomations } from './bot-automation-delete-hides'
 import { useBotNeedsYouCount, useBotNow } from './use-bot-now'
 import { updateBotReporting } from './bot-update-reporting'
 import { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
@@ -93,7 +95,20 @@ function BotActivityOrSettings({ bot }: { bot: Bot }): React.JSX.Element {
 
 function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
   const t = useTranslate()
-  const activity = useBotActivity(bot)
+  const activityRead = useBotActivityAuthorityRead(bot)
+  // Its server is down: the panel shows the last read with its actions off until it's back.
+  const offline = useBotHostOffline(bot.hostId)
+  const deletion = useBotAutomationDelete(bot, activityRead, offline)
+  const listedActivity = activityRead.read?.activity ?? NO_ACTIVITY
+  // One projection for every place this tab names an automation: deleted here, it's gone from all.
+  const activity = useMemo(
+    () => withoutHiddenAutomations(listedActivity, deletion.hidden),
+    [listedActivity, deletion.hidden]
+  )
+  const hiddenCardKeys = useMemo(
+    () => hiddenAutomationCardKeys(listedActivity, deletion.hidden),
+    [listedActivity, deletion.hidden]
+  )
   const now = useBotNow(bot)
   const items = useBotItems(bot)
   const read = items.read
@@ -106,8 +121,6 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
     setFilterState(next)
   }
   const picture = useBotPictureSetting(bot, (updates) => updateBotReporting(bot, updates))
-  // Its server is down: the panel shows the last read with its actions off until it's back.
-  const offline = useBotHostOffline(bot.hostId)
   // "Today at…" and "next" roll over with the clock; a minute is fine-grained enough.
   const clock = useNow(60_000)
   // Read above the list/item switch: an open item walks this list, and Back finds its row in it.
@@ -131,8 +144,11 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
     [bot, activity, clock]
   )
   const stoppedForSignIn = useMemo(
-    () => now.stoppedForSignIn.map((row) => ({ ...row, hostId: bot.hostId })),
-    [now.stoppedForSignIn, bot.hostId]
+    () =>
+      now.stoppedForSignIn.flatMap((row) =>
+        deletion.hidden.has(row.automation.id) ? [] : [{ ...row, hostId: bot.hostId }]
+      ),
+    [now.stoppedForSignIn, bot.hostId, deletion.hidden]
   )
   // Every ask leads Needs you, whatever the filter: Needs you only keeps them all.
   const asks = useMemo<BotNeedsYouAsks>(() => {
@@ -146,8 +162,8 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
   // The badge's count, unfiltered: the header's dot and line say what the Items tab says.
   const needsYou = useBotNeedsYouCount(bot, now)
   const signInStops = useMemo(
-    () => new Set(now.stoppedForSignIn.map((row) => row.key)),
-    [now.stoppedForSignIn]
+    () => new Set(stoppedForSignIn.map((row) => row.key)),
+    [stoppedForSignIn]
   )
   const rowName = (row: BotAutomationCardRow): string =>
     row.kind === 'look-around'
@@ -219,6 +235,8 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
         <BotUpcomingSection
           bot={bot}
           rows={automationRows}
+          hiddenKeys={hiddenCardKeys}
+          deletion={deletion}
           upNext={activity.upNext?.state}
           hasAutomations={activity.automations.length + activity.waits.length > 0}
           signInStops={signInStops}

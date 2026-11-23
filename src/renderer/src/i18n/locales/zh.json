@@ -28592,7 +28592,10 @@
       "runNow": "立即运行",
       "openOnPage": "在自动化页面中打开",
       "pauseShort": "暂停",
-      "resumeShort": "恢复"
+      "resumeShort": "恢复",
+      "deleting": "正在删除…",
+      "deleteFailed": "无法删除 {{name}}",
+      "deleteDescription": "删除 <name/> 及其运行历史。"
     },
     "host": {
       "errors": {

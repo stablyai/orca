@@ -24566,7 +24566,10 @@
       "runNow": "Jetzt ausführen",
       "openOnPage": "Auf der Seite Automatisierungen öffnen",
       "pauseShort": "Pausieren",
-      "resumeShort": "Fortsetzen"
+      "resumeShort": "Fortsetzen",
+      "deleting": "Wird gelöscht…",
+      "deleteFailed": "{{name}} konnte nicht gelöscht werden",
+      "deleteDescription": "<name/> und den Ausführungsverlauf löschen."
     },
     "access": {
       "thisComputer": "diesem Computer",

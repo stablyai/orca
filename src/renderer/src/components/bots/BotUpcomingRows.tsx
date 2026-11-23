@@ -10,6 +10,7 @@ import {
   Hourglass,
   Moon,
   Settings,
+  Trash2,
   Zap
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -40,6 +41,7 @@ import {
   BotRowMoreMenu,
   BotRowStateIcon,
   isBotRowTrouble,
+  type BotRowMenuItem,
   type BotRowState
 } from './BotPanelRow'
 import { LookAroundRow } from './BotLookAroundRow'
@@ -70,6 +72,7 @@ function TidyUpRow({ bot, folded }: { bot: Bot; folded: boolean }): React.JSX.El
   const toggle = pauseResume(t, setting.on, (on) => updateBotReporting(bot, { tidyUp: { on } }))
   return (
     <BotPanelRow
+      rowKey="tidy-up"
       icon={<BotRowStateIcon state={rowState} kind={<Moon className={ICON} />} />}
       title={t('bots.upcoming.tidyUp', 'Tidy memory')}
       state={rowState?.label}
@@ -115,6 +118,17 @@ function TidyUpRow({ bot, folded }: { bot: Bot; folded: boolean }): React.JSX.El
   )
 }
 
+/** Delete on an automation row: its state while deleting, and how to ask for it. */
+export type BotAutomationRowDeletion = {
+  pending: boolean
+  /** It was asked from the folded list, which keeps it listed until the delete ends. */
+  admittedAsTrouble: boolean
+  /** Offline or deleting. */
+  disabled: boolean
+  /** `asTrouble`: it is listed under a folded section for its trouble. */
+  request: (asTrouble: boolean) => void
+}
+
 /** A click opens it on the Automations page, at its failed run if it failed. */
 function AutomationRow({
   card,
@@ -122,7 +136,8 @@ function AutomationRow({
   bot,
   signInShownApart,
   now,
-  folded
+  folded,
+  deletion
 }: {
   card: BotAutomationCardRow
   row: BotAutomationRow
@@ -131,6 +146,7 @@ function AutomationRow({
   signInShownApart: boolean
   now: number
   folded: boolean
+  deletion: BotAutomationRowDeletion | null
 }): React.JSX.Element | null {
   const t = useTranslate()
   const { automation } = row
@@ -145,7 +161,8 @@ function AutomationRow({
   // The saved state until the list re-reads; a newer record from the host replaces it.
   const [saved, setSaved] = useState<{ enabled: boolean; from: number } | null>(null)
   const enabled = saved?.from === automation.updatedAt ? saved.enabled : automation.enabled
-  const rowState: BotRowState | null =
+  // What the host says of it, which alone decides whether a folded section lists it.
+  const membershipState: BotRowState | null =
     !enabled && !card.running
       ? paused(t)
       : card.failed
@@ -161,9 +178,14 @@ function AutomationRow({
                   reason: t('bots.upcoming.lastNeededSignIn', 'Its last run stopped for a sign-in')
                 }
               : null
-  if (folded && !isBotRowTrouble(rowState)) {
+  const trouble = isBotRowTrouble(membershipState)
+  const pending = deletion?.pending === true
+  if (folded && !trouble && !(pending && deletion?.admittedAsTrouble)) {
     return null
   }
+  const rowState: BotRowState | null = pending
+    ? { kind: 'deleting', label: t('bots.automations.deleting', 'Deleting…') }
+    : membershipState
   const when = botAutomationWhen(automation)
   const setEnabled = (next: boolean): void => {
     setSaving(true)
@@ -185,7 +207,16 @@ function AutomationRow({
   }
   const open = (): void =>
     openBotAutomation(bot.hostId, automation.id, card.failed ? (row.latestRunId ?? null) : null)
-  const toggle = pauseResume(t, enabled, setEnabled, saving)
+  const toggle = pauseResume(t, enabled, setEnabled, saving || pending)
+  const deleteItem: BotRowMenuItem | null = deletion
+    ? {
+        icon: <Trash2 />,
+        label: t('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete'),
+        onSelect: () => deletion.request(trouble),
+        disabled: deletion.disabled,
+        variant: 'destructive'
+      }
+    : null
   const kind = hasAutomationSchedule(automation) ? (
     <CalendarClock className={ICON} />
   ) : (
@@ -193,12 +224,13 @@ function AutomationRow({
   )
   return (
     <BotPanelRow
+      rowKey={card.key}
       icon={<BotRowStateIcon state={rowState} kind={kind} />}
       title={automation.name}
       state={rowState?.label}
       dimmed={rowState?.kind === 'paused'}
       // An event-only row has no next; one whose events won't fire still runs on its schedule.
-      next={enabled && card.nextAt !== null ? { at: card.nextAt, now } : null}
+      next={!pending && enabled && card.nextAt !== null ? { at: card.nextAt, now } : null}
       card={{
         state: rowState,
         facts: [
@@ -212,6 +244,7 @@ function AutomationRow({
         ]
       }}
       onOpen={open}
+      contextMenu={deleteItem ? [deleteItem] : undefined}
       actions={
         <>
           <PauseResumeButton item={toggle} />
@@ -222,7 +255,7 @@ function AutomationRow({
                   icon: <CirclePlay />,
                   label: t('bots.automations.runNow', 'Run now'),
                   onSelect: runNow,
-                  disabled: starting
+                  disabled: starting || pending
                 },
                 toggle
               ],
@@ -232,7 +265,8 @@ function AutomationRow({
                   label: t('bots.automations.openOnPage', 'Open on Automations page'),
                   onSelect: () => openBotAutomation(bot.hostId, automation.id, null)
                 }
-              ]
+              ],
+              deleteItem ? [deleteItem] : []
             ]}
           />
         </>
@@ -265,6 +299,7 @@ function WaitRow({
   }
   return (
     <BotPanelRow
+      rowKey={`wait:${row.key}`}
       icon={<Hourglass className={ICON} />}
       title={automation.name}
       card={
@@ -295,7 +330,8 @@ export function UpcomingItem({
   upNext,
   signInStops,
   now,
-  folded
+  folded,
+  deletion
 }: {
   bot: Bot
   row: BotAutomationCardRow
@@ -304,6 +340,8 @@ export function UpcomingItem({
   now: number
   /** The section is folded: only rows in trouble render. */
   folded: boolean
+  /** Delete for an automation row; none elsewhere. */
+  deletion?: BotAutomationRowDeletion | null
 }): React.JSX.Element | null {
   switch (row.kind) {
     case 'look-around':
@@ -320,6 +358,7 @@ export function UpcomingItem({
           signInShownApart={signInStops.has(row.row.key)}
           now={now}
           folded={folded}
+          deletion={deletion ?? null}
         />
       )
     case 'wait':

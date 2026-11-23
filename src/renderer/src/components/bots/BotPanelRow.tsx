@@ -5,6 +5,12 @@ import { CircleAlert, CircleX, MoreHorizontal, Pause } from 'lucide-react'
 import { AgentWorkingSpinner } from '@/components/agent/status/AgentWorkingSpinner'
 import { Button } from '@/components/ui/button'
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -92,6 +98,7 @@ function botRowCardText({ state, facts }: BotRowCard): string {
 }
 
 export function BotPanelRow({
+  rowKey,
   icon,
   title,
   state,
@@ -100,8 +107,11 @@ export function BotPanelRow({
   onOpen,
   next = null,
   actions,
-  actionsShown = false
+  actionsShown = false,
+  contextMenu
 }: {
+  /** Names the row for focus that moves to it after another leaves. */
+  rowKey?: string
   icon: React.ReactNode
   title: string
   /** The state the icon shows, read after the name ("Reshare X post, Failed"). */
@@ -119,6 +129,8 @@ export function BotPanelRow({
   /** Its next run, said short at the row's end ("6:30 PM"), read against the panel's clock so it
    *  rolls on with it; null when it has none to say. */
   next?: { at: number; now: number } | null
+  /** Its right-click menu; none without. */
+  contextMenu?: readonly BotRowMenuItem[]
 }): React.JSX.Element {
   const t = useTranslate()
   const descriptionId = useId()
@@ -131,8 +143,11 @@ export function BotPanelRow({
   ]
     .filter(Boolean)
     .join(', ')
-  return (
-    <div className="group/item relative flex min-w-0 items-center gap-2 rounded-sm px-2 py-1 hover:bg-accent has-[:focus-visible]:bg-accent has-[[data-state=open]]:bg-accent">
+  const row = (
+    <div
+      data-bot-panel-row={rowKey}
+      className="group/item relative flex min-w-0 items-center gap-2 rounded-sm px-2 py-1 hover:bg-accent has-[:focus-visible]:bg-accent has-[[data-state=open]]:bg-accent"
+    >
       <span
         className={cn('flex h-5 w-4 shrink-0 items-center justify-center', dimmed && 'opacity-60')}
       >
@@ -144,6 +159,7 @@ export function BotPanelRow({
           aria-label={label === title ? undefined : label}
           aria-describedby={card ? descriptionId : undefined}
           aria-disabled={onOpen ? undefined : true}
+          data-bot-row-open={onOpen ? '' : undefined}
           className={cn(
             'min-w-0 flex-1 truncate rounded-sm text-left text-[13px] leading-5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
             onOpen ? 'cursor-pointer' : 'cursor-default',
@@ -186,6 +202,27 @@ export function BotPanelRow({
       ) : null}
     </div>
   )
+  if (!contextMenu || contextMenu.length === 0) {
+    return row
+  }
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      <ContextMenuContent className="w-52">
+        {contextMenu.map((item) => (
+          <ContextMenuItem
+            key={item.label}
+            variant={item.variant}
+            disabled={item.disabled}
+            onSelect={item.onSelect}
+          >
+            {item.icon}
+            {item.label}
+          </ContextMenuItem>
+        ))}
+      </ContextMenuContent>
+    </ContextMenu>
+  )
 }
 
 /** What a row's leading icon says in place of its kind; null shows the kind. */
@@ -195,6 +232,8 @@ export type BotRowState =
   | { kind: 'alert'; label: string; reason?: string | null }
   | { kind: 'running'; label: string }
   | { kind: 'paused'; label: string }
+  /** Being deleted; never trouble, never dimmed. */
+  | { kind: 'deleting'; label: string }
 
 /** Failed and alert rows stay listed under a folded section. */
 export const isBotRowTrouble = (state: BotRowState | null): boolean =>
@@ -222,6 +261,12 @@ export function BotRowStateIcon({
       return <AgentWorkingSpinner className="size-3 shrink-0" />
     case 'paused':
       return <Pause aria-hidden className={cn(GLYPH, 'text-muted-foreground')} />
+    case 'deleting':
+      return (
+        <span aria-hidden className="flex">
+          <AgentWorkingSpinner className="size-3 shrink-0" />
+        </span>
+      )
   }
 }
 
@@ -262,6 +307,7 @@ export type BotRowMenuItem = {
   label: string
   onSelect: () => void
   disabled?: boolean
+  variant?: 'destructive'
 }
 
 /** A row's ⋯ menu: its commands, then a separator before where it opens. */
@@ -287,6 +333,7 @@ export function BotRowMoreMenu({
               {group.map((item) => (
                 <DropdownMenuItem
                   key={item.label}
+                  variant={item.variant}
                   disabled={item.disabled}
                   onSelect={item.onSelect}
                 >
