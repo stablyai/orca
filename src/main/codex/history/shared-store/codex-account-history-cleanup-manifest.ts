@@ -5,26 +5,17 @@ import { join, relative } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/windows-retry-file-operations'
 import { withFileTransactionLock } from '../../../filesystem/file-transaction-lock'
-import { MERGE_PENDING_SUFFIX, lstatIfPresent } from '../../../filesystem/merged-directory-link'
-import { listRolloutTwinPairs, rolloutTwinPath } from '../rollouts/codex-rollout-compressed-twin'
-import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
+import { lstatIfPresent } from '../../../filesystem/merged-directory-link'
 import { MANIFEST_VERSION, isCurrentManifest } from './codex-account-history-cleanup-manifest-shape'
 import { readEntries, regularFiles } from './codex-account-history-folder-listing'
 
-/**
- * In each account home: the old data sharing left behind, for a later release to delete once the
- * store has proven itself; `cleanUpCodexHistoryLeftBehind` deletes only what it proved redundant.
- */
+/** In each account home: the old data sharing left behind, kept until a later release deletes it. */
 export const HISTORY_CLEANUP_MANIFEST = '.orca-history-cleanup.json'
 /** One form of a rollout whose other form the store holds, kept out so it holds one. */
 export const SET_ASIDE_ROLLOUTS_DIR = '.orca-set-aside-rollouts'
 /** The account's own databases from before sharing stopped; kept, never read again. */
 export const PRE_SHARE_DATABASES_DIR = '.orca-pre-share-db'
-/** The only folders whose left-behind files the cleanup inventories, checks and deletes. */
-export const ROLLOUT_FOLDERS = new Set(['sessions', 'archived_sessions'])
 export const CODEX_DATABASE_FILE = /\.sqlite(?:-wal|-shm)?$/
-
-const HISTORY_FOLDERS = ['sessions', 'archived_sessions']
 
 /** `path` is relative to its home with `/` separators. */
 export type FileFacts = { path: string; bytes: number; mtimeMs: number }
@@ -68,21 +59,12 @@ function toManifestPath(root: string, path: string): string {
   return relative(root, path).split(/[\\/]/).join('/')
 }
 
-export function fromManifestPath(root: string, path: string): string {
-  return join(root, ...path.split('/'))
-}
-
 export function factsOf(root: string, path: string, stats: BigIntStats): FileFacts {
   return {
     path: toManifestPath(root, path),
     bytes: Number(stats.size),
     mtimeMs: Number(stats.mtimeNs / 1_000_000n)
   }
-}
-
-export async function storeFileFacts(storeHome: string, path: string): Promise<FileFacts | null> {
-  const stats = await lstatIfPresent(fromManifestPath(storeHome, path))
-  return stats?.isFile() ? factsOf(storeHome, fromManifestPath(storeHome, path), stats) : null
 }
 
 /** A newer version's manifest is left alone; anything unreadable or malformed is rebuilt. */
@@ -162,78 +144,6 @@ export function updateManifest(
   })
 }
 
-export function sameFacts(left: FileFacts, right: FileFacts | null): boolean {
-  return right !== null && left.bytes === right.bytes && left.mtimeMs === right.mtimeMs
-}
-
-// Null when `shouldStop` cut the walk short.
-async function leftBehindRollouts(
-  accountHome: string,
-  storeHome: string,
-  previous: Map<string, LeftBehindRollout>,
-  shouldStop: () => boolean
-): Promise<LeftBehindRollout[] | null> {
-  // A pending folder is `<folder>[.<ms>].orca-profile-merge`; its files conflict by name.
-  const sources: { root: string; folder: string; kind: LeftBehindRollout['kind'] }[] = []
-  const setAside = join(accountHome, SET_ASIDE_ROLLOUTS_DIR)
-  // A link here would lead the inventory outside the account home.
-  const setAsideFolders = (await lstatIfPresent(setAside))?.isDirectory()
-    ? await readEntries(setAside)
-    : []
-  for (const folder of setAsideFolders) {
-    if (folder.isDirectory() && ROLLOUT_FOLDERS.has(folder.name)) {
-      sources.push({
-        root: join(accountHome, SET_ASIDE_ROLLOUTS_DIR, folder.name),
-        folder: folder.name,
-        kind: 'set-aside-twin'
-      })
-    }
-  }
-  for (const entry of await readEntries(accountHome)) {
-    if (entry.isDirectory() && entry.name.endsWith(MERGE_PENDING_SUFFIX)) {
-      const folder = entry.name.slice(0, -MERGE_PENDING_SUFFIX.length).replace(/\.\d+$/, '')
-      // Kept thread locks, memories and the like are never the cleanup's to judge.
-      if (ROLLOUT_FOLDERS.has(folder)) {
-        sources.push({ root: join(accountHome, entry.name), folder, kind: 'merge-conflict' })
-      }
-    }
-  }
-  const rollouts: LeftBehindRollout[] = []
-  for (const source of sources) {
-    for await (const file of regularFiles(source.root, shouldStop)) {
-      if (shouldStop()) {
-        return null
-      }
-      const inFolder = `${source.folder}/${toManifestPath(source.root, file.path)}`
-      if (!parseCodexRolloutThreadId(inFolder)) {
-        continue
-      }
-      // A set-aside form matches the store's other form; a conflict usually its same name.
-      const [first, second] =
-        source.kind === 'set-aside-twin'
-          ? [rolloutTwinPath(inFolder), inFolder]
-          : [inFolder, rolloutTwinPath(inFolder)]
-      const store =
-        (await storeFileFacts(storeHome, first)) ??
-        (parseCodexRolloutThreadId(inFolder) ? await storeFileFacts(storeHome, second) : null)
-      const facts = factsOf(accountHome, file.path, file.stats)
-      const prior = previous.get(facts.path)
-      const keepsCheck =
-        prior?.check &&
-        sameFacts(prior, facts) &&
-        prior.storePath === (store?.path ?? null) &&
-        sameFacts(prior.check.store, store)
-      rollouts.push({
-        ...facts,
-        kind: source.kind,
-        storePath: store?.path ?? null,
-        check: keepsCheck ? prior.check : null
-      })
-    }
-  }
-  return shouldStop() ? null : rollouts
-}
-
 async function databasesLeftBehind(
   accountHome: string,
   includeHomeRoot: boolean
@@ -255,19 +165,10 @@ async function databasesLeftBehind(
   return databases
 }
 
-/** Plain-form paths of store rollouts present in both forms; names only, no file reads. */
-async function storeTwinPairs(storeHome: string, shouldStop: () => boolean): Promise<string[]> {
-  const pairs: string[] = []
-  for (const folder of HISTORY_FOLDERS) {
-    pairs.push(...(await listRolloutTwinPairs(join(storeHome, folder), Infinity, shouldStop)))
-  }
-  return pairs.map((path) => toManifestPath(storeHome, path)).sort()
-}
-
 /**
  * After a pass: the shared streak (a fully shared pass extends it, turning sharing off resets it)
- * and the databases left behind. Only cheap reads, since a launch awaits the pass; the rollout
- * inventory is rebuilt by `inventoryCodexHistoryLeftBehind` off that path.
+ * and the databases left behind. Only cheap reads, since a launch awaits the pass; rollout entries
+ * an older build recorded are kept as they are.
  */
 export async function recordCodexHistoryLeftBehind(args: {
   accountHome: string
@@ -295,49 +196,4 @@ export async function recordCodexHistoryLeftBehind(args: {
       updatedAt: now
     }
   })
-}
-
-/**
- * Rebuilds the left-behind rollouts and store twin pairs from disk, keeping still-valid checks,
- * and returns the rollouts; null, with nothing written, when `shouldStop` cut the walk short. With
- * `persist` false (report mode) nothing is written at all.
- */
-export async function inventoryCodexHistoryLeftBehind(args: {
-  accountHome: string
-  storeHome: string
-  shouldStop?: () => boolean
-  persist?: boolean
-}): Promise<LeftBehindRollout[] | null> {
-  const before = await readManifest(args.accountHome)
-  if (!before || before === 'newer') {
-    return []
-  }
-  const shouldStop = args.shouldStop ?? (() => false)
-  // Walked outside the write, which then touches only these fields: a pass (or, in WSL, another
-  // process) may rewrite the streak meanwhile, and a launch never waits behind the walk.
-  const previous = new Map(before.rollouts.map((rollout) => [rollout.path, rollout]))
-  const rollouts = await leftBehindRollouts(args.accountHome, args.storeHome, previous, shouldStop)
-  if (!rollouts) {
-    return null
-  }
-  // The twin pairs only feed what gets saved.
-  if (args.persist === false) {
-    return rollouts
-  }
-  const pairs = await storeTwinPairs(args.storeHome, shouldStop)
-  if (shouldStop()) {
-    return null
-  }
-  if (pairs.length > 0) {
-    console.warn(
-      `[codex-account-history] ${pairs.length} rollouts are in ${args.storeHome} as both .jsonl and .jsonl.zst; both kept`
-    )
-  }
-  await updateManifest(args.accountHome, async (current) => ({
-    ...(current ?? before),
-    rollouts,
-    storeTwinPairs: pairs,
-    updatedAt: new Date().toISOString()
-  }))
-  return rollouts
 }

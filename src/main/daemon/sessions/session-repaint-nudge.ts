@@ -23,8 +23,7 @@ export class SessionRepaintNudge {
     isLive: () => boolean
   ): void {
     const grid = readGrid()
-    // Why not Windows: ConPTY answers a resize by replaying its own viewport, not the program's paint.
-    if (process.platform === 'win32' || this.inFlight || !grid || grid.cols < 1 || grid.rows < 1) {
+    if (this.inFlight || !grid || grid.cols < 1 || grid.rows < 1) {
       return
     }
     const { cols, rows } = grid

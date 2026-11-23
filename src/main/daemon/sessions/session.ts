@@ -8,7 +8,6 @@ import type { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from '../shell-readiness/terminal-shell-recovery-barrier'
 import { SessionTerminationController } from './session-termination-controller'
 import { SessionProcessInspection } from './session-process-inspection'
-import type { JobTerminationOutcome } from '../../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { randomUUID } from 'node:crypto'
@@ -75,6 +74,7 @@ export class Session extends SessionProcessInspection {
     })
     try {
       this.subprocess.onData((data) => {
+        this._outputChunks += 1
         if (!this._disposed) {
           this.shellReady.ingestSubprocessData(data)
         }
@@ -128,11 +128,6 @@ export class Session extends SessionProcessInspection {
 
   get pid(): number {
     return this.subprocess.pid
-  }
-
-  /** A PTY job result of unavailable does not prove child exit. */
-  terminateOwnedTree(): JobTerminationOutcome {
-    return this.subprocess.terminateOwnedTree()
   }
 
   write(data: string): void {
@@ -222,6 +217,11 @@ export class Session extends SessionProcessInspection {
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
     this.startupIngress.snapshotBarrier()
     return this.output.getSnapshot(opts)
+  }
+
+  getVisibleProjection() {
+    this.startupIngress.snapshotBarrier()
+    return this.output.getVisibleProjection()
   }
 
   getPartialEscapeTailAnsi(): string {

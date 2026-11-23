@@ -6,6 +6,7 @@ import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getOptionalStringFlagAllowingEmpty,
+  getRepeatedStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/connection/types'
@@ -33,6 +34,20 @@ export async function readMessageText(
     throw new RuntimeClientError('invalid_argument', 'The text is empty.')
   }
   return text
+}
+
+// A list's tasks: each --item as given, blanks dropped; none is a mistake.
+function listItems(flags: HandlerContext['flags']): string[] {
+  const items = getRepeatedStringFlag(flags, 'item')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+  if (items.length === 0) {
+    throw new RuntimeClientError('invalid_argument', 'A list needs at least one --item.')
+  }
+  if (items.length > 50) {
+    throw new RuntimeClientError('invalid_argument', 'A list takes at most 50 items at once.')
+  }
+  return items
 }
 
 const AHEAD = /^\+(\d{1,4})([mhd])$/
@@ -90,7 +105,18 @@ export function scheduledFor(at: string | undefined, nowMs: number): { postAt?: 
 }
 
 /** The verbs `orca slack` sends in one call, as connector.act names them; attach takes several. */
-export type SlackVerb = 'find' | 'check' | 'read' | 'post' | 'react' | 'edit' | 'delete'
+export type SlackVerb =
+  | 'find'
+  | 'check'
+  | 'read'
+  | 'post'
+  | 'react'
+  | 'edit'
+  | 'delete'
+  | 'pin'
+  | 'canvas'
+  | 'list'
+  | 'scheduled'
 
 export async function actionArgs(
   verb: SlackVerb,
@@ -116,6 +142,26 @@ export async function actionArgs(
         // The bytes stream to this machine from a link the answer gives, never inline.
         ...(download ? { download, stream: true as const } : {})
       }
+    }
+    case 'pin':
+      return flags.get('remove') === true ? { remove: true as const } : {}
+    case 'canvas':
+      return {
+        title: getRequiredStringFlag(flags, 'title'),
+        text: await readMessageText(flags, cwd, true)
+      }
+    case 'list':
+      return { title: getRequiredStringFlag(flags, 'title'), items: listItems(flags) }
+    case 'scheduled': {
+      // Read with its blank kept: `--cancel ""` is a mistake to refuse, never a request to list.
+      const cancel = getOptionalStringFlagAllowingEmpty(flags, 'cancel')
+      if (cancel !== undefined && !cancel.trim()) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          '--cancel takes the id `orca slack scheduled <place>` lists.'
+        )
+      }
+      return cancel ? { cancel: cancel.trim() } : {}
     }
     case 'edit':
       return { text: await readMessageText(flags, cwd, true) }

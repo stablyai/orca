@@ -3,6 +3,7 @@ import {
   type SessionTabProps
 } from '../chat/structured-session-tab-rename'
 import { OrcaRuntimeWithHeadlessPaneMoveToNewTab } from './headless-pane-move-to-new-tab'
+import { botHomePinRefusal, botHomeSessionId } from '../chat/bot-home-snapshot'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
@@ -53,10 +54,20 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadle
     const hostTabId = snapshot
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId
+    // Every client, CLI and older Orca reaches this; Home stays pinned and side chats never pin.
+    const pinRefusal = botHomePinRefusal(
+      snapshot,
+      botHomeSessionId(this.store, worktreeId),
+      hostTabId,
+      args.isPinned
+    )
+    if (pinRefusal) {
+      throw Object.assign(new Error(pinRefusal), { code: 'capability_unsupported' })
+    }
     if (ORCA_LAYOUT_OWNER_IS_MAIN && (await this.setMainTabProps(worktreeId, hostTabId, args))) {
       return { updated: true }
     }
-    const authoritativeWindow = this.getAvailableAuthoritativeWindow()
+    const authoritativeWindow = this.hasAuthoritativeWindow()
     if (
       authoritativeWindow &&
       (args.color !== undefined || args.isPinned !== undefined || args.viewMode !== undefined)
@@ -213,8 +224,8 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadle
       snapshotVersion: snapshot.snapshotVersion + 1,
       tabs
     }
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    // Storing can place a bot's Home; publish what was stored.
+    this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(worktreeId, nextSnapshot))
   }
 
   protected getMobileSessionTopLevelTabId(tab: RuntimeMobileSessionSnapshotTab): string {
@@ -297,7 +308,6 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadle
       snapshotVersion: snapshot.snapshotVersion + 1,
       tabs
     }
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(worktreeId, nextSnapshot))
   }
 }

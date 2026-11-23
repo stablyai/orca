@@ -1,16 +1,19 @@
-// Consecutive quiet item lines sit 4 px apart, not a full row gap: after slot selection, adjacent item
-// note slots join one slot (each note keeps its own row and id inside it; a lone note is a slot of one). A note with an owner's
-// comment, a receipt or turn bar, or anything drawn below a note (a turn's diff or PR card) ends it.
+// Consecutive quiet item notes join one slot (each note keeps its own row and id inside it; a lone note
+// is a slot of one). A note with an owner's comment, a receipt or turn bar, or anything drawn below a
+// note (a turn's diff or PR card) ends it. A long run splits into slots of a few notes, so the window
+// mounts only the notes near the view (a busy bot's hidden quiet turns join its notes across turns);
+// how close those slots sit is `markNativeChatActivityJoins`'s.
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { botItemNoteIsQuiet } from '../../../../../shared/bots/bot-item-note-lines'
 import type { NativeChatRowTypography } from '../viewport/virtualization/native-chat-row-height-estimate'
+import { NATIVE_CHAT_ACTIVITY_ROW_GAP_PX } from '../conversation/slots/native-chat-activity-row-joins'
 import type {
   NativeChatMessageSlot,
   NativeChatTranscriptSlot
 } from '../conversation/slots/native-chat-transcript-slots'
 
-/** The space between two item lines of a cluster, as `gap-1` draws it. */
-export const NATIVE_CHAT_ITEM_NOTE_GAP_PX = 4
+/** Notes per slot. Counted from a run's first note, so a live note only changes the last slot. */
+export const MAX_NATIVE_CHAT_ITEM_NOTE_CLUSTER = 8
 
 function quietNote(slot: NativeChatTranscriptSlot): slot is NativeChatMessageSlot {
   const note = slot.kind === 'message' ? slot.message.botItemNote : undefined
@@ -35,7 +38,8 @@ function clusterSlot(
 ): NativeChatMessageSlot {
   const head = members[0]!
   const last = members.at(-1)!
-  const gaps = (members.length - 1) * NATIVE_CHAT_ITEM_NOTE_GAP_PX * (typography?.spacingScale ?? 1)
+  const scale = typography?.spacingScale ?? 1
+  const gaps = (members.length - 1) * NATIVE_CHAT_ACTIVITY_ROW_GAP_PX * scale
   return {
     ...head,
     itemNotes: members.map((member): NativeChatMessage => member.message),
@@ -64,6 +68,9 @@ export function nativeChatBotItemNoteClusters(
       flush()
       result.push(slot)
       continue
+    }
+    if (members.length === MAX_NATIVE_CHAT_ITEM_NOTE_CLUSTER) {
+      flush()
     }
     members.push(slot)
     if (endsCluster(slot)) {

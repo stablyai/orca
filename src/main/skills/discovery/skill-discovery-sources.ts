@@ -111,7 +111,8 @@ const PROJECT_SKILL_FOLDERS: readonly (readonly [AgentType, string, SkillProvide
   ['cursor', '.cursor', ['agent-skills']],
   ['copilot', '.github', ['agent-skills']],
   ['qoder', '.qoder', ['agent-skills']],
-  ['opencode', '.opencode', ['agent-skills']]
+  ['opencode', '.opencode', ['agent-skills']],
+  ['prime-agent', '.prime/agent', ['agent-skills']]
 ]
 
 export function buildSkillDiscoverySources(
@@ -164,6 +165,14 @@ export function buildSkillDiscoverySources(
     // folded into one scan, so it keeps the relocated root alone.
     ...providerHomeSources(home, pathApi, providerRootOverrides, !args.pathApi),
     // Why: discovery-only agent folders; installs for these agents go to the canonical root.
+    source(
+      'home-gemini',
+      'Gemini CLI home',
+      pathApi.join(home, '.gemini', 'skills'),
+      'home',
+      ['agent-skills'],
+      'gemini'
+    ),
     source(
       'home-opencode',
       'OpenCode home',

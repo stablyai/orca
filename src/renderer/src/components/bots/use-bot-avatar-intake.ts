@@ -36,7 +36,8 @@ export type BotAvatarIntake = {
   /** Back to the hint; a decode in flight is dropped. */
   dismiss: () => void
   /** Another way of choosing a picture (Generate) takes the next turn: a decode in flight is dropped,
-   *  and the returned check says whether that turn is still the newest when its picture arrives. */
+   *  and the returned check says whether no picture has been taken since, when its picture arrives.
+   *  Browsing or dismissing leaves the turn alone. */
   claim: () => () => boolean
   /** A picture is dragged over one of its surfaces, or no longer. */
   setDragging: (dragging: boolean) => void
@@ -55,6 +56,8 @@ export function useBotAvatarIntakeState({
   const [taken, setTaken] = useState(0)
   // Bumped by every new action, so a late decode is dropped.
   const run = useRef(0)
+  // Bumped by each picture taken; a claimed turn ends only when one lands.
+  const landed = useRef(0)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // A decode can finish after the carousel moved; the picture lands where it is now.
   const latest = useRef({ onPicture, undoable })
@@ -81,8 +84,8 @@ export function useBotAvatarIntakeState({
 
   const claim = (): (() => boolean) => {
     dismiss()
-    const id = run.current
-    return () => run.current === id
+    const id = landed.current
+    return () => landed.current === id
   }
 
   const take = (image: Blob): void => {
@@ -96,6 +99,7 @@ export function useBotAvatarIntakeState({
           return
         }
         setReading(false)
+        landed.current += 1
         setTaken((count) => count + 1)
         latest.current.onPicture(png)
         if (latest.current.undoable) {

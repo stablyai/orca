@@ -231,6 +231,14 @@ export function BotSlackCard({
             }
           : null
       }
+      update={
+        installed?.updateAvailable && !installed.updateNeeded
+          ? {
+              label: t('bots.slack.connection.updatePermissions', 'Update Slack permissions…'),
+              onClick: openSetup
+            }
+          : null
+      }
       remove={
         removable
           ? {

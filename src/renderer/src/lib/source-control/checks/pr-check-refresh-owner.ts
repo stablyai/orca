@@ -1,3 +1,4 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { acceptPRCheckObservation } from '../../../../../shared/github/checks/complete-pr-check-owner'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
@@ -5,7 +6,6 @@ import type { TaskSourceContext } from '../../../../../shared/work-items/task-so
 import { capturePRCheckContract } from './pr-check-observation-contract'
 import { getGitHubSourceRuntimeTarget } from '../../work-items/github/github-source-runtime-context'
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '../../work-items/github/github-work-item-source-lookup'
-import { useAppStore } from '@/store/index'
 
 export async function readPRCheckRefreshOwner(args: {
   repoPath: string | null
@@ -16,7 +16,7 @@ export async function readPRCheckRefreshOwner(args: {
   accepts: () => boolean
 }) {
   const contract = capturePRCheckContract(
-    useAppStore.getState,
+    readRuntimeStatuses,
     getGitHubSourceRuntimeTarget(args.sourceContext),
     args.sourceContext
   )

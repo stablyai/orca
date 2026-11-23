@@ -100,6 +100,56 @@ export const SLACK_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['slack', 'pin'],
+    summary: 'Pin a Slack message to its channel, or unpin it, as this bot',
+    usage: 'orca slack pin <message> [--remove] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'ref', 'remove'],
+    positionalArgs: ['ref'],
+    notes: [
+      AS_BOT,
+      PLACE,
+      'Pinning one already pinned, or unpinning one that is not, is not an error.'
+    ]
+  },
+  {
+    path: ['slack', 'canvas'],
+    summary: 'Make a canvas in a Slack channel from Markdown, as this bot',
+    usage: 'orca slack canvas <place> --title <title> (<markdown> | --text-file <path|->) [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'ref', 'title', 'text', 'text-file'],
+    positionalArgs: ['ref', 'text'],
+    notes: [
+      AS_BOT,
+      PLACE,
+      'The canvas is added to the channel as a tab, and the answer gives its link. It takes headings to three levels, lists and checklists, tables, quotes and code blocks; a code block inside a list item or a table is refused.',
+      TEXT_FILE
+    ]
+  },
+  {
+    path: ['slack', 'list'],
+    summary: 'Make a Slack list of tasks and share it with a channel, as this bot',
+    usage: 'orca slack list <place> --title <title> --item <text> [--item <text>]... [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'ref', 'title', 'item'],
+    repeatableFlags: ['item'],
+    positionalArgs: ['ref'],
+    notes: [
+      AS_BOT,
+      PLACE,
+      'Each --item is one task, in order (up to 50), with a checkbox, an assignee and a due date people fill in. The answer gives its link. Slack lists need a paid Slack plan.'
+    ]
+  },
+  {
+    path: ['slack', 'scheduled'],
+    summary: 'See the posts this bot scheduled in a Slack channel, or cancel one',
+    usage: 'orca slack scheduled <place> [--cancel <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'ref', 'cancel'],
+    positionalArgs: ['ref'],
+    notes: [
+      AS_BOT,
+      PLACE,
+      'Lists what `orca slack post --at` scheduled there, each with the id --cancel takes. Slack cancels none in its last minute before posting.'
+    ]
+  },
+  {
     path: ['slack', 'edit'],
     summary: "Replace the text of one of this bot's own Slack messages",
     usage: 'orca slack edit <message> (<text> | --text-file <path|->) [--json]',

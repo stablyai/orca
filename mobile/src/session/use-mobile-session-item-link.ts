@@ -3,6 +3,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useSessionRouteRequest } from './use-session-route-request'
 import { SESSION_PANE_INTENT_PARAM } from './session-pane-intent'
 import {
+  parseMobileSessionAccessTarget,
   parseMobileSessionItemTarget,
   type MobileSessionItemLink,
   type MobileSessionItemOutcome,
@@ -19,6 +20,7 @@ export function useMobileSessionItemLink(
     const target = parseMobileSessionItemTarget(arrival?.value)
     return { pending: target, selection: target }
   })
+  const [access, setAccess] = useState(() => parseMobileSessionAccessTarget(arrival?.value))
   const current = useRef(request.pending)
   const seen = useRef(arrival)
   useEffect(() => {
@@ -29,6 +31,7 @@ export function useMobileSessionItemLink(
     const target = parseMobileSessionItemTarget(arrival?.value)
     current.current = target
     setRequest({ pending: target, selection: target })
+    setAccess(parseMobileSessionAccessTarget(arrival?.value))
   }, [arrival])
   const complete = useCallback(
     (target: MobileSessionItemTarget, outcome: MobileSessionItemOutcome) => {
@@ -56,7 +59,14 @@ export function useMobileSessionItemLink(
       selection: request.selection,
       navigation: target
         ? { target, complete: (outcome: MobileSessionItemOutcome) => complete(target, outcome) }
+        : null,
+      // Only this request's own ack clears it, so a newer push's request survives an older one's.
+      access: access
+        ? {
+            requestId: access,
+            reviewed: () => setAccess((current) => (current === access ? null : current))
+          }
         : null
     }
-  }, [complete, request])
+  }, [access, complete, request])
 }

@@ -1,7 +1,8 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { removeTreeSync } from '../../../../../shared/file-write/windows-transient-lock-removal'
 import { DeviceRegistry } from './device-registry'
 import { devicePrincipalOf, fingerprintAuthenticatedPairingCredential } from './device-principal'
 import { PairingTicketExchangeError } from './pairing-ticket-exchange'
@@ -16,7 +17,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  rmSync(dir, { recursive: true, force: true })
+  removeTreeSync(dir)
 })
 
 function pairedOffer(registry: DeviceRegistry) {

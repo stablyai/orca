@@ -28,7 +28,8 @@ export function getAgentImageHandling(agent: string | null | undefined): AgentIm
 export const NATIVE_CHAT_QUOTED_FILE_REFERENCE = /@"(?:\\"|[^"])*"|@'[^']*'/
 
 export function formatNativeChatFileReference(filePath: string): string {
-  if (!/[\s@]/.test(filePath)) {
+  // A name that starts with a quote would otherwise read as a quoted reference.
+  if (!/[\s@]/.test(filePath) && !/^["']/.test(filePath)) {
     return `@${filePath}`
   }
   if (!filePath.includes('"')) {

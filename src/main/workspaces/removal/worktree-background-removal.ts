@@ -5,6 +5,7 @@ import {
   waitForPendingWorktreeRemoval,
   type RemovalSettlement
 } from './worktree-removal-settlement'
+export { readCheckoutMarkerIdentity as markerIdentity } from './worktree-removal-gitdir-identity'
 export {
   waitForPendingWorktreeRemoval,
   waitForWorktreeRemovalAcceptance,
@@ -33,10 +34,7 @@ import {
   recordWorktreeRemoval,
   setWorktreeRemovalRecordsDirectory
 } from './worktree-removal-table'
-import {
-  worktreeRemovalLifetime,
-  _resetWorktreeRemovalLifetimeForTests
-} from './worktree-removal-lifetime'
+import { worktreeRemovalLifetime } from './worktree-removal-lifetime'
 
 export type BackgroundWorktreeRemovalJob = {
   /** Abort only the checkout delete on orderly quit. */
@@ -104,7 +102,7 @@ export function startBackgroundWorktreeRemoval(
   args: {
     removal: Pick<
       WorktreeRemovalRecord,
-      'worktreeId' | 'repoId' | 'repoPath' | 'deleteBranch' | 'force'
+      'worktreeId' | 'repoId' | 'repoPath' | 'deleteBranch' | 'force' | 'gitdir'
     > & { worktree: Pick<GitWorktreeInfo, 'path' | 'branch' | 'head'> }
   } & BackgroundWorktreeRemovalJob
 ): Promise<RemoveWorktreeResult> {
@@ -294,12 +292,6 @@ function publishSafely(publish: () => void): void {
   }
 }
 
-export async function _settlePendingWorktreeRemovalsForTests(): Promise<void> {
-  while (jobsByWorktreeId.size > 0) {
-    await Promise.all(jobsByWorktreeId.values())
-  }
-}
-
 export async function drainBackgroundWorktreeRemovals(): Promise<void> {
   const results = await Promise.allSettled(jobsByWorktreeId.values())
   await closeWorktreeRemovalRecords()
@@ -307,17 +299,4 @@ export async function drainBackgroundWorktreeRemovals(): Promise<void> {
   if (errors.length > 0) {
     throw new AggregateError(errors, 'Could not finish stopping workspace deletion.')
   }
-}
-
-export function _resetPendingWorktreeRemovalsForTests(): void {
-  _resetWorktreeRemovalLifetimeForTests()
-  pendingWorktreeRemovals.clear()
-  failedWorktreeRemovals.clear()
-  jobsByWorktreeId.clear()
-  settlementsByWorktreeId.clear()
-  for (const fence of startupFencesByWorktreeId.values()) {
-    fence.release()
-  }
-  startupFencesByWorktreeId.clear()
-  setWorktreeRemovalRecordsDirectory(null)
 }

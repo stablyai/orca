@@ -1,5 +1,5 @@
 import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
-import { delimiter, isAbsolute, resolve as resolvePath } from 'node:path'
+import { delimiter, isAbsolute, posix, resolve as resolvePath, win32 } from 'node:path'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
@@ -26,8 +26,8 @@ import {
   resolveGuestNativeProgram
 } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 import {
-  isManagedAgentCli,
-  managedAgentCommand
+  isManagedAgentCopyPath,
+  managedAgentCommandFor
 } from '../../managed-agent-cli/managed-agent-cli-registry'
 
 export type StructuredAgentResolutionOperation = {
@@ -49,7 +49,7 @@ export function assertStructuredAgentResolutionCurrent(
 }
 
 export type StructuredAgentCommandSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv'>
+  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv' | 'antigravityManagedAgyEnabled'>
 >
 type CommandSettings = StructuredAgentCommandSettings
 type CommandOptions = NonNullable<Parameters<typeof resolveExecutableCommand>[1]>
@@ -73,7 +73,8 @@ function resolveOverride(
   return command && plan
     ? {
         command,
-        prefixArgs: expandHomeArgs(plan.prefixArgs, options.homePath)
+        prefixArgs: expandHomeArgs(plan.prefixArgs, options.homePath),
+        program: plan.program
       }
     : null
 }
@@ -81,8 +82,8 @@ function resolveOverride(
 export type StructuredAgentCommand = {
   command: string
   prefixArgs: string[]
-  /** The user's Command setting as written; absent for the stock CLI. */
-  configured?: string
+  /** The name of the program the user's Command runs, never its arguments; absent for the stock CLI. */
+  configuredProgram?: string
 }
 
 /** Read live settings on every lookup; invalid explicit commands must refuse instead of launching stock CLI. */
@@ -90,19 +91,29 @@ export function resolveStructuredAgentCommand(
   agent: TuiAgent,
   settings: CommandSettings,
   options: CommandOptions = {},
-  stock: { command?: string; resolve?: typeof resolveCliCommand } = {}
+  stock: { command?: string; resolve?: typeof resolveCliCommand; managedCopy?: boolean } = {}
 ): StructuredAgentCommand {
   if (!hasExplicitTuiLaunchCommand(settings, agent)) {
     // WSL PATH may contain drive-mounted Windows shims after native entries.
     const command = stock.command ?? agent
     const resolved = resolveGuestNativeProgram(command, options, stock.resolve)
-    // The user's own install wins; Orca's copy serves hosts that have none.
+    // The user's own install wins; Orca's copy serves hosts that have none, where it may run.
     const managed =
-      isManagedAgentCli(agent) && (resolved === null || !isAbsolute(resolved))
-        ? managedAgentCommand(agent)
+      stock.managedCopy !== false && (resolved === null || !isAbsolute(resolved))
+        ? managedAgentCommandFor(agent, command)
         : null
     if (managed) {
       return { command: managed, prefixArgs: [] }
+    }
+    // Orca's copy, reached through a PATH an Orca terminal passed on, may not run either.
+    if (
+      stock.managedCopy === false &&
+      resolved !== null &&
+      isManagedAgentCopyPath(agent, resolved)
+    ) {
+      throw new AgentSessionPreSpawnError(`${command} is not installed on this host`, {
+        reason: 'cliMissing'
+      })
     }
     if (resolved === null) {
       throw new AgentSessionPreSpawnError(
@@ -129,7 +140,11 @@ export function resolveStructuredAgentCommand(
         )
       : refusal
   }
-  return { ...invocation, configured }
+  const { program, ...resolved } = invocation
+  return {
+    ...resolved,
+    configuredProgram: (platform === 'win32' ? win32 : posix).basename(program)
+  }
 }
 
 export type ProgramSearch<T> = {

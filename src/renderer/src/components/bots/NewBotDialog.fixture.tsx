@@ -1,11 +1,16 @@
-import { useState } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { stubBots } from '../../component-fixtures/fixture-bots'
-import { useAppStore } from '@/store'
-import { PortalContainerContext } from '../ui/portal-container-context'
 import { BOT_TEMPLATES } from '../../../../shared/bots/bot-templates'
 import { templateProposal, type BotProposal } from '../../../../shared/bots/bot-proposal'
+import type { BotShareReview } from '../../../../shared/bots/bot-share-received'
 import { NewBotDialog } from './NewBotDialog'
+import {
+  LONG_FIXTURE_COMPUTER,
+  NewBotFixtureStage,
+  newBotFixture,
+  seedNewBotFixture,
+  typeInto
+} from './new-bot-stage-fixture'
 
 const dialog = () => (
   <div className="h-[720px] bg-background">
@@ -30,21 +35,6 @@ const proposed = (height: number, proposal: BotProposal, origin: string) => () =
     <NewBotDialog open onOpenChange={() => {}} proposal={proposal} origin={origin} />
   </div>
 )
-
-// Types into the controlled fields the way a person would, so React sees the change.
-const typeInto = (selector: string, text: string) => async (): Promise<void> => {
-  const field = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)
-  if (!field) {
-    return
-  }
-  const proto =
-    field instanceof HTMLTextAreaElement
-      ? HTMLTextAreaElement.prototype
-      : HTMLInputElement.prototype
-  Reflect.getOwnPropertyDescriptor(proto, 'value')?.set?.call(field, text)
-  field.dispatchEvent(new Event('input', { bubbles: true }))
-  await new Promise((resolve) => setTimeout(resolve, 50))
-}
 
 const typed = (purpose: string) => async (): Promise<void> => {
   await typeInto('[role="dialog"] input[autocomplete="off"]', 'Pulse')()
@@ -97,44 +87,6 @@ export const proposalLongPurpose = defineFixture({
   )
 })
 
-// Review shots at a 340 and a 480 px dialog. The dialog is fixed, so it portals into a transformed box
-// that wide (plus its 1rem margins) instead of the page's wide viewport.
-function Stage({ width, nudge }: { width: 340 | 480; nudge?: boolean }): React.JSX.Element {
-  const [box, setBox] = useState<HTMLElement | null>(null)
-  return (
-    <div
-      ref={setBox}
-      className="relative h-[620px] translate-x-0 bg-background"
-      style={{ width: width + 32 }}
-    >
-      {box ? (
-        <PortalContainerContext.Provider value={box}>
-          <NewBotDialog open onOpenChange={() => {}} onImport={nudge ? () => {} : undefined} />
-        </PortalContainerContext.Provider>
-      ) : null}
-    </div>
-  )
-}
-
-const LONG_COMPUTER = 'build-runner-02.eu-west.internal'
-
-const seeded = (computer?: string) => (): void => {
-  stubBots([])
-  useAppStore.setState((state) => ({
-    detectedAgentIds: ['claude', 'codex'],
-    localDetectedAgentIdsByContext: {
-      host: ['claude', 'codex'],
-      'host\u0000all-agents': ['claude', 'codex']
-    },
-    ensureDetectedAgents: async () => ['claude', 'codex'],
-    isDetectingAgents: false,
-    settings: state.settings && {
-      ...state.settings,
-      hostSettingOverrides: computer ? { local: { displayLabel: computer } } : {}
-    }
-  }))
-}
-
 // A Hermes bot on this computer, so the first-bot import nudge shows.
 const HERMES_SOURCES = [
   {
@@ -145,7 +97,7 @@ const HERMES_SOURCES = [
 ]
 
 const withNudge = (): void => {
-  seeded()()
+  seedNewBotFixture()()
   try {
     localStorage.removeItem('orca.bots.import-nudge-dismissed')
   } catch {
@@ -178,12 +130,6 @@ const openComputerMenu = async (): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, 300))
 }
 
-const review = (width: 340 | 480, computer?: string) => ({
-  width: width + 32,
-  setup: seeded(computer),
-  render: () => <Stage width={width} />
-})
-
 const FILLED = named('Atlas', 'Triage new bugs and post a daily summary in #eng.')
 const LONGEST = named(
   'Customer Escalations Concierge for the Platform Team',
@@ -199,26 +145,124 @@ const LONGEST = named(
 export const nudge340 = defineFixture({
   width: 372,
   setup: withNudge,
-  render: () => <Stage width={340} nudge />
+  render: () => <NewBotFixtureStage width={340} nudge />
 })
 export const nudge480 = defineFixture({
   width: 512,
   setup: withNudge,
-  render: () => <Stage width={480} nudge />
+  render: () => <NewBotFixtureStage width={480} nudge />
 })
-export const empty340 = defineFixture(review(340))
-export const empty480 = defineFixture(review(480))
-export const filled340 = defineFixture({ ...review(340), interact: FILLED })
-export const filled480 = defineFixture({ ...review(480), interact: FILLED })
-export const longest340 = defineFixture({ ...review(340, LONG_COMPUTER), interact: LONGEST })
-export const longest480 = defineFixture({ ...review(480, LONG_COMPUTER), interact: LONGEST })
-export const picker340 = defineFixture({ ...review(340), interact: openPicker })
-export const picker480 = defineFixture({ ...review(480), interact: openPicker })
+export const empty340 = defineFixture(newBotFixture(340))
+export const empty480 = defineFixture(newBotFixture(480))
+
+export const filled340 = defineFixture({ ...newBotFixture(340), interact: FILLED })
+export const filled480 = defineFixture({ ...newBotFixture(480), interact: FILLED })
+export const longest340 = defineFixture({
+  ...newBotFixture(340, LONG_FIXTURE_COMPUTER),
+  interact: LONGEST
+})
+export const longest480 = defineFixture({
+  ...newBotFixture(480, LONG_FIXTURE_COMPUTER),
+  interact: LONGEST
+})
+export const picker340 = defineFixture({ ...newBotFixture(340), interact: openPicker })
+export const picker480 = defineFixture({ ...newBotFixture(480), interact: openPicker })
 export const computerMenu340 = defineFixture({
-  ...review(340, LONG_COMPUTER),
+  ...newBotFixture(340, LONG_FIXTURE_COMPUTER),
   interact: openComputerMenu
 })
 export const computerMenu480 = defineFixture({
-  ...review(480, LONG_COMPUTER),
+  ...newBotFixture(480, LONG_FIXTURE_COMPUTER),
   interact: openComputerMenu
 })
+
+// From a template: PR review (1 skill, 1 automation, GitHub) and Security check, the most parts.
+const fromTemplate = (id: string, name?: string) => {
+  const found = BOT_TEMPLATES.find((entry) => entry.id === id)
+  return found ? templateProposal(found, name ? { name } : {}) : undefined
+}
+const templateReview = (width: 340 | 480, id: string, name?: string) => ({
+  width: width + 32,
+  setup: seedNewBotFixture(),
+  render: () => <NewBotFixtureStage width={width} height={1100} proposal={fromTemplate(id, name)} />
+})
+const openChip = (label: RegExp) => async (): Promise<void> => {
+  const chip = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+    (button) => label.test(button.textContent ?? '')
+  )
+  chip?.click()
+  await new Promise((resolve) => setTimeout(resolve, 300))
+}
+const skillOff = async (): Promise<void> => {
+  await openChip(/skill/)()
+  document.querySelector<HTMLButtonElement>('[role="switch"]')?.click()
+  await new Promise((resolve) => setTimeout(resolve, 100))
+}
+const LONG_TEMPLATE_NAME = 'Customer Escalations Concierge for the Platform Reliability Team'
+
+export const prReview340 = defineFixture(templateReview(340, 'pr-review'))
+export const prReview480 = defineFixture(templateReview(480, 'pr-review'))
+export const largest340 = defineFixture(templateReview(340, 'security-check'))
+export const largest480 = defineFixture(templateReview(480, 'security-check'))
+export const manyApps340 = defineFixture(templateReview(340, 'meeting-prep'))
+export const longName340 = defineFixture(templateReview(340, 'pr-review', LONG_TEMPLATE_NAME))
+export const longName480 = defineFixture(templateReview(480, 'pr-review', LONG_TEMPLATE_NAME))
+export const skillsOpen340 = defineFixture({
+  ...templateReview(340, 'pr-review'),
+  interact: openChip(/skill/)
+})
+export const skillOff340 = defineFixture({
+  ...templateReview(340, 'pr-review'),
+  interact: skillOff
+})
+export const appsOpen340 = defineFixture({
+  ...templateReview(340, 'meeting-prep'),
+  interact: openChip(/apps|GitHub|Google/)
+})
+export const schedulesOpen480 = defineFixture({
+  ...templateReview(480, 'email-digest'),
+  interact: openChip(/schedule/)
+})
+
+const LONGEST_LINK: BotShareReview = {
+  reviewId: 'review-1',
+  shareId: 'share-1',
+  versionId: 'version-1',
+  publisher: 'Example Studio',
+  publishedAt: '2026-11-08T00:00:00.000Z',
+  bot: {
+    schemaVersion: 1,
+    name: 'Customer Escalations Concierge for the Platform Team',
+    avatar: { mascot: 'B1' },
+    purpose: 'Owns customer escalations.',
+    agentHint: 'claude',
+    skills: [],
+    tools: [],
+    connectors: [],
+    schedules: [],
+    eventSuggestions: [],
+    memory: []
+  },
+  files: [],
+  flags: [],
+  leftOut: [],
+  avatarDataUrl: null
+}
+
+const fromLink = (width: 340 | 480) => ({
+  width: width + 32,
+  setup: seedNewBotFixture(LONG_FIXTURE_COMPUTER),
+  render: () => <NewBotFixtureStage width={width} link={LONGEST_LINK} />,
+  interact: (frame: HTMLElement) => {
+    const name = frame.querySelector<HTMLInputElement>('input[aria-label="Name"]')
+    if (!name || document.activeElement === name || frame.querySelector('textarea')) {
+      throw new Error(
+        'A reviewed link must open with a prefilled, unfocused name and no Identity input'
+      )
+    }
+  }
+})
+
+// The link flow's New bot: the same dialog, prefilled from the link, beside longest340/480.
+export const link340 = defineFixture(fromLink(340))
+export const link480 = defineFixture(fromLink(480))
