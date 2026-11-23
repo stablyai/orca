@@ -75,13 +75,19 @@ function streamedSlotHeight(
     ? (NATIVE_CHAT_ROW_GAP_PX - NATIVE_CHAT_ACTIVITY_ROW_GAP_PX) * (typography?.spacingScale ?? 1)
     : 0
   const own = nativeChatMessageSlotHeight(before, slot, typography)
-  const inFlow = nativeChatRowHeightWithControlsInFlow(own, typography) - pull
-  const controlsInFlow = slot.estimatedHeight === inFlow && inFlow !== own - pull
-  if (!controlsInFlow && slot.estimatedHeight !== own - pull) {
-    return null
-  }
   const grown = nativeChatMessageSlotHeight(current, slot, typography)
-  return (controlsInFlow ? nativeChatRowHeightWithControlsInFlow(grown, typography) : grown) - pull
+  // Each reading of the built estimate (controls in flow or not) that matches it.
+  const readings = [
+    { matches: slot.estimatedHeight === own - pull, height: grown - pull },
+    {
+      matches:
+        slot.estimatedHeight === nativeChatRowHeightWithControlsInFlow(own, typography) - pull,
+      height: nativeChatRowHeightWithControlsInFlow(grown, typography) - pull
+    }
+  ].filter((reading) => reading.matches)
+  // At the cap both readings match; only one height for the current text is safe to give.
+  const heights = new Set(readings.map((reading) => reading.height))
+  return heights.size === 1 ? [...heights][0]! : null
 }
 
 /**

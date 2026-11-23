@@ -99,3 +99,14 @@ it('caps a settled reply whose controls stay in flow as a full build does', () =
   expect(build(current).at(-1)?.estimatedHeight).toBe(1600)
   expect(streamed.at(-1)?.estimatedHeight).toBe(1600)
 })
+
+it('builds again when a capped estimate cannot tell whether controls were in flow', () => {
+  const lines = (count: number) =>
+    Array.from({ length: count }, (_, line) => `Line ${line}`).join('\n')
+  const saved = withReply(history(), lines(73))
+  const settled = { ...inputFor(saved), isWorking: false, lifecycleWorking: false }
+  const build = (rows: readonly NativeChatMessage[]) =>
+    buildNativeChatTranscript({ ...settled, messages: rows }).slots
+  // Text-only revisions may shrink a reply, not only grow it.
+  expect(withStreamedRows(build(saved), saved, withReply(saved, lines(72)))).toBeNull()
+})
