@@ -152,10 +152,10 @@ export function WorktreeCardsUpdateNotice(): React.JSX.Element | null {
     return null
   }
   return (
-    // Why inverted: like a tooltip, it must stand apart from the sidebar it sits on.
+    // Why a bordered floating surface: like a tooltip, it must stand apart from the sidebar it sits on.
     <section
       aria-labelledby="worktree-cards-update-notice-heading"
-      className="relative mx-2 mt-1 mb-4 shrink-0 space-y-2 rounded-lg bg-foreground p-2.5 text-background shadow-floating"
+      className="relative mx-2 mt-1 mb-4 shrink-0 space-y-2 rounded-lg border border-border bg-popover p-2.5 text-popover-foreground shadow-floating"
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
@@ -184,9 +184,7 @@ export function WorktreeCardsUpdateNotice(): React.JSX.Element | null {
       <UpdateDemo />
       <ul className="space-y-1 text-xs leading-snug">
         <KeyItem
-          glyph={
-            <span className="size-[7px] rounded-full bg-unread-inverse ring-2 ring-unread-inverse/30" />
-          }
+          glyph={<span className="size-[7px] rounded-full bg-unread ring-2 ring-unread/30" />}
         >
           <Trans
             i18n={i18n}
@@ -202,7 +200,7 @@ export function WorktreeCardsUpdateNotice(): React.JSX.Element | null {
         </KeyItem>
         <KeyItem
           glyph={
-            <span className="inline-flex h-3 items-center rounded-[3px] border border-background/45 px-0.5">
+            <span className="inline-flex h-3 items-center rounded-[3px] border border-foreground/45 px-0.5">
               <Workflow className="size-2" />
             </span>
           }
@@ -213,7 +211,7 @@ export function WorktreeCardsUpdateNotice(): React.JSX.Element | null {
       {/* Why: points down at the cards this note describes. */}
       <span
         aria-hidden="true"
-        className="absolute -bottom-[5px] left-4 size-2.5 rotate-45 rounded-[2px] bg-foreground"
+        className="absolute -bottom-[5px] left-4 size-2.5 rotate-45 rounded-[2px] bg-popover"
       />
     </section>
   )

@@ -192,7 +192,7 @@ export function WorktreeCardsKeptHintContent(): React.JSX.Element {
       align="end"
       alignOffset={-6}
       sideOffset={8}
-      tone="inverted"
+      tone="compact"
       className="w-56 cursor-default"
       onOpenAutoFocus={(event) => event.preventDefault()}
       onClick={close}
