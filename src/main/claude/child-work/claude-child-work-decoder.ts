@@ -94,8 +94,14 @@ export class ClaudeChildWorkDecoder {
     // Only a frame the decoder admits proves the provider runs this owner; a historical alias
     // that is ignored above would otherwise clear the lease and leave the row working for good.
     // A frame that does not report running (a metadata-only update) says nothing about a resume.
-    if (liveClaudeTaskRunState(message.status) !== null) {
-      this.wake.confirmRunning(id, message)
+    // task_progress is emitted only while a task runs, and a running update reports it under the patch.
+    const patch = record(message.patch)
+    const running = liveClaudeTaskRunState(patch?.status) ?? liveClaudeTaskRunState(message.status)
+    if (running !== null || message.subtype === 'task_progress') {
+      this.wake.confirmRunning(
+        id,
+        liveClaudeTaskRunState(patch?.status) !== null ? patch! : message
+      )
     }
     switch (message.subtype) {
       case 'task_started':

@@ -1,12 +1,23 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import { CLAUDE_CHILD_WAKE_LEASE_MS } from './claude-child-wake-lease'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 
+const NOW = 1_700_000_000_000
+
+function useFixedClock(): void {
+  vi.useFakeTimers()
+  vi.setSystemTime(NOW)
+}
+
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 const PARENT = 'toolu_parent'
 const OWNER = 'owner_task'
 const CHILD = 'child_task'
-const OWNED_BY_OWNER = { toolu_child: OWNER }
+const OWNED_BY_OWNER: Readonly<Record<string, string>> = { toolu_child: OWNER }
 
 /** Spawn a subagent task; `owner` names the subagent that made the spawn call. */
 function start(taskId: string, toolUseId: string): Record<string, unknown> {
@@ -40,7 +51,7 @@ function observe(
   decoder: ClaudeChildWorkDecoder,
   message: Record<string, unknown>
 ): AgentChildWorkEvidence[] {
-  decoder.observe(message, (id) => OWNED_BY_OWNER[id as keyof typeof OWNED_BY_OWNER] ?? null)
+  decoder.observe(message, (id) => OWNED_BY_OWNER[id] ?? null)
   return decoder.drain(Date.now())
 }
 
@@ -53,12 +64,14 @@ function finishOwnerThenChildEnds(decoder: ClaudeChildWorkDecoder): AgentChildWo
 }
 
 function states(evidence: AgentChildWorkEvidence[]): [string, string][] {
-  return evidence.flatMap((edge) =>
-    edge.type === 'live' ? [[edge.child.handle.id, edge.child.state] as [string, string]] : []
+  return evidence.flatMap((edge): [string, string][] =>
+    edge.type === 'live' ? [[edge.child.handle.id, edge.child.state]] : []
   )
 }
 
 describe('a child ending wakes a finished subagent it was launched from', () => {
+  beforeEach(useFixedClock)
+
   it('shows the owner working again at once, as before', () => {
     const decoder = new ClaudeChildWorkDecoder()
     const evidence = finishOwnerThenChildEnds(decoder)
@@ -226,5 +239,36 @@ describe('a child ending wakes a finished subagent it was launched from', () => 
       patch: { status: 'running' }
     })
     expect(states(evidence)).toContainEqual([OWNER, 'working'])
+  })
+
+  it('releases the wake when an admitted progress frame names the owner', () => {
+    const decoder = new ClaudeChildWorkDecoder()
+    finishOwnerThenChildEnds(decoder)
+    // task_progress carries no status; the SDK only emits it for a running task, so an admitted
+    // one proves the provider resumed the owner and must not let the lease revert it.
+    observe(decoder, {
+      type: 'system',
+      subtype: 'task_progress',
+      task_id: OWNER,
+      tool_use_id: PARENT,
+      summary: 'still working'
+    })
+    expect(decoder.wakeExpiryAt()).toBeUndefined()
+    expect(decoder.drain(Date.now() + CLAUDE_CHILD_WAKE_LEASE_MS * 2)).toEqual([])
+  })
+
+  it('releases the wake when an admitted update patch reports the owner running', () => {
+    const decoder = new ClaudeChildWorkDecoder()
+    finishOwnerThenChildEnds(decoder)
+    // A running patch lives under patch.status, but the status gate only reads the envelope.
+    observe(decoder, {
+      type: 'system',
+      subtype: 'task_updated',
+      task_id: OWNER,
+      tool_use_id: PARENT,
+      patch: { status: 'running' }
+    })
+    expect(decoder.wakeExpiryAt()).toBeUndefined()
+    expect(decoder.drain(Date.now() + CLAUDE_CHILD_WAKE_LEASE_MS * 2)).toEqual([])
   })
 })
