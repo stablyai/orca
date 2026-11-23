@@ -1,10 +1,19 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject
+} from 'react'
 
 export type RuntimeServersDialog = 'add' | 'install'
 
 type RuntimeServersPageState = {
   dialog: RuntimeServersDialog | null
   setDialog: (dialog: RuntimeServersDialog | null, addTrigger?: HTMLElement | null) => void
+  addButtonRef: RefObject<HTMLButtonElement | null>
   restoreAddFocus: (event: Event) => void
 }
 
@@ -18,6 +27,7 @@ export function RuntimeServersPageProvider({
 }): React.JSX.Element {
   const [dialog, setOpenDialog] = useState<RuntimeServersDialog | null>(null)
   const addTriggerRef = useRef<HTMLElement | null>(null)
+  const addButtonRef = useRef<HTMLButtonElement>(null)
   const setDialog = useCallback(
     (next: RuntimeServersDialog | null, addTrigger?: HTMLElement | null) => {
       if (next === 'add') {
@@ -30,13 +40,14 @@ export function RuntimeServersPageProvider({
   const restoreAddFocus = useCallback((event: Event) => {
     const trigger = addTriggerRef.current
     addTriggerRef.current = null
-    if (trigger?.isConnected) {
+    const target = trigger?.isConnected ? trigger : addButtonRef.current
+    if (target?.isConnected) {
       event.preventDefault()
-      trigger.focus()
+      target.focus()
     }
   }, [])
   const value = useMemo(
-    () => ({ dialog, setDialog, restoreAddFocus }),
+    () => ({ dialog, setDialog, addButtonRef, restoreAddFocus }),
     [dialog, setDialog, restoreAddFocus]
   )
   return (

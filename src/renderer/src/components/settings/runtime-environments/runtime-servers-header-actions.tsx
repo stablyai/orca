@@ -43,7 +43,7 @@ function AddServerMenuItem({
 /** The section header's only action: Add server, with its other ways to add in a menu. */
 export function RuntimeServersHeaderActions(): React.JSX.Element {
   const t = useTranslate()
-  const { setDialog } = useRuntimeServersPage()
+  const { setDialog, addButtonRef } = useRuntimeServersPage()
   const addMenuTriggerRef = useRef<HTMLButtonElement>(null)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const canInstall = getManagedOrcadApi() !== undefined
@@ -51,6 +51,7 @@ export function RuntimeServersHeaderActions(): React.JSX.Element {
   return (
     <ButtonGroup>
       <Button
+        ref={addButtonRef}
         type="button"
         variant="outline"
         size="responsive-sm"

@@ -83,10 +83,12 @@ export function RuntimeShareComputerSection(): React.JSX.Element {
             </div>
             <div className="col-start-2 row-start-2 truncate text-xs text-muted-foreground">
               {activeLinksLabel ??
-                t(
-                  'auto.components.settings.serverList.shareRowHint',
-                  'Let another Orca connect here.'
-                )}
+                (activeLinkCount === 0
+                  ? t(
+                      'auto.components.settings.serverList.shareRowHint',
+                      'Let another Orca connect here.'
+                    )
+                  : null)}
             </div>
             <DialogTrigger asChild>
               <Button

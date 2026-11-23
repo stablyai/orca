@@ -87,22 +87,26 @@ export function ServerListRow({
           {icon ?? <Server className="size-4" />}
         </span>
         <div className="contents @lg/server-row:block">
-          <div className="col-start-2 row-start-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 @lg/server-row:flex-nowrap">
-            <span className="max-w-full truncate text-sm font-medium">{name}</span>
-            {chips}
-            {descriptor ? (
-              <span className="max-w-full truncate text-xs text-muted-foreground">
-                {descriptor}
+          <div className="contents @lg/server-row:flex @lg/server-row:min-w-0 @lg/server-row:items-center @lg/server-row:gap-2">
+            <div className="col-start-2 row-start-1 flex min-w-0 items-center gap-2 @lg/server-row:contents">
+              <span className="max-w-full truncate text-sm font-medium @max-lg/server-row:shrink-0">
+                {name}
               </span>
-            ) : null}
+              {descriptor ? (
+                <span className="truncate text-xs text-muted-foreground">{descriptor}</span>
+              ) : null}
+            </div>
+            <div className="col-span-3 col-start-2 flex min-w-0 flex-wrap gap-1 empty:hidden @lg/server-row:shrink-0 @lg/server-row:flex-nowrap">
+              {chips}
+            </div>
           </div>
           {meta ? (
-            <div className="col-span-3 col-start-2 row-start-2 flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+            <div className="col-span-3 col-start-2 flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
               {meta}
             </div>
           ) : null}
         </div>
-        <div className="col-span-3 col-start-2 row-start-3 empty:hidden @lg/server-row:col-span-1 @lg/server-row:col-start-3 @lg/server-row:row-start-1">
+        <div className="col-span-3 col-start-2 empty:hidden @lg/server-row:col-span-1 @lg/server-row:col-start-3 @lg/server-row:row-start-1">
           {status ? <ServerRowStatusLabel status={status} /> : null}
         </div>
         <div className="col-start-3 row-start-1 flex justify-end @lg/server-row:col-start-4">

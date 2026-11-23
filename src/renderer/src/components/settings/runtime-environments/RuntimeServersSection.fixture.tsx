@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
@@ -78,7 +79,7 @@ const connected: RuntimeHostDetails = {
   error: null
 }
 
-function stubActiveLinks(count: number): () => void {
+function stubActiveLinks(count: number | null): () => void {
   return () => {
     let activeCount = count
     window.api.mobile.onDevicesChanged = (callback) => {
@@ -91,15 +92,19 @@ function stubActiveLinks(count: number): () => void {
       window.addEventListener('fixture-runtime-grants-change', listener)
       return () => window.removeEventListener('fixture-runtime-grants-change', listener)
     }
-    window.api.mobile.listRuntimeAccessGrants = () =>
-      Promise.resolve({
+    window.api.mobile.listRuntimeAccessGrants = async () => {
+      if (activeCount === null) {
+        throw new Error('Fixture grant count unavailable')
+      }
+      return {
         grants: Array.from({ length: activeCount }, (_, index) => ({
           deviceId: `device-${index}`,
           name: `Device ${index + 1}`,
           createdAt: 1,
           lastSeenAt: null
         }))
-      })
+      }
+    }
   }
 }
 
@@ -115,6 +120,16 @@ function Section({
   web?: boolean
 }): React.JSX.Element {
   const { dialog, setDialog, restoreAddFocus } = useRuntimeServersPage()
+  const [addedServer, setAddedServer] = useState(false)
+  useEffect(() => {
+    const finishAdd = (): void => {
+      setAddedServer(true)
+      setDialog(null)
+    }
+    window.addEventListener('fixture-first-server-added', finishAdd)
+    return () => window.removeEventListener('fixture-first-server-added', finishAdd)
+  }, [setDialog])
+  const listedEnvironments = addedServer ? servers.slice(0, 1) : environments
   return (
     <SettingsSection
       id="servers"
@@ -128,9 +143,9 @@ function Section({
         <div className="space-y-2">
           <RuntimeServerListHeader />
           <RuntimeServerList
-            environments={environments}
+            environments={listedEnvironments}
             detailsByEnvironmentId={Object.fromEntries(
-              environments.map((server) => [server.id, connected])
+              listedEnvironments.map((server) => [server.id, connected])
             )}
             activeRuntimeEnvironmentId={null}
             remoteServerUpdates={remoteServerUpdates}
@@ -183,7 +198,7 @@ function sectionFixture({
   environments?: PublicKnownRuntimeEnvironment[]
   phases?: RemoteServerUpdateEntry['phase'][]
   running?: boolean
-  links?: number
+  links?: number | null
   width?: number
   web?: boolean
   clientVersion?: string
@@ -220,6 +235,7 @@ export const oneUpdate = sectionFixture({ phases: ['available', 'current', 'curr
 export const noUpdates = sectionFixture({ phases: ['current', 'current', 'current'] })
 export const noServers = sectionFixture({ environments: [] })
 export const twoActiveLinks = sectionFixture({ links: 2 })
+export const unknownLinks = sectionFixture({ links: null })
 const longNameServers = [
   environment('long', LONG_NAME, 'ws://192.0.2.15:6768'),
   ...servers.slice(1)
@@ -237,35 +253,40 @@ export const compactVersionSkew = sectionFixture({
   phases: ['current'],
   clientVersion: '1.7.0'
 })
-export const compactChippedRows = defineFixture({
-  width: 248,
-  render: () => (
-    <div className="divide-y divide-border rounded-lg border border-border bg-card">
-      <ServerListRow
-        name="Ubuntu"
-        chips={<ServerRowChip>WSL</ServerRowChip>}
-        status={{ label: 'Connected', tone: 'success' }}
-        primaryAction={
-          <Button variant="outline" size="xs">
-            Restart
-          </Button>
-        }
-        menuItems={<div>More</div>}
-      />
-      <ServerListRow
-        name="dev-box"
-        chips={<ServerRowChip>Default</ServerRowChip>}
-        status={{ label: 'Connected', tone: 'success' }}
-        primaryAction={
-          <Button variant="outline" size="xs">
-            Update
-          </Button>
-        }
-        menuItems={<div>More</div>}
-      />
-    </div>
-  )
-})
+export const compactChippedRows = chippedRows(248)
+export const minimumChippedRows = chippedRows(276)
+
+function chippedRows(width: number): ReturnType<typeof defineFixture> {
+  return defineFixture({
+    width,
+    render: () => (
+      <div className="divide-y divide-border rounded-lg border border-border bg-card">
+        <ServerListRow
+          name="Ubuntu"
+          chips={<ServerRowChip>WSL</ServerRowChip>}
+          status={{ label: 'Connected', tone: 'success' }}
+          primaryAction={
+            <Button variant="outline" size="xs">
+              Restart
+            </Button>
+          }
+          menuItems={<div>More</div>}
+        />
+        <ServerListRow
+          name="dev-box"
+          chips={<ServerRowChip>SSH tunnel</ServerRowChip>}
+          status={{ label: 'Connected', tone: 'success' }}
+          primaryAction={
+            <Button variant="outline" size="xs">
+              Update
+            </Button>
+          }
+          menuItems={<div>More</div>}
+        />
+      </div>
+    )
+  })
+}
 export const addServerMenu = defineFixture({
   ...sectionFixture({}),
   interact: (frame) => {
