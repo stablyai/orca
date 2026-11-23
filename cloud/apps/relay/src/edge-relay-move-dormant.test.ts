@@ -16,6 +16,7 @@ import {
 } from './edge-relay.js'
 import { DORMANT_PAGE_SCAN_MAX, RelayAssignmentStore } from './assignment/assignment-store.js'
 import { ShadowSeatDirectory } from './shadow-seat-directory.js'
+import { parseIpCountryTable, type IpCountryLookup } from './ip-country.js'
 
 vi.mock('./admin-token-verifier.js', () => ({
   createAdminTokenVerifier: () => async (token: string) => token === 'deploy-token',
@@ -26,8 +27,10 @@ vi.mock('./admin-token-verifier.js', () => ({
   createRuntimeTokenVerifier: () => async () => false
 }))
 
+// A host's own relay token, for its next /v1/assign: `host:<relayHostId>` (always the test user).
 vi.mock('./relay-token-verifier.js', () => ({
-  createRelayTokenVerifier: () => async () => null,
+  createRelayTokenVerifier: () => async (token: string) =>
+    token.startsWith('host:') ? { sub: 'user-dormant-1', relayHostId: token.slice('host:'.length) } : null,
   readBearer: (value: string | undefined) => value?.replace(/^Bearer /, '') ?? null
 }))
 
@@ -119,12 +122,14 @@ async function harness(options: {
   // A real seat directory instead of the stub.
   directory?: ShadowSeatDirectory
   onPush?: () => void
+  ipCountry?: IpCountryLookup
 } = {}) {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   const database = await openInMemoryRelayDatabase()
   databases.push(database)
   const clock = { now: T0 }
-  const store = new RelayAssignmentStore(database, () => clock.now)
+  // Live cells as production directors require, so the host's next ask can be placed on one.
+  const store = new RelayAssignmentStore(database, () => clock.now, { requireLiveCells: true, heartbeatTtlMs: 45_000 })
   await store.reconcileCells([RETIRING, OTHER], true)
   if (options.reserve) { await store.setCellAdmitMode(RETIRING.id, 'reserve') }
   // The source cell's current process, which the seat feed must be from.
@@ -137,6 +142,7 @@ async function harness(options: {
     observedRequests: 0
   })
   const pushes: EdgeAssignBody[] = []
+  const exports: string[] = []
   let release: () => void = () => {}
   const gate = new Promise<void>((resolve) => { release = resolve })
   const admin = {
@@ -145,6 +151,12 @@ async function harness(options: {
       options.onPush?.()
       if (options.hang) { await gate }
       return { outcome: 'applied' as const, assignmentEpoch: body.assignmentEpoch }
+    },
+    // An offline desktop: the edge gives its data back at once (never 'busy').
+    exportHost: async (relayHostId: string) => {
+      exports.push(relayHostId)
+      const assignment = { userId: USER, cellId: EDGE_CELL_ID, assignmentEpoch: 0 }
+      return { outcome: 'exported' as const, assignment, devices: [] }
     }
   } as unknown as EdgeAdmin
   const edge = new EdgeAssignments(
@@ -155,7 +167,8 @@ async function harness(options: {
       allowHosts: new Set(options.allowHosts ?? [HOST, SECOND_HOST]),
       denyHosts: new Set(options.denyHosts ?? []),
       regions: new Set(['us-central1']),
-      ...(options.control ? { control: options.control } : {})
+      ...(options.control ? { control: options.control } : {}),
+      ...(options.ipCountry ? { ipCountry: options.ipCountry } : {})
     },
     () => clock.now,
     admin,
@@ -195,7 +208,7 @@ async function harness(options: {
     assignments: store,
     ...(options.configured === false ? {} : { edgeAssignments: edge }),
     ...(options.shadow === false ? {} : { shadowSeats: shadow as never }),
-    reservePlacement: { raiseEpochFloor, rowEpochFloor: () => 0 } as never,
+    reservePlacement: { plan: async () => ({ kind: 'database' }), raiseEpochFloor, rowEpochFloor: () => 0 } as never,
     edgeDormantFeedWaitMs: 300,
     drain: vi.fn(),
     ready: vi.fn(async () => true)
@@ -240,6 +253,13 @@ async function harness(options: {
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
       body: JSON.stringify({ v: 1, userId: USER, relayHostId: HOST, sourceCellId: RETIRING.id, ...body })
     })
+  // The host's own next ask, from `forwardedFor`.
+  const ask = async (relayHostId: string, forwardedFor: string) =>
+    await app.request('/v1/assign', {
+      method: 'POST',
+      headers: { authorization: `Bearer host:${relayHostId}`, 'content-type': 'application/json', 'x-forwarded-for': forwardedFor },
+      body: JSON.stringify({ v: 1, relayHostId, preferredRegion: 'us-central1', reconnect: true })
+    })
   const list = async (body: Record<string, unknown>) =>
     await app.request('/v1/admin/dormant-assignments', {
       method: 'POST',
@@ -255,8 +275,8 @@ async function harness(options: {
       .map((line) => JSON.parse(line) as Record<string, unknown>)
       .filter((line) => line.event === event)
   return {
-    database, store, edge, clock, pushes, release, shadowState, raiseEpochFloor,
-    placeRow, addLease, row, move, list, lines, logged
+    database, store, edge, clock, pushes, exports, release, shadowState, raiseEpochFloor,
+    placeRow, addLease, row, move, ask, list, lines, logged
   }
 }
 
@@ -686,28 +706,49 @@ describe('the dormant move re-reads the seat map under the row lock and after th
   })
 })
 
-describe('the dormant move judges the cohort as for an unknown country', () => {
-  it('refuses a rollout host when its region excludes any country, and moves a host listed by id', async () => {
-    const control = () => ({ mode: 'on' as const, regionExcludeCountries: { 'us-central1': ['CN'] } })
-    const rollout = await harness({ allowHosts: [], rolloutPercent: 100, control })
-    await rollout.placeRow()
-    await expectRefused(rollout, await rollout.move(), 'country_unknown')
-    const listed = await harness({ control })
-    await listed.placeRow()
-    expect((await listed.move()).status).toBe(200)
+describe('the dormant move leaves country exclusions to the host\'s next ask', () => {
+  // As production: us-central1 excludes CN (and here unknown countries too); the rollout is 100%.
+  const control = () => ({
+    mode: 'on' as const,
+    regionExcludeCountries: { 'us-central1': ['CN'] },
+    regionExcludeUnknownCountry: { 'us-central1': true }
   })
+  const ipCountry = parseIpCountryTable('192.0.2.0,192.0.2.127,CN\n192.0.2.128,192.0.2.255,HK\n')
 
-  it('refuses a rollout host when its region excludes unknown countries', async () => {
-    const control = () => ({ mode: 'on' as const, regionExcludeUnknownCountry: { 'us-central1': true } })
+  it('moves a rollout host in a region with country exclusions', async () => {
     const h = await harness({ allowHosts: [], rolloutPercent: 100, control })
     await h.placeRow()
-    await expectRefused(h, await h.move(), 'not_in_cohort')
+    expect((await h.move()).status).toBe(200)
+    expect((await h.row())?.cell_id).toBe(EDGE_CELL_ID)
   })
 
-  it('moves a rollout host with no exclusion', async () => {
-    const h = await harness({ allowHosts: [], rolloutPercent: 100 })
+  it('takes an excluded-country host off the edge at its next ask, as any excluded edge host', async () => {
+    const h = await harness({ allowHosts: [], rolloutPercent: 100, control, ipCountry })
     await h.placeRow()
     expect((await h.move()).status).toBe(200)
+    expect((await h.row())?.cell_id).toBe(EDGE_CELL_ID)
+    h.pushes.length = 0
+    // The desktop comes back from China: the ask is judged with that country.
+    const response = await h.ask(HOST, '192.0.2.1')
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { cellUrl: string; assignmentEpoch: number }
+    expect([RETIRING.url, OTHER.url]).toContain(body.cellUrl)
+    // The edge's copy came back first, the row is on a cell above the edge epoch, and the edge
+    // was told where the host went (its phones get WRONG_CELL, not HOST_OFFLINE).
+    expect(h.exports).toEqual([HOST])
+    const after = await h.row()
+    expect(after?.cell_id).not.toBe(EDGE_CELL_ID)
+    expect(Number(after?.assignment_epoch)).toBeGreaterThan(5)
+    expect(h.pushes).toEqual([expect.objectContaining({ cellId: after?.cell_id, assignmentEpoch: body.assignmentEpoch })])
+  })
+
+  it('keeps an allowed-country host on the edge at its next ask', async () => {
+    const h = await harness({ allowHosts: [], rolloutPercent: 100, control, ipCountry })
+    await h.placeRow()
+    expect((await h.move()).status).toBe(200)
+    const response = await h.ask(HOST, '192.0.2.200')
+    expect(await response.json()).toMatchObject({ cellUrl: EDGE_URL, assignmentEpoch: 5 })
+    expect(h.exports).toEqual([])
   })
 
   // Why the move checks inEdgeCohort only: every host it admits is within the leave ceiling, so

@@ -73,7 +73,6 @@ import {
 } from './edge-relay.js'
 import {
   EDGE_CONTROL_DEFAULTS,
-  edgeFrontDoorListsHost,
   edgeMoveOwnControlAsk,
   edgeMoveStaleUnitsAsk
 } from './edge-relay-control.js'
@@ -1473,19 +1472,14 @@ export function createRelayApp(
       if (active === 'feed_not_fresh') { return busy(active) }
       if (active) { return refuse(active) }
       const region = await operations.assignments.dormantHostRegion(identity, sourceCellId)
-      // Only a host the cohort would take: anything else is moved back at its next ask. The
-      // director never keeps a host's country (only the ask's, from its address, never stored), so
-      // the cohort is judged as for an unknown country: a region that excludes unknown countries
-      // refuses, and so does one that excludes any country, since the host may be in it. Hosts
-      // listed by id are judged without countries, as their asks are. inEdgeCohort implies
-      // mayBeOnEdge (every rollout it admits under is part of the leave ceiling), so the host's
-      // next ask always reads its edge row.
-      const listedById =
-        edge.config.allowHosts.has(relayHostId) || edgeFrontDoorListsHost(flags, edge.config.frontDoorUrls, relayHostId)
-      if (!listedById && (flags.regionExcludeCountries?.[region]?.length ?? 0) > 0) {
-        return refuse('country_unknown')
-      }
-      if (!inEdgeCohort(edge.config, relayHostId, region, userId, null)) { return refuse('not_in_cohort') }
+      // Only a host the region's rollout (or an allow list) would take. Country exclusions are not
+      // judged: the director never keeps a host's country, and a dormant host's next action is an
+      // ask, which is judged with its request's real country. An excluded one then leaves the edge
+      // on that ask (export, placement on a cell, fence) before its desktop connects anywhere, as
+      // any excluded host on the edge does. Country undefined skips the exclusion, as the
+      // evacuation sweep judges. inEdgeCohort implies mayBeOnEdge (every rollout it admits under
+      // is part of the leave ceiling), so that ask always reads the edge row.
+      if (!inEdgeCohort(edge.config, relayHostId, region, userId)) { return refuse('not_in_cohort') }
       const now = Date.now()
       const moved = await edge.moveDormantToEdge(
         identity,
