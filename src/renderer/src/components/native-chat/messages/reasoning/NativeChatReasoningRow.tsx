@@ -13,6 +13,10 @@ import {
 } from './NativeChatReasoningDisclosure'
 import { NativeChatToolRunIcon } from '../../tools/lines/NativeChatToolIcon'
 import { useNativeChatDisclosure } from '../disclosure/native-chat-disclosure-store'
+import {
+  NativeChatReplyRevealsContext,
+  useNativeChatHeldReveals
+} from '../../markdown/native-chat-reply-reveals'
 
 function translatedHeadline(
   headline: NativeChatReasoningHeadline,
@@ -45,6 +49,8 @@ export function NativeChatReasoningRow({
   // Keyed like the live line, so a block opened while it streamed lands open, and windowing keeps it.
   const disclosureKey = nativeChatReasoningDisclosureKey(message.id)
   const disclosure = useNativeChatDisclosure(disclosureKey, false)
+  // Held outside the collapsible body, so collapsing and reopening a streaming thought resumes its reveal.
+  const heldReveals = useNativeChatHeldReveals(disclosureKey)
   if (!markdown.trim()) {
     return null
   }
@@ -71,12 +77,14 @@ export function NativeChatReasoningRow({
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent animation="height" data-native-chat-member-detail>
-          <NativeChatReasoningBody
-            rowKey={disclosureKey}
-            markdown={markdown}
-            streaming={turnIsWorking && message.state !== 'completed'}
-            savedRevision={message.journalRevision}
-          />
+          <NativeChatReplyRevealsContext.Provider value={heldReveals}>
+            <NativeChatReasoningBody
+              rowKey={disclosureKey}
+              markdown={markdown}
+              streaming={turnIsWorking && message.state !== 'completed'}
+              savedRevision={message.journalRevision}
+            />
+          </NativeChatReplyRevealsContext.Provider>
         </CollapsibleContent>
       </Collapsible>
     </div>
