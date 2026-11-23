@@ -25,7 +25,7 @@ import {
   readLiveBotHostIds,
   readUpdateNeededBotHosts
 } from './bot-catalog-snapshot'
-import { openBotHomeTab, refreshBots } from './bot-catalog'
+import { openBotHome, openBotHomeTab, refreshBots } from './bot-catalog'
 import { botHostTarget, botTarget } from './bot-hosts'
 import { activateAiVaultStructuredSession } from './agent-session/open/activate-ai-vault-structured-session'
 import { isHome } from '../../../shared/bots/bot-homes'
@@ -114,6 +114,8 @@ export async function openBotLinkHome(
         sayThreadMissing()
         return
       }
+      // A server's chat tabs reach this window only once its home is open here, as the sidebar opens it.
+      openBotHome(bot)
       await activateAiVaultStructuredSession(
         {
           structuredSession: { workspaceId: folderWorkspaceKey(bot.folderWorkspaceId), sessionId }
