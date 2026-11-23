@@ -38,7 +38,7 @@
       "sessionQueued": "에이전트 세션이 대기열에 추가되었습니다.",
       "skipped_one": "대화 기록 {{count}}개 건너뜀",
       "skipped_other": "대화 기록 {{count}}개 건너뜀",
-      "title": "Agent 세션 기록",
+      "title": "에이전트 세션 기록",
       "unavailable": "에이전트 세션 기록 사용 불가",
       "unknownHostPlatform": "호스트 플랫폼을 확인할 수 없습니다.",
       "updateHost": "에이전트 세션 기록을 보려면 이 호스트의 Orca를 업데이트하세요.",
@@ -66,7 +66,7 @@
       "waitingForHost": "호스트 대기 중…"
     },
     "worktreeNavigationActions": {
-      "agentSessionHistory": "Agent 세션 기록",
+      "agentSessionHistory": "에이전트 세션 기록",
       "sourceControl": "소스 제어"
     }
   },
@@ -227,7 +227,7 @@
       "sendSteer": "지금 보내기",
       "sendSteerQueued": "다음 항목 보내기",
       "sendQueueHint": "현재 턴이 끝난 뒤 실행됩니다",
-      "sendSteerHint": "Agent가 지금 하고 있는 작업에 들어갑니다"
+      "sendSteerHint": "에이전트가 지금 하고 있는 작업에 들어갑니다"
     },
     "contextUsage": {
       "label": "컨텍스트 {{used}}/{{window}} 토큰, {{percent}}% 사용",
@@ -985,7 +985,7 @@
       "label": "설정 스크립트",
       "runSetup": "설정 실행",
       "skip": "건너뛰기",
-      "startAgentAfterSetup": "설정 후 agent 시작",
+      "startAgentAfterSetup": "설정 후 에이전트 시작",
       "waitForSetupSaveFailed": "시작 동작 저장 실패"
     },
     "newWorkspaceSshConnectionField": {
@@ -995,7 +995,7 @@
       "serverRecovery": "데스크톱의 설정 → SSH 호스트 → 서버 복구에서 서버를 복구해야 합니다."
     },
     "newWorktreeAgentSelection": {
-      "blankTerminal": "빈 Terminal"
+      "blankTerminal": "빈 터미널"
     },
     "newWorktreeFormSheet": {
       "agent": "에이전트",
@@ -1599,8 +1599,8 @@
       "tryAgain": "다시 시도하세요."
     },
     "stats": {
-      "agentTime": "Agent 시간",
-      "agentsSpawned": "시작된 Agents",
+      "agentTime": "에이전트 시간",
+      "agentsSpawned": "시작된 에이전트",
       "days": "{{days}}일",
       "heading": "내 통계",
       "hours": "{{hours}}시간",
@@ -1710,7 +1710,7 @@
     "workspaceOptionControls": {
       "agentActivity": "에이전트 활동",
       "agentActivityLayout": "에이전트 활동 레이아웃",
-      "agentActivitySort": "Agent 활동",
+      "agentActivitySort": "에이전트 활동",
       "agentActivitySortDescription": "주의가 필요한 에이전트를 우선 표시한 뒤 최근 활동순으로 정렬합니다.",
       "agentStatuses": "에이전트 상태",
       "allHosts": "모든 호스트",
@@ -2958,7 +2958,7 @@
       "troubleshooting": "문제 해결",
       "localTitle": "테스트 알림",
       "localBody": "이 휴대전화의 로컬 알림 테스트입니다.",
-      "localScheduled": "{{reason}} 로컬 테스트를 예약했습니다. 알림을 확인하세요. 이 테스트는 표시만 확인하며 Agent 알림 전달은 확인하지 않습니다.",
+      "localScheduled": "{{reason}} 로컬 테스트를 예약했습니다. 알림을 확인하세요. 이 테스트는 표시만 확인하며 에이전트 알림 전달은 확인하지 않습니다.",
       "disabled": "Orca에서 알림이 꺼져 있습니다. 알림을 켜고 다시 시도하세요.",
       "osDisabled": "시스템 설정에서 알림이 꺼져 있습니다. 알림을 허용하고 다시 시도하세요.",
       "noToken": "이 휴대전화에서 사용할 수 있는 푸시 토큰이 없습니다.",
@@ -3078,26 +3078,26 @@
       "checkingBranchStatus": "브랜치 상태 확인 중…",
       "checkingPrStatus": "PR 상태 확인 중…",
       "commit": "Commit",
-      "commitAndForcePush": "스테이지된 변경 사항을 Commit 하고 lease로 강제 푸시",
-      "commitAndPush": "스테이지된 변경 사항을 Commit 하고 푸시",
-      "commitAndTryPush": "스테이지된 변경 사항을 Commit 하고 푸시 시도",
-      "commitForcePush": "Commit 및 강제 푸시",
-      "commitPush": "Commit 및 푸시",
-      "commitStagedChanges": "스테이지된 변경 사항 Commit",
-      "commitSync": "Commit 및 동기화",
+      "commitAndForcePush": "스테이지된 변경 사항을 커밋하고 lease로 강제 푸시",
+      "commitAndPush": "스테이지된 변경 사항을 커밋하고 푸시",
+      "commitAndTryPush": "스테이지된 변경 사항을 커밋하고 푸시 시도",
+      "commitForcePush": "커밋 및 강제 푸시",
+      "commitPush": "커밋 및 푸시",
+      "commitStagedChanges": "스테이지된 변경 사항 커밋",
+      "commitSync": "커밋 및 동기화",
       "commitThenPullPush": "커밋한 다음 풀 및 푸시",
-      "enterMessage": "commit 하려면 commit 메시지를 입력하세요.",
+      "enterMessage": "커밋하려면 커밋 메시지를 입력하세요.",
       "linkedReviewTargetUnavailable": "연결된 리뷰 브랜치 대상을 사용할 수 없습니다",
       "prAlreadyMerged": "PR이 이미 병합되었습니다",
       "publishBranchFirstToPush": "커밋을 푸시하려면 먼저 브랜치를 게시하세요",
       "publishBranchFirstToSync": "커밋을 동기화하려면 먼저 브랜치를 게시하세요",
-      "resolveConflicts": "commit 하기 전에 충돌을 해결하세요.",
-      "stageFile": "commit 할 파일을 하나 이상 스테이지하세요",
-      "useCommitAndForcePush": "Commit 및 강제 푸시를 사용하세요 — 원격에는 로컬 커밋의 이전 사본만 있습니다"
+      "resolveConflicts": "커밋하기 전에 충돌을 해결하세요.",
+      "stageFile": "커밋할 파일을 하나 이상 스테이지하세요",
+      "useCommitAndForcePush": "커밋 및 강제 푸시를 사용하세요 — 원격에는 로컬 커밋의 이전 사본만 있습니다"
     },
     "commitFailurePanel": {
       "fix": "수정",
-      "fixWithAi": "AI로 commit 실패 수정",
+      "fixWithAi": "AI로 커밋 실패 수정",
       "hideDetails": "세부 정보 숨기기",
       "hideFailureDetails": "커밋 실패 세부 정보 숨기기",
       "showDetails": "세부 정보 표시",
@@ -3121,10 +3121,10 @@
     "content": {
       "cancelGeneration": "커밋 메시지 생성 취소",
       "commitMessageDisabled": "커밋 메시지 입력이 비활성화되었습니다. 스테이징된 파일이 없습니다.",
-      "commitMessagePlaceholder": "Commit 메시지",
+      "commitMessagePlaceholder": "커밋 메시지",
       "emptyMessage": "워크트리에 변경 사항이 없습니다.",
       "emptyTitle": "로컬 변경 사항 없음",
-      "generateMessage": "AI로 commit 메시지 생성",
+      "generateMessage": "AI로 커밋 메시지 생성",
       "reconnecting": "데스크톱에 다시 연결 중…",
       "regenerateHint": "다시 생성하려면 메시지를 지웁니다."
     },
@@ -3363,10 +3363,10 @@
       "syncStatus": "{{ahead}}개 앞섬, {{behind}}개 뒤처짐"
     },
     "textGenerationFailure": {
-      "agentBinaryNotFound": "PATH에서 {{binary}}을(를) 찾을 수 없습니다. AI commit 메시지를 사용하려면 {{label}}을(를) 설치하세요.",
+      "agentBinaryNotFound": "PATH에서 {{binary}}을(를) 찾을 수 없습니다. AI 커밋 메시지를 사용하려면 {{label}}을(를) 설치하세요.",
       "agentCannotGenerateBranchName": "\"{{agent}}\" 에이전트는 소스 제어 AI의 브랜치 이름을 지원하지 않습니다. 지원되는 에이전트: {{agents}} 또는 사용자 지정 명령.",
       "agentCannotGenerateChatName": "\"{{agent}}\" 에이전트는 채팅 이름을 지원하지 않습니다. 지원되는 에이전트: {{agents}} 또는 사용자 지정 명령.",
-      "agentCannotGenerateCommitMessage": "\"{{agent}}\" 에이전트는 소스 제어 AI의 commit 메시지를 지원하지 않습니다. 지원되는 에이전트: {{agents}} 또는 사용자 지정 명령.",
+      "agentCannotGenerateCommitMessage": "\"{{agent}}\" 에이전트는 소스 제어 AI의 커밋 메시지를 지원하지 않습니다. 지원되는 에이전트: {{agents}} 또는 사용자 지정 명령.",
       "agentCannotGeneratePullRequest": "\"{{agent}}\" 에이전트는 소스 제어 AI의 PR 세부 정보를 지원하지 않습니다. 지원되는 에이전트: {{agents}} 또는 사용자 지정 명령.",
       "agentCouldNotStart": "{{label}}을(를) 시작할 수 없습니다. 설정에서 에이전트 명령을 확인하고 다시 시도하세요.",
       "agentFailedToStart": "{{label}} 시작에 실패했습니다. 설정에서 에이전트 명령을 확인하고 다시 시도하세요.",
@@ -3382,9 +3382,9 @@
       "cliTerminatedWithDetail": "{{label}} CLI 명령이 종료되기 전에 중단되었습니다: {{detail}}",
       "commandTemplateEmptyBranchName": "브랜치 이름용 명령 템플릿이 비어 있습니다.",
       "commandTemplateEmptyChatName": "채팅 이름용 명령 템플릿이 비어 있습니다.",
-      "commandTemplateEmptyCommitMessage": "commit 메시지용 명령 템플릿이 비어 있습니다.",
+      "commandTemplateEmptyCommitMessage": "커밋 메시지용 명령 템플릿이 비어 있습니다.",
       "commandTemplateEmptyPullRequest": "PR 세부 정보용 명령 템플릿이 비어 있습니다.",
-      "commitMessageUnparseable": "생성된 commit 메시지를 구문 분석할 수 없습니다.",
+      "commitMessageUnparseable": "생성된 커밋 메시지를 구문 분석할 수 없습니다.",
       "emptyCommitMessage": "{{label}}에서 빈 메시지를 반환했습니다.",
       "emptyCommitMessageWithDetail": "{{label}}에서 빈 메시지를 반환했습니다. CLI 출력: {{detail}}",
       "emptyJiraSummary": "{{label}}에서 빈 요약을 반환했습니다.",
@@ -3428,8 +3428,8 @@
       "noStagedChanges": "요약할 스테이징된 변경 사항이 없습니다.",
       "openCodeInvalidEvents": "OpenCode가 잘못된 JSON 이벤트를 반환했습니다.",
       "outputTooLarge": "{{label}} CLI 명령의 출력이 너무 많습니다. 에이전트 CLI 설정을 확인하고 다시 시도하세요.",
-      "planAgentUnsupported": "\"{{agent}}\" 에이전트는 AI commit 메시지를 지원하지 않습니다.",
-      "planCustomCommandEmpty": "사용자 지정 명령이 비어 있습니다. 설정 → Git → AI commit 메시지에서 추가하세요.",
+      "planAgentUnsupported": "\"{{agent}}\" 에이전트는 AI 커밋 메시지를 지원하지 않습니다.",
+      "planCustomCommandEmpty": "사용자 지정 명령이 비어 있습니다. 설정 → Git → AI 커밋 메시지에서 추가하세요.",
       "planModelUnavailable": "\"{{model}}\" 모델은 {{label}}에서 사용할 수 없습니다.",
       "planModelWithoutThinking": "\"{{model}}\" 모델은 사고 강도 설정을 지원하지 않습니다.",
       "planThinkingLevelInvalid": "{{model}}에서는 사고 강도 \"{{level}}\" 설정을 사용할 수 없습니다.",
@@ -3693,7 +3693,7 @@
       "projectMergeRequestsDescription": "저장소별 MR 및 이슈",
       "projects": "프로젝트",
       "pullRequests": "PR",
-      "repository": "리포지토리",
+      "repository": "저장소",
       "repositorySortDescription": "저장소별로 그룹화한 후 최근 활동순 정렬",
       "reviewRequestsDescription": "나에게 할당된 리뷰 요청",
       "status": "상태",
@@ -3825,10 +3825,10 @@
       "selectPageOfTotal": "페이지 선택, 전체 {{total}}페이지 중 {{page}}페이지"
     },
     "providerPickers": {
-      "allRepositories": "모든 리포지토리",
+      "allRepositories": "모든 저장소",
       "githubView": "GitHub 보기",
       "issueSources": "GitHub 이슈 소스",
-      "issueSourcesDescription": "각 리포지토리에서 이슈 조회와 작업 생성에 사용할 소스를 upstream과 origin 중에서 선택하세요.",
+      "issueSourcesDescription": "각 저장소에서 이슈 조회와 작업 생성에 사용할 소스를 upstream과 origin 중에서 선택하세요.",
       "issues": "이슈",
       "noIssueSources": "사용할 수 있는 다른 이슈 소스가 없습니다.",
       "origin": "origin",
@@ -3839,8 +3839,8 @@
       "pages": "GitHub 페이지",
       "pullRequests": "PR",
       "queryingSource": "조회 대상: {{source}}",
-      "repoDescription": "조회할 리포지토리를 선택하세요.",
-      "repos": "리포지토리",
+      "repoDescription": "조회할 저장소를 선택하세요.",
+      "repos": "저장소",
       "upstream": "업스트림"
     },
     "providerViewProjection": {
@@ -3887,7 +3887,7 @@
     },
     "sparsePresetDraft": {
       "directoryRequired": "하나 이상의 디렉터리를 추가합니다.",
-      "repoRelativeDirectoriesRequired": "루트, 절대 경로, 상위 경로가 아니라 repo 기준 상대 디렉터리를 사용하세요."
+      "repoRelativeDirectoriesRequired": "루트, 절대 경로, 상위 경로가 아니라 저장소 기준 상대 디렉터리를 사용하세요."
     },
     "taskViewOptions": {
       "allSubtitle": "선택한 사이트의 미해결 이슈",
@@ -3903,7 +3903,7 @@
       "connect": "연결",
       "connectLinearWorkspace": "Linear 워크스페이스 연결",
       "createIssue": "이슈 생성",
-      "createWorkspaceIn": "워크스페이스 생성 리포지토리",
+      "createWorkspaceIn": "워크스페이스 생성 저장소",
       "description": "설명",
       "descriptionPlaceholder": "배경 설명 추가",
       "fileIn": "{{slug}}에 이슈 등록",
@@ -3916,8 +3916,8 @@
       "newIssueTitle": "새 {{providerLabel}} 이슈",
       "origin": "origin",
       "personalApiKey": "개인 API 키",
-      "repository": "리포지토리",
-      "repositorySubtitle": "선택한 리포지토리에 이슈를 생성하세요.",
+      "repository": "저장소",
+      "repositorySubtitle": "선택한 저장소에 이슈를 생성하세요.",
       "team": "팀",
       "title": "제목",
       "titlePlaceholder": "작업 제목",
@@ -3927,17 +3927,17 @@
       "blankTerminal": "빈 터미널"
     },
     "workspaceCreateDrawer": {
-      "addRepository": "Linear 워크스페이스를 생성하기 전에 Git 리포지토리를 추가하세요.",
+      "addRepository": "Linear 워크스페이스를 생성하기 전에 Git 저장소를 추가하세요.",
       "advanced": "고급",
       "agent": "에이전트",
-      "connectFirst": "먼저 리포지토리를 연결하세요",
-      "connectRepository": "리포지토리 연결",
+      "connectFirst": "먼저 저장소를 연결하세요",
+      "connectRepository": "저장소 연결",
       "defaultBranch": "기본 브랜치",
       "detectingAgents": "에이전트 감지 중…",
-      "remoteRepository": "원격 리포지토리",
-      "repository": "리포지토리",
-      "repositoryNotFound": "리포지토리를 찾을 수 없습니다.",
-      "selectRepository": "리포지토리 선택",
+      "remoteRepository": "원격 저장소",
+      "repository": "저장소",
+      "repositoryNotFound": "저장소를 찾을 수 없습니다.",
+      "selectRepository": "저장소 선택",
       "startFrom": "시작 기준",
       "title": "워크스페이스 생성",
       "workspaceName": "워크스페이스 이름"
@@ -4284,8 +4284,8 @@
       "remoteSchedulingUnavailable": "이 Orca 클라이언트에서는 아직 원격 서버의 자동화 예약을 사용할 수 없습니다. 원격 서버에서 이 자동화를 실행하거나, 영속적인 원격 예약 기능이 제공되면 Orca를 업데이트하세요.",
       "projectSetupMissing": "선택한 자동화 호스트에 프로젝트가 더 이상 설정되어 있지 않습니다.",
       "targetSetupMismatch": "자동화 실행 대상이 프로젝트에서 선택한 호스트 설정과 더 이상 일치하지 않습니다.",
-      "repoUnavailable": "선택한 자동화 호스트의 리포지토리를 더 이상 사용할 수 없습니다.",
-      "repoDetached": "리포지토리가 선택한 자동화 호스트에 더 이상 연결되어 있지 않습니다.",
+      "repoUnavailable": "선택한 자동화 호스트의 저장소를 더 이상 사용할 수 없습니다.",
+      "repoDetached": "저장소가 선택한 자동화 호스트에 더 이상 연결되어 있지 않습니다.",
       "projectPathChanged": "선택한 자동화 호스트의 프로젝트 경로가 변경되었습니다.",
       "automationChanged": "이번 실행이 시작되기 전에 자동화가 변경되었습니다.",
       "destinationChanged": "이번 실행이 시작되기 전에 자동화의 실행 위치가 변경되었습니다.",
@@ -4430,7 +4430,7 @@
             "c06c1d215d": "네트워크 요청 실패로 Claude 사용량을 새로 고칠 수 없습니다.",
             "cabdc2a9e0": "Claude 로그인 자격 증명을 읽을 수 없습니다.",
             "a7517cccb6": "현재 Claude 사용량을 사용할 수 없습니다.",
-            "8418ec448d": "{{value0}} 사용량을 새로 고칠 수 없습니다. Agent 세션은 여전히 로그인되어 있을 수 있습니다."
+            "8418ec448d": "{{value0}} 사용량을 새로 고칠 수 없습니다. 에이전트 세션은 여전히 로그인되어 있을 수 있습니다."
           }
         }
       }

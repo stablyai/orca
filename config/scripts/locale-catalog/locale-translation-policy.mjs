@@ -25,6 +25,8 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Antigravity',
   'Auggie',
   'Autohand Code',
+  'Azure DevOps Repos',
+  'Azure Repos',
   'Charm',
   'Claude',
   'Claude Agent Teams',
