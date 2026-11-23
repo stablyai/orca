@@ -8,6 +8,8 @@ const appJson = join(fileURLToPath(new URL('../../../..', import.meta.url)), 'mo
 
 // Xcode 27 builds nothing below iOS 15, so features iOS 15 already had need no entry below.
 const OLDEST_DECLARABLE_IOS = '15.0'
+// The iOS that page-ios-too-old.ts probes for (regex lookbehind); it must move with the minimum.
+const PAGE_GATE_IOS = '16.4'
 
 /** The App Store minimum: app.json's ios.deploymentTarget, which Expo writes into the Xcode app target. */
 export function readMobileIosMinimum(path = appJson) {
@@ -17,6 +19,12 @@ export function readMobileIosMinimum(path = appJson) {
   }
   if (compareIosVersions(minimum, OLDEST_DECLARABLE_IOS) < 0) {
     throw new Error(`expo.ios.deploymentTarget ${minimum} is below iOS ${OLDEST_DECLARABLE_IOS}`)
+  }
+  if (minimum !== PAGE_GATE_IOS) {
+    throw new Error(
+      `expo.ios.deploymentTarget is ${minimum}, but the page's too-old check probes for iOS ${PAGE_GATE_IOS}; ` +
+        'change webKitRunsThePage() in page-ios-too-old.ts and PAGE_GATE_IOS together with it'
+    )
   }
   return minimum
 }
@@ -75,11 +83,6 @@ export const IOS_FEATURE_SINCE = {
 // Set#union/intersection/difference (iOS 17) only when a detector's userSelect, touchAction or
 // enableContextMenu changes after mount. Every Orca detector passes constants; one that changes
 // them needs that path replaced first.
-const STATIC_CALLS = new Set(
-  Object.keys(IOS_FEATURE_SINCE).filter((name) => /^[A-Z]\w*\.\w+$/.test(name))
-)
-const GLOBAL_CALLS = new Set(['structuredClone'])
-
 const LOOKBEHIND_IN_TEXT = /\(\?<[=!]/
 
 const regexParser = new RegExpParser({ ecmaVersion: 2025 })
@@ -180,15 +183,6 @@ function isFeatureTested(node, name) {
   return false
 }
 
-function insideFunction(node) {
-  for (let parent = node.parent; parent; parent = parent.parent) {
-    if (isFunctionBoundary(parent)) {
-      return true
-    }
-  }
-  return false
-}
-
 // A RegExp built from a string: its literal parts, the pattern with substitutions as plain letters
 // (undefined when the pattern is not literal text), and its flags.
 function constructedPattern(node) {
@@ -278,12 +272,14 @@ export function findFeaturesPastIosMinimum(source, assetPath, minimum) {
         readPatterns.add(part)
       }
       // A probe may use what it tests for; a pattern built at runtime still shows its flags.
-      if (!isRegexProbe(node) && pattern.text === undefined) {
-        for (const feature of flagFeatures(pattern.flags)) {
-          report(feature, node)
+      if (!isRegexProbe(node)) {
+        if (pattern.text === undefined) {
+          for (const feature of flagFeatures(pattern.flags)) {
+            report(feature, node)
+          }
+        } else {
+          reportRegex(pattern.text, pattern.flags, node, false)
         }
-      } else if (!isRegexProbe(node)) {
-        reportRegex(pattern.text, pattern.flags, node, false)
       }
     } else if (
       (ts.isStringLiteralLike(node) || ts.isTemplateLiteralToken(node)) &&
@@ -306,14 +302,14 @@ export function findFeaturesPastIosMinimum(source, assetPath, minimum) {
       report('private method', node)
     } else if (
       (ts.isAwaitExpression(node) || (ts.isForOfStatement(node) && node.awaitModifier)) &&
-      !insideFunction(node)
+      ts.findAncestor(node.parent, isFunctionBoundary) === undefined
     ) {
       report('top-level await', node)
     } else if (ts.isVariableDeclarationList(node) && (node.flags & ts.NodeFlags.Using) !== 0) {
       report('using declaration', node)
     } else if (ts.isCallExpression(node)) {
       const name = calleeName(node)
-      if ((STATIC_CALLS.has(name) || GLOBAL_CALLS.has(name)) && !isFeatureTested(node, name)) {
+      if (Object.hasOwn(IOS_FEATURE_SINCE, name) && !isFeatureTested(node, name)) {
         report(name, node)
       }
     }

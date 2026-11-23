@@ -4,7 +4,8 @@ import { colors, spacing, typography } from '../../../theme/mobile-theme'
 // app.json's ios.deploymentTarget, which the page build defines; verify holds every route to it.
 const IOS_MINIMUM = String(process.env.ORCA_IOS_MINIMUM)
 
-/** Lookbehind is what WebKit added in iOS 16.4; without it the routes cannot even parse. */
+/** Lookbehind is what WebKit added in iOS 16.4; without it the routes cannot even parse. Raising
+ *  app.json's minimum past 16.4 needs a probe for that version (verify refuses it until then). */
 export function webKitRunsThePage(): boolean {
   try {
     return new RegExp('(?<=a)b').test('ab')
@@ -28,28 +29,28 @@ function iosVersion(userAgent: string): { major: number; minor: number; text: st
 export function iosTooOldCopy(userAgent: string): IosTooOldCopy {
   const version = iosVersion(userAgent)
   // Apple shipped iOS 15.8 only to devices that cannot run iOS 16.
-  if (version && version.major === 15 && version.minor >= 8) {
-    return {
-      message: translate(
-        'webShell.iosTooOld.cannotUpdate',
-        'Orca needs iOS {{version}} or newer, which this device can’t install.',
-        { version: IOS_MINIMUM }
-      ),
-      detail: translate('webShell.iosTooOld.deviceHas', 'This device has iOS {{version}}.', {
-        version: version.text
-      })
-    }
-  }
+  const cannotUpdate = version !== null && version.major === 15 && version.minor >= 8
   return {
-    message: translate(
-      'webShell.iosTooOld.update',
-      'Orca needs iOS {{version}} or newer. Update it in Settings > General > Software Update.',
-      { version: IOS_MINIMUM }
-    ),
+    message: cannotUpdate
+      ? translate(
+          'webShell.iosTooOld.cannotUpdate',
+          'Orca needs iOS {{version}} or newer, which this device can’t install.',
+          { version: IOS_MINIMUM }
+        )
+      : translate(
+          'webShell.iosTooOld.update',
+          'Orca needs iOS {{version}} or newer. Update it in Settings > General > Software Update.',
+          { version: IOS_MINIMUM }
+        ),
     detail: version
-      ? translate('webShell.iosTooOld.deviceHas', 'This device has iOS {{version}}.', {
-          version: version.text
-        })
+      ? translate(
+          'webShell.shellStateScreen.webViewInUse',
+          'This device has {{name}} {{version}}.',
+          {
+            name: 'iOS',
+            version: version.text
+          }
+        )
       : translate(
           'webShell.iosTooOld.noUpdateOffered',
           'If no update is offered, Orca can’t run on this device.'

@@ -28,7 +28,8 @@ import {
 } from '../src/mobile-web-shell/bridge/page-storage/page-device-store'
 import {
   RouteScreenPaintProvider,
-  createRouteScreenPaintReporter
+  createRouteScreenPaintReporter,
+  reportAfterFirstPaint
 } from '../src/mobile-web-shell/bridge/page-lifecycle/page-first-paint'
 import { PageFaultBoundary } from '../src/mobile-web-shell/bridge/page-lifecycle/page-fault-boundary'
 import type { BridgeUiLocale } from '../src/mobile-web-shell/bridge/protocol/bridge-envelope'
@@ -59,6 +60,13 @@ import {
 import routeContext from './route-manifest'
 import { preloadBootRoutes } from './boot-route-preload'
 
+const PAGE_FRAMES = {
+  requestFrame: (callback: () => void) => requestAnimationFrame(callback),
+  cancelFrame: (handle: number) => {
+    cancelAnimationFrame(handle)
+  }
+}
+
 // The h/ tree omits the native root provider, so supply ExpoRoot’s wrapper after init gives us a client.
 // Router suspense handles pending chunks; rejected chunks belong to the outer fault boundary.
 function createRootProviders(
@@ -67,17 +75,9 @@ function createRootProviders(
   queryClient: QueryClient
 ) {
   // Wait for the second frame before dropping the shell’s cover; a React commit alone proves no paint.
-  const reportRouteScreenPaint = createRouteScreenPaintReporter(
-    {
-      requestFrame: (callback) => requestAnimationFrame(callback),
-      cancelFrame: (handle) => {
-        cancelAnimationFrame(handle)
-      }
-    },
-    () => {
-      client.notifyPagePainted()
-    }
-  )
+  const reportRouteScreenPaint = createRouteScreenPaintReporter(PAGE_FRAMES, () => {
+    client.notifyPagePainted()
+  })
   return function RootProviders({ children }: PropsWithChildren) {
     // Child-first effects prove router commit, possibly its suspense fallback; screen paint is reported separately.
     useEffect(() => {
@@ -186,11 +186,9 @@ bootstrapShellPage({
         paint()
         subscribeMobileUiLanguage(paint)
         subscribeMobileColorScheme(paint)
-        // Two frames, as a route screen reports: the shell's cover stays up until then.
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            client.notifyPagePainted()
-          })
+        // The shell's cover stays up until the page reports painted.
+        reportAfterFirstPaint(PAGE_FRAMES, () => {
+          client.notifyPagePainted()
         })
       })
       return
