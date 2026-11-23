@@ -117,8 +117,9 @@ export class GoogleSetupRuns {
     const now = this.now()
     const current = this.get(botId)
     if (change.action === 'start') {
-      // A bot resumes a running setup rather than restarting it, which could lift Guide me here.
-      if (current?.state === 'running' && actor === 'bot') {
+      // A bot resumes a running setup rather than restarting it, which could lift Guide me here. A
+      // new-app start replaces an ordinary run: that start never picks Do it for me.
+      if (current?.state === 'running' && actor === 'bot' && (!change.newApp || current.newApp)) {
         return current
       }
       return this.save({
