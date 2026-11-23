@@ -1,5 +1,5 @@
 import type * as FsPromises from 'node:fs/promises'
-import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -122,6 +122,39 @@ describe('BotShareSkillReads', () => {
     await expect(
       reads.read('bot/dialog', 'now', true, async () => listing('unread'))
     ).resolves.toEqual(listing('deploy'))
+  })
+
+  it('never lets an older pick stop the read a newer pick is waiting for', async () => {
+    const reads = new BotShareSkillReads()
+    const opening = walk()
+    const fresh = reads.forBuild('bot', { session: 'dialog' }).build
+    const built = reads.read('bot/dialog', 'now', false, opening.run, fresh)
+    const older = reads.forBuild('bot', { session: 'dialog', reuseSkills: true }).build
+    const newest = reads.forBuild('bot', { session: 'dialog', reuseSkills: true }).build
+    const joined = reads.read('bot/dialog', 'now', true, async () => listing('unread'), newest)
+
+    const late = reads.read('bot/dialog', 'before', true, async () => listing('old'), older)
+
+    await expect(late).rejects.toThrow(BOT_SHARE_ERRORS.prepareAgain)
+    opening.finish(listing('deploy'))
+    await expect(joined).resolves.toEqual(listing('deploy'))
+    await expect(built).resolves.toEqual(listing('deploy'))
+    expect(opening.stopped).toEqual([])
+  })
+
+  it("keeps a dialog's order while its builds run, however many dialogs open meanwhile", async () => {
+    const reads = new BotShareSkillReads()
+    const older = reads.forBuild('bot', { session: 'dialog', reuseSkills: true }).build
+    const newer = reads.forBuild('bot', { session: 'dialog' }).build
+    await reads.read('bot/dialog', 'now', false, async () => listing('deploy'), newer)
+    for (let index = 1; index <= 8; index += 1) {
+      const other = reads.forBuild('bot', { session: `other-${index}` }).build
+      await reads.read(`bot/other-${index}`, 'sources', false, async () => listing('other'), other)
+    }
+
+    await expect(
+      reads.read('bot/dialog', 'before', true, async () => listing('old'), older)
+    ).rejects.toThrow(BOT_SHARE_ERRORS.prepareAgain)
   })
 
   it('keeps only the dialogs opened most recently', async () => {
@@ -321,6 +354,32 @@ describe('a reused skill listing on disk', () => {
         await pointAt('beta')
 
         await expect(build(true)).resolves.toEqual(['beta'])
+      }
+    )
+
+    const alpha = () => join(root, 'checkouts/alpha')
+    const away = () => join(root, 'checkouts/alpha-away')
+    it.skipIf(process.platform === 'win32').each([
+      { change: 'goes missing', redirect: false },
+      { change: 'is swapped for a link to another project', redirect: true }
+    ])(
+      'never keeps a listing read while the project folder $change and is then put back',
+      async ({ redirect }) => {
+        lookups.next.set(project, async (resolve) => {
+          const real = await resolve()
+          await rename(alpha(), away())
+          if (redirect) {
+            await symlink(join(root, 'checkouts/beta'), alpha())
+          }
+          return real
+        })
+        await build(false)
+        if (redirect) {
+          await rm(alpha())
+        }
+        await rename(away(), alpha())
+
+        await expect(build(true)).resolves.toEqual(['alpha'])
       }
     )
   })

@@ -277,8 +277,8 @@ export async function readBotShareable(
     )
     const listSkills = async (signal?: AbortSignal): Promise<BotShareSkillListing> => {
       const skillsLeftOut: BotShareLeftOut[] = []
-      const skills = await readShareSkills(input.bot, home, skillsLeftOut, roots, signal)
-      return { skills, leftOut: skillsLeftOut }
+      const read = await readShareSkills(input.bot, home, skillsLeftOut, roots, signal)
+      return { skills: read.skills, leftOut: skillsLeftOut, moved: read.moved }
     }
     const listing = await (input.skillReads && input.session
       ? input.skillReads.read(

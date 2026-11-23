@@ -3,7 +3,8 @@
 // is checked on its own before precedence applies, so a copy reached through another folder's link
 // never hides the real one.
 import { createHash } from 'node:crypto'
-import { realpath } from 'node:fs/promises'
+import { lstat, realpath } from 'node:fs/promises'
+import type { Stats } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import type { Bot } from '../../../shared/bot-types'
 import {
@@ -88,33 +89,57 @@ async function homeSources(
   return sources
 }
 
-/** Linked projects' skills, scanned the way a chat's launch and Settings scan them. */
+/** Linked projects' skills, scanned the way a chat's launch and Settings scan them; `moved` when a
+ *  project's folder went missing, or was put back or swapped for a link, while it was scanned. */
 async function projectSources(
   projects: readonly BotShareSkillRoot[],
   signal?: AbortSignal
-): Promise<Source[]> {
-  const sources = await Promise.all(
-    projects.map(async ({ real, ...project }): Promise<Source | null> => {
-      // The folder the path resolved to, not the path again: a link moved since lists nothing new.
-      if (real === null) {
-        return null
+): Promise<{ sources: Source[]; moved: boolean }> {
+  const scans = await Promise.all(
+    projects.map(
+      async ({ real, ...project }): Promise<{ source: Source | null; moved: boolean }> => {
+        // The folder the path resolved to, not the path again: a link moved since lists nothing new.
+        if (real === null) {
+          return { source: null, moved: false }
+        }
+        const before = await lstat(real).catch(() => null)
+        const scanned = before?.isDirectory() ? await scanSkillProject(real, signal) : null
+        const after = await lstat(real).catch(() => null)
+        const moved =
+          !before?.isDirectory() ||
+          !after ||
+          !sameEntry(before, after) ||
+          (await realpath(real).catch(() => null)) !== real
+        if (!scanned) {
+          return { source: null, moved }
+        }
+        return {
+          source: {
+            skills: scanned.skills,
+            root: null,
+            label: () => project.name,
+            homePath: () => null,
+            optInFrom: (folder) => (within(real, folder) ? undefined : project.name)
+          },
+          moved
+        }
       }
-      const scanned = await scanSkillProject(real, signal)
-      if (!scanned) {
-        return null
-      }
-      return {
-        skills: scanned.skills,
-        root: null,
-        label: () => project.name,
-        homePath: () => null,
-        optInFrom: (folder) => (within(real, folder) ? undefined : project.name)
-      }
-    })
+    )
   )
-  return sources.filter((source): source is Source => source !== null)
+  return {
+    sources: scans.flatMap(({ source }) => (source ? [source] : [])),
+    moved: scans.some((scan) => scan.moved)
+  }
 }
 
+/** The same folder, unchanged at its own level: a folder moved away and back, or made again, has a
+ *  new change time or inode. */
+function sameEntry(left: Stats, right: Stats): boolean {
+  return left.dev === right.dev && left.ino === right.ino && left.ctimeMs === right.ctimeMs
+}
+
+/** The skills a dialog lists; `moved` when a linked project's folder moved while it was read, so
+ *  that listing is not one to keep. */
 export async function readShareSkills(
   bot: Pick<Bot, 'agent'>,
   home: Home,
@@ -122,11 +147,10 @@ export async function readShareSkills(
   projects: readonly BotShareSkillRoot[] = [],
   /** Aborted when a newer read replaces this one: it stops walking and rejects. */
   signal?: AbortSignal
-): Promise<BotShareSkill[]> {
-  const sources = [
-    ...(await homeSources(bot, home, leftOut, signal)),
-    ...(await projectSources(projects, signal))
-  ]
+): Promise<{ skills: BotShareSkill[]; moved: boolean }> {
+  const fromHome = await homeSources(bot, home, leftOut, signal)
+  const projectsFound = await projectSources(projects, signal)
+  const sources = [...fromHome, ...projectsFound.sources]
   const valid: { skill: ScannedSkill; source: Source }[] = []
   const refused: { folder: string; entry: BotShareLeftOut }[] = []
   for (const source of sources) {
@@ -177,9 +201,10 @@ export async function readShareSkills(
       leftOut.push(entry)
     }
   }
-  return withinLimit(await packable(skills, leftOut, signal), leftOut).sort((left, right) =>
+  const listed = withinLimit(await packable(skills, leftOut, signal), leftOut).sort((left, right) =>
     left.name.localeCompare(right.name, 'en-US')
   )
+  return { skills: listed, moved: projectsFound.moved }
 }
 
 function optInField(
