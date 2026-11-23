@@ -41,6 +41,7 @@ import {
   syncBrowserExtensionSidePanelWebviews
 } from './browser-extension-side-panel-webviews'
 import { isClientHostedBrowserPageHandle } from '@/store/slices/browser/hosts/browser-host-state'
+import { useServerBrowserPageProfileId } from '../assemble-chrome/profile-routing/use-server-browser-page-profile-id'
 
 // Why a cap: a wide panel must leave the page usable, as Chrome's two-thirds limit does.
 const MAX_PANE_SHARE = '66.667%'
@@ -207,8 +208,10 @@ function SidePanelDockBody({
   panels: readonly BrowserExtensionSidePanel[]
 }): React.JSX.Element | null {
   // Why: a workspace switched to another profile must not keep the old profile's extensions open.
-  // SSH and This-device pages run their local profile's extensions as an instance of their own.
-  const profileId = workspace.sessionProfileId ?? 'default'
+  // SSH and This-device pages run their local profile's extensions as an instance of their own; a
+  // This-device page switches profile on its server, so only its page snapshot has the current one.
+  const serverProfileId = useServerBrowserPageProfileId(clientPageId ?? '')
+  const profileId = (clientPageId ? serverProfileId : workspace.sessionProfileId) ?? 'default'
   const panels = useMemo(
     () => allPanels.filter((panel) => panel.browserProfileId === profileId),
     [allPanels, profileId]
