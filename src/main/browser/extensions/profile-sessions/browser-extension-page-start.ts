@@ -99,15 +99,23 @@ export function loadPageWhenReady(
   // Why an instance override: Electron starts a navigation synchronously inside loadURL, with no
   // hook to defer it, and a navigation that commits first makes a history restore impossible.
   Object.defineProperty(contents, 'loadURL', { value: hold, configurable: true, writable: true })
-  return ready.then(() => {
+  // One way out: readiness, or the page closing first (which must not wait for readiness).
+  let destroyed: () => void = () => {}
+  const closed = new Promise<'closed'>((resolve) => {
+    destroyed = () => resolve('closed')
+    contents.once('destroyed', destroyed)
+  })
+  return Promise.race([ready.then(() => 'ready' as const), closed]).then((how) => {
+    contents.off('destroyed', destroyed)
     heldFirstLoads.delete(contents)
     Reflect.deleteProperty(contents, 'loadURL')
     const queued = requested
-    const outcome = contents.isDestroyed()
-      ? queued
-        ? Promise.reject(new Error('The browser page closed while loading'))
-        : Promise.resolve()
-      : load(queued ? { url: queued.url, options: queued.options } : null)
+    const outcome =
+      how === 'closed' || contents.isDestroyed()
+        ? queued
+          ? Promise.reject(new Error('The browser page closed while loading'))
+          : Promise.resolve()
+        : load(queued ? { url: queued.url, options: queued.options } : null)
     queued?.settle(outcome)
     return outcome
   })
