@@ -1,6 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import { claudeBuildPermissionMode } from '../permissions/claude-plan-approval-mode'
+import { journalClaudeSessionPermissionNotice } from '../permissions/claude-full-access-refusal-notice'
 import {
   claudeAutoFallbackReason,
   claudeBypassRefused,
@@ -165,6 +166,9 @@ async function waitForClaudeStartupSettings(
   )
   if (intent === 'auto' && session.startupSettings === pending) {
     session.startupSettings = undefined
+    if (claudeAutoFallbackReason(session) === 'started-outside') {
+      journalClaudeSessionPermissionNotice(session)
+    }
   }
 }
 

@@ -154,13 +154,22 @@ it('keeps the newer Plan request when an older Auto acknowledgement arrives', as
 })
 
 it.each([
-  { rootMode: undefined, mode: 'auto', notice: /:restored:auto$/ },
-  { rootMode: 'default', mode: 'default', notice: /:auto-started-outside:ask$/ }
-])('uses $mode on open with root init $rootMode', async ({ rootMode, mode, notice }) => {
+  { rootMode: undefined, mode: 'auto', settings: null, notice: /:restored:auto$/ },
+  { rootMode: 'default', mode: 'default', settings: null, notice: /:auto-started-outside:ask$/ },
+  {
+    rootMode: 'default',
+    mode: 'default',
+    settings: { effective: { disableAutoMode: 'disable' } },
+    notice: /:auto-settings:ask$/
+  }
+])('uses $mode with $rootMode init and settings $settings', async (scenario) => {
+  const { rootMode, mode, settings, notice } = scenario
   const { session, rows } = autoSession(async () => {})
+  const read = Promise.withResolvers<unknown>()
   session.fullAccessRefusalNoticeId = 'earlier-process'
   if (rootMode) {
     observeClaudeRootInit(session, { permissionMode: rootMode })
+    expect(session.appliedInputOptions.get('buildPermissionMode')).toBe('default')
   }
   await openClaudeSession({
     session,
@@ -171,7 +180,7 @@ it.each([
       resumesTranscript: true,
       requestTimeoutMs: undefined
     }),
-    readSettings: () => new Promise<never>(() => {}),
+    readSettings: () => read.promise,
     isCurrent: () => true,
     diagnose: () => {},
     onLateRefusal: () => {},
@@ -181,6 +190,9 @@ it.each([
   journalClaudeSessionPermissionNotice(session)
 
   expect(session.firstRootInit?.permissionMode).toBe(mode)
+  expect(rows).toEqual(rootMode ? [] : [expect.stringMatching(notice)])
+  read.resolve(settings)
+  await session.startupSettings
   expect(rows).toEqual([expect.stringMatching(notice)])
 })
 

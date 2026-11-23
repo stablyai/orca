@@ -38,6 +38,7 @@ import {
 } from './claude-structured-session-startup-exit'
 import type { ClaudeSession } from '../claude-structured-session-state'
 import {
+  claudeAutoFallbackReason,
   readClaudeSettingsAutoDisabled,
   readClaudeSettingsBypassDisabled
 } from '../permissions/claude-full-access-refusal'
@@ -276,8 +277,15 @@ async function settleClaudeStartupSettings(
     )
     const autoNewlyDisabled = autoDisabled === true && session.autoDisabled !== true
     session.autoDisabled = autoDisabled
-    if (autoNewlyDisabled && session.launchIntent?.permissionMode === 'auto') {
-      journalClaudeSessionPermissionNotice(session)
+    if (session.launchIntent?.permissionMode === 'auto') {
+      const pending = session.startupSettings
+      session.startupSettings = undefined
+      if (
+        autoNewlyDisabled ||
+        (pending && claudeAutoFallbackReason(session) === 'started-outside')
+      ) {
+        journalClaudeSessionPermissionNotice(session)
+      }
     }
   }
   if (!input.isCurrent() || token.pending || session.settingsObservation !== token) {

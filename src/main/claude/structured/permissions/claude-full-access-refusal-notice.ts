@@ -99,12 +99,17 @@ function claudePermissionNoticeRow(
   }
 }
 
-function claudeAutoRefusalNotice(session: ClaudeBypassFacts): ClaudeFullAccessRefusalNotice | null {
+function claudeAutoRefusalNotice(
+  session: ClaudeBypassFacts & Pick<ClaudeSession, 'startupSettings'>
+): ClaudeFullAccessRefusalNotice | null {
   if (session.appliedInputOptions?.get('buildPermissionMode') !== 'default') {
     return null
   }
   const reason = claudeAutoFallbackReason(session)
-  if (reason === null) {
+  if (
+    reason === null ||
+    (reason === 'started-outside' && session.autoDisabled === undefined && session.startupSettings)
+  ) {
     return null
   }
   const refusal =
@@ -203,7 +208,10 @@ export async function readClaudeEarlierRefusalNotice(
 
 export function claimClaudeFullAccessRefusalNotice(
   session: ClaudeBypassFacts &
-    ClaudeNoticeState & { initialization: Pick<ClaudeSession['initialization'], 'startup'> }
+    ClaudeNoticeState &
+    Pick<ClaudeSession, 'startupSettings'> & {
+      initialization: Pick<ClaudeSession['initialization'], 'startup'>
+    }
 ): ClaudeFullAccessRefusalNotice | null {
   if (!session.initialization.startup.opened() || !session.fullAccessRefusalNotices) {
     return null
@@ -214,6 +222,13 @@ export function claimClaudeFullAccessRefusalNotice(
   }
   if (session.launchIntent?.permissionMode === 'auto') {
     const notice = claudeAutoRefusalNotice(session)
+    // A reply after the deadline can explain the same Ask fallback already shown.
+    if (
+      notice?.id === 'auto-settings:ask' &&
+      session.fullAccessRefusalNoticeId === 'auto-started-outside:ask'
+    ) {
+      return null
+    }
     return notice && claimClaudePermissionNotice(session, notice)
   }
   const id = claudeFullAccessRefusalNoticeId(session)
