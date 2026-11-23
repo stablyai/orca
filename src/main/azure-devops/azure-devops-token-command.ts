@@ -20,6 +20,14 @@ export function azureDevOpsTokenCommand(): string | null {
   return value.length > 0 ? value : null
 }
 
+function hasExplicitAzureDevOpsToken(): boolean {
+  return [
+    'ORCA_AZURE_DEVOPS_TOKEN',
+    'ORCA_AZURE_DEVOPS_PAT',
+    'ORCA_AZURE_DEVOPS_ACCESS_TOKEN'
+  ].some((name) => (process.env[name]?.trim() ?? '').length > 0)
+}
+
 /** The token the command last printed, while it is fresh; synchronous readers use this. */
 export function cachedAzureDevOpsCommandToken(now = Date.now()): string | null {
   return cached && cached.expiresAt > now ? cached.token : null
@@ -32,7 +40,8 @@ export async function runAzureDevOpsTokenCommand(command: string): Promise<strin
     process.platform === 'win32'
       ? {
           program: windowsSystem32Binary('cmd.exe', env),
-          args: ['/d', '/s', '/c', command],
+          // `/s /c` strips one outer quote pair; wrapping keeps a quoted executable path intact.
+          args: ['/d', '/s', '/c', `"${command}"`],
           windowsVerbatimArguments: true
         }
       : { program: '/bin/sh', args: ['-c', command] }
@@ -41,6 +50,8 @@ export async function runAzureDevOpsTokenCommand(command: string): Promise<strin
       ...shell,
       env,
       timeoutMs: COMMAND_TIMEOUT_MS,
+      // A stalled helper behind the shell must die with it, not outlive the timeout.
+      terminationBarrier: true,
       maxOutputBytes: 64 * 1024
     })
     const token = result.stdout
@@ -56,7 +67,8 @@ export async function runAzureDevOpsTokenCommand(command: string): Promise<strin
 /** Refreshes the in-memory token from the configured command; a no-op without one. */
 export async function ensureAzureDevOpsCommandToken(): Promise<string | null> {
   const command = azureDevOpsTokenCommand()
-  if (!command) {
+  // An explicit token wins anyway, so never wait on a command whose answer would be ignored.
+  if (!command || hasExplicitAzureDevOpsToken()) {
     return null
   }
   const fresh = cachedAzureDevOpsCommandToken()

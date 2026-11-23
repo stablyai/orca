@@ -165,8 +165,10 @@ export async function requestAzureDevOpsJsonAtBase<T>(
   // Creation preflight must distinguish lookup failure from an absent PR.
   throwOnFailure = false
 ): Promise<T | null> {
-  await ensureAzureDevOpsCommandToken()
-  const config = getAzureDevOpsAuthConfig()
+  const commandToken = await ensureAzureDevOpsCommandToken()
+  const authConfig = getAzureDevOpsAuthConfig()
+  // The returned token, not a second cache read that could have expired in between.
+  const config = { ...authConfig, pat: authConfig.pat ?? commandToken }
   const doFetch = (url: URL): Promise<Response> =>
     fetch(url, {
       headers: {

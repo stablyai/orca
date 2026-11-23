@@ -143,8 +143,9 @@ function sortPullRequestsForBranch(
 }
 
 export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus> {
-  await ensureAzureDevOpsCommandToken()
-  const config = getAzureDevOpsAuthConfig()
+  const commandToken = await ensureAzureDevOpsCommandToken()
+  const authConfig = getAzureDevOpsAuthConfig()
+  const config = { ...authConfig, pat: authConfig.pat ?? commandToken }
   const baseUrl = config.apiBaseUrl ? normalizeAzureDevOpsApiBaseUrl(config.apiBaseUrl) : null
   const hasToken = azureDevOpsTokenConfigured(config)
   if (!baseUrl && !hasToken) {

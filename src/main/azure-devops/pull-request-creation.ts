@@ -239,7 +239,8 @@ export async function createAzureDevOpsPullRequest(
     ...(input.draft ? { isDraft: true } : {})
   }
 
-  await ensureAzureDevOpsCommandToken()
+  const commandToken = await ensureAzureDevOpsCommandToken()
+  const createAuth = getAuthConfig()
   try {
     const raw = await requestCreatePullRequest(
       repo,
@@ -249,7 +250,7 @@ export async function createAzureDevOpsPullRequest(
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          ...authHeaders(getAuthConfig())
+          ...authHeaders({ ...createAuth, pat: createAuth.pat ?? commandToken })
         },
         body: JSON.stringify(requestBody)
       }
