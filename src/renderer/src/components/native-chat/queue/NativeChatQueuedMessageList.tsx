@@ -55,7 +55,9 @@ export function NativeChatQueuedMessageList({
     setExpanded(true)
   }
   const newest = cards.at(-1)
-  const steerableHead = controller.queueCapable ? headSteerableQueuedMessageCard(cards) : null
+  // Mail first in line is what the shortcut sends, so no card advertises it then.
+  const steerableHead =
+    controller.queueCapable && !controller.mailLeads ? headSteerableQueuedMessageCard(cards) : null
   const attentionCard = !expanded ? cards.find(queuedMessageCardNeedsAttention) : undefined
   const attentionCaption = attentionCard
     ? queuedMessageCardCaption(attentionCard, agentName, statedFailures, t)

@@ -13,7 +13,6 @@ import type { MobileStructuredBackgroundTasks } from '../../input/tasks/use-mobi
 import { useMobileNativeChatQueuedEditFocus } from '../../input/queued-messages/use-mobile-native-chat-queued-edit-focus'
 import { createMobileQueuedHeadLight } from '../../input/queued-messages/mobile-queued-head-light'
 import type { MobileWaitingAgentMailActionsValue } from '../../transcript/agent-messages/MobileWaitingAgentMailActions'
-import type { MobileQueuedMessageCard } from '../../input/queued-messages/mobile-structured-queued-message-cards'
 import {
   createMobileQueuedCardActionStore,
   useMobileQueuedCardActions
@@ -54,8 +53,6 @@ export function useMobileNativeChatComposerTray({
   queued: MobileNativeChatQueuedMessagesProps & {
     /** One card list per conversation: a pending action in one never disables another's. */
     sessionKey: string
-    /** The queue the steer shortcut presses the head of; the cards unless waiting mail leads. */
-    steerOrder?: readonly MobileQueuedMessageCard[]
     /** Other agents' waiting mail, which the transcript draws instead of a card. */
     agentMail?: readonly NativeChatMessage[]
     agentMailEditable?: (messageId: string) => boolean
@@ -84,6 +81,33 @@ export function useMobileNativeChatComposerTray({
     agentMailEditable
   } = queued
   const actions = useMobileQueuedCardActions(actionStore, sessionKey)
+  // Its own memo, so the transcript's waiting rows redraw only when the mail or its actions change.
+  const waitingAgentMail = useMemo(
+    () =>
+      // A list without the chat's queue actions draws no waiting mail.
+      onSend && onDelete
+        ? {
+            rows: agentMail ?? NO_ROWS,
+            actions,
+            send: onSend,
+            delete: onDelete,
+            edit: editQueuedMessage,
+            editable: agentMailEditable,
+            steerHeld: steerHeld === true,
+            agentWorking: agentWorking === true
+          }
+        : undefined,
+    [
+      agentMail,
+      actions,
+      onSend,
+      onDelete,
+      editQueuedMessage,
+      agentMailEditable,
+      steerHeld,
+      agentWorking
+    ]
+  )
   return useMemo(
     () => ({
       content: createElement(
@@ -117,25 +141,13 @@ export function useMobileNativeChatComposerTray({
           onResume,
           steerHeld,
           headLight,
-          agentWorking
+          agentWorking,
+          steerOrder
         })
       ),
       composerInputRef,
       // Shares the cards' action guard, so a press here and on a card never overlap.
-      // A list without the chat's queue actions draws no waiting mail.
-      waitingAgentMail:
-        onSend && onDelete
-          ? {
-              rows: agentMail ?? NO_ROWS,
-              actions,
-              send: onSend,
-              delete: onDelete,
-              edit: editQueuedMessage,
-              editable: agentMailEditable,
-              steerHeld: steerHeld === true,
-              agentWorking: agentWorking === true
-            }
-          : undefined,
+      waitingAgentMail,
       steerHead: {
         steers: (alternateSteers: boolean) => {
           const head = mobileNativeChatChordHeadId(
@@ -174,8 +186,7 @@ export function useMobileNativeChatComposerTray({
       headLight,
       actions,
       agentWorking,
-      agentMail,
-      agentMailEditable
+      waitingAgentMail
     ]
   )
 }

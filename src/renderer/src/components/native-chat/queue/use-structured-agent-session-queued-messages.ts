@@ -73,6 +73,8 @@ export type StructuredAgentSessionQueuedMessagesController = {
   agentMail: readonly NativeChatMessage[]
   /** Whether a waiting agent message offers Edit, which opens it in the queue's editor. */
   agentMailEditable: (messageId: string) => boolean
+  /** Waiting agent mail is first in line, so the steer shortcut sends it rather than a card. */
+  mailLeads: boolean
   /** A Stop is ending the turn: nothing steers into it. */
   stopping: boolean
 }
@@ -326,6 +328,7 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     holds: mail.holds,
     stopping: args.stopping,
     agentMail: mail.agentMail,
-    agentMailEditable: mail.agentMailEditable
+    agentMailEditable: mail.agentMailEditable,
+    mailLeads: mail.mailLeads
   }
 }

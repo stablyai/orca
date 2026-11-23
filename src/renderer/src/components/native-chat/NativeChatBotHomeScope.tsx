@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import { cn } from '@/lib/class-names'
 import { BotFirstScreen } from '../bots/BotFirstScreen'
 import { NativeChatWaitingAgentMailRows } from './queue/NativeChatWaitingAgentMailRows'
+import { NativeChatWaitingAgentMailContext } from './queue/NativeChatWaitingAgentMailActions'
 import { nativeChatFirstScreenSignIn } from '../../../../shared/bots/bot-first-screen'
 import {
   NativeChatBotKickoffContext,
@@ -46,6 +47,7 @@ export function NativeChatBotHomeScope({
   children: React.ReactNode
 }): React.JSX.Element {
   const firstScreen = kickoff?.firstScreen ?? null
+  const mail = useContext(NativeChatWaitingAgentMailContext)
   const [shownFirstScreen, setShownFirstScreen] = useState(false)
   if (firstScreen && !shownFirstScreen) {
     setShownFirstScreen(true)
@@ -67,10 +69,12 @@ export function NativeChatBotHomeScope({
             )}
             aria-hidden={firstScreen ? true : undefined}
           >
-            {children}
+            {/* While setup covers the transcript, its waiting mail is drawn once, over setup. */}
+            <NativeChatWaitingAgentMailContext.Provider value={firstScreen ? null : mail}>
+              {children}
+            </NativeChatWaitingAgentMailContext.Provider>
           </div>
           {firstScreen ? <BotFirstScreen firstScreen={firstScreen} isVisible={isVisible} /> : null}
-          {/* The hidden transcript draws other agents' waiting mail; while setup covers it, it shows here. */}
           {firstScreen ? (
             <div className="absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-(--chat-content-max-width) flex-col gap-2 px-4 pb-2">
               <NativeChatWaitingAgentMailRows />

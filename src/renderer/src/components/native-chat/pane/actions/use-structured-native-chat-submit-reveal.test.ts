@@ -35,7 +35,8 @@ it('sends no queued card and retries no start on a host held for its permission 
     holds: () => false,
     stopping: false,
     agentMail: [],
-    agentMailEditable: () => false
+    agentMailEditable: () => false,
+    mailLeads: false
   }
   const controller = {
     capturePresentation: () => () => true,

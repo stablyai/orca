@@ -73,6 +73,8 @@ export type MobileNativeChatQueuedMessagesProps = {
   headLight?: MobileQueuedHeadLight
   /** The agent is working: a steerable card's action reads Steer, otherwise Send. */
   agentWorking?: boolean
+  /** The queue the steer shortcut presses the head of; the cards unless waiting mail leads. */
+  steerOrder?: readonly MobileQueuedMessageCard[]
 }
 
 export function MobileNativeChatQueuedMessages({
@@ -89,7 +91,8 @@ export function MobileNativeChatQueuedMessages({
   onResume,
   steerHeld = false,
   headLight,
-  agentWorking = false
+  agentWorking = false,
+  steerOrder
 }: MobileNativeChatQueuedMessagesProps): React.JSX.Element | null {
   useMobileColorScheme()
   const lowerRegion = useMobileNativeChatLowerRegion()
@@ -172,7 +175,8 @@ export function MobileNativeChatQueuedMessages({
   const showAll = open || cards.length === 1 || editingHidden
   const shownCards = showAll ? cards : cards.slice(0, 1)
   const queueBusy = busyIds.has(QUEUE_KEY)
-  const headId = headSteerableQueuedMessageCard(cards)?.messageId
+  // The shortcut's own head, which is waiting agent mail (no card) when that is first in line.
+  const headId = headSteerableQueuedMessageCard(steerOrder ?? cards)?.messageId
   const messageIds = cards.map((card) => card.messageId)
   // Clear all takes every card, so it waits for any card's own action rather than skip that card.
   const clearBusy = queueBusy || messageIds.some((messageId) => busyIds.has(messageId))
