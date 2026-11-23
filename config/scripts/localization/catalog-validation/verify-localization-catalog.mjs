@@ -395,7 +395,7 @@ function verifyLocaleCatalog(enCatalog, localeName, localeCatalog) {
   const { enEntries, localeEntries, missingInLocale, extraInLocale, interpolationMismatches } =
     collectLocaleParityIssues(enCatalog, localeCatalog, localeName)
   const genericTermRegressions = collectGenericTermRegressions(enEntries, localeEntries, localeName)
-  const glossaryViolations = collectGlossaryViolations(enEntries, localeEntries, localeName)
+  const glossaryViolations = collectGlossaryViolations(localeEntries, localeName)
 
   // Feature PRs own English declarations; missing target translations use i18next fallback until localization supplies them.
   console.log(

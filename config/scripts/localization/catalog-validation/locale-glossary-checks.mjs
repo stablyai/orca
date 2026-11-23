@@ -12,7 +12,7 @@ const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
 
 // Why: placeholders, code, markup, URLs and CLI invocations (orca terminal, git commit) keep English on purpose.
 const EXEMPT_SPAN_RE =
-  /\{\{[^}]*\}\}|\{[^}]*\}|`[^`]*`|<[^>]*>|https?:\/\/\S+|\b(?:orca|git|gh|glab) [a-z][a-z-]*/g
+  /\{\{[^}]*\}\}|\{[^}]*\}|`[^`]*`|<code>[\s\S]*?<\/code>|<[^>]*>|https?:\/\/\S+|\b(?:orca|git|gh|glab) [a-z][a-z-]*/g
 
 // Multi-word product names (Claude Agent Teams, Azure Repos) contain glossary terms but stay Latin.
 const PRODUCT_NAMES = [...NEVER_TRANSLATE_VALUES]
@@ -42,17 +42,15 @@ function readableCopy(value) {
 }
 
 // Copy left in English (or in a rejected spelling) where the locale glossary settled a translation.
-export function collectGlossaryViolations(enEntries, localeEntries, locale) {
+export function collectGlossaryViolations(localeEntries, locale) {
   const rules = compileRules(locale)
   if (rules.length === 0) {
     return []
   }
   const violations = []
   for (const [key, value] of localeEntries) {
-    // Why: a value equal to English is an untranslated fallback, which coverage already reports.
     if (
       typeof value !== 'string' ||
-      value === enEntries.get(key) ||
       ENGLISH_ONLY_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))
     ) {
       continue

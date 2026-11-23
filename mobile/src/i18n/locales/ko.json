@@ -3077,7 +3077,7 @@
       "checkOutBranchToSync": "커밋을 동기화하기 전에 브랜치를 체크아웃하세요",
       "checkingBranchStatus": "브랜치 상태 확인 중…",
       "checkingPrStatus": "PR 상태 확인 중…",
-      "commit": "Commit",
+      "commit": "커밋",
       "commitAndForcePush": "스테이지된 변경 사항을 커밋하고 lease로 강제 푸시",
       "commitAndPush": "스테이지된 변경 사항을 커밋하고 푸시",
       "commitAndTryPush": "스테이지된 변경 사항을 커밋하고 푸시 시도",
@@ -3296,7 +3296,7 @@
       "updateReviewFailed": "연결된 리뷰를 업데이트하지 못했습니다."
     },
     "primaryAction": {
-      "commit": "Commit",
+      "commit": "커밋",
       "forcePush": "강제 푸시",
       "forcePushFromDesktop": "데스크톱에서 이 PR의 브랜치를 강제 푸시하세요.",
       "publishBranch": "브랜치 게시",
