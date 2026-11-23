@@ -31,7 +31,7 @@ export function watchTeamPluginPolicy(
     const team = getActiveTeamCapabilities()
     const policy = team?.teamPolicy
     const pluginSettings = [
-      policy?.internalCatalog,
+      policy?.internalCatalogs,
       policy?.requiredPlugins,
       team?.flags[flags.plugins],
       team?.flags[flags.officialPlugins],
@@ -39,7 +39,7 @@ export function watchTeamPluginPolicy(
     ]
     const snapshot =
       policy && pluginSettings.some((value) => value !== undefined)
-        ? JSON.stringify([policy.orgId, ...pluginSettings])
+        ? JSON.stringify([policy.orgIds, ...pluginSettings])
         : undefined
     const changed = snapshot !== lastSnapshot
     const retry = policy?.requiredPlugins?.length && Date.now() - lastAttemptAt >= 15 * 60_000

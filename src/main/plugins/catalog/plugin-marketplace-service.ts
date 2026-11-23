@@ -80,7 +80,7 @@ export class PluginMarketplaceService {
     return Promise.all(
       sources.map(async (source) => {
         try {
-          const managed = source.id === this.teamPolicy.managedSourceId()
+          const managed = this.teamPolicy.isManaged(source.id)
           const error = this.sourceErrors.get(source.id)
           return pluginMarketplaceSourceState(
             source,
@@ -132,7 +132,7 @@ export class PluginMarketplaceService {
   }
 
   async removeSource(sourceId: string): Promise<boolean> {
-    if (sourceId === this.teamPolicy.managedSourceId()) {
+    if (this.teamPolicy.isManaged(sourceId)) {
       throw new Error('This plugin catalog is managed by your team.')
     }
     const source = (await this.store.listSources()).find((candidate) => candidate.id === sourceId)

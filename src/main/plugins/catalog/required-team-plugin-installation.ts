@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util'
 import { marketplaceSourceId } from './plugin-marketplace-store'
 import type { PluginMarketplaceInstaller } from './plugin-marketplace-installer'
 import type { PluginMarketplaceService } from './plugin-marketplace-service'
@@ -16,7 +17,10 @@ export async function installRequiredTeamPlugins(
   }
   const stillRequired = (pluginKey: string): boolean => {
     const current = getActiveTeamCapabilities()?.teamPolicy
-    return Boolean(current?.orgId === policy.orgId && current.requiredPlugins?.includes(pluginKey))
+    return Boolean(
+      current?.requiredPlugins?.includes(pluginKey) &&
+      isDeepStrictEqual(current.orgIds, policy.orgIds)
+    )
   }
   const lock = await installer.readInstallLockfile()
   const missing = policy.requiredPlugins.filter((pluginKey) => !lock.plugins[pluginKey])
@@ -34,17 +38,21 @@ export async function installRequiredTeamPlugins(
     await refreshStaleCatalogs()
     listings = await marketplace.listCachedPlugins(keys)
   }
-  const internalId = policy.internalCatalog && marketplaceSourceId(policy.internalCatalog)
+  const internalIds = new Set(policy.internalCatalogs?.map(marketplaceSourceId))
   let installed = false
   for (const pluginKey of missing) {
     if (!stillRequired(pluginKey)) {
       continue
     }
     const matches = listings.filter((listing) => listing.pluginKey === pluginKey)
+    const internalMatches = matches.filter((entry) => internalIds.has(entry.marketplaceSourceId))
     const listing =
-      matches.find((entry) => entry.marketplaceSourceId === internalId) ??
-      matches.find((entry) => entry.official) ??
-      (matches.length === 1 ? matches[0] : undefined)
+      internalMatches.length > 0
+        ? internalMatches.length === 1
+          ? internalMatches[0]
+          : undefined
+        : (matches.find((entry) => entry.official) ??
+          (matches.length === 1 ? matches[0] : undefined))
     if (!listing) {
       continue
     }

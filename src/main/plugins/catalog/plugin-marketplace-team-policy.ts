@@ -20,16 +20,18 @@ export class PluginMarketplaceTeamPolicy {
     if (isOfficialMarketplaceGitSource(source.url)) {
       return capabilities?.flags[flags.officialPlugins] !== false
     }
-    const internal = capabilities?.teamPolicy?.internalCatalog
     return (
       capabilities?.flags[flags.communityPlugins] !== false ||
-      (internal !== undefined && marketplaceSourceId(source) === marketplaceSourceId(internal))
+      this.isManaged(marketplaceSourceId(source), capabilities)
     )
   }
 
-  managedSourceId(): string | undefined {
-    const source = this.getCapabilities?.()?.teamPolicy?.internalCatalog
-    return source && marketplaceSourceId(source)
+  isManaged(sourceId: string, capabilities = this.getCapabilities?.()): boolean {
+    return (
+      capabilities?.teamPolicy?.internalCatalogs?.some(
+        (source) => marketplaceSourceId(source) === sourceId
+      ) ?? false
+    )
   }
 
   async list(store: PluginMarketplaceStore): Promise<PluginMarketplaceRegisteredSource[]> {
@@ -39,11 +41,12 @@ export class PluginMarketplaceTeamPolicy {
       return [...sources]
     }
     const visible = sources.filter(({ source }) => this.allows(source, capabilities))
-    const internal = capabilities.teamPolicy?.internalCatalog
-    if (internal && this.allows(internal, capabilities)) {
-      const id = marketplaceSourceId(internal)
-      if (!visible.some((source) => source.id === id)) {
-        visible.push({ id, source: internal, addedAt: capabilities.refreshedAt })
+    const visibleIds = new Set(visible.map(({ id }) => id))
+    for (const source of capabilities.teamPolicy?.internalCatalogs ?? []) {
+      const id = marketplaceSourceId(source)
+      if (!visibleIds.has(id) && this.allows(source, capabilities)) {
+        visibleIds.add(id)
+        visible.push({ id, source, addedAt: capabilities.refreshedAt })
       }
     }
     return visible

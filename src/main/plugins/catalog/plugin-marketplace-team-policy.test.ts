@@ -7,7 +7,7 @@ import { OFFICIAL_MARKETPLACE_GIT_SOURCE } from '../../../shared/plugins/catalog
 import { PluginMarketplaceService } from './plugin-marketplace-service'
 import { PluginMarketplaceStore } from './plugin-marketplace-store'
 
-it('scopes the internal catalog to the active team and blocks excluded sources', async () => {
+it('protects managed catalogs from both governing teams and blocks excluded sources', async () => {
   const pluginsDataDir = await mkdtemp(join(tmpdir(), 'orca-plugin-policy-'))
   const store = new PluginMarketplaceStore(pluginsDataDir)
   const community = {
@@ -20,10 +20,11 @@ it('scopes the internal catalog to the active team and blocks excluded sources',
     url: 'https://git.example.com/my-team/catalog.git',
     ref: 'main'
   } as const
+  const secondInternal = { ...internal, url: 'https://git.example.com/another-team/catalog.git' }
   let capabilities: OrcaCloudCapabilities | undefined = {
     flags: { team_settings: true, 'plugins.official': false, 'plugins.community': false },
     refreshedAt: 1,
-    teamPolicy: { orgId: 'org_a', internalCatalog: internal }
+    teamPolicy: { orgIds: ['org_a', 'org_b'], internalCatalogs: [internal, secondInternal] }
   }
   const marketplace = new PluginMarketplaceService({
     pluginsDataDir,
@@ -35,10 +36,11 @@ it('scopes the internal catalog to the active team and blocks excluded sources',
     await store.addSource(community)
     const sources = await marketplace.listSources()
     expect(sources.map(({ source, managed }) => [source.url, managed])).toEqual([
-      [internal.url, true]
+      [internal.url, true],
+      [secondInternal.url, true]
     ])
     await expect(marketplace.addSource(community)).rejects.toThrow('turned off by your team')
-    await expect(marketplace.removeSource(sources[0]!.id)).rejects.toThrow('managed by your team')
+    await expect(marketplace.removeSource(sources[1]!.id)).rejects.toThrow('managed by your team')
 
     capabilities = undefined
     expect((await marketplace.listSources()).map(({ source }) => source.url)).toEqual([

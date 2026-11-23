@@ -7,7 +7,7 @@ export async function initializeTeamCapabilities(
   profile: OrcaProfileSummary
 ): Promise<void> {
   const finish = initializeActiveTeamProfile(userDataPath, profile)
-  if (profile.cloud?.activeOrgId) {
+  if (profile.cloud) {
     finish(await readStoredTeamPolicySession(profile.id, userDataPath))
   }
 }

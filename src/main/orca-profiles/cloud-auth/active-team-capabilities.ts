@@ -1,6 +1,6 @@
 import type { OrcaCloudCapabilities } from '../../../shared/orca-profiles/orca-cloud-capabilities'
 import {
-  getTeamCapabilitiesForOrg,
+  getGoverningTeamCapabilities,
   type OrcaCloudTeamFeatureFlag
 } from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import type { OrcaProfileSummary } from '../../../shared/orca-profiles/orca-profiles'
@@ -21,10 +21,10 @@ const listeners = new Set<() => void>()
 export function getActiveTeamCapabilities(): OrcaCloudCapabilities | undefined {
   const cloud = active?.profile.cloud
   const session = active?.session
-  if (!cloud?.activeOrgId || !session || !sessionBelongsToProfile(session, cloud)) {
+  if (!cloud || !session || !sessionBelongsToProfile(session, cloud)) {
     return undefined
   }
-  return getTeamCapabilitiesForOrg(session.capabilities, cloud.activeOrgId)
+  return getGoverningTeamCapabilities(session.capabilities)
 }
 
 export function initializeActiveTeamProfile(

@@ -18,12 +18,11 @@ export const ORCA_CLOUD_TEAM_POLICY_FLAGS = {
 export type OrcaCloudTeamFeatureFlag =
   (typeof ORCA_CLOUD_TEAM_POLICY_FLAGS)[keyof typeof ORCA_CLOUD_TEAM_POLICY_FLAGS]
 
-export function getTeamCapabilitiesForOrg(
-  capabilities: OrcaCloudCapabilities | undefined,
-  orgId: string
+export function getGoverningTeamCapabilities(
+  capabilities: OrcaCloudCapabilities | undefined
 ): OrcaCloudCapabilities | undefined {
   return capabilities?.flags[ORCA_CLOUD_TEAM_SETTINGS] === true &&
-    capabilities.teamPolicy?.orgId === orgId
+    capabilities.teamPolicy?.orgIds?.length
     ? capabilities
     : undefined
 }
@@ -38,16 +37,15 @@ export function isOrcaCloudTeamFeatureBlocked(
 export function getOrcaCloudTeamCapabilities(
   auth: OrcaProfileAuthStatus | null
 ): OrcaCloudCapabilities | undefined {
-  const orgId = auth?.cloud?.activeOrgId
-  return auth?.state === 'connected' && orgId
-    ? getTeamCapabilitiesForOrg(auth.capabilities, orgId)
+  return auth?.state === 'connected' && auth.cloud
+    ? getGoverningTeamCapabilities(auth.capabilities)
     : undefined
 }
 
 export const orcaCloudTeamPolicySchema = z.object({
-  orgId: z.string().min(1),
-  internalCatalog: pluginMarketplaceGitSourceSchema.optional(),
-  requiredPlugins: z.array(z.string().refine(isQualifiedPluginKey)).max(64).optional(),
+  orgIds: z.array(z.string().min(1)).min(1),
+  internalCatalogs: z.array(pluginMarketplaceGitSourceSchema).optional(),
+  requiredPlugins: z.array(z.string().refine(isQualifiedPluginKey)).optional(),
   updateChannel: z.enum(['stable', 'rc']).optional(),
   updateDelayDays: z.number().int().min(0).max(90).optional()
 })
