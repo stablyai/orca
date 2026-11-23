@@ -14,8 +14,8 @@ export type SessionCookieTracker = {
    * this launch writes over it only for a full clear (or removes it with the profile).
    */
   savedFile: 'same' | 'stale' | 'unread'
-  /** Timer saves that have retried a failed clear's rewrite; bounded, so a lasting I/O error stops. */
-  rewriteAttempts: number
+  /** Set once the one timer retry of a failed clear's rewrite has run: later saves write only real changes. */
+  rewriteRetried: boolean
   /** Set until the file has been read: a save before then would compare against nothing. */
   reading: boolean
   /** Scopes whose cookies changed since `saved` was read. */
@@ -33,6 +33,10 @@ export type SessionCookieTracker = {
 // Why keyed by file path: the same browser profile id ('default') exists in every Orca profile.
 export const sessionCookieTrackers = new Map<string, SessionCookieTracker>()
 
+// A retired jar's file, by jar, and whether its removal finished (true) or failed (false).
+const detachedFiles = new WeakMap<Session, string>()
+const retirements = new Map<string, Promise<boolean>>()
+
 /** The tracker for a jar whose session cookies this launch tracks, if any. */
 export function sessionCookieTrackerFor(target: Session): SessionCookieTracker | undefined {
   return [...sessionCookieTrackers.values()].find((tracker) => tracker.target === target)
@@ -44,7 +48,39 @@ export function stopTrackingSessionCookies(filePath: string): void {
     cancelPendingSave(tracker)
     tracker.target.cookies.off('changed', tracker.onChanged)
     sessionCookieTrackers.delete(filePath)
+    detachedFiles.set(tracker.target, filePath)
   }
+}
+
+/** For a profile or route jar being retired: stops tracking it, then removes its file. */
+export function retireSessionCookieSnapshot(
+  filePath: string,
+  remove: (filePath: string) => Promise<void>
+): Promise<void> {
+  stopTrackingSessionCookies(filePath)
+  const removal = remove(filePath)
+  retirements.set(
+    filePath,
+    removal.then(
+      () => true,
+      () => false
+    )
+  )
+  return removal
+}
+
+/**
+ * For a jar no tracker owns: true only when nothing saved can restore its cookies. Not tracking a
+ * jar proves nothing, its retirement's removal must have finished, and no newer restore may have
+ * read the file since.
+ */
+export async function untrackedSnapshotGone(target: Session): Promise<boolean> {
+  const filePath = detachedFiles.get(target)
+  if (filePath === undefined) {
+    return true
+  }
+  const removed = (await retirements.get(filePath)) ?? false
+  return removed && !sessionCookieTrackers.has(filePath)
 }
 
 export function cancelPendingSave(tracker: SessionCookieTracker): void {

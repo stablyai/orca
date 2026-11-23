@@ -4,7 +4,7 @@ import {
   removeSessionCookieSnapshot,
   routeSnapshotPath
 } from './browser-session-cookie-snapshot-file'
-import { stopTrackingSessionCookies } from './browser-session-cookie-tracker'
+import { retireSessionCookieSnapshot } from './browser-session-cookie-tracker'
 
 const routeRestores = new Map<string, Promise<void>>()
 
@@ -32,10 +32,9 @@ export async function forgetBrowserRoutePartitionSessionCookies(partition: strin
     return
   }
   const filePath = routeSnapshotPath(partition)
-  stopTrackingSessionCookies(filePath)
   try {
     // File first: any restore that starts from here on reads nothing.
-    await removeSessionCookieSnapshot(filePath)
+    await retireSessionCookieSnapshot(filePath, removeSessionCookieSnapshot)
   } finally {
     // One that read it already (or ran past its page's timeout) finishes before the jar is cleared,
     // and the next restore tracks the jar again even when the file could not go.

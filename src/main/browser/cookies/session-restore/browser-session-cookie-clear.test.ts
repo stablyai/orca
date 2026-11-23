@@ -61,14 +61,27 @@ vi.mock('../browser-cookie-clear-store', async (importOriginal) => ({
 
 function fakeSession() {
   let jar: Cookie[] = []
+  // Set while a test holds the jar's reads, as a slow cookie store would.
+  let held: Promise<void> | null = null
   const listeners = new Set<Listener>()
   // Chromium reports cookie changes on their own channel, after the call that made them.
   const emitLater = (cookie: Cookie, removed: boolean) =>
     setImmediate(() => listeners.forEach((listener) => listener({}, cookie, 'explicit', removed)))
   return {
     names: () => jar.map((cookie) => cookie.name).sort(),
+    holdReads: () => {
+      let release = () => {}
+      held = new Promise((resolve) => (release = resolve))
+      return () => {
+        held = null
+        release()
+      }
+    },
     cookies: {
-      get: async () => jar.map((cookie) => ({ ...cookie })),
+      get: async () => {
+        await held
+        return jar.map((cookie) => ({ ...cookie }))
+      },
       set: async (details: CookiesSetDetails) => {
         const cookie: Cookie = {
           name: details.name ?? '',
@@ -317,22 +330,58 @@ describe('session cookie snapshot that a launch could not read', () => {
     expect((await launch()).jar.names()).toEqual([])
   })
 
-  it('a removal that keeps failing is retried by three saves and at quit, then left', async () => {
-    const { target, clear, restore } = await savedButUnread()
+  it('a removal that keeps failing is retried by one save and at quit, then left', async () => {
+    const { jar, target, clear, restore } = await savedButUnread()
     io.rmFailures = Number.POSITIVE_INFINITY
     await expect(clear.clearBrowserCookieJar(target)).rejects.toThrow('EBUSY')
 
-    for (let save = 1; save <= 3; save++) {
-      await elapse(30_000)
-      expect(io.rmCalls).toBe(1 + save)
-    }
+    await elapse(30_000)
+    expect(io.rmCalls).toBe(2)
+    // Events that leave no new cookie don't arm the old retry again.
+    await jar.cookies.set({ url: 'https://example.org/', name: 'brief' })
+    await settle()
+    await jar.cookies.remove('https://example.org/', 'brief')
+    await settle()
     await elapse(5 * 60_000)
-    expect(io.rmCalls).toBe(4)
+    expect(io.rmCalls).toBe(2)
     expect(vi.getTimerCount()).toBe(0)
     await restore.flushBrowserSessionCookiesOnQuit()
 
-    expect(io.rmCalls).toBe(5)
+    expect(io.rmCalls).toBe(3)
     expect(existsSync(snapshotFile())).toBe(true)
+  })
+
+  it('a full clear whose removal failed still removes the file when new cookies cannot be sealed', async () => {
+    const { jar, target, clear } = await savedButUnread()
+    io.rmFailures = 1
+    await expect(clear.clearBrowserCookieJar(target)).rejects.toThrow('EBUSY')
+    sealing = false
+    await jar.cookies.set({ url: 'https://example.org/', name: 'new', secure: true })
+    await settle()
+
+    await elapse(30_000)
+
+    expect(io.cdpReads).toBe(0)
+    expect(existsSync(snapshotFile())).toBe(false)
+  })
+
+  it('changes while unread are not kept, and saving resumes after a full clear', async () => {
+    const { jar, target, clear } = await savedButUnread()
+    for (let i = 0; i < 50; i++) {
+      await jar.cookies.set({ url: `https://site${i}.example/`, name: 'sid' })
+      await jar.cookies.remove(`https://site${i}.example/`, 'sid')
+    }
+    await settle()
+    expect(lastTrackers?.sessionCookieTrackers.get(snapshotFile())?.changedScopes.size).toBe(0)
+
+    await jar.cookies.set({ url: 'https://example.org/', name: 'early', secure: true })
+    await settle()
+    await clear.clearBrowserCookieJar(target)
+    await jar.cookies.set({ url: 'https://example.org/', name: 'after', secure: true })
+    await settle()
+    await elapse(30_000)
+
+    expect((await launch()).jar.names()).toEqual(['after'])
   })
 
   it('cookies set while sealing is unavailable leave the file, past the save and quit', async () => {
@@ -341,7 +390,9 @@ describe('session cookie snapshot that a launch could not read', () => {
 
     await jar.cookies.set({ url: 'https://example.org/', name: 'new' })
     await settle()
+    expect(vi.getTimerCount()).toBe(0)
     await elapse(60_000)
+    expect(io.cdpReads).toBe(0)
     await restore.flushBrowserSessionCookiesOnQuit()
 
     expect(readFileSync(snapshotFile())).toEqual(before)
@@ -409,6 +460,7 @@ describe('session cookie snapshot that a launch read', () => {
     expect(readFileSync(snapshotFile())).toEqual(before)
     await elapse(5 * 60_000)
     expect(vi.getTimerCount()).toBe(0)
+    expect(io.cdpReads).toBe(0)
     await restore.flushBrowserSessionCookiesOnQuit()
 
     expect(readFileSync(snapshotFile())).toEqual(before)
@@ -442,5 +494,57 @@ describe('session cookie snapshot that a launch read', () => {
 
     expect(io.cdpReads).toBe(1)
     expect((await launch()).jar.names()).toEqual(['new'])
+  })
+})
+
+describe('session cookie snapshot of a retired profile', () => {
+  async function signedIn() {
+    await saveSnapshot([sessionCookie('sid', 'example.com'), sessionCookie('SID', 'google.com')])
+    return launch()
+  }
+  const isGoogle = (cookie: CdpCookie) => cookie.domain === 'google.com'
+
+  it('a clear after a retirement whose removal failed is not reported persisted', async () => {
+    const { target, clear, restore } = await signedIn()
+    io.rmFailures = 1
+    restore.forgetBrowserSessionCookies('default')
+
+    expect(await clear.persistBrowserCookieClear(target, isGoogle)).toBe(false)
+    expect(existsSync(snapshotFile())).toBe(true)
+  })
+
+  it('a clear after a retirement that removed the file is reported persisted', async () => {
+    const { target, clear, restore } = await signedIn()
+    restore.forgetBrowserSessionCookies('default')
+
+    expect(await clear.persistBrowserCookieClear(target, isGoogle)).toBe(true)
+    expect(existsSync(snapshotFile())).toBe(false)
+  })
+
+  it('a quit save held while the profile is retired does not write the file back', async () => {
+    const { jar, restore } = await signedIn()
+    await jar.cookies.set({ url: 'https://example.org/', name: 'new', secure: true })
+    await settle()
+    const release = jar.holdReads()
+    const quit = restore.flushBrowserSessionCookiesOnQuit()
+    await settle()
+    restore.forgetBrowserSessionCookies('default')
+    while (existsSync(snapshotFile())) {
+      await settle()
+    }
+
+    release()
+    await quit
+
+    expect(existsSync(snapshotFile())).toBe(false)
+  })
+})
+
+describe('CDP cookie reply for a saved read', () => {
+  it('a reply without a cookies array fails instead of reading as an empty jar', async () => {
+    const { requireCdpCookies } = await import('../browser-cdp-cookie')
+    expect(() => requireCdpCookies({})).toThrow('cdp_cookies_reply_invalid')
+    expect(() => requireCdpCookies({ cookies: null })).toThrow('cdp_cookies_reply_invalid')
+    expect(requireCdpCookies({ cookies: [] })).toEqual([])
   })
 })

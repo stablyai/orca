@@ -2,9 +2,13 @@ import type { Session } from 'electron'
 import type { CdpCookie } from '../browser-cdp-cookie'
 import { cdpCookieScopeKey } from '../browser-cookie-clear-store'
 import { withCookieMutationLock } from '../mutation/cookie-mutation-lock'
-import { groupByScope, noteScopeChange } from './browser-session-cookie-scopes'
+import { groupByScope, liveCookieScopeKey, noteScopeChange } from './browser-session-cookie-scopes'
 import { scheduleSave, writeTrackedSnapshot } from './browser-session-cookie-restore'
-import { queueSnapshotWrite, sessionCookieTrackerFor } from './browser-session-cookie-tracker'
+import {
+  queueSnapshotWrite,
+  sessionCookieTrackerFor,
+  untrackedSnapshotGone
+} from './browser-session-cookie-tracker'
 
 /** Clears every cookie in a jar, durably. */
 export async function clearBrowserCookieJar(target: Session): Promise<void> {
@@ -17,8 +21,9 @@ export async function clearBrowserCookieJar(target: Session): Promise<void> {
  * For a cookie clear: what it removed leaves Chromium's store and the saved session cookies now,
  * not at their next commit up to 30 s later, so a crash before then can't sign pages back in.
  * `partial` picks what a partial clear removed; a full clear omits it. Resolves false when the
- * saved cookies may still hold what was cleared: a partial clear can't edit a file launch could
- * not read, and dropping it would sign every other site out.
+ * saved cookies may still hold what was cleared: a partial clear can't edit a file this launch
+ * could not read (dropping it would sign every other site out), and a retired jar's file may not
+ * be gone.
  */
 export async function persistBrowserCookieClear(
   target: Session,
@@ -27,14 +32,14 @@ export async function persistBrowserCookieClear(
   await target.cookies.flushStore()
   const tracker = sessionCookieTrackerFor(target)
   if (!tracker) {
-    return true
+    return untrackedSnapshotGone(target)
   }
   const cleared = partial ?? (() => true)
   // After any queued save: one that read the jar before the clear would write it back.
   return queueSnapshotWrite(tracker, async () => {
-    // A profile deleted meanwhile already lost its file.
+    // Retired meanwhile: only the file's removal shows nothing saved brings the cookies back.
     if (sessionCookieTrackerFor(target) !== tracker) {
-      return true
+      return untrackedSnapshotGone(target)
     }
     if (tracker.savedFile === 'unread' && partial) {
       return false
@@ -51,14 +56,24 @@ export async function persistBrowserCookieClear(
         noteScopeChange(tracker.changedScopes, key, 'other')
       }
     }
+    const wasUnread = tracker.savedFile === 'unread'
     try {
       await writeTrackedSnapshot(tracker, kept)
+      if (wasUnread) {
+        // Changes went unrecorded while the file was unread: what the jar holds now is new.
+        for (const cookie of await target.cookies.get({ session: true })) {
+          const key = liveCookieScopeKey(cookie)
+          if (key) {
+            noteScopeChange(tracker.changedScopes, key, 'other')
+          }
+        }
+      }
       return true
     } catch (error) {
       // The file may still hold what was cleared; the next save (or quit) rewrites it without that.
       tracker.saved = groupByScope(kept, cdpCookieScopeKey)
       tracker.savedFile = 'stale'
-      tracker.rewriteAttempts = 0
+      tracker.rewriteRetried = false
       throw error
     } finally {
       scheduleSave(tracker)
