@@ -7,6 +7,7 @@ import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
 import { scrollSubsectionIntoView } from '../../navigation/settings-navigation-foundations'
 import { getSettingsTitleTargetId } from '../../section-layout/settings-target-highlight'
+import { revealInstalledAgentChoice } from '../surfaces/installed-agent-choice-reveal'
 
 function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
   const catalog = getAgentCatalog()
@@ -108,6 +109,9 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
             }
           >
             Jump to last agent
+          </Button>
+          <Button variant="outline" size="xs" onClick={revealInstalledAgentChoice}>
+            Choose per agent
           </Button>
         </div>
         <div data-fixture-settings-page="" className="scrollbar-sleek h-[900px] overflow-auto p-8">

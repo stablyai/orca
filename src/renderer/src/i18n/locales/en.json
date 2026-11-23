@@ -1247,8 +1247,8 @@
       "chatUnavailableOnWindows": "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work.",
       "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host.",
       "agentActions": "{{agent}} actions",
-      "showDetails": "Show details",
-      "hideDetails": "Hide details",
+      "showAgentDetails": "Show {{agent}} details",
+      "hideAgentDetails": "Hide {{agent}} details",
       "defaultAutoBadge": "Default · Auto",
       "newAgentsTitle": "New agents",
       "defaultSurfaceServerDescription": "The default for agents {{host}} starts itself, such as from its CLI or orchestration workers. Agents you open from this computer follow This computer's choice."
