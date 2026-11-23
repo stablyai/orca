@@ -90,6 +90,20 @@ it.each(importModes)(
   }
 )
 
+it('keeps the same suffix for 60k tiny messages', async () => {
+  root = await mkdtemp(join(tmpdir(), 'orca-claude-60k-'))
+  const filePath = join(root, 'session.jsonl')
+  await writeFile(
+    filePath,
+    Array.from({ length: 60_000 }, (_, index) =>
+      JSON.stringify({ type: 'assistant', uuid: `m-${index}`, parentUuid: index ? `m-${index - 1}` : null, message: { content: 'x' } })
+    ).join('\n') + '\n'
+  )
+  const input = { agent: 'claude' as const, filePath, sessionId: '60k', limits: { inlineHeadBytes: 1024 }, retainedBytes: 2400 }
+  const [forward, recovery] = await Promise.all([importClaudeTranscript(input), importClaudeTranscript({ ...input, bounded: true })])
+  expect(recovery.items.map((item) => item.identity)).toEqual(forward.items.map((item) => item.identity))
+})
+
 it.each(importModes)(
   'keeps parallel tool forks and drops rewound branches: %s',
   async (boundedClaude) => {
