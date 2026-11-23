@@ -358,12 +358,25 @@ describe('agents here messaging agents on a paired computer', () => {
       { waitMs: 0, clientAsks: asks('session_2', { previousPairing: 'fp_a' }) },
       repaired
     )
+    // That session ends, and the next one no longer names the pairing it replaced.
+    const gone = new AbortController()
+    gone.abort()
+    await fromClient(
+      'orchestration.peerMailPull',
+      { waitMs: 0, clientAsks: asks('session_2') },
+      { ...repaired, signal: gone.signal }
+    )
+    await fromClient(
+      'orchestration.peerMailPull',
+      { waitMs: 0, clientAsks: asks('session_3') },
+      repaired
+    )
 
     await local('orchestration.reply', { id: answer!.id, body: 'Thanks.', from: 'term_s' })
 
     const pulled = await fromClient(
       'orchestration.peerMailPull',
-      { waitMs: 0, clientAsks: asks('session_2') },
+      { waitMs: 0, clientAsks: asks('session_3') },
       repaired
     )
     expect(
@@ -402,6 +415,44 @@ describe('agents here messaging agents on a paired computer', () => {
     })
 
     expect(replied).toMatchObject({ ok: true })
+    const items = (await pull('session_back')).items.filter(
+      (queued) => queued.messageId !== item!.messageId
+    )
+    expect(items.map((queued) => queued.kind)).toEqual(['client_reply'])
+  })
+
+  it('keeps a reply for the offline computer, never a copy sharing its installation id', async () => {
+    await pull()
+    await ask({ type: 'question' })
+    const [item] = (await pull()).items
+    await fromClient('orchestration.peerMailReturn', {
+      items: [
+        {
+          conversationId: item!.conversationId,
+          sequence: 1,
+          messageId: 'msg_answer_4',
+          kind: 'peer_mail',
+          payload: JSON.stringify({
+            senderLabel: 'Literature on Client A',
+            fromAddress: 'bot:Literature',
+            subject: 'Re: Check the citations',
+            body: 'All real.',
+            threadId: item!.messageId
+          })
+        }
+      ]
+    })
+    const [answer] = db.getUnreadMessages('term_s')
+    await settleOffline()
+    const copy = { deviceId: 'device_copy', fingerprint: 'fp_copy' }
+    const copyPull = () =>
+      fromClient('orchestration.peerMailPull', { waitMs: 0, clientAsks: asks('copy') }, copy)
+    await copyPull()
+
+    await local('orchestration.reply', { id: answer!.id, body: 'Thanks.', from: 'term_s' })
+
+    const copied = await copyPull()
+    expect(Pulled.parse(copied.ok ? copied.result : null).items).toEqual([])
     const items = (await pull('session_back')).items.filter(
       (queued) => queued.messageId !== item!.messageId
     )

@@ -13,6 +13,7 @@ import {
 import {
   approvalReportId,
   isDeliberateRest,
+  isFailedLeadTurnFence,
   presenceReportId,
   sendWorkerReport,
   stopReportId,
@@ -291,7 +292,9 @@ function reconcileWorkerReport(
       ? approvalReportId(dispatchId, rest.approval.approvalId)
       : 'backgroundWait' in rest && rest.backgroundWait
         ? stopReportId(dispatchId, `background:${rest.backgroundWait.since}`)
-        : presenceReportId(dispatchId, row.generation)
+        : isFailedLeadTurnFence(row.fence)
+          ? stopReportId(dispatchId, row.fence)
+          : presenceReportId(dispatchId, row.generation)
   const sent = sendWorkerReport(db, target, rest, id, deps, () =>
     writeWorkerPresence(db, dispatchId, decided(finishedMail))
   )

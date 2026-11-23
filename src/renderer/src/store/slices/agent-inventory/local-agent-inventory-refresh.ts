@@ -120,12 +120,16 @@ export function refreshLocalAgentInventory(
         lifecycle.refreshPromises.get(contextKey) === pending
       ) {
         keepManagedAgentCommands()
+        const ownsPublished = ownsPublishedRefresh()
+        const settledKeys = ownsPublished ? refreshContextKeys : new Set([contextKey])
         lifecycle.failedDetectContextKeys.delete(contextKey)
         lifecycle.refusedContextKeys.delete(contextKey)
-        lifecycle.failedDetectContextKeys.delete(publishedContextKey)
+        if (ownsPublished) {
+          lifecycle.failedDetectContextKeys.delete(publishedContextKey)
+        }
         const exposeToLegacy =
           lifecycle.legacyRefreshContextKey !== null &&
-          refreshContextKeys.has(lifecycle.legacyRefreshContextKey)
+          settledKeys.has(lifecycle.legacyRefreshContextKey)
         if (exposeToLegacy) {
           lifecycle.legacyRefreshContextKey = null
           lifecycle.detectedContextKey = publishedContextKey
@@ -141,12 +145,12 @@ export function refreshLocalAgentInventory(
             : {}),
           localDetectedAgentIdsByContext: {
             ...state.localDetectedAgentIdsByContext,
-            [contextKey]: typed,
-            [publishedContextKey]: published
+            ...(ownsPublished ? { [publishedContextKey]: published } : {}),
+            [contextKey]: typed
           },
           isRefreshingLocalAgentsByContext: contextEviction.removeLocalAgentContextEntries(
             state.isRefreshingLocalAgentsByContext,
-            refreshContextKeys
+            settledKeys
           )
         }))
       }
@@ -158,35 +162,44 @@ export function refreshLocalAgentInventory(
         requestGeneration === lifecycle.localDetectionGeneration &&
         lifecycle.refreshPromises.get(contextKey) === pending
       ) {
+        const ownsPublished = ownsPublishedRefresh()
+        const settledKeys = ownsPublished ? refreshContextKeys : new Set([contextKey])
         markLocalAgentRefusal(lifecycle, contextKey, error)
         lifecycle.keptThroughFailure.add(fallback)
         const publishedFallback = get().localDetectedAgentIdsByContext[publishedContextKey] ?? []
-        lifecycle.keptThroughFailure.add(publishedFallback)
-        if (!publishedHadUsableCache) {
-          lifecycle.failedDetectContextKeys.add(publishedContextKey)
+        if (ownsPublished) {
+          lifecycle.keptThroughFailure.add(publishedFallback)
+          if (!publishedHadUsableCache) {
+            lifecycle.failedDetectContextKeys.add(publishedContextKey)
+          }
         }
         if (!hadUsableCache) {
           lifecycle.failedDetectContextKeys.add(contextKey)
         }
         const exposeToLegacy =
           lifecycle.legacyRefreshContextKey !== null &&
-          refreshContextKeys.has(lifecycle.legacyRefreshContextKey)
+          settledKeys.has(lifecycle.legacyRefreshContextKey)
         if (exposeToLegacy) {
           lifecycle.legacyRefreshContextKey = null
-          lifecycle.detectedContextKey = publishedContextKey
+          if (ownsPublished) {
+            lifecycle.detectedContextKey = publishedContextKey
+          }
         }
         set((state) => ({
           ...(exposeToLegacy
-            ? { detectedAgentIds: publishedFallback, isRefreshingAgents: false }
+            ? {
+                ...(ownsPublished ? { detectedAgentIds: publishedFallback } : {}),
+                isRefreshingAgents: false
+              }
             : {}),
           localDetectedAgentIdsByContext: {
             ...state.localDetectedAgentIdsByContext,
-            [contextKey]: fallback,
-            [publishedContextKey]: publishedFallback
+            ...(ownsPublished ? { [publishedContextKey]: publishedFallback } : {}),
+            [contextKey]: fallback
           },
           isRefreshingLocalAgentsByContext: contextEviction.removeLocalAgentContextEntries(
             state.isRefreshingLocalAgentsByContext,
-            refreshContextKeys
+            settledKeys
           )
         }))
       }
@@ -200,6 +213,9 @@ export function refreshLocalAgentInventory(
   const publishedPending = includeDisabled
     ? pending.then(() => get().localDetectedAgentIdsByContext[publishedContextKey] ?? [])
     : pending
+  // A dropped or superseded enabled half belongs to someone else; this refresh must not write it.
+  const ownsPublishedRefresh = (): boolean =>
+    lifecycle.refreshPromises.get(publishedContextKey) === publishedPending
   if (includeDisabled) {
     lifecycle.refreshPromises.set(publishedContextKey, publishedPending)
     void publishedPending.finally(() => {

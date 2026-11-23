@@ -121,7 +121,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'オンボーディングチェックリスト、{{value0}}/{{value1}} 完了。セットアップガイドを表示。'
   },
   'auto.components.settings.ShortcutFilterRail.02dc7d4251': {
-    ko: '바로가기 검색',
+    ko: '단축키 검색',
     zh: '搜索快捷键',
     ja: 'ショートカットを検索'
   },
@@ -541,7 +541,17 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.settings.browser.search.sshWorkspaceRouting.ssh': { fr: 'ssh' },
   // Worktree badge: stand-alone 主要な leaves the adnominal な dangling — align with the Tooltip's プライマリ.
   'auto.components.sidebar.WorktreeCard.7d517f82e2': { ja: 'プライマリ' },
-  'auto.components.WorktreeJumpPalette.739bda980c': { ja: 'プライマリ' }
+  'auto.components.WorktreeJumpPalette.739bda980c': { ja: 'プライマリ' },
+  // "Dismiss" on a bot's create offer is sent to the bot as the owner's reply, so it reads 忽略, not 关闭.
+  'components.native-chat.offerCard.dismiss': { zh: '忽略' },
+  // Bot statuses read as states (已完成), not the imperative button word 完成.
+  'bots.items.status.done': { zh: '已完成' },
+  'bots.webhooks.calls.completed': { zh: '已完成' },
+  'bots.googleSetup.progress.done': { zh: '已完成' },
+  'featureTips.botsTeammate.agentDone': { zh: '已完成' },
+  // Dismissing an Up next suggestion ignores it; the webhook's Checks are its signature checks.
+  'bots.upNext.dismiss': { zh: '忽略' },
+  'bots.webhooks.checksLabel': { zh: '验证' }
 }
 
 export const LOCALE_KEY_OVERRIDES = mergeLocaleKeyOverrides(BASE_LOCALE_KEY_OVERRIDES)

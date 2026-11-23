@@ -137,6 +137,7 @@ export async function registerCoreHandlers(
     registerAppHandlers(store, {
       rendererCheckpoint,
       onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
+      onQuit: lifecycleOptions.onQuit,
       // Restart/profile switching closes this through will-quit; this callback covers relaunch exit.
       onBeforeRelaunchExit: () => closeNotificationDismissalsBeforeRelaunch(runtime)
     })

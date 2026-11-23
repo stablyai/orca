@@ -35,7 +35,10 @@ import {
   executeBrowserClientPageAutomation,
   retireBrowserClientPageAutomation
 } from '../../client-pages/execution/browser-client-page-automation-runtime'
-import { selectBrowserClientPageRenderer } from '../../client-pages/renderer/browser-client-page-renderer-runtime'
+import {
+  selectBrowserClientPageRenderer,
+  whenBrowserClientPageRendererAvailable
+} from '../../client-pages/renderer/browser-client-page-renderer-runtime'
 import { PairedRuntimeBrowserClientHostComposition } from './paired-runtime-browser-client-host-composition'
 import { PairedRuntimeBrowserClientHost } from './paired-runtime-browser-client-host'
 import {
@@ -112,7 +115,13 @@ const browserClientHosts =
             retireAutomation: retireBrowserClientPageAutomation,
             fileChannel,
             uploadStaging,
-            onPageUnavailable
+            claimRelayedDownload: (guestWebContentsId) =>
+              browserManager.claimNextDownload(guestWebContentsId, null),
+            // A window reload loses every guest before its new renderer attaches; recreating them earlier fails for good.
+            onPageUnavailable: (browserPageId, generation) =>
+              whenBrowserClientPageRendererAvailable(() =>
+                onPageUnavailable(browserPageId, generation)
+              )
           })
           return executor
         },

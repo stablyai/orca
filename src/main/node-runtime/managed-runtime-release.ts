@@ -35,6 +35,8 @@ export type ManagedRuntime = {
   pin(): ManagedRuntimePin | null
   /** Runtimes that follow a published latest release look it up here; pin() answers from it. */
   refreshPin?(signal?: AbortSignal): Promise<void>
+  /** An installed copy older than pin() is brought up to it without a click, as this build ships it. */
+  updatesToPin?: true
   /** Validate startup without user credentials before publishing/reusing this pinned copy. */
   validate?(folder: string, pin: ManagedRuntimePin, signal: AbortSignal): Promise<void>
   /** Add files the unpacked release needs before it is checked and published, e.g. a second command name. */
@@ -51,6 +53,23 @@ export type ManagedAgentCli = {
   launcher?: (folder: string) => string
   /** The one stock command it stands in for, when the agent's launches name other programs too. */
   standsInFor?: string
+}
+
+const serverUseListeners = new Set<(agent: string) => void>()
+/** Told each time a chat starts on Orca's installed server, so an update that failed is retried on use. */
+export function onManagedServerUse(listener: (agent: string) => void): () => void {
+  serverUseListeners.add(listener)
+  return () => serverUseListeners.delete(listener)
+}
+/** A launch resolved to `version` of Orca's `runtime`; only runtimes that follow their pin listen. */
+export function noteManagedServerUse(
+  agent: string,
+  runtime: ManagedRuntime | undefined,
+  version: string | undefined
+): void {
+  if (version !== undefined && runtime?.updatesToPin) {
+    serverUseListeners.forEach((listener) => listener(agent))
+  }
 }
 
 /** The download's digest names the release, so a republished build is never mistaken for it. */

@@ -89,7 +89,8 @@ export function MobileBotEditToolPage(props: {
     }
   }, [client, bot.id, name, needsRead])
   const collision = draft !== null && props.taken.has(draft.name)
-  const invalid = draft && loaded ? botToolDraftError(draft, loaded.platform, loaded.saved) : null
+  const invalid =
+    draft && loaded ? botToolDraftError(draft, loaded.platform, t, loaded.saved) : null
   const save = () => {
     if (!client || !draft || !loaded || saving || invalid || collision || !props.online) {
       return

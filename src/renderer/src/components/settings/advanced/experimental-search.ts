@@ -6,6 +6,14 @@ import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-se
 import { getAppRailSearchEntry } from '../../app-rail/app-rail-search-entry'
 import { getEphemeralVmsSearchEntry } from '../virtual-machines/recipes/ephemeral-vms-search'
 import { getWslHostsExperimentalSearchEntry } from '../wsl/hosts/wsl-hosts-experimental-search'
+import { isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+
+/** Only a macOS or Linux desktop's own chats read the switch: Windows keeps one server per chat,
+ *  and a web client's chats run on a host the switch never reaches. */
+export function sharedCodexServersSettingAvailable(): boolean {
+  return !isWebClientLocation() && !isWindowsUserAgent()
+}
 
 export const getExperimentalSearchEntry = createLocalizedCatalog(
   () =>
@@ -147,6 +155,30 @@ export const getExperimentalSearchEntry = createLocalizedCatalog(
           )
         ]
       },
+      sharedCodexServers: {
+        title: translate(
+          'auto.components.settings.experimental.search.sharedCodexServers.title',
+          'Shared Codex servers'
+        ),
+        description: translate(
+          'auto.components.settings.experimental.search.sharedCodexServers.description',
+          'Codex chats with the same setup share one background process instead of starting one per chat.'
+        ),
+        keywords: [
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.0d24759f14',
+            'experimental'
+          ),
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.sharedCodexServers.codex',
+            'codex'
+          ),
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.sharedCodexServers.memory',
+            'memory'
+          )
+        ]
+      },
       agentHibernation: {
         title: translate(
           'auto.components.settings.experimental.search.agentHibernation.title',
@@ -191,7 +223,9 @@ export const getExperimentalSearchEntry = createLocalizedCatalog(
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
-    ...Object.values(getExperimentalSearchEntry()),
+    ...Object.entries(getExperimentalSearchEntry()).flatMap(([key, entry]) =>
+      key === 'sharedCodexServers' && !sharedCodexServersSettingAvailable() ? [] : [entry]
+    ),
     // Index WSL toggles only on Windows desktops that expose them.
     ...(typeof window !== 'undefined' && window.api?.runtimeEnvironments?.wslHosts
       ? [getWslHostsExperimentalSearchEntry()]

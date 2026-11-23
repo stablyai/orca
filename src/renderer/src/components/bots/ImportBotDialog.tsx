@@ -1,7 +1,5 @@
 // Import from another app: pick a bot OpenClaw, Hermes or OpenBot keeps on this computer, or an export the
 // old bot made, and create the Orca bot whose first turn brings it over. Laid out like New group.
-import { useBotHostHas } from '@/lib/bot-host-status'
-import { BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import React, { useId, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -43,7 +41,7 @@ import { useBotAgentMenu } from './use-bot-agent-choices'
 import { useBotCreateHost } from './bot-create-hosts'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { useBotAgentSetup } from './use-bot-agent-setup'
-import { useNewBotPicture } from './use-new-bot-picture'
+import { useNewBotHostLooks, useNewBotPicture } from './use-new-bot-picture'
 
 export type ImportPick = { source: BotImportSource; bot: BotImportCandidate }
 
@@ -71,7 +69,7 @@ export function ImportBotDialog({
   const menu = useBotAgentMenu(hostId, open)
   const { choices } = menu
   const agentSetup = useBotAgentSetup(choices, hostId)
-  const picture = useNewBotPicture(useBotHostHas(hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY))
+  const picture = useNewBotPicture(useNewBotHostLooks(hostId))
   const [creating, setCreating] = useState(false)
 
   const picks =
@@ -156,6 +154,7 @@ export function ImportBotDialog({
         ...agentSetup.setup,
         avatar: picture.avatar,
         avatarColor: picture.avatarColor,
+        avatarOutfit: picture.avatarOutfit,
         importFrom
       })
       const bot = await picture.saveUpload(made)

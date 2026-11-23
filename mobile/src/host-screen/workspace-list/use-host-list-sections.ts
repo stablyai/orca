@@ -28,20 +28,15 @@ import {
 import { useHostRepoIconDataUrls } from '../catalog/use-host-repo-icon-data-urls'
 import type { HostSidebarFeed } from '../sidebar-feed/use-host-sidebar-feed'
 import type { HostScreenState } from '../use-host-screen-state'
-import {
-  buildHostBotSections,
-  isProjectListRow,
-  type HostBotListing
-} from '../../bots/host-bot-sections'
-import { usePublishedBotStatuses } from '../../bots/use-published-bot-statuses'
-import { useHostBotChatListInputs } from '../../bots/use-host-bot-chat-trees'
-import { drawBotRow } from '../../bots/host-bot-row-draw'
+import { isProjectListRow, type HostBotListing } from '../../bots/host-bot-sections'
+import { useHostBotSections } from '../../bots/use-host-bot-sections'
 import type { LastVisitedWorktreeOnHost } from '../../worktree/row-presentation/host-list-highlight'
 import { indexHiddenProjects } from '../../../../src/shared/project/catalog/hidden-projects'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host/execution-host'
 
 export type HostListSectionsInputs = {
   client: RpcClient | null
+  connected: boolean
   hostId: string | undefined
   /** Null in a build that lists without the feed. */
   feed: HostSidebarFeed | null
@@ -261,37 +256,19 @@ export function useHostListSections(inputs: HostListSectionsInputs): HostListSec
   const collapsedGroups = useCollapsedGroups(state)
   const lastVisited = useLastVisitedWorktreeOnHost(inputs.hostId)
   const lineageStores = useLineageStores(inputs)
-  const chatInputs = useHostBotChatListInputs({
+  const botSections = useHostBotSections({
     client: inputs.client,
-    pairedHostId: inputs.hostId,
+    connected: inputs.connected,
+    hostId: inputs.hostId,
     hostCapabilities: inputs.hostCapabilities,
     listings: bots,
-    collapsedGroups
+    rows: displayWorktrees,
+    collapsedGroups,
+    repoHostIdByRepoId: state.repoHostIdByRepoId,
+    search: state.search,
+    lastVisited,
+    lineageStores
   })
-  const botSections = useMemo(
-    () =>
-      buildHostBotSections({
-        rows: displayWorktrees,
-        listings: bots,
-        collapsedGroups,
-        repoHostIdByRepoId: state.repoHostIdByRepoId,
-        search: state.search,
-        drawRow: drawBotRow(lastVisited),
-        lineageStores,
-        ...chatInputs
-      }),
-    [
-      displayWorktrees,
-      bots,
-      collapsedGroups,
-      state.repoHostIdByRepoId,
-      state.search,
-      lastVisited,
-      lineageStores,
-      chatInputs
-    ]
-  )
-  usePublishedBotStatuses(inputs.hostId, bots, botSections.sections)
   // Left out before the list is planned, as the desktop's are, so counts and empty sections follow its rules.
   const listRows = useMemo(
     () =>

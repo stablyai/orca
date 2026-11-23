@@ -15,7 +15,7 @@ import {
 import { readRasterImageDimensions } from '../../../../shared/file-preview/raster-image-dimensions'
 import { acquireElectronDebugger } from '../../cdp/debugger/electron-debugger-lease'
 import { sendGuestCdpCommand } from '../../cdp/debugger/guest-cdp-command'
-import { AgentBrowserBridgeFindCommands } from './agent-browser-bridge-find-commands'
+import { AgentBrowserBridgePageMenuCommands } from './agent-browser-bridge-page-menu-commands'
 import { ORCA_TAB_SESSION_PREFIX } from '../session-lifecycle/agent-browser-session-name'
 import { captureRemoteCliBrowserWorkBound } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import {
@@ -23,7 +23,7 @@ import {
   waitForPromiseWithSignal
 } from '../../../../shared/concurrency/abort-signal-reason'
 
-export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBridgeFindCommands {
+export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBridgePageMenuCommands {
   async screenshot(
     options: BrowserScreenshotOptions,
     worktreeId?: string,

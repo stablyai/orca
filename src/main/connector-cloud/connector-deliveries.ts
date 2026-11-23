@@ -226,6 +226,7 @@ export function dispatchDelivery(
       const message = {
         text,
         ...(asker ? { asker } : {}),
+        ...(delivery.resume ? { resume: true as const } : {}),
         ...deliveryNote(delivery, inTurn),
         ...sentTiming(delivery, msLeft),
         ...together,

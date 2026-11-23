@@ -42,7 +42,7 @@ export async function addItem(
       { ...fields, ownerBotId: writer.bot.id, chatId: writer.actor.chatId, source: writer.source },
       writer.actor
     )
-    return writeResult(runtime, outcome, writer)
+    return writeResult(context, outcome, writer)
   }
   assertBotItemAddable(fields)
   const uid = randomUUID()
@@ -73,7 +73,7 @@ export async function addItem(
       },
       writer.actor
     )
-    return await writeResult(runtime, outcome, writer)
+    return await writeResult(context, outcome, writer)
   } finally {
     sent.nudge()
   }

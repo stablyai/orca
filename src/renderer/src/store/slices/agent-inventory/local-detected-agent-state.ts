@@ -2,16 +2,13 @@ import { haveSameDisabledTuiAgents } from '../../../../../shared/agent-launch/ca
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
+import { dropEnabledLocalAgentInventories } from './local-agent-inventory-invalidation'
 import * as contextEviction from './local-agent-context-eviction'
 import { getLegacyLoadingPatch } from './local-agent-legacy-loading'
 import { markLocalAgentRefusal, refreshLocalAgentInventory } from './local-agent-inventory-refresh'
 import type { LocalAgentInventoryLifecycle } from './local-agent-inventory-refresh'
 import { createEmptyLocalDetectedAgentState } from './local-detected-agent-store-state'
-import {
-  beginAgentDetection,
-  forgetManagedAgentCommands,
-  LOCAL_MANAGED_AGENT_HOST
-} from './managed-agent-launch-commands'
+import * as managedCommands from './managed-agent-launch-commands'
 import type {
   LocalAgentRefreshOptions,
   LocalDetectedAgentState
@@ -152,7 +149,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
         }
       }))
       const detectArgs = includeDisabled ? context : { ...context, enabledOnly: true }
-      const read = beginAgentDetection(LOCAL_MANAGED_AGENT_HOST)
+      const read = managedCommands.beginAgentDetection(managedCommands.LOCAL_MANAGED_AGENT_HOST)
       const pending = window.api.preflight
         .detectAgents({
           ...detectArgs,
@@ -271,7 +268,9 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       lifecycle.detectedContextKey = null
       lifecycle.legacyDetectContextKey = null
       lifecycle.legacyRefreshContextKey = null
-      forgetManagedAgentCommands((host) => host === LOCAL_MANAGED_AGENT_HOST)
+      managedCommands.forgetManagedAgentCommands(
+        (host) => host === managedCommands.LOCAL_MANAGED_AGENT_HOST
+      )
       set(createEmptyLocalDetectedAgentState())
     }
   }
@@ -298,7 +297,11 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       )
     ) {
       const reacquireNativeInventory = nativeInventoryRequested
-      actions.clearLocalDetectedAgents()
+      if (overridesChanged) {
+        actions.clearLocalDetectedAgents()
+      } else {
+        dropEnabledLocalAgentInventories(set, get, lifecycle)
+      }
       // Native consumers can remain mounted while workspace consumers reacquire only WSL.
       if (reacquireNativeInventory) {
         void actions.ensureNativeDetectedAgents()

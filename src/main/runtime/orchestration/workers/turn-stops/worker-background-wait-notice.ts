@@ -1,5 +1,5 @@
 /** How long a worker may wait on its own background task, its turn over, before its coordinator hears. */
-const WORKER_BACKGROUND_WAIT_NOTICE_MS = 60 * 60_000
+const WORKER_BACKGROUND_WAIT_NOTICE_MS = 20 * 60_000
 
 /** The notice bound; a test rig shortens it with ORCA_WORKER_BACKGROUND_WAIT_NOTICE_MS. */
 export function workerBackgroundWaitNoticeMs(): number {
