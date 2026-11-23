@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  closeProviderTimelineRigs,
-  openProviderTimelineRig,
+  closeExtensionUiRigs,
+  openExtensionUiRig,
   GENERATION,
   NAMESPACE,
   SESSION
-} from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+} from './pi-extension-ui-journal-rig.test-fixture'
 import { JsonlRpcTimelineLane } from '../../jsonl-rpc/timeline-lane'
 import type { JsonlRpcRecord } from '../../jsonl-rpc/peer'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -20,14 +20,14 @@ afterEach(async () => {
   for (const lane of lanes.splice(0)) {
     lane.dispose()
   }
-  await closeProviderTimelineRigs()
+  await closeExtensionUiRigs()
 })
 
 type ExtensionFrame = { method: string } & Record<string, unknown>
 
 // The real lane, sink and journal: a frame either reaches the chat's rows or it does not.
 async function rig() {
-  const journal = await openProviderTimelineRig({ agent: 'pi' })
+  const journal = await openExtensionUiRig()
   const lane = new JsonlRpcTimelineLane({
     sink: journal.sink,
     sessionId: SESSION,
