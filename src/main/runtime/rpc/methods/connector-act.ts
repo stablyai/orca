@@ -62,6 +62,35 @@ function signedOutError(host: { server: OrcaSignInServer; botName: string }): Co
   )
 }
 
+/** Slack deliberately hides a channel from an app without membership, while its API names missing
+ *  history permissions separately. Preserve that distinction so a bot can fix the right condition. */
+function slackReadFailure(error: string | null): ConnectorActError | null {
+  switch (error?.toLowerCase()) {
+    case 'missing_scope':
+      return new ConnectorActError(
+        'connector_refused',
+        'Slack refused this read because the bot app is missing channel-history permission. Reconnect the bot to Slack so it grants `channels:history` for public channels and `groups:history` for private channels, then try again.'
+      )
+    case 'not_in_channel':
+      return new ConnectorActError(
+        'connector_refused',
+        'Slack refused this read because the bot is not in that channel. Run `orca slack check <channel> --join` for a public channel, or invite the bot to a private channel, then try again.'
+      )
+    case 'channel_not_found':
+      return new ConnectorActError(
+        'connector_refused',
+        "Slack couldn't find a channel this bot can read. Check that the link is for this Slack workspace; for a private channel, invite the bot first."
+      )
+    case 'thread_not_found':
+      return new ConnectorActError(
+        'connector_refused',
+        "Slack couldn't find that thread. Read it from the thread's root message or use `orca slack find <channel>` to get a current ref."
+      )
+    default:
+      return null
+  }
+}
+
 /** A cloud failure in words; only an answer that never came is "didn't answer". */
 export function actFailure(
   verb: string,
@@ -99,6 +128,10 @@ export function actFailure(
       'bot_not_in_cloud',
       "This bot isn't on Orca Cloud from this machine yet: connect it to Slack, Linear or GitHub, or wait a moment after connecting it."
     )
+  }
+  const slackFailure = verb === 'read' ? slackReadFailure(failure.error) : null
+  if (slackFailure) {
+    return slackFailure
   }
   const reason = failure.error ?? `HTTP ${failure.status}`
   return failure.status === 400
