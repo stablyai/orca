@@ -20,6 +20,8 @@ import {
   readAgentJournalTurnOutcome
 } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { ConnectorFailure } from '../../shared/connectors/connector-cloud-contract'
+import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
+import { stoppedBeforeItRan } from './external-conversation-failure'
 import type { ReplyRecoveryChat } from './external-conversation-reply-recovery'
 import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../native-chat/agent-session-journal/projection/journal-dispatch-doubt-reasons'
 
@@ -35,6 +37,16 @@ export type ReplyRecoveryVerdict = {
 
 // The machine lost track of the request across a restart: it may have finished (Phase 1 §1.8).
 export const UNCONFIRMED: ConnectorFailure = { category: 'unconfirmed' }
+
+/** A rejected send: withdrawn when a person's Stop or close took it back, else failed with why. */
+function rejectedVerdict(
+  submission: AgentJournalSubmission,
+  rejectionOf: (submission: AgentJournalSubmission) => { failure?: ConnectorFailure }
+): ReplyRecoveryVerdict {
+  return stoppedBeforeItRan(readAgentSessionFailureFact(submission.rejection))
+    ? { outcome: 'withdrawn' }
+    : { outcome: 'failed', ...rejectionOf(submission) }
+}
 
 export const keyOf = (row: Unfilled) => ({ account: row.account, deliveryId: row.deliveryId })
 
@@ -140,7 +152,7 @@ export async function readReplyEvidence(
     }
     const submission = submissionByKey(agentJournalSubmissionKey(claimMessageId))
     if (submission?.dispatchState === 'rejected') {
-      return { outcome: 'failed', ...rejectionOf(submission) }
+      return rejectedVerdict(submission, rejectionOf)
     }
     if (submission?.dispatchState === 'unknown' && submission.recovered === true) {
       return { outcome: 'interrupted', failure: UNCONFIRMED }
@@ -265,7 +277,7 @@ export function rowVerdict(
   const submission = view.submissionOf(row)
   if (submission && !submission.answeredInTurn) {
     if (submission.dispatchState === 'rejected') {
-      return { outcome: 'failed', ...rejectionOf(submission) }
+      return rejectedVerdict(submission, rejectionOf)
     }
     if (
       submission.dispatchState === 'unknown' &&

@@ -35,7 +35,7 @@ import {
 } from '../runtime/orchestration/turn-delivery/send-agent-turn'
 import { refusalOf } from './external-conversation-chain'
 import { storedConnectorAsker } from '../../shared/connector-message-asker'
-import { connectorFailure } from './external-conversation-failure'
+import { rejectedSendRefusal } from './external-conversation-failure'
 import { refused, type ConnectorMessage, type Delivery } from './external-conversation-types'
 
 /** What the seam reads of the native-chat host. */
@@ -298,7 +298,7 @@ export async function deliverToChat(
       const fact = readAgentSessionFailureFact(
         outcome.kind === 'sent' ? outcome.submission?.rejection : undefined
       )
-      return refused('agent_not_reachable', fact && connectorFailure(fact, link.agent))
+      return rejectedSendRefusal(fact, link.agent)
     }
     return dispatched === 'unknown'
       ? { outcome: 'unknown', reason: 'writer_failed' }

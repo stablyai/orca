@@ -38,6 +38,7 @@ import { usageLimitReplyPause } from './external-conversation-reply-pause'
 import { ConnectorReplyRecovery } from './external-conversation-reply-recovery'
 import { connectorReplyTurnStamps } from '../../shared/agent-session/journal/journal-connector-reply-turn'
 import { replyEventsOf } from '../connector-cloud/connector-reply-outbox'
+import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 
 // Phase 1 restart matrix, desktop side: a real journal file reopened on every "restart", the real
 // admission writer, recovery and fill, a fake clock. Each case asserts the rows' durable outcome.
@@ -760,6 +761,28 @@ describe('no positional "answered together" across a restart', () => {
     )
     await p.recovery.boot()
     expect(p.outcomes()).toEqual({ d1: { outcome: null } })
+  })
+})
+
+describe('a send rejected before it ran', () => {
+  it('reads a Stop or close that took the send back as stopped, and any other rejection as failed', async () => {
+    const p = start()
+    const kinds = { d1: 'cancelled', d2: 'chatClosed', d3: 'notSignedIn' } as const
+    for (const id of Object.keys(kinds)) {
+      admit(p.db, id, asked(id))
+    }
+    p.show(
+      Object.keys(kinds).map((id) => p.message(id)),
+      Object.entries(kinds).map(([id, kind]) =>
+        submissionOf(id, { dispatchState: 'rejected', rejection: agentSessionFailureFact(kind) })
+      )
+    )
+    await p.recovery.boot()
+    expect(p.outcomes()).toEqual({
+      d1: { outcome: 'withdrawn', head: 'd1' },
+      d2: { outcome: 'withdrawn', head: 'd2' },
+      d3: { outcome: 'failed', head: 'd3', category: 'signed_out' }
+    })
   })
 })
 

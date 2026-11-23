@@ -9,6 +9,7 @@ import type {
   ConnectorFailureCategory
 } from '../../shared/connectors/connector-cloud-contract'
 import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
+import { refused, type Delivery } from './external-conversation-types'
 
 // Each a different next step for the owner; any other kind is the agent's own error.
 const CATEGORY_OF: Partial<Record<AgentSessionFailureKind, ConnectorFailureCategory>> = {
@@ -20,6 +21,16 @@ const CATEGORY_OF: Partial<Record<AgentSessionFailureKind, ConnectorFailureCateg
   claudeAccountFolderMissing: 'not_set_up',
   claudeAccountSetupFailed: 'not_set_up',
   launchFolderMissing: 'folder_missing'
+}
+
+// A send a person's Stop or close took back before the agent ran it: stopped, never an error.
+const STOPPED_BEFORE_IT_RAN: ReadonlySet<AgentSessionFailureKind> = new Set([
+  'cancelled',
+  'chatClosed'
+])
+
+export function stoppedBeforeItRan(fact: AgentSessionFailureFact | undefined): boolean {
+  return fact !== undefined && STOPPED_BEFORE_IT_RAN.has(fact.kind)
 }
 
 export function connectorFailure(
@@ -35,4 +46,14 @@ export function connectorFailure(
     ...(limit ? { usageLimit: limit } : {}),
     ...(timeZone ? { timeZone } : {})
   }
+}
+
+/** Why the connector hears a send the chat rejected: stopped for a person's Stop, else why it failed. */
+export function rejectedSendRefusal(
+  fact: AgentSessionFailureFact | undefined,
+  agent: string
+): Delivery {
+  return stoppedBeforeItRan(fact)
+    ? refused('conversation_cancelled')
+    : refused('agent_not_reachable', fact && connectorFailure(fact, agent))
 }
