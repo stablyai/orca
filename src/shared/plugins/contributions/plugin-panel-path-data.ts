@@ -46,7 +46,8 @@ function skipDigits(data: string, at: number): number {
   return index
 }
 
-/** End of the number starting at `at`, or -1. Accepts `1`, `-1.`, `.5`, `1e-3`. */
+/** End of the number starting at `at`, or -1. Reads `1`, `.5`, `1e-3`, and also `1.` so that
+ *  numberIssue names the trailing dot rather than reporting a missing number. */
 function readNumber(data: string, at: number): number {
   let index = at
   if (data[index] === '+' || data[index] === '-') {
@@ -72,13 +73,43 @@ function readNumber(data: string, at: number): number {
   return end
 }
 
+// Why float limits: Chromium reads path numbers as 32-bit floats and stops drawing at a
+// positive exponent above 38, or an integer part or value past the float range, so `1e39`,
+// and even `0.001e39`, cut the path short. A negative exponent of any size just reads as 0.
+const FLOAT_MAX_EXPONENT = 38
+const POSITIVE_EXPONENT = /[eE]\+?(\d+)$/
+const INTEGER_PART = /^[+-]?(\d*)/
+
+function overflowsFloat(value: number): boolean {
+  return !Number.isFinite(Math.fround(value))
+}
+
+/** Why Chromium would not draw the number `literal`, or null. */
+function numberIssue(literal: string, at: number): string | null {
+  // Why: Chromium needs a digit after the dot, so `1.` or `1.e2` stops the path there.
+  if (/\.(?!\d)/.test(literal)) {
+    return `has a number at position ${at + 1} that ends with a dot; write a digit after it or drop the dot`
+  }
+  const exponent = POSITIVE_EXPONENT.exec(literal)?.[1]
+  const integerPart = INTEGER_PART.exec(literal)?.[1] ?? ''
+  if (
+    (exponent !== undefined && Number(exponent) > FLOAT_MAX_EXPONENT) ||
+    overflowsFloat(Number(integerPart || '0')) ||
+    overflowsFloat(Number(literal))
+  ) {
+    return `has a number at position ${at + 1} that is too large to draw`
+  }
+  return null
+}
+
 function startsNumber(char: string | undefined): boolean {
   return isDigit(char) || char === '.' || char === '+' || char === '-'
 }
 
 /** Why the data is not drawable SVG path data, or null when it is. Checks each command's
- *  arity, arc flags and separators, so a browser draws every segment rather than stopping
- *  at the first error. Compact forms such as `M0 0l1-1`, `.5.5` and `1e-3` are legal. */
+ *  arity, arc flags, separators and numbers (no trailing dot, within float range), so a
+ *  browser draws every segment rather than stopping at the first error. Compact forms such
+ *  as `M0 0l1-1`, `.5.5` and `1e-3` are legal. */
 export function svgPathDataIssue(data: string): string | null {
   if (data[0] !== 'M' && data[0] !== 'm') {
     return 'must start with M or m'
@@ -110,6 +141,10 @@ export function svgPathDataIssue(data: string): string | null {
         const end = readNumber(data, index)
         if (end < 0) {
           return `command "${command}" at position ${commandAt + 1} needs ${arity} numbers per segment`
+        }
+        const issue = numberIssue(data.slice(index, end), index)
+        if (issue) {
+          return issue
         }
         index = end
       }

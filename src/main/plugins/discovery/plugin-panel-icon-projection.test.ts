@@ -10,4 +10,7 @@ it('keeps names in icon and sends path icons, defaults applied, in iconPath', ()
   expect(projectPluginPanelIcon({ path: 'M0 0h8', viewBox: '0 0 8 8', mode: 'fill' })).toEqual({
     iconPath: { path: 'M0 0h8', viewBox: '0 0 8 8', mode: 'fill' }
   })
+  // Why: Chromium would draw nothing for these, so the panel keeps `puzzle`.
+  expect(projectPluginPanelIcon({ path: 'M1. 2.L-.5-1.5' })).toEqual({})
+  expect(projectPluginPanelIcon({ path: 'M0 0L1e39 1' })).toEqual({})
 })

@@ -89,6 +89,9 @@ it(
       ],
       [{ path: 'M0\u00a00' }, 'icon.path must be SVG path data'],
       [{ path: 'M0 0,' }, 'icon.path has a comma'],
+      // Why: Chromium draws nothing for `1.` and stops the path at a number past float range.
+      [{ path: 'M1. 2.L-.5-1.5' }, 'icon.path has a number at position 2 that ends with a dot'],
+      [{ path: 'M0 0L1e39 1' }, 'icon.path has a number at position 6 that is too large to draw'],
       [{ path: '' }, 'icon.path must not be empty'],
       [{ path: `M${' 1'.repeat(2048)}` }, 'icon.path must be at most 4096 characters'],
       [{ path: 'M0 0', viewBox: '0 0 0 24' }, 'icon.viewBox must be "0 0 W H"'],
