@@ -1,6 +1,6 @@
 import { BrowserNewTabPage } from '../../new-tab/BrowserNewTabPage'
 import { ClientHostedBrowserUnavailableNotice } from './client-hosted-browser-unavailable-notice'
-import { useClientHostedBrowserProfileId } from './use-client-hosted-browser-profile-id'
+import { useServerBrowserPageProfileId } from '../profile-routing/use-server-browser-page-profile-id'
 
 /** What a server's page shows in place of its guest: the unavailable notice or its new tab page. */
 export function ClientHostedBrowserPageStandIn({
@@ -22,7 +22,7 @@ export function ClientHostedBrowserPageStandIn({
   placementHostClientId: string | null
   onOpenUrl: (url: string) => void
 }): React.JSX.Element | null {
-  const browserProfileId = useClientHostedBrowserProfileId(browserPageId)
+  const browserProfileId = useServerBrowserPageProfileId(browserPageId)
   if (unavailable) {
     return (
       <ClientHostedBrowserUnavailableNotice

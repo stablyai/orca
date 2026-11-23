@@ -13,6 +13,10 @@ export const SiteColorScheme = BrowserTarget.extend({
   colorScheme: z.enum(['light', 'dark']).nullable()
 })
 
+export const AudioMuted = BrowserTarget.extend({
+  muted: z.boolean()
+})
+
 export const FindInPage = BrowserTarget.extend({
   text: requiredString('Missing required text'),
   forward: z.boolean().optional(),
