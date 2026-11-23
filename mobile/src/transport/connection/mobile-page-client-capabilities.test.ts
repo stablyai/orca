@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { notePageVersion, watchPageClientCapabilities } from './mobile-page-client-capabilities'
-import {
-  readvertiseOnPageChange,
-  settleMobileRuntimeCapabilities
-} from './mobile-runtime-capability-negotiation'
-import type { ConnectionState } from './connection-state'
-import type { RpcClient } from '../rpc/rpc-client-contract'
+import { settleMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
 
 const ROWS = { clientCapabilities: expect.arrayContaining(['browser.clientHost.rows.v1']) }
 
@@ -35,47 +30,16 @@ describe('page-drawn client capabilities', () => {
     stop()
   })
 
-  it('sends a page change made while connecting once the socket connects', async () => {
-    let state: ConnectionState = 'handshaking'
-    const stateListeners = new Set<(next: ConnectionState) => void>()
+  it('sends the new list when the page changes while the handshake advertises the old one', async () => {
     const sent: unknown[] = []
-    const client: RpcClient = {
-      sendRequest: async (_method, params) => {
-        sent.push(params)
-        return { id: '1', ok: true, result: {} }
-      },
-      subscribe: () => () => {},
-      updateTerminalSubscriptionViewport: () => {},
-      getState: () => state,
-      getReconnectAttempt: () => 0,
-      getLastConnectedAt: () => null,
-      onStateChange: (listener) => {
-        stateListeners.add(listener)
-        return () => stateListeners.delete(listener)
-      },
-      notifyForeground: () => {},
-      close: () => {}
-    }
-    const publish = (next: ConnectionState): void => {
-      state = next
-      for (const listener of stateListeners) {
-        listener(next)
-      }
-    }
-    const stop = readvertiseOnPageChange('host-c', client)
-
-    // Authentication already read the old list; this change must not be lost.
-    notePageVersion('host-c', 4)
-    expect(sent).toEqual([])
-    publish('connected')
-    await Promise.resolve()
-    expect(sent).toEqual([ROWS])
-
-    // Already heard: a later reconnect advertises during authentication, not here.
-    publish('reconnecting')
-    publish('connected')
-    await Promise.resolve()
-    expect(sent).toHaveLength(1)
-    stop()
+    await settleMobileRuntimeCapabilities(async (_method, params) => {
+      sent.push(params)
+      // The page for this host finishes loading before the host replies.
+      notePageVersion('host-c', 4)
+      return { id: '1', ok: true, result: {} }
+    }, 'host-c')
+    expect(sent).toHaveLength(2)
+    expect(sent[0]).not.toEqual(ROWS)
+    expect(sent[1]).toEqual(ROWS)
   })
 })

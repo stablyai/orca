@@ -5,6 +5,7 @@ import {
 import { isRpcDeliveryUnknown } from '../rpc/rpc-delivery-ambiguity'
 import {
   pageClientCapabilities,
+  sameClientCapabilities,
   watchPageClientCapabilities
 } from './mobile-page-client-capabilities'
 import { defineRpcOperation, runRpcOperation } from '../rpc/rpc-operation'
@@ -18,21 +19,27 @@ export async function settleMobileRuntimeCapabilities(
   sendRequest: CapabilityRequest,
   hostId?: string
 ): Promise<void> {
-  let response: RpcResponse
-  try {
-    response = await sendRequest(
-      MOBILE_RUNTIME_CLIENT_CAPABILITY_UPDATE_METHOD,
-      mobileRuntimeClientCapabilityUpdateParams(pageClientCapabilities(hostId))
-    )
-  } catch (error) {
-    if (!isRpcDeliveryUnknown(error)) {
-      throw error
+  let sent: readonly string[] | null = null
+  // A page that loads mid-handshake changes the list after it was read, and nothing re-advertises before `connected`.
+  while (sent === null || !sameClientCapabilities(sent, pageClientCapabilities(hostId))) {
+    sent = pageClientCapabilities(hostId)
+    let response: RpcResponse
+    try {
+      response = await sendRequest(
+        MOBILE_RUNTIME_CLIENT_CAPABILITY_UPDATE_METHOD,
+        mobileRuntimeClientCapabilityUpdateParams(sent)
+      )
+    } catch (error) {
+      if (!isRpcDeliveryUnknown(error)) {
+        throw error
+      }
+      console.warn('[net] mobile capability negotiation unanswered — proceeding', error)
+      return
     }
-    console.warn('[net] mobile capability negotiation unanswered — proceeding', error)
-    return
-  }
-  if (!response.ok) {
-    console.warn('[net] mobile capability negotiation unavailable', response.error.code)
+    if (!response.ok) {
+      console.warn('[net] mobile capability negotiation unavailable', response.error.code)
+      return
+    }
   }
 }
 
@@ -67,12 +74,13 @@ const clientCapabilitiesUpdate = defineRpcOperation({
   barrier: 'on-settle'
 })
 
-/** A connected host hears at once when the page loaded for it changes what it can draw; a change while
- *  the socket is still coming up is sent once it connects, since authentication may have read the old list. */
+/** A connected host hears at once when the page loaded for it changes what it can draw; a reconnect
+ *  advertises the current list during authentication instead. */
 export function readvertiseOnPageChange(hostId: string, client: RpcClient): () => void {
-  let unsent = false
-  const advertise = (): void => {
-    unsent = false
+  return watchPageClientCapabilities(hostId, () => {
+    if (client.getState() !== 'connected') {
+      return
+    }
     void runRpcOperation(
       client,
       clientCapabilitiesUpdate,
@@ -81,21 +89,5 @@ export function readvertiseOnPageChange(hostId: string, client: RpcClient): () =
     ).catch((error: unknown) => {
       console.warn('[net] page capability update unsent', error)
     })
-  }
-  const stopPage = watchPageClientCapabilities(hostId, () => {
-    if (client.getState() === 'connected') {
-      advertise()
-    } else {
-      unsent = true
-    }
   })
-  const stopState = client.onStateChange((state) => {
-    if (state === 'connected' && unsent) {
-      advertise()
-    }
-  })
-  return () => {
-    stopPage()
-    stopState()
-  }
 }

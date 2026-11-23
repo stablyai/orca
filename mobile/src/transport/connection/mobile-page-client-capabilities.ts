@@ -18,15 +18,15 @@ export function pageClientCapabilities(hostId: string | undefined): readonly str
   return (hostId && capabilitiesByHost.get(hostId)) || []
 }
 
+export function sameClientCapabilities(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((capability, i) => capability === b[i])
+}
+
 export function notePageVersion(hostId: string, pageVersion: number): void {
   const next = PAGE_DRAWN_CAPABILITIES.filter((entry) => pageVersion >= entry.sincePageVersion).map(
     (entry) => entry.capability
   )
-  const previous = pageClientCapabilities(hostId)
-  if (
-    previous.length === next.length &&
-    previous.every((capability, i) => capability === next[i])
-  ) {
+  if (sameClientCapabilities(pageClientCapabilities(hostId), next)) {
     return
   }
   capabilitiesByHost.set(hostId, next)
