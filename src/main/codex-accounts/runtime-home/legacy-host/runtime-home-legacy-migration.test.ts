@@ -203,7 +203,10 @@ describe('CodexRuntimeHomeService', () => {
     writeFileSync(runtimeHistoryPath, '{"id":"shared-1"}', 'utf-8')
     const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
 
-    await startService()
+    await constructService()
+    // Startup itself must not rewrite it, before the import settles.
+    expect(readFileSync(runtimeHistoryPath, 'utf-8')).toBe('{"id":"shared-1"}')
+    await waitForHistorySettled()
     await removeAccountHome(managedHomePath)
 
     expect(readFileSync(runtimeHistoryPath, 'utf-8')).toBe('{"id":"shared-1"}')
@@ -296,15 +299,14 @@ describe('CodexRuntimeHomeService', () => {
     )
     mkdirSync(join(managedHomePath, 'sessions'), { recursive: true })
     writeFileSync(join(managedHomePath, 'sessions', 'session.json'), '{"turns":[1,2]}', 'utf-8')
-    const store = createStore(createSettings())
 
-    const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
-    new CodexRuntimeHomeService(store as never)
-    await waitForHistorySettled()
+    // Session copies finish during construction; check them before the history import settles.
+    await constructService()
 
     expect(readFileSync(occupiedPreservedPath, 'utf-8')).toBe('{"turns":["kept"]}')
     expect(
       readFileSync(join(runtimeSessionsDir, 'session.orca-legacy-account-1-1.json'), 'utf-8')
     ).toBe('{"turns":[1,2]}')
+    await waitForHistorySettled()
   })
 })
