@@ -143,5 +143,14 @@ export function derivePluginMonacoTheme(input: {
     }),
     colors
   }
+  // Monaco's nesting colors override bracket tokens. Let an explicit theme rule supply
+  // the palette instead, keeping Monaco's default for themes without a bracket color.
+  const bracket = data.rules.find((rule) => rule.token === 'punctuation.bracket')?.foreground
+  if (bracket) {
+    for (let level = 1; level <= 6; level += 1) {
+      colors[`editorBracketHighlight.foreground${level}`] = bracket
+    }
+  }
+
   return { name: `orca-plugin-${hashThemeContent(JSON.stringify(data))}`, data }
 }
