@@ -1155,7 +1155,9 @@
         "waiting": "等待安装",
         "updateNeeded": "需要更新"
       },
-      "avatarSlackNote": "也会更改你的 bot 在 Slack 中的头像",
+      "avatarSlackNote": "Slack 会同步头像，但不包括颜色或装扮。",
+      "avatarSlackNoteColor": "Slack 会同步头像，但不包括颜色。",
+      "avatarSlackNotePicture": "也会更改 bot 在 Slack 中的头像。",
       "linearStatus": {
         "checking": "检查中",
         "unknown": "无法检查",
