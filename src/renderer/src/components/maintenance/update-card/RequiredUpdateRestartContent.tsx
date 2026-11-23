@@ -1,5 +1,4 @@
 // @protected-copy scope=file
-import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -9,17 +8,13 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { useTranslate } from '@/i18n/use-translate'
-import { getIntlLocale } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { useNow } from '@/lib/window-activity/use-now'
 import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
 import type { TeamUpdateRestart } from '../../../../../shared/updater/update-status-types'
 
 function RestartCountdown({ until }: { until: number }): React.JSX.Element {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(timer)
-  }, [])
+  const now = useNow(1000)
   const seconds = Math.max(0, Math.ceil((until - now) / 1000))
   return (
     <span className="tabular-nums">
@@ -38,6 +33,7 @@ export function RequiredUpdateRestartContent({
   onRestart: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const locale = useIntlLocale()
   const title = t('updates.teamRequired.title', 'Your team requires Orca {{version}}', { version })
   const restartNow = t('updates.teamRequired.restartNow', 'Restart now')
   if (restart.phase === 'countdown') {
@@ -82,7 +78,7 @@ export function RequiredUpdateRestartContent({
               'updates.teamRequired.deadline',
               'Restart by {{deadline}}. Orca saves your sessions before restarting.',
               {
-                deadline: new Date(restart.deadlineAt).toLocaleString(getIntlLocale(), {
+                deadline: new Date(restart.deadlineAt).toLocaleString(locale, {
                   dateStyle: 'medium',
                   timeStyle: 'short'
                 })

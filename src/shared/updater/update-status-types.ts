@@ -120,6 +120,7 @@ export type UpdateStatus = (
   | {
       state: 'error'
       message: string
+      failurePhase?: 'download' | 'install'
       /** Translation code for `message`; older hosts omit it and newer ones may send unknown codes. */
       messageCode?: string
       messageParams?: Record<string, string | number>

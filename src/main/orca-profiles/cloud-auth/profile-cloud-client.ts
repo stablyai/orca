@@ -1,5 +1,5 @@
 import { cleanCloudServiceOrigin } from '../../../shared/network/cloud-service-url'
-import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { getDesktopReportHeaders } from './desktop-client-report'
 import type {
   OrcaCloudCapabilities,
   OrcaCloudOrgSummary,
@@ -209,9 +209,7 @@ async function postJson<T>(url: string, body: unknown, options?: PostJsonOptions
     headers: {
       'content-type': 'application/json',
       ...(options?.accessToken ? { authorization: `Bearer ${options.accessToken}` } : {}),
-      ...(options?.reportVersion === true && hasAppEnvironment()
-        ? { 'x-orca-app-version': getAppEnvironment().getVersion() }
-        : {})
+      ...(options?.reportVersion ? getDesktopReportHeaders() : {})
     },
     body: JSON.stringify(body),
     // Redirects could leak rotating credentials; timeout bounds renderer IPC waits.

@@ -243,7 +243,9 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
 
   /** Force repeated failures through the preload abort relay or identical retries leave the renderer stuck at its restart checkpoint. */
   protected sendInstallFailureStatus(status: UpdateStatus): void {
-    this.sendStatus(status, { force: true })
+    this.sendStatus(status.state === 'error' ? { ...status, failurePhase: 'install' } : status, {
+      force: true
+    })
   }
 
   /** Preserve the native failure cause, including Linux manual-install instructions, for local and remote clients. */

@@ -108,6 +108,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
         // Squirrel may still finish this attempt. Keep its version fenced until a native result.
         this.sendStatus({
           state: 'error',
+          failurePhase: 'download',
           version,
           retryable: false,
           ...updaterCodedMessage('macStagingTimeout')

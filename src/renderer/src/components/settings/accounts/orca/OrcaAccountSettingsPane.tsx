@@ -2,14 +2,16 @@ import { useState } from 'react'
 import { BookOpen, Check, CircleUserRound, Files, Smartphone } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useOrcaProfileAuthStatusRefresh } from '@/components/orca-profiles/use-orca-profile-auth-status-refresh'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { OrcaProfileSignOutConfirmDialog } from '../../../orca-profiles/OrcaProfileSignOutConfirmDialog'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../orca-profiles/OrcaSignInProgress'
 import { isOrcaCloudConsoleAvailable } from '../../../../../../shared/orca-cloud-console'
+import { getOrcaCloudTeamCapabilities } from '../../../../../../shared/orca-profiles/orca-cloud-team-policy'
 import { OrcaConsoleRow } from './OrcaConsoleRow'
 
 export function accountStatusCopy(
@@ -102,12 +104,20 @@ export function OrcaAccountHeader({
 
 export function OrcaAccountSettingsPane(): React.JSX.Element {
   const t = useTranslate()
+  const locale = useIntlLocale()
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
   const signOut = useAppStore((state) => state.signOutCurrentOrcaProfile)
   const [signOutOpen, setSignOutOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const connected = authStatus?.state === 'connected'
   const canConnect = authStatus?.configured === true
+  const policy = getOrcaCloudTeamCapabilities(authStatus)?.teamPolicy
+  const reportingOrgIds = policy?.reportingOrgIds ?? policy?.orgIds ?? []
+  const reportingTeams =
+    authStatus?.organizations
+      ?.filter(({ orgId }) => reportingOrgIds.includes(orgId))
+      .map(({ name }) => name) ?? []
+  const showReporting = reportingOrgIds.length > 0
 
   useOrcaProfileAuthStatusRefresh()
 
@@ -151,6 +161,47 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
           {connected ? null : <OrcaSignInWaitNotice className="basis-full" />}
         </OrcaAccountHeader>
 
+        {policy && (
+          <div className="space-y-1 text-settings-detail text-muted-foreground">
+            <p>
+              {showReporting
+                ? reportingTeams.length === reportingOrgIds.length
+                  ? t(
+                      'auto.components.settings.orcaAccount.managedWithNamedReporting',
+                      'Some settings are managed by your team. Owners and admins at {{teams}} can see your Orca version.',
+                      { teams: new Intl.ListFormat(locale).format(reportingTeams) }
+                    )
+                  : t(
+                      'auto.components.settings.orcaAccount.managedWithReporting',
+                      'Your team manages some settings. Team owners and admins can see your Orca version.'
+                    )
+                : t(
+                    'auto.components.settings.orcaAccount.managed',
+                    'Your team manages some Orca settings.'
+                  )}
+            </p>
+            {showReporting && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="link" size="inlineText">
+                    {t(
+                      'auto.components.settings.orcaAccount.reportingDetails',
+                      'Device reporting details'
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-80 max-w-[calc(100vw-2rem)]">
+                  <p className="p-3 text-sm">
+                    {t(
+                      'auto.components.settings.orcaAccount.reportingDisclosure',
+                      'The Devices view shows your Orca version, release channel, device name, platform, update status, and when Orca last reported them.'
+                    )}
+                  </p>
+                </PopoverContent>
+              </Popover>
+            )}
+          </div>
+        )}
         {isOrcaCloudConsoleAvailable(authStatus) ? <OrcaConsoleRow /> : null}
 
         <div className="space-y-4 border-t border-border/60 pt-5">

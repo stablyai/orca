@@ -45,6 +45,7 @@ export function getOrcaCloudTeamCapabilities(
 
 export const orcaCloudTeamPolicySchema = z.object({
   orgIds: z.array(z.string().min(1)).min(1),
+  reportingOrgIds: z.array(z.string().min(1)).optional(),
   internalCatalogs: z.array(pluginMarketplaceGitSourceSchema).optional(),
   requiredPlugins: z.array(z.string().refine(isQualifiedPluginKey)).optional(),
   updateChannel: z.enum(['stable', 'rc']).optional(),
