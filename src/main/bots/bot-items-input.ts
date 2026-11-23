@@ -48,6 +48,9 @@ export type BotItemSetInput = {
   ask?: BotItemAsk
   /** On the comment `comment` or `ask` writes; admitted and claimed on the host first. */
   images?: readonly BotItemCommentImage[]
+  /** Set by the host, never a client: the chat whose conversation's turn asked `ask`, so the
+   *  owner's answer goes back to that conversation. */
+  askedInConversation?: string
 }
 
 /** What a write did. */

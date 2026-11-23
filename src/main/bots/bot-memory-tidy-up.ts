@@ -1,5 +1,6 @@
 // Tidy-up: once a night, a bot tidies its own memory from its new chats. Its run has no tools and
 // replies with a draft (see bot-memory-tidy-up-draft.ts), which Orca checks and writes itself.
+import { botFailure, botFailureEnglishTable } from '../../shared/bots/bot-failure-copy'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { BOT_MEMORY_INDEX_LINE_CAP } from '../../shared/bot-memory-lines'
@@ -43,29 +44,26 @@ const DAY_MS = 24 * 60 * 60 * 1000
 export const TIDY_UP_INDEX_BLOCK = 'MEMORY.md'
 export const TIDY_UP_REPLACED_BLOCK = 'REPLACED'
 
-export const TIDY_UP_FAILURES = {
-  unfinished: "The last tidy-up didn't finish.",
-  timedOut: `The last tidy-up was stopped after ${TIDY_UP_RUN_LIMIT_MS / 60_000} min.`,
-  couldNotStart: "The last tidy-up couldn't start.",
-  asleep: 'The last tidy-up was missed because this computer was asleep.',
-  unreadChats: "The last tidy-up couldn't read its chats, so it didn't run.",
-  noDraft: "The last tidy-up didn't reply with a new MEMORY.md.",
-  noOps: "The last tidy-up's reply wasn't a list of changes Orca could read.",
-  allSkipped: 'Orca skipped every change the last tidy-up asked for, so nothing changed.',
-  notListLines:
-    "The last tidy-up didn't run: MEMORY.md has more than a few lines that aren't list lines, and ops Tidy-up reads only list lines.",
-  movedOnly:
-    'The last tidy-up moved status lines to memory/journal/, but Orca could not use the rest of its reply.',
-  badTopic: "The last tidy-up named a topic file Orca can't write, so nothing changed.",
-  tooLong: `The last tidy-up's MEMORY.md was over ${BOT_MEMORY_INDEX_LINE_CAP} lines, so nothing changed.`,
-  tooManyRemoved: 'The last tidy-up took out too many lines at once, so nothing changed.',
-  tooManyAdded: 'The last tidy-up added too many new lines at once, so nothing changed.',
-  notCopied:
-    "The last tidy-up filed a line MEMORY.md doesn't have; new facts go in MEMORY.md, so nothing changed.",
-  tooManyFiled: `The last tidy-up filed more than ${TIDY_UP_MAX_FILED} lines at once, so nothing changed.`,
-  changed: 'MEMORY.md changed during the last tidy-up, so nothing changed.',
-  notApplied: "The last tidy-up's changes couldn't be saved, so nothing changed."
-} as const
+export const TIDY_UP_FAILURE_CODES = {
+  unfinished: botFailure('tidyUpUnfinished'),
+  timedOut: botFailure('tidyUpTimedOut', { minutes: TIDY_UP_RUN_LIMIT_MS / 60_000 }),
+  couldNotStart: botFailure('tidyUpCouldNotStart'),
+  asleep: botFailure('tidyUpAsleep'),
+  unreadChats: botFailure('tidyUpUnreadChats'),
+  noDraft: botFailure('tidyUpNoDraft'),
+  noOps: botFailure('tidyUpNoOps'),
+  notListLines: botFailure('tidyUpNotListLines'),
+  badTopic: botFailure('tidyUpBadTopic'),
+  tooLong: botFailure('tidyUpTooLong', { max: BOT_MEMORY_INDEX_LINE_CAP }),
+  tooManyRemoved: botFailure('tidyUpTooManyRemoved'),
+  tooManyAdded: botFailure('tidyUpTooManyAdded'),
+  notCopied: botFailure('tidyUpNotCopied'),
+  tooManyFiled: botFailure('tidyUpTooManyFiled', { max: TIDY_UP_MAX_FILED }),
+  changed: botFailure('tidyUpChanged'),
+  notApplied: botFailure('tidyUpNotApplied')
+}
+
+export const TIDY_UP_FAILURES = botFailureEnglishTable(TIDY_UP_FAILURE_CODES)
 
 /** One chat since the last tidy-up: the owner's lines and the bot's replies to them, oldest first. */
 export type TidyUpChat = { title: string | null; lines: { by: 'owner' | 'bot'; text: string }[] }
@@ -320,6 +318,7 @@ export function tidyUpPrompt(input: {
     '- Merge lines that say the same thing into one: the clearer wording and the earliest date.',
     '- When a newer line replaces an older one, leave the older one out of MEMORY.md and list it as replaced.',
     `- Leave out at most a fifth of the lines; when MEMORY.md is over ${TIDY_UP_TARGET_FACTS} lines, move the oldest details to topic files first. Orca keeps every line you leave out in memory/archive.md.`,
+    `- When MEMORY.md is over ${BOT_MEMORY_INDEX_LINE_CAP} lines, make it shorter within these limits; it may stay over ${BOT_MEMORY_INDEX_LINE_CAP} tonight, and the next tidy-up carries on.`,
     `- Add only facts your owner stated, decisions they made, and lessons from their corrections in the chats below, each as "- ${input.today} <fact>". Never add a question, a task, a hypothetical, anything from someone other than your owner, anything the archive already retired, or a password, key or token.`,
     '',
     'Reply with only these blocks, each marker on its own line: the whole new MEMORY.md, then one block for each topic file with only the lines to add to it, then the replaced lines. Leave out blocks you have nothing for. If nothing should change, reply with MEMORY.md unchanged.',

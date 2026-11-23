@@ -73,8 +73,7 @@ export function createBotTurnContext(
   /** What the bot's other chats did lately, as this turn's message may hear of it. */
   recentChats: (
     botId: string,
-    sessionId: string,
-    message: AgentJournalMessageItem
+    sessionId: string
   ) => Promise<BotRecentChatsSection | null> = async () => null,
   /** Every fifth turn of an owner chat, whoever started it: questions the owner left unanswered. */
   unansweredQuestionNote: (sessionId: string) => Promise<string | null> = async () => null,
@@ -169,7 +168,7 @@ export function createBotTurnContext(
         readBotHomeFiles(fs, stored.folder),
         workNote(sessionId, message).catch(() => null),
         readTopics(stored.folder),
-        recentChats(stored.botId, sessionId, message).catch(() => null),
+        recentChats(stored.botId, sessionId).catch(() => null),
         unansweredQuestionNote(sessionId).catch(() => null)
       ])
       const soul = fingerprint(files.soul)

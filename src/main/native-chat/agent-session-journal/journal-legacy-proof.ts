@@ -9,6 +9,7 @@ import {
   LEGACY_PROOF_COPIES_TABLE,
   LEGACY_PROOF_LAYOUT,
   LEGACY_SOURCE_REFUSAL_POLICY,
+  type LegacyProofCounts,
   type LegacySourceProving,
   type LegacySourceRefusal
 } from './journal-legacy-retirement-state'
@@ -51,6 +52,22 @@ export class JournalLegacyProof {
     }
   }
 
+  /** The walk finished this attempt; only the removal is left. */
+  get finished(): boolean {
+    return this.proven
+  }
+
+  /**
+   * Drops a finished walk, so the next attempt resumes from what was saved and checks again what
+   * can change meanwhile (compares due, failures), exactly as the next launch would.
+   */
+  forgetFinished(): void {
+    if (this.proven) {
+      this.descriptor = undefined
+      this.proven = false
+    }
+  }
+
   /**
    * Picks up where an earlier launch's proof of this same original into this same store stopped,
    * or, after a deletion that didn't go through, at the copies it ends with. Pages already proven
@@ -66,8 +83,30 @@ export class JournalLegacyProof {
       this.frontier.cursor.after === null
     const at = fresh ? savedCursor(saved, observation) : null
     if (at) {
-      this.frontier = createLegacyProofFrontier({ ...at, check: true })
+      this.frontier = createLegacyProofFrontier({ ...at.cursor, check: true }, at)
     }
+  }
+
+  /** What this run of the proof walked, and whether it picked up saved progress. */
+  get walked(): {
+    /** Null until a page finished or saved progress carried counts: nothing was measured yet. */
+    counts: LegacyProofCounts | null
+    resumed: boolean
+    whole: boolean
+  } {
+    const { counts, resumed, whole, pages, copiesOnly } = this.frontier
+    const measured = !copiesOnly && (pages > 0 || (resumed && whole))
+    return { counts: measured ? { ...counts } : null, resumed, whole }
+  }
+
+  /** Why this original was refused, once `refused` said so. */
+  get refusalReason(): LegacySourceRefusal['reason'] | undefined {
+    return this.refusal?.reason
+  }
+
+  /** Which shapes builds left behind an inventory refusal saw. */
+  get refusalArtifact(): LegacySourceRefusal['artifact'] {
+    return this.refusal?.artifact
   }
 
   /** True when this exact original was refused before; the proof isn't run again for it. */
@@ -108,7 +147,8 @@ export class JournalLegacyProof {
           policy: LEGACY_SOURCE_REFUSAL_POLICY,
           proof: observation.proof,
           store: observation.store,
-          reason: error.reason
+          reason: error.reason,
+          ...(error.artifact ? { artifact: error.artifact } : {})
         }
         await this.saveRefusal()
       }
@@ -127,13 +167,19 @@ export class JournalLegacyProof {
       layout: LEGACY_PROOF_LAYOUT,
       proof: observation.proof,
       store: observation.store,
-      cursor
+      cursor,
+      // Only counts that began at the first page are carried, so a resumed walk can say so.
+      ...(this.frontier.whole ? { counts: { ...this.frontier.counts } } : {})
     }
-    await this.writer.maintain({
+    const saved = await this.writer.maintain({
       kind: 'legacy-retirement-save',
       value: JSON.stringify(proving),
       durable: false
     })
+    // A copy converts only once the progress before it is saved.
+    if (saved !== true) {
+      throw new Error('legacy proof progress was not saved')
+    }
   }
 
   private async saveRefusal(): Promise<void> {
@@ -157,7 +203,7 @@ export class JournalLegacyProof {
 function savedCursor(
   saved: string | null,
   observation: LegacyProofObservation
-): LegacyProofCursor | null {
+): { cursor: LegacyProofCursor; counts?: LegacyProofCounts } | null {
   const proving = decodeLegacySourceProving(saved)
   if (proving) {
     if (proving.proof !== observation.proof || proving.store !== observation.store) {
@@ -165,8 +211,12 @@ function savedCursor(
     }
     // Copies the reconcile keeps can sort anywhere, so their pages are always walked whole.
     return proving.cursor.table >= LEGACY_PROOF_COPIES_TABLE
-      ? { table: LEGACY_PROOF_COPIES_TABLE, after: null }
-      : proving.cursor
+      ? {
+          cursor: { table: LEGACY_PROOF_COPIES_TABLE, after: null },
+          // Copies already converted are gone from the original's mappings, so their count stands.
+          counts: proving.counts
+        }
+      : { cursor: proving.cursor, counts: proving.counts }
   }
   let retiring: unknown
   try {
@@ -178,6 +228,7 @@ function savedCursor(
     typeof retiring === 'object' &&
     retiring !== null &&
     'phase' in retiring &&
+    // Only a deletion cut short: a held proof is no standing permission, so a deleting build walks again.
     retiring.phase === 'retiring' &&
     'layout' in retiring &&
     retiring.layout === LEGACY_PROOF_LAYOUT &&
@@ -185,5 +236,5 @@ function savedCursor(
     retiring.proof === observation.proof &&
     'store' in retiring &&
     retiring.store === observation.store
-  return proven ? { table: LEGACY_PROOF_COPIES_TABLE, after: null } : null
+  return proven ? { cursor: { table: LEGACY_PROOF_COPIES_TABLE, after: null } } : null
 }

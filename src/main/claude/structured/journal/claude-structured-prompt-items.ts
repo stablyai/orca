@@ -118,7 +118,9 @@ export function claudeQuestionItems(input: {
             ...(header ? { header } : {}),
             options: questionOptions(question, questionAddress),
             multiSelect: question.multiSelect === true,
-            freeTextQuestionId: questionAddress
+            freeTextQuestionId: questionAddress,
+            // Claude takes answers that leave a question out, as its own question card sends.
+            skippable: true
           }
         ]
       : []

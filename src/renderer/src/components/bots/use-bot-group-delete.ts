@@ -1,3 +1,4 @@
+import { botErrorText } from './bot-presentation'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
@@ -22,7 +23,7 @@ export function useBotGroupDelete(): (group: BotGroup) => Promise<boolean> {
       await deleteBotGroup(group)
       return true
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error))
+      toast.error(botErrorText(error))
       return false
     }
   }

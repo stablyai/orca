@@ -48,8 +48,9 @@ const MB = 2 ** 20
 type LiveWorker = { worker: Worker; role: WorkerThreadRole; threadId: number }
 type WorkerHeap = { entry: LiveWorker; heap: number }
 
+const live = new Set<LiveWorker>()
+
 export function installWorkerThreadDiagnostics(): void {
-  const live = new Set<LiveWorker>()
   let largeSendLogSet = false
   onJournalReaderRequest(annotateReaderRequest)
   let sampling: ReturnType<typeof setTimeout> | undefined
@@ -96,8 +97,7 @@ export function installWorkerThreadDiagnostics(): void {
   })
 }
 
-/** Returns the committed heap of main plus every live worker. */
-async function sampleHeaps(live: Set<LiveWorker>): Promise<number> {
+async function readLiveWorkerHeaps(live: Set<LiveWorker>): Promise<WorkerHeap[]> {
   for (const entry of live) {
     if (entry.worker.threadId === -1) {
       live.delete(entry)
@@ -110,7 +110,28 @@ async function sampleHeaps(live: Set<LiveWorker>): Promise<number> {
       heap: (await readWorkerHeap(entry.worker, ledger.get(entry.threadId))).bytes ?? 0
     }))
   )
-  heaps.sort((a, b) => b.heap - a.heap)
+  return heaps.sort((a, b) => b.heap - a.heap)
+}
+
+/** Worker heaps, largest first, and what main retains for chats; for the memory spike record. */
+export async function readWorkerThreadMemoryData(): Promise<CrashReportBreadcrumbData> {
+  const heaps = await readLiveWorkerHeaps(live)
+  const data: CrashReportBreadcrumbData = {
+    workers: heaps.length,
+    workersHeapMB: Math.round(heaps.reduce((sum, { heap }) => sum + heap, 0) / MB),
+    ...mainHeapSpaces(),
+    ...retentionData(readRetention())
+  }
+  heaps.slice(0, REPORTED_WORKERS).forEach(({ entry, heap }, index) => {
+    data[`w${index}_role`] = entry.role
+    data[`w${index}_heapMB`] = Math.round(heap / MB)
+  })
+  return data
+}
+
+/** Returns the committed heap of main plus every live worker. */
+async function sampleHeaps(live: Set<LiveWorker>): Promise<number> {
+  const heaps = await readLiveWorkerHeaps(live)
   // After the worker reads, which can take seconds, so main's and the ledger's figures are current.
   const sent = new Map(readWorkerSendLedger().map((slot) => [slot.threadId, slot]))
   const mainHeap = getHeapStatistics().total_heap_size
