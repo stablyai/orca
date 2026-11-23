@@ -5,13 +5,14 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
 import type {
+  ProcessMemoryMetric,
   SessionMemory,
   WorktreeMemory
 } from '../../../../../shared/diagnostics/process-stats-types'
 import type { RuntimeHostResourceSample } from '../resources/workspace-attribution/resource-usage-merge-types'
 
 export type RuntimeHostResourceResult =
-  | { status: 'sampled'; worktrees: WorktreeMemory[] }
+  | { status: 'sampled'; worktrees: WorktreeMemory[]; memoryMetric?: ProcessMemoryMetric }
   // An unanswered server is unverifiable, not idle.
   | { status: 'unreachable' }
   | { status: 'update-required' }
@@ -37,8 +38,19 @@ export async function readRuntimeHostResources(
   call: RuntimeHostResourceCall
 ): Promise<RuntimeHostResourceResult> {
   try {
-    const worktrees = parseSnapshotWorktrees(await call(environmentId))
-    return worktrees ? { status: 'sampled', worktrees } : { status: 'update-required' }
+    const reply = await call(environmentId)
+    const worktrees = parseSnapshotWorktrees(reply)
+    const metric = isRecord(reply) ? reply.processMemoryMetric : undefined
+    return worktrees
+      ? {
+          status: 'sampled',
+          worktrees,
+          // Older servers send no metric; leave it unknown rather than guess.
+          ...(metric === 'rss' || metric === 'working-set' || metric === 'footprint'
+            ? { memoryMetric: metric }
+            : {})
+        }
+      : { status: 'update-required' }
   } catch (error) {
     return hasErrorCode(error, 'method_not_found')
       ? { status: 'update-required' }
@@ -56,7 +68,8 @@ export function toRuntimeHostResourceSamples(
       samples.push({
         hostId: toRuntimeExecutionHostId(environmentId),
         hostLabel: hostLabel(environmentId),
-        worktrees: result.worktrees
+        worktrees: result.worktrees,
+        memoryMetric: result.memoryMetric
       })
     }
   }
