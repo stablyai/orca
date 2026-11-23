@@ -1,5 +1,5 @@
-// `worker-start --item`: the start names the item as its origin, which is honored only from the item's
-// own bot's chat (never a worker or background run), on an open item. The Dispatch then keeps
+// `worker-start --item`: the start names the item as its origin, honored from any agent's own chat on this
+// computer (never a worker or background run), on an open item; the worker is the caller's own. The Dispatch then keeps
 // `bot-item:<uid>`, and the items host links it from orchestration's own record.
 import { isOpenBotItemStatus } from '../../../../shared/bots/bot-items'
 import { BotItemError } from '../../../bots/bot-item-error'
@@ -29,13 +29,13 @@ export async function checkedWorkerOrigin(
     context.runtime.botItems.store(),
     origin.slice(BOT_ITEM_ORIGIN_PREFIX.length)
   )
-  if (item.ownerBotId !== writer.bot.id) {
-    throw new BotItemError('not_owner', `Item ${item.number} belongs to another bot.`)
-  }
   if (!isOpenBotItemStatus(item.status)) {
+    const closed = item.status === 'done' ? 'done' : 'canceled'
     throw new BotItemError(
       'item_closed',
-      `Item ${item.number} is ${item.status === 'done' ? 'done' : 'canceled'}; reopen it with \`orca bot item set ${item.number} --status in-progress\`, or add a new one.`
+      item.ownerBotId === writer.bot.id
+        ? `Item ${item.number} is ${closed}; reopen it with \`orca bot item set ${item.number} --status in-progress\`, or add a new one.`
+        : `Item ${item.number} is ${closed}. Ask its bot.`
     )
   }
   return {

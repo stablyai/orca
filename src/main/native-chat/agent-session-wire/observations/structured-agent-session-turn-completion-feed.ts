@@ -1,6 +1,7 @@
 // Derive attention edges on the host so background chats work without a renderer reader.
 // Completion and prompt events are live-only; late subscribers receive no replay.
 
+import { chatTurnRunning, type ChatStateReader } from './chat-turn-running'
 import { structuredAgentSessionAwaitsAnswer } from '../../../../shared/agent-session/view/structured-agent-session-async-questions'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
@@ -35,6 +36,10 @@ export type StructuredAgentSessionTurnCompletionSubscriber = {
   onState?: (state: StructuredAttentionState) => void
   /** The session closed; a turn it was running ends with no completion. */
   onClosed?: (sessionId: string) => void
+  /** Every status observation, before any filtering: whether its lead turn runs now. */
+  onObserved?: (sessionId: string, running: boolean) => void
+  /** Given a reader of a chat's status as its journal stands now (null when not loaded here). */
+  readsState?: (read: ChatStateReader) => void
 }
 
 type CompletionFeedCursor = { epoch: string; sequence: number }
@@ -59,11 +64,13 @@ export type StructuredAgentSessionTurnCompletionFeedDeps = {
 
 type RequestMark = Pick<StructuredAgentSessionLatestRequest, 'kind' | 'id'>
 
-/** Missing baseline makes first observation silent; settled/prompts track already-accounted edges. */
+/** Missing baseline makes first observation silent; settled/prompts track already-accounted edges.
+ *  accountedThrough is the journal sequence of the last end accounted for; turns behind it never
+ *  merge, nor does that end's own turn when a later write moves its row. */
 type SessionBaseline = CompletionFeedCursor & {
   settled: RequestMark | null
-  heldCompletedTurns: number
-  heldRequest: RequestMark | null
+  accountedThrough: number
+  accountedSettled: RequestMark | null
   prompts: ReadonlySet<string>
 }
 
@@ -79,6 +86,9 @@ export class StructuredAgentSessionTurnCompletionFeed {
 
   subscribe(subscriber: StructuredAgentSessionTurnCompletionSubscriber): () => void {
     this.subscribers.set(subscriber.id, subscriber)
+    subscriber.readsState?.(async (id) =>
+      this.deps.sessions.has(id) ? this.deps.readStatusState(id) : null
+    )
     return () => this.unsubscribe(subscriber.id)
   }
 
@@ -143,6 +153,14 @@ export class StructuredAgentSessionTurnCompletionFeed {
     state: StructuredAgentSessionStatusState,
     options?: { historical?: boolean }
   ): void {
+    const running = chatTurnRunning(state)
+    for (const subscriber of this.subscribers.values()) {
+      try {
+        subscriber.onObserved?.(sessionId, running)
+      } catch {
+        // One reader's failure never costs this commit its attention edge.
+      }
+    }
     const request = state.latestRequest
     const prompts = new Set(state.pendingPromptIds)
     const baseline = this.baselines.get(sessionId)
@@ -153,8 +171,8 @@ export class StructuredAgentSessionTurnCompletionFeed {
       this.baselines.set(sessionId, {
         ...cursor,
         settled: settledMark(request),
-        heldCompletedTurns: 0,
-        heldRequest: null,
+        accountedThrough: cursor.sequence,
+        accountedSettled: settledMark(request),
         prompts
       })
       return
@@ -164,15 +182,15 @@ export class StructuredAgentSessionTurnCompletionFeed {
       baseline.epoch = cursor.epoch
       baseline.sequence = cursor.sequence
       baseline.settled = settledMark(request)
-      baseline.heldCompletedTurns = 0
-      baseline.heldRequest = null
+      baseline.accountedThrough = cursor.sequence
+      baseline.accountedSettled = baseline.settled
       baseline.prompts = prompts
       return
     }
     baseline.sequence = cursor.sequence
     const raised = state.pendingPromptIds.find((id) => !baseline.prompts.has(id))
     baseline.prompts = prompts
-    const completion = this.settledCompletion(sessionId, session, state, baseline)
+    const completion = this.settledCompletion(sessionId, session, state, baseline, cursor.sequence)
     if (completion) {
       completion.journalCursor = cursor
       const restatesPrompt = completion.awaitingUser === true && completion.outcome === 'success'
@@ -217,28 +235,17 @@ export class StructuredAgentSessionTurnCompletionFeed {
     sessionId: string,
     session: CompletionFeedSession,
     state: StructuredAgentSessionStatusState,
-    baseline: SessionBaseline
+    baseline: SessionBaseline,
+    sequence: number
   ): AgentSessionTurnCompletion | null {
     const request = state.latestRequest
     if (request?.turnState === 'running') {
       // Clear on running so each running-to-settled transition can fire, even for a reused ID.
       baseline.settled = null
-      baseline.heldRequest = null
       return null
     }
-    // Repeated publications of one held end must not count as more provider turns.
+    // A held end merges into whichever end is announced next.
     if (state.owesWork) {
-      if (
-        request?.kind === 'turn' &&
-        request.turnState === 'completed' &&
-        request.outcome &&
-        baseline.settled?.id !== request.id &&
-        baseline.heldRequest?.id !== request.id
-      ) {
-        // A held quiet answer said nothing, so it is no reply the merged end could have dropped.
-        baseline.heldCompletedTurns += state.quietAnswer ? 0 : 1
-        baseline.heldRequest = { kind: request.kind, id: request.id }
-      }
       return null
     }
     if (
@@ -246,7 +253,8 @@ export class StructuredAgentSessionTurnCompletionFeed {
       (baseline.settled?.kind === request.kind && baseline.settled.id === request.id)
     ) {
       // No end to announce: what was held stays unannounced, so it can't inflate a later end.
-      this.clearHeld(baseline)
+      baseline.accountedThrough = sequence
+      baseline.accountedSettled = settledMark(request)
       return null
     }
     // Live work defers this end; its held turns still merge into whichever end is announced.
@@ -254,15 +262,14 @@ export class StructuredAgentSessionTurnCompletionFeed {
       return null
     }
     baseline.settled = settledMark(request)
+    const accounted = { through: baseline.accountedThrough, settled: baseline.accountedSettled }
+    baseline.accountedThrough = sequence
+    baseline.accountedSettled = baseline.settled
     // No outcome means unknown; inferring success would alert on failures.
     if (!request.outcome) {
-      this.clearHeld(baseline)
       return null
     }
-    const mergedTurnCount =
-      baseline.heldCompletedTurns +
-      (request.kind === 'turn' && baseline.heldRequest?.id !== request.id ? 1 : 0)
-    this.clearHeld(baseline)
+    const mergedTurnCount = mergedTurns(state, accounted)
     return {
       scope: session.params.location,
       sessionId,
@@ -275,11 +282,6 @@ export class StructuredAgentSessionTurnCompletionFeed {
       ...(state.turnFailure ? { failure: state.turnFailure } : {}),
       ...(state.quiet ? { quiet: true as const } : {})
     }
-  }
-
-  private clearHeld(baseline: SessionBaseline): void {
-    baseline.heldCompletedTurns = 0
-    baseline.heldRequest = null
   }
 
   /** A successful turn is finished only when the combined row would be done; a held request stays unaccounted so a later observe can announce it. */
@@ -327,4 +329,23 @@ export class StructuredAgentSessionTurnCompletionFeed {
       }
     }
   }
+}
+
+/** This end plus the answered turns behind it since the last accounted end. A full window still
+ *  counts as merged, so a long run of held turns can't hide a dropped reply. */
+function mergedTurns(
+  state: StructuredAgentSessionStatusState,
+  accounted: { through: number; settled: RequestMark | null }
+): number {
+  const behind = state.turnsBehind
+  if (!behind) {
+    return 1
+  }
+  const unaccounted = behind.turns.filter(
+    (turn) => turn.sequence > accounted.through && turn.id !== accounted.settled?.id
+  )
+  if (behind.more && unaccounted.length === behind.turns.length) {
+    return behind.turns.length + 1
+  }
+  return 1 + unaccounted.filter((turn) => turn.answered).length
 }

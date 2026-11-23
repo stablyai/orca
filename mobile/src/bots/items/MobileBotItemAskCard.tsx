@@ -20,8 +20,6 @@ type OpenAsk = {
   askId: string
   shape: BotItemQuestionShape
   open: number[]
-  /** Drawn from the item's copy of its question while its event is unread. */
-  standIn?: true
 }
 
 /** The waiting ask's lines no comment answered yet; the item's own copy of its question stands in until
@@ -45,8 +43,7 @@ function openAsk(item: BotItem, events: readonly BotItemEvent[]): OpenAsk | null
   return {
     askId: question.eventId,
     shape: { body: '', decisions },
-    open: decisions.map((_, index) => index),
-    standIn: true
+    open: decisions.map((_, index) => index)
   }
 }
 
@@ -105,8 +102,8 @@ export function useMobileBotItemAskSlot({
   if (!ask) {
     return { card: null, strip: null }
   }
-  // A line answered elsewhere, or the event's own shape read (pick several), brings a fresh card.
-  const key = `${ask.standIn ? 'stand-in:' : ''}${ask.askId}:${ask.open.join(',')}`
+  // One card per ask: a line answered elsewhere leaves it, and the other lines keep their picks.
+  const key = ask.askId
   const first = ask.shape.decisions[ask.open[0]!]!
   const fold = (): void => setFolded(key)
   return {
@@ -119,6 +116,7 @@ export function useMobileBotItemAskSlot({
       <MobileNativeChatAsk
         key={key}
         prompt={askPrompt(ask)}
+        questionKeys={ask.open.map(String)}
         answerPending={pending || !online}
         onAnswer={async (selections) => {
           const text = answerText(ask, selections)

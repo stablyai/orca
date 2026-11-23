@@ -2,6 +2,7 @@
 // connector's workspace, then add them together; whoever can already ask stays listed, greyed.
 import { useEffect, useState } from 'react'
 import { BOT_MAX_MEMBERS, type BotMember } from '../../../src/shared/bot-types'
+import { joinSentences } from '../../../src/shared/text/sentence-joining'
 import { MobileSearchField } from '../components/controls/MobileSearchField'
 import { MobileStateView } from '../components/feedback/MobileStateView'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
@@ -9,6 +10,7 @@ import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { SheetPrimaryButton } from '../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsNote } from '../settings/settings-screen-frame'
+import { memberMark } from './MobileBotWhoCanAsk'
 import type { WhoCanAskConnector, WhoCanAskFound } from './who-can-ask-connectors'
 
 const SEARCH_DEBOUNCE_MS = 250
@@ -57,11 +59,13 @@ function useMemberSearch(
 const matches = (name: string, needle: string): boolean =>
   needle === '' || name.toLowerCase().includes(needle)
 
-// Saved as the desktop saves it: a found person's picture is kept, their handle isn't.
+// Saved as the desktop saves it: a found person's picture is kept, their handle isn't; an app is
+// marked so, so it draws as one.
 const asMember = (found: Found, connector: WhoCanAskConnector): BotMember => ({
   id: found.id,
   name: found.name,
   ...(found.avatarUrl ? { avatarUrl: found.avatarUrl } : {}),
+  ...(found.app ? { kind: 'app' as const } : {}),
   ...connector.stamp
 })
 
@@ -112,6 +116,7 @@ export function MobileBotWhoCanAskPicker(props: {
     return (
       <ListRow
         key={member.id}
+        leading={memberMark(member)}
         title={member.name || member.id}
         subtitle={handleLine(member.name, handle)}
         selected={on}
@@ -182,6 +187,7 @@ export function MobileBotWhoCanAskPicker(props: {
             {withAccess.map((member) => (
               <ListRow
                 key={member.id}
+                leading={memberMark(member)}
                 title={member.name || member.id}
                 subtitle={handleLine(member.name, handles.get(member.id))}
                 value={canAsk}
@@ -192,16 +198,20 @@ export function MobileBotWhoCanAskPicker(props: {
         </>
       ) : null}
       <SettingsNote>
-        {t('bots.whoCanAsk.addedCount', '{{count}} of {{max}} added', {
-          count: added.size + picked.length,
-          max: connector.max
-        })}
-        {search.status === 'ready' && !idle && !search.found.complete
-          ? ` ${t(
-              'bots.whoCanAsk.incomplete',
-              'Not everyone is listed. Search by name to find someone.'
-            )}`
-          : ''}
+        {joinSentences([
+          t('bots.whoCanAsk.addedCount', '{{count}} of {{max}} added', {
+            count: added.size + picked.length,
+            max: connector.max
+          }),
+          ...(search.status === 'ready' && !idle && !search.found.complete
+            ? [
+                t(
+                  'bots.whoCanAsk.incomplete',
+                  'Not everyone is listed. Search by name to find someone.'
+                )
+              ]
+            : [])
+        ])}
       </SettingsNote>
       {picked.length > 0 ? (
         <>

@@ -106,6 +106,21 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     windowsInstallScript:
       'https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.ps1'
   },
+  // `cline auth` signs in to Cline or connects another provider.
+  { agent: 'cline', loginCommand: ['cline', 'auth'], installCommand: 'npm install -g cline' },
+  {
+    agent: 'devin',
+    loginCommand: ['devin', 'auth', 'login'],
+    remoteLoginCommand: ['devin', 'auth', 'login', '--force-manual-token-flow'],
+    installCommand: 'curl -fsSL https://cli.devin.ai/install.sh | bash',
+    windowsInstallScript: 'https://cli.devin.ai/install.ps1'
+  },
+  {
+    agent: 'codebuddy',
+    loginCommand: ['codebuddy'],
+    slashCommand: '/login',
+    installCommand: 'npm install -g @tencent-ai/codebuddy-code'
+  },
   // Host `agy acp` uses `agy acp --login` (`system`); managed Antigravity chats keep their own sign-in in Settings.
   {
     agent: 'antigravity',

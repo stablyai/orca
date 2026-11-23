@@ -1,3 +1,4 @@
+import { sessionWorkerBackgroundWait } from './session-worker-background-wait'
 import type {
   FleetDurableWorker,
   OrchestrationFleetWorker
@@ -256,6 +257,7 @@ function sessionWorker(
     agent: worker.provider?.id ?? provider ?? requestedAgent(db, worker.dispatchId),
     state,
     activity: sessionWorkerActivity(worker, chatSessionId, chatStatusRows),
+    ...sessionWorkerBackgroundWait(worker, state, chatSessionId, chatStatusRows),
     pendingQuestion: hasPendingQuestion(worker),
     liveness: worker.liveness.verdict,
     host: worker.host.kind,

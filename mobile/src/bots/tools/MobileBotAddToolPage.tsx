@@ -18,6 +18,8 @@ export function MobileBotAddToolPage(props: {
   bot: ToolsBot
   /** The bot's tool names, so the new one gets a free name. */
   taken: ReadonlySet<string>
+  /** An app's address with its blank at the default, to change before Add; its name on the bot. */
+  preset?: { source: string; name: string }
   hostName: string
   online: boolean
   banner: ReactNode
@@ -25,7 +27,7 @@ export function MobileBotAddToolPage(props: {
   onAdded: (tool: PhoneOwnTool) => Promise<void>
 }) {
   const t = useMobileTranslation()
-  const [source, setSource] = useState('')
+  const [source, setSource] = useState(props.preset?.source ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useBackClaim(() => {
@@ -36,7 +38,9 @@ export function MobileBotAddToolPage(props: {
   })
   const typed = source.trim()
   const url = /^https?:\/\//i.test(typed)
-  const name = typed ? freeBotToolName(botToolNameFrom(typed), props.taken) : ''
+  const name = typed
+    ? freeBotToolName(props.preset?.name ?? botToolNameFrom(typed), props.taken)
+    : ''
   const add = () => {
     if (!props.client || !typed || saving || !props.online) {
       return
