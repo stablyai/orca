@@ -110,6 +110,18 @@ describe('a child ending wakes a finished subagent it was launched from', () => 
     expect(decoder.wakeExpiryAt()).toBeUndefined()
   })
 
+  it('releases the wake when a roster entry reports the owner running', () => {
+    const decoder = new ClaudeChildWorkDecoder()
+    finishOwnerThenChildEnds(decoder)
+    observe(decoder, {
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      tasks: [{ task_id: OWNER, tool_use_id: PARENT, status: 'running', task_type: 'local_agent' }]
+    })
+    expect(decoder.wakeExpiryAt()).toBeUndefined()
+    expect(decoder.drain(Date.now() + CLAUDE_CHILD_WAKE_LEASE_MS * 2)).toEqual([])
+  })
+
   it('does not hold a wake for an owner that never ended', () => {
     const decoder = new ClaudeChildWorkDecoder()
     observe(decoder, start(OWNER, PARENT))

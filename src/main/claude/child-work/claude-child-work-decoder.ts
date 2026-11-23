@@ -1,4 +1,5 @@
 // Roster changes, turn endings and spawn results cannot settle a child.
+/* eslint-disable max-lines -- Why: the decoder reads one frame stream, so roster release, admission and ending share its maps. */
 
 import { ClaudeTaskInvocations } from '../background-tasks/claude-task-invocations'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
@@ -61,6 +62,9 @@ export class ClaudeChildWorkDecoder {
         for (const entry of message.tasks) {
           const task = record(entry)
           const id = task && taskId(task)
+          if (task && id && liveClaudeTaskRunState(task.status) !== null) {
+            this.wakeLease.release(id)
+          }
           if (
             task &&
             id &&
