@@ -280,9 +280,8 @@ export function BotBackupModelsPage({
       setStatus(next)
     } catch {
       // Keep last known status when offline or unavailable.
-    } finally {
-      setLoading(false)
     }
+    setLoading(false)
   }, [bot])
 
   useEffect(() => {
