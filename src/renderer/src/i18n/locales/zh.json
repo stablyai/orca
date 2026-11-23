@@ -27908,7 +27908,7 @@
         "pickCustom": "自定义时间"
       },
       "ask": {
-        "heldCount_other": "{{count}} 条回答尚未发送",
+        "heldCount_other": "{{count}} 条回答尚未发送，<send>仍然发送</send>",
         "next": "下一个问题",
         "notSentYet": "尚未发送",
         "previous": "上一个问题",
