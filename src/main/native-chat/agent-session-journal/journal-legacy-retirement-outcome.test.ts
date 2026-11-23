@@ -395,7 +395,7 @@ it('only the current live claimant can advance the remote cleanup signature', as
   vi.stubEnv('ORCA_TELEMETRY_DISABLED', '')
   vi.stubEnv('DO_NOT_TRACK', '')
   vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const host = {}
+  const host = { getRuntimeId: () => 'retirement-test-host' }
   cleanup.push(enableLegacyJournalRetirementForwarding(host))
   const reporter = new LegacyJournalRetirementReporter(writer, '1.0.1', false)
   await reporter.report({ outcome: 'proving', error: 'pending' })

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { resolveTelemetryDisableEnv } from '../../telemetry/consent'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { LegacyJournalRetirementReporter } from './journal-legacy-retirement-outcome'
 
 type Subscriber = {
@@ -28,7 +29,7 @@ class LegacyJournalRetirementForwarding {
     }
     this.reporter = reporter
     this.claimInFlight = null
-    if (delivery && !resolveTelemetryDisableEnv()) {
+    if (delivery?.version && !resolveTelemetryDisableEnv()) {
       for (const { announce } of this.subscribers.values()) {
         try {
           announce()
@@ -40,7 +41,7 @@ class LegacyJournalRetirementForwarding {
   }
 
   get available(): boolean {
-    return this.reporter?.pendingDelivery() != null && !resolveTelemetryDisableEnv()
+    return !!this.reporter?.pendingDelivery()?.version && !resolveTelemetryDisableEnv()
   }
 
   subscribe(subscriber: Subscriber, announce: () => void): () => void {
@@ -90,10 +91,12 @@ class LegacyJournalRetirementForwarding {
   }
 }
 
-let orcadRuntime: object | undefined
+type RetirementRuntime = Pick<OrcaRuntimeService, 'getRuntimeId'>
+
+let orcadRuntime: RetirementRuntime | undefined
 let forwarding: LegacyJournalRetirementForwarding | undefined
 
-export function enableLegacyJournalRetirementForwarding(runtime: object): () => void {
+export function enableLegacyJournalRetirementForwarding(runtime: RetirementRuntime): () => void {
   orcadRuntime = runtime
   return () => {
     if (orcadRuntime === runtime) {
@@ -104,7 +107,7 @@ export function enableLegacyJournalRetirementForwarding(runtime: object): () => 
 }
 
 export function legacyJournalRetirementForwarding(
-  runtime: object
+  runtime: RetirementRuntime
 ): LegacyJournalRetirementForwarding | undefined {
   if (runtime === orcadRuntime) {
     return (forwarding ??= new LegacyJournalRetirementForwarding())

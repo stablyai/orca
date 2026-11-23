@@ -1,10 +1,13 @@
-import { z } from 'zod'
 import {
   LEGACY_JOURNAL_RETIREMENT_ACK_METHOD,
   LEGACY_JOURNAL_RETIREMENT_AVAILABLE,
   LEGACY_JOURNAL_RETIREMENT_CLAIM_METHOD,
   LEGACY_JOURNAL_RETIREMENT_FORWARDING_CAPABILITY
 } from '../../../../../shared/remote-runtime/protocol/legacy-journal-retirement-forwarding'
+import {
+  LegacyJournalRetirementAckParams,
+  LegacyJournalRetirementClaimParams
+} from '../../../../../shared/rpc-contract/client-ui/client-events-params'
 import { legacyJournalRetirementForwarding } from '../../../../native-chat/agent-session-journal/journal-legacy-retirement-forwarding'
 import { defineMethod, type RpcContext } from '../../core'
 
@@ -40,16 +43,11 @@ export function subscribeLegacyJournalRetirement(
   }
 }
 
-const ClaimParams = z.strictObject({
-  subscriptionId: z.string().min(1).max(256),
-  token: z.uuid()
-})
-
 export const LEGACY_JOURNAL_RETIREMENT_METHODS = [
   defineMethod({
     name: LEGACY_JOURNAL_RETIREMENT_CLAIM_METHOD,
     permission: 'workspace',
-    params: ClaimParams.extend({ release: z.literal(true).optional() }),
+    params: LegacyJournalRetirementClaimParams,
     handler: ({ subscriptionId, token, release }, ctx) => {
       const subscriber = retirementSubscriber(ctx, subscriptionId)
       const forwarding = subscriber && legacyJournalRetirementForwarding(ctx.runtime)
@@ -63,10 +61,7 @@ export const LEGACY_JOURNAL_RETIREMENT_METHODS = [
   defineMethod({
     name: LEGACY_JOURNAL_RETIREMENT_ACK_METHOD,
     permission: 'workspace',
-    params: z.discriminatedUnion('accepted', [
-      ClaimParams.extend({ accepted: z.literal(false) }),
-      ClaimParams.extend({ accepted: z.literal(true), deliveryId: z.uuid() })
-    ]),
+    params: LegacyJournalRetirementAckParams,
     handler: async (params, ctx) => {
       const { subscriptionId, token } = params
       const subscriber = retirementSubscriber(ctx, subscriptionId)
