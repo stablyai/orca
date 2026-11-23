@@ -2,6 +2,7 @@
 
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import { agentJournalSubmissionAwaitsAgent } from '../requests/agent-session-queued-submission'
+import { structuredAgentSessionOpeningSendIn } from '../requests/structured-agent-session-opening-send'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
@@ -292,7 +293,12 @@ export function selectStructuredAgentTurnBars(
 } {
   const turns = readStructuredAgentJournalTurns(items, submissions)
   if (turnId === null) {
-    const opening = writtenOpeningSend(submissions)
+    const written = writtenOpeningSend(submissions)
+    // Only the send that is opening the live turn; the transcript scan runs only while one is stamped.
+    const opening =
+      written && structuredAgentSessionOpeningSendIn(items, submissions) === written.key
+        ? written
+        : null
     return {
       settledTurns: settledTurnsOf(turns, submissions),
       runningTiming: opening?.timing ?? null,
