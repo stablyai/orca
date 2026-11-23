@@ -23,6 +23,8 @@ export type ClaudeLeadTurnState = {
   unclassifiedTurnCompletedAt?: number
   /** Claude hook model. Later events that omit it keep the last reported value. */
   model?: string
+  /** The `prompt_id` of a turn this pane compacted while idle; that compaction's own hooks must not reopen it. */
+  idleCompactionTurnId?: string
   /** Restore the lead state displaced by a child wait; inventing working cannot later fold back to done. */
   stateBeforeWait?: Pick<
     ClaudeLeadTurnState,
