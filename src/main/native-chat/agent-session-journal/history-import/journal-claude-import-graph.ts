@@ -2,6 +2,7 @@ import { setImmediate } from 'node:timers/promises'
 import Database from '../../../sqlite/sync-database'
 import { claudeRecord } from '../../../claude/structured/journal/claude-structured-item-translation'
 import { isClaudeConversationEntry } from '../../../claude/transcripts/claude-conversation-fork-boundary'
+import { createClaudeImportScratch } from './journal-claude-import-scratch'
 
 type Row = Record<string, unknown>
 type StoredPayload = { raw: string; lineIndex: number; position: number }
@@ -18,7 +19,8 @@ function messageType(value: unknown): string | null {
 
 /** Disk-backed selection for a Claude transcript. Links are cheap; payloads are candidate-only. */
 export function createClaudeImportGraph() {
-  const db = new Database('')
+  const scratch = createClaudeImportScratch()
+  const db = new Database(scratch.filename)
   db.exec(`
     PRAGMA journal_mode = OFF;
     PRAGMA synchronous = OFF;
@@ -151,6 +153,7 @@ export function createClaudeImportGraph() {
       if (closed) return
       closed = true
       db.close()
+      scratch.close()
     }
   }
 }
