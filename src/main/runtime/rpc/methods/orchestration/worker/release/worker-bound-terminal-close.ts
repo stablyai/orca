@@ -14,12 +14,15 @@ export async function closeWorkerBoundTerminals(
   db: OrchestrationDb,
   originDispatchId: string
 ): Promise<void> {
-  const setupFailed = FAILED_SETUP_STATES.has(
-    db.getWorkerDispatch(originDispatchId)?.setup_state ?? ''
-  )
   for (const bound of listWorkerBoundTerminals(db, originDispatchId)) {
-    unbindWorkerTerminal(db, bound.terminal_handle)
-    if (bound.role === 'setup' && setupFailed) {
+    // Checked per row: earlier closes await, and Keep open or a setup failure may land meanwhile.
+    if (!unbindWorkerTerminal(db, bound.terminal_handle)) {
+      continue
+    }
+    if (
+      bound.role === 'setup' &&
+      FAILED_SETUP_STATES.has(db.getWorkerDispatch(originDispatchId)?.setup_state ?? '')
+    ) {
       continue
     }
     // A handle that no longer names the bound pane is someone else's terminal now.

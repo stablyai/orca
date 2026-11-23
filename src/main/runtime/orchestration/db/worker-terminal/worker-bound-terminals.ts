@@ -76,8 +76,13 @@ export function findWorkerBoundTerminalByPane(
   )
 }
 
-export function unbindWorkerTerminal(db: OrchestrationDb, terminalHandle: string): void {
-  db.db.prepare('DELETE FROM worker_bound_terminals WHERE terminal_handle = ?').run(terminalHandle)
+/** Whether this call removed the binding: false once Keep open or another close already did. */
+export function unbindWorkerTerminal(db: OrchestrationDb, terminalHandle: string): boolean {
+  return (
+    db.db
+      .prepare('DELETE FROM worker_bound_terminals WHERE terminal_handle = ?')
+      .run(terminalHandle).changes > 0
+  )
 }
 
 /** A shown pane's auto-close state: its own worker's, else the worker it is bound to (it closes with
