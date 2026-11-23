@@ -21,6 +21,9 @@ export class JournalSqlBackgroundMaintenance {
   private reclaim = 0
   private retiredAfter: string | null = null
   private retiredThrough: string | null = null
+  // Where the launch sweep resumes after a storage deferral (undefined once it finished), so
+  // converted chats aren't walked again.
+  private convertedThrough: string | null | undefined = null
   private work = 0
   private wake = new AbortController()
   private timer: NodeJS.Timeout | undefined
@@ -65,8 +68,8 @@ export class JournalSqlBackgroundMaintenance {
         this.report(error)
       }
       this.periodic = true
-      // A sweep a storage deferral stopped starts over once its backoff ends.
-      this.discover ||= this.conversions.resumed()
+      // A sweep a storage deferral stopped resumes once its backoff ends.
+      this.discover ||= this.convertedThrough !== undefined && this.conversions.resumed()
       this.reclaim = 1024
       this.wake.abort()
       this.wake = new AbortController()
@@ -265,13 +268,14 @@ export class JournalSqlBackgroundMaintenance {
   }
 
   private async convertSavedChats(): Promise<void> {
-    let after: string | null = null
     while (!this.conversions.deferred() && (await this.boundary())) {
+      const after = this.convertedThrough ?? null
       const page = await this.readers.database({ kind: 'sessions', after })
       if (page.kind !== 'sessions') {
         throw new Error('journal reader returned no saved sessions')
       }
       if (page.sessionIds.length === 0) {
+        this.convertedThrough = undefined
         return
       }
       for (const sessionId of page.sessionIds) {
@@ -284,8 +288,8 @@ export class JournalSqlBackgroundMaintenance {
         } catch (error) {
           this.report(error, sessionId)
         }
+        this.convertedThrough = this.conversions.deferred() ? this.convertedThrough : sessionId
       }
-      after = page.sessionIds.at(-1)!
     }
   }
 

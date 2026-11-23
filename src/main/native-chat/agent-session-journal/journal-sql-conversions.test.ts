@@ -16,24 +16,29 @@ afterEach(() => {
 })
 
 function conversion(
-  storage: () => JournalConversionStorage | null | Promise<JournalConversionStorage | null>,
+  storage: (
+    sessionId?: string
+  ) => JournalConversionStorage | null | Promise<JournalConversionStorage | null>,
   pages = 1,
   sessionIds = ['chat']
 ) {
   const writes: string[] = []
+  const listedAfter: (string | null)[] = []
   const readers: Pick<
     JournalSqlReaderPool,
     'database' | 'compareLegacyChat' | 'importState' | 'prepareConversion' | 'conversionStorage'
   > = {
-    database: async (read) =>
-      read.kind === 'retired-heads'
-        ? { kind: 'retired-heads', heads: [], through: null }
-        : read.kind === 'forgotten-chats'
-          ? { kind: 'forgotten-chats', sessionIds: [] }
-          : {
-              kind: 'sessions',
-              sessionIds: read.kind === 'sessions' && !read.after ? sessionIds : []
-            },
+    database: async (read) => {
+      if (read.kind === 'retired-heads') {
+        return { kind: 'retired-heads', heads: [], through: null }
+      }
+      if (read.kind !== 'sessions') {
+        return { kind: 'forgotten-chats', sessionIds: [] }
+      }
+      listedAfter.push(read.after)
+      const after = read.after
+      return { kind: 'sessions', sessionIds: sessionIds.filter((id) => !after || id > after) }
+    },
     compareLegacyChat: async () => null,
     importState: async () => ({ state: 'converting', epoch: null }),
     prepareConversion: async (sessionId) => {
@@ -46,7 +51,7 @@ function conversion(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: conversions use only header, next and close.
       return reader as unknown as JournalSqlConversionReader
     },
-    conversionStorage: async () => storage()
+    conversionStorage: async (sessionId) => storage(sessionId)
   }
   const writer = {
     maintain: async (operation: { kind: string }): Promise<JournalSqlMaintenanceResult> => {
@@ -67,16 +72,20 @@ function conversion(
     }
   }
   const conversions = new JournalSqlConversions(writer, readers, async () => {})
-  return { conversions, writes, readers, writer }
+  return { conversions, writes, readers, writer, listedAfter }
 }
 
 const deferred = expect.any(JournalConversionStorageError)
 
 describe('JournalSqlConversions storage guard', () => {
-  it('the idle sweep converts nothing below the floor, and every chat once space frees', async () => {
+  it('the idle sweep defers below the floor and resumes where it stopped once space frees', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
-    let storage = LOW
-    const { conversions, writes, readers, writer } = conversion(() => storage, 1, ['a', 'b'])
+    let low = true
+    const { conversions, writes, readers, writer, listedAfter } = conversion(
+      (sessionId) => (sessionId === 'b' && low ? LOW : ROOM),
+      1,
+      ['a', 'b', 'c']
+    )
     const errors: unknown[] = []
     const maintenance = new JournalSqlBackgroundMaintenance(
       writer,
@@ -86,15 +95,17 @@ describe('JournalSqlConversions storage guard', () => {
       (error) => errors.push(error)
     )
     await maintenance.start()
-    expect(writes).not.toContain('import-page')
+    expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(1)
     expect(errors).toEqual([deferred])
-    storage = ROOM
-    // The periodic tick after the backoff starts the sweep over.
+    low = false
+    listedAfter.length = 0
+    // The periodic tick after the backoff resumes the sweep after the last chat it finished.
     await vi.advanceTimersByTimeAsync(60_000)
     await maintenance.settled()
     maintenance.stop()
     vi.useRealTimers()
-    expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(2)
+    expect(listedAfter[0]).toBe('a')
+    expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(3)
     expect(errors).toEqual([deferred])
   })
 
