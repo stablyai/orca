@@ -78,7 +78,7 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
       'The disk on the computer running this chat is full.'
     ),
   freeDiskSpace: () =>
-    translate('session.writeNotice.freeDiskSpace', 'Free up space on it, then try again.'),
+    translate('session.writeNotice.freeDiskSpace', 'Free up space on that disk, then try again.'),
   savedInOtherFolder: () =>
     translate(
       'session.writeNotice.savedInOtherFolder',

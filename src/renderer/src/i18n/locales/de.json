@@ -19365,7 +19365,7 @@
         "historyUnusable": "Dieser Chat konnte nicht geladen werden.",
         "historyUnavailable": "Orca konnte den Verlauf dieses Chats gerade nicht öffnen.",
         "diskFull": "Der Datenträger auf dem Computer, auf dem dieser Chat läuft, ist voll.",
-        "freeDiskSpace": "Gib dort Speicherplatz frei und versuche es dann erneut.",
+        "freeDiskSpace": "Gib auf diesem Datenträger Speicherplatz frei und versuche es dann erneut.",
         "savedInOtherFolder": "Diese Unterhaltung wurde in einem anderen Ordner gespeichert.",
         "savedByNewerOrca": "Die Chats wurden mit einer neueren Orca-Version gespeichert.",
         "updateOrcaToKeepUsing": "Orca aktualisieren, um sie weiter zu verwenden.",

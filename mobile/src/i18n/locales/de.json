@@ -2752,7 +2752,7 @@
       "goalsUnsupported": "Dieser Agent unterstützt keine Ziele.",
       "historyUnavailable": "Orca konnte den Verlauf dieses Chats gerade nicht öffnen.",
       "diskFull": "Der Datenträger auf dem Computer, auf dem dieser Chat läuft, ist voll.",
-      "freeDiskSpace": "Gib dort Speicherplatz frei und versuche es dann erneut.",
+      "freeDiskSpace": "Gib auf diesem Datenträger Speicherplatz frei und versuche es dann erneut.",
       "savedInOtherFolder": "Diese Unterhaltung wurde in einem anderen Ordner gespeichert.",
       "historyUnreadable": "Orca konnte den gespeicherten Verlauf dieses Chats nicht lesen.",
       "historyUnusable": "Dieser Chat konnte nicht geladen werden.",

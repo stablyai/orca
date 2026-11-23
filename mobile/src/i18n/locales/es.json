@@ -2826,7 +2826,7 @@
       "goalsUnsupported": "Este agente no admite objetivos.",
       "historyUnavailable": "Orca no pudo abrir el historial de este chat en este momento.",
       "diskFull": "El disco del equipo que ejecuta este chat está lleno.",
-      "freeDiskSpace": "Libere espacio en él y vuelva a intentarlo.",
+      "freeDiskSpace": "Libere espacio en ese disco y vuelva a intentarlo.",
       "savedInOtherFolder": "Esta conversación se guardó en otra carpeta.",
       "historyUnreadable": "Orca no pudo leer el historial guardado de este chat.",
       "historyUnusable": "No se puede cargar este chat.",

@@ -17,7 +17,7 @@ it('an open the disk refused asks for space, and damage still reads as damage', 
       code: 'agent_session_journal_unreadable',
       details: { reason: 'journalStorageFull' },
       message:
-        'The disk on the computer running this chat is full. Free up space on it, then try again.'
+        'The disk on the computer running this chat is full. Free up space on that disk, then try again.'
     })
   )
   expect(
