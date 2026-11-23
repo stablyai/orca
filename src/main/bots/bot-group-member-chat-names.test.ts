@@ -81,11 +81,13 @@ afterEach(() => setStructuredAgentSessionHost(null))
 describe("a member chat's name", () => {
   it("is its room's name, a thread's title once it has one, not the room prompt", async () => {
     const { title } = chats({ [ROOM]: {}, [THREAD]: { conversationName: PROMPT } })
-    const { groups, group } = rooms()
+    const { groups, group, store } = rooms()
     await nameBotGroupMemberChats(groups, [group])
     expect([title(ROOM), title(THREAD)]).toEqual(['Release', 'Release'])
     const titled = { ...group, threads: group.threads!.map((t) => ({ ...t, title: 'Notes' })) }
-    await nameBotGroupMemberChats(groups, [{ ...titled, name: 'Ship' }])
+    store.put({ ...titled, name: 'Ship' })
+    // A pass handed the room as an earlier save left it still writes the room as saved now.
+    await nameBotGroupMemberChats(groups, [group])
     expect([title(ROOM), title(THREAD)]).toEqual(['Ship', 'Notes'])
   })
 
