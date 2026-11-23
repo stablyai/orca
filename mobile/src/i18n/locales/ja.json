@@ -4056,6 +4056,9 @@
       "newHint": "新しいローカルブランチを作成",
       "newName": "新しいブランチ名",
       "title": "このワークツリーのブランチ"
+    },
+    "activity": {
+      "permission": "許可が必要"
     }
   },
   "worktree": {
@@ -4297,8 +4300,14 @@
         "error": "選択したオートメーションのホストで、プロジェクトのセットアップに失敗しました。",
         "unsupported": "選択したオートメーションのホストは、このプロジェクトをサポートしていません。"
       },
-      "wslDistroStopped": "WSL ディストリビューション {{distro}} が停止しているため、このスケジュール実行では起動しませんでした。ディストリビューションを起動するか、「今すぐ実行」を使ってください。起動中は以降の実行が行われます。"
-    }
+      "wslDistroStopped": "WSL ディストリビューション {{distro}} が停止しているため、このスケジュール実行では起動しませんでした。ディストリビューションを起動するか、「今すぐ実行」を使ってください。起動中は以降の実行が行われます。",
+      "botsOff": "設定でボットがオフになっているため、Orca はこの実行をスキップしました。",
+      "botMissing": "このオートメーションを実行するボットはもう存在しません。",
+      "botFolderMissing": "ボットのフォルダーは利用できなくなりました。",
+      "botPaused": "{{bot}} は一時停止中のため、Orca はこの実行をスキップしました。"
+    },
+    "eventsWontFire": "スケジュールでのみ実行されます：{{connectors}} コネクタが必要です",
+    "wontFire": "実行されません：{{connectors}} コネクタが必要です"
   },
   "auto": {
     "components": {
@@ -4640,7 +4649,9 @@
       "newThreadTab": "新規スレッド",
       "newThreadHint": "新しく始まります",
       "newThread": "{{name}} の新規スレッド",
-      "handoffsPaused": "引き継ぎを {{count}} 回行ったため一時停止しました。続けるには返信してください。"
+      "handoffsPaused": "引き継ぎを {{count}} 回行ったため一時停止しました。続けるには返信してください。",
+      "stopCouldNotBeConfirmed": "停止を確認できませんでした。",
+      "notStarted": "未開始"
     },
     "templates": {
       "title": "ボットテンプレート",
@@ -4696,7 +4707,8 @@
         "offline": "{{host}} はオフラインです。"
       },
       "thisComputer": "コンピュータ",
-      "readFailedClosedPage": "クローズ済みの項目をこれ以上読み込めませんでした。"
+      "readFailedClosedPage": "クローズ済みの項目をこれ以上読み込めませんでした。",
+      "skillLimit": "メッセージは送信されませんでした。選択するスキルファイルを {{limit}} 個以内にして、もう一度お試しください。"
     },
     "needs": {
       "chat": "{{name}} とのチャット",
@@ -5000,7 +5012,21 @@
       "tryAgain": "再試行",
       "signedInTo": "{{app}} にサインイン済み",
       "back": "ツールに戻る",
-      "problem": "問題"
+      "problem": "問題",
+      "input": {
+        "invalid": "有効なサーバー名と、URL または実行ファイルを入力してください。",
+        "namesRepeat": "ヘッダー名と環境変数名はそれぞれ一意にしてください。",
+        "rowInvalid": "すべての行に有効な名前と値を入力するか、その行を削除してください。"
+      },
+      "signInFailure": {
+        "unsupported": "このアプリにはまだ対応していません。",
+        "unavailable": "このアプリに接続できません。アドレスを確認してから、もう一度お試しください。",
+        "noTool": "このボットにはそのツールがなくなりました。",
+        "desktopOnly": "{{host}} の Orca からサインインしてください。",
+        "denied": "アクセスが許可されませんでした。",
+        "expired": "サインインの有効期限が切れました。もう一度お試しください。",
+        "couldNotSignIn": "サインインできませんでした。もう一度お試しください。"
+      }
     },
     "handToBot": {
       "menu": "ボットに引き渡す…",
@@ -5153,7 +5179,78 @@
       "groupImagesTooLarge": "これらの画像は合計 {{totalMb}} MB です。グループメッセージは最大 {{maxMb}} MB までです。",
       "groupImageNotStored": "グループメッセージに付けられるのは、貼り付けまたは添付した画像だけです。",
       "groupAttachmentsUnavailable": "このコンピューターは現在添付ファイルを受け付けられません。少ししてからもう一度送信してください。",
-      "groupAttachFailed": "ファイルを添付できませんでした。少ししてからもう一度送信してください。"
+      "groupAttachFailed": "ファイルを添付できませんでした。少ししてからもう一度送信してください。",
+      "groupMentionAmbiguous": "送信する前に、あいまいなボットのメンションを修正してください。",
+      "groupMentionUnavailable": "送信する前に、利用できないかあいまいなボットのメンションを修正してください。",
+      "groupReplierNotMember": "ルームの返信で現在のルームメンバーを選択してください。",
+      "groupMailNeverStarted": "このメールはターンを開始しませんでした。",
+      "groupRemoteUnreachable": "{{host}} に接続できませんでした。{{detail}}",
+      "groupRemoteUnreachableRetry": "{{host}} に接続できませんでした。{{detail}} もう一度投稿すると再試行します。"
+    },
+    "automations": {
+      "paused": "一時停止中",
+      "newDraft": "次の内容のオートメーションを設定してください： "
+    },
+    "row": {
+      "idle": "アイドル"
+    },
+    "apps": {
+      "line": {
+        "vercel": "デプロイを確認してログを読む",
+        "sentry": "エラーとその背後のイベントを調べる",
+        "datadog": "ログ、メトリクス、モニターを検索する",
+        "posthog": "プロダクト分析と機能フラグを照会する",
+        "cloudflare": "Workers や DNS などアカウント全体を管理する",
+        "supabase": "データベースを照会してプロジェクトを管理する",
+        "neon": "SQL を実行して Postgres のブランチを管理する",
+        "netlify": "サイトをデプロイしてビルドを確認する",
+        "gitlab": "Issue とマージリクエストを読んで更新する",
+        "context7": "コードライブラリの最新ドキュメントと例",
+        "atlassian": "Jira の課題と Confluence のページ",
+        "notion": "ページを検索、閲覧、編集する",
+        "stripe": "支払い、顧客、サブスクリプションを調べる",
+        "github": "Issue と PR でのメンションとイベント",
+        "slack": "メッセージとメンション",
+        "linear": "割り当てられた Issue とメンション",
+        "google": "あなたとして Gmail、カレンダー、ドライブを使う"
+      },
+      "composioLine": {
+        "outlook": "メール、カレンダー、連絡先",
+        "microsoft_teams": "チャット、チャネル、会議",
+        "notion": "ページ、データベース、コメント",
+        "jira": "課題、プロジェクト、スプリント",
+        "hubspot": "連絡先、会社、取引、チケット",
+        "salesforce": "取引先、リード、商談",
+        "asana": "タスク、プロジェクト、コメント",
+        "airtable": "ベース、テーブル、レコード",
+        "zendesk": "チケット、ユーザー、ヘルプセンターの記事",
+        "figma": "ファイル、コメント、コンポーネント",
+        "stripe": "支払い、顧客、請求書",
+        "dropbox": "ファイルとフォルダー",
+        "one_drive": "ファイルとフォルダー",
+        "confluence": "ページ、スペース、コメント",
+        "clickup": "タスク、リスト、ドキュメント",
+        "monday": "ボード、アイテム、更新",
+        "intercom": "会話、連絡先、記事",
+        "zoom": "会議、録画、文字起こし",
+        "calendly": "イベント、招待者、予約リンク",
+        "trello": "ボード、リスト、カード",
+        "sentry": "Issue、イベント、リリース",
+        "box": "ファイルとフォルダー",
+        "miro": "ボード、付箋、フレーム",
+        "reddit": "投稿、コメント、サブレディット"
+      },
+      "webhooks": {
+        "line": "あらゆるツールやスクリプトからのイベント"
+      }
+    },
+    "share": {
+      "signInOtherSite": "コンピューターから別のサイトのサインインリンクが送られてきたため、開きませんでした。"
+    }
+  },
+  "sidebar": {
+    "cardSlot": {
+      "working": "作業中"
     }
   }
 }

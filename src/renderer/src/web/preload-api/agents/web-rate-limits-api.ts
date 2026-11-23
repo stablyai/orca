@@ -149,6 +149,8 @@ export function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimi
   return {
     get: () => readRateLimits(false),
     refresh,
+    // The server keeps polling while this stream is subscribed.
+    refreshOnOwnerReturn: async () => {},
     refreshCodexForTarget: refresh,
     // Why: redemption is desktop-only; report the safe no-credit outcome with the server's usage.
     consumeCodexResetCredit: async () => ({

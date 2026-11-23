@@ -5306,6 +5306,9 @@
       "newHint": "创建新的本地分支",
       "newName": "新分支名称",
       "title": "此工作树使用的分支"
+    },
+    "activity": {
+      "permission": "需要授权"
     }
   },
   "worktree": {
@@ -5555,7 +5558,11 @@
         "error": "项目在所选自动化主机上设置失败",
         "unsupported": "所选自动化主机不支持此项目"
       },
-      "wslDistroStopped": "WSL 发行版 {{distro}} 已停止，因此本次计划运行没有启动它。请启动该发行版或使用“立即运行”；它运行期间，后续运行会照常进行"
+      "wslDistroStopped": "WSL 发行版 {{distro}} 已停止，因此本次计划运行没有启动它。请启动该发行版或使用“立即运行”；它运行期间，后续运行会照常进行",
+      "botsOff": "设置中已关闭机器人，因此 Orca 跳过了这次运行。",
+      "botMissing": "运行这个自动化的机器人已不存在。",
+      "botFolderMissing": "机器人的文件夹已不可用。",
+      "botPaused": "{{bot}} 已暂停，因此 Orca 跳过了这次运行。"
     },
     "botTarget": {
       "fieldLabel": "Bot 或项目",
@@ -5600,7 +5607,9 @@
       "editInChat": "在聊天中编辑",
       "editDraft": "修改自动化“{{name}}”： ",
       "addDraft": "修改自动化“{{name}}”，让它在以下情况也运行： "
-    }
+    },
+    "eventsWontFire": "仅按计划运行：需要 {{connectors}} 连接器",
+    "wontFire": "无法运行：需要 {{connectors}} 连接器"
   },
   "auto": {
     "components": {
@@ -5860,7 +5869,9 @@
       "runQueued": "自动化运行已排队",
       "runFailed": "无法开始运行",
       "emptyTitle": "还没有自动化",
-      "viewRuns": "查看运行记录"
+      "viewRuns": "查看运行记录",
+      "paused": "已暂停",
+      "newDraft": "设置一个自动化，用于 "
     },
     "settings": {
       "remove": "移除",
@@ -6099,7 +6110,9 @@
       "suggestThree": "{{a}}、{{b}} 和 {{c}}",
       "suggestMore": "{{a}}、{{b}} 及另外 {{count}} 个",
       "pickOne": "请选择一个 bot",
-      "needsTwoBots": "需要 {{host}} 上有 2 个 bot"
+      "needsTwoBots": "需要 {{host}} 上有 2 个 bot",
+      "stopCouldNotBeConfirmed": "无法确认是否已停止",
+      "notStarted": "尚未启动"
     },
     "templates": {
       "title": "Bot 模板",
@@ -6791,7 +6804,8 @@
         "pickHour": "几点？"
       },
       "readFailedTitle": "无法加载事项",
-      "readFailedClosedPage": "无法读取更多已关闭的事项"
+      "readFailedClosedPage": "无法读取更多已关闭的事项",
+      "skillLimit": "消息未发送。请最多选择 {{limit}} 个技能文件后重试。"
     },
     "needs": {
       "permissionTool": "权限 · {{tool}}",
@@ -7240,7 +7254,21 @@
       "checkUnfinished": "原生检查没有完成。请重新检查",
       "signedInTo": "已登录 {{app}}",
       "back": "返回工具",
-      "problem": "问题"
+      "problem": "问题",
+      "input": {
+        "invalid": "请输入有效的服务器名称，以及 URL 或可执行文件。",
+        "namesRepeat": "每个请求头或环境变量名称都必须唯一。",
+        "rowInvalid": "请为每一行输入有效的名称和值，或删除该行。"
+      },
+      "signInFailure": {
+        "unsupported": "暂不支持此应用。",
+        "unavailable": "无法连接此应用。请检查地址后重试。",
+        "noTool": "这个机器人已经没有那个工具了。",
+        "desktopOnly": "请在 {{host}} 上的 Orca 中登录。",
+        "denied": "未获得访问授权",
+        "expired": "登录已过期。请重试。",
+        "couldNotSignIn": "无法登录。请重试。"
+      }
     },
     "handToBot": {
       "menu": "交给 bot…",
@@ -7385,7 +7413,20 @@
         "slack": "消息与提及",
         "github": "议题和 PR 中的提及与事件",
         "linear": "分配给它的议题与提及",
-        "google": "以你的身份使用 Gmail、日历和云端硬盘"
+        "google": "以你的身份使用 Gmail、日历和云端硬盘",
+        "vercel": "查看部署并阅读其日志",
+        "sentry": "调查错误及其背后的事件",
+        "datadog": "搜索日志、指标和监控",
+        "posthog": "查询产品分析和功能开关",
+        "cloudflare": "管理 Workers、DNS 以及账号的其他内容",
+        "supabase": "查询数据库并管理项目",
+        "neon": "运行 SQL 并管理 Postgres 分支",
+        "netlify": "部署网站并检查其构建",
+        "gitlab": "读取和更新议题与合并请求",
+        "context7": "代码库的最新文档和示例",
+        "atlassian": "Jira 议题和 Confluence 页面",
+        "notion": "搜索、阅读和编辑页面",
+        "stripe": "查询付款、客户和订阅"
       },
       "webhooks": {
         "line": "来自任意工具或脚本的事件"
@@ -7414,7 +7455,33 @@
       "couldNotSignIn": "无法登录 {{app}}",
       "signingIn": "正在登录",
       "openPageAgain": "再次打开页面",
-      "closeKeepsSigningIn": "关闭此页面后，登录仍会在浏览器中继续"
+      "closeKeepsSigningIn": "关闭此页面后，登录仍会在浏览器中继续",
+      "composioLine": {
+        "outlook": "邮件、日历和联系人",
+        "microsoft_teams": "聊天、频道和会议",
+        "notion": "页面、数据库和评论",
+        "jira": "议题、项目和冲刺",
+        "hubspot": "联系人、公司、交易和工单",
+        "salesforce": "客户、潜在客户和商机",
+        "asana": "任务、项目和评论",
+        "airtable": "数据库、表和记录",
+        "zendesk": "工单、用户和帮助中心文章",
+        "figma": "文件、评论和组件",
+        "stripe": "付款、客户和发票",
+        "dropbox": "文件和文件夹",
+        "one_drive": "文件和文件夹",
+        "confluence": "页面、空间和评论",
+        "clickup": "任务、列表和文档",
+        "monday": "看板、项目和更新",
+        "intercom": "对话、联系人和文章",
+        "zoom": "会议、录制和文字记录",
+        "calendly": "活动、受邀者和预约链接",
+        "trello": "看板、列表和卡片",
+        "sentry": "问题、事件和发布",
+        "box": "文件和文件夹",
+        "miro": "白板、便签和框架",
+        "reddit": "帖子、评论和子版块"
+      }
     },
     "connectors": {
       "back": "返回连接器",
@@ -7548,7 +7615,13 @@
       "groupImagesTooLarge": "这些图片共 {{totalMb}} MB。一条群组消息最多 {{maxMb}} MB。",
       "groupImageNotStored": "群组消息中只能放粘贴或附加的图片。",
       "groupAttachmentsUnavailable": "这台电脑现在无法接收附件。请稍后再发送。",
-      "groupAttachFailed": "无法附加文件。请稍后再发送。"
+      "groupAttachFailed": "无法附加文件。请稍后再发送。",
+      "groupMentionAmbiguous": "请先修正有歧义的机器人提及，再发送。",
+      "groupMentionUnavailable": "请先修正不可用或有歧义的机器人提及，再发送。",
+      "groupReplierNotMember": "请在“房间回复”中选择一位当前的房间成员。",
+      "groupMailNeverStarted": "这封邮件从未开始一轮对话。",
+      "groupRemoteUnreachable": "无法连接 {{host}}。{{detail}}",
+      "groupRemoteUnreachableRetry": "无法连接 {{host}}。{{detail}} 重新发布即可重试。"
     },
     "setup": {
       "for": "用于 {{name}}"
@@ -7698,7 +7771,8 @@
       "tooLargeNotShared": "过大 · 未分享",
       "unreadableNotShared": "无法读取 · 未分享",
       "overLimitNotShared": "超出技能数量上限 · 未分享",
-      "linkNoLongerAvailable": "此分享链接已不可用"
+      "linkNoLongerAvailable": "此分享链接已不可用",
+      "signInOtherSite": "电脑发来的是其他网站的登录链接，因此没有打开。"
     },
     "settingsView": {
       "sharing": "分享",
@@ -8056,7 +8130,8 @@
       "replying": "正在回复",
       "waitingCount": "正在等待 {{count}} 个事件",
       "waitingFor": "正在等待 {{label}}",
-      "waitingForUntil": "正在等待 {{label}} · 直到 {{time}}"
+      "waitingForUntil": "正在等待 {{label}} · 直到 {{time}}",
+      "idle": "空闲"
     },
     "panel": {
       "needYou_one": "{{count}} 个需要你",
@@ -8150,6 +8225,11 @@
     "activity": {
       "needsWindow": "无法更新，请在 {{desktop}} 上打开 Orca",
       "failed": "无法更新智能体列表"
+    }
+  },
+  "sidebar": {
+    "cardSlot": {
+      "working": "工作中"
     }
   }
 }
