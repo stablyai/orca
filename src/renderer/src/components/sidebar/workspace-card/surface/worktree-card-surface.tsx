@@ -102,6 +102,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         (isMultiSelected && !isActiveSurface && !isLineageDropTarget) || undefined
       }
       data-worktree-lineage-drop-target={isLineageDropTarget || undefined}
+      data-worktree-card-menu-open={card.detailsHoverControl.contextMenuOpen ? 'true' : undefined}
       onClick={handleClick}
       onPointerDown={affiliateListMode ? undefined : handlePointerDown}
       onPointerEnter={affiliateListMode ? undefined : handlePointerEnter}

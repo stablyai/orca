@@ -111,6 +111,7 @@ export function MobileBotConnectorAccountPage(
           workspaceId={page.workspaceId}
           linear={props.linear}
           save={props.save}
+          page={page}
           onClose={() => setPage(page.from)}
           onDone={(workspaceId) => setPage({ kind: 'linear', workspaceId })}
         />
@@ -132,6 +133,7 @@ export function MobileBotConnectorAccountPage(
           {...scope}
           github={props.github}
           save={props.save}
+          page={page}
           onClose={() => setPage(page.from)}
           onDone={() =>
             setPage({ kind: 'github', installationId: shown[0]?.installationId ?? null })

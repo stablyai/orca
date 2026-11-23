@@ -1,6 +1,6 @@
 import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
 import type { AgentJournalConnectorDelivery } from './agent-journal-bot-message-fields'
-import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
+import { journalTurnAnsweredMessages } from './journal-turn-answered-messages'
 import { addressedBotWords, isQuietBotResult } from '../../bot-quiet-result'
 import type { JournalConnectorReplyOutcome } from './journal-connector-reply'
 
@@ -57,9 +57,8 @@ export function connectorReplyTurnOutcome(turn: {
 
 /** The deliveries a turn answered, by the provider's own evidence: its opener's stamp (a
  *  continuation's: the cut's deliveries it claimed), and each send the provider proved it steered
- *  into the turn. A message's turn scope alone is not evidence: the
- *  host assigns it at handover, before the provider takes the input. Each joined conversation gets
- *  the turn's whole answer (#850). `turnItemId`: the turn row's journal item key. */
+ *  into the turn (journalTurnAnsweredMessages). Each joined conversation gets the turn's whole
+ *  answer (#850). `turnItemId`: the turn row's journal item key. */
 export function connectorReplyTurnStamps(
   journal: {
     items: readonly AgentJournalRenderItem[]
@@ -82,25 +81,15 @@ export function connectorReplyTurnStamps(
       known.ownerAsked = true
     }
   }
-  const add = (item: AgentJournalRenderItem | null | undefined) => {
-    const body = item?.body.kind === 'message' ? item.body : null
-    if (body?.connectorDelivery) {
-      const ownerAsked = body.asker?.role === 'owner'
-      addStamp({ ...body.connectorDelivery, ...(ownerAsked ? { ownerAsked: true as const } : {}) })
-    }
-  }
   // A continuation answers the deliveries of the cut it claimed, ahead of anything steered in.
   if (opener?.body.kind === 'message') {
     opener.body.connectorClaim?.origin.forEach(addStamp)
   }
-  add(opener)
-  for (const submission of journal.submissions) {
-    if (
-      submission.answeredInTurn?.via === 'steer' &&
-      submission.answeredInTurn.turnItemId === turnItemId
-    ) {
-      const key = agentJournalSubmissionKey(submission.clientMessageId)
-      add(journal.items.find((item) => item.itemId === key))
+  for (const item of journalTurnAnsweredMessages(journal, opener, turnItemId)) {
+    const body = item.body.kind === 'message' ? item.body : null
+    if (body?.connectorDelivery) {
+      const ownerAsked = body.asker?.role === 'owner'
+      addStamp({ ...body.connectorDelivery, ...(ownerAsked ? { ownerAsked: true as const } : {}) })
     }
   }
   return stamps

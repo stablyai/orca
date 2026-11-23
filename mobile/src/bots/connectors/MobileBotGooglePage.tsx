@@ -26,6 +26,13 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import { googleBotSet } from './bot-connector-account-operations'
+import {
+  connectorReadCells,
+  connectorReadKey,
+  setConnectorRead,
+  useConnectorRead,
+  type ConnectorReadCell
+} from './phone-connector-reads'
 
 export type PhoneGoogleStatus = ReturnType<typeof googleStatusRead.interpret>
 type Readiness = NonNullable<PhoneGoogleStatus['accounts']>[number]['services'][number]
@@ -34,40 +41,52 @@ type Readiness = NonNullable<PhoneGoogleStatus['accounts']>[number]['services'][
 export type PhoneGoogle = {
   status: PhoneGoogleStatus | null
   unread: boolean
+  /** When the shown read was sent (0: never); another surface's may be minutes old. */
+  readAt: number
   refresh: (check?: boolean) => Promise<void>
 }
 
-/** The host's Google app and accounts; `check` asks Google again first. */
+type GoogleCell = ConnectorReadCell<Pick<PhoneGoogle, 'status' | 'unread' | 'readAt'>>
+
+const googleCells = connectorReadCells((): GoogleCell => ({
+  value: { status: null, unread: false, readAt: 0 }
+}))
+
+/** The host's Google app and accounts, one answer for every surface; `check` asks Google again first. */
 export function usePhoneGoogleStatus(
   client: RpcClient | null,
+  hostKey: string,
   enabled: boolean,
   again: number
 ): PhoneGoogle {
-  const [status, setStatus] = useState<PhoneGoogleStatus | null>(null)
-  const [unread, setUnread] = useState(false)
+  const cell = googleCells(connectorReadKey(hostKey, 'google'))
+  const { status, unread, readAt } = useConnectorRead(cell)
   const refresh = useCallback(
     async (check = false) => {
       if (!client) {
         return
       }
+      // Only an answer newer than the shown one lands, whichever surface asked.
+      const sentAt = Date.now()
       const read = await googleStatusRead
         .request(hostReadClient(client), check ? { check: true } : {})
         .then((reply) => googleStatusRead.interpret(reply))
         // Unread, the page keeps what it showed.
         .catch(() => null)
-      setUnread(!read)
-      if (read) {
-        setStatus(read)
+      if (read && sentAt >= cell.value.readAt) {
+        setConnectorRead(cell, { status: read, unread: false, readAt: sentAt })
+      } else if (!read) {
+        setConnectorRead(cell, { ...cell.value, unread: true })
       }
     },
-    [client]
+    [client, cell]
   )
   useEffect(() => {
     if (enabled) {
       void refresh()
     }
   }, [enabled, refresh, again])
-  return { status, unread, refresh }
+  return { status, unread, readAt, refresh }
 }
 
 /** A service this build knows; a newer host's others are left out. */

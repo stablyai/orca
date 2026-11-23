@@ -10,6 +10,7 @@ import {
   MobileNativeChatRootItemSourceContext
 } from './mobile-native-chat-item-read'
 import { MobileNativeChatMessage } from '../messages/MobileNativeChatMessage'
+import { MobileNativeChatWorkerApprovalReceipts } from '../messages/MobileNativeChatWorkerApprovalReceipts'
 import { mobileNativeChatActivityJoinMargins } from '../messages/mobile-native-chat-activity-join'
 import { MobileNativeChatQuietTurnContext } from '../message-content/MobileNativeChatAnswerProse'
 import type { NativeChatActivityJoin } from '../../../../../../src/shared/native-chat/transcript/events/native-chat-activity-rows'
@@ -115,7 +116,15 @@ export function MobileNativeChatRow({
         })
       }
     : null
-  return <MobileNativeChatRowContent {...props} {...outer} source={source} />
+  return (
+    <>
+      <MobileNativeChatRowContent {...props} {...outer} source={source} />
+      <MobileNativeChatWorkerApprovalReceipts
+        messageId={message.id}
+        fontScale={outer.fontScale ?? 1}
+      />
+    </>
+  )
 }
 async function unavailable(): Promise<void> {
   throw new Error('Message unavailable')

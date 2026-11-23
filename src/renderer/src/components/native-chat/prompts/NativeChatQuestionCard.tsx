@@ -289,7 +289,7 @@ export function NativeChatQuestionCard({
           ref={surfaceRef}
           data-native-chat-dock-clip
           className={cn(
-            'native-chat-question-card-surface relative z-[1] flex min-h-0 flex-col overflow-hidden rounded-[14px] border border-primary/28 bg-chat-canvas bg-[linear-gradient(var(--color-chat-composer-surface),var(--color-chat-composer-surface))] shadow-sm',
+            'native-chat-question-card-surface relative z-[1] flex min-h-0 flex-col overflow-hidden rounded-xl border border-primary/28 bg-chat-canvas bg-[linear-gradient(var(--color-chat-composer-surface),var(--color-chat-composer-surface))] shadow-sm',
             look?.surfaceClassName
           )}
         >

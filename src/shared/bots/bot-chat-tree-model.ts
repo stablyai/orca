@@ -2,6 +2,7 @@
 import {
   sessionWorkerAgentState,
   sessionWorkerIsRunning,
+  sessionWorkerNeverStarted,
   sessionWorkerRestsOnAsk,
   type OrchestrationSessionWorker
 } from '../orchestration-session-workers'
@@ -249,6 +250,7 @@ export function botChatTreeDispatchWorker(
       : {}),
     ...(worker.agent ? { agent: worker.agent } : {}),
     ...(worker.summary ? { summary: worker.summary } : {}),
+    ...(sessionWorkerNeverStarted(worker) ? { neverStarted: true as const } : {}),
     host: worker.host
   }
 }

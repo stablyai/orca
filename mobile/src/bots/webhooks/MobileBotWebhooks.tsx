@@ -19,7 +19,7 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import { MobileBotTextButton } from '../MobileBotTextButton'
-import { MobileBotWebhookDetail, WEBHOOK_WRITE } from './MobileBotWebhookDetail'
+import { MobileBotWebhookDetail } from './MobileBotWebhookDetail'
 import {
   MobileBotWebhookRotate,
   MobileBotWebhookSecret,
@@ -39,6 +39,7 @@ import {
   webhookRotate,
   webhookSample,
   webhookSecretSet,
+  WEBHOOK_WRITE,
   type PhoneWebhook
 } from './mobile-webhook-operations'
 import { usePhoneWebhooks } from './use-phone-webhooks'

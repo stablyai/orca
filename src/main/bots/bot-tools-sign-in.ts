@@ -8,12 +8,13 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
 import type { BotToolServer } from '../../shared/bot-tools'
 import { ensureNodePtySpawnHelperExecutable } from '../providers/local-pty/local-pty-executable-spawn'
-import { codexToolProblems } from './bot-tools-codex'
+import { codexToolProblems, isTakenByCodexStdio } from './bot-tools-codex'
 import { redactBotToolText } from './bot-tool-redaction'
 import { readBotToolServers } from './bot-tools-file'
 import {
   claudeSignInFolder,
   codexSession,
+  codexStdioToolNames,
   codexThread,
   hasBotToolsCli,
   type BotToolsCli,
@@ -147,18 +148,24 @@ async function startLogin(
   if (!hasBotToolsCli(cli)) {
     throw new BotFailureError('toolSignInAgentUnsupported', { name })
   }
-  return cli.agent === 'codex' ? codexLogin(cli, servers, name) : claudeLogin(cli, servers, name)
+  return cli.agent === 'codex' ? codexLogin(cli, servers, server) : claudeLogin(cli, servers, name)
 }
 
 async function codexLogin(
   cli: BotToolsCli,
   servers: readonly BotToolServer[],
-  name: string
+  server: BotToolServer
 ): Promise<{ authorizationUrl: string; finished: Promise<boolean> }> {
+  const { name } = server
+  const ownerStdioNames = await codexStdioToolNames(cli)
+  // Its thread runs the owner's stdio server of that name instead, which has no sign-in.
+  if (isTakenByCodexStdio(server, ownerStdioNames)) {
+    throw new BotFailureError('toolNameTakenByCodexStdio', { name })
+  }
   const link = Promise.withResolvers<string>()
   const launch = await cliWithLaunchTools(cli, servers)
   const login = codexSession(launch.cli, SIGN_IN_TIMEOUT_MS, async (rpc) => {
-    const threadId = await codexThread(rpc, launch.cli, launch.tools)
+    const threadId = await codexThread(rpc, launch.cli, launch.tools, ownerStdioNames)
     const started = await rpc.request('mcpServer/oauth/login', { name, threadId })
     const url = LoginStarted.safeParse(started).data?.authorizationUrl
     if (!url) {

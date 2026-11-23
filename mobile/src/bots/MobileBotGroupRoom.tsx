@@ -6,6 +6,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronLeft, Ellipsis, ListChecks } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useMobileSessionKeyboardLift } from '../terminal/session/input-controls/use-mobile-session-keyboard-lift'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -13,13 +14,19 @@ import { colors } from '../theme/mobile-theme'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { isBotAgent } from '../../../src/shared/bot-types'
-import { BOTS_ITEMS_RUNTIME_CAPABILITY } from '../../../src/shared/bot-runtime-capabilities'
+import {
+  BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY,
+  BOTS_ITEMS_RUNTIME_CAPABILITY
+} from '../../../src/shared/bot-runtime-capabilities'
 import { MobileBotGroupItems } from './MobileBotGroupItems'
 import { MobileBotGroupRepliesSheet } from './MobileBotGroupRepliesSheet'
 import { MobileBotGroupApprovalDock } from './MobileBotGroupApprovalDock'
 import { botGroupReplyDraft } from '../../../src/shared/bots/bot-group-mentions'
-import { useMobileBotGroupComposer } from './use-mobile-bot-group-composer'
-import { confirmMobileBotGroupDelete } from './mobile-bot-group-delete'
+import {
+  mobileBotGroupSessionOptions,
+  useMobileBotGroupComposer
+} from './use-mobile-bot-group-composer'
+import { MobileBotGroupDeleteConfirm } from './MobileBotGroupDeleteConfirm'
 import { botGroupMenuActions } from './bot-group-menu-actions'
 import { botGroupRoomOrder } from '../../../src/shared/bots/bot-group-room-order'
 import { groupNewThread, groupSend, groupStop } from './bot-group-operations'
@@ -38,8 +45,7 @@ import { structuredAgentSessionHostSupport } from '../session/native-chat/agent-
 import type { MobileBotGroupSession } from './MobileBotGroupTurns'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { MobileNativeChatSendErrorBanner } from '../session/native-chat/status/MobileNativeChatSendErrorBanner'
-import { mobileBotGroupDraftKey, useMobileBotGroupDraft } from './use-mobile-bot-group-draft'
-import { closeMobileNativeChatTabDraft } from '../session/native-chat/composer/drafts/mobile-native-chat-draft-store'
+import { useMobileBotGroupDraft } from './use-mobile-bot-group-draft'
 import { MobileNativeChatInputLockStatus } from '../session/native-chat/composer/field/MobileNativeChatInputLockStatus'
 import type { MobileNativeChatHostOutage } from '../session/native-chat/status/mobile-native-chat-host-outage'
 
@@ -65,6 +71,8 @@ export function MobileBotGroupRoom({
   const t = useMobileTranslation()
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
+  // The page draws under the keyboard, so the composer rises by what it covers, as a chat's does.
+  const keyboardLift = useMobileSessionKeyboardLift(insets.bottom)
   const { hostCapabilities } = useHostProtocolGates()
   const support = useMemo(
     () => structuredAgentSessionHostSupport(hostCapabilities ?? []),
@@ -73,10 +81,10 @@ export function MobileBotGroupRoom({
   // The original room, or one of the group's threads.
   const [threadId, setThreadId] = useState<string | undefined>()
   const roomId = threadId ?? groupId
-  const composerDraft = useMobileBotGroupDraft(hostId, roomId)
+  const composerDraft = useMobileBotGroupDraft(hostId, groupId, roomId)
   const { text: draft, edit: setDraft } = composerDraft
   const [error, setError] = useState<string | null>(null)
-  const [menu, setMenu] = useState<'actions' | 'members' | 'replies' | null>(null)
+  const [menu, setMenu] = useState<'actions' | 'members' | 'replies' | 'delete' | null>(null)
   const [startingThread, setStartingThread] = useState(false)
   const [itemsOpen, setItemsOpen] = useState(false)
   const itemsOnPhone = hostCapabilities?.includes(BOTS_ITEMS_RUNTIME_CAPABILITY) === true
@@ -127,7 +135,14 @@ export function MobileBotGroupRoom({
       }) ?? [],
     [group?.members, bots, data?.messages]
   )
-  const { recipientId, roomMentions, audience } = useMobileBotGroupComposer(group, bots, draft)
+  const { recipientId, roomMentions, audience, photos, attachPhotos } = useMobileBotGroupComposer(
+    group,
+    bots,
+    composerDraft,
+    client,
+    hostCapabilities?.includes(BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY) === true,
+    setError
+  )
   const selectedMember = group?.members.find((member) => member.botId === recipientId)
   const chosen = selectedMember && sessions.get(selectedMember.sessionId)
   const stop = async (botId?: string) => {
@@ -137,14 +152,15 @@ export function MobileBotGroupRoom({
       )
       const refused = result.results.find((result) => !result.ok)
       if (refused) {
-        setError(refused.refusal?.message ?? 'Stop could not be confirmed.')
+        setError(
+          refused.refusal?.message ??
+            t('bots.groups.stopCouldNotBeConfirmed', 'Stop could not be confirmed.')
+        )
       }
     } catch (error) {
       setError(botFailureMessage(error) ?? String(error))
     }
   }
-  // The host takes a post to bots on other computers only from its own window, as the desktop says.
-  const postsOnComputer = (group?.remoteMembers?.length ?? 0) > 0
   const working =
     group?.members.some((member) => sessions.get(member.sessionId)?.isWorking) ?? false
   const startThread = async () => {
@@ -166,7 +182,12 @@ export function MobileBotGroupRoom({
     return bot ? [{ id: bot.id, avatar: mobileBotAvatarSource(bot) }] : []
   })
   return (
-    <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <View
+      style={[
+        styles.screen,
+        { paddingTop: insets.top, paddingBottom: insets.bottom + keyboardLift }
+      ]}
+    >
       {readers.map((turn) => (
         <MobileBotGroupReader
           key={turn.sessionId}
@@ -242,16 +263,6 @@ export function MobileBotGroupRoom({
         hostOutage={outage}
       />
       <MobileNativeChatSendErrorBanner message={error} onDismiss={() => setError(null)} />
-      {/* Above the composer, not its placeholder: a saved draft would hide that. */}
-      {postsOnComputer ? (
-        <Text style={styles.notice}>
-          {t(
-            'bots.groups.remotePostOnComputer',
-            'To post in a group with bots on other computers, use {{host}}.',
-            { host: hostName }
-          )}
-        </Text>
-      ) : null}
       <MobileNativeChatComposer
         value={draft}
         onChangeText={setDraft}
@@ -261,7 +272,11 @@ export function MobileBotGroupRoom({
         getComposerEditGeneration={composerDraft.getEditGeneration}
         agent={readers.find((turn) => turn.sessionId === selectedMember?.sessionId)?.agent}
         placeholder={t('bots.groups.composerPlaceholder', 'Message the group, @ to mention a bot')}
-        disabled={!connected || postsOnComputer}
+        disabled={!connected}
+        onAttachImage={attachPhotos}
+        attachments={[...photos.images]}
+        onRemoveAttachment={photos.remove}
+        isAttaching={photos.uploading}
         roomMentions={roomMentions}
         roomReplies={
           <ModelPill
@@ -275,27 +290,15 @@ export function MobileBotGroupRoom({
             onPress={() => setMenu('replies')}
           />
         }
-        sessionOptions={
-          chosen
-            ? {
-                isWorking: chosen.isWorking,
-                controller: {
-                  snapshot: chosen.optionSnapshot,
-                  optionSurface: chosen.optionSurface,
-                  pendingId: null,
-                  setOption: chosen.setStructuredOption,
-                  invokeAction: chosen.invokeStructuredOption,
-                  recordCommand: () => {}
-                }
-              }
-            : undefined
-        }
+        sessionOptions={mobileBotGroupSessionOptions(chosen)}
         stop={working ? { held: false, onStop: () => void stop() } : null}
         onSend={async (text) => {
           if (!group) {
             return false
           }
           composerDraft.clearForSend(text)
+          const sent = photos.images
+          photos.clearSent(sent.map((image) => image.id))
           try {
             const result = groupSend.interpret(
               await groupSend.request(client, {
@@ -303,7 +306,8 @@ export function MobileBotGroupRoom({
                 revision: group.revision,
                 threadId,
                 messageId: randomV4Uuid(),
-                text
+                text,
+                ...(sent.length > 0 ? { images: sent.map((image) => image.path) } : {})
               })
             )
             apply({ kind: 'sent', message: result.message })
@@ -311,6 +315,7 @@ export function MobileBotGroupRoom({
             return true
           } catch (error) {
             composerDraft.restoreRefused(text)
+            photos.returnRefused(sent)
             setError(botFailureMessage(error) ?? String(error))
             return false
           }
@@ -329,24 +334,7 @@ export function MobileBotGroupRoom({
             onPress: () => void startThread()
           },
           onManageMembers: () => setMenu('members'),
-          onDelete: group
-            ? () =>
-                confirmMobileBotGroupDelete({
-                  client,
-                  group,
-                  t,
-                  onDeleted: () => {
-                    for (const room of [
-                      group.id,
-                      ...(anyRoomGroup?.threads ?? []).map((thread) => thread.id)
-                    ]) {
-                      closeMobileNativeChatTabDraft(mobileBotGroupDraftKey(hostId, room))
-                    }
-                    router.back()
-                  },
-                  onError: setError
-                })
-            : null
+          onDelete: group ? () => setMenu('delete') : null
         })}
         onClose={() => setMenu(null)}
       />
@@ -362,6 +350,14 @@ export function MobileBotGroupRoom({
           onClose={() => setMenu(null)}
         />
       ) : null}
+      <MobileBotGroupDeleteConfirm
+        client={client}
+        hostId={hostId}
+        group={menu === 'delete' ? (anyRoomGroup ?? null) : null}
+        onClose={() => setMenu(null)}
+        onDeleted={() => router.back()}
+        onError={setError}
+      />
       {itemsOnPhone ? (
         <MobileBotGroupItems
           visible={itemsOpen}
