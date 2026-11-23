@@ -9,6 +9,7 @@ import type {
   ProviderRelaySpawnSpec
 } from '../protocol/daemon-provider-relay-protocol'
 import { ProviderRelay, type ProviderRelayStream } from './provider-relay'
+import { waitAtMost } from './provider-relay-bounded-wait'
 
 type SpawnManaged = typeof spawnManagedProviderProcess
 
@@ -16,6 +17,8 @@ const PROVIDER_OWNER_EXECUTABLE = 'orca-provider-exec'
 const MAX_CHAT_KEY_CHARS = 1024
 /** An ended relay nobody collects is dropped after this, so it never holds the daemon or its spool forever. */
 const ENDED_RELAY_RETENTION_MS = 24 * 60 * 60 * 1000
+/** Relay cleanup is disk work; shutdown waits for it only this long. */
+const DISPOSE_WAIT_MS = 3000
 const RELAY_SPOOL_NAME = /^r-(\d+)-[0-9a-f-]{36}\.ndjson(?:\.line)?$/
 
 type RelayHostOptions = {
@@ -196,7 +199,7 @@ export class ProviderRelayHost {
     this.expiries.clear()
     const relays = [...this.relays.values()]
     this.relays.clear()
-    await Promise.all(relays.map((relay) => relay.dispose()))
+    await waitAtMost(Promise.all(relays.map((relay) => relay.dispose())), DISPOSE_WAIT_MS)
   }
 
   private staleFor(spec: ProviderRelaySpawnSpec): boolean {

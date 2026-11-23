@@ -177,13 +177,19 @@ export class ProviderRelaySpool {
     this.mode = 'detached'
     this.attachGeneration++
     if (!this.fileFailed) {
-      for (let index = this.memoryHead; index < this.memory.length; index++) {
-        this.writeToFile(this.memory[index])
-      }
+      const held = this.memory.slice(this.memoryHead)
       this.memory = []
       this.memoryHead = 0
       this.ackedHeldBytes = 0
       this.memoryBytes = 0
+      for (const record of held) {
+        if (this.fileFailed) {
+          this.memory.push(record)
+          this.memoryBytes += record.line.length
+        } else {
+          this.writeToFile(record)
+        }
+      }
     }
     this.updatePressure()
     return this.io
@@ -229,7 +235,16 @@ export class ProviderRelaySpool {
     if (this.disposed) {
       return
     }
-    const encoded = `${JSON.stringify(record)}\n`
+    let encoded: string
+    try {
+      encoded = `${JSON.stringify(record)}\n`
+    } catch {
+      // Too large to escape: it and every later record stay in memory, so seq order holds.
+      this.fileFailed = true
+      this.memory.push(record)
+      this.memoryBytes += record.line.length
+      return
+    }
     const bytes = Buffer.byteLength(encoded)
     this.fileUnackedBytes += bytes
     this.fileIndex.push(record.seq, bytes)

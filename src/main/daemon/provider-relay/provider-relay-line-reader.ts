@@ -1,10 +1,13 @@
 import { readFile, truncate, unlink, writeFile } from 'node:fs/promises'
+import { waitAtMost } from './provider-relay-bounded-wait'
 
 const NEWLINE = 0x0a
 /** Past this, an unfinished line moves to disk; real JSONL lines stay far below it. */
 export const RELAY_LINE_SPILL_BYTES = 4 * 1024 * 1024
 /** A rebuilt line this large costs that much daemon memory at once, so it is logged. */
 const LARGE_LINE_WARN_BYTES = 64 * 1024 * 1024
+/** With the disk failing, a line held in memory past this is dropped, so a full disk can't exhaust the daemon. */
+const MEMORY_LINE_LIMIT_BYTES = 256 * 1024 * 1024
 
 type LineReaderOptions = {
   /** Private scratch file for one unfinished line; removed once the line completes. */
@@ -19,7 +22,7 @@ type LineReaderOptions = {
 }
 
 const SPILL_READ_ATTEMPTS = 3
-/** A disk that never answers must not hold the daemon's shutdown; a stray file is swept later. */
+/** A stray spill file left by a disk that never answers is swept by a later daemon. */
 const DISPOSE_WAIT_MS = 2000
 
 /**
@@ -38,6 +41,8 @@ export class ProviderRelayLineReader {
   /** Bytes known to be whole in the spill file; a torn append past this is ignored. */
   private spilledBytes = 0
   private disposed = false
+  /** An oversized line was dropped; its remaining bytes are skipped up to its newline. */
+  private discarding = false
   private ended: (() => void) | null = null
   private readonly spillBytes: number
 
@@ -75,6 +80,14 @@ export class ProviderRelayLineReader {
 
   private split(chunk: Buffer): void {
     let start = 0
+    if (this.discarding) {
+      const newline = chunk.indexOf(NEWLINE)
+      if (newline === -1) {
+        return
+      }
+      this.discarding = false
+      start = newline + 1
+    }
     let newline = chunk.indexOf(NEWLINE, start)
     while (newline !== -1) {
       const tail = chunk.subarray(start, newline)
@@ -86,8 +99,7 @@ export class ProviderRelayLineReader {
       newline = chunk.indexOf(NEWLINE, start)
     }
     if (start < chunk.length) {
-      this.partial.push(chunk.subarray(start))
-      this.partialBytes += chunk.length - start
+      this.hold(chunk.subarray(start))
     }
     if (!this.spillBroken && this.partialBytes >= this.spillBytes) {
       this.spilled = true
@@ -104,31 +116,37 @@ export class ProviderRelayLineReader {
     }
   }
 
-  /** A line past the engine's string limit cannot be decoded; it is reported lost, never thrown. */
+  private hold(chunk: Buffer): void {
+    this.partial.push(chunk)
+    this.partialBytes += chunk.length
+    if (this.spillBroken && this.partialBytes > MEMORY_LINE_LIMIT_BYTES) {
+      this.options.onLineLost?.(this.spilledBytes + this.partialBytes)
+      this.partial = []
+      this.partialBytes = 0
+      this.spilledBytes = 0
+      this.spilled = false
+      this.spillBroken = false
+      this.discarding = true
+    }
+  }
+
+  /** A line that cannot be decoded or recorded is reported lost; the lines after it still go through. */
   private deliver(line: Buffer): void {
-    let text: string
-    try {
-      text = line.toString('utf8')
-    } catch {
-      this.options.onLineLost?.(line.length)
+    if (this.disposed) {
       return
     }
-    this.options.onLine(text)
+    try {
+      this.options.onLine(line.toString('utf8'))
+    } catch {
+      this.options.onLineLost?.(line.length)
+    }
   }
 
   /** Stops reading and spilling, and waits for disk work in flight, so the caller can delete the file. */
   async dispose(): Promise<void> {
     this.disposed = true
     this.queue = []
-    let timer: ReturnType<typeof setTimeout> | undefined
-    await Promise.race([
-      this.drainDone,
-      new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, DISPOSE_WAIT_MS)
-        timer.unref?.()
-      })
-    ])
-    clearTimeout(timer)
+    await waitAtMost(this.drainDone, DISPOSE_WAIT_MS)
     this.ended?.()
   }
 
@@ -192,8 +210,7 @@ export class ProviderRelayLineReader {
       return
     }
     if (this.spillBroken) {
-      this.partial.push(chunk)
-      this.partialBytes += chunk.length
+      this.hold(chunk)
       return
     }
     try {
@@ -207,8 +224,7 @@ export class ProviderRelayLineReader {
       // Disk trouble: the rest of this line stays in memory rather than being lost; a torn tail is cut.
       this.spillBroken = true
       await truncate(this.options.spillPath, this.spilledBytes).catch(() => {})
-      this.partial.push(chunk)
-      this.partialBytes += chunk.length
+      this.hold(chunk)
     }
   }
 
