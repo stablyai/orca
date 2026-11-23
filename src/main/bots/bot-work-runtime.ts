@@ -34,7 +34,10 @@ import {
 } from './bot-work-record'
 import { BotWorkStore, botWorkStoreFile, type BotWorkHost } from './bot-work-store'
 import type { BotWorkWorkspaceShow } from './bot-work-workspace-show'
-import type { ScopedWorktreeReads } from '../runtime/workspaces/catalog/scoped-worktree-row-resolution'
+import {
+  createScopedWorktreeReads,
+  type ScopedWorktreeReads
+} from '../runtime/workspaces/catalog/scoped-worktree-row-resolution'
 import { isInBotHome } from './bot-home-membership'
 import { readRemoteGitHubRepo, readRemoteWorkspace } from './bot-work-remote-workspace'
 import { readServerOwnedWorker } from './bot-work-server-owned-worker'
@@ -297,7 +300,10 @@ export function runtimeBotWork(runtime: BotWorkRuntime): BotWorkRecord {
       return store
     },
     workers: (dispatchIds) => readWorkers(runtime, dispatchIds),
-    workspace: (worker, reads) => readWorkspace(runtime, worker, reads),
+    workspaces: () => {
+      const reads = createScopedWorktreeReads()
+      return (worker) => readWorkspace(runtime, worker, reads)
+    },
     turnAddress: (sessionId, message) => readTurnAddress(runtime, sessionId, message),
     conversationTitle: (address) => {
       const store = runtime.linkStore()

@@ -75,7 +75,7 @@ export function evalWorkRecord(
     store: () => (store ??= BotWorkStore.open(storePath)),
     workers: async (dispatchIds) =>
       new Map(dispatchIds.map((dispatchId) => [dispatchId, evalWorker(read(), dispatchId)])),
-    workspace: async (worker) => {
+    workspaces: () => async (worker) => {
       const state = read()
       if (!worker.worktreeId || worker.host !== 'local') {
         return null
