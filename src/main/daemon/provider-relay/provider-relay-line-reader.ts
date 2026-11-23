@@ -12,7 +12,8 @@ export const RELAY_LINE_MAX_BYTES = 256 * 1024 * 1024
 type LineReaderOptions = {
   /** Private scratch file for one unfinished line; removed once the line completes. */
   spillPath: string
-  onLine: (line: string) => void
+  /** `bytes` is the line's UTF-8 size, so the spool charges what it really holds. */
+  onLine: (line: string, bytes: number) => void
   /** True while disk work is in flight; the owner stops reading stdout meanwhile. */
   onBusy: (busy: boolean) => void
   spillBytes?: number
@@ -141,7 +142,7 @@ export class ProviderRelayLineReader {
       return
     }
     try {
-      this.options.onLine(line.toString('utf8'))
+      this.options.onLine(line.toString('utf8'), line.length)
     } catch {
       this.fail('line-undeliverable')
     }
@@ -227,12 +228,12 @@ export class ProviderRelayLineReader {
   }
 
   private async spillChunk(chunk: Buffer): Promise<void> {
-    if (this.disposed) {
+    // Checked before any disk work, so a stalled write can't delay the verdict on an oversized line.
+    if (this.disposed || this.tooLarge(chunk.length)) {
       return
     }
     if (this.spillBroken) {
       this.hold(chunk)
-      this.tooLarge()
       return
     }
     try {
@@ -252,7 +253,6 @@ export class ProviderRelayLineReader {
       await truncate(this.options.spillPath, this.spilledBytes).catch(() => {})
       this.hold(chunk)
     }
-    this.tooLarge()
   }
 
   /** Delivers the spilled line plus its in-memory tail; null tail means stdout ended mid-line. */

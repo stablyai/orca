@@ -29,6 +29,15 @@ const INITIALIZE_WINDOW_LINES = 256
 /** Codex resolves a server request elsewhere (another client, a timeout) and says so with this. */
 const RESOLVED_METHOD = 'serverRequest/resolved'
 
+/** A client line longer than this is forwarded but not classified, so it can't grow without bound. */
+const MAX_CLIENT_LINE_CHARS = 256 * 1024 * 1024
+/** JSON may spell a key with escapes (`"m\u0065thod"`); serializers never do, so such lines take the slow path. */
+const ESCAPED_LETTER = /\\u00[4-7][0-9a-fA-F]/
+
+function mayHideKey(line: string): boolean {
+  return line.includes('\\u00') && ESCAPED_LETTER.test(line)
+}
+
 function controlId(value: unknown): string | null {
   return typeof value === 'string' ? `c:${value}` : null
 }
@@ -44,6 +53,7 @@ export class ProviderRelayPendingRequests {
   private initializeKey: string | null = null
   private initializeLinesLeft = INITIALIZE_WINDOW_LINES
   private clientLinePartial = ''
+  private skippingClientLine = false
   maxClientRequestId: number | null = null
   initializeResult: string | null = null
 
@@ -89,7 +99,7 @@ export class ProviderRelayPendingRequests {
       this.initializeKey !== null &&
       this.initializeResult === null &&
       this.initializeLinesLeft-- > 0
-    if (!maybeRpcRequest && !maybeControl && !awaitingInitialize) {
+    if (!maybeRpcRequest && !maybeControl && !awaitingInitialize && !mayHideKey(line)) {
       return
     }
     const message = parseObject(line)
@@ -129,26 +139,50 @@ export class ProviderRelayPendingRequests {
     }
   }
 
-  /** Client writes may split or join lines; only complete lines are classified. */
-  observeClientData(data: string): void {
-    if (!data.includes('\n')) {
-      this.clientLinePartial += data
-      return
+  /**
+   * Client writes may split or join lines; only complete lines are classified. Returns the keys of
+   * requests this data answers; the owner releases them once the data has reached the agent.
+   */
+  observeClientData(data: string): string[] {
+    const answered: string[] = []
+    let start = 0
+    let newline = data.indexOf('\n')
+    while (newline !== -1) {
+      if (!this.skippingClientLine) {
+        const key = this.observeClientLine(this.clientLinePartial + data.slice(start, newline))
+        if (key) {
+          answered.push(key)
+        }
+      }
+      this.clientLinePartial = ''
+      this.skippingClientLine = false
+      start = newline + 1
+      newline = data.indexOf('\n', start)
     }
-    const lines = (this.clientLinePartial + data).split('\n')
-    this.clientLinePartial = lines.pop() ?? ''
-    for (const line of lines) {
-      this.observeClientLine(line)
+    if (start < data.length && !this.skippingClientLine) {
+      this.clientLinePartial += data.slice(start)
+      if (this.clientLinePartial.length > MAX_CLIENT_LINE_CHARS) {
+        this.clientLinePartial = ''
+        this.skippingClientLine = true
+      }
+    }
+    return answered
+  }
+
+  /** The answers reached the agent's stdin, so their requests are no longer owed. */
+  releaseAnswered(keys: string[]): void {
+    for (const key of keys) {
+      this.release(key)
     }
   }
 
-  private observeClientLine(line: string): void {
-    if (!line.includes('"id"') && !line.includes('control_')) {
-      return
+  private observeClientLine(line: string): string | null {
+    if (!line.includes('"id"') && !line.includes('control_') && !mayHideKey(line)) {
+      return null
     }
     const message = parseObject(line)
     if (!message) {
-      return
+      return null
     }
     if (typeof message.method === 'string') {
       if (typeof message.id === 'number' && Number.isSafeInteger(message.id)) {
@@ -157,19 +191,16 @@ export class ProviderRelayPendingRequests {
       if (message.method === 'initialize' && this.initializeKey === null) {
         this.initializeKey = rpcId(message.id)
       }
-      return
+      return null
     }
     if (message.type === 'control_request') {
       const { request } = message
       if (isObject(request) && request.subtype === 'initialize' && this.initializeKey === null) {
         this.initializeKey = controlId(message.request_id)
       }
-      return
+      return null
     }
-    const key = this.responseKey(message)
-    if (key) {
-      this.release(key)
-    }
+    return this.responseKey(message)
   }
 
   private responseKey(message: JsonObject): string | null {

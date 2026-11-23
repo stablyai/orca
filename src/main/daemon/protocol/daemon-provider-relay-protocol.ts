@@ -48,7 +48,8 @@ export type ProviderRelayAttachResult = {
   /** Seqs of unanswered agent requests; their lines arrive first as `relayPending` events. */
   pending: number[]
   maxClientRequestId: number | null
-  initializeResult: string | null
+  /** The agent's answer to the client's first `initialize` arrived before this reply as `relayInitialize` events (seq 0). */
+  initializeResultSent: boolean
   stderrTail: string
   exit: ProviderRelayExit | null
 }
@@ -70,8 +71,8 @@ export type ProviderRelayListResult = { relays: ProviderRelayInfo[] }
 /** A line longer than one frame piece arrives as consecutive pieces of one seq; `more` marks all but the last. */
 export type ProviderRelayDataEvent = {
   type: 'event'
-  /** `relayPending` re-sends a held request on attach; `relayData` is the spool, in seq order. */
-  event: 'relayData' | 'relayPending'
+  /** `relayInitialize` and `relayPending` are sent on attach; `relayData` is the spool, in seq order. */
+  event: 'relayData' | 'relayPending' | 'relayInitialize'
   sessionId: string
   payload: { seq: number; line: string; more?: true }
 }

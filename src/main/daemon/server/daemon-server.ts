@@ -265,9 +265,11 @@ export class DaemonServer {
     this.stopStreamBacklogProbe()
     this.transientFactRelay.dispose()
     this.preparations.cancelAll()
-    try {
-      await Promise.all([this.host.dispose(), this.relays.dispose()])
-    } catch (error) {
+    // Both finish before shutdown goes on, even when one of them fails.
+    const disposed = await Promise.allSettled([this.host.dispose(), this.relays.dispose()])
+    const failure = disposed.find((result) => result.status === 'rejected')
+    if (failure) {
+      const error: unknown = failure.reason
       this.log.log('shutdown-dispose-failed', {
         error: error instanceof Error ? error.message : String(error)
       })

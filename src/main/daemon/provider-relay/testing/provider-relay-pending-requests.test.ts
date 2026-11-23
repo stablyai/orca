@@ -77,7 +77,7 @@ describe('provider relay pending requests', () => {
     relay.write(
       '{"type":"control_response","response":{"subtype":"success","request_id":"perm-1"}}\n'
     )
-    expect(relay.info().pendingCount).toBe(0)
+    await vi.waitFor(() => expect(relay.info().pendingCount).toBe(0))
     await relay.dispose()
   })
 
@@ -180,6 +180,43 @@ describe('provider relay pending requests', () => {
     expect(slowWrites).toBe(1)
     // 4 held-request pieces plus 4 replayed spool pieces, each once.
     expect(fastWrites).toBe(8)
+    await relay.dispose()
+  })
+
+  it('sends a line the agent prints during a takeover to the new client exactly once', async () => {
+    const { managed, stdout } = fakeManaged()
+    const relay = new ProviderRelay({
+      relayId: 'r-6',
+      chatKey: 'chat',
+      managed,
+      spoolPath: join(dir, 'r-6.ndjson'),
+      onSettled: () => {},
+      onDetached: () => {}
+    })
+    await relay.attach('app-0', { socket: new PassThrough() }, 0)
+    stdout.write('{"id":7,"method":"session/request_permission","params":{}}\n')
+    await vi.waitFor(() => expect(relay.info().pendingCount).toBe(1))
+    const socket = new PassThrough()
+    let needDrain = true
+    Object.defineProperty(socket, 'writableNeedDrain', { get: () => needDrain })
+    let received = ''
+    socket.on('data', (chunk: Buffer) => {
+      received += chunk.toString('utf8')
+    })
+    const attached = relay.attach('app-1', { socket }, 1)
+    stdout.write('{"method":"note","params":{}}\n')
+    await tick()
+    needDrain = false
+    socket.emit('drain')
+    await attached
+    const dataSeqs = received
+      .split('\n')
+      .filter((frame) => frame.includes('"relayData"'))
+      .map((frame) => {
+        const event: { payload?: { seq?: number } } = JSON.parse(frame)
+        return event.payload?.seq
+      })
+    expect(dataSeqs).toEqual([2])
     await relay.dispose()
   })
 })

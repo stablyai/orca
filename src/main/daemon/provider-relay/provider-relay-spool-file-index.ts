@@ -1,0 +1,51 @@
+/** Acked entries are skipped by index and compacted in bulk, so per-line acks stay O(1). */
+const COMPACT_MIN_ENTRIES = 1024
+
+/** What the spool file holds, as packed [seq, bytes] pairs, so back-pressure counts only unacked bytes. */
+export class SpoolFileIndex {
+  private entries: number[] = []
+  private head = 0
+  unackedBytes = 0
+  /** Highest seq written to the file; 0 when there is no file. */
+  lastSeq = 0
+
+  add(seq: number, bytes: number): void {
+    this.entries.push(seq, bytes)
+    this.unackedBytes += bytes
+    this.lastSeq = seq
+  }
+
+  ackThrough(seq: number): void {
+    while (this.head < this.entries.length && this.entries[this.head] <= seq) {
+      this.unackedBytes -= this.entries[this.head + 1]
+      this.head += 2
+    }
+    if (this.head >= 2 * COMPACT_MIN_ENTRIES && this.head * 2 >= this.entries.length) {
+      this.entries = this.entries.slice(this.head)
+      this.head = 0
+    }
+  }
+
+  /** Records a failed write never landed; only those still unacked are debited, as acks debited the rest. */
+  drop(seqs: Set<number>): void {
+    const kept: number[] = []
+    for (let at = this.head; at < this.entries.length; at += 2) {
+      if (seqs.has(this.entries[at])) {
+        this.unackedBytes -= this.entries[at + 1]
+      } else {
+        kept.push(this.entries[at], this.entries[at + 1])
+      }
+    }
+    this.entries = kept
+    this.head = 0
+    // With nothing unacked left in the file, a replay has nothing to read from it.
+    this.lastSeq = kept.at(-2) ?? 0
+  }
+
+  clear(): void {
+    this.entries = []
+    this.head = 0
+    this.unackedBytes = 0
+    this.lastSeq = 0
+  }
+}

@@ -8,7 +8,8 @@ import type {
   ProviderRelaySpawnResult,
   ProviderRelaySpawnSpec
 } from '../protocol/daemon-provider-relay-protocol'
-import { ProviderRelay, type ProviderRelayStream } from './provider-relay'
+import { ProviderRelay } from './provider-relay'
+import type { ProviderRelayStream } from './provider-relay-attachment'
 import { waitAtMost } from './provider-relay-bounded-wait'
 
 type SpawnManaged = typeof spawnManagedProviderProcess
@@ -134,6 +135,10 @@ export class ProviderRelayHost {
     })
     this.relays.set(relayId, relay)
     await managed.child.ready?.catch(() => {})
+    // Shutdown during the launch already closes this agent; the caller must not be told it runs.
+    if (this.disposed) {
+      return { refused: 'unavailable' }
+    }
     const pid = managed.child.pid
     if (pid === undefined) {
       this.remove(relay)

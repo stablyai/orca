@@ -23,10 +23,14 @@ function isSpoolRecord(value: unknown): value is ProviderRelayRecord {
   )
 }
 
-/** Streams a detached spool in chunks, yielding to the client's drain; false when the attach went stale. */
-export async function replaySpoolFile(replay: SpoolReplay): Promise<boolean> {
+/** 'stale' means the attach was superseded; 'failed' means the file could not be read through. */
+export type SpoolReplayOutcome = 'done' | 'stale' | 'failed'
+
+/** Streams a detached spool in chunks, yielding to the client's drain. */
+export async function replaySpoolFile(replay: SpoolReplay): Promise<SpoolReplayOutcome> {
   const replayLine = (line: string): void => {
-    if (line.length === 0) {
+    // A superseded attach sends nothing more, not even rows already read.
+    if (line.length === 0 || !replay.current()) {
       return
     }
     try {
@@ -61,13 +65,13 @@ export async function replaySpoolFile(replay: SpoolReplay): Promise<boolean> {
       }
       await replay.drained?.()
       if (!replay.current()) {
-        return false
+        return 'stale'
       }
     }
     replayLine(partial + parts.join(''))
-    return true
+    return replay.current() ? 'done' : 'stale'
   } catch {
-    return replay.current()
+    return replay.current() ? 'failed' : 'stale'
   } finally {
     stream.destroy()
   }
