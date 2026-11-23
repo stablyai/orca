@@ -65,7 +65,9 @@ export function createRestartAnswers() {
       return { waiting, settled: Promise.resolve() }
     }
     await settleChats((sessionId) => !waiting.has(sessionId), false)
-    const settled = Promise.all([...waiting].map((sessionId) => answers.get(sessionId)))
+    const settled = Promise.all(
+      [...waiting].map((sessionId) => answers.get(sessionId) ?? Promise.resolve())
+    )
       .then(() => settleChats((sessionId) => waiting.has(sessionId), true))
       .catch(() => {
         logger.warn('settling late restart continuations failed', {
