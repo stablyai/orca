@@ -83,7 +83,7 @@ export async function evaluate(env: WakeAlertsEnv, scheduledTime: number): Promi
   for (const rule of RULES) {
     if (!rule.breach(now, limits, before)) { continue }
     const started = !rule.breach(before, limits)
-    if (started || hourly) { fired.push(`${started ? 'FIRING' : 'STILL FIRING'} ${rule.id}: ${rule.describe(now)}`) }
+    if (started || hourly) { fired.push(`${started ? 'FIRING' : 'STILL FIRING'} ${rule.id}: ${rule.describe(now, limits)}`) }
   }
   for (const text of fired) { await post(env, text) }
   return [...probeAlerts, ...fired]

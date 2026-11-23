@@ -47,12 +47,12 @@ describe('wake alerts', () => {
     expect(r.posts).toEqual([])
   })
 
-  it('never counts its own probe refusals as auth refusals', async () => {
-    // 3 probes per window at low volume: quiet; 3 probes + 5 real refusals: fires.
-    expect((await run({ socket_open: 5, refuse_401: 7 })).fired).toEqual([])
-    const r = await run({ socket_open: 5, refuse_401: 8 })
-    expect(r.fired).toHaveLength(1)
-    expect(r.fired[0]).toMatch(/^FIRING auth-refusals-low-volume/)
+  it('never counts its own probe refusals as auth refusals, even with one more from cron jitter', async () => {
+    // A 15 min window holds 3 probes, or 4 when a run lands late.
+    expect((await run({ socket_open: 20, refuse_401: 4 })).fired).toEqual([])
+    expect((await run({ socket_open: 5, refuse_401: 8 })).fired).toEqual([])
+    const r = await run({ socket_open: 5, refuse_401: 9 })
+    expect(r.fired).toEqual(['FIRING auth-refusals-low-volume: 401 refusals 5 in 15 min at low volume (14 upgrades)'])
     expect(r.posts[0]).toMatch(/^\[connector-wake test\] FIRING auth-refusals-low-volume/)
   })
 
@@ -78,6 +78,33 @@ describe('wake alerts', () => {
   it('reads Cloudflare errors for the wake Worker, never the relay edge', async () => {
     expect((await run({})).graphqlScript).toBe('orca-connector-wake')
     expect((await run({}, {}, { env: { CF_SCRIPT_NAME: 'orca-connector-wake-staging' } })).graphqlScript).toBe('orca-connector-wake-staging')
+  })
+
+  it('fires cloudflare-errors from the GraphQL counts', async () => {
+    vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+      const url = String(input)
+      if (url === env.ALERT_WEBHOOK_URL || url.endsWith('/v1/connector/wake')) { return new Response(null, { status: url.endsWith('/wake') ? 401 : 200 }) }
+      if (url.endsWith('/__health/object')) { return Response.json({ ok: true }) }
+      if (url.endsWith('/graphql')) {
+        const errors = [{ sum: { requests: 900 }, dimensions: { status: 'success' } }, { sum: { requests: 100 }, dimensions: { status: 'scriptThrewException' } }]
+        return Response.json({ data: { viewer: { accounts: [{ w0: errors, w1: [] }] } } })
+      }
+      return Response.json({ data: [healthy] })
+    })
+    const fired = await evaluate(env, Date.UTC(2026, 10, 22, 10, 17))
+    expect(fired).toEqual(['FIRING cloudflare-errors: Worker/Durable Object errors 100 = 10.0% of 1000 invocations in 15 min'])
+  })
+
+  it('alerts when metrics are unreadable or the canary object fails', async () => {
+    vi.stubGlobal('fetch', async (input: string) => {
+      const url = String(input)
+      if (url === env.ALERT_WEBHOOK_URL) { return new Response('ok') }
+      if (url.endsWith('/v1/connector/wake')) { return new Response(null, { status: 401 }) }
+      if (url.endsWith('/__health/object')) { return Response.json({ ok: false }, { status: 503 }) }
+      return new Response('no', { status: 500 })
+    })
+    const fired = await evaluate(env, Date.UTC(2026, 10, 22, 10, 17))
+    expect(fired).toEqual(['FIRING object-probe: object health check got 503, expected 200', 'alerts cannot read metrics: analytics query failed: 500'])
   })
 
   it('alerts when the wake upgrade is not refused 401', async () => {

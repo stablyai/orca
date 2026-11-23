@@ -14,6 +14,7 @@ export type WakeThresholds = Thresholds & { noSocketPct: number; noSocketMin: nu
 
 export const WINDOW_MIN = 15
 // The cron runs every 5 min, and each run's edge probe is one refused upgrade (refuse 401 'token').
+// Cron jitter can put one more probe than WINDOW_MIN / PROBE_EVERY_MIN inside a window.
 const PROBE_EVERY_MIN = 5
 const ADMIN_FAILURES_MIN = 3
 const LOW_VOLUME_401_MIN = 5
@@ -28,7 +29,7 @@ export function thresholds(env: WakeAlertsEnv): WakeThresholds {
     ...edgeThresholds(env),
     noSocketPct: positive(env.NO_SOCKET_PCT, 5),
     noSocketMin: positive(env.NO_SOCKET_MIN, 50),
-    probesPerWindow: env.EDGE_PROBE_URL ? WINDOW_MIN / PROBE_EVERY_MIN : 0
+    probesPerWindow: env.EDGE_PROBE_URL ? WINDOW_MIN / PROBE_EVERY_MIN + 1 : 0
   }
 }
 
@@ -48,7 +49,7 @@ FROM ${dataset}
 WHERE timestamp > NOW() - INTERVAL '${fromMin}' MINUTE AND timestamp <= NOW() - INTERVAL '${toMin}' MINUTE
 FORMAT JSON`
 
-export type Rule = { id: string; describe: (now: Counts) => string; breach: (c: Counts, t: WakeThresholds, prior?: Counts) => boolean }
+export type Rule = { id: string; describe: (now: Counts, t: WakeThresholds) => string; breach: (c: Counts, t: WakeThresholds, prior?: Counts) => boolean }
 
 const pct = (a: number, b: number) => (b > 0 ? (100 * a) / b : 0)
 // Every upgrade that reached the token check or the country check.
@@ -61,13 +62,13 @@ export const RULES: Rule[] = [
     // A desktop refused at upgrade falls back to long-poll; a spike means good tokens are refused.
     id: 'auth-refusals',
     breach: (c, t) => upgrades(c) >= t.minVolume && pct(refusals401(c, t), upgrades(c)) > 0.5,
-    describe: (c) => `401 refusals ${c.refuse_401} = ${pct(c.refuse_401, upgrades(c)).toFixed(2)}% of upgrades`
+    describe: (c, t) => `401 refusals ${refusals401(c, t)} = ${pct(refusals401(c, t), upgrades(c)).toFixed(2)}% of upgrades`
   },
   {
     // Below the share rules' volume a handful of 401s is still worth a look.
     id: 'auth-refusals-low-volume',
     breach: (c, t) => upgrades(c) < t.minVolume && refusals401(c, t) >= LOW_VOLUME_401_MIN,
-    describe: (c) => `401 refusals ${c.refuse_401} in ${WINDOW_MIN} min at low volume (${upgrades(c)} upgrades)`
+    describe: (c, t) => `401 refusals ${refusals401(c, t)} in ${WINDOW_MIN} min at low volume (${upgrades(c)} upgrades)`
   },
   {
     // Sockets dropped en masse (deploy, eviction, runtime restart): the desktops reconnect at once.
