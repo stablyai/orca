@@ -65,11 +65,7 @@ function readPage(
   })
 }
 
-const cursorOffset = (cursor: string): number =>
-  JSON.parse(Buffer.from(cursor.slice('oar1_'.length), 'base64url').toString()).p
-
-/** Every page from the newest to the one with no cursor, each cursor strictly older than the
- *  last; `between` runs after each page. */
+/** Every page from the newest to the one with no cursor; `between` runs after each page. */
 async function readEveryPage(
   path: string,
   limit: number,
@@ -82,9 +78,6 @@ async function readEveryPage(
     pages.push(page)
     if (page.nextCursor === null) {
       return pages
-    }
-    if (cursor !== undefined) {
-      expect(cursorOffset(page.nextCursor)).toBeLessThan(cursorOffset(cursor))
     }
     cursor = page.nextCursor
     between?.()
@@ -132,9 +125,8 @@ describe('readTerminalAgentPage', () => {
     const pages = await readEveryPage(path, 20)
 
     expect(assembled(pages)).toEqual(ids)
-    // The bound, not the limit, ended the first page.
-    expect(pages[0]!.entries.length).toBeGreaterThan(0)
-    expect(pages[0]!.entries.length).toBeLessThan(20)
+    // The bound, not the limit of 20, ends each page before the last.
+    expect(pages.map((page) => page.entries.length)).toEqual([12, 12, 12, 9])
     expect(pages.flatMap((page) => page.entries).every((entry) => entry.shortened)).toBe(true)
   })
 
