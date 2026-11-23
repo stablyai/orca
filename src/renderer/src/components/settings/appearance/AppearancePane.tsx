@@ -11,6 +11,7 @@ import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '../../../store/index'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { getAppIconEntries } from './appearance-app-icon-search'
+import { getAgentIconInTabsEntries } from './appearance-agent-icon-search'
 import {
   getCodeEditorThemeEntries,
   getLanguageEntries,
@@ -109,6 +110,7 @@ export function AppearancePane({
     ...getTypographyEntries(),
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
     ...getTitlebarEntries(),
+    ...getAgentIconInTabsEntries(),
     ...getReduceVisualEffectsEntries(),
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
     ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })

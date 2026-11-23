@@ -11,6 +11,7 @@ import {
   type TerminalTabActivityStatus
 } from './terminal-tab-activity-status'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '../../../store/index'
 
 type TerminalTabLeadingIconProps = {
   agent: TerminalAgent | null
@@ -54,13 +55,14 @@ export function TerminalTabLeadingIcon({
   isActive,
   progress,
   identity
-}: TerminalTabLeadingIconProps): React.JSX.Element {
+}: TerminalTabLeadingIconProps): React.JSX.Element | null {
   const t = useTranslate()
+  const showAgentIcon = useAppStore((s) => s.settings?.showAgentIconInTabs !== false)
   const identityIcon = identity ? (
     <span className={cn('inline-flex', !isActive && 'opacity-70')} aria-hidden>
       {identity}
     </span>
-  ) : agent ? (
+  ) : agent && showAgentIcon ? (
     <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} />
   ) : null
   if (showUnreadActivity) {
@@ -101,9 +103,9 @@ export function TerminalTabLeadingIcon({
   }
 
   if (agent) {
-    return (
+    return showAgentIcon ? (
       <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} className="mr-1 shrink-0" />
-    )
+    ) : null
   }
 
   return (
