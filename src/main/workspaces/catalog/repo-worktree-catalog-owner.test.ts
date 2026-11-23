@@ -30,12 +30,7 @@ function controlledScans() {
     })
     await Promise.resolve()
   }
-  const fail = async (atMs: number) => {
-    vi.setSystemTime(atMs)
-    pending.shift()!({ kind: 'failed', error: new Error('worktree list failed') })
-    await Promise.resolve()
-  }
-  return { plan, pending, finish, fail }
+  return { plan, pending, finish }
 }
 
 // Each case owns its repo: the fake clock restarts at 0, and an older test's newer rows would mask it.
@@ -95,42 +90,22 @@ describe('worktree catalog freshness', () => {
     await scans.finish('/repos/freshness/v1', 6_000)
     await first
 
-    vi.setSystemTime(10_000)
+    // Fresh by the window (3 s after completion) but past the ceiling from scan start.
+    vi.setSystemTime(9_000)
     const verified = readWorktreeCatalog(
       target,
       'local:default',
       {
         kind: 'runtime',
-        maxAgeMs: 30_000,
+        maxAgeMs: 5_000,
         verifier: { ceilingMs: 8_000, timeoutMs: 1_000, probe: () => Promise.resolve('fp') }
       },
       scans.plan
     )
     await vi.waitFor(() => expect(scans.pending).toHaveLength(1))
-    await scans.finish('/repos/freshness/v2', 11_000)
+    await scans.finish('/repos/freshness/v2', 10_000)
     expect((await verified).observation?.outcome).toMatchObject({
       worktrees: [{ path: '/repos/freshness/v2' }]
     })
-  })
-
-  it('reuses a slow failed scan for its window from completion instead of retrying it at once', async () => {
-    const scans = controlledScans()
-    const target = repoFor('failure')
-    const runtimeRead = () =>
-      readWorktreeCatalog(
-        target,
-        'local:default',
-        { kind: 'runtime', maxAgeMs: 5_000, reusesFailure: true },
-        scans.plan
-      )
-    const first = runtimeRead()
-    await vi.waitFor(() => expect(scans.pending).toHaveLength(1))
-    await scans.fail(6_000)
-    const failed = (await first).observation
-    expect(failed?.outcome.kind).toBe('failed')
-
-    vi.setSystemTime(10_000)
-    expect((await runtimeRead()).observation).toBe(failed)
-    expect(scans.pending).toHaveLength(0)
   })
 })

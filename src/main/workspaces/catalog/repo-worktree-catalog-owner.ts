@@ -233,7 +233,7 @@ export async function readWorktreeCatalog(
       requirement.reusesFailure &&
       failure?.startedBy === requirement.kind &&
       isCurrent(entry, failure) &&
-      now - failure.completedAt <= requirement.maxAgeMs
+      now - failure.startedAt <= requirement.maxAgeMs
     ) {
       return { observation: failure, superseded: false }
     }
