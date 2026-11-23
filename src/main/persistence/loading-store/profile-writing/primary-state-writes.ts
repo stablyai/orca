@@ -165,7 +165,12 @@ export class PrimaryStateWriteOperations {
 
 export function enqueueWrite(
   owner: PrimaryStateWriteOperations,
-  options: { fullCheckpoint?: boolean; skipIfClean?: boolean; signal?: AbortSignal } = {}
+  options: {
+    fullCheckpoint?: boolean
+    skipIfClean?: boolean
+    signal?: AbortSignal
+    onSaveFailed?: (error: unknown) => void
+  } = {}
 ): Promise<void> {
   const context = owner[primaryStateWriteOperationsContext]
   const { runtime } = context
@@ -177,6 +182,9 @@ export function enqueueWrite(
     // Explicit flushes must still save every domain for getter edits outside tracked domains.
     queued.capture.allDomains ||= !queued.capture.skipIfClean
     queued.capture.pendingSnapshotFileWork = runtime.pendingSnapshotFileWork
+    if (options.onSaveFailed) {
+      queued.completion.catch(options.onSaveFailed)
+    }
     return queued.completion
   }
   const capture = {
@@ -212,6 +220,9 @@ export function enqueueWrite(
   })
   if (batchable) {
     context.queuedSnapshot = { completion, capture }
+  }
+  if (options.onSaveFailed) {
+    completion.catch(options.onSaveFailed)
   }
   // Caller cancellation must not discard an admitted write or its acknowledgement/order.
   return waitForPromiseWithSignal(completion, options.signal)

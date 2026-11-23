@@ -177,12 +177,10 @@ export async function flushCurrentStateAsync(
       try {
         await enqueueWrite(writes, {
           fullCheckpoint,
-          signal
+          signal,
+          // This flush cancelled any pending retry; the save itself, not this cancellable wait, decides on a new one.
+          onSaveFailed: (error) => retryRefusedSave(runtime, writes, error)
         })
-      } catch (error) {
-        // This flush cancelled any pending retry; a refused save must still be retried without a new edit.
-        retryRefusedSave(runtime, writes, error)
-        throw error
       } finally {
         await (final
           ? runtime.activeViewPreference.flushAsync()
