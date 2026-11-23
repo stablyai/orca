@@ -110,29 +110,40 @@ export function dispatchBatch(
   const carriedBy = (done: Promise<ConnectorDeliveryResult>) => (delivery: SendDelivery) =>
     seam.receipts.carried(delivery.conversation, delivery.deliveryId, delivery.text, done)
   const [next, ...after] = later
-  // Held by a thread's mute: the later ones wait for its decision, then go with it as one turn, or
-  // (silenced, a command) on as a batch of their own, so a request and its follow-ups stay together.
+  // `carrier`: the turn of the first send so far that went on, carrying the rest; null for none.
+  type Turn = { done: Promise<ConnectorDeliveryResult> } | null
+  function heldBatch(carrier: Promise<Turn>): DispatchedDelivery[] {
+    return later.map((delivery, index) => {
+      const before = carrier
+      const own = dispatchDelivery(
+        seam,
+        host,
+        machine,
+        delivery,
+        msLeft,
+        later.slice(index + 1),
+        outboxAccount,
+        before.then((turn) => turn !== null)
+      )
+      const ownCarries = own?.carriedLater ?? Promise.resolve(false)
+      carrier = Promise.all([before, ownCarries]).then(
+        ([turn, carries]): Turn => turn ?? (carries && own ? { done: own.done } : null)
+      )
+      return {
+        deliveryId: delivery.deliveryId,
+        received: false,
+        done: before.then((turn) =>
+          turn ? carriedBy(turn.done)(delivery) : (own?.done ?? { outcome: 'unsupported' as const })
+        )
+      }
+    })
+  }
+  // Held by a thread's mute: each later one takes its place now, behind the one before, then goes
+  // in the turn of the first before it that went on, or is decided itself, so a request and its
+  // follow-ups stay one turn and nothing later in the poll overtakes them.
   const heldLater = first.carriedLater
   const carried: DispatchedDelivery[] = heldLater
-    ? (() => {
-        const rest = heldLater.then((carries) => {
-          if (carries || !next) {
-            return new Map(
-              later.map((delivery) => [delivery.deliveryId, carriedBy(first.done)(delivery)])
-            )
-          }
-          const own = dispatchBatch(seam, host, machine, [next, ...after], msLeft, outboxAccount)
-          return new Map(own.map((entry) => [entry.deliveryId, entry.done]))
-        })
-        return later.map((delivery) => ({
-          deliveryId: delivery.deliveryId,
-          received: false,
-          done: rest.then(
-            (dones) =>
-              dones.get(delivery.deliveryId) ?? { outcome: 'unknown', reason: 'not_dispatched' }
-          )
-        }))
-      })()
+    ? heldBatch(heldLater.then((carries) => (carries ? { done: first.done } : null)))
     : first.received
       ? later.map((delivery): DispatchedDelivery => ({
           deliveryId: delivery.deliveryId,

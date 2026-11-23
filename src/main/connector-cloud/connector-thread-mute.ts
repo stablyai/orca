@@ -99,13 +99,15 @@ export type RecordHandled = (
 
 /** A send this step holds: its result (accepted with no turn), or 'send' when it goes on once
  *  decided. */
-export type ThreadMuteOutcome = { decided: Promise<ConnectorDeliveryResult | 'send'> }
+export type ThreadMuteOutcome = { decided: Promise<ConnectorDeliveryResult | 'send' | 'carried'> }
 
 /** The send's outcome when this step holds it; null when it goes on to the agent now. */
 export function handleThreadMute(
   deps: ThreadMuteDeps,
   delivery: SendDelivery,
-  record: RecordHandled
+  record: RecordHandled,
+  // A later send of a held batch: whether an earlier send of it carried this one into its turn.
+  carriedBefore?: Promise<boolean>
 ): ThreadMuteOutcome | null {
   const key = delivery.conversation
   const userId = key.source === 'slack' ? slackThreadBotUser(key.externalId) : null
@@ -113,6 +115,16 @@ export function handleThreadMute(
     return null
   }
   const id = JSON.stringify([key.source, key.externalId])
+  // Its place is taken now, behind the send before it, so nothing later in the poll overtakes it.
+  if (carriedBefore) {
+    const waited = deps.queued(key, () => carriedBefore.catch(() => false))
+    const decided = waited.then(async (wait) =>
+      (await carriedBefore.catch(() => false))
+        ? ('carried' as const)
+        : await afterWait(Promise.resolve(wait), deps, delivery, record, userId)
+    )
+    return { decided: hold(deps, id, decided) }
+  }
   // A reply behind one still deciding (its link being written, or its mute or unmute being saved)
   // waits its turn, so it is decided on what that one left and never overtakes it.
   const ahead = deps.waiting.get(id)
@@ -149,7 +161,7 @@ async function afterWait(
   delivery: SendDelivery,
   record: RecordHandled,
   userId: string
-): Promise<ConnectorDeliveryResult | 'send'> {
+): Promise<ConnectorDeliveryResult | 'send' | 'carried'> {
   const wait = (await waited) as { outcome?: string } | undefined
   return wait?.outcome === 'refused'
     ? (wait as ConnectorDeliveryResult)
@@ -161,7 +173,7 @@ async function decideNow(
   delivery: SendDelivery,
   record: RecordHandled,
   userId: string
-): Promise<ConnectorDeliveryResult | 'send'> {
+): Promise<ConnectorDeliveryResult | 'send' | 'carried'> {
   const linked = deps.read(delivery.conversation)
   const applied =
     linked && linked !== 'not_bot' && applyStep(deps, delivery, record, userId, linked)
@@ -169,11 +181,11 @@ async function decideNow(
 }
 
 /** Keeps the thread's newest deciding reply until it settles, for the replies behind it. */
-function hold(
+function hold<Decided>(
   deps: ThreadMuteDeps,
   id: string,
-  decided: Promise<ConnectorDeliveryResult | 'send'>
-): Promise<ConnectorDeliveryResult | 'send'> {
+  decided: Promise<Decided>
+): Promise<Decided> {
   deps.waiting.set(id, decided)
   void decided
     .catch(() => undefined)

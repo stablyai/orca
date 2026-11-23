@@ -127,7 +127,9 @@ export function dispatchDelivery(
   msLeft: (expiresAt: number) => number,
   later: readonly SendDelivery[] = [],
   // The account whose reply outbox admits a start or send; null for the legacy way.
-  outboxAccount: string | null = null
+  outboxAccount: string | null = null,
+  // A later send of a batch a thread's mute holds: whether an earlier one carried it.
+  carriedBefore?: Promise<boolean>
 ): DispatchedDelivery | null {
   const parsed = ConnectorDelivery.safeParse(raw)
   if (!parsed.success) {
@@ -198,14 +200,17 @@ export function dispatchDelivery(
   if (delivery.kind === 'send' && !seam.receipts.known(delivery.conversation, deliveryId)) {
     // Before the seam: a mute command or a muted thread's reply never reaches the agent. Done alone,
     // so its batch's later sends go on their own.
-    const muted = machine.threadMute?.(delivery, (handled) =>
-      seam.receipts.run(
-        delivery.conversation,
-        deliveryId,
-        'connector.mute',
-        [delivery.text],
-        handled
-      )
+    const muted = machine.threadMute?.(
+      delivery,
+      (handled) =>
+        seam.receipts.run(
+          delivery.conversation,
+          deliveryId,
+          'connector.mute',
+          [delivery.text],
+          handled
+        ),
+      carriedBefore
     )
     if (muted) {
       // Held until decided; one that then goes on carries its batch's later sends, as it would have.
@@ -215,6 +220,10 @@ export function dispatchDelivery(
       const done = settle(async (): Promise<ConnectorDeliveryResult> => {
         try {
           const result = await muted.decided
+          // Carried in an earlier send's turn, whose outcome its batch reports for it.
+          if (result === 'carried') {
+            return { outcome: 'accepted' }
+          }
           if (result !== 'send') {
             return result
           }

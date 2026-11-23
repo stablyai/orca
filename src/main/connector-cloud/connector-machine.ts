@@ -35,7 +35,8 @@ export type ConnectorMachine = {
    *  now, 'send' when it goes on once its thread is linked. */
   threadMute?: (
     delivery: Extract<ConnectorDelivery, { kind: 'send' }>,
-    record: RecordHandled
+    record: RecordHandled,
+    carriedBefore?: Promise<boolean>
   ) => ThreadMuteOutcome | null
   /** Tells the bot's owner about one of its hooks; false when the hook isn't this machine's. */
   webhookNotice?: (

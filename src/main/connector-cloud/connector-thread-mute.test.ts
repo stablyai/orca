@@ -90,7 +90,8 @@ describe('a muted thread', () => {
       runTrigger: async () => false,
       threadMute: (
         delivery: Parameters<typeof handleThreadMute>[1],
-        record: Parameters<typeof handleThreadMute>[2]
+        record: Parameters<typeof handleThreadMute>[2],
+        carriedBefore?: Promise<boolean>
       ) =>
         handleThreadMute(
           {
@@ -107,7 +108,8 @@ describe('a muted thread', () => {
             }
           },
           delivery,
-          record
+          record,
+          carriedBefore
         )
     }
     const deliver = async (raw: unknown) => {
@@ -199,7 +201,8 @@ describe('a resent delivery', () => {
       runTrigger: async () => false,
       threadMute: (
         delivery: Parameters<typeof handleThreadMute>[1],
-        record: Parameters<typeof handleThreadMute>[2]
+        record: Parameters<typeof handleThreadMute>[2],
+        carriedBefore?: Promise<boolean>
       ) =>
         handleThreadMute(
           {
@@ -214,7 +217,8 @@ describe('a resent delivery', () => {
             react: async () => {}
           },
           delivery,
-          record
+          record,
+          carriedBefore
         )
     }
     const resent = dispatchDelivery(
@@ -258,7 +262,8 @@ describe('a mention that unmutes, with follow-ups in its poll', () => {
       runTrigger: async () => false,
       threadMute: (
         delivery: Parameters<typeof handleThreadMute>[1],
-        record: Parameters<typeof handleThreadMute>[2]
+        record: Parameters<typeof handleThreadMute>[2],
+        carriedBefore?: Promise<boolean>
       ) =>
         handleThreadMute(
           {
@@ -273,7 +278,8 @@ describe('a mention that unmutes, with follow-ups in its poll', () => {
             react: async () => {}
           },
           delivery,
-          record
+          record,
+          carriedBefore
         )
     }
     const batch = [
@@ -330,7 +336,8 @@ describe('a silenced reply resent after an unmute', () => {
       runTrigger: async () => false,
       threadMute: (
         delivery: Parameters<typeof handleThreadMute>[1],
-        record: Parameters<typeof handleThreadMute>[2]
+        record: Parameters<typeof handleThreadMute>[2],
+        carriedBefore?: Promise<boolean>
       ) =>
         handleThreadMute(
           {
@@ -345,7 +352,8 @@ describe('a silenced reply resent after an unmute', () => {
             react: async () => {}
           },
           delivery,
-          record
+          record,
+          carriedBefore
         )
     }
     const deliver = async (raw: unknown) =>
@@ -424,7 +432,8 @@ describe('a silenced reply leading a batch', () => {
       runTrigger: async () => false,
       threadMute: (
         delivery: Parameters<typeof handleThreadMute>[1],
-        record: Parameters<typeof handleThreadMute>[2]
+        record: Parameters<typeof handleThreadMute>[2],
+        carriedBefore?: Promise<boolean>
       ) =>
         handleThreadMute(
           {
@@ -439,7 +448,8 @@ describe('a silenced reply leading a batch', () => {
             react: async () => {}
           },
           delivery,
-          record
+          record,
+          carriedBefore
         )
     }
     const batch = [
@@ -456,5 +466,124 @@ describe('a silenced reply leading a batch', () => {
     )
     await Promise.all(dispatched.map((entry) => entry.done))
     expect(turns).toEqual([{ text: '<@U0BOT> draft a reply', later: 1 }])
+  })
+})
+
+describe('a held reply leading a batch, stopped while it waits', () => {
+  // Its follow-ups are refused with it, as one queued turn would be, never sent after the Stop.
+  it('takes its batch down with it', async () => {
+    const stopped = { outcome: 'refused', reason: 'conversation_cancelled' }
+    const reached: string[] = []
+    const seam = {
+      send: async (_host: unknown, _key: unknown, _id: string, message: { text: string }) => {
+        reached.push(message.text)
+        return { outcome: 'accepted' }
+      },
+      receipts: {
+        run: (_k: unknown, _d: unknown, _m: unknown, _t: unknown, run: () => unknown) => run(),
+        known: () => false,
+        heldByMute: () => null,
+        carried: async (_k: unknown, _d: unknown, _t: unknown, done: Promise<unknown>) => done
+      }
+    } as unknown as ExternalConversationSeam
+    const waiting = new Map<string, Promise<unknown>>()
+    const machine = {
+      runTrigger: async () => false,
+      threadMute: (
+        delivery: Parameters<typeof handleThreadMute>[1],
+        record: Parameters<typeof handleThreadMute>[2],
+        carriedBefore?: Promise<boolean>
+      ) =>
+        handleThreadMute(
+          {
+            read: () => null,
+            write: async () => {},
+            botNames: () => [],
+            otherBotNames: () => [],
+            queued: async () => stopped,
+            waiting,
+            react: async () => {}
+          },
+          delivery,
+          record,
+          carriedBefore
+        )
+    }
+    const batch = [send('@sam be quiet'), send('draft it')] as unknown as Parameters<
+      typeof dispatchBatch
+    >[3]
+    const dispatched = dispatchBatch(
+      seam,
+      {} as ExternalConversationHost,
+      machine,
+      batch,
+      () => 60_000
+    )
+    const results = await Promise.all(dispatched.map((entry) => entry.done))
+    expect(results).toEqual([stopped, stopped])
+    expect(reached).toEqual([])
+  })
+})
+
+describe('a later mute in the same poll as a held batch', () => {
+  // `mute`, a mention, then `mute` again: the mention keeps its place, so the last mute wins.
+  it('is never overtaken by the batch before it', async () => {
+    let muted = false
+    const reached: string[] = []
+    const seam = {
+      send: async (_host: unknown, _key: unknown, _id: string, message: { text: string }) => {
+        reached.push(message.text)
+        return { outcome: 'accepted' }
+      },
+      receipts: {
+        run: (_k: unknown, _d: unknown, _m: unknown, _t: unknown, run: () => unknown) => run(),
+        known: () => false,
+        heldByMute: () => null,
+        carried: async (_k: unknown, _d: unknown, _t: unknown, done: Promise<unknown>) => done
+      }
+    } as unknown as ExternalConversationSeam
+    const waiting = new Map<string, Promise<unknown>>()
+    const machine = {
+      runTrigger: async () => false,
+      threadMute: (
+        delivery: Parameters<typeof handleThreadMute>[1],
+        record: Parameters<typeof handleThreadMute>[2],
+        carriedBefore?: Promise<boolean>
+      ) =>
+        handleThreadMute(
+          {
+            read: () => ({ botId: 'bot1', muted }),
+            write: async (_key, next) => {
+              muted = next
+            },
+            botNames: () => ['reviewer'],
+            otherBotNames: () => [],
+            queued: async (_key, work) => await work?.(),
+            waiting,
+            react: async () => {}
+          },
+          delivery,
+          record,
+          carriedBefore
+        )
+    }
+    const dispatch = (texts: { text: string; extra?: Record<string, unknown> }[]) =>
+      dispatchBatch(
+        seam,
+        {} as ExternalConversationHost,
+        machine,
+        texts.map(({ text, extra }) => send(text, extra)) as unknown as Parameters<
+          typeof dispatchBatch
+        >[3],
+        () => 60_000
+      )
+    const first = dispatch([
+      { text: 'mute' },
+      { text: '@reviewer check this', extra: { mentioned: true } }
+    ])
+    const second = dispatch([{ text: 'mute' }])
+    await Promise.all([...first, ...second].map((entry) => entry.done))
+    expect(reached).toEqual(['@reviewer check this'])
+    expect(muted).toBe(true)
   })
 })
