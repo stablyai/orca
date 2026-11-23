@@ -258,6 +258,10 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
             }
           />
           <fieldset disabled={merged.offline} className="contents">
+            {/* A member's kept rows show while its refresh failed: say so above them, with Retry. */}
+            {merged.ready && merged.failedRetry ? (
+              <BotItemsReadFailed stale onRetry={merged.failedRetry} />
+            ) : null}
             <BotItemsList
               bot={{
                 foldKey: `group:${group.id}`,
