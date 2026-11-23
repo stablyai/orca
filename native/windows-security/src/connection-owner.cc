@@ -78,22 +78,28 @@ class TcpClientOwnerWorker : public Napi::AsyncWorker {
     CloseHandle(process);
   }
 
+  // A table read failure rejects; an owner found but unreadable still reports its PID.
   void OnOK() override {
     auto env = Env();
-    if (failedCall_ != nullptr) {
-      deferred_.Reject(Napi::Error::New(env, std::string(failedCall_) +
-                                                 " failed with Win32 error " +
-                                                 std::to_string(code_))
-                           .Value());
-      return;
-    }
+    std::string failure = failedCall_ == nullptr
+                              ? ""
+                              : std::string(failedCall_) + " failed with Win32 error " +
+                                    std::to_string(code_);
     if (pid_ == 0) {
-      deferred_.Resolve(env.Null());
+      if (failedCall_ != nullptr) {
+        deferred_.Reject(Napi::Error::New(env, failure).Value());
+      } else {
+        deferred_.Resolve(env.Null());
+      }
       return;
     }
     auto owner = Napi::Object::New(env);
     owner.Set("pid", Napi::Number::New(env, static_cast<double>(pid_)));
-    owner.Set("sid", Napi::String::New(env, sid_));
+    if (failedCall_ != nullptr) {
+      owner.Set("error", Napi::String::New(env, failure));
+    } else {
+      owner.Set("sid", Napi::String::New(env, sid_));
+    }
     deferred_.Resolve(owner);
   }
 
