@@ -131,6 +131,25 @@ describe('lanes reading bytes at their own pace', () => {
   })
 })
 
+describe('a finish the tracker reads late, from an earlier turn', () => {
+  it("never settles the agent's newer mark held by command paint", async () => {
+    const { record, arbiter, settle } = devinPane()
+    observeTerminalCommandPaint(record, `${START}devin`, 'devin', 1_000)
+    // Command paint has already passed turn 1's end and turn 2's start, and holds turn 2's end.
+    observeTerminalCommandPaint(record, `${START}go`, 'go', 2_000)
+    expect(observeTerminalCommandPaint(record, `DONE${FINISH}`, 'DONE', 3_000).finishHeld).toBe(
+      true
+    )
+    arbiter.note('pty-1', { paint: true })
+    // The tracker now reads turn 1's end and turn 2's start.
+    arbiter.note('pty-1', { authority: { exitCode: 0 } })
+    arbiter.noteCommandStarted('pty-1', 'authority')
+    await settle('agent')
+    expect(isShellInFront(record)).toBe(false)
+    expect(isCurrentCommandStatus(record, 2_500)).toBe(true)
+  })
+})
+
 describe('a mark a replaced process left', () => {
   it('is dismissed when the new process starts a command', async () => {
     const { record, retired, feed, settle } = devinPane()
