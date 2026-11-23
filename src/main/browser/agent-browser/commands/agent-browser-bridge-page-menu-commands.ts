@@ -66,6 +66,12 @@ export abstract class AgentBrowserBridgePageMenuCommands extends AgentBrowserBri
     const end = Math.min(start + BROWSER_READ_IMAGE_CHUNK_BYTES, image.bytes.length)
     if (end < image.bytes.length) {
       this.lastReadImage.set(wc, image)
+      // A viewer that stops part way must not leave the image held for the page's life.
+      setTimeout(() => {
+        if (this.lastReadImage.get(wc) === image) {
+          this.lastReadImage.delete(wc)
+        }
+      }, READ_IMAGE_REUSE_MS).unref()
     } else {
       this.lastReadImage.delete(wc)
     }

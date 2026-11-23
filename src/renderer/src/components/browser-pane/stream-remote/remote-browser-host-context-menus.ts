@@ -3,6 +3,9 @@ import type { BrowserContextMenuTarget } from '../../../../../shared/browser/gue
 // The host reports the menu right after the forwarded press reaches the page; past this it opened none.
 const RIGHT_PRESS_MENU_WAIT_MS = 3_000
 
+// `sentAt` stays null while the press waits behind earlier input in the queue.
+export type RemoteBrowserHostMenuPress = { clientX: number; clientY: number; sentAt: number | null }
+
 export type RemoteBrowserHostContextMenuListener = (
   menu: BrowserContextMenuTarget,
   press: { clientX: number; clientY: number }
@@ -12,8 +15,7 @@ export type RemoteBrowserHostContextMenuListener = (
 export class RemoteBrowserHostContextMenus {
   /** The current stream sends right presses to the page and reports the menus they open. */
   supported = false
-  // `sentAt` stays null while the press waits behind earlier input in the queue.
-  private press: { clientX: number; clientY: number; sentAt: number | null } | null = null
+  private press: RemoteBrowserHostMenuPress | null = null
   private listener: RemoteBrowserHostContextMenuListener | null = null
 
   setSupported(supported: boolean): void {
@@ -21,19 +23,23 @@ export class RemoteBrowserHostContextMenus {
     this.press = null
   }
 
-  notePress(clientX: number, clientY: number): void {
+  notePress(clientX: number, clientY: number): RemoteBrowserHostMenuPress {
     this.press = { clientX, clientY, sentAt: null }
+    return this.press
   }
 
   /** The press or its release is going to the host now; the menu it opens follows shortly. */
-  markPressSent(): void {
-    if (this.press) {
-      this.press.sentAt = Date.now()
+  markPressSent(press: RemoteBrowserHostMenuPress): void {
+    // A newer press replaced this one; its own dispatch stamps it.
+    if (this.press === press) {
+      press.sentAt = Date.now()
     }
   }
 
+  /** A press whose menu may still come; one the page cancelled stops counting once the wait ends. */
   get hasPendingPress(): boolean {
-    return this.press !== null
+    const press = this.press
+    return press !== null && (press.sentAt === null || !this.waitEnded(press.sentAt))
   }
 
   clearPress(): void {
@@ -46,10 +52,14 @@ export class RemoteBrowserHostContextMenus {
 
   deliver(menu: BrowserContextMenuTarget): void {
     const press = this.press
-    if (!press || press.sentAt === null || Date.now() - press.sentAt > RIGHT_PRESS_MENU_WAIT_MS) {
+    if (!press || press.sentAt === null || this.waitEnded(press.sentAt)) {
       return
     }
     this.press = null
     this.listener?.(menu, press)
+  }
+
+  private waitEnded(sentAt: number): boolean {
+    return Date.now() - sentAt > RIGHT_PRESS_MENU_WAIT_MS
   }
 }

@@ -7,6 +7,7 @@ import {
 import { useRemoteBrowserPageKeyboard } from './use-remote-browser-page-keyboard'
 import type { BrowserPageEditCommand } from '../assemble-chrome/context-menu/browser-page-context-menu-items'
 import { RemoteBrowserInputQueue } from './remote-browser-input-queue'
+import type { RemoteBrowserHostMenuPress } from './remote-browser-host-context-menus'
 import { useRemoteBrowserPageHover } from './use-remote-browser-page-hover'
 import { useRemoteBrowserSelectPopup } from './remote-browser-select-popup'
 import type { RemoteBrowserPageInputParams } from './remote-browser-page-input-params'
@@ -77,6 +78,7 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     selectPopupElement
   } = useRemoteBrowserSelectPopup(input)
   const rightPressForwardedRef = useRef(false)
+  const menuPressRef = useRef<RemoteBrowserHostMenuPress | null>(null)
   // macOS Control+click is a right press, through to its release.
   const controlClickRef = useRef(false)
   const getRemoteImagePoint = useCallback(
@@ -117,9 +119,11 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     if (!target || !pageId || !image || !operationToken || !point || !button) {
       return
     }
-    if (pageMenuPress) {
-      hostContextMenus.notePress(event.clientX, event.clientY)
-    } else {
+    const menuPress = pageMenuPress
+      ? hostContextMenus.notePress(event.clientX, event.clientY)
+      : null
+    menuPressRef.current = menuPress
+    if (!menuPress) {
       hostContextMenus.clearPress()
     }
     if (button === 'right') {
@@ -151,8 +155,8 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
           { ...params, x: point.x, y: point.y },
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
-        if (pageMenuPress) {
-          hostContextMenus.markPressSent()
+        if (menuPress) {
+          hostContextMenus.markPressSent(menuPress)
         }
         await callRuntimeRpc(
           target,
@@ -196,7 +200,7 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     if (!target || !pageId || !operationToken || !point || !button) {
       return
     }
-    const pageMenuRelease = button === 'right' && !pagePointerOwned
+    const menuPress = button === 'right' && !pagePointerOwned ? menuPressRef.current : null
     if (button === 'right') {
       rightPressForwardedRef.current = false
     }
@@ -216,8 +220,8 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
         // Windows hosts open the page menu on the release.
-        if (pageMenuRelease) {
-          hostContextMenus.markPressSent()
+        if (menuPress) {
+          hostContextMenus.markPressSent(menuPress)
         }
         await callRuntimeRpc(
           target,
