@@ -164,6 +164,18 @@ export function useBotItemQuestionSteps(
     hold(next)
   }
   const answer = useLatestHandler((index: number, words: string) => settle(index, words))
+  // Every line of the text answers a question another waiting ask holds.
+  const namesOtherAsk = (text: string): boolean => {
+    const others = [...botItemQuestionPairing(item, events).questions]
+      .filter(([id, entry]) => id !== askId && entry.waiting)
+      .flatMap(([, entry]) =>
+        entry.shape.decisions.map((d) => `${botItemQuestionLine(d.question)} →`)
+      )
+    const lines = text.split('\n').filter((line) => line.trim())
+    return (
+      lines.length > 0 && lines.every((line) => others.some((head) => line.trim().startsWith(head)))
+    )
+  }
   const fromBox = useLatestHandler(
     (
       text: string,
@@ -173,15 +185,16 @@ export function useBotItemQuestionSteps(
     ) => {
       if (!waiting) {
         send(text, paths, undefined, oneLine !== null && replyingTo === null, skills)
-      } else if (replyingTo === `${askId}:${current}`) {
+      } else if (replyingTo === `${askId}:${current}` && !namesOtherAsk(text)) {
         settle(current, text, paths, skills)
       } else {
-        // Held answers name their lines; the comment rides along answering none.
+        // Held answers name their lines; the comment rides along answering none, or the other ask's
+        // lines it names ("Question → answer", as an Alt-clicked chip of that ask fills the box).
         const answered = botItemAnswersText(shape, kept)
         if (answered) {
           post(kept, `${answered}\n${text}`, paths, skills)
         } else {
-          send(text, paths, undefined, true, skills)
+          send(text, paths, undefined, !namesOtherAsk(text), skills)
         }
       }
     }
