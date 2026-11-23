@@ -1,6 +1,7 @@
 import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RemoteBrowserPageSession } from './remote-browser-page-session'
 import { RemoteBrowserPagePrompts } from './remote-browser-page-prompts'
+import { RemoteBrowserHostContextMenus } from './remote-browser-host-context-menus'
 import { openRemoteBrowserScreencastStream } from './remote-browser-screencast-subscription'
 import { RemoteBrowserStreamRestartScheduler } from './remote-browser-stream-restart-scheduler'
 import { RemoteBrowserStreamLiveness } from './remote-browser-stream-liveness'
@@ -34,6 +35,8 @@ import type { RemoteBrowserStreamLifecycleDeps } from './remote-browser-stream-l
 export class RemoteBrowserStreamLifecycle {
   readonly tokens: RemoteBrowserOperationTokens
   readonly session: RemoteBrowserPageSession
+  /** Whether this pane's stream reports the page's own menus, and the menus it reports. */
+  readonly hostContextMenus = new RemoteBrowserHostContextMenus()
   private readonly restartScheduler: RemoteBrowserStreamRestartScheduler
   private subscription: RemoteBrowserStreamSubscription | null = null
   private streamViewportSize: RemoteBrowserViewportSize | null = null
@@ -144,13 +147,8 @@ export class RemoteBrowserStreamLifecycle {
     this.setStatus(REMOTE_BROWSER_STREAM_OPENING)
     current.unsubscribe()
     void this.startStream(pageId)
-      .then((subscription) => {
-        // A null stream means supersession; only its replacement may write status.
-        if (!subscription) {
-          return
-        }
-        this.adoptSubscription(subscription)
-      })
+      // A null stream means supersession; only its replacement may write status.
+      .then((subscription) => subscription && this.adoptSubscription(subscription))
       .catch((error: unknown) => {
         if (!restartToken || !this.tokens.isCurrent(restartToken)) {
           return
@@ -276,7 +274,7 @@ export class RemoteBrowserStreamLifecycle {
           onPageMissing: () => deps.closeMissingRemotePage(pageId),
           onFrame: (bytes) => deps.handleFrameBytes(token, bytes),
           onPointer: (pointer) => deps.setPointer(pointer),
-          hostContextMenus: deps.hostContextMenus,
+          hostContextMenus: this.hostContextMenus,
           onClosed: () => this.handleStreamClosed(token, true),
           pagePrompts: new RemoteBrowserPagePrompts(deps)
         }

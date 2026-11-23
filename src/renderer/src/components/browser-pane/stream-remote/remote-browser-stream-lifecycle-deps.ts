@@ -1,5 +1,4 @@
 import type { BrowserScreencastPointer } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
-import type { RemoteBrowserHostContextMenus } from './remote-browser-host-context-menus'
 import type { RemoteBrowserPageSessionDeps } from './remote-browser-page-session'
 import type { RemoteBrowserPagePromptDeps } from './remote-browser-page-prompts'
 import type { RemoteBrowserScreencastSubscribe } from './remote-browser-screencast-subscription'
@@ -23,5 +22,4 @@ export type RemoteBrowserStreamLifecycleDeps = Omit<RemoteBrowserPageSessionDeps
     clearFrame: () => void
     handleFrameBytes: (token: RemoteBrowserStreamToken, bytes: Uint8Array<ArrayBufferLike>) => void
     setPointer: (pointer: BrowserScreencastPointer | null) => void
-    hostContextMenus: Pick<RemoteBrowserHostContextMenus, 'setSupported' | 'deliver'>
   }

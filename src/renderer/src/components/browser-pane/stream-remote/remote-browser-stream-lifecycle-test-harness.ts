@@ -223,8 +223,7 @@ export function createHarness() {
     setStatus: (status) => statusLog.push(status),
     clearFrame: () => {},
     handleFrameBytes: () => {},
-    setPointer: () => {},
-    hostContextMenus: { setSupported: () => {}, deliver: () => {} }
+    setPointer: () => {}
   })
 
   return {
