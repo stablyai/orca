@@ -30,7 +30,12 @@ function controlledScans() {
     })
     await Promise.resolve()
   }
-  return { plan, pending, finish }
+  const fail = async (atMs: number) => {
+    vi.setSystemTime(atMs)
+    pending.shift()!({ kind: 'failed', error: new Error('worktree list failed') })
+    await Promise.resolve()
+  }
+  return { plan, pending, finish, fail }
 }
 
 const read = (plan: ReturnType<typeof controlledScans>['plan']) =>
@@ -77,5 +82,25 @@ describe('worktree catalog freshness', () => {
     expect((await afterMutation).observation?.outcome).toMatchObject({
       worktrees: [{ path: '/repos/freshness/v3' }]
     })
+  })
+
+  it('reuses a slow failed scan for its window from completion instead of retrying it at once', async () => {
+    const scans = controlledScans()
+    const runtimeRead = () =>
+      readWorktreeCatalog(
+        repo,
+        'local:default',
+        { kind: 'runtime', maxAgeMs: 5_000, reusesFailure: true },
+        scans.plan
+      )
+    const first = runtimeRead()
+    await vi.waitFor(() => expect(scans.pending).toHaveLength(1))
+    await scans.fail(6_000)
+    const failed = (await first).observation
+    expect(failed?.outcome.kind).toBe('failed')
+
+    vi.setSystemTime(10_000)
+    expect((await runtimeRead()).observation).toBe(failed)
+    expect(scans.pending).toHaveLength(0)
   })
 })
