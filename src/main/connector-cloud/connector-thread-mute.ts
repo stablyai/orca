@@ -59,8 +59,11 @@ function normalized(text: string): string {
     .trim()
 }
 
+// The longest name first: "reviewer 2" (folder reviewer-2) before its bot's name "reviewer".
 function afterName(rest: string, names: readonly string[]): string | null {
-  const name = names.find((entry) => rest === entry || rest.startsWith(`${entry} `))
+  const name = [...names]
+    .sort((a, b) => b.length - a.length)
+    .find((entry) => rest === entry || rest.startsWith(`${entry} `))
   return name === undefined ? null : rest.slice(name.length).trimStart()
 }
 
@@ -187,7 +190,7 @@ export type ThreadMuteDeps = {
   botNames: (botId: string) => string[]
   /** Settles after the thread's queued deliveries, as a start in the same poll writes its link. */
   queued: (key: ConnectorConversation) => Promise<unknown>
-  /** Each unlinked thread's newest reply still waiting for its link, by conversation. */
+  /** Each thread's newest reply still deciding (its link being written, its mute being saved). */
   waiting: Map<string, Promise<unknown>>
   react: (
     botId: string,
@@ -213,34 +216,67 @@ export function handleThreadMute(
 ): Promise<ConnectorDeliveryResult | 'send'> | null {
   const key = delivery.conversation
   const userId = key.source === 'slack' ? slackThreadBotUser(key.externalId) : null
-  const thread = userId ? deps.read(key) : 'not_bot'
-  if (!userId || thread === 'not_bot') {
+  if (!userId) {
+    return null
+  }
+  const id = JSON.stringify([key.source, key.externalId])
+  // A reply behind one still deciding (its link being written, or its mute or unmute being saved)
+  // waits its turn, so it is decided on what that one left and never overtakes it.
+  const ahead = deps.waiting.get(id)
+  if (ahead) {
+    return hold(
+      deps,
+      id,
+      ahead.catch(() => undefined).then(() => decideNow(deps, delivery, record, userId))
+    )
+  }
+  const thread = deps.read(key)
+  if (thread === 'not_bot') {
     return null
   }
   if (thread) {
     // Most replies to a thread that isn't muted are no command: they skip the bot's names.
-    return thread.muted || mayBeThreadMuteCommand(delivery.text)
-      ? applyStep(deps, delivery, record, userId, thread)
-      : null
+    const applied =
+      thread.muted || mayBeThreadMuteCommand(delivery.text)
+        ? applyStep(deps, delivery, record, userId, thread)
+        : null
+    return applied && hold(deps, id, applied)
   }
-  // No link yet: a start in the same poll is still writing it. A likely command, and every reply
-  // behind one, waits for it and is then decided as any other; the rest go on now, batched as ever.
-  const id = JSON.stringify([key.source, key.externalId])
-  if (!deps.waiting.has(id) && !mayBeThreadMuteCommand(delivery.text)) {
+  // No link yet: a start in the same poll is still writing it. A likely command waits for it and
+  // is then decided as any other; the rest go on now, batched as ever.
+  if (!mayBeThreadMuteCommand(delivery.text)) {
     return null
   }
-  const linkedAt = deps.queued(key)
-  deps.waiting.set(id, linkedAt)
-  const decided = linkedAt.then(async (): Promise<ConnectorDeliveryResult | 'send'> => {
-    const linked = deps.read(key)
-    const settled =
-      linked && linked !== 'not_bot' && applyStep(deps, delivery, record, userId, linked)
-    return settled ? await settled : 'send'
-  })
+  return hold(
+    deps,
+    id,
+    deps.queued(key).then(() => decideNow(deps, delivery, record, userId))
+  )
+}
+
+async function decideNow(
+  deps: ThreadMuteDeps,
+  delivery: SendDelivery,
+  record: RecordHandled,
+  userId: string
+): Promise<ConnectorDeliveryResult | 'send'> {
+  const linked = deps.read(delivery.conversation)
+  const applied =
+    linked && linked !== 'not_bot' && applyStep(deps, delivery, record, userId, linked)
+  return applied ? await applied : 'send'
+}
+
+/** Keeps the thread's newest deciding reply until it settles, for the replies behind it. */
+function hold(
+  deps: ThreadMuteDeps,
+  id: string,
+  decided: Promise<ConnectorDeliveryResult | 'send'>
+): Promise<ConnectorDeliveryResult | 'send'> {
+  deps.waiting.set(id, decided)
   void decided
     .catch(() => undefined)
     .finally(() => {
-      if (deps.waiting.get(id) === linkedAt) {
+      if (deps.waiting.get(id) === decided) {
         deps.waiting.delete(id)
       }
     })
@@ -253,7 +289,7 @@ function applyStep(
   record: RecordHandled,
   userId: string,
   thread: { botId: string; muted: boolean }
-): Promise<ConnectorDeliveryResult> | null {
+): Promise<ConnectorDeliveryResult | 'send'> | null {
   const key = delivery.conversation
   // A reply with no mention and nothing like a command needs no names: most of a muted thread's.
   const plain = !delivery.text.includes('@') && !mayBeThreadMuteCommand(delivery.text)
@@ -268,12 +304,8 @@ function applyStep(
     return record(async () => ACCEPTED)
   }
   if (step === 'unmute_and_send') {
-    // Sent on at once, keeping its place in the thread: its save starts first and is usually on
-    // disk well before its turn is admitted and receipted.
-    void deps
-      .write(key, false)
-      .catch((error: unknown) => console.warn('[connectors] could not save a thread unmute', error))
-    return null
+    // Saved before it goes on, so its turn's receipt never stands for an unmute a crash lost.
+    return deps.write(key, false).then(() => 'send' as const)
   }
   const ref = delivery.asker?.messageRef
   // Saved before its receipt, so a crash between leaves the resend to decide it again; a save that

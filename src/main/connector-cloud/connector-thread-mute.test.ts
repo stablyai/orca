@@ -30,6 +30,13 @@ describe('threadMuteCommand', () => {
     expect(threadMuteCommand('<@U0BOT> reviewer stop responding in this thread', bot)).toBe('mute')
     expect(threadMuteCommand('@Orca reviewer please unmute 🔊', bot)).toBe('unmute')
     expect(threadMuteCommand('Start responding again.', bot)).toBe('unmute')
+    // A numbered handle is matched whole, never as its bot's shorter name.
+    expect(
+      threadMuteCommand('<@U0BOT> reviewer-2 mute', {
+        userId: 'U0BOT',
+        names: ['reviewer', 'reviewer-2']
+      })
+    ).toBe('mute')
     // Someone else's mute, a question, or a sentence that only contains the word.
     expect(threadMuteCommand('<@UOTHER> mute', bot)).toBeNull()
     expect(threadMuteCommand('@bob be quiet', bot)).toBeNull()
