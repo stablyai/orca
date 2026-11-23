@@ -85,6 +85,10 @@ export function MobileHomeScreen() {
   // refreshes that desktop. Clearing the params lets the same tap work again.
   const { router, setHostCatalog } = data
   const link = useLocalSearchParams<{ tab?: string; host?: string }>()
+  const pairedHostIds = useMemo(
+    () => data.sortedHostCatalog.map((entry) => entry.id),
+    [data.sortedHostCatalog]
+  )
   const [usageRefreshRequest, setUsageRefreshRequest] = useState<UsageRefreshRequest>({
     id: 0,
     hostId: null
@@ -276,6 +280,7 @@ export function MobileHomeScreen() {
                     stats={data.stats}
                     bottomInset={contentBottom}
                     refreshRequest={usageRefreshRequest}
+                    pairedHostIds={pairedHostIds}
                     onOpenAccounts={openMobileAccounts}
                   />
                 ) : (

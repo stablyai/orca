@@ -54,6 +54,8 @@ export function MobileHomeUsageTab(props: {
   bottomInset: number
   /** Bumped when the usage widget opens this tab: shows its desktop, then refreshes once connected. */
   refreshRequest: UsageRefreshRequest
+  /** Every paired desktop, connectable or not, so a desktop without credentials yet isn't read as unpaired. */
+  pairedHostIds: readonly string[]
   onOpenAccounts: (hostId: string) => void
 }) {
   const t = useMobileTranslation()
@@ -80,26 +82,59 @@ export function MobileHomeUsageTab(props: {
     }
   }, [client, host, refreshing])
 
+  // The widget's tap: its desktop is selected once, then refreshed when connected. Picking another
+  // desktop cancels it; a desktop since unpaired falls back to refreshing the one shown.
   const handledRefreshRequest = useRef(0)
+  const pendingRefresh = useRef<{ hostId: string | null; selected: boolean } | null>(null)
+  const pickByUser = useCallback(
+    (hostId: string) => {
+      pendingRefresh.current = null
+      pick(hostId)
+    },
+    [pick]
+  )
   useEffect(() => {
     const request = props.refreshRequest
-    if (request.id <= handledRefreshRequest.current) {
+    if (request.id > handledRefreshRequest.current) {
+      handledRefreshRequest.current = request.id
+      const paired = request.hostId != null && props.pairedHostIds.includes(request.hostId)
+      pendingRefresh.current = { hostId: paired ? request.hostId : null, selected: false }
+    }
+    const pending = pendingRefresh.current
+    if (!pending) {
       return
     }
-    // The widget's desktop first, when it is still paired; the refresh waits for it to connect.
-    if (
-      request.hostId &&
-      host?.id !== request.hostId &&
-      props.hosts.some((candidate) => candidate.id === request.hostId)
-    ) {
-      pick(request.hostId)
-      return
+    if (pending.hostId) {
+      if (!props.pairedHostIds.includes(pending.hostId)) {
+        pending.hostId = null
+      } else if (!pending.selected) {
+        // A paired desktop without credentials yet isn't selectable; wait until it is.
+        if (!props.hosts.some((candidate) => candidate.id === pending.hostId)) {
+          return
+        }
+        pending.selected = true
+        if (host?.id !== pending.hostId) {
+          pick(pending.hostId)
+          return
+        }
+      } else if (host?.id !== pending.hostId) {
+        return
+      }
     }
     if (connected && client) {
-      handledRefreshRequest.current = request.id
+      pendingRefresh.current = null
       void refresh()
     }
-  }, [props.refreshRequest, props.hosts, host, pick, connected, client, refresh])
+  }, [
+    props.refreshRequest,
+    props.pairedHostIds,
+    props.hosts,
+    host,
+    pick,
+    connected,
+    client,
+    refresh
+  ])
 
   return (
     <View style={styles.screen}>
@@ -130,7 +165,7 @@ export function MobileHomeUsageTab(props: {
             host={host}
             state={props.hostStates[host.id]}
             pickerTitle={t('home.usage.showUsageFor', 'Show usage for')}
-            onPick={pick}
+            onPick={pickByUser}
           />
         ) : null}
         {props.stats ? <MobileHomeStats stats={props.stats} first /> : null}

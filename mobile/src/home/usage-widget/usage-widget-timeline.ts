@@ -230,7 +230,8 @@ export function buildUsageWidgetTimeline(
   }
   const changes = input.summary.hosts.flatMap((host) =>
     host.providers.flatMap((provider) => [
-      provider.updatedAt + USAGE_WIDGET_STALE_AFTER_MS,
+      // stale is strictly past the hour, so the entry that dims sits just after it.
+      provider.updatedAt + USAGE_WIDGET_STALE_AFTER_MS + 1,
       ...[provider.session?.resetsAt, provider.weekly?.resetsAt].filter((time) => time != null)
     ])
   )
