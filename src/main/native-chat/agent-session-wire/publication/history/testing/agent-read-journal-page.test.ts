@@ -4,6 +4,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionFailureWords } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
 import { readAgentJournalPage, type AgentReadJournalPage } from '../agent-read-journal-page'
 import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from '../agent-session-history-page-bounds'
 import { body, fixture, item } from './agent-session-history-contract.test-fixture'
@@ -38,6 +39,15 @@ const clear = () =>
     kind: 'context-clear',
     boundary: { operationId: `clear-${++clears}`, afterFence: 1, clearedAt: fixture.clock }
   })
+const approval = (answered: boolean): AgentJournalItemBody => ({
+  kind: 'approval',
+  title: 'approval',
+  detail: null,
+  options: [{ id: 'allow', label: 'Allow' }],
+  resolution: answered
+    ? { state: 'resolved', selectedOptionId: 'allow', resolvedBy: 'phone', resolvedAt: 5 }
+    : { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+})
 /** An entry of about `share` of a page's byte budget. */
 const large = (id: string, share: number) =>
   `${id} ${'x'.repeat(Math.floor(HISTORY_PAGE_CONTENT_BUDGET_BYTES * share))}`
@@ -213,5 +223,62 @@ describe('readAgentJournalPage', () => {
       [['e0'], true]
     ])
     expect(pages.at(-1)!.nextCursor).toBeNull()
+  })
+
+  it('refuses a cursor as stale once an item was removed, even with its anchor intact', async () => {
+    ordinal = 0
+    for (let index = 0; index < 6; index++) {
+      await say(`e${index}`)
+    }
+    const cursor = (await readPage(2)).nextCursor!
+    // A rewind keeps later output of retained turns: an unread entry goes, the anchor stays.
+    await fixture.journal.appendTombstone(item(2), { fence: 1 })
+
+    await expect(readPage(2, cursor)).rejects.toMatchObject({ code: 'agent_cursor_stale' })
+  })
+
+  it('keeps a cursor across appends and in-place updates of older items', async () => {
+    ordinal = 0
+    await say('e0')
+    await appendBody(approval(false))
+    const approvalOrdinal = ordinal
+    for (let index = 1; index < 4; index++) {
+      await say(`e${index}`)
+    }
+    const cursor = (await readPage(2)).nextCursor!
+    await fixture.journal.appendItem(item(approvalOrdinal), approval(true), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    await say('e4')
+
+    expect((await readPage(2, cursor)).entries).toEqual([
+      { kind: 'approval', text: 'approval', pending: false },
+      { kind: 'message', role: 'assistant', text: 'e1' }
+    ])
+  })
+
+  it('refuses a cursor as stale once an older send was re-placed', async () => {
+    ordinal = 0
+    await say('e0')
+    await fixture.journal.appendSubmission({
+      clientMessageId: 'send-1',
+      payloadFingerprint: 'send-1',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'send-1' }] },
+      fence: 1
+    })
+    for (let index = 1; index < 4; index++) {
+      await say(`e${index}`)
+    }
+    const cursor = (await readPage(2)).nextCursor!
+    // A rejected direct send keeps its ordinal and moves to a new place.
+    await fixture.journal.resolveDispatch({
+      clientMessageId: 'send-1',
+      fence: 1,
+      state: 'rejected',
+      ...agentSessionFailureWords({ kind: 'notSignedIn' }, { surface: 'rejection' })
+    })
+
+    await expect(readPage(2, cursor)).rejects.toMatchObject({ code: 'agent_cursor_stale' })
   })
 })

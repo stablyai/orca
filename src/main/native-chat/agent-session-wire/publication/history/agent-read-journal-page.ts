@@ -65,11 +65,17 @@ export async function readAgentJournalPage(
         }
       : { sessionId, direction: 'tail', limit: AGENT_SESSION_HISTORY_MAX_LIMIT },
     position
-      ? { scope: 'own-agent', agentRead: { olderThan: position.anchor } }
+      ? {
+          scope: 'own-agent',
+          agentRead: {
+            olderThan: position.anchor,
+            since: { headSequence: position.headSequence, maxOrdinal: position.maxOrdinal }
+          }
+        }
       : { scope: 'own-agent', acceptedUnopened: true, agentRead: {} }
   )
   // A reset means the public epoch moved (`/compact`, a non-local rewind) under the cursor.
-  if (!frame.result.ok || !frame.agentRead) {
+  if (!frame.result.ok || !frame.agentRead || frame.agentRead.changedSince) {
     throw staleAgentReadCursor(orcaSessionId)
   }
   const { page } = frame.result
