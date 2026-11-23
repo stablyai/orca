@@ -27,8 +27,11 @@ export async function webhookCallText(
 ): Promise<WebhookCallText> {
   const envelope = await routes.envelope(callId)
   if (envelope && !envelope.ok && envelope.status === 404) {
-    const { calls } = webhookReadValue(await routes.calls(hookId))
-    const row = calls.find((call) => call.kind === 'call' && call.callId === callId)
+    // A failed log read leaves the envelope's own answer.
+    const log = await routes.calls(hookId)
+    const row = log?.ok
+      ? log.value.calls.find((call) => call.kind === 'call' && call.callId === callId)
+      : undefined
     if (row?.kind === 'call' && row.state === 'ignored') {
       return { callId, ignored: true, text: ignoredCallText(row.reason) }
     }
