@@ -11,7 +11,12 @@ import { getOptionalPositiveIntegerValueFlag } from '../numeric-flags'
 import { isDevCliInvocation } from '../recovery/runtime-compatibility'
 import { resolveCoordinatorTerminalHandle } from '../identity/terminal-identity'
 import { formatWorkerStart, type WorkerReleaseReceipt } from './worker-output'
-import { isLiveWorkerStart, WORKER_START_VIEW } from './worker-start-agent-view'
+import {
+  isLiveWorkerStart,
+  WORKER_START_VIEW,
+  type WorkerStartAgentReceipt
+} from './worker-start-agent-view'
+import { reconcileWorkerStartTimeout } from './worker-start-timeout'
 import {
   printOrchestrationResult,
   renderOrchestrationArgv,
@@ -49,26 +54,13 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     const parent = getOptionalStringFlag(flags, 'parent')
     const item = getOptionalStringFlag(flags, 'item')
     const forQuestion = getOptionalStringFlag(flags, 'for')
-    const result = await callOrchestrationMutation<{
-      runId: string
-      taskId: string
-      dispatchId: string
-      state: string
-      failedStage?: string
-      lastError?: string
-      warning?: string
-      mode?: { mode: string; preferred: string; reason: string; detail: string }
-      effects: unknown[]
-      residualResources: unknown[]
-      nextCommands?: string[]
-      next?: string
-    }>(client, flags, 'orchestration.workerStart', {
+    const params = {
       task,
       ...(spec ? { spec } : {}),
       ...(taskTitle ? { taskTitle } : {}),
       ...(deps ? { deps } : {}),
       ...(parent ? { parent } : {}),
-      // The host checks the item is the calling bot chat's own, open one, then records it.
+      // The host checks the caller is a bot's own chat and the item is open, then records it.
       ...(item ? { origin: `bot-item:${item}` } : {}),
       ...(forQuestion ? { forQuestion } : {}),
       on: getOptionalStringFlag(flags, 'on'),
@@ -88,7 +80,19 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       run: getOptionalStringFlag(flags, 'run'),
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client),
       devMode: isDevCliInvocation()
-    }).catch(async (error: unknown) => {
+    }
+    const result = await callOrchestrationMutation<WorkerStartAgentReceipt>(
+      client,
+      flags,
+      'orchestration.workerStart',
+      params
+    ).catch(async (error: unknown) => {
+      if (!flags.has('retry-request')) {
+        const recovered = await reconcileWorkerStartTimeout(client, error)
+        if (recovered) {
+          return recovered
+        }
+      }
       throw await explainOlderRuntimeRunRequired(client, error)
     })
     if (result.result.state !== 'ready') {

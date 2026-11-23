@@ -84,6 +84,8 @@ export type MobileNativeChatViewProps = MobileNativeChatSendProps &
     onDismissSendError?: () => void
     filePaths?: string[]
     onNeedFiles?: (query: string) => void
+    /** How a picked file is written when the chat runs in a workspace sub-folder. */
+    fileReference?: (path: string) => string | undefined
     skillDiscovery?: NativeChatSkillDiscoverySnapshot
     onNeedSkills?: () => void
     sessionOptions?: MobileNativeChatSessionOptionPickersProps | null

@@ -80,7 +80,8 @@ export const BotSearchResultRow = memo(function BotSearchResultRow({
         WORKTREE_CARD_SURFACE_CLASS_NAME,
         // shrink-0: the results scroll rather than squash rows when the split caps their height.
         'worktree-sidebar-card-hover flex w-[calc(100%-0.25rem)] shrink-0 scroll-my-0.5 items-center pt-1.25 pb-1.5 pl-1.5 text-left',
-        'focus-visible:ring-2 focus-visible:ring-sidebar-ring'
+        // Inset: the card reaches the scroller's edges, which would clip an outer ring.
+        'focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-inset'
       )}
       onClick={() => onSelect(entry)}
       onFocus={(event) =>

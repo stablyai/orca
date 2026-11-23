@@ -1,9 +1,16 @@
 // Add a connector, as a page inside Connectors: the desktop's AddConnectorDialog, built like Bot templates
-// (search, category chips, one grouped list). Lists what the phone can add, and Manage for what the bot has.
+// (search, category chips, one grouped list). Lists what the phone can add, and Manage for what the bot has:
+// Orca's connectors, the apps Add to <bot> lists, Composio's apps, then Add by URL.
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
+import {
+  BOT_APP_CATEGORIES,
+  BOT_MCP_APPS,
+  type BotAppCategory,
+  type BotMcpApp
+} from '../../../../src/shared/bots/bot-mcp-apps'
 import { useState, type ReactNode } from 'react'
 import { ScrollView, View } from 'react-native'
-import { Webhook } from 'lucide-react-native'
+import { Plus, Webhook, Wrench } from 'lucide-react-native'
 import { MobileSearchField } from '../../components/controls/MobileSearchField'
 import { MobileNoMatchState } from '../../components/feedback/MobileStateView'
 import {
@@ -24,8 +31,9 @@ import { MobileConnectorSourceIcon, MobileGoogleMark } from '../MobileConnectorS
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { AppLogo } from './MobileBotComposio'
 import { useComposioCatalog } from './use-composio-catalog'
+import { botMcpAppLine, composioCuratedAppLine } from '../../../../src/shared/bots/bot-app-lines'
 
-type Category = 'coding' | 'chat' | 'docs' | 'mail'
+type Category = BotAppCategory
 
 /** One row; `added` rows open the bot's own page for it, the rest add it. */
 export type AddConnectorOption = {
@@ -62,6 +70,12 @@ export function MobileBotAddConnector(props: {
     /** The host has a key, so Composio's whole catalog can be searched. */
     catalog: { client: RpcClient | null; botId: string } | null
     onPick: (app: { slug: string; name: string }) => void
+  }
+  apps: {
+    /** The ids of the listed apps the bot has as tools. */
+    added: ReadonlySet<string>
+    onPick: (app: BotMcpApp) => void
+    onAddByUrl: () => void
   }
 }) {
   useMobileColorScheme()
@@ -104,7 +118,10 @@ export function MobileBotAddConnector(props: {
     coding: t('bots.apps.category.coding', 'Coding'),
     chat: t('bots.apps.category.chat', 'Chat'),
     docs: t('bots.apps.category.docs', 'Docs and projects'),
-    mail: t('bots.apps.category.mail', 'Mail and meetings')
+    mail: t('bots.apps.category.mail', 'Mail and meetings'),
+    monitoring: t('bots.apps.category.monitoring', 'Monitoring'),
+    sales: t('bots.apps.category.sales', 'Sales and support'),
+    design: t('bots.apps.category.design', 'Design')
   }
   const listed = props.options.filter((option) => option.added || option.add)
   const mine = listed.filter((option) => option.added)
@@ -115,8 +132,21 @@ export function MobileBotAddConnector(props: {
       (needle === '' ||
         `${copy[option.id].name} ${copy[option.id].line}`.toLocaleLowerCase().includes(needle))
   )
+  // In Add to <bot>'s order: by category, then as listed.
+  const mcpApps = BOT_APP_CATEGORIES.flatMap((category) =>
+    BOT_MCP_APPS.filter((app) => app.category === category)
+  )
+  const mcpMine = mcpApps.filter((app) => props.apps.added.has(app.id))
+  const mcpShown = mcpApps.filter(
+    (app) =>
+      (filter === null ||
+        (filter === 'mine' ? props.apps.added.has(app.id) : app.category === filter)) &&
+      (needle === '' || `${app.name} ${botMcpAppLine(app, t)}`.toLocaleLowerCase().includes(needle))
+  )
   const { composio } = props
   const added = (slug: string) => composio.active.includes(slug)
+  // An app listed above is offered there, not again under Composio, as the desktop does.
+  const direct = new Set(mcpApps.flatMap((app) => app.composio ?? []))
   // Browsing or searching with a key reads Composio's whole catalog, as the desktop's does.
   const fromCatalog = composio.catalog !== null && (browsing || needle !== '') && filter === null
   const catalog = useComposioCatalog(
@@ -128,12 +158,17 @@ export function MobileBotAddConnector(props: {
     ? catalog.apps
     : composio.curated.filter(
         (app) =>
+          // Unless signed in already: that sign-in is the bot's, listed with Manage.
+          (!direct.has(app.slug) || added(app.slug)) &&
           (filter === null || (filter === 'mine' && added(app.slug))) &&
-          (needle === '' || `${app.name} ${app.line}`.toLocaleLowerCase().includes(needle))
+          (needle === '' ||
+            `${app.name} ${composioCuratedAppLine(app, t)}`.toLocaleLowerCase().includes(needle))
       )
   const appsShown = fromCatalog || browsing || needle !== '' ? apps : apps.slice(0, COMPOSIO_SHOWN)
-  const categories = (['coding', 'chat', 'docs', 'mail'] as const).filter((category) =>
-    listed.some((option) => CATEGORY[option.id] === category)
+  const categories = BOT_APP_CATEGORIES.filter(
+    (category) =>
+      listed.some((option) => CATEGORY[option.id] === category) ||
+      mcpApps.some((app) => app.category === category)
   )
   const chip = (value: Category | 'mine' | null, label: string) => (
     <FilterChip
@@ -164,15 +199,15 @@ export function MobileBotAddConnector(props: {
         contentContainerStyle={styles.chipRow}
       >
         {chip(null, t('bots.apps.allShort', 'All'))}
-        {mine.length > 0
+        {mine.length + mcpMine.length > 0
           ? chip(
               'mine',
-              `${t('bots.apps.onBot', 'On {{bot}}', { bot: props.botName })} ${mine.length}`
+              `${t('bots.apps.onBot', 'On {{bot}}', { bot: props.botName })} ${mine.length + mcpMine.length}`
             )
           : null}
         {categories.map((category) => chip(category, categoryLabel[category]))}
       </ScrollView>
-      {shown.length === 0 && apps.length === 0 && !catalog.loading ? (
+      {shown.length === 0 && mcpShown.length === 0 && apps.length === 0 && !catalog.loading ? (
         <MobileNoMatchState
           message={t('bots.apps.noMatch', 'No app matches “{{query}}”.', { query: query.trim() })}
           onClear={() => setQuery('')}
@@ -212,6 +247,37 @@ export function MobileBotAddConnector(props: {
                           label={action.label}
                           disabled={props.disabled}
                           onPress={action.onPress}
+                        />
+                      }
+                    />
+                  )
+                })}
+              </ListGroup>
+            </>
+          ) : null}
+          {mcpShown.length > 0 ? (
+            <>
+              <SectionHeader title={t('bots.apps.appsCaption', 'Apps')} />
+              <ListGroup separatorInset={LIST_LEADING_INSET}>
+                {mcpShown.map((app) => {
+                  const onBot = props.apps.added.has(app.id)
+                  return (
+                    <ListRow
+                      key={app.id}
+                      leading={<Wrench size={20} color={colors.textSecondary} />}
+                      title={app.name}
+                      subtitle={botMcpAppLine(app, t)}
+                      disabled={props.disabled && !onBot}
+                      onPress={() => props.apps.onPick(app)}
+                      accessory={
+                        <MobileBotTextButton
+                          label={
+                            onBot
+                              ? t('bots.connectors.manage', 'Manage')
+                              : t('bots.apps.add', 'Add')
+                          }
+                          disabled={props.disabled}
+                          onPress={() => props.apps.onPick(app)}
                         />
                       }
                     />
@@ -268,11 +334,21 @@ export function MobileBotAddConnector(props: {
           ) : null}
         </View>
       )}
+      <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.byUrl}>
+        <ListRow
+          leading={<Plus size={20} color={colors.textPrimary} />}
+          title={t('bots.apps.addByUrl', 'Add by URL')}
+          disabled={props.disabled}
+          navigates
+          onPress={props.apps.onAddByUrl}
+        />
+      </ListGroup>
     </>
   )
 }
 
 const styles = themedStyleSheet(() => ({
   chips: { flexGrow: 0, marginTop: spacing.xs },
-  chipRow: { gap: spacing.sm }
+  chipRow: { gap: spacing.sm },
+  byUrl: { marginTop: spacing.lg }
 }))

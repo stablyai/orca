@@ -44,6 +44,8 @@ import {
 } from './acp-listing-session-models'
 import { AcpAgentExitedError } from '../transport/acp-errors'
 import { signedOutAsUnavailable } from './acp-listing-signed-out'
+import { discardAcpListingSessions } from './acp-listing-session-discard'
+import { sealSharedToolProcessChild } from '../../runtime/agent-session/environment/structured-session-child-env'
 import { usesModelSpecificAcpEfforts } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 
 type AcpListingConnect<C> = (
@@ -138,8 +140,10 @@ export function createAcpModelCatalogProbe(
             command,
             args: [...prefixArgs, ...spec.args({ fullAccess: false, pluginDirs: [] })],
             cwd,
-            env,
-            envToDelete
+            // A shared tool process started by this listing keeps its environment for later chats.
+            ...(spec.sharedToolProcess
+              ? sealSharedToolProcessChild(env, envToDelete)
+              : { env, envToDelete })
           }
           // Chats send this identity, and some servers list models only to clients they allowlist.
           const connectionOptions = { clientInfo: acpClientInfo(spec, version ?? release.version) }
@@ -227,19 +231,18 @@ export function createAcpModelCatalogProbe(
                   run
                 )
               } finally {
-                // The session's process has exited, so its files are no longer written.
                 const accountHomePath = agentSessionAccountHomePath(accountHome)
                 if (accountHomePath) {
-                  for (const sessionId of started) {
-                    await listing
-                      .discardSession?.({ sessionId, cwd: sessionCwd, accountHomePath })
-                      .catch((error: unknown) => {
-                        console.warn(
-                          `[acp-model-catalog] ${spec.agent} kept a listing session:`,
-                          error
-                        )
-                      })
-                  }
+                  await discardAcpListingSessions(spec.agent, listing, started, {
+                    cwd: sessionCwd,
+                    accountHomePath,
+                    // Unbounded by the listing's signal: a cancelled listing still discards its session.
+                    runAgent: (agentArgs) =>
+                      (deps.runListing ?? runAgentModelCatalogListing)(
+                        { ...launch, args: [...prefixArgs, ...agentArgs] },
+                        { site: `${spec.agent}-listing-discard` }
+                      )
+                  })
                 }
                 await folder?.remove()
               }

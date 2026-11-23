@@ -133,12 +133,7 @@ export function MobileBotRequestCard({
   const state = mobileBotRequestStatus(view, card.purpose, t)
   return (
     <MobileBotCardFrame
-      avatar={
-        <MobileBotAvatar
-          avatar={mobileBotAvatarSource(bot, undefined)}
-          size={BOT_CARD_AVATAR_SIZE}
-        />
-      }
+      avatar={<MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={BOT_CARD_AVATAR_SIZE} />}
       heading={view.heading}
       title={state ? `${bot.name} · ${state}` : bot.name}
       meta={<MobileBotCardMeta fontScale={fontScale}>{view.line}</MobileBotCardMeta>}

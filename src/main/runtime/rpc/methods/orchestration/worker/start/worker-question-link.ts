@@ -12,6 +12,7 @@ import {
   stampQuestionTakes
 } from '../../../../../orchestration/db/messages/mail-taker'
 import { botRequestRecord } from '../../messaging/bot-request-record'
+import { getRemoteOwnedQuestion } from '../../../../../orchestration/db/remote-owned/remote-dispatch-records'
 import { botRequestSenderName } from '../../../../../../bots/bot-request-view'
 
 export type WorkerQuestionLink =
@@ -48,7 +49,8 @@ export function linkWorkerToQuestion(
   const asked =
     message?.type === 'question' &&
     (db.getBotRequest(question)?.purpose === 'question' ||
-      db.getQuestionRaw(question) !== undefined)
+      db.getQuestionRaw(question) !== undefined ||
+      getRemoteOwnedQuestion(db, question) !== undefined)
   if (!message || !asked) {
     return unlinked(`${question} is not a question this Orca holds`)
   }
@@ -116,17 +118,29 @@ export function openQuestionReminder(
   if (own.length === 0) {
     return undefined
   }
+  const takers = own.map(() => '?').join(',')
   const id = db.db
     .prepare(
-      `SELECT message_id FROM bot_requests WHERE awaiting = 1
-       AND taken_by IN (${own.map(() => '?').join(',')}) ORDER BY rowid DESC LIMIT 1`
+      `SELECT id FROM messages WHERE id IN (
+         SELECT message_id FROM bot_requests WHERE awaiting = 1 AND taken_by IN (${takers})
+         UNION SELECT message_id FROM question_threads WHERE awaiting = 1 AND taken_by IN (${takers})
+         UNION SELECT message_id FROM remote_owned_questions
+         WHERE awaiting = 1 AND taken_by IN (${takers})
+       ) ORDER BY sequence DESC LIMIT 1`
     )
-    .get(...own)?.message_id
+    .get(...own, ...own, ...own)?.id
   if (typeof id !== 'string') {
     return undefined
   }
   const record = botRequestRecord(db, id)
-  const asker = record ? botRequestSenderName(record) : 'another agent'
+  const worker = record
+    ? undefined
+    : (db.getQuestionRaw(id)?.dispatch_id ?? getRemoteOwnedQuestion(db, id)?.dispatch_id)
+  const asker = record
+    ? botRequestSenderName(record)
+    : worker
+      ? `your worker on Dispatch ${worker}`
+      : 'another agent'
   return `You have an open question from ${asker} (${id}). If this worker is for it, add --for ${id}.`
 }
 

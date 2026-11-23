@@ -59,8 +59,8 @@ const QUESTION_TAKE_TABLES = [
     `CASE WHEN NOT EXISTS (SELECT 1 FROM bot_request_outcomes o
        WHERE o.message_id = bot_requests.message_id) THEN 1 END`
   ],
-  ['question_threads', '', 'awaiting'],
-  ['remote_owned_questions', '', 'awaiting']
+  ['question_threads', '', "CASE WHEN status = 'pending' AND told IS NULL THEN 1 END"],
+  ['remote_owned_questions', '', 'CASE WHEN ended IS NULL THEN 1 END']
 ] as const
 
 /** Stamps the taker on these messages' question rows that have none, while the mail is still unread;

@@ -9,6 +9,7 @@ import {
   awaitingTakers,
   linkedDispatches,
   reconcileQuestions,
+  remoteAskTakers,
   takersLinkedTo,
   type QuestionNoticeWriter,
   type QuestionPartyFacts
@@ -135,6 +136,11 @@ export class QuestionReconciler {
         return this.mailboxChanged(edge.mailbox)
       case 'pane':
         return this.terminalChanged(this.deps.terminalParty(edge.ptyId), false)
+      case 'reachable':
+        if (this.awaiting.size > 0) {
+          remoteAskTakers(this.db, edge.environmentId).forEach((taker) => this.request(taker))
+        }
+        return
       case 'mail':
         if (this.watched.size > 0 || this.changing.size > 0) {
           this.mailboxesOf(edge.ids).forEach((mailbox) => this.mailboxChanged(mailbox))
@@ -180,7 +186,7 @@ export class QuestionReconciler {
   }
 
   private async decide(taker: string): Promise<void> {
-    const questions = awaitingQuestions(this.db, taker)
+    const questions = awaitingQuestions(this.db, taker).map((question) => question.messageId)
     if (questions.length === 0) {
       this.forget(taker)
       this.unverified.delete(taker)
@@ -238,7 +244,7 @@ export class QuestionReconciler {
     } else if (this.unverified.delete(taker) && this.unverified.size === 0) {
       this.seenSinceUnverified.clear()
     }
-    return awaitingQuestions(this.db, taker)
+    return awaitingQuestions(this.db, taker).map((question) => question.messageId)
   }
 
   /** Remembers what holds a taker's questions, so the edge that ends the hold decides again. */

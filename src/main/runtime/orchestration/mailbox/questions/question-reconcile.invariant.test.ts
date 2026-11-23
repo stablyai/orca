@@ -15,8 +15,11 @@ import { stampQuestionTakes, type MailTaker } from '../../db/messages/mail-taker
 import { linkWorkerToQuestion } from '../../../rpc/methods/orchestration/worker/start/worker-question-link'
 import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { QuestionReconciler } from './question-reconciler'
+import type { QuestionKind } from './question-reconcile'
+import { dropReaderlessRunQuestions } from '../../db/questions/readerless-run-questions'
 import type { QuestionPartyReads } from './question-party-facts'
 import {
+  COORDINATOR,
   RECEIVERS,
   randomOp,
   rng,
@@ -26,7 +29,13 @@ import {
 } from './question-reconcile-invariant.test-fixture'
 
 type PartyState = 'resting' | 'running' | 'prompt' | 'closed' | 'paused' | 'deleted'
-type Question = { id: string; to: number; taker: string | null; answered: boolean }
+type Question = {
+  id: string
+  kind: 'bot' | 'worker-ask'
+  to: number
+  taker: string | null
+  answered: boolean
+}
 type Worker = {
   dispatchId: string
   question: string
@@ -69,18 +78,36 @@ class World {
   reconciler!: QuestionReconciler
   stop: () => void = () => undefined
   seq = 0
+  bound = true
+  askDispatch: string
 
   constructor() {
+    // Receiver 2 coordinates the Run as a chat: it reads the Run's mail while bound.
     this.runId = this.db.createRun({
       objective: 'invariant',
-      coordinatorHandle: 'term_coord',
-      coordinatorPaneKey: 'tab_coord:11111111-1111-4111-8111-111111111111'
+      coordinatorHandle: null,
+      coordinatorPaneKey: null,
+      coordinatorOrcaSessionId: testOrcaSessionId(session(COORDINATOR))
     }).id
+    const task = this.db.createTask({ spec: 'asker', runId: this.runId })
+    this.askDispatch = this.db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    }).dispatch.id
+    this.db.markWorkerDispatchReady(this.askDispatch)
     this.startReconciler()
   }
 
   mailbox(index: number): string {
     return `orca_session_id:${session(index)}`
+  }
+  /** Every mailbox a receiver reads: the coordinator also reads the Run's while bound. */
+  mailboxesOf(index: number): string[] {
+    return index === COORDINATOR && this.bound
+      ? [this.mailbox(index), `run:${this.runId}`]
+      : [this.mailbox(index)]
   }
   receiverOf(chat: string): number | null {
     const index = SESSIONS.indexOf(chat)
@@ -108,10 +135,13 @@ class World {
     liveSession: (root) => root,
     chatRunning: async (session) => this.running(session),
     chatReceiving: (mailbox) => {
-      const session = mailbox.startsWith('dispatch:')
+      if (mailbox === `run:${this.runId}`) {
+        return this.bound && this.receiving(session(COORDINATOR)) ? session(COORDINATOR) : null
+      }
+      const chat = mailbox.startsWith('dispatch:')
         ? `W-${mailbox.slice('dispatch:'.length)}`
         : mailbox.slice('orca_session_id:'.length)
-      return this.receiving(session) ? session : null
+      return this.receiving(chat) ? chat : null
     },
     chatHandingOver: (mailbox) => this.handing.some((mail) => mail.mailbox === mailbox),
     terminal: () => null,
@@ -119,8 +149,12 @@ class World {
   }
 
   startReconciler(): void {
-    const write = (messageId: string) => {
-      this.db.recordBotRequestOutcome(messageId, 'unanswered')
+    const write = (messageId: string, kind: QuestionKind, taker: string) => {
+      if (kind === 'bot') {
+        this.db.recordBotRequestOutcome(messageId, 'unanswered')
+      } else {
+        this.tellWorker(messageId, taker)
+      }
       this.told.set(messageId, (this.told.get(messageId) ?? 0) + 1)
       const question = this.questions.find((q) => q.id === messageId)
       const why = question?.taker ? this.busy(question.taker, question.id) : null
@@ -131,7 +165,7 @@ class World {
     }
     this.reconciler = new QuestionReconciler(this.db, {
       reads: this.reads,
-      notices: async () => (notice) => write(notice.messageId),
+      notices: async () => (notice) => write(notice.messageId, notice.kind, notice.taker),
       sessionParty: (session) => `session:${session}`,
       terminalParty: () => null
     })
@@ -155,10 +189,9 @@ class World {
 
   // ---- ground truth, from the model only ----
   wakePending(session: string): boolean {
+    const receiver = this.receiverOf(session)
     const mailboxes =
-      this.receiverOf(session) !== null
-        ? [this.mailbox(this.receiverOf(session)!)]
-        : [`dispatch:${session.slice('W-'.length)}`]
+      receiver !== null ? this.mailboxesOf(receiver) : [`dispatch:${session.slice('W-'.length)}`]
     return (
       this.receiving(session) &&
       [...this.pending, ...this.handing].some((mail) => mailboxes.includes(mail.mailbox))
@@ -240,12 +273,15 @@ class World {
   }
 
   pendingFor(index: number): string[] {
-    return this.pending.filter((m) => m.mailbox === this.mailbox(index)).map((m) => m.id)
+    const mailboxes = this.mailboxesOf(index)
+    return this.pending.filter((m) => mailboxes.includes(m.mailbox)).map((m) => m.id)
   }
 
   /** The `pick`th receiver with mail in `mail`, so a delivery op always finds something to do. */
   withMail(mail: readonly Mail[], pick: number): number {
-    const waiting = [0, 1, 2].filter((i) => mail.some((m) => m.mailbox === this.mailbox(i)))
+    const waiting = [0, 1, 2].filter((i) =>
+      mail.some((m) => this.mailboxesOf(i).includes(m.mailbox))
+    )
     return waiting[pick % Math.max(waiting.length, 1)] ?? pick
   }
 
@@ -255,7 +291,7 @@ class World {
   }
 
   holderOf(by: number): { index: number; question: Question } | null {
-    const holders = [0, 1].filter(
+    const holders = [0, 1, 2].filter(
       (i) =>
         this.state[i] === 'running' &&
         this.questions.some((q) => q.taker === `session:${session(i)}` && !q.answered)
@@ -269,6 +305,37 @@ class World {
     )
     const question = open[by % Math.max(open.length, 1)]
     return question ? { index, question } : null
+  }
+
+  /** Unread worker asks in an unbound Run are dropped as unread takes: no one will read them. */
+  noteReaderless(): void {
+    if (this.bound) {
+      return
+    }
+    for (const question of this.questions) {
+      if (question.kind === 'worker-ask' && question.taker === null) {
+        question.taker = 'dropped:no-reader'
+        this.pending = this.pending.filter((mail) => mail.id !== question.id)
+      }
+    }
+  }
+
+  /** As the worker-ask notice writer: the worker gets mail on its Dispatch, which can wake it. */
+  tellWorker(messageId: string, taker: string): void {
+    const question = this.db.getQuestionRaw(messageId)!
+    this.db.db
+      .prepare('UPDATE question_threads SET told = ? WHERE message_id = ?')
+      .run(taker.startsWith('dropped:') ? 'dropped' : 'unanswered', messageId)
+    const mail = this.db.insertMessage({
+      from: `run:${this.runId}`,
+      to: `dispatch:${question.dispatch_id}`,
+      subject: 'Re: Question',
+      threadId: messageId,
+      runId: this.runId
+    })
+    if (question.dispatch_id !== this.askDispatch) {
+      this.pending.push({ id: mail.id, mailbox: `dispatch:${question.dispatch_id}` })
+    }
   }
 
   apply(op: Op): void {
@@ -292,7 +359,13 @@ class World {
           }
         })
         if (admitted.kind === 'sent') {
-          this.questions.push({ id: admitted.message.id, to: op.to, taker: null, answered: false })
+          this.questions.push({
+            id: admitted.message.id,
+            kind: 'bot',
+            to: op.to,
+            taker: null,
+            answered: false
+          })
           this.pending.push({ id: admitted.message.id, mailbox: this.mailbox(op.to) })
         }
         return
@@ -353,12 +426,63 @@ class World {
       case 'reply': {
         const held = this.holderOf(op.by + op.pick)
         if (held) {
-          this.db.recordBotAnswer(held.question.id)
-          if (this.db.getMessageById(held.question.id)?.read === 0) {
-            this.db.markAsRead([held.question.id], { kind: 'reply' })
+          if (held.question.kind === 'bot') {
+            this.db.recordBotAnswer(held.question.id)
+            if (this.db.getMessageById(held.question.id)?.read === 0) {
+              this.db.markAsRead([held.question.id], { kind: 'reply' })
+            }
+          } else {
+            this.db.answerQuestion({
+              messageId: held.question.id,
+              runId: this.runId,
+              body: 'this one',
+              consumerGeneration: this.db.getRun(this.runId)!.consumer_generation
+            })
           }
           held.question.answered = true
         }
+        return
+      }
+      case 'workerAsk': {
+        // A linked worker asks the Run (its question can wake it); otherwise another worker does.
+        const worker = this.liveWorker(op.worker)
+        const from =
+          worker?.state === 'running' || worker?.state === 'resting'
+            ? worker.dispatchId
+            : this.askDispatch
+        const { message } = this.db.createQuestion({
+          runId: this.runId,
+          dispatchId: from,
+          askerHandle: 'term_asker',
+          question: 'which?'
+        })
+        this.questions.push({
+          id: message.id,
+          kind: 'worker-ask',
+          to: COORDINATOR,
+          taker: null,
+          answered: false
+        })
+        this.pending.push({ id: message.id, mailbox: `run:${this.runId}` })
+        // As ask admission: no one coordinates the Run, so the worker is told at once.
+        dropReaderlessRunQuestions(this.db, this.runId)
+        this.noteReaderless()
+        return
+      }
+      case 'unbind': {
+        if (!this.bound) {
+          return
+        }
+        this.bound = false
+        this.db.unbindOtherRunsForCoordinator(
+          {
+            terminalHandle: null,
+            paneKey: null,
+            orcaSessionId: testOrcaSessionId(session(COORDINATOR))
+          },
+          'run_none'
+        )
+        this.noteReaderless()
         return
       }
       case 'rest':
@@ -573,7 +697,21 @@ class World {
       if (count > 1) {
         this.violations.push({ kind: 'duplicate', detail: `${question.id} told ${count} times` })
       }
-      if (question.answered || count > 0 || question.taker === null) {
+      if (question.answered || count > 0) {
+        continue
+      }
+      if (question.taker === null) {
+        // Untaken: only a mailbox no one can read again strands it.
+        const unread =
+          question.kind === 'worker-ask'
+            ? !this.bound
+            : ['paused', 'deleted'].includes(this.state[question.to]!)
+        if (unread && !this.handing.some((mail) => mail.id === question.id)) {
+          this.violations.push({
+            kind: 'stranded-untaken',
+            detail: `${question.id} (${question.kind}) no one will read, untold, after ${after}`
+          })
+        }
         continue
       }
       if (!this.busy(question.taker, question.id)) {

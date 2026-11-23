@@ -57,11 +57,6 @@ const UNSUPPORTED_USAGE_COMMAND_REASON =
 // Unsupported /usage spends quota; latch each runtime for the process lifetime.
 const unsupportedUsageRuntimes = new Set<string>()
 
-/** Clears the unsupported latch. Tests only — a live process has no way back. */
-export function resetAntigravityUsageSupportForTests(): void {
-  unsupportedUsageRuntimes.clear()
-}
-
 export type AntigravityUsageDependencies = {
   /** Injected so tests exercise the classification without spawning agy. */
   runCommand?: typeof runProcess

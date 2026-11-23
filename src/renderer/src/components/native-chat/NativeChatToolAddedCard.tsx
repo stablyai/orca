@@ -16,6 +16,10 @@ import {
 } from '../../../../shared/bots/bot-tool-added-card-view'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { NativeChatEventRow } from './messages/events/NativeChatEventRow'
+import {
+  NATIVE_CHAT_INLINE_NAME,
+  NATIVE_CHAT_ROW_SHARE
+} from './messages/events/native-chat-inline-chip'
 
 type ToolAdded = NonNullable<NativeChatMessage['toolAdded']>
 
@@ -100,14 +104,11 @@ export function NativeChatToolAddedCard({
         }
       >
         <span className="shrink-0">{lead}</span>
-        <span
-          className="min-w-0 max-w-[min(16rem,100%)] truncate text-chat-foreground"
-          title={title}
-        >
+        <span className={NATIVE_CHAT_INLINE_NAME} title={title}>
           {title}
         </span>
         {after.length > 0 ? (
-          <span className="min-w-0 max-w-max grow basis-0 truncate" title={after.join(' · ')}>
+          <span className={NATIVE_CHAT_ROW_SHARE} title={after.join(' · ')}>
             {after.map((part) => `· ${part}`).join(' ')}
           </span>
         ) : null}

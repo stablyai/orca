@@ -9,6 +9,24 @@ export const keepFocusPressProps = {
   onMouseDown: (event: MouseEvent) => event.preventDefault()
 }
 
+// Pane surfaces: the workbench (terminal hosts included), the floating terminal panel and Activity's terminal slots.
+const PANE_SURFACE_SELECTOR =
+  '[data-terminal-workbench-container], [data-floating-terminal-panel], [data-activity-terminal-slot-id]'
+
+/**
+ * For sidebar and titlebar chrome: a press keeps focus only while it is in a pane (terminal, editor,
+ * chat), which the press can't unmount. Focus anywhere else moves to the control as usual, so a
+ * field in a sidebar or its portals blurs (and saves) before the press closes or swaps it.
+ */
+export const keepPaneFocusPressProps = {
+  [KEEPS_FOCUS_ATTRIBUTE]: '',
+  onMouseDown: (event: MouseEvent) => {
+    if (document.activeElement?.closest(PANE_SURFACE_SELECTOR)) {
+      event.preventDefault()
+    }
+  }
+}
+
 export function isFocusKeepingPress(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest(`[${KEEPS_FOCUS_ATTRIBUTE}]`) !== null
 }

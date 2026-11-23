@@ -300,6 +300,7 @@ export function resolveAutomationRunTarget(
     run.terminalPtyId
   return {
     worktree: target?.worktree ?? null,
+    catalogAuthority: fresh ? authority : null,
     ownerEnvironmentId: target?.ownerEnvironmentId ?? (ownerOnly ? environmentId : null),
     expectedPairingRevision: authority?.kind === 'runtime' ? authority.pairingRevision : undefined,
     terminalTarget: target?.terminalTarget ?? null,

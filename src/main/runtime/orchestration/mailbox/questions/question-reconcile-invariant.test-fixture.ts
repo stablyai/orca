@@ -1,12 +1,15 @@
 // The operations the agent-question invariant test draws at random, and its shrinker.
 
-/** Agents 0 and 1 are asked questions; agent 2 only sends status mail and starts no work. */
+/** Agents 0 and 1 are asked questions; agent 2 coordinates the Run its workers ask. */
 export const RECEIVERS = 3
+export const COORDINATOR = 2
 
 export type HandoverEnd = 'turn' | 'queued' | 'refused' | 'stuck'
 
 export type Op =
   | { op: 'ask'; to: number }
+  | { op: 'workerAsk'; worker: number }
+  | { op: 'unbind' }
   | { op: 'status'; to: number }
   | { op: 'statusToWorker'; worker: number }
   | { op: 'deliver'; to: number }
@@ -39,6 +42,9 @@ export function rng(seed: number): () => number {
 }
 
 const WEIGHTED = [
+  'workerAsk',
+  'workerAsk',
+  'unbind',
   'ask',
   'ask',
   'ask',
@@ -94,11 +100,13 @@ export function randomOp(random: () => number, depth = 0): Op {
     case 'handoverEnds':
       return { op: kind, to: who, end: pick(HANDOVER_ENDS) }
     case 'crash':
+    case 'unbind':
       return { op: kind }
     case 'reply':
     case 'startLinked':
       return { op: kind, by: who, pick: Math.floor(random() * 3) }
     case 'statusToWorker':
+    case 'workerAsk':
     case 'startHelper':
     case 'workerReady':
     case 'workerRest':

@@ -30,6 +30,7 @@ import type { NativeChatComposerInput } from '../../native-chat/composer/editor/
 import { useNativeChatComposerHandle } from '../../native-chat/composer/editor/use-native-chat-composer-handle'
 import { useNativeChatDraftEvents } from '../../native-chat/composer/editor/use-native-chat-draft-events'
 import type { NativeChatComposerHandle } from '../../native-chat/composer/native-chat-composer-types'
+import { composerQuoteTarget } from '../../native-chat/selection-quotes/NativeChatSelectionQuote'
 import { NativeChatImageAttachmentPreview } from '../../native-chat/attachments/chips/NativeChatImageAttachmentPreview'
 import { useNativeChatComposerAttachments } from '../../native-chat/attachments/chips/use-native-chat-composer-attachments'
 import { useNativeChatFileDrops } from '../../native-chat/attachments/intake/use-native-chat-file-drops'
@@ -63,7 +64,7 @@ import {
   type BotItemCommentAttachTarget
 } from './use-bot-item-comment-attachments'
 
-export type BotItemCommentBoxHandle = {
+export type BotItemCommentBoxHandle = ReturnType<typeof composerQuoteTarget> & {
   focus: () => void
   /** Focus the box with the caret after its text, as when coming back to a draft. */
   focusEnd: () => void
@@ -232,6 +233,7 @@ function BotItemCommentField({
   useImperativeHandle(ref, () => ({
     focus: () => input.current?.focus(),
     focusEnd: caretToEnd,
+    ...composerQuoteTarget(composer),
     type: (typed) => void composer.current?.insertTypedText(typed),
     answer: () => {
       reply.show()
