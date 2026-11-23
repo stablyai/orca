@@ -7,6 +7,7 @@ import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import { pickCookieFile } from '../../browser/cookies/imports/cookie-file-picker'
+import { importCookiesIntoBrowserProfile } from '../../browser/cookies/imports/browser-profile-cookie-import'
 import { detectInstalledBrowsers } from '../../browser/cookies/sources/browser-cookie-detection'
 import {
   browserCookieImportSource,
@@ -132,9 +133,8 @@ export function registerBrowserSessionProfileHandlers(): void {
       if ('reason' in source) {
         return source
       }
-      const result = await source.importInto(profile.partition)
+      const result = await importCookiesIntoBrowserProfile(profile, () => source)
       if (result.ok) {
-        browserSessionRegistry.updateProfileSource(args.profileId, source.importedSource())
         return retainLocalGoogleCookieClearTarget(result, profile, args.profileId)
       }
       return result
@@ -258,13 +258,10 @@ export function registerBrowserSessionProfileHandlers(): void {
       if (!profile) {
         return browserCookieImportFailure('profileNotFound')
       }
-      const source = browserCookieImportSource(args, profile.source)
-      if ('reason' in source) {
-        return source
-      }
-      const result = await source.importInto(profile.partition)
+      const result = await importCookiesIntoBrowserProfile(profile, (previous) =>
+        browserCookieImportSource(args, previous)
+      )
       if (result.ok) {
-        browserSessionRegistry.updateProfileSource(args.profileId, source.importedSource())
         return retainLocalGoogleCookieClearTarget(result, profile, args.profileId)
       }
       return result

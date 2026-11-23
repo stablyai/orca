@@ -69,18 +69,26 @@ async function importIntoClientRoutePartition(
   if ('reason' in destination) {
     return destination
   }
-  const sourceStore = await openClientRouteCookieImportSources(routeIdentity)
-  const imported = await importIntoRoutePartition(destination, () =>
-    resolveSource(
-      target.browserPageId === undefined ? sourceStore.sources[destination.profileId] : undefined
-    )
+  const sourceRoute = { ...routeIdentity, environmentId: target.environmentId }
+  const imported = await importIntoRoutePartition(
+    destination,
+    async () => {
+      const previous =
+        target.browserPageId === undefined
+          ? (await openClientRouteCookieImportSources(sourceRoute)).sources[destination.profileId]
+          : undefined
+      return resolveSource(previous)
+    },
+    async (partition, source) => {
+      if (destination.isProfileJar(partition)) {
+        // Badge this desktop’s server-route jar for the profile.
+        const sourceStore = await openClientRouteCookieImportSources(sourceRoute)
+        await sourceStore.record(destination.profileId, source)
+      }
+    }
   )
   if (!imported.ok) {
     return imported
-  }
-  if (destination.isProfileJar(imported.partition)) {
-    // Badge this desktop’s server-route jar, rather than the local profile jar.
-    await sourceStore.record(destination.profileId, imported.source.importedSource())
   }
   const result = { ...imported.result, profileId: destination.profileId }
   return destination.label === null

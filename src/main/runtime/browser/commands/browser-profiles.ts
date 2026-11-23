@@ -17,14 +17,10 @@ import { browserSessionRegistry } from '../../../browser/sessions/profiles/brows
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import { waitForTabRegistration } from '../../../ipc/browser/browser-tab-registration-wait'
-import {
-  detectInstalledBrowsers,
-  resolveBrowserImportSelection,
-  selectBrowserProfile
-} from '../../../browser/cookies/sources/browser-cookie-detection'
-import { importedBrowserProfileSource } from '../../../browser/cookies/sources/browser-cookie-source-profiles'
+import { detectInstalledBrowsers } from '../../../browser/cookies/sources/browser-cookie-detection'
+import { importCookiesIntoBrowserProfile } from '../../../browser/cookies/imports/browser-profile-cookie-import'
+import { browserCookieImportSource } from '../../../browser/cookies/route-partition/browser-route-partition-cookie-import'
 import type { BrowserCookieImportSelection } from '../../../../shared/browser/workspaces/browser-workspace-types'
-import { importCookiesFromBrowser } from '../../../browser/cookies/browser-cookie-import'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost
@@ -274,27 +270,15 @@ export class RuntimeBrowserProfiles {
     if (!profile) {
       return browserCookieImportFailure('profileNotFound')
     }
-    const selection = resolveBrowserImportSelection(params, profile.source)
-    if ('reason' in selection) {
-      return selection
-    }
-    const [detected] = detectInstalledBrowsers(selection.browserFamily)
-    const browser = selectBrowserProfile(detected, selection)
-    if ('reason' in browser) {
-      return browser
-    }
-
-    const result = await importCookiesFromBrowser(browser, profile.partition, {
-      canReportPartitionSkippedCookies: params.supportsPartitionSkippedCookies === true
-    })
+    const result = await importCookiesIntoBrowserProfile(profile, (previous) =>
+      browserCookieImportSource(params, previous, {
+        canReportPartitionSkippedCookies: params.supportsPartitionSkippedCookies === true
+      })
+    )
     if (!result.ok) {
       return result
     }
 
-    browserSessionRegistry.updateProfileSource(
-      params.profileId,
-      importedBrowserProfileSource(browser)
-    )
     return { ...result, profileId: params.profileId, executorRuntimeId: this.host.getRuntimeId() }
   }
 

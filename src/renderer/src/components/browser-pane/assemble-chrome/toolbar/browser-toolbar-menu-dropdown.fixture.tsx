@@ -13,7 +13,12 @@ const PROFILES: BrowserSessionProfile[] = [
     scope: 'default',
     partition: 'persist:orca-browser',
     label: 'Default',
-    source: null
+    source: {
+      browserFamily: 'chrome',
+      profileName: 'Personal',
+      importedAt: 1735689600000,
+      chromeProfile: { id: '4f7b4052-00aa-48ac-b17f-87b1372f6524', directory: 'Default' }
+    }
   },
   {
     id: 'fixture-work',

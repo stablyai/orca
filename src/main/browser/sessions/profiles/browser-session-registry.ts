@@ -45,6 +45,7 @@ import {
 import { isBrowserExtensionSupportEnabled } from '../../extensions/browser-extension-support'
 import { trackBrowserSessionCookies } from '../../cookies/session-restore/browser-session-cookie-restore'
 import { clearBrowserCookieJar } from '../../cookies/session-restore/browser-session-cookie-clear'
+import { withCookieImportSourceLock } from '../../cookies/mutation/cookie-mutation-lock'
 
 type ExtensionIdListKey = 'enabledExtensionIdsByProfileId' | 'pinnedExtensionIdsByProfileId'
 type ExtensionIdListUpdate = (byProfile: Record<string, string[]>) => Record<string, string[]>
@@ -311,24 +312,22 @@ class BrowserSessionRegistry {
   }
 
   async clearDefaultSessionCookies(): Promise<boolean> {
+    const partition = this.defaultPartition
     try {
-      // Clear import metadata first so quitting during storage cleanup cannot leave a stale source badge.
-      const defaultProfile = this.profiles.get('default')
-      if (defaultProfile) {
-        this.profiles.set('default', { ...defaultProfile, source: null })
-      }
-      const meta = this.loadPersistedMeta()
-      const pendingCookieImports = { ...meta.pendingCookieImports }
-      delete pendingCookieImports[this.defaultPartition]
-      this.persistMeta({
-        defaultSource: null,
-        pendingCookieDbPath: null,
-        pendingCookieImports
+      const jar = session.fromPartition(partition)
+      return await withCookieImportSourceLock(jar, async () => {
+        if (this.defaultPartition !== partition) {
+          return false
+        }
+        // Clear import metadata first so quitting during storage cleanup cannot leave a stale source badge.
+        this.profiles.set('default', { ...this.getDefaultProfile(), source: null })
+        const pendingCookieImports = { ...this.loadPersistedMeta().pendingCookieImports }
+        delete pendingCookieImports[partition]
+        this.persistMeta({ defaultSource: null, pendingCookieDbPath: null, pendingCookieImports })
+        this.onProfilesChanged?.()
+        await clearBrowserCookieJar(jar)
+        return true
       })
-      this.onProfilesChanged?.()
-
-      await clearBrowserCookieJar(session.fromPartition(this.defaultPartition))
-      return true
     } catch {
       return false
     }

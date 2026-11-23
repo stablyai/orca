@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
@@ -15,7 +15,6 @@ it('persists concurrent imports separately for each Orca profile and pairing', a
       JSON.stringify({
         'server\u0000legacy': {
           browserFamily: 'chrome',
-          authority: 'first-pairing',
           profileName: 'Legacy',
           importedAt: 1,
           chromeProfile: { directory: 'Default', id: 'unbound' }
@@ -25,6 +24,7 @@ it('persists concurrent imports separately for each Orca profile and pairing', a
     const { openClientRouteCookieImportSources } =
       await import('./client-route-cookie-import-source-store')
     const route = (orcaProfileId: string, authorityConnectionIdentity = 'first-pairing') => ({
+      environmentId: 'server',
       storageScope: deriveBrowserRoutePartitionStorageScope({
         orcaProfileId,
         environmentId: 'server'
@@ -35,7 +35,11 @@ it('persists concurrent imports separately for each Orca profile and pairing', a
       openClientRouteCookieImportSources(route('alpha')),
       openClientRouteCookieImportSources(route('alpha'))
     ])
-    expect(work.sources.legacy).toBeUndefined()
+    expect(work.sources.legacy).toEqual({
+      browserFamily: 'chrome',
+      profileName: 'Legacy',
+      importedAt: 1
+    })
     await Promise.all([
       work.record('work', {
         browserFamily: 'chrome',
@@ -59,13 +63,26 @@ it('persists concurrent imports separately for each Orca profile and pairing', a
     expect(original.sources.work?.chromeProfile?.id).toBe('work-import')
     expect(original.sources.personal?.browserFamily).toBe('firefox')
     expect((await reopen(route('beta'))).sources.work?.chromeProfile?.id).toBe('beta-import')
-    expect((await reopen(route('alpha', 'second-pairing'))).sources).toEqual({})
+    expect((await reopen(route('alpha', 'second-pairing'))).sources.work).toBeUndefined()
+
+    const storePath = join(userData, 'client-route-cookie-import-sources.json')
+    const savedPath = `${storePath}.saved`
+    await rename(storePath, savedPath)
+    await mkdir(storePath)
+    await expect(
+      original.record('work', { browserFamily: 'firefox', importedAt: 5 })
+    ).rejects.toThrow()
+    expect((await reopen(route('alpha'))).sources.work?.chromeProfile?.id).toBe('work-import')
+    await rm(storePath, { recursive: true })
+    await rename(savedPath, storePath)
 
     await forgetClientRouteCookieImportSource(route('alpha'), 'work')
+    await forgetClientRouteCookieImportSource(route('alpha'), 'legacy')
     vi.resetModules()
     const { openClientRouteCookieImportSources: afterClear } =
       await import('./client-route-cookie-import-source-store')
     expect((await afterClear(route('alpha'))).sources.work).toBeUndefined()
+    expect((await afterClear(route('alpha'))).sources.legacy).toBeUndefined()
     expect((await afterClear(route('alpha'))).sources.personal?.browserFamily).toBe('firefox')
     expect((await afterClear(route('beta'))).sources.work?.chromeProfile?.id).toBe('beta-import')
   } finally {

@@ -27,7 +27,11 @@ export function importedBrowserProfileSource(
     browserFamily: browser.family,
     profileName:
       browser.profiles.find((profile) => profile.directory === directory)?.name ?? directory,
-    ...(browser.family === 'chrome' && { chromeProfile: { directory, id: randomUUID() } }),
+    ...(browser.family === 'chrome' &&
+      browser.profilesFromLocalState &&
+      browser.profiles.some((profile) => profile.directory === directory) && {
+        chromeProfile: { directory, id: randomUUID() }
+      }),
     importedAt: Date.now()
   }
 }

@@ -38,17 +38,10 @@ export function BrowserToolbarProfileSub({
 }: BrowserToolbarProfileSubProps): React.JSX.Element {
   const t = useTranslate()
   const currentProfile = allProfiles.find((profile) => profile.id === effectiveProfileId)
-  // This menu belongs to a local page even when Settings shows a different host.
-  const localProfile = useAppStore((s) =>
-    s.browserSessionProfilesByHostId[LOCAL_EXECUTION_HOST_ID]?.find(
-      (profile) => profile.id === effectiveProfileId
-    )
-  )
-  const isImporting = useAppStore(
-    (s) =>
-      s.browserSessionImportState?.profileId === effectiveProfileId &&
-      s.browserSessionImportState.status === 'importing'
-  )
+  const isImporting = useAppStore((s) => {
+    const pending = s.browserSessionImportStateByHostId?.[LOCAL_EXECUTION_HOST_ID]
+    return pending?.profileId === effectiveProfileId && pending.status === 'importing'
+  })
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger disabled={switching}>
@@ -87,11 +80,11 @@ export function BrowserToolbarProfileSub({
             <Plus className="size-3.5" />
             {t('auto.components.browser.pane.BrowserToolbarMenu.cf7cdc67ef', 'New Profile…')}
           </DropdownMenuItem>
-          {canRefreshFromChrome && localProfile?.source?.chromeProfile && (
+          {canRefreshFromChrome && currentProfile?.source?.chromeProfile && (
             <DropdownMenuItem
               disabled={isImporting}
               onSelect={() =>
-                void refreshChromeProfileCookies(localProfile, LOCAL_EXECUTION_HOST_ID)
+                void refreshChromeProfileCookies(currentProfile, LOCAL_EXECUTION_HOST_ID)
               }
             >
               <RefreshCw className="size-3.5" />

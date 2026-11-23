@@ -1,3 +1,4 @@
+import { session } from 'electron'
 import type {
   BrowserCookieImportResult,
   BrowserCookieImportSelection,
@@ -14,6 +15,8 @@ import { importCookiesFromFile } from '../imports/import-cookie-file'
 import { importedBrowserProfileSource } from '../sources/browser-cookie-source-profiles'
 import { errorMessage } from '../../../../shared/errors/error-message'
 import { restoreBrowserRoutePartitionSessionCookies } from '../session-restore/browser-session-cookie-restore'
+import { withCookieImportSourceLock } from '../mutation/cookie-mutation-lock'
+import type { CookieImportOptions } from '../imports/cookie-import-contracts'
 
 export type RouteCookieImportSource = {
   importInto: (partition: string) => Promise<BrowserCookieImportResult>
@@ -34,20 +37,16 @@ export async function importIntoRoutePartition(
     currentPartition: () => string | null
     routeChanged: (settled: string | null) => BrowserCookieImportFailure
   },
-  resolveSource: () => Promise<RouteCookieImportSource | BrowserCookieImportFailure>
+  resolveSource: () => Promise<RouteCookieImportSource | BrowserCookieImportFailure>,
+  recordSource?: (partition: string, source: BrowserSessionProfileSource) => Promise<void>
 ): Promise<
   | {
       ok: true
       result: RouteCookieImportSuccess
       partition: string
-      source: RouteCookieImportSource
     }
   | BrowserCookieImportFailure
 > {
-  const source = await resolveSource()
-  if ('reason' in source) {
-    return source
-  }
   let partition: string | null
   try {
     partition = destination.bindPartition()
@@ -57,27 +56,48 @@ export async function importIntoRoutePartition(
   if (partition === null) {
     return destination.routeChanged(null)
   }
-  // Saved session cookies go back first, or the next page's restore would overwrite the import.
-  await restoreBrowserRoutePartitionSessionCookies(partition)
-  const result = await source.importInto(partition)
-  let settled: string | null
-  try {
-    settled = destination.currentPartition()
-  } catch {
-    settled = null
+  const jar = partition
+  const currentPartition = (): string | null => {
+    try {
+      return destination.currentPartition()
+    } catch {
+      return null
+    }
   }
-  if (settled !== partition) {
-    return destination.routeChanged(settled)
-  }
-  if (!result.ok) {
-    return result
-  }
-  return { ok: true, result, partition, source }
+  return withCookieImportSourceLock(session.fromPartition(jar), async () => {
+    const beforeRestore = currentPartition()
+    if (beforeRestore !== jar) {
+      return destination.routeChanged(beforeRestore)
+    }
+    // Saved session cookies go back first, or the next page's restore would overwrite the import.
+    await restoreBrowserRoutePartitionSessionCookies(jar)
+    const source = await resolveSource()
+    if ('reason' in source) {
+      return source
+    }
+    const settled = currentPartition()
+    if (settled !== jar) {
+      return destination.routeChanged(settled)
+    }
+    const result = await source.importInto(jar)
+    const afterImport = currentPartition()
+    if (afterImport !== jar) {
+      return destination.routeChanged(afterImport)
+    }
+    if (!result.ok) {
+      return result
+    }
+    if (recordSource && result.summary.importedCookies > 0) {
+      await recordSource(jar, source.importedSource())
+    }
+    return { ok: true, result, partition: jar }
+  })
 }
 
 export function browserCookieImportSource(
   request: BrowserCookieImportSelection,
-  previous?: BrowserSessionProfileSource | null
+  previous?: BrowserSessionProfileSource | null,
+  options?: CookieImportOptions
 ): RouteCookieImportSource | BrowserCookieImportFailure {
   const selection = resolveBrowserImportSelection(request, previous)
   if ('reason' in selection) {
@@ -89,7 +109,7 @@ export function browserCookieImportSource(
     return browser
   }
   return {
-    importInto: (partition) => importCookiesFromBrowser(browser, partition),
+    importInto: (partition) => importCookiesFromBrowser(browser, partition, options),
     importedSource: () => importedBrowserProfileSource(browser)
   }
 }

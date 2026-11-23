@@ -1,96 +1,77 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
-import {
-  detectInstalledBrowsers,
-  resolveBrowserImportSelection,
-  selectBrowserProfile
-} from './browser-cookie-detection'
-import * as profiles from './browser-cookie-source-profiles'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { browserCookieImportSource } from '../route-partition/browser-route-partition-cookie-import'
 
-const chrome: profiles.DetectedBrowser = {
-  family: 'chrome',
-  label: 'Chrome',
-  profiles: [
-    { directory: 'Default', name: 'Work' },
-    { directory: 'Profile 2', name: 'Work' }
-  ],
-  selectedProfile: 'Profile 2',
-  cookiesPath: 'unused'
-}
+vi.mock('electron', () => ({}))
+vi.mock('../browser-cookie-import', () => ({}))
+vi.mock('../imports/import-cookie-file', () => ({}))
+vi.mock('../session-restore/browser-session-cookie-restore', () => ({}))
 
-afterEach(() => {
-  vi.restoreAllMocks()
-})
+let home: string
+let root: string
 
-it('refreshes the chosen Chrome directory even when the default has its old display name', () => {
-  const root = mkdtempSync(join(tmpdir(), 'orca-chrome-selection-'))
-  try {
-    vi.spyOn(profiles, 'browserRootPath').mockReturnValue(root)
-    for (const profile of chrome.profiles) {
-      mkdirSync(join(root, profile.directory))
-      writeFileSync(join(root, profile.directory, 'Cookies'), '')
-    }
-    const writeProfiles = (info_cache: Record<string, { name: string }>) =>
-      writeFileSync(join(root, 'Local State'), JSON.stringify({ profile: { info_cache } }))
-    writeProfiles({ Default: { name: 'Work' }, 'Profile 2': { name: 'Renamed' } })
-    const saved = profiles.importedBrowserProfileSource(chrome)
-    const refresh = { refreshSourceId: saved.chromeProfile!.id }
-
-    const selection = resolveBrowserImportSelection(refresh, saved)
-    if ('reason' in selection) {
-      throw new Error(selection.reason)
-    }
-    expect(selectBrowserProfile(detectInstalledBrowsers('chrome')[0], selection)).toMatchObject({
-      selectedProfile: 'Profile 2'
-    })
-
-    // A removed profile can leave a readable database behind.
-    writeProfiles({ Default: { name: 'Work' } })
-    expect(selectBrowserProfile(detectInstalledBrowsers('chrome')[0], selection)).toMatchObject({
-      ok: false,
-      reasonCode: 'savedChromeProfileUnavailable'
-    })
-  } finally {
-    rmSync(root, { recursive: true, force: true })
+beforeEach(() => {
+  home = mkdtempSync(join(tmpdir(), 'orca-chrome-selection-'))
+  vi.stubEnv('HOME', home)
+  vi.stubEnv('LOCALAPPDATA', home)
+  vi.stubEnv('XDG_CONFIG_HOME', home)
+  root =
+    process.platform === 'darwin'
+      ? join(home, 'Library', 'Application Support', 'Google', 'Chrome')
+      : process.platform === 'win32'
+        ? join(home, 'Google', 'Chrome', 'User Data')
+        : join(home, 'google-chrome')
+  for (const directory of ['Default', 'Profile 2']) {
+    mkdirSync(join(root, directory), { recursive: true })
+    writeFileSync(join(root, directory, 'Cookies'), '')
   }
 })
 
-it('refuses a refresh for a different destination with the same Chrome directory', () => {
-  const original = profiles.importedBrowserProfileSource(chrome)
-  const other = profiles.importedBrowserProfileSource(chrome)
-  expect(
-    resolveBrowserImportSelection({ refreshSourceId: original.chromeProfile!.id }, other)
-  ).toMatchObject({
+afterEach(() => {
+  vi.unstubAllEnvs()
+  rmSync(home, { recursive: true, force: true })
+})
+
+function writeProfiles(info_cache: Record<string, { name: string }>): void {
+  writeFileSync(join(root, 'Local State'), JSON.stringify({ profile: { info_cache } }))
+}
+
+it('refreshes the saved directory through a rename and refuses it after removal', () => {
+  writeProfiles({ Default: { name: 'Work' }, 'Profile 2': { name: 'Work' } })
+  const original = browserCookieImportSource({
+    browserFamily: 'chrome',
+    browserProfile: 'Profile 2'
+  })
+  if ('reason' in original) {
+    throw new Error(original.reason)
+  }
+  const saved = original.importedSource()
+  const selection = { refreshSourceId: saved.chromeProfile!.id }
+  writeProfiles({ Default: { name: 'Work' }, 'Profile 2': { name: 'Renamed' } })
+  const refreshed = browserCookieImportSource(selection, saved)
+  if ('reason' in refreshed) {
+    throw new Error(refreshed.reason)
+  }
+  expect(refreshed.importedSource()).toMatchObject({
+    profileName: 'Renamed',
+    chromeProfile: { directory: 'Profile 2' }
+  })
+
+  writeProfiles({ Default: { name: 'Work' } })
+  expect(browserCookieImportSource(selection, saved)).toMatchObject({
     ok: false,
     reasonCode: 'savedChromeProfileUnavailable'
   })
 })
 
-it('refreshes Default only while Chrome lists it, even when its old database remains', () => {
-  const root = mkdtempSync(join(tmpdir(), 'orca-chrome-default-'))
-  try {
-    vi.spyOn(profiles, 'browserRootPath').mockReturnValue(root)
-    mkdirSync(join(root, 'Default'))
-    writeFileSync(join(root, 'Default', 'Cookies'), '')
-    const localState = join(root, 'Local State')
-    writeFileSync(localState, JSON.stringify({ profile: { info_cache: { Default: {} } } }))
-    const refresh = { browserFamily: 'chrome', browserProfile: 'Default', refresh: true } as const
-    expect(selectBrowserProfile(detectInstalledBrowsers('chrome')[0], refresh)).toMatchObject({
-      selectedProfile: 'Default'
-    })
-
-    writeFileSync(localState, JSON.stringify({ profile: { info_cache: {} } }))
-    const [detected] = detectInstalledBrowsers('chrome')
-    expect(selectBrowserProfile(detected, { browserFamily: 'chrome' })).toMatchObject({
-      selectedProfile: 'Default'
-    })
-    expect(selectBrowserProfile(detected, refresh)).toMatchObject({
-      ok: false,
-      reasonCode: 'savedChromeProfileUnavailable'
-    })
-  } finally {
-    rmSync(root, { recursive: true, force: true })
+it('keeps the manual import badge for the legacy Default fallback without a refresh token', () => {
+  writeProfiles({})
+  const source = browserCookieImportSource({ browserFamily: 'chrome' })
+  if ('reason' in source) {
+    throw new Error(source.reason)
   }
+  expect(source.importedSource()).toMatchObject({ browserFamily: 'chrome', profileName: 'Default' })
+  expect(source.importedSource().chromeProfile).toBeUndefined()
 })

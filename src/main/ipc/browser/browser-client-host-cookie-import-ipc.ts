@@ -93,7 +93,10 @@ export function registerClientHostCookieImportHandlers(): void {
       if (!route) {
         return null
       }
-      const { sources } = await openClientRouteCookieImportSources(route)
+      const { sources } = await openClientRouteCookieImportSources({
+        ...route,
+        environmentId: args.environmentId
+      })
       const current = getPairedRuntimeBrowserClientRouteIdentity(args.environmentId)
       if (!current) {
         return null
