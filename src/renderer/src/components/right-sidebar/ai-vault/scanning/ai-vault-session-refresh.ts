@@ -23,6 +23,7 @@ import { claimAiVaultForcedRescan } from './ai-vault-forced-rescan-budget'
 import {
   type AiVaultListResult,
   type AiVaultSession,
+  type AiVaultWorkspaceOwner,
   isAiVaultScanCancelledError as isAiVaultScanCancellation
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 
@@ -34,7 +35,8 @@ export function useAiVaultSessionRefresh(
   scopePaths: readonly string[],
   executionHostScope: ExecutionHostScope,
   sessionLimit: AiVaultSessionLimit,
-  scopeOnly = false
+  scopeOnly = false,
+  workspaceOwner?: AiVaultWorkspaceOwner | null
 ): {
   error: string | null
   loading: boolean
@@ -45,12 +47,13 @@ export function useAiVaultSessionRefresh(
   /** The depth the sessions on screen came from, which trails the selected one during a rescan. */
   loadedSessionLimit: AiVaultSessionLimit | null
 } {
-  const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths, scopeOnly)}\n${sessionLimit}`
+  const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths, scopeOnly, workspaceOwner)}\n${sessionLimit}`
   // A return to the panel opens on the list this scope already holds instead of a skeleton.
   const { scan, applyScan } = useAppliedAiVaultScan(() => {
     const result = readCachedAiVaultSessionList({
       scopePaths,
       scopeOnly,
+      workspaceOwner,
       executionHostScope,
       sessionLimit
     })
@@ -81,6 +84,7 @@ export function useAiVaultSessionRefresh(
   const scopePathsRef = useRef<readonly string[]>(scopePaths)
   scopePathsRef.current = scopePaths
   const scopeOnlyRef = useRef(scopeOnly)
+  const workspaceOwnerRef = useRef(workspaceOwner)
   const executionHostScopeRef = useRef<ExecutionHostScope>(executionHostScope)
   executionHostScopeRef.current = executionHostScope
   const sessionLimitRef = useRef(sessionLimit)
@@ -88,14 +92,16 @@ export function useAiVaultSessionRefresh(
   useLayoutEffect(() => {
     sessionLimitRef.current = sessionLimit
     scopeOnlyRef.current = scopeOnly
+    workspaceOwnerRef.current = workspaceOwner
     associationsRef.current = associations
-  }, [associations, scopeOnly, sessionLimit])
+  }, [associations, scopeOnly, sessionLimit, workspaceOwner])
   const currentScanScopeKey = useCallback(
     () =>
       `${aiVaultSessionResultCacheKey(
         executionHostScopeRef.current,
         scopePathsRef.current,
-        scopeOnlyRef.current
+        scopeOnlyRef.current,
+        workspaceOwnerRef.current
       )}\n${sessionLimitRef.current}`,
     []
   )
@@ -110,11 +116,17 @@ export function useAiVaultSessionRefresh(
       const request = {
         scopePaths: scopePathsRef.current,
         scopeOnly: scopeOnlyRef.current,
+        workspaceOwner: workspaceOwnerRef.current,
         executionHostScope: hostScope,
         sessionLimit: selectedLimit
       }
       const { scopeOnly } = request
-      const baseKey = aiVaultSessionResultCacheKey(hostScope, request.scopePaths, scopeOnly)
+      const baseKey = aiVaultSessionResultCacheKey(
+        hostScope,
+        request.scopePaths,
+        scopeOnly,
+        request.workspaceOwner
+      )
       const scanKey = `${baseKey}\n${selectedLimit}`
       const applyListed = (published: AiVaultListResult, scanned = false) =>
         applyScan(

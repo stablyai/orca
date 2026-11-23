@@ -16,11 +16,13 @@ import {
   type AiVaultScope,
   type AiVaultSession,
   type AiVaultSort,
+  type AiVaultWorkspaceOwner,
   aiVaultAgentLabel,
   isAiVaultSessionRecoverableEmpty,
   isAiVaultSessionResumableContent
 } from '../contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../execution-host/execution-host'
+import { isAiVaultJournalOnlySession } from './cursor-acp-session-path'
 import { sessionPreviewSearchText } from './ai-vault-session-display'
 
 // Move the plain descriptor type without importing renderer project-attribution runtime.
@@ -39,6 +41,7 @@ export type AiVaultSessionFilterState = {
   scope: AiVaultScope
   sort: AiVaultSort
   activeWorktreePaths: readonly string[]
+  workspaceOwner?: AiVaultWorkspaceOwner | null
   activeProjectKey?: string | null
   sessionProjectById?: ReadonlyMap<string, AiVaultSessionProject>
   projectLabelByKey?: ReadonlyMap<string, string>
@@ -93,7 +96,12 @@ export function filterAiVaultSessions(
       return false
     }
     if (filters.scope === 'workspace') {
-      if (!aiVaultSessionInScope(inWorkspace, session)) {
+      const ownedMiMo = session.agent === 'mimo-code' && isAiVaultJournalOnlySession(session)
+      const matches = ownedMiMo
+        ? filters.workspaceOwner?.executionHostId === session.executionHostId &&
+          filters.workspaceOwner?.workspaceId === session.structuredSession?.workspaceId
+        : aiVaultSessionInScope(inWorkspace, session)
+      if (!matches) {
         return false
       }
     }

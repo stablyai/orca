@@ -28,6 +28,8 @@ import { aiVaultBrowseSortMenu, aiVaultSearchSortMenu } from '../scope/ai-vault-
 import { AiVaultShowMoreSessionsRow } from '../session-list/AiVaultShowMoreSessionsRow'
 import { AiVaultSessionVirtualList } from '../session-list/AiVaultSessionVirtualList'
 import { useAiVaultSessionRefresh } from '../scanning/ai-vault-session-refresh'
+import { normalizeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/agent-session/resume/history/ai-vault-resume-target'
 import { useAiVaultPanelHostScope } from '../scope/ai-vault-host-scope'
 import { useAiVaultPanelScope } from '../scope/use-ai-vault-panel-scope'
 import { usePersistedAiVaultViewOptions } from '../scope/use-persisted-ai-vault-view-options'
@@ -152,6 +154,23 @@ export default function AiVaultPanel({
       }),
     [activeProjectKey, activeWorktree, allWorktrees, projectHostSetupProjection, scope]
   )
+  const workspaceOwner = useMemo(() => {
+    if (scope !== 'workspace') {
+      return undefined
+    }
+    const workspaceId = activeWorktree?.id
+    const executionHostId =
+      workspace?.executionHostId ??
+      normalizeExecutionHostId(activeWorktree?.hostId) ??
+      getAiVaultResumeWorkspaceExecutionHostId(resumeTargetState, workspaceId ?? null)
+    return workspaceId && executionHostId ? { workspaceId, executionHostId } : null
+  }, [
+    activeWorktree?.hostId,
+    activeWorktree?.id,
+    resumeTargetState,
+    scope,
+    workspace?.executionHostId
+  ])
   const {
     error,
     loading,
@@ -160,7 +179,13 @@ export default function AiVaultPanel({
     scanResult,
     sessions: history,
     loadedSessionLimit
-  } = useAiVaultSessionRefresh(scopePaths, executionHostScope, sessionLimit, scope !== 'all')
+  } = useAiVaultSessionRefresh(
+    scopePaths,
+    executionHostScope,
+    sessionLimit,
+    scope !== 'all',
+    workspaceOwner
+  )
   // Send scope identity: the host owns project worktree enumeration, and hundreds of paths cannot fit a request.
   const searchWithin = useMemo(
     () =>
@@ -229,6 +254,7 @@ export default function AiVaultPanel({
     scope,
     sort,
     activeWorktreePaths,
+    workspaceOwner,
     activeProjectKey,
     sessionProjectById,
     projectLabelByKey,

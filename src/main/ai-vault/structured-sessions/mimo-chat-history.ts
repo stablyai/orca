@@ -20,10 +20,12 @@ const mimoHistoryKeys: AgentSessionConversationKeys = ({ provider }) =>
   provider === MIMO ? [MIMO] : []
 
 /** MiMo Chat owns a journal, not a readable History transcript or terminal resume handle. */
-export function includeLocalMimoHistory(
+export async function includeLocalMimoHistory(
   result: AiVaultListResult,
-  args?: AiVaultListArgs
-): AiVaultListResult {
+  args: AiVaultListArgs | undefined,
+  resolveLocalWorkspacePath?: (workspaceId: string, selected: boolean) => Promise<string | null>,
+  signal?: AbortSignal
+): Promise<AiVaultListResult> {
   if (result.cancelled || result.unchanged) {
     return result
   }
@@ -40,8 +42,13 @@ export function includeLocalMimoHistory(
     )
   )
   const inScope = createAiVaultScopeCwdMatcher(args?.scopePaths ?? [])
+  const selectedOwner = args?.scopeOnly ? args.workspaceOwner : undefined
+  const livePaths = new Map<string, string | null>()
   const sessions: AiVaultSession[] = []
   for (const { sessionId } of store.conversationsKeyedBy(mimoHistoryKeys, MIMO)) {
+    if (signal?.aborted) {
+      return result
+    }
     const record = store.getRecord(sessionId)
     if (
       !record ||
@@ -50,8 +57,26 @@ export function includeLocalMimoHistory(
       record.location.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
       seen.has(sessionId) ||
       !record.launchDirectory ||
-      (args?.scopeOnly && !inScope(record.launchDirectory))
+      (!record.lastTurn?.prompt && !record.lastTurn?.reply)
     ) {
+      continue
+    }
+    const { workspaceId, executionHostId } = record.location
+    if (
+      selectedOwner !== undefined &&
+      (selectedOwner?.workspaceId !== workspaceId ||
+        selectedOwner.executionHostId !== executionHostId)
+    ) {
+      continue
+    }
+    if (!livePaths.has(workspaceId)) {
+      livePaths.set(
+        workspaceId,
+        (await resolveLocalWorkspacePath?.(workspaceId, selectedOwner != null)) ?? null
+      )
+    }
+    const livePath = livePaths.get(workspaceId)
+    if (args?.scopeOnly && (!livePath || (selectedOwner === undefined && !inScope(livePath)))) {
       continue
     }
     const timestamp = new Date(record.lastTurn?.at ?? record.updatedAt).toISOString()
@@ -61,7 +86,7 @@ export function includeLocalMimoHistory(
       agent: MIMO,
       sessionId,
       title: record.conversationName ?? defaultAgentChatLabel(MIMO),
-      cwd: record.launchDirectory,
+      cwd: livePath ?? record.launchDirectory,
       branch: null,
       model: null,
       filePath: '',
@@ -76,7 +101,7 @@ export function includeLocalMimoHistory(
       subagentTranscriptCount: 0,
       resumeCommand: '',
       subagent: null,
-      structuredSession: { sessionId, workspaceId: record.location.workspaceId }
+      structuredSession: { sessionId, workspaceId }
     }
     const preview = ownedRowLastTurnPreview(row, sessionId)
     if (preview) {
