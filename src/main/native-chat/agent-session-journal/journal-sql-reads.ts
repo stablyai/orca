@@ -1,5 +1,5 @@
 import type { NativeChatTaskList } from '../../../shared/native-chat/input/task-lists/native-chat-task-list'
-import type { JournalTurnAttribution } from './journal-domain-turn-attribution'
+import type { JournalTurnAttribution, JournalTurnNaming } from './journal-domain-turn-attribution'
 import type { JournalRequestMark } from './journal-request-failure'
 import type { JournalMailAttempt, JournalMailObservation } from './journal-mail-observation'
 import type { JournalRewindCut, JournalRewindSelection } from './journal-domain-rewind-cut'
@@ -64,7 +64,7 @@ export type JournalSqlReads = AgentSessionJournalReads & {
   turnAttribution(
     turnId: string,
     through: number,
-    stampsOnly?: true
+    naming?: JournalTurnNaming
   ): Promise<JournalTurnAttribution>
   promptItem(end: 'first' | 'last'): Promise<AgentJournalRenderItem | null>
   /** The plan last written in the turn of the chat's newest tool call, or null. */
@@ -169,13 +169,13 @@ export function journalSqlReads(
     botMemorySources: async (after) => (await read({ kind: 'bot-memory-sources', after })).sources,
     automationResultNotes: async () => (await read({ kind: 'automation-result-notes' })).snapshot,
     operationWindow: async (anchors) => (await read({ kind: 'operation-window', anchors })).window,
-    turnAttribution: async (turnId, through, stampsOnly) =>
+    turnAttribution: async (turnId, through, naming) =>
       (
         await read({
           kind: 'turn-attribution',
           turnId,
           through,
-          ...(stampsOnly ? { stampsOnly } : {})
+          ...(naming ? { naming } : {})
         })
       ).attribution,
     promptItem: async (end) => (await read({ kind: 'prompt-item', end })).item,

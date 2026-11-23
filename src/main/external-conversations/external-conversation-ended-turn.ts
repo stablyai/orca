@@ -87,12 +87,12 @@ export async function endedTurnAttribution(
   sessionId: string,
   turnId: string,
   cursor?: AgentJournalCursor,
-  stampsOnly?: true
+  naming?: ConnectorReplyStamp['conversation']
 ): Promise<Pick<EndedChatTurn, 'opener' | 'stamps'>> {
   const read = cursor
     ? await chat
         .journalReads(sessionId)
-        .then((reads) => reads.turnAttribution(turnId, cursor.sequence, stampsOnly))
+        .then((reads) => reads.turnAttribution(turnId, cursor.sequence, naming))
         .catch(() => null)
     : null
   if (
@@ -103,7 +103,7 @@ export async function endedTurnAttribution(
   ) {
     return {}
   }
-  return stampsOnly ? { stamps: read.stamps } : { opener: read.opener, stamps: read.stamps }
+  return naming ? { stamps: read.stamps } : { opener: read.opener, stamps: read.stamps }
 }
 
 /** How many turns merged into a completion's end, and the answering ones when the end names them
@@ -119,8 +119,8 @@ export function mergedTurnNews(
       ? {
           mergedAnswers: {
             turnIds,
-            read: (turnId: string) =>
-              endedTurnAttribution(chat, sessionId, turnId, journalCursor, true)
+            read: (turnId, naming) =>
+              endedTurnAttribution(chat, sessionId, turnId, journalCursor, naming)
           }
         }
       : {})
@@ -129,7 +129,11 @@ export function mergedTurnNews(
 
 export type MergedAnswers = {
   turnIds: readonly string[]
-  read: (turnId: string) => Promise<Pick<EndedChatTurn, 'stamps'>>
+  /** A stamp of the turn naming this conversation, if it answered it. */
+  read: (
+    turnId: string,
+    naming: ConnectorReplyStamp['conversation']
+  ) => Promise<Pick<EndedChatTurn, 'stamps'>>
 }
 
 /** What the reply outbox reads of the turn: its row's journal key, the deliveries it answered, and

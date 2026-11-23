@@ -13,29 +13,29 @@ export function journalTurnAnsweredMessages(
   opener: AgentJournalRenderItem | null | undefined,
   turnItemId: string
 ): AgentJournalRenderItem[] {
-  // Indexed once, and only for a turn that steered sends in: a long turn can steer in hundreds.
-  let byId: Map<string, AgentJournalRenderItem> | undefined
-  const itemOf = (key: string) => {
-    if (!byId) {
-      byId = new Map()
-      for (const item of journal.items) {
-        if (!byId.has(item.itemId)) {
-          byId.set(item.itemId, item)
-        }
-      }
+  const keys = journal.submissions.flatMap((submission) =>
+    submission.answeredInTurn?.via === 'steer' &&
+    submission.answeredInTurn.turnItemId === turnItemId
+      ? [agentJournalSubmissionKey(submission.clientMessageId)]
+      : []
+  )
+  // One pass over the rows, stopping once every steered send is found: a long turn steers hundreds.
+  const found = new Map<string, AgentJournalRenderItem | null>(keys.map((key) => [key, null]))
+  let missing = found.size
+  for (const item of journal.items) {
+    if (missing === 0) {
+      break
     }
-    return byId.get(key)
+    if (found.get(item.itemId) === null) {
+      found.set(item.itemId, item)
+      missing -= 1
+    }
   }
   const messages = new Set(opener ? [opener] : [])
-  for (const submission of journal.submissions) {
-    if (
-      submission.answeredInTurn?.via === 'steer' &&
-      submission.answeredInTurn.turnItemId === turnItemId
-    ) {
-      const item = itemOf(agentJournalSubmissionKey(submission.clientMessageId))
-      if (item) {
-        messages.add(item)
-      }
+  for (const key of keys) {
+    const item = found.get(key)
+    if (item) {
+      messages.add(item)
     }
   }
   return [...messages]

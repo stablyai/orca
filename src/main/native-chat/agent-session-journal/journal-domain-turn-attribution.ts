@@ -24,15 +24,19 @@ export type JournalTurnAttribution = {
   messages: AgentJournalRenderItem[] | null
 }
 
+/** The conversation a stamp-only attribution read asks about. */
+export type JournalTurnNaming = AgentJournalConnectorDelivery['conversation']
+
 /** A turn's row, opener and steered sends, each found by index: work is the turn's own rows (every
  *  send steered into it, all needed to prove none was a delivery), never the chat's send history (an
  *  operation window scans every current send). `through`: the sequence its end was read at; a row
- *  written later is not the ended turn's. `stampsOnly`: opener and messages stay null. */
+ *  written later is not the ended turn's. `naming`: only whether it answered that conversation, one stamp
+ *  naming it at most, found by reading the fewest sends; opener and messages stay null. */
 export function readJournalDomainTurnAttribution(
   scope: JournalSqlScope,
   turnId: string,
   through: number,
-  stampsOnly?: true
+  naming?: JournalTurnNaming
 ): JournalTurnAttribution {
   const cursor = journalDomainContextHead(scope.db, scope)
   const ended = (item: AgentJournalRenderItem | null) =>
@@ -55,31 +59,77 @@ export function readJournalDomainTurnAttribution(
           )
         )
       : null
-  const sends = scope.db
-    .prepare(`SELECT payload_json FROM journal_submission_attempts INDEXED BY journal_submission_steer
-    WHERE session_id=? AND epoch=? AND current=1 AND steer_turn_item_id=?
-    ORDER BY accepted_sequence,ordinal`)
-    .all(...scope.prefix, row.itemId)
-  const submissions = sends.map((send) =>
-    scope.decode<AgentJournalSubmission>(scope.examined(send).payload_json)
-  )
+  if (naming) {
+    const stamps = stampNaming(scope, row.itemId, opener, naming, ended)
+    return { cursor, turnItemId: row.itemId, opener: null, stamps, messages: null }
+  }
+  const submissions = [...steeredSends(scope, row.itemId)]
   const items = submissions.flatMap((submission) => {
     const key = agentJournalSubmissionKey(submission.clientMessageId)
     const item = ended(journalVisibleItem(scope.db, scope.prefix, key))
     return item ? [item] : []
   })
-  const stamps = connectorReplyTurnStamps({ items, submissions }, opener, row.itemId)
-  // Its caller checks only whom the turn answered: the rows stay in the worker.
-  if (stampsOnly) {
-    return { cursor, turnItemId: row.itemId, opener: null, stamps, messages: null }
-  }
   return {
     cursor,
     turnItemId: row.itemId,
     opener,
-    stamps,
+    stamps: connectorReplyTurnStamps({ items, submissions }, opener, row.itemId),
     messages: journalTurnAnsweredMessages({ items, submissions }, opener, row.itemId)
   }
+}
+
+/** Every current send steered into the turn row, in order, decoded as it is reached. */
+function* steeredSends(
+  scope: JournalSqlScope,
+  turnItemId: string
+): Iterable<AgentJournalSubmission> {
+  const sends = scope.db
+    .prepare(`SELECT payload_json FROM journal_submission_attempts INDEXED BY journal_submission_steer
+    WHERE session_id=? AND epoch=? AND current=1 AND steer_turn_item_id=?
+    ORDER BY accepted_sequence,ordinal`)
+    .iterate(...scope.prefix, turnItemId)
+  for (const send of sends) {
+    yield scope.decode<AgentJournalSubmission>(scope.examined(send).payload_json)
+  }
+}
+
+/** At most one stamp naming the conversation: the opener's (or its claim's) first, then each
+ *  steered send's in order, its message read only while none before named it. */
+function stampNaming(
+  scope: JournalSqlScope,
+  turnItemId: string,
+  opener: AgentJournalRenderItem | null,
+  naming: JournalTurnNaming,
+  ended: (item: AgentJournalRenderItem | null) => AgentJournalRenderItem | null
+): AgentJournalConnectorDelivery[] {
+  const named = (stamps: AgentJournalConnectorDelivery[]) =>
+    stamps.find(
+      ({ conversation }) =>
+        conversation.source === naming.source && conversation.externalId === naming.externalId
+    )
+  const fromOpener = named(
+    connectorReplyTurnStamps({ items: [], submissions: [] }, opener, turnItemId)
+  )
+  if (fromOpener) {
+    return [fromOpener]
+  }
+  for (const submission of steeredSends(scope, turnItemId)) {
+    const answered = submission.answeredInTurn
+    if (answered?.via !== 'steer' || answered.turnItemId !== turnItemId) {
+      continue
+    }
+    const key = agentJournalSubmissionKey(submission.clientMessageId)
+    const item = ended(journalVisibleItem(scope.db, scope.prefix, key))
+    const stamp =
+      item &&
+      named(
+        connectorReplyTurnStamps({ items: [item], submissions: [submission] }, null, turnItemId)
+      )
+    if (stamp) {
+      return [stamp]
+    }
+  }
+  return []
 }
 
 /** The turn's own root row: its lifecycle record by turn id, else the item the id names. */

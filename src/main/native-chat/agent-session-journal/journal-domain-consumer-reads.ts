@@ -36,7 +36,8 @@ import {
 
 import {
   readJournalDomainTurnAttribution,
-  type JournalTurnAttribution
+  type JournalTurnAttribution,
+  type JournalTurnNaming
 } from './journal-domain-turn-attribution'
 export type JournalConsumerRead =
   | { kind: 'naming-prompt'; hostStartedAt?: number }
@@ -46,7 +47,7 @@ export type JournalConsumerRead =
   /** Automation-result notes since the last clear, with the sends that read them. */
   | { kind: 'automation-result-notes' }
   | { kind: 'operation-window'; anchors: JournalOperationWindowAnchors }
-  | { kind: 'turn-attribution'; turnId: string; through: number; stampsOnly?: true }
+  | { kind: 'turn-attribution'; turnId: string; through: number; naming?: JournalTurnNaming }
   | { kind: 'prompt-item'; end: 'first' | 'last' }
   | { kind: 'latest-task-list' }
   | { kind: 'run-mentions'; runId: string }
@@ -91,7 +92,7 @@ export function readJournalDomainConsumer(
         scope,
         operation.turnId,
         operation.through,
-        operation.stampsOnly
+        operation.naming
       )
     }
   }

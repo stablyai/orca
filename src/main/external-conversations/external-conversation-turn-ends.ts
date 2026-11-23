@@ -334,7 +334,7 @@ async function mergedAnswersOutboxed(
   for (const turnId of merged.turnIds) {
     const attribution = end.current()
       ? await Promise.resolve(turnId)
-          .then(merged.read)
+          .then((id) => merged.read(id, { source: link.source, externalId: link.externalId }))
           .catch(() => null)
       : null
     if (!attribution || !stampsName(attribution, link)) {
