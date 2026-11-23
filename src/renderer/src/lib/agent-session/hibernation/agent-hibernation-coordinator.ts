@@ -54,6 +54,9 @@ type AgentHibernationCoordinatorState = {
 
 const MAX_REFUSED_RETRY_MS = 16 * 60_000
 
+/** Narrows a re-check to the one pane about to sleep. */
+type TargetPane = { tabId: string; paneKey: string }
+
 const coordinator: AgentHibernationCoordinatorState = {
   interval: null,
   unsubscribeVisibility: null,
@@ -68,14 +71,20 @@ function snapshotFromState(
   state: AppState,
   now: number,
   hostEvidence: HostPtyEvidence,
-  targetWorktreeId?: string
+  targetWorktreeId?: string,
+  pane?: TargetPane
 ): AgentHibernationPlannerSnapshot {
+  const worktreeTabs = targetWorktreeId ? (state.tabsByWorktree[targetWorktreeId] ?? []) : []
   return {
     settings: state.settings,
     activeWorktreeId: state.activeWorktreeId,
     foregroundTerminalTabIds: getForegroundTerminalTabIds(),
     tabsByWorktree: targetWorktreeId
-      ? { [targetWorktreeId]: state.tabsByWorktree[targetWorktreeId] ?? [] }
+      ? {
+          [targetWorktreeId]: pane
+            ? worktreeTabs.filter((tab) => tab.id === pane.tabId)
+            : worktreeTabs
+        }
       : state.tabsByWorktree,
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     ptyIdsByTabId: state.ptyIdsByTabId,
@@ -90,7 +99,9 @@ function snapshotFromState(
     inUsePtyIds: [...getAllDrivers()]
       .filter(([, driver]) => driver.kind === 'mobile')
       .map(([ptyId]) => ptyId),
-    agentStatusByPaneKey: state.agentStatusByPaneKey,
+    agentStatusByPaneKey: pane
+      ? new Map([[pane.paneKey, state.agentStatusByPaneKey.get(pane.paneKey)]])
+      : state.agentStatusByPaneKey,
     sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
     // Why: input stamps are coalesced, so planning must see the not-yet-flushed keystroke.
     lastTerminalInputAtByPaneKey: mergePendingTerminalInputActivity(
@@ -104,18 +115,21 @@ function snapshotFromState(
   }
 }
 
-async function currentCandidates(now: number, targetWorktreeId?: string) {
+async function currentCandidates(now: number, targetWorktreeId?: string, pane?: TargetPane) {
   const hostEvidence = await collectHostPtyEvidence(useAppStore.getState(), targetWorktreeId)
   const freshState = useAppStore.getState()
   // Sample binding ages from the plan’s state so a first-seen pane cannot already qualify as long-idle.
-  observeHibernationPtyBindings({
-    tabsByWorktree: freshState.tabsByWorktree,
-    terminalLayoutsByTabId: freshState.terminalLayoutsByTabId,
-    now,
-    idleMs: getEffectiveAgentHibernationIdleMs(freshState.settings?.agentHibernationIdleMs)
-  })
+  // A one-pane re-check skips it: an unsampled binding fails closed, and the next tick samples it.
+  if (!pane) {
+    observeHibernationPtyBindings({
+      tabsByWorktree: freshState.tabsByWorktree,
+      terminalLayoutsByTabId: freshState.terminalLayoutsByTabId,
+      now,
+      idleMs: getEffectiveAgentHibernationIdleMs(freshState.settings?.agentHibernationIdleMs)
+    })
+  }
   return planAgentHibernationCandidates(
-    snapshotFromState(freshState, now, hostEvidence, targetWorktreeId)
+    snapshotFromState(freshState, now, hostEvidence, targetWorktreeId, pane)
   )
     .filter((candidate) => {
       const owner = resolveAgentHibernationRuntimeOwner(freshState, candidate.worktreeId)
@@ -144,7 +158,12 @@ async function hibernatePaneIfStillEligible(
   }
   // Only the pane’s owner can authorize teardown; global sweeps cause C×W runtime listings for C candidates.
   const stillEligible = async () =>
-    (await currentCandidates(coordinator.now(), worktreeId)).some(
+    (
+      await currentCandidates(coordinator.now(), worktreeId, {
+        tabId: confirmedCandidate.tabId,
+        paneKey: confirmedCandidate.paneKey
+      })
+    ).some(
       (candidate) =>
         candidate.id === confirmedCandidate.id &&
         candidate.signature === confirmedCandidate.signature

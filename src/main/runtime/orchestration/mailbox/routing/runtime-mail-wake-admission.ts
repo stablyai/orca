@@ -125,9 +125,21 @@ export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobil
 
   private publishedHeldVersion = -1
   private publishedHeld = ''
+  private heldPublishQueued = false
 
-  /** The workspaces holding mail for a sleeper, sent only when that set changed. */
+  /** The workspaces holding mail for a sleeper: the full set, at most once per tick, only when it changed. */
   protected publishHeldWorktrees(): void {
+    if (this.heldPublishQueued) {
+      return
+    }
+    this.heldPublishQueued = true
+    queueMicrotask(() => {
+      this.heldPublishQueued = false
+      this.sendHeldWorktrees()
+    })
+  }
+
+  private sendHeldWorktrees(): void {
     if (this.publishedHeldVersion === this.sleptMailboxWake.heldVersion) {
       return
     }

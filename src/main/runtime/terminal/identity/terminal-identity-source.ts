@@ -8,6 +8,7 @@ import type { TerminalHandleRecord, PtyIncarnationHandleRecord } from './termina
 import { OrderedTerminalCandidates } from './ordered-terminal-candidates'
 import { TerminalIncarnationBindings } from './terminal-incarnation-bindings'
 import { TerminalPaneCandidates } from './terminal-pane-candidates'
+import { TerminalHandleTouches } from './terminal-handle-touches'
 import { retireReplacedLaunch } from '../launch/launch-evidence'
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] }
@@ -29,6 +30,7 @@ export class TerminalIdentitySource {
   private sequence = 0
   private epoch = 0
 
+  readonly handleTouches = new TerminalHandleTouches()
   constructor(private readonly retire: () => void) {}
 
   readonly ptys: ReadonlyMap<string, RuntimePtyWorktreeRecord> = this.ptyRecords
@@ -94,6 +96,7 @@ export class TerminalIdentitySource {
 
   setPtyConnected(record: RuntimePtyWorktreeRecord, value: boolean): void {
     this.setPtyField(record, 'connected', value)
+    this.handleTouches.touch(this.ptyBindings.get(record.ptyId))
   }
 
   setPtyTabId(record: RuntimePtyWorktreeRecord, value: string | null | undefined): void {
@@ -149,6 +152,7 @@ export class TerminalIdentitySource {
     if (inputs === this.leafRecords) {
       return
     }
+    this.handleTouches.touchDropped(this.leafRecords.keys(), inputs, this.leafBindings)
     const next = new Map<string, Mutable<RuntimeLeafRecord>>()
     this.paneCandidates.leaves.clear()
     for (const [key, input] of inputs) {
@@ -170,10 +174,12 @@ export class TerminalIdentitySource {
   }
 
   removeLeaf(key: string): boolean {
+    this.handleTouches.touch(this.leafBindings.get(key))
     this.paneCandidates.leaves.delete(key)
     return this.remove(this.leafRecords, key)
   }
   clearLeaves(): void {
+    this.handleTouches.touch(null)
     this.paneCandidates.leaves.clear()
     this.clear(this.leafRecords)
   }
@@ -206,12 +212,15 @@ export class TerminalIdentitySource {
       previous.issuedForPaneKey !== owned.issuedForPaneKey
     ) {
       this.changed()
+      this.handleTouches.touch(key)
     }
   }
   removeHandle(key: string): boolean {
+    this.handleTouches.touch(key)
     return this.remove(this.handleRecords, key)
   }
   clearHandles(): void {
+    this.handleTouches.touch(null)
     this.clear(this.handleRecords)
   }
 
@@ -223,10 +232,12 @@ export class TerminalIdentitySource {
     return this.reverseCandidates.first(handle)
   }
   clearPtyBindings(): void {
+    this.handleTouches.touch(null)
     this.reverseCandidates.clear()
     this.clear(this.ptyBindings)
   }
   unbindPty(id: string): boolean {
+    this.handleTouches.touch(this.ptyBindings.get(id))
     this.reverseCandidates.delete(id)
     return this.remove(this.ptyBindings, id)
   }
@@ -234,9 +245,11 @@ export class TerminalIdentitySource {
     this.bind(this.leafBindings, key, handle)
   }
   unbindLeaf(key: string): boolean {
+    this.handleTouches.touch(this.leafBindings.get(key))
     return this.remove(this.leafBindings, key)
   }
   clearLeafBindings(): void {
+    this.handleTouches.touch(null)
     this.clear(this.leafBindings)
   }
 
@@ -298,6 +311,8 @@ export class TerminalIdentitySource {
     if (previous !== value) {
       map.set(key, value)
       this.changed()
+      this.handleTouches.touch(previous)
+      this.handleTouches.touch(value)
     }
   }
   private remove<T>(map: Map<string, T>, key: string): boolean {
