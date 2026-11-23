@@ -1,4 +1,4 @@
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type {
   AgentModelCatalogService,
   AgentModelCatalogServiceDeps
@@ -6,7 +6,7 @@ import type {
 import { agentModelCatalogFingerprint } from './agent-model-catalog-fingerprint'
 
 export async function newChatCatalogKey(
-  deps: AgentModelCatalogServiceDeps,
+  deps: Pick<AgentModelCatalogServiceDeps, 'resolveAccountHome'>,
   agent: string,
   folder?: string
 ): Promise<{ fingerprint: string; accountHome: AgentSessionAccountHome } | null> {
@@ -50,6 +50,7 @@ export async function prewarmAgentModelCatalog(
   const used = Object.keys(probes).filter(
     (agent) =>
       !deps.listsInChatFolder?.has(agent) &&
+      !deps.listsOnDemand?.has(agent) &&
       (deps.store.hasEntryForAgent(agent) || deps.hasChatRecords?.(agent) === true)
   )
   await runBounded(used, 2, signal, async (agent) => {

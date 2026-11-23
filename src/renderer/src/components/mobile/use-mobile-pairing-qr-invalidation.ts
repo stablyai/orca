@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import {
   canMintMobilePairingOffer,
   type MobilePairingConnectionMode
-} from '../../../../shared/mobile-pairing-connection-mode'
+} from '../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 
 type MutableRef<T> = { current: T }
 

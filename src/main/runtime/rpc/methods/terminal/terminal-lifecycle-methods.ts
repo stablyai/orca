@@ -1,12 +1,13 @@
-import { terminalImageViewerSupported } from '../../../terminal-image-viewer-env'
+import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
+import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { TERMINAL_WORKSPACE_STOP_METHODS } from './terminal-workspace-stop-methods'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { defineMethod } from '../../core'
 import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
-} from '../../../../../shared/runtime-navigation'
-import { withTerminalCloseAttribution } from '../../terminal-close-attribution'
+} from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
+import { withTerminalCloseAttribution } from '../../terminal/terminal-close-attribution'
 import {
   AgentTeamsPrepareLaunch,
   AgentTeamsTmuxCompat,
@@ -16,8 +17,8 @@ import {
   TerminalReveal,
   TerminalSplit,
   TerminalWait
-} from '../../../../../shared/rpc-contract/terminal-unary-params'
-import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/terminal-stream-params'
+} from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
+import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/terminal/terminal-stream-params'
 
 export const TERMINAL_LIFECYCLE_METHODS = [
   defineMethod({
@@ -34,6 +35,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
   }),
   defineMethod({
     name: 'terminal.create',
+    requires: terminalCreateFeatureRequirement,
     permission: 'workspace',
     params: TerminalCreateParams,
     handler: async (params, context) => {
@@ -72,6 +74,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
                 : {}),
               ...(params.launchToken ? { launchToken: params.launchToken } : {}),
               ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+              ...(params.trustWorktreeId ? { trustWorktreeId: params.trustWorktreeId } : {}),
               terminalImageViewerSupported: terminalImageViewerSupported(context)
             }
           )
@@ -84,6 +87,8 @@ export const TERMINAL_LIFECYCLE_METHODS = [
         params.reconcileExisting === true,
         (canonicalWorktreeSelector, preAllocatedHandle) =>
           runtime.createTerminal(canonicalWorktreeSelector, {
+            // A CLI command (typed or an agent's) or a window's create is the user's act.
+            wslUserAct: true,
             command: params.command,
             terminalImageViewerSupported: terminalImageViewerSupported(context),
             ...(params.shell ? { shellOverride: params.shell } : {}),
@@ -97,6 +102,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             ...(params.resumeOrigin ? { resumeOrigin: params.resumeOrigin } : {}),
             ...(params.launchToken ? { launchToken: params.launchToken } : {}),
             ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+            ...(params.trustWorktreeId ? { trustWorktreeId: params.trustWorktreeId } : {}),
             ...(params.terminalKittyKeyboardProtocol === true
               ? { terminalKittyKeyboardProtocol: true }
               : {}),
@@ -113,8 +119,11 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             tabId: params.tabId,
             leafId: params.leafId,
             ...(params.spawnIntent ? { spawnIntent: params.spawnIntent } : {}),
+            // A paired window starts its mounted panes here, activation spawns included, and can't tell them apart.
+            ...(clientKind === 'runtime' ? { reopensPane: true as const } : {}),
             ...(preAllocatedHandle ? { preAllocatedHandle } : {})
-          })
+          }),
+        { wslUserAct: true }
       )
       // Switch point. A CLI start is work in the workspace; a window or phone tab is a person opening one.
       if (
@@ -136,28 +145,39 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     name: 'terminal.split',
     permission: 'workspace',
     params: TerminalSplit,
-    handler: async (params, { runtime }) => ({
-      split:
-        params.pane && !params.terminal
-          ? await runtime.splitTerminalPane(params.pane, {
-              direction: params.direction ?? 'horizontal',
-              newLeafId: params.newLeafId,
-              cwd: params.cwd,
-              initialSize: params.initialSize,
-              command: params.command,
-              env: params.env,
-              // The window's split shows why its start failed, as its own spawn did.
-              keepPaneOnStartFailure: true
-            })
-          : // The schema requires a handle when no pane is named.
-            await runtime.splitTerminal(params.terminal ?? '', {
-              direction: params.direction,
-              command: params.command,
-              env: params.env,
-              telemetrySource: params.telemetrySource,
-              retrySplit: params.retrySplit
-            })
-    })
+    handler: async (params, context) => {
+      const { runtime, caller } = context
+      const viewerSupported = terminalImageViewerSupported(context)
+      const viewer =
+        viewerSupported === undefined ? {} : { terminalImageViewerSupported: viewerSupported }
+      return {
+        split:
+          params.pane && !params.terminal
+            ? await runtime.splitTerminalPane(params.pane, {
+                direction: params.direction ?? 'horizontal',
+                newLeafId: params.newLeafId,
+                cwd: params.cwd,
+                initialSize: params.initialSize,
+                command: params.command,
+                env: params.env,
+                ...viewer,
+                // The window's split shows why its start failed, as its own spawn did.
+                keepPaneOnStartFailure: true,
+                wslUserAct: true
+              })
+            : // The schema requires a handle when no pane is named.
+              await runtime.splitTerminal(params.terminal ?? '', {
+                direction: params.direction,
+                command: params.command,
+                env: params.env,
+                ...viewer,
+                telemetrySource: params.telemetrySource,
+                retrySplit: params.retrySplit,
+                ...(caller?.kind === 'local-cli' ? { activate: false } : {}),
+                wslUserAct: true
+              })
+      }
+    }
   }),
   ...TERMINAL_WORKSPACE_STOP_METHODS,
   defineMethod({

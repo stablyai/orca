@@ -1,5 +1,5 @@
 import type { JSX, ReactNode } from 'react'
-import type { FeatureTip } from '../../../../shared/feature-tips'
+import type { FeatureTip } from '../../../../shared/feature-education/feature-tips'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -9,11 +9,13 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Trans } from 'react-i18next'
 import { CliFeatureTipVisual } from './CliFeatureTipVisual'
 import { CliSkillSetupPanel } from './CliSkillSetupPanel'
 import { FeatureTipActions } from './FeatureTipActions'
+import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
 
 function WorktreePromptTerm({ children }: { children?: ReactNode }): JSX.Element {
   return (
@@ -40,6 +42,8 @@ export function CliSetupTipDialog({
   onPrimaryAction: () => void
   onSkip: () => void
 }): JSX.Element {
+  const t = useTranslate()
+  const copy = getLocalizedFeatureTipCopy(tip)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Why: the CLI tip sits over terminal surfaces, so it needs a local token-mixed surface. */}
@@ -59,10 +63,10 @@ export function CliSetupTipDialog({
                   skillTerminalOpen ? 'max-w-2xl' : 'max-w-[22rem]'
                 }`}
               >
-                {tip.title}
+                {copy.title}
               </DialogTitle>
               <DialogDescription className="mt-3 max-w-2xl text-sm leading-relaxed">
-                {tip.description}
+                {copy.description}
               </DialogDescription>
               <div
                 aria-hidden={skillTerminalOpen}
@@ -73,15 +77,12 @@ export function CliSetupTipDialog({
                 }`}
               >
                 <p className="font-medium text-foreground">
-                  {translate(
-                    'auto.components.feature.tips.FeatureTipsModal.4795ac2d4a',
-                    'Try asking:'
-                  )}
+                  {t('auto.components.feature.tips.FeatureTipsModal.4795ac2d4a', 'Try asking:')}
                 </p>
                 <p>
                   <Trans
                     i18n={i18n}
-                    defaults={translate(
+                    defaults={t(
                       'auto.components.feature.tips.FeatureTipsModal.splitPrPrompt',
                       '“Split this PR into two <term>worktrees</term> and create PRs for each.”'
                     )}
@@ -89,17 +90,14 @@ export function CliSetupTipDialog({
                   />
                 </p>
                 <p>
-                  {translate(
+                  {t(
                     'auto.components.feature.tips.FeatureTipsModal.864e2db28f',
                     '“When the agent in'
                   )}
                   <WorktreePromptTerm>
-                    {translate(
-                      'auto.components.feature.tips.FeatureTipsModal.298301b7a0',
-                      'worktree'
-                    )}
+                    {t('auto.components.feature.tips.FeatureTipsModal.298301b7a0', 'worktree')}
                   </WorktreePromptTerm>{' '}
-                  {translate(
+                  {t(
                     'auto.components.feature.tips.FeatureTipsModal.3c6c478462',
                     'X finishes, send it the review task.”'
                   )}
@@ -112,7 +110,7 @@ export function CliSetupTipDialog({
           <DialogFooter className="mt-8 flex sm:justify-stretch">
             {skillTerminalOpen ? (
               <Button className="w-full" onClick={onSkip}>
-                {translate('auto.components.feature.tips.FeatureTipsModal.c169298e4d', 'Done')}
+                {t('auto.components.feature.tips.FeatureTipsModal.c169298e4d', 'Done')}
               </Button>
             ) : (
               <FeatureTipActions

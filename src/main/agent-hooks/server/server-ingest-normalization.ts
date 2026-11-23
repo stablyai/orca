@@ -1,26 +1,123 @@
-import { retainOpenCodeWriterTopology } from './cli-writer-observation'
-import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
-import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
-import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
-import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
+import {
+  retainOpenCodeWriterTopology,
+  retainTmuxHookWriterTopology
+} from './cli-writer-observation'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { AgentHookAttributionDiagnostics } from '../../../shared/agent-hook-listener/state/agent-hook-attribution-diagnostics'
+import {
+  buildSpoolHookBody,
+  type SpoolRecord
+} from '../../../shared/agent-hook-listener/transport/agent-hook-spool'
+import {
+  checkHookOwnerPresence,
+  restateHookRoot
+} from '../../../shared/agent-hook-listener/presence/agent-hook-owner-presence'
+import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
+import { withStopTranscriptReadsSkipped } from '../../../shared/agent-hook-listener/transcript-lines'
+import { droidStopTranscriptPath } from '../../../shared/agent-hook-listener/providers/droid/droid-turn-outcome'
+import {
+  isAgentHookSource,
+  type AgentHookSource
+} from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   bindOpenCodeTuiSession,
   isOpenCodeSharedServerPost
 } from '../../../shared/agent-hook-listener/opencode-session-registry'
-import type { NormalizedLocalHook } from './server-types'
+import type { EnrichedAgentHookEventPayload, NormalizedLocalHook } from './server-types'
 import { AgentHookServerTmuxStatus } from './server-tmux-status'
-import { getClaudeObservedConfigDirs } from '../../claude-accounts/claude-profile-installed-router'
+import { getClaudeObservedConfigDirs } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
+
+import {
+  type PrefetchedRolloutReads,
+  withPrefetchedRolloutReads
+} from '../../../shared/agent-hook-listener/providers/codex/codex-rollout-prefetch-scope'
+import {
+  CodexHookRolloutPrefetcher,
+  prefetchCodexHookRolloutReadsWithin
+} from '../../../shared/agent-hook-listener/providers/codex/codex-hook-rollout-prefetch'
 
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerTmuxStatus {
+  protected readonly codexRolloutPrefetcher = new CodexHookRolloutPrefetcher()
+
+  protected readonly attributionDiagnostics = new AgentHookAttributionDiagnostics()
+  /** Panes whose owner an undecided hook challenged: until that hook is admitted or refused, the
+   *  owner's exit neither answers for the pane nor is forgotten. */
+  protected readonly undecidedOwnerChallenges = new Map<string, number>()
+
+  /** HTTP and spool hooks share one ownership preflight before provider folds; a drain passes
+   *  the one answer deadline all its records share. */
+  protected checkHookOwner(
+    source: AgentHookSource,
+    body: unknown,
+    answerBy?: number
+  ): Promise<unknown> | undefined {
+    const challenges = this.undecidedOwnerChallenges
+    let challenged: string | undefined
+    const read = this.readHookRootEvidence
+    const pending = checkHookOwnerPresence(
+      this.state,
+      source,
+      body,
+      this.env,
+      (paneKey) => {
+        challenged = this.resolvePaneKeyAlias(paneKey)
+        challenges.set(challenged, (challenges.get(challenged) ?? 0) + 1)
+        return this.checkAgentPresence(paneKey)
+      },
+      read && {
+        read,
+        answerBy,
+        // A late answer re-applies the pane's current row with the authority it settles.
+        reconcile: (completion) => {
+          const event = this.statusHooksEnabled
+            ? restateHookRoot(this.state, completion)
+            : undefined
+          if (event) {
+            this.applyNormalizedStatus(event)
+          }
+        }
+      }
+    )
+    // The caller admits or refuses the hook as soon as this settles, with no await in between.
+    return pending?.finally(() => {
+      if (!challenged) {
+        return
+      }
+      const remaining = (challenges.get(challenged) ?? 1) - 1
+      if (remaining > 0) {
+        challenges.set(challenged, remaining)
+      } else {
+        challenges.delete(challenged)
+      }
+    })
+  }
+
+  protected override applyNormalizedStatus(
+    ...args: Parameters<AgentHookServerTmuxStatus['applyNormalizedStatus']>
+  ): EnrichedAgentHookEventPayload | undefined {
+    const applied = super.applyNormalizedStatus(...args)
+    const [incoming, , origin = 'hook'] = args
+    // Claude can still block the prompt after this hook, and its idle may already have landed.
+    if (
+      applied?.payload.agentType === 'claude' &&
+      origin === 'hook' &&
+      incoming.hookEventName === 'UserPromptSubmit' &&
+      this.programStatusFacets.claimPrompt(applied.paneKey)
+    ) {
+      this.settleClaudePromptBlocked(applied)
+    }
+    return applied
+  }
+
   protected setClaudeBackgroundEvidence(
     paneKey: string,
-    hasRunningTask: boolean,
+    runningTasks: readonly string[] | undefined,
     hasActiveCron: boolean
   ): void {
-    if (hasRunningTask) {
-      this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+    if (runningTasks) {
+      this.state.claudeRunningNonAgentTasksByPaneKey.set(paneKey, runningTasks)
     } else {
-      this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+      this.state.claudeRunningNonAgentTasksByPaneKey.delete(paneKey)
     }
     if (hasActiveCron) {
       this.state.claudeActiveSessionCronPaneKeys.add(paneKey)
@@ -29,10 +126,24 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
   }
 
+  /** Never scans a transcript on the event loop: a skipped Stop-text read comes back as a path. */
   protected normalizeLocalHookPayload(
     source: AgentHookSource,
     body: unknown,
     isReplay = false
+  ): NormalizedLocalHook {
+    const { value, skipped } = withStopTranscriptReadsSkipped(() =>
+      this.normalizeLocalHookPayloadNow(source, body, isReplay)
+    )
+    retainTmuxHookWriterTopology(value.event, body)
+    const droidVerdictTranscriptPath = droidStopTranscriptPath(source, value.event, body)
+    return { ...value, stopTranscriptPath: skipped.at(-1), droidVerdictTranscriptPath }
+  }
+
+  private normalizeLocalHookPayloadNow(
+    source: AgentHookSource,
+    body: unknown,
+    isReplay: boolean
   ): NormalizedLocalHook {
     if (source !== 'claude' || typeof body !== 'object' || body === null) {
       const event = normalizeHookPayload(this.state, source, body, this.env, {
@@ -65,17 +176,17 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     const rawPaneKey = (body as Record<string, unknown>).paneKey
     const paneKey = typeof rawPaneKey === 'string' ? rawPaneKey.trim() : ''
     if (!paneKey) {
-      return { event: normalizeHookPayload(this.state, source, body, this.env) }
+      return { event: normalizeHookPayload(this.state, source, body, this.env, { isReplay }) }
     }
-    const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
+    const previousRunningTask = this.state.claudeRunningNonAgentTasksByPaneKey.get(paneKey)
     const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
-    const event = normalizeHookPayload(this.state, source, body, this.env)
+    const event = normalizeHookPayload(this.state, source, body, this.env, { isReplay })
     const transcriptPath = event?.providerSession?.transcriptPath
     if (transcriptPath) {
       // A wrapper's CLAUDE_CONFIG_DIR is only visible here; History scans it too (#23505).
       getClaudeObservedConfigDirs()?.observeTranscriptPath(transcriptPath)
     }
-    const nextRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
+    const nextRunningTask = this.state.claudeRunningNonAgentTasksByPaneKey.get(paneKey)
     const nextActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
     this.setClaudeBackgroundEvidence(paneKey, previousRunningTask, previousActiveCron)
     if (!event || event.paneKey !== paneKey) {
@@ -88,28 +199,89 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
   }
 
+  /** Normalizes and applies one local hook; returns the row that owns its tool call, if any. */
+  protected ingestLocalHook(
+    source: AgentHookSource,
+    aliasedBody: unknown
+  ): NormalizedLocalHook['event'] {
+    const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
+    if (source === 'muse' && !normalized.event) {
+      this.rearmIgnoredMuseHook(aliasedBody)
+    }
+    const statusDisposition = normalized.event
+      ? this.getAgentStatusDisposition(normalized.event.paneKey, {
+          source,
+          hookEventName: normalized.event.hookEventName,
+          isReplay: normalized.event.isReplay,
+          hasExplicitPrompt: normalized.event.hasExplicitPrompt,
+          opensTurn: normalized.event.opensTurn,
+          launchToken: normalized.event.launchToken
+        })
+      : 'suppress'
+    let toolCallOwner: NormalizedLocalHook['event'] = null
+    if (normalized.event && statusDisposition !== 'suppress') {
+      const restartedAuthority =
+        statusDisposition === 'restart' && source === 'omp'
+          ? this.restoreRetiredStatusRestart(normalized.event.paneKey)
+          : undefined
+      const event =
+        statusDisposition === 'restart'
+          ? {
+              ...normalized.event,
+              launchToken: undefined,
+              ...(restartedAuthority
+                ? {
+                    ...restartedAuthority,
+                    tabId: parsePaneKey(restartedAuthority.paneKey)?.tabId
+                  }
+                : {})
+            }
+          : normalized.event
+      if (statusDisposition === 'restart') {
+        // A new session must not inherit the retired one's observation order.
+        this.observations.rebind(event.paneKey)
+      }
+      this.recordCurrentAuthorityObservation(event)
+      toolCallOwner = event
+      const enriched = this.applyLocalHookAndReply(source, aliasedBody, event, normalized)
+      if (enriched) {
+        this.checkAgentPresenceAfterHook(event, enriched)
+        this.scheduleTranscriptPoll(source, aliasedBody, enriched)
+      }
+    }
+    return toolCallOwner
+  }
+
   // Spool records are durable replay evidence, not a live observation.
-  protected ingestSpoolRecord(record: SpoolRecord): Promise<void> | void {
+  protected ingestSpoolRecord(record: SpoolRecord, answerBy?: number): Promise<void> | void {
     if (!isAgentHookSource(record.source)) {
       return
     }
     const token = this.token
     const statusHookGeneration = this.statusHookGeneration
-    const apply = () => {
-      if (
-        !this.statusHooksEnabled ||
-        this.token !== token ||
-        this.statusHookGeneration !== statusHookGeneration
-      ) {
-        throw new Error('Status hook spool replay interrupted')
+    const apply = (reads?: PrefetchedRolloutReads) => {
+      try {
+        if (
+          !this.statusHooksEnabled ||
+          this.token !== token ||
+          this.statusHookGeneration !== statusHookGeneration
+        ) {
+          throw new Error('Status hook spool replay interrupted')
+        }
+        withPrefetchedRolloutReads(reads, () => this.applySpoolHook(record, body))
+      } finally {
+        reads?.batch.release()
       }
-      this.applySpoolHook(record, body)
     }
     const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
-    const pending = checkHookOwnerPresence(this.state, record.source, body, this.env, (paneKey) =>
-      this.checkAgentPresence(paneKey)
-    )
-    return pending ? pending.then(apply) : apply()
+    const pending = this.checkHookOwner(record.source, body, answerBy)
+    if (record.source === 'codex') {
+      // Replayed Codex hooks read live rollouts too; keep those opens off the main thread (#43539).
+      return Promise.resolve(pending)
+        .then(() => prefetchCodexHookRolloutReadsWithin(this.state, body))
+        .then(apply)
+    }
+    return pending ? pending.then(() => apply()) : apply()
   }
 
   private applySpoolHook(record: SpoolRecord, body: unknown): void {
@@ -141,7 +313,11 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       this.observations.rebind(event.paneKey)
     }
     this.recordCurrentAuthorityObservation(event)
-    this.applyNormalizedStatus(event, normalized.onAccepted)
+    const enriched = this.applyReplayedHookAndReply(event, normalized, record.receivedAt)
+    // Replay defers children whose rollout path is unresolved; only the poll finds and reads them.
+    if (enriched && record.source === 'codex') {
+      this.requestReplayTranscriptPoll(body, enriched)
+    }
     if (event.payload.state !== 'done') {
       this.withdrawReplayObservation(this.resolvePaneKeyAlias(event.paneKey))
     }

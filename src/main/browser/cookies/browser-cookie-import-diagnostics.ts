@@ -15,9 +15,6 @@ export function getDiagLogPath(): string {
   }
   return _diagLog
 }
-export function reasonWithDiagLog(reason: string): string {
-  return `${reason} Details were written to ${getDiagLogPath()}.`
-}
 const COOKIE_IMPORT_ERROR_SUMMARY_MAX_CHARS = 180
 const COOKIE_IMPORT_ERROR_SCAN_MAX_CHARS = 512
 

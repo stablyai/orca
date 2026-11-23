@@ -1,12 +1,15 @@
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type {
+  BrowserScreencastPointer,
   BrowserScreencastReadyResult,
   BrowserScreencastResult
-} from '../../../../../shared/runtime-types'
-import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/runtime-rpc-feature-interaction-source'
-import { e2eConfig } from '@/lib/e2e-config'
+} from '../../../../../shared/browser/runtime/runtime-browser-contracts'
+import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-feature-interaction-source'
+import { e2eConfig } from '@/app-shell/startup/e2e-config'
 import { isRemoteBrowserPageMissingCode } from './remote-browser-stream-errors'
+import type { RemoteBrowserDialogPage } from './remote-browser-javascript-dialog'
 import type { RemoteBrowserViewportSize } from './remote-browser-stream-tokens'
+import type { RemoteBrowserPagePrompts } from './remote-browser-page-prompts'
 
 export type RemoteBrowserScreencastSubscribe = (
   args: { selector: string; method: string; params?: unknown; timeoutMs?: number },
@@ -53,7 +56,11 @@ export type RemoteBrowserScreencastEvents = {
   onTransportError: (message: string) => void
   onPageMissing: () => void
   onFrame: (bytes: Uint8Array<ArrayBufferLike>) => void
+  /** The page's cursor and hovered link; null from hosts without `pointerEvents`. */
+  onPointer: (pointer: BrowserScreencastPointer | null) => void
   onClosed: () => void
+  /** This stream's view of the page's dialog and prompts; they close with the stream. */
+  pagePrompts: RemoteBrowserPagePrompts
 }
 
 export async function openRemoteBrowserScreencastStream(
@@ -62,7 +69,12 @@ export async function openRemoteBrowserScreencastStream(
   events: RemoteBrowserScreencastEvents
 ): Promise<{ unsubscribe: () => void }> {
   recordE2eScreencastSubscribe()
-  return subscribe(
+  const dialogPage: RemoteBrowserDialogPage = {
+    target: { kind: 'environment', environmentId: request.environmentId },
+    worktree: request.worktree,
+    pageId: request.pageId
+  }
+  const subscription = await subscribe(
     {
       selector: request.environmentId,
       method: 'browser.screencast',
@@ -75,13 +87,20 @@ export async function openRemoteBrowserScreencastStream(
         maxHeight: 2160,
         viewportWidth: request.viewportSize?.width,
         viewportHeight: request.viewportSize?.height,
-        deviceScaleFactor: request.deviceScaleFactor,
-        everyNthFrame: 2
+        // A viewport preset brings its own device; otherwise the page renders at this display's scale.
+        deviceScaleFactor:
+          request.viewportSize?.device?.deviceScaleFactor ?? request.deviceScaleFactor,
+        mobile: request.viewportSize?.device?.mobile === true,
+        // Pace by time, not by skipping frames: a skipped frame on a static page (one hover repaint) never arrives, while the host holds the newest paced frame.
+        everyNthFrame: 1,
+        minFrameIntervalMs: 33,
+        pointerEvents: 1,
+        pagePrompts: 1
       }),
       timeoutMs: 15_000
     },
     {
-      onResponse: (response) => dispatchScreencastResponse(response, events),
+      onResponse: (response) => dispatchScreencastResponse(response, events, dialogPage),
       onBinary: (bytes) => events.onFrame(bytes),
       onError: (error) => {
         if (!events.isCurrent()) {
@@ -93,14 +112,24 @@ export async function openRemoteBrowserScreencastStream(
         }
         events.onTransportError(error.message)
       },
-      onClose: () => events.onClosed()
+      onClose: () => {
+        events.pagePrompts.closeAll()
+        events.onClosed()
+      }
     }
   )
+  return {
+    unsubscribe: () => {
+      events.pagePrompts.closeAll()
+      subscription.unsubscribe()
+    }
+  }
 }
 
 function dispatchScreencastResponse(
   response: RuntimeRpcResponse<unknown>,
-  events: RemoteBrowserScreencastEvents
+  events: RemoteBrowserScreencastEvents,
+  dialogPage: RemoteBrowserDialogPage
 ): void {
   if (!events.isCurrent()) {
     return
@@ -119,8 +148,19 @@ function dispatchScreencastResponse(
   const event = response.result as BrowserScreencastResult
   if (event.type === 'ready') {
     events.onReady(event)
+    events.onPointer(event.pointer ?? null)
+  } else if (event.type === 'pointer') {
+    events.onPointer({ cursor: event.cursor, targetUrl: event.targetUrl })
   } else if (event.type === 'end') {
     events.onEnded()
+  } else if (event.type === 'dialog') {
+    events.pagePrompts.javaScriptDialog.show(event, dialogPage)
+  } else if (event.type === 'dialogClosed') {
+    events.pagePrompts.javaScriptDialog.close()
+  } else if (event.type === 'pagePrompt') {
+    events.pagePrompts.show(event.request, dialogPage)
+  } else if (event.type === 'pagePromptClosed') {
+    events.pagePrompts.close(event.requestId)
   } else if (event.type === 'error') {
     events.onFailed(event.message)
   }

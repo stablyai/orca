@@ -1,28 +1,29 @@
 import { z } from 'zod'
-import { KEYBINDING_DEFINITIONS, keybindingMatchesAction } from '../../../../shared/keybindings'
-import { isAgentInjectingInput } from '../../agent-input-injection'
-import { browserManager } from '../../browser-manager'
+import { KEYBINDING_DEFINITIONS } from '../../../../shared/keybindings/definitions'
+import { keybindingMatchesAction } from '../../../../shared/keybindings/matching'
+import { isAgentInjectingInput } from '../../cdp/input/agent-input-injection'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import {
   emitBrowserExtensionEvent,
   getBrowserExtensionProfileIdForSession
-} from '../browser-extension-api-host'
+} from '../api-runtime/browser-extension-api-host'
 import {
   EXECUTE_ACTION_COMMANDS,
   readBrowserExtensionCommands,
   shortcutMatchesInput
-} from '../browser-extension-commands'
-import { grantBrowserExtensionActiveTab } from '../browser-extension-active-tab'
-import { localizeManifestString } from '../browser-extension-manifest'
+} from '../actions/browser-extension-commands'
+import { grantBrowserExtensionActiveTab } from '../permissions/browser-extension-active-tab'
+import { localizeManifestString } from '../installation/browser-extension-manifest'
 import {
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace
-} from '../browser-extension-namespace-registry'
+} from '../api-runtime/browser-extension-namespace-registry'
 import {
   describeBrowserExtensionTab,
   resolveBrowserExtensionTab
-} from '../browser-extension-tab-model'
-import { runBrowserExtensionToolbarAction } from '../browser-extension-toolbar'
-import { noteBrowserExtensionUserGesture } from './permissions'
+} from '../tabs-and-windows/browser-extension-tab-model'
+import { runBrowserExtensionToolbarAction } from '../actions/browser-extension-toolbar'
+import { noteBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
 
 function isOrcaShortcut(input: Electron.Input): boolean {
   const overrides = browserManager.getKeybindingOverrides()

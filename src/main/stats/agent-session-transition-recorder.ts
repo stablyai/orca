@@ -1,7 +1,7 @@
 // Hook transitions align desktop/dashboard/mobile stats; OSC titles miss hook-only agents and can mistake spinner TUIs for execution.
 
-import { isAgentTimeAccruing } from '../../shared/agent-lead-status-fold'
-import type { AgentStatusPayload } from '../../shared/agent-status-types'
+import { isAgentTimeAccruing } from '../../shared/agent-status/lifecycle/agent-lead-status-fold'
+import type { AgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
 
 export type AgentSessionStatusEvent = {
   paneKey: string

@@ -1,0 +1,299 @@
+import type {
+  BrowserCommandTargetParams,
+  RuntimeBrowserCommandHost
+} from './browser-command-contracts'
+import { RuntimeBrowserCommandTargets } from './browser-command-targets'
+import { RuntimeBrowserTabCatalog } from '../tabs/browser-tab-catalog'
+import { RuntimeBrowserNavigation } from './browser-navigation'
+import { RuntimeBrowserElementActions } from './browser-element-actions'
+import { RuntimeBrowserPointerInput } from './browser-pointer-input'
+import { RuntimeBrowserCapture } from './browser-capture'
+import { RuntimeBrowserNetwork } from '../network/browser-network'
+import { RuntimeBrowserStorage } from './browser-storage'
+import { RuntimeBrowserTabQueries } from '../tabs/browser-tab-queries'
+import { RuntimeBrowserTabCreation } from '../tabs/browser-tab-creation'
+import { RuntimeBrowserTabClose } from '../tabs/browser-tab-close'
+import { RuntimeBrowserProfiles } from './browser-profiles'
+import { RuntimeBrowserScreencasts } from '../screencast/browser-screencasts'
+import { RuntimeBrowserDialogs } from './browser-dialogs'
+import { RuntimeBrowserGrab } from './browser-grab-commands'
+import { BROWSER_COMMANDS_WITHOUT_PAGE_ADMISSION } from './browser-commands-without-page-admission'
+
+type BrowserPageCommand = (
+  params: BrowserCommandTargetParams & { index?: number },
+  ...rest: unknown[]
+) => unknown
+function isBrowserPageCommand(value: unknown): value is BrowserPageCommand {
+  return typeof value === 'function'
+}
+
+export class RuntimeBrowserCommands {
+  readonly browserSnapshot: RuntimeBrowserCommandTargets['browserSnapshot']
+  readonly browserClick: RuntimeBrowserNavigation['browserClick']
+  readonly browserGoto: RuntimeBrowserNavigation['browserGoto']
+  readonly browserBack: RuntimeBrowserNavigation['browserBack']
+  readonly browserReload: RuntimeBrowserNavigation['browserReload']
+  readonly browserZoom: RuntimeBrowserNavigation['browserZoom']
+  readonly browserSiteDisplay: RuntimeBrowserNavigation['browserSiteDisplay']
+  readonly browserSetSiteColorScheme: RuntimeBrowserNavigation['browserSetSiteColorScheme']
+  readonly browserStop: RuntimeBrowserNavigation['browserStop']
+  readonly browserSetAudioMuted: RuntimeBrowserNavigation['browserSetAudioMuted']
+  readonly browserFindInPage: RuntimeBrowserNavigation['browserFindInPage']
+  readonly browserStopFindInPage: RuntimeBrowserNavigation['browserStopFindInPage']
+  readonly browserFill: RuntimeBrowserElementActions['browserFill']
+  readonly browserType: RuntimeBrowserElementActions['browserType']
+  readonly browserSelect: RuntimeBrowserElementActions['browserSelect']
+  readonly browserScroll: RuntimeBrowserElementActions['browserScroll']
+  readonly browserHover: RuntimeBrowserElementActions['browserHover']
+  readonly browserDrag: RuntimeBrowserElementActions['browserDrag']
+  readonly browserUpload: RuntimeBrowserElementActions['browserUpload']
+  readonly browserWait: RuntimeBrowserElementActions['browserWait']
+  readonly browserCheck: RuntimeBrowserElementActions['browserCheck']
+  readonly browserFocus: RuntimeBrowserElementActions['browserFocus']
+  readonly browserClear: RuntimeBrowserElementActions['browserClear']
+  readonly browserSelectAll: RuntimeBrowserElementActions['browserSelectAll']
+  readonly browserKeypress: RuntimeBrowserElementActions['browserKeypress']
+  readonly browserDblclick: RuntimeBrowserElementActions['browserDblclick']
+  readonly browserScrollIntoView: RuntimeBrowserElementActions['browserScrollIntoView']
+  readonly browserGet: RuntimeBrowserElementActions['browserGet']
+  readonly browserIs: RuntimeBrowserElementActions['browserIs']
+  readonly browserFind: RuntimeBrowserElementActions['browserFind']
+  readonly browserHighlight: RuntimeBrowserElementActions['browserHighlight']
+  readonly browserExec: RuntimeBrowserElementActions['browserExec']
+  readonly browserKeyboardInsertText: RuntimeBrowserPointerInput['browserKeyboardInsertText']
+  readonly browserMouseMove: RuntimeBrowserPointerInput['browserMouseMove']
+  readonly browserMouseDown: RuntimeBrowserPointerInput['browserMouseDown']
+  readonly browserMouseClick: RuntimeBrowserPointerInput['browserMouseClick']
+  readonly browserMouseUp: RuntimeBrowserPointerInput['browserMouseUp']
+  readonly browserMouseWheel: RuntimeBrowserPointerInput['browserMouseWheel']
+  readonly browserScreenshot: RuntimeBrowserCapture['browserScreenshot']
+  readonly browserPdf: RuntimeBrowserCapture['browserPdf']
+  readonly browserFullScreenshot: RuntimeBrowserCapture['browserFullScreenshot']
+  readonly browserCaptureStart: RuntimeBrowserCapture['browserCaptureStart']
+  readonly browserCaptureStop: RuntimeBrowserCapture['browserCaptureStop']
+  readonly browserConsoleLog: RuntimeBrowserCapture['browserConsoleLog']
+  readonly browserEval: RuntimeBrowserCapture['browserEval']
+  readonly browserNetworkLog: RuntimeBrowserNetwork['browserNetworkLog']
+  readonly browserForward: RuntimeBrowserNavigation['browserForward']
+  readonly browserCookieGet: RuntimeBrowserNetwork['browserCookieGet']
+  readonly browserCookieSet: RuntimeBrowserNetwork['browserCookieSet']
+  readonly browserCookieDelete: RuntimeBrowserNetwork['browserCookieDelete']
+  readonly browserSetViewport: RuntimeBrowserNetwork['browserSetViewport']
+  readonly browserSetGeolocation: RuntimeBrowserNetwork['browserSetGeolocation']
+  readonly browserInterceptEnable: RuntimeBrowserNetwork['browserInterceptEnable']
+  readonly browserInterceptDisable: RuntimeBrowserNetwork['browserInterceptDisable']
+  readonly browserInterceptList: RuntimeBrowserNetwork['browserInterceptList']
+  readonly browserSetDevice: RuntimeBrowserNetwork['browserSetDevice']
+  readonly browserSetOffline: RuntimeBrowserNetwork['browserSetOffline']
+  readonly browserSetHeaders: RuntimeBrowserNetwork['browserSetHeaders']
+  readonly browserSetCredentials: RuntimeBrowserNetwork['browserSetCredentials']
+  readonly browserSetMedia: RuntimeBrowserNetwork['browserSetMedia']
+  readonly browserDownload: RuntimeBrowserNetwork['browserDownload']
+  readonly browserClipboardRead: RuntimeBrowserStorage['browserClipboardRead']
+  readonly browserClipboardWrite: RuntimeBrowserStorage['browserClipboardWrite']
+  readonly browserStorageLocalGet: RuntimeBrowserStorage['browserStorageLocalGet']
+  readonly browserStorageLocalSet: RuntimeBrowserStorage['browserStorageLocalSet']
+  readonly browserStorageLocalClear: RuntimeBrowserStorage['browserStorageLocalClear']
+  readonly browserStorageSessionGet: RuntimeBrowserStorage['browserStorageSessionGet']
+  readonly browserStorageSessionSet: RuntimeBrowserStorage['browserStorageSessionSet']
+  readonly browserStorageSessionClear: RuntimeBrowserStorage['browserStorageSessionClear']
+  readonly browserTabList: RuntimeBrowserTabQueries['browserTabList']
+  readonly browserProceedCertificate: RuntimeBrowserTabQueries['browserProceedCertificate']
+  readonly browserTabShow: RuntimeBrowserTabQueries['browserTabShow']
+  readonly browserTabCurrent: RuntimeBrowserTabQueries['browserTabCurrent']
+  readonly browserTabAnnotations: RuntimeBrowserTabQueries['browserTabAnnotations']
+  readonly browserTabSwitch: RuntimeBrowserTabQueries['browserTabSwitch']
+  readonly browserTabCreate: RuntimeBrowserTabCreation['browserTabCreate']
+  readonly browserOpenUrlOnClient: RuntimeBrowserTabCreation['browserOpenUrlOnClient']
+  readonly browserTabClose: RuntimeBrowserTabClose['browserTabClose']
+  readonly browserTabSetProfile: RuntimeBrowserProfiles['browserTabSetProfile']
+  readonly browserTabProfileShow: RuntimeBrowserProfiles['browserTabProfileShow']
+  readonly browserTabProfileClone: RuntimeBrowserProfiles['browserTabProfileClone']
+  readonly browserProfileList: RuntimeBrowserProfiles['browserProfileList']
+  readonly browserProfileCreate: RuntimeBrowserProfiles['browserProfileCreate']
+  readonly browserProfileDelete: RuntimeBrowserProfiles['browserProfileDelete']
+  readonly browserScreencast: RuntimeBrowserScreencasts['browserScreencast']
+  readonly browserDialogAccept: RuntimeBrowserDialogs['browserDialogAccept']
+  readonly browserDialogDismiss: RuntimeBrowserDialogs['browserDialogDismiss']
+  readonly browserGrabSetMode: RuntimeBrowserGrab['browserGrabSetMode']
+  readonly browserGrabAwait: RuntimeBrowserGrab['browserGrabAwait']
+  readonly browserGrabCancel: RuntimeBrowserGrab['browserGrabCancel']
+  readonly browserGrabCaptureSelection: RuntimeBrowserGrab['browserGrabCaptureSelection']
+  readonly browserGrabExtractHover: RuntimeBrowserGrab['browserGrabExtractHover']
+  readonly browserGrabViewportBridge: RuntimeBrowserGrab['browserGrabViewportBridge']
+  readonly browserGrabWatch: RuntimeBrowserGrab['browserGrabWatch']
+
+  readonly browserProfileDetectBrowsers: RuntimeBrowserProfiles['browserProfileDetectBrowsers']
+  readonly browserProfileImportFromBrowser: RuntimeBrowserProfiles['browserProfileImportFromBrowser']
+  readonly browserProfileClearGoogleCookies: RuntimeBrowserProfiles['browserProfileClearGoogleCookies']
+  readonly browserProfileClearDefaultCookies: RuntimeBrowserProfiles['browserProfileClearDefaultCookies']
+
+  constructor(host: RuntimeBrowserCommandHost) {
+    const targets = new RuntimeBrowserCommandTargets(host)
+    const catalog = new RuntimeBrowserTabCatalog(host, targets)
+    const navigation = new RuntimeBrowserNavigation(host, targets)
+    const elements = new RuntimeBrowserElementActions(targets)
+    const pointer = new RuntimeBrowserPointerInput(targets)
+    const capture = new RuntimeBrowserCapture(targets)
+    const network = new RuntimeBrowserNetwork(targets)
+    const storage = new RuntimeBrowserStorage(targets)
+    const queries = new RuntimeBrowserTabQueries(host, targets, catalog)
+    const creation = new RuntimeBrowserTabCreation(host, targets)
+    const close = new RuntimeBrowserTabClose(queries, host, targets)
+    const screencasts = new RuntimeBrowserScreencasts(host, targets, catalog)
+    const profiles = new RuntimeBrowserProfiles(
+      host,
+      targets,
+      catalog,
+      creation,
+      screencasts.guestSwaps
+    )
+    const dialogs = new RuntimeBrowserDialogs(targets)
+    const grab = new RuntimeBrowserGrab(targets, catalog)
+    this.browserProfileDetectBrowsers = profiles.browserProfileDetectBrowsers.bind(profiles)
+    this.browserProfileImportFromBrowser = profiles.browserProfileImportFromBrowser.bind(profiles)
+    this.browserProfileClearGoogleCookies = profiles.browserProfileClearGoogleCookies.bind(profiles)
+    this.browserProfileClearDefaultCookies =
+      profiles.browserProfileClearDefaultCookies.bind(profiles)
+
+    this.browserSnapshot = targets.browserSnapshot.bind(targets)
+    this.browserClick = navigation.browserClick.bind(navigation)
+    this.browserGoto = navigation.browserGoto.bind(navigation)
+    this.browserBack = navigation.browserBack.bind(navigation)
+    this.browserReload = navigation.browserReload.bind(navigation)
+    this.browserZoom = navigation.browserZoom.bind(navigation)
+    this.browserSiteDisplay = navigation.browserSiteDisplay.bind(navigation)
+    this.browserSetSiteColorScheme = navigation.browserSetSiteColorScheme.bind(navigation)
+    this.browserStop = navigation.browserStop.bind(navigation)
+    this.browserSetAudioMuted = navigation.browserSetAudioMuted.bind(navigation)
+    this.browserFindInPage = navigation.browserFindInPage.bind(navigation)
+    this.browserStopFindInPage = navigation.browserStopFindInPage.bind(navigation)
+    this.browserFill = elements.browserFill.bind(elements)
+    this.browserType = elements.browserType.bind(elements)
+    this.browserSelect = elements.browserSelect.bind(elements)
+    this.browserScroll = elements.browserScroll.bind(elements)
+    this.browserHover = elements.browserHover.bind(elements)
+    this.browserDrag = elements.browserDrag.bind(elements)
+    this.browserUpload = elements.browserUpload.bind(elements)
+    this.browserWait = elements.browserWait.bind(elements)
+    this.browserCheck = elements.browserCheck.bind(elements)
+    this.browserFocus = elements.browserFocus.bind(elements)
+    this.browserClear = elements.browserClear.bind(elements)
+    this.browserSelectAll = elements.browserSelectAll.bind(elements)
+    this.browserKeypress = elements.browserKeypress.bind(elements)
+    this.browserDblclick = elements.browserDblclick.bind(elements)
+    this.browserScrollIntoView = elements.browserScrollIntoView.bind(elements)
+    this.browserGet = elements.browserGet.bind(elements)
+    this.browserIs = elements.browserIs.bind(elements)
+    this.browserFind = elements.browserFind.bind(elements)
+    this.browserHighlight = elements.browserHighlight.bind(elements)
+    this.browserExec = elements.browserExec.bind(elements)
+    this.browserKeyboardInsertText = pointer.browserKeyboardInsertText.bind(pointer)
+    this.browserMouseMove = pointer.browserMouseMove.bind(pointer)
+    this.browserMouseDown = pointer.browserMouseDown.bind(pointer)
+    this.browserMouseClick = pointer.browserMouseClick.bind(pointer)
+    this.browserMouseUp = pointer.browserMouseUp.bind(pointer)
+    this.browserMouseWheel = pointer.browserMouseWheel.bind(pointer)
+    this.browserScreenshot = capture.browserScreenshot.bind(capture)
+    this.browserPdf = capture.browserPdf.bind(capture)
+    this.browserFullScreenshot = capture.browserFullScreenshot.bind(capture)
+    this.browserCaptureStart = capture.browserCaptureStart.bind(capture)
+    this.browserCaptureStop = capture.browserCaptureStop.bind(capture)
+    this.browserConsoleLog = capture.browserConsoleLog.bind(capture)
+    this.browserEval = capture.browserEval.bind(capture)
+    this.browserNetworkLog = network.browserNetworkLog.bind(network)
+    this.browserForward = navigation.browserForward.bind(navigation)
+    this.browserCookieGet = network.browserCookieGet.bind(network)
+    this.browserCookieSet = network.browserCookieSet.bind(network)
+    this.browserCookieDelete = network.browserCookieDelete.bind(network)
+    this.browserSetViewport = network.browserSetViewport.bind(network)
+    this.browserSetGeolocation = network.browserSetGeolocation.bind(network)
+    this.browserInterceptEnable = network.browserInterceptEnable.bind(network)
+    this.browserInterceptDisable = network.browserInterceptDisable.bind(network)
+    this.browserInterceptList = network.browserInterceptList.bind(network)
+    this.browserSetDevice = network.browserSetDevice.bind(network)
+    this.browserSetOffline = network.browserSetOffline.bind(network)
+    this.browserSetHeaders = network.browserSetHeaders.bind(network)
+    this.browserSetCredentials = network.browserSetCredentials.bind(network)
+    this.browserSetMedia = network.browserSetMedia.bind(network)
+    this.browserDownload = network.browserDownload.bind(network)
+    this.browserClipboardRead = storage.browserClipboardRead.bind(storage)
+    this.browserClipboardWrite = storage.browserClipboardWrite.bind(storage)
+    this.browserStorageLocalGet = storage.browserStorageLocalGet.bind(storage)
+    this.browserStorageLocalSet = storage.browserStorageLocalSet.bind(storage)
+    this.browserStorageLocalClear = storage.browserStorageLocalClear.bind(storage)
+    this.browserStorageSessionGet = storage.browserStorageSessionGet.bind(storage)
+    this.browserStorageSessionSet = storage.browserStorageSessionSet.bind(storage)
+    this.browserStorageSessionClear = storage.browserStorageSessionClear.bind(storage)
+    this.browserTabList = queries.browserTabList.bind(queries)
+    this.browserProceedCertificate = queries.browserProceedCertificate.bind(queries)
+    this.browserTabShow = queries.browserTabShow.bind(queries)
+    this.browserTabCurrent = queries.browserTabCurrent.bind(queries)
+    this.browserTabAnnotations = queries.browserTabAnnotations.bind(queries)
+    this.browserTabSwitch = queries.browserTabSwitch.bind(queries)
+    this.browserTabCreate = creation.browserTabCreate.bind(creation)
+    this.browserOpenUrlOnClient = creation.browserOpenUrlOnClient.bind(creation)
+    this.browserTabClose = close.browserTabClose.bind(close)
+    this.browserTabSetProfile = profiles.browserTabSetProfile.bind(profiles)
+    this.browserTabProfileShow = profiles.browserTabProfileShow.bind(profiles)
+    this.browserTabProfileClone = profiles.browserTabProfileClone.bind(profiles)
+    this.browserProfileList = profiles.browserProfileList.bind(profiles)
+    this.browserProfileCreate = profiles.browserProfileCreate.bind(profiles)
+    this.browserProfileDelete = profiles.browserProfileDelete.bind(profiles)
+    this.browserScreencast = screencasts.browserScreencast.bind(screencasts)
+    this.browserDialogAccept = dialogs.browserDialogAccept.bind(dialogs)
+    this.browserDialogDismiss = dialogs.browserDialogDismiss.bind(dialogs)
+    this.browserGrabSetMode = grab.browserGrabSetMode.bind(grab)
+    this.browserGrabAwait = grab.browserGrabAwait.bind(grab)
+    this.browserGrabCancel = grab.browserGrabCancel.bind(grab)
+    this.browserGrabCaptureSelection = grab.browserGrabCaptureSelection.bind(grab)
+    this.browserGrabExtractHover = grab.browserGrabExtractHover.bind(grab)
+    this.browserGrabViewportBridge = grab.browserGrabViewportBridge.bind(grab)
+    this.browserGrabWatch = grab.browserGrabWatch.bind(grab)
+    for (const [name, value] of Object.entries(this)) {
+      if (BROWSER_COMMANDS_WITHOUT_PAGE_ADMISSION.has(name)) {
+        continue
+      }
+      if (!isBrowserPageCommand(value)) {
+        continue
+      }
+      const command = value
+      Reflect.set(
+        this,
+        name,
+        async (params: BrowserCommandTargetParams & { index?: number }, ...rest: unknown[]) => {
+          const answer =
+            name === 'browserDialogAccept' ||
+            name === 'browserDialogDismiss' ||
+            name === 'browserProceedCertificate'
+          if (name === 'browserProceedCertificate' && !params.page) {
+            return command.call(this, params)
+          }
+          let target = params
+          if (name === 'browserTabSwitch' && !params.page) {
+            const listed = await queries.browserTabList(params)
+            const page = listed.tabs[params.index ?? -1]?.browserPageId
+            if (page) {
+              target = { ...params, page }
+            }
+          }
+          if (target.page && host.getRuntimeBrowserPageRegistry().getPage(target.page)) {
+            return command.call(this, target, ...(answer ? [] : rest))
+          }
+          return targets.withPageOperation(
+            target,
+            (admitted, admitAnswer) =>
+              Promise.resolve(
+                command.call(this, { ...target, ...admitted }, ...(answer ? [admitAnswer] : rest))
+              ),
+            answer
+              ? 'answer'
+              : name === 'browserReload' || name === 'browserGoto'
+                ? 'recover'
+                : 'ordinary'
+          )
+        }
+      )
+    }
+  }
+}

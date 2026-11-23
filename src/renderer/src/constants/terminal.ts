@@ -1,4 +1,5 @@
-import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
+import type { RendererTerminalSplitRequest } from '../../../shared/workspace-layout/terminal-topology/renderer-terminal-split-request'
+import type { TerminalTabCloseIntent } from '@/components/terminal/tab-lifecycle/terminal-tab-close-intent'
 
 export const TOGGLE_TERMINAL_PANE_EXPAND_EVENT = 'orca-toggle-terminal-pane-expand'
 export const FOCUS_TERMINAL_PANE_EVENT = 'orca-focus-terminal-pane'
@@ -26,6 +27,8 @@ export type FocusTerminalPaneDetail = {
   flashFocusedPane?: boolean
   /** Follow live agent output when activation is explicitly about that agent. */
   scrollToBottomIfOutputSinceLastView?: boolean
+  /** Collapse another expanded pane first, so the target is not hidden behind it. */
+  collapseExpandedPane?: boolean
 }
 
 export type PasteTerminalTextDetail = {
@@ -34,16 +37,8 @@ export type PasteTerminalTextDetail = {
   text: string
 }
 
-export type SplitTerminalPaneDetail = {
-  tabId: string
-  worktreeId?: string
-  paneRuntimeId: number
-  direction: 'horizontal' | 'vertical'
-  command?: string
-  sourceLeafId?: string
+export type SplitTerminalPaneDetail = RendererTerminalSplitRequest & {
   sourcePtyId?: string
-  telemetrySource?: TerminalPaneSplitSource
-  newLeafId?: string
   ptyId?: string
 }
 
@@ -59,6 +54,8 @@ export type RequestActiveTerminalPaneCloseDetail = {
 
 export type CloseTerminalPaneDetail = {
   tabId: string
+  /** Who asked, for when the pane is its tab's last and the whole tab closes. */
+  lastPaneCloseReason: TerminalTabCloseIntent
   paneRuntimeId?: number
   leafId?: string
   preservePty?: boolean

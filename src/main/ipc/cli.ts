@@ -1,24 +1,33 @@
 import { ipcMain } from 'electron'
-import type { CliInstallStatus } from '../../shared/cli-install-types'
-import { resolveAppImageCacheKey } from '../cli/appimage-extracted-root'
+import type { CliInstallStatus } from '../../shared/cli/cli-install-types'
+import { resolveAppImageCacheKey } from '../../shared/desktop-distribution/appimage/appimage-cache-identity'
 import { CliInstaller } from '../cli/cli-installer'
-import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
+import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import {
+  forgetWslCliRegistration,
   recordWslCliRegistrationInstalled,
   recordWslCliRegistrationRemoved
-} from '../cli/wsl-cli-registration-registry'
-import { WslCliInstaller } from '../cli/wsl-cli-installer'
+} from '../cli/wsl/wsl-cli-registration-registry'
+import { WslCliInstaller } from '../cli/wsl/wsl-cli-installer'
 import {
+  deletedDistroWslCliStatus,
   notRunningWslCliStatus,
   unreachableWslCliStatus,
   WslCliUnreachableError
-} from '../cli/wsl-cli-status'
-import { runSerializedWslCliRegistrationOperation } from '../cli/wsl-cli-registration-operation'
-import { getCanonicalUserDataPath } from '../persistence'
-import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
-import { getDefaultWslDistro } from '../wsl'
-import { blockedWslDistroForExec, runAsWslExecUserAct } from '../wsl/wsl-background-exec-gate'
-import { resolveAppImageRuntimeIdentity } from '../appimage-runtime-identity'
+} from '../cli/wsl/wsl-cli-status'
+import { runSerializedWslCliRegistrationOperation } from '../cli/wsl/wsl-cli-registration-operation'
+import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
+import {
+  hydrateShellPath,
+  mergePathSegments
+} from '../startup/shell-environment/hydrate-shell-path'
+import { getDefaultWslDistro } from '../wsl/discovery/distro-catalog'
+import {
+  blockedWslDistroForExec,
+  runAsWslExecUserAct
+} from '../wsl/discovery/wsl-background-exec-gate'
+import { isWslDistroNotFoundFailure } from '../wsl/discovery/wsl-distro-unsupported'
+import { resolveAppImageRuntimeIdentity } from '../updater/linux-package/appimage-runtime-identity'
 
 const APPIMAGE_REPAIR_RETRY_MS = 30_000
 const localCliRegistrationQueues = new Map<string, Promise<void>>()
@@ -85,6 +94,17 @@ async function hydrateLocalShellPathForCli(force = false): Promise<void> {
   }
 }
 
+/** Status without the stale-AppImage repair, which would re-register the command. */
+export async function readLocalCliInstallStatus(): Promise<CliInstallStatus> {
+  await hydrateLocalShellPathForCli()
+  return new CliInstaller().getStatus()
+}
+
+export async function removeLocalCliRegistration(): Promise<CliInstallStatus> {
+  await hydrateLocalShellPathForCli()
+  return runLocalCliRegistrationOperation(() => new CliInstaller().remove())
+}
+
 export function registerCliHandlers(): void {
   let staleAppImageRepairAttempt: {
     promise: Promise<CliInstallStatus | null>
@@ -134,10 +154,7 @@ export function registerCliHandlers(): void {
     return runLocalCliRegistrationOperation(() => new CliInstaller().install())
   })
 
-  ipcMain.handle('cli:remove', async (): Promise<CliInstallStatus> => {
-    await hydrateLocalShellPathForCli()
-    return runLocalCliRegistrationOperation(() => new CliInstaller().remove())
-  })
+  ipcMain.handle('cli:remove', removeLocalCliRegistration)
 
   ipcMain.handle(
     'cli:getWslInstallStatus',
@@ -189,7 +206,20 @@ export function registerCliHandlers(): void {
     async (_event, args?: { distro?: string | null }): Promise<CliInstallStatus> => {
       const distro = resolveWslCliDistro(args)
       return runWslCliRegistrationOperation(distro, async () => {
-        const status = await new WslCliInstaller({ distro }).remove()
+        let status: CliInstallStatus
+        try {
+          status = await new WslCliInstaller({ distro }).remove()
+        } catch (error) {
+          if (!distro || !isWslDistroNotFoundFailure(error)) {
+            throw error
+          }
+          // Nothing is left inside a deleted distro; only Orca's bookkeeping still names it.
+          await persistWslCliRegistration(
+            () => forgetWslCliRegistration(getCanonicalUserDataPath(), distro),
+            'remove'
+          )
+          return deletedDistroWslCliStatus(distro)
+        }
         if (distro && status.state === 'not_installed') {
           await persistWslCliRegistration(
             () => recordWslCliRegistrationRemoved(getCanonicalUserDataPath(), distro),

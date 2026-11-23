@@ -1,20 +1,30 @@
-import { invalidateReviewLookupsAfterPRMutation } from '../../pr-mutation-review-invalidation'
-import type { PRConflictSummary } from '../../../../shared/github/pull-request-types'
-import { getPRConflictSummary } from '../../conflict-summary'
-import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
-import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
-import { mergeGitHubPRStack } from '../../github-pr-stack'
+import { invalidateReviewLookupsAfterPRMutation } from '../../pull-requests/refresh/pr-mutation-review-invalidation'
+import type { PRConflictSummary } from '../../../../shared/github/pull-requests/pull-request-types'
+import { getPRConflictSummary } from '../../pull-requests/conflicts/conflict-summary'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
+import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { mergeGitHubPRStack } from '../../pull-requests/stacks/github-pr-stack-async-merge'
 import { githubPRStackExecutionScope, type GhExecOptions } from './../github-exec-scope'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
 import type { PullRequestLookupData } from './../lookup/pull-request-lookup-data'
 import { getRestPRByNumber, getPRByNumber } from './../lookup/pr-number-lookup'
 import { STACK_METADATA_UNAVAILABLE_ERROR } from './../lookup/pr-stack-summary-cache'
+import { codeHostFailure } from '../../../../shared/source-control/code-host-failure-copy'
+
+export const PR_HEAD_MOVED_MERGE_ERROR =
+  'This pull request changed since you loaded it. Refresh and review the latest commits before merging.'
+
+/** `expectedHeadSha` fences the merge to the head the caller reviewed; GitHub refuses it if the head moved. */
 export async function mergePR(
   repoPath: string,
   prNumber: number,
   method: 'merge' | 'squash' | 'rebase' = 'squash',
   connectionId?: string | null,
   prRepo?: GitHubApiRepository | null,
+  expectedHeadSha?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
@@ -24,7 +34,7 @@ export async function mergePR(
     localGitOptions
   )
   if (!ownerRepo) {
-    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+    return codeHostFailure('github.repoUnresolved')
   }
   await acquire()
   let concurrencySlotHeld = true
@@ -47,6 +57,9 @@ export async function mergePR(
       )
       return { ok: false, error: STACK_METADATA_UNAVAILABLE_ERROR }
     }
+    if (expectedHeadSha && restData.headRefOid && restData.headRefOid !== expectedHeadSha) {
+      return { ok: false, error: PR_HEAD_MOVED_MERGE_ERROR }
+    }
     if (restData.stack) {
       const mergeMetadata = await detectRepositoryMergeMetadata(
         ownerRepo,
@@ -64,9 +77,6 @@ export async function mergePR(
         headSha: restData.headRefOid,
         ghOptions
       })
-      if (result.ok) {
-        invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
-      }
       return result
     }
     const mergeBlocker = await getPRMergeBlocker(
@@ -86,17 +96,20 @@ export async function mergePR(
     if (ownerRepo) {
       args.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
     }
+    if (expectedHeadSha) {
+      args.push('--match-head-commit', expectedHeadSha)
+    }
     await ghExecFileAsync(args, {
       ...ghOptions,
       env: { ...process.env, GH_PROMPT_DISABLED: '1' }
     })
-    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return { ok: true }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
     return { ok: false, error: message }
   } finally {
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     if (concurrencySlotHeld) {
       release()
     }

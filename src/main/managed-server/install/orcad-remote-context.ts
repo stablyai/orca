@@ -1,5 +1,5 @@
-import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { NodeRuntimeTarget } from '../../../shared/node-runtime/node-runtime-pin'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { resolveOrcadRuntimeTarget } from '../lifecycle/orcad-runtime-target'
@@ -10,7 +10,7 @@ import {
   isWslOrcadHostTarget,
   type OrcadHostTarget,
   type OrcadHostTransport
-} from '../../ssh/orcad-host-transport'
+} from './orcad-host-transport'
 import {
   decideOrcadMachineHome,
   orcadMachineDataRoot,
@@ -24,18 +24,18 @@ import {
   readOrcadMachineClaimAnswer
 } from '../host-state/orcad-machine-claim-command'
 import { execOrcadRemote, type OrcadRemoteExecTarget } from './orcad-remote-runtime-control'
-import { readRemoteHomeCommand } from '../../ssh/ssh-remote-commands'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { readRemoteHomeCommand } from '../../ssh/remote-exec/ssh-remote-commands'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
   normalizeRemoteHome,
   validateRemoteHome,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
-import { detectRemoteHostPlatform } from '../../ssh/ssh-remote-platform-detection'
-import { OrcadHostUnsupportedError } from '../../orcad/orcad-host-unavailable'
-import { rememberSshHostPlatform } from '../../ssh/ssh-host-platform-memo'
+} from '../../ssh/remote-host/ssh-remote-platform'
+import { detectRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform-detection'
+import { OrcadHostUnsupportedError } from '../../orcad/diagnostics/orcad-host-unavailable'
+import { rememberSshHostPlatform } from '../../ssh/remote-host/ssh-host-platform-memo'
 
 /** Default SSH generic retains compatibility with lifecycle consumers requiring SSH-only fields. */
 export type OrcadRemoteContext<Target extends OrcadHostTarget = SshTarget> = {
@@ -59,7 +59,14 @@ export async function resolveOrcadRemoteContext<Target extends OrcadHostTarget =
    * Facts the caller already read on this host. `loginHome` serves only login-home placement;
    * `firstLibcProbeOutput` answers the libc probe's first command, whose fallbacks still run.
    */
-  known: { loginHome?: string; firstLibcProbeOutput?: string } = {}
+  known: {
+    loginHome?: string
+    firstLibcProbeOutput?: string
+    /** Replaces the plain activation record read; WSL reads its connect snapshot here. */
+    readActivationRecord?: (
+      target: OrcadRemoteExecTarget & { remoteHome: string; userDataDir: string }
+    ) => Promise<OrcadActivationRecord>
+  } = {}
 ): Promise<OrcadRemoteContext<Target>> {
   const host = detectedHost ?? (await detectRemoteHostPlatform(connection, { signal }))
   if (!host) {
@@ -107,9 +114,10 @@ export async function resolveOrcadRemoteContext<Target extends OrcadHostTarget =
       signal
     })
   }
-  const activationRecord = await readOrcadActivationRecord({
+  const activationRecord = await (known.readActivationRecord ?? readOrcadActivationRecord)({
     ...remote,
-    remoteHome
+    remoteHome,
+    userDataDir
   })
   return {
     activationRecord,

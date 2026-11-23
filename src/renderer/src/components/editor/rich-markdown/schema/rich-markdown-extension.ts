@@ -1,0 +1,33 @@
+import { Markdown } from '@tiptap/markdown'
+import { registerRichMarkdownBlockSource } from '../document/rich-markdown-block-source'
+import { preserveLiteralMarkdownSource } from '../document/rich-markdown-literal-serialization'
+import { preserveLiteralProseEntities } from './rich-markdown-prose-entities'
+import type { RichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
+
+export const RichMarkdownExtension = Markdown.extend({
+  onBeforeCreate(event) {
+    this.parent?.(event)
+    // Empty Markdown must initialize without routing through the HTML DOM parser.
+    if (
+      this.editor.options.contentType === 'markdown' &&
+      typeof this.editor.options.content === 'string'
+    ) {
+      this.editor.options.content = this.editor.schema.topNodeType.createAndFill()!.toJSON()
+    }
+  }
+})
+
+export function createRichMarkdownExtension(
+  codec: RichMarkdownEditorCodec,
+  htmlSuperscriptLinks = false
+) {
+  // configure() first so extend() does not link this per-editor child onto the shared module extension.
+  return RichMarkdownExtension.configure().extend({
+    onBeforeCreate(event) {
+      this.parent?.(event)
+      preserveLiteralProseEntities(this.editor)
+      preserveLiteralMarkdownSource(this.editor, codec, htmlSuperscriptLinks)
+      registerRichMarkdownBlockSource(this.editor, codec, htmlSuperscriptLinks)
+    }
+  })
+}

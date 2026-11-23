@@ -1,6 +1,6 @@
-import type { StartupActions } from '../app-shell/startup-actions-selector'
+import type { StartupActions } from '../app-shell/startup/startup-actions-selector'
 import { useAppStore } from '../store'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { purgeHydratedWorktrees } from '../store/slices/worktrees/listing/hydrated-worktree-purge'
 import type { WorktreeRefreshResult } from '../store/slices/worktrees/listing/worktree-refresh-result'
 import { timeRendererStartupStep } from './startup-diagnostics'
@@ -82,9 +82,12 @@ export async function refreshStartupWorktrees(
   }
   if (!isCancelled()) {
     // Lineage decorates rows; it must not keep discovery feedback pending.
-    void actions.fetchWorktreeLineage().catch((err: unknown) => {
-      console.warn('Startup worktree lineage refresh failed:', err)
-    })
+    // One lineage list per store: the focused store's full list, every other store's cross-machine links.
+    void actions
+      .fetchWorktreeLineage({ crossStoreHostIds: refreshedHosts })
+      .catch((err: unknown) => {
+        console.warn('Startup worktree lineage refresh failed:', err)
+      })
   }
   return catalogsSucceeded ? results : []
 }

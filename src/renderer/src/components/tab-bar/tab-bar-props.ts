@@ -1,10 +1,14 @@
-import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
-import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
-import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { OpenFile } from '../../store/slices/editor'
-import type { HoveredTabInsertion } from '../tab-group/useTabDragSplit'
-import type { TabCreateEntryArgs } from './tab-create-entry-action'
+import type { BrowserWorkspace } from '../../../../shared/browser/workspaces/browser-workspace-types'
+import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
+import type {
+  Tab,
+  WorkspaceVisibleTabType
+} from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { OpenFile } from '../../store/slices/editor/types/open-file'
+import type { HoveredTabInsertion } from '../tab-group/drag/tab-insertion'
+import type { TabCreateEntryArgs } from './create-entry/tab-create-entry-action'
+import type { NewTabMenuSurface } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
 
 export type TabBarProps = {
   tabs: (TerminalTab & { unifiedTabId?: string })[]
@@ -28,12 +32,13 @@ export type TabBarProps = {
   showAgentLaunchItems?: boolean
   onNewFileTab?: () => void
   onOpenFileTab?: () => void
-  newTabMenuOrder?: 'default' | 'markdown-first'
+  /** Which + menu this is; the floating panel leads with Markdown and keeps its own layout. */
+  newTabMenuSurface?: NewTabMenuSurface
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePaneExpand: (tabId: string) => void
   editorFiles?: (OpenFile & { tabId?: string })[]
-  browserTabs?: (BrowserTabState & { tabId?: string })[]
+  browserTabs?: (BrowserWorkspace & { tabId?: string })[]
   /** Pages rendering on a paired client. Appended after the real tabs; never part of tab order. */
   clientHostedBrowserRows?: readonly ClientHostedBrowserRow[]
   /** The group's own active tab at render time; a client-hosted selection dies when it moves. */

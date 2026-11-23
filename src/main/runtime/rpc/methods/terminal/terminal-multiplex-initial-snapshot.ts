@@ -8,7 +8,7 @@ import { isMovedPaneHistorySessionId } from '../../../../../shared/orcad-migrati
 import {
   MOBILE_SUBSCRIBE_SCROLLBACK_ROWS,
   MOVED_PANE_SUBSCRIBE_SCROLLBACK_ROWS
-} from '../../../scrollback-limits'
+} from '../../../terminal/output/mobile-scrollback-limits'
 import { getTerminalInputSequenceLedger } from './terminal-input-sequence-ledger'
 import {
   isMultiplexStreamAttached,
@@ -89,11 +89,14 @@ export async function publishMultiplexInitialSnapshot(
     rows: serialized?.rows ?? size?.rows,
     displayMode,
     seq: layoutSeq,
-    ...((stream.supportsOutputPause || stream.inputSessionId !== null) && {
+    ...((stream.supportsOutputPause ||
+      stream.inputSessionId !== null ||
+      stream.supportsOutputCadence) && {
       capabilities: {
         ...(stream.supportsOutputPause ? { outputPause: 1 as const } : {}),
         ...(stream.supportsOutputPauseDropNotice ? { outputPauseDropNotice: 1 as const } : {}),
-        ...(stream.inputSessionId !== null ? { inputAck: 1 as const } : {})
+        ...(stream.inputSessionId !== null ? { inputAck: 1 as const } : {}),
+        ...(stream.supportsOutputCadence ? { outputCadence: 1 as const } : {})
       }
     }),
     ...(stream.inputSessionId !== null
@@ -116,6 +119,7 @@ export async function publishMultiplexInitialSnapshot(
     kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
     alternateScreen: serialized?.alternateScreen,
     terminalOwner: serialized?.terminalOwner,
+    lastTitle: serialized?.lastTitle,
     oscLinks: serialized?.oscLinks,
     pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
     // E2E: a forced-unavailable host retains nothing, so it has no tail to fall back on either.

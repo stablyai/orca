@@ -1,5 +1,5 @@
 import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
-import { TaskPageGitHubFilters } from './github/Filters'
+import { TaskPageGitHubFilters } from './github/listing/Filters'
 import { TaskPageLinearFilters } from './linear/Filters'
 import { TaskPageJiraFilters } from './jira/Filters'
 import { TaskPageGitLabFilters } from './gitlab/Filters'

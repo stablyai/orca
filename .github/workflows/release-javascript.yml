@@ -50,10 +50,13 @@ jobs:
           node <<'NODE' >> "$GITHUB_OUTPUT"
           const fs = require('node:fs')
           const { scripts, devDependencies } = require('./package.json')
+          const artifactScript = fs.existsSync('config/scripts/release/javascript-artifacts/release-javascript-artifact.mjs')
+            ? 'config/scripts/release/javascript-artifacts/release-javascript-artifact.mjs'
+            : 'config/scripts/release-javascript-artifact.mjs'
           const supported = Boolean(scripts['build:release:javascript'] && scripts['build:release:host'])
           const devSupported = supported && Boolean(
             scripts['build:release:javascript:parallel'] && devDependencies?.tsrs &&
-            fs.readFileSync('config/scripts/release-javascript-artifact.mjs', 'utf8')
+            fs.readFileSync(artifactScript, 'utf8')
               .includes('ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY')
           )
           console.log('supported=' + (process.env.DEV_BUILD === 'true' ? devSupported : supported))
@@ -75,7 +78,11 @@ jobs:
         run: |
           RELEASE_TAG="v$(node -p 'require("./package.json").version')"
           export RELEASE_TAG
-          echo "value=$(node config/scripts/release-javascript-artifact.mjs identity)" >> "$GITHUB_OUTPUT"
+          RELEASE_JAVASCRIPT_ARTIFACT='config/scripts/release/javascript-artifacts/release-javascript-artifact.mjs'
+          if [ ! -f "$RELEASE_JAVASCRIPT_ARTIFACT" ]; then
+            RELEASE_JAVASCRIPT_ARTIFACT='config/scripts/release-javascript-artifact.mjs'
+          fi
+          echo "value=$(node "$RELEASE_JAVASCRIPT_ARTIFACT" identity)" >> "$GITHUB_OUTPUT"
 
       - name: Build and archive release JavaScript
         if: steps.source.outputs.supported == 'true'
@@ -85,11 +92,15 @@ jobs:
           ORCA_CLI_BUILD_COMPILER: ${{ inputs.dev_build && 'tsrs' || 'bun' }}
           ORCA_BUILD_IDENTITY: ${{ steps.identity.outputs.value }}
           ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY: ${{ inputs.dev_build && 'dev' || '' }}
-          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://orca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ !inputs.dev_build && secrets.ORCA_POSTHOG_WRITE_KEY || '' }}
         run: |
           pnpm run "$JAVASCRIPT_BUILD_SCRIPT"
-          node config/scripts/release-javascript-artifact.mjs pack
+          RELEASE_JAVASCRIPT_ARTIFACT='config/scripts/release/javascript-artifacts/release-javascript-artifact.mjs'
+          if [ ! -f "$RELEASE_JAVASCRIPT_ARTIFACT" ]; then
+            RELEASE_JAVASCRIPT_ARTIFACT='config/scripts/release-javascript-artifact.mjs'
+          fi
+          node "$RELEASE_JAVASCRIPT_ARTIFACT" pack
 
       - uses: actions/upload-artifact@v7
         if: steps.source.outputs.supported == 'true'

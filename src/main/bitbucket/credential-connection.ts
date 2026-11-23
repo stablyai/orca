@@ -17,7 +17,8 @@ import type {
   BitbucketConnectArgs,
   BitbucketConnectResult,
   BitbucketConnectionStatus
-} from '../../shared/bitbucket-credentials'
+} from '../../shared/bitbucket/bitbucket-credentials'
+import { bitbucketConnectFailure } from '../../shared/bitbucket/bitbucket-credentials'
 
 export type { BitbucketConnectArgs, BitbucketConnectResult, BitbucketConnectionStatus }
 
@@ -42,26 +43,16 @@ export async function connectBitbucket(
 ): Promise<BitbucketConnectResult> {
   const config = buildCandidateConfig(input)
   if (!hasAuth(config)) {
-    return {
-      ok: false,
-      error:
-        input.authMode === 'token'
-          ? 'Enter an access token.'
-          : 'Enter both an email and an API token.'
-    }
+    return bitbucketConnectFailure(
+      input.authMode === 'token' ? 'accessTokenRequired' : 'emailAndApiTokenRequired'
+    )
   }
   const result = await fetchBitbucketUserResult(config, VERIFY_TIMEOUT_MS)
   if (!result.ok) {
-    return {
-      ok: false,
-      error:
-        result.reason === 'rejected'
-          ? 'Bitbucket rejected these credentials. Check the email and token, then try again.'
-          : 'Could not reach Bitbucket. Check your connection or the API base URL, then try again.'
-    }
+    return bitbucketConnectFailure(result.reason === 'rejected' ? 'rejected' : 'unreachable')
   }
   const account = accountNameFromUser(result.user)
-  saveBitbucketCredential({
+  await saveBitbucketCredential({
     authMode: input.authMode,
     email: config.email,
     baseUrl: normalize(input.baseUrl),
@@ -72,12 +63,12 @@ export async function connectBitbucket(
   return { ok: true, account }
 }
 
-export function disconnectBitbucket(): void {
-  clearStoredBitbucketCredential()
+export async function disconnectBitbucket(): Promise<void> {
+  await clearStoredBitbucketCredential()
 }
 
 // Status reads must avoid keychain prompts.
-export function getBitbucketConnectionStatus(): BitbucketConnectionStatus {
+export async function getBitbucketConnectionStatus(): Promise<BitbucketConnectionStatus> {
   const env = getEnvAuthConfig()
   if (hasAuth(env)) {
     return {
@@ -90,12 +81,12 @@ export function getBitbucketConnectionStatus(): BitbucketConnectionStatus {
       baseUrl: envValue('ORCA_BITBUCKET_API_BASE_URL')
     }
   }
-  if (hasStoredBitbucketCredential()) {
-    const metadata = getStoredBitbucketMetadata()
+  if (await hasStoredBitbucketCredential()) {
+    const metadata = await getStoredBitbucketMetadata()
     return {
       configured: true,
       source: 'stored',
-      credentialProtection: getBitbucketCredentialProtection(),
+      credentialProtection: await getBitbucketCredentialProtection(),
       account: metadata?.account ?? null,
       authMode: metadata?.authMode ?? null,
       email: metadata?.email ?? null,

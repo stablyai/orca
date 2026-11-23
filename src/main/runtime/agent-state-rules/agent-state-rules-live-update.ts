@@ -1,11 +1,11 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
-import { readFetchResponseTextWithinLimit } from '../../../shared/fetch-response-body'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { getVersionChannel, MAIN_RELEASE_REPO } from '../../../shared/release-channel'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { readFetchResponseTextWithinLimit } from '../../../shared/network/fetch-response-body'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import { getVersionChannel, MAIN_RELEASE_REPO } from '../../../shared/updater/release-channel'
 import { getMainHttpClient } from '../../network/http-client'
-import { writePluginFileAtomically } from '../../plugins/plugin-atomic-file-write'
+import { writePluginFileAtomically } from '../../plugins/installation/plugin-atomic-file-write'
 import {
   activateAgentStateRules,
   BUNDLED_AGENT_STATE_RULES,
@@ -184,8 +184,10 @@ export class AgentStateRulesLiveUpdater {
       })
       if (!response.ok) {
         await response.body?.cancel().catch(() => undefined)
-        // Re-uploads can briefly return 404; retain the last good rules.
-        warn(`download failed: HTTP ${response.status}`)
+        // 404 is the normal state until rules are published (or mid re-upload); keep the last good rules.
+        if (response.status !== 404) {
+          warn(`download failed: HTTP ${response.status}`)
+        }
         return null
       }
       return await readFetchResponseTextWithinLimit(response, AGENT_STATE_RULES_BUNDLE_MAX_BYTES)

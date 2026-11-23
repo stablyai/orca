@@ -1,16 +1,20 @@
 import { AlertCircle, CheckCircle2, Loader2, RotateCcw } from 'lucide-react'
-import { useNativeChatRestartOfferEnabled } from '../native-chat-restart-offer-gate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   localNativeChatRestartStore,
   useNativeChatRestartOffer,
   useNativeChatRestartRun,
-  type NativeChatRestartStore
-} from '../native-chat-resume-on-restart-store'
-import { useNativeChatRestartRuntimes } from '../native-chat-restart-runtimes'
-import { resumeRunInFlight } from '../native-chat-resume-run'
-import { resumeRunFailures, resumeRunView } from '../native-chat-resume-run-view'
+  useLocalRestartOffersEnabled
+} from '../native-chat-recovery/offers/native-chat-resume-on-restart-store'
+import type { NativeChatRestartStore } from '../native-chat-recovery/offers/native-chat-restart-runtime-store'
+import { useNativeChatRestartRuntimes } from '../native-chat-recovery/offers/native-chat-restart-runtimes'
+import { resumeRunInFlight } from '../native-chat-recovery/runs/native-chat-resume-run'
+import {
+  resumeRunFailures,
+  resumeRunView
+} from '../native-chat-recovery/runs/native-chat-resume-run-view'
 
 // Keep offers and in-flight/results visible after dialog snooze; statusBarItems must not hide the remaining resume surface.
 
@@ -19,8 +23,6 @@ function Segment({
   label,
   ariaLabel,
   tooltip,
-  iconOnly,
-  count,
   onOpen,
   machineName
 }: {
@@ -28,8 +30,6 @@ function Segment({
   label: string
   ariaLabel: string
   tooltip: string
-  iconOnly: boolean
-  count: number
   onOpen: () => Promise<void>
   machineName?: string
 }): React.JSX.Element {
@@ -43,9 +43,7 @@ function Segment({
           aria-label={machineName ? `${machineName}: ${ariaLabel}` : ariaLabel}
         >
           {icon}
-          <span className="text-[11px]">
-            {iconOnly ? count : machineName ? `${machineName}: ${label}` : label}
-          </span>
+          <span className="text-[11px]">{machineName ? `${machineName}: ${label}` : label}</span>
         </button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={6}>
@@ -57,142 +55,94 @@ function Segment({
 
 type SegmentText = { label: string; ariaLabel: string; tooltip: string }
 
-function resumingText(done: number, total: number): SegmentText {
+function resumingText(done: number, total: number, t: Translate = translate): SegmentText {
   return {
-    label: translate(
+    label: t(
       'auto.components.status.bar.NativeChatResumeStatusSegment.resumingProgressLabel',
-      'Resuming chats {{value0}}/{{value1}}',
+      'Resuming agents {{value0}}/{{value1}}',
       { value0: done, value1: total }
     ),
-    ariaLabel: translate(
+    ariaLabel: t(
       'auto.components.status.bar.NativeChatResumeStatusSegment.resumingProgressAria',
-      'Resuming chats, {{value0}} of {{value1}} done. Click to open details.',
+      'Resuming agents, {{value0}} of {{value1}} done. Click to open details.',
       { value0: done, value1: total }
     ),
-    tooltip: translate(
+    tooltip: t(
       'auto.components.status.bar.NativeChatResumeStatusSegment.resumingTooltip',
-      'Restoring interrupted chats and asking them to carry on…'
+      'Restoring interrupted agents and asking them to carry on…'
     )
   }
 }
 
-function failedText(count: number): SegmentText {
+function failedText(count: number, t: Translate = translate): SegmentText {
   return {
-    label:
-      count === 1
-        ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.chatsFailedLabel_one',
-            '{{count}} chat failed to resume',
-            { count }
-          )
-        : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.chatsFailedLabel_other',
-            '{{count}} chats failed to resume',
-            { count }
-          ),
-    ariaLabel:
-      count === 1
-        ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.chatsFailedAria_one',
-            '{{count}} chat failed to resume. Click for details.',
-            { count }
-          )
-        : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.chatsFailedAria_other',
-            '{{count}} chats failed to resume. Click for details.',
-            { count }
-          ),
-    tooltip: translate(
+    label: t(
+      'auto.components.status.bar.NativeChatResumeStatusSegment.chatsFailedLabel',
+      '{{count}} agents failed to resume',
+      { count, defaultValue_one: '{{count}} agent failed to resume' }
+    ),
+    ariaLabel: t(
+      'auto.components.status.bar.NativeChatResumeStatusSegment.chatsFailedAria',
+      '{{count}} agents failed to resume. Click for details.',
+      { count, defaultValue_one: '{{count}} agent failed to resume. Click for details.' }
+    ),
+    tooltip: t(
       'auto.components.status.bar.NativeChatResumeStatusSegment.failedTooltip',
-      'Chats Orca could not resume after the restart. Click for details.'
+      'Agents Orca could not resume after the restart. Click for details.'
     )
   }
 }
 
-function resumedText(count: number): SegmentText {
+function resumedText(count: number, t: Translate = translate): SegmentText {
   return {
-    label:
-      count === 1
-        ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedLabelCount_one',
-            '{{count}} chat resumed',
-            { count }
-          )
-        : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedLabelCount_other',
-            '{{count}} chats resumed',
-            { count }
-          ),
-    ariaLabel:
-      count === 1
-        ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedAriaCount_one',
-            '{{count}} chat resumed. Click to see it.',
-            { count }
-          )
-        : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedAriaCount_other',
-            '{{count}} chats resumed. Click to see them.',
-            { count }
-          ),
-    tooltip: translate(
+    label: t(
+      'auto.components.status.bar.NativeChatResumeStatusSegment.resumedLabelCount',
+      '{{count}} agents resumed',
+      { count, defaultValue_one: '{{count}} agent resumed' }
+    ),
+    ariaLabel: t(
+      'auto.components.status.bar.NativeChatResumeStatusSegment.resumedAriaCount',
+      '{{count}} agents resumed. Click to see them.',
+      { count, defaultValue_one: '{{count}} agent resumed. Click to see it.' }
+    ),
+    tooltip: t(
       'auto.components.status.bar.NativeChatResumeStatusSegment.resumedTooltip',
-      'Chats Orca resumed after the restart. Click to see them.'
+      'Agents Orca resumed after the restart. Click to see them.'
     )
   }
 }
 
-function checkText(count: number): SegmentText {
+function checkText(count: number, t: Translate = translate): SegmentText {
   return {
-    label:
-      count === 1
-        ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.checkLabelCount_one',
-            '{{count}} chat to check',
-            { count }
-          )
-        : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.checkLabelCount_other',
-            '{{count}} chats to check',
-            { count }
-          ),
-    ariaLabel:
-      count === 1
-        ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.checkAriaCount_one',
-            '{{count}} chat to check after resuming. Click for details.',
-            { count }
-          )
-        : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.checkAriaCount_other',
-            '{{count}} chats to check after resuming. Click for details.',
-            { count }
-          ),
-    tooltip: translate(
+    label: t(
+      'auto.components.status.bar.NativeChatResumeStatusSegment.checkLabelCount',
+      '{{count}} agents to check',
+      { count, defaultValue_one: '{{count}} agent to check' }
+    ),
+    ariaLabel: t(
+      'auto.components.status.bar.NativeChatResumeStatusSegment.checkAriaCount',
+      '{{count}} agents to check after resuming. Click for details.',
+      { count, defaultValue_one: '{{count}} agent to check after resuming. Click for details.' }
+    ),
+    tooltip: t(
       'auto.components.status.bar.NativeChatResumeStatusSegment.checkTooltip',
-      'Chats Orca couldn’t resume, or couldn’t confirm it resumed, after the restart. Click for details.'
+      'Agents Orca couldn’t resume, or couldn’t confirm it resumed, after the restart. Click for details.'
     )
   }
 }
 
-export function NativeChatResumeStatusSegment({
-  iconOnly
-}: {
-  iconOnly: boolean
-}): React.JSX.Element {
-  const enabled = useNativeChatRestartOfferEnabled()
+export function NativeChatResumeStatusSegment(): React.JSX.Element {
+  const enabled = useLocalRestartOffersEnabled()
   const runtimes = useNativeChatRestartRuntimes()
   return (
     <>
       <NativeChatRuntimeResumeStatusSegment
-        iconOnly={iconOnly}
         store={localNativeChatRestartStore}
         offerEnabled={enabled}
       />
       {runtimes.map(({ environment, store }) => (
         <NativeChatRuntimeResumeStatusSegment
           key={environment.id}
-          iconOnly={iconOnly}
           store={store}
           machineName={environment.name}
           offerEnabled
@@ -203,16 +153,15 @@ export function NativeChatResumeStatusSegment({
 }
 
 function NativeChatRuntimeResumeStatusSegment({
-  iconOnly,
   store,
   machineName,
   offerEnabled
 }: {
-  iconOnly: boolean
   store: NativeChatRestartStore
   machineName?: string
   offerEnabled: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const { candidates, failed } = useNativeChatRestartOffer(offerEnabled, store)
   const run = useNativeChatRestartRun(store)
   const failureBySession = resumeRunFailures(run, failed)
@@ -243,48 +192,28 @@ function NativeChatRuntimeResumeStatusSegment({
         <Segment
           onOpen={store.reopenNativeChatRestartOffer}
           machineName={machineName}
-          iconOnly={iconOnly}
-          count={view?.counts.total ?? 0}
           icon={<Loader2 className="size-3 animate-spin text-muted-foreground" />}
-          {...resumingText(view?.counts.done ?? 0, view?.counts.total ?? 0)}
+          {...resumingText(view?.counts.done ?? 0, view?.counts.total ?? 0, t)}
         />
       )}
       {pending > 0 && (
         <Segment
           onOpen={store.reopenNativeChatRestartOffer}
           machineName={machineName}
-          iconOnly={iconOnly}
-          count={pending}
           icon={<RotateCcw className="size-3 text-muted-foreground" />}
-          label={
-            pending === 1
-              ? translate(
-                  'auto.components.status.bar.NativeChatResumeStatusSegment.labelCount_one',
-                  '{{count}} chat to resume',
-                  { count: pending }
-                )
-              : translate(
-                  'auto.components.status.bar.NativeChatResumeStatusSegment.labelCount_other',
-                  '{{count}} chats to resume',
-                  { count: pending }
-                )
-          }
-          ariaLabel={
-            pending === 1
-              ? translate(
-                  'auto.components.status.bar.NativeChatResumeStatusSegment.ariaLabelCount_one',
-                  '{{count}} chat available to resume',
-                  { count: pending }
-                )
-              : translate(
-                  'auto.components.status.bar.NativeChatResumeStatusSegment.ariaLabelCount_other',
-                  '{{count}} chats available to resume',
-                  { count: pending }
-                )
-          }
-          tooltip={translate(
+          label={t(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.labelCount',
+            '{{count}} agents to resume',
+            { count: pending, defaultValue_one: '{{count}} agent to resume' }
+          )}
+          ariaLabel={t(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.ariaLabelCount',
+            '{{count}} agents available to resume',
+            { count: pending, defaultValue_one: '{{count}} agent available to resume' }
+          )}
+          tooltip={t(
             'auto.components.status.bar.NativeChatResumeStatusSegment.tooltip',
-            'Open interrupted chats available to resume'
+            'Open interrupted agents available to resume'
           )}
         />
       )}
@@ -293,20 +222,16 @@ function NativeChatRuntimeResumeStatusSegment({
         <Segment
           onOpen={store.reopenNativeChatRestartOffer}
           machineName={machineName}
-          iconOnly={iconOnly}
-          count={failures}
           icon={<AlertCircle className="size-3 text-status-warning" />}
-          {...(unconfirmed ? checkText(failures) : failedText(failures))}
+          {...(unconfirmed ? checkText(failures, t) : failedText(failures, t))}
         />
       )}
       {resumed > 0 && (
         <Segment
           onOpen={store.reopenNativeChatRestartOffer}
           machineName={machineName}
-          iconOnly={iconOnly}
-          count={resumed}
           icon={<CheckCircle2 className="size-3 text-status-success" />}
-          {...resumedText(resumed)}
+          {...resumedText(resumed, t)}
         />
       )}
     </>

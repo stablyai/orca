@@ -22,7 +22,7 @@ runs:
         path: |
           ${{ runner.temp }}/xterm-patch-build/upstream/.git
           ${{ runner.temp }}/xterm-patch-build/upstream/node_modules
-        key: xterm-dependencies-v1-${{ runner.os }}-${{ steps.runtime.outputs.image }}-${{ runner.arch }}-${{ steps.runtime.outputs.node }}-${{ hashFiles('config/patches/xterm-upstream.json', 'config/scripts/regenerate-xterm-patches.mjs', 'config/scripts/xterm-patch-text.mjs', '.github/actions/prepare-xterm-dependencies/action.yml') }}
+        key: xterm-dependencies-v1-${{ runner.os }}-${{ steps.runtime.outputs.image }}-${{ runner.arch }}-${{ steps.runtime.outputs.node }}-${{ hashFiles('config/patches/xterm-upstream.json', 'config/scripts/terminal-dependencies/xterm-patches/regenerate-xterm-patches.mjs', 'config/scripts/terminal-dependencies/xterm-patches/xterm-patch-text.mjs', '.github/actions/prepare-xterm-dependencies/action.yml') }}
     - name: Restore download cache on an installed-dependency miss
       if: steps.restore.outputs.cache-hit != 'true'
       uses: actions/cache/restore@v5

@@ -1,7 +1,10 @@
 import { chmodSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { chmod, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { durableWriteTempPath, removeStaleDurableWriteTempFiles } from '../durable-file-write'
+import {
+  durableWriteTempPath,
+  removeStaleDurableWriteTempFiles
+} from '../filesystem/durable-file-write'
 
 const STALE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 

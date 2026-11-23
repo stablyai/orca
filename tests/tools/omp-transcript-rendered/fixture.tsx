@@ -2,7 +2,7 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatMessageList } from '../../../src/renderer/src/components/native-chat/NativeChatMessageList'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
 import './fixture.css'
 
 declare const __TRANSCRIPT_PROOF__: {

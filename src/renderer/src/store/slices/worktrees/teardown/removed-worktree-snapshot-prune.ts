@@ -1,5 +1,5 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 
 /** Prune remote removals from local cached cleanup snapshots or they reappear on next scan; local main already prunes inline. */
 export async function recordRemovedWorktreeSnapshotPrune(args: {

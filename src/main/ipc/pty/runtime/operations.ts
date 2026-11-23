@@ -1,20 +1,26 @@
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { ptyOwnership } from '../provider/ownership-state'
-import { ptySizes } from '../delivery/visibility-state'
+import { isRendererViewShowingPty, ptySizes } from '../delivery/visibility-state'
+import { isHiddenRendererPty } from '../delivery/pty-hidden-delivery-gate'
+import { hideRuntimeOwnedRendererDelivery } from './spawn-hidden-delivery'
+import { seedAttachedRuntimeTerminal } from './seed-attached-runtime-terminal'
 import { rendererSerializerReadiness } from '../pane/serializer-state'
 import { getProviderForPty, localProvider, resolvePtyExecutionHost } from '../provider/registry'
-import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
+import { inspectPtyProviderProcess } from '../../../providers/pty/process-inspection'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import {
   writeRefused,
   writeUnverifiable,
   isSettledWrite,
   type WriteSettlement
-} from '../../../../shared/pty-write-settlement'
-import { isDrivingInputKind, type TerminalInputKind } from '../../../../shared/terminal-input-kind'
+} from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
+import {
+  isDrivingInputKind,
+  type TerminalInputKind
+} from '../../../../shared/terminal/input/terminal-input-kind'
 
 type RuntimeWriteDeps = Pick<PtyRuntimeControllerDeps, 'runtime'>
 
@@ -125,8 +131,13 @@ export async function attachPtyFromRuntimeController(
   if (provider !== localProvider || provider instanceof LocalPtyProvider) {
     return false
   }
+  // A pane's own hidden claim stays its own; a reveal or exit clears main's.
+  if (!isRendererViewShowingPty(ptyId) && !isHiddenRendererPty(ptyId)) {
+    hideRuntimeOwnedRendererDelivery(deps, ptyId)
+  }
   try {
     const sequenceBeforeProviderAttach = deps.runtime?.getPtyOutputSequence?.(ptyId) ?? 0
+    const sizeBeforeAttach = ptySizes.get(ptyId)
     const attachResult = await provider.attach(ptyId)
     if (attachResult?.providerSequence) {
       deps.runtime?.synchronizePtyOutputSequenceFromProvider?.(
@@ -135,9 +146,10 @@ export async function attachPtyFromRuntimeController(
         sequenceBeforeProviderAttach
       )
     }
-    if (attachResult?.lastTitle) {
-      deps.runtime?.seedTerminalRestoreTail?.(ptyId, { lastTitle: attachResult.lastTitle })
+    if (attachResult) {
+      seedAttachedRuntimeTerminal(deps.runtime, attachResult, sizeBeforeAttach)
     }
+    deps.syncPtyBackgroundedDelivery?.(ptyId, 'main-attach')
     return true
   } catch {
     return false
@@ -152,9 +164,17 @@ export async function getForegroundProcessFromRuntimeController(ptyId: string) {
   }
 }
 
+export function supportsForegroundObservationFromRuntimeController(ptyId: string): boolean {
+  try {
+    return getProviderForPty(ptyId).supportsForegroundObservation?.(ptyId) === true
+  } catch {
+    return false
+  }
+}
+
 export async function inspectProcessFromRuntimeController(
   ptyId: string,
-  options?: { expectedIncarnationId?: string }
+  options?: { expectedIncarnationId?: string; foregroundOnly?: boolean }
 ) {
   return inspectPtyProviderProcess(getProviderForPty(ptyId), ptyId, options)
 }
@@ -227,9 +247,10 @@ export async function resetInputModesFromRuntimeController(
 const settledLocalPtyProviderStartups = new WeakSet<Promise<void>>()
 const watchedLocalPtyProviderStartups = new WeakSet<Promise<void>>()
 
-export function hasPtyFromRuntimeController(
+function readReadyPtyProvider(
   deps: PtyRuntimeControllerDeps,
-  ptyId: string
+  ptyId: string,
+  read: (provider: IPtyProvider) => boolean | null
 ): boolean | null {
   try {
     // A local provider cannot prove remote-host absence.
@@ -248,10 +269,25 @@ export function hasPtyFromRuntimeController(
       }
       return null
     }
-    return getProviderForPty(ptyId).hasPty?.(ptyId) ?? null
+    return read(getProviderForPty(ptyId))
   } catch {
     return null
   }
+}
+
+export function hasPtyFromRuntimeController(deps: PtyRuntimeControllerDeps, ptyId: string) {
+  return readReadyPtyProvider(deps, ptyId, (provider) => provider.hasPty?.(ptyId) ?? null)
+}
+
+export function getPtyAvailabilityFromRuntimeController(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string
+): boolean | null {
+  return readReadyPtyProvider(
+    deps,
+    ptyId,
+    (provider) => provider.getPtyAvailability?.(ptyId) ?? null
+  )
 }
 
 export function resizePtyFromRuntimeController(ptyId: string, cols: number, rows: number): boolean {
@@ -284,16 +320,4 @@ export function waitForRendererSerializerFromRuntimeController(
 
 export function getSizeFromRuntimeController(ptyId: string) {
   return ptySizes.get(ptyId) ?? null
-}
-
-export async function serializeProviderBufferFromRuntimeController(
-  ptyId: string,
-  opts?: { scrollbackRows?: number }
-) {
-  try {
-    // Unmounted restored daemon PTYs still need provider snapshots for phone navigation.
-    return (await getProviderForPty(ptyId).getBufferSnapshot?.(ptyId, opts)) ?? null
-  } catch {
-    return null
-  }
 }

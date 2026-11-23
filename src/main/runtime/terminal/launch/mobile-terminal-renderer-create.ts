@@ -1,47 +1,23 @@
-import { applyRemoteViewerLaunchEnv } from '../../remote-viewer-launch-env'
+import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 import type { MobileTerminalCommandOptions, MobileTerminalCommand } from './mobile-terminal-startup'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { OrcaRuntimeWithMobileChatForkCreate } from './mobile-terminal-chat-fork-create'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
-import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-types'
-import { randomUUID } from 'node:crypto'
-import { getRuntimeDesktopSurface } from '../../runtime-desktop-surface'
-import type { IpcMainEvent } from 'electron'
+import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import {
   MOBILE_TERMINAL_READY_FALLBACK_MS,
-  MOBILE_TERMINAL_SURFACE_TIMEOUT_MS,
-  isClientDisconnectedError
-} from '../../orca-runtime-core'
-import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
-import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolution'
-import { assertMobileTerminalShellSupported } from './mobile-terminal-shell-refusal'
+  MOBILE_TERMINAL_SURFACE_TIMEOUT_MS
+} from '../view/terminal-surface-deadlines'
+import { isClientDisconnectedError } from '../../client/runtime-client-disconnect'
+import { deterministicAgentSessionUuid } from './runtime-agent-launch-resolution'
+import {
+  assertMobileTerminalShellSupported,
+  listMobileTerminalShellChoices
+} from './mobile-terminal-shell-refusal'
 import { anchorTabOfCreate, mainPlacedAfter } from './mobile-terminal-create-anchor'
-
-export type MobileTerminalCreateOptions = {
-  terminalImageViewerSupported?: boolean
-  afterTabId?: string
-  sourceChatFork?: { sessionId: string }
-  targetGroupId?: string
-  command?: string
-  shellOverride?: string
-  cwd?: string
-  env?: Record<string, string>
-  envToDelete?: string[]
-  startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
-  agent?: TuiAgent
-  agentPrompt?: string
-  launchConfig?: SleepingAgentLaunchConfig
-  launchAgent?: TuiAgent
-  viewMode?: 'terminal' | 'chat'
-  activate?: boolean
-  clientNavigationId?: string
-  clientMutationId?: string
-  supportsSplitGroupPlacement?: boolean
-  signal?: AbortSignal
-}
+import type { MobileTerminalCreateOptions } from './mobile-terminal-create'
+import { noteCallerOpenedTerminal } from '../../rpc/server/pairing/paired-terminal-creators'
 
 export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWithMobileChatForkCreate {
   protected abstract resolveMobileSessionTerminalCommand(
@@ -82,13 +58,24 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
 
   protected abstract hasLiveShellForRendererTab(worktreeId: string, tabId: string): boolean
 
+  /** The Windows shells a paired client may offer for a new terminal here; empty off Windows and over SSH. */
+  async listMobileSessionTerminalShellChoices(worktreeSelector: string) {
+    const settings = this.store?.getSettings()
+    return listMobileTerminalShellChoices(this.store, settings, worktreeSelector, (selector) =>
+      this.resolveTerminalWorkspaceLaunchScope(selector, undefined, { readOnly: true })
+    )
+  }
+
   protected async runCreateMobileSessionTerminal(
     worktreeSelector: string,
     opts: MobileTerminalCreateOptions = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const pairedCreate = Boolean(opts.clientNavigationId)
     const graphEpoch = this.captureReadyGraphEpoch()
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
+    // The paired client's own create: its user's act, as every start below.
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector, undefined, {
+      wslUserAct: true
+    })
     const worktreeId = workspace.id
     const cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, opts.cwd)
     assertMobileTerminalShellSupported(this.store, workspace, opts.shellOverride, cwd)
@@ -130,7 +117,10 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         opts.activate !== false,
         afterTabId,
         {
+          // The paired client's own create: its user's act.
+          wslUserAct: true,
           ...startupCommand,
+          ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           cwd,
           identity: {
             tabId: deterministicAgentSessionUuid(`mobile-qoder-tab\0${seed}`),
@@ -144,13 +134,14 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         }
       )
     }
-    const win = this.getAvailableAuthoritativeWindow()
-    if (!win) {
+    const windowId = this.getAvailableAuthoritativeWindowId()
+    if (windowId === null) {
       return await this.createRuntimeOwnedMobileSessionTerminal(
         worktreeId,
         opts.activate !== false,
         afterTabId,
         {
+          wslUserAct: true,
           command: startupCommand.command,
           ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
           cwd,
@@ -158,6 +149,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           envToDelete: startupCommand.envToDelete,
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           launchAgent: startupCommand.launchAgent,
+          ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
           ...mainPlacedAfter(
@@ -171,48 +163,28 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         }
       )
     }
-    const rendererWebContents = win.webContents
-    if (rendererWebContents.isDestroyed?.()) {
+    const desktop = getRuntimeDesktopSurface()
+    if (!desktop.hasLiveRenderer(windowId)) {
       throw new Error('runtime_unavailable')
     }
     const releasePublicationThrottle = pairedCreate
-      ? rendererPublicationThrottle.acquire(rendererWebContents)
+      ? (desktop.holdRendererPublication?.(windowId) ?? (() => {}))
       : () => {}
     try {
-      const requestId = randomUUID()
-      const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
-          opts.signal?.removeEventListener('abort', onAbort)
-          reject(new Error('Terminal creation timed out'))
-        }, 10_000)
-        // Disconnect cancels only this wait; preserve the renderer tab/shell for host use and reconnect mirrors (#7718).
-        const onAbort = (): void => {
-          clearTimeout(timer)
-          getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
-          reject(new Error('client_disconnected'))
-        }
-
-        const handler = (
-          event: IpcMainEvent,
-          r: { requestId: string; tabId?: string; title?: string; error?: string }
-        ): void => {
-          if (event.sender !== rendererWebContents || r.requestId !== requestId) {
-            return
-          }
-          clearTimeout(timer)
-          getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
-          opts.signal?.removeEventListener('abort', onAbort)
-          if (r.error) {
-            reject(new Error(r.error))
-          } else {
-            resolve({ tabId: r.tabId!, title: r.title ?? '' })
-          }
-        }
-        opts.signal?.addEventListener('abort', onAbort, { once: true })
-        getRuntimeDesktopSurface().onIpc('terminal:tabCreateReply', handler)
-        rendererWebContents.send('terminal:requestTabCreate', {
-          requestId,
+      // Disconnect cancels only this wait; preserve the renderer tab/shell for host use and reconnect mirrors (#7718).
+      const response = await desktop.requestRenderer<{
+        requestId: string
+        tabId?: string
+        title?: string
+        error?: string
+      }>(windowId, {
+        channel: 'terminal:requestTabCreate',
+        replyChannel: 'terminal:tabCreateReply',
+        timeoutMs: 10_000,
+        timeoutMessage: 'Terminal creation timed out',
+        signal: opts.signal,
+        abortMessage: 'client_disconnected',
+        payload: {
           worktreeId,
           afterTabId: afterDesktopTabId,
           targetGroupId: opts.targetGroupId,
@@ -223,12 +195,17 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           ...(startupCommand.envToDelete ? { envToDelete: startupCommand.envToDelete } : {}),
           ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
           ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
+          ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           source: 'runtime-session',
           activate: opts.activate
-        })
+        }
       })
+      if (response.error) {
+        throw new Error(response.error)
+      }
+      const reply = { tabId: response.tabId!, title: response.title ?? '' }
 
       if (opts.activate !== false) {
         this.notifier?.focusTerminal(reply.tabId, worktreeId, null)
@@ -252,6 +229,8 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         })
         if (this.isReadyMobileTerminalSurface(surface)) {
           this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
+          // The window spawned it outside this RPC, so the runtime's spawn point never saw the caller.
+          noteCallerOpenedTerminal(surface.tab.terminal)
           return surface
         }
         const readySurface = await this.waitForMobileTerminalSurface(worktreeId, reply.tabId, {
@@ -261,6 +240,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         }).catch(() => null)
         if (readySurface) {
           this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
+          noteCallerOpenedTerminal(readySurface.tab.terminal)
           return readySurface
         }
         if (opts.signal?.aborted) {
@@ -277,6 +257,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           opts.activate !== false,
           afterTabId,
           {
+            wslUserAct: true,
             command: startupCommand.command,
             ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
             cwd,
@@ -285,6 +266,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
             startupCommandDelivery: startupCommand.startupCommandDelivery,
             identity: { tabId: pendingSurface.tab.parentTabId, leafId: pendingSurface.tab.leafId },
             launchAgent: startupCommand.launchAgent,
+            ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
             viewMode: opts.viewMode,
             targetGroupId: opts.targetGroupId,
             supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,

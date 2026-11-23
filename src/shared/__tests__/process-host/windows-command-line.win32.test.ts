@@ -1,5 +1,5 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { removeTreeSync } from '../../windows-transient-lock-removal'
+import { removeTreeSync } from '../../file-write/windows-transient-lock-removal'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -34,18 +34,6 @@ describeOnWindows('Windows .cmd argument round-trip', () => {
   function decode(stdout: string): string[] {
     return [...stdout.matchAll(/ARG<([\s\S]*?)>(?=\nARG<|$)/g)].map((match) => match[1]!)
   }
-
-  it.each(WINDOWS_ARGUMENT_CORPUS)('delivers $name unchanged', async ({ value }) => {
-    const result = await runProcess({
-      program: shim,
-      args: [value],
-      // Populate variables so percent-expansion cases cannot pass against undefined names.
-      env: { ...process.env, ...WINDOWS_ARGUMENT_CORPUS_ENV },
-      timeoutMs: 30_000
-    })
-    expect(result.code).toBe(0)
-    expect(decode(result.stdout)).toEqual([value])
-  })
 
   it('delivers the whole corpus in one invocation', async () => {
     // One argument can leave cmd mid-quote; the next argument's ampersand exposes truncation/command execution.

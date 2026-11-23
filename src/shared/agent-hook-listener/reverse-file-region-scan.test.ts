@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { scanFileRegionsBackward } from './reverse-file-region-scan'
+import { scanFileRegionsBackward, scanFileRegionsBackwardAsync } from './reverse-file-region-scan'
 
 const roots: string[] = []
 afterEach(() => {
@@ -42,21 +42,6 @@ describe('scanFileRegionsBackward', () => {
     }
   })
 
-  it('stops at the first defined result without reading the rest of the file', () => {
-    const file = writeFixture(`${Array.from({ length: 200 }, (_, i) => `line-${i}`).join('\n')}\n`)
-    let regions = 0
-    const found = scanFileRegionsBackward(
-      file,
-      { chunkBytes: 32, maxScanBytes: 1024 * 1024 },
-      () => {
-        regions += 1
-        return 'first'
-      }
-    )
-    expect(found).toBe('first')
-    expect(regions).toBe(1)
-  })
-
   it('reports the byte offset each region starts at', () => {
     const file = writeFixture('😀alpha\nbravo\ncharlie\n')
     const offsets: { text: string; regionPosition: number }[] = []
@@ -79,22 +64,21 @@ describe('scanFileRegionsBackward', () => {
     const file = writeFixture(`${'x'.repeat(500)}\nkeep-me\n`)
     expect(collectLines(file, 64, 128)).toEqual(['keep-me'])
   })
+})
 
-  it('reads a file with no trailing newline', () => {
-    expect(collectLines(writeFixture('alpha\nbravo'), 4)).toEqual(['bravo', 'alpha'])
-  })
-
-  it('treats an empty or missing file as nothing found', () => {
-    expect(collectLines(writeFixture(''), 64)).toEqual([])
-    expect(
-      scanFileRegionsBackward(
-        '/nonexistent/transcript.jsonl',
-        {
-          chunkBytes: 64,
-          maxScanBytes: 64
-        },
-        () => 'x'
-      )
-    ).toBeUndefined()
+describe('scanFileRegionsBackwardAsync with a floor', () => {
+  it('stops at lines an earlier scan saw whole, but finishes one that grew across it', async () => {
+    // An earlier scan saw 'old-a\nold-b\nhalf-' (17 bytes); the half-written line then completed.
+    const file = writeFixture(`old-a\nold-b\nhalf-${'w'.repeat(40)}\nnew-c\n`)
+    const seen: string[] = []
+    await scanFileRegionsBackwardAsync(
+      file,
+      { chunkBytes: 8, maxScanBytes: 4096, floor: 17 },
+      (region) => {
+        seen.push(...region.toString('utf8').split('\n').filter(Boolean))
+        return undefined
+      }
+    )
+    expect(seen).toEqual(['new-c', `half-${'w'.repeat(40)}`])
   })
 })

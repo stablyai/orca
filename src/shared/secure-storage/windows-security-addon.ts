@@ -1,0 +1,193 @@
+import { realpathSync } from 'node:fs'
+import { realpath } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { basename, isAbsolute, join, relative, toNamespacedPath } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import type * as WindowsSecurityModule from '@orca/windows-security'
+import { ORCAD_WINDOWS_SECURITY_FILENAME } from '../remote-runtime/orcad-distribution/orcad-artifacts'
+
+export type WindowsSecurityAddon = typeof WindowsSecurityModule
+
+/** The addon (every path namespaced, async writes ordered per path) and the token's user SID. */
+export type WindowsSecurity = {
+  addon: Omit<WindowsSecurityAddon, 'currentUserSid'>
+  userSid: string
+  modulePath?: string
+}
+
+/** FILE_ALL_ACCESS, what SDDL prints as `FA`. */
+export const WINDOWS_FILE_ALL_ACCESS = 0x1f01ff
+/** FILE_GENERIC_READ | FILE_GENERIC_EXECUTE, what icacls calls `(RX)`. */
+export const WINDOWS_FILE_READ_EXECUTE = 0x1200a9
+
+const nativeLookupDirectory =
+  basename(__dirname) === 'secure-storage' &&
+  (basename(__filename) === 'windows-security-addon.ts' ||
+    basename(__filename) === 'windows-security-addon.js')
+    ? join(__dirname, '..')
+    : __dirname
+const requireFromHere = createRequire(
+  nativeLookupDirectory === __dirname
+    ? __filename
+    : new URL(`../${basename(__filename)}`, pathToFileURL(__filename))
+)
+
+let loaded: WindowsSecurity | { error: string } | null = null
+
+/** Load orcad’s staged binary at its slot root; desktop/CLI packages must resolve inside the app.
+ * Bare package lookup could escape to C:\node_modules, which another local user can create. */
+export function loadWindowsSecurity(): WindowsSecurity | { error: string } {
+  loaded ??= loadOnce()
+  return loaded
+}
+
+let loading: Promise<WindowsSecurity | { error: string }> | undefined
+
+export async function loadWindowsSecurityAsync(): Promise<WindowsSecurity | { error: string }> {
+  if (loaded) {
+    return loaded
+  }
+  loading ??= loadOnceAsync()
+  try {
+    const result = await loading
+    loaded ??= result
+    return loaded
+  } finally {
+    loading = undefined
+  }
+}
+
+async function loadOnceAsync(): Promise<WindowsSecurity | { error: string }> {
+  if (process.platform !== 'win32') {
+    return { error: `unsupported on ${process.platform}` }
+  }
+  const failures: string[] = []
+  const candidates = [
+    () => join(nativeLookupDirectory, ORCAD_WINDOWS_SECURITY_FILENAME),
+    () => join(nativeLookupDirectory, '..', '..', ORCAD_WINDOWS_SECURITY_FILENAME),
+    () => trustedPackagePathAsync(requireFromHere.resolve('@orca/windows-security'), appRoots())
+  ]
+  for (const candidate of candidates) {
+    try {
+      const modulePath = await candidate()
+      return { ...prepare(requireFromHere(modulePath)), modulePath }
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error))
+    }
+  }
+  return { error: failures.join('; ') }
+}
+
+export async function trustedPackagePathAsync(
+  resolved: string,
+  roots: readonly string[]
+): Promise<string> {
+  const real = await realpath(resolved)
+  for (const root of roots) {
+    if (isInsidePackageRoot(real, await realpath(root))) {
+      return real
+    }
+  }
+  throw new Error(`refusing @orca/windows-security outside the app: ${real}`)
+}
+
+function loadOnce(): WindowsSecurity | { error: string } {
+  if (process.platform !== 'win32') {
+    return { error: `unsupported on ${process.platform}` }
+  }
+  const failures: string[] = []
+  const candidates = [
+    () => join(nativeLookupDirectory, ORCAD_WINDOWS_SECURITY_FILENAME),
+    () => join(nativeLookupDirectory, '..', '..', ORCAD_WINDOWS_SECURITY_FILENAME),
+    () => trustedPackagePath(requireFromHere.resolve('@orca/windows-security'), appRoots())
+  ]
+  for (const candidate of candidates) {
+    try {
+      // Reading the SID is also what makes the package load its deferred .node binary.
+      const modulePath = candidate()
+      return { ...prepare(requireFromHere(modulePath)), modulePath }
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error))
+    }
+  }
+  return { error: failures.join('; ') }
+}
+
+/** Packaged resources or checkout root; electron-vite chunks sit one level deeper in out/main/chunks. */
+function appRoots(): string[] {
+  const checkout =
+    basename(nativeLookupDirectory) === 'chunks'
+      ? join(nativeLookupDirectory, '..', '..', '..')
+      : join(nativeLookupDirectory, '..', '..')
+  // Electron only, so not on Node's Process type; the CLI runs under Electron as Node too.
+  return 'resourcesPath' in process && typeof process.resourcesPath === 'string'
+    ? [process.resourcesPath, checkout]
+    : [checkout]
+}
+
+/** `resolved` when its real location is inside one of `roots`; throws otherwise. */
+export function trustedPackagePath(resolved: string, roots: readonly string[]): string {
+  const real = realpathSync(resolved)
+  if (roots.some((root) => isInsidePackageRoot(real, realpathSync(root)))) {
+    return real
+  }
+  throw new Error(`refusing @orca/windows-security outside the app: ${real}`)
+}
+
+function isInsidePackageRoot(real: string, root: string): boolean {
+  const fromRoot = relative(root, real)
+  return fromRoot !== '' && !fromRoot.startsWith('..') && !isAbsolute(fromRoot)
+}
+
+/** Namespace paths once for MAX_PATH-limited Win32 APIs. Serialize async writes per path so a read/merge grant cannot race a re-lock and restore broader access.
+ * Sync grants finish on main before restrictAsync’s post-apply verification; a broader result fails verification and evicts the directory for bounded retry. */
+function prepare(raw: WindowsSecurityAddon): WindowsSecurity {
+  const writes = new Map<string, Promise<unknown>>()
+  const inPathOrder = (path: string, write: (namespaced: string) => Promise<void>) => {
+    const namespaced = toNamespacedPath(path)
+    const key = namespaced.toLowerCase()
+    const run = () => write(namespaced)
+    const next = (writes.get(key) ?? Promise.resolve()).then(run, run)
+    const settled = next.catch(() => undefined)
+    writes.set(key, settled)
+    void settled.then(() => {
+      if (writes.get(key) === settled) {
+        writes.delete(key)
+      }
+    })
+    return next
+  }
+  return {
+    userSid: raw.currentUserSid(),
+    addon: {
+      getDaclAces: (path) => raw.getDaclAces(toNamespacedPath(path)),
+      setDaclSddl: (path, sddl) => raw.setDaclSddl(toNamespacedPath(path), sddl),
+      setDaclSddlAsync: (path, sddl) =>
+        inPathOrder(path, (namespaced) => raw.setDaclSddlAsync(namespaced, sddl)),
+      createFileWithDacl: (path, sddl, data, strict) =>
+        raw.createFileWithDacl(toNamespacedPath(path), sddl, data, strict),
+      readFileWithDacl: (path, maxBytes) => raw.readFileWithDacl(toNamespacedPath(path), maxBytes),
+      readGenericCredential: (target) => raw.readGenericCredential(target),
+      writeGenericCredential: (target, user, data) =>
+        raw.writeGenericCredential(target, user, data),
+      grantAccess: (path, sid, mask, options) =>
+        raw.grantAccess(toNamespacedPath(path), sid, mask, options),
+      grantAccessAsync: (path, sid, mask, options) =>
+        inPathOrder(path, (namespaced) => raw.grantAccessAsync(namespaced, sid, mask, options)),
+      clearStdHandleInheritance: () => raw.clearStdHandleInheritance(),
+      spawnDetachedIsolated: (file, commandLine, cwd, environmentBlock, onExit) =>
+        raw.spawnDetachedIsolated(file, commandLine, cwd, environmentBlock, onExit),
+      isolatedSpawnBreaksAwayFromJob: () => raw.isolatedSpawnBreaksAwayFromJob(),
+      hasNativeExport: (name) => raw.hasNativeExport(name)
+    }
+  }
+}
+
+/** Wrap fake addons identically to production; null simulates load failure. */
+export function setWindowsSecurityForTests(addon: WindowsSecurityAddon | null): void {
+  loaded = addon ? prepare(addon) : { error: 'disabled for tests' }
+}
+
+export function resetWindowsSecurityLoadForTests(): void {
+  loaded = null
+}

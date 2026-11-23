@@ -24,7 +24,7 @@ Register the CLI under [Settings → General → Orca CLI](/docs/settings). On m
 
 ## SSH connects but remote terminals fail
 
-- Confirm the remote has Node and network access for the first-time relay install.
+- On first connect to an SSH host or a WSL distro, Orca installs the Node.js version its server needs there. It downloads it on this computer, or on the host if that fails. If your network blocks nodejs.org, set **Settings → Advanced → Network → Node.js Download Mirror** to a copy of `nodejs.org/dist`, or download the file named in the error on another machine and copy it to the path the error gives on this computer. Then connect again.
 - On Linux, install a C/C++ toolchain if terminals never spawn: make, g++/clang++, python3 (see [SSH worktrees](/docs/ssh)).
 - Reconnect after installing tools so Orca can reinstall native modules.
 

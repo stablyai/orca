@@ -1,12 +1,13 @@
-import { provenSpawnResponse } from '../spawn-outcome'
-import { isNativeWindowsLocalPtySpawn } from '../../../runtime/terminal-model-query-authority'
+import '../spawn/spawn-outcome'
+import { provenSpawnResponse } from '../../../../shared/terminal/pty/lifecycle/terminal-spawn-response'
+import { isNativeWindowsLocalPtySpawn } from '../../../runtime/terminal/output/terminal-model-query-authority'
 import { normalizeValidPaneKey } from '../pane/key-state'
 import type { RuntimePtySpawnState } from './spawn-state'
-import { startupCwdFallbackOutcome } from '../spawn-startup-target'
-import { commitPtySpawn } from '../spawn-commit-assembly'
-import type { PtySpawnPaneBinding } from '../spawn-commit-binding'
-import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
-import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
+import { startupCwdFallbackOutcome } from '../host-env/spawn-startup-target'
+import { commitPtySpawn } from '../spawn/spawn-commit-assembly'
+import type { PtySpawnPaneBinding } from '../spawn/spawn-commit-binding'
+import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/terminal-bindings/pty-binding-span'
+import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/startup-prompts/opencode-startup-prompt-owner'
 
 export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   return commitPtyWithOpenCodePromptIntent(ctx, () => {
@@ -30,7 +31,10 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         store: ctx.hostSessionBinding?.store ?? ctx.deps.store,
         worktreeId: args.worktreeId,
         shellOverride: ctx.daemonShellOverride,
-        rendererLaunchAuthority: null
+        rendererLaunchAuthority: null,
+        launchedAgent: null,
+        // The runtime's own create records its launch once the spawn commits.
+        freshSpawn: false
       },
       preAllocatedHandle: args.preAllocatedHandle,
       // Runtime spawns bypass renderer IPC; publish reverse pane lookup for hooks and cleanup.

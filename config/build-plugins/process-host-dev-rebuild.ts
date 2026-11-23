@@ -5,7 +5,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import type ts from 'typescript-api'
 import type { Plugin } from 'rolldown'
-import { createWorkspaceSourceResolver } from '../scripts/workspace-source-exports.mjs'
+import { createWorkspaceSourceResolver } from '../scripts/workspace/source-exports/workspace-source-exports.mjs'
 
 function configError(diagnostic: ts.Diagnostic, compiler: typeof ts): Error {
   return new Error(compiler.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))

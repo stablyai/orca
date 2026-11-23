@@ -1,5 +1,6 @@
-import type { AgentStatusState } from '../agent-status-types'
-import type { AgentTurnOutcome } from '../agent-turn-outcome'
+import type { AgentStatusState } from '../agent-status/contracts/agent-status-types'
+import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outcome'
+import type { AgentTurnFailure } from '../agent-status/lifecycle/main-agent-status'
 
 /** The Claude main agent's own turn record, published on every row as `mainAgent`. */
 export type ClaudeLeadTurnState = {
@@ -8,6 +9,8 @@ export type ClaudeLeadTurnState = {
   taskWakeupTurn?: true
   /** Done-turn verdict from provider, inferred cancellation or persisted seed; the fold reads cancellation as interrupted. */
   outcome?: AgentTurnOutcome
+  /** On a `failure` outcome: Claude's StopFailure `error` (`rate_limit`) and its message. */
+  failure?: AgentTurnFailure
   /** When `state` first appeared; the main agent's own clock, distinct from the gated row's. */
   stateStartedAt: number
   /** Only the waiting child's next activity may clear its card; sibling churn cannot. */
@@ -16,10 +19,14 @@ export type ClaudeLeadTurnState = {
   waitingToolUseId?: string
   /** End time retained while background work holds working, then repeated on all-clear done. */
   turnCompletedAt?: number
+  /** That end time, held because the turn's late prompt event has not said whether a task wakeup started it. */
+  unclassifiedTurnCompletedAt?: number
+  /** Claude hook model. Later events that omit it keep the last reported value. */
+  model?: string
   /** Restore the lead state displaced by a child wait; inventing working cannot later fold back to done. */
   stateBeforeWait?: Pick<
     ClaudeLeadTurnState,
-    'state' | 'outcome' | 'stateStartedAt' | 'turnCompletedAt' | 'taskWakeupTurn'
+    'state' | 'outcome' | 'failure' | 'stateStartedAt' | 'turnCompletedAt' | 'taskWakeupTurn'
   >
 }
 

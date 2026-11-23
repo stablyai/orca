@@ -1,14 +1,14 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
-import { setTerminalPrewarmWorktrees } from '@/components/terminal/terminal-worktree-prewarm'
+import { setTerminalPrewarmWorktrees } from '@/components/terminal/worktree-prewarm/terminal-worktree-prewarm'
 import {
   getWorktreeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+} from '../../../../../../shared/execution-host/execution-host'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
-import { resolveCycledWorkspaceRow } from '../../worktree-keyboard-cycle'
+import { resolveCycledWorkspaceRow } from './worktree-keyboard-cycle'
 
 // Settle first so prewarm never competes with the switch that just happened or a key-repeat scan.
 const NEIGHBOR_PREWARM_DELAY_MS = 500

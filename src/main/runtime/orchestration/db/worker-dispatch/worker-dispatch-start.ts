@@ -1,19 +1,23 @@
-import type { DispatchContextRow, TaskRow, WorkerDispatchRow } from '../../types'
+import type { DispatchContextRow, TaskRow, WorkerDispatchRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
-import { ensureMutationReceiptCapacity } from '../../mutation-receipt-capacity'
-import { CURRENT_CONTRACT_VERSION } from '../contract-constants'
+import { ensureMutationReceiptCapacity } from '../mutation-receipts/mutation-receipt-capacity'
+import { ORCHESTRATION_CONTRACT_VERSION as CURRENT_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 import { insertStartingDispatchContextRow } from '../dispatch-row-writer'
 import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
-import { taskNotFoundError, taskNotStartableError } from '../../task-dispatch-refusal'
+import { taskNotFoundError } from '../../coordinator/dispatch/task-dispatch-refusal'
+import { claimTaskForStart } from '../tasks/task-start-claim'
+import { getFollowUpDispatch, takeFollowUpMail } from '../dispatch-context/worker-follow-up-lineage'
 
 export function createStartingWorkerDispatch(
   this: OrchestrationDb,
   params: {
     taskId?: string
     taskSpec?: string
+    /** The paired coordinator's ID for this Task: an existing one is reopened, else the new one takes it. */
+    adoptTaskId?: string
     taskRunId?: string
     taskCreatedByTerminalHandle?: string
     taskCreatedByPaneKey?: string
@@ -43,6 +47,16 @@ export function createStartingWorkerDispatch(
     maxDepth: number
     /** A worker's own Dispatch that authorized this helper; it must still be the creator here. */
     requiredCreatorDispatchId?: string
+    /** The settled Dispatch whose worker this follow-up continues; only one follow-up claims it. */
+    followUpOf?: string
+    /** Another mutation's pending receipt (a send's follow-up), told what this start accepted. */
+    acceptedBy?: { callerFingerprint: string; requestId: string }
+    /** The Dispatch whose unread mail this follow-up's Task tells it to check, moved to it in the claim. */
+    takesMailOf?: string
+    /** What the creator started it for; a retry or follow-up without one keeps its earlier start's. */
+    originRef?: string
+    /** The question it was started to answer; a retry or follow-up without one keeps its earlier start's. */
+    forMessageId?: string
   }
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow; task: TaskRow } {
   this.db.exec('BEGIN IMMEDIATE')
@@ -71,67 +85,51 @@ export function createStartingWorkerDispatch(
         )
         .run(receipt.callerFingerprint, receipt.requestId, receipt.method, receipt.payloadHash)
     }
+    const claimedFollowUp = params.followUpOf ? getFollowUpDispatch(this, params.followUpOf) : null
+    if (claimedFollowUp) {
+      throw new OrchestrationError(
+        'follow_up_claimed',
+        `Dispatch ${params.followUpOf} already continues as Dispatch ${claimedFollowUp.id}.`,
+        { followUpDispatchId: claimedFollowUp.id }
+      )
+    }
+    const adopted = params.adoptTaskId ? this.getTask(params.adoptTaskId) : undefined
+    if (adopted && !params.retryOf) {
+      reopenSettledAdoptedTask(this, adopted, params.taskRunId)
+    }
     const task = params.taskId
       ? this.getTask(params.taskId)
-      : params.taskSpec
-        ? this.createTask({
-            spec: params.taskSpec,
-            taskTitle: params.taskTitle,
-            deps: params.taskDeps,
-            parentId: params.taskParentId,
-            createdByTerminalHandle: params.taskCreatedByTerminalHandle,
-            createdByPaneKey: params.taskCreatedByPaneKey,
-            createdByProcessIncarnation: params.taskCreatedByProcessIncarnation,
-            createdByRunGeneration: params.taskCreatedByRunGeneration,
-            runId: params.taskRunId
-          })
-        : undefined
+      : adopted
+        ? this.getTask(adopted.id)
+        : params.taskSpec
+          ? this.createTask({
+              id: params.adoptTaskId,
+              spec: params.taskSpec,
+              taskTitle: params.taskTitle,
+              deps: params.taskDeps,
+              parentId: params.taskParentId,
+              createdByTerminalHandle: params.taskCreatedByTerminalHandle,
+              createdByPaneKey: params.taskCreatedByPaneKey,
+              createdByProcessIncarnation: params.taskCreatedByProcessIncarnation,
+              createdByRunGeneration: params.taskCreatedByRunGeneration,
+              runId: params.taskRunId
+            })
+          : undefined
     if (!task) {
       // An inline spec already creates its Task; missing rows here imply an explicit id.
       const taskId = params.taskId ?? ''
       throw taskNotFoundError(`Task ${taskId} was not found.`, { taskId })
     }
-    let priorFailures = 0
-    if (params.retryOf) {
-      const prior = this.getDispatchContextById(params.retryOf)
-      const priorWorker = this.getWorkerDispatch(params.retryOf)
-      const latest = this.getDispatchContext(task.id)
-      if (prior?.task_id === task.id && prior.status === 'circuit_broken') {
-        throw taskNotStartableError(
-          this,
-          `Task ${task.id} failed ${prior.failure_count} times, so Orca will not retry it again (last error: ${prior.last_failure ?? 'unknown'}). Report the failure to the user instead of retrying.`,
-          task,
-          params.retryOf,
-          prior.failure_count
-        )
-      }
-      // Context-only Dispatches have no worker row; read settlement from the Dispatch itself.
-      const priorSettled = priorWorker
-        ? ['failed', 'stopped', 'abandoned'].includes(priorWorker.state)
-        : prior?.status === 'failed'
-      if (
-        !prior ||
-        prior.task_id !== task.id ||
-        latest?.id !== prior.id ||
-        !priorSettled ||
-        !['failed', 'blocked'].includes(task.status)
-      ) {
-        throw taskNotStartableError(
-          this,
-          `Task ${task.id} cannot retry from Dispatch ${params.retryOf}.`,
-          task,
-          params.retryOf
-        )
-      }
-      // Only a retry chain inherits failures; a fresh start after a worker exit keeps its own count.
-      priorFailures = prior.failure_count
-    } else if (task.status !== 'ready') {
-      throw taskNotStartableError(
-        this,
-        `Task ${task.id} is ${task.status}; only a ready Task can start.`,
-        task
+    const peerRun = this.getPeerRun(task.run_id)
+    if (peerRun?.state === 'closed') {
+      // Starts, follow-ups and helpers alike: its coordinator cancelled it.
+      throw new OrchestrationError(
+        'run_not_found',
+        `Run ${task.run_id} was cancelled by ${peerRun.home_label}. No effects were applied.`,
+        { effectsApplied: false }
       )
     }
+    const { priorFailures } = claimTaskForStart(this, task, { retryOf: params.retryOf })
 
     const id = generateId('ctx')
     const creatorDispatchId = this.resolveCreatorDispatchId(params.creator)
@@ -145,7 +143,15 @@ export function createStartingWorkerDispatch(
         { effectsApplied: false }
       )
     }
-    if (params.mutationReceipt) {
+    if (creatorDispatchId && this.isWorkerStopRequested(creatorDispatchId)) {
+      throw new OrchestrationError(
+        'consumer_fenced',
+        `Dispatch ${creatorDispatchId} is being stopped, so it cannot start a helper.`,
+        { effectsApplied: false }
+      )
+    }
+    const accepting = params.mutationReceipt ?? params.acceptedBy
+    if (accepting) {
       this.db
         .prepare(
           `UPDATE mutation_receipts
@@ -154,8 +160,8 @@ export function createStartingWorkerDispatch(
         )
         .run(
           JSON.stringify({ accepted: { taskId: task.id, dispatchId: id } }),
-          params.mutationReceipt.callerFingerprint,
-          params.mutationReceipt.requestId
+          accepting.callerFingerprint,
+          accepting.requestId
         )
     }
     insertStartingDispatchContextRow(this.db, {
@@ -168,8 +174,24 @@ export function createStartingWorkerDispatch(
       retryOfDispatchId: params.retryOf ?? null,
       priorFailures,
       creatorDispatchId,
+      followUpOfDispatchId: params.followUpOf ?? null,
+      originRef:
+        params.originRef ??
+        [params.retryOf, params.followUpOf]
+          .map((earlier) => (earlier ? this.getDispatchContextById(earlier)?.origin_ref : null))
+          .find((ref) => ref) ??
+        null,
+      forMessageId:
+        params.forMessageId ??
+        [params.retryOf, params.followUpOf]
+          .map((earlier) => (earlier ? this.getDispatchContextById(earlier)?.for_message_id : null))
+          .find((ref) => ref) ??
+        null,
       ...recordedCreatorIdentity(params.creator)
     })
+    if (params.takesMailOf) {
+      takeFollowUpMail(this, params.takesMailOf, id)
+    }
     this.db
       .prepare(
         `INSERT INTO worker_dispatches (
@@ -201,8 +223,10 @@ export function createStartingWorkerDispatch(
     })
     this.db.exec('COMMIT')
     this.hasAnyDispatchContextsCache = true
+    const dispatch = this.getDispatchContextById(id) as DispatchContextRow
+    this.workerDockSources?.changedDispatch(id)
     return {
-      dispatch: this.getDispatchContextById(id) as DispatchContextRow,
+      dispatch,
       worker: this.getWorkerDispatch(id) as WorkerDispatchRow,
       task: this.getTask(task.id) as TaskRow
     }
@@ -220,4 +244,31 @@ export function attachWorkerDispatchStart(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     createStartingWorkerDispatch
   })
+}
+
+/** A Task its paired coordinator reopened gets a new attempt here once its latest attempt settled. */
+function reopenSettledAdoptedTask(
+  db: OrchestrationDb,
+  task: TaskRow,
+  runId: string | undefined
+): void {
+  if (task.run_id !== runId) {
+    throw taskNotFoundError(`Task ${task.id} was not found in Run ${runId ?? ''}.`, {
+      taskId: task.id
+    })
+  }
+  const latest = db.getDispatchContext(task.id)
+  const worker = latest ? db.getWorkerDispatch(latest.id) : undefined
+  const settled = worker
+    ? ['succeeded', 'failed', 'stopped', 'abandoned'].includes(worker.state)
+    : !latest || ['completed', 'failed', 'circuit_broken'].includes(latest.status)
+  // A pending Task still waits on its dependencies; the ordinary promotion readies it.
+  if (settled && task.status !== 'ready' && task.status !== 'pending') {
+    transitionLifecycleWithDb(db.db, {
+      entity: 'task',
+      id: task.id,
+      from: task.status,
+      to: 'ready'
+    })
+  }
 }
