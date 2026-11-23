@@ -10,6 +10,10 @@ import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { taskNotFoundError } from '../../coordinator/dispatch/task-dispatch-refusal'
 import { claimTaskForStart } from '../tasks/task-start-claim'
 import { getFollowUpDispatch, takeFollowUpMail } from '../dispatch-context/worker-follow-up-lineage'
+import {
+  requireRetainedWorkerTerminal,
+  type RetainedWorkerAuthority
+} from '../worker-terminal/worker-terminal-transfer'
 
 export function createStartingWorkerDispatch(
   this: OrchestrationDb,
@@ -49,6 +53,7 @@ export function createStartingWorkerDispatch(
     requiredCreatorDispatchId?: string
     /** The settled Dispatch whose worker this follow-up continues; only one follow-up claims it. */
     followUpOf?: string
+    retainedChat?: { authority: RetainedWorkerAuthority; worktreeId: string; effects: unknown[] }
     /** Another mutation's pending receipt (a send's follow-up), told what this start accepted. */
     acceptedBy?: { callerFingerprint: string; requestId: string }
     /** The Dispatch whose unread mail this follow-up's Task tells it to check, moved to it in the claim. */
@@ -63,6 +68,18 @@ export function createStartingWorkerDispatch(
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow; task: TaskRow } {
   this.db.exec('BEGIN IMMEDIATE')
   try {
+    const claimedFollowUp = params.followUpOf ? getFollowUpDispatch(this, params.followUpOf) : null
+    if (claimedFollowUp) {
+      throw new OrchestrationError(
+        'follow_up_claimed',
+        `Dispatch ${params.followUpOf} already continues as Dispatch ${claimedFollowUp.id}.`,
+        { followUpDispatchId: claimedFollowUp.id }
+      )
+    }
+    const retained = params.retainedChat
+    if (retained) {
+      requireRetainedWorkerTerminal(this, retained.authority, retained.worktreeId)
+    }
     if (params.mutationReceipt) {
       const receipt = params.mutationReceipt
       const existing = this.getMutationReceipt(receipt.callerFingerprint, receipt.requestId)
@@ -86,14 +103,6 @@ export function createStartingWorkerDispatch(
            ) VALUES (?, ?, ?, ?, 'pending')`
         )
         .run(receipt.callerFingerprint, receipt.requestId, receipt.method, receipt.payloadHash)
-    }
-    const claimedFollowUp = params.followUpOf ? getFollowUpDispatch(this, params.followUpOf) : null
-    if (claimedFollowUp) {
-      throw new OrchestrationError(
-        'follow_up_claimed',
-        `Dispatch ${params.followUpOf} already continues as Dispatch ${claimedFollowUp.id}.`,
-        { followUpDispatchId: claimedFollowUp.id }
-      )
     }
     const adopted = params.adoptTaskId ? this.getTask(params.adoptTaskId) : undefined
     if (adopted && !params.retryOf) {
@@ -206,6 +215,22 @@ export function createStartingWorkerDispatch(
          ) VALUES (?, ?, 'starting', 'accepted', ?)`
       )
       .run(id, params.runtimeEpoch ?? null, JSON.stringify(params.startOptions))
+    if (retained) {
+      const { authority } = retained
+      this.prepareStartingWorkerAuthority({
+        dispatchId: id,
+        ...authority,
+        worktreeId: retained.worktreeId,
+        effects: retained.effects,
+        setupState: 'not_applicable'
+      })
+      this.transferWorkerTerminalResourceStatement({
+        ...authority,
+        toDispatchId: id,
+        terminalHandle: authority.handle,
+        endpointId: params.runtimeEpoch
+      })
+    }
     if (params.federation) {
       this.db
         .prepare(

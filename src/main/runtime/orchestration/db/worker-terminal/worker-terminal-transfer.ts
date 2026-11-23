@@ -1,8 +1,64 @@
-import type { WorkerTerminalResourceRow } from '../../terminal-authority/release/worker-terminal-ownership'
+import {
+  WORKER_SETTLED_STATES,
+  type WorkerTerminalResourceRow
+} from '../../terminal-authority/release/worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import { isEquivalentPaneKey } from '../pane-key-match'
 import { createPreviousCustodianLookup } from './worker-custody-read'
 import type { OrchestrationDb } from '../orchestration-db'
+
+export type RetainedWorkerTerminal = {
+  resourceId: string
+  ownerDispatchId: string
+  handle: string
+}
+
+export type RetainedWorkerAuthority = RetainedWorkerTerminal & {
+  paneKey: string
+  processIncarnation: string
+  hostScope: string
+}
+
+/** The follow-up may take only the row its admission selected, while holding the write transaction. */
+export function requireRetainedWorkerTerminal(
+  db: OrchestrationDb,
+  selected: RetainedWorkerAuthority,
+  worktreeId: string | null
+): void {
+  const row = db.getWorkerTerminalResource(selected.resourceId)
+  if (
+    row?.owner_dispatch_id === selected.ownerDispatchId &&
+    ['requested', 'releasing', 'unknown'].includes(row.release_state)
+  ) {
+    throw new OrchestrationError(
+      'terminal_release_in_progress',
+      `Terminal ${selected.handle} has a release in progress. No effects were applied.`,
+      { effectsApplied: false }
+    )
+  }
+  const owner = db.getWorkerDispatch(selected.ownerDispatchId)
+  if (
+    !row ||
+    row.owner_dispatch_id !== selected.ownerDispatchId ||
+    row.terminal_handle !== selected.handle ||
+    row.pane_key !== selected.paneKey ||
+    row.process_incarnation !== selected.processIncarnation ||
+    row.host_scope !== selected.hostScope ||
+    row.worktree_id !== worktreeId ||
+    row.ownership_state !== 'owned' ||
+    !['not_requested', 'retained'].includes(row.release_state) ||
+    !owner ||
+    !WORKER_SETTLED_STATES.includes(owner.state) ||
+    db.findActiveDispatchForAssignee(selected.handle, selected.paneKey) ||
+    db.workerTerminalResourceHasIdentityConflict(row.id)
+  ) {
+    throw new OrchestrationError(
+      'worker_identity_changed',
+      `Terminal ${selected.handle} no longer has one settled resource held by Dispatch ${selected.ownerDispatchId}. No effects were applied.`,
+      { effectsApplied: false }
+    )
+  }
+}
 
 // Finds an owned, settled, exact-match resource for an explicitly reused terminal.
 export function findTransferableWorkerTerminalResource(

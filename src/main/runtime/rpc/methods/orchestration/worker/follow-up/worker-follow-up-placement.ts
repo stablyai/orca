@@ -7,11 +7,16 @@ import { CHAT_WORKER_AUTHORITY } from '../../chat-assignee-admission'
 import type { WorkerResumeSession } from '../../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { getStructuredAgentSessionHost } from '../../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
+  requireRunningStructuredWorker,
   resolveStructuredWorkerIdentity,
   structuredWorkerSession
 } from '../../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import type { WorkerFollowUpPlacement } from './worker-follow-up-choice'
 import { publishChatTabInBackground } from '../../../../../session-tabs/chat/background-chat-tab-publication'
+import type {
+  RetainedWorkerAuthority,
+  RetainedWorkerTerminal
+} from '../../../../../orchestration/db/worker-terminal/worker-terminal-transfer'
 
 /** What a follow-up continues, and for a closed worker how it comes back once the follow-up holds its Dispatch. */
 export type WorkerFollowUp = {
@@ -25,6 +30,7 @@ export type WorkerFollowUp = {
   place: (assertCreatorCurrent: () => void) => Promise<WorkerFollowUpPlacement>
   /** Resolves null when the agent refused to resume before spawning anything; a fresh one starts instead. */
   reopen?: (dispatchId: string) => Promise<ReopenedWorker | null>
+  retainedChat?: RetainedWorkerTerminal
   /** The send this follow-up answers, whose pending receipt names the Dispatch it accepted. */
   acceptedBy?: { callerFingerprint: string; requestId: string }
   /** The Dispatch whose unread mail this follow-up's Task tells it to check. */
@@ -148,6 +154,52 @@ export async function reopenWorkerChat(
       paneKey: identity.paneKey,
       processIncarnation: identity.processIncarnation,
       hostScope: JSON.stringify(identity.hostScope)
+    }
+  }
+}
+
+/** Read the exact chat before claiming the follow-up. Only a committed claim may publish it. */
+export function prepareRetainedWorkerChat(
+  runtime: Pick<OrcaRuntimeService, 'publishStructuredAgentSessionTab'>,
+  db: OrchestrationDb,
+  selected: RetainedWorkerTerminal,
+  worktreeId: string | undefined
+): {
+  authority: RetainedWorkerAuthority
+  worktreeId: string
+  publish: () => Promise<ReopenedWorker>
+} {
+  const host = getStructuredAgentSessionHost()
+  const identity = resolveStructuredWorkerIdentity(selected.handle, db)
+  if (!host || !identity || !worktreeId) {
+    throw new OrchestrationError(
+      'worker_not_restartable',
+      `Worker ${selected.handle} has no chat Orca can reopen. No effects were applied.`,
+      { effectsApplied: false }
+    )
+  }
+  const running = requireRunningStructuredWorker(identity)
+  if (
+    running.record.location.workspaceId !== worktreeId ||
+    running.lineage.some((sessionId) => host.isSessionTabVisible(sessionId))
+  ) {
+    throw new OrchestrationError(
+      'worker_identity_changed',
+      `Worker ${selected.handle} no longer has a closed chat in its workspace. No effects were applied.`,
+      { effectsApplied: false }
+    )
+  }
+  return {
+    worktreeId,
+    authority: {
+      ...selected,
+      paneKey: identity.paneKey,
+      processIncarnation: identity.processIncarnation,
+      hostScope: JSON.stringify(identity.hostScope)
+    },
+    publish: async () => {
+      await publishChatTabInBackground(runtime, host, running.sessionId)
+      return { handle: selected.handle, chat: true, userOpened: false }
     }
   }
 }

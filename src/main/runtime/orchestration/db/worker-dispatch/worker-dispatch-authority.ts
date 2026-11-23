@@ -1,6 +1,11 @@
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 import { dispatchAssigneeOrcaSessionId } from '../../addressing/session-lineage/dispatch-assignee-orca-session-id'
+import {
+  beginLifecycleWriteTransaction,
+  commitLifecycleWriteTransaction,
+  rollbackLifecycleWriteTransaction
+} from '../lifecycle-transition'
 
 export function prepareStartingWorkerAuthority(
   this: OrchestrationDb,
@@ -21,7 +26,7 @@ export function prepareStartingWorkerAuthority(
     sleptProcessIncarnation?: string | null
   }
 ): void {
-  this.db.exec('BEGIN IMMEDIATE')
+  const transaction = beginLifecycleWriteTransaction(this.db, 'starting_worker_authority')
   try {
     // Read under the transaction so guarded updates cannot race another state change.
     const dispatch = this.getDispatchContextById(params.dispatchId)
@@ -173,9 +178,9 @@ export function prepareStartingWorkerAuthority(
         }
       }
     }
-    this.db.exec('COMMIT')
+    commitLifecycleWriteTransaction(this.db, transaction)
   } catch (error) {
-    this.db.exec('ROLLBACK')
+    rollbackLifecycleWriteTransaction(this.db, transaction)
     throw error
   }
 }

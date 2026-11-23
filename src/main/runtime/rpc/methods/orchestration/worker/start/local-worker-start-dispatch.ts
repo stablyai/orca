@@ -7,6 +7,7 @@ import {
 import { resolveDispatchAssigneeParty } from '../../../../../orchestration/addressing/orchestration-party'
 import type { WorkerStartInput } from './worker-start-input'
 import type { RunRow } from '../../../../../orchestration/db/orchestration-records'
+import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type { startLocalWorker } from './local-worker-start'
 import { resolveDispatchCreator } from '../../runs/dispatch-creator'
 
@@ -32,7 +33,8 @@ export function createLocalWorkerStartDispatch(
     resolvedWorktreeId,
     repoSelector,
     agent,
-    launchReceipt
+    launchReceipt,
+    retainedChat
   }: {
     params: WorkerStartInput
     run: RunRow
@@ -43,6 +45,7 @@ export function createLocalWorkerStartDispatch(
     repoSelector: string | undefined
     agent: TuiAgent | undefined
     launchReceipt: OrchestrationWorkerLaunchReceipt
+    retainedChat: Parameters<OrchestrationDb['createStartingWorkerDispatch']>[0]['retainedChat']
   }
 ) {
   const startOptions = {
@@ -94,6 +97,7 @@ export function createLocalWorkerStartDispatch(
     runtimeEpoch: runtime.getRuntimeId(),
     mutationReceipt: orchestrationMutation,
     followUpOf: followUp?.of,
+    retainedChat,
     acceptedBy: followUp?.acceptedBy,
     takesMailOf: followUp?.takesMailOf,
     ...(params.origin ? { originRef: params.origin } : {}),

@@ -49,7 +49,13 @@ import {
   recordWorkerStartOutcome
 } from '../../../../../orchestration/workers/launch/worker-start-card'
 import { rebindReusedStructuredWorker } from '../../structured-workers/orchestration-structured-worker-session'
-import { placedWorkerParty, type WorkerFollowUp } from '../follow-up/worker-follow-up-placement'
+import {
+  placedWorkerParty,
+  prepareRetainedWorkerChat,
+  type WorkerFollowUp
+} from '../follow-up/worker-follow-up-placement'
+import { qualifyLiveWorkerFollowUp } from './admission/worker-start-authority'
+import { OrchestrationError } from '../../../../../orchestration/orchestration-error'
 
 export async function startLocalWorker(args: {
   params: WorkerStartInput
@@ -136,9 +142,31 @@ export async function startLocalWorker(args: {
   const host = { runtime, agent, resolvedWorktree, creationTarget, terminal: params.terminal }
   let mode = chatWorkerMode(await preflightWorkerAgentOnHost({ ...host, mode: decided }), chat)
 
-  // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.
-  refuseClaimedWorkerTerminal(db, params.terminal, runtime, args.followUp?.of)
+  const followUp = args.followUp
+  if (followUp?.retainedChat) {
+    await runtime.ensureStructuredAgentSessionHost()
+  }
+  // No await from the tab and claim checks through the Dispatch insert.
+  const retained = followUp?.retainedChat
+    ? prepareRetainedWorkerChat(runtime, db, followUp.retainedChat, resolvedWorktree?.id)
+    : undefined
+  refuseClaimedWorkerTerminal(
+    db,
+    retained?.authority.handle ?? params.terminal,
+    runtime,
+    followUp?.of
+  )
   const run = args.bindRun()
+  if (retained && followUp) {
+    qualifyLiveWorkerFollowUp(runtime, coordinator, params.from, callerSession, run.id, followUp)
+  }
+  const effects: WorkerEffect[] = []
+  if (resolvedWorktree) {
+    effects.push(
+      { kind: 'worktree', action: 'reused', id: resolvedWorktree.id },
+      { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
+    )
+  }
   const started = createLocalWorkerStartDispatch(args, {
     params,
     run,
@@ -148,17 +176,20 @@ export async function startLocalWorker(args: {
     resolvedWorktreeId: resolvedWorktree?.id,
     repoSelector: creationTarget?.repoSelector,
     agent,
-    launchReceipt: launch.receipt
+    launchReceipt: launch.receipt,
+    retainedChat: retained
+      ? {
+          authority: retained.authority,
+          worktreeId: retained.worktreeId,
+          effects: [
+            ...effects,
+            { kind: 'terminal', role: 'agent', action: 'reused', id: retained.authority.handle }
+          ]
+        }
+      : undefined
   })
   releaseRetriedWorkerTerminal(runtime, db, params)
-  const effects: WorkerEffect[] = []
   const task = started.task
-  if (resolvedWorktree) {
-    effects.push(
-      { kind: 'worktree', action: 'reused', id: resolvedWorktree.id },
-      { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
-    )
-  }
   let terminalHandle = params.terminal
   let placed: Awaited<ReturnType<typeof placeWorkerAgent>> | undefined
   let failedStage = 'terminal_create'
@@ -208,7 +239,7 @@ export async function startLocalWorker(args: {
       launch,
       effects,
       onStage,
-      followUp: args.followUp
+      followUp: retained && followUp ? { ...followUp, reopen: retained.publish } : followUp
     })
     // New worktrees resolve host support after creation, so the final mode receipt may differ from preflight.
     mode = placed.mode
@@ -229,7 +260,9 @@ export async function startLocalWorker(args: {
       failedStage = 'setup_start'
       throw new Error('Setup terminal failed to start before the gated agent launch.')
     }
-    persistWorkerReadinessStage(setupStage)
+    if (!retained) {
+      persistWorkerReadinessStage(setupStage)
+    }
 
     const launchedAt = Date.now()
     failedStage = 'agent_readiness'
@@ -247,6 +280,21 @@ export async function startLocalWorker(args: {
     const handle = terminalHandle
     // A hand-over from the background wait gets a fresh delivery budget; one in time keeps the shared one.
     const bindTerminal = (): void => {
+      if (retained) {
+        const custody = db.getWorkerTerminalResourceByOwner(started.dispatch.id)
+        if (
+          db.getWorkerDispatch(started.dispatch.id)?.state !== 'starting' ||
+          db.getDispatchContextById(started.dispatch.id)?.status !== 'pending' ||
+          custody?.id !== retained.authority.resourceId ||
+          custody.ownership_state !== 'owned'
+        ) {
+          throw new OrchestrationError(
+            'dispatch_inactive',
+            `Dispatch ${started.dispatch.id} no longer holds its starting worker.`
+          )
+        }
+        return
+      }
       const terminalAuthority = authority ?? requireWorkerAuthority(runtime, handle)
       db.prepareStartingWorkerAuthority({
         dispatchId: started.dispatch.id,

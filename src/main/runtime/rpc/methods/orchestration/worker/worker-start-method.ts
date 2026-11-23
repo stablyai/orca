@@ -294,7 +294,12 @@ export async function prepareWorkerStart(
       ...(placement.effort ? { effort: placement.effort } : {}),
       spec
     }
-    followUp = { ...followUp, reopen: placement.reopen, earlierWork: placement.earlierWork }
+    followUp = {
+      ...followUp,
+      reopen: placement.reopen,
+      retainedChat: placement.retainedChat,
+      earlierWork: placement.earlierWork
+    }
     await assertWorkerStartTaskSpecWithinPromptBudget(spec)
   }
   return {

@@ -42,6 +42,7 @@ export type WorkerFollowUpPlacement = {
   /** Earlier task and report, for a fresh agent that cannot reopen the conversation. */
   earlierWork?: string
   reopen?: WorkerFollowUp['reopen']
+  retainedChat?: WorkerFollowUp['retainedChat']
 }
 
 export async function chooseWorkerFollowUpPlacement(
@@ -56,6 +57,11 @@ export async function chooseWorkerFollowUpPlacement(
   if (!worker || !worktreeId) {
     throw notRestartable(latest.id)
   }
+  const closedRetainedChat =
+    found &&
+    isStructuredWorkerHandle(found.terminal_handle) &&
+    !released(found) &&
+    !chatTabOpen(db, found)
   const workspace = await runtime.showManagedTerminalWorkspace(`id:${worktreeId}`).catch(() => null)
   if (!workspace) {
     throw new OrchestrationError(
@@ -65,17 +71,26 @@ export async function chooseWorkerFollowUpPlacement(
     )
   }
   const options = parseStartOptions(worker.start_options)
-  const resource = found && (await settledRelease(db, found))
-  if (resource && isStructuredWorkerHandle(resource.terminal_handle)) {
+  const resource = found && (closedRetainedChat ? found : await settledRelease(db, found))
+  if (found && resource && isStructuredWorkerHandle(resource.terminal_handle)) {
     const handle = resource.terminal_handle
-    return chatTabOpen(db, resource)
-      ? { delivery: 'follow_up', worktreeId, terminal: handle }
-      : {
-          delivery: 'reopened',
-          worktreeId,
-          ...(options.agent ? { agent: options.agent } : {}),
-          reopen: () => reopenWorkerChat(runtime, db, handle)
-        }
+    if (!closedRetainedChat && chatTabOpen(db, resource)) {
+      return { delivery: 'follow_up', worktreeId, terminal: handle }
+    }
+    return {
+      delivery: 'reopened',
+      worktreeId,
+      ...(options.agent ? { agent: options.agent } : {}),
+      ...(released(resource)
+        ? { reopen: () => reopenWorkerChat(runtime, db, handle) }
+        : {
+            retainedChat: {
+              resourceId: found.id,
+              ownerDispatchId: found.owner_dispatch_id,
+              handle: found.terminal_handle
+            }
+          })
+    }
   }
   const open =
     resource && !released(resource)
