@@ -1,7 +1,11 @@
 // How the Automations card words when things run and ran.
 import { translate } from '@/i18n/i18n'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
-import { lookedDay, type LookAroundEvery } from '../../../../shared/bots/bot-look-around'
+import {
+  LOOK_AROUND_EVERY,
+  lookedDay,
+  type BotLookAround
+} from '../../../../shared/bots/bot-look-around'
 import { formatWaitTime } from './bot-wait-copy'
 
 const CLOCK = { hour: 'numeric', minute: '2-digit' } as const
@@ -18,17 +22,43 @@ export function upcomingAt(at: number, now = Date.now()): string {
     : formatWaitTime(at, now)
 }
 
-export function everyText(every: LookAroundEvery): string {
-  switch (every) {
-    case 'every-4h':
-      return translate('bots.upcoming.every4h', 'every 4 hours')
-    case 'every-2h':
-      return translate('bots.upcoming.every2h', 'every 2 hours')
-    case 'twice-daily':
-      return translate('bots.upcoming.twiceDaily', 'twice a day')
-    case 'mornings':
-      return translate('bots.upcoming.mornings', 'each morning')
-  }
+const HOUR = { hour: 'numeric' } as const
+
+function hourText(hour: number): string {
+  const at = new Date()
+  at.setHours(hour, 0, 0, 0)
+  return uiDateTimeFormat(HOUR).format(at)
+}
+
+/** The setting's real schedule: "weekdays, 8 AM to 8 PM, every 4 hours", "each morning at 8 AM". */
+export function everyText(setting: Pick<BotLookAround, 'every' | 'weekdaysOnly'>): string {
+  const hours = LOOK_AROUND_EVERY[setting.every]
+  const first = hourText(hours[0] ?? 0)
+  const last = hourText(hours.at(-1) ?? 0)
+  const schedule = ((): string => {
+    switch (setting.every) {
+      case 'every-4h':
+        return translate('bots.upcoming.every4hWindow', '{{from}} to {{to}}, every 4 hours', {
+          from: first,
+          to: last
+        })
+      case 'every-2h':
+        return translate('bots.upcoming.every2hWindow', '{{from}} to {{to}}, every 2 hours', {
+          from: first,
+          to: last
+        })
+      case 'twice-daily':
+        return translate('bots.upcoming.twiceDailyAt', 'twice a day, {{first}} and {{second}}', {
+          first,
+          second: last
+        })
+      case 'mornings':
+        return translate('bots.upcoming.morningsAt', 'each morning at {{time}}', { time: first })
+    }
+  })()
+  return setting.weekdaysOnly
+    ? translate('bots.upcoming.weekdays', 'weekdays, {{schedule}}', { schedule })
+    : schedule
 }
 
 export const pausedText = (): string => translate('bots.automations.paused', 'Paused')

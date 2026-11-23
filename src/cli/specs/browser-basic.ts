@@ -13,9 +13,10 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget(
   },
   {
     path: ['browser', 'identity', 'set'],
-    summary: 'Choose the browser identity for every page on this Orca host',
+    summary: 'Choose the browser identity for pages this Orca host renders',
     usage: 'orca browser identity set --mode <clean|native> [--reset] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'mode', 'reset']
+    allowedFlags: [...GLOBAL_FLAGS, 'mode', 'reset'],
+    notes: ["Pages a paired desktop renders for this host use that desktop's identity."]
   },
   {
     path: ['open-url'],

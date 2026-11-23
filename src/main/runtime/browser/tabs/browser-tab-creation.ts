@@ -65,9 +65,16 @@ export class RuntimeBrowserTabCreation {
   ) {}
 
   async browserTabCreate(
-    params: BrowserTabCreateRequest,
+    requested: BrowserTabCreateRequest,
     caller?: BrowserTabCreateCaller
   ): Promise<{ browserPageId: string }> {
+    // A host with no window has no layout to split: its tab opens plain, here or on a paired desktop.
+    const params =
+      requested.split &&
+      requested.placement?.kind !== 'client' &&
+      this.host.getAvailableAuthoritativeWindowId() === null
+        ? { ...requested, split: undefined, splitFromTabId: undefined }
+        : requested
     const url = params.url ?? 'about:blank'
     const focus = resolveBrowserTabCreateFocus({
       activate: params.activate,
@@ -87,11 +94,7 @@ export class RuntimeBrowserTabCreation {
       )
     }
     // Why reject rather than ignore: a caller asking for a split pane should learn it got none.
-    if (
-      params.split &&
-      (params.placement?.kind === 'client' ||
-        this.host.getAvailableAuthoritativeWindowId() === null)
-    ) {
+    if (params.split && params.placement?.kind === 'client') {
       throw new BrowserError(
         'invalid_argument',
         'Opening a browser tab in a split pane needs an Orca desktop window on this host.'

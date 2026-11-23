@@ -1,9 +1,7 @@
 import { worktreeRemovalLifetime } from '../../../workspaces/removal/worktree-removal-lifetime'
-import { readCheckoutMarkerIdentity } from '../../../workspaces/removal/worktree-removal-gitdir-identity'
 import { CheckoutIdentityRefusal } from '../../../workspaces/removal/worktree-removal-leftover'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
-  authorizeWindowsCheckout,
   nativeWindowsMarkerMissing,
   usesNativeWindowsRemoval
 } from '../../../git/worktrees/removal/windows-worktree-removal'
@@ -12,27 +10,21 @@ import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-ty
 import type { ArchiveHookOverride } from '../../../../shared/worktree/removal/archive-hook-removal-gate'
 import { gateWorktreeRemovalOnArchiveHook } from '../../../workspaces/removal/worktree-archive-hook-gate'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal/removal'
 import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { assertWorktreeCleanForRemoval } from '../../../git/worktrees/removal/worktree-removal-preflight'
-import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
 import { removeWorktree } from '../../../git/worktrees/removal/worktree-removal'
-import { getWorktreeSharedLinkPaths } from '../../../git/worktrees/content-paths/worktree-shared-directories'
 import { runHook, getEffectiveHooks } from '../../../workspace-hooks/hooks'
-import { findExistingWorktreeSymlinkPaths } from '../../../git/worktrees/content-paths/worktree-symlink-detection'
 import { removeWorktreeLinkedPaths } from '../../../ipc/worktrees/linked-paths/worktree-symlinks'
+import { getWorktreeSharedLinkPaths } from '../../../git/worktrees/content-paths/worktree-shared-directories'
+import { prepareRegisteredLocalWorktreeRemoval } from '../../../ipc/worktrees/removal/registered-local-worktree-preflight'
 import { cleanupRemovedWorktreePushTarget } from './runtime-worktree-push-target-cleanup'
 export { cleanupRemovedWorktreePushTarget } from './runtime-worktree-push-target-cleanup'
 import { runWorktreeChangeInvalidators } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
 import {
   formatWorktreeRemovalError,
-  isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError
 } from '../../../ipc/worktrees/paths/worktree-logic'
 import { cleanupLocalOrphanedWorktreeDirectory } from '../../../workspaces/removal/local-orphaned-worktree-cleanup'
 import { recoverPartialLocalWorktreeRemoval } from '../../../workspaces/removal/local-worktree-removal-recovery'
-import { findRegisteredDeletableWorktree } from '../../../workspaces/removal/worktree-removal-safety'
-import { CLIENT_REMOVAL_HOME } from '../../../workspaces/removal/worktree-removal-home-guard'
 import type { RuntimePreservedBranchCleanup } from '../../repositories/runtime-preserved-branch-cleanup'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from '../catalog/runtime-worktree-selection'
@@ -122,61 +114,15 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
     console.warn(`[hooks] ${warning}`)
   }
 
-  const refreshedWorktrees = args.hasLocalOptions
-    ? await listWorktreesStrict(repo.path, localOptions)
-    : await listWorktreesStrict(repo.path)
-  const refreshed = findRegisteredDeletableWorktree(
-    repo.path,
-    canonicalPath,
-    refreshedWorktrees,
-    CLIENT_REMOVAL_HOME
-  )
-  if (!refreshed) {
-    throw new Error(
-      `Worktree registration changed during deletion: ${canonicalPath}. Retry deletion.`
-    )
-  }
-  try {
-    assertWorktreeUnlockedForRemoval(refreshed)
-  } catch (error) {
-    throw new Error(formatWorktreeRemovalError(error, canonicalPath, args.force))
-  }
-
   const linkedPaths = getWorktreeSharedLinkPaths(repo)
-  const ignoredLinkedPaths = args.force
-    ? []
-    : await findExistingWorktreeSymlinkPaths(canonicalPath, linkedPaths)
-  const markerMissing = await nativeWindowsMarkerMissing(canonicalPath, localOptions)
-  try {
-    if (usesNativeWindowsRemoval(canonicalPath, localOptions)) {
-      await authorizeWindowsCheckout(
-        repo.path,
-        canonicalPath,
-        args.force,
-        {
-          ...localOptions,
-          knownRemovedWorktree: refreshed,
-          ignoredUntrackedPaths: ignoredLinkedPaths
-        },
-        true
-      )
-    } else if (!markerMissing) {
-      await (args.hasLocalOptions
-        ? assertWorktreeCleanForRemoval(canonicalPath, args.force, {
-            ...localOptions,
-            ...(ignoredLinkedPaths.length > 0 ? { ignoredUntrackedPaths: ignoredLinkedPaths } : {})
-          })
-        : ignoredLinkedPaths.length > 0
-          ? assertWorktreeCleanForRemoval(canonicalPath, args.force, {
-              ignoredUntrackedPaths: ignoredLinkedPaths
-            })
-          : assertWorktreeCleanForRemoval(canonicalPath, args.force))
-    }
-  } catch (error) {
-    if (!isOrphanCompatiblePreflightError(error)) {
-      throw new Error(formatWorktreeRemovalError(error, canonicalPath, args.force))
-    }
-  }
+  const { refreshed, guard, markerMissing } = await prepareRegisteredLocalWorktreeRemoval({
+    repo,
+    canonicalWorktreePath: canonicalPath,
+    force: args.force,
+    localOptions,
+    hasLocalOptions: args.hasLocalOptions,
+    linkedPaths
+  })
 
   const background = removesInBackground(canonicalPath, localOptions)
   const prepare = async (): Promise<RemoveWorktreeResult> => {
@@ -184,6 +130,9 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
     let accepted = false
     try {
       await args.stopPtys()
+      if (args.beforeCheckoutDelete || (!markerMissing && linkedPaths.length > 0)) {
+        await guard.verify()
+      }
       await args.beforeCheckoutDelete?.(refreshed)
       if (!markerMissing && linkedPaths.length > 0) {
         await removeWorktreeLinkedPaths(canonicalPath, linkedPaths)
@@ -198,8 +147,17 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
       ...(archiveHookOverride ? { archiveHookOverride } : {}),
       ...(warning ? { warning } : {})
     }
+    const runFinish = (stopSignal?: AbortSignal) =>
+      finishRuntimeLocalWorktreeRemoval(
+        args,
+        refreshed,
+        gate,
+        stopSignal,
+        guard.verify,
+        guard.markerOptions
+      )
     if (!background) {
-      const result = await finishRuntimeLocalWorktreeRemoval(args, refreshed, gate)
+      const result = await runFinish()
       args.publish()
       return { ...result, ...acceptedFields }
     }
@@ -210,12 +168,12 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
         repoId: repo.id,
         repoPath: repo.path,
         worktree: refreshed,
-        gitdir: await readCheckoutMarkerIdentity(refreshed.path),
+        gitdir: guard.gitdir,
         deleteBranch: args.deleteBranch,
         force: args.force
       },
       run: async (stopSignal) => {
-        const result = await finishRuntimeLocalWorktreeRemoval(args, refreshed, gate, stopSignal)
+        const result = await runFinish(stopSignal)
         args.onRemoved()
         return result
       },
@@ -247,11 +205,14 @@ export async function finishRuntimeLocalWorktreeRemoval(
   refreshed: GitWorktreeInfo,
   gate: { finish: (removed: boolean) => Promise<void> },
   checkoutDeleteSignal?: AbortSignal,
-  beforeCheckoutDelete?: () => Promise<void>
+  beforeCheckoutDelete?: () => Promise<void>,
+  markerOptions: { expectedMarker?: string; forbidAnyMarker?: boolean } = {}
 ): Promise<RemoveWorktreeResult> {
   const { repo, localOptions } = args
   const canonicalPath = refreshed.path
   const native = usesNativeWindowsRemoval(canonicalPath, localOptions)
+  const hasInlineGuard =
+    markerOptions.expectedMarker !== undefined || markerOptions.forbidAnyMarker === true
   let removalResult: RemoveWorktreeResult | undefined
   let completed = false
   try {
@@ -261,6 +222,7 @@ export async function finishRuntimeLocalWorktreeRemoval(
           ...(!args.deleteBranch ? { deleteBranch: args.deleteBranch } : {}),
           knownRemovedWorktree: refreshed,
           ...localOptions,
+          ...markerOptions,
           ...(checkoutDeleteSignal ? { checkoutDeleteSignal } : {}),
           ...(beforeCheckoutDelete ? { beforeCheckoutDelete } : {})
         }),
@@ -281,7 +243,10 @@ export async function finishRuntimeLocalWorktreeRemoval(
         deleteBranch: args.deleteBranch,
         closeWatcher: args.closeWatchers,
         signal: checkoutDeleteSignal,
-        ...(beforeCheckoutDelete ? { beforeLeftoverDelete: beforeCheckoutDelete } : {})
+        ...markerOptions,
+        ...(!hasInlineGuard && beforeCheckoutDelete
+          ? { beforeLeftoverDelete: beforeCheckoutDelete }
+          : {})
       })
       if (recovered) {
         removalResult = recovered
@@ -293,7 +258,8 @@ export async function finishRuntimeLocalWorktreeRemoval(
           canonicalPath,
           localOptions,
           args.closeWatchers,
-          checkoutDeleteSignal
+          checkoutDeleteSignal,
+          markerOptions
         )
         await pruneGitWorktrees({ cwd: repo.path, ...localOptions }).catch(() => {})
         await cleanupRemovedWorktreePushTarget(args)

@@ -9,6 +9,20 @@ export const PageZoom = BrowserTarget.extend({
   direction: z.enum(['in', 'out', 'reset'])
 })
 
+export const SiteColorScheme = BrowserTarget.extend({
+  colorScheme: z.enum(['light', 'dark']).nullable()
+})
+
+export const AudioMuted = BrowserTarget.extend({
+  muted: z.boolean()
+})
+
+export const FindInPage = BrowserTarget.extend({
+  text: requiredString('Missing required text'),
+  forward: z.boolean().optional(),
+  findNext: z.boolean().optional()
+})
+
 export const CertificateProceed = BrowserTarget.extend({
   challengeId: requiredString('Missing required challengeId')
 })

@@ -1,7 +1,10 @@
 // The phone's pending comments on an item (the desktop's store, shared): each goes to the bot's host
 // with its photos, and a request id where the host dedupes by one; a failure says why in a toast.
 import { useEffect, useSyncExternalStore } from 'react'
-import { BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
+import {
+  BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY
+} from '../../../../src/shared/bot-runtime-capabilities'
 import {
   BotItemCommentMayHaveArrived,
   botItemPendingCommentText,
@@ -34,12 +37,14 @@ export function usePhoneBotItemPendingComments({
 }) {
   const t = useMobileTranslation()
   const requestIds = useRouteCapability(BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY)
+  const skills = useRouteCapability(BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY)
   return usePendingComments(key, events, {
     post: async (entry) => {
       const outcome = client
         ? await commentOnBotItem(client, uid, botItemPendingCommentText(entry), {
             images: entry.paths,
-            requestId: entry.requestId ?? undefined
+            requestId: entry.requestId ?? undefined,
+            skills: entry.skills
           })
         : ({ kind: 'not-sent' } as const)
       if (outcome.kind !== 'done') {
@@ -53,6 +58,9 @@ export function usePhoneBotItemPendingComments({
     failed: (error) => showToast(error instanceof Error ? error.message : String(error)),
     requestIds,
     // The phone's ask card answers through its own send, so typed comments carry no question.
-    questionIds: false
+    questionIds: false,
+    // Nor do they ever opt out of answering: the phone's box has no reply mark to close.
+    plain: false,
+    skills
   })
 }
