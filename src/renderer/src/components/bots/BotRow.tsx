@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useId } from 'react'
 import { openBotSettings } from './bot-settings-open'
 import { ChevronDown, Copy, Pause, Play, Server, Settings, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -9,6 +9,7 @@ import { openBotHome, updateBot } from '@/lib/bot-catalog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useBotUpNextUnseen } from '@/lib/bot-up-next-unseen'
 import { cn } from '@/lib/class-names'
+import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
 import type { Bot } from '../../../../shared/bot-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { botErrorMessage } from './bot-presentation'
@@ -81,7 +82,7 @@ export function BotRow({
   const handleDelete = useDeleteBot(bot)
   return (
     <BotSidebarRow
-      avatar={<BotAvatar bot={bot} className="size-9 rounded-md text-sm" />}
+      avatar={<BotAvatar bot={bot} className="size-8 rounded-md text-sm" />}
       name={bot.name}
       workspaceId={workspaceId}
       hostId={bot.hostId}
@@ -128,7 +129,15 @@ export function BotRow({
           />
         ) : null
       }
-      trailing={fold ? <BotRowFoldToggle botName={bot.name} fold={fold} /> : null}
+      trailing={
+        fold ? (
+          <BotRowFoldToggle
+            botName={bot.name}
+            fold={fold}
+            working={!offline && status === 'working'}
+          />
+        ) : null
+      }
       hoverDetails={() => (
         <BotHoverDetails
           bot={bot}
@@ -207,14 +216,20 @@ function BotRowHostIcon({ label }: { label: string }): React.JSX.Element {
 
 function BotRowFoldToggle({
   botName,
-  fold
+  fold,
+  working
 }: {
   botName: string
   fold: BotRowFold
+  /** The bot itself is working: the row's working mark sits here, on the strip. */
+  working: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const statusId = useId()
   const { folded, counts } = fold
-  const live = botFoldLiveStatus(counts)
+  const live = folded ? botFoldLiveStatus(counts) : null
+  // One mark: a folded workspace's ask outranks the bot's own work, which outranks the rest.
+  const mark = live === 'permission' ? live : working ? 'working' : live
   const label = folded
     ? t('bots.chats.unfold', 'Unfold {{name}}', { name: botName })
     : t('bots.chats.fold', 'Fold {{name}}', { name: botName })
@@ -229,16 +244,13 @@ function BotRowFoldToggle({
         // edge; the row's rounded overflow clips its corners.
         '-mt-1.25 -mr-1.5 -mb-1.25 min-w-10 gap-0.5 self-stretch rounded-none px-1.5 text-xs tabular-nums',
         'focus-visible:ring-2 focus-visible:ring-inset',
-        // A narrow row keeps its width for the name and time where a pointer can hover: at rest the
-        // strip shrinks to what it shows (nothing while unfolded), and widens on row hover or its own
-        // focus. Touch keeps the full strip, since nothing would reveal it.
-        'can-hover:pointer-fine:@max-[15rem]/bot-row:mr-0 can-hover:pointer-fine:@max-[15rem]/bot-row:min-w-0 can-hover:pointer-fine:@max-[15rem]/bot-row:px-0',
-        'can-hover:pointer-fine:@max-[15rem]/bot-row:group-hover/bot-row:-mr-1.5 can-hover:pointer-fine:@max-[15rem]/bot-row:group-hover/bot-row:min-w-10 can-hover:pointer-fine:@max-[15rem]/bot-row:group-hover/bot-row:px-1.5',
-        'can-hover:pointer-fine:@max-[15rem]/bot-row:focus-visible:-mr-1.5 can-hover:pointer-fine:@max-[15rem]/bot-row:focus-visible:min-w-10 can-hover:pointer-fine:@max-[15rem]/bot-row:focus-visible:px-1.5',
-        !folded &&
-          'can-hover:pointer-fine:@max-[15rem]/bot-row:-ml-1 can-hover:pointer-fine:@max-[15rem]/bot-row:w-0 can-hover:pointer-fine:@max-[15rem]/bot-row:overflow-hidden can-hover:pointer-fine:@max-[15rem]/bot-row:group-hover/bot-row:ml-0 can-hover:pointer-fine:@max-[15rem]/bot-row:group-hover/bot-row:w-auto can-hover:pointer-fine:@max-[15rem]/bot-row:focus-visible:ml-0 can-hover:pointer-fine:@max-[15rem]/bot-row:focus-visible:w-auto'
+        // A narrow row keeps more width for the name and time where a pointer can hover: a compact
+        // strip, still a 24px target, whose size never changes, so hover and focus never move the
+        // row's text. Touch keeps the full strip.
+        'can-hover:pointer-fine:@max-[15rem]/bot-row:min-w-6 can-hover:pointer-fine:@max-[15rem]/bot-row:px-1'
       )}
       aria-label={label}
+      aria-describedby={mark === 'working' ? statusId : undefined}
       aria-expanded={!folded}
       onClick={(event) => {
         event.stopPropagation()
@@ -247,10 +259,15 @@ function BotRowFoldToggle({
       onKeyDown={(event) => event.stopPropagation()}
     >
       {/* Folded, only its most urgent live workspace's status: a bare count of every workspace it
-          ever made said nothing at a glance. */}
-      {folded && live ? (
+          ever made said nothing at a glance. Folded or not, the bot's own work shows here too. */}
+      {mark === 'working' ? (
+        <span id={statusId} className="sr-only">
+          {getWorktreeStatusLabel(mark)}
+        </span>
+      ) : null}
+      {mark ? (
         <span className="flex items-center">
-          <StatusIndicator status={live} showTooltip={false} />
+          <StatusIndicator status={mark} showTooltip={false} />
         </span>
       ) : null}
       <span className="flex size-4 items-center justify-center">

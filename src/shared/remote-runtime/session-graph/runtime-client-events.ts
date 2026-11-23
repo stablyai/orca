@@ -77,6 +77,8 @@ export type RuntimeClientEvent =
   | ({ type: 'botsChanged' } & BotChangeScope)
   /** A worker this chat session started appeared or changed state; that chat's worker list re-reads. Old clients drop it. */
   | { type: 'orchestrationSessionWorkersChanged'; sessionId: string }
+  /** A paired computer handed back replies to this host's agents' asks; their cards re-read. Old clients drop it. */
+  | { type: 'peerMailReturned' }
   // Old clients drop the unknown type; the report RPC has the same run.
   | WorkspaceCleanupRunFinishedEvent
   | {

@@ -7,9 +7,8 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionContentRow } from './MobileSessionContentRow'
 import { MobileSessionHeader } from './MobileSessionHeader'
 import { MobileSessionSheets } from './MobileSessionSheets'
-import { MobileSessionBotActionsContext } from './mobile-session-bot-actions-context'
 import { MobileWorkerAutoCloseStrip } from './tabs/MobileWorkerAutoCloseStrip'
-import { BotChatOpenContext, BotItemOpenContext } from '../bots/bot-item-open'
+import { BotChatOpenContext, BotItemOpenContext, BotPanelOpenContext } from '../bots/bot-item-open'
 import { openBotChatTab } from './bot-chat-tab-open'
 import { AnchoredDetailCardLayer } from '../components/detail-cards/AnchoredDetailCard'
 import { StatusDot } from '../components/feedback/StatusDot'
@@ -61,6 +60,22 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
     () => (itemsOnPhone ? (itemUid: string) => openBotPanel({ item: itemUid }) : null),
     [itemsOnPhone, openBotPanel]
   )
+  const routeBotId = routeBot?.bot.id
+  // Keyed on the ids, so an Activity read that changes none doesn't redraw every card using the opener.
+  const automationIds = (routeBot?.activity?.automations ?? [])
+    .map((row) => row.automation.id)
+    .join('\n')
+  const panelOpener = useMemo(
+    () =>
+      itemsOnPhone && routeBotId
+        ? {
+            botId: routeBotId,
+            open: openBotPanel,
+            automationIds: new Set(automationIds.split('\n'))
+          }
+        : null,
+    [itemsOnPhone, routeBotId, openBotPanel, automationIds]
+  )
   const openChat = useCallback(
     (chat: { chatId: string; home?: true }) =>
       openBotChatTab(
@@ -83,14 +98,14 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
   return (
     <View ref={setMobileSessionRootRef} style={styles.container}>
       <View style={styles.kavInner}>
-        <MobileSessionBotActionsContext.Provider value={controller.botMoreActions}>
-          <MobileSessionHeader controller={controller} details={details} />
-        </MobileSessionBotActionsContext.Provider>
+        <MobileSessionHeader controller={controller} details={details} />
         <MobileWorkerAutoCloseStrip controller={controller} />
         {/* A chat's item chips open the item's page in the bot panel. */}
         <BotItemOpenContext.Provider value={openItem}>
           <BotChatOpenContext.Provider value={openChat}>
-            <MobileSessionContentRow controller={controller} />
+            <BotPanelOpenContext.Provider value={panelOpener}>
+              <MobileSessionContentRow controller={controller} />
+            </BotPanelOpenContext.Provider>
           </BotChatOpenContext.Provider>
         </BotItemOpenContext.Provider>
       </View>

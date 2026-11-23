@@ -15,10 +15,14 @@ export type BotChatTreeWorker = {
   worktreeId?: string
   paneKey?: string
   note?: 'handed-over' | 'from-closed-chat' | 'automation-terminal'
+  /** Running, but its turn is over and it waits on background tasks it started. Absent from older hosts. */
+  waitsOnBackground?: true
   /** Stop and open go through it; absent for a handed-over agent. */
   dispatchId?: string
   /** `runtime:<id>` when the workspace runs on another paired computer. */
   hostId?: string
+  /** Where its record places it, relative to the host that answered; absent from older hosts. */
+  host?: 'local' | 'remote'
   agent?: string
   summary?: string
   /** A terminal-only automation run, opened as a run rather than a pane. */
@@ -32,6 +36,9 @@ export type BotChatTreeChat = {
   /** The thread's place or the automation's name, e.g. '#orca'. */
   originLabel?: string
   live: 'replying' | 'needs-you' | 'idle'
+  /** The session running the chat now, when a /clear moved it past `chatId`: its status is keyed
+   *  by this id. Absent from older hosts. */
+  liveSessionId?: string
   lastActiveAt: number
   /** Filled by each client from its own acks against `turnDone`; the host can't know them. */
   unread: boolean

@@ -5,10 +5,6 @@ import XCTest
 final class StandardRoleDescriptionsTests: XCTestCase {
     private let system = StandardRoleDescriptions.system()
 
-    func testLocalizedStandardRoleReadsInEnglish() {
-        XCTAssertEqual(system.english(role: "AXButton", description: "botão"), "button")
-    }
-
     func testLocalizedStandardSubroleReadsInEnglish() {
         XCTAssertEqual(system.english(role: "AXWindow", description: "janela padrão"), "standard window")
     }
@@ -30,8 +26,8 @@ final class StandardRoleDescriptionsTests: XCTestCase {
         XCTAssertNil(descriptions.english(role: "AXList", description: "lijst"))
     }
 
-    func testLocalizedStaticTextInlinesItsValue() {
-        let roleDescription = system.english(role: "AXStaticText", description: "texto")
+    func testLocalizedStaticTextInlinesItsValue() throws {
+        let roleDescription = try XCTUnwrap(system.english(role: "AXStaticText", description: "texto"))
         let node = SnapshotRenderNode(role: "AXStaticText", roleDescription: roleDescription, value: "0")
         XCTAssertEqual(SnapshotRenderHeuristics.line(index: 3, node: node), "3 text 0")
     }

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Bot } from 'lucide-react-native'
 import {
   botAccessPlace,
   botAccessCopy,
@@ -15,9 +16,9 @@ import { ConfirmContent } from '../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ListRow } from '../components/list/ListGroup'
 import { SettingsSection } from '../settings/settings-screen-frame'
+import { colors } from '../theme/mobile-theme'
 import { MobileBotTextButton } from './MobileBotTextButton'
 import { phoneBotReachLines, type PhoneAccessBot } from './bot-access-request-copy'
-import { memberSourceLabel } from './mobile-bot-sheet-copy'
 
 // The phone can't read the app's chat permission, nor turn Google off: those stay on the desktop.
 const PHONE_FIXES: Record<
@@ -26,6 +27,11 @@ const PHONE_FIXES: Record<
 > = {
   'only-me': { headingId: 'fixOnlyMe', actionId: 'fixOnlyMeAction' },
   'ask-for-approval': { headingId: 'fixAsk', actionId: 'fixAskAction' }
+}
+
+/** Another Slack app draws the desktop's bot mark; a person draws none. */
+export function memberMark(member: BotMember): ReactNode {
+  return member.kind === 'app' ? <Bot size={20} color={colors.textSecondary} /> : undefined
 }
 
 /** One person who can ask, with Remove. */
@@ -37,8 +43,8 @@ export function MobileBotMemberRow(props: {
   const t = useMobileTranslation()
   return (
     <ListRow
+      leading={memberMark(props.member)}
       title={props.member.name}
-      subtitle={memberSourceLabel(props.member)}
       accessory={
         <MobileBotTextButton
           label={t('bots.settings.remove', 'Remove')}
@@ -59,7 +65,7 @@ export function MobileBotWhoCanAsk(props: {
   disabled: boolean
   onKeepOnlyMe: () => void
   onAskForApproval: () => void
-  /** The people rows, under the summary in its group. */
+  /** Each connector's people, under the summary. */
   children: ReactNode
 }) {
   const { bot } = props
@@ -88,8 +94,8 @@ export function MobileBotWhoCanAsk(props: {
         footer={botAccessCopy(control.id, { ...control.values, name, ...place })}
       >
         <ListRow title={botAccessCopy(who.id, { ...who.values, name })} wrapTitle />
-        {props.children}
       </SettingsSection>
+      {props.children}
       {others.length > 0 ? (
         <SettingsSection title={botAccessCopy('reachHeading', { name })}>
           {phoneBotReachLines(bot).map((line) => (

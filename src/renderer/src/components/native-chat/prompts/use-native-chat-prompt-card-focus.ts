@@ -1,18 +1,20 @@
 import { useLayoutEffect, useRef, type RefObject } from 'react'
 import { NATIVE_CHAT_ROOT_SELECTOR } from '@/components/native-chat/paste/native-chat-paste-request'
+import { replacesComposerMidDraft } from './native-chat-prompt-card-draft-handoff'
 
 const PROMPT_CARD_WANTS_FOCUS_SELECTOR = '[data-native-chat-prompt-card-focus]'
-const PROMPT_CARD_FOCUS_TARGET_SELECTOR =
+export const PROMPT_CARD_FOCUS_TARGET_SELECTOR =
   '[data-native-chat-prompt-card-focus-target]:not(:disabled)'
 
 function focusPromptCard(card: HTMLElement): void {
   const target = card.querySelector<HTMLElement>(PROMPT_CARD_FOCUS_TARGET_SELECTOR)
-  if (target) {
-    // Show the ring even when a mouse click opened the card; number keys and Enter act on this row.
+  // Keys typed into a draft the card replaced must not press an answer.
+  if (target && !(target instanceof HTMLButtonElement && replacesComposerMidDraft(card))) {
+    // A no-options card's answer field or an approval's default: show the ring even after a click.
     target.focus({ focusVisible: true })
     return
   }
-  // The card itself is only a key sink; leave its ring to the browser's keyboard heuristic.
+  // A question card takes focus itself, so no option opens looking picked; it is the key sink.
   card.focus()
 }
 

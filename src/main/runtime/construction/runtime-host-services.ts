@@ -1,5 +1,4 @@
 import { RuntimeAgentStatusSources } from './runtime-agent-status-sources'
-import { announceAgentCliUpdatesFinished } from '../../agent-cli-update/agent-cli-update-service'
 import type { ClaudeAccountSelectedHandler } from '../../../shared/agent-accounts/managed-account-types'
 
 import type * as Calls from './runtime-host-service-calls'
@@ -224,6 +223,8 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
     rollback: (candidate) => this.rollbackLegacyWorkerTerminalSurface(candidate),
     reconcileMissing: (candidate) =>
       this.legacyWorkerRecoveryPersistence.reconcileMissing(candidate, this.lostWorkerReport),
+    holdForRestartResume: (candidate) => this.holdLostWorkerForRestartResume(candidate),
+    isResuming: (dispatchId) => this.terminalWorkerRestartResume.isHeld(dispatchId),
     notifyResolution: (candidate, resolution) =>
       this.notifier?.resolveLegacyWorkerTerminalRecovery?.(candidate.paneKey, resolution),
     canRecoverPersistentLocalPtys: () => this.canRecoverPersistentLocalPtysFn(),
@@ -364,6 +365,4 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
     this.nativeChatDraftResolutions.snapshot.bind(this.nativeChatDraftResolutions)
 
   protected emitClientEvent = this.clientEvents.emit.bind(this.clientEvents)
-
-  protected readonly cliUpdateNotices = announceAgentCliUpdatesFinished(this.emitClientEvent)
 }

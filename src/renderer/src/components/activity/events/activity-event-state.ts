@@ -42,6 +42,23 @@ export function freshActivityLiveAgentState(
   return activityLiveAgentState(entry, now, false)
 }
 
+/** Whether any pane has a fresh live turn or a blocked migration; the sidebar badge builds only then. */
+export function hasFreshActivityLiveAgent(
+  statuses: ReadonlyMap<string, AgentStatusEntry>,
+  migrationUnsupportedByPtyId: Readonly<Record<string, unknown>>
+): boolean {
+  if (Object.keys(migrationUnsupportedByPtyId).length > 0) {
+    return true
+  }
+  const now = Date.now()
+  for (const entry of statuses.values()) {
+    if (freshActivityLiveAgentState(entry, now)) {
+      return true
+    }
+  }
+  return false
+}
+
 /** Unverifiable rows stay listed but are not running work. */
 export function isRunningActivityState(state: ActivityLiveAgentState | null | undefined): boolean {
   return state != null && state !== 'unverifiable'

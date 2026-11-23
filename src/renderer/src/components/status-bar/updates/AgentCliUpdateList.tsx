@@ -25,7 +25,7 @@ export type AgentCliUpdateRow = {
 
 export type AgentCliUpdateGroup = {
   hostKey: string
-  /** Null when every row is on this computer, so no host heading is needed. */
+  /** Null when every row is on this computer and no other host is added, so no host heading is needed. */
   label: string | null
   rows: readonly AgentCliUpdateRow[]
 }

@@ -332,7 +332,10 @@ export function forgetBotToolCredentials(folder: string): BotToolOAuthEntry[] {
   return entries
 }
 
-/** A stored tool with its saved values and the address they're bound to, to keep them on an edit. */
+/**
+ * A stored tool as an edit starts from: its saved values and the address they're bound to, and a
+ * credential id only for Orca's own sign-in, which the edit keeps.
+ */
 export function withSavedBotToolHeaders(folder: string, server: BotToolServer): BotToolServer {
   if (!('url' in server) || !server.credential) {
     return server
@@ -341,10 +344,11 @@ export function withSavedBotToolHeaders(folder: string, server: BotToolServer): 
     // Its tokens are Orca's own sign-in; a generic edit keeps the id and changes no values.
     return server
   }
-  const saved = readBotToolCredential(folder, server.credential)
+  const { credential, ...rest } = server
+  const saved = readBotToolCredential(folder, credential)
   if (saved?.source) {
     // Its headers come from a source Orca fills per call; a generic edit would drop them.
     throw new Error('Orca manages this tool. Change it where you set it up.')
   }
-  return saved ? { ...server, url: saved.url, headers: saved.headers } : server
+  return saved ? { ...rest, url: saved.url, headers: saved.headers } : rest
 }

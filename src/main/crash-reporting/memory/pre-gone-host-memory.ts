@@ -1,9 +1,6 @@
 import type { CrashReportDetailValue } from '../../../shared/crash-reporting/crash-reporting'
 import { readSwapVolumeFreeSpace } from './swap-volume-free-space'
-import {
-  notePreGoneHostMemorySample,
-  resetPreGonePtyTreeMemoryForTest
-} from './pre-gone-pty-tree-memory'
+import { notePreGoneHostMemorySample } from './pre-gone-pty-tree-memory'
 import {
   getSystemMemoryDetails,
   SYSTEM_MEMORY_KEY_PREFIX,
@@ -108,18 +105,6 @@ export function startPreGoneSystemMemorySampling(
   void samplePreGoneSystemMemory()
   preGoneTimer = setInterval(() => void samplePreGoneSystemMemory(), intervalMs)
   preGoneTimer.unref?.()
-}
-
-export function resetPreGoneSystemMemorySamplingForTest(): void {
-  if (preGoneTimer) {
-    clearInterval(preGoneTimer)
-  }
-  preGoneTimer = null
-  preGoneSample = null
-  swapVolumeReadInFlight = false
-  resetPreGonePtyTreeMemoryForTest()
-  // Invalidate pending volume reads so they cannot repopulate a reset sample.
-  samplingGeneration += 1
 }
 
 export function preGoneSystemMemoryDetails(nowMs: number): CrashReportDetails {
