@@ -776,22 +776,9 @@
 1 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
 3 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
-1 src/main/native-chat/agent-session-journal/journal-domain-input-eligibility.ts
-2 src/main/native-chat/agent-session-journal/journal-domain-item-display.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-maintenance.ts # worker-only: the retired prune settles its pending entry on the journal SQL worker
-1 src/main/native-chat/agent-session-journal/journal-domain-queue-failures.ts
-2 src/main/native-chat/agent-session-journal/journal-domain-queue-pauses.ts
-6 src/main/native-chat/agent-session-journal/journal-domain-queue-reads.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-schema.ts
-2 src/main/native-chat/agent-session-journal/journal-domain-submission-consume.ts
 1 src/main/native-chat/agent-session-journal/journal-forgotten-chats.ts
-11 src/main/native-chat/agent-session-journal/journal-sql-queue-read.ts
-1 src/main/native-chat/agent-session-journal/journal-sql-queued-messages.ts
-2 src/main/native-chat/agent-session-journal/journal-sql-status-context.ts
-1 src/main/native-chat/agent-session-journal/journal-sql-status-items.ts
-1 src/main/native-chat/agent-session-journal/journal-sql-work-read.ts
-5 src/main/native-chat/agent-session-journal/journal-stored-output-rows.ts # streamed-text tail (#43716): same SQL already in main-blocking-sqlite-baseline; journal SQL path, not a timer or handler
-10 src/main/native-chat/agent-session-journal/journal-text-tail.ts # streamed-text tail (#43716): same SQL already in main-blocking-sqlite-baseline; journal SQL path, not a timer or handler
 2 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format.ts
 4 src/main/native-chat/agent-session-journal/replay/journal-read-row.ts
 3 src/main/native-chat/agent-session-journal/replay/journal-stored-cursor.ts
