@@ -6,9 +6,6 @@ importers:
   .:
     configDependencies: {}
     packageManagerDependencies:
-      '@pnpm/exe':
-        specifier: 12.18.0
-        version: 12.18.0
       pnpm:
         specifier: 12.18.0
         version: 12.18.0
@@ -92,11 +89,6 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@pnpm/exe@12.18.0':
-    resolution: {integrity: sha512-3t/p83vw9SXsJML6suMBThCtwCl4lUGp/ILcxECU1In+G+NmFwMV9D+2TcvU7kX8tbrHRoYhs3eOPepEVdD7tQ==}
-    engines: {node: '>=18'}
-    hasBin: true
-
   pnpm@12.18.0:
     resolution: {integrity: sha512-nXiC1dyCFH7PxOBiqjSDTgrQKWcQoYN6ERWuASEn02txCeMhrBWYod0KZVl2gbHpmRfhLtDXSerpEYeUM2O+sw==}
     engines: {node: '>=18'}
@@ -145,23 +137,6 @@ snapshots:
 
   '@pnpm/exe.win32-x64@12.18.0':
     optional: true
-
-  '@pnpm/exe@12.18.0':
-    optionalDependencies:
-      '@pnpm/exe.android-arm64': 12.18.0
-      '@pnpm/exe.android-x64': 12.18.0
-      '@pnpm/exe.darwin-arm64': 12.18.0
-      '@pnpm/exe.darwin-x64': 12.18.0
-      '@pnpm/exe.freebsd-x64': 12.18.0
-      '@pnpm/exe.linux-arm64': 12.18.0
-      '@pnpm/exe.linux-arm64-musl': 12.18.0
-      '@pnpm/exe.linux-ppc64': 12.18.0
-      '@pnpm/exe.linux-riscv64': 12.18.0
-      '@pnpm/exe.linux-s390x': 12.18.0
-      '@pnpm/exe.linux-x64': 12.18.0
-      '@pnpm/exe.linux-x64-musl': 12.18.0
-      '@pnpm/exe.win32-arm64': 12.18.0
-      '@pnpm/exe.win32-x64': 12.18.0
 
   pnpm@12.18.0:
     optionalDependencies:
@@ -7608,8 +7583,8 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
-  semver@7.8.6:
-    resolution: {integrity: sha512-9lpSSU4Mly3mrtruwLs1eLK6+gzbzqeBFwRNjIjE+9LuDpWdYctrQlQ3ej1Ilgi7gknpsTRnPoLP8DpCHqHIJw==}
+  semver@7.8.1:
+    resolution: {integrity: sha512-rkVq3IXh+4FDGch+KwzX3aV9W3kO54GyEgpvBzSyctDA6Xtd7RJQV1xmXbeQp5v7+VzLOfVqiutSE6GICgPFvg==}
     engines: {node: '>=10'}
     hasBin: true
 
@@ -8729,7 +8704,7 @@ snapshots:
       env-paths: 3.0.0
       graceful-fs: 4.2.11
       progress: 2.0.3
-      semver: 7.8.6
+      semver: 7.8.1
       sumchecker: 3.0.1(supports-color@7.2.0)
     optionalDependencies:
       undici: 7.30.1
@@ -8760,7 +8735,7 @@ snapshots:
       debug: 4.4.3(supports-color@7.2.0)
       isbinaryfile: 4.0.10
       plist: 3.1.0
-      semver: 7.8.6
+      semver: 7.8.1
     transitivePeerDependencies:
       - supports-color
 
@@ -12941,7 +12916,7 @@ snapshots:
       es6-error: 4.1.1
       matcher: 3.0.0
       roarr: 2.15.4
-      semver: 7.8.6
+      semver: 7.7.4
       serialize-error: 7.0.1
     optional: true
 
@@ -14211,7 +14186,7 @@ snapshots:
 
   node-abi@4.33.0:
     dependencies:
-      semver: 7.8.6
+      semver: 7.8.1
 
   node-addon-api@7.1.0:
     optional: true
@@ -14222,7 +14197,7 @@ snapshots:
 
   node-api-version@0.2.1:
     dependencies:
-      semver: 7.8.6
+      semver: 7.8.1
 
   node-gyp@12.4.0:
     dependencies:
@@ -14231,7 +14206,7 @@ snapshots:
       graceful-fs: 4.2.11
       nopt: 9.0.0
       proc-log: 6.1.0
-      semver: 7.8.6
+      semver: 7.8.1
       tar: 7.5.22
       tinyglobby: 0.2.17
       undici: 6.29.1
@@ -15142,7 +15117,7 @@ snapshots:
 
   semver@7.7.4: {}
 
-  semver@7.8.6: {}
+  semver@7.8.1: {}
 
   send@1.2.1(supports-color@7.2.0):
     dependencies:
@@ -15251,7 +15226,7 @@ snapshots:
 
   simple-update-notifier@2.0.0:
     dependencies:
-      semver: 7.8.6
+      semver: 7.8.1
 
   sisteransi@1.0.5: {}
 
