@@ -75,3 +75,21 @@ export function carryWaitingAsk(db: SyncDatabase, uid: string, id: number): void
       WHERE item_uid = ? AND at = (SELECT last_event_id FROM items WHERE uid = ?)`
   ).run(id, uid, uid)
 }
+
+/** The kept ask while it holds, else paired from all the item's events and kept for the next open. */
+export function waitingAskOf(db: SyncDatabase, uid: string, keeps: boolean): number | null {
+  const kept = keeps ? keptWaitingAsk(db, uid) : undefined
+  if (kept !== undefined) {
+    return kept
+  }
+  const paired = pairWaitingAsk(db, uid)
+  if (keeps) {
+    try {
+      keepWaitingAsk(db, uid, paired)
+    } catch (error) {
+      // It only spares a later open the pairing.
+      console.warn('[bots] items: keeping a waiting ask failed', error)
+    }
+  }
+  return paired.ask
+}

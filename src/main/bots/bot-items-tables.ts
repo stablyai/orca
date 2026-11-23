@@ -14,7 +14,8 @@ import {
   hasKeptWaitingAsks,
   keepWaitingAsk,
   pairWaitingAsk,
-  pairsWaitingAsks
+  pairsWaitingAsks,
+  waitingAskOf
 } from './bot-item-waiting-ask-keep'
 import { eventRecordOf, itemRecordOf, linkRecordOf } from './bot-items-rows'
 import type { BotItemEventRecord, BotItemLinkRecord, BotItemRecord } from './bot-items-schema'
@@ -145,6 +146,12 @@ export class BotItemsTables {
       }
     }
     return id
+  }
+
+  /** The item's ask waiting on the owner, which a later question can leave open: the kept one while it
+   *  paired the item's newest event, else worked out from all its events (and kept for the next open). */
+  protected waitingAsk(item: Pick<BotItemRecord, 'uid'>): number | null {
+    return waitingAskOf(this.db, item.uid, this.keepsWaitingAsks())
   }
 
   /** This file keeps each item's waiting ask, and this build may write it. */

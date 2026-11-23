@@ -16,7 +16,6 @@ import {
   text
 } from './bot-items-rows'
 import type { BotItemEventRecord, BotItemLinkRecord, BotItemRecord } from './bot-items-schema'
-import { keepWaitingAsk, keptWaitingAsk, pairWaitingAsk } from './bot-item-waiting-ask-keep'
 import { BotItemsTables } from './bot-items-tables'
 
 export type BotItemListQuery = {
@@ -34,26 +33,6 @@ export type BotItemListQuery = {
 }
 
 export class BotItemsReads extends BotItemsTables {
-  /** The item's ask waiting on the owner, which a later question can leave open: the kept one while it
-   *  paired the item's newest event, else worked out from all its events (and kept for the next open). */
-  protected waitingAsk(item: Pick<BotItemRecord, 'uid'>): number | null {
-    const keeps = this.keepsWaitingAsks()
-    const kept = keeps ? keptWaitingAsk(this.db, item.uid) : undefined
-    if (kept !== undefined) {
-      return kept
-    }
-    const paired = pairWaitingAsk(this.db, item.uid)
-    if (keeps) {
-      try {
-        keepWaitingAsk(this.db, item.uid, paired)
-      } catch (error) {
-        // It only spares a later open the pairing.
-        console.warn('[bots] items: keeping a waiting ask failed', error)
-      }
-    }
-    return paired.ask
-  }
-
   /** Links of a kind to any of these refs, across items. */
   linksTo(kind: BotItemLinkKind, refs: readonly string[]): BotItemLinkRecord[] {
     if (refs.length === 0) {
