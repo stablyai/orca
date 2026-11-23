@@ -7,6 +7,7 @@ export type BotPanelFoldId =
   | 'suggestions'
   | 'items-needs_you'
   | 'items-working'
+  | 'items-waiting'
   | 'items-planned'
   | 'items-snoozed'
   | 'items-stale'

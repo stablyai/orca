@@ -104,6 +104,7 @@ export const BOT_METHODS = [
     // threadReplies: whether it binds an event's run to its thread, for --results-to thread.
     // githubEvents2: whether it sends GitHub's newer events and label=, for trigger-options.
     // githubWorkflows: whether it sends github.workflow_finished, for trigger-options.
+    // githubCiFinished: whether it sends github.ci_finished, for trigger-options and watch-pr.
     // waits: each bot's waits still waiting, for its row; needsYou: its unstale Needs you items, for phones.
     // connectorNeedsSignIn: Orca Cloud refused this host's sign-in, so nothing reaches its bots.
     // connectorStatus: signed out, needs sign-in (the app is signed in but the connector refuses it),
@@ -123,7 +124,8 @@ export const BOT_METHODS = [
         ...(runtime.getConnectorCloud()?.botListFacts() ?? {
           threadReplies: false,
           githubEvents2: false,
-          githubWorkflows: false
+          githubWorkflows: false,
+          githubCiFinished: false
         }),
         signInServer
       }

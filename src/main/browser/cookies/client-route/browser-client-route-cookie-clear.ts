@@ -3,7 +3,7 @@ import { bindRoutePartition } from './browser-client-route-cookie-import'
 import { forgetClientRouteCookieImportSource } from './client-route-cookie-import-source-store'
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { restoreBrowserRoutePartitionSessionCookies } from '../session-restore/browser-session-cookie-restore'
-import { withCookieMutationLock } from '../mutation/cookie-mutation-lock'
+import { clearBrowserCookieJar } from '../session-restore/browser-session-cookie-clear'
 
 const DEFAULT_PROFILE_ID = 'default'
 
@@ -20,7 +20,6 @@ export async function clearClientRouteDefaultCookies(
   await forgetClientRouteCookieImportSource({ environmentId, profileId: DEFAULT_PROFILE_ID })
   // A route jar restores its saved session cookies lazily; a later restore would undo this clear.
   await restoreBrowserRoutePartitionSessionCookies(partition)
-  const target = session.fromPartition(partition)
-  await withCookieMutationLock(target, () => target.clearStorageData({ storages: ['cookies'] }))
+  await clearBrowserCookieJar(session.fromPartition(partition))
   return true
 }

@@ -2,6 +2,7 @@
 // progress (one written while the bot asks is the answer), and any status on any number of items, each
 // owing the item's chat a mail; and snoozes, which mail nobody. A comment or status move brings a snoozed item back.
 import {
+  BOT_ITEM_LIMITS,
   botItemEventId,
   isOpenBotItemStatus,
   type BotItemCommentImage,
@@ -13,6 +14,7 @@ import { BotItemError } from './bot-item-error'
 import { BotItemsWrites } from './bot-items-writes'
 import {
   assertBotItemText,
+  botItemWaitText,
   type BotItemOwnerActor,
   type BotItemWriteOutcome
 } from './bot-items-input'
@@ -26,6 +28,8 @@ export type BotItemOwnerStatusInput = {
   to: BotItemStatus
   reason?: string
   comment?: string
+  /** With Waiting, which needs it: what it waits on. */
+  note?: string
 }
 
 export type BotItemOwnerOutcome = { uid: string; eventId: number | null; woke: boolean }
@@ -68,15 +72,32 @@ export class BotItemsOwner extends BotItemsWrites {
         item.status === 'needs_you' && item.questionEvent !== null
           ? this.botQuestion(item.questionEvent)
           : null
-      if (question && questionEventId !== undefined && question.id !== questionEventId) {
+      // An ask a later question left open waits first, even once another ask's answer moved the item
+      // on: replies go to it.
+      const waitingAsk = isOpenBotItemStatus(item.status) ? this.waitingAsk(item) : null
+      const asking = question !== null || waitingAsk !== null
+      if (
+        asking &&
+        questionEventId !== undefined &&
+        question?.id !== questionEventId &&
+        waitingAsk !== questionEventId
+      ) {
         throw new BotItemError(
           'item_changed',
           `Item ${item.number} has a new question. Read it, then reply.`
         )
       }
-      // While the bot asks, a comment not sent as plain is the answer: it names the question, and the
-      // move it makes says so. A plain one leaves the item waiting on its question.
-      const answering = question && !plain ? question : null
+      // While the bot asks, a comment not sent as plain is the answer: it names the question (a quick
+      // reply's own, else the ask waiting), and the move it makes says so. A plain one leaves the item
+      // waiting on its question.
+      const answeringId =
+        asking && !plain ? (questionEventId ?? waitingAsk ?? question?.id ?? null) : null
+      const answering =
+        answeringId === null
+          ? null
+          : answeringId === question?.id
+            ? question
+            : this.botQuestion(answeringId)
       const answers = answering ? botItemEventId(answering.id) : undefined
       // A question a conversation's turn asked is answered there too (bots-items-mail.ts reads it).
       const askedIn = answering?.data.askedInConversation
@@ -157,14 +178,22 @@ export class BotItemsOwner extends BotItemsWrites {
     if (input.to === 'canceled' && !input.reason?.trim()) {
       throw new BotItemError('invalid_argument', 'Canceling needs a reason.')
     }
+    const wait =
+      input.to === 'waiting'
+        ? botItemWaitText(input.note, {
+            missing: 'Say what it waits on.',
+            tooLong: `Keep what it waits on to one line, up to ${BOT_ITEM_LIMITS.wait} characters.`
+          })
+        : null
     return this.transaction(() => ({
-      items: input.uids.map((uid) => this.writeOwnerStatus(uid, input, actor, now))
+      items: input.uids.map((uid) => this.writeOwnerStatus(uid, input, wait, actor, now))
     }))
   }
 
   private writeOwnerStatus(
     uid: string,
     input: BotItemOwnerStatusInput,
+    wait: string | null,
     actor: BotItemOwnerActor,
     now: number
   ): BotItemOwnerOutcome {
@@ -172,13 +201,16 @@ export class BotItemsOwner extends BotItemsWrites {
     const comment = input.comment?.trim()
       ? this.writeOwnerComment(item, input.comment, actor, now)
       : null
-    if (item.status === input.to) {
+    if (item.status === input.to && (wait === null || wait === this.waitText(item))) {
       if (comment !== null) {
         this.endSnooze(uid, actor, now)
       }
       return { uid, eventId: comment, woke: comment !== null }
     }
     this.endSnooze(uid, actor, now)
+    if (wait !== null) {
+      return { uid, eventId: this.moveToWait(item, wait, actor, true, now), woke: true }
+    }
     const closing = input.to === 'done' || input.to === 'canceled'
     const note = closing ? (input.reason?.trim() ? input.reason : null) : null
     this.writeStatus(uid, input.to, input.to === 'needs_you' ? comment : null, actor, now, note)

@@ -1179,6 +1179,7 @@
 4 src/main/runtime/orchestration/db/schema/migrate.ts
 10 src/main/runtime/orchestration/db/schema/orchestration-schema-version-skew.ts
 1 src/main/runtime/orchestration/db/schema/structured-worker-orca-session-backfill.ts
+1 src/main/runtime/orchestration/db/schema/worker-dock-schema.ts # one backfill transaction when the worker dock tables are first installed at database open; later dock facts are written by triggers inside lifecycle statements that were already synchronous
 9 src/main/runtime/orchestration/db/tasks/task-status-transition.ts
 2 src/main/runtime/orchestration/db/tasks/task-store.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-abandon.ts
@@ -1188,6 +1189,10 @@
 6 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-start.ts
 22 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-stop.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-terminal-recovery.ts
+1 src/main/runtime/orchestration/dock/worker-dock-acknowledgment.ts # only on the user's Clear, Clear all or Show in dock again click; no passive caller
+1 src/main/runtime/orchestration/dock/worker-dock-provider-failures.ts # only when a provider subagent or command fails: one transaction per failure batch, so a failure stays until the user clears it; successful child events never reach the database
+3 src/main/runtime/orchestration/dock/worker-dock-read-snapshot.ts # one consistent read transaction (BEGIN, never IMMEDIATE) per dock read: the cold seed of a visible unknown source, subscribe, a lifecycle or visible activity change of this chat's own workers, or a roster window the user loads; unrelated wakes skip it by version and hidden chats never read
+1 src/main/runtime/orchestration/dock/worker-dock-read.ts # the dock reads described for worker-dock-read-snapshot.ts, through that one helper
 1 src/main/runtime/orchestration/federation/paired-server-asks/paired-server-ask-decisions.ts # one savepoint around orchestration DB writes that were already synchronous, so a card's answer and its decline or allowance commit together
 2 src/main/runtime/orchestration/federation/peer-mail/paired-server-changes.ts # moved unchanged out of peer-mail-relay.ts: closing a removed or re-paired server's Run links
 1 src/main/runtime/orchestration/federation/peer-mail/peer-questions-out.ts # one savepoint per asker told on an unpair, around orchestration DB writes that were already synchronous

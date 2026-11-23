@@ -10,6 +10,7 @@ import {
   GitPullRequest,
   GitPullRequestClosed,
   GitPullRequestDraft,
+  Hourglass,
   Link2,
   X,
   type LucideIcon
@@ -325,6 +326,19 @@ function Row({
               void openBotItemFile(row.path, fileContext)
             }
           }}
+        />
+      )
+    case 'automation':
+      return (
+        <LinkRow
+          icon={<Hourglass className="size-3.5 text-muted-foreground" />}
+          title={row.name ?? t('bots.items.link.automation', 'Automation')}
+          tip={
+            row.active
+              ? t('bots.items.link.automationOn', 'Will wake the agent for this item')
+              : t('bots.items.link.automationEnded', 'Ended')
+          }
+          disabled={!row.active}
         />
       )
   }
