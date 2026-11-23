@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BookOpen, Check, CircleUserRound, Files, Smartphone } from 'lucide-react'
+import { BookOpen, Check, CircleUserRound, Files, Info, Smartphone } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -122,6 +122,10 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
       ?.filter(({ orgId }) => reportingOrgIds.includes(orgId))
       .map(({ name }) => name) ?? []
   const showReporting = reportingOrgIds.length > 0
+  const reportingDetails = t(
+    'auto.components.settings.orcaAccount.reportingDetails',
+    'Device reporting details'
+  )
 
   useOrcaProfileAuthStatusRefresh()
 
@@ -166,41 +170,50 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
         </OrcaAccountHeader>
 
         {policy && (
-          <div className="space-y-1 text-settings-detail text-muted-foreground">
+          <div className="flex items-center gap-1 text-settings-detail text-muted-foreground">
             <p>
-              {showReporting
-                ? reportingTeams.length === reportingOrgIds.length
-                  ? t(
-                      'auto.components.settings.orcaAccount.managedWithNamedDeviceReporting',
-                      'Your team manages some Orca settings. Owners and admins at {{teams}} can view reports from this device.',
-                      { teams: new Intl.ListFormat(locale).format(reportingTeams) }
-                    )
-                  : t(
-                      'auto.components.settings.orcaAccount.managedWithDeviceReporting',
-                      'Your team manages some Orca settings. Team owners and admins can view reports from this device.'
-                    )
-                : t(
-                    'auto.components.settings.orcaAccount.managed',
-                    'Your team manages some Orca settings.'
-                  )}
+              {t(
+                'auto.components.settings.orcaAccount.managed',
+                'Your team manages some Orca settings.'
+              )}
             </p>
             {showReporting && (
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="link" size="inlineText">
-                    {t(
-                      'auto.components.settings.orcaAccount.reportingDetails',
-                      'Device reporting details'
-                    )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={reportingDetails}
+                  >
+                    <Info aria-hidden className="size-3.5" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent align="start" className="w-80 max-w-[calc(100vw-2rem)]">
-                  <p className="p-3 text-sm">
-                    {t(
-                      'auto.components.settings.orcaAccount.reportingDisclosure',
-                      'The Devices view shows your Orca version, release channel, device name, platform, update status, required plugins Orca couldn’t install, and when the device last reported.'
-                    )}
-                  </p>
+                <PopoverContent
+                  align="start"
+                  aria-label={reportingDetails}
+                  className="w-80 max-w-[calc(100vw-2rem)]"
+                >
+                  <div className="space-y-2 p-3 text-sm">
+                    <p>
+                      {reportingTeams.length === reportingOrgIds.length
+                        ? t(
+                            'auto.components.settings.orcaAccount.deviceReportNamedViewers',
+                            'Owners and admins at {{teams}} can view reports from this device.',
+                            { teams: new Intl.ListFormat(locale).format(reportingTeams) }
+                          )
+                        : t(
+                            'auto.components.settings.orcaAccount.deviceReportViewers',
+                            'Team owners and admins can view reports from this device.'
+                          )}
+                    </p>
+                    <p>
+                      {t(
+                        'auto.components.settings.orcaAccount.reportingDisclosure',
+                        'The Devices view shows your Orca version, release channel, device name, platform, update status, required plugins Orca couldn’t install, and when the device last reported.'
+                      )}
+                    </p>
+                  </div>
                 </PopoverContent>
               </Popover>
             )}
