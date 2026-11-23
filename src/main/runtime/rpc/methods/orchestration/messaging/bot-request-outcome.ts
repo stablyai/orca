@@ -141,7 +141,7 @@ export async function settleBotRequestTurn(
   ended?: TurnEndedVerdict
 ): Promise<void> {
   if (ended?.outcome !== 'failure') {
-    await settleBotRequests(runtime, sessionId, turnId, 'ended')
+    await settleBotRequests(runtime, sessionId, turnId, { why: 'ended' })
   }
 }
 
@@ -158,15 +158,23 @@ export async function settleBotRequestFailure(
   // The reason is mailed to other agents and paired computers, so redact it as worker escalations do.
   const reason = error ? redactFailure(error.text) : undefined
   noteBotQuestionFailure(failure.sessionId, { requestId: failure.id, why, reason })
-  await settleBotRequests(runtime, failure.sessionId, failure.id, why, reason)
+  // A refused send settles only itself: other agents' mail refused says nothing of earlier requests.
+  await settleBotRequests(runtime, failure.sessionId, failure.id, {
+    why,
+    reason,
+    refusedSend: failure.kind === 'refused-send'
+  })
 }
 
 async function settleBotRequests(
   runtime: OrcaRuntimeService,
   sessionId: string,
   turnId: string,
-  why: 'ended' | 'failed' | 'failed-continues',
-  reason?: string
+  {
+    why,
+    reason,
+    refusedSend = false
+  }: { why: 'ended' | 'failed' | 'failed-continues'; reason?: string; refusedSend?: boolean }
 ): Promise<void> {
   // Every chat's turn ends here; only a bot's can be on a request.
   if (!botOfSession(runtime.bots, sessionId)) {
@@ -177,7 +185,7 @@ async function settleBotRequests(
     await (await requireStructuredHost(runtime)).journalReads(sessionId),
     turnId,
     (messageId) => db.getBotRequest(messageId) !== undefined,
-    async () => (await readBotTurn(runtime, db, sessionId)).turn.requestIds
+    { reportFallback: !refusedSend }
   )
   // Questions are decided by the question reconciler (mailbox/questions), from who took them.
   const open = requestIds.filter(
