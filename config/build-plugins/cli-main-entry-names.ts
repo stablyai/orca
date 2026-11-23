@@ -2,6 +2,8 @@
 export const CLI_MAIN_ENTRY_NAMES = [
   'worker-threads/worker-thread-entry-path',
   'worker-threads/worker-thread-spawn',
+  // The CLI-emitted environment store worker entry installs the send ledger from here.
+  'worker-threads/worker-send-ledger',
   'agent-hooks/installation/managed-agent-hook-controls',
   'gitlab/projects/project-ref-parser',
   'orca-profiles/profile-index-store',

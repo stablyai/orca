@@ -14,6 +14,7 @@ import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/sess
 import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { prepareAiVaultSessionForFork } from '../history/ai-vault-session-resume-preparation'
+import { conversationHostUnavailableError } from '../history/ai-vault-session-fork-startup'
 import { aiVaultSessionListArgs } from '@/components/right-sidebar/ai-vault/scanning/ai-vault-session-list-request'
 import {
   findTabSessionHistoryRow,
@@ -45,12 +46,7 @@ export async function prepareNativeChatCliFork(
   const hostId = subject.request.executionHostScope
   const host = parseExecutionHostId(hostId)
   if (!host || (host.kind !== 'local' && host.kind !== 'runtime')) {
-    throw new Error(
-      translate(
-        'auto.lib.nativeChatCliFork.hostUnavailable',
-        'The conversation host is unavailable.'
-      )
-    )
+    throw conversationHostUnavailableError()
   }
   const target =
     host.kind === 'runtime'

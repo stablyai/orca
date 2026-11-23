@@ -36,6 +36,7 @@ import {
 } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import '@/lib/workspace/creation/new-workspace-ssh-gate'
 import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import {
@@ -158,7 +159,14 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     if (!liveRepo || connection?.targetId !== targetId) {
       return
     }
-    const liveStatus = selectRepoSshGateInput(liveState, liveRepo).status
+    const liveStatus = selectRepoSshGateInput(
+      {
+        sshConnectionStates: liveState.sshConnectionStates,
+        sshStateByEnvironment: liveState.sshStateByEnvironment
+      },
+      readRuntimeStatuses(),
+      liveRepo
+    ).status
     if (liveStatus === 'connected' || isConnectingSshStatus(liveStatus)) {
       return
     }

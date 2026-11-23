@@ -33,6 +33,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   force:
     '--force                Force worktree removal when supported; does not force branch deletion',
   focus: '--focus                Reveal the created terminal session in Orca',
+  headless:
+    '--headless             On a server or SSH host, open the tab in its own headless browser',
   for: '--for exit|tui-idle    Wait condition to satisfy',
   'from-element-index': '--from-element-index <n> Source element index from get-app-state',
   'from-x': '--from-x <x>           Source window-local x coordinate',
@@ -40,7 +42,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   help: '--help                 Show this help message',
   'include-visual-layouts': '--include-visual-layouts Include tab and pane topology in JSON output',
   interrupt: '--interrupt            Send as an interrupt-style input when supported',
-  'keep-open': '--keep-open            Keep the worker open after it finishes',
+  'keep-open': '--keep-open            Stay open after the worker finishes',
   'spec-file': '--spec-file <path|->  Read the spec from a file or stdin',
   id: '--id <id>             Identifier for a target item or permission',
   issue: '--issue <number|null>  Linked GitHub issue number',

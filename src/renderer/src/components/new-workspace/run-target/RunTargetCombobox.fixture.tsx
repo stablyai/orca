@@ -1,6 +1,6 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { ProjectHostSetupOption } from '@/lib/workspace/creation/project-host-setup-options'
-import RunTargetCombobox from './RunTargetCombobox'
+import WorkspaceRunTargetCombobox from './WorkspaceRunTargetCombobox'
 
 // Shape produced by buildProjectHostSetupOptions with local + ephemeral VM setups and SSH hosts:
 // the VM is dropped entirely, SSH hosts become needs-setup rows.
@@ -33,7 +33,7 @@ const options: ProjectHostSetupOption[] = [
 function Preview({ vmSelected }: { vmSelected: boolean }): React.JSX.Element {
   return (
     <div className="h-[460px] p-4">
-      <RunTargetCombobox
+      <WorkspaceRunTargetCombobox
         hostOptions={options}
         hostValue={vmSelected ? 'vm' : 'mac'}
         hostExecutionHostId={vmSelected ? 'runtime:vm-1' : 'local'}

@@ -15,6 +15,7 @@ import {
 import { hardenSqliteDatabaseFiles } from '../harden-database-files'
 import { classifyRowCacheFailure } from './row-cache-failure'
 import { readLegacyJsonSource, removeLegacyJsonSource } from './legacy-json-source'
+import { rowCacheWalCheckpoints, type RowCacheWalCheckpoints } from './row-cache-wal-checkpoints'
 
 export type KeyedJsonRow = { key: string; json: string }
 
@@ -26,6 +27,10 @@ export type KeyedJsonRowCacheOptions = {
   holdConnection?: boolean
   /** JSON file older builds wrote; see load(). */
   legacyPath?: string
+  walCheckpoints?: Pick<
+    RowCacheWalCheckpoints,
+    'available' | 'attach' | 'detach' | 'request' | 'assertRemovable'
+  >
 }
 
 /**
@@ -63,12 +68,17 @@ export class KeyedJsonRowCache {
   private dataVersion: unknown
   private closed = false
   private readonly busyTimeoutMs: number
+  private readonly walCheckpoints: NonNullable<KeyedJsonRowCacheOptions['walCheckpoints']>
+  private walRegistration: number | null = null
+  // Set when checkpoints were handed back: the next operation reopens with SQLite's own.
+  private reopen = false
 
   constructor(
     readonly path: string,
     private readonly options: KeyedJsonRowCacheOptions
   ) {
     this.busyTimeoutMs = options.busyTimeoutMs ?? DEFAULT_BUSY_TIMEOUT_MS
+    this.walCheckpoints = options.walCheckpoints ?? rowCacheWalCheckpoints
   }
 
   /**
@@ -199,6 +209,9 @@ export class KeyedJsonRowCache {
       // Sample under the write lock; publish the planned baseline only after COMMIT.
       const version = db.pragma('data_version', { simple: true })
       db.exec('COMMIT')
+      if (this.walRegistration !== null) {
+        this.walCheckpoints.request(this.walRegistration)
+      }
       if (plan.next) {
         this.stored = plan.next
       } else {
@@ -252,6 +265,7 @@ export class KeyedJsonRowCache {
       db?.close()
       db = null
       try {
+        this.walCheckpoints.assertRemovable(this.path)
         removeVersionedCacheDatabase(this.path, 'fail-fast')
       } catch (removeError) {
         return { kind: 'unavailable' as const, error: removeError }
@@ -283,6 +297,7 @@ export class KeyedJsonRowCache {
       if (classifyRowCacheFailure(error) !== 'corrupt') {
         throw error
       }
+      this.walCheckpoints.assertRemovable(this.path)
       this.closeDatabase()
       // Fail fast: a file held open elsewhere (Windows) throws, and the caller retries later.
       removeVersionedCacheDatabase(this.path, 'fail-fast')
@@ -291,20 +306,29 @@ export class KeyedJsonRowCache {
   }
 
   private database(busyTimeoutMs: number): SyncDatabase {
+    if (this.reopen) {
+      // Closing can checkpoint; each cache pays that on its own next operation, not all at once.
+      this.reopen = false
+      this.closeDatabase()
+    }
     if (this.db) {
       return this.db
     }
+    const offMain = this.walCheckpoints.available(this.path)
     const db = openVersionedCacheDatabase(this.path, {
       version: this.options.schemaVersion,
       // The caller's budget covers opening too: schema setup writes, so it can meet the lock.
       busyTimeoutMs,
       removal: 'fail-fast',
+      beforeRemove: () => this.walCheckpoints.assertRemovable(this.path),
       // Rows can hold prompts, PR titles and notification ids; keep them user-only.
       directoryMode: 0o700,
-      sql: SCHEMA_SQL
+      sql: SCHEMA_SQL,
+      walAutocheckpoint: offMain ? 0 : undefined
     })
-    hardenSqliteDatabaseFiles(this.path)
     this.db = db
+    this.walRegistration = this.walCheckpoints.attach(this.path, () => (this.reopen = true))
+    hardenSqliteDatabaseFiles(this.path)
     // A fresh connection cannot vouch for a baseline read through an earlier one.
     this.dataVersion = undefined
     this.stored = new Map()
@@ -313,6 +337,8 @@ export class KeyedJsonRowCache {
   }
 
   private closeDatabase(): void {
+    this.walCheckpoints.detach(this.walRegistration)
+    this.walRegistration = null
     try {
       this.db?.close()
     } catch {

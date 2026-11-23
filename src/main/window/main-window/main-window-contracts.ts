@@ -16,7 +16,7 @@ export type MainWindowLoadObserver = {
 export type MainWindowOpenOptions = Pick<
   CreateMainWindowOptions,
   'revealOnDidFinishLoad' | 'revealInBackground'
->
+> & { loadObserver?: MainWindowLoadObserver }
 
 export type CreateMainWindowOptions = {
   /** Returns true when a manual app.quit() (Cmd+Q) is in progress, so the renderer skips the running-process confirm dialog. */

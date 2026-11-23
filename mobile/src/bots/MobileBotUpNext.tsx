@@ -1,3 +1,4 @@
+import { botCodedText } from '../../../src/shared/bots/bot-failure-copy'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ArrowUpRight } from 'lucide-react-native'
@@ -8,7 +9,13 @@ import {
   type Suggestion
 } from '../../../src/shared/bots/bot-look-around'
 import { SheetPrimaryButton } from '../components/sheets/SheetPrimaryButton'
-import { ListGroup, SectionHeader } from '../components/list/ListGroup'
+import {
+  LIST_LEADING_INSET,
+  LIST_ROW_PADDING,
+  ListGroup,
+  ListRow,
+  SectionHeader
+} from '../components/list/ListGroup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { openExternalLink } from '../platform/external-links/external-link'
 import { colors, spacing } from '../theme/mobile-theme'
@@ -17,12 +24,12 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { lookedText } from './bot-up-next-copy'
 import { MobileBotTextButton } from './MobileBotTextButton'
 import { MobileConnectorSourceIcon } from './MobileConnectorSourceIcon'
-import { optionStyles } from './mobile-bot-option-styles'
 
 export type UpNextActions = {
   /** Null while no chat shows to put the request in. */
   start: ((suggestionId: string) => void) | null
   dismiss: (suggestionId: string) => void
+  /** Off while one runs or the host is offline. */
   busy: boolean
 }
 
@@ -32,45 +39,47 @@ function UpNextRow({ item, actions }: { item: Suggestion; actions: UpNextActions
   const { link, source } = item
   const start = actions.start
   return (
-    <View style={[optionStyles.filterRow, upNextStyles.row]}>
-      <View style={upNextStyles.iconSlot}>
-        {source ? <MobileConnectorSourceIcon source={source} /> : null}
-      </View>
-      <View style={optionStyles.optionRowLabel}>
-        <Text style={optionStyles.filterRowText}>{item.title}</Text>
-        <Text style={optionStyles.optionRowDetail}>{item.why}</Text>
-        {link ? (
-          <Pressable
-            style={upNextStyles.link}
-            onPress={() => openExternalLink(link)}
-            accessibilityRole="link"
-          >
-            <Text style={upNextStyles.linkText} numberOfLines={1}>
-              {suggestionLinkLabel(link)}
-            </Text>
-            <ArrowUpRight size={12} color={colors.textSecondary} />
-          </Pressable>
-        ) : null}
-        <View style={upNextStyles.actions}>
-          {start ? (
-            <SheetPrimaryButton
-              size="compact"
-              label={t('bots.upNext.start', 'Start')}
-              disabled={actions.busy}
-              onPress={() => start(item.id)}
-            />
+    <ListRow
+      title={item.title}
+      wrapTitle
+      subtitle={item.why}
+      subtitleLines={0}
+      leading={source ? <MobileConnectorSourceIcon source={source} /> : <View />}
+      detail={
+        <>
+          {link ? (
+            <Pressable
+              style={upNextStyles.link}
+              onPress={() => openExternalLink(link)}
+              accessibilityRole="link"
+            >
+              <Text style={upNextStyles.linkText} numberOfLines={1}>
+                {suggestionLinkLabel(link)}
+              </Text>
+              <ArrowUpRight size={12} color={colors.textSecondary} />
+            </Pressable>
           ) : null}
-          <MobileBotTextButton
-            label={t('bots.upNext.dismiss', 'Dismiss')}
-            accessibilityLabel={t('bots.upNext.dismissTitle', 'Dismiss {{title}}', {
-              title: item.title
-            })}
-            disabled={actions.busy}
-            onPress={() => actions.dismiss(item.id)}
-          />
-        </View>
-      </View>
-    </View>
+          <View style={upNextStyles.actions}>
+            {start ? (
+              <SheetPrimaryButton
+                size="compact"
+                label={t('bots.upNext.start', 'Start')}
+                disabled={actions.busy}
+                onPress={() => start(item.id)}
+              />
+            ) : null}
+            <MobileBotTextButton
+              label={t('bots.upNext.dismiss', 'Dismiss')}
+              accessibilityLabel={t('bots.upNext.dismissTitle', 'Dismiss {{title}}', {
+                title: item.title
+              })}
+              disabled={actions.busy}
+              onPress={() => actions.dismiss(item.id)}
+            />
+          </View>
+        </>
+      }
+    />
   )
 }
 
@@ -103,16 +112,26 @@ export function MobileBotUpNext({
         }
       />
       {state.error && !state.running ? (
-        <Text style={[optionStyles.optionRowDetail, upNextStyles.note]}>{state.error}</Text>
+        <Text style={upNextStyles.note}>{botCodedText(state.error, state.failure, t)}</Text>
       ) : null}
       {shown.length > 0 ? (
-        <ListGroup>
-          {shown.map((item) => (
-            <UpNextRow key={item.id} item={item} actions={actions} />
-          ))}
+        <ListGroup separatorInset={LIST_LEADING_INSET}>
+          {[
+            ...shown.map((item) => <UpNextRow key={item.id} item={item} actions={actions} />),
+            ...(hiddenCount > 0
+              ? [
+                  <ListRow
+                    key="more"
+                    title={t('bots.upNext.showMore', 'Show {{count}} more', { count: hiddenCount })}
+                    leading={<View />}
+                    onPress={() => setExpanded(true)}
+                  />
+                ]
+              : [])
+          ]}
         </ListGroup>
       ) : state.running ? null : (
-        <Text style={[optionStyles.optionRowDetail, upNextStyles.note]}>
+        <Text style={upNextStyles.note}>
           {state.lastLookedAt
             ? t('bots.upNext.empty', 'No suggestions from the last look.')
             : t(
@@ -122,27 +141,11 @@ export function MobileBotUpNext({
               )}
         </Text>
       )}
-      {hiddenCount > 0 ? (
-        <View style={upNextStyles.more}>
-          <MobileBotTextButton
-            label={t('bots.upNext.showMore', 'Show {{count}} more', { count: hiddenCount })}
-            onPress={() => setExpanded(true)}
-          />
-        </View>
-      ) : null}
     </View>
   )
 }
 
 const upNextStyles = themedStyleSheet(() => ({
-  row: {
-    alignItems: 'flex-start'
-  },
-  iconSlot: {
-    width: 16,
-    paddingTop: 2,
-    alignItems: 'center'
-  },
   link: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -162,12 +165,9 @@ const upNextStyles = themedStyleSheet(() => ({
     paddingTop: spacing.xs
   },
   note: {
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.md
-  },
-  more: {
-    alignItems: 'flex-start',
-    marginTop: -spacing.xs,
+    fontSize: 13,
+    color: colors.textMuted,
+    paddingHorizontal: LIST_ROW_PADDING,
     marginBottom: spacing.md
   }
 }))

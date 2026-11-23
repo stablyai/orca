@@ -6,6 +6,8 @@ import type { GoogleService } from './google-scopes'
 export const GOOGLE_CONNECT_RUNTIME_CAPABILITY = 'google.connect.v1' as const
 /** The host checks Gmail and Calendar automation rules itself. */
 export const GOOGLE_TRIGGERS_RUNTIME_CAPABILITY = 'google.triggers.v1' as const
+/** A paired window that draws Google setup's Connect card, so a server posts it instead of a line. */
+export const GOOGLE_SETUP_CARDS_CLIENT_CAPABILITY = 'google.setupCards.v1' as const
 
 /** What one harmless read per API found. */
 export type GoogleServiceState =
@@ -43,6 +45,11 @@ export type GoogleStatusView = {
   /** The last check of the key, when it was this key (`check` runs a fresh one). */
   clientKey?: GoogleClientKeyState
   accounts: GoogleAccountView[]
+  /**
+   * The account calls and triggers without `--account` use; null with no account. Absent from a host
+   * too old to keep one, where a second account would break those calls.
+   */
+  defaultAccount?: string | null
   /** The bots on this host whose Google toggle is on. */
   bots: { id: string; name: string }[]
 }

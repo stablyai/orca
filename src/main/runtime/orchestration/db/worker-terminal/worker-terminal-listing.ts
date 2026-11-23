@@ -8,7 +8,7 @@ import {
 } from '../../terminal-authority/release/worker-terminal-ownership'
 
 import { OrchestrationError } from '../../orchestration-error'
-import type { OrchestrationDb } from '../orchestration-db'
+import type { OrchestrationDb, OrchestrationDbConnection } from '../orchestration-db'
 import {
   getWorkerAttentionFacts,
   getWorkerAttentionFactsForDispatches
@@ -55,7 +55,7 @@ export const WORKER_LIST_CURSOR_EXPIRED_MESSAGE =
 /** The anchor must still belong to the filtered set. An anchor from another Run resolved to a
  *  rowid past this Run's rows, so the page read as a finished, empty inventory. */
 function resolveAnchorRowId(
-  this: OrchestrationDb,
+  this: OrchestrationDbConnection,
   after: WorkerTerminalOrderingKey,
   runId: string | undefined
 ): number {
@@ -79,7 +79,7 @@ function resolveAnchorRowId(
 }
 
 export function listWorkerTerminalResources(
-  this: OrchestrationDb,
+  this: OrchestrationDbConnection,
   params: {
     runId?: string
     limit?: number

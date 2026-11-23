@@ -35,6 +35,8 @@ export type WindowsAgentForegroundResolution = {
   processName: string | null
   /** Unambiguous recognized-name anchor; use the outer wrapper PID so embedded-child restarts do not imply exit. */
   processId?: number
+  /** The anchor's creation time, so a later check can tell it from a process that reused its pid. */
+  processCreationTimeMs?: number
   /** True when the scan proves `anchorProcessId` now belongs to a non-agent. */
   anchorPidForeign?: boolean
 }
@@ -92,9 +94,19 @@ export async function resolveWindowsAgentForegroundProcessWithAvailability(
         anchorRecognized.processName !== options.anchorProcessName
       : // Query-denied command === name is inconclusive, never foreign proof.
         anchorRow.command !== anchorRow.name)
+  const identity = resolveWindowsForegroundIdentity(
+    filteredCandidates,
+    fallbackProcess,
+    options.contextPaths
+  )
+  const processCreationTimeMs =
+    identity.processId === undefined
+      ? undefined
+      : candidates.find((candidate) => candidate.pid === identity.processId)?.creationTimeMs
   return {
     available: true,
-    ...resolveWindowsForegroundIdentity(filteredCandidates, fallbackProcess, options.contextPaths),
+    ...identity,
+    ...(processCreationTimeMs !== undefined ? { processCreationTimeMs } : {}),
     ...(anchorPidForeign ? { anchorPidForeign: true } : {})
   }
 }

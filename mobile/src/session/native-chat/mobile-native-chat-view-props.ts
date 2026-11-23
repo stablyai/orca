@@ -21,6 +21,7 @@ import type { MobileNativeChatSendProps } from './composer/MobileNativeChatCompo
 import type { MobileNativeChatPromptCard } from './input/prompts/MobileNativeChatPromptCard'
 import type { MobileNativeChatInputLockStatus } from './composer/field/MobileNativeChatInputLockStatus'
 import type { MobileNativeChatPendingItem } from './transcript/projection/mobile-native-chat-render-data'
+import type { MobileWorkerApprovals } from './input/prompts/use-mobile-worker-approvals'
 
 export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
 
@@ -28,6 +29,8 @@ export type MobileNativeChatViewProps = MobileNativeChatSendProps &
   Omit<ComponentProps<typeof MobileNativeChatPromptCard>, 'answering' | 'requiresTerminal'> & {
     // Keep raw messages to distinguish loading from a loaded transcript filtered to empty.
     itemNavigation?: MobileSessionItemNavigation | null
+    /** Workers' open prompts for a coordinator chat; shown above the chat's own prompt. */
+    workerApprovals?: MobileWorkerApprovals
     messages: NativeChatMessage[]
     folded: NativeChatMessage[]
     status: MobileNativeChatStatus
@@ -47,6 +50,8 @@ export type MobileNativeChatViewProps = MobileNativeChatSendProps &
     workingStartedAt?: number | null
     settledTurns?: NativeChatSettledTurns | null
     turnJournal?: NativeChatTurnJournal | null
+    /** A stored copy or the first read, until a live frame confirms the transcript. */
+    transcriptLoading?: boolean
     receipts?: ReadonlyMap<string, NativeChatResolvedPrompt> | null
     actionablePromptIds?: readonly string[]
     onStop?: () => void
@@ -81,6 +86,8 @@ export type MobileNativeChatViewProps = MobileNativeChatSendProps &
     onDismissSendError?: () => void
     filePaths?: string[]
     onNeedFiles?: (query: string) => void
+    /** How a picked file is written when the chat runs in a workspace sub-folder. */
+    fileReference?: (path: string) => string | undefined
     skillDiscovery?: NativeChatSkillDiscoverySnapshot
     onNeedSkills?: () => void
     sessionOptions?: MobileNativeChatSessionOptionPickersProps | null

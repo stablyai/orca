@@ -3,6 +3,10 @@ import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from './structured-agent-session-projection'
+import {
+  isStructuredAgentSessionHostTabId,
+  structuredAgentSessionHostTabId
+} from './structured-agent-session-host-tab-id'
 
 /** Read only necessary fields so clients with different tab shapes share the registered-agent tab predicate. */
 export function isStructuredTab<T extends { contentType?: string; agentSessionAgent?: unknown }>(
@@ -22,4 +26,25 @@ export function structuredAgentSessionIdOfTab(tabId: string): string | null {
   return tabId.startsWith(prefix) && tabId.length > prefix.length
     ? tabId.slice(prefix.length)
     : null
+}
+
+/** The tab `id` names: that tab itself, else the chat tab whose session a legacy-derived id names. */
+export function findTabByIdOrChatAlias<
+  T extends { id: string; contentType?: string; entityId?: string | null }
+>(tabs: readonly T[] | undefined, id: string): T | undefined {
+  const sessionId =
+    structuredAgentSessionIdOfTab(id) ??
+    (isStructuredAgentSessionHostTabId(id)
+      ? id.slice(structuredAgentSessionHostTabId('').length)
+      : null)
+  let chat: T | undefined
+  for (const tab of tabs ?? []) {
+    if (tab.id === id) {
+      return tab
+    }
+    if (!chat && sessionId && tab.contentType === 'agent-session' && tab.entityId === sessionId) {
+      chat = tab
+    }
+  }
+  return chat
 }

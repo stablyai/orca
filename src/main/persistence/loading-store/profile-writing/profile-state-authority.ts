@@ -1,6 +1,7 @@
 import type { LegacyPaneKeyAliasEntry } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type { ProfileStateDatabaseQuarantine } from '../../profile-state/recovery/profile-state-database-quarantine'
+import type { ProfileStateDomainPatch } from '../../profile-state/documents/profile-state-domain-patches'
 
 export type ProfileStateMaintenance = {
   resume(): Promise<void>
@@ -59,14 +60,20 @@ export type AsyncProfileStateAuthority = Omit<
   assertWritable(): void
   abort(): Promise<void>
   assertCurrentRevision(): Promise<void>
-  writeSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]): Promise<void>
+  /** Patches carry only changed entries of split domains; the writer applies them to its copy. */
+  writeSerializedDomains(
+    replacements: readonly ProfileStateDomainReplacement[],
+    patches?: readonly ProfileStateDomainPatch[]
+  ): Promise<void>
   writeSerializedAutomationRuns(
     replacements: readonly ProfileStateDomainReplacement[],
     runs: readonly AutomationRun[]
   ): Promise<void>
   writeSerializedState(payload: Buffer): Promise<void>
+  /** Patched session domains are kept and updated in place of a whole payload. */
   writeCompleteSerializedDomains(
-    replacements: readonly ProfileStateDomainReplacement[]
+    replacements: readonly ProfileStateDomainReplacement[],
+    patches?: readonly ProfileStateDomainPatch[]
   ): Promise<void>
   writeJsonExport(targetPath: string): Promise<number>
   writeLatestJsonExport(dataFile: string): Promise<number | undefined>

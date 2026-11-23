@@ -348,7 +348,6 @@ export default function FeatureTipsModal(): JSX.Element | null {
         tip={currentTip}
         onOpenChange={handleOpenChange}
         onPrimaryAction={() => void handlePrimaryAction()}
-        onSkip={handleSkip}
       />
     )
   }

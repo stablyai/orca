@@ -1,7 +1,6 @@
 import { Clock, Hourglass, Play, Webhook, Zap, type LucideIcon } from 'lucide-react'
 import { BotAppBrandMark } from '@/components/bots/apps/BotAppBrandLogo'
 import type { AutomationRowMark } from '../../../../../shared/automations/automation-chat-row'
-import { NativeChatCardAvatar } from '../NativeChatCardFrame'
 
 // Connectors draw their own logo; the rest a plain mark.
 const PLAIN: Record<AutomationRowMark, LucideIcon | null> = {
@@ -18,11 +17,7 @@ const PLAIN: Record<AutomationRowMark, LucideIcon | null> = {
 
 /** An automation row's icon slot: the connector that starts it, else a plain mark. */
 export function NativeChatAutomationMark({ mark }: { mark: AutomationRowMark }): React.JSX.Element {
-  const className = 'size-3.5 text-muted-foreground'
+  const className = 'size-3.5'
   const Icon = PLAIN[mark]
-  return (
-    <NativeChatCardAvatar compact>
-      {Icon ? <Icon className={className} /> : <BotAppBrandMark id={mark} className={className} />}
-    </NativeChatCardAvatar>
-  )
+  return Icon ? <Icon className={className} /> : <BotAppBrandMark id={mark} className={className} />
 }

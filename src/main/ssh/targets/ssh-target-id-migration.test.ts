@@ -55,16 +55,19 @@ describe('migrateWorkspaceSessionSshTargetId', () => {
       }
     })
 
-    expect(migrateWorkspaceSessionSshTargetId(session, OLD_ID, NEW_ID)).toBe(true)
+    const migrated = migrateWorkspaceSessionSshTargetId(session, OLD_ID, NEW_ID)
+    if (!migrated) {
+      throw new Error('expected a migrated session')
+    }
 
-    const tabs = session.tabsByWorktree['r1::/wt']
+    const tabs = migrated.tabsByWorktree['r1::/wt']
     expect(tabs[0].ptyId).toBe(`ssh:${NEW_ID}@@pty-3`)
     expect(tabs[1].ptyId).toBe('local-pty-7')
     expect(tabs[2].ptyId).toBe(`ssh:other-target@@pty-1`)
-    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
+    expect(migrated.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
       'leaf-1': `ssh:${NEW_ID}@@pty-3`
     })
-    expect(session.remoteSessionIdsByTabId).toEqual({
+    expect(migrated.remoteSessionIdsByTabId).toEqual({
       tab1: `ssh:${NEW_ID}@@pty-3`,
       tab3: `ssh:other-target@@pty-1`
     })

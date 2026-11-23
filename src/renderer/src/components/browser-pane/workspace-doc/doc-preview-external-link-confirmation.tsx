@@ -44,9 +44,7 @@ export function subscribeDocPreviewExternalLinkConfirmation(
         modifiers ?? { metaKey: false, ctrlKey: false, shiftKey: false },
         navigator.userAgent.includes('Mac'),
         source.worktreeId,
-        source.owner.kind === 'ssh'
-          ? source.owner
-          : { kind: 'runtime', runtimeEnvironmentId: source.owner.environmentId }
+        { kind: 'runtime', runtimeEnvironmentId: source.owner.environmentId }
       ),
       allowRemoteInApp: true,
       allowClientBrowserFallback: true,

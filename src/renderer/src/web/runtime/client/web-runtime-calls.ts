@@ -98,10 +98,14 @@ type RuntimeClient = ReturnType<typeof getClientForEnvironment>
 async function probeRuntimeStatus(
   client: RuntimeClient,
   params: unknown,
-  timeoutMs: number | undefined
+  timeoutMs: number | undefined,
+  force?: true
 ): Promise<RuntimeRpcResponse<unknown>> {
   const epoch = client.connectionEpoch
-  const response = await client.call('status.get', params, { timeoutMs })
+  const response = await client.call('status.get', params, {
+    timeoutMs,
+    ...(force ? { force } : {})
+  })
   const runtimeId = responseRuntimeId(response)
   if (response.ok && runtimeId && client.connectionEpoch === epoch) {
     probedConnections.set(client, { epoch, runtimeId })
@@ -115,10 +119,11 @@ async function callPinnedToRuntime(
   method: string,
   params: unknown,
   timeoutMs: number | undefined,
-  expectedEnvironmentRuntimeId: string | undefined
+  expectedEnvironmentRuntimeId: string | undefined,
+  forceStatusProbe?: true
 ): Promise<RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
-    return probeRuntimeStatus(client, params, timeoutMs)
+    return probeRuntimeStatus(client, params, timeoutMs, forceStatusProbe)
   }
   if (expectedEnvironmentRuntimeId === undefined) {
     return client.call(method, params, { timeoutMs })
@@ -139,7 +144,8 @@ export async function callEnvironmentEnvelope<TResult = unknown>(
   params?: unknown,
   timeoutMs?: number,
   expectedEnvironmentPairingRevision?: number,
-  expectedEnvironmentRuntimeId?: string
+  expectedEnvironmentRuntimeId?: string,
+  forceStatusProbe?: true
 ): Promise<RuntimeRpcResponse<TResult>> {
   const environment = resolveEnvironment(selector)
   const assertPairing = () => assertEnvironmentPairing(selector, expectedEnvironmentPairingRevision)
@@ -160,7 +166,8 @@ export async function callEnvironmentEnvelope<TResult = unknown>(
         method,
         params,
         timeoutMs,
-        expectedEnvironmentRuntimeId
+        expectedEnvironmentRuntimeId,
+        forceStatusProbe
       )
     },
     0,
@@ -256,8 +263,17 @@ export const callWebRuntimeEnvironment: PreloadApi['runtimeEnvironments']['call'
 export const getWebRuntimeStatus: PreloadApi['runtimeEnvironments']['getStatus'] = ({
   selector,
   timeoutMs,
-  observeOnly
+  observeOnly,
+  force
 }) =>
   observeOnly
-    ? observeWebRuntimeStatus(selector, timeoutMs)
-    : callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs)
+    ? observeWebRuntimeStatus(selector, timeoutMs, force)
+    : callEnvironmentEnvelope<RuntimeStatus>(
+        selector,
+        'status.get',
+        undefined,
+        timeoutMs,
+        undefined,
+        undefined,
+        force
+      )

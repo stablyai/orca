@@ -20,7 +20,8 @@ export function useBotUpNext({
   showing,
   showToast,
   onStart,
-  refresh
+  refresh,
+  online
 }: {
   client: RpcClient | null
   botId: string
@@ -30,6 +31,8 @@ export function useBotUpNext({
   /** Puts the request in the Home Chat's message box, unsent; null while no chat shows. */
   onStart: ((ask: string) => void) | null
   refresh: () => void
+  /** The host answers; off, the actions are too. */
+  online: boolean
 }): UpNextActions & { lookNow: () => void } {
   const t = useMobileTranslation()
   const [busy, setBusy] = useState(false)
@@ -68,7 +71,11 @@ export function useBotUpNext({
         void act(
           async (rpc) => {
             const { ask } = suggestionStart.interpret(
-              await suggestionStart.request(rpc, { botId, suggestionId })
+              await suggestionStart.request(
+                rpc,
+                { botId, suggestionId },
+                { failWhenDisconnected: true }
+              )
             )
             onStart(ask)
           },
@@ -80,7 +87,13 @@ export function useBotUpNext({
   const dismiss = (suggestionId: string) =>
     void act(
       async (rpc) => {
-        suggestionDismiss.interpret(await suggestionDismiss.request(rpc, { botId, suggestionId }))
+        suggestionDismiss.interpret(
+          await suggestionDismiss.request(
+            rpc,
+            { botId, suggestionId },
+            { failWhenDisconnected: true }
+          )
+        )
       },
       () => showToast(t('bots.saveFailed', 'Couldn’t save'), 1800)
     )
@@ -88,10 +101,12 @@ export function useBotUpNext({
   const lookNow = () =>
     void act(
       async (rpc) => {
-        lookAroundNow.interpret(await lookAroundNow.request(rpc, { botId }))
+        lookAroundNow.interpret(
+          await lookAroundNow.request(rpc, { botId }, { failWhenDisconnected: true })
+        )
       },
       (error) => showToast(lookNowRefusalText(error instanceof Error ? error.message : ''), 1800)
     )
 
-  return { start, dismiss, lookNow, busy }
+  return { start, dismiss, lookNow, busy: busy || !online }
 }

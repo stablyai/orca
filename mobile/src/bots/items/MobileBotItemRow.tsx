@@ -18,6 +18,8 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { formatTimeAgo } from '../../worktree/agent-lineage/agent-row-display'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
 import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
+import { MobileBotAvatar } from '../MobileBotAvatar'
+import type { MobileBotAvatarSource } from '../host-bot-row-facts'
 
 export function MobileBotItemRow({
   item,
@@ -28,7 +30,8 @@ export function MobileBotItemRow({
   now,
   disabled,
   onPress,
-  onLongPress
+  onLongPress,
+  owner
 }: {
   item: BotItem
   stale: boolean
@@ -41,18 +44,26 @@ export function MobileBotItemRow({
   disabled: boolean
   onPress: () => void
   onLongPress: () => void
+  /** In a group's list: the bot the item is from, named under its title. */
+  owner?: { name: string; avatar: MobileBotAvatarSource }
 }) {
   const t = useMobileTranslation()
-  // Only Needs you has a second line, the bot's question; In progress's spinner is its live signal.
+  // Only Needs you and Waiting have a second line, the bot's question or what it waits on; In
+  // progress's spinner is its live signal.
   const question =
-    !stale && !snoozed && item.status === 'needs_you' ? item.question?.text : undefined
+    !stale && !snoozed && item.status === 'needs_you'
+      ? item.question?.text
+      : !snoozed && item.status === 'waiting'
+        ? item.wait?.text
+        : undefined
   const Check = checked ? CircleCheck : Circle
   return (
     <ListRow
       title={item.title}
       marker={formatBotItemNumber(item.number)}
-      subtitle={question}
+      subtitle={owner ? undefined : question}
       subtitleLines={1}
+      detail={owner ? <MobileBotItemOwnerLine owner={owner} line={question} /> : undefined}
       leading={
         checked === null ? (
           <MobileBotItemStatusIcon
@@ -90,6 +101,25 @@ export function MobileBotItemRow({
       onPress={onPress}
       onLongPress={onLongPress}
     />
+  )
+}
+
+/** In a group's list: the member a row is from, its face and name, then the row's own line. */
+export function MobileBotItemOwnerLine({
+  owner,
+  line
+}: {
+  owner: { name: string; avatar: MobileBotAvatarSource }
+  line?: string
+}) {
+  useMobileColorScheme()
+  return (
+    <View style={styles.owner}>
+      <MobileBotAvatar avatar={owner.avatar} size={14} />
+      <Text style={styles.ownerText} numberOfLines={1}>
+        {line ? `${owner.name} · ${line}` : owner.name}
+      </Text>
+    </View>
   )
 }
 
@@ -132,6 +162,8 @@ export function MobileBotItemSelectionBar({
 
 const styles = themedStyleSheet(() => ({
   trailing: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  owner: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  ownerText: { flexShrink: 1, fontSize: typography.metaSize, color: colors.textSecondary },
   age: { fontSize: typography.metaSize, color: colors.textMuted, fontVariant: ['tabular-nums'] },
   bar: {
     position: 'absolute',

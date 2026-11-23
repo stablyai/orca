@@ -17,6 +17,8 @@ import {
 } from '../senders/agent-message-relation'
 import { agentMessageSender, type SenderSnapshotResolver } from '../senders/agent-message-sender'
 import { answersConversationAsk } from '../senders/conversation-ask-answer'
+import { readMessageSenderDispatch } from '../../db/messages/message-sender-dispatch'
+import type { WorkerIdentity } from '../../workers/identity/worker-identity'
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
 import type { ReportFollowUpAction } from '../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 import {
@@ -41,15 +43,24 @@ export function structuredMailSource(input: {
   /** The chat reading it, so an answer to a thread ask it passed on goes back to that thread. */
   sessionId?: string
 }): AgentMessageSource & { orchestration: OrchestrationMailNotice } {
-  const groups = new Map<string, { message: MailSourceMessage; report: ReportFact }[]>()
+  const groups = new Map<
+    string,
+    { message: MailSourceMessage; report: ReportFact; recorded: WorkerIdentity | null }[]
+  >()
   for (const message of input.batch) {
-    const key = JSON.stringify([message.from_handle, message.answer_sender_snapshot ?? null])
+    // A reused terminal can send for several Dispatches; each is its own sender.
+    const recorded = recordedWorker(input.db, message)
+    const key = JSON.stringify([
+      message.from_handle,
+      message.answer_sender_snapshot ?? null,
+      recorded?.dispatchId ?? null
+    ])
     let group = groups.get(key)
     if (!group) {
       group = []
       groups.set(key, group)
     }
-    group.push({ message, report: reportFact(message) })
+    group.push({ message, report: reportFact(message), recorded })
   }
   const senders: AgentMessageSender[] = []
   for (const group of groups.values()) {
@@ -57,6 +68,8 @@ export function structuredMailSource(input: {
     const saved = readAnswerSenderSnapshot(group[0]!.message.answer_sender_snapshot)
     const accepted = saved?.party.address === address ? saved : undefined
     const reported = group.find(({ report }) => report.kind === 'valid')?.report
+    // Orca's record of the sending Dispatch proves lineage whatever that Dispatch's state at delivery.
+    const recordedDispatchId = group[0]!.recorded?.dispatchId
     const guardedAnswer = accepted
       ? undefined
       : historicalAnswerSender(group[0]!.message, input.db, input.senderSnapshot)
@@ -67,14 +80,21 @@ export function structuredMailSource(input: {
         address,
         input.db,
         input.senderSnapshot,
-        reported?.kind === 'valid' ? reported.dispatchId : undefined,
+        recordedDispatchId ?? (reported?.kind === 'valid' ? reported.dispatchId : undefined),
         // The oldest message decides, so mail sent before a rebind never takes the new coordinator.
-        group.map(({ message }) => message.created_at).toSorted()[0]
+        group.map(({ message }) => message.created_at).toSorted()[0],
+        group[0]!.recorded
       )
     const relations = new Map<string, Lineage | undefined>()
     const values = group.map(({ message, report }) => {
       // Sender and DB are fixed by this group/invocation; every varying evidence field is keyed.
-      const key = JSON.stringify([input.mailboxHandle, input.dispatchId, message.run_id, report])
+      const key = JSON.stringify([
+        input.mailboxHandle,
+        input.dispatchId,
+        message.run_id,
+        message.type,
+        report
+      ])
       if (!relations.has(key)) {
         relations.set(
           key,
@@ -85,8 +105,10 @@ export function structuredMailSource(input: {
                 sender: sender.party,
                 recipient: input.mailboxHandle,
                 runId: message.run_id,
-                reportedDispatchId: report.kind === 'valid' ? report.dispatchId : undefined,
-                recipientDispatchId: input.dispatchId
+                reportedDispatchId:
+                  recordedDispatchId ?? (report.kind === 'valid' ? report.dispatchId : undefined),
+                recipientDispatchId: input.dispatchId,
+                messageType: message.type
               })
         )
       }
@@ -142,17 +164,18 @@ export function structuredMailMessage(input: {
   conversationPlace?: (from: AgentMessageSource) => ChatMailPlace | null
 }): { body: AgentJournalMessageItem; whole: boolean } {
   const from = structuredMailSource({ ...input, batch: [input.message] })
-  const formatted = formatMessageBannerWithContent(input.message, {
+  const formatting = {
     cliCommand: input.cliCommand,
-    followUp: input.followUp
-  })
+    followUp: input.followUp,
+    peerMail: input.db
+  }
+  const formatted = formatMessageBannerWithContent(input.message, formatting)
   const whole = [{ type: 'text' as const, text: formatted.text }]
   // Whole or not is decided without the item line or note, as custody decides it; ones that won't fit are left off.
   if (!structuredAgentSessionBlocksTooLarge(whole)) {
     const guided = input.reportItem
       ? formatMessageBannerWithContent(input.message, {
-          cliCommand: input.cliCommand,
-          followUp: input.followUp,
+          ...formatting,
           reportItem: input.reportItem
         }).text
       : formatted.text
@@ -213,6 +236,19 @@ function withConversationNote(
       ? `[Orca: your final message and \`${cliCommand} bot reply\` (with any files) go to ${bound.place}.]`
       : `[Orca: this mail did not come from ${bound.place}, so your final message stays in Orca.]`
   return [{ type: 'text', text: note ? `${text}\n\n${note}` : text }]
+}
+
+/** The worker this mail was recorded from when it was written. */
+function recordedWorker(
+  db: OrchestrationDb | null,
+  message: MailSourceMessage
+): WorkerIdentity | null {
+  try {
+    return db ? readMessageSenderDispatch(db, message.id) : null
+  } catch {
+    // Failure to resolve a label must not block delivery.
+    return null
+  }
 }
 
 type ReportFact = { kind: 'mail' } | { kind: 'invalid' } | { kind: 'valid'; dispatchId: string }

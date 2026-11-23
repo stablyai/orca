@@ -175,7 +175,8 @@ export function HostWorkspaceList({
           onPress={openWorktreeSession}
           onAgentPress={openWorktreeSession}
           statusLive={statusLive && !view.hostContextHealthLabel}
-          onLongPress={item.workspaceKind === 'folder-workspace' ? undefined : setActionTarget}
+          // A bot's home goes through the bot's own delete, not the workspace menu.
+          onLongPress={item.botHome === true || view.botFacts ? undefined : setActionTarget}
           onToggleLineage={toggleWorktreeLineage}
           unsavedName={unsavedRename(renameDrafts, hostId, item)}
         />

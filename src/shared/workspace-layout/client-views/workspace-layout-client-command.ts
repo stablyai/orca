@@ -165,7 +165,7 @@ export function clientLayoutCommand(
     case 'renameEditorFiles':
     case 'openBrowserPage':
     case 'closeBrowserPage':
-    case 'replaceBrowserPage':
+    case 'replaceTabContent':
     case 'setBrowserTabProfile':
     case 'startPane':
     case 'restartPane':

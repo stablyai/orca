@@ -22,10 +22,6 @@ export function releaseAgentStartupDeliveryConsumed(key: string): void {
   consumedAgentStartupDeliveries.delete(key)
 }
 
-export function clearConsumedAgentStartupDeliveriesForTests(): void {
-  consumedAgentStartupDeliveries.clear()
-}
-
 // Successful guards persist until teardown; purge removed tabs/worktrees to bound session-long accumulation.
 export function forgetAgentStartupDeliveriesForTabs(tabIds: Iterable<string>): void {
   const tabIdSet = tabIds instanceof Set ? tabIds : new Set(tabIds)

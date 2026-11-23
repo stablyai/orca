@@ -88,6 +88,24 @@ function closeUnpreparedPopup(
   }
 }
 
+/** A child Chromium opened without adoptable contents (its OpenURL path) has no opener. */
+export function popupChildOpener(options: PopupChildWindowOptions): Electron.WebFrameMain | null {
+  return (options.nativeWindow?.webContents ?? options.webContents)?.opener ?? null
+}
+
+/** Another surface loads the URL; discard the provisional popup before its first request. */
+export function discardPopupChildWindow(
+  options: PopupChildWindowOptions,
+  url: string
+): Electron.WebContents {
+  if (options.webContents && !options.nativeWindow) {
+    // Discard directly to avoid flashing a window that would immediately close.
+    discardBrowserPopupContents(options.webContents)
+    return options.webContents
+  }
+  return openPopupWithOriginBar(options, url, () => false).contentWebContents
+}
+
 // Native child windows lack an address bar; untrusted popups need an Orca-controlled origin display.
 export function openPopupWithOriginBar(
   options: PopupChildWindowOptions,

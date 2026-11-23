@@ -35,6 +35,7 @@ import {
   withoutPendingHandle
 } from '../../../session/tabs/pending-session-selection'
 import { releaseTerminalCreateLock } from './terminal-create-lock'
+import { hostViewModeForNewAgentTab } from '../../../storage/session-view-preferences'
 import { placeCreatedSessionTab } from '../../../../../src/shared/workspace-layout/tab-groups/session-tab-placement'
 import '../../../../../src/shared/remote-runtime/protocol/protocol-version'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../src/shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
@@ -159,7 +160,10 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
         clientMutationId,
         agent,
         options,
-        ...(sourceFork ? { sourceChatFork: { sessionId: sourceFork.sessionId } } : {})
+        shell: options?.shell,
+        ...(sourceFork ? { sourceChatFork: { sessionId: sourceFork.sessionId } } : {}),
+        viewMode:
+          sourceFork || options?.terminalView ? undefined : await hostViewModeForNewAgentTab(agent)
       })
       if (!isCurrent()) {
         return sourceOutcome('accepted')

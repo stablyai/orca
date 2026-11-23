@@ -8,7 +8,8 @@ export type PrimaryStateWriteOperationsContext = {
     completion: Promise<void>
     capture: {
       skipIfClean: boolean
-      fullCheckpoint: boolean
+      /** Save every domain, not just tracked ones. */
+      allDomains: boolean
       pendingSnapshotFileWork: Promise<void> | null
     }
   }

@@ -3,6 +3,7 @@ import type { RpcMethodName } from '../../../../src/shared/rpc-contract/rpc-para
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 import type { RpcCompatibleReader } from '../../transport/rpc/rpc-operation-contract'
 import {
+  browserCertificateProceedReplySchema,
   browserCommandUnreadReplySchema,
   browserNavigationSettledSchema
 } from './browser-command-reply-schema'
@@ -30,7 +31,7 @@ const unreadBrowserCommandReader = rpcResultVariant(
   browserCommandUnreadReplySchema
 )
 
-/** The twelve commands whose reply body nothing reads. */
+/** Commands whose reply body nothing reads. */
 function browserPageCommand<Method extends RpcMethodName>(name: string, method: Method) {
   return browserPageCommandReading(name, method, unreadBrowserCommandReader)
 }
@@ -43,6 +44,7 @@ export const browserNavigate = browserPageCommandReading(
 export const browserGoBack = browserPageCommand('browser.go-back', 'browser.back')
 export const browserGoForward = browserPageCommand('browser.go-forward', 'browser.forward')
 export const browserReload = browserPageCommand('browser.reload-page', 'browser.reload')
+export const browserStop = browserPageCommand('browser.stop-page', 'browser.stop')
 export const browserPointerClick = browserPageCommand('browser.pointer-click', 'browser.mouseClick')
 export const browserPointerMove = browserPageCommand('browser.pointer-move', 'browser.mouseMove')
 export const browserPointerDown = browserPageCommand('browser.pointer-down', 'browser.mouseDown')
@@ -60,4 +62,10 @@ export const browserDialogAccept = browserPageCommand(
 export const browserDialogDismiss = browserPageCommand(
   'browser.dialog-dismiss',
   'browser.dialogDismiss'
+)
+
+export const browserCertificateProceed = browserPageCommandReading(
+  'browser.certificate-proceed',
+  'browser.certificate.proceed',
+  rpcResultVariant('browser-certificate-proceed', browserCertificateProceedReplySchema)
 )

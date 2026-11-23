@@ -5,6 +5,7 @@ import { botOfToken } from '../../../bots/bot-of-caller'
 import { getGoogleConnect, type GoogleConnect } from '../../../google/google-connect'
 import type { GoogleStatusView } from '../../../../shared/google/google-connect-types'
 import {
+  botAskerKeys,
   botOtherAskers,
   googleWhoCanAskWarning
 } from '../../../../shared/google/google-who-can-ask-warning'
@@ -12,6 +13,7 @@ import {
   GoogleBotAccessSetParams,
   GoogleClientExportParams,
   GoogleClientImportParams,
+  GoogleDefaultSetParams,
   GoogleDisconnectParams,
   GoogleFinishSignInParams,
   GoogleSignInFlowParams,
@@ -45,12 +47,12 @@ function refuseFromBot(botToken: string | undefined, context: RpcContext): void 
   }
 }
 
-function statusView(
+async function statusView(
   runtime: OrcaRuntimeService,
   connect: GoogleConnect
-): Omit<GoogleStatusView, 'accounts'> {
+): Promise<Omit<GoogleStatusView, 'accounts'>> {
   return {
-    client: connect.client(),
+    client: await connect.client(),
     bots: runtime.bots.enabled()
       ? runtime.bots
           .list()
@@ -60,11 +62,11 @@ function statusView(
   }
 }
 
-function pickAccount(connect: GoogleConnect, wanted: string | undefined): string {
+async function pickAccount(connect: GoogleConnect, wanted: string | undefined): Promise<string> {
   if (wanted) {
     return wanted
   }
-  const accounts = connect.accounts()
+  const accounts = await connect.accounts()
   if (accounts.length === 1 && accounts[0]) {
     return accounts[0].email
   }
@@ -76,6 +78,18 @@ function pickAccount(connect: GoogleConnect, wanted: string | undefined): string
 }
 
 // `workspace`: anyone who can run commands here could run the sign-in in a terminal anyway.
+const GOOGLE_ASKERS_CHANGED =
+  'Who can ask changed while you were confirming. Review it and turn Google on again.'
+
+function sameAskers(shown: readonly string[], current: readonly string[]): boolean {
+  const sortedShown = [...shown].sort()
+  const sortedCurrent = [...current].sort()
+  return (
+    sortedShown.length === sortedCurrent.length &&
+    sortedShown.every((key, index) => key === sortedCurrent[index])
+  )
+}
+
 export const GOOGLE_METHODS = [
   defineMethod({
     name: 'google.status',
@@ -85,8 +99,13 @@ export const GOOGLE_METHODS = [
       const connect = google()
       const [accounts, clientKey] = check
         ? await Promise.all([connect.checkAccounts(), connect.checkClient()])
-        : [connect.accounts(), connect.clientCheck()]
-      return { ...statusView(runtime, connect), accounts, ...(clientKey ? { clientKey } : {}) }
+        : [await connect.accounts(), await connect.clientCheck()]
+      return {
+        ...(await statusView(runtime, connect)),
+        accounts,
+        defaultAccount: await connect.defaultAccount(),
+        ...(clientKey ? { clientKey } : {})
+      }
     }
   }),
   defineMethod({
@@ -95,7 +114,7 @@ export const GOOGLE_METHODS = [
     params: GoogleClientImportParams,
     handler: async ({ botToken, file }, ctx) => {
       refuseFromBot(botToken, ctx)
-      return { client: google().importClient(file) }
+      return { client: await google().importClient(file) }
     }
   }),
   defineMethod({
@@ -104,7 +123,7 @@ export const GOOGLE_METHODS = [
     params: GoogleClientExportParams,
     handler: async ({ botToken }, ctx) => {
       refuseFromBot(botToken, ctx)
-      return { file: google().exportClient() }
+      return { file: await google().exportClient() }
     }
   }),
   defineMethod({
@@ -150,17 +169,31 @@ export const GOOGLE_METHODS = [
     handler: async ({ botToken, account, revoke }, ctx) => {
       refuseFromBot(botToken, ctx)
       const connect = google()
-      return connect.disconnect(pickAccount(connect, account), revoke === true)
+      return connect.disconnect(await pickAccount(connect, account), revoke === true)
+    }
+  }),
+  defineMethod({
+    name: 'google.default.set',
+    permission: 'workspace',
+    params: GoogleDefaultSetParams,
+    handler: async ({ botToken, account }, ctx) => {
+      refuseFromBot(botToken, ctx)
+      return { defaultAccount: await google().setDefaultAccount(account) }
     }
   }),
   defineMethod({
     name: 'google.bot.set',
     permission: 'workspace',
     params: GoogleBotAccessSetParams,
-    handler: async ({ botToken, botId, on }, ctx) => {
+    handler: async ({ botToken, botId, on, confirmedAskers }, ctx) => {
       refuseFromBot(botToken, ctx)
       ctx.runtime.bots.assertEnabled()
-      const bot = await ctx.runtime.bots.update(botId, { google: on })
+      const bot = await ctx.runtime.bots.update(botId, (current) => {
+        if (on && confirmedAskers && !sameAskers(confirmedAskers, botAskerKeys(current))) {
+          throw new InvalidArgumentError(GOOGLE_ASKERS_CHANGED)
+        }
+        return { google: on }
+      })
       // Settings confirms this before turning Google on; the CLI prints it.
       const warning = on ? googleWhoCanAskWarning(bot.name, botOtherAskers(bot)) : null
       return {

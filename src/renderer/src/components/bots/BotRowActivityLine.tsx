@@ -4,8 +4,8 @@ import { botTarget } from '@/lib/bot-hosts'
 import { buildWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-agent-rows'
 import { selectLiveAgentStatusEntriesForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import { useNow } from '@/lib/window-activity/use-now'
-import { translate } from '@/i18n/i18n'
-import { useTranslate } from '@/i18n/use-translate'
+import { useWorktreeActivityStatus } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-status'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { useBotWaits, useListedBotItemsNeedingOwner } from '@/lib/bot-catalog'
 import { usePublishedBotNeedsYou } from './bot-needs-you-published'
 import { useStructuredAgentSessionsStarting } from '@/components/native-chat/session/status/structured-agent-session-status-hooks'
@@ -26,6 +26,13 @@ import { botRowLineText, botRowReplyingAt } from '../../../../shared/bots/bot-ro
 import { countLiveBotWorkspaces } from '../../../../shared/bots/bot-sidebar-workspaces'
 import { useBotWorkerWorkspaces, useLiveWorkspaceStatuses } from './use-bot-worker-statuses'
 import { useBotOwnChats } from '@/lib/bot-own-chats'
+import type { NamedUsageLimitStop } from '../../../../shared/bots/bot-usage-limit-stop'
+import { useBotUsageLimitStops } from './use-bot-usage-limit-stops'
+import { usageLimitStopText } from './BotUsageLimitMark'
+
+/** A chat, worker or run stopped on its usage limit, said while nothing of the bot's works or
+ *  waits on the owner; those still speak first. */
+export type BotRowLimit = { place: string | null; stop: NamedUsageLimitStop }
 
 const NO_LINKS: NonNullable<FolderWorkspace['externalConversations']> = []
 const NO_ENTRIES: AgentStatusEntry[] = []
@@ -36,7 +43,8 @@ export function useBotRowLine(
   bot: Bot,
   home: FolderWorkspace,
   needsYou?: number
-): { line: BotRowLine | null; now: number; needsYou: boolean } {
+): { line: BotRowLine | null; limit: BotRowLimit | null; now: number; needsYou: boolean } {
+  const t = useTranslate()
   const links = home.externalConversations ?? NO_LINKS
   const chats = useBotOwnChats(bot.paused ? null : bot)
   const paneKeys = useMemo(
@@ -84,13 +92,34 @@ export function useBotRowLine(
     [bot.paused, childWorktrees]
   )
   const workerStatuses = useLiveWorkspaceStatuses(workerIds)
+  const stopWorkspaces = useMemo(
+    () => (bot.paused ? [] : [folderWorkspaceKey(home.id), ...workerIds]),
+    [bot.paused, home.id, workerIds]
+  )
+  const [stop] = useBotUsageLimitStops(bot, stopWorkspaces)
   const workers = useMemo(() => countLiveBotWorkspaces(workerStatuses), [workerStatuses])
   const now = useNow(60_000)
   const rows = useMemo(() => buildWorktreeAgentRows({ tabs: [], entries, now }), [entries, now])
+  // Its home's own status also reads terminal pane titles, which `rows` (built without tabs) misses.
+  const homeStatus = useWorktreeActivityStatus(folderWorkspaceKey(home.id))
   // The panel, tab badge or toggle's count when one is mounted for the bot; else the rows' own asks
   // plus the items its host's list counted. Neither starts a read.
   const published = usePublishedBotNeedsYou(bot)
   const listedItems = useListedBotItemsNeedingOwner(bot)
+  // Any of its own rows or workers working or waiting: the line is theirs, not the stop's.
+  const busy = useMemo(
+    () =>
+      homeStatus === 'working' ||
+      homeStatus === 'permission' ||
+      workers.working > 0 ||
+      workers.permission > 0 ||
+      rows.some(
+        (row) =>
+          row.rowSource !== 'subagent' &&
+          (row.state === 'working' || row.state === 'blocked' || row.state === 'waiting')
+      ),
+    [homeStatus, rows, workers]
+  )
   const hasNeedsYou = useMemo(
     () =>
       !bot.paused &&
@@ -101,21 +130,41 @@ export function useBotRowLine(
         )),
     [bot.paused, rows, workers.permission]
   )
-  const line = selectBotRowLine({
-    paused: bot.paused,
-    startingSessionIds,
-    rows,
-    chatSessionId: bot.chatSessionId,
-    links,
-    chats,
-    waits,
-    workers,
-    needsYou: needsYou ?? published ?? undefined,
-    itemsNeedingYou: listedItems ?? undefined,
-    now
-  })
-  return { line, now, needsYou: hasNeedsYou }
+  const line = selectBotRowLine(
+    {
+      paused: bot.paused,
+      startingSessionIds,
+      rows,
+      chatSessionId: bot.chatSessionId,
+      links,
+      chats,
+      waits,
+      workers,
+      needsYou: needsYou ?? published ?? undefined,
+      itemsNeedingYou: listedItems ?? undefined,
+      now
+    },
+    t
+  )
+  const limit: BotRowLimit | null =
+    stop && !busy && !(line && LIVE_LINES.has(line.kind))
+      ? {
+          place:
+            stop.sessionId === bot.chatSessionId ? t('bots.chats.home', 'Home Chat') : stop.name,
+          stop
+        }
+      : null
+  return { line, limit, now, needsYou: hasNeedsYou }
 }
+
+/** Lines about live work or the owner, which a stop never covers; a past activity or a wait can be. */
+const LIVE_LINES: ReadonlySet<BotRowLine['kind']> = new Set([
+  'paused',
+  'reading',
+  'replying',
+  'needYouElsewhere',
+  'workingElsewhere'
+])
 
 /** How long ago the line's activity was, shown on the row's first line. */
 export function botRowLineAge(line: BotRowLine | null, now: number): string | null {
@@ -125,6 +174,7 @@ export function botRowLineAge(line: BotRowLine | null, now: number): string | nu
 /** The second line: its text truncates first, the trailing control stays. */
 export function BotRowLineView({
   line,
+  limit = null,
   fallback = null,
   unread,
   now,
@@ -133,6 +183,8 @@ export function BotRowLineView({
   trailing = null
 }: {
   line: BotRowLine | null
+  /** Said in place of a quiet line. */
+  limit?: BotRowLimit | null
   /** Shown when there is no line: the bot's purpose, so the row has no blank line. */
   fallback?: string | null
   unread: boolean
@@ -148,7 +200,13 @@ export function BotRowLineView({
       {leading}
       {/* No title: the row's hover card shows the whole line. */}
       <span className={cn('min-w-0 flex-1 truncate', unread && 'text-foreground')}>
-        <BotRowLineText line={line} fallback={fallback} now={now} disconnected={disconnected} />
+        <BotRowLineText
+          line={line}
+          limit={limit}
+          fallback={fallback}
+          now={now}
+          disconnected={disconnected}
+        />
       </span>
       {trailing}
     </div>
@@ -158,11 +216,13 @@ export function BotRowLineView({
 /** The line's words, with a place's label and icon, for a container that truncates them. */
 export function BotRowLineText({
   line,
+  limit = null,
   fallback = null,
   now,
   disconnected = false
 }: {
   line: BotRowLine | null
+  limit?: BotRowLimit | null
   /** Shown when there is no line: the bot's purpose. */
   fallback?: string | null
   now: number
@@ -171,6 +231,19 @@ export function BotRowLineText({
   const t = useTranslate()
   if (disconnected) {
     return <>{t('bots.row.disconnected', 'Disconnected')}</>
+  }
+  if (limit) {
+    return (
+      <>
+        {limit.place ? (
+          <>
+            <span className="font-medium text-foreground">{limit.place}</span>
+            {' · '}
+          </>
+        ) : null}
+        {usageLimitStopText(t, limit.stop)}
+      </>
+    )
   }
   if (line?.kind === 'activity' && line.place) {
     return (
@@ -184,7 +257,7 @@ export function BotRowLineText({
   if (line?.kind === 'replying' && line.place) {
     return <ReplyingAtLabel place={line.place} />
   }
-  return <>{line ? lineText(line, now) : (fallback ?? '')}</>
+  return <>{line ? lineText(t, line, now) : (fallback ?? '')}</>
 }
 
 /** The hover card's copy of the row's line, whole and with markdown stripped. */
@@ -195,14 +268,18 @@ export function BotHoverLatestLine({
   line: BotRowLine | null
   now: number
 }): React.JSX.Element | null {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   if (!line || line.kind === 'paused') {
     return null
   }
   const age =
-    line.kind === 'activity' && line.at !== null ? formatUiRelativeTime(line.at - now) : null
+    line.kind === 'activity' && line.at !== null
+      ? formatUiRelativeTime(line.at - now, intlLocale)
+      : null
   // Block markers first (list bullets, headings, quotes), then inline links and emphasis.
   const text = stripInlineMarkdownForToc(
-    lineText(line, now).replace(/^\s*(?:[-*+]|\d+\.|#{1,6}|>)\s+/gm, '')
+    lineText(t, line, now).replace(/^\s*(?:[-*+]|\d+\.|#{1,6}|>)\s+/gm, '')
   )
   return (
     <div className="mt-2.5 line-clamp-3 border-t border-border pt-2 text-xs leading-snug text-foreground">
@@ -225,7 +302,8 @@ function BotRowPlaceLabel({ place }: { place: BotRowPlace }): React.JSX.Element 
 const PLACE_SLOT = '\u0000'
 
 function ReplyingAtLabel({ place }: { place: BotRowPlace }): React.JSX.Element {
-  const [before = '', after = ''] = botRowReplyingAt(translate, place, PLACE_SLOT).split(PLACE_SLOT)
+  const t = useTranslate()
+  const [before = '', after = ''] = botRowReplyingAt(t, place, PLACE_SLOT).split(PLACE_SLOT)
   return (
     <>
       {before}
@@ -235,6 +313,8 @@ function ReplyingAtLabel({ place }: { place: BotRowPlace }): React.JSX.Element {
   )
 }
 
-function lineText(line: BotRowLine, now: number): string {
-  return botRowLineText(line, translate, (by) => formatWaitTime(by, now))
+// Takes the render's t, not module translate(): React Compiler memoizes this call on its arguments,
+// so a module translate() here kept the previous language after a switch.
+function lineText(t: Translate, line: BotRowLine, now: number): string {
+  return botRowLineText(line, t, (by) => formatWaitTime(by, now))
 }
