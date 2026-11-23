@@ -19,7 +19,6 @@ import { CodexSharedServerTurns } from './codex-shared-server-turns'
 import { stopCodexLeaseWriter } from './codex-shared-server-writer-stop'
 import { CodexSharedServerRouter } from './codex-shared-server-router'
 import { retiringHungCodexServers } from './codex-shared-server-hang-watch'
-import type { CodexSharedServerWindowsJob } from './codex-shared-server-windows-job'
 
 const RELEASE_REQUEST_TIMEOUT_MS = 5_000
 const INITIALIZE_TIMEOUT_MS = 15_000
@@ -48,9 +47,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     readonly spec: CodexSharedServerSpec,
     private readonly onEnded: (server: CodexSharedServer) => void,
     connect: typeof spawnCodexAppServerConnection = spawnCodexAppServerConnection,
-    private readonly sweep?: CodexSharedServerProcessSweep,
-    /** Windows only: holds the server's whole tree, so its close ends what chats left running. */
-    private readonly windowsJob?: CodexSharedServerWindowsJob
+    private readonly sweep?: CodexSharedServerProcessSweep
   ) {
     this.ready = this.start(retiringHungCodexServers(connect))
   }
@@ -82,26 +79,11 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     this.physical = connection
     try {
       await initializeCodexAppServerConnection(connection, INITIALIZE_TIMEOUT_MS)
-      // A server its Windows job can't hold couldn't end what chats leave running.
-      await this.windowsJob?.requireHolds(connection.pid, () => this.hasExited)
     } catch (error) {
       // A server that never initialized serves nobody; the next chat gets a fresh one.
       this.draining = true
-      if (this.windowsJob) {
-        // Its waiting chats leave silently: their open rejects and a fallback reuses their handlers.
-        this.leases.clear()
-      }
-      void this.closeProcess()
+      void connection.close()
       throw error
-    }
-  }
-
-  /** Every close of the process: the tree kill, then the Windows job ends anything it missed. */
-  private async closeProcess(): Promise<boolean> {
-    try {
-      return this.physical ? await this.physical.close() : true
-    } finally {
-      this.windowsJob?.terminate()
     }
   }
 
@@ -310,7 +292,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
       console.warn(`[codex-shared-server] pid ${this.pid ?? '?'}: chat work outlived cleanup`)
       return
     }
-    await this.closeProcess()
+    await this.physical.close()
   }
 
   /** Whether the process's descendants (the chats' commands) were proven gone when it closed. */
@@ -331,9 +313,10 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   async stop(): Promise<boolean> {
     this.draining = true
     await this.ready.catch(() => {})
-    // A server that never spawned is trivially stopped.
-    const closed = await this.closeProcess()
-    return closed && (this.physical?.closeResult?.root ?? 'exited') === 'exited'
+    if (!this.physical) {
+      return true
+    }
+    return (await this.physical.close()) && this.physical.closeResult?.root === 'exited'
   }
 
   refuse(frame: CodexSharedServerFrame): void {
@@ -355,10 +338,13 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     this.turns.endAll()
     this.backlogs.dispose()
     // Root exit says nothing of the commands it ran; reap and judge the tree for every chat.
-    this.reaping = this.closeProcess().then(
-      () => {},
-      () => {}
-    )
+    const physical = this.physical
+    this.reaping = physical
+      ? physical.close().then(
+          () => {},
+          () => {}
+        )
+      : Promise.resolve()
     // Every chat on it sees its own unexpected exit and reopens its thread on its next send.
     for (const lease of this.leases) {
       lease.fail(error, false)

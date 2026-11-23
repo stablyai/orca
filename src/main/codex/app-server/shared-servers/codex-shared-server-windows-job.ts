@@ -1,4 +1,5 @@
 import { spawnProcess } from '@orca/process-host'
+import type { spawnCodexAppServerConnection } from '../codex-app-server-connection'
 import type { ProviderProcessSpawner } from '../../../provider-process/provider-process-spawn'
 import { readWindowsProcessIdentityTableFresh } from '../../../windows/windows-process-table'
 import { windowsJobObjectApi, type WindowsJobObjectApi } from '../../../windows/windows-job-object'
@@ -53,6 +54,20 @@ export class CodexSharedServerWindowsJob {
       this.api.assignProcessToJob(this.job, child.pid)
     }
     return child
+  }
+
+  /** Opens the server with its launcher in this job, and ends the job after every close of it. */
+  connect(connect: typeof spawnCodexAppServerConnection): typeof spawnCodexAppServerConnection {
+    return async (launch, handlers) => {
+      const connection = await connect(launch, handlers, this.spawn).catch((error: unknown) => {
+        this.terminate()
+        throw error
+      })
+      // The tree kill misses what a finished command left running; the job doesn't.
+      const close = connection.close.bind(connection)
+      connection.close = () => close().finally(() => this.terminate())
+      return connection
+    }
   }
 
   /** Throws unless the launcher chain down to native Codex is in the job. A chain member outside
