@@ -8,6 +8,8 @@ export type WakeAlertsEnv = AlertsEnv & {
   // no-socket-share fires above NO_SOCKET_PCT (5) percent of wakes, at >= NO_SOCKET_MIN (50) wakes.
   NO_SOCKET_PCT?: string
   NO_SOCKET_MIN?: string
+  // Comma-separated rule ids this deployment never evaluates (e.g. 'silent' where no clients run).
+  ALERTS_OFF?: string
 }
 
 export type WakeThresholds = Thresholds & { noSocketPct: number; noSocketMin: number; probesPerWindow: number }
@@ -34,10 +36,12 @@ export function thresholds(env: WakeAlertsEnv): WakeThresholds {
   }
 }
 
-// Counts per window, weighted by Analytics Engine sampling. blobs: [event, label, version, reason,
-// place]; double1 is the event's value (a wake event's value is its host count).
-export const SQL = (dataset: string, fromMin: number, toMin: number) => `
+// Counts per whole minute ago (0 = the last minute), weighted by Analytics Engine sampling, so one
+// query gives every window alerts.ts compares. blobs: [event, label, version, reason, place]; double1
+// is the event's value (a wake event's value is its host count).
+export const SQL = (dataset: string, fromMin: number) => `
 SELECT
+  intDiv(toUInt32(NOW()) - toUInt32(timestamp), 60) AS ago,
   sumIf(_sample_interval, blob1 = 'socket_open') AS socket_open,
   sumIf(_sample_interval, blob1 = 'refuse' AND blob4 = 'token') AS refuse_401,
   sumIf(_sample_interval, blob1 = 'refuse' AND blob4 = 'country') AS refuse_country,
@@ -48,7 +52,8 @@ SELECT
   sumIf(_sample_interval * double1, blob1 = 'wake' AND blob2 = 'error') AS wake_error,
   sumIf(_sample_interval, blob1 != 'refuse') AS events
 FROM ${dataset}
-WHERE timestamp > NOW() - INTERVAL '${fromMin}' MINUTE AND timestamp <= NOW() - INTERVAL '${toMin}' MINUTE
+WHERE timestamp > NOW() - INTERVAL '${fromMin}' MINUTE
+GROUP BY ago
 FORMAT JSON`
 
 export type Rule = { id: string; describe: (now: Counts, t: WakeThresholds) => string; breach: (c: Counts, t: WakeThresholds, prior?: Counts) => boolean }
