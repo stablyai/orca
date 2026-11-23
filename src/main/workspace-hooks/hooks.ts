@@ -1,4 +1,5 @@
 import { readFileSync, existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parseOrcaYaml } from '../../shared/workspace-setup/orca-yaml'
 import { resolveHookCommandSourcePolicy } from '../../shared/workspace-setup/hooks/hook-command-source-policy'
@@ -89,12 +90,19 @@ function hookSpawnFailure(
   return { success: false, output: message }
 }
 
-function getHookShell(): string | undefined {
+// Non-FHS hosts (NixOS) keep only sh in /bin; keep the exact path where it exists, since a
+// GUI-launched main process may carry a stripped PATH. Resolved once per process, off the main thread.
+let posixHookShell: Promise<string> | null = null
+function getHookShell(): Promise<string> {
   if (process.platform === 'win32') {
-    return process.env.ComSpec || 'cmd.exe'
+    return Promise.resolve(process.env.ComSpec || 'cmd.exe')
   }
 
-  return '/bin/bash'
+  posixHookShell ??= access('/bin/bash').then(
+    () => '/bin/bash',
+    () => 'bash'
+  )
+  return posixHookShell
 }
 
 // A UNC drive-mount repo's file opens only through its drive path.
@@ -156,7 +164,7 @@ export function getSetupCommandSource(
   return null
 }
 
-export function runHook(
+export async function runHook(
   hookName: 'setup' | 'archive',
   cwd: string,
   repo: WorkspaceHookOwner,
@@ -171,7 +179,7 @@ export function runHook(
   const script = hooks?.scripts[hookName]
 
   if (!script) {
-    return Promise.resolve({ success: true, output: '' })
+    return { success: true, output: '' }
   }
 
   const runtimeTarget = getHookRuntimeTarget(projectRuntime)
@@ -212,6 +220,7 @@ export function runHook(
   applyHostHookOrcaCliEnv(shellHookEnv)
   Object.assign(shellHookEnv, getSetupEnvVars(repo, cwd, options.identity))
   dropIncoherentCondaActivationEnv(shellHookEnv)
+  const hookShell = await getHookShell()
 
   return new Promise<HookProcessOutcome>((resolve) => {
     // Settle at the deadline even if the hook traps SIGTERM or keeps running (#19334).
@@ -230,7 +239,7 @@ export function runHook(
     // exec ignores detached; spawn creates the process group needed for tree termination.
     const child = spawn(script, {
       cwd,
-      shell: getHookShell(),
+      shell: hookShell,
       // Unattended hooks must suppress interactive Git prompts while retaining cached auth (#7652).
       env: promptGuardShellEnv(shellHookEnv),
       stdio: ['ignore', 'pipe', 'pipe'],
