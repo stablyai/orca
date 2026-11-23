@@ -51,7 +51,7 @@ export type ThreadBot = {
 function normalized(text: string): string {
   return text
     .toLowerCase()
-    .replace(/[’']/g, '')
+    .replace(/[\u2019']/g, '')
     .replace(/[^\p{L}\p{N}@<>\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()

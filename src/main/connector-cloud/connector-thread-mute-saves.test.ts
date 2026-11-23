@@ -23,6 +23,7 @@ describe('a thread mute whose save fails', () => {
       }
       saved += 1
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
     const write = threadMuteSaves({ flushPendingOrThrowAsync } as unknown as Parameters<
       typeof threadMuteSaves
     >[0])
@@ -55,6 +56,7 @@ describe('an unmute while an earlier unmute is still saving', () => {
     }))
     vi.resetModules()
     const { threadMuteSaves: saves } = await import('./connector-thread-mute-saves')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
     const write = saves({ flushPendingOrThrowAsync } as unknown as Parameters<typeof saves>[0])
     const key = { source: 'slack' as const, externalId: 'T:C:1.2:U' }
     void write(key, false)

@@ -210,7 +210,8 @@ function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore)
     read: (key) => readThreadMute(store, key),
     write: threadMuteSaves(store),
     queued: (key, work) =>
-      runtime.getExternalConversationSeam()?.queued(key, work) ?? Promise.resolve(work?.()),
+      runtime.getExternalConversationSeam()?.queued(key, work) ??
+      Promise.resolve(work?.()).then(() => undefined),
     // Only bots behind the same Slack app share its mention.
     otherBotNames: (botId) => {
       const bots = store.getBots?.() ?? []

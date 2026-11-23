@@ -6,6 +6,7 @@ import type {
   ConnectorDeliveryResult
 } from '../../shared/connectors/connector-cloud-contract'
 import type { SendDelivery } from './connector-deliveries'
+import type { Delivery } from '../external-conversations/external-conversation-types'
 
 import {
   addressesOtherBot,
@@ -79,7 +80,10 @@ export type ThreadMuteDeps = {
   otherBotNames: (botId: string) => string[]
   /** Runs `work` in the thread's queue after its queued deliveries (a start in the same poll
    *  writes its link there); a Stop settles it unrun. */
-  queued: (key: ConnectorConversation, work?: () => Promise<unknown>) => Promise<unknown>
+  queued: (
+    key: ConnectorConversation,
+    work?: () => Promise<unknown>
+  ) => Promise<Delivery | undefined>
   /** Each thread's newest reply still deciding (its link being written, its mute being saved). */
   waiting: Map<string, Promise<unknown>>
   react: (
@@ -156,16 +160,14 @@ export function handleThreadMute(
 /** Decides a reply once its wait in the thread's queue is over; one a Stop settled while it waited
  *  is refused as the Stop refused it, never sent into a new queue. */
 async function afterWait(
-  waited: Promise<unknown>,
+  waited: Promise<Delivery | undefined>,
   deps: ThreadMuteDeps,
   delivery: SendDelivery,
   record: RecordHandled,
   userId: string
 ): Promise<ConnectorDeliveryResult | 'send' | 'carried'> {
-  const wait = (await waited) as { outcome?: string } | undefined
-  return wait?.outcome === 'refused'
-    ? (wait as ConnectorDeliveryResult)
-    : await decideNow(deps, delivery, record, userId)
+  const wait = await waited
+  return wait?.outcome === 'refused' ? wait : await decideNow(deps, delivery, record, userId)
 }
 
 async function decideNow(

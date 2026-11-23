@@ -58,7 +58,7 @@ export class ExternalConversationSeam {
   readonly signal = this.abort.signal
   private readonly chain = new ConversationChain(this.abort.signal)
   /** Runs `work` in the conversation's queue, after its queued deliveries; a Stop settles it unrun. */
-  readonly queued = (key: ConversationKey, work?: () => Promise<unknown>): Promise<unknown> =>
+  readonly queued = (key: ConversationKey, work?: () => Promise<unknown>): Promise<Delivery> =>
     this.chain.after(conversationId(key), work)
   private readonly linked = new Map<string, { key: ConversationKey; worktreeId: string }>()
   private readonly chatDeliveries = new ChatDeliveries((...link) => this.linkChat(...link))

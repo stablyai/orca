@@ -75,6 +75,7 @@ describe('a muted thread', () => {
     let muted = false
     const reacted: string[] = []
     const reached: string[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
     const seam = {
       send: async (_host: unknown, _key: unknown, _id: string, message: { text: string }) => {
         reached.push(message.text)
@@ -115,6 +116,7 @@ describe('a muted thread', () => {
     const deliver = async (raw: unknown) => {
       const dispatched = dispatchDelivery(
         seam,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
         {} as ExternalConversationHost,
         machine,
         raw,
@@ -163,6 +165,7 @@ describe('a reply in the same poll as its thread’s start', () => {
         waiting,
         react: async () => {}
       },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
       send(text) as Parameters<typeof handleThreadMute>[1],
       (handled) => handled()
     )
@@ -190,6 +193,7 @@ describe('a resent delivery', () => {
     const waiting = new Map<string, Promise<unknown>>()
     let muted = true
     const reached: string[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
     const seam = {
       send: async (_host: unknown, _key: unknown, _id: string, message: { text: string }) => {
         reached.push(message.text)
@@ -223,6 +227,7 @@ describe('a resent delivery', () => {
     }
     const resent = dispatchDelivery(
       seam,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
       {} as ExternalConversationHost,
       machine,
       send('<@U0BOT> look', { mentioned: true }),
@@ -241,6 +246,7 @@ describe('a mention that unmutes, with follow-ups in its poll', () => {
     const waiting = new Map<string, Promise<unknown>>()
     let muted = true
     const turns: { text: string; later: number }[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
     const seam = {
       send: async (
         _host: unknown,
@@ -282,6 +288,7 @@ describe('a mention that unmutes, with follow-ups in its poll', () => {
           carriedBefore
         )
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
     const batch = [
       send('<@U0BOT> ok unmute', { mentioned: true }),
       send('a'),
@@ -289,6 +296,7 @@ describe('a mention that unmutes, with follow-ups in its poll', () => {
     ] as unknown as Parameters<typeof dispatchBatch>[3]
     const dispatched = dispatchBatch(
       seam,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
       {} as ExternalConversationHost,
       machine,
       batch,
@@ -309,6 +317,7 @@ describe('a silenced reply resent after an unmute', () => {
     let muted = true
     const reached: string[] = []
     const held = new Map<string, Promise<unknown>>()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
     const seam = {
       send: async (_host: unknown, _key: unknown, _id: string, message: { text: string }) => {
         reached.push(message.text)
@@ -357,6 +366,7 @@ describe('a silenced reply resent after an unmute', () => {
         )
     }
     const deliver = async (raw: unknown) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
       await dispatchDelivery(seam, {} as ExternalConversationHost, machine, raw, () => 60_000)?.done
     const reply = send('do the thing', { automations: [{ automationId: 'a1', triggerId: 't1' }] })
     expect(await deliver(reply)).toEqual({ outcome: 'accepted' })
@@ -370,7 +380,7 @@ describe('a silenced reply resent after an unmute', () => {
 describe('a held reply whose thread is stopped while it waits', () => {
   // The Stop settles its wait in the thread's queue as refused: it is refused too, never sent on.
   it('is refused as the Stop refused it', async () => {
-    const stopped = { outcome: 'refused', reason: 'conversation_cancelled' }
+    const stopped = { outcome: 'refused', reason: 'conversation_cancelled' } as const
     const outcome = handleThreadMute(
       {
         read: () => null,
@@ -381,6 +391,7 @@ describe('a held reply whose thread is stopped while it waits', () => {
         waiting: new Map(),
         react: async () => {}
       },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
       send('@sam be quiet') as Parameters<typeof handleThreadMute>[1],
       (handled) => handled()
     )
@@ -411,6 +422,7 @@ describe('a silenced reply leading a batch', () => {
     const waiting = new Map<string, Promise<unknown>>()
     let muted = true
     const turns: { text: string; later: number }[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
     const seam = {
       send: async (
         _host: unknown,
@@ -452,6 +464,7 @@ describe('a silenced reply leading a batch', () => {
           carriedBefore
         )
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
     const batch = [
       send('fyi'),
       send('<@U0BOT> draft a reply', { mentioned: true }),
@@ -459,6 +472,7 @@ describe('a silenced reply leading a batch', () => {
     ] as unknown as Parameters<typeof dispatchBatch>[3]
     const dispatched = dispatchBatch(
       seam,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
       {} as ExternalConversationHost,
       machine,
       batch,
@@ -472,8 +486,9 @@ describe('a silenced reply leading a batch', () => {
 describe('a held reply leading a batch, stopped while it waits', () => {
   // Its follow-ups are refused with it, as one queued turn would be, never sent after the Stop.
   it('takes its batch down with it', async () => {
-    const stopped = { outcome: 'refused', reason: 'conversation_cancelled' }
+    const stopped = { outcome: 'refused', reason: 'conversation_cancelled' } as const
     const reached: string[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
     const seam = {
       send: async (_host: unknown, _key: unknown, _id: string, message: { text: string }) => {
         reached.push(message.text)
@@ -509,11 +524,13 @@ describe('a held reply leading a batch, stopped while it waits', () => {
           carriedBefore
         )
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
     const batch = [send('@sam be quiet'), send('draft it')] as unknown as Parameters<
       typeof dispatchBatch
     >[3]
     const dispatched = dispatchBatch(
       seam,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
       {} as ExternalConversationHost,
       machine,
       batch,
@@ -530,6 +547,7 @@ describe('a later mute in the same poll as a held batch', () => {
   it('is never overtaken by the batch before it', async () => {
     let muted = false
     const reached: string[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
     const seam = {
       send: async (_host: unknown, _key: unknown, _id: string, message: { text: string }) => {
         reached.push(message.text)
@@ -558,7 +576,7 @@ describe('a later mute in the same poll as a held batch', () => {
             },
             botNames: () => ['reviewer'],
             otherBotNames: () => [],
-            queued: async (_key, work) => await work?.(),
+            queued: async (_key, work) => void (await work?.()),
             waiting,
             react: async () => {}
           },
@@ -570,8 +588,10 @@ describe('a later mute in the same poll as a held batch', () => {
     const dispatch = (texts: { text: string; extra?: Record<string, unknown> }[]) =>
       dispatchBatch(
         seam,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
         {} as ExternalConversationHost,
         machine,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
         texts.map(({ text, extra }) => send(text, extra)) as unknown as Parameters<
           typeof dispatchBatch
         >[3],
