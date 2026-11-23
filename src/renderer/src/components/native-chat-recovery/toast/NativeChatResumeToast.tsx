@@ -13,7 +13,9 @@ export type NativeChatResumeToastProps = {
   /** Set for a paired server; its chats are named with the machine. */
   machineName?: string
   listedAt: number
-  nameFor: (candidate: ResumeCandidate, fallback: string) => string
+  nameFor: (sessionId: string, fallback: string) => string
+  /** The bot whose chat this is, named before the chat's title. */
+  botNameFor?: (candidate: ResumeCandidate) => string | undefined
   defaultExpanded?: boolean
   onResume: (sessionIds: readonly string[]) => void
   onRowAction: (action: ResumeFailureAction, sessionId: string) => void
@@ -137,6 +139,7 @@ export function NativeChatResumeToast({
   machineName,
   listedAt,
   nameFor,
+  botNameFor,
   defaultExpanded = false,
   onResume,
   onRowAction,
@@ -235,10 +238,11 @@ export function NativeChatResumeToast({
                 key={row.candidate.sessionId}
                 row={row}
                 name={nameFor(
-                  row.candidate,
+                  row.candidate.sessionId,
                   firstLine(row.candidate.latestPrompt) ||
                     t('auto.components.NativeChatResumeToast.untitled', 'Untitled agent')
                 )}
+                owner={botNameFor?.(row.candidate)}
                 age={formatShortTimeAgo(row.candidate.recordedAt, listedAt)}
                 busy={busy}
                 remote={machineName !== undefined}

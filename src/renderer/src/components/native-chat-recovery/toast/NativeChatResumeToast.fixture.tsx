@@ -12,7 +12,7 @@ const actions = {
   onRowAction: noop,
   onOpenSettings: noop,
   onClose: noop,
-  nameFor: (_candidate: ResumeCandidate, fallback: string) => fallback
+  nameFor: (_sessionId: string, fallback: string) => fallback
 }
 
 const PROMPTS = [
@@ -64,6 +64,8 @@ function finishedRun(
 }
 
 const NARROW = 360
+/** The toaster's narrowest width, min(26rem, 100vw - 2rem) = 328 px in a 360 px window, plus the frame's padding. */
+const NARROWEST = 360
 
 export const offerManual = defineFixture({
   width: NARROW,
@@ -161,9 +163,16 @@ export const remoteServer = defineFixture({
 })
 
 /** A bot's chats lead with its name; its own chat is always "Home". */
-const BOT_CHATS: Record<string, string> = {
-  'chat-0': 'UX Designer · Home',
-  'chat-1': 'UX Designer · Review the onboarding flow'
+const BOT_CHATS: Record<string, { bot: string; chat: string }> = {
+  'chat-0': { bot: 'UX Designer', chat: 'Home' },
+  'chat-1': { bot: 'UX Designer', chat: 'Review the onboarding flow' }
+}
+
+function botChats(chats: Record<string, { bot: string; chat: string }>) {
+  return {
+    nameFor: (sessionId: string, fallback: string) => chats[sessionId]?.chat ?? fallback,
+    botNameFor: (candidate: ResumeCandidate) => chats[candidate.sessionId]?.bot
+  }
 }
 
 export const botChatsResumed = defineFixture({
@@ -174,7 +183,33 @@ export const botChatsResumed = defineFixture({
       listedAt={NOW}
       defaultExpanded
       {...actions}
-      nameFor={(candidate, fallback) => BOT_CHATS[candidate.sessionId] ?? fallback}
+      {...botChats(BOT_CHATS)}
+    />
+  )
+})
+
+const LONG_BOT = 'Customer Onboarding Research Assistant 02'
+/** Narrowest toast: the chat title truncates before a long bot name, and the age and actions stay. */
+export const botChatsLongNames = defineFixture({
+  width: NARROWEST,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(
+        finishedRun(twelve.slice(0, 4), 'launch'),
+        [],
+        new Map([[notAttached.sessionId, notAttached]])
+      )}
+      listedAt={NOW}
+      defaultExpanded
+      {...actions}
+      {...botChats({
+        'chat-0': {
+          bot: LONG_BOT,
+          chat: 'Summarize every interview from last week and draft the findings deck'
+        },
+        'chat-1': { bot: LONG_BOT, chat: 'Home' },
+        'chat-2': { bot: 'UX Designer', chat: PROMPTS[0] ?? '' }
+      })}
     />
   )
 })
@@ -191,9 +226,6 @@ type FixtureLanguage =
   | 'tr'
   | 'zh'
   | 'zh-Hant'
-
-/** The toaster's narrowest width, min(26rem, 100vw - 2rem) = 328 px in a 360 px window, plus the frame's padding. */
-const NARROWEST = 360
 
 function twelveOneNeedsYouIn(language: FixtureLanguage, width = NARROWEST) {
   return defineFixture({

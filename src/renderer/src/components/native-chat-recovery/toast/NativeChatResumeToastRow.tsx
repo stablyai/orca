@@ -85,7 +85,8 @@ function StateMark({ row }: { row: ResumeToastRow }): React.JSX.Element {
 
 export function NativeChatResumeToastRow({
   row,
-  name,
+  name: chatName,
+  owner,
   age,
   busy,
   remote,
@@ -93,6 +94,8 @@ export function NativeChatResumeToastRow({
 }: {
   row: ResumeToastRow
   name: string
+  /** The bot whose chat this is; the chat title truncates first so the bot stays named. */
+  owner?: string
   age: string
   busy: boolean
   remote: boolean
@@ -100,6 +103,12 @@ export function NativeChatResumeToastRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const actions = rowActions(row, remote, t)
+  const name = owner
+    ? t('auto.components.NativeChatResumeToast.botChat', '{{bot}} · {{chat}}', {
+        bot: owner,
+        chat: chatName
+      })
+    : chatName
   const reason = row.openOnly
     ? t('auto.components.NativeChatResumeFailureGuidance.fallbackShort', 'Couldn’t resume.')
     : row.failure
@@ -112,8 +121,17 @@ export function NativeChatResumeToastRow({
       <StateMark row={row} />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-baseline gap-2">
-          <span className="min-w-0 flex-1 truncate text-xs text-foreground/90" title={name}>
-            {name}
+          <span className="flex min-w-0 flex-1 text-xs text-foreground/90" title={name}>
+            {owner && (
+              <>
+                {/* Never shrinks, so even a sub-pixel squeeze can't clip it; past its cap the chat keeps a word. */}
+                <span className="max-w-[calc(100%-4rem)] shrink-0 truncate">{owner}</span>
+                <span aria-hidden="true" className="shrink-0 px-1 text-muted-foreground">
+                  ·
+                </span>
+              </>
+            )}
+            <span className="min-w-0 truncate">{chatName}</span>
           </span>
           <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{age}</span>
         </div>

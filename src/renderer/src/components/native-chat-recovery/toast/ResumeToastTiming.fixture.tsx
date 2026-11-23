@@ -39,7 +39,7 @@ function Report({ id }: { id: string }): React.JSX.Element {
       <NativeChatResumeToast
         view={view}
         listedAt={1}
-        nameFor={(_candidate, fallback) => fallback}
+        nameFor={(_id, fallback) => fallback}
         onResume={noop}
         onRowAction={noop}
         onOpenSettings={noop}

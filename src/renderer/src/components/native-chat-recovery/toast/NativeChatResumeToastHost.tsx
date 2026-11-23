@@ -5,7 +5,6 @@ import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activ
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { structuredChatShownName } from '@/runtime/native-chat/naming/structured-chat-shown-name'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
-import { useTranslate } from '@/i18n/use-translate'
 import { useBotsEnabled, useHostBots } from '@/lib/bot-catalog'
 import { findBotByWorkspace } from '../../bots/bot-workspace'
 import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from '../../settings/chat/native-chat-resume-setting-target'
@@ -159,22 +158,15 @@ function ConnectedResumeToast({
     root
   )
 
-  const t = useTranslate()
   const botsEnabled = useBotsEnabled()
   const hostId = getRuntimeTargetHostId(store.target)
   const hostBots = useHostBots(hostId)
   const feed = getStructuredAgentSessionStatusFeed(store.target)
-  const nameFor = (candidate: ResumeCandidate, fallback: string): string => {
-    const chat = structuredChatShownName(feed, candidate.sessionId)?.trim() || fallback
-    // Every bot's own chat is "Home", so a bot's rows lead with its name; scoped to this host's bots.
-    const bot = botsEnabled ? findBotByWorkspace(hostBots, candidate.workspaceId, hostId) : null
-    return bot
-      ? t('auto.components.NativeChatResumeToast.botChat', '{{bot}} · {{chat}}', {
-          bot: bot.name,
-          chat
-        })
-      : chat
-  }
+  const nameFor = (sessionId: string, fallback: string) =>
+    structuredChatShownName(feed, sessionId)?.trim() || fallback
+  // Every bot's own chat is "Home", so a bot's rows lead with its name; scoped to this host's bots.
+  const botNameFor = (candidate: ResumeCandidate): string | undefined =>
+    botsEnabled ? findBotByWorkspace(hostBots, candidate.workspaceId, hostId)?.name : undefined
 
   const onRowAction = (action: ResumeFailureAction, sessionId: string): void => {
     if (action === 'dismiss') {
@@ -213,6 +205,7 @@ function ConnectedResumeToast({
           machineName={remote ? machineName : undefined}
           listedAt={listedAt}
           nameFor={nameFor}
+          botNameFor={botNameFor}
           onResume={(ids) => void store.continueNativeChatRestartOffer(ids)}
           onRowAction={onRowAction}
           onDetailsOpened={onDetailsOpened}
