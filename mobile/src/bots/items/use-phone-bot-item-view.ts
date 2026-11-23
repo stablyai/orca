@@ -129,7 +129,8 @@ export function usePhoneBotItemView({
     if (waitingUnread && earlierCursor) {
       loadEarlier()
     }
-  }, [waitingUnread, earlierCursor, loadEarlier])
+    // A retry reads again from the newest page, so it starts paging back again too.
+  }, [waitingUnread, earlierCursor, loadEarlier, attempt])
   const failed = failure?.uid === uid ? failure : null
   return {
     item: own?.item ?? null,

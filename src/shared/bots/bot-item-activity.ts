@@ -137,7 +137,10 @@ function eventEntries(
     }
   }
   const pairing = botItemQuestionPairing(item, events)
-  const askWaiting = [...pairing.questions.values()].some(({ waiting }) => waiting)
+  // An ask waits, read or still on an earlier page.
+  const askWaiting =
+    [...pairing.questions.values()].some(({ waiting }) => waiting) ||
+    (item.waitingAsk !== undefined && !pairing.questions.has(item.waitingAsk))
   const kept = events.filter((event) => !isSnoozeMark(event))
   const place = new Map(kept.map((event, index) => [event, index]))
   const prev = (event: BotItemEvent): BotItemEvent | undefined => {

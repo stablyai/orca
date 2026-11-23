@@ -72,8 +72,8 @@ function answersAskedQuestions(text: string, asked: ReadonlySet<string>): boolea
 type OpenAsk = { id: string; entry: BotItemQuestionAnswers }
 
 /** The open asks' lines a reply answers: a recorded answer, a quick reply's words or a comment naming no
- *  line go to the ask it names first (the one waiting when it was sent), then the oldest open one;
- *  "Question → answer" lines go to every open ask asking that question. */
+ *  line go to the ask it names (the one waiting when it was sent), or the oldest open one when it names
+ *  none open; "Question → answer" lines go to the first ask asking that question, the named one first. */
 function answeredLines(
   open: readonly OpenAsk[],
   reply: BotItemEvent,
@@ -81,6 +81,8 @@ function answeredLines(
 ): { ask: OpenAsk; lines: number[]; byOrder: boolean }[] {
   const named = open.find(({ id }) => id === reply.data.answers)
   const asks = named ? [named, ...open.filter((ask) => ask !== named)] : open
+  // Words that name no question answer only the ask the reply names, else the oldest open one.
+  const own = named ? [named] : open
   const recorded = named && recordedLines(reply.data, named.entry.shape.decisions.length)
   if (named && recorded) {
     return [{ ask: named, lines: recorded, byOrder: false }]
@@ -93,7 +95,7 @@ function answeredLines(
   // A line read by order is open to a comment that names it.
   const isOpen = ({ answers, byOrder }: BotItemQuestionAnswers, index: number): boolean =>
     !answers[index] || byOrder[index] === true
-  for (const ask of asks) {
+  for (const ask of own) {
     const { shape } = ask.entry
     const picked = shape.decisions.findIndex(
       (decision, index) =>
@@ -118,7 +120,7 @@ function answeredLines(
   if (answersAskedQuestions(text, asked)) {
     return []
   }
-  for (const ask of asks) {
+  for (const ask of own) {
     const next = ask.entry.answers.indexOf(null)
     if (next !== -1) {
       return [{ ask, lines: [next], byOrder: true }]
@@ -247,6 +249,10 @@ export function botItemWaitingLine(
   }
   const { question } = item
   if (item.status !== 'needs_you' || !question) {
+    return null
+  }
+  // Another ask waits, still on an earlier page: the item's own question doesn't stand in for it.
+  if (item.waitingAsk !== undefined && item.waitingAsk !== question.eventId) {
     return null
   }
   // Read, its ask has no open line, or it asks nothing: no reply target.

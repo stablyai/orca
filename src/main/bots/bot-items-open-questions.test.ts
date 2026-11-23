@@ -166,8 +166,9 @@ function leftOpen() {
   const made = item()
   const first = made.ask([HOSTS, GO])
   made.comment(`${HOSTS} → Yes`, first)
-  made.ask([MERGE])
-  made.comment('Yes')
+  // The later set's quick reply, naming its ask.
+  const second = made.ask([MERGE])
+  made.comment('Yes', second)
   made.store.set(
     made.uid,
     { status: 'needs_you', comment: 'Only one question is left.' },
@@ -189,4 +190,15 @@ it('waits on no set while the one waiting is still on an earlier page', () => {
   expect(view().replyingTo?.line).toBe(HOSTS)
   // Only the events after the first set are loaded: the later set doesn't stand in for it.
   expect(view(first).replyingTo).toBeNull()
+})
+
+it('keeps a reply that names one set out of another set with the same choices', () => {
+  const { ask, comment, view } = item()
+  const first = ask([HOSTS, GO])
+  const second = ask([MERGE])
+  // Words that name no question, sent while the first set waits.
+  comment('Yes')
+  const { asks } = view()
+  expect(asks.get(botItemEventId(first))?.answers.map(Boolean)).toEqual([true, false])
+  expect(asks.get(botItemEventId(second))?.answers.map(Boolean)).toEqual([false])
 })
