@@ -15,7 +15,7 @@ import {
   type HeldLoopbackReturn
 } from '../orca-profiles/cloud-auth/loopback-callback'
 import { createOrcaCloudPkceSecrets } from '../orca-profiles/cloud-auth/profile-cloud-pkce'
-import { GOOGLE_CLIENT_ENDED } from './google-account-tokens'
+import { checkGoogleClientKey } from './google-client-check'
 import { checkGoogleServices } from './google-readiness'
 import {
   readGoogleAccount,
@@ -75,11 +75,15 @@ async function signInClient(
   loginHint: string | undefined
 ): Promise<GoogleSignInClient | null> {
   const saved = loginHint ? await readGoogleAccount(loginHint) : null
-  // An app Google no longer knows can't sign the account in again.
-  if (saved && saved.reason !== GOOGLE_CLIENT_ENDED) {
-    return { ...saved.client, ...(saved.projectId ? { projectId: saved.projectId } : {}) }
+  const current = await deps.client()
+  if (!saved || saved.client.clientId === current?.clientId) {
+    return current
   }
-  return deps.client()
+  // An app Google no longer knows can't sign the account in again.
+  if (current && (await checkGoogleClientKey(deps.http, saved.client)) === 'gone') {
+    return current
+  }
+  return { ...saved.client, ...(saved.projectId ? { projectId: saved.projectId } : {}) }
 }
 
 function authorizeUrl(

@@ -13,15 +13,13 @@ import { defaultGoogleHttp, GOOGLE_TOKEN_URL, type GoogleHttp } from './google-t
 export type GoogleTokenDeps = { http: GoogleHttp; now: () => number }
 export const defaultGoogleTokenDeps: GoogleTokenDeps = { http: defaultGoogleHttp, now: Date.now }
 
-/** Why an account is in Reconnect when Google no longer knows the client it signed in with. */
-export const GOOGLE_CLIENT_ENDED =
-  'The Google client this account signed in with was deleted or changed. Reconnect.'
-
 // The grant is gone: revoked, expired (an unpublished External app's 7 days), or its client deleted.
 const GRANT_ENDED: Record<string, string> = {
   invalid_grant: 'Google access ended (revoked, expired, or the password changed). Reconnect.',
-  invalid_client: GOOGLE_CLIENT_ENDED,
-  unauthorized_client: GOOGLE_CLIENT_ENDED
+  invalid_client:
+    'The Google client this account signed in with was deleted or changed. Reconnect.',
+  unauthorized_client:
+    'The Google client this account signed in with was deleted or changed. Reconnect.'
 }
 
 export class GoogleAccountUnavailableError extends Error {

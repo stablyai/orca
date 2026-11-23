@@ -28,11 +28,16 @@ function idToken(email: string): string {
 }
 
 /** Signs in through a fake Google that answers as `signedInAs`; returns the app each step used. */
-async function signIn(signedInAs: string, loginHint?: string) {
+async function signIn(signedInAs: string, loginHint?: string, goneApps: string[] = []) {
   const used: { authorize?: string; exchange?: string } = {}
   const http: typeof fetch = async (input, init) => {
     const url = String(input)
     if (url.startsWith('https://oauth2.googleapis.com/token')) {
+      const form = new URLSearchParams(String(init?.body))
+      if (form.get('code') === 'orca-key-check') {
+        const gone = goneApps.includes(form.get('client_id') ?? '')
+        return Response.json({ error: gone ? 'invalid_client' : 'invalid_grant' }, { status: 400 })
+      }
       used.exchange = new URLSearchParams(String(init?.body)).get('client_id') ?? undefined
       return Response.json({
         access_token: 'access',
@@ -66,7 +71,7 @@ async function signIn(signedInAs: string, loginHint?: string) {
   return { record, used }
 }
 
-async function saveAccount(email: string, extra: { reason?: string } = {}): Promise<void> {
+async function saveAccount(email: string): Promise<void> {
   await saveGoogleAccount({
     email,
     client: OWN,
@@ -77,8 +82,7 @@ async function saveAccount(email: string, extra: { reason?: string } = {}): Prom
     grantedScopes: [],
     status: 'reconnect',
     services: [],
-    connectedAt: 500,
-    ...extra
+    connectedAt: 500
   })
 }
 
@@ -115,9 +119,8 @@ describe('the Google app a sign-in goes through', () => {
   })
 
   it('is this computer’s app when Google no longer knows the account’s own', async () => {
-    const { GOOGLE_CLIENT_ENDED } = await import('./google-account-tokens')
-    await saveAccount('me@gmail.com', { reason: GOOGLE_CLIENT_ENDED })
-    const { used } = await signIn('me@gmail.com', 'me@gmail.com')
+    await saveAccount('me@gmail.com')
+    const { used } = await signIn('me@gmail.com', 'me@gmail.com', ['own-id'])
     expect(used).toEqual({ authorize: 'current-id', exchange: 'current-id' })
   })
 
