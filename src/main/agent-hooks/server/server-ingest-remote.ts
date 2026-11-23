@@ -297,9 +297,10 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       applyClaudeBackgroundWork
         ? () => {
             if (envelope.claudeRunningNonAgentTask) {
-              this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+              // The relay's own row names the commands; this host only gates on the fact.
+              this.state.claudeRunningNonAgentTasksByPaneKey.set(paneKey, [])
             } else {
-              this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+              this.state.claudeRunningNonAgentTasksByPaneKey.delete(paneKey)
             }
           }
         : undefined,

@@ -69,6 +69,7 @@ export function stageMailboxPointerEnter(
   ids: string[],
   target: MailboxPointerReservationTarget
 ): boolean {
+  this.releasedPointerPtyIds.delete(target.ptyId)
   return (
     mutatePointerMessages(
       this,
@@ -188,7 +189,13 @@ export function releaseMailboxPointerEnter(
   }))
 }
 
+const RELEASED_POINTER_PTY_CAP = 4096
+
 export function releasePendingMailboxPointerForPty(this: OrchestrationDb, ptyId: string): void {
+  // Only staging writes a PTY's pointer and staging evicts it, so a released PTY has none left.
+  if (this.releasedPointerPtyIds.has(ptyId)) {
+    return
+  }
   this.db
     .prepare(
       `UPDATE messages
@@ -202,6 +209,19 @@ export function releasePendingMailboxPointerForPty(this: OrchestrationDb, ptyId:
        WHERE pointer_enter_pending > 0 AND pointer_pty_id = ?`
     )
     .run(MAILBOX_POINTER_RESERVED, ptyId)
+  // An enclosing transaction can still roll the release back, so only a committed one is remembered.
+  if (!this.db.isTransaction) {
+    // Forgetting is always safe (one more release per PTY), so a full set resets instead of growing.
+    if (this.releasedPointerPtyIds.size >= RELEASED_POINTER_PTY_CAP) {
+      this.releasedPointerPtyIds.clear()
+    }
+    this.releasedPointerPtyIds.add(ptyId)
+  }
+}
+
+/** An exited PTY leaves the released set; a reused id then runs one release on its first working edge. */
+export function forgetReleasedPointerPty(this: OrchestrationDb, ptyId: string): void {
+  this.releasedPointerPtyIds.delete(ptyId)
 }
 
 function pointersHeldBy(
@@ -272,6 +292,7 @@ export type MailboxPointerEnterStateMethods = {
   settleMailboxPointerEnter: typeof settleMailboxPointerEnter
   releaseMailboxPointerEnter: typeof releaseMailboxPointerEnter
   releasePendingMailboxPointerForPty: typeof releasePendingMailboxPointerForPty
+  forgetReleasedPointerPty: typeof forgetReleasedPointerPty
 }
 
 export function attachMailboxPointerEnterState(ctor: { prototype: object }): void {
@@ -284,6 +305,7 @@ export function attachMailboxPointerEnterState(ctor: { prototype: object }): voi
     markMailboxPointerEnterAttempted,
     settleMailboxPointerEnter,
     releaseMailboxPointerEnter,
-    releasePendingMailboxPointerForPty
+    releasePendingMailboxPointerForPty,
+    forgetReleasedPointerPty
   })
 }

@@ -39,6 +39,7 @@ const mutations = [
   'prepareStartingWorkerAuthority',
   'markWorkerDispatchReady',
   'recordWorkerStage',
+  'retainWorkerLaunchObservation',
   'completeDispatch',
   'completeActiveDispatchesForTask',
   'failActiveDispatchForTask',
@@ -180,6 +181,9 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
   const insert = prototype.insertMessage
   prototype.insertMessage = function (this: OrchestrationDb, message) {
     const result = insert.call(this, message)
+    if (result.type === 'worker_done' && result.to_handle.startsWith('orca_session_id:')) {
+      this.workerDockSources?.invalidate(result.to_handle.slice('orca_session_id:'.length))
+    }
     if (result.type !== 'heartbeat') {
       const notice: CrewInvalidation =
         result.delivery_contract === 'legacy_direct'
@@ -224,6 +228,21 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
           name === 'recordAttemptObservation'
         ) {
           return result
+        }
+        if (name === 'recordAttemptObservation') {
+          const observation = args[0]
+          if (
+            observation &&
+            typeof observation === 'object' &&
+            'dispatchId' in observation &&
+            typeof observation.dispatchId === 'string'
+          ) {
+            this.workerDockSources?.changedDispatch(observation.dispatchId)
+          }
+        } else if (name === 'resetAll' || name === 'resetTasks') {
+          this.workerDockSources?.forgetWorkers()
+        } else if (name === 'resetMessages') {
+          this.workerDockSources?.changedHistory()
         }
         const mailboxes = mailboxScopes[name]?.(args, result)
         const notify = (change: CrewInvalidation) =>

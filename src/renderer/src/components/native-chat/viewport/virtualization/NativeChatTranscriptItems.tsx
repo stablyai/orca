@@ -6,7 +6,7 @@ import {
 import { nativeChatSlotKey } from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import { nativeChatSlotLeavesWhole } from '../../conversation/slots/native-chat-quiet-turn-rows'
-import { nativeChatSlotJoinsNotesAbove } from '../../bot-items/native-chat-bot-item-note-clusters'
+import { nativeChatSlotJoinsActivityAbove } from '../../conversation/slots/native-chat-activity-row-joins'
 import {
   useNativeChatTimedRows,
   type NativeChatTimedRow
@@ -71,7 +71,7 @@ export function NativeChatTranscriptItems({
                     newRowsMarker?.place === 'above-row' &&
                     rowKeys[item.index + 1] === newRowsMarker.key
                   }
-                  joinsNotesAbove={nativeChatSlotJoinsNotesAbove({
+                  joinsActivityAbove={nativeChatSlotJoinsActivityAbove({
                     slot,
                     previous: slots[item.index - 1],
                     timedRowsAfter: placed?.afterMessage,
@@ -116,7 +116,7 @@ export function NativeChatWaitingTranscriptItems({
           key={nativeChatSlotKey(slot)}
           slot={slot}
           context={context}
-          joinsNotesAbove={nativeChatSlotJoinsNotesAbove({
+          joinsActivityAbove={nativeChatSlotJoinsActivityAbove({
             slot,
             previous: slots[index - 1],
             timedRowsAfter: context.timedRows,

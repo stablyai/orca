@@ -305,7 +305,11 @@ export default function AiVaultPanel({
       ) : null}
 
       {!searching && <AiVaultScanIssueBanners scanResult={scanResult} />}
-      <AiVaultPanelSearch search={search} noAgents={agents.length === 0}>
+      <AiVaultPanelSearch
+        search={search}
+        noAgents={agents.length === 0}
+        listed={filteredSessions.length > 0}
+      >
         {searching
           ? filteredSessions.length > 0 && (
               <AiVaultSessionListBar
@@ -323,10 +327,11 @@ export default function AiVaultPanel({
                 onChange={setSort}
               />
             )}
-        {(!searching || sessions.length > 0 || search.loading) && (
+        {(!searching || filteredSessions.length > 0 || search.loading) && (
           <AiVaultSessionVirtualList
             key={searching ? 'search' : 'history'}
-            resultsKey={searching ? search.resultsKey : undefined}
+            // Title matches stay put when an empty reply lands, so only hits reset scroll and selection.
+            resultsKey={listMode === 'search-hits' ? search.resultsKey : undefined}
             stale={stale}
             searchHits={searching ? searchHits : undefined}
             searchHitHostLabels={searchHitHostLabels}

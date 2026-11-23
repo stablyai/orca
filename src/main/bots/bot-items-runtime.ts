@@ -25,7 +25,7 @@ import { readAgentSessionRecordStore } from '../runtime/orchestration/addressing
 import { access } from 'node:fs/promises'
 import { BotItemWorkerLinks } from './bot-item-worker-links'
 import { trackDispatchLinks, type TrackedBotItems } from './bot-item-dispatch-link-refs'
-import { dispatchStarter } from './bot-item-dispatch-facts'
+import { dispatchStarter, dispatchStarterBotId } from './bot-item-dispatch-facts'
 import { botItemsStoreFile } from './bot-items-input'
 import { BotItemLinkJoin, type BotItemGitHubCache } from './bot-items-link-join'
 import type { BotItemsRemote } from './bot-items-ops'
@@ -83,6 +83,7 @@ export class BotItemsHost {
       store: () => this.openedTracked(),
       db,
       starter: (dispatchId) => dispatchStarter(db(), dispatchId, deps.chatRoot),
+      starterBotId: (dispatchId) => dispatchStarterBotId(db(), dispatchId, deps.bots()),
       linksOf: async (item) => (await this.views([item]))[0]?.links,
       sendOwedMail: () => this.sendOwedMail(),
       changed: (store, uids) => this.changedItems(store, uids),

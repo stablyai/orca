@@ -1,7 +1,8 @@
 // One comment in an item's Activity, as the desktop's card draws it: who and when, the reply it quotes,
 // its words with its images and files, a question's lines, and for a comment sent
 // from the box that didn't reach the host, Not sent · Retry · Discard.
-import { Pressable, Text, View } from 'react-native'
+import { useEffect, useRef, type Ref } from 'react'
+import { Animated, Pressable, Text, View, type HostInstance } from 'react-native'
 import { CircleAlert } from 'lucide-react-native'
 import type { BotItemActivityEntry } from '../../../../src/shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-name'
@@ -26,7 +27,10 @@ export function MobileBotItemCommentCard({
   item,
   entry,
   attachments,
-  failed
+  failed,
+  ref,
+  onShowQuestion,
+  flash
 }: {
   item: BotItem
   entry: Pick<
@@ -36,6 +40,11 @@ export function MobileBotItemCommentCard({
   attachments: MobileBotItemAttachmentSource
   /** A comment sent from the box that didn't reach the host; no Retry when it may have. */
   failed?: { retry: (() => void) | null; discard: () => void }
+  ref?: Ref<HostInstance>
+  /** Its quote's tap; null while the question isn't in the Activity read so far. */
+  onShowQuestion?: (() => void) | null
+  /** Shown from a reply's quote: a brief highlight, again for each new `at`; `end` stays the same. */
+  flash?: { at: number; still: boolean; end: () => void }
 }) {
   const t = useMobileTranslation()
   const { event, replyTo, waiting } = entry
@@ -44,7 +53,8 @@ export function MobileBotItemCommentCard({
   const shape = botItemQuestionShape(event.data)
   const text = mobileBotItemCommentWords({ ...event.data, text: shape.body })
   return (
-    <View style={[styles.card, mine && styles.cardMine, failed && styles.cardFailed]}>
+    <View ref={ref} style={[styles.card, mine && styles.cardMine, failed && styles.cardFailed]}>
+      {flash ? <CommentFlash key={flash.at} still={flash.still} end={flash.end} /> : null}
       <View style={styles.cardHead}>
         <Text style={[styles.author, styles.shrink]} numberOfLines={1}>
           {botItemActorName(event, item, t)}
@@ -54,7 +64,9 @@ export function MobileBotItemCommentCard({
           {time.label(event.at)}
         </Text>
       </View>
-      {replyTo ? <MobileBotItemReplyQuote text={replyTo.text} /> : null}
+      {replyTo ? (
+        <MobileBotItemReplyQuote text={replyTo.text} onShowQuestion={onShowQuestion ?? null} />
+      ) : null}
       <MobileBotItemCommentAttachments data={event.data} {...attachments}>
         {text.trim() ? <MobileMarkdown content={text} /> : null}
       </MobileBotItemCommentAttachments>
@@ -85,7 +97,43 @@ export function MobileBotItemCommentCard({
   )
 }
 
+// The desktop's: held, then easing out; with reduced motion it holds a little longer and goes at once.
+const FLASH_HOLD_MS = 1200
+const FLASH_FADE_MS = 600
+const FLASH_STILL_MS = 1600
+
+/** The desktop's ring and tint, under the card's content. */
+function CommentFlash({ still, end }: { still: boolean; end: () => void }) {
+  const opacity = useRef(new Animated.Value(1)).current
+  useEffect(() => {
+    const run = still
+      ? Animated.delay(FLASH_STILL_MS)
+      : Animated.sequence([
+          Animated.delay(FLASH_HOLD_MS),
+          Animated.timing(opacity, { toValue: 0, duration: FLASH_FADE_MS, useNativeDriver: true })
+        ])
+    run.start(({ finished }) => {
+      if (finished) {
+        end()
+      }
+    })
+    return () => run.stop()
+  }, [opacity, still, end])
+  return <Animated.View pointerEvents="none" style={[styles.flash, { opacity }]} />
+}
+
 const styles = themedStyleSheet(() => ({
+  flash: {
+    position: 'absolute',
+    top: -1,
+    left: -1,
+    right: -1,
+    bottom: -1,
+    borderRadius: radii.surface,
+    borderWidth: 2,
+    borderColor: colors.inputBorder,
+    backgroundColor: colors.translucentFill
+  },
   card: {
     marginVertical: spacing.xs,
     paddingHorizontal: spacing.md,

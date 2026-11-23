@@ -1,4 +1,5 @@
 import { RuntimePtyExitSurfaceReads } from './pty-exit-surface-reads'
+import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import {
   type TerminalExitCause,
   describeTerminalExitCause,
@@ -9,7 +10,11 @@ import {
   observeRemoteWorkerExit,
   observeTerminalWorkerExit
 } from '../../orchestration/workers/lifecycle/worker-exit-observation'
+import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { WorkerGone } from '../../orchestration/workers/turn-stops/worker-presence-report'
+import { retireCoordinatorPaneRuns } from '../../orchestration/db/runs/retired-coordinator-runs'
+import type { TerminalSurfaceCloseTarget } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
+import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 
 /** A worker's terminal ending or losing its agent, told to the Dispatch it runs. */
 export abstract class RuntimePtyExitWorkerObservation extends RuntimePtyExitSurfaceReads {
@@ -18,18 +23,102 @@ export abstract class RuntimePtyExitWorkerObservation extends RuntimePtyExitSurf
     handle: string,
     paneKey: string | null,
     cause: TerminalExitCause,
-    lastOutput?: string
+    lastOutput?: string,
+    options: { paneRespawning?: boolean } = {}
   ): void {
     const db = this._orchestrationDb
     if (!db) {
       return
     }
+    const processIncarnation = this.getTerminalProcessIncarnation(handle)
+    const fail = (): void =>
+      this.observeWorkerTerminalExit(db, handle, paneKey, processIncarnation, cause, lastOutput)
+    // Its pane is starting again where the window's restore resumes the conversation: the Dispatch waits for it.
+    const respawning = options.paneRespawning && paneKey
+    const dispatch = respawning ? db.getActiveDispatchForTerminal(handle, paneKey) : undefined
+    if (
+      respawning &&
+      dispatch &&
+      this.terminalWorkerRestartResume.holdInPlace(
+        dispatch.id,
+        respawning,
+        processIncarnation,
+        fail
+      )
+    ) {
+      return
+    }
+    fail()
+  }
+
+  /** A coordinator terminal that ended with nothing left in its pane: its Runs have no reader. */
+  protected retireExitedCoordinatorRuns(
+    paneKeys: Iterable<string | null>,
+    ptyId: string | null,
+    exitIncarnationId: PtyIncarnationId | undefined
+  ): void {
+    try {
+      // A restored terminal can end before anything opened the database its Runs are in.
+      const db = this.getExistingOrchestrationDb()
+      if (!db) {
+        return
+      }
+      for (const paneKey of paneKeys) {
+        if (paneKey && !this.paneHasSuccessorProcess(paneKey, ptyId, exitIncarnationId)) {
+          retireCoordinatorPaneRuns(db, paneKey)
+        }
+      }
+    } catch (error) {
+      // The exit's cleanup goes on: its Runs stay bound, as before this retirement existed.
+      console.warn('[orchestration] could not retire an ended terminal from its Runs', error)
+    }
+  }
+
+  /** The panes a close removes, read before it does: a tab's every leaf, or the one pane. */
+  protected terminalCloseLeafIds(worktreeId: string, target: TerminalSurfaceCloseTarget): string[] {
+    if (target.kind === 'pane') {
+      return [target.leafId]
+    }
+    const layout =
+      this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId?.[target.tabId]
+    const graphLeafIds = [...this.leaves.values()]
+      .filter((leaf) => leaf.tabId === target.tabId)
+      .map((leaf) => leaf.leafId)
+    return [...new Set([...collectLeafIds(layout?.root), ...graphLeafIds])]
+  }
+  /** A closed pane whose leaf no layout holds any more and no live terminal shows: a slept or
+   *  host-lost coordinator closes without an exit, so its close retires its Runs. */
+  protected retireClosedCoordinatorPanes(
+    worktreeId: string,
+    tabId: string,
+    leafIds: readonly string[]
+  ): void {
+    const layouts = this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId ?? {}
+    const remaining = new Set(
+      Object.values(layouts).flatMap((layout) => collectLeafIds(layout?.root))
+    )
+    const gone = leafIds.filter((leafId) => !remaining.has(leafId))
+    // A pane a live terminal still shows retires on that terminal's exit.
+    this.retireExitedCoordinatorRuns(
+      gone.map((leafId) => `${tabId}:${leafId}`),
+      null,
+      undefined
+    )
+  }
+
+  private observeWorkerTerminalExit(
+    db: OrchestrationDb,
+    handle: string,
+    paneKey: string | null,
+    processIncarnation: string | null,
+    cause: TerminalExitCause,
+    lastOutput: string | undefined
+  ): void {
     const errorContext = describeTerminalExitCause(cause)
     // A person closing the pane leaves the task unowned; any other end is the agent's exit.
     const gone = isDeliberateTerminalExit(cause)
       ? { reason: 'lost' as const, cause: 'it was closed in Orca', lastOutput }
       : { reason: 'exited' as const, cause: errorContext, lastOutput }
-    const processIncarnation = this.getTerminalProcessIncarnation(handle)
     const settledLocally = observeTerminalWorkerExit(
       db,
       this.getRuntimeId(),

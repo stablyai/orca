@@ -25,7 +25,7 @@ import {
   saveTerminalAutoRestoreFitMs,
   setTerminalAutoRestoreFitMsForHost
 } from '../src/terminal/viewport/terminal-auto-restore-fit-state'
-import { setTerminalSettingsScrollEnabled } from '../src/terminal/preferences/terminal-settings-scroll-lock'
+import { setDragReorderScrollEnabled } from '../src/components/reorder/drag-reorder-scroll-lock'
 import { useTerminalFontSettings } from '../src/terminal/preferences/use-terminal-font-settings'
 import {
   TerminalFontPicker,
@@ -220,7 +220,7 @@ export default function TerminalSettingsScreen() {
   // Toggle imperatively: rerendering during drag rebuilds row gestures and can cancel it.
   const setScrollEnabled = useCallback(
     (enabled: boolean) => {
-      setTerminalSettingsScrollEnabled(scrollRef, enabled)
+      setDragReorderScrollEnabled(scrollRef, enabled)
     },
     [scrollRef]
   )

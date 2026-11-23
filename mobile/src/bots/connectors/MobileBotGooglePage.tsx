@@ -4,7 +4,6 @@
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { AppState } from 'react-native'
-import { withGoogleAccount } from '../../../../src/shared/google/google-console-setup'
 import {
   GOOGLE_CHOICE_SERVICES,
   GOOGLE_SERVICES,
@@ -18,7 +17,7 @@ import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
-import { openExternalLink } from '../../platform/external-links/external-link'
+import { openGoogleConsoleLink } from './connector-link'
 import { hostReadClient } from '../../query/host-read-client'
 import { googleStatusRead } from '../../session/native-chat/transcript/bot-cards/mobile-bot-card-operations'
 import { googleChoiceLabel } from '../../session/native-chat/transcript/bot-cards/mobile-google-setup-copy'
@@ -190,7 +189,7 @@ export function MobileBotGooglePage(props: {
         return enableUrl
           ? {
               label: t('bots.google.fix.turnOn', 'Turn on'),
-              onPress: () => openExternalLink(withGoogleAccount(enableUrl, account))
+              onPress: () => openGoogleConsoleLink(enableUrl, account)
             }
           : null
       case 'blocked-by-admin':
