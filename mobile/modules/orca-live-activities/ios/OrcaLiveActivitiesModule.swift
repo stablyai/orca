@@ -3,7 +3,13 @@ import ExpoModulesCore
 import UIKit
 
 public class OrcaLiveActivitiesModule: Module {
-  private var watches: [String: Task<Void, Never>] = [:]
+  private struct ActivityWatch {
+    let generation: UUID
+    let task: Task<Void, Never>
+  }
+
+  private var watches: [String: ActivityWatch] = [:]
+  private var isDestroyed = false
   private let lock = NSRecursiveLock()
   private let recordsKey = "orca.liveActivities.routes"
 
@@ -62,9 +68,11 @@ public class OrcaLiveActivitiesModule: Module {
     }
     OnDestroy {
       self.lock.lock()
-      defer { self.lock.unlock() }
-      for watch in self.watches.values { watch.cancel() }
+      self.isDestroyed = true
+      let pending = Array(self.watches.values)
       self.watches.removeAll()
+      self.lock.unlock()
+      for watch in pending { watch.task.cancel() }
     }
   }
 
@@ -90,7 +98,14 @@ public class OrcaLiveActivitiesModule: Module {
   private func cancelWatch(_ id: String) {
     lock.lock()
     defer { lock.unlock() }
-    watches.removeValue(forKey: id)?.cancel()
+    watches.removeValue(forKey: id)?.task.cancel()
+  }
+
+  private func finishWatch(_ id: String, _ generation: UUID) {
+    lock.lock()
+    defer { lock.unlock() }
+    guard watches[id]?.generation == generation else { return }
+    watches.removeValue(forKey: id)
   }
 
   private func hex(_ bytes: Data) -> String { bytes.map { String(format: "%02x", $0) }.joined() }
@@ -98,8 +113,11 @@ public class OrcaLiveActivitiesModule: Module {
   private func watch(_ activity: Activity<OrcaSessionAttributes>) {
     lock.lock()
     defer { lock.unlock() }
-    guard watches[activity.id] == nil else { return }
-    watches[activity.id] = Task { [weak self] in
+    guard !isDestroyed, watches[activity.id] == nil,
+      activity.activityState == .active || activity.activityState == .stale else { return }
+    let generation = UUID()
+    let task = Task { [weak self] in
+      defer { self?.finishWatch(activity.id, generation) }
       await withTaskGroup(of: Void.self) { group in
         group.addTask { [weak self] in
           for await token in activity.pushTokenUpdates {
@@ -108,17 +126,15 @@ public class OrcaLiveActivitiesModule: Module {
               "token": self.hex(token), "state": String(describing: activity.activityState)])
           }
         }
-        group.addTask { [weak self] in
-          for await state in activity.activityStateUpdates {
-            guard !Task.isCancelled, let self else { return }
-            self.sendEvent("onState", ["activityId": activity.id, "linkId": activity.attributes.linkId,
-              "token": activity.pushToken.map(self.hex) ?? "", "state": String(describing: state)])
-            if state == .ended || state == .dismissed { return }
-          }
+        for await state in activity.activityStateUpdates {
+          guard !Task.isCancelled, let self else { break }
+          self.sendEvent("onState", ["activityId": activity.id, "linkId": activity.attributes.linkId,
+            "token": activity.pushToken.map(self.hex) ?? "", "state": String(describing: state)])
+          if state == .ended || state == .dismissed { break }
         }
-        await group.next()
         group.cancelAll()
       }
     }
+    watches[activity.id] = ActivityWatch(generation: generation, task: task)
   }
 }

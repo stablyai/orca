@@ -36,7 +36,9 @@ restarts so the same turn is not recreated after dismissal.
 
 - `mobile/modules/orca-live-activities`: a local Expo module using ActivityKit.
   It requests `.token` activities, observes token and lifecycle changes, reattaches
-  existing activities and reads the system authorization on start/resume.
+  existing activities and reads the system authorization on start/resume. The state
+  observer owns the subscription lifetime: token-stream completion cannot discard
+  a terminal state, and completed observers are removed by generation.
 - `mobile/plugins/ios-live-activities.js`: generates the WidgetKit extension target
   during Expo prebuild, sharing the Codable attributes source with the native
   module. `ios/` remains generated and is not committed.
@@ -141,7 +143,11 @@ with iOS 27.2 (24B8117): compact/expanded Dynamic Island and Lock Screen working
 attention, completed and failed cards. A temporary SwiftUI fixture supplied
 synthetic states to the actual compiled extension without APNs; tapping a card
 dispatched its widget URL to that fixture. These captures qualify presentation,
-not production registration, session routing or suspended delivery. Minimal Island,
+not production registration, session routing or suspended delivery. The real Expo
+app opened after a clean install; its Portuguese notification settings were checked
+with Live Activities enabled independently of ordinary notifications and a separate
+name opt-in. Both choices were returned to off. Compact accessibility was checked
+as the state label plus elapsed time, without the technical SF Symbol name. Minimal Island,
 large text, appearance variants, physical-iPhone suspension, signed archives and
 production APNs delivery still require qualification. This Mac has no valid iOS
 signing identity, and no physical device was connected. The Linux host

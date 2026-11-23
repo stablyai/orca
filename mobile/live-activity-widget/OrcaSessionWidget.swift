@@ -7,7 +7,7 @@ struct OrcaSessionWidget: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: OrcaSessionAttributes.self) { context in
       HStack(spacing: 12) {
-        Image(systemName: symbol(context)).font(.title2)
+        Image(systemName: symbol(context)).font(.title2).accessibilityHidden(true)
         VStack(alignment: .leading, spacing: 4) {
           Text(context.state.title).font(.headline).lineLimit(1).privacySensitive()
           Text(label(context)).font(.subheadline)
@@ -20,7 +20,7 @@ struct OrcaSessionWidget: Widget {
     } dynamicIsland: { context in
       DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
-          Image(systemName: symbol(context))
+          Image(systemName: symbol(context)).accessibilityHidden(true)
         }
         DynamicIslandExpandedRegion(.trailing) { time(context) }
         DynamicIslandExpandedRegion(.bottom) {
@@ -30,11 +30,15 @@ struct OrcaSessionWidget: Widget {
           }.frame(maxWidth: .infinity, alignment: .leading)
         }
       } compactLeading: {
-        Image(systemName: symbol(context))
+        Image(systemName: symbol(context)).accessibilityLabel(label(context))
       } compactTrailing: {
-        if context.isStale { Image(systemName: "wifi.slash") } else { time(context) }
+        if context.isStale {
+          Image(systemName: "wifi.slash").accessibilityHidden(true)
+        } else {
+          time(context)
+        }
       } minimal: {
-        Image(systemName: symbol(context))
+        Image(systemName: symbol(context)).accessibilityLabel(label(context))
       }
       .widgetURL(link(context))
     }
