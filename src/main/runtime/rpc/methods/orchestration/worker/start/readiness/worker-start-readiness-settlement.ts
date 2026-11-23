@@ -6,7 +6,10 @@ import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../../orchestration/db/orchestration-db'
 import type { RunRow, TaskRow } from '../../../../../../orchestration/db/orchestration-records'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
-import { deliverWorkerDispatchPreamble } from './deliver-worker-dispatch-preamble'
+import {
+  agentStartCeilingText,
+  deliverWorkerDispatchPreamble
+} from './deliver-worker-dispatch-preamble'
 import { SUBMIT_WITHHELD_STAGE } from '../../../../../../orchestration/workers/turn-stops/unconfirmed-start-evidence'
 import { WORKER_AGENT_STARTING_STAGE } from '../../../../../../orchestration/db/worker-dispatch/worker-awaiting-agent-stage'
 import { reportedWorkerOutcome } from '../worker-start-receipt'
@@ -113,7 +116,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     turnStart.queued === true &&
     db.getWorkerTerminalResourceByOwner(args.dispatchId)?.ownership_state === 'owned'
   if (turnStart.agentStarting && !alreadySettled) {
-    // A slow start, not a failure: the host hands the held brief over when the agent attaches.
+    // Its agent has not attached yet: the host hands the held brief over when it does.
     const worker = db.markWorkerStartUnknown(
       args.dispatchId,
       WORKER_AGENT_STARTING_STAGE,
@@ -133,7 +136,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
       effects,
       residualResources: [],
       nextCommands: [`orca orchestration worker-show --dispatch ${args.dispatchId} --json`],
-      next: `Worker ${terminalHandle} (Dispatch ${args.dispatchId}) is live and its agent is still starting. Orca holds the task and delivers it once the agent is up; the worker then runs it and reports as usual. Don't resend this task or stop the worker: it is not stuck, and a new start would run the task twice. Carry on with other work or end your turn.`,
+      next: `Worker ${terminalHandle} (Dispatch ${args.dispatchId}) is live, but its agent hasn't finished starting. Orca holds the task and hands it over once the agent is up; the worker then runs it and reports as usual. If the start fails, or the agent isn't up within ${agentStartCeilingText()}, Orca sends you an error report. Sending the task again would run it twice once the agent is up.`,
       ...(args.terminalRevealWarning ? { warning: args.terminalRevealWarning } : {})
     }
   }

@@ -20,6 +20,7 @@ import { sendChatTask, type ChatTaskDelivery } from '../../../chat-task-delivery
 import { dispatchTaskSource } from '../../../../../../orchestration/coordinator/dispatch/dispatch-task-source'
 import type { AgentMessageSource } from '../../../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { WorkerTurnStartObservation } from './worker-start-turn-observation'
+import { STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS } from '../../../../../../../native-chat/agent-session-wire/startup/structured-agent-session-startup-attempt-contract'
 import type { createStructuredWorkerSessionForWorktree } from '../placement/worker-placement-topology'
 
 type StructuredSession = Awaited<ReturnType<typeof createStructuredWorkerSessionForWorktree>> | null
@@ -102,8 +103,9 @@ export async function deliverWorkerDispatchPreamble(args: {
                 verdict: 'unobserved',
                 agentStarting: true,
                 reason:
-                  "The worker's agent is still starting. Orca holds the task and delivers it " +
-                  "when the agent is up; don't resend or stop it."
+                  "The worker's agent hasn't finished starting. Orca holds the task and hands it " +
+                  `over once the agent is up. If the start fails, or the agent isn't up within ${agentStartCeilingText()}, ` +
+                  'Orca sends an error report.'
               }
             : {
                 verdict: 'unobserved',
@@ -142,6 +144,14 @@ export async function deliverWorkerDispatchPreamble(args: {
   } finally {
     briefGuard?.dispose()
   }
+}
+
+/** The startup ceiling after which Orca fails a structured agent's start, as a person reads it. */
+export function agentStartCeilingText(): string {
+  const minutes = STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS / 60_000
+  return Number.isInteger(minutes)
+    ? `${minutes} minute${minutes === 1 ? '' : 's'}`
+    : `${Math.round(STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS / 1000)} seconds`
 }
 
 function chatTaskTurnStart(delivery: ChatTaskDelivery): WorkerTurnStartObservation {
