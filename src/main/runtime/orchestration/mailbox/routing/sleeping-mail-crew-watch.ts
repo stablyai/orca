@@ -51,17 +51,22 @@ export function retryOnHostConnect(
   subscribe: (listener: (event: RuntimeClientEvent) => void) => unknown,
   wake: Pick<SleptMailboxWake, 'retryFailed' | 'trackedMailboxes'>,
   publish: (scope: SleepingMailScope) => void
-): void {
-  const statuses = new Map<string, string>()
+): ReadonlySet<string> {
+  // Only hosts up now: a disconnected or removed target leaves nothing behind.
+  const connected = new Set<string>()
   subscribe((event) => {
     if (event.type !== 'sshStateChanged') {
       return
     }
-    const was = statuses.get(event.targetId)
-    statuses.set(event.targetId, event.state.status)
-    if (event.state.status === 'connected' && was !== 'connected') {
+    if (event.state.status !== 'connected') {
+      connected.delete(event.targetId)
+      return
+    }
+    if (!connected.has(event.targetId)) {
+      connected.add(event.targetId)
       wake.retryFailed()
       publish({ mailboxes: wake.trackedMailboxes(), panes: [] })
     }
   })
+  return connected
 }

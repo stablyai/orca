@@ -49,8 +49,13 @@ export function getForegroundTerminalTabIds(): string[] {
   )
 }
 
-export function getForegroundTerminalTabLastSeenAtById(): Record<string, number> {
-  return Object.fromEntries(foregroundTerminalTabLastSeenAtById)
+/** Every tab's last foreground time, or only `onlyTabId`'s for a one-pane check. */
+export function getForegroundTerminalTabLastSeenAtById(onlyTabId?: string): Record<string, number> {
+  if (onlyTabId === undefined) {
+    return Object.fromEntries(foregroundTerminalTabLastSeenAtById)
+  }
+  const lastSeenAt = foregroundTerminalTabLastSeenAtById.get(onlyTabId)
+  return lastSeenAt === undefined ? {} : { [onlyTabId]: lastSeenAt }
 }
 
 // Purge retired tab timestamps on tab/worktree removal; IDs never recur and would otherwise accumulate all session.

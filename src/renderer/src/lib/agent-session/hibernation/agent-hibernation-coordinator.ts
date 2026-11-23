@@ -120,7 +120,7 @@ function snapshotFromState(
       state.lastTerminalInputAtByPaneKey
     ),
     attentionByWorktreeId: hostEvidence.attentionByWorktreeId,
-    foregroundTerminalLastSeenAtByTabId: getForegroundTerminalTabLastSeenAtById(),
+    foregroundTerminalLastSeenAtByTabId: getForegroundTerminalTabLastSeenAtById(pane?.tabId),
     ptyBindingFirstSeenAtByPaneKey: getHibernationPtyBindingFirstSeenAtByPaneKey(pane?.paneKey),
     boundaryResolvedAtByPaneKey: getHibernationBoundaryResolvedAtByPaneKey(pane?.paneKey),
     now

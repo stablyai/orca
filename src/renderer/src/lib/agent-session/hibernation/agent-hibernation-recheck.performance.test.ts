@@ -7,6 +7,7 @@ const work = vi.hoisted(() => {
     tabReads: number
     ownerPtyReads: number
     ageCopies: number
+    historyCopies: number
     planned: number
     ownerKind: 'non-runtime' | 'ambiguous'
     state: unknown
@@ -16,6 +17,7 @@ const work = vi.hoisted(() => {
     tabReads: 0,
     ownerPtyReads: 0,
     ageCopies: 0,
+    historyCopies: 0,
     planned: 0,
     state: {}
   }
@@ -45,10 +47,6 @@ vi.mock('@/store/terminals/sleep/terminal-teardown-owner', async (importOriginal
   }
 })
 vi.mock('../../pane-manager/mobile-driver-state', () => ({ getAllDrivers: () => new Map() }))
-vi.mock('../../../components/terminal-pane/parking/retention/foreground-terminal-tabs', () => ({
-  getForegroundTerminalTabIds: () => [],
-  getForegroundTerminalTabLastSeenAtById: () => ({})
-}))
 vi.mock('./agent-hibernation-output-activity', () => ({
   getAgentHibernationOutputSignature: () => 'quiet'
 }))
@@ -67,7 +65,9 @@ vi.mock('./agent-hibernation-planner', () => ({
     agentStatusByPaneKey: { values(): Iterable<{ paneKey: string; tabId: string } | undefined> }
     ptyBindingFirstSeenAtByPaneKey: Record<string, number>
     boundaryResolvedAtByPaneKey: Record<string, number>
+    foregroundTerminalLastSeenAtByTabId: Record<string, number>
   }) => {
+    work.historyCopies += Object.keys(snapshot.foregroundTerminalLastSeenAtByTabId).length
     work.ageCopies +=
       Object.keys(snapshot.ptyBindingFirstSeenAtByPaneKey).length +
       Object.keys(snapshot.boundaryResolvedAtByPaneKey).length
@@ -100,6 +100,10 @@ import {
   stopAgentHibernationCoordinator
 } from './agent-hibernation-coordinator'
 import { recordHibernationBoundaryResolved } from './agent-hibernation-pane-age'
+import {
+  forgetForegroundTerminalTabs,
+  setForegroundTerminalTabIds
+} from '../../../components/terminal-pane/parking/retention/foreground-terminal-tabs'
 
 const LEAF_ID = '00000000-1111-4111-8111-111111111111'
 type Status = { paneKey: string; tabId: string; state: 'done' }
@@ -171,7 +175,12 @@ it.each([
         }
       }
     }
+    // The real foreground history: every tab the user has viewed, none of them in front now.
+    const viewedTabIds = Array.from({ length: count }, (_, index) => `viewed-${index}`)
+    setForegroundTerminalTabIds(viewedTabIds)
+    setForegroundTerminalTabIds([])
     await runAgentHibernationTick()
+    work.historyCopies = 0
     work.statusReads = 0
     work.tabReads = 0
     work.ownerPtyReads = 0
@@ -189,5 +198,8 @@ it.each([
     expect(work.tabReads).toBeLessThanOrEqual(10 * count)
     // An ambiguous owner is settled from the workspace's PTYs once, not once per pane checked.
     expect(work.ownerPtyReads).toBeLessThanOrEqual(count)
+    // The tick's plan copies the whole history once; a re-check reads at most its own tab's.
+    expect(work.historyCopies).toBeLessThanOrEqual(count + rechecks)
+    forgetForegroundTerminalTabs(viewedTabIds)
   }
 )
