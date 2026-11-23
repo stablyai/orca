@@ -21252,7 +21252,6 @@
         "imageAttachAgainLabel": "Attach again",
         "pastedImageNotKeptLabel": "Not kept",
         "imageNumber": "Image #{{number}}",
-        "imageReferenceMissing": "Image removed",
         "imagePasteFailed": "Image paste failed.",
         "imageSaving": "Saving pasted image…",
         "worktreeNotReady": "Worktree not ready — try again in a moment.",
@@ -21345,7 +21344,8 @@
         "retryChats": "Retry",
         "permissionAppliesNextMessage": "{{saved}} applies to your next message; currently using {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
-        "modelAndEffort": "Model and effort"
+        "modelAndEffort": "Model and effort",
+        "imageReferenceMissing": "Image removed"
       },
       "tool": {
         "exitCode": "exit {{value0}}",

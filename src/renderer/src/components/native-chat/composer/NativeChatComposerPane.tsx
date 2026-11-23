@@ -146,7 +146,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       attachmentScopeKey: draftScopeKey,
       allowWithoutTarget: Boolean(structuredTransport),
       acceptsImages: structuredTransport?.acceptsImages !== false,
-      imageReferences: Boolean(structuredTransport),
       caret,
       disabled,
       isComposing: imeEnterGesture.isComposing,

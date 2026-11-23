@@ -91,33 +91,44 @@ export function restorePromptBotMentions(document: JSONContent): JSONContent {
   return changed ? { ...document, content } : document
 }
 
-/** All text-to-document paths must reconstruct image chips, bot mentions and pending-paste pills. */
 /** The editor's opening content: an adopted draft's document with bot pills restored, else its text. */
-export function openingPromptContent(document: JSONContent | undefined, text: string): JSONContent {
+export function openingPromptContent(
+  document: JSONContent | undefined,
+  text: string,
+  imageChips = false
+): JSONContent {
   return document
-    ? restorePromptBotMentions(promptParagraphLines(document))
-    : promptTextContent(text)
+    ? restorePromptBotMentions(
+        promptParagraphLines(imageChips ? document : withoutImageReferenceNodes(document))
+      )
+    : promptTextContent(text, imageChips)
 }
 
-export function promptTextContent(text: string): JSONContent {
+/** Image tokens become chips only for an editor that holds them; otherwise they stay literal text. */
+export function promptTextContent(text: string, imageChips = false): JSONContent {
   return {
     type: 'doc',
-    content: text.split('\n').map((line) => ({
-      type: 'paragraph',
-      content: splitImageReferences(line).flatMap((part) =>
-        typeof part === 'string'
-          ? part
-              .split(NATIVE_CHAT_PASTED_TEXT_TOKEN)
-              .flatMap((piece, index): JSONContent[] =>
-                piece === ''
-                  ? []
-                  : index % 2 === 1
-                    ? [{ type: FILE_REFERENCE_NODE, attrs: { token: piece, path: '' } }]
-                    : botMentionContent(piece)
-              )
-          : [{ type: IMAGE_REFERENCE_NODE, attrs: { attachmentId: part.attachmentId } }]
-      )
-    }))
+    content: text.split('\n').map((line) => {
+      const parts: ReturnType<typeof splitImageReferences> = imageChips
+        ? splitImageReferences(line)
+        : [line]
+      return {
+        type: 'paragraph',
+        content: parts.flatMap((part) =>
+          typeof part === 'string'
+            ? part
+                .split(NATIVE_CHAT_PASTED_TEXT_TOKEN)
+                .flatMap((piece, index): JSONContent[] =>
+                  piece === ''
+                    ? []
+                    : index % 2 === 1
+                      ? [{ type: FILE_REFERENCE_NODE, attrs: { token: piece, path: '' } }]
+                      : botMentionContent(piece)
+                )
+            : [{ type: IMAGE_REFERENCE_NODE, attrs: { attachmentId: part.attachmentId } }]
+        )
+      }
+    })
   }
 }
 
@@ -189,10 +200,11 @@ export function seedPromptSkillReferences(
 /** The document side of withoutImageReference: each chip goes with one space after it. */
 export function withoutImageReferenceNodes(
   document: JSONContent,
-  attachmentId: string
+  attachmentId?: string
 ): JSONContent {
   const isChip = (node: JSONContent | undefined): boolean =>
-    node?.type === IMAGE_REFERENCE_NODE && node.attrs?.attachmentId === attachmentId
+    node?.type === IMAGE_REFERENCE_NODE &&
+    (attachmentId === undefined || node.attrs?.attachmentId === attachmentId)
   return document.content
     ? {
         ...document,

@@ -4,7 +4,6 @@ import type { NativeChatComposerDraftImage } from '../../../drafts/native-chat-c
 import { appendToNativeChatComposerDraft } from '../../../drafts/native-chat-composer-draft-store'
 import { structuredAgentSessionDraftScopeKey } from '../../../drafts/native-chat-draft-scope'
 import { unavailableNativeChatComposerDraftImage } from '../../../drafts/native-chat-composer-draft-persistence'
-import { promptMarkersToImageReferences } from '../../../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import {
   promptTextContent,
   seedPromptSkillReferences
@@ -26,10 +25,6 @@ export function returnMessageToComposer(
   expiredUploadIds?: ReadonlySet<string>,
   skills?: AgentJournalMessageItem['skills']
 ): boolean {
-  // Its `[Image #k]` markers become chips for its k-th image, by the ids its images get below.
-  const imageIds = blocks.flatMap((block, index) =>
-    block.type === 'image-ref' ? [`${attachmentIdPrefix}-${index}`] : []
-  )
   let image = 0
   // Not the attachment hook's helper: its imports reach the store, whose teardown imports this.
   const images = blocks.flatMap((block, index): NativeChatComposerDraftImage[] => {
@@ -46,10 +41,7 @@ export function returnMessageToComposer(
       ? [unavailableNativeChatComposerDraftImage({ id, path: block.path })]
       : [{ id, path: block.path, ...(connectionId ? { connectionId } : {}) }]
   })
-  const text = promptMarkersToImageReferences(
-    structuredAgentSessionMessageText({ kind: 'message', role: 'user', blocks }),
-    imageIds
-  )
+  const text = structuredAgentSessionMessageText({ kind: 'message', role: 'user', blocks })
   if (text === '' && images.length === 0) {
     return true
   }
