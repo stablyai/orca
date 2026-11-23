@@ -101,13 +101,14 @@ function claudePermissionModeLadder(
   mode: PermissionMode
 ): PermissionMode[] {
   if (mode === 'auto' && session.launchIntent?.permissionMode === 'auto') {
-    if (claudeAutoRefused(session)) {
+    if (session.autoDisabled === true) {
       return ['default']
     }
     if (session.autoUnsettled !== undefined) {
       return claudeAutoRetryDue(session) ? ['default', 'auto'] : ['default']
     }
-    return ['auto']
+    // A start outside auto may have been for now, so auto is still asked for behind Ask.
+    return claudeAutoRefused(session) ? ['default', 'auto'] : ['auto']
   }
   if (mode !== 'bypassPermissions') {
     return [mode]

@@ -169,7 +169,7 @@ export type ClaudeSession = {
   /** The Full access refusal warning this process last wrote; a change gets a new row. */
   fullAccessRefusalNoticeId?: string
   /** This process's warning rows: a random id and a count, so each is a new row at the bottom. */
-  fullAccessRefusalNotices?: { process: string; count: number }
+  fullAccessRefusalNotices?: { process: string; count: number; after?: number }
   /** Counts permission mode requests, so a fallback written after Claude answers never lands
    *  over a newer request. */
   permissionModeRequests?: number

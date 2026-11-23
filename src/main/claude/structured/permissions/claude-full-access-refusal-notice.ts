@@ -2,6 +2,7 @@
 // another mode.
 
 import { randomUUID } from 'node:crypto'
+import { setTimeout as delay } from 'node:timers/promises'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -23,9 +24,10 @@ import {
 const CLAUDE_REFUSAL_NOTICE_PREFIX = 'full-access-refused:claude:'
 // An earlier process's warning that no row since has answered.
 const EARLIER_PROCESS_WARNING = 'earlier-process'
+const CLAUDE_REFUSAL_NOTICE_READ_RETRY_MS = 1_000
 
 type ClaudeNoticeFacts = ClaudeBypassFacts &
-  Partial<Pick<ClaudeSession, 'appliedInputOptions' | 'reportedOptions'>>
+  Partial<Pick<ClaudeSession, 'appliedInputOptions' | 'reportedOptions' | 'orderedPermissionMode'>>
 
 export type ClaudeFullAccessRefusalNotice = { id: string; body: AgentJournalStatusItem }
 
@@ -151,12 +153,10 @@ export function claimClaudeFullAccessRefusalNotice(
     Pick<ClaudeSession, 'fullAccessRefusalNoticeId' | 'fullAccessRefusalNotices'>
 ): ClaudeFullAccessRefusalNotice | null {
   const previous = session.fullAccessRefusalNoticeId
-  // After an earlier process's warning, Claude starting in the chat's choice is running it too.
+  // After an earlier process's warning, Claude reporting the chat's choice is running it too.
   const applied =
     session.appliedInputOptions?.get('buildPermissionMode') ??
-    (previous === EARLIER_PROCESS_WARNING
-      ? (session.firstRootInit?.permissionMode ?? undefined)
-      : undefined)
+    (previous === EARLIER_PROCESS_WARNING ? claudeRunningChoice(session) : undefined)
   const restored =
     applied !== undefined &&
     applied === session.launchIntent?.permissionMode &&
@@ -169,21 +169,39 @@ export function claimClaudeFullAccessRefusalNotice(
   const notices = (session.fullAccessRefusalNotices ??= { process: randomUUID(), count: 0 })
   notices.count += 1
   return {
-    id: `${claudeRefusalNoticeTime()}:${notices.process}:${String(notices.count).padStart(6, '0')}:${id}`,
+    id: `${claudeRefusalNoticeTime(notices)}:${notices.process}:${String(notices.count).padStart(6, '0')}:${id}`,
     body: restored ? claudeChoiceRestoredRow(applied) : claudeFullAccessRefusalRow(session, applied)
   }
 }
 
+/** The chat's choice when Claude reports running it (in wire order where known), else undefined. */
+function claudeRunningChoice(session: ClaudeNoticeFacts): string | undefined {
+  const intent = session.launchIntent?.permissionMode
+  const running = session.orderedPermissionMode
+    ? session.orderedPermissionMode()
+    : session.reportedOptions?.reportedPermissionMode
+  const inPlan = session.appliedInputOptions?.get('interactionMode') === 'plan'
+  return intent !== undefined && !inPlan && running === claudeFallbackChoice(intent)
+    ? intent
+    : undefined
+}
+
 /** Leads each row id so the chat's newest row has the greatest id; it sorts after older rows
  *  whose ids led with a hex process id. */
-function claudeRefusalNoticeTime(): string {
-  return `t${Date.now().toString(36).padStart(10, '0')}`
+function claudeRefusalNoticeTime(notices: { after?: number }): string {
+  // Never at or before the chat's newest row, so a clock set back keeps the order.
+  const time = Math.max(Date.now(), (notices.after ?? 0) + 1)
+  notices.after = time
+  return `t${time.toString(36).padStart(10, '0')}`
 }
 
 /** Reads the chat's newest warning row once per process start: when an earlier process's warning
  *  for this mode is still the newest, a run in the chat's choice says so in a new row. */
 export async function readClaudeEarlierRefusalNotice(
-  session: Pick<ClaudeSession, 'launchIntent' | 'fullAccessRefusalNoticeId'>,
+  session: Pick<
+    ClaudeSession,
+    'launchIntent' | 'fullAccessRefusalNoticeId' | 'fullAccessRefusalNotices'
+  >,
   reads: Pick<JournalSqlReads, 'newestItemId'> | undefined
 ): Promise<void> {
   const intent = session.launchIntent?.permissionMode
@@ -194,13 +212,26 @@ export async function readClaudeEarlierRefusalNotice(
     provider: 'orca',
     clientMessageId: CLAUDE_REFUSAL_NOTICE_PREFIX
   })
-  const itemId = await reads.newestItemId(prefix)
+  // One retry: a journal reader can be replaced while it answers.
+  const itemId = await reads
+    .newestItemId(prefix)
+    .catch(async () =>
+      delay(CLAUDE_REFUSAL_NOTICE_READ_RETRY_MS, undefined, { ref: false }).then(() =>
+        reads.newestItemId(prefix)
+      )
+    )
   if (itemId === null) {
     return
   }
   // `t<time>:<process>:<count>:<warning id>`, or `<process>:<count>:<warning id>` before times led
   const parts = decodeURIComponent(itemId.slice(prefix.length)).split(':')
-  const id = parts.slice(parts[0]?.startsWith('t') ? 3 : 2).join(':')
+  const timed = parts[0]?.startsWith('t') === true
+  const id = parts.slice(timed ? 3 : 2).join(':')
+  if (timed) {
+    const after = Number.parseInt(parts[0].slice(1), 36)
+    const notices = (session.fullAccessRefusalNotices ??= { process: randomUUID(), count: 0 })
+    notices.after = Math.max(notices.after ?? 0, Number.isFinite(after) ? after : 0)
+  }
   const forThisMode = id.startsWith('auto-') === (intent === 'auto')
   if (forThisMode && !id.startsWith('restored:')) {
     session.fullAccessRefusalNoticeId ??= EARLIER_PROCESS_WARNING
