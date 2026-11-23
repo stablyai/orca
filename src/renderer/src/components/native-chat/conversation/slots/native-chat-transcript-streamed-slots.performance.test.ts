@@ -259,13 +259,13 @@ function rowReadsStreaming(turns: number, shown: Shown): { reads: number; keysHe
   for (let window = 0; window < 20; window++) {
     text += ` and more ${window}`
     const next = [...raw.slice(0, -1), message(`answer-${turns - 1}`, 'assistant', text)]
-    const countedRows = new Proxy(next, {
-      get(target, key, receiver) {
-        if (typeof key === 'string' && /^\d+$/.test(key)) {
-          reads++
-        }
-        return Reflect.get(target, key, receiver)
-      }
+    // Each row read through the list counts as a visit.
+    const countedRows: NativeChatMessage[] = []
+    next.forEach((row, index) => {
+      Object.defineProperty(countedRows, index, {
+        get: () => (reads++, row),
+        enumerable: true
+      })
     })
     noteRevisedInPlace(countedRows, previous, [next.length - 1])
     const { slots } = project(input, saved, show(countedRows))
