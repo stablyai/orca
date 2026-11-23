@@ -13,6 +13,8 @@ import {
   type NativeChatTaskList
 } from '../../shared/native-chat/input/task-lists/native-chat-task-list'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
+import { englishTranslate, type CopyTranslate } from '../../shared/i18n/english-translate'
+import { getRuntimeDesktopSurface } from '../runtime/construction/runtime-desktop-surface'
 import type { ConversationPane } from './external-conversation-types'
 
 // A thread's status is one message edited in place: slower than its source's edit limit, and slow
@@ -28,12 +30,20 @@ type ActivityLink = {
   workspace: { worktreeId: string }
 }
 
+// A thread's words follow this host's UI language, as its notices do; a headless host sends English.
+const threadTranslate = (): CopyTranslate =>
+  getRuntimeDesktopSurface().translateNotification ?? englishTranslate
+
 type Told = { turnId: number; said: string; at: number; steps?: ConnectorTurnActivityStep[] }
 
 function stepsOf(list: NativeChatTaskList | null): ConnectorTurnActivityStep[] | undefined {
+  const translate = threadTranslate()
   const steps = list?.tasks
     .slice(0, CONNECTOR_TURN_ACTIVITY_LIMITS.maxActivitySteps)
-    .map((task) => ({ title: connectorTurnActivityStepTitle(task.content), status: task.status }))
+    .map((task) => ({
+      title: connectorTurnActivityStepTitle(task.content, translate),
+      status: task.status
+    }))
   return steps?.length ? steps : undefined
 }
 
@@ -74,7 +84,7 @@ export class ConversationTurnActivity {
       return
     }
     this.readPlan(paneKey, turnId, linked.link.sessionId, row)
-    const text = connectorTurnActivityLine(row.toolName, row.toolInput)
+    const text = connectorTurnActivityLine(row.toolName, row.toolInput, threadTranslate())
     const last = this.told.get(paneKey)
     const sameTurn = last?.turnId === turnId
     const steps = sameTurn ? last.steps : undefined

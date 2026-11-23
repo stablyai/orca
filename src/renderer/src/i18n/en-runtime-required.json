@@ -2294,6 +2294,25 @@
         "watches": "Your Orca workspaces and their pull requests"
       }
     },
+    "threadActivity": {
+      "editing": "Editing {{detail}}",
+      "handingOff": "Handing off: {{detail}}",
+      "listing": "Listing {{detail}}",
+      "lookingAt": "Looking at {{detail}}",
+      "lookingFor": "Looking for {{detail}}",
+      "reading": "Reading {{detail}}",
+      "running": "Running {{detail}}",
+      "runningCommand": "Running a command",
+      "searchingFor": "Searching for {{detail}}",
+      "searchingWeb": "Searching the web for {{detail}}",
+      "stepLeftOut": "Step left out: it looked like it held a secret",
+      "updatingPlan": "Updating the plan",
+      "usingNamed": "Using {{name}}",
+      "usingServer": "Using {{server}}",
+      "usingServerTool": "Using {{server}} ({{tool}})",
+      "usingTool": "Using a tool",
+      "writing": "Writing {{detail}}"
+    },
     "upNext": {
       "newSuggestions": "{{count}} new suggestions · click to see",
       "newSuggestions_one": "{{count}} new suggestion · click to see",

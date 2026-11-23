@@ -30466,6 +30466,25 @@
       "webhookRefusals": "\"{{automation}}\" refused {{refused}} calls in the last 10 minutes. If you don't expect them, pause it.",
       "webhookHourlyCap": "\"{{automation}}\" reached its {{limit}} runs an hour; more calls wait. To stop them, pause it."
     },
+    "threadActivity": {
+      "reading": "Reading {{detail}}",
+      "lookingAt": "Looking at {{detail}}",
+      "editing": "Editing {{detail}}",
+      "writing": "Writing {{detail}}",
+      "searchingFor": "Searching for {{detail}}",
+      "lookingFor": "Looking for {{detail}}",
+      "listing": "Listing {{detail}}",
+      "searchingWeb": "Searching the web for {{detail}}",
+      "handingOff": "Handing off: {{detail}}",
+      "running": "Running {{detail}}",
+      "runningCommand": "Running a command",
+      "updatingPlan": "Updating the plan",
+      "usingServerTool": "Using {{server}} ({{tool}})",
+      "usingServer": "Using {{server}}",
+      "usingTool": "Using a tool",
+      "usingNamed": "Using {{name}}",
+      "stepLeftOut": "Step left out: it looked like it held a secret"
+    },
     "tools": {
       "pasteInvalid": "The paste is invalid.",
       "checkUnfinished": "The native check did not finish. Check again to retry.",

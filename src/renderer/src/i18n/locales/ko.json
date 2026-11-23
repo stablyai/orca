@@ -27725,6 +27725,25 @@
       "webhookRefusals": "\"{{automation}}\"이(가) 최근 10분 동안 호출 {{refused}}건을 거부했습니다. 예상하지 못한 호출이라면 일시 중지하세요.",
       "webhookHourlyCap": "\"{{automation}}\"이(가) 시간당 실행 한도 {{limit}}회에 도달해 이후 호출은 대기합니다. 멈추려면 일시 중지하세요."
     },
+    "threadActivity": {
+      "reading": "읽는 중: {{detail}}",
+      "lookingAt": "살펴보는 중: {{detail}}",
+      "editing": "수정 중: {{detail}}",
+      "writing": "작성 중: {{detail}}",
+      "searchingFor": "검색 중: {{detail}}",
+      "lookingFor": "찾는 중: {{detail}}",
+      "listing": "목록 확인 중: {{detail}}",
+      "searchingWeb": "웹 검색 중: {{detail}}",
+      "handingOff": "작업 위임 중: {{detail}}",
+      "running": "실행 중: {{detail}}",
+      "runningCommand": "명령을 실행 중입니다",
+      "updatingPlan": "계획을 업데이트합니다",
+      "usingServerTool": "{{server}}의 {{tool}} 사용",
+      "usingServer": "{{server}} 사용 중",
+      "usingTool": "도구를 사용 중입니다",
+      "usingNamed": "{{name}} 사용 중",
+      "stepLeftOut": "민감한 정보가 포함된 것 같아 이 단계를 숨깁니다"
+    },
     "tools": {
       "pasteInvalid": "붙여 넣은 내용이 올바르지 않습니다.",
       "checkUnfinished": "기본 확인이 끝나지 않았습니다. 다시 확인해 재시도하세요.",
