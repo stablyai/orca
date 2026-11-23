@@ -40,6 +40,12 @@ import {
   getGitHubLinkedWorkItemIdentity
 } from './source-selection-decisions'
 
+// Why: Jira and ClickUp links resolve through an account-backed source, so an item without one cannot be shown or refreshed.
+function requiresTaskSourceContext(item: LinkedWorkItemSummary): boolean {
+  const provider = getWorkspaceSourceProvider(item)
+  return provider === 'jira' || provider === 'clickup'
+}
+
 export function useComposerSourceContextState(input: ComposerSourceContextStateInput) {
   const {
     folderSourceRepos,
@@ -113,14 +119,14 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
 
   const initialLinkedWorkItemSeed =
     normalizedInitialLinkedWorkItem &&
-    getWorkspaceSourceProvider(normalizedInitialLinkedWorkItem) === 'jira' &&
+    requiresTaskSourceContext(normalizedInitialLinkedWorkItem) &&
     !initialLinkedTaskSourceContext
       ? null
       : normalizedInitialLinkedWorkItem
 
   const draftLinkedWorkItemSeed =
     normalizedDraftLinkedWorkItem &&
-    getWorkspaceSourceProvider(normalizedDraftLinkedWorkItem) === 'jira' &&
+    requiresTaskSourceContext(normalizedDraftLinkedWorkItem) &&
     !draftLinkedTaskSourceContext
       ? null
       : normalizedDraftLinkedWorkItem

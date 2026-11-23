@@ -13,6 +13,7 @@ import {
   type TaskHydration
 } from './task-queries'
 import { MOBILE_TASKS_CAPABILITY } from './mobile-tasks-capability'
+import { filterMobileTaskProviders } from './mobile-supported-task-providers'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   filterAvailableTaskProviders,
@@ -108,10 +109,12 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
 
     const preferredProviders = normalizeVisibleTaskProviders(settings.visibleTaskProviders)
     const linearIsConnected = hydration.linearConnected
-    const availableProviders = filterAvailableTaskProviders(preferredProviders, {
-      gitlabInstalled: hydration.glabInstalled,
-      linearConnected: linearIsConnected
-    })
+    const availableProviders = filterMobileTaskProviders(
+      filterAvailableTaskProviders(preferredProviders, {
+        gitlabInstalled: hydration.glabInstalled,
+        linearConnected: linearIsConnected
+      })
+    )
     const nextVisibleProviders =
       preferredProviders.includes('linear') && !availableProviders.includes('linear')
         ? [...availableProviders, 'linear' as const]

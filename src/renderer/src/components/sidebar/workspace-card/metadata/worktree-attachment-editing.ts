@@ -60,6 +60,7 @@ export function workspaceAttachmentProviderLabel(item: WorkspaceAttachment): str
     gitlab: 'GitLab',
     linear: 'Linear',
     jira: 'Jira',
+    clickup: 'ClickUp',
     bitbucket: 'Bitbucket',
     'azure-devops': 'Azure DevOps',
     gitea: 'Gitea'

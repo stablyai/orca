@@ -32,6 +32,7 @@ import { getTaskPageRepoSourceContext } from '../../lib/work-items/task-repo-sou
 import { searchJiraIssuesByKeyOrText } from '../../../../shared/jira/jira-issue-input-search'
 import { bindTaskPageJiraItemSourceContext } from '../task-page/jira/task-page-jira-item-source-context'
 import { makeCmdJTaskSearchResult, type CmdJTaskSearchResult } from './task-search-results'
+import { searchClickUpForCmdJ } from './task-search-clickup'
 
 const RESULT_LIMIT = 12
 export type CmdJTaskSearchRequest = {
@@ -169,8 +170,11 @@ export function createCmdJTaskSearchRequests(args: {
     if (filter.repoIds.length && !initialRepo) {
       continue
     }
-    for (const provider of ['linear', 'jira'] as const) {
-      if (!providers.includes(provider) || (provider === 'linear' && parsed.kind === 'ssh')) {
+    for (const provider of ['linear', 'jira', 'clickup'] as const) {
+      if (
+        !providers.includes(provider) ||
+        ((provider === 'linear' || provider === 'clickup') && parsed.kind === 'ssh')
+      ) {
         continue
       }
       // Jira credentials stay on the desktop for SSH repositories; runtime hosts own theirs.
@@ -206,9 +210,13 @@ export function createCmdJTaskSearchRequests(args: {
           if (signal.aborted) {
             return []
           }
-          return provider === 'linear'
-            ? searchLinear(source, target, query, signal, initialRepo?.id ?? null, hostLabel)
-            : searchJira(source, target, query, signal, initialRepo?.id ?? null, hostLabel)
+          const search =
+            provider === 'linear'
+              ? searchLinear
+              : provider === 'jira'
+                ? searchJira
+                : searchClickUpForCmdJ
+          return search(source, target, query, signal, initialRepo?.id ?? null, hostLabel)
         }
       })
     }

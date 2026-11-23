@@ -185,7 +185,9 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
         openLinearIssue: undefined,
         openLinearSourceContext: undefined,
         openJiraIssue: undefined,
-        openJiraSourceContext: undefined
+        openJiraSourceContext: undefined,
+        openClickUpTask: undefined,
+        openClickUpSourceContext: undefined
       }
     }))
   }, [clearSelectedLinearIssue, setDialogWorkItem])

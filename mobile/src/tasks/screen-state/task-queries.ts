@@ -229,5 +229,8 @@ export function taskListParams(input: TaskListInput, repoKey: string): HostQuery
             query
           }
         : null
+    // Mobile has no ClickUp list (see filterMobileTaskProviders), so there is no read to key.
+    case 'clickup':
+      return null
   }
 }

@@ -8,6 +8,7 @@ import {
   GitPullRequest
 } from 'lucide-react'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { ClickUpIcon } from '@/components/icons/ClickUpIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { Trans } from 'react-i18next'
 import { i18n } from '@/i18n/i18n'
@@ -68,6 +69,9 @@ export function SelectionIcon({
   }
   if (kind === 'jira') {
     return <JiraIcon className="size-3.5 shrink-0 text-muted-foreground" />
+  }
+  if (kind === 'clickup') {
+    return <ClickUpIcon className="size-3.5 shrink-0 text-muted-foreground" />
   }
   return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
 }

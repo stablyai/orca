@@ -62,6 +62,12 @@ export function getWorkspaceAttachmentSourceLabel(item: WorkspaceAttachment): st
       source?.accountLabel
     )
   }
+  if (item.provider === 'clickup') {
+    return joinSourceParts(
+      identity?.provider === 'clickup' ? identity.workspaceName : null,
+      source?.accountLabel
+    )
+  }
   if (item.provider === 'github') {
     const repo =
       (item.url ? parseGitHubIssueOrPRLink(item.url)?.slug : null) ??

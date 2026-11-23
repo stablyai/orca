@@ -52,8 +52,13 @@ export function matchesWorkspaceAttachmentQuery(
   if (query.type !== result.type && (query.provider !== 'github' || query.url)) {
     return false
   }
-  const identifier = query.identifier ?? query.linearIdentifier ?? query.jiraIdentifier
-  const resultIdentifier = result.identifier ?? result.linearIdentifier ?? result.jiraIdentifier
+  const identifier =
+    query.identifier ?? query.linearIdentifier ?? query.jiraIdentifier ?? query.clickupIdentifier
+  const resultIdentifier =
+    result.identifier ??
+    result.linearIdentifier ??
+    result.jiraIdentifier ??
+    result.clickupIdentifier
   if (identifier && identifier.toLowerCase() !== resultIdentifier?.toLowerCase()) {
     return false
   }
@@ -79,8 +84,14 @@ export function isWorkspaceAttachmentLinked(
       item.provider === candidate.provider &&
       item.type === candidate.type &&
       item.number === candidate.number &&
-      (item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier) ===
-        (candidate.identifier ?? candidate.linearIdentifier ?? candidate.jiraIdentifier)
+      (item.identifier ??
+        item.linearIdentifier ??
+        item.jiraIdentifier ??
+        item.clickupIdentifier) ===
+        (candidate.identifier ??
+          candidate.linearIdentifier ??
+          candidate.jiraIdentifier ??
+          candidate.clickupIdentifier)
     const scope = getWorkspaceAttachmentUrlScope(item)
     if (!sameReference || !scope || scope !== getWorkspaceAttachmentUrlScope(candidate)) {
       return false

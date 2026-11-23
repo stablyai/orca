@@ -1,6 +1,6 @@
 import Svg, { Path } from 'react-native-svg'
 
-export type TaskProviderLogoKind = 'github' | 'gitlab' | 'linear' | 'jira'
+export type TaskProviderLogoKind = 'github' | 'gitlab' | 'linear' | 'jira' | 'clickup'
 
 type Props = {
   provider: TaskProviderLogoKind
@@ -58,6 +58,15 @@ export function TaskProviderLogo({ provider, size = 16, color }: Props) {
         <Path d="M244.658 0H121.707a55.502 55.502 0 0 0 55.502 55.502h22.649V77.37c.02 30.625 24.841 55.447 55.466 55.467V10.666C255.324 4.777 250.55 0 244.658 0z" />
         <Path d="M183.822 61.262H60.872c.019 30.625 24.84 55.447 55.466 55.467h22.649v21.938c.039 30.625 24.877 55.43 55.502 55.43V71.93c0-5.891-4.776-10.667-10.667-10.667z" />
         <Path d="M122.951 122.489H0c0 30.653 24.85 55.502 55.502 55.502h22.72v21.867c.02 30.597 24.798 55.408 55.396 55.466V133.156c0-5.891-4.776-10.667-10.667-10.667z" />
+      </Svg>
+    )
+  }
+
+  if (provider === 'clickup') {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+        {/* Use the official ClickUp mark as a monochrome provider glyph. */}
+        <Path d="M2 18.439l3.69-2.828c1.961 2.56 4.044 3.739 6.363 3.739 2.307 0 4.33-1.166 6.203-3.704L22 18.405C19.298 22.065 15.941 24 12.053 24 8.178 24 4.788 22.078 2 18.439zM12.04 6.15l-6.568 5.66-3.036-3.52L12.055 0l9.543 8.296-3.05 3.509z" />
       </Svg>
     )
   }

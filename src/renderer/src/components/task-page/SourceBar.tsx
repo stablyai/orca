@@ -27,6 +27,10 @@ export function TaskPageSourceBar({
     selectJiraSite,
     linearConnected,
     jiraConnected,
+    clickupConnected,
+    clickupWorkspaces,
+    selectedClickUpWorkspace,
+    handleClickUpWorkspaceChange,
     linearWorkspaces,
     selectedLinearWorkspaceId,
     jiraSites,
@@ -218,6 +222,26 @@ export function TaskPageSourceBar({
               </SelectContent>
             </Select>
           ) : null}
+        </div>
+      ) : null}
+      {taskSource === 'clickup' && clickupConnected && clickupWorkspaces.length > 1 ? (
+        <div className="flex items-center gap-2">
+          <Select value={selectedClickUpWorkspace?.id} onValueChange={handleClickUpWorkspaceChange}>
+            <SelectTrigger
+              size="sm"
+              className="w-[220px]"
+              aria-label={t('taskProviders.clickup.workspaceLabel', 'Workspace')}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {clickupWorkspaces.map((workspace) => (
+                <SelectItem key={workspace.id} value={workspace.id}>
+                  {workspace.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       ) : null}
     </div>

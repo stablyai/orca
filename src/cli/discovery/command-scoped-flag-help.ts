@@ -6,6 +6,9 @@ const FILE_OPEN_FOCUS_HELP =
 
 const BOT_ITEM_TITLE_HELP = "--title <text>         The item's title"
 
+const CLICKUP_TASK_ID_HELP =
+  '--id <id>              ClickUp task id, custom id (ABC-123) or task URL; also accepted positionally'
+
 const AGENT_ID_FLAG_HELP =
   "--id <id>              The agent's orca_session_id: ID; also accepted positionally"
 
@@ -13,6 +16,24 @@ const SKILLS_FORCE_FLAG_HELP =
   '--force                Replace skipped copies where possible, moving each to ~/.agents/.orca-skill-backups first.'
 
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  'clickup task': { id: CLICKUP_TASK_ID_HELP },
+  'clickup comment add': { id: CLICKUP_TASK_ID_HELP },
+  'clickup status set': {
+    id: CLICKUP_TASK_ID_HELP,
+    to: '--to <status name>     Target status, matched case-insensitively against the list statuses'
+  },
+  'clickup list': {
+    all: '--all                  List every task in the Workspace, not only mine',
+    'include-closed': '--include-closed       Include tasks in done or closed statuses',
+    status: '--status <name>        Only tasks in this status; repeat for several',
+    page: '--page <n>             Zero-based page; pass the nextPage value from the previous result'
+  },
+  'clickup search': {
+    query:
+      '--query <text>         Task name, custom id, id or URL; also accepted as the positional argument',
+    'include-closed': '--include-closed       Include tasks in done or closed statuses',
+    status: '--status <name>        Only tasks in this status; repeat for several'
+  },
   'bot item add': {
     title: BOT_ITEM_TITLE_HELP,
     for: '--for bot:<name>       Make the item for another bot'

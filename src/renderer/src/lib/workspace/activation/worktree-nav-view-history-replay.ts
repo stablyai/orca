@@ -34,7 +34,9 @@ export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): v
         openLinearIssue: undefined,
         openLinearSourceContext: undefined,
         openJiraIssue: undefined,
-        openJiraSourceContext: undefined
+        openJiraSourceContext: undefined,
+        openClickUpTask: undefined,
+        openClickUpSourceContext: undefined
       }
     }))
     return
@@ -54,7 +56,9 @@ export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): v
         openLinearIssue: undefined,
         openLinearSourceContext: undefined,
         openJiraIssue: undefined,
-        openJiraSourceContext: undefined
+        openJiraSourceContext: undefined,
+        openClickUpTask: undefined,
+        openClickUpSourceContext: undefined
       }
     }))
     return
@@ -75,7 +79,9 @@ export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): v
         openLinearIssue: undefined,
         openLinearSourceContext: undefined,
         openJiraIssue: undefined,
-        openJiraSourceContext: undefined
+        openJiraSourceContext: undefined,
+        openClickUpTask: undefined,
+        openClickUpSourceContext: undefined
       }
     }))
     return
@@ -95,7 +101,31 @@ export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): v
         openLinearIssue: undefined,
         openLinearSourceContext: undefined,
         openJiraIssue: entry.issue,
-        openJiraSourceContext: entry.sourceContext
+        openJiraSourceContext: entry.sourceContext,
+        openClickUpTask: undefined,
+        openClickUpSourceContext: undefined
+      }
+    }))
+    return
+  }
+  if (entry.source === 'clickup') {
+    useAppStore.setState((state) => ({
+      activeView: 'tasks',
+      githubTaskDrawerWorkItem: null,
+      taskPageData: {
+        ...state.taskPageData,
+        taskSource: 'clickup',
+        openGitHubWorkItem: undefined,
+        openGitHubSourceContext: undefined,
+        openGitHubInitialTab: undefined,
+        openGitLabWorkItem: undefined,
+        openGitLabSourceContext: undefined,
+        openLinearIssue: undefined,
+        openLinearSourceContext: undefined,
+        openJiraIssue: undefined,
+        openJiraSourceContext: undefined,
+        openClickUpTask: entry.task,
+        openClickUpSourceContext: entry.sourceContext
       }
     }))
     return
@@ -114,7 +144,9 @@ export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): v
       openLinearIssue: entry.issue,
       openLinearSourceContext: entry.sourceContext,
       openJiraIssue: undefined,
-      openJiraSourceContext: undefined
+      openJiraSourceContext: undefined,
+      openClickUpTask: undefined,
+      openClickUpSourceContext: undefined
     }
   }))
 }

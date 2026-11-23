@@ -2,6 +2,7 @@ import React from 'react'
 import { CircleDot } from 'lucide-react'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { ClickUpIcon } from '@/components/icons/ClickUpIcon'
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import { getProviderChecksOutcome } from '../../../../../../shared/source-control/checks/provider-check-summary'
 import type { WorkspaceAttachment } from '../../../../../../shared/worktree/types'
@@ -26,6 +27,11 @@ function singleReferenceLabel(item: WorkspaceAttachment, t: Translate = translat
   if (item.provider === 'jira') {
     return t('auto.components.sidebar.WorktreeCardMeta.linkedJira', 'Linked Jira {{value0}}', {
       value0: item.identifier ?? item.jiraIdentifier
+    })
+  }
+  if (item.provider === 'clickup') {
+    return t('workspace.links.linkedClickUp', 'Linked ClickUp {{value0}}', {
+      value0: item.identifier ?? item.clickupIdentifier
     })
   }
   return item.type === 'issue'
@@ -54,6 +60,9 @@ function ReferenceGlyph({
   }
   if (item.provider === 'jira') {
     return <JiraIcon className="text-muted-foreground" />
+  }
+  if (item.provider === 'clickup') {
+    return <ClickUpIcon className="text-muted-foreground" />
   }
   return <CircleDot className="text-muted-foreground" />
 }

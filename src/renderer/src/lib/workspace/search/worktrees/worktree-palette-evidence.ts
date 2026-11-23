@@ -125,6 +125,9 @@ function resolveLinkedTaskIdentifier(worktree: Worktree): string {
   if (item?.jiraIdentifier) {
     return item.jiraIdentifier
   }
+  if (item?.clickupIdentifier) {
+    return item.clickupIdentifier
+  }
   if (item && item.number > 0) {
     return `#${item.number}`
   }
@@ -229,7 +232,12 @@ export function buildWorktreePortEvidence(
 export function buildWorktreeAttachmentEvidence(
   item: WorkspaceAttachment
 ): PaletteComposedEvidence | null {
-  if (item.type !== 'issue' && item.provider !== 'linear' && item.provider !== 'jira') {
+  if (
+    item.type !== 'issue' &&
+    item.provider !== 'linear' &&
+    item.provider !== 'jira' &&
+    item.provider !== 'clickup'
+  ) {
     return buildWorktreeReviewEvidence({
       provider: item.provider,
       number: item.number,
@@ -239,7 +247,8 @@ export function buildWorktreeAttachmentEvidence(
   if (item.provider === 'github' || item.provider === 'gitlab') {
     return buildWorktreeIssueEvidence(item)
   }
-  const identifier = item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? ''
+  const identifier =
+    item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? item.clickupIdentifier ?? ''
   return composePaletteEvidence({
     id: `task:${identifier}`,
     kind: 'task',

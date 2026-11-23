@@ -95,6 +95,13 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
           sourceCount: 1,
           hostLabelById,
           hostAvailability: accountAvailability
+        }) ?? undefined,
+      clickup:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('clickup'),
+          sourceCount: 1,
+          hostLabelById,
+          hostAvailability: accountAvailability
         }) ?? undefined
     }
   }, [
@@ -112,16 +119,14 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
   const taskSourceAvailabilityNotice = useMemo(() => {
     const providerLabel =
       sourceOptions.find((source) => source.id === taskSource)?.label ?? taskSource
+    const accountBacked =
+      taskSource === 'linear' || taskSource === 'jira' || taskSource === 'clickup'
     return getTaskSourceAvailabilityNotice({
       providerLabel,
-      sourceCount:
-        taskSource === 'linear' || taskSource === 'jira'
-          ? 1
-          : Math.max(1, taskSourceRepoContexts.length),
-      hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
-          ? accountBackedTaskSourceHostAvailability
-          : taskSourceHostAvailability,
+      sourceCount: accountBacked ? 1 : Math.max(1, taskSourceRepoContexts.length),
+      hostAvailability: accountBacked
+        ? accountBackedTaskSourceHostAvailability
+        : taskSourceHostAvailability,
       hostLabelById
     })
   }, [

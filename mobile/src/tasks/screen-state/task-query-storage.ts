@@ -18,7 +18,7 @@ import type { TaskHydration, TaskListSnapshot } from './task-queries'
 export const TASKS_TARGET: HostQueryTarget = { exec: 'local' }
 export const NO_TASK_INPUT = {}
 
-const TASK_PROVIDERS = ['github', 'gitlab', 'linear', 'jira'] as const
+const TASK_PROVIDERS = ['github', 'gitlab', 'linear', 'jira', 'clickup'] as const
 
 // Only what draws the screen's view: agent launch settings and hook trust stay off disk, and a
 // stored copy is never acted on (the screen waits for a live read before Tasks is ready).

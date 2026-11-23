@@ -48,7 +48,15 @@ export type SmartWorkspaceNameFieldProps = {
 }
 
 export type SmartWorkspaceNameSelection = {
-  kind: 'github-pr' | 'github-issue' | 'gitlab-mr' | 'gitlab-issue' | 'branch' | 'linear' | 'jira'
+  kind:
+    | 'github-pr'
+    | 'github-issue'
+    | 'gitlab-mr'
+    | 'gitlab-issue'
+    | 'branch'
+    | 'linear'
+    | 'jira'
+    | 'clickup'
   label: string
   url?: string
 }

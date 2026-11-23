@@ -131,7 +131,34 @@ const COPY: Record<TaskProviderErrorCode, () => string> = {
     translate(
       'taskProviders.errors.jira.invalidCloudId',
       'The site did not report a valid Atlassian cloud ID.'
-    )
+    ),
+  'clickup.notConnected': () =>
+    translate('taskProviders.errors.clickup.notConnected', 'Not connected to ClickUp.'),
+  'clickup.tokenRequired': () =>
+    translate('taskProviders.errors.clickup.tokenRequired', 'Personal API token is required.'),
+  'clickup.connectionFailed': () =>
+    translate(
+      'taskProviders.errors.clickup.connectionFailed',
+      'ClickUp could not verify this token. Check that it is a personal API token, that it has not been revoked, and that you are online.'
+    ),
+  'clickup.noWorkspaces': () =>
+    translate(
+      'taskProviders.errors.clickup.noWorkspaces',
+      'This ClickUp account has no Workspaces.'
+    ),
+  'clickup.taskIdRequired': () =>
+    translate(
+      'taskProviders.errors.clickup.taskIdRequired',
+      'A valid ClickUp task id is required.'
+    ),
+  'clickup.commentBodyRequired': () =>
+    translate('taskProviders.errors.clickup.commentBodyRequired', 'Comment body is required.'),
+  'clickup.updatesRequired': () =>
+    translate('taskProviders.errors.clickup.updatesRequired', 'A status or a name is required.'),
+  'clickup.updateFailed': () =>
+    translate('taskProviders.errors.clickup.updateFailed', 'Failed to update task.'),
+  'clickup.commentFailed': () =>
+    translate('taskProviders.errors.clickup.commentFailed', 'Failed to add comment.')
 }
 
 const LEGACY_CODES: Record<string, TaskProviderErrorCode> = {
