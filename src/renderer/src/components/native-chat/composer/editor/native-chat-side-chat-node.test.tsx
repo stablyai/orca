@@ -71,6 +71,8 @@ describe('side chat pill availability', () => {
       editor.commands.selectAll()
       editor.commands.deleteSelection()
     })
+    expect(input.value).toBe('')
+    expect(pillCount(editor)).toBe(0)
     disableSideChat()
     act(() => {
       editor.commands.undo()
@@ -80,6 +82,8 @@ describe('side chat pill availability', () => {
     act(() => {
       editor.commands.undo()
     })
+    expect(input.value).toBe('')
+    expect(pillCount(editor)).toBe(0)
     act(() => {
       editor.commands.redo()
     })
