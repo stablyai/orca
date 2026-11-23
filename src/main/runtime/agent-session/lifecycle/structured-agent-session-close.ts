@@ -82,7 +82,8 @@ export async function closeStructuredAgentSessionChild(
   }
   if (
     admitted &&
-    wasStarting &&
+    // A start may also have registered after that read, before this close's lane cut it.
+    (wasStarting || host.reads.agentStarting(sessionId)) &&
     closeFailure === undefined &&
     !structuredSessionCloseSettled(sessionId)
   ) {

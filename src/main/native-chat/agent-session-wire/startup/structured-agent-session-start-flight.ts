@@ -41,6 +41,11 @@ export class StructuredAgentSessionStartFlights {
     void attempt.then(done, done)
   }
 
+  /** An attempt, though perhaps already decided, has not finished its provider work. */
+  attempting(sessionId: string): boolean {
+    return (this.attempts.get(sessionId)?.size ?? 0) > 0
+  }
+
   /** Settles once every attempt for the session, including its acquisition cleanup, has ended. */
   async attemptsEnded(sessionId: string): Promise<void> {
     while (this.attempts.get(sessionId)?.size) {

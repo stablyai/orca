@@ -210,7 +210,11 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     /** Its agent is still starting: acquiring its process, or attached but not yet answering. */
     agentStarting: (id: string): boolean => {
       const { runtimeState, sessions } = context()
-      return runtimeState.startFlights.has(id) || sessions.get(id)?.child?.phase === 'starting'
+      return (
+        runtimeState.startFlights.has(id) ||
+        runtimeState.startFlights.attempting(id) ||
+        sessions.get(id)?.child?.phase === 'starting'
+      )
     },
     /** A cancelled start's provider work, including releasing what it acquired, has ended. */
     startAttemptsEnded: (id: string) => context().runtimeState.startFlights.attemptsEnded(id),
