@@ -1,3 +1,4 @@
+import type { GitHubSlice } from '../github-slice-contract'
 import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type { GitHubPRRefreshCandidate } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { CacheEntry } from '../cache/cache-model'
@@ -24,4 +25,9 @@ export function cachedPRCandidateFields(
     cachedMergeable: cached?.data?.mergeable ?? null,
     cachedMergeStateStatus: cached?.data?.mergeStateStatus ?? null
   }
+}
+
+/** The PR read's transport options; a refresh timer's read or retry goes out as background. */
+export function prReadRpcOptions(options: Parameters<GitHubSlice['fetchPRForBranch']>[2]) {
+  return { timeoutMs: 30_000, signal: options?.signal, background: options?.background === true }
 }

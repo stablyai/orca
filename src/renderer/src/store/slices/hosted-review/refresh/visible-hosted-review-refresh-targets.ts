@@ -201,6 +201,8 @@ export function getVisibleHostedReviewRefreshTargets(
       intervalMs: reviewRefreshIntervalMs(intervalInput, cadence),
       foregroundIntervalMs: reviewRefreshIntervalMs(intervalInput, 'default'),
       refresh: async (force = true, signal, intent) => {
+        // A timer's read and a failed read's backoff are polls: no use of an idle WSL host (#46567).
+        const background = intent === 'timer' || intent === 'retry' || undefined
         let outcome: PRSnapshotReply | undefined
         const before = getState()
         const beforeFetchedAt = knownGitHub
@@ -210,8 +212,9 @@ export function getVisibleHostedReviewRefreshTargets(
           ? before.fetchPRForBranch(candidate.repoPath, candidate.branch, {
               force: true,
               signal,
-              reason: (intent ? intent === 'discovery' : force) ? 'active' : 'swr',
+              reason: (intent ? intent !== 'timer' : force) ? 'active' : 'swr',
               selected,
+              background,
               onReadOutcome: (next) => {
                 outcome = next
               },
@@ -232,8 +235,7 @@ export function getVisibleHostedReviewRefreshTargets(
               currentHeadOid: exactRequest ? null : candidate.currentHeadOid,
               active: selected,
               admissionTier: selected ? 'interactive' : 'background',
-              // The selected workspace's 60 s timer is a poll: no use of an idle WSL host (#46567).
-              background: intent === 'timer' || undefined
+              background
             }))
         const after = getState()
         if (runtime && outcome) {

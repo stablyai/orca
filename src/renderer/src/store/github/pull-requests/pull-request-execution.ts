@@ -27,7 +27,7 @@ import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { inflightPRRequests, prRequestGenerations } from '../requests/request-coordination'
 import { getRuntimeRepoTarget } from '../repositories/repository-routing'
 import { isWslHostOffForForge, withForgeHostOffSkip } from '../repositories/wsl-host-off-forge'
-import { cachedPRCandidateFields } from './pr-refresh-cached-candidate-fields'
+import { cachedPRCandidateFields, prReadRpcOptions } from './pr-refresh-cached-candidate-fields'
 import { lookupPRForBranchOverIpc } from './pr-for-branch-ipc-fallback'
 import { setGitHubPRResultCaches, shouldPreserveExistingPRForFallbackMiss } from './pr-result-cache'
 import { findWorktreeById, isStaleExactLinkedPRLookup } from '../refresh/worktree-refresh'
@@ -128,7 +128,7 @@ export function startPullRequestLookup(args: {
                 ? { fallbackPRNumber, acceptMergedFallbackPR: fallbackPRSource !== null }
                 : {})
             },
-            { timeoutMs: 30_000, signal: options?.signal, ...checkContract.sourceRpcOptions }
+            { ...prReadRpcOptions(options), ...checkContract.sourceRpcOptions }
           ).then((result) =>
             isPRRevalidationOnly(result) ? result : normalizeGitHubPRForBranchOutcome(result)
           )

@@ -158,7 +158,7 @@ function referenceRefreshTargets(
                 ...request,
                 admissionTier: selected ? 'interactive' : 'background',
                 // A timer's reread is a poll: no use of an idle WSL host (#46567).
-                background: intent === 'timer' || undefined
+                background: intent === 'timer' || intent === 'retry' || undefined
               },
               signal
             ).then(
