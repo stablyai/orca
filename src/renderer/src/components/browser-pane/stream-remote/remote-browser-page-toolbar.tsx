@@ -12,6 +12,7 @@ import { getOpenableExternalUrl, toDisplayUrl } from '../describe-page/browser-p
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser/navigation/browser-url'
+import { useServerBrowserPageProfileId } from '../assemble-chrome/profile-routing/use-server-browser-page-profile-id'
 import BrowserAddressBar from '../assemble-chrome/address-bar/BrowserAddressBar'
 import type { BrowserAddressBarEditSessionBinding } from '../assemble-chrome/address-bar/use-browser-address-bar-edit-session'
 import type {
@@ -42,6 +43,7 @@ export function RemoteBrowserPageToolbar({
   isActive,
   siteDisplaySource,
   runtimeEnvironmentId,
+  remotePageId,
   addressBarValue,
   onAddressBarChange,
   onSubmitAddressBar,
@@ -66,6 +68,8 @@ export function RemoteBrowserPageToolbar({
   /** Null on hosts that can't report the page's site zoom and color scheme. */
   siteDisplaySource: BrowserPageSiteDisplaySource | null
   runtimeEnvironmentId: string
+  /** The host's id for the page; null until the host has it. */
+  remotePageId: string | null
   addressBarValue: string
   onAddressBarChange: (value: string) => void
   onSubmitAddressBar: () => void
@@ -91,6 +95,7 @@ export function RemoteBrowserPageToolbar({
 }): React.JSX.Element {
   const t = useTranslate()
   const { id: browserPageId, url: pageUrl, loading } = page
+  const currentProfileId = useServerBrowserPageProfileId(browserPageId)
   const viewportPresetId = page.viewportPresetId ?? null
   // The stream reads the preset from the page and sizes the host's page to it.
   const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void =>
@@ -192,11 +197,11 @@ export function RemoteBrowserPageToolbar({
       elementTools={pickerAvailable ? annotateTools.tools : null}
       markup={annotateTools.markup}
       notes={annotateTools.notes}
-      // The page runs in the host's browser, whose extensions and profiles this desktop can't drive.
+      // The page runs in the host's browser, whose extensions this desktop can't drive.
       extensionActions={null}
       overflowMenu={(overflow) => (
         <BrowserToolbarMenu
-          currentProfileId={null}
+          currentProfileId={currentProfileId}
           workspaceId={workspaceId}
           worktreeId={worktreeId}
           browserPageId={browserPageId}
@@ -214,7 +219,7 @@ export function RemoteBrowserPageToolbar({
               : null
           }}
           extensionsSub={null}
-          showProfiles={false}
+          streamedPage={{ environmentId: runtimeEnvironmentId, remotePageId }}
           overflow={overflow}
         />
       )}

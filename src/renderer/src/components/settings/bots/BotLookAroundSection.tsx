@@ -20,13 +20,13 @@ import type { Bot } from '../../../../../shared/bot-types'
 import {
   botLookAround,
   LOOK_AROUND_EVERY_CHOICES,
-  LOOK_AROUND_EVERY_LABELS,
   LOOK_AROUND_FOCUS_MAX_LENGTH,
   lookAroundSupported,
   type BotLookAround,
   type LookAroundEvery,
   type UpNextState
 } from '../../../../../shared/bots/bot-look-around'
+import { lookAroundEveryLabel } from '../../../../../shared/bots/bot-look-around-every-label'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import { Switch } from '@/components/ui/switch'
 import { lookAroundLine } from '@/components/bots/bot-settings-row-states'
@@ -141,7 +141,7 @@ export function BotLookAroundSection({
                 <SelectContent>
                   {LOOK_AROUND_EVERY_CHOICES.map((choice) => (
                     <SelectItem key={choice} value={choice}>
-                      {LOOK_AROUND_EVERY_LABELS[choice]}
+                      {lookAroundEveryLabel(choice, t)}
                     </SelectItem>
                   ))}
                 </SelectContent>

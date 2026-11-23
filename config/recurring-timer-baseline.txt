@@ -17,6 +17,7 @@
 1 src/main/codex-accounts/login/codex-login-session.ts
 1 src/main/codex/configuration/homes/codex-windows-sandbox-read-grant.ts
 1 src/main/composio/composio-upkeep.ts
+1 src/main/connector-cloud/connector-wake-socket.ts
 1 src/main/crash-reporting/memory/pre-gone-host-memory.ts
 1 src/main/crash-reporting/process-exits/process-gone-diagnostics.ts
 1 src/main/daemon/admission/host-terminal-ledger.ts
