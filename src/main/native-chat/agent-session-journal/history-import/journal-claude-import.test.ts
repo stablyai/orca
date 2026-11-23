@@ -149,7 +149,7 @@ it.each(importModes)(
 )
 
 it.each(importModes)(
-  'keeps conversation items beneath more than 20 MiB of progress: %s',
+  'keeps both messages after 20k trailing progress rows: %s',
   async (boundedClaude) => {
     root = await mkdtemp(join(tmpdir(), 'orca-claude-progress-'))
     const filePath = join(root, 'session.jsonl')
@@ -168,11 +168,11 @@ it.each(importModes)(
         .join('\n')}\n`
     )
     let parentUuid = 'answer'
-    for (let index = 0; index < 22; index++) {
-      const uuid = `progress-${index}`
+    for (let index = 0; index < 20_000; index++) {
+      const uuid = `progress-${index.toString().padStart(64, '0')}`
       await appendFile(
         filePath,
-        `${JSON.stringify({ type: 'progress', uuid, parentUuid, data: 'x'.repeat(1024 * 1024) })}\n`
+        `${JSON.stringify({ type: 'progress', uuid, parentUuid })}\n`
       )
       parentUuid = uuid
     }
