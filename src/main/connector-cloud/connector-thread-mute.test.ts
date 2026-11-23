@@ -65,6 +65,15 @@ describe('a mention in a muted thread', () => {
     expect(step('the example username is `@reviewer`')).toBe('silence')
     expect(step('```\n<@U0BOT> hi\n```')).toBe('silence')
   })
+
+  it('leaves a sibling bot whose name ends in a phrase to that bot', () => {
+    const bot = { userId: 'UAPP', names: ['reviewer'], others: ['reviewer mute'] }
+    expect(threadMuteStep(false, { text: '<@UAPP> reviewer mute' }, bot)).toBe('send')
+    expect(threadMuteStep(true, { text: '<@UAPP> reviewer mute unmute' }, bot)).toBe('silence')
+    expect(threadMuteStep(false, { text: '<@UAPP> reviewer mute' }, { ...bot, others: [] })).toBe(
+      'mute'
+    )
+  })
 })
 
 describe('a muted thread', () => {

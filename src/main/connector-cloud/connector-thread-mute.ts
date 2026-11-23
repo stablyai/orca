@@ -41,16 +41,17 @@ export function threadMuteStep(
   if (delivery.resume) {
     return 'send'
   }
+  // Another bot behind the same Slack app, named after its mention, neither mutes nor unmutes this
+  // one, even when its longer name ends in a phrase ("Reviewer Mute").
+  if (addressesOtherBot(text, bot)) {
+    return muted ? 'silence' : 'send'
+  }
   const command = threadMuteCommand(text, bot)
   if (command) {
     return command
   }
   if (!muted) {
     return 'send'
-  }
-  // Another bot behind the same Slack app, named after its mention, leaves this one muted.
-  if (addressesOtherBot(text, bot)) {
-    return 'silence'
   }
   // `mentioned` comes only from a newer connector service; until then the bot's own mention in the
   // text counts.
