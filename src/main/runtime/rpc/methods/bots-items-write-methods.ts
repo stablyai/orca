@@ -5,17 +5,15 @@ import {
   BotItemsComment,
   BotItemsDone,
   BotItemsLink,
-  BotItemsSet,
-  type BotItemsLinkParams
+  BotItemsSet
 } from '../../../../shared/rpc-contract/bots-items-params'
 
 import { botItemAskAdvice } from '../../../../shared/bots/bot-item-ask-advice'
-import { BOT_ITEM_LIMITS } from '../../../../shared/bots/bot-items'
 import {
   dispatchStarterBotId,
   linksOutsideLinkedChains
 } from '../../../bots/bot-item-dispatch-facts'
-import { defineMethod, type RpcContext } from '../core'
+import { defineMethod } from '../core'
 import { addItem } from './bots-items-add'
 import { admitBotItemFiles } from './bots-items-bot-files'
 import { BotItemError } from '../../../bots/bot-item-error'
@@ -153,52 +151,27 @@ const LINK = defineMethod({
   name: 'bots.items.link',
   permission: 'workspace',
   params: BotItemsLink,
-  handler: linkItem
+  handler: async (params, context) => {
+    const writer = writerOf(params, context)
+    const store = context.runtime.botItems.store()
+    const item = await resolveItem(store, params.item)
+    const db = context.runtime.getOrchestrationDb()
+    const requested = params.refs.map(parseItemLink)
+    const startedBy: Record<string, string | null> =
+      item.ownerBotId === writer.bot.id
+        ? {}
+        : startersOf(db, requested, context.runtime.bots.list())
+    // Every worker named is checked, one already linked too, so a mixed call fails whole.
+    assertBotItemAttach(item, writer.actor, requested, (id) => startedBy[id] ?? null)
+    if (params.check) {
+      return null
+    }
+    // A step of a follow-up chain the item already links is that worker again: no second link.
+    const links = linksOutsideLinkedChains(db, await store.links(item.uid), requested)
+    const outcome = await store.link(item.uid, links, writer.actor, startedBy)
+    return writeResult(context, outcome, writer)
+  }
 })
-
-/** Links workers, PRs, pages or files to an item, as the calling bot chat. `quiet`: a link already
- *  there answers nothing, with no item view built for it. */
-export async function linkItem(
-  params: BotItemsLinkParams,
-  context: RpcContext,
-  { quiet = false }: { quiet?: boolean } = {}
-) {
-  const writer = writerOf(params, context)
-  const store = context.runtime.botItems.store()
-  const item = await resolveItem(store, params.item)
-  const db = context.runtime.getOrchestrationDb()
-  const requested = params.refs.map(parseItemLink)
-  const startedBy: Record<string, string | null> =
-    item.ownerBotId === writer.bot.id ? {} : startersOf(db, requested, context.runtime.bots.list())
-  // Every worker named is checked, one already linked too, so a mixed call fails whole.
-  assertBotItemAttach(item, writer.actor, requested, (id) => startedBy[id] ?? null)
-  const held = await store.links(item.uid)
-  // A link the item already holds is settled before walking any worker's follow-up chain.
-  const fresh = requested.filter(
-    (link) => !held.some((had) => had.kind === link.kind && had.ref === link.ref)
-  )
-  // A step of a follow-up chain the item already links is that worker again: no second link.
-  const links = fresh.length === 0 ? [] : linksOutsideLinkedChains(db, held, fresh)
-  if (params.check) {
-    // A check answers for the write too: an item with no room for them refuses now.
-    assertBotItemLinkRoom(held.length, links.length)
-    return null
-  }
-  if (quiet && links.length === 0) {
-    return null
-  }
-  const outcome = await store.link(item.uid, links, writer.actor, startedBy)
-  return quiet && outcome.eventId === null ? null : writeResult(context, outcome, writer)
-}
-
-function assertBotItemLinkRoom(held: number, adding: number): void {
-  if (held + adding > BOT_ITEM_LIMITS.links) {
-    throw new BotItemError(
-      'invalid_argument',
-      `An item takes up to ${BOT_ITEM_LIMITS.links} links.`
-    )
-  }
-}
 
 /** Who started each worker named, read only for a link to someone else's item. */
 function startersOf(

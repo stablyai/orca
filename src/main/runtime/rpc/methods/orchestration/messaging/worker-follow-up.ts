@@ -5,6 +5,7 @@ import {
 /** A message to a worker that finished becomes its next Task: worker-start run for the sender, on that same worker.
  *  Open workers take it in place, closed ones reopen in their saved conversation, and agents that keep none start fresh. */
 
+import { BOT_ITEM_ORIGIN_PREFIX } from '../../bots-items-worker-origin'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import {
   carryWorkerResumeSession,
@@ -58,6 +59,18 @@ export function planWorkerFollowUp(
   )
 }
 
+/** `send --to dispatch: --item`: only a finished worker's follow-up takes work for an item; a working
+ *  worker's report would answer for both. Refused before anything is sent. */
+export function assertFollowUpForItem(forItem: string | undefined, followsUp: boolean): void {
+  if (forItem !== undefined && !followsUp) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      '--item gives work to a worker on this computer that has finished, as a follow-up for that item. Wait for its report, or start one with `orchestration worker-start --item <n>`. Nothing was sent.',
+      { effectsApplied: false }
+    )
+  }
+}
+
 export async function startWorkerFollowUp(args: {
   ctx: FollowUpContext
   db: OrchestrationDb
@@ -66,6 +79,8 @@ export async function startWorkerFollowUp(args: {
   message: { subject: string; body?: string | undefined }
   /** The Dispatch whose unread mail this follow-up's Task tells it to check. */
   takesMailOf?: string
+  /** `send --item <n>`: the follow-up is for that item, kept on its Dispatch as `worker-start --item`. */
+  forItem?: string
 }): Promise<WorkerFollowUpOutcome> {
   const { ctx, db } = args
   const { latest, resource } = args.plan
@@ -81,7 +96,10 @@ export async function startWorkerFollowUp(args: {
         from: args.from,
         run: latest.run_id,
         spec: body || subject,
-        taskTitle: subject
+        taskTitle: subject,
+        ...(args.forItem !== undefined
+          ? { origin: `${BOT_ITEM_ORIGIN_PREFIX}${args.forItem}` }
+          : {})
       },
       // The send's own receipt is already pending; the follow-up only names what it accepted.
       { ...ctx, orchestrationMutation: undefined },

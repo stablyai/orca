@@ -1,5 +1,4 @@
 import type { z } from 'zod'
-import { withDispatchItemLink } from './dispatch-mail-item-link'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import type { OrchestrationCompatibilityCallerAuthority } from '../../../../orchestration/terminal-authority/orchestration-compatibility-authority'
@@ -139,7 +138,7 @@ export function withPeerMailSend<R>(
   return async (params, ctx) => {
     const { on, onClient } = params
     if ((on === undefined && onClient === undefined) || ctx.replayedMutationReceipt !== undefined) {
-      return await withDispatchItemLink(send)(params, ctx)
+      return await send(params, ctx)
     }
     const attested = ctx.orchestrationCompatibilityCallerAuthority
     if (onClient !== undefined) {
