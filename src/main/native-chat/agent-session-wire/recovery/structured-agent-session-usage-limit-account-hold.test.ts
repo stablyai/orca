@@ -80,3 +80,61 @@ it("a person's Stop withdraws the continue a switch gives an unknown-reset cut",
   expect(isOptionalUsageLimitContinueCancel(withdrawal)).toBe(true)
   expect(cancelsCut(withdrawal, holds.withSwitchReset('chat', CUT))).toBe(true)
 })
+
+it('asks once for 100 resetless relaunched chats on the same account', async () => {
+  const holds = new UsageLimitAccountHolds()
+  let asked = 0
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attribution reads only these fields
+  const host = {
+    store: {
+      getRecord: () => ({
+        provider: 'codex',
+        location: { wslDistro: null },
+        launchedAccount: { fence: 4, accountHome: NEXT },
+        lease: { runtimeFence: 4 }
+      })
+    },
+    launchAccountHome: async () => NEXT,
+    usageLimitAutoContinue: {
+      accountUsage: async () => ({
+        scope: 'shared-account',
+        account: { key: 'shared-account', read: () => null, refresh: () => (++asked, true) }
+      })
+    }
+  } as unknown as Parameters<UsageLimitAccountHolds['attribute']>[1]
+  for (let index = 0; index < 100; index += 1) {
+    const id = `chat-${index}`
+    await holds.attribute(id, host, CUT, SWITCHED)
+    holds.askForRelaunchRoom(id, holds.withSwitchReset(id, CUT))
+  }
+  expect(asked).toBe(1)
+})
+
+it('retries a refused resetless relaunch read until it is accepted', async () => {
+  const holds = new UsageLimitAccountHolds()
+  let asked = 0
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attribution reads only these fields
+  const host = {
+    store: {
+      getRecord: () => ({
+        provider: 'codex',
+        location: { wslDistro: null },
+        launchedAccount: { fence: 4, accountHome: NEXT },
+        lease: { runtimeFence: 4 }
+      })
+    },
+    launchAccountHome: async () => NEXT,
+    usageLimitAutoContinue: {
+      accountUsage: async () => ({
+        scope: 'retry-account',
+        account: { key: 'retry-account', read: () => null, refresh: () => ++asked > 1 }
+      })
+    }
+  } as unknown as Parameters<UsageLimitAccountHolds['attribute']>[1]
+  await holds.attribute('chat', host, CUT, SWITCHED)
+  const cut = holds.withSwitchReset('chat', CUT)
+  holds.askForRelaunchRoom('chat', cut)
+  holds.askForRelaunchRoom('chat', cut)
+  holds.askForRelaunchRoom('chat', cut)
+  expect(asked).toBe(2)
+})

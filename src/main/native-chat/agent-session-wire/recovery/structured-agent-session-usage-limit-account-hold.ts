@@ -16,7 +16,6 @@ import {
   type SwitchReset
 } from './structured-agent-session-usage-limit-chain'
 import {
-  askForSwitchedAccountRoom,
   sameAccountHome,
   UsageLimitRelaunchedCuts,
   usageLimitCutLaunch,
@@ -61,6 +60,7 @@ export class UsageLimitAccountHolds {
   private readonly holds = new Map<string, Hold>()
   private readonly scopes = new Map<string, UsageLimitAccountScope | undefined>()
   private readonly bindings = new Map<string, UsageLimitAttributionBinding>()
+  private readonly providers = new Map<string, string>()
   private readonly movedSince = new Map<
     string,
     { cut: string; to: AgentSessionAccountHome; at: number }
@@ -128,20 +128,16 @@ export class UsageLimitAccountHolds {
     }
     this.scopes.set(id, scope)
     this.bindings.set(id, binding)
+    if (record) {
+      this.providers.set(id, record.provider)
+    }
     const since = this.movedSince.get(id)
-    let switched = false
     if (!movedTo) {
       this.movedSince.delete(id)
     } else if (since?.cut !== hit.cut || !sameAccountHome(since.to, movedTo)) {
       this.movedSince.set(id, { cut: hit.cut, to: movedTo, at: now })
-      switched = true
     }
-    switched =
-      this.relaunched.note(id, hit?.cut ?? '', relaunchedOn, cutLaunch?.launchFence, now) ||
-      switched
-    if (limited.resetsAt === undefined && switched) {
-      askForSwitchedAccountRoom(scope)
-    }
+    this.relaunched.note(id, hit?.cut ?? '', relaunchedOn, cutLaunch?.launchFence, now)
   }
 
   /** What the chat's attribution was computed under; a send binds to this. */
@@ -164,7 +160,7 @@ export class UsageLimitAccountHolds {
   }
 
   retain(shown: ReadonlySet<string>): void {
-    for (const cache of [this.holds, this.scopes, this.bindings, this.movedSince]) {
+    for (const cache of [this.holds, this.scopes, this.bindings, this.providers, this.movedSince]) {
       for (const id of cache.keys()) {
         if (!shown.has(id)) {
           cache.delete(id)
@@ -178,6 +174,7 @@ export class UsageLimitAccountHolds {
     this.holds.clear()
     this.scopes.clear()
     this.bindings.clear()
+    this.providers.clear()
     this.movedSince.clear()
     this.relaunched.clear()
     this.beginPass()
@@ -191,13 +188,22 @@ export class UsageLimitAccountHolds {
       cut
     )
   }
+
+  askForRelaunchRoom = (id: string, cut: NativeChatUsageLimitCut & SwitchReset): void =>
+    this.relaunched.askForRoom(
+      id,
+      cut,
+      this.providers.get(id),
+      this.bindings.get(id)?.witness,
+      this.scopes.get(id)
+    )
   verdict(
     id: string,
     limited: { turnItemId: string; resetsAt: number } & SwitchReset,
     now: number
   ): UsageLimitAccountVerdict {
-    const moved = this.movedSince.get(id)
-    const movedCut = moved?.cut === switchFreeIdentity(limited)
+    const moved = this.movedSince.get(id),
+      movedCut = moved?.cut === switchFreeIdentity(limited)
     const cut = movedCut ? { ...limited, resetsAt: Math.min(limited.resetsAt, moved.at) } : limited
     let [scope, hold] = [this.scopes.get(id), this.holds.get(id)]
     const awaitingRoom =

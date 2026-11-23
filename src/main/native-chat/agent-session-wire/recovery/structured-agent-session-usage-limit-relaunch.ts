@@ -11,6 +11,8 @@ import { normalizeRuntimePathForComparison } from '../../../../shared/file-acces
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { UsageLimitAccountScope } from './structured-agent-session-usage-limit-account-types'
+import { switchFreeIdentity, type SwitchReset } from './structured-agent-session-usage-limit-chain'
+import type { NativeChatUsageLimitCut } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 
 export function sameAccountHome(
   left: AgentSessionAccountHome,
@@ -65,12 +67,6 @@ export function usageLimitAttributionBindingHolds(
   )
 }
 
-/** A newly selected account gets one immediate reading; later recovery never polls just to release it. */
-export function askForSwitchedAccountRoom(scope: UsageLimitAccountScope | undefined): void {
-  const ask = scope?.account?.refresh ?? scope?.bootstrap
-  ask?.()
-}
-
 type Relaunch = {
   cut: string
   to: AgentSessionAccountHome
@@ -87,6 +83,7 @@ type Relaunch = {
  *  the cut before its own reset. Derived each pass from readings; nothing is saved. */
 export class UsageLimitRelaunchedCuts {
   private readonly relaunches = new Map<string, Relaunch>()
+  private readonly switchReads = new Set<string>()
 
   /** `to` is where the chat would start now, after the launch at `fence`; null when the cut's launch
    *  still names its account. */
@@ -116,6 +113,31 @@ export class UsageLimitRelaunchedCuts {
   at(id: string, cut: string): number | undefined {
     const relaunch = this.relaunches.get(id)
     return relaunch?.cut === cut ? relaunch.at : undefined
+  }
+
+  askForRoom(
+    id: string,
+    cut: NativeChatUsageLimitCut & SwitchReset,
+    provider: string | undefined,
+    witness: string | undefined,
+    scope: UsageLimitAccountScope | undefined
+  ): void {
+    if (
+      cut.resetFromSwitch !== true ||
+      !provider ||
+      !scope ||
+      this.at(id, switchFreeIdentity(cut)) === undefined
+    ) {
+      return
+    }
+    const key = JSON.stringify([provider, witness, scope.scope])
+    if (this.switchReads.has(key)) {
+      return
+    }
+    const ask = scope.account?.refresh ?? scope.bootstrap
+    if (ask?.()) {
+      this.switchReads.add(key)
+    }
   }
 
   /** When room released the cut, while the live reading of `account` still shows it: the first
@@ -168,5 +190,6 @@ export class UsageLimitRelaunchedCuts {
 
   clear(): void {
     this.relaunches.clear()
+    this.switchReads.clear()
   }
 }
