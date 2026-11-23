@@ -32,6 +32,7 @@ import {
 } from '../forms/new-worktree-modal-types'
 import {
   buildNewWorkspaceProjectOptions,
+  orderNewWorkspaceProjectsByRecentActivity,
   buildNewWorkspaceRunTargetOptions,
   getNewWorkspaceRunTarget
 } from '../../source-selection/presentation/new-workspace-project-targets'
@@ -75,6 +76,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     hostLabelById,
     existingWorktreePaths,
     existingWorktrees,
+    projectActivity,
     openExternalUrl,
     onCreated,
     onClose,
@@ -237,7 +239,25 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
       })),
     [hostRepos]
   )
-  const projectPickerItems = useMemo(() => buildNewWorkspaceProjectOptions(repos), [repos, t])
+  // Why: ordered from the projects and activity read as the picker opens, so rows don't shuffle under a finger as they update.
+  const projectDrawerOpen = navigation.drawerView === 'project'
+  const [wasProjectDrawerOpen, setWasProjectDrawerOpen] = useState(false)
+  const [orderBasis, setOrderBasis] = useState({ repos, activity: projectActivity })
+  if (projectDrawerOpen !== wasProjectDrawerOpen) {
+    setWasProjectDrawerOpen(projectDrawerOpen)
+    if (projectDrawerOpen) {
+      setOrderBasis({ repos, activity: projectActivity })
+    }
+  }
+  const projectPickerItems = useMemo(
+    () =>
+      orderNewWorkspaceProjectsByRecentActivity(
+        buildNewWorkspaceProjectOptions(repos),
+        orderBasis.repos,
+        orderBasis.activity ?? []
+      ),
+    [orderBasis, repos, t]
+  )
   const selectedProjectId = selectedRepo ? getProjectIdentityKey(selectedRepo) : null
   const selectedProject =
     projectPickerItems.find((project) => project.id === selectedProjectId) ?? null

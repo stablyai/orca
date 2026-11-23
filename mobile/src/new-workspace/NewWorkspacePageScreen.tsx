@@ -3,7 +3,7 @@ import { useLocalSearchParams } from 'expo-router'
 import { NewWorktreeModalController } from './creation/modal/NewWorktreeModalController'
 import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
 import { useHostLabelById } from './use-host-label-by-id'
-import { useHostWorktreeRows } from './use-host-worktree-rows'
+import { useHostServerWorktreeRows, useHostWorktreeRows } from './use-host-worktree-rows'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { firstParam } from '../navigation/route-param-reader'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'
@@ -20,6 +20,11 @@ export function NewWorkspacePageScreen() {
   const { hostCapabilities } = useHostProtocolGates()
   const connected = connState === 'connected'
   const worktrees = useHostWorktreeRows(client, connected, hostId)
+  const serverWorktrees = useHostServerWorktreeRows(client, connected, hostId, hostCapabilities)
+  const projectActivity = useMemo(
+    () => [...worktrees, ...serverWorktrees],
+    [serverWorktrees, worktrees]
+  )
   const hostLabelById = useHostLabelById(client, connected, hostId)
   const worktreePaths = useMemo(() => worktrees.map((worktree) => worktree.path), [worktrees])
 
@@ -32,6 +37,7 @@ export function NewWorkspacePageScreen() {
       hostLabelById={hostLabelById}
       existingWorktreePaths={worktreePaths}
       existingWorktrees={worktrees}
+      projectActivity={projectActivity}
       openExternalUrl={openExternalLink}
       onCreated={(worktreeId, name, warning, executionHost) =>
         router.replace(
