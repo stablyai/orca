@@ -1,6 +1,7 @@
 import type { EventProps } from '../../shared/telemetry/telemetry-event-classification'
 import { nativeChatPickerItemAcceptedSchema } from '../../shared/telemetry/schemas/telemetry-native-feature-event-schemas'
 import type { Store } from '../persistence/loading-store/store'
+import { isBeforeSharingResumed } from './consent'
 
 type DailyRow = EventProps<'native_chat_picker_accepts_daily'>
 type SettingsStore = Pick<Store, 'getSettings' | 'updateSettings'>
@@ -19,21 +20,25 @@ function save(store: SettingsStore, telemetry: Telemetry, day: number, counts: C
   }
 }
 
-/** Sends each finished day's counts once; cleared before sending, so a crash can drop a day but never repeat it. */
+/** Sends a finished day's counts, cleared first; returns false when they could not be cleared. */
 export function flushPickerAccepts(
   now: number,
   store: SettingsStore | null,
   emit: (name: 'native_chat_picker_accepts_daily', row: DailyRow) => boolean
-): void {
+): boolean {
   const telemetry = store?.getSettings().telemetry
   const saved = telemetry?.pickerAccepts
-  if (!store || !telemetry || !saved || saved.day >= utcDay(now) || saved.counts.length === 0) {
-    return
+  // A day behind or ahead (clock moved back) is finished; either way it is sent once.
+  if (!store || !telemetry || !saved || saved.day === utcDay(now) || saved.counts.length === 0) {
+    return true
   }
   if (!save(store, telemetry, utcDay(now), [])) {
-    return
+    return false
   }
   const usageDay = new Date(saved.day * 86_400_000).toISOString().slice(0, 10)
+  if (isBeforeSharingResumed(telemetry, usageDay)) {
+    return true
+  }
   for (const [agentKind, itemKind, count] of saved.counts) {
     emit('native_chat_picker_accepts_daily', {
       agent_kind: agentKind,
@@ -42,6 +47,7 @@ export function flushPickerAccepts(
       usage_day: usageDay
     })
   }
+  return true
 }
 
 /** Counts one validated accept toward today's row instead of sending it. */
@@ -51,7 +57,10 @@ export function rollUpPickerAccept(
   store: SettingsStore,
   emit: (name: 'native_chat_picker_accepts_daily', row: DailyRow) => boolean
 ): boolean {
-  flushPickerAccepts(now, store, emit)
+  if (!flushPickerAccepts(now, store, emit)) {
+    // Counting into a new day would overwrite the unsent one.
+    return false
+  }
   const parsed = nativeChatPickerItemAcceptedSchema.safeParse(props)
   const telemetry = store.getSettings().telemetry
   if (!parsed.success || !telemetry) {

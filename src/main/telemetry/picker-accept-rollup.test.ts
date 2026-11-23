@@ -39,5 +39,13 @@ describe('picker accept rollup', () => {
       { agent_kind: 'claude-code', item_kind: 'command', accept_count: 2, usage_day: '2024-10-04' },
       { agent_kind: 'codex', item_kind: 'skill', accept_count: 1, usage_day: '2024-10-04' }
     ])
+
+    // Sharing turned back on: days up to then may hold activity from while it was off.
+    const telemetry = store.getSettings().telemetry
+    store.updateSettings({
+      telemetry: telemetry && { ...telemetry, sharingResumedDay: '2024-10-05' }
+    })
+    flushPickerAccepts(day + 2 * DAY, store, emit)
+    expect(sent).toHaveLength(2)
   })
 })
