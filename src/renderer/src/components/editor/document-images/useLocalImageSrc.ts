@@ -9,12 +9,11 @@ import {
   getLocalImageCacheGeneration,
   inFlightBlobUrlLoads,
   isImmutableLocalImageCacheKey,
-  localImageBlobFits,
   unpinLocalImageCache,
   subscribeToLocalImageCacheInvalidation as onImageCacheInvalidated
 } from './local-image-src-cache'
 import { pinLocalImageCacheKey as pinLocalImageCache } from './local-image-cache-pinning'
-import { base64ToBlobInSlices, decodedBase64Length } from './local-image-blob-decode'
+import { decodeLocalImageForCache } from './local-image-blob-decode'
 import {
   localImageSrcStatus,
   type LocalImageSrcOutcome,
@@ -181,7 +180,8 @@ export function useLocalImageSrcResult(
     external: Boolean(externalSrc),
     cacheKey,
     outcome,
-    generation: Math.max(generation, getLocalImageCacheGeneration())
+    generation: Math.max(generation, getLocalImageCacheGeneration()),
+    owned: Boolean(cacheKey && displaySrc && blobUrlCache.get(cacheKey) === displaySrc)
   })
   return { src: displaySrc, status }
 }
@@ -285,11 +285,10 @@ export function loadLocalImageAbsolutePath(
         logLocalImageReadFailure(cacheKey, absolutePath, 'not-an-image')
         return null
       }
-      // Refuse before decoding: a photo the cache cannot hold would only cost a long decode.
-      if (!localImageBlobFits(cacheKey, decodedBase64Length(result.content))) {
+      const blob = await decodeLocalImageForCache(cacheKey, result, superseded)
+      if (!blob) {
         return null
       }
-      const blob = await base64ToBlobInSlices(result.content, result.mimeType ?? 'image/png')
       const url = URL.createObjectURL(blob)
       const byteLength = blob.size
       if (superseded()) {

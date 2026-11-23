@@ -1,3 +1,5 @@
+import { localImageBlobFits } from './local-image-src-cache'
+
 /** Base64 characters decoded per slice: about 3 MB of bytes, a few milliseconds of work each. */
 const SLICE_CHARS = 4 * 1024 * 1024
 
@@ -19,12 +21,14 @@ export function decodedBase64Length(base64: string): number {
 }
 
 /** Decode a large base64 payload into a Blob in slices, yielding between them, so a photo-sized
- *  image never holds the renderer in one long task. */
+ *  image never holds the renderer in one long task. Null once `superseded` says the read no longer
+ *  matters, checked after every yield and before the Blob is built. */
 export async function base64ToBlobInSlices(
   base64: string,
   mimeType: string,
+  superseded: () => boolean = () => false,
   sliceChars = SLICE_CHARS
-): Promise<Blob> {
+): Promise<Blob | null> {
   const parts: Uint8Array<ArrayBuffer>[] = []
   let carry = ''
   for (let start = 0; start < base64.length; start += sliceChars) {
@@ -40,7 +44,23 @@ export async function base64ToBlobInSlices(
     parts.push(bytes)
     if (start + sliceChars < base64.length) {
       await yieldToEventLoop()
+      if (superseded()) {
+        return null
+      }
     }
   }
-  return new Blob(parts, { type: mimeType })
+  return superseded() ? null : new Blob(parts, { type: mimeType })
+}
+
+/** A read image's bytes as a Blob for the cache, or null when the cache could not hold it (refused
+ *  before any decoding: a photo it cannot keep would only cost a long decode) or the read is stale. */
+export function decodeLocalImageForCache(
+  cacheKey: string,
+  read: { content: string; mimeType?: string },
+  superseded: () => boolean
+): Promise<Blob | null> {
+  if (!localImageBlobFits(cacheKey, decodedBase64Length(read.content))) {
+    return Promise.resolve(null)
+  }
+  return base64ToBlobInSlices(read.content, read.mimeType ?? 'image/png', superseded)
 }

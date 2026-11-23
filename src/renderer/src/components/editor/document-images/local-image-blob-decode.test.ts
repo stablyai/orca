@@ -13,9 +13,14 @@ const MIB = 1024 * 1024
 
 it('decodes the same bytes across slice boundaries and line breaks', async () => {
   // "Hello, gallery!" with a line break mid-payload and slices that split base64 quads.
-  const blob = await base64ToBlobInSlices('SGVsbG8s\nIGdhbGxlcnkh', 'image/png', 6)
-  expect(await blob.text()).toBe('Hello, gallery!')
-  expect(blob.type).toBe('image/png')
+  const blob = await base64ToBlobInSlices('SGVsbG8s\nIGdhbGxlcnkh', 'image/png', undefined, 6)
+  expect(await blob?.text()).toBe('Hello, gallery!')
+  expect(blob?.type).toBe('image/png')
+})
+
+it('stops at the next slice once the read is superseded, building no Blob', async () => {
+  const blob = await base64ToBlobInSlices('SGVsbG8sIGdhbGxlcnkh', 'image/png', () => true, 8)
+  expect(blob).toBeNull()
 })
 
 it('measures a payload without decoding it', () => {
