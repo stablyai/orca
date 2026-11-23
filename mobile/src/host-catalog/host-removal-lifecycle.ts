@@ -10,6 +10,7 @@ import { forgetNativeHostQueries } from '../query/native-query-persistence'
 import { forgetHostDescriptor } from '../host-descriptors/host-descriptor-store'
 import { removeHost } from './host-store'
 import { forgetKeptBots } from '../bots/kept-server-bot-listings'
+import { forgetBotAvatarUploads } from '../bots/bot-avatar-uploads'
 
 export async function removeHostAndCloseClient(
   hostId: string,
@@ -30,6 +31,7 @@ export async function removeHostAndCloseClient(
   // Before the wipe, so nothing this world still holds is written back after it.
   forgetNativeHostQueries(queryClient, hostId)
   forgetKeptBots(hostId)
+  forgetBotAvatarUploads(hostId)
   // After commit, cache cleanup must not delay/fail removal; later eviction can reclaim failures.
   void forgetHostUpdateFailures(hostId).catch(() => undefined)
   void deleteHostPageCache(hostId).catch(() => undefined)

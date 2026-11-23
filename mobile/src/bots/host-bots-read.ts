@@ -121,7 +121,7 @@ export async function readHostBots(
     }
     options?.beforeSend?.()
     publishHostBots(key, read)
-    noteListedBots(client, read.bots)
+    noteListedBots(client, key, read.bots)
     return read
   } catch {
     return { kind: 'unreadable' }
