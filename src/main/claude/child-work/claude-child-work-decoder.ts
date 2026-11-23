@@ -1,5 +1,4 @@
 // Roster changes, turn endings and spawn results cannot settle a child.
-/* eslint-disable max-lines -- Why: the decoder reads one frame stream, so roster release, admission and ending share its maps. */
 
 import { ClaudeTaskInvocations } from '../background-tasks/claude-task-invocations'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
@@ -24,6 +23,8 @@ import {
   claudeChildWorkObservation,
   type DecodedClaudeTask,
   type EndedClaudeTask,
+  claudeRosterAliasId,
+  claudeRosterEntries,
   claudeTaskProgressFacts,
   type ClaudeTaskFacts
 } from './claude-child-work-evidence'
@@ -59,19 +60,16 @@ export class ClaudeChildWorkDecoder {
     this.wakeLease.release(taskAliasId(message.tool_use_id))
     if (message.subtype === 'background_tasks_changed') {
       if (Array.isArray(message.tasks)) {
-        for (const entry of message.tasks) {
-          const task = record(entry)
-          const id = task && taskId(task)
-          if (task && id && liveClaudeTaskRunState(task.status) !== null) {
-            this.wakeLease.release(id)
+        for (const entry of claudeRosterEntries(message.tasks)) {
+          // A roster entry that reports the owner running proves the provider resumes it.
+          if (entry.live) {
+            this.wakeLease.release(entry.id)
           }
           if (
-            task &&
-            id &&
-            !this.ended.has(id) &&
-            this.taskInvocations.parentOf(id, taskAliasId(task.tool_use_id))
+            !this.ended.has(entry.id) &&
+            this.taskInvocations.parentOf(entry.id, claudeRosterAliasId(entry.task))
           ) {
-            this.started(id, task, true)
+            this.started(entry.id, entry.task, true)
           }
         }
       }
