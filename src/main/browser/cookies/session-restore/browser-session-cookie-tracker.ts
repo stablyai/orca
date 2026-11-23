@@ -5,14 +5,17 @@ import type { ScopeChange } from './browser-session-cookie-scopes'
 export type SessionCookieTracker = {
   target: Session
   filePath: string
-  /** What the file holds now, by scope (unless `savedFile` says otherwise). */
+  /** What the file holds now, by scope; for 'stale', what it should hold. */
   saved: Map<string, CdpCookie[]>
   /**
    * 'same': the file holds `saved`. 'stale': a clear's write failed, so it may still hold cookies
    * `saved` dropped, and the next save must rewrite it. 'unread': launch could not read it, so
-   * `saved` is empty and says nothing of what it holds; only live cookies or a full clear replace it.
+   * `saved` is empty and says nothing of what it holds. Its bytes may read on a later launch, so
+   * this launch writes over it only for a full clear (or removes it with the profile).
    */
   savedFile: 'same' | 'stale' | 'unread'
+  /** Timer saves that have retried a failed clear's rewrite; bounded, so a lasting I/O error stops. */
+  rewriteAttempts: number
   /** Set until the file has been read: a save before then would compare against nothing. */
   reading: boolean
   /** Scopes whose cookies changed since `saved` was read. */
@@ -52,10 +55,10 @@ export function cancelPendingSave(tracker: SessionCookieTracker): void {
 }
 
 /** Runs a snapshot write after those already queued, so an older one can't land last. */
-export function queueSnapshotWrite(
+export function queueSnapshotWrite<T>(
   tracker: SessionCookieTracker,
-  write: () => Promise<void>
-): Promise<void> {
+  write: () => Promise<T>
+): Promise<T> {
   const run = (tracker.saving ?? Promise.resolve()).then(write)
   const settled: Promise<void> = run
     .catch(() => {})

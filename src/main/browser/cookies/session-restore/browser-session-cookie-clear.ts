@@ -16,47 +16,49 @@ export async function clearBrowserCookieJar(target: Session): Promise<void> {
 /**
  * For a cookie clear: what it removed leaves Chromium's store and the saved session cookies now,
  * not at their next commit up to 30 s later, so a crash before then can't sign pages back in.
- * `cleared` picks the cookies a partial clear removed; without it, the clear removed them all.
+ * `partial` picks what a partial clear removed; a full clear omits it. Resolves false when the
+ * saved cookies may still hold what was cleared: a partial clear can't edit a file launch could
+ * not read, and dropping it would sign every other site out.
  */
 export async function persistBrowserCookieClear(
   target: Session,
-  cleared?: (cookie: CdpCookie) => boolean
-): Promise<void> {
+  partial?: (cookie: CdpCookie) => boolean
+): Promise<boolean> {
   await target.cookies.flushStore()
   const tracker = sessionCookieTrackerFor(target)
   if (!tracker) {
-    return
+    return true
   }
-  const isCleared = cleared ?? (() => true)
+  const cleared = partial ?? (() => true)
   // After any queued save: one that read the jar before the clear would write it back.
-  await queueSnapshotWrite(tracker, async () => {
+  return queueSnapshotWrite(tracker, async () => {
     // A profile deleted meanwhile already lost its file.
     if (sessionCookieTrackerFor(target) !== tracker) {
-      return
+      return true
     }
-    // Only a full clear may drop a file launch could not read: a partial one can't take just its
-    // cookies out, and every other site's would go with them.
-    if (tracker.savedFile === 'unread' && cleared) {
-      return
+    if (tracker.savedFile === 'unread' && partial) {
+      return false
     }
     const saved = [...tracker.saved.values()].flat()
-    const kept = saved.filter((cookie) => !isCleared(cookie))
+    const kept = saved.filter((cookie) => !cleared(cookie))
     if (kept.length === saved.length && tracker.savedFile === 'same') {
-      return
+      return true
     }
     // A site may have set one of these again after the clear: the next save reads them back.
     for (const cookie of saved) {
-      const key = isCleared(cookie) ? cdpCookieScopeKey(cookie) : null
+      const key = cleared(cookie) ? cdpCookieScopeKey(cookie) : null
       if (key) {
         noteScopeChange(tracker.changedScopes, key, 'other')
       }
     }
     try {
       await writeTrackedSnapshot(tracker, kept)
+      return true
     } catch (error) {
-      // The file may still hold what was cleared; the next save rewrites it without that.
+      // The file may still hold what was cleared; the next save (or quit) rewrites it without that.
       tracker.saved = groupByScope(kept, cdpCookieScopeKey)
       tracker.savedFile = 'stale'
+      tracker.rewriteAttempts = 0
       throw error
     } finally {
       scheduleSave(tracker)

@@ -53,10 +53,11 @@ export async function clearGoogleCookiesFromPartition(
   const target = session.fromPartition(partition)
   await sessionCookieTrackerFor(target)?.restored
   const result = await clearGoogleCookies(target, validate)
-  await persistBrowserCookieClear(target, (cookie) =>
+  const persisted = await persistBrowserCookieClear(target, (cookie) =>
     isNonTransplantableCookieDomain(cookie.domain ?? '')
   )
-  return result
+  // The saved session cookies may still sign Google back in on restart: not a success.
+  return persisted || (result !== 'cleared' && result !== 'empty') ? result : 'unverified'
 }
 
 export function clearGoogleCookiesForRuntimeProfile(

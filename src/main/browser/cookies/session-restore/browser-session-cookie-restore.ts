@@ -21,6 +21,7 @@ import {
   type ScopeChange
 } from './browser-session-cookie-scopes'
 import {
+  canSealSessionCookies,
   readSessionCookieSnapshot,
   removeSessionCookieSnapshot,
   routeSnapshotPath,
@@ -37,6 +38,7 @@ import {
 
 // Chromium commits its own cookie store this often.
 const SAVE_DELAY_MS = 30_000
+const CLEAR_REWRITE_ATTEMPTS = 3
 // Each CDP read or partitioned restore opens a hidden renderer; managed profiles are unbounded in number.
 const HELPER_TARGET_CONCURRENCY = 2
 const helperTargetSlots = new PrioritySemaphore(HELPER_TARGET_CONCURRENCY)
@@ -204,6 +206,7 @@ function track(filePath: string, target: Session): SessionCookieTracker {
     filePath,
     saved: new Map(),
     savedFile: 'same',
+    rewriteAttempts: 0,
     reading: false,
     changedScopes: new Map(),
     changedDuringSave: null,
@@ -244,7 +247,9 @@ function track(filePath: string, target: Session): SessionCookieTracker {
 }
 
 export function scheduleSave(tracker: SessionCookieTracker): void {
-  if (!tracker.timer && !tracker.changedDuringSave && !tracker.reading) {
+  // An unread file is left as it is, so nothing would be saved over it.
+  const fenced = tracker.reading || tracker.savedFile === 'unread'
+  if (!tracker.timer && !tracker.changedDuringSave && !fenced) {
     tracker.timer = setTimeout(
       () => void queueSnapshotWrite(tracker, () => saveSessionCookies(tracker)),
       SAVE_DELAY_MS
@@ -254,6 +259,13 @@ export function scheduleSave(tracker: SessionCookieTracker): void {
 
 async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> {
   tracker.timer = null
+  // Live cookies can't be stored unsealed (a failed clear's rewrite may still remove the file).
+  if (
+    tracker.savedFile === 'unread' ||
+    (tracker.savedFile === 'same' && !canSealSessionCookies())
+  ) {
+    return
+  }
   const changedDuringSave = new Map<string, ScopeChange>()
   tracker.changedDuringSave = changedDuringSave
   try {
@@ -261,13 +273,8 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
     // After quit or deletion the file belongs to the quit prune or is gone.
     if (cookies && !quitting && trackers.get(tracker.filePath) === tracker) {
       const saved = groupByScope(cookies, cdpCookieScopeKey)
-      // An unread file is replaced only after a change made this read the live jar, never with
-      // the empty stand-in for it. Sites often re-set a session cookie to the value it already had;
-      // skip the sealed write.
-      const mustRewrite =
-        tracker.savedFile === 'stale' ||
-        (tracker.savedFile === 'unread' && tracker.changedScopes.size > 0)
-      if (mustRewrite || !sameSavedCookies(tracker.saved, saved)) {
+      // Sites often re-set a session cookie to the value it already had; skip the sealed write.
+      if (tracker.savedFile === 'stale' || !sameSavedCookies(tracker.saved, saved)) {
         await writeTrackedSnapshot(tracker, cookies)
       }
       tracker.changedScopes = changedDuringSave
@@ -278,7 +285,16 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
     tracker.changedDuringSave = null
   }
   // A deleted profile's or a quitting app's leftover changes must not reopen a CDP target every 30 s.
-  if (tracker.changedScopes.size > 0 && !quitting && trackers.get(tracker.filePath) === tracker) {
+  if (quitting || trackers.get(tracker.filePath) !== tracker) {
+    return
+  }
+  // A failed clear's rewrite is retried a few times even with nothing else changed, then left to
+  // the next cookie change or quit.
+  const retry =
+    tracker.savedFile === 'stale'
+      ? ++tracker.rewriteAttempts < CLEAR_REWRITE_ATTEMPTS
+      : tracker.changedScopes.size > 0
+  if (retry) {
     scheduleSave(tracker)
   }
 }
@@ -326,9 +342,12 @@ export async function flushBrowserSessionCookiesOnQuit(): Promise<void> {
   await Promise.all(
     [...trackers.values()].map(async (tracker) => {
       cancelPendingSave(tracker)
+      // After any clear or save already writing, so this one lands last.
+      await tracker.saving
       // A file still being read, or that could not be read, is left as it is: this keeps only
-      // saved scopes, so it would replace that file with nothing.
-      if (tracker.changedScopes.size === 0 || tracker.reading || tracker.savedFile === 'unread') {
+      // saved scopes, so it would replace that file with nothing. A failed clear gets a last try.
+      const unchanged = tracker.changedScopes.size === 0 && tracker.savedFile === 'same'
+      if (unchanged || tracker.reading || tracker.savedFile === 'unread') {
         return
       }
       try {
