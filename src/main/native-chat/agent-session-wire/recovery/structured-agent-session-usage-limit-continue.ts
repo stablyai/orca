@@ -2,6 +2,7 @@ import type { UsageLimitContinueDeps } from './structured-agent-session-usage-li
 import { AgentSessionPreDispatchError } from '../operations/structured-agent-session-operation-settlement'
 import {
   USAGE_LIMIT_CONTINUE_CHAIN_LIMIT,
+  switchFreeIdentity as attemptIdentity,
   usageLimitContinueIdentity as identity,
   type HostUsageLimitCut
 } from './structured-agent-session-usage-limit-chain'
@@ -22,6 +23,8 @@ import {
 export const USAGE_LIMIT_CONTINUE_SENDS_PER_PASS = 2
 
 type Cut = HostUsageLimitCut & { resetsAt: number; turnEndedAt: number }
+/** `identity` names the journal's cut, not a reset a switch or room derived: a reading that comes
+ *  and goes never clears an unconfirmed send. */
 type Attempt = { identity: string; count: number; at: number; unconfirmed?: boolean }
 
 export { readSavedUsageLimitCut } from './structured-agent-session-usage-limit-chain'
@@ -130,7 +133,8 @@ export class StructuredAgentSessionUsageLimitContinue {
     const state = cancelsCut(cancel, cut)
       ? 'cancelled'
       : cut.chain >= USAGE_LIMIT_CONTINUE_CHAIN_LIMIT ||
-          (attempt?.identity === identity(cut) && (attempt.count >= 5 || attempt.unconfirmed))
+          (attempt?.identity === attemptIdentity(cut) &&
+            (attempt.count >= 5 || attempt.unconfirmed))
         ? 'failed'
         : this.eligible(id, cut)
           ? 'scheduled'
@@ -165,7 +169,7 @@ export class StructuredAgentSessionUsageLimitContinue {
         record?.location.executionHostId === this.deps.host.store.hostId &&
         isUsageLimitChatOpen(this.deps.host.store, id),
       cancel: record?.usageLimitContinueCancel,
-      attempt: cut && attempt?.identity === identity(cut) ? attempt : undefined
+      attempt: cut && attempt?.identity === attemptIdentity(cut) ? attempt : undefined
     })
   }
 
@@ -227,7 +231,7 @@ export class StructuredAgentSessionUsageLimitContinue {
         }
         const cut = read && this.holds.withSwitchReset(id, read, this.deps.now())
         const previous = this.attempts.get(id)
-        if (!cut || previous?.identity !== identity(cut)) {
+        if (!cut || previous?.identity !== attemptIdentity(cut)) {
           this.attempts.delete(id)
         }
         const attempt = this.attempts.get(id)
@@ -258,12 +262,9 @@ export class StructuredAgentSessionUsageLimitContinue {
   private async deferUnchangedCut(id: string, cut: Cut, at: number): Promise<void> {
     const current = await this.cold.read(id)
     // Admission also refuses temporary backlog; yield the next passes without spending a failure.
-    if (current && identity(current) === identity(cut)) {
-      this.attempts.set(id, {
-        identity: identity(cut),
-        count: this.attempts.get(id)?.count ?? 0,
-        at
-      })
+    const key = attemptIdentity(cut)
+    if (current && attemptIdentity(current) === key) {
+      this.attempts.set(id, { identity: key, count: this.attempts.get(id)?.count ?? 0, at })
     } else {
       this.attempts.delete(id)
     }
@@ -291,7 +292,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     const binding = this.holds.attributionBinding(id)
     const at = this.deps.now()
     const attempt: Attempt = {
-      identity: identity(cut),
+      identity: attemptIdentity(cut),
       count: (this.attempts.get(id)?.count ?? 0) + 1,
       at
     }

@@ -248,3 +248,20 @@ it('continues a cut with no known reset after Orca restarts while the relaunched
   expect(await pass(20_000, reading(0, NOW + 20_000))).toEqual([])
   expect(await pass(40_000, reading(0, NOW + 40_000))).toHaveLength(1)
 })
+
+it('never sends an unconfirmed continue again when its room goes and comes back', async () => {
+  const { host, pass } = await relaunchedChat(null)
+  expect(await pass(5_000, reading(0, NOW + 5_000))).toEqual([])
+  const send = host.send
+  let sends = 0
+  host.send = async () => {
+    sends += 1
+    throw new Error('lost before it could be confirmed')
+  }
+  expect(await pass(25_000, reading(0, NOW + 25_000))).toEqual([])
+  expect(sends).toBe(1)
+  host.send = send
+  expect(await pass(30_000, reading(100, NOW + 30_000))).toEqual([])
+  expect(await pass(40_000, reading(0, NOW + 40_000))).toEqual([])
+  expect(await pass(60_000, reading(0, NOW + 60_000))).toEqual([])
+})
