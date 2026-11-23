@@ -4616,15 +4616,16 @@
         "next": "Sonraki öğe",
         "subWhere": "Öğe {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "Şimdi değil"
-      },
       "write": {
         "offline": "{{host}} çevrimdışı."
       },
       "thisComputer": "Bilgisayar",
       "readFailedClosedPage": "Daha fazla kapalı öğe okunamadı.",
-      "skillLimit": "Mesaj gönderilmedi. En fazla {{limit}} beceri dosyası seçip yeniden deneyin."
+      "skillLimit": "Mesaj gönderilmedi. En fazla {{limit}} beceri dosyası seçip yeniden deneyin.",
+      "ask": {
+        "notSentYet": "henüz gönderilmedi",
+        "replaced": "Ajan yeni bir soru sordu. Okuyup yanıtlayın."
+      }
     },
     "needs": {
       "chat": "{{name}} ile sohbetiniz",

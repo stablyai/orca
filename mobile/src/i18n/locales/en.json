@@ -6345,7 +6345,8 @@
         "replyTo": "Reply to {{name}}…",
         "replyingTo": "Replying to:",
         "showLess": "Show less",
-        "fileOnComputer": "Open {{name}} on your computer."
+        "fileOnComputer": "Open {{name}} on your computer.",
+        "hideReplyingTo": "Hide"
       },
       "link": {
         "notRead": "Not read yet",
@@ -6482,7 +6483,14 @@
       "readFailedTitle": "Couldn’t load items",
       "ask": {
         "recommended": "Recommended",
-        "notNow": "Not now"
+        "typeAnswer": "Type your answer",
+        "notSentYet": "not sent yet",
+        "previous": "Previous question",
+        "step": "{{n}} of {{total}}",
+        "next": "Next question",
+        "heldCount_one": "{{count}} answer not sent yet, <send>send anyway</send>",
+        "heldCount_other": "{{count}} answers not sent yet, <send>send anyway</send>",
+        "replaced": "The agent asked a new question. Read it, then reply."
       },
       "readFailedClosedPage": "Couldn’t read more closed items.",
       "skillLimit": "Message not sent. Keep at most {{limit}} selected skill files and try again."

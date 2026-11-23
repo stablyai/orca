@@ -4616,15 +4616,16 @@
         "next": "Nächstes Element",
         "subWhere": "Element {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "Nicht jetzt"
-      },
       "write": {
         "offline": "{{host}} ist offline."
       },
       "thisComputer": "Der Computer",
       "readFailedClosedPage": "Weitere geschlossene Elemente konnten nicht gelesen werden.",
-      "skillLimit": "Nachricht nicht gesendet. Wähle höchstens {{limit}} Skill-Dateien aus und versuche es erneut."
+      "skillLimit": "Nachricht nicht gesendet. Wähle höchstens {{limit}} Skill-Dateien aus und versuche es erneut.",
+      "ask": {
+        "notSentYet": "noch nicht gesendet",
+        "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann."
+      }
     },
     "needs": {
       "chat": "Dein Chat mit {{name}}",
