@@ -30,8 +30,16 @@ export function createClaudeFullAccessPolicy(providerSessionId: string): ClaudeF
   // reaches the callback as an abort, so dropping its entry early would apply a later mode.
   const modeAtRequest = new Map<string, boolean>()
   let mode: string | null | undefined
+  let modeBeforePlan: string | null | undefined
   let closed = false
   let partial = ''
+
+  // Plan entered from Full access keeps it, as the CLI does for a --dangerously-skip-permissions
+  // session; non-interactive Claude asks instead, so without this every read in Plan prompts.
+  const fullAccessApplies = (): boolean =>
+    mode === undefined ||
+    mode === 'full-access' ||
+    (mode === 'plan' && (modeBeforePlan === undefined || modeBeforePlan === 'full-access'))
 
   const remember = (request: unknown): void => {
     if (
@@ -45,7 +53,7 @@ export function createClaudeFullAccessPolicy(providerSessionId: string): ClaudeF
     const requestId = readClaudeFrameString(request, 'request_id')
     // A redelivered id keeps its first position.
     if (requestId && !modeAtRequest.has(requestId)) {
-      modeAtRequest.set(requestId, mode === undefined || mode === 'full-access')
+      modeAtRequest.set(requestId, fullAccessApplies())
     }
   }
 
@@ -81,9 +89,12 @@ export function createClaudeFullAccessPolicy(providerSessionId: string): ClaudeF
     ) {
       return
     }
-    // Absent keeps the last report; plan, ask, dontAsk and unknown modes all suspend Full access.
+    // Absent keeps the last report; ask, dontAsk and unknown modes suspend Full access.
     const reported = readClaudeReportedPermissionMode(frame)
     if (reported !== undefined) {
+      if (reported !== 'plan') {
+        modeBeforePlan = reported
+      }
       mode = reported
     }
   }
