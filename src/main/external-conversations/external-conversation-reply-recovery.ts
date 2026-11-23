@@ -39,7 +39,7 @@ export type ReplyRecoveryChat = {
   conversation(sessionId: string): Promise<unknown>
   journalReads(
     sessionId: string
-  ): Promise<Pick<JournalSqlReads, 'canonicalItemIds' | 'operationWindow' | 'latestStop'>>
+  ): Promise<Pick<JournalSqlReads, 'canonicalItemIds' | 'operationWindow'>>
   observeJournalPublications(sessionId: string, observer: () => void): () => void
 }
 
@@ -214,7 +214,8 @@ export class ConnectorReplyRecovery {
         endedCuts,
         idle,
         lastEnded,
-        startedAt: this.startedAt
+        startedAt: this.startedAt,
+        rejectionOf: (submission) => this.rejectionOf(sessionId, submission)
       })
     const fills = left.flatMap((row) => {
       const verdict = evidence(row)
@@ -230,9 +231,6 @@ export class ConnectorReplyRecovery {
         ...(verdict.failure ? { failure: verdict.failure } : {})
       }))
     )
-    if (view.deferredForStop()) {
-      this.again.add(sessionId)
-    }
     const owed = (await journal.read(sessionId)).filter((row) => !row.fill)
     if (owed.length > 0) {
       this.watch(chat, sessionId)

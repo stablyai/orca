@@ -5,7 +5,6 @@ import {
   type AgentSessionFailureFact,
   type AgentSessionFailureKind
 } from '../../shared/agent-session/failures/agent-session-failure'
-import type { AgentJournalSubmission } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   ConnectorFailure,
   ConnectorFailureCategory
@@ -13,8 +12,12 @@ import type {
 import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import { refused, type Delivery } from './external-conversation-types'
 import type { JournalSqlReads } from '../native-chat/agent-session-journal/journal-sql-reads'
-import type { JournalStopEvent } from '../native-chat/agent-session-journal/durable-rows/journal-row-schema'
-import { stopIsAPersons } from '../native-chat/agent-session-journal/context-epochs/journal-stop-turn-end'
+import {
+  personStopTookBack,
+  stopMayHaveRejected,
+  type RejectedSend,
+  type SavedStop
+} from '../native-chat/agent-session-journal/connector-replies/journal-connector-stop-withdrawal'
 
 // Each a different next step for the owner; any other kind is the agent's own error.
 const CATEGORY_OF: Partial<Record<AgentSessionFailureKind, ConnectorFailureCategory>> = {
@@ -28,20 +31,8 @@ const CATEGORY_OF: Partial<Record<AgentSessionFailureKind, ConnectorFailureCateg
   launchFolderMissing: 'folder_missing'
 }
 
-// Kinds a Stop or close rejects unsent sends with. Orca's own stops use them too, so only a
-// person's saved Stop between the send and its rejection makes one read as stopped.
-const STOP_REJECTIONS: ReadonlySet<AgentSessionFailureKind> = new Set(['cancelled', 'chatClosed'])
-
-type RejectedSend = Pick<AgentJournalSubmission, 'rejection' | 'submittedAt' | 'resolvedAt'>
 type StopReadingChat = {
   journalReads(sessionId: string): Promise<Pick<JournalSqlReads, 'latestStop'>>
-}
-export type SavedStop = Pick<JournalStopEvent, 'reason' | 'at'> | null
-
-/** Whether a rejection could be a Stop's, so the saved Stop is worth reading. */
-export function stopMayHaveRejected(send: Pick<RejectedSend, 'rejection'>): boolean {
-  const fact = readAgentSessionFailureFact(send.rejection)
-  return fact !== undefined && STOP_REJECTIONS.has(fact.kind)
 }
 
 /** The chat's latest saved Stop; unreadable reads as none, so the send keeps its failure. */
@@ -52,17 +43,6 @@ export async function savedStop(chat: StopReadingChat, sessionId: string): Promi
     console.warn('[connectors] could not read the chat’s latest Stop', error)
     return null
   }
-}
-
-/** A send a person's Stop or close took back before the agent ran it: stopped, never an error. */
-export function personStopTookBack(send: RejectedSend, stop: SavedStop): boolean {
-  return (
-    stopMayHaveRejected(send) &&
-    stop !== null &&
-    stopIsAPersons(stop.reason) &&
-    stop.at >= send.submittedAt &&
-    (send.resolvedAt === null || stop.at <= send.resolvedAt)
-  )
 }
 
 export function connectorFailure(
@@ -86,11 +66,12 @@ export async function rejectedSendRefusal(
   link: { sessionId: string; agent: string },
   send: RejectedSend | null | undefined
 ): Promise<Delivery> {
-  const fact = readAgentSessionFailureFact(send?.rejection)
-  if (send && fact && STOP_REJECTIONS.has(fact.kind)) {
+  // Read just after the rejection, so the latest Stop is the one that could have caused it.
+  if (send && stopMayHaveRejected(send)) {
     if (personStopTookBack(send, await savedStop(chat, link.sessionId))) {
       return refused('conversation_cancelled')
     }
   }
+  const fact = readAgentSessionFailureFact(send?.rejection)
   return refused('agent_not_reachable', fact && connectorFailure(fact, link.agent))
 }

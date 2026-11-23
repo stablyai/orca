@@ -20,12 +20,6 @@ import {
   readAgentJournalTurnOutcome
 } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { ConnectorFailure } from '../../shared/connectors/connector-cloud-contract'
-import {
-  personStopTookBack,
-  savedStop,
-  stopMayHaveRejected,
-  type SavedStop
-} from './external-conversation-failure'
 import type { ReplyRecoveryChat } from './external-conversation-reply-recovery'
 import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../native-chat/agent-session-journal/projection/journal-dispatch-doubt-reasons'
 
@@ -41,17 +35,6 @@ export type ReplyRecoveryVerdict = {
 
 // The machine lost track of the request across a restart: it may have finished (Phase 1 §1.8).
 export const UNCONFIRMED: ConnectorFailure = { category: 'unconfirmed' }
-
-/** A rejected send: withdrawn when a person's Stop or close took it back, else failed with why. */
-function rejectedVerdict(
-  submission: AgentJournalSubmission,
-  stop: SavedStop,
-  rejectionOf: (submission: AgentJournalSubmission) => { failure?: ConnectorFailure }
-): ReplyRecoveryVerdict {
-  return personStopTookBack(submission, stop)
-    ? { outcome: 'withdrawn' }
-    : { outcome: 'failed', ...rejectionOf(submission) }
-}
 
 export const keyOf = (row: Unfilled) => ({ account: row.account, deliveryId: row.deliveryId })
 
@@ -107,25 +90,6 @@ export async function readReplyEvidence(
           (candidate) => agentJournalSubmissionKey(candidate.clientMessageId) === key
         )
   const submissionOf = (row: Unfilled) => submissionByKey(messageOf(row)?.itemId)
-  // Read only when a row's own send was rejected as a Stop's could be: most passes have none.
-  const stopRejected = (send: AgentJournalSubmission | undefined) =>
-    send?.dispatchState === 'rejected' && stopMayHaveRejected(send)
-  const stopRead = rows.some(
-    (row) =>
-      stopRejected(submissionOf(row)) ||
-      (row.claimMessageId !== undefined &&
-        stopRejected(submissionByKey(agentJournalSubmissionKey(row.claimMessageId))))
-  )
-  const stop = stopRead ? await savedStop(chat, sessionId) : null
-  // A row admitted after these rows were read is judged without the Stop: it waits for a rerun.
-  let deferredForStop = false
-  const rejected = (submission: AgentJournalSubmission): ReplyRecoveryVerdict | null => {
-    if (!stopRead && stopRejected(submission)) {
-      deferredForStop = true
-      return null
-    }
-    return rejectedVerdict(submission, stop, rejectionOf)
-  }
   const turnRowOf = (cutTurnId: string) =>
     snapshot.items.findLast(
       (item) => readAgentJournalTurn(item.body)?.turnId === cutTurnId || item.itemId === cutTurnId
@@ -176,7 +140,7 @@ export async function readReplyEvidence(
     }
     const submission = submissionByKey(agentJournalSubmissionKey(claimMessageId))
     if (submission?.dispatchState === 'rejected') {
-      return rejected(submission)
+      return { outcome: 'failed', ...rejectionOf(submission) }
     }
     if (submission?.dispatchState === 'unknown' && submission.recovered === true) {
       return { outcome: 'interrupted', failure: UNCONFIRMED }
@@ -191,8 +155,6 @@ export async function readReplyEvidence(
     turnOpenedBy,
     cutOpener,
     claimVerdict,
-    rejected,
-    deferredForStop: () => deferredForStop,
     // Only turns that could have answered a row still unfilled.
     turns: () => {
       const placed = rows.map((row) => messageOf(row)?.sequence ?? 0).filter((at) => at > 0)
@@ -277,9 +239,11 @@ export function rowVerdict(
     lastEnded: number
     /** When this host process started: a send accepted before it was cut off by a restart. */
     startedAt: number
+    rejectionOf: (submission: AgentJournalSubmission) => { failure?: ConnectorFailure }
   }
 ): ReplyRecoveryVerdict | null {
-  const { view, cut, unresolved, settled, endedCuts, idle, lastEnded, startedAt } = facts
+  const { view, cut, unresolved, settled, endedCuts, idle, lastEnded, startedAt, rejectionOf } =
+    facts
   if (row.claimMessageId !== undefined) {
     return settled ? view.claimVerdict(row.claimMessageId) : null
   }
@@ -301,7 +265,7 @@ export function rowVerdict(
   const submission = view.submissionOf(row)
   if (submission && !submission.answeredInTurn) {
     if (submission.dispatchState === 'rejected') {
-      return view.rejected(submission)
+      return { outcome: 'failed', ...rejectionOf(submission) }
     }
     if (
       submission.dispatchState === 'unknown' &&

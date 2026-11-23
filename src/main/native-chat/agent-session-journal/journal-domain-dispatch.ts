@@ -1,5 +1,6 @@
 import type Database from '../../sqlite/sync-database'
 import { JournalSqlScope } from './journal-sql-scope'
+import { withdrawStopRejectedConnectorReplies } from './connector-replies/journal-connector-stop-withdrawal'
 import { journalDomainSubmission } from './journal-domain-status-inputs'
 import { refreshJournalDomainAcceptedHandover } from './journal-domain-input-ends'
 import {
@@ -100,6 +101,7 @@ export function applyJournalDomainDispatch(
     const itemId = agentJournalSubmissionKey(input.clientMessageId)
     const previous = readJournalDomainDispatchItem(db, target, itemId)
     const next = settledJournalDomainSubmission(attempt.submission, input, savedAt)
+    withdrawStopRejectedConnectorReplies(db, target, next, savedAt)
     let handover = attempt.handover
     let handoverPlace = attempt.handoverPlace
     let carries = attempt.carries
