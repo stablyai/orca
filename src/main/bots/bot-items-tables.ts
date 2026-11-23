@@ -12,6 +12,7 @@ import { linkWords, type BotItemLinkInput } from './bot-items-input'
 import {
   carryWaitingAsk,
   hasKeptWaitingAsks,
+  keepInWrite,
   keepWaitingAsk,
   pairWaitingAsk,
   pairsWaitingAsks,
@@ -50,7 +51,7 @@ export class BotItemsTables {
     try {
       const result = write()
       for (const uid of this.repair) {
-        keepWaitingAsk(this.db, uid, pairWaitingAsk(this.db, uid))
+        keepInWrite(this.db, () => keepWaitingAsk(this.db, uid, pairWaitingAsk(this.db, uid)))
       }
       this.db.exec('COMMIT')
       return result
@@ -128,7 +129,7 @@ export class BotItemsTables {
     }
     const keeps = this.keepsWaitingAsks()
     if (keeps && !pairsWaitingAsks(kind)) {
-      carryWaitingAsk(this.db, uid, id)
+      keepInWrite(this.db, () => carryWaitingAsk(this.db, uid, id))
     }
     this.db
       .prepare(
@@ -142,7 +143,7 @@ export class BotItemsTables {
       if (this.repair) {
         this.repair.add(uid)
       } else {
-        keepWaitingAsk(this.db, uid, pairWaitingAsk(this.db, uid))
+        keepInWrite(this.db, () => keepWaitingAsk(this.db, uid, pairWaitingAsk(this.db, uid)))
       }
     }
     return id

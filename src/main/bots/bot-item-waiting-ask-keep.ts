@@ -76,7 +76,22 @@ export function carryWaitingAsk(db: SyncDatabase, uid: string, id: number): void
   ).run(id, uid, uid)
 }
 
-/** The kept ask while it holds, else paired from all the item's events and kept for the next open. */
+/** A keep inside a write that may fail (a full disk) without failing the write: a kept ask not written
+ *  goes stale against the item's newest event, and a later open pairs the events again. */
+export function keepInWrite(db: SyncDatabase, keep: () => void): void {
+  db.exec('SAVEPOINT keep_waiting_ask')
+  try {
+    keep()
+    db.exec('RELEASE keep_waiting_ask')
+  } catch (error) {
+    db.exec('ROLLBACK TO keep_waiting_ask')
+    db.exec('RELEASE keep_waiting_ask')
+    console.warn('[bots] items: keeping a waiting ask failed', error)
+  }
+}
+
+/** The kept ask while it holds, else paired from all the item's events and kept for the next open, unless
+ *  a write holds the file: a read never waits on one to keep it. */
 export function waitingAskOf(db: SyncDatabase, uid: string, keeps: boolean): number | null {
   const kept = keeps ? keptWaitingAsk(db, uid) : undefined
   if (kept !== undefined) {
@@ -84,11 +99,14 @@ export function waitingAskOf(db: SyncDatabase, uid: string, keeps: boolean): num
   }
   const paired = pairWaitingAsk(db, uid)
   if (keeps) {
+    const timeout = Number(db.pragma('busy_timeout', { simple: true }) ?? 0)
+    db.pragma('busy_timeout = 0')
     try {
       keepWaitingAsk(db, uid, paired)
-    } catch (error) {
-      // It only spares a later open the pairing.
-      console.warn('[bots] items: keeping a waiting ask failed', error)
+    } catch {
+      // Busy or refused: the next open pairs again.
+    } finally {
+      db.pragma(`busy_timeout = ${timeout}`)
     }
   }
   return paired.ask
