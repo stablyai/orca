@@ -38,8 +38,6 @@ let seenLive: readonly string[] | null = null
 const seen = new WeakSet<Bot>()
 // Bots whose attempt failed, looked at again on the next run whatever their record.
 const retry = new Set<string>()
-// Bots listed last run, for letting a deleted bot's look go.
-let listedCount = 0
 
 // Lets a failed or outdated attempt go; the next bots notice, of any kind, looks at the bot again.
 function forget(bot: Bot, attempt: number): void {
@@ -195,6 +193,7 @@ function publishLooks(): void {
     return
   }
   const liveChanged = live !== seenLive
+  const listChanged = bots !== seenBots
   seenBots = bots
   seenLive = live
   for (const bot of bots) {
@@ -209,8 +208,9 @@ function publishLooks(): void {
       publishBotSlackIcon(bot)
     }
   }
-  // A deleted bot, or one on an unpaired host, keeps nothing here.
-  if (handled.size + retry.size + failures.size > bots.length || bots.length < listedCount) {
+  // A deleted bot, or one on an unpaired host, keeps nothing here, even when others took its place in a
+  // list of the same length: once per changed list, before any of its jobs runs again.
+  if (listChanged) {
     const listed = new Set(bots.map(botRefKey))
     for (const key of handled.keys()) {
       if (!listed.has(key)) {
@@ -235,7 +235,6 @@ function publishLooks(): void {
       }
     }
   }
-  listedCount = bots.length
 }
 
 // Back from offline, or its event stream back after a gap: another client may have replaced its icons.
@@ -299,7 +298,6 @@ export function useBotSlackIcons(): void {
       // Off, nothing here is kept: no list, no waiting attempts, and the one running stops at its next check.
       seenBots = null
       seenLive = null
-      listedCount = 0
       handled.clear()
       failures.clear()
       retry.clear()
