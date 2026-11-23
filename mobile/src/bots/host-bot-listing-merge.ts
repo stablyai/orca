@@ -49,7 +49,9 @@ export function mergeKeptServerBotListing(
   if (
     live?.kind !== 'listed' ||
     live.workerStatus !== 'unavailable' ||
-    live.installationId !== kept.installationId
+    live.installationId !== kept.installationId ||
+    Object.keys(live.workspaceLineage).length > 0 ||
+    Object.keys(live.worktreeLineage).length > 0
   ) {
     return live ?? kept
   }

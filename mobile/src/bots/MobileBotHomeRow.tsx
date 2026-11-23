@@ -46,16 +46,12 @@ export function MobileBotHomeRow({
   const down = bot.host?.word !== undefined
   const asking = !down && line?.kind === 'needYouElsewhere'
   const lineText = line ? mobileBotRowLineText(line, now) : bot.statusLine
-  const workerStatus = bot.workerStatusUnavailable
-    ? t('bots.workers.unavailable', 'Worker status unavailable')
-    : null
-  const withWorkerStatus = workerStatus ? `${lineText} · ${workerStatus}` : lineText
   // The line names who waits on an access answer, since nothing else on the row says it.
   const preview = down
     ? ''
     : asking && bot.askedForAccess
-      ? `${withWorkerStatus} · ${t('bots.needs.access', '{{person}} asked for access', { person: bot.askedForAccess })}`
-      : withWorkerStatus
+      ? `${lineText} · ${t('bots.needs.access', '{{person}} asked for access', { person: bot.askedForAccess })}`
+      : lineText
   const age =
     !down && line?.kind === 'activity' && line.at !== null ? formatTimeAgo(line.at, now) : null
   // The desktop's mark before a thread's label, which leads an activity line.

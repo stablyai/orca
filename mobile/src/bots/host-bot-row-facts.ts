@@ -36,8 +36,6 @@ export type MobileBotRowFacts = {
   dot: BotRowStatus
   /** A folded row's glyph: its most urgent live workspace. */
   foldLive: ReturnType<typeof botFoldLiveStatus>
-  /** The bot list arrived but the separate worker-lineage read did not. */
-  workerStatusUnavailable?: true
   /** New Up next suggestions, counted apart from unread. */
   upNext?: number
   /** What its line reads beside the home's agent rows: its Chat, its threads' links, its waits. */

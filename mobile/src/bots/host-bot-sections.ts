@@ -108,6 +108,14 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
       }
       continue
     }
+    if (listing.workerStatus === 'unavailable') {
+      endLines.push({
+        key: `workers-unavailable:${listing.hostId}`,
+        text: translate('bots.workers.unavailable', 'Worker status unavailable on {{host}}.', {
+          host: listing.hostLabel
+        })
+      })
+    }
     const host = drawHostBotEntries(listing, hostRows, inputs, lineageOf, hosts)
     drawn.push(...host.drawn)
     host.listed.forEach((identity) => listedIdentities.add(identity))
