@@ -238,11 +238,17 @@ export class BrowserClientPageCommandExecutor {
   retirePage(browserPageId: string, pageHostGeneration: number): Promise<boolean> {
     return (
       this.initializers.retirePage(browserPageId, pageHostGeneration) ??
-      (this.memorySaver.freed.has(browserPageId)
-        ? this.memorySaver.retire(browserPageId, pageHostGeneration)
-        : retireBrowserClientRetainedPage(this.pages, browserPageId, pageHostGeneration, (page) =>
-            this.cleanupPage(page)
-          ))
+      (this.memorySaver.holds(browserPageId)
+        ? this.memorySaver
+            .retire(browserPageId, pageHostGeneration)
+            .then((retired) => retired ?? this.retireLivePage(browserPageId, pageHostGeneration))
+        : this.retireLivePage(browserPageId, pageHostGeneration))
+    )
+  }
+
+  private retireLivePage(browserPageId: string, pageHostGeneration: number): Promise<boolean> {
+    return retireBrowserClientRetainedPage(this.pages, browserPageId, pageHostGeneration, (page) =>
+      this.cleanupPage(page)
     )
   }
 

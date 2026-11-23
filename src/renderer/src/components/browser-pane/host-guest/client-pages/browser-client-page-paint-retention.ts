@@ -124,12 +124,28 @@ export function trackBrowserClientPageGuestActivity(page: BrowserClientRetainedR
   syncBrowserClientPagePaintRetention(page)
 }
 
-// A profile switch's two guests share a page id; only the one registered may unregister.
+/** A profile switch's two guests share a page id: the survivor of a retired one reports again. */
 export function forgetBrowserClientPageGuestActivity(
-  page: BrowserClientRetainedRendererPage
+  page: BrowserClientRetainedRendererPage,
+  pages: Iterable<BrowserClientRetainedRendererPage>
 ): void {
-  if (browserGuestActivity.get(page.identity.browserPageId)?.webview === page.webview) {
-    unregisterBrowserGuestActivity(page.identity.browserPageId)
+  if (browserGuestActivity.get(page.identity.browserPageId)?.webview !== page.webview) {
+    return
+  }
+  unregisterBrowserGuestActivity(page.identity.browserPageId)
+  let survivor: BrowserClientRetainedRendererPage | null = null
+  for (const candidate of pages) {
+    if (
+      candidate !== page &&
+      candidate.status === 'attached' &&
+      candidate.identity.browserPageId === page.identity.browserPageId &&
+      (!survivor || candidate.identity.pageHostGeneration > survivor.identity.pageHostGeneration)
+    ) {
+      survivor = candidate
+    }
+  }
+  if (survivor) {
+    trackBrowserClientPageGuestActivity(survivor)
   }
 }
 

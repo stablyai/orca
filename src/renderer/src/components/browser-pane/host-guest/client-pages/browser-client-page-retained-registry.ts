@@ -296,7 +296,7 @@ export class BrowserClientPageRetainedRegistry {
       return
     }
     retireBrowserGuestMetadata(page.webview, page.webContentsId)
-    forgetBrowserClientPageGuestActivity(page)
+    forgetBrowserClientPageGuestActivity(page, this.pages.values())
     releaseBrowserClientRetainedRendererPage(page)
     this.pages.delete(page.key)
     const nextCount = (this.partitionCounts.get(page.identity.partition) ?? 1) - 1
@@ -309,7 +309,7 @@ export class BrowserClientPageRetainedRegistry {
 
   private disconnectPage(page: RetainedPage): void {
     retireBrowserGuestMetadata(page.webview, page.webContentsId)
-    forgetBrowserClientPageGuestActivity(page)
+    forgetBrowserClientPageGuestActivity(page, this.pages.values())
     // Registry disposal or guest loss may precede pane detach; stop rect reads for the disconnected host now.
     page.visibleAttachment?.stopTrackingViewport()
     page.visibleAttachment = null

@@ -192,21 +192,31 @@ export class BrowserClientPageMemorySaver implements BrowserClientPageMemoryOwne
     }
   }
 
-  /** Forgets a freed page whose generation the server retired. */
-  async retire(browserPageId: string, pageHostGeneration: number): Promise<boolean> {
+  /** Freed, or being remade from a free. */
+  holds(browserPageId: string): boolean {
+    return this.freed.has(browserPageId) || this.waking.has(browserPageId)
+  }
+
+  /** Forgets a freed page whose generation the server retired; null once it is live again. */
+  async retire(browserPageId: string, pageHostGeneration: number): Promise<boolean | null> {
     await this.waking.get(browserPageId)?.catch(() => {})
-    if (this.freed.get(browserPageId)?.inventory.pageHostGeneration !== pageHostGeneration) {
+    const freed = this.freed.get(browserPageId)
+    if (!freed) {
+      return null
+    }
+    if (freed.inventory.pageHostGeneration !== pageHostGeneration) {
       return false
     }
     await this.drop(browserPageId)
     return true
   }
 
+  /** A wake still running fails its commit or is cleaned up with the executor's live pages. */
   async close(): Promise<void> {
     this.lifetime.abort()
     const retirings = [...this.freed.values()].map((freed) => freed.retiring)
     this.freed.clear()
-    await Promise.allSettled([...this.waking.values(), ...retirings])
+    await Promise.allSettled(retirings)
   }
 
   private remake(browserPageId: string): Promise<void> {
@@ -270,21 +280,24 @@ export class BrowserClientPageMemorySaver implements BrowserClientPageMemoryOwne
   }
 
   private async reopen(page: BrowserClientRetainedPage, freed: FreedPage): Promise<void> {
+    // A failed load leaves the page live on its error, as a local tab whose restore failed; a
+    // command that navigates elsewhere still runs.
     const { routeWebContents } = this.host.dependencies
-    if (!(await routeWebContents.navigateGuest(page.lifecycleClaim, freed.inventory.currentUrl))) {
-      throw new BrowserClientPageCommandError('browser_client_page_navigation_failed')
-    }
+    await routeWebContents.navigateGuest(page.lifecycleClaim, freed.inventory.currentUrl)
     // Navigation settles at did-finish-load; a command sent before did-stop-loading would wait on it.
     const guest = webContents.fromId(page.registration.webContentsId)
     if (guest && !guest.isDestroyed() && guest.isLoadingMainFrame()) {
       await new Promise<void>((resolve) => {
+        const { signal } = this.lifetime
         const settle = (): void => {
           guest.off('did-stop-loading', settle)
           guest.off('destroyed', settle)
+          signal.removeEventListener('abort', settle)
           resolve()
         }
         guest.on('did-stop-loading', settle)
         guest.on('destroyed', settle)
+        signal.addEventListener('abort', settle)
       })
     }
   }

@@ -39,14 +39,19 @@ export function useClientHostedPageAttachment(
         setAttachmentError(code)
         return () => {}
       }
-      let stop = whenBrowserClientPageContainerShown(container, () => {
-        stop = wakeBrowserClientPage(
+      // The shown check can call back synchronously, so the wake's handle exists before it runs.
+      let stopWake = (): void => {}
+      const stopShown = whenBrowserClientPageContainerShown(container, () => {
+        stopWake = wakeBrowserClientPage(
           { browserPageId, pageHostGeneration },
           () => setRemountRevision((revision) => revision + 1),
           () => setAttachmentError(code)
         )
       })
-      stopWakeRef.current = () => stop()
+      stopWakeRef.current = () => {
+        stopShown()
+        stopWake()
+      }
       return stopWakeRef.current
     },
     [browserPageId]
