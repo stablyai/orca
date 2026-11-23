@@ -6,13 +6,16 @@
 import { useEffect } from 'react'
 import { readBotsEnabled, subscribeToBotChanges, useBotsEnabled } from '@/lib/bot-catalog'
 import { onBotHostCameBack } from '@/lib/bot-host-link-read'
-import { onBotsChanged } from '@/lib/bots-changed-window-event'
+import { BOTS_CHANGED_EVENT } from '@/lib/bots-changed-window-event'
 import { readBotHostIds, readBotHostState, readHostBots } from '@/lib/bot-catalog-snapshot'
 import { botRefKey } from '@/lib/bot-hosts'
 import { botHostHas } from '@/lib/bot-host-status'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import {
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { BOTS_SLACK_ICON_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import { wornBotOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import { botSlackIconLook } from '../../../../shared/bots/bot-slack-icon'
@@ -30,7 +33,19 @@ type Attempt = { bot: Bot; look: string; attempt: number }
 const pending = new Map<string, Map<string, Attempt>>()
 const running = new Set<string>()
 // Per bot, the look its last try failed at: not tried again until a real step clears it.
-const failures = new Map<string, { look: string; bot: Bot }>()
+// Kept by host, so one host's notice looks only at its own.
+const failures = new Map<ExecutionHostId, Map<string, { look: string; bot: Bot }>>()
+
+function failureOf(bot: Bot): { look: string; bot: Bot } | undefined {
+  return failures.get(bot.hostId)?.get(botRefKey(bot))
+}
+
+function clearFailure(bot: Pick<Bot, 'hostId' | 'id'>): void {
+  const kept = failures.get(bot.hostId)
+  if (kept?.delete(botRefKey(bot)) && kept.size === 0) {
+    failures.delete(bot.hostId)
+  }
+}
 // Per host, its bots as last looked at: a notice that left a host's list as it was (a Needs You count, a
 // detail of the list) costs one compare for that host. Per bot, its record as last looked at, by its save
 // time, picture fields and links: a list rebuilt around a deleted bot asks nothing about the bots it only
@@ -59,7 +74,9 @@ function forget(bot: Bot, attempt: number, failed = false): void {
   }
   handled.delete(key)
   if (failed) {
-    failures.set(key, { look: entry.look, bot })
+    const kept = failures.get(bot.hostId) ?? new Map<string, { look: string; bot: Bot }>()
+    kept.set(key, { look: entry.look, bot })
+    failures.set(bot.hostId, kept)
   }
 }
 
@@ -96,7 +113,6 @@ async function publish(bot: Bot, look: string, attempt: number): Promise<void> {
     forget(bot, attempt)
     return
   }
-  const key = botRefKey(bot)
   try {
     const parsed = parseBotAvatar(bot.avatar)
     const want = parsed?.kind === 'mascot' ? await botSlackIconWanted(bot, look) : null
@@ -107,7 +123,7 @@ async function publish(bot: Bot, look: string, attempt: number): Promise<void> {
       return
     }
     if (!want.wanted) {
-      failures.delete(key)
+      clearFailure(bot)
       return
     }
     const png = stillCurrent(bot, attempt)
@@ -118,7 +134,7 @@ async function publish(bot: Bot, look: string, attempt: number): Promise<void> {
       return
     }
     if (png && (await uploadBotSlackIcon(bot, look, png))) {
-      failures.delete(key)
+      clearFailure(bot)
       return
     }
     // No drawing, or the host's look changed meanwhile: only a drawing that failed waits for a real step.
@@ -141,7 +157,7 @@ export function publishBotSlackIcon(bot: Bot): void {
   if (
     handled.get(key)?.look === look ||
     // Failed at this look: it waits for a real step, which clears this first.
-    failures.get(key)?.look === look ||
+    failureOf(bot)?.look === look ||
     readBotHostState(bot.hostId) !== 'live' ||
     !botHostHas(bot.hostId, BOTS_SLACK_ICON_RUNTIME_CAPABILITY)
   ) {
@@ -160,7 +176,7 @@ export function publishBotSlackIcon(bot: Bot): void {
 function askAgain(bot: Bot): void {
   allowOutfitReadsAgain()
   handled.delete(botRefKey(bot))
-  failures.delete(botRefKey(bot))
+  clearFailure(bot)
   publishBotSlackIcon(bot)
 }
 
@@ -189,7 +205,7 @@ function prune(hostId: ExecutionHostId, before: readonly Bot[], bots: readonly B
     const key = botRefKey(bot)
     if (!listed.has(key)) {
       handled.delete(key)
-      failures.delete(key)
+      clearFailure(bot)
       seen.delete(key)
       pending.get(hostId)?.delete(key)
     }
@@ -236,18 +252,36 @@ function hostCameBack(hostId: ExecutionHostId): void {
   }
 }
 
-// Coming back to the window is a real step: each failed icon is tried again, from its record as it failed
-// (a newer record already cleared its failure). A host's settings changing (its own bots turned on) retries
-// only that host's.
-function retryFailed(hostId?: ExecutionHostId): void {
-  for (const { bot } of failures.values()) {
-    if (hostId === undefined || bot.hostId === hostId) {
-      askAgain(bot)
-    }
+// Each failed icon is tried again, from its record as it failed (a newer record already cleared it).
+function retry(kept: ReadonlyMap<string, { bot: Bot }>): void {
+  for (const { bot } of kept.values()) {
+    askAgain(bot)
   }
 }
 
-const retryAll = (): void => retryFailed()
+// Coming back to the window is a real step for every host's failed icons.
+function retryAll(): void {
+  for (const kept of failures.values()) {
+    retry(kept)
+  }
+}
+
+// A host's settings changing (its own bots turned on) retries that host's failed icons. Read straight off
+// the notice, so a host with none, or a notice of another kind, costs one lookup and nothing is decoded.
+function hostSettingsChanged(event: Event): void {
+  const detail: unknown = event instanceof CustomEvent ? event.detail : undefined
+  if (!detail || typeof detail !== 'object' || !('hostId' in detail)) {
+    return
+  }
+  const hostId = typeof detail.hostId === 'string' ? normalizeExecutionHostId(detail.hostId) : null
+  const kept = hostId ? failures.get(hostId) : undefined
+  const scope =
+    'scope' in detail && detail.scope && typeof detail.scope === 'object' ? detail.scope : null
+  const kinds = scope && 'kinds' in scope ? scope.kinds : undefined
+  if (kept && (!Array.isArray(kinds) || kinds.includes('settings'))) {
+    retry(kept)
+  }
+}
 
 /** For the window: follows the bots list another surface loaded, and never loads it itself. */
 export function useBotSlackIcons(): void {
@@ -262,14 +296,12 @@ export function useBotSlackIcons(): void {
     const stopBots = subscribeToBotChanges(run)
     const stopCameBack = onBotHostCameBack(hostCameBack)
     window.addEventListener('focus', retryAll)
-    const stopSettings = onBotsChanged((hostId) => retryFailed(hostId), undefined, {
-      kinds: ['settings']
-    })
+    window.addEventListener(BOTS_CHANGED_EVENT, hostSettingsChanged)
     return () => {
       stopBots()
       stopCameBack()
       window.removeEventListener('focus', retryAll)
-      stopSettings()
+      window.removeEventListener(BOTS_CHANGED_EVENT, hostSettingsChanged)
       // Off, nothing here is kept: no lists, no waiting attempts, and the one running stops at its next check.
       seenHosts.clear()
       seen.clear()
