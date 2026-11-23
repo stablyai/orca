@@ -30,6 +30,22 @@ export const getTerminalPaneAppearanceSearchEntries = createLocalizedCatalog(() 
       ...translateSearchKeyword('auto.components.settings.terminal.search.781f49d942', 'divider'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.f637a7dee9', 'thickness')
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.terminal.search.showPaneActionButtons',
+      'Show pane action buttons'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.showPaneActionButtonsDescription',
+      'Show the buttons at the top-right of terminal panes. Shortcuts and the right-click menu still work.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.846a7a1204', 'pane'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.actions', 'actions'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.buttons', 'buttons'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.hide', 'hide')
+    ]
   }
 ])
 

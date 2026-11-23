@@ -136,6 +136,9 @@ export function TerminalPaneSurface({
   const paneOnClient = useAppStore(
     (state) => getKnownExecutionHostIdForWorktree(state, worktreeId) === LOCAL_EXECUTION_HOST_ID
   )
+  const showPaneActionButtons = useAppStore(
+    (state) => state.settings?.showTerminalPaneActionButtons !== false
+  )
   const errorReplacedByStartCard = useWslHostStartCardReplacesPaneError(
     worktreeId,
     activePaneRuntimeEnvironmentId
@@ -348,6 +351,7 @@ export function TerminalPaneSurface({
         worktreeId={worktreeId}
         cwd={cwd ?? ''}
         showAlwaysOnHeaders={isActive && terminalContentVisible}
+        showActionButtons={showPaneActionButtons}
         showSplitButton={showSplitButton}
         isTabPinned={isTabPinned}
         paneCount={paneCount}

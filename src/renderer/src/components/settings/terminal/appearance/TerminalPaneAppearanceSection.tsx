@@ -1,5 +1,5 @@
 import { DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY } from '../../../../../../shared/terminal/appearance/terminal-pane-opacity'
-import { NumberField } from '../../form-controls/SettingsFormControls'
+import { NumberField, SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsGroupSubsection } from '../../section-layout/SettingsGroup'
 import { clampNumber, resolvePaneStyleOptions } from '@/lib/terminal/appearance/terminal-theme'
@@ -81,6 +81,34 @@ export function TerminalPaneAppearanceSection({
           onChange={(value) =>
             updateSettings({
               terminalDividerThicknessPx: clampNumber(value, 1, 32)
+            })
+          }
+        />
+      </SearchableSetting>
+      <SearchableSetting
+        title={t(
+          'auto.components.settings.TerminalPaneAppearanceSection.showPaneActionButtons',
+          'Show pane action buttons'
+        )}
+        description={t(
+          'auto.components.settings.TerminalPaneAppearanceSection.showPaneActionButtonsDescription',
+          'Show the buttons at the top-right of terminal panes. Shortcuts and the right-click menu still work.'
+        )}
+        keywords={['pane', 'buttons', 'actions', 'hide']}
+      >
+        <SettingsSwitchRow
+          label={t(
+            'auto.components.settings.TerminalPaneAppearanceSection.showPaneActionButtons',
+            'Show pane action buttons'
+          )}
+          description={t(
+            'auto.components.settings.TerminalPaneAppearanceSection.showPaneActionButtonsDescription',
+            'Show the buttons at the top-right of terminal panes. Shortcuts and the right-click menu still work.'
+          )}
+          checked={settings.showTerminalPaneActionButtons !== false}
+          onChange={() =>
+            updateSettings({
+              showTerminalPaneActionButtons: settings.showTerminalPaneActionButtons === false
             })
           }
         />
