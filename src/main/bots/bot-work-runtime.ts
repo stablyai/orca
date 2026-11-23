@@ -72,24 +72,34 @@ export function botWorkHostOf(db: OrchestrationDb, dispatchId: string): BotWorkH
   )
 }
 
-/** One batch's workspace reader; `reads`: its repo reads, shared by every workspace it reads. */
+/** One batch's workspace reader; `reads`: its repo reads, shared by every workspace it reads.
+ *  `exists`: path checks shared too, only where a 'gone' never closes anything (item views). */
 export function workspaceReader(
   runtime: BotWorkRuntime,
-  reads: ScopedWorktreeReads = new Map()
+  reads: ScopedWorktreeReads = new Map(),
+  exists?: Map<string, boolean>
 ): (worker: BotWorkWorker) => Promise<BotWorkWorkspace | 'gone' | null> {
   return async (worker) => {
     if (worker.host !== 'local') {
       return readRemoteWorkspace(runtime, worker)
     }
-    return worker.worktreeId ? readLocalWorkspace(runtime, worker.worktreeId, reads) : null
+    return worker.worktreeId ? readLocalWorkspace(runtime, worker.worktreeId, reads, exists) : null
   }
+}
+
+/** `check`'s answer under `key`, asked once per batch; without a batch, asked every time. */
+function existsOnce(key: string, check: () => boolean, known?: Map<string, boolean>): boolean {
+  const answer = known?.get(key) ?? check()
+  known?.set(key, answer)
+  return answer
 }
 
 /** One of this host's worktrees as the work record reads it; 'gone' only with proof. */
 async function readLocalWorkspace(
   runtime: BotWorkRuntime,
   worktreeId: string,
-  reads?: ScopedWorktreeReads
+  reads?: ScopedWorktreeReads,
+  exists?: Map<string, boolean>
 ): Promise<BotWorkWorkspace | 'gone' | null> {
   const store = runtime.linkStore()
   const parsed = splitWorktreeId(worktreeId)
@@ -105,8 +115,8 @@ async function readLocalWorkspace(
   if (
     getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
     !parseWslUncPath(parsed.worktreePath) &&
-    existsSync(repo.path) &&
-    !existsSync(parsed.worktreePath)
+    existsOnce(`repo:${repo.path}`, () => existsSync(repo.path), exists) &&
+    !existsOnce(`worktree:${parsed.worktreePath}`, () => existsSync(parsed.worktreePath), exists)
   ) {
     return 'gone'
   }
