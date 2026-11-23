@@ -1,4 +1,8 @@
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalWorkTarget,
+  ResolvedBotWorkTargetPlacement
+} from '../../../../shared/agent-session/work-target/agent-session-work-target'
 import type { WorkerDockPresence } from '../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type {
   AgentModelCatalogSource,
@@ -267,6 +271,14 @@ export type StructuredAgentSessionHostDeps = {
   quietTurnEnd?: QuietTurnEnd
   /** Whether a workspace is a bot's home, whose quiet-marker answers previews skip; absent: none is. */
   isBotHome?: (workspaceId: string) => boolean
+  /** Validates a user-selected project/workspace target before send admission; absent refuses targets. */
+  validateWorkTarget?: (
+    record: AgentSessionRecord,
+    target: AgentJournalWorkTarget
+  ) => Promise<
+    | { ok: true; placement: ResolvedBotWorkTargetPlacement }
+    | { ok: false; refusal: AgentSessionWireRefusal }
+  >
   /** Carries the user's chat name into the agent's own conversation; never delays the caller. */
   nameProviderConversation?: (record: AgentSessionRecord) => void
 }

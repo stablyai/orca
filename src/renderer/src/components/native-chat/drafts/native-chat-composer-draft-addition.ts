@@ -12,12 +12,14 @@ import type {
   NativeChatComposerDraft,
   NativeChatComposerDraftImage
 } from './native-chat-composer-draft-storage'
+import type { AgentJournalWorkTarget } from '../../../../../shared/agent-session/work-target/agent-session-work-target'
 
 export type NativeChatComposerDraftAddition = {
   readonly text?: string
   readonly document?: JSONContent
   readonly pastedTextFiles?: Readonly<Record<string, string>>
   readonly images?: readonly NativeChatComposerDraftImage[]
+  readonly workTarget?: AgentJournalWorkTarget
   /** Only an image the user attaches takes the place of a placeholder with its file name. */
   readonly fromUser?: boolean
   /** The held image the new ones go in front of, so they keep the order they were attached in. */
@@ -52,8 +54,12 @@ export function placeNativeChatComposerDraftAddition(
 export function withNativeChatComposerDraftAddition(
   draft: NativeChatComposerDraft,
   addition: NativeChatComposerDraftAddition
-): Pick<NativeChatComposerDraft, 'text' | 'images' | 'document' | 'pastedTextFiles'> {
+): Pick<
+  NativeChatComposerDraft,
+  'text' | 'images' | 'document' | 'pastedTextFiles' | 'workTarget'
+> {
   const fills = new Set(addition.fills)
+  const workTarget = draft.workTarget ?? addition.workTarget
   // An existing unique image id proves the addition already landed, regardless of later typing.
   if (
     addition.images?.some(({ id }) => !fills.has(id) && draft.images.some((held) => held.id === id))
@@ -62,7 +68,8 @@ export function withNativeChatComposerDraftAddition(
       text: draft.text,
       images: draft.images,
       document: draft.document,
-      pastedTextFiles: draft.pastedTextFiles
+      pastedTextFiles: draft.pastedTextFiles,
+      ...(workTarget ? { workTarget } : {})
     }
   }
   const returned = addition.text ?? ''
@@ -120,7 +127,8 @@ export function withNativeChatComposerDraftAddition(
     text,
     images,
     document,
-    pastedTextFiles: { ...draft.pastedTextFiles, ...addition.pastedTextFiles }
+    pastedTextFiles: { ...draft.pastedTextFiles, ...addition.pastedTextFiles },
+    ...(workTarget ? { workTarget } : {})
   }
 }
 
@@ -151,10 +159,12 @@ export function withIndependentNativeChatComposerDraft(
               ...((contribution.document ?? promptTextContent(returned)).content ?? [])
             ]
           }
+  const workTarget = base.workTarget ?? contribution.workTarget
   return {
     text,
     document,
     images: [...base.images, ...(contribution.images ?? []).filter((image) => !held.has(image.id))],
-    pastedTextFiles: { ...base.pastedTextFiles, ...contribution.pastedTextFiles }
+    pastedTextFiles: { ...base.pastedTextFiles, ...contribution.pastedTextFiles },
+    ...(workTarget ? { workTarget } : {})
   }
 }

@@ -163,7 +163,8 @@ export function useNativeChatStructuredComposerSend({
         consumed = true
         const left = nativeChatComposerDraftLeftAfterSend(
           readNativeChatComposerDraft(draftScopeKey),
-          submitted
+          submitted,
+          { preserveWorkTarget: hostCommand }
         )
         if (!left) {
           return
@@ -171,7 +172,7 @@ export function useNativeChatStructuredComposerSend({
         if (completeAddition) {
           updateNativeChatComposerDraft(
             draftScopeKey,
-            { ...left, document: left.document },
+            { ...left, document: left.document, workTarget: left.workTarget ?? null },
             'immediate'
           )
         }
@@ -179,13 +180,22 @@ export function useNativeChatStructuredComposerSend({
           if (!completeAddition) {
             updateNativeChatComposerDraft(
               draftScopeKey,
-              { text: left.text, document: undefined, images: left.images },
+              {
+                text: left.text,
+                document: undefined,
+                images: left.images,
+                workTarget: left.workTarget ?? null
+              },
               'immediate'
             )
           }
           return
         }
-        updateNativeChatComposerDraft(draftScopeKey, { images: left.images }, 'immediate')
+        updateNativeChatComposerDraft(
+          draftScopeKey,
+          { images: left.images, workTarget: left.workTarget ?? null },
+          'immediate'
+        )
         // A live composition owns the field, which keeps only what it composed once cleared.
         const composing = isComposing()
         setDraft(composing ? '' : left.text)
@@ -202,6 +212,7 @@ export function useNativeChatStructuredComposerSend({
       }
       const prepareAttachments: StructuredAgentSessionAttachmentPreparation | undefined =
         stagedInput ? (input) => stagedInput.prepare(input, structuredTransport) : undefined
+      const submittedWorkTarget = !hostCommand ? submitted.workTarget : undefined
       return dispatchNativeChatStructuredComposerText(
         structuredTransport,
         text,
@@ -209,6 +220,7 @@ export function useNativeChatStructuredComposerSend({
         promptSkillRefs(submission.draft?.document),
         {
           ...intent,
+          ...(submittedWorkTarget ? { workTarget: submittedWorkTarget } : {}),
           ...(prepareAttachments
             ? { prepareAttachments, onSettled: () => stagedInput?.release() }
             : {})

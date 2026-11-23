@@ -23,6 +23,8 @@ import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
 import { NativeChatComposerPrimaryButton } from './NativeChatComposerPrimaryButton'
 import { NativeChatAttachButton } from './NativeChatAttachButton'
 import { NativeChatDictationButton } from './NativeChatDictationButton'
+import { NativeChatWorkTargetPicker } from '../work-target/NativeChatWorkTargetPicker'
+import type { NativeChatComposerWorkTargetPickerProps } from '../../native-chat-composer-field-props'
 import { NativeChatContextUsageRing } from '../../usage/NativeChatContextUsageRing'
 import type { NativeChatContextUsageSummary } from '../../../../../../shared/native-chat/native-chat-context-usage-summary'
 import type { NativeChatOptionPickerRequest } from '../../session/options/controls/native-chat-option-picker-request'
@@ -65,6 +67,9 @@ export type NativeChatComposerActionsProps = {
   contextUsage?: NativeChatContextUsageSummary | null
   /** The chat's agent, whose permission modes the picker describes. */
   agent?: string
+  /** Bot chat project/workspace target picker control. */
+  workTargetPicker?: NativeChatComposerWorkTargetPickerProps
+  workTargetDisabled?: boolean
   /** A launch prompt: Attach and dictation are its only controls; launching is the panel's. */
   launchPrompt?: boolean
 }
@@ -98,6 +103,8 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   contextUsage,
   focusComposer,
   agent,
+  workTargetPicker,
+  workTargetDisabled = false,
   launchPrompt = false
 }: NativeChatComposerActionsProps): React.JSX.Element {
   const t = useTranslate()
@@ -196,6 +203,35 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
 
   const left: NativeChatComposerControl[] = [
     { id: 'attach', priority: 6, content: attach },
+    ...(workTargetPicker
+      ? [
+          {
+            id: 'work-target',
+            priority: 6,
+            content: (
+              <NativeChatWorkTargetPicker
+                {...workTargetPicker}
+                disabled={workTargetDisabled}
+                focusComposer={focusComposer}
+              />
+            ),
+            overflow: (close: () => void) => (
+              <NativeChatWorkTargetPicker
+                {...workTargetPicker}
+                disabled={workTargetDisabled}
+                focusComposer={focusComposer}
+                overflow
+                onOpenChange={(nextOpen) => {
+                  if (nextOpen) {
+                    close()
+                  }
+                  workTargetPicker.onOpenChange(nextOpen)
+                }}
+              />
+            )
+          }
+        ]
+      : []),
     ...(roomReplies ? [{ id: 'room-replies', priority: 6, content: roomReplies }] : []),
     {
       id: 'permissions',

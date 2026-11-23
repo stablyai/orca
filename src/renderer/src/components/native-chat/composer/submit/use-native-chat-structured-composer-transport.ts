@@ -1,7 +1,11 @@
 import { openNativeChatAccountUsageModal } from '@/components/native-chat/usage/native-chat-account-usage-modal'
 import { useNativeChatMcpTray } from '@/components/native-chat/mcp/use-native-chat-mcp-tray'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
-import { AGENT_SESSION_MCP_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import {
+  AGENT_SESSION_MCP_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SEND_WORK_TARGET_RUNTIME_CAPABILITY
+} from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import { localizeStructuredComposerOutcome } from '@/components/native-chat/composer/submit/structured-composer-command-error-text'
@@ -105,6 +109,8 @@ export function useNativeChatStructuredComposerTransport(args: {
   reveal: { revealLatest: () => void; captureRevealLatest: () => () => void }
   /** Host reason for refusing turns and holding Send. */
   sendBlockedReason?: string | null
+  /** True when this structured chat belongs to an Orca bot home. */
+  isBotHomeChat?: boolean
 }): NativeChatStructuredComposerTransport {
   const { props, controller, forks, sendThroughLaunch, starting, worktreeId, optionPickerRequest } =
     args
@@ -124,6 +130,12 @@ export function useNativeChatStructuredComposerTransport(args: {
       props.target.kind === 'local' ? null : props.target,
       AGENT_SESSION_MCP_RUNTIME_CAPABILITY
     ) === 'supported'
+  const remoteTakesWorkTarget =
+    useStructuredAgentSessionHostCapabilityState(
+      props.target.kind === 'local' ? null : props.target,
+      AGENT_SESSION_SEND_WORK_TARGET_RUNTIME_CAPABILITY
+    ) === 'supported'
+  const isBotHomeChat = args.isBotHomeChat === true
   const managesMcp =
     hostAgent?.capabilities.mcpServers === true &&
     (props.target.kind === 'local' || remoteManagesMcp)
@@ -167,7 +179,8 @@ export function useNativeChatStructuredComposerTransport(args: {
         const requiresSession =
           attachments.length > 0 ||
           request[0]?.prepareAttachments !== undefined ||
-          Boolean(request[0]?.skills?.length)
+          Boolean(request[0]?.skills?.length) ||
+          request[0]?.workTarget !== undefined
         if (starting && requiresSession) {
           onError(nativeChatSessionAttachmentNotReadyNotice(props.agent, true))
           return false
@@ -234,6 +247,17 @@ export function useNativeChatStructuredComposerTransport(args: {
       sessionId: props.sessionId,
       runtimeEnvironmentId:
         props.target.kind === 'local' ? null : (props.target.environmentId ?? null),
+      ...(isBotHomeChat
+        ? {
+            workTargetSupport: {
+              botHostId:
+                props.target.kind === 'local'
+                  ? LOCAL_EXECUTION_HOST_ID
+                  : (`runtime:${props.target.environmentId}` as const),
+              supported: props.target.kind === 'local' || remoteTakesWorkTarget
+            }
+          }
+        : {}),
       ...(!transportEnabled
         ? {
             sessionPending: true,
@@ -244,9 +268,11 @@ export function useNativeChatStructuredComposerTransport(args: {
   }, [
     acceptsImages,
     controller,
+    isBotHomeChat,
     managesMcp,
     mcpTray,
     fork,
+    remoteTakesWorkTarget,
     sideChat,
     worktreeId,
     onError,

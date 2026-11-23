@@ -38,8 +38,7 @@ import { botWorkHasPrBranch, botWorkRowsForRuntime } from '../bots/bot-work-pr-b
 import { profileAccountUserId } from '../orca-profiles/profile-account-user-id'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { OrcaRuntimeWithLinearCommands } from './integrations/linear/linear-commands'
-import { botStructuredSessionWiring, type WiredBot } from '../bots/bot-structured-session-wiring'
-import { botChatJournal } from '../bots/bot-chat-reads'
+import type { WiredBot } from '../bots/bot-structured-session-wiring'
 import type { RuntimeStore } from './construction/runtime-store-contract'
 import { watchBotSettingsChangeSources } from '../bots/bot-settings-change-sources'
 import type { BotChangeScope } from '../../shared/bots/bot-change-scope'
@@ -52,6 +51,10 @@ import { isStructuredAttentionMuted } from './agent-session/lifecycle/structured
 import { backfillInstalledBotBackgroundChats } from '../bots/bot-background-chat-backfill'
 import { runtimeBotItems } from '../bots/runtime-bot-items'
 import { botItemOfReport } from '../bots/bot-item-report-fact'
+import { BotTurnWorkTargetRegistry } from '../bots/bot-turn-work-target'
+import type { BotWorkTargetWorkspaceSummary } from '../bots/bot-work-target-validation'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
+import { buildRuntimeBotStructuredSessionHostDeps } from './orca-runtime-bot-session-wiring'
 import { listeningClients } from './orchestration/federation/client-asks/client-ask-listeners'
 
 export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands {
@@ -215,6 +218,9 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** Which worker each bot conversation's code work went to. */
   readonly botWork = runtimeBotWork(this.botWorkRuntime)
 
+  /** Active-turn validated work target for each bot session's single targeted message. */
+  readonly botWorkTargets = new BotTurnWorkTargetRegistry()
+
   private readonly botJournal = journaledItemsNotice(this, (scope) =>
     this.botChangeNotices.changed(scope)
   )
@@ -263,28 +269,14 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   /** The structured host's bot side: their sessions' tools and memory, Look around, and the queued-message gate. */
   protected botStructuredSessionHostDeps(store: () => RuntimeStore) {
-    return {
-      ...botStructuredSessionWiring({
-        store,
-        botsAtInstall: this.store?.getBots?.() ?? [],
-        bots: this.bots,
-        chats: botChatJournal(),
-        work: this.botWork,
-        lookAround: this.lookAround,
-        requestTurnEnded: (sessionId, turnId, ended) =>
-          this.botSessions.turnEnded(sessionId, turnId, ended),
-        recentChats: (botId, sessionId) => this.botSessions.recentChats(botId, sessionId),
-        unansweredQuestionNote: (sessionId, botId) =>
-          this.botSessions.unansweredQuestionNote(sessionId, botId),
-        botChats: (bot, sessionId) => this.botSessions.chatsOf(bot, sessionId),
-        pairedBotRosters: this.pairedBotRosters.read,
-        clientName: (installationId) => listeningClients(this, installationId)[0]?.name ?? null,
-        scrubToolSecrets: (bot) => this.scrubBotToolSecrets(bot)
-      }),
-      assertQueuedMessageAllowed: (sessionId: string, messageId: string) =>
-        this.assertStructuredQueuedMessageAllowed(sessionId, messageId),
-      onMessageAdmitted: (message: AdmittedMessage) => this.onChatMessageAdmitted(message)
-    }
+    return buildRuntimeBotStructuredSessionHostDeps(this, store, {
+      botsAtInstall: this.store?.getBots?.() ?? [],
+      isBotHome: (workspaceId) => this.wiredBotLookup.byHome(workspaceId) !== null,
+      clientName: (installationId) => listeningClients(this, installationId)[0]?.name ?? null,
+      scrubBotToolSecrets: (bot) => this.scrubBotToolSecrets(bot),
+      assertQueuedMessageAllowed: (sessionId, messageId) =>
+        this.assertStructuredQueuedMessageAllowed(sessionId, messageId)
+    })
   }
 
   abstract onChatMessageAdmitted(message: AdmittedMessage): void
@@ -317,8 +309,13 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   abstract listWorkspaceLineage(): Promise<Record<WorkspaceKey, WorkspaceLineage>>
 
   abstract showManagedTerminalWorkspace(
-    ...args: Parameters<BotWorkRuntime['showManagedTerminalWorkspace']>
-  ): ReturnType<BotWorkRuntime['showManagedTerminalWorkspace']>
+    selector: string,
+    requiredHostId?: ExecutionHostId,
+    reads?: Parameters<BotWorkRuntime['showManagedTerminalWorkspace']>[2]
+  ): Promise<
+    Awaited<ReturnType<BotWorkRuntime['showManagedTerminalWorkspace']>> &
+      BotWorkTargetWorkspaceSummary
+  >
 
   /** Debounced `botsChanged` for clients showing a bot; every source of change calls it. */
   protected readonly botChangeNotices = new BotChangeNotices({

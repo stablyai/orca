@@ -150,6 +150,10 @@ export const AGENT_SESSION_PROMPT_SUGGESTIONS_RUNTIME_CAPABILITY =
 // The host appends CI result lines to chats that opened or pushed to a PR; older hosts write none.
 export const AGENT_SESSION_PR_EVENTS_RUNTIME_CAPABILITY = 'agent-session.pr-events.v1' as const
 
+// Send params are strict: advertise before sending per-message project/workspace targets.
+export const AGENT_SESSION_SEND_WORK_TARGET_RUNTIME_CAPABILITY =
+  'agent-session.send-work-target.v1' as const
+
 // Individual client flags must not retain the unused host capability aggregate.
 export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
   [
@@ -209,5 +213,6 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
     AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY,
     AGENT_SESSION_PROMPT_SUGGESTIONS_RUNTIME_CAPABILITY,
+    AGENT_SESSION_SEND_WORK_TARGET_RUNTIME_CAPABILITY,
     ...AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES
   ] as const)()

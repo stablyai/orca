@@ -2,6 +2,7 @@ import type { AutomationTriggeredBy } from '../../bots/bot-acts-for'
 import type { TookOverNotice } from '../../native-chat/took-over-notice'
 import type { ConnectorMessageAsker } from '../../connector-message-asker'
 import type { AutomationRunMessage } from '../../automations/automation-run-message'
+import type { AgentJournalWorkTarget } from '../work-target/agent-session-work-target'
 
 /** The account whose connector handed the delivery over, its conversation and ids. */
 export type AgentJournalConnectorDelivery = {
@@ -52,4 +53,6 @@ export type AgentJournalBotMessageFields = {
   memorySource?: string
   /** Beside `memorySource`: who did the event that started the run, for the record. Host-written. */
   triggeredBy?: AutomationTriggeredBy
+  /** Optional project or existing workspace selected in a bot chat for this single message. */
+  workTarget?: AgentJournalWorkTarget
 }

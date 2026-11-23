@@ -5,6 +5,11 @@ import type {
   AgentJournalMessageItem,
   AgentJournalPlainStatusItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type {
+  AgentJournalWorkTarget,
+  ResolvedBotWorkTargetPlacement
+} from '../../../shared/agent-session/work-target/agent-session-work-target'
 import type { AgentSessionTurnCompletion } from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import type { JournalSqlReads } from '../agent-session-journal/journal-sql-reads'
 import { readJournalTurnOpenerRows } from '../agent-session-journal/journal-turn-opener-rows'
@@ -45,6 +50,15 @@ export type StructuredAgentSessionTurnContext = {
   /** What this person's message alone needs said, such as who the bots it names are; rides with
    *  it whatever the turn, attachments too. Null adds nothing. */
   mentions?: (sessionId: string, message: AgentJournalMessageItem) => Promise<string | null>
+  /** Re-validates a message's selected project/workspace target right before handover and produces
+   *  its single-turn `<orca_context>` ride-along; refusal aborts handover without fallback. */
+  resolveWorkTarget?: (
+    sessionId: string,
+    target: AgentJournalWorkTarget
+  ) => Promise<
+    | { ok: true; text: string; placement: ResolvedBotWorkTargetPlacement }
+    | { ok: false; refusal: AgentSessionWireRefusal }
+  >
   /** A person's message started a turn, whether or not it carries the plan (attachments don't). */
   handedOver?: (sessionId: string, message: AgentJournalMessageItem) => void
   /** A turn in this conversation ended, whoever started it; `readItems` reads its journal. */

@@ -47,6 +47,7 @@ import {
   NATIVE_CHAT_UNKERNED_CSS,
   nativeChatTextHasUnkernedRun
 } from '@/components/native-chat/composer/editor/native-chat-unkerned-runs'
+import { NativeChatWorkTargetTag } from '@/components/native-chat/composer/work-target/NativeChatWorkTargetBadge'
 
 /** The visible caption under the text; the default waiting hold needs none. */
 export function queuedMessageCardCaption(
@@ -247,6 +248,7 @@ export function NativeChatQueuedMessageCard({
           style={maskStyle}
         >
           {sender}
+          {card.workTarget ? <NativeChatWorkTargetTag target={card.workTarget} /> : null}
           {expanded ? null : (
             <p ref={measureLine} className="truncate text-sm text-foreground" title={line}>
               {line}

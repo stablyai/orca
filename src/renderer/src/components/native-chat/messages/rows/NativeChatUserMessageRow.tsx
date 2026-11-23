@@ -29,6 +29,7 @@ import {
 import { NativeChatConnectorNoAccessNote } from '../../NativeChatConnectorNoAccessNote'
 import { NativeChatDetailsDisclosure } from '../diagnostics/NativeChatProviderDetails'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
+import { NativeChatWorkTargetTag } from '../../composer/work-target/NativeChatWorkTargetBadge'
 import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 
 const USER_META_REVEAL =
@@ -183,6 +184,7 @@ export function NativeChatUserMessageRow({
           <span>{t('components.native-chat.goal.sentAsGoal', 'Sent as goal')}</span>
         </div>
       ) : null}
+      {message.workTarget ? <NativeChatWorkTargetTag target={message.workTarget} /> : null}
       {message.automationResultsCarried ? (
         <p className="text-2xs text-chat-foreground-faint">
           {message.automationResultsCarried === 1

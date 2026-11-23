@@ -222,7 +222,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     setOptionPickerRequest,
     onError: reportComposerError,
     reveal: submits,
-    sendBlockedReason: hostSendGate.sendBlockedReason ?? install.sendBlockedReason
+    sendBlockedReason: hostSendGate.sendBlockedReason ?? install.sendBlockedReason,
+    isBotHomeChat: chatBot !== null
   })
   const continuation = useNativeChatInterruptedContinuation({
     ...controller,

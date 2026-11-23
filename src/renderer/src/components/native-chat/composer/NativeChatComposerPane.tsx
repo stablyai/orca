@@ -31,6 +31,7 @@ import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-compositio
 import { useNativeChatComposerAppMenuSelection } from './focus/use-native-chat-composer-app-menu-selection'
 import { useNativeChatComposerSubmit } from './submit/use-native-chat-composer-submit'
 import { useNativeChatComposerCommandPicker } from './pickers/use-native-chat-composer-command-picker'
+import { useNativeChatComposerWorkTargetPicker } from './work-target/use-bot-work-target-catalog'
 import type * as C from './native-chat-composer-types'
 
 type ComposerHandle = C.NativeChatComposerHandle
@@ -182,13 +183,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       setDraft,
       setCaret,
       setActiveSuggestion,
-      targetKey: JSON.stringify([
-        paneKey,
-        targetPtyId,
-        structuredTransport?.sessionId,
-        structuredTransport?.worktreeId,
-        structuredTransport?.runtimeEnvironmentId
-      ]),
+      target: { paneKey, targetPtyId, structuredTransport },
       agent,
       disabled,
       resolveAttachmentOwner: fileDrops.resolveAttachmentOwner,
@@ -321,6 +316,13 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       resolveTarget
     })
 
+    const { onOpenWorkTargetPicker, workTargetPicker } = useNativeChatComposerWorkTargetPicker(
+      draftScopeKey,
+      !editSession && !launchPrompt ? structuredTransport?.workTargetSupport : undefined,
+      disabled,
+      setNotice
+    )
+
     const handleKeyDown = useNativeChatComposerKeyDown({
       autocomplete: autocomplete,
       mentionFiles: mentions.mentionFiles,
@@ -340,6 +342,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       hasAttachments: imageAttachments.length > 0,
       ...(!editSession && steerHead ? { steerHead } : {}),
       chordSteersHead: sendButton.chordSteersHead,
+      onOpenWorkTargetPicker,
       setActiveSuggestion: picker.navigateSuggestion,
       setDraft,
       setCaret
@@ -410,6 +413,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
             agent={agent}
             launchPrompt={launchPrompt}
             workspaceFooter={workspaceFooter}
+            workTargetPicker={workTargetPicker}
             {...fieldOverrides}
           />
         </NativeChatComposerRoomProvider>

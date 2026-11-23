@@ -39,6 +39,7 @@ import type { OtherPersonTypist } from '../agent-session/journal/agent-journal-t
 import type { BotItemNoteItem, BotItemNoteView } from '../bots/bot-item-note'
 import type { BotContextNote } from '../bots/bot-context-note'
 import type { AutomationResultNote } from '../bots/bot-automation-result-note'
+import type { AgentJournalWorkTarget } from '../agent-session/work-target/agent-session-work-target'
 
 export const NATIVE_CHAT_SOURCES = ['transcript', 'hook', 'scrape'] as const
 export type NativeChatSource = (typeof NATIVE_CHAT_SOURCES)[number]
@@ -273,6 +274,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   completedAt?: number
   /** On a conversation command the user sent, such as `/compact`: the command it names. */
   command?: { name: string }
+  /** Optional project or existing workspace selected for this single message in a bot chat. */
+  workTarget?: AgentJournalWorkTarget
   /** On a user-role message another agent sent through Orca: who, as the journal recorded it. */
   from?: AgentMessageSource
   /** On a user-role message Orca delivered from a connector: who asked and where, for its tag. */

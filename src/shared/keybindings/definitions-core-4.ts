@@ -41,6 +41,15 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+F'])
   },
   {
+    id: 'chat.pickWorkTarget',
+    title: 'Pick project or workspace target',
+    group: 'Chat',
+    scope: 'chat',
+    conflictGroups: ['global', 'tabs', 'chat'],
+    searchKeywords: ['shortcut', 'chat', 'project', 'workspace', 'worktree', 'target', 'picker'],
+    defaultBindings: platformBindings(['Mod+Shift+P'])
+  },
+  {
     id: 'terminal.toggleNativeChat',
     title: 'Switch between Chat UI and terminal',
     group: 'Chat',

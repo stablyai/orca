@@ -8,6 +8,7 @@ import { NativeChatComposerMenus } from '../pickers/NativeChatComposerMenus'
 import { NativeChatComposerActions } from '../controls/NativeChatComposerActions'
 import { NativeChatComposerNotices } from '../controls/NativeChatComposerNotices'
 import { NativeChatImageAttachmentPreview } from '../../attachments/chips/NativeChatImageAttachmentPreview'
+import { NativeChatComposerWorkTargetChip } from '../work-target/NativeChatWorkTargetBadge'
 
 import { useNativeChatComposerDraftUnsaved } from '../../drafts/use-native-chat-draft-unsaved'
 import { useNativeChatComposerGlow } from '../../native-chat-composer-glow'
@@ -80,7 +81,8 @@ export function NativeChatComposerField({
   agent,
   launchPrompt,
   workspaceFooter,
-  sideChat
+  sideChat,
+  workTargetPicker
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const t = useTranslate()
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
@@ -236,6 +238,19 @@ export function NativeChatComposerField({
               glowing && 'native-chat-composer-glow'
             )}
           >
+            {workTargetPicker?.selectedTarget ? (
+              <div className="mb-1.5 flex flex-wrap items-center gap-1.5 px-1.5 pt-1">
+                <NativeChatComposerWorkTargetChip
+                  target={workTargetPicker.selectedTarget}
+                  disabled={disabled}
+                  onOpenPicker={() => workTargetPicker.onOpenChange(true)}
+                  onClear={() => {
+                    workTargetPicker.onSelectTarget(null)
+                    focusComposer()
+                  }}
+                />
+              </div>
+            ) : null}
             {imageAttachments.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-2 px-1 pt-1.5">
                 {imageAttachments.map((attachment, index) => (
@@ -338,6 +353,8 @@ export function NativeChatComposerField({
                 sessionOptionsPickerRequest={sessionOptionsPickerRequest}
                 focusComposer={focusComposer}
                 onExitGoalMode={goalMode?.active ? exitGoalMode : undefined}
+                workTargetPicker={workTargetPicker}
+                workTargetDisabled={disabled}
                 launchPrompt={launch}
                 {...(agent ? { agent } : {})}
               />

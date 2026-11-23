@@ -9,7 +9,17 @@ import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { glowNativeChatComposer } from '../../native-chat-composer-glow'
 
 type UseNativeChatComposerHandleArgs = Parameters<typeof useNativeChatTypedInsertion>[0] &
-  Omit<UseNativeChatComposerPasteArgs, 'insertTypedText'> & {
+  Omit<UseNativeChatComposerPasteArgs, 'insertTypedText' | 'targetKey'> & {
+    targetKey?: string
+    target?: {
+      paneKey: string
+      targetPtyId: string | null
+      structuredTransport?: {
+        sessionId?: string
+        worktreeId?: string
+        runtimeEnvironmentId?: string | null
+      }
+    }
     /** Intake only: captured with the paste action, never consulted during settlement. */
     resend?: NativeChatComposerHandle['resend']
     /** A structured chat's editor while it shows this scope, where a long paste saved as a file lands. */
@@ -18,12 +28,34 @@ type UseNativeChatComposerHandleArgs = Parameters<typeof useNativeChatTypedInser
     longPasteThreshold?: number
   }
 
+function resolveTargetKey(args: UseNativeChatComposerHandleArgs): string {
+  if (args.targetKey !== undefined) {
+    return args.targetKey
+  }
+  const { paneKey, targetPtyId, structuredTransport } = args.target!
+  return JSON.stringify([
+    paneKey,
+    targetPtyId,
+    structuredTransport?.sessionId,
+    structuredTransport?.worktreeId,
+    structuredTransport?.runtimeEnvironmentId
+  ])
+}
+
 /** Expose typed/pasted insertion to pane routing and return the paste handler. */
 export function useNativeChatComposerHandle(
   ref: ForwardedRef<NativeChatComposerHandle>,
   args: UseNativeChatComposerHandleArgs
 ): (event: ClipboardEventLike) => void {
-  const { textareaRef, isComposing, setDraft, setActiveSuggestion, ...pasteArgs } = args
+  const {
+    textareaRef,
+    isComposing,
+    setDraft,
+    setActiveSuggestion,
+    target: _target,
+    ...restPasteArgs
+  } = args
+  const pasteArgs = { ...restPasteArgs, targetKey: resolveTargetKey(args) }
   const {
     insertTypedText,
     appendText: appendPlainText,

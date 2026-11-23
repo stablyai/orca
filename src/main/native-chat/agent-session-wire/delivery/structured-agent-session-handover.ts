@@ -101,6 +101,14 @@ export async function beginSubmissionHandover(
     attempt?.end()
     release?.()
     released()
+    if (error instanceof StructuredAgentSessionInputNotAdmitted && error.outcome) {
+      await ctx.journal.resolveDispatch({
+        clientMessageId,
+        fence: ctx.fence,
+        ...error.outcome
+      })
+      return null
+    }
     throw error
   }
   const prepareFresh = async (fence: number): Promise<AgentJournalMessageItem> => {

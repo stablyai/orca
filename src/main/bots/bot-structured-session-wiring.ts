@@ -13,12 +13,19 @@ import { createBotTurnContext } from './bot-turn-context'
 import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { BotChatJournal } from './bot-turn-rows'
 import type { BotRecentChatsSection } from './bot-recent-chats'
-import { BOT_FIRST_RUN_RULES } from './bot-preamble'
+import { BOT_FIRST_RUN_RULES, BOT_ORCA_CLI } from './bot-preamble'
 import { linkBotOwnSkills } from './bot-own-skills'
 import { botSessionInstructions } from './bot-session-instructions'
 import { createBotSessionMentions } from './bot-session-mentions'
 import type { BotController } from './bot-controller'
 import type { BotWorkRecord } from './bot-work-record'
+import type { BotTurnWorkTargetRegistry } from './bot-turn-work-target'
+import type { BotWorkTargetValidationResult } from './bot-work-target-validation'
+import {
+  formatBotWorkTargetContext,
+  type AgentJournalWorkTarget
+} from '../../shared/agent-session/work-target/agent-session-work-target'
+import { refuse } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   botLinkedSkillsFolder,
   linkedSkillListing,
@@ -64,6 +71,15 @@ export function botStructuredSessionWiring(deps: {
   clientName?: (installationId: string) => string | null
   /** Moves saved values an older Orca left behind out of reach; a launch waits for it. */
   scrubToolSecrets?: (bot: Bot) => Promise<void>
+  /** Active-turn placement registry for explicit user-selected project/workspace targets. */
+  workTargets?: BotTurnWorkTargetRegistry
+  /** Validates a user-selected project/workspace target against live host state. */
+  validateWorkTarget?: (
+    record: Pick<AgentSessionRecord, 'location'>,
+    target: AgentJournalWorkTarget
+  ) => Promise<BotWorkTargetValidationResult>
+  /** Resolves a session record for handover-time work-target re-validation. */
+  sessionRecord?: (sessionId: string) => Pick<AgentSessionRecord, 'location'> | null
 }): Required<
   Pick<
     StructuredAgentSessionRuntimeDeps,
@@ -79,7 +95,8 @@ export function botStructuredSessionWiring(deps: {
     | 'quietTurnEnd'
     | 'isBotHome'
   >
-> {
+> &
+  Pick<StructuredAgentSessionRuntimeDeps, 'validateWorkTarget'> {
   const lookup = createBotLookupIndex(() => deps.store().getBots?.() ?? [])
   const botById = (botId: string): Bot | undefined => lookup.byId(botId)
   /** Only a new bot's Chat runs first run; its automations and threads run in the same home without. */
@@ -104,7 +121,14 @@ export function botStructuredSessionWiring(deps: {
       }
     },
     deps.chats,
-    (sessionId, message) => deps.work.turnNote(sessionId, message),
+    (sessionId, message) => {
+      // Suppress conflicting prior-worker follow-up notes when the user explicitly targeted a workspace/project.
+      if (message.workTarget) {
+        deps.work.handedOver(sessionId, message)
+        return Promise.resolve(null)
+      }
+      return deps.work.turnNote(sessionId, message)
+    },
     deps.bots.memory,
     {
       projects: (botId) => botById(botId)?.skillProjects ?? null,
@@ -238,11 +262,44 @@ export function botStructuredSessionWiring(deps: {
     turnContext: {
       ...turnContext,
       mentions,
+      ...(deps.validateWorkTarget
+        ? {
+            resolveWorkTarget: async (sessionId, target) => {
+              const record = deps.sessionRecord?.(sessionId)
+              if (!record) {
+                deps.workTargets?.clearForTurn(sessionId)
+                return {
+                  ok: false as const,
+                  refusal: refuse(
+                    'agent_session_operation_invalid',
+                    { reason: 'workTargetUnsupportedChat' },
+                    'Project and workspace targeting is only available in bot chats.'
+                  )
+                }
+              }
+              const validated = await deps.validateWorkTarget!(record, target)
+              if (!validated.ok) {
+                deps.workTargets?.clearForTurn(sessionId)
+                return validated
+              }
+              deps.workTargets?.setForTurn(sessionId, validated.placement)
+              return {
+                ok: true as const,
+                placement: validated.placement,
+                text: formatBotWorkTargetContext(validated.placement, BOT_ORCA_CLI)
+              }
+            }
+          }
+        : {}),
       handedOver: (sessionId, message) => {
+        if (!message.workTarget) {
+          deps.workTargets?.clearForTurn(sessionId)
+        }
         deps.work.handedOver(sessionId, message)
         turnContext.handedOver?.(sessionId, message)
       },
       turnEnded: (sessionId, turnId, readItems, writeNote, ended) => {
+        deps.workTargets?.clearForTurn(sessionId)
         deps.work.turnEnded(sessionId)
         deps.requestTurnEnded?.(sessionId, turnId, ended)
         turnContext.turnEnded?.(sessionId, turnId, readItems, writeNote)
@@ -257,6 +314,7 @@ export function botStructuredSessionWiring(deps: {
           : null,
     quietTurnEnd: (sessionId, outcome, usageLimited) =>
       deps.lookAround.lookTurnIsQuiet(sessionId, outcome, usageLimited === true),
-    isBotHome: (workspaceId) => lookup.byHome(workspaceId) !== null
+    isBotHome: (workspaceId) => lookup.byHome(workspaceId) !== null,
+    ...(deps.validateWorkTarget ? { validateWorkTarget: deps.validateWorkTarget } : {})
   }
 }

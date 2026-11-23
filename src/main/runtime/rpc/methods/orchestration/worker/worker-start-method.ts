@@ -10,6 +10,7 @@ import { withWorkerStartNext } from '../receipt-next'
 import { resolveOrchestrationCaller } from '../runs/run-scope'
 import {
   assertHelperStartScope,
+  assertWorkerStartPlacementBoundaries,
   resolveWorkerStartRun,
   qualifyLiveWorkerFollowUp
 } from './start/admission/worker-start-authority'
@@ -21,9 +22,8 @@ import {
 } from '../../../../../../shared/orchestration/orchestration-timing-budgets'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../../../../shared/orchestration/orchestration-task-display'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './start/admission/worker-start-prompt-budget'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/agent-session/identity/orca-session-address-prefix'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
+import { applyBotTurnWorkTargetForCaller } from '../../../../../bots/bot-turn-work-target'
 import { checkedWorkerOrigin } from '../../bots-items-worker-origin'
 import { decideStartMode, noteTerminalFallbackOnItem } from './start/worker-chat-lineage'
 import { withKeepOpenDefault } from './start/worker-keep-open-default'
@@ -160,46 +160,13 @@ export async function prepareWorkerStart(
       '--timeout-ms is too large for worker-start transport grace; the derived timeout must fit within the timer limit.'
     )
   }
-  if (params.on && params.terminal?.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) {
-    // Refused here, before any remote call: an Orca session ID names a chat only on its own host.
-    throw new OrchestrationError(
-      SESSION_CODES.hostBoundary,
-      `${params.terminal} names a chat by its Orca session ID, which identifies it only on the host that runs it. Run worker-start on that host. No effects were applied.`,
-      { effectsApplied: false }
-    )
-  }
-  if (params.adoptTaskId !== undefined && orchestrationCaller?.kind !== 'peer') {
-    throw new OrchestrationError(
-      'invalid_argument',
-      'Only the paired Orca coordinating a Run names its Task IDs. No effects were applied.',
-      { effectsApplied: false }
-    )
-  }
-  const placement = params.worktree ?? 'current'
-  if (
-    params.crossStoreParent &&
-    (orchestrationCaller?.kind !== 'peer' || placement !== 'new-child')
-  ) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      "Only the paired Orca coordinating a Run names its own workspace as a new-child's parent. No effects were applied.",
-      { effectsApplied: false }
-    )
-  }
-  // A paired Orca's new-child nests under its own workspace, named by the parent it sends.
-  if (
-    orchestrationCaller?.kind === 'peer' &&
-    !followUp &&
-    !params.terminal &&
-    !params.crossStoreParent &&
-    /^(current|new-child)$/.test(placement)
-  ) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      `--on requires an exact remote worktree selector or new-top-level: ${orchestrationCaller.peerRun.home_label} has no workspace on this server for --worktree ${placement}. No effects were applied.`,
-      { effectsApplied: false }
-    )
-  }
+  params = applyBotTurnWorkTargetForCaller(
+    params,
+    runtime.botWorkTargets,
+    orchestrationCaller,
+    Boolean(followUp)
+  )
+  assertWorkerStartPlacementBoundaries(params, orchestrationCaller, followUp)
   const db = runtime.getOrchestrationDb()
   const coordinator = resolveOrchestrationCaller(runtime, {
     callerTerminalHandle: params.from,

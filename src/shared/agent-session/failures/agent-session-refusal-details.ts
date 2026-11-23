@@ -41,6 +41,12 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'cancelNotSaved',
     /** The message names a chat attachment the host no longer stores. */
     'attachmentExpired',
+    /** The selected project or workspace target is missing, hidden, archived, or disallowed. */
+    'workTargetUnavailable',
+    /** The execution host for the selected project or workspace target is offline or unreachable. */
+    'workTargetHostUnavailable',
+    /** Project/workspace targeting was attached to a non-bot chat session. */
+    'workTargetUnsupportedChat',
     // The conversation's state
     'conversationCleared',
     /** Older hosts only: a /clear that never committed; its replacement may not exist. */

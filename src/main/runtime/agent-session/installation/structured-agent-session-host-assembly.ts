@@ -100,6 +100,7 @@ export async function installOnJournal(
     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
     ...(deps.quietTurnEnd ? { quietTurnEnd: deps.quietTurnEnd } : {}),
     ...(deps.isBotHome ? { isBotHome: deps.isBotHome } : {}),
+    ...(deps.validateWorkTarget ? { validateWorkTarget: deps.validateWorkTarget } : {}),
     ...(deps.queuedAgentMessageOwed ? { queuedAgentMessageOwed: deps.queuedAgentMessageOwed } : {}),
     ...(deps.startupLimits ? { startupLimits: deps.startupLimits } : {}),
     ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),

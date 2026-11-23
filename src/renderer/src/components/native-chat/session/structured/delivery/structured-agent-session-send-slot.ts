@@ -1,4 +1,5 @@
 import type { AgentJournalSkillRef } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalWorkTarget } from '../../../../../../../shared/agent-session/work-target/agent-session-work-target'
 import { createStructuredAgentSessionOperationId } from '../../../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import {
   structuredAgentSessionSendBody,
@@ -33,6 +34,8 @@ export type StructuredAgentSessionSendInput = {
   usageLimitContinuationOfTurnItemId?: string
   /** Skills picked from the menu, by file; only to a host that takes them. */
   skills?: readonly AgentJournalSkillRef[]
+  /** Optional project or existing workspace target selected for this single message. */
+  workTarget?: AgentJournalWorkTarget
   /** Made while the chat read Stopping: drawn after that turn until the host records it. */
   sentWhileStopping?: true
   onCreated?: (clientMessageId: string) => void
@@ -44,6 +47,7 @@ export type StructuredAgentSessionSendRequest = Pick<
   | 'callerKeepsText'
   | 'usageLimitContinuationOfTurnItemId'
   | 'skills'
+  | 'workTarget'
   | 'onCreated'
   | 'prepareAttachments'
 > & {
@@ -63,7 +67,7 @@ export function takeStructuredAgentSessionSendSlot(
   const entry: StructuredAgentSessionPendingSend = {
     clientMessageId: createStructuredAgentSessionOperationId(createBrowserUuid),
     sessionId: input.sessionId,
-    body: structuredAgentSessionSendBody(input.text, attachments, input.skills),
+    body: structuredAgentSessionSendBody(input.text, attachments, input.skills, input.workTarget),
     previewUris: attachments.map((attachment) => attachment.previewUri),
     queuedAt: input.now ?? Date.now(),
     ...(input.delivery ? { delivery: input.delivery } : {}),

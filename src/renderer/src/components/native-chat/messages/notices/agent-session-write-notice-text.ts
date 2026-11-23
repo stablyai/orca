@@ -94,6 +94,41 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
     translate('components.native-chat.writeNotice.reattachFile', COPY.reattachFile),
   reattachFiles: () =>
     translate('components.native-chat.writeNotice.reattachFiles', COPY.reattachFiles),
+  workTargetUnavailable: () =>
+    translate(
+      'components.native-chat.writeNotice.workTargetUnavailable',
+      COPY.workTargetUnavailable
+    ),
+  chooseOrClearWorkTarget: () =>
+    translate(
+      'components.native-chat.writeNotice.chooseOrClearWorkTarget',
+      COPY.chooseOrClearWorkTarget
+    ),
+  workTargetHostUnavailable: () =>
+    translate(
+      'components.native-chat.writeNotice.workTargetHostUnavailable',
+      COPY.workTargetHostUnavailable
+    ),
+  reconnectOrClearWorkTarget: () =>
+    translate(
+      'components.native-chat.writeNotice.reconnectOrClearWorkTarget',
+      COPY.reconnectOrClearWorkTarget
+    ),
+  workTargetUnsupportedChat: () =>
+    translate(
+      'components.native-chat.writeNotice.workTargetUnsupportedChat',
+      COPY.workTargetUnsupportedChat
+    ),
+  clearWorkTargetAndSend: () =>
+    translate(
+      'components.native-chat.writeNotice.clearWorkTargetAndSend',
+      COPY.clearWorkTargetAndSend
+    ),
+  workTargetHostUnsupported: () =>
+    translate(
+      'components.native-chat.writeNotice.workTargetHostUnsupported',
+      COPY.workTargetHostUnsupported
+    ),
   conversationCleared: () =>
     translate('components.native-chat.writeNotice.conversationCleared', COPY.conversationCleared),
   openCurrentConversation: () =>

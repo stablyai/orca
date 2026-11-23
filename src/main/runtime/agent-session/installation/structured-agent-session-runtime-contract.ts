@@ -91,6 +91,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   quietTurnEnd?: StructuredAgentSessionHostDeps['quietTurnEnd']
   /** See `StructuredAgentSessionHostDeps.isBotHome`. */
   isBotHome?: StructuredAgentSessionHostDeps['isBotHome']
+  /** See `StructuredAgentSessionHostDeps.validateWorkTarget`. */
+  validateWorkTarget?: StructuredAgentSessionHostDeps['validateWorkTarget']
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   /** Which login-shell variables Codex and Claude children inherit; absent inherits all. */
   resolveShellEnvironmentPolicy?: () => NativeChatShellEnvironmentPolicy

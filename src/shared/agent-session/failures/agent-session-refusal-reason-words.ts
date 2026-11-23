@@ -78,6 +78,21 @@ const REASON_WORDS = {
     // The card's Cancel button stays; its notice names the step.
     cancelNotSaved: causeWords('cancelNotSaved', 'retry', 'tryAgain'),
     attachmentExpired: causeWords('attachmentExpired', 'actFirst', 'reattachFile'),
+    workTargetUnavailable: causeWords(
+      'workTargetUnavailable',
+      'actFirst',
+      'chooseOrClearWorkTarget'
+    ),
+    workTargetHostUnavailable: causeWords(
+      'workTargetHostUnavailable',
+      'actFirst',
+      'reconnectOrClearWorkTarget'
+    ),
+    workTargetUnsupportedChat: causeWords(
+      'workTargetUnsupportedChat',
+      'actFirst',
+      'clearWorkTargetAndSend'
+    ),
     conversationCleared: causeWords(
       'conversationCleared',
       'goElsewhere',

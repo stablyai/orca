@@ -24,7 +24,8 @@ export function returnMessageToComposer(
   imageConnectionIds?: readonly (string | null)[],
   /** Uploads the host no longer stores: their chips come back asking to be attached again. */
   expiredUploadIds?: ReadonlySet<string>,
-  skills?: AgentJournalMessageItem['skills']
+  skills?: AgentJournalMessageItem['skills'],
+  workTarget?: AgentJournalMessageItem['workTarget']
 ): boolean {
   // Its `[Image #k]` markers become chips for its k-th image, by the ids its images get below.
   const imageIds = blocks.flatMap((block, index) =>
@@ -50,13 +51,14 @@ export function returnMessageToComposer(
     structuredAgentSessionMessageText({ kind: 'message', role: 'user', blocks }),
     imageIds
   )
-  if (text === '' && images.length === 0) {
+  if (text === '' && images.length === 0 && !workTarget) {
     return true
   }
   // Stable image ids make repeated hand-back idempotent despite later typing.
   return appendToNativeChatComposerDraft(composerScopeKey, {
     text,
     images,
+    ...(workTarget ? { workTarget } : {}),
     ...(skills?.length
       ? { document: seedPromptSkillReferences(promptTextContent(text), skills) }
       : {})
@@ -77,6 +79,7 @@ export function handBackStructuredAgentSessionMessage(
     body.blocks,
     imageConnectionIds,
     expiredUploadIds,
-    body.skills
+    body.skills,
+    body.workTarget
   )
 }

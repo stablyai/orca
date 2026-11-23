@@ -18,6 +18,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
+import type { AgentJournalWorkTarget } from '../work-target/agent-session-work-target'
 import { pendingPromptsAllUnanswerableHere } from '../requests/prompts/agent-session-approval-subject'
 import type { NativeChatImageRefBlock } from '../../native-chat/native-chat-types'
 import {
@@ -70,6 +71,8 @@ export type QueuedMessageCard = {
   from?: AgentMessageSource
   /** Typed by someone other than the host's owner, on their paired computer. */
   typedByOther?: OtherPersonTypist
+  /** Optional project or existing workspace target attached to this queued message. */
+  workTarget?: AgentJournalWorkTarget
 }
 
 export function queuedMessageCardText(body: AgentSessionQueuedMessage['body']): string {
@@ -172,7 +175,8 @@ export function projectQueuedMessageCards(
         ? { returnedRejection: message.returnedRejection }
         : {}),
       ...(from ? { from } : {}),
-      ...(typedByOther ? { typedByOther } : {})
+      ...(typedByOther ? { typedByOther } : {}),
+      ...(message.body.workTarget ? { workTarget: message.body.workTarget } : {})
     }
   })
   return cards.filter((card) => card.state === 'returned' || !handedOff.has(card.messageId))

@@ -3168,10 +3168,12 @@
         "capacity": "Orca on the computer running this chat has hit a request limit. Update Orca there, then try again.",
         "chatNotFound": "Orca can't find this chat.",
         "chatSavedByNewerOrca": "This chat was saved by a newer Orca.",
+        "chooseOrClearWorkTarget": "Choose another target or clear it and send again.",
         "clearAfterAnswer": "Answer the agent's question or approval, then run /clear.",
         "clearAfterRetry": "Retry your earlier message, then run /clear.",
         "clearAfterSending": "Your earlier message is still being sent. Run /clear once it has gone.",
         "clearUnfinished": "The last /clear didn't finish.",
+        "clearWorkTargetAndSend": "Clear the selected target and send again.",
         "commandRunning": "A /compact or /clear is still running.",
         "compactAfterAnswer": "Answer the agent's question or approval, then run /compact.",
         "compactAfterRetry": "Retry your earlier message, then run /compact.",
@@ -3209,6 +3211,7 @@
         "quitTerminalAgent": "Quit that agent to continue the chat here.",
         "reattachFile": "Remove it and attach it again.",
         "reattachFiles": "Remove them and attach them again.",
+        "reconnectOrClearWorkTarget": "Reconnect that host, or choose another target or clear it.",
         "recordFailed": "Orca couldn't save this to the chat's history.",
         "recordUnreadable": "Orca couldn't read this chat's saved state.",
         "reopenChat": "Reopen the chat to check again.",
@@ -3234,7 +3237,11 @@
         "waitForCommand": "Wait for the /compact or /clear to finish.",
         "waitForStart": "Wait for the agent to finish starting.",
         "waitForTurn": "Wait for the agent to finish responding, or stop it.",
-        "waitMoment": "Wait a moment."
+        "waitMoment": "Wait a moment.",
+        "workTargetHostUnavailable": "The host for the selected project or workspace is unavailable.",
+        "workTargetHostUnsupported": "Update Orca on the host running this chat to target a project or workspace.",
+        "workTargetUnavailable": "The selected project or workspace is no longer available.",
+        "workTargetUnsupportedChat": "Project and workspace targeting is only available in bot chats."
       }
     },
     "onboarding": {
