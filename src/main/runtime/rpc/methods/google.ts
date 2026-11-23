@@ -1,6 +1,6 @@
 // google.*: this host's Google client, the accounts signed in on it, and which bots may use them.
 // Tokens stay on this host; clients see emails and per-service states only.
-import { GOOGLE_OWNER_ONLY } from '../../../bots/bot-google-access'
+import { GOOGLE_OWNER_ONLY, readGoogleRefusal } from '../../../bots/bot-google-access'
 import { botOfToken } from '../../../bots/bot-of-caller'
 import { getGoogleConnect, type GoogleConnect } from '../../../google/google-connect'
 import type { GoogleStatusView } from '../../../../shared/google/google-connect-types'
@@ -177,8 +177,12 @@ export const GOOGLE_METHODS = [
     name: 'google.default.set',
     permission: 'workspace',
     params: GoogleDefaultSetParams,
+    // A bot with Google on may switch the default when its owner asks; it only picks among connected accounts.
     handler: async ({ botToken, account }, ctx) => {
-      refuseFromBot(botToken, ctx)
+      const refusal = readGoogleRefusal(ctx.runtime, botToken, ctx.pairedDeviceId)
+      if (refusal) {
+        throw new InvalidArgumentError(refusal)
+      }
       return { defaultAccount: await google().setDefaultAccount(account) }
     }
   }),
