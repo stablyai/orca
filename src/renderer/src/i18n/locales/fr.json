@@ -8159,6 +8159,8 @@
           "808f9a726e": "Aucun préfixe ne sera appliqué"
         },
         "GitPane": {
+          "prLabelsKeyword": "étiquettes de PR",
+          "showGitHubLabelsInChecks": "Afficher les étiquettes des pull requests GitHub dans les vérifications",
           "895d3f70b8": "gh",
           "32dca11189": "github",
           "c4f610d057": "En-têtes de limite de débit REST actuels de la CLI GitLab, lorsqu'ils sont disponibles.",

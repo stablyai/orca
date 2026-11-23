@@ -8267,6 +8267,8 @@
           "808f9a726e": "Es wird kein Präfix verwendet"
         },
         "GitPane": {
+          "prLabelsKeyword": "PR-Labels",
+          "showGitHubLabelsInChecks": "Labels von GitHub-Pull-Requests unter „Checks“ anzeigen",
           "895d3f70b8": "gh",
           "32dca11189": "github",
           "c4f610d057": "Aktuelle REST-Ratenlimit-Header der GitLab CLI, sofern verfügbar.",

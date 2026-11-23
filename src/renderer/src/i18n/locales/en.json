@@ -9438,6 +9438,8 @@
           "808f9a726e": "No prefix will be applied"
         },
         "GitPane": {
+          "prLabelsKeyword": "PR labels",
+          "showGitHubLabelsInChecks": "Show GitHub pull request labels in Checks",
           "895d3f70b8": "gh",
           "32dca11189": "github",
           "c4f610d057": "Current GitLab CLI REST rate-limit headers when available.",

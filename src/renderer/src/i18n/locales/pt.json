@@ -6492,6 +6492,8 @@
           "71e5d9feae": "Mostrar no Gerenciador de Arquivos"
         },
         "GitPane": {
+          "prLabelsKeyword": "etiquetas de PR",
+          "showGitHubLabelsInChecks": "Mostrar as etiquetas dos pull requests do GitHub em Verificações",
           "895d3f70b8": "gh",
           "32dca11189": "github",
           "c4f610d057": "Cabeçalhos atuais de limite de taxa REST da CLI do GitLab, quando disponíveis.",

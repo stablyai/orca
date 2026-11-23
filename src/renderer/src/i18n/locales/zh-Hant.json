@@ -8096,6 +8096,8 @@
           "808f9a726e": "不會套用前綴"
         },
         "GitPane": {
+          "prLabelsKeyword": "PR 標籤",
+          "showGitHubLabelsInChecks": "在「檢查」分頁中顯示 GitHub 拉取請求標籤",
           "895d3f70b8": "gh",
           "32dca11189": "github",
           "c4f610d057": "目前 GitLab CLI REST 速率限制標頭（如果可用）。",

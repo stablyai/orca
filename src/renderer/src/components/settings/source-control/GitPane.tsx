@@ -29,7 +29,12 @@ import {
   KeepLocalMainUpToDateSetting
 } from './KeepLocalMainUpToDateSetting'
 import { useTranslate } from '@/i18n/use-translate'
-import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
+import {
+  SettingsRow,
+  SettingsSegmentedControl,
+  SettingsSwitchRow
+} from '../form-controls/SettingsFormControls'
+import { getGitHubLabelsInChecksEntry } from './git-search'
 
 const SOURCE_CONTROL_GROUP_ORDER_KEYWORDS = [
   'group order',
@@ -131,6 +136,7 @@ export function GitPane({
   const storeSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle(t)
+  const gitHubLabelsEntry = getGitHubLabelsInChecksEntry(t)
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, {
@@ -190,6 +196,17 @@ export function GitPane({
         settings={settings}
         updateSettings={updateSettings}
       />
+    ) : null,
+    matchesSettingsSearch(searchQuery, gitHubLabelsEntry) ? (
+      <SearchableSetting key="github-labels-in-checks" {...gitHubLabelsEntry}>
+        <SettingsSwitchRow
+          label={gitHubLabelsEntry.title}
+          checked={settings.showGitHubLabelsInChecks === true}
+          onChange={() =>
+            void updateSettings({ showGitHubLabelsInChecks: !settings.showGitHubLabelsInChecks })
+          }
+        />
+      </SearchableSetting>
     ) : null,
     compareAgainstUpstreamMatchesSearch(searchQuery, t) ? (
       <CompareAgainstUpstreamSetting

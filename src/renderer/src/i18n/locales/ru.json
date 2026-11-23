@@ -8602,6 +8602,8 @@
           "808f9a726e": "Префикс не добавляется"
         },
         "GitPane": {
+          "prLabelsKeyword": "метки PR",
+          "showGitHubLabelsInChecks": "Показывать метки пул-реквестов GitHub на вкладке «Проверки»",
           "895d3f70b8": "gh",
           "32dca11189": "github",
           "c4f610d057": "Текущие заголовки лимитов REST GitLab CLI, если доступны.",

@@ -7840,6 +7840,8 @@
           "808f9a726e": "No se aplicará ningún prefijo"
         },
         "GitPane": {
+          "prLabelsKeyword": "etiquetas de PR",
+          "showGitHubLabelsInChecks": "Mostrar las etiquetas de las pull requests de GitHub en Comprobaciones",
           "895d3f70b8": "gh",
           "32dca11189": "github",
           "c4f610d057": "Encabezados actuales de límite de tasa REST de GitLab CLI cuando estén disponibles.",

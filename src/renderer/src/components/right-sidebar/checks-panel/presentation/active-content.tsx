@@ -194,7 +194,9 @@ export function ChecksPanelActiveContent({
           </div>
         )}
 
-        {activeReview.provider === 'github' && <GitHubLabelChips labels={pr?.labels} />}
+        {settings?.showGitHubLabelsInChecks && activeReview.provider === 'github' && (
+          <GitHubLabelChips labels={pr?.labels} />
+        )}
 
         {activeReview.updatedAt && (
           <ChecksPanelUpdatedAtMetadata

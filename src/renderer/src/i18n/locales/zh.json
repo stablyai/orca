@@ -8600,6 +8600,8 @@
           "808f9a726e": "不会应用前缀"
         },
         "GitPane": {
+          "prLabelsKeyword": "PR 标签",
+          "showGitHubLabelsInChecks": "在“检查”选项卡中显示 GitHub 拉取请求标签",
           "895d3f70b8": "gh",
           "32dca11189": "github",
           "c4f610d057": "当前 GitLab CLI REST 速率限制标头(如果可用)",

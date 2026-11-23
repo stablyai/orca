@@ -8178,6 +8178,8 @@
           "808f9a726e": "プレフィックスは適用されません"
         },
         "GitPane": {
+          "prLabelsKeyword": "PR ラベル",
+          "showGitHubLabelsInChecks": "チェックに GitHub プルリクエストのラベルを表示",
           "895d3f70b8": "gh",
           "32dca11189": "GitHub",
           "c4f610d057": "現在の GitLab CLI REST レート制限ヘッダー (利用可能な場合)。",

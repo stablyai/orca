@@ -179,6 +179,7 @@ export function buildDefaultSettings(args: {
     followSymlinkedDirectories: false,
     sourceControlViewMode: 'list',
     sourceControlGroupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,
+    showGitHubLabelsInChecks: false,
     sourceControlCompareAgainstUpstream: false,
     prAutoRefresh: 'default',
     showTitlebarAppName: true,

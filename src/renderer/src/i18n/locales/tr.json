@@ -8356,6 +8356,8 @@
           "808f9a726e": "Hiçbir önek uygulanmayacak"
         },
         "GitPane": {
+          "prLabelsKeyword": "PR etiketleri",
+          "showGitHubLabelsInChecks": "Kontroller sekmesinde GitHub pull request etiketlerini göster",
           "895d3f70b8": "gh",
           "32dca11189": "github",
           "c4f610d057": "Mevcut olduğunda güncel GitLab CLI REST oran sınırı başlıkları.",

@@ -8461,6 +8461,8 @@
           "808f9a726e": "접두사가 적용되지 않습니다"
         },
         "GitPane": {
+          "prLabelsKeyword": "PR 레이블",
+          "showGitHubLabelsInChecks": "검사 탭에 GitHub 풀 리퀘스트 레이블 표시",
           "895d3f70b8": "gh",
           "32dca11189": "GitHub",
           "c4f610d057": "사용 가능한 경우 현재 GitLab CLI REST 속도 제한 헤더입니다.",
