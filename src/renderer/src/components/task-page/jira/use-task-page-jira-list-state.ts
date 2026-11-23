@@ -12,7 +12,7 @@ import type {
   JiraPriority
 } from '../../../../../shared/jira/jira-types'
 import type { TaskPageJiraLoadError } from '@/components/task-page/jira/listing/task-page-jira-load-state'
-import type { TaskPageJiraJqlRejection } from '@/components/task-page/jira/listing/task-page-jira-search'
+import type { JiraJqlRejection } from '../../../../../shared/jira/jira-issue-input-search'
 import type { JiraPresetId } from '@/components/task-page/task-page-localized-options'
 import type {
   JiraIssueSortColumn,
@@ -39,7 +39,6 @@ import {
 } from '@/runtime/rpc/targets/runtime-client-target'
 import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
-import { useTaskPageJiraProjectScope } from './filters/use-task-page-jira-project-scope'
 const EMPTY_JIRA_PRIORITIES: JiraPrioritiesBySite = new Map()
 
 export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
@@ -55,18 +54,11 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
       ipcOrRuntimeTargetForHostId(jiraTaskSourceContext?.hostId ?? accountBackedTaskSourceHostId),
     [accountBackedTaskSourceHostId, jiraTaskSourceContext]
   )
-  const jiraProjectScope = useTaskPageJiraProjectScope(
-    model.repos,
-    model.selectedRepos,
-    model.pageData.preselectedRepoId,
-    model.accountBackedTaskSourceHostId,
-    selectedJiraSiteId
-  )
   const [jiraIssues, setJiraIssues] = useState<JiraIssue[]>([])
   const [jiraLoading, setJiraLoading] = useState(false)
   const [jiraError, setJiraError] = useState<TaskPageJiraLoadError | null>(null)
   const [jiraErrorDetailsOpen, setJiraErrorDetailsOpen] = useState(false)
-  const [jiraJqlRejection, setJiraJqlRejection] = useState<TaskPageJiraJqlRejection | null>(null)
+  const [jiraJqlRejection, setJiraJqlRejection] = useState<JiraJqlRejection | null>(null)
   const [jiraSearchInput, setRawJiraSearchInput] = useState('')
   const [appliedJiraSearch, setAppliedJiraSearch] = useState('')
   const [jiraHasWorkspace, setJiraLinkedView] = useState(loadJiraLinkedView)
@@ -217,7 +209,6 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
     ...quickFilters,
     jiraStatusCatalog,
     setJiraStatusCatalog,
-    ...jiraProjectScope,
     jiraIssues,
     setJiraIssues,
     jiraLoading,

@@ -1,3 +1,4 @@
+import { boundedStoredJson, boundedStoredJsonSql } from './journal-stored-json-bounds'
 import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot
@@ -54,7 +55,8 @@ export function readJournalDomainPublication(
         ])
       ]
       const rows = db
-        .prepare(`SELECT item.item_id,item.wire_version,item.wire_json,item.payload_json FROM json_each(?) wanted
+        .prepare(`SELECT item.item_id,item.wire_version,item.wire_json,
+          ${boundedStoredJsonSql('item.payload_json', 'payload_json', { shortenColumn: 'item.payload_json' })} FROM json_each(?) wanted
         CROSS JOIN journal_items item INDEXED BY journal_items_visible_position
         WHERE item.session_id=? AND item.epoch=? AND item.hidden=0 AND item.sequence=wanted.value
         ORDER BY item.sequence,item.sequence_index,item.ordinal`)
@@ -73,7 +75,9 @@ export function readJournalDomainPublication(
             sequence: Number(head.last_sequence)
           },
           items: rows.map((row) => {
-            const item = scope.decode<AgentJournalRenderItem>(row.payload_json)
+            const item = scope.decode<AgentJournalRenderItem>(
+              boundedStoredJson(row, 'payload_json')
+            )
             return resolveJournalDomainDisplay(
               item,
               row.wire_version,

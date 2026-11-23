@@ -46,8 +46,7 @@ function makeHost(kind: HostKind, state: OrcaUninstallEntryState): OrcaUninstall
     label: connected ? 'openclaw' : 'gpu-box',
     connected,
     state,
-    detail: connected || state === 'removed' ? null : 'Not connected.',
-    manualCommand: connected ? null : 'orca uninstall'
+    detail: connected || state === 'removed' ? null : 'Not connected.'
   }
 }
 

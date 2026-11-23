@@ -12,6 +12,7 @@ import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceViewOptionKey } from '../../../../../../shared/workspace-view/workspace-view-options'
 import { FilterToggleRow } from './FilterToggleRow'
+import { setShowSleepingWorkspacesKeepingActiveRow } from './sleeping-workspaces-visibility'
 
 export type WorkspaceFilterOptionKey = Extract<
   WorkspaceViewOptionKey,
@@ -42,7 +43,7 @@ const FILTER_ROWS: Record<WorkspaceFilterOptionKey, FilterRow> = {
         'Hide sleeping'
       ),
     checked: (state) => !state.showSleepingWorkspaces,
-    set: (hide) => useAppStore.getState().setShowSleepingWorkspaces(!hide)
+    set: (hide) => setShowSleepingWorkspacesKeepingActiveRow(!hide)
   },
   alwaysShowDefaultBranchWorkspace: {
     icon: <GitBranch className="size-3.5" />,

@@ -106,13 +106,18 @@ export function readBootstrapStatus(stream: Readable): {
   }
 }
 
+export const PROVIDER_BOOTSTRAP_DEADLINE_MS = 15_000
+
 export async function withProviderBootstrapDeadline(start: () => Promise<void>): Promise<void> {
   let timer: NodeJS.Timeout | undefined
   try {
     await Promise.race([
       start(),
       new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error('Provider ownership startup timed out')), 15_000)
+        timer = setTimeout(
+          () => reject(new Error('Provider ownership startup timed out')),
+          PROVIDER_BOOTSTRAP_DEADLINE_MS
+        )
       })
     ])
   } finally {

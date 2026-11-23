@@ -24,6 +24,7 @@ type RuntimePairingGeneratorFormProps = {
   runtimePairingUrl: string | null
   copiedTarget: 'web' | 'pairing' | null
   generatedAddress: string | null
+  grantRemoved: boolean
   linkExpiry: RuntimePairingLinkExpiry
   onIntentChange: (intent: RuntimePairingIntent) => void
   onSelectedAddressChange: (address: string) => void
@@ -43,6 +44,7 @@ export function RuntimePairingGeneratorForm({
   runtimePairingUrl,
   copiedTarget,
   generatedAddress,
+  grantRemoved,
   linkExpiry,
   onIntentChange,
   onSelectedAddressChange,
@@ -89,9 +91,8 @@ export function RuntimePairingGeneratorForm({
     }
   ]
   const generatedIsCurrent = generatedAddress === selectedAddress
-  const staleGeneratedLink = generatedAddress !== null && !generatedIsCurrent
-  // Hide an expired unused link so it cannot be copied; Create link mints a new one.
-  const showLink = generatedIsCurrent && linkExpiry?.kind !== 'expired'
+  const staleGeneratedLink = generatedAddress !== null && !generatedIsCurrent && !grantRemoved
+  const showLink = generatedIsCurrent && !grantRemoved && linkExpiry?.kind !== 'expired'
   const customAddressResult =
     intent === 'custom' ? parseServerShareAddress(selectedAddress) : { ok: true as const }
   const customAddressInvalid = selectedAddress !== '' && !customAddressResult.ok
@@ -353,7 +354,10 @@ export function RuntimePairingGeneratorForm({
         />
       ) : null}
 
-      {generatedIsCurrent && runtimePairingUrl && linkExpiry ? (
+      {generatedIsCurrent &&
+      runtimePairingUrl &&
+      linkExpiry &&
+      (!grantRemoved || linkExpiry.kind === 'expired') ? (
         <p className="text-xs text-muted-foreground">
           {linkExpiry.kind === 'expired'
             ? t('auto.components.settings.RuntimePairingUrlGenerator.linkExpired', 'Link expired')

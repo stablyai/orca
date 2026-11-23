@@ -1,7 +1,11 @@
+import { BOTS_ITEM_WAITING_CAPABILITY } from '../../../shared/bot-runtime-capabilities'
 import { GIT_REVERT_CONFLICT_CLIENT_CAPABILITY } from '../../../shared/git/commands/git-commit-action'
 import { GIT_GRAPH_TAB_CAPABILITY } from '../../../shared/source-control/runtime/git-graph-capabilities'
 import type { RuntimeCapability } from '../../../shared/remote-runtime/protocol/protocol-version'
-import { REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
+import {
+  REPO_SEARCH_CANONICAL_REFS_RUNTIME_CAPABILITY,
+  REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY
+} from '../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from '../../../shared/agent-session/capabilities/structured-agent-session-renderer-client-capabilities'
 import {
   AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
@@ -19,6 +23,7 @@ export const DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES: readonly RuntimeCapab
   GIT_REVERT_CONFLICT_CLIENT_CAPABILITY,
   ...STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
+  REPO_SEARCH_CANONICAL_REFS_RUNTIME_CAPABILITY,
   // Agent-launch authorization requires this even for the same-build desktop renderer.
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   // Read unconfirmed prompt replays after interrupted delivery.
@@ -26,5 +31,7 @@ export const DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES: readonly RuntimeCapab
   // Treat closed launch tabs as silent cancellation instead of unknown failure.
   AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY,
   TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY,
-  TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY
+  TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,
+  // Without it the host shows Waiting items to this window as In progress.
+  BOTS_ITEM_WAITING_CAPABILITY
 ] as const

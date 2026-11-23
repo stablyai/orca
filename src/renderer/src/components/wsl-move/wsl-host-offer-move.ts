@@ -11,8 +11,10 @@ import {
   LOCAL_EXECUTION_HOST_ID
 } from '../../../../shared/execution-host/execution-host'
 import type { WslMoveRowRef } from '../../../../shared/wsl-move/wsl-move-driver-types'
-import { openWslMoveDialogFor } from '../wsl-move/wsl-move-entry'
-import { wslMoveDistroOfPath } from '../wsl-move/wsl-move-scope-rows'
+import { openWslMoveDialogFor } from './wsl-move-entry'
+import { resolveWslMappedDrivePath } from '../sidebar/project-admission/host-selection/wsl-mapped-drive-path'
+import { wslMappedDrivePathToShare } from '../../../../shared/wsl-move/wsl-mapped-drive-paths'
+import { wslMoveDistroOfPath } from './wsl-move-scope-rows'
 import type { WslHostOffer } from '../sidebar/project-admission/host-selection/wsl-host-offer-actions'
 
 /** The local project saved at exactly `path`, in either catalog; null when none is. */
@@ -70,25 +72,61 @@ function addedRepoOf(added: unknown): { id: string; path: string } | null {
     : null
 }
 
+function isWslMoveRowRef(value: unknown): value is WslMoveRowRef {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'kind' in value &&
+    (value.kind === 'repo' || value.kind === 'folder') &&
+    'id' in value &&
+    typeof value.id === 'string'
+  )
+}
+
+/** Every repo a nested import added, which all start checked; null for any other add. */
+function importedRefsOf(added: unknown): WslMoveRowRef[] | null {
+  if (typeof added !== 'object' || added === null || !('imported' in added)) {
+    return null
+  }
+  const imported: unknown = added.imported
+  const refs = Array.isArray(imported) ? imported.filter(isWslMoveRowRef) : []
+  return refs.length > 0 ? refs : null
+}
+
+/** A project saved as `W:\…` moves as it is when its drive still maps into the offered distro. */
+async function moveSavedUnderMappedDrive(
+  offer: WslHostOffer,
+  repo: { id: string; path: string }
+): Promise<void> {
+  const letter = repo.path[0]?.toUpperCase() ?? ''
+  const share = /^[A-Z]$/.test(letter) ? await resolveWslMappedDrivePath(`${letter}:\\`) : null
+  const sharePath = share ? wslMappedDrivePathToShare(repo.path, { letter, share }) : null
+  if (sharePath && wslMoveDistroOfPath(sharePath)?.toLowerCase() === offer.distro.toLowerCase()) {
+    openWslMoveDialogFor(offer.distro, { kind: 'repo', id: repo.id })
+    return
+  }
+  toast.error(
+    translate(
+      'sidebar.wslHostOffer.savedUnderAnotherPath',
+      "This folder is already a project here as {{path}}, which can't move to the {{distro}} host yet. Remove that project, then add the folder again to move it.",
+      { path: repo.path, distro: offer.distro }
+    )
+  )
+}
+
 /**
- * Opens the move with only the offered project checked; the user's Move is what moves it.
+ * Opens the move with only what the offer added checked; the user's Move is what moves it.
  * `added` is the add's answer, which names an already-saved project the path resolved to.
  */
 export function moveWslHostOfferProject(offer: WslHostOffer, added?: unknown): void {
   const repo = addedRepoOf(added)
-  // The same folder was already saved under another spelling (`W:\…`), which the move can't take.
+  // The same folder was already saved under another spelling (`W:\…`).
   if (repo && wslMoveDistroOfPath(repo.path)?.toLowerCase() !== offer.distro.toLowerCase()) {
-    toast.error(
-      translate(
-        'sidebar.wslHostOffer.savedUnderAnotherPath',
-        "This folder is already a project here as {{path}}, which can't move to the {{distro}} host yet. Remove that project, then add the folder again to move it.",
-        { path: repo.path, distro: offer.distro }
-      )
-    )
+    void moveSavedUnderMappedDrive(offer, repo)
     return
   }
   const only = repo
-    ? ({ kind: 'repo', id: repo.id } as const)
+    ? (importedRefsOf(added) ?? ({ kind: 'repo', id: repo.id } as const))
     : wslHostOfferProjectRef(offer.sharePath ?? offer.path)
   if (only) {
     openWslMoveDialogFor(offer.distro, only)

@@ -1,8 +1,10 @@
 import type {
   NestedRepoScanResult,
   ProjectGroup,
-  ProjectGroupImportMode
+  ProjectGroupImportMode,
+  ProjectGroupParentMove
 } from '../../shared/project/groups/project-group-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import {
   getRuntimePathBasename,
   isPathInsideOrEqual,
@@ -11,6 +13,7 @@ import {
   relativePathInsideRoot,
   resolveRuntimePath
 } from '../../shared/file-access/cross-platform-path'
+import { createFolderScanGroupReuse } from './folder-scan-group-reuse'
 
 type CreateGroupInput = {
   name: string
@@ -24,6 +27,7 @@ type NestedProjectGroupResolver = {
   getGroupForRepo: (repoPath: string) => ProjectGroup | undefined
   getRootGroup: () => ProjectGroup | undefined
   getCreatedGroups: () => ProjectGroup[]
+  applyReusedGroupChanges: () => void
 }
 
 export type ResolvedNestedRepoSelection = {
@@ -146,7 +150,11 @@ export function createNestedProjectGroupResolver(args: {
   mode: ProjectGroupImportMode
   connectionId?: string | null
   repoPaths?: readonly string[]
+  existingGroups?: readonly ProjectGroup[]
+  existingRepos?: readonly Pick<Repo, 'projectGroupId'>[]
   createGroup: (input: CreateGroupInput) => ProjectGroup
+  renameGroup?: (groupId: string, name: string) => ProjectGroup | null | undefined
+  reparentGroups?: (moves: readonly ProjectGroupParentMove[]) => void
 }): NestedProjectGroupResolver {
   const createdGroups: ProjectGroup[] = []
   // Folder scopes are reachable only in group mode; use the same flag to skip their construction.
@@ -159,6 +167,16 @@ export function createNestedProjectGroupResolver(args: {
   )
   const folderScopeGroups = new Map<string, ProjectGroup>()
   let rootGroup: ProjectGroup | undefined
+  const connectionId = args.connectionId ?? null
+  // Rescanning a folder reuses its groups; reused groups stay out of createdGroups so rollback keeps them.
+  const groupReuse = createFolderScanGroupReuse({
+    groups: createsGroups ? (args.existingGroups ?? []) : [],
+    repos: args.existingRepos ?? [],
+    connectionId,
+    toPathKey: (path) => normalizeRuntimePathForComparison(trimPathSeparators(path)),
+    renameGroup: args.renameGroup,
+    reparentGroups: args.reparentGroups
+  })
 
   const ensureRootGroup = (): ProjectGroup | undefined => {
     if (!createsGroups) {
@@ -168,10 +186,15 @@ export function createNestedProjectGroupResolver(args: {
       return rootGroup
     }
     const fallbackName = getRuntimePathBasename(trimPathSeparators(args.parentPath))
+    const enteredName = args.groupName.trim()
+    rootGroup = groupReuse.reuseRoot(args.parentPath, enteredName, fallbackName)
+    if (rootGroup) {
+      return rootGroup
+    }
     rootGroup = args.createGroup({
-      name: args.groupName.trim() || fallbackName,
+      name: enteredName || fallbackName,
       parentPath: trimPathSeparators(args.parentPath),
-      connectionId: args.connectionId ?? null,
+      connectionId,
       parentGroupId: null,
       createdFrom: 'folder-scan'
     })
@@ -195,11 +218,17 @@ export function createNestedProjectGroupResolver(args: {
     const parentGroup = scope.parentRelativePath
       ? ensureFolderScopeGroup(scope.parentRelativePath)
       : root
+    const parentGroupId = parentGroup?.id ?? root.id
+    const reusable = groupReuse.reuseScope(scope.folderPath, parentGroupId)
+    if (reusable) {
+      folderScopeGroups.set(relativePath, reusable)
+      return reusable
+    }
     const group = args.createGroup({
       name: scope.name,
       parentPath: scope.folderPath,
-      connectionId: args.connectionId ?? null,
-      parentGroupId: parentGroup?.id ?? root.id,
+      connectionId,
+      parentGroupId,
       createdFrom: 'folder-scan'
     })
     folderScopeGroups.set(relativePath, group)
@@ -220,7 +249,10 @@ export function createNestedProjectGroupResolver(args: {
       return scopePath ? ensureFolderScopeGroup(scopePath) : root
     },
     getRootGroup: () => rootGroup,
-    getCreatedGroups: () => [...createdGroups]
+    getCreatedGroups: () => [...createdGroups],
+    applyReusedGroupChanges: () => {
+      rootGroup = groupReuse.applyChanges() ?? rootGroup
+    }
   }
 }
 

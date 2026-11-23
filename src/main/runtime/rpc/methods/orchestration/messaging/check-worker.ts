@@ -7,7 +7,7 @@ import {
   acknowledgedOnlyReceipt,
   deliveryReceipt,
   exposeMessages,
-  withReportFollowUps
+  withReplyFollowUps
 } from './mailbox-message-receipt'
 import { routeAllMailboxPages, createDirectMailSnapshotRouter } from './mailbox-page-routing'
 import { asDispatchFence, callerHoldsDispatchPane, dispatchFenced } from './dispatch-mailbox-fence'
@@ -156,7 +156,8 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
           mailboxHandle: address,
           consumerGeneration: workerMailbox.generation,
           consumerSource: activeDispatch ? 'dispatch' : 'attachment',
-          deliveryId: params.ack
+          deliveryId: params.ack,
+          taker: args.reconciliation.taker
         })
       : undefined
   } catch (error) {
@@ -172,18 +173,23 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
   }
   const formatted = (messages: MessageRow[]) =>
     params.format || params.inject
-      ? { formatted: messages.map(formatMessageBanner).join('\n\n') }
+      ? {
+          formatted: messages
+            .map((message) => formatMessageBanner(message, { peerMail: db }))
+            .join('\n\n')
+        }
       : {}
   const showAll = params.all === true || (params.unread === false && params.peek !== true)
   const readPeek = () => db.getUnreadMessages(address, typeFilter)
   const result = (batch: MailboxDeliveryBatch | undefined) => {
     const receipt = deliveryReceipt({
+      db,
       mailbox: mailboxIdentity,
       batch,
       acknowledged: acknowledged?.delivery.id ?? args.runAcknowledged,
       format: params.format === true || params.inject === true
     })
-    return batch?.finalResponse ? receipt : withReportFollowUps(db, receipt)
+    return batch?.finalResponse ? receipt : withReplyFollowUps(runtime, db, args.reader, receipt)
   }
   const takeDelivery = async (wakeTypes?: MessageType[], wake?: MessageWake) => {
     if (args.deferDelivery?.()) {

@@ -202,6 +202,7 @@ export type ClaudeControlSurface = {
   /** The blocking subagent or command started by `toolUseId` returns at once and keeps running. */
   backgroundTask: (toolUseId: string, options?: ClaudeControlOptions) => Promise<boolean>
   supportedModels: (options?: ClaudeControlOptions) => Promise<unknown[]>
+  mcpServerStatus: () => ReturnType<Query['mcpServerStatus']>
   /** Initialization is untimed; child exit closes the query. */
   initializationResult: () => Promise<unknown>
   getSettings: (options?: ClaudeControlOptions) => Promise<unknown>
@@ -211,6 +212,8 @@ export type ClaudeControlSurface = {
   renameSession: (title: string, sessionId: string, options?: ClaudeControlOptions) => Promise<void>
   /** The `/mcp` panel's requests; test connections leave it out. */
   mcp?: ClaudeMcpControls
+  /** Stops or restarts the CLI generating prompt suggestions; a new process starts unpaused. */
+  setPromptSuggestionsPaused?: (paused: boolean, options?: ClaudeControlOptions) => Promise<void>
 }
 
 type InterruptingQuery = {
@@ -265,6 +268,7 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
       ),
     supportedModels: (options) =>
       runClaudeControl('list_models', () => query.supportedModels(), options?.timeoutMs),
+    mcpServerStatus: () => runClaudeControl('mcp_status', () => query.mcpServerStatus()),
     initializationResult: () =>
       runClaudeControl('initialize', () => query.initializationResult(), null),
     getContextUsage: (options) =>
@@ -286,6 +290,22 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
             new ClaudeControlRequestError(
               'rename_session',
               'this SDK exposes no rename_session request'
+            )
+          )
+    },
+    setPromptSuggestionsPaused: (paused, options) => {
+      // Sends `set_prompt_suggestions_paused` but is absent from Query's declaration.
+      const pause = 'setPromptSuggestionsPaused' in query ? query.setPromptSuggestionsPaused : null
+      return typeof pause === 'function'
+        ? runClaudeControl(
+            'set_prompt_suggestions_paused',
+            () => Promise.resolve(pause.call(query, paused)),
+            options?.timeoutMs
+          ).then(() => {})
+        : Promise.reject(
+            new ClaudeControlRequestError(
+              'set_prompt_suggestions_paused',
+              'this SDK exposes no set_prompt_suggestions_paused request'
             )
           )
     },

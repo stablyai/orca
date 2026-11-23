@@ -1,3 +1,4 @@
+import type { HostedProviderRequest } from './daemon-provider-process-protocol'
 import type { TerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type {
   AsyncIoHealthRequest,
@@ -24,7 +25,7 @@ import type {
 } from '../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type * as HistorySeedProtocol from '../history/seed-transfer/terminal-history-seed-transfer-protocol'
 import type * as PtyOwnerQueryProtocol from './daemon-pty-owner-query-protocol'
-import type { TerminalSnapshot } from './terminal-snapshot'
+import type { TerminalSnapshot, TerminalSnapshotReadOptions } from './terminal-snapshot'
 import type { SetLaunchNoteRequest } from './daemon-launch-note-protocol'
 
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
@@ -175,10 +176,11 @@ export type TerminalBufferActionRequest = {
   }
 }
 
-// Viewers live above the daemon on orcad; gated by focusLossReportSupport (v56, some v55).
-export type ReportFocusLostRequest = {
+// Viewers live above the daemon on orcad; focus loss is gated by focusLossReportSupport (v56, some
+// v55), a repaint request by REPAINT_REQUEST_PROTOCOL_VERSION.
+export type SessionNoticeRequest = {
   id: string
-  type: 'reportFocusLost'
+  type: 'reportFocusLost' | 'requestRepaint'
   payload: {
     sessionId: string
   }
@@ -195,10 +197,7 @@ export type ShutdownRequest = {
 export type GetSnapshotRequest = {
   id: string
   type: 'getSnapshot'
-  payload: {
-    sessionId: string
-    scrollbackRows?: number
-  }
+  payload: { sessionId: string } & TerminalSnapshotReadOptions
 }
 
 // Read applied dimensions to detect dropped or coerced fire-and-forget resizes.
@@ -240,6 +239,7 @@ export type TakePendingOutputResult = {
 }
 
 export type DaemonRequest =
+  | HostedProviderRequest
   | CreateOrAttachRequest
   | HistorySeedProtocol.TerminalHistorySeedTransferRequest
   | CancelCreateOrAttachRequest
@@ -259,7 +259,7 @@ export type DaemonRequest =
   | ConfirmForegroundProcessRequest
   | ConfirmShellForegroundRequest
   | TerminalBufferActionRequest
-  | ReportFocusLostRequest
+  | SessionNoticeRequest
   | ShutdownRequest
   | PingRequest
   | SystemResolverHealthRequest
@@ -288,8 +288,8 @@ export type RpcResponseError = {
 
 export type RpcResponse<T = unknown> = RpcResponseOk<T> | RpcResponseError
 
-export type GetSnapshotResult = {
-  snapshot: TerminalSnapshot | null
+export type GetSnapshotResult<Snapshot = TerminalSnapshot> = {
+  snapshot: Snapshot | null
 }
 
 export type ListSessionsResult = {

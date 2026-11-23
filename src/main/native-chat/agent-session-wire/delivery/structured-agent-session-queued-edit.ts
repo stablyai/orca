@@ -31,7 +31,9 @@ export function updateQueuedStructuredAgentMessage(
     queuedImageCards?: boolean
   }
 ): Promise<AgentSessionMutationResult<AgentSessionQueuedMessageUpdateResult>> {
-  const { envelope, queuedImageCards, ...fields } = params
+  // The host's typist stamp is not the client's edit: kept out of the operation's fingerprint.
+  const { envelope, queuedImageCards, typedBy, ...fields } = params
+  const update = { ...fields, ...(typedBy ? { typedBy } : {}) }
   const plan: MutationPlan<AgentSessionQueuedMessageUpdateResult> = {
     method: 'agentSession.queuedMessageUpdate',
     fields,
@@ -41,11 +43,11 @@ export function updateQueuedStructuredAgentMessage(
       const decision = queuedMessageUpdateDecision(
         await Promise.resolve(queued.get(fields.messageId)),
         ctx.sessionId,
-        fields,
+        update,
         queuedImageCards !== false
       )
       if (decision.status === 'unchanged') {
-        return { ok: true, value: await queued.update(fields) }
+        return { ok: true, value: await queued.update(update) }
       }
       if (decision.status !== 'ready') {
         return { ok: true, value: decision }
@@ -61,7 +63,7 @@ export function updateQueuedStructuredAgentMessage(
         return { ok: false, refusal }
       }
       try {
-        return { ok: true, value: await queued.update(fields) }
+        return { ok: true, value: await queued.update(update) }
       } catch (error) {
         if (isAgentSessionAttachmentExpiredError(error)) {
           return agentSessionAttachmentExpiredRefusal(error)

@@ -82,6 +82,22 @@ export function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
     )?.seedName ?? getLinkedWorkItemSuggestedName(issue)
   )
 }
+/** The GitHub fan-out's repo arguments; a repo on a host known unreachable is marked, not dialled. */
+export function getTaskPageGitHubRepoArgs(
+  repos: readonly Repo[],
+  unreachableHostIds: ReadonlySet<TaskSourceContext['hostId']>
+) {
+  return repos.map((repo) => {
+    const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
+    return {
+      repoId: repo.id,
+      path: repo.path,
+      executionHostId: repo.executionHostId,
+      sourceContext,
+      hostUnreachable: Boolean(sourceContext && unreachableHostIds.has(sourceContext.hostId))
+    }
+  })
+}
 export function getTaskSourceHostAvailabilityForHost(
   host: ExecutionHostRegistryEntry | null | undefined,
   hostId: TaskSourceContext['hostId']

@@ -54,7 +54,8 @@ function closedWorkerHandle(
   db: OrchestrationDb
 ): string | null {
   if (located.location?.kind === 'terminal') {
-    return located.location.handle
+    // Another server's terminal is that server's to reopen.
+    return located.location.environmentId ? null : located.location.handle
   }
   if (located.lost !== 'terminal') {
     return null

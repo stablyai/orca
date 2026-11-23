@@ -7,9 +7,10 @@ import { resolveStructuredAgentCommand } from '../../../native-chat/agent-launch
 import { structuredAgentConfiguredArgs } from '../../../native-chat/agent-launch/structured-agent-configured-args'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { resolveTuiAgentLaunchEnv } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
-import { overlayEnvironmentVariables } from '../../../../shared/shell/launch/environment-overlay'
-import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import {
+  structuredAgentLaunchEnv,
+  type StructuredAgentLaunchEnvSettings
+} from '../environment/structured-agent-launch-env'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { RuntimeWorkspaceCatalog } from '../../workspaces/catalog/workspace-catalog'
 import type { OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController } from '../../terminal/lifecycle/pty-worktree-refresh'
@@ -29,13 +30,9 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
   /** Apply the host-owning desktop's account overlay to configured agent environment. */
   protected structuredAgentLaunchEnv(
     agent: StructuredAgentId,
-    settings: Pick<GlobalSettings, 'agentDefaultEnv'>
+    settings: Partial<StructuredAgentLaunchEnvSettings>
   ) {
-    return overlayEnvironmentVariables(
-      overlayEnvironmentVariables({}, resolveTuiAgentLaunchEnv(agent, settings), process.platform),
-      this.accounts.hostLaunchEnvFor(agent),
-      process.platform
-    )
+    return structuredAgentLaunchEnv(agent, settings, this.accounts.hostLaunchEnvFor(agent))
   }
 
   protected structuredAgentCatalogDependencies(): StructuredAgentModelCatalogDeps {

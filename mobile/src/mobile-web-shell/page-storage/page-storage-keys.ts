@@ -28,7 +28,9 @@ export const TERMINAL_SETTINGS_STORAGE_KEYS = [
   'orca:terminalAutocompleteEnabled',
   'orca:terminalLinkOpenMode',
   /** Chat text size, font and spacing, so an open chat follows Settings too. */
-  'orca:nativeChatText'
+  'orca:nativeChatText',
+  /** Used or remaining on usage bars, so an open Accounts page follows Settings. */
+  'orca:usagePercentageDisplay'
 ] as const
 
 export const PAGE_STORAGE_EXACT_KEYS = [
@@ -49,7 +51,11 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   /** Terminal font, line spacing and weight. */
   'orca:terminalFontStyle',
   /** Chat text size, font and spacing; a pinch in a chat saves here. */
-  'orca:nativeChatText'
+  'orca:nativeChatText',
+  /** The New Tab sheet's Chat or CLI pick. */
+  'orca:newAgentSurface',
+  /** Whether usage bars show the percentage used or remaining. */
+  'orca:usagePercentageDisplay'
 ] as const
 
 /**
@@ -60,7 +66,9 @@ export const PAGE_STORAGE_EXACT_KEYS = [
 export const NEGOTIATED_PAGE_STORAGE_KEYS = [
   'orca:terminalSplitLayout',
   'orca:terminalFontStyle',
-  'orca:nativeChatText'
+  'orca:nativeChatText',
+  'orca:newAgentSurface',
+  'orca:usagePercentageDisplay'
 ] as const
 
 /** Whether a page that declared `storageKeys` (null: declared nothing) reads this key in `init`. */

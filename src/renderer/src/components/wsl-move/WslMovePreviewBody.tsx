@@ -13,9 +13,9 @@ import type {
 import {
   wslMoveBrowserLoginsNotCarried,
   wslMoveChatsStayCopy,
-  wslMoveRefusalMessage,
-  wslMoveScopeRefusalReason
+  wslMoveRefusalMessage
 } from './wsl-move-copy'
+import { wslMoveScopeRefusalReason } from './wsl-move-scope-refusal-copy'
 import type { WslMoveCounts, WslMoveProjectRow } from './wsl-move-scope-rows'
 import { WslMoveBlockerList, type WslMoveBlockerView } from './WslMoveBlockerList'
 
@@ -183,8 +183,13 @@ export function wslMoveNotMovingLines(
   distro: string,
   t: Translate = translate
 ): { name: string; why: string }[] {
+  const refused = preview.refused?.map((entry) => ({
+    name: nameOf({ kind: entry.kind === 'repo' ? 'repo' : 'folder', id: entry.id }),
+    why: wslMoveScopeRefusalReason(entry.reason, t)
+  }))
   if (preview.outcome !== 'ready') {
-    return []
+    // A refused preview carries why each project can't move when none can.
+    return refused ?? []
   }
   return [
     ...preview.heldByHost.map((ref) => ({
@@ -198,9 +203,6 @@ export function wslMoveNotMovingLines(
         'Moved earlier, then changed here by an older version of Orca. It is not moved again.'
       )
     })),
-    ...preview.refused.map((entry) => ({
-      name: nameOf({ kind: entry.kind === 'repo' ? 'repo' : 'folder', id: entry.id }),
-      why: wslMoveScopeRefusalReason(entry.reason, t)
-    }))
+    ...(refused ?? [])
   ]
 }

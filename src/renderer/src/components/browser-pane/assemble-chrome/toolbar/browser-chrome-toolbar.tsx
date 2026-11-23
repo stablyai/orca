@@ -14,6 +14,7 @@ import {
   type BrowserChromeNoteActions
 } from './browser-annotate-tool-button'
 import { useFloatingSplitBrowserClose } from './use-floating-split-browser-close'
+import { MarkupDrawButton } from '../../annotate/markup-tools/MarkupDrawButton'
 
 export type BrowserChromeToolAction = {
   onSelect: () => void
@@ -59,7 +60,8 @@ export function BrowserChromeToolbar({
         menuTriggerRef: React.RefObject<HTMLButtonElement | null>
       ) => React.ReactNode)
     | null
-  elementTools: BrowserChromeElementTools
+  /** Null where the page can't run the element picker; the row then offers Draw alone. */
+  elementTools: BrowserChromeElementTools | null
   markup: BrowserChromeMarkupTool
   notes?: BrowserChromeNoteActions | null
   /** Share beside a document chip, which can't hold a nested button the way the address field does. */
@@ -102,12 +104,21 @@ export function BrowserChromeToolbar({
       showTourAnchors={showTourAnchors}
     >
       {shareControl}
-      <BrowserAnnotateToolButton
-        tools={elementTools}
-        markup={markup}
-        notes={notes}
-        showTourAnchors={showTourAnchors}
-      />
+      {elementTools ? (
+        <BrowserAnnotateToolButton
+          tools={elementTools}
+          markup={markup}
+          notes={notes}
+          showTourAnchors={showTourAnchors}
+        />
+      ) : (
+        <MarkupDrawButton
+          onClick={markup.onToggle}
+          disabled={markup.disabled}
+          active={markup.active}
+          surfaceActive={markup.canShowDiscoveryHint}
+        />
+      )}
       <span className="flex shrink-0 items-center">
         {extensionActions?.(folded.has('extensions'), overflowTriggerRef)}
         {overflowMenu({

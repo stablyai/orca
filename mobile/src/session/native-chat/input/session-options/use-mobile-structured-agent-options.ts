@@ -274,6 +274,9 @@ export function useMobileStructuredAgentOptions(args: {
       conversationSupport?.sessionId === sessionId ? conversationSupport.forkSupport : undefined,
     contextUsageSupport:
       conversationSupport?.sessionId === sessionId ? conversationSupport.contextUsage : undefined,
+    /** The options read says `/usage` can show this chat's account. */
+    accountUsageReported:
+      conversationSupport?.sessionId === sessionId && conversationSupport.accountUsage,
     threadGoalSupport: threadGoalSupport?.sessionId === sessionId ? threadGoalSupport : null,
     acceptsImages:
       (imageSupport?.sessionId === sessionId ? imageSupport.acceptsImages : undefined) ??

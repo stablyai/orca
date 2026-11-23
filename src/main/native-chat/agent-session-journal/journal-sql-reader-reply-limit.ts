@@ -13,19 +13,31 @@ export const JOURNAL_READER_REPLY_BYTE_LIMIT = 64 * 2 ** 20
 
 /**
  * The bounded walk sizes a reply it saw whole; one it cut short is measured, so rows past the walk
- * can't hide. A reply carrying one stored item is never refused: no page can split it, and main
- * held it when it was written. The record set loads the chat store itself: refusing it
+ * can't hide. One stored item is refused like any aggregate: a completed tool output is kept whole,
+ * so a single item can be hundreds of MB. The record set loads the chat store itself: refusing it
  * would leave every chat unopenable, and it grows only with chat count (~25 MB at 18k chats).
  */
 export function journalReaderReplyExceedsLimit(
   reply: unknown,
   limit = JOURNAL_READER_REPLY_BYTE_LIMIT
 ): boolean {
-  if (isRecordSetReply(reply) || carriesOneItem(reply)) {
-    return false
+  return replyBytes(reply, limit).exceeds
+}
+
+/**
+ * Never below the serialized size: the walk counts characters, and a two-byte string serializes
+ * at twice that, so walked sizes count at UTF-16 width. Measured whenever the walk may miss rows.
+ */
+function replyBytes(reply: unknown, limit: number): { bytes?: number; exceeds: boolean } {
+  if (isRecordSetReply(reply)) {
+    return { exceeds: false }
   }
   const shape = describeWorkerMessage(reply)
-  return (shape.truncated || shape.bytes > limit / 4) && serialize(reply).byteLength > limit
+  if (!shape.truncated && shape.bytes <= limit / 4) {
+    return { bytes: shape.bytes * 2, exceeds: false }
+  }
+  const bytes = serialize(reply).byteLength
+  return { bytes, exceeds: bytes > limit }
 }
 
 /** The reader posts every reply through this: an oversized one becomes its request's failure. */
@@ -33,19 +45,37 @@ export function limitJournalReaderReply<T extends { type: string }>(
   reply: T,
   limit = JOURNAL_READER_REPLY_BYTE_LIMIT
 ): T | Extract<JournalSqlReaderReply, { type: 'failed' }> {
-  if (
-    reply.type === 'failed' ||
-    !('id' in reply) ||
-    typeof reply.id !== 'number' ||
-    !journalReaderReplyExceedsLimit(reply, limit)
-  ) {
-    return reply
+  return measureJournalReaderReply(reply, limit).reply
+}
+
+/** `bytes` is absent for failures, untracked replies and the record set. */
+export function measureJournalReaderReply<T extends { type: string }>(
+  reply: T,
+  limit = JOURNAL_READER_REPLY_BYTE_LIMIT
+): { reply: T | Extract<JournalSqlReaderReply, { type: 'failed' }>; bytes?: number } {
+  if (reply.type === 'failed' || !('id' in reply) || typeof reply.id !== 'number') {
+    return { reply }
+  }
+  const { bytes, exceeds } = replyBytes(reply, limit)
+  if (!exceeds) {
+    return bytes === undefined ? { reply } : { reply, bytes }
   }
   return {
-    type: 'failed',
-    id: reply.id,
-    error: journalSqlFailure(new Error(`journal read reply (${reply.type}) exceeds ${limit} bytes`))
+    reply: {
+      type: 'failed',
+      id: reply.id,
+      error: journalSqlFailure(
+        new Error(`${REPLY_LIMIT_FAILURE} (${reply.type}) exceeds ${limit} bytes`)
+      )
+    }
   }
+}
+
+const REPLY_LIMIT_FAILURE = 'journal read reply'
+
+/** A chat whose rows can't fit one reply fails the same way at every retry. */
+export function isJournalReaderReplyLimitFailure(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith(`${REPLY_LIMIT_FAILURE} (`)
 }
 
 function isRecordSetReply(reply: unknown): boolean {
@@ -59,42 +89,5 @@ function isRecordSetReply(reply: unknown): boolean {
     result !== null &&
     'kind' in result &&
     result.kind === 'records'
-  )
-}
-
-/** Point reads of one stored entity; anything else, including nested aggregates, stays limited. */
-const SINGLE_ENTITY_RESULTS: ReadonlySet<unknown> = new Set([
-  'item',
-  'item-detail',
-  'saved-content',
-  'submission-body'
-])
-const ITEM_LIST_RESULTS: ReadonlySet<unknown> = new Set([
-  'items-by-kind',
-  'history-items',
-  'history-source-items'
-])
-
-function carriesOneItem(reply: unknown): boolean {
-  if (typeof reply !== 'object' || reply === null || !('type' in reply) || !('result' in reply)) {
-    return false
-  }
-  const { result } = reply
-  if (
-    reply.type !== 'point' ||
-    typeof result !== 'object' ||
-    result === null ||
-    !('kind' in result)
-  ) {
-    return false
-  }
-  if (SINGLE_ENTITY_RESULTS.has(result.kind)) {
-    return true
-  }
-  return (
-    ITEM_LIST_RESULTS.has(result.kind) &&
-    'items' in result &&
-    Array.isArray(result.items) &&
-    result.items.length <= 1
   )
 }

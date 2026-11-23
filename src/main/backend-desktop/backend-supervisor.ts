@@ -3,7 +3,6 @@ import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/dur
 import { BackendPortRpc } from '../../shared/backend/backend-port-rpc'
 import {
   BACKEND_CONNECTION_CHANGED,
-  BACKEND_PORT_DELIVERY,
   BACKEND_PORT_REQUEST,
   BACKEND_UTILITY_PROCESS_NAME,
   type AutomationUsageClient
@@ -17,14 +16,15 @@ import { ManagedOrcadEventWindow } from '../managed-server/lifecycle/orcad-manag
 import { ORCAD_SHUTDOWN_DEADLINE_MS } from '../orcad/host-lifecycle/managed-stop/orcad-stop-deadlines'
 import {
   createBackendDesktopCapabilities,
-  trustsBackendRenderer,
+  admitBackendPortRequest,
+  deliverBackendDocumentPort,
   trackBackendDocument,
   type BackendDocument
 } from './backend-desktop-capabilities'
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
 
 export { captureBackendBootstrap } from './backend-bootstrap'
-import { capturedBootstrap } from './backend-bootstrap'
+import { capturedBootstrap, sendBackendBootstrap } from './backend-bootstrap'
 
 export class BackendSupervisor {
   private child: ReturnType<typeof utilityProcess.fork> | null = null
@@ -35,6 +35,7 @@ export class BackendSupervisor {
   private exited: Promise<void> = Promise.resolve()
   private restartTimer: ReturnType<typeof setTimeout> | undefined
   private readonly failures = new ManagedOrcadEventWindow(10 * 60_000, Date.now)
+  private incarnation: string | undefined
   private readonly documents = new Map<number, BackendDocument>()
   private stopping?: Promise<void>
 
@@ -49,46 +50,37 @@ export class BackendSupervisor {
     ipcMain.handle(
       BACKEND_PORT_REQUEST,
       async (event, token: unknown, purpose: unknown = 'demand') => {
-        if (
-          typeof token !== 'string' ||
-          !/^[0-9a-f-]{36}$/i.test(token) ||
-          (purpose !== 'demand' && purpose !== 'recovery')
-        ) {
-          throw new Error('Invalid backend connection request.')
-        }
-        const { sender, senderFrame } = event
-        if (!senderFrame || senderFrame !== sender.mainFrame || !trustsBackendRenderer(sender)) {
-          throw new Error('This document cannot connect to Orca.')
-        }
+        const admitted = admitBackendPortRequest(event, token, purpose)
+        const { sender, senderFrame, role } = admitted
         const document = trackBackendDocument(
           this.documents,
           sender,
           senderFrame,
-          token,
-          (retiredToken) => this.child?.postMessage({ type: 'retire', token: retiredToken })
+          { token: admitted.token, role },
+          (id) => this.child?.postMessage({ type: 'retire', document: id })
         )
         if (!this.desiredRunning) {
           throw new Error('Orca is shutting down.')
         }
-        const ready = purpose === 'recovery' ? this.ready : this.ensureReady(true)
+        const ready = admitted.purpose === 'recovery' ? this.ready : this.ensureReady(true)
         const child = this.child
         if (!ready) {
           throw new Error('Usage is unavailable. Try refreshing the usage view.')
         }
         await ready
+        const incarnation = this.incarnation
         if (
           this.documents.get(sender.id) !== document ||
           !this.desiredRunning ||
           !child ||
           this.child !== child ||
+          !incarnation ||
           sender.isDestroyed() ||
           sender.mainFrame !== senderFrame
         ) {
           throw new Error('The document was replaced before Orca connected.')
         }
-        const { port1, port2 } = new MessageChannelMain()
-        child.postMessage({ type: 'client', token: document.token }, [port1])
-        senderFrame.postMessage(BACKEND_PORT_DELIVERY, { token: document.token }, [port2])
+        deliverBackendDocumentPort(child, document, incarnation)
         return document.token
       }
     )
@@ -97,19 +89,22 @@ export class BackendSupervisor {
 
   automationClient(provider: 'claudeUsage' | 'codexUsage'): AutomationUsageClient {
     return {
-      getAutomationRunUsage: async (input) => {
-        const ready = this.ensureReady(true)
-        const control = this.control
-        await ready
-        if (!this.desiredRunning || !control || this.control !== control) {
-          throw new Error('Usage disconnected. Try again after it reconnects.')
-        }
+      getAutomationRunUsage: async (input) =>
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private usage service returns its typed automation result for this provider method.
-        return (await control.call(`${provider}:getAutomationRunUsage`, input)) as Awaited<
+        (await this.callControl(`${provider}:getAutomationRunUsage`, input)) as Awaited<
           ReturnType<AutomationUsageClient['getAutomationRunUsage']>
         >
-      }
     }
+  }
+
+  async callControl(method: string, params: unknown): Promise<unknown> {
+    const ready = this.ensureReady(true)
+    const control = this.control
+    await ready
+    if (!this.desiredRunning || !control || this.control !== control) {
+      throw new Error('Usage disconnected. Try again after it reconnects.')
+    }
+    return control.call(method, params)
   }
 
   stop(): Promise<void> {
@@ -207,6 +202,7 @@ export class BackendSupervisor {
             const control = this.control
             this.child = null
             this.control = null
+            this.incarnation = undefined
             this.ready = null
             this.disposeFailedStartup = undefined
             clearTimeout(startupDeadline)
@@ -232,9 +228,11 @@ export class BackendSupervisor {
           if (
             message.type === 'ready' &&
             message.protocol === 1 &&
-            message.capabilities?.includes('usage')
+            message.capabilities?.includes('usage') &&
+            typeof message.incarnation === 'string'
           ) {
             incarnation = message.incarnation
+            this.incarnation = incarnation
             settled = true
             clearTimeout(startupDeadline)
             resolve()
@@ -273,6 +271,7 @@ export class BackendSupervisor {
         this.control?.close()
         this.control = null
         this.child = null
+        this.incarnation = undefined
         this.ready = null
         this.disposeFailedStartup = undefined
         if (this.desiredRunning) {
@@ -297,7 +296,7 @@ export class BackendSupervisor {
       }
       settleExit()
     })
-    child.postMessage({ type: 'bootstrap', config: capturedBootstrap }, [port2])
+    sendBackendBootstrap(child, port2, () => this.child === child)
     return ready
   }
 }

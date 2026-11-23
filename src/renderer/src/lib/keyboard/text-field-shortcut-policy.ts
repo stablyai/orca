@@ -1,6 +1,10 @@
 import { keybindingRunsInTextField } from '../../../../shared/keybindings/matching'
 import type { KeybindingActionId } from '../../../../shared/keybindings/types'
-import { isEditableTarget, isNativeChatPromptTarget } from '../text-input/focus/editable-target'
+import {
+  isEditableTarget,
+  isNativeChatPaneTarget,
+  isNativeChatPromptTarget
+} from '../text-input/focus/editable-target'
 import { getShortcutPlatform } from './shortcut-platform'
 import {
   nativeChatPromptClaimsShortcut,
@@ -90,7 +94,12 @@ export function textFieldClaimsActionKey(
   actionId?: KeybindingActionId
 ): boolean {
   if (isNativeChatPromptTarget(event.target)) {
-    return nativeChatPromptClaimsShortcut(event, getShortcutPlatform(), actionId)
+    return nativeChatPromptClaimsShortcut(
+      event,
+      getShortcutPlatform(),
+      actionId,
+      isNativeChatPaneTarget(event.target)
+    )
   }
   if (!fileSearchClaimsTextKey(event)) {
     return false

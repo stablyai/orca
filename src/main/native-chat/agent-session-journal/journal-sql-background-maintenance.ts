@@ -13,7 +13,7 @@ const STORED_OUTPUT_PAGES_PER_TICK = JOURNAL_STORED_OUTPUT_WRITES ? 256 : 0
 
 /** Idle conversion and periodic pruning share one owner; activity never blocks retired cleanup. */
 export class JournalSqlBackgroundMaintenance {
-  private readonly stopped = new AbortController()
+  readonly stopped = new AbortController()
   private running: Promise<void> | undefined
   private discover = false
   private sweep = false
@@ -28,11 +28,13 @@ export class JournalSqlBackgroundMaintenance {
   constructor(
     private readonly writer: Pick<JournalSqlOwner, 'maintain'>,
     private readonly readers: Pick<JournalSqlReaderPool, 'database'>,
-    private readonly conversions: Pick<JournalSqlConversions, 'ensure'>,
+    private readonly conversions: Pick<JournalSqlConversions, 'ensure' | 'compareLegacyChats'>,
     private readonly activity: JournalSqlActivity,
     private readonly onError: (error: unknown, sessionId?: string) => void,
     private readonly onTick?: () => void
   ) {}
+
+  legacy?: { run(): Promise<void> }
 
   start(): Promise<void> {
     if (this.stopped.signal.aborted) {
@@ -93,7 +95,7 @@ export class JournalSqlBackgroundMaintenance {
     await this.running
   }
 
-  private async boundary(): Promise<boolean> {
+  async boundary(): Promise<boolean> {
     while (!this.stopped.signal.aborted) {
       await this.runOrdinaryWork()
       if (this.periodic) {
@@ -110,10 +112,11 @@ export class JournalSqlBackgroundMaintenance {
 
   private async run(): Promise<void> {
     while (!this.stopped.signal.aborted && (this.discover || this.sweep || this.periodic)) {
-      await this.runOrdinaryWork()
+      await this.runOrdinaryWork().then(() => this.legacy?.run())
       if (this.discover) {
         this.discover = false
         try {
+          await this.conversions.compareLegacyChats(() => this.boundary())
           await this.convertSavedChats()
         } catch (error) {
           this.report(error)
@@ -245,7 +248,7 @@ export class JournalSqlBackgroundMaintenance {
     }
   }
 
-  private async rest(started: number): Promise<void> {
+  async rest(started: number): Promise<void> {
     this.work += performance.now() - started
     if (this.work >= 25) {
       try {
@@ -274,7 +277,7 @@ export class JournalSqlBackgroundMaintenance {
           return
         }
         try {
-          await this.convertSavedChat(sessionId)
+          await this.serviceWhile(this.conversions.ensure(sessionId, false))
         } catch (error) {
           this.report(error, sessionId)
         }
@@ -283,16 +286,11 @@ export class JournalSqlBackgroundMaintenance {
     }
   }
 
-  private async convertSavedChat(sessionId: string): Promise<void> {
+  async serviceWhile<T>(work: Promise<T>): Promise<T> {
     let complete = false
-    const conversion = this.conversions.ensure(sessionId, false).then(
-      () => {
-        complete = true
-      },
-      (error) => {
-        complete = true
-        this.report(error, sessionId)
-      }
+    const settled = work.then(
+      () => (complete = true),
+      () => (complete = true)
     )
     while (!complete && !this.stopped.signal.aborted) {
       await this.runOrdinaryWork()
@@ -306,11 +304,12 @@ export class JournalSqlBackgroundMaintenance {
         signal.addEventListener('abort', ready, { once: true })
       })
       try {
-        await Promise.race([conversion, wake])
+        await Promise.race([settled, wake])
       } finally {
         signal.removeEventListener('abort', ready)
       }
     }
+    return complete ? work : Promise.reject(new Error('journal maintenance stopped'))
   }
 
   private report(error: unknown, sessionId?: string): void {

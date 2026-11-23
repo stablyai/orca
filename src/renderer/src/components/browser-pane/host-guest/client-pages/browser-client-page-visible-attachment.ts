@@ -1,4 +1,5 @@
 import { registerWebviewDragPassthroughSurface } from '../drag/webview-drag-passthrough'
+import { retainWebviewDragListeners } from '../webview-registry'
 import { registerBrowserClientPagePositionSync } from '../viewport/browser-client-page-position-driver'
 import { syncBrowserClientPagePaintRetention } from './browser-client-page-paint-retention'
 import type { BrowserClientPageRendererIdentity as RendererPageIdentity } from '../../../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
@@ -23,6 +24,24 @@ export function findBrowserClientRetainedPageForAttachment(
     }
   }
   return undefined
+}
+
+// Why newest: a profile switch keeps the old generation attached until its retire arrives.
+export function findNewestAttachedBrowserClientRetainedPage(
+  pages: Map<string, RetainedPage>,
+  browserPageId: string
+): RetainedPage | null {
+  let newest: RetainedPage | null = null
+  for (const page of pages.values()) {
+    if (
+      page.status === 'attached' &&
+      page.identity.browserPageId === browserPageId &&
+      (!newest || page.identity.pageHostGeneration > newest.identity.pageHostGeneration)
+    ) {
+      newest = page
+    }
+  }
+  return newest
 }
 
 export function attachBrowserClientRetainedPage(
@@ -80,7 +99,14 @@ export function attachBrowserClientRetainedPage(
 
 /** Register the body-level host for drag passthrough; hidden creation and derived show state also cover enrollment mid-drag. */
 export function enrolRetainedHostDragPassthrough(page: RetainedPage): () => void {
-  return registerWebviewDragPassthroughSurface(() => syncBrowserClientPagePaintRetention(page))
+  const releaseSurface = registerWebviewDragPassthroughSurface(() =>
+    syncBrowserClientPagePaintRetention(page)
+  )
+  const releaseListeners = retainWebviewDragListeners()
+  return () => {
+    releaseSurface()
+    releaseListeners()
+  }
 }
 
 function showRetainedHost(page: RetainedPage, container: HTMLElement): () => void {

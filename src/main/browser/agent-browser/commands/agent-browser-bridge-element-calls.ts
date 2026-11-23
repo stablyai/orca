@@ -4,9 +4,17 @@ import type { CapturedElement } from '../../cdp/commands/cdp-element-capture'
 import { assertExpectedPageUrlForStep } from '../../cdp/input/browser-expected-page-url'
 import { sendGuestCdpCommand } from '../../cdp/debugger/guest-cdp-command'
 import { readRecord, readString } from '../../cdp/input/guest-frame-input-sessions'
+import { isEmbeddedGuest } from '../../cdp/input/guest-direct-key-input'
 import { AgentBrowserBridgeExecution } from '../helper-process/agent-browser-bridge-execution'
 
 export type CapturedTarget = { wc: WebContents; captured: CapturedElement }
+
+type ElementFunctionOptions = {
+  args?: unknown[]
+  userGesture?: boolean
+  /** The function focuses its element, which must wait out the user's IME composition. */
+  movesFocus?: boolean
+}
 
 export abstract class AgentBrowserBridgeElementCalls extends AgentBrowserBridgeExecution {
   /** Runs a browser-element-functions action on the element the helper resolves, in its own frame. */
@@ -15,7 +23,7 @@ export abstract class AgentBrowserBridgeElementCalls extends AgentBrowserBridgeE
     element: string,
     action: string,
     functionDeclaration: string,
-    args: unknown[] = []
+    options: ElementFunctionOptions = {}
   ): Promise<unknown> {
     const target = await this.captureElement(sessionName, element)
     return await this.callElementFunction(
@@ -24,9 +32,7 @@ export abstract class AgentBrowserBridgeElementCalls extends AgentBrowserBridgeE
       element,
       action,
       functionDeclaration,
-      {
-        args
-      }
+      options
     )
   }
 
@@ -62,21 +68,31 @@ export abstract class AgentBrowserBridgeElementCalls extends AgentBrowserBridgeE
     element: string,
     action: string,
     functionDeclaration: string,
-    { args = [], userGesture = false }: { args?: unknown[]; userGesture?: boolean } = {}
+    { args = [], userGesture = false, movesFocus = false }: ElementFunctionOptions = {}
   ): Promise<unknown> {
-    const response = await this.sendElementCdpCommand(
-      sessionName,
-      wc,
-      'Runtime.callFunctionOn',
-      {
-        objectId: captured.objectId,
-        functionDeclaration,
-        arguments: args.map((value) => ({ value })),
-        returnByValue: true,
-        ...(userGesture ? { userGesture } : {})
-      },
-      captured.sessionId
-    )
+    // A guest focus move discards the window's macOS IME composition (Chromium 150), as a press does.
+    const release =
+      movesFocus && isEmbeddedGuest(wc)
+        ? await this.browserManager.guardUserFocusForAgentInput(wc.id)
+        : null
+    let response: unknown
+    try {
+      response = await this.sendElementCdpCommand(
+        sessionName,
+        wc,
+        'Runtime.callFunctionOn',
+        {
+          objectId: captured.objectId,
+          functionDeclaration,
+          arguments: args.map((value) => ({ value })),
+          returnByValue: true,
+          ...(userGesture ? { userGesture } : {})
+        },
+        captured.sessionId
+      )
+    } finally {
+      release?.()
+    }
     const exception = readRecord(response, 'exceptionDetails')
     if (exception) {
       const description = readString(readRecord(exception, 'exception'), 'description')

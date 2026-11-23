@@ -12,7 +12,7 @@ import { translate } from '@/i18n/i18n'
 import { overlayPendingOnTaskPagePages } from '@/components/task-page/github/mutations/task-page-github-work-item-mutation-pages'
 import { scopeGitHubTaskSearch } from '../../../../../../shared/work-items/task-github-search'
 import { useGitHubTaskSearchCommit } from '@/components/task-page/github/listing/use-github-task-search-commit'
-import { getTaskPageRepoSourceContext } from '../../../../lib/work-items/task-repo-source-context'
+import { getTaskPageGitHubRepoArgs } from '@/components/task-page/task-page-source-context'
 export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProjectionModel) {
   const {
     setTaskResumeState,
@@ -39,7 +39,8 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
     setProvenPageLimit,
     countedTotalPagesRef,
     fetchWorkItemsNextPage,
-    activeGithubTaskKind
+    activeGithubTaskKind,
+    unreachableTaskSourceHostIds
   } = model
   // Why: load only the clicked page so a high-page jump doesn't exhaust GitHub's Search API rate bucket.
   const handleLoadNextPage = useCallback(
@@ -48,12 +49,7 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
         return
       }
       const q = stripRepoQualifiers(appliedTaskSearch.trim())
-      const repoArgs = selectedRepos.map((r) => ({
-        repoId: r.id,
-        path: r.path,
-        executionHostId: r.executionHostId,
-        sourceContext: getTaskPageRepoSourceContext(r, 'github')
-      }))
+      const repoArgs = getTaskPageGitHubRepoArgs(selectedRepos, unreachableTaskSourceHostIds)
       const requestGeneration = paginationGenerationRef.current
       const target = targetPage ?? currentPage + 1
       setPaginationLoading(true)
@@ -158,6 +154,7 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
     [
       paginationLoading,
       selectedRepos,
+      unreachableTaskSourceHostIds,
       currentPage,
       appliedTaskSearch,
       fetchWorkItemsNextPage,

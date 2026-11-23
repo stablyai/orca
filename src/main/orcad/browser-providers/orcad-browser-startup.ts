@@ -11,6 +11,7 @@ import {
   type OrcadBrowserProviderOptions
 } from './orcad-browser-provider'
 import { orcadClientPageCommand } from './orcad-client-page-commands'
+import { explainMissingEngineTab } from './orcad-hidden-engine-refusal'
 
 /** Discover browsers asynchronously so authorization UI cannot block core RPC readiness. */
 export function startOrcadBrowserProvider(options: OrcadBrowserProviderOptions): {
@@ -35,8 +36,8 @@ export function startOrcadBrowserProvider(options: OrcadBrowserProviderOptions):
             if (!engineAvailable() || !provider) {
               throw browserUnavailableError()
             }
-            commands ??= provider.factory(host)
-            return callBrowserCommand(commands, name, args)
+            const engine = (commands ??= provider.factory(host))
+            return explainMissingEngineTab(host, () => callBrowserCommand(engine, name, args))
           }
           return (
             orcadClientPageCommand(host, property, forward, engineAvailable) ??
@@ -47,6 +48,7 @@ export function startOrcadBrowserProvider(options: OrcadBrowserProviderOptions):
     },
     {
       supportsGoogleCookieClear: () => provider?.supportsGoogleCookieClear?.() === true,
+      identity: () => provider?.identity?.() ?? null,
       headless: true,
       clientHostingWithoutEngine: true,
       isAvailable: engineAvailable

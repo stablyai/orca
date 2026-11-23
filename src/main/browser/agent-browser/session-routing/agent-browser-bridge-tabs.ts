@@ -5,12 +5,11 @@ import type {
 import { BrowserError } from '../../browser-error'
 import type { ResolvedBrowserCommandTarget } from './agent-browser-command-target'
 import { AgentBrowserBridgeState } from './agent-browser-bridge-state'
-import { isAgentRpcCaller } from '../../../runtime/rpc/callers/rpc-caller-identity'
-import { getActiveRpcCaller } from '../../../runtime/rpc/callers/active-call'
+import { activeRpcBrowserPagePicker, personPickWaits } from './person-pick-hold'
 
 export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
   setActiveTab(webContentsId: number, worktreeId?: string): void {
-    if (isAgentRpcCaller(getActiveRpcCaller())) {
+    if (activeRpcBrowserPagePicker() === 'agent') {
       this.pointAgentAt(webContentsId, worktreeId)
     } else {
       this.selectForPerson(webContentsId, worktreeId)
@@ -50,12 +49,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
       return
     }
     for (const key of routingKeys(worktreeId)) {
-      const current = this.routedPage(key)
-      if (
-        current !== null &&
-        current !== browserPageId &&
-        this.browserManager.isAgentUsingPage(current)
-      ) {
+      if (personPickWaits(this.routedPage(key), browserPageId, this.isAgentUsingPage)) {
         this.setHeldPersonSelection(key, browserPageId)
       } else {
         this.setRoutedPageId(key, browserPageId)
@@ -67,10 +61,9 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
   protected applyHeldPersonSelections(worktreeId?: string): void {
     for (const key of routingKeys(worktreeId)) {
       const held = this.heldPersonSelections.get(key)
-      const current = this.routedPage(key)
       if (
         held === undefined ||
-        (current !== null && this.browserManager.isAgentUsingPage(current))
+        personPickWaits(this.routedPage(key), held, this.isAgentUsingPage)
       ) {
         continue
       }
@@ -78,6 +71,9 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
       this.setRoutedPageId(key, held)
     }
   }
+
+  readonly isAgentUsingPage = (browserPageId: string): boolean =>
+    this.browserManager.isAgentUsingPage(browserPageId)
 
   private routedPage(key: string | undefined): string | null {
     return key === undefined ? this.routedPageId : (this.routedPagePerWorktree.get(key) ?? null)
@@ -135,6 +131,17 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     browserPageId: string
   ): { loading: boolean; canGoBack: boolean; canGoForward: boolean } | null {
     return this.browserManager.getBrowserPageNavigationState(browserPageId)
+  }
+  /** A server page's sound and agent flags, which its session row carries only when set. */
+  getPageRowFields(browserPageId: string): {
+    audible?: true
+    audioMuted?: true
+    agentDriving?: true
+  } {
+    return {
+      ...this.browserManager.getBrowserPageAudioRowFields(browserPageId),
+      ...(this.isAgentUsingPage(browserPageId) && { agentDriving: true as const })
+    }
   }
   onTabChanged(webContentsId: number, worktreeId?: string): void {
     this.selectForPerson(webContentsId, worktreeId)

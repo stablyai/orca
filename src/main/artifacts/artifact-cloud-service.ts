@@ -26,6 +26,8 @@ import {
 import { artifactRequest, artifactWriteBody } from './artifact-cloud-request'
 import { ArtifactPublisher } from './artifact-publisher'
 import { OrcaCloudRequestError } from '../orca-profiles/cloud-auth/profile-cloud-client'
+import { isTeamFeatureBlocked } from '../orca-profiles/cloud-auth/active-team-capabilities'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../shared/orca-profiles/orca-cloud-team-policy'
 
 import {
   type ArtifactAuthContext,
@@ -82,21 +84,22 @@ export class ArtifactCloudService {
     request: ArtifactCloudOptions & { sourceKey: string }
   ): Promise<ArtifactCloudOperation<ArtifactPublishedLink | null>> {
     return this.withAuth(request, async (_token, _apiUrl, auth) => {
-      const record = getArtifactShareRecord(
+      const record = await getArtifactShareRecord(
         auth.profileId,
         this.userDataPath,
         request.sourceKey,
         auth.scope
       )
+      // The read waited on the disk; a sign-out meanwhile must not hand back its link.
+      auth.assertCurrent()
       return record ? { shareUrl: record.shareUrl } : null
     })
   }
 
   // Keep gate failures asynchronous for callers’ promise chains.
   async share(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
-    assertArtifactSharingAllowed(this.isSharingEnabled)
     const idempotencyKey = randomUUID()
-    return this.withAuth(request, (token, apiUrl, auth) =>
+    return this.withSharingAuth(request, (token, apiUrl, auth) =>
       this.publisher.share(request, token, apiUrl, auth, idempotencyKey)
     )
   }
@@ -104,19 +107,17 @@ export class ArtifactCloudService {
   async publish(
     request: ArtifactWriteRequest
   ): Promise<ArtifactCloudOperation<ArtifactPublishResult>> {
-    assertArtifactSharingAllowed(this.isSharingEnabled)
     const idempotencyKey = randomUUID()
-    return this.withAuth(request, (token, apiUrl, auth) =>
+    return this.withSharingAuth(request, (token, apiUrl, auth) =>
       this.publisher.publish(request, token, apiUrl, auth, idempotencyKey)
     )
   }
 
   async update(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
-    assertArtifactSharingAllowed(this.isSharingEnabled)
-    return this.withAuth(request, (token, apiUrl, auth) =>
+    return this.withSharingAuth(request, (token, apiUrl, auth) =>
       this.publisher.runForSource(request.sourceKey, auth, async () => {
         auth.assertCurrent()
-        const record = getArtifactShareRecord(
+        const record = await getArtifactShareRecord(
           auth.profileId,
           this.userDataPath,
           request.sourceKey,
@@ -126,7 +127,7 @@ export class ArtifactCloudService {
           throw new Error('This file has not been shared from the active Orca profile.')
         }
         return this.publisher.runForSlug(record.slug, auth, async () => {
-          auth.assertCurrent()
+          auth.assertCanSend()
           const response = await artifactRequest<ArtifactListItem>(
             apiUrl,
             token,
@@ -138,14 +139,14 @@ export class ArtifactCloudService {
               rateLimitReplay: auth.rateLimitReplay
             }
           )
-          auth.assertCurrent()
-          refreshArtifactShareRecordExpiration(
+          await refreshArtifactShareRecordExpiration(
             auth.profileId,
             this.userDataPath,
             request.sourceKey,
             auth.scope,
             record,
-            response.artifact.expiresAt
+            response.artifact.expiresAt,
+            auth.assertCurrent
           )
           return response
         })
@@ -159,7 +160,7 @@ export class ArtifactCloudService {
     return this.withAuth(request, (token, apiUrl, auth) =>
       this.publisher.runForSource(request.sourceKey, auth, async () => {
         auth.assertCurrent()
-        const record = getArtifactShareRecord(
+        const record = await getArtifactShareRecord(
           auth.profileId,
           this.userDataPath,
           request.sourceKey,
@@ -169,13 +170,15 @@ export class ArtifactCloudService {
           throw new Error('This file has not been shared from the active Orca profile.')
         }
         return this.publisher.runForSlug(record.slug, auth, async () => {
-          auth.assertCurrent()
+          auth.assertCanSend()
           await deleteArtifactRequest(apiUrl, token, `/${record.slug}`, auth, record.editToken)
-          auth.assertCurrent()
-          removeArtifactShareRecords(auth.profileId, this.userDataPath, auth.scope, {
-            sourceKey: request.sourceKey,
-            slug: record.slug
-          })
+          await removeArtifactShareRecords(
+            auth.profileId,
+            this.userDataPath,
+            auth.scope,
+            { sourceKey: request.sourceKey, slug: record.slug },
+            auth.assertCurrent
+          )
         })
       })
     )
@@ -184,12 +187,34 @@ export class ArtifactCloudService {
   delete(id: string, options: ArtifactCloudOptions): Promise<ArtifactCloudOperation<void>> {
     return this.withAuth(options, (token, apiUrl, auth) =>
       this.publisher.runForSlug(id, auth, async () => {
-        auth.assertCurrent()
+        auth.assertCanSend()
         await deleteArtifactRequest(apiUrl, token, `/${encodeURIComponent(id)}`, auth)
-        auth.assertCurrent()
-        removeArtifactShareRecords(auth.profileId, this.userDataPath, auth.scope, { slug: id })
+        await removeArtifactShareRecords(
+          auth.profileId,
+          this.userDataPath,
+          auth.scope,
+          { slug: id },
+          auth.assertCurrent
+        )
       })
     )
+  }
+
+  private async withSharingAuth<T>(
+    options: ArtifactCloudOptions,
+    operation: (token: string, apiUrl: string, auth: ArtifactAuthContext) => Promise<T>
+  ): Promise<ArtifactCloudOperation<T>> {
+    const assertAllowed = (): void => {
+      if (isTeamFeatureBlocked(ORCA_CLOUD_TEAM_POLICY_FLAGS.artifactSharing)) {
+        throw new Error('Artifact sharing is turned off by your team.')
+      }
+      assertArtifactSharingAllowed(this.isSharingEnabled)
+    }
+    assertAllowed()
+    return this.withAuth(options, (token, apiUrl, auth) => {
+      assertAllowed()
+      return operation(token, apiUrl, auth)
+    })
   }
 
   private async withAuth<T>(

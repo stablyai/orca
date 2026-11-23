@@ -1,8 +1,8 @@
+import { settlePaneShellForeground } from './pane-agent-shell-lifecycle'
 import { agentTypeToIconAgent } from '../../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
-import { isRetainedProgramResult } from '@/lib/program-status/row'
+import { isRetainedProgramResult } from '../../../../../../shared/program-status/program-status-row'
 import { useAppStore } from '@/store/index'
-import { CONFIRMED_SHELL_MODE_RESET } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {
   isLocalNativeWindowsConpty,
   resolveWindowsShellOverride
@@ -156,38 +156,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     onAgentProcessRead: (process) =>
       session.agentCompletionCoordinator?.observeForegroundAgentProcess(process),
     hasKnownAgentIdentity: session.paneHasKnownAgentIdentity,
-    onConfirmedShellForeground: (reason) => {
-      // Retire stale agent occupancy when a normal exit returns to the shell.
-      const state = useAppStore.getState()
-      const sleepingRecord = session.getSleepingRecordForPane(state)
-      const ptyId = session.transport.getPtyId()
-      const wake = session.hibernatedWakeTarget
-      // A delayed shell read can settle after exit consumes suppression; preserve only that PTY's exact wake record.
-      const isHibernationWakeRecord =
-        (ptyId && state.suppressedPtyExitIds[ptyId]) ||
-        (wake && wake.record === sleepingRecord?.record && (ptyId === null || wake.ptyId === ptyId))
-      if (sleepingRecord && !isHibernationWakeRecord) {
-        session.clearSleepingRecordProviderDuplicates(state, sleepingRecord)
-      }
-      session.clearStaleAgentTabTitleOnConfirmedShell()
-      // Confirmed hard-kill exit must disarm leftover mouse/focus/Kitty modes; guard reset auto-replies from reaching the shell.
-      session.writeInputModeGround(CONFIRMED_SHELL_MODE_RESET)
-      // Agents that leave their OSC title (grok, codex) never trip the title exit; Orca's own hibernation stop keeps its chat.
-      if (!isHibernationWakeRecord) {
-        session.deps.onAgentExitedRef.current(session.pane.leafId)
-      }
-      // Why: no 133;D backs these proofs, so a deferred command-finished drop keeps its own read.
-      if (reason === 'process-exit') {
-        // Why: reopen the one-shot visible sample so the next agent typed here is identified.
-        session.visibleForegroundSamplePending = false
-        session.visibleForegroundSampleSettled = false
-      }
-      if (reason === 'visible-pty' || reason === 'process-exit') {
-        state.clearAgentLaunchConfig(session.cacheKey)
-        return
-      }
-      session.settleDeferredCommandFinishedStatusDrop({ confirmedShell: true })
-    },
+    onConfirmedShellForeground: (reason) => settlePaneShellForeground(session, reason),
     // Wrap callbacks so caller arguments cannot become options that reconcile an unproven exit.
     onCommandFinishedUnavailable: () => session.settleDeferredCommandFinishedStatusDrop(),
     onVisibleForegroundSettled: (outcome) => {

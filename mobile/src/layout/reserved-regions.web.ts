@@ -13,3 +13,8 @@ export function useReservedRegions() {
   const { occlusions } = usePageGeometry()
   return useMemo(() => ({ divisions: [], occlusions }), [occlusions])
 }
+
+/** The native shell has already kept only the occlusions a header may share. */
+export function useTopChromeOcclusions() {
+  return usePageGeometry().occlusions
+}

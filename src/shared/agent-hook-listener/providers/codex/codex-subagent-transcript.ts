@@ -1,14 +1,23 @@
-import { basename, dirname, extname, isAbsolute, join } from 'node:path'
+import { readJsonlCursor, readTranscriptDirectory } from './codex-rollout-jsonl-cursor'
+import { record, type JsonlCursor, type JsonRecord } from './codex-rollout-jsonl-format'
+import {
+  markParentReadDeferred,
+  rolloutCursorReadDeferred,
+  rolloutReadsPrefetched
+} from './codex-rollout-prefetch-scope'
 
 import {
-  readJsonlCursor,
-  readTranscriptDirectory,
-  record,
-  type JsonlCursor,
-  type JsonRecord
-} from './codex-rollout-jsonl-cursor'
-
-import { reconcileCodexTranscriptTurn, type CodexTranscriptTurn } from './codex-turn-transcript'
+  childIsComplete,
+  readChildModel,
+  readTurnEnd,
+  reconcileCodexTranscriptTurn,
+  type CodexTranscriptTurn
+} from './codex-turn-transcript'
+import {
+  normalizedTranscriptPath,
+  resolveChildTranscript,
+  SAFE_THREAD_ID
+} from './codex-rollout-paths'
 
 import { isCodexStatusTranscriptLine } from './codex-status-transcript-line'
 
@@ -27,9 +36,8 @@ import {
 // Why: retire a child whose rollout stays unreadable this long, else a deleted/never-written file pins a phantom row forever.
 const CHILD_UNREADABLE_GRACE_MS = 60_000
 const MAX_TRACKED_TURN_ENDS = 16
-const SAFE_THREAD_ID = /^[A-Za-z0-9-]{1,64}$/
 
-type TrackedTranscriptSubagent = JsonlCursor & {
+export type TrackedTranscriptSubagent = JsonlCursor & {
   description?: string
   /** Retain the child’s own model across incremental reads; turn_context appears once per turn. */
   model?: string
@@ -48,59 +56,6 @@ export type CodexSubagentTranscriptState = {
   reviewersByPath: Map<string, CodexApprovalsReviewer>
   /** Who resolves this turn's approvals in the parent rollout. */
   approvalsReviewer?: CodexApprovalsReviewer
-}
-
-// Why: Codex files each rollout under its OWN local start date, so a session running past midnight spawns children into a sibling day directory.
-function childDayDirectory(parentPath: string, startedAt: number): string | undefined {
-  const dayDir = dirname(parentPath)
-  const monthDir = dirname(dayDir)
-  const yearDir = dirname(monthDir)
-  if (
-    !/^\d{2}$/.test(basename(dayDir)) ||
-    !/^\d{2}$/.test(basename(monthDir)) ||
-    !/^\d{4}$/.test(basename(yearDir)) ||
-    !Number.isFinite(startedAt)
-  ) {
-    return undefined
-  }
-  const startedOn = new Date(startedAt)
-  if (Number.isNaN(startedOn.getTime())) {
-    return undefined
-  }
-  const pad = (value: number): string => String(value).padStart(2, '0')
-  return join(
-    dirname(yearDir),
-    String(startedOn.getFullYear()).padStart(4, '0'),
-    pad(startedOn.getMonth() + 1),
-    pad(startedOn.getDate())
-  )
-}
-
-function resolveChildTranscript(
-  parentPath: string,
-  threadId: string,
-  startedAt: number,
-  entriesByDirectory: Map<string, string[]>
-): string | undefined {
-  if (!SAFE_THREAD_ID.test(threadId)) {
-    return undefined
-  }
-  const suffix = `-${threadId}.jsonl`
-  const parentDir = dirname(parentPath)
-  const childDir = childDayDirectory(parentPath, startedAt)
-  const directories = childDir && childDir !== parentDir ? [parentDir, childDir] : [parentDir]
-  for (const directory of directories) {
-    let entries = entriesByDirectory.get(directory)
-    if (!entries) {
-      entries = readTranscriptDirectory(directory)
-      entriesByDirectory.set(directory, entries)
-    }
-    const fileName = entries.find((entry) => entry.endsWith(suffix))
-    if (fileName) {
-      return join(directory, fileName)
-    }
-  }
-  return undefined
 }
 
 function readActivity(recordValue: JsonRecord):
@@ -139,59 +94,6 @@ function readActivity(recordValue: JsonRecord):
   }
 }
 
-/** Read model from child turn_context; it may differ from the parent’s. */
-function readChildModel(records: JsonRecord[]): string | undefined {
-  let model: string | undefined
-  for (const recordValue of records) {
-    if (recordValue.type !== 'turn_context') {
-      continue
-    }
-    const payload = record(recordValue.payload)
-    const value = typeof payload?.model === 'string' ? payload.model.trim() : ''
-    if (value) {
-      model = value
-    }
-  }
-  return model
-}
-
-function normalizedTranscriptPath(transcriptPath: string | undefined): string | undefined {
-  const normalizedPath = transcriptPath?.trim()
-  return normalizedPath && isAbsolute(normalizedPath) && extname(normalizedPath) === '.jsonl'
-    ? normalizedPath
-    : undefined
-}
-
-function readTurnEnd(
-  recordValue: JsonRecord
-): { turnId: string; end: 'completed' | 'failed' } | undefined {
-  if (recordValue.type !== 'event_msg') {
-    return undefined
-  }
-  const payload = record(recordValue.payload)
-  const turnId = typeof payload?.turn_id === 'string' ? payload.turn_id.trim() : ''
-  if ((payload?.type !== 'task_complete' && payload?.type !== 'turn_complete') || !turnId) {
-    return undefined
-  }
-  return { turnId, end: payload.error == null ? 'completed' : 'failed' }
-}
-
-function childIsComplete(records: JsonRecord[]): boolean {
-  let complete = false
-  for (const recordValue of records) {
-    if (recordValue.type !== 'event_msg') {
-      continue
-    }
-    const payload = record(recordValue.payload)
-    if (payload?.type === 'task_started') {
-      complete = false
-    } else if (payload?.type === 'task_complete') {
-      complete = true
-    }
-  }
-  return complete
-}
-
 export function createCodexSubagentTranscriptState(): CodexSubagentTranscriptState {
   return {
     parent: { offset: 0, carry: '' },
@@ -216,32 +118,39 @@ export function hasTrackedCodexTranscriptSubagents(
   return Boolean(state && state.subagents.size > 0)
 }
 
-export function reconcileCodexSubagentTranscript(
+/** Resets per-session state when the parent rollout changes; undefined for an unusable path. */
+function beginCodexTranscriptReconcile(
   state: CodexSubagentTranscriptState,
   roster: CodexSubagentRoster,
   transcriptPath: string | undefined
-): boolean {
+): { path: string; changed: boolean } | undefined {
   const normalizedPath = normalizedTranscriptPath(transcriptPath)
   if (!normalizedPath) {
-    return false
+    return undefined
   }
-  let changed = false
-  if (state.parent.filePath !== normalizedPath) {
-    for (const id of state.subagents.keys()) {
-      finishCodexSubagent(roster, id)
-    }
-    changed = true
-    state.parent = { filePath: normalizedPath, offset: 0, carry: '' }
-    state.rootTurn = { interrupted: false }
-    state.turnEnds.clear()
-    state.subagents.clear()
-    state.reviewerCursorsByPath.clear()
-    state.reviewersByPath.clear()
-    // Why: a different rollout is a different session, so its predecessor's reviewer is void.
-    state.approvalsReviewer = undefined
+  if (state.parent.filePath === normalizedPath) {
+    return { path: normalizedPath, changed: false }
   }
-  const parentRecords = readJsonlCursor(state.parent, isCodexStatusTranscriptLine)
-  changed ||=
+  for (const id of state.subagents.keys()) {
+    finishCodexSubagent(roster, id)
+  }
+  state.parent = { filePath: normalizedPath, offset: 0, carry: '' }
+  state.rootTurn = { interrupted: false }
+  state.turnEnds.clear()
+  state.subagents.clear()
+  state.reviewerCursorsByPath.clear()
+  state.reviewersByPath.clear()
+  // Why: a different rollout is a different session, so its predecessor's reviewer is void.
+  state.approvalsReviewer = undefined
+  return { path: normalizedPath, changed: true }
+}
+
+export function applyCodexParentTranscript(
+  state: CodexSubagentTranscriptState,
+  roster: CodexSubagentRoster,
+  parentRecords: JsonRecord[] | undefined
+): boolean {
+  const changed =
     Boolean(parentRecords?.length) ||
     (parentRecords === undefined && state.approvalsReviewer !== undefined)
   reconcileCodexTranscriptTurn(state.rootTurn, parentRecords ?? [])
@@ -290,18 +199,27 @@ export function reconcileCodexSubagentTranscript(
       tracked.startedAt
     )
   }
-  const entriesByDirectory = new Map<string, string[]>()
+  return changed
+}
+
+/** `deferred` skips a child whose rollout was not read this pass. */
+type ChildTranscriptReader = (
+  id: string,
+  tracked: TrackedTranscriptSubagent
+) => JsonRecord[] | undefined | 'deferred'
+
+export function applyCodexChildTranscripts(
+  state: CodexSubagentTranscriptState,
+  roster: CodexSubagentRoster,
+  readChild: ChildTranscriptReader
+): boolean {
+  let changed = false
   const now = Date.now()
   for (const [id, tracked] of state.subagents) {
-    if (!tracked.filePath) {
-      tracked.filePath = resolveChildTranscript(
-        normalizedPath,
-        id,
-        tracked.startedAt,
-        entriesByDirectory
-      )
+    const records = readChild(id, tracked)
+    if (records === 'deferred') {
+      continue
     }
-    const records = readJsonlCursor(tracked, isCodexStatusTranscriptLine)
     changed ||= Boolean(records?.length)
     if (!records) {
       // Why: a rollout that never appears (or is deleted) has no completion event, so time-box it instead of leaking a working row.
@@ -327,5 +245,43 @@ export function reconcileCodexSubagentTranscript(
     finishCodexSubagent(roster, id)
     state.subagents.delete(id)
   }
+  return changed
+}
+
+export function reconcileCodexSubagentTranscript(
+  state: CodexSubagentTranscriptState,
+  roster: CodexSubagentRoster,
+  transcriptPath: string | undefined
+): boolean {
+  const begun = beginCodexTranscriptReconcile(state, roster, transcriptPath)
+  if (!begun) {
+    return false
+  }
+  let changed = begun.changed
+  if (rolloutCursorReadDeferred(state.parent)) {
+    markParentReadDeferred()
+  } else {
+    const parentRecords = readJsonlCursor(state.parent, isCodexStatusTranscriptLine)
+    changed = applyCodexParentTranscript(state, roster, parentRecords) || changed
+  }
+  const entriesByDirectory = new Map<string, string[]>()
+  const entriesFor = (directory: string): string[] => {
+    let entries = entriesByDirectory.get(directory)
+    if (!entries) {
+      entries = readTranscriptDirectory(directory)
+      entriesByDirectory.set(directory, entries)
+    }
+    return entries
+  }
+  changed =
+    applyCodexChildTranscripts(state, roster, (id, tracked) => {
+      if (!tracked.filePath && rolloutReadsPrefetched()) {
+        return 'deferred'
+      }
+      tracked.filePath ??= resolveChildTranscript(begun.path, id, tracked.startedAt, entriesFor)
+      return rolloutCursorReadDeferred(tracked)
+        ? 'deferred'
+        : readJsonlCursor(tracked, isCodexStatusTranscriptLine)
+    }) || changed
   return changed
 }

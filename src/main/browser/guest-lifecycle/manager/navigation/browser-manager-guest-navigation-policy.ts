@@ -3,6 +3,13 @@ import {
   toSecureCertificateEndpoint
 } from '../../../../../shared/browser/navigation/browser-url'
 import { isChromiumInternalErrorUrl } from './browser-main-frame-navigation'
+import { readGuestNavigationState } from '../../navigation/browser-guest-navigation-state'
+import { BROWSER_GUEST_SUBFRAME_UNLOADED_CHANNEL } from '../../../../../shared/browser/identity/browser-subframe-unload'
+import {
+  noteBrowserGuestSubframeNavigation,
+  noteBrowserGuestSubframeUnloaded,
+  settleBrowserGuestSubframe
+} from './browser-guest-frame-user-agent-demand'
 import { watchDecisionBlockedMainFrames } from '../../../sessions/requests/browser-session-request-decisions'
 import {
   BrowserManagerGuestPopupPolicy,
@@ -64,7 +71,11 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       _isInPlace: boolean,
       isMainFrame: boolean
     ): void => {
-      if (!navigationGuard(event, url) || !isMainFrame || isChromiumInternalErrorUrl(url)) {
+      if (!navigationGuard(event, url) || isChromiumInternalErrorUrl(url)) {
+        return
+      }
+      if (!isMainFrame) {
+        noteBrowserGuestSubframeNavigation(guest, url, event.frame)
         return
       }
       this.updatePendingNavigationForRedirect(guest.id, url)
@@ -121,12 +132,16 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     }
 
     const didStartNavigationHandler = (
-      _event: Electron.Event,
+      event: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>,
       url: string,
       isInPlace: boolean,
       isMainFrame: boolean
     ): void => {
-      if (!isMainFrame || isChromiumInternalErrorUrl(url)) {
+      if (!isMainFrame) {
+        noteBrowserGuestSubframeNavigation(guest, url, event.frame)
+        return
+      }
+      if (isChromiumInternalErrorUrl(url)) {
         return
       }
       // Like the tab strip: a load that fails on the new origin never commits to clear it.
@@ -151,6 +166,12 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     }
 
     let publishedUrl: string | null = null
+    // pushState with an unchanged address still adds a history entry the Back button must see.
+    let publishedHistory = ''
+    const readHistory = (): string => {
+      const history = readGuestNavigationState(guest)
+      return `${history.canGoBack}|${history.canGoForward}`
+    }
 
     const didNavigateHandler = (_event: Electron.Event, url: string): void => {
       // A redirect can still land on another origin.
@@ -158,10 +179,11 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         this.remoteTabFaviconUrlByGuestId.delete(guest.id)
       }
       publishedUrl = guest.getURL()
+      publishedHistory = readHistory()
       this.pendingNavigationByGuestId.delete(guest.id)
+      this.settleUserAgentDemand(guest)
       // Committing makes the hidden error obsolete; a later abort must not restore it.
       this.clearedLoadErrorsByGuestId.delete(guest.id)
-      this.certificateTrustController?.onMainFrameNavigationCommitted(guest.id, url)
       this.siteDisplayController?.onMainFrameNavigationCommitted(guest.id)
       // Offscreen pages have no renderer to publish their committed URL.
       this.notifyBrowserGuestStateChanged(guest.id)
@@ -176,9 +198,11 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         return
       }
       const address = guest.getURL()
+      const history = readHistory()
       // replaceState reports here even when the address stays the same.
-      if (address !== publishedUrl) {
+      if (address !== publishedUrl || history !== publishedHistory) {
         publishedUrl = address
+        publishedHistory = history
         this.notifyBrowserGuestStateChanged(guest.id)
       }
     }
@@ -186,7 +210,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     // Renderer webviews keep their own icon. An offscreen page's icon arriving publishes; later
     // swaps (animated or status icons) ride the page's next publish instead of one per frame.
     const faviconUpdatedHandler = (_event: Electron.Event, favicons: string[]): void => {
-      if (!this.offscreenGuestIds.has(guest.id)) {
+      if (!this.isListedAsServerPage(guest.id)) {
         return
       }
       const next = remoteTabFaviconUrl(pickDisplayableFaviconUrl(favicons))
@@ -203,7 +227,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
 
     // Offscreen pages have no renderer; titles parse after commit and loads finish later.
     const offscreenStateChangedHandler = (): void => {
-      if (this.offscreenGuestIds.has(guest.id)) {
+      if (this.isListedAsServerPage(guest.id)) {
         this.offscreenGuestStateNotices.schedule(String(guest.id))
       }
     }
@@ -217,6 +241,21 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     guest.on('page-title-updated', offscreenStateChangedHandler)
     guest.on('did-start-loading', offscreenStateChangedHandler)
     guest.on('did-stop-loading', offscreenStateChangedHandler)
+    // Subframe commits and failures (an error page is a failure, not a commit) settle that frame.
+    const subframeSettled = (...args: unknown[]): void => {
+      const [isMainFrame, processId, routingId] = args.slice(-3)
+      if (isMainFrame === false && typeof processId === 'number' && typeof routingId === 'number') {
+        settleBrowserGuestSubframe(guest, processId, routingId)
+      }
+    }
+    guest.on('did-frame-navigate', subframeSettled)
+    guest.on('did-fail-provisional-load', subframeSettled)
+    const subframeUnloaded = (event: Electron.IpcMainEvent, channel: string): void => {
+      if (channel === BROWSER_GUEST_SUBFRAME_UNLOADED_CHANNEL && event.sender === guest) {
+        noteBrowserGuestSubframeUnloaded(guest, event.senderFrame)
+      }
+    }
+    guest.on('ipc-message', subframeUnloaded)
     guest.on('did-fail-load', didFailLoadHandler)
     // Why emit: an extension-blocked guest main frame commits no error page, so Electron reports
     // nothing; every did-fail-load reader (this policy, the pane, webNavigation) needs the failure.
@@ -253,6 +292,9 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         guest.off('page-title-updated', offscreenStateChangedHandler)
         guest.off('did-start-loading', offscreenStateChangedHandler)
         guest.off('did-stop-loading', offscreenStateChangedHandler)
+        guest.off('did-frame-navigate', subframeSettled)
+        guest.off('did-fail-provisional-load', subframeSettled)
+        guest.off('ipc-message', subframeUnloaded)
         guest.off('did-fail-load', didFailLoadHandler)
         guest.off('will-prevent-unload', allowPageUnload)
       }

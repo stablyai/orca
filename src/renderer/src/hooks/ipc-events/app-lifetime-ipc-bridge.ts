@@ -2,6 +2,11 @@ import { installBrowserInitializationPresentationLifetime } from '@/runtime/web-
 import { observeJiraImageHostStatus } from '@/runtime/jira/runtime-jira-image-cache'
 import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pending-runtime-repo-removal-replay'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { emitBotsChangedWindowEvent } from '@/lib/bots-changed-window-event'
+import { emitPeerMailReturnedWindowEvent } from '@/lib/peer-mail-returned-window-event'
+import { installBotHostListing } from '@/lib/bot-host-listing'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/components/terminal-pane/mounting/parked-terminal-host-hydration'
 import { emitAutomationsChangedWindowEvent } from '@/components/automations/events/automations-changed-window-event'
 import { emitWorkspaceCleanupRunFinishedWindowEvent } from '@/components/workspace-cleanup/events/workspace-cleanup-run-finished-window-event'
@@ -26,6 +31,7 @@ import { registerOrcaProfileAuthIpcBridge } from '../../components/orca-profiles
 import { registerPluginViewIpcBridge } from '../../components/plugins/view/plugin-view-ipc-bridge'
 import { registerPreflightWslRetryIpcBridge } from '../../runtime/hosts/wsl/preflight-wsl-retry-ipc-bridge'
 import { registerOsMarkdownFileOpenBridge } from './native-app/os-markdown-file-open-bridge'
+import { registerBotDeepLinkIpcBridge } from './bot-deep-link-ipc-bridge'
 import { registerProjectCatalogIpcBridge } from './workspace-catalog/project-catalog-ipc-bridge'
 import { registerRateLimitIpcBridge } from './native-app/rate-limit-ipc-bridge'
 import { registerClaudeAccountSwitchIpcBridge } from '../../lib/provider-accounts/claude-account-switch-ipc-bridge'
@@ -33,6 +39,7 @@ import { registerRuntimeClientIpcBridge } from './runtime-events/runtime-client-
 import { registerSessionTabIpcBridge } from './session-tabs/session-tab-ipc-bridge'
 import { registerSettingsAndSidebarIpcBridge } from '../app-commands/settings-sidebar-ipc-bridge'
 import { registerQuitAndStopAllSessionsIpcBridge } from './native-app/quit-and-stop-all-sessions-ipc-bridge'
+import { registerBackgroundWorkerPausedIpcBridge } from './native-app/background-worker-paused-ipc-bridge'
 import { registerTabLifecycleIpcBridge } from './session-tabs/tab-lifecycle-ipc-bridge'
 import { registerTerminalPresentationIpcBridge } from './terminal/terminal-presentation-ipc-bridge'
 import { registerTerminalTabMountIpcBridge } from './terminal/terminal-tab-mount-ipc-bridge'
@@ -48,6 +55,7 @@ import { registerWorkspaceShortcutIpcBridge } from '../app-commands/workspace-sh
 import { registerZoomIpcBridge } from './native-app/zoom-ipc-bridge'
 import { registerWslAccountNoticeIpcBridge } from '../../runtime/hosts/wsl/wsl-account-notice-ipc-bridge'
 import { registerWslHostIpcBridge } from '../../runtime/hosts/wsl/wsl-host-ipc-bridge'
+import { noteOrchestrationSessionWorkersChanged } from '@/lib/orchestration-session-workers'
 
 function isRuntimeEnvironmentActive(): boolean {
   return Boolean(useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim())
@@ -67,6 +75,25 @@ export function installAppLifetimeIpcEvents(): () => void {
   unsubs.push(
     window.api.automations.onChanged((payload) => emitAutomationsChangedWindowEvent(payload))
   )
+  // This app's own runtime's bots; a paired server's arrive on its client-event stream.
+  unsubs.push(
+    window.api.botChanges.onChanged((scope) =>
+      emitBotsChangedWindowEvent(LOCAL_EXECUTION_HOST_ID, scope)
+    )
+  )
+  unsubs.push(installBotHostListing(useAppStore, isPairedWebClientWindow()))
+  const stopSessionWorkerNotices = window.api.runtime.onOrchestrationSessionWorkersChanged?.(
+    ({ sessionId }) => noteOrchestrationSessionWorkersChanged(null, sessionId)
+  )
+  if (stopSessionWorkerNotices) {
+    unsubs.push(stopSessionWorkerNotices)
+  }
+  const stopPeerMailReturns = window.api.runtime.onPeerMailReturned?.(() =>
+    emitPeerMailReturnedWindowEvent(LOCAL_EXECUTION_HOST_ID)
+  )
+  if (stopPeerMailReturns) {
+    unsubs.push(stopPeerMailReturns)
+  }
   unsubs.push(
     window.api.workspaceCleanup.onRunFinished((run) =>
       emitWorkspaceCleanupRunFinishedWindowEvent({ environmentId: null, run })
@@ -107,10 +134,12 @@ export function installAppLifetimeIpcEvents(): () => void {
   )
   registerSettingsAndSidebarIpcBridge(unsubs)
   registerQuitAndStopAllSessionsIpcBridge(unsubs)
+  registerBackgroundWorkerPausedIpcBridge(unsubs)
   registerOrcaProfileAuthIpcBridge(unsubs)
   registerPreflightWslRetryIpcBridge(unsubs)
   registerWorkspaceShortcutIpcBridge(unsubs)
   registerOsMarkdownFileOpenBridge(unsubs)
+  registerBotDeepLinkIpcBridge(unsubs)
   registerWslAccountNoticeIpcBridge(unsubs)
   unsubs.push(
     window.api.ui.onActivateWorktree(
