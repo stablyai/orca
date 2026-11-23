@@ -241,3 +241,45 @@ export function readSend(scope: JournalSqlScope, messageId: string): AgentJourna
   }
   return scope.decode<AgentJournalSubmission>(scope.examined(row).payload_json)
 }
+
+/** Handed over and not answered: its turn is still to be attributed. */
+export function unanswered(send: Send): boolean {
+  return send.dispatchState === 'pending' || (send.dispatchState === 'unknown' && !send.recovered)
+}
+
+/** The sends the window holds: anchored, unanswered or placed in it, with every send sharing a
+ *  provider id or queued card with one, since attribution reads the first or last of those. */
+export function keptSends(
+  sends: readonly Send[],
+  operations: ReadonlySet<string>,
+  start: number | null,
+  end: number | null,
+  anchorsOnly: boolean
+): Send[] {
+  const after = (position: number) =>
+    start !== null && position >= start && (end === null || position < end)
+  const kept = new Set(
+    sends.filter(
+      (send) =>
+        operations.has(send.messageId) ||
+        send.positions.some(after) ||
+        (unanswered(send) && (!anchorsOnly || send.positions.every(after)))
+    )
+  )
+  for (let grown = true; grown;) {
+    grown = false
+    const providers = new Set([...kept].flatMap((send) => send.providerItemId ?? []))
+    const cards = new Set([...kept].flatMap((send) => send.queuedMessageId ?? []))
+    for (const send of sends) {
+      if (
+        !kept.has(send) &&
+        ((send.providerItemId !== null && providers.has(send.providerItemId)) ||
+          (send.queuedMessageId !== null && cards.has(send.queuedMessageId)))
+      ) {
+        kept.add(send)
+        grown = true
+      }
+    }
+  }
+  return sends.filter((send) => kept.has(send))
+}

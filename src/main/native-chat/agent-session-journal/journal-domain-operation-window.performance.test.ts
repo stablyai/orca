@@ -243,6 +243,7 @@ it('reads the newest turns with the same work however many turns came before the
   const short = read(50)
   const long = read(500)
   expect(long.examined).toBe(short.examined)
+  expect([short.examined, read(500, 491).examined]).toEqual([72, 72])
   expect(long.sends).toEqual(Array.from({ length: 9 }, (_, index) => `m${491 + index}`))
   expect(long.turns).toEqual(Array.from({ length: 9 }, (_, index) => `turn-${491 + index}`))
   // A long agent turn's tool calls are never listed to find its sends, and change nothing it reads:
@@ -280,8 +281,16 @@ it('reads the newest turns with the same work however many turns came before the
   const { snapshot } = readJournalDomainOperationWindow(pinned, { latestTurns: 8, turnShape: true })
   const whole = new JournalSqlScope(db, 'chat', 'epoch')
   readJournalDomainOperationWindow(whole, { latestTurns: 8, turnShape: true, afterSequence: -1 })
+  const own = new JournalSqlScope(db, 'chat', 'epoch')
+  const anchored = readJournalDomainOperationWindow(own, {
+    latestTurns: 8,
+    turnShape: true,
+    anchorsOnly: true
+  })
   db.close()
+  // The whole read plus the unanswered send's own read (it and its queued card); a window of its
+  // anchors alone holds no older send, so that send never pins it back.
+  expect([own.work.rows, pinned.work.rows, whole.work.rows]).toEqual([74, 2001, 1999])
+  expect(anchored.snapshot.submissions.map((send) => send.clientMessageId)).toEqual(long.sends)
   expect(snapshot.submissions.map((send) => send.clientMessageId)).toContain('m0')
-  // Plus the unanswered send's own read (it and its queued card), which found it.
-  expect(pinned.work.rows).toBeLessThanOrEqual(whole.work.rows + 2)
 })

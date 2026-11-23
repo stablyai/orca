@@ -12,10 +12,12 @@ import { marginAfter } from './journal-operation-window-end'
 import {
   type Send,
   newestTurnsOnly,
+  keptSends,
   reachesBefore,
   readSend,
   seedSends,
   sendHeads,
+  unanswered,
   windowSends,
   withSends
 } from './journal-operation-window-sends'
@@ -116,7 +118,11 @@ export function readJournalDomainOperationWindow(
   ]
   const earliest = anchored.length > 0 ? Math.min(...anchored) : null
   // The whole read is cheaper than reading by index the long stretch such a send pins the window to.
-  if (recent && reachesBefore(sends, earliest, Math.min(...anchorAt))) {
+  const newest = Math.min(...anchorAt)
+  const held = recent
+    ? keptSends(sends, operations, newest, null, anchors.anchorsOnly === true)
+    : []
+  if (recent && reachesBefore(held, earliest, newest)) {
     indexed = false
     sends = sendHeads(scope)
   }
@@ -161,48 +167,6 @@ export function readJournalDomainOperationWindow(
       end === null &&
       (first === null || first === undefined || (start !== null && start <= Number(first)))
   }
-}
-
-/** Handed over and not answered: its turn is still to be attributed. */
-function unanswered(send: Send): boolean {
-  return send.dispatchState === 'pending' || (send.dispatchState === 'unknown' && !send.recovered)
-}
-
-/** The sends the window holds: anchored, unanswered or placed in it, with every send sharing a
- *  provider id or queued card with one, since attribution reads the first or last of those. */
-function keptSends(
-  sends: readonly Send[],
-  operations: ReadonlySet<string>,
-  start: number | null,
-  end: number | null,
-  anchorsOnly: boolean
-): Send[] {
-  const after = (position: number) =>
-    start !== null && position >= start && (end === null || position < end)
-  const kept = new Set(
-    sends.filter(
-      (send) =>
-        operations.has(send.messageId) ||
-        send.positions.some(after) ||
-        (unanswered(send) && (!anchorsOnly || send.positions.every(after)))
-    )
-  )
-  for (let grown = true; grown;) {
-    grown = false
-    const providers = new Set([...kept].flatMap((send) => send.providerItemId ?? []))
-    const cards = new Set([...kept].flatMap((send) => send.queuedMessageId ?? []))
-    for (const send of sends) {
-      if (
-        !kept.has(send) &&
-        ((send.providerItemId !== null && providers.has(send.providerItemId)) ||
-          (send.queuedMessageId !== null && cards.has(send.queuedMessageId)))
-      ) {
-        kept.add(send)
-        grown = true
-      }
-    }
-  }
-  return sends.filter((send) => kept.has(send))
 }
 
 /** Each operation's sends (its own id, every send that carried it as a queued card, and the card's
