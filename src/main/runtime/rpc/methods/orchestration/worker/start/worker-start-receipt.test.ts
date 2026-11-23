@@ -14,7 +14,7 @@ import { failWorkerStartWithReceipt } from './worker-start-receipt'
 import { readDispatchWorkers, type SessionWorkersRuntime } from '../session-workers-method'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each stub has every member the code under test calls.
-const stub = <T>(members: object): T => members as T
+const stub = <T>(members: Partial<T>): T => members as T
 
 describe('a worker start cut before its agent ran', () => {
   let db: OrchestrationDb
