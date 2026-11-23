@@ -36,7 +36,13 @@ async function admit(runtime: OrcaRuntimeService, row: PairedServerAskRow): Prom
   try {
     const routed = await deliverPeerMailToBot(
       runtime,
-      { ...ask, conversationId: row.conversation_id, messageId: row.message_id },
+      // By the bot id its card showed, so a rename while it waited never sends it to another bot.
+      {
+        ...ask,
+        to: `bot:${row.bot_id}`,
+        conversationId: row.conversation_id,
+        messageId: row.message_id
+      },
       pairing,
       peerMailSenderSnapshot(ask.senderLabel, ask.sender),
       {

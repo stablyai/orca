@@ -13,6 +13,8 @@ export type ClientAskListener = {
   /** The pairing fingerprint this Orca keys the computer's conversations by. */
   fingerprint: string
   session: string
+  /** The older pairing this one replaced in a re-pair, once it said so. */
+  replaced?: string
 }
 
 export type ClientAskPull = { key: string; session: string }
@@ -71,7 +73,8 @@ export function clientAskPullStarted(
     installationId: pull.installationId,
     name: pull.name,
     fingerprint: caller.fingerprint,
-    session: pull.session
+    session: pull.session,
+    replaced: pull.previousPairing ?? current?.replaced
   })
   return { key, session: pull.session }
 }
@@ -144,11 +147,12 @@ export function requireListeningClient(
 }
 
 /** The listening computer a conversation's environment names: the same device first, so copies
- *  sharing an installation id stay apart; else the one installation that re-paired. */
+ *  sharing an installation id stay apart; else the one that re-paired from `pairing`. */
 export function listenerForClientEnvironment(
   owner: ClientAskListenerOwner,
   deviceId: string,
-  installationId: string
+  installationId: string,
+  pairing: string
 ): ClientAskListener | null {
   const listeners = listenersOf(owner)
   const same = listeners.get(keyOf(deviceId, installationId))
@@ -156,7 +160,7 @@ export function listenerForClientEnvironment(
     return same
   }
   const repaired = [...listeners.values()].filter(
-    (listener) => listener.installationId === installationId
+    (listener) => listener.installationId === installationId && listener.replaced === pairing
   )
   return repaired.length === 1 ? repaired[0]! : null
 }

@@ -306,6 +306,20 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     expect(awaiting(sent.message.id)).toBeNull()
   })
 
+  it('delivers an approved card to the agent it showed, even after its name went to another', async () => {
+    await introduce()
+    const sent = await ask({ to: 'bot:Docs' })
+    await vi.waitFor(async () => expect(await cards()).toHaveLength(1))
+    vi.mocked(computer.runtime.bots.list).mockReturnValue([
+      makeTestBot({ id: 'docs', name: 'Manuals' }),
+      makeTestBot({ id: 'other', name: 'Docs' })
+    ])
+
+    await call('pairedServerAsks.decide', { messageId: sent.message.id, decision: 'once' })
+    await vi.waitFor(() => expect(computer.db.getUnreadMessages(DOCS_HOME)).toHaveLength(1))
+    expect(withChat.mock.calls.map(([botId]) => botId)).toEqual(['docs'])
+  })
+
   it('hands the asker a follow-up reply straight to the agent, with no card', async () => {
     await introduce()
     const sent = await ask()
