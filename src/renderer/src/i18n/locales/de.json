@@ -24150,6 +24150,8 @@
       "hitTip": "Nutzungslimit von {{agent}} erreicht · Reset {{time}}"
     },
     "section": {
+      "scrollLeft": "Nach links scrollen · {{amount}} ausgeblendet",
+      "scrollRight": "Nach rechts scrollen · {{amount}} ausgeblendet",
       "title": "Bots",
       "startFromScratch": "Ohne Vorlage starten"
     },

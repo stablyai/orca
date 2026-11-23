@@ -26213,8 +26213,12 @@
       "orca": "Orca",
       "agents": "Agents",
       "otherTerminals": "Other terminals",
-      "privateBytes": "Committed by Orca and terminals"
-    }
+      "privateBytes": "Committed by Orca, agents and terminals"
+    },
+    "chatRow": {
+      "tooltip": "{{agent}} chat, including the processes running under it"
+    },
+    "sharedAgentProcesses": "Shared agent processes"
   },
   "browserExtensions": {
     "permission": {
@@ -27447,6 +27451,8 @@
       "identityReports": "Reports {{what}}"
     },
     "section": {
+      "scrollLeft": "Scroll left · {{amount}} hidden",
+      "scrollRight": "Scroll right · {{amount}} hidden",
       "title": "Bots",
       "newBot": "New bot",
       "startFromScratch": "Start from scratch",
@@ -27455,8 +27461,6 @@
       "expand": "Expand Bots",
       "collapse": "Collapse Bots",
       "summary": "{{action}}, {{total}} bots, {{attention}} need you, {{unread}} unread, {{working}} working",
-      "showMore_one": "Show {{count}} more bot",
-      "showMore_other": "Show {{count}} more bots",
       "new": "New bot or group",
       "expandAll": "Expand all bots",
       "collapseAll": "Collapse all bots"

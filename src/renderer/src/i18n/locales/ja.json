@@ -25617,6 +25617,8 @@
       "hitTip": "{{agent}} の利用上限に到達 · {{time}} にリセット"
     },
     "section": {
+      "scrollLeft": "左にスクロール · 非表示 {{amount}} 件",
+      "scrollRight": "右にスクロール · 非表示 {{amount}} 件",
       "title": "Bots",
       "startFromScratch": "最初から作成"
     },
