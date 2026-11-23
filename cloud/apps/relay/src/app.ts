@@ -1374,6 +1374,12 @@ export function createRelayApp(
   // zero assignment rows: offline hosts never re-ask, so nothing else moves them. Deploy identity
   // only (the /v1/admin/* middleware scopes every other identity to its own list). It is the ask's
   // move (EdgeAssignments.moveDormantToEdge), refused unless the row is dormant under its lock.
+  // Accepted limits:
+  // - A booking or join on another cell after that cell's last poll is not seen: the same window
+  //   rebalance-dormant has. The host's next ask on the edge row then re-places it as usual.
+  // - Every host moved onto the edge widens the set an edge outage can touch: past
+  //   EDGE_EXPORT_SKIP_AFTER_MS of failed exports a leaving host is placed without its edge copy
+  //   and its phones pair again (EdgeAssignments.leaveEdge), as for any host on the edge.
   app.post('/v1/admin/edge-move-dormant', async (context) => {
     const bearer = readBearer(context.req.header('authorization'))
     if (config.role !== 'director') { return context.json({ error: 'director_only' }, 404) }
@@ -1410,6 +1416,9 @@ export function createRelayApp(
       context.header('Retry-After', String(EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS))
       return context.json({ error: 'relay_edge_move_busy', reason }, 503)
     }
+    // A refusal the seat feed may clear within seconds is retryable; any other is the row's.
+    const reject = (reason: EdgeDormantMoveRefusal): Response =>
+      reason === 'feed_not_fresh' ? busy(reason) : refuse(reason)
     // Every seat map reading below must come from a poll sent after this instant.
     const startedAt = Date.now()
     const edge = operations.edgeAssignments
@@ -1424,37 +1433,38 @@ export function createRelayApp(
       admitMode = source.admitMode
       const shadow = operations.shadowSeats
       const reserve = admitMode === 'reserve'
-      // A live reserve-mode cell keeps activity in memory and writes no leases, so its row alone
-      // never proves a host dormant: only a seat map that holds that cell's current process, from a
-      // poll sent after this request began, without the host does. isComplete alone is not enough:
-      // it skips roll-isolated cells (a cell being retired is isolated first) and is satisfied by
-      // one old answer.
-      if (reserve && (!shadow || !shadow.isComplete())) { return refuse('seat_map_incomplete') }
+      // The row alone never proves a host dormant, on either mode. A live reserve-mode cell keeps
+      // activity in memory and writes no leases; and a host that joined while its cell was in
+      // reserve mode keeps zero counters and its join time as last_activity_at after the cell flips
+      // back to the database, so a desktop connected for over a day looks dormant there too. Only a
+      // seat map holding the source cell's current process, caught up by a poll sent after this
+      // request began, without the host does. isComplete alone is not enough: it skips
+      // roll-isolated cells (a cell being retired is isolated first) and is satisfied by one old
+      // answer. No map, or a source the map does not poll, is retryable, never a fall-through.
+      if (!shadow || !shadow.isComplete()) { return busy('seat_map_incomplete') }
       const feedLive = (requirePollAfter: boolean): boolean => {
-        const state = shadow?.cellState(sourceCellId)
+        const state = shadow.cellState(sourceCellId)
+        // A live state always carries a string incarnation, so a cell without a runtime row (null)
+        // never matches.
         return (
           state !== undefined &&
           state.status === 'live' &&
-          source.runtimeIncarnation !== null &&
           state.incarnation === source.runtimeIncarnation &&
-          state.polledAt !== undefined &&
-          (!requirePollAfter || state.polledAt >= startedAt)
+          state.caughtUpPolledAt !== undefined &&
+          (!requirePollAfter || state.caughtUpPolledAt >= startedAt)
         )
       }
-      if (reserve) {
-        // A bounded wait for the next poll (the map polls every SHADOW_SEAT_POLL_MS), holding no
-        // lock or connection. Past it the answer is retryable, never a guess.
-        const deadline = startedAt + (operations.edgeDormantFeedWaitMs ?? EDGE_DORMANT_FEED_WAIT_MS)
-        while (!feedLive(true) && Date.now() < deadline) {
-          await new Promise((resolve) => setTimeout(resolve, EDGE_DORMANT_FEED_CHECK_MS))
-        }
-        if (!feedLive(true)) { return busy('feed_not_fresh') }
+      // A bounded wait for the next poll (the map polls every SHADOW_SEAT_POLL_MS), holding no
+      // lock or connection. Past it the answer is retryable, never a guess.
+      const deadline = startedAt + (operations.edgeDormantFeedWaitMs ?? EDGE_DORMANT_FEED_WAIT_MS)
+      while (!feedLive(true) && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, EDGE_DORMANT_FEED_CHECK_MS))
       }
+      if (!feedLive(true)) { return busy('feed_not_fresh') }
       // Run here, under the row lock and again after the push (EdgeDormantMoveGuard.recheck).
       const hostActive = (): EdgeDormantMoveRefusal | null => {
         const now = Date.now()
-        if (reserve && !feedLive(false)) { return 'feed_not_fresh' }
-        if (!shadow) { return null }
+        if (!feedLive(false)) { return 'feed_not_fresh' }
         if (shadow.seatsOf(userId, relayHostId).length > 0) { return 'host_seated' }
         if (
           shadow
@@ -1469,8 +1479,7 @@ export function createRelayApp(
         return null
       }
       const active = hostActive()
-      if (active === 'feed_not_fresh') { return busy(active) }
-      if (active) { return refuse(active) }
+      if (active) { return reject(active) }
       const region = await operations.assignments.dormantHostRegion(identity, sourceCellId)
       // Only a host the region's rollout (or an allow list) would take. Country exclusions are not
       // judged: the director never keeps a host's country, and a dormant host's next action is an
@@ -1495,9 +1504,7 @@ export function createRelayApp(
       log('moved')
       return context.json({ v: 1, moved: true, assignmentEpoch: moved.assignmentEpoch })
     } catch (error) {
-      if (error instanceof EdgeDormantMoveRefusedError) {
-        return error.reason === 'feed_not_fresh' ? busy(error.reason) : refuse(error.reason)
-      }
+      if (error instanceof EdgeDormantMoveRefusedError) { return reject(error.reason) }
       if (error instanceof EdgeMoveBusyError) { return busy('relay_edge_move_busy') }
       if (error instanceof EdgeMoveDeferredError) {
         // edge_busy: this director's locked pushes are at edgeLockedCallsMax. push_failed: the

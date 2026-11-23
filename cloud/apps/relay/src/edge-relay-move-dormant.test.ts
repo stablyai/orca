@@ -89,13 +89,43 @@ function overlapping(database: RelayDatabase): RelayDatabase {
   })
 }
 
+// Lease rows locked elsewhere: every locked lease read inside a transaction answers unavailable.
+function leaseLocksBusy(database: RelayDatabase): RelayDatabase {
+  const wrap = (transaction: RelayDatabase): RelayDatabase =>
+    new Proxy(transaction, {
+      get(target, property) {
+        if (property === 'queryLocked') {
+          return async (sql: string, ...rest: unknown[]) => {
+            if (sql.includes('relay_assignment_activity_leases')) { throw new Error('database_lock_unavailable') }
+            return await (target.queryLocked as (...args: unknown[]) => Promise<unknown>)(sql, ...rest)
+          }
+        }
+        const value = Reflect.get(target, property, target) as unknown
+        return typeof value === 'function' ? value.bind(target) : value
+      }
+    })
+  return new Proxy(database, {
+    get(target, property) {
+      if (property === 'transaction') {
+        return async <T>(operation: (transaction: RelayDatabase) => Promise<T>, ...rest: unknown[]) =>
+          await (target.transaction as (...args: unknown[]) => Promise<T>)(
+            (transaction: RelayDatabase) => operation(wrap(transaction)),
+            ...rest
+          )
+      }
+      const value = Reflect.get(target, property, target) as unknown
+      return typeof value === 'function' ? value.bind(target) : value
+    }
+  })
+}
+
 type ShadowStub = {
   complete: boolean
   seated: Set<string>
   recentlyLeftAt: Map<string, number>
   booking?: { cellId: string; epoch: number; at: number }
   // The source cell's feed: 'fresh' answers a poll sent just now, by the cell's current process.
-  feed: 'fresh' | 'pending' | 'stale' | 'mismatch'
+  feed: 'fresh' | 'pending' | 'stale' | 'mismatch' | 'unverifiable' | 'partial'
   // Called on every seatsOf read: lets a test seat the host part way through a move.
   onSeatsRead?: (reads: number) => void
 }
@@ -123,6 +153,10 @@ async function harness(options: {
   directory?: ShadowSeatDirectory
   onPush?: () => void
   ipCountry?: IpCountryLookup
+  // The lease rows are locked by another transaction (queryLocked answers unavailable).
+  leaseLockBusy?: boolean
+  // The admit-mode table cannot be read, so the reserve-mode set is unknown.
+  admitModesUnreadable?: boolean
 } = {}) {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   const database = await openInMemoryRelayDatabase()
@@ -160,7 +194,7 @@ async function harness(options: {
     }
   } as unknown as EdgeAdmin
   const edge = new EdgeAssignments(
-    options.hang ? overlapping(database) : database,
+    options.leaseLockBusy ? leaseLocksBusy(database) : options.hang ? overlapping(database) : database,
     {
       cellUrl: EDGE_URL,
       rolloutPercent: options.rolloutPercent ?? 0,
@@ -175,6 +209,9 @@ async function harness(options: {
     options.lockedCallsMax
   )
   if (options.seeded !== false) { await edge.ensureEdgeCell() }
+  if (options.admitModesUnreadable) {
+    await database.query('ALTER TABLE relay_cell_admit_modes RENAME TO relay_cell_admit_modes_gone')
+  }
   const shadowState: ShadowStub = { complete: true, seated: new Set(), recentlyLeftAt: new Map(), feed: 'fresh' }
   let seatReads = 0
   const stub = {
@@ -195,9 +232,21 @@ async function harness(options: {
       switch (shadowState.feed) {
         case 'pending': { return { cellId, status: 'pending' } }
         // Live, but its last answered poll left before the request did.
-        case 'stale': { return { cellId, status: 'live', incarnation: INCARNATION, polledAt: now - 60_000, lastLiveAt: now - 60_000 } }
-        case 'mismatch': { return { cellId, status: 'live', incarnation: 'another-process', polledAt: now, lastLiveAt: now } }
-        default: { return { cellId, status: 'live', incarnation: INCARNATION, polledAt: now, lastLiveAt: now } }
+        case 'stale': {
+          return { cellId, status: 'live', incarnation: INCARNATION, polledAt: now - 60_000, caughtUpPolledAt: now - 60_000 }
+        }
+        case 'mismatch': {
+          return { cellId, status: 'live', incarnation: 'another-process', polledAt: now, caughtUpPolledAt: now }
+        }
+        // Everything else fresh, but the last poll failed.
+        case 'unverifiable': {
+          return { cellId, status: 'unverifiable', incarnation: INCARNATION, polledAt: now, caughtUpPolledAt: now }
+        }
+        // A page answered now, but with more pages pending: not caught up since before the request.
+        case 'partial': {
+          return { cellId, status: 'live', incarnation: INCARNATION, polledAt: now, caughtUpPolledAt: now - 60_000 }
+        }
+        default: { return { cellId, status: 'live', incarnation: INCARNATION, polledAt: now, caughtUpPolledAt: now } }
       }
     }
   }
@@ -287,6 +336,17 @@ async function expectRefused(h: Harness, response: Response, reason: string) {
   expect(await response.json()).toEqual({ error: 'dormant_edge_move_refused', reason })
   expect(h.logged('orca_relay_edge_dormant_move').at(-1)).toMatchObject({ outcome: 'refused', reason })
   expect(h.pushes).toHaveLength(0)
+}
+
+// Retryable: nothing moved, nothing pushed, Retry-After as relay_edge_move_busy.
+async function expectBusy(h: Harness, response: Response, reason: string) {
+  expect(response.status).toBe(503)
+  expect(response.headers.get('Retry-After')).toBe(String(EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS))
+  expect(await response.json()).toEqual({ error: 'relay_edge_move_busy', reason })
+  expect(h.logged('orca_relay_edge_dormant_move').at(-1)).toMatchObject({ outcome: 'busy', reason })
+  expect(h.pushes).toHaveLength(0)
+  const row = await h.row()
+  if (row) { expect(row.cell_id).not.toBe(EDGE_CELL_ID) }
 }
 
 // No log line ever names the host or its account.
@@ -460,14 +520,16 @@ describe('POST /v1/admin/edge-move-dormant', () => {
       await expectRefused(h, await h.move(), 'not_dormant')
     })
 
-    it('refuses without a complete seat map, since the cell keeps activity in memory', async () => {
-      const incomplete = await harness({ reserve: true })
-      await incomplete.placeRow()
-      incomplete.shadowState.complete = false
-      await expectRefused(incomplete, await incomplete.move(), 'seat_map_incomplete')
-      const none = await harness({ reserve: true, shadow: false })
-      await none.placeRow()
-      await expectRefused(none, await none.move(), 'seat_map_incomplete')
+    it('answers 503 without a complete seat map, on either mode', async () => {
+      for (const reserve of [true, false]) {
+        const incomplete = await harness({ reserve })
+        await incomplete.placeRow()
+        incomplete.shadowState.complete = false
+        await expectBusy(incomplete, await incomplete.move(), 'seat_map_incomplete')
+        const none = await harness({ reserve, shadow: false })
+        await none.placeRow()
+        await expectBusy(none, await none.move(), 'seat_map_incomplete')
+      }
     })
 
     it('refuses a host the seat map shows seated, or seen within the TTL', async () => {
@@ -579,7 +641,7 @@ describe('POST /v1/admin/dormant-assignments', () => {
   })
 })
 
-describe('the dormant move on a reserve-mode cell trusts only a fresh feed from the cell\'s process', () => {
+describe('the dormant move trusts only a fresh, caught-up feed from the source cell\'s process', () => {
   // The source is roll-isolated in these tests (not required for completeness), as a cell being
   // retired is: the map reads complete without the source ever having answered.
   function directory(): ShadowSeatDirectory {
@@ -596,13 +658,9 @@ describe('the dormant move on a reserve-mode cell trusts only a fresh feed from 
   ) {
     map.apply(RETIRING.id, { v: 1, cellId: RETIRING.id, incarnation, seq: 0, at: polledAt, full }, polledAt, polledAt)
   }
-  async function expectFeedNotFresh(h: Harness, response: Response) {
-    expect(response.status).toBe(503)
-    expect(response.headers.get('Retry-After')).toBe(String(EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS))
-    expect(await response.json()).toEqual({ error: 'relay_edge_move_busy', reason: 'feed_not_fresh' })
-    expect(h.logged('orca_relay_edge_dormant_move').at(-1)).toMatchObject({ outcome: 'busy', reason: 'feed_not_fresh' })
-    expect((await h.row())?.cell_id).toBe(RETIRING.id)
-    expect(h.pushes).toHaveLength(0)
+  async function expectFeedNotFresh(h: Harness, response: Response, cellId = RETIRING.id) {
+    await expectBusy(h, response, 'feed_not_fresh')
+    expect((await h.row())?.cell_id).toBe(cellId)
   }
 
   it('refuses, retryably, a source feed that never answered though the map reads complete', async () => {
@@ -653,13 +711,59 @@ describe('the dormant move on a reserve-mode cell trusts only a fresh feed from 
     await expectRefused(h, await pending, 'host_seated')
   })
 
-  it('refuses each degraded feed state of the stub too', async () => {
-    for (const feed of ['pending', 'stale', 'mismatch'] as const) {
-      const h = await harness({ reserve: true })
-      await h.placeRow()
-      h.shadowState.feed = feed
-      await expectFeedNotFresh(h, await h.move())
+  it('refuses each degraded feed state of the stub too, on either mode', async () => {
+    for (const reserve of [true, false]) {
+      for (const feed of ['pending', 'stale', 'mismatch', 'unverifiable', 'partial'] as const) {
+        const h = await harness({ reserve })
+        await h.placeRow()
+        h.shadowState.feed = feed
+        await expectFeedNotFresh(h, await h.move())
+      }
     }
+  })
+
+  it('refuses a source the map does not poll, or one with no runtime row', async () => {
+    const h = await harness()
+    await h.placeRow(HOST, { cellId: OTHER.id })
+    await expectFeedNotFresh(h, await h.move({ sourceCellId: OTHER.id }), OTHER.id)
+    const map = directory()
+    const gone = await harness({ directory: map })
+    await gone.placeRow()
+    await gone.database.query(`DELETE FROM relay_cell_runtime WHERE cell_id = ?`, [RETIRING.id])
+    const pending = gone.move()
+    setTimeout(() => answer(map, Date.now()), 30)
+    await expectFeedNotFresh(gone, await pending)
+  })
+
+  it('refuses a feed whose only poll since the request was a partial page', async () => {
+    const map = directory()
+    answer(map, Date.now() - 10_000)
+    const h = await harness({ directory: map })
+    await h.placeRow()
+    const pending = h.move()
+    setTimeout(() => {
+      const at = Date.now()
+      map.apply(
+        RETIRING.id,
+        {
+          v: 1, cellId: RETIRING.id, incarnation: INCARNATION, seq: 5, at, more: true,
+          changes: [{ seq: 1, kind: 'leave', userId: 'someone-else', relayHostId: 'otherhost0000001', epoch: 1, generation: 1, at }]
+        },
+        at,
+        at
+      )
+    }, 30)
+    await expectFeedNotFresh(h, await pending)
+  })
+
+  it('re-judges the feed under the row lock: a new process mid-move refuses', async () => {
+    const h = await harness()
+    await h.placeRow()
+    // Read 1 is the check before the transaction: the cell restarts right after it.
+    h.shadowState.onSeatsRead = (reads) => {
+      if (reads === 1) { h.shadowState.feed = 'mismatch' }
+    }
+    await expectFeedNotFresh(h, await h.move())
   })
 })
 
@@ -811,5 +915,24 @@ describe('dormant-assignments reads a bounded window of keys per call', () => {
     }
     expect(second.candidates.map((candidate) => candidate.relayHostId)).toEqual(['zzcandidate00001'])
     expect(second.cursor).toBeNull()
+  })
+})
+
+describe('the dormant move\'s retryable answers', () => {
+  it('answers 503 when another transaction holds the host\'s lease rows', async () => {
+    const h = await harness({ leaseLockBusy: true })
+    await h.placeRow()
+    await expectBusy(h, await h.move(), 'relay_edge_move_busy')
+  })
+
+  it('answers 503 when the reserve-mode set cannot be read', async () => {
+    const h = await harness({ admitModesUnreadable: true })
+    await h.placeRow()
+    const response = await h.move()
+    expect(response.status).toBe(503)
+    expect(response.headers.get('Retry-After')).toBe('5')
+    expect(await response.json()).toEqual({ error: 'database_temporarily_unavailable' })
+    expect(h.logged('orca_relay_edge_dormant_move').at(-1)).toMatchObject({ outcome: 'busy', reason: 'reserve_mode_unknown' })
+    expect(h.pushes).toHaveLength(0)
   })
 })
