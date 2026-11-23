@@ -154,13 +154,18 @@ export function mentionsBot(text: string, bot: ThreadBot): boolean {
   )
 }
 
+/** Whether the message, cleaned up as the other checks read it, starts with `<@userId>`. */
+export function leadsWithBotUser(text: string, userId: string): boolean {
+  return normalized(text).startsWith(`<@${userId.toLowerCase()}>`)
+}
+
 /** Whether the message leads with the shared Slack user's mention and then another bot's name
  *  (longest first), so it is that bot's, not this one's. */
 export function addressesOtherBot(text: string, bot: ThreadBot): boolean {
   const userId = bot.userId?.toLowerCase()
   const rest = normalized(text)
   const prefix = `<@${userId}>`
-  if (!userId || !bot.others?.length || !rest.startsWith(prefix)) {
+  if (!userId || !bot.others?.length || !leadsWithBotUser(text, userId)) {
     return false
   }
   const after = rest.slice(prefix.length).trimStart()

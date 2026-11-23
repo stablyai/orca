@@ -9,6 +9,7 @@ import type { SendDelivery } from './connector-deliveries'
 
 import {
   addressesOtherBot,
+  leadsWithBotUser,
   mayBeThreadMuteCommand,
   mentionsBot,
   threadMuteCommand,
@@ -187,9 +188,9 @@ function applyStep(
   const step = threadMuteStep(thread.muted, delivery, {
     userId,
     names: plain ? [] : deps.botNames(thread.botId),
-    // Only a reply leading with the shared Slack mention can be another bot's.
+    // Only a reply leading with this bot's own Slack mention can be another bot's behind its app.
     others:
-      plain || !delivery.text.trimStart().startsWith('<@') ? [] : deps.otherBotNames(thread.botId)
+      plain || !leadsWithBotUser(delivery.text, userId) ? [] : deps.otherBotNames(thread.botId)
   })
   if (step === 'send') {
     return null
