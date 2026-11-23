@@ -103,6 +103,8 @@ export function watchChatNews(
     chat?.subscribeTurnCompletions({
       id,
       includePrompts: true,
+      // A turn's words go out with that turn, even when live workers hold its end.
+      includeHeld: true,
       onClosed: (sessionId) => listener({ kind: 'closed', sessionId }),
       emit: (event) => {
         if (event.type === 'prompt') {

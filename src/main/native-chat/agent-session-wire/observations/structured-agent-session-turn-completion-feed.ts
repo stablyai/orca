@@ -22,6 +22,11 @@ import {
 } from '../../../../shared/agent-status/child-work/agent-status-child-work-liveness'
 import type { StructuredAgentSessionLatestRequest } from '../../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import {
+  completionAudience,
+  hearsTurnCompletionEdge,
+  type TurnCompletionAudience
+} from './structured-agent-session-turn-completion-audience'
 import type {
   StructuredAgentSessionStatusState,
   StructuredAgentSessionJournalProjection
@@ -32,6 +37,8 @@ export type StructuredAgentSessionTurnCompletionSubscriber = {
   emit: (event: AgentSessionTurnCompletionEvent) => void
   /** Older clients misread prompt arms, so delivery requires opt-in. */
   includePrompts?: boolean
+  /** Also hears an end live work holds, when it ends, and not again when it is announced. */
+  includeHeld?: boolean
   /** In-process reconciliation on restore and prompt removal. */
   onState?: (state: StructuredAttentionState) => void
   /** The session closed; a turn it was running ends with no completion. */
@@ -67,8 +74,12 @@ type RequestMark = Pick<StructuredAgentSessionLatestRequest, 'kind' | 'id'>
 /** Missing baseline makes first observation silent; settled/prompts track already-accounted edges. */
 type SessionBaseline = CompletionFeedCursor & {
   settled: RequestMark | null
+  // The end live work holds, already told to subscribers that hear held ends.
+  held: RequestMark | null
   prompts: ReadonlySet<string>
 }
+
+const sameMark = (a: RequestMark | null, b: RequestMark) => a?.kind === b.kind && a.id === b.id
 
 function settledMark(request: StructuredAgentSessionLatestRequest | null): RequestMark | null {
   return request && request.turnState !== 'running' ? { kind: request.kind, id: request.id } : null
@@ -167,6 +178,7 @@ export class StructuredAgentSessionTurnCompletionFeed {
       this.baselines.set(sessionId, {
         ...cursor,
         settled: settledMark(request),
+        held: null,
         prompts
       })
       return
@@ -176,18 +188,21 @@ export class StructuredAgentSessionTurnCompletionFeed {
       baseline.epoch = cursor.epoch
       baseline.sequence = cursor.sequence
       baseline.settled = settledMark(request)
+      baseline.held = null
       baseline.prompts = prompts
       return
     }
     baseline.sequence = cursor.sequence
     const raised = state.pendingPromptIds.find((id) => !baseline.prompts.has(id))
     baseline.prompts = prompts
-    const completion = this.settledCompletion(sessionId, session, state, baseline)
-    if (completion) {
+    const settled = this.settledCompletion(sessionId, session, state, baseline)
+    if (settled) {
+      const { completion, held, told } = settled
       completion.journalCursor = cursor
       const restatesPrompt = completion.awaitingUser === true && completion.outcome === 'success'
-      this.broadcast({ type: 'completion', completion }, restatesPrompt ? 'legacy' : 'all')
-      if (!restatesPrompt) {
+      const audience = completionAudience({ held, restatesPrompt, told })
+      this.broadcast({ type: 'completion', completion }, audience)
+      if (!held && !restatesPrompt) {
         return
       }
     }
@@ -228,11 +243,12 @@ export class StructuredAgentSessionTurnCompletionFeed {
     session: CompletionFeedSession,
     state: StructuredAgentSessionStatusState,
     baseline: SessionBaseline
-  ): AgentSessionTurnCompletion | null {
+  ): { completion: AgentSessionTurnCompletion; held?: true; told?: true } | null {
     const request = state.latestRequest
     if (request?.turnState === 'running') {
       // Clear on running so each running-to-settled transition can fire, even for a reused ID.
       baseline.settled = null
+      baseline.held = null
       return null
     }
     if (state.owesWork) {
@@ -244,9 +260,16 @@ export class StructuredAgentSessionTurnCompletionFeed {
     ) {
       return null
     }
-    // Live work defers this end.
+    // Live work defers this end; those who hear held ends hear it now, once.
     if (this.heldByLiveWork(sessionId, state, request)) {
-      return null
+      if (sameMark(baseline.held, request)) {
+        return null
+      }
+      baseline.held = { kind: request.kind, id: request.id }
+      return {
+        completion: this.completionOf(sessionId, session, state, request.id, 'success'),
+        held: true
+      }
     }
     baseline.settled = settledMark(request)
     // No outcome means unknown; inferring success would alert on failures.
@@ -254,10 +277,23 @@ export class StructuredAgentSessionTurnCompletionFeed {
       return null
     }
     return {
+      completion: this.completionOf(sessionId, session, state, request.id, request.outcome),
+      ...(sameMark(baseline.held, request) ? { told: true as const } : {})
+    }
+  }
+
+  private completionOf(
+    sessionId: string,
+    session: CompletionFeedSession,
+    state: StructuredAgentSessionStatusState,
+    turnId: string,
+    outcome: AgentSessionTurnCompletion['outcome']
+  ): AgentSessionTurnCompletion {
+    return {
       scope: session.params.location,
       sessionId,
-      turnId: request.id,
-      outcome: request.outcome,
+      turnId,
+      outcome,
       completedAt: this.deps.now(),
       // Include attention here: remote clients receive status and completion streams unordered.
       ...(state.summary.status === 'attention' ? { awaitingUser: true as const } : {}),
@@ -295,13 +331,9 @@ export class StructuredAgentSessionTurnCompletionFeed {
     )
   }
 
-  private broadcast(
-    event: AgentSessionAttentionEdge,
-    audience: 'all' | 'legacy' | 'prompt-aware'
-  ): void {
+  private broadcast(event: AgentSessionAttentionEdge, audience: TurnCompletionAudience): void {
     for (const subscriber of this.subscribers.values()) {
-      const promptAware = subscriber.includePrompts === true
-      if ((audience === 'legacy' && promptAware) || (audience === 'prompt-aware' && !promptAware)) {
+      if (!hearsTurnCompletionEdge(subscriber, audience)) {
         continue
       }
       try {
