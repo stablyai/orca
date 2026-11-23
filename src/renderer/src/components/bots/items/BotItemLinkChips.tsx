@@ -1,7 +1,7 @@
 // An item's links as one or two lines of chips under its frozen title, so they stay in view while the
 // owner reads and answers lower down. Each chip opens its link as its row in the full list would; the
 // chips with no room go behind "+N", whose popover lists them as full rows.
-import { FileText, GitPullRequest, Link2, Square } from 'lucide-react'
+import { FileText, GitPullRequest, Hourglass, Link2, Square } from 'lucide-react'
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
@@ -312,6 +312,19 @@ function Chip({
       return <WebChip row={row} />
     case 'file':
       return <FileChip row={row} fileContext={fileContext} />
+    case 'automation':
+      return (
+        <ChipButton
+          icon={<Hourglass className="size-3.5 text-muted-foreground" />}
+          label={row.name ?? t('bots.items.link.automation', 'Automation')}
+          tip={
+            row.active
+              ? t('bots.items.link.automationOn', 'Will wake the agent for this item')
+              : t('bots.items.link.automationEnded', 'Ended')
+          }
+          disabled={!row.active}
+        />
+      )
   }
 }
 
