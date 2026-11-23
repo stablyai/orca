@@ -37,11 +37,11 @@ export async function closeServerPagesInDeletedProfile(
           browserManager.getSessionProfileIdForTab(pageId) !== profileId
         const saved = host.serveBrowserTabs?.pagesInProfile(profileId) ?? []
         const tabId = saved.find((entry) => entry.pageId === page)?.tabId
-        // Closing a saved page closes its whole tab, so a sibling already running in another profile keeps it.
-        const stillInProfile = offscreen.ownsTab(page)
-          ? !runsElsewhere(page)
-          : tabId !== undefined &&
-            !saved.some((entry) => entry.tabId === tabId && runsElsewhere(entry.pageId))
+        // Closing a page closes its whole saved tab, so a sibling already running in another profile keeps it.
+        const stillInProfile =
+          (offscreen.ownsTab(page) || tabId !== undefined) &&
+          !runsElsewhere(page) &&
+          !saved.some((entry) => entry.tabId === tabId && runsElsewhere(entry.pageId))
         if (stillInProfile) {
           await close.browserTabClose({
             page,
