@@ -1,9 +1,13 @@
+import { Fragment, useState } from 'react'
+import { Button } from '../ui/button'
 import { formatSessionTime, formatTokens, formatUsageProjectLabel } from './usage-formatters'
-import { useIntlLocale } from '../../i18n/use-translate'
+import { useIntlLocale, useTranslate } from '../../i18n/use-translate'
 
 type UsageRecentSession = {
   sessionId: string
   lastActiveAt: string
+  lastActiveDay?: string
+  totalsScope?: 'lifetime' | 'selection'
   projectLabel: string
   model: string | null
   inputTokens: number
@@ -29,6 +33,8 @@ type UsageRecentSessionsTableProps<Row extends UsageRecentSession> = {
   getActivity: (row: Row) => number
   getTrailingTokens: (row: Row) => number
   getModelSuffix?: (row: Row) => React.ReactNode
+  getSessionTimeLabel?: (row: Row) => string
+  renderDetails?: (row: Row) => React.ReactNode
 }
 
 export function UsageRecentSessionsTable<Row extends UsageRecentSession>({
@@ -39,16 +45,28 @@ export function UsageRecentSessionsTable<Row extends UsageRecentSession>({
   rows,
   getActivity,
   getTrailingTokens,
-  getModelSuffix
+  getModelSuffix,
+  getSessionTimeLabel,
+  renderDetails
 }: UsageRecentSessionsTableProps<Row>): React.JSX.Element {
+  const t = useTranslate()
+  const [expanded, setExpanded] = useState<string | null>(null)
   const intlLocale = useIntlLocale()
   return (
     <section className="rounded-lg border border-border/60 bg-card/40 p-4">
       <div className="mb-3">
         <h4 className="text-sm font-semibold text-foreground">{title}</h4>
         <p className="text-xs text-muted-foreground">{description}</p>
+        {rows.some((row) => row.totalsScope === 'lifetime') ? (
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'stats.usage.session.lifetime',
+              'Some session rows show lifetime totals because period attribution is unavailable. Refresh the scan to rebuild their detail.'
+            )}
+          </p>
+        ) : null}
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto scrollbar-sleek">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
@@ -61,28 +79,55 @@ export function UsageRecentSessionsTable<Row extends UsageRecentSession>({
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.sessionId} className="border-b border-border/40 last:border-b-0">
-                <td className="px-2 py-2 text-muted-foreground">
-                  {formatSessionTime(row.lastActiveAt, intlLocale)}
-                </td>
-                <td className="px-2 py-2 text-foreground">
-                  {formatUsageProjectLabel(row.projectLabel)}
-                </td>
-                <td className="px-2 py-2 text-muted-foreground">
-                  {row.model ?? unknownModel}
-                  {getModelSuffix?.(row)}
-                </td>
-                <td className="px-2 py-2 text-muted-foreground">{getActivity(row)}</td>
-                <td className="px-2 py-2 text-muted-foreground">
-                  {formatTokens(row.inputTokens, intlLocale)}
-                </td>
-                <td className="px-2 py-2 text-muted-foreground">
-                  {formatTokens(row.outputTokens, intlLocale)}
-                </td>
-                <td className="px-2 py-2 text-muted-foreground">
-                  {formatTokens(getTrailingTokens(row), intlLocale)}
-                </td>
-              </tr>
+              <Fragment key={row.sessionId}>
+                <tr key={row.sessionId} className="border-b border-border/40 last:border-b-0">
+                  <td className="px-2 py-2 text-muted-foreground">
+                    {renderDetails ? (
+                      <Button
+                        variant="link"
+                        size="xs"
+                        className="h-auto"
+                        aria-expanded={expanded === row.sessionId}
+                        onClick={() =>
+                          setExpanded(expanded === row.sessionId ? null : row.sessionId)
+                        }
+                      >
+                        {getSessionTimeLabel?.(row) ??
+                          row.lastActiveDay ??
+                          formatSessionTime(row.lastActiveAt, intlLocale)}
+                      </Button>
+                    ) : (
+                      (getSessionTimeLabel?.(row) ??
+                      row.lastActiveDay ??
+                      formatSessionTime(row.lastActiveAt, intlLocale))
+                    )}
+                  </td>
+                  <td className="px-2 py-2 text-foreground">
+                    {formatUsageProjectLabel(row.projectLabel)}
+                  </td>
+                  <td className="px-2 py-2 text-muted-foreground">
+                    {row.model ?? unknownModel}
+                    {getModelSuffix?.(row)}
+                  </td>
+                  <td className="px-2 py-2 text-muted-foreground">{getActivity(row)}</td>
+                  <td className="px-2 py-2 text-muted-foreground">
+                    {formatTokens(row.inputTokens, intlLocale)}
+                  </td>
+                  <td className="px-2 py-2 text-muted-foreground">
+                    {formatTokens(row.outputTokens, intlLocale)}
+                  </td>
+                  <td className="px-2 py-2 text-muted-foreground">
+                    {formatTokens(getTrailingTokens(row), intlLocale)}
+                  </td>
+                </tr>
+                {expanded === row.sessionId && renderDetails ? (
+                  <tr>
+                    <td colSpan={7} className="bg-muted/30 px-2 py-3">
+                      {renderDetails(row)}
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
             ))}
           </tbody>
         </table>

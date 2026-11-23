@@ -5,6 +5,7 @@ import { gunzipSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   readUsageSourceCache,
+  readUsageSourceCacheForScan,
   splitUsageCacheFile,
   usageSourceCachePath,
   writeUsageSourceCache
@@ -117,6 +118,17 @@ describe('usage source cache file', () => {
       '{"schemaVersion":7,"worktreeFingerprint":"w","sources":[null,7,["a.jsonl"],{"path":"a.jsonl"}]}'
     )
     expect(await readUsageSourceCache(ref)).toEqual([{ path: 'a.jsonl' }])
+    expect(await readUsageSourceCacheForScan({ ...ref, hadPreviousHistory: true })).toEqual({
+      sources: [{ path: 'a.jsonl' }],
+      reuseProjections: true,
+      accountAttributionAvailable: true
+    })
+    writeFileSync(ref.path, '{"schemaVersion":7,"worktreeFingerprint":"w","sources":[null,7,[]]}')
+    expect(await readUsageSourceCacheForScan({ ...ref, hadPreviousHistory: true })).toEqual({
+      sources: [],
+      reuseProjections: true,
+      accountAttributionAvailable: false
+    })
   })
 
   it('keeps the prior cache and removes the partial temp when encoding fails after writing', async () => {

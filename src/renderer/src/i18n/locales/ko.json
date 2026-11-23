@@ -5491,7 +5491,6 @@
         },
         "StatsPane": {
           "42d3e0bdf7": "사용 분석 제공자: {{value0}}",
-          "c79f073d4c": "사용량 분석",
           "a58aba506f": "생성된 PR",
           "1c96f433e2": "에이전트 작업 시간",
           "9dbec9e675": "시작된 에이전트",
@@ -5504,25 +5503,7 @@
           "trackingSince": "{{value0}} 이후 추적 중"
         },
         "UsageOverviewPane": {
-          "33f7b043d2": "공급자",
-          "70f36452d4": "캐시 공유",
-          "327603fe8b": "활성 일수",
-          "0eaf937335": "예상 비용",
-          "3887b94ce5": "총 토큰",
-          "2d13e57f72": "OpenCode 활성화",
-          "2f1ee2878b": "Codex 활성화",
-          "0ea0cae435": "Claude 활성화",
-          "6c00c46815": "공급자를 활성화해 로컬 에이전트 로그를 스캔하고 통합 토큰 원장을 만드세요.",
-          "49405ccc8d": "토큰 추적 시작",
-          "ca6bc5fded": "새로고침",
-          "e06d1baf5c": "사용량 개요 새로고침",
-          "c760c481c5": "사용량 개요",
-          "55c910f4f1": "- 일부 모델 가격 확인 불가",
-          "enableMuse": "Muse 사용",
-          "noLocalUsageYet": "아직 로컬 Claude, Codex, OpenCode 또는 Muse 사용량을 찾지 못했습니다. 다음 에이전트 세션이 토큰 로그를 기록하면 개요가 채워집니다.",
-          "providersEnabledWithData": "{{enabled}}개 활성화 - {{withData}}개에 데이터 있음",
-          "sessionCount_one": "세션 {{formatted}}개",
-          "sessionCount_other": "세션 {{formatted}}개"
+          "3887b94ce5": "총 토큰"
         },
         "share": {
           "card": {
@@ -19653,17 +19634,6 @@
         "keyword-trust": "신뢰",
         "keyword-hooks": "훅"
       },
-      "task-page": {
-        "checksPill": {
-          "pipelinePassed": "파이프라인 통과",
-          "pipelineFailed": "파이프라인 실패",
-          "pipelinePending": "파이프라인 대기 중",
-          "pipelineUnresolved": "파이프라인 미확정"
-        }
-      },
-      "NewWorkspaceComposerFooter": {
-        "create": "생성"
-      },
       "NativeChatResumeToast": {
         "resumingOn_one": "{{machine}}에서 에이전트 {{count}}개를 다시 시작하는 중…",
         "resumingOn_other": "{{machine}}에서 에이전트 {{count}}개를 재개하는 중…",
@@ -19711,6 +19681,17 @@
         "notAttachedShort": "다시 연결되지 않았습니다.",
         "dispatchRejectedShort": "에이전트가 계속하기를 거부했습니다.",
         "unsupportedShort": "Orca가 이 에이전트를 재개할 수 없습니다."
+      },
+      "task-page": {
+        "checksPill": {
+          "pipelinePassed": "파이프라인 통과",
+          "pipelineFailed": "파이프라인 실패",
+          "pipelinePending": "파이프라인 대기 중",
+          "pipelineUnresolved": "파이프라인 미확정"
+        }
+      },
+      "NewWorkspaceComposerFooter": {
+        "create": "생성"
       }
     },
     "i18n": {
@@ -25732,49 +25713,6 @@
     "title": "Orca를 시작할 수 없음",
     "finishFailed": "Orca가 시작을 완료하지 못했습니다: {{detail}}"
   },
-  "wslDriveProject": {
-    "label": "Git",
-    "converted": "Orca가 이 프로젝트에서 Windows의 Git을 실행합니다. 터미널과 에이전트는 계속 {{distro}}에서 실행됩니다.",
-    "checkFailed": "Orca가 이 프로젝트를 확인할 수 없습니다.",
-    "convertFailed": "Orca가 Git을 전환할 수 없습니다.",
-    "description": "이 프로젝트는 Windows 드라이브에 있어 WSL의 Git이 느리고 Windows에서 변경한 내용을 놓칩니다. 대신 Git for Windows를 사용하세요. 터미널과 에이전트는 {{distro}}에 그대로 남습니다.",
-    "useWindowsGit": "Git for Windows 사용",
-    "review": "이 프로젝트에서 Orca의 변경 사항은 없습니다. 탭, 터미널, 채팅, 워크스페이스는 그대로 유지되고 실행 중인 터미널도 계속 실행됩니다.",
-    "lineEndings": "이 저장소에 core.autocrlf도 설정해 WSL 터미널의 git이 모든 파일을 변경된 것으로 표시하지 않게 합니다.",
-    "cancel": "취소",
-    "confirm": "Git for Windows 사용",
-    "blocker": {
-      "notWsl": "이 프로젝트는 이미 Windows의 Git을 실행합니다.",
-      "repair": "먼저 이 프로젝트의 WSL 런타임을 고치세요. 배포판이 없거나 WSL을 사용할 수 없습니다.",
-      "notWindowsDrive": "이 프로젝트의 폴더 중 하나가 Windows 드라이브에 있지 않습니다.",
-      "gitMissing": "Git for Windows가 설치되어 있지 않습니다. git-scm.com에서 설치한 뒤 다시 시도하세요.",
-      "wslWorktrees": "WSL Git이 다음 워크스페이스를 만들었으며 Git for Windows는 읽을 수 없습니다: {{paths}}. 제거하거나 이 프로젝트를 WSL Git으로 유지하세요.",
-      "worktreeFolder": "이 프로젝트의 새 워크스페이스가 WSL 안에 생성되도록 설정되어 있습니다. 먼저 이 프로젝트의 설정에서 Windows 드라이브의 폴더를 선택하세요."
-    }
-  },
-  "wslDriveUnc": {
-    "label": "위치",
-    "description": "Orca가 이 프로젝트를 WSL을 통해 엽니다. 대신 {{drivePath}}에서 여세요. Git이 Windows에서 실행되어 훨씬 빠르고, 터미널과 에이전트는 {{distro}}에 그대로 남습니다.",
-    "convert": "{{drivePath}}에서 열기",
-    "review": "Orca가 이 프로젝트의 터미널을 일시 중지하고 다시 시작한 뒤 {{drivePath}}에서 다시 엽니다. 탭, 기록이 있는 터미널, 채팅, 설정은 그대로 옮겨지며 일시 중지된 터미널은 중단된 지점부터 이어집니다.",
-    "cancel": "취소",
-    "confirm": "다시 시작하고 변환",
-    "failed": "Orca가 이 프로젝트를 변환할 수 없습니다.",
-    "restarting": "이 프로젝트를 변환하기 위해 Orca를 다시 시작하는 중…",
-    "terminalsBusy": "이 프로젝트의 일부 터미널이 사용 중입니다. 작업이 끝나길 기다리거나 터미널을 닫은 뒤 다시 시도하세요.",
-    "pauseFailed": "Orca가 이 프로젝트의 터미널을 일시 중지할 수 없어 아무것도 변경하지 않았습니다.",
-    "blocker": {
-      "pending": "Orca가 이미 프로젝트를 변환하고 있습니다. Orca를 다시 시작하면 완료됩니다.",
-      "state": "Orca가 이 프로젝트에서 안전하게 변환할 수 없는 저장된 상태를 발견하여 아무것도 변경하지 않았습니다.",
-      "duplicate": "{{drivePath}}은(는) 이미 Orca의 프로젝트입니다.",
-      "mixed": "이 프로젝트의 일부 폴더가 Windows 드라이브가 아니라 WSL 안에 있습니다.",
-      "overlap": "이 프로젝트는 Orca가 변환할 수 없는 프로젝트와 폴더를 공유하므로, 변환하면 폴더가 나뉩니다.",
-      "notDriveMount": "이 배포판에서 해당 폴더는 {{drivePath}}이(가) 아닙니다. 해당 Windows 드라이브에서 마운트된 폴더가 아닙니다.",
-      "notConvertible": "이 프로젝트는 이 컴퓨터의 Windows 드라이브에 있지 않습니다.",
-      "differingState": "Orca가 이 폴더에 대해 WSL 경로와 {{drivePath}} 아래에 서로 다른 정보를 저장해 두어 아무것도 변경하지 않았습니다.",
-      "projectSplit": "이 프로젝트에는 변환되지 않는 저장소도 있어 아무것도 변경하지 않았습니다."
-    }
-  },
   "localBuild": {
     "chooseTitle": "로컬 Orca 빌드 선택",
     "chooseButton": "빌드 선택",
@@ -27753,6 +27691,137 @@
       }
     }
   },
+  "speechModelUpdate": {
+    "update": "업데이트",
+    "cancel": "취소",
+    "pill": {
+      "updateNotice": "더 빠른 받아쓰기를 설치할 수 있습니다",
+      "retiredNotice": "받아쓰기가 더 빠른 음성 모델로 바뀌었습니다",
+      "install": "설치",
+      "installTooltip": "1회 다운로드 · {{size}}MB",
+      "downloading": "받아쓰기 설정 중",
+      "downloadingTooltip": "{{done}} / {{size}}MB",
+      "ready": "받아쓰기가 준비되었습니다. <kbd></kbd> 키를 누르세요",
+      "readyNoShortcut": "받아쓰기가 준비되었습니다.",
+      "failed": "다운로드가 중단되었습니다. 연결을 확인하세요.",
+      "tryAgain": "다시 시도",
+      "deleteOld": "이전 모델 삭제",
+      "deleteFailed": "{{model}}을(를) 삭제하지 못했습니다.",
+      "dismiss": "닫기",
+      "cancelDownload": "다운로드 취소"
+    }
+  },
+  "crashReport": {
+    "freeze": {
+      "attachmentsOmitted": "저장된 멈춤 보고서와 진단 로그를 첨부하지 않았습니다: {{value0}}",
+      "description": "저장된 멈춤 보고서를 보내 무슨 일이 있었는지 파악하는 데 도움을 주세요.",
+      "notSent": "멈춤 보고서를 보내지 못했습니다",
+      "notes": "선택 사항: Orca가 멈추기 전에 무엇을 하고 있었나요?",
+      "sent": "멈춤 보고서를 보냈습니다.",
+      "sentWithoutAttachments": "저장된 멈춤 보고서와 진단 로그 없이 상세 정보를 보냈습니다",
+      "summary": "Orca가 응답하지 않음",
+      "title": "멈춤 신고",
+      "includeRedacted": "저장된 멈춤 보고서와 최근 로그 포함(민감 정보 제거)",
+      "uncheckAttachments": "\"저장된 멈춤 보고서와 최근 로그 포함(민감 정보 제거)\" 체크를 해제한 뒤 다시 시도하거나 세부 정보를 복사하세요."
+    },
+    "includeRecentLogsRedacted": "최근 로그 포함(민감 정보 제거)",
+    "details": "세부 정보",
+    "copyDetails": "세부 정보 복사",
+    "dontSend": "보내지 않음",
+    "sending": "전송 중…",
+    "sendReport": "보고서 보내기"
+  },
+  "agentCliUpdate": {
+    "updating": "업데이트 중…",
+    "tryAgain": "다시 시도",
+    "update": "업데이트",
+    "versions": "{{installed}} → {{latest}}",
+    "modelRequiresClaude": "Claude Code CLI {{version}} 필요",
+    "modelRequiresCodex": "Codex CLI {{version}} 필요",
+    "modelRequires": "{{product}} {{version}} 필요",
+    "claudeProduct": "Claude Code",
+    "codexProduct": "Codex CLI",
+    "grokProduct": "Grok Build",
+    "opencodeProduct": "OpenCode",
+    "opencode2Product": "OpenCode 2",
+    "ompProduct": "OMP",
+    "copilotProduct": "GitHub Copilot CLI",
+    "copilotShortProduct": "Copilot CLI",
+    "kimiProduct": "Kimi Code",
+    "cursorProduct": "Cursor CLI",
+    "hermesProduct": "Hermes Agent",
+    "gooseProduct": "Goose CLI",
+    "auggieProduct": "Auggie",
+    "kiloProduct": "Kilo CLI",
+    "mimoCodeProduct": "MiMo Code",
+    "qwenCodeProduct": "Qwen Code",
+    "commandCopied": "명령이 복사됨",
+    "commandNotCopied": "명령을 복사할 수 없습니다",
+    "copyCommand": "복사",
+    "manualHint": "터미널에서 실행:",
+    "noOutput": "명령이 아무것도 출력하지 않았습니다.",
+    "heading_one": "CLI 업데이트 {{count}}개 사용 가능",
+    "heading_other": "CLI 업데이트 {{count}}개 사용 가능",
+    "updateAll": "모두 업데이트",
+    "thisComputer": "이 컴퓨터",
+    "statusUpdating": "CLI 업데이트 중",
+    "statusUpdatingTooltip": "에이전트 CLI 업데이트가 실행 중입니다",
+    "statusFailed": "CLI 업데이트 실패",
+    "statusFailedTooltip": "열어서 문제를 확인하세요",
+    "statusCount_one": "CLI 업데이트 {{count}}개",
+    "statusCount_other": "CLI 업데이트 {{count}}개",
+    "statusTooltip": "에이전트 CLI의 새 버전이 나왔습니다",
+    "failedButton": "업데이트 실패",
+    "failedChip": "업데이트 실패",
+    "failedChipLabel": "업데이트 실패: 오류 보기",
+    "failedChipTooltip": "업데이트하지 못했습니다. 눌러서 자세히 확인하세요.",
+    "failedTitle": "{{product}}을(를) 업데이트하지 못했습니다",
+    "failedDescription": "Orca가 <strong>{{host}}</strong>에서 <code>{{command}}</code>을(를) 실행해 {{product}}을(를) <strong>{{installedVersion}}</strong>에서 <strong>{{latestVersion}}</strong>(으)로 업데이트하려 했지만 실패했습니다.",
+    "failedDescriptionNoCommand": "Orca가 <strong>{{host}}</strong>에서 {{product}}을(를) 업데이트할 수 없습니다."
+  },
+  "wslDriveProject": {
+    "label": "Git",
+    "converted": "Orca가 이 프로젝트에서 Windows의 Git을 실행합니다. 터미널과 에이전트는 계속 {{distro}}에서 실행됩니다.",
+    "checkFailed": "Orca가 이 프로젝트를 확인할 수 없습니다.",
+    "convertFailed": "Orca가 Git을 전환할 수 없습니다.",
+    "description": "이 프로젝트는 Windows 드라이브에 있어 WSL의 Git이 느리고 Windows에서 변경한 내용을 놓칩니다. 대신 Git for Windows를 사용하세요. 터미널과 에이전트는 {{distro}}에 그대로 남습니다.",
+    "useWindowsGit": "Git for Windows 사용",
+    "review": "이 프로젝트에서 Orca의 변경 사항은 없습니다. 탭, 터미널, 채팅, 워크스페이스는 그대로 유지되고 실행 중인 터미널도 계속 실행됩니다.",
+    "lineEndings": "이 저장소에 core.autocrlf도 설정해 WSL 터미널의 git이 모든 파일을 변경된 것으로 표시하지 않게 합니다.",
+    "cancel": "취소",
+    "confirm": "Git for Windows 사용",
+    "blocker": {
+      "notWsl": "이 프로젝트는 이미 Windows의 Git을 실행합니다.",
+      "repair": "먼저 이 프로젝트의 WSL 런타임을 고치세요. 배포판이 없거나 WSL을 사용할 수 없습니다.",
+      "notWindowsDrive": "이 프로젝트의 폴더 중 하나가 Windows 드라이브에 있지 않습니다.",
+      "gitMissing": "Git for Windows가 설치되어 있지 않습니다. git-scm.com에서 설치한 뒤 다시 시도하세요.",
+      "wslWorktrees": "WSL Git이 다음 워크스페이스를 만들었으며 Git for Windows는 읽을 수 없습니다: {{paths}}. 제거하거나 이 프로젝트를 WSL Git으로 유지하세요.",
+      "worktreeFolder": "이 프로젝트의 새 워크스페이스가 WSL 안에 생성되도록 설정되어 있습니다. 먼저 이 프로젝트의 설정에서 Windows 드라이브의 폴더를 선택하세요."
+    }
+  },
+  "wslDriveUnc": {
+    "label": "위치",
+    "description": "Orca가 이 프로젝트를 WSL을 통해 엽니다. 대신 {{drivePath}}에서 여세요. Git이 Windows에서 실행되어 훨씬 빠르고, 터미널과 에이전트는 {{distro}}에 그대로 남습니다.",
+    "convert": "{{drivePath}}에서 열기",
+    "review": "Orca가 이 프로젝트의 터미널을 일시 중지하고 다시 시작한 뒤 {{drivePath}}에서 다시 엽니다. 탭, 기록이 있는 터미널, 채팅, 설정은 그대로 옮겨지며 일시 중지된 터미널은 중단된 지점부터 이어집니다.",
+    "cancel": "취소",
+    "confirm": "다시 시작하고 변환",
+    "failed": "Orca가 이 프로젝트를 변환할 수 없습니다.",
+    "restarting": "이 프로젝트를 변환하기 위해 Orca를 다시 시작하는 중…",
+    "terminalsBusy": "이 프로젝트의 일부 터미널이 사용 중입니다. 작업이 끝나길 기다리거나 터미널을 닫은 뒤 다시 시도하세요.",
+    "pauseFailed": "Orca가 이 프로젝트의 터미널을 일시 중지할 수 없어 아무것도 변경하지 않았습니다.",
+    "blocker": {
+      "pending": "Orca가 이미 프로젝트를 변환하고 있습니다. Orca를 다시 시작하면 완료됩니다.",
+      "state": "Orca가 이 프로젝트에서 안전하게 변환할 수 없는 저장된 상태를 발견하여 아무것도 변경하지 않았습니다.",
+      "duplicate": "{{drivePath}}은(는) 이미 Orca의 프로젝트입니다.",
+      "mixed": "이 프로젝트의 일부 폴더가 Windows 드라이브가 아니라 WSL 안에 있습니다.",
+      "overlap": "이 프로젝트는 Orca가 변환할 수 없는 프로젝트와 폴더를 공유하므로, 변환하면 폴더가 나뉩니다.",
+      "notDriveMount": "이 배포판에서 해당 폴더는 {{drivePath}}이(가) 아닙니다. 해당 Windows 드라이브에서 마운트된 폴더가 아닙니다.",
+      "notConvertible": "이 프로젝트는 이 컴퓨터의 Windows 드라이브에 있지 않습니다.",
+      "differingState": "Orca가 이 폴더에 대해 WSL 경로와 {{drivePath}} 아래에 서로 다른 정보를 저장해 두어 아무것도 변경하지 않았습니다.",
+      "projectSplit": "이 프로젝트에는 변환되지 않는 저장소도 있어 아무것도 변경하지 않았습니다."
+    }
+  },
   "plugins": {
     "frameSaveAs": {
       "title": "파일 저장",
@@ -27783,26 +27852,6 @@
     "gitlabAllowedFailure": "실패 허용",
     "rerunUnsuccessful": "실패한 항목 다시 실행"
   },
-  "speechModelUpdate": {
-    "update": "업데이트",
-    "cancel": "취소",
-    "pill": {
-      "updateNotice": "더 빠른 받아쓰기를 설치할 수 있습니다",
-      "retiredNotice": "받아쓰기가 더 빠른 음성 모델로 바뀌었습니다",
-      "install": "설치",
-      "installTooltip": "1회 다운로드 · {{size}}MB",
-      "downloading": "받아쓰기 설정 중",
-      "downloadingTooltip": "{{done}} / {{size}}MB",
-      "ready": "받아쓰기가 준비되었습니다. <kbd></kbd> 키를 누르세요",
-      "readyNoShortcut": "받아쓰기가 준비되었습니다.",
-      "failed": "다운로드가 중단되었습니다. 연결을 확인하세요.",
-      "tryAgain": "다시 시도",
-      "deleteOld": "이전 모델 삭제",
-      "deleteFailed": "{{model}}을(를) 삭제하지 못했습니다.",
-      "dismiss": "닫기",
-      "cancelDownload": "다운로드 취소"
-    }
-  },
   "renderer": {
     "lib": {
       "filePreview": {
@@ -27826,26 +27875,6 @@
       "read": "사용량을 불러올 수 없습니다. 다시 새로 고침하세요.",
       "retry": "새로고침"
     }
-  },
-  "crashReport": {
-    "freeze": {
-      "attachmentsOmitted": "저장된 멈춤 보고서와 진단 로그를 첨부하지 않았습니다: {{value0}}",
-      "description": "저장된 멈춤 보고서를 보내 무슨 일이 있었는지 파악하는 데 도움을 주세요.",
-      "notSent": "멈춤 보고서를 보내지 못했습니다",
-      "notes": "선택 사항: Orca가 멈추기 전에 무엇을 하고 있었나요?",
-      "sent": "멈춤 보고서를 보냈습니다.",
-      "sentWithoutAttachments": "저장된 멈춤 보고서와 진단 로그 없이 상세 정보를 보냈습니다",
-      "summary": "Orca가 응답하지 않음",
-      "title": "멈춤 신고",
-      "includeRedacted": "저장된 멈춤 보고서와 최근 로그 포함(민감 정보 제거)",
-      "uncheckAttachments": "\"저장된 멈춤 보고서와 최근 로그 포함(민감 정보 제거)\" 체크를 해제한 뒤 다시 시도하거나 세부 정보를 복사하세요."
-    },
-    "includeRecentLogsRedacted": "최근 로그 포함(민감 정보 제거)",
-    "details": "세부 정보",
-    "copyDetails": "세부 정보 복사",
-    "dontSend": "보내지 않음",
-    "sending": "전송 중…",
-    "sendReport": "보고서 보내기"
   },
   "tabBar": {
     "createRow": {
@@ -27929,54 +27958,6 @@
     "suggestionUse": "사용",
     "browseOnline": "찾아보기",
     "browseOnlineLabel": "orca.dev에서 커뮤니티 번역 둘러보기 (브라우저에서 열림)"
-  },
-  "agentCliUpdate": {
-    "updating": "업데이트 중…",
-    "tryAgain": "다시 시도",
-    "update": "업데이트",
-    "versions": "{{installed}} → {{latest}}",
-    "modelRequiresClaude": "Claude Code CLI {{version}} 필요",
-    "modelRequiresCodex": "Codex CLI {{version}} 필요",
-    "modelRequires": "{{product}} {{version}} 필요",
-    "claudeProduct": "Claude Code",
-    "codexProduct": "Codex CLI",
-    "grokProduct": "Grok Build",
-    "opencodeProduct": "OpenCode",
-    "opencode2Product": "OpenCode 2",
-    "ompProduct": "OMP",
-    "copilotProduct": "GitHub Copilot CLI",
-    "copilotShortProduct": "Copilot CLI",
-    "kimiProduct": "Kimi Code",
-    "cursorProduct": "Cursor CLI",
-    "hermesProduct": "Hermes Agent",
-    "gooseProduct": "Goose CLI",
-    "auggieProduct": "Auggie",
-    "kiloProduct": "Kilo CLI",
-    "mimoCodeProduct": "MiMo Code",
-    "qwenCodeProduct": "Qwen Code",
-    "commandCopied": "명령이 복사됨",
-    "commandNotCopied": "명령을 복사할 수 없습니다",
-    "copyCommand": "복사",
-    "manualHint": "터미널에서 실행:",
-    "noOutput": "명령이 아무것도 출력하지 않았습니다.",
-    "heading_one": "CLI 업데이트 {{count}}개 사용 가능",
-    "heading_other": "CLI 업데이트 {{count}}개 사용 가능",
-    "updateAll": "모두 업데이트",
-    "thisComputer": "이 컴퓨터",
-    "statusUpdating": "CLI 업데이트 중",
-    "statusUpdatingTooltip": "에이전트 CLI 업데이트가 실행 중입니다",
-    "statusFailed": "CLI 업데이트 실패",
-    "statusFailedTooltip": "열어서 문제를 확인하세요",
-    "statusCount_one": "CLI 업데이트 {{count}}개",
-    "statusCount_other": "CLI 업데이트 {{count}}개",
-    "statusTooltip": "에이전트 CLI의 새 버전이 나왔습니다",
-    "failedButton": "업데이트 실패",
-    "failedChip": "업데이트 실패",
-    "failedChipLabel": "업데이트 실패: 오류 보기",
-    "failedChipTooltip": "업데이트하지 못했습니다. 눌러서 자세히 확인하세요.",
-    "failedTitle": "{{product}}을(를) 업데이트하지 못했습니다",
-    "failedDescription": "Orca가 <strong>{{host}}</strong>에서 <code>{{command}}</code>을(를) 실행해 {{product}}을(를) <strong>{{installedVersion}}</strong>에서 <strong>{{latestVersion}}</strong>(으)로 업데이트하려 했지만 실패했습니다.",
-    "failedDescriptionNoCommand": "Orca가 <strong>{{host}}</strong>에서 {{product}}을(를) 업데이트할 수 없습니다."
   },
   "backgroundWorkerPaused": {
     "title": "반복해서 중단된 일부 백그라운드 작업을 일시 중지했습니다",

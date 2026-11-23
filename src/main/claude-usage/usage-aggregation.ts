@@ -58,7 +58,13 @@ export function mergeClaudeDailyAggregates(
   dailyAggregates: ClaudeUsageDailyAggregate[]
 ): void {
   for (const aggregate of dailyAggregates) {
-    const key = [aggregate.day, aggregate.model ?? 'unknown', aggregate.projectKey].join('::')
+    const key = [
+      aggregate.day,
+      aggregate.model ?? 'unknown',
+      aggregate.projectKey,
+      aggregate.sessionId ?? '',
+      aggregate.accountId ?? ''
+    ].join('::')
     const existing = target.get(key)
     if (!existing) {
       target.set(key, { ...aggregate })
@@ -169,7 +175,13 @@ export function aggregateClaudeUsage(turns: ClaudeUsageAttributedTurn[]): {
       })
     }
 
-    const dailyKey = [turn.day, turn.model ?? 'unknown', turn.projectKey].join('::')
+    const dailyKey = [
+      turn.day,
+      turn.model ?? 'unknown',
+      turn.projectKey,
+      turn.sessionId,
+      turn.accountId ?? ''
+    ].join('::')
     const existingDaily = dailyByKey.get(dailyKey)
     if (existingDaily) {
       existingDaily.turnCount++
@@ -184,6 +196,8 @@ export function aggregateClaudeUsage(turns: ClaudeUsageAttributedTurn[]): {
       addLongContext(existingDaily, longContext)
     } else {
       dailyByKey.set(dailyKey, {
+        ...(turn.accountId !== undefined ? { accountId: turn.accountId } : {}),
+        sessionId: turn.sessionId,
         day: turn.day,
         model: turn.model,
         projectKey: turn.projectKey,

@@ -61,7 +61,15 @@ export function* iterateClaudeUsageResumeProjection(
   }
   const dailyKeys = new Set<string>()
   for (const day of previous.dailyAggregates) {
-    dailyKeys.add([day.day, day.model ?? 'unknown', day.projectKey].join('::'))
+    dailyKeys.add(
+      [
+        day.day,
+        day.model ?? 'unknown',
+        day.projectKey,
+        day.sessionId ?? '',
+        day.accountId ?? ''
+      ].join('::')
+    )
     if (++checked % CLAUDE_USAGE_VALIDATION_BATCH_ROWS === 0) {
       yield
     }
@@ -105,7 +113,13 @@ export function* iterateClaudeUsageResumeProjection(
       (projection.model !== null && typeof projection.model !== 'string') ||
       !sessionLocations.get(projection.sessionId)?.has(projection.projectKey) ||
       !dailyKeys.has(
-        [projection.day, projection.model ?? 'unknown', projection.projectKey].join('::')
+        [
+          projection.day,
+          projection.model ?? 'unknown',
+          projection.projectKey,
+          projection.sessionId,
+          projection.accountId ?? ''
+        ].join('::')
       )
     ) {
       return false

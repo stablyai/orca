@@ -31,7 +31,10 @@ export function createUsageProviderApi(
         : ipc.invoke(`${prefix}:getScanState`),
     setEnabled: (args: { enabled: boolean }) => ipc.invoke(`${prefix}:setEnabled`, args),
     refresh: (args?: { force?: boolean }) => ipc.invoke(`${prefix}:refresh`, args),
-    getSnapshot: (args: UsageRangeArgs & { limit?: number }, purpose?: BackendConnectionPurpose) =>
+    getSnapshot: (
+      args: UsageRangeArgs & { limit?: number; includeHistory?: boolean },
+      purpose?: BackendConnectionPurpose
+    ) =>
       purpose
         ? ipc.invoke(`${prefix}:getSnapshot`, args, purpose)
         : ipc.invoke(`${prefix}:getSnapshot`, args),

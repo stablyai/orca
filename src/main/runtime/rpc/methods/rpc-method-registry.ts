@@ -1,3 +1,4 @@
+import { USAGE_HISTORY_METHODS } from './usage-history'
 import { STATUS_METHODS } from './host-management/status'
 import { DESKTOP_WINDOW_METHODS } from './host-management/desktop-window'
 import { SIDEBAR_INPUT_METHODS } from './sidebar-inputs/sidebar-inputs'
@@ -215,6 +216,7 @@ const SERVICE_RPC_METHODS = [
   ...GOOGLE_FILES_METHODS,
   ...GOOGLE_WRITE_METHODS,
   ...USAGE_CREDENTIAL_METHODS,
+  ...USAGE_HISTORY_METHODS,
   ...PREFLIGHT_METHODS,
   ...COMPUTER_METHODS,
   ...SESSION_TAB_METHODS,

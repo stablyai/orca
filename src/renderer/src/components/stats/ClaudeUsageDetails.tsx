@@ -37,7 +37,7 @@ export function ClaudeUsageDetails({
           rows={modelBreakdown.map((row) => ({
             key: row.key,
             label: row.label,
-            tokens: row.inputTokens + row.outputTokens,
+            tokens: row.inputTokens + row.outputTokens + row.cacheReadTokens + row.cacheWriteTokens,
             sessions: row.sessions,
             eventsOrTurns: row.turns
           }))}
@@ -50,7 +50,7 @@ export function ClaudeUsageDetails({
           rows={projectBreakdown.map((row) => ({
             key: row.key,
             label: row.label,
-            tokens: row.inputTokens + row.outputTokens,
+            tokens: row.inputTokens + row.outputTokens + row.cacheReadTokens + row.cacheWriteTokens,
             sessions: row.sessions,
             eventsOrTurns: row.turns
           }))}

@@ -2,10 +2,10 @@ import { app, ipcMain, MessageChannelMain, utilityProcess, type WebContents } fr
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { BackendPortRpc } from '../../shared/backend/backend-port-rpc'
 import {
-  BACKEND_CONNECTION_CHANGED,
   BACKEND_PORT_REQUEST,
   BACKEND_UTILITY_PROCESS_NAME,
-  type AutomationUsageClient
+  type AutomationUsageClient,
+  type BackendConnectionPurpose
 } from '../../shared/backend/backend-service-contract'
 import { backendMessagePort } from '../backend/backend-message-port'
 import {
@@ -19,6 +19,7 @@ import {
   admitBackendPortRequest,
   deliverBackendDocumentPort,
   trackBackendDocument,
+  notifyBackendDocuments,
   type BackendDocument
 } from './backend-desktop-capabilities'
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
@@ -89,17 +90,25 @@ export class BackendSupervisor {
 
   automationClient(provider: 'claudeUsage' | 'codexUsage'): AutomationUsageClient {
     return {
-      getAutomationRunUsage: async (input) =>
+      getAutomationRunUsage: async (input) => {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private usage service returns its typed automation result for this provider method.
-        (await this.callControl(`${provider}:getAutomationRunUsage`, input)) as Awaited<
+        return (await this.invokeUsage(`${provider}:getAutomationRunUsage`, input)) as Awaited<
           ReturnType<AutomationUsageClient['getAutomationRunUsage']>
         >
+      }
     }
   }
 
-  async callControl(method: string, params: unknown): Promise<unknown> {
-    const ready = this.ensureReady(true)
+  async invokeUsage(
+    method: string,
+    params: unknown,
+    purpose?: BackendConnectionPurpose
+  ): Promise<unknown> {
+    const ready = purpose === 'recovery' ? this.ready : this.ensureReady(true)
     const control = this.control
+    if (!ready) {
+      throw new Error('Usage is unavailable. Try refreshing the usage view.')
+    }
     await ready
     if (!this.desiredRunning || !control || this.control !== control) {
       throw new Error('Usage disconnected. Try again after it reconnects.')
@@ -132,14 +141,6 @@ export class BackendSupervisor {
       clearTimeout(deadline)
     })()
     return this.stopping
-  }
-
-  private notify(connected: boolean, unavailable = false): void {
-    for (const document of this.documents.values()) {
-      if (!document.contents.isDestroyed() && document.contents.mainFrame === document.frame) {
-        document.frame.postMessage(BACKEND_CONNECTION_CHANGED, { connected, unavailable })
-      }
-    }
   }
 
   private async ensureReady(explicit: boolean): Promise<void> {
@@ -236,7 +237,7 @@ export class BackendSupervisor {
             settled = true
             clearTimeout(startupDeadline)
             resolve()
-            this.notify(true)
+            notifyBackendDocuments(this.documents, true, false)
           }
           if (message.type === 'failed') {
             failed(new Error('Usage could not start. Try refreshing the usage view.'))
@@ -277,9 +278,10 @@ export class BackendSupervisor {
         if (this.desiredRunning) {
           this.failures.record('backend')
         }
-        this.notify(false, this.desiredRunning && this.failures.recent('backend').length >= 3)
+        const deaths = this.failures.recent('backend').length
+        notifyBackendDocuments(this.documents, false, this.desiredRunning && deaths >= 3)
         if (this.desiredRunning) {
-          if (this.failures.recent('backend').length < 3) {
+          if (deaths < 3) {
             const restartTimer = setTimeout(
               () => {
                 if (this.restartTimer !== restartTimer) {
@@ -288,7 +290,7 @@ export class BackendSupervisor {
                 this.restartTimer = undefined
                 void this.ensureReady(false).catch(() => {})
               },
-              250 * 2 ** this.failures.recent('backend').length
+              250 * 2 ** deaths
             )
             this.restartTimer = restartTimer
           }

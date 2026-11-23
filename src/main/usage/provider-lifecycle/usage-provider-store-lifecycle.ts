@@ -1,4 +1,5 @@
 import { readFileSync, statSync } from 'node:fs'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import { AgentTokenUsageReporter } from '../reporting/token-usage/agent-token-usage-reporter'
 import { join, parse } from 'node:path'
 import type { UsageStoreHost } from '../usage-store-host'
@@ -71,6 +72,7 @@ export abstract class UsageProviderStoreLifecycle<
 
   async flush(): Promise<void> {
     await this.loaded
+    await this.scanPromise
     await this.inlineCache.settle()
     await this.tokenReporter?.flush()
     await this.writer.flush()
@@ -154,7 +156,7 @@ export abstract class UsageProviderStoreLifecycle<
         })
       }
     } catch (error) {
-      if (!isMissingFileError(error)) {
+      if (!isDefinitiveAbsence(error)) {
         console.error(`${this.config.logTag} Failed to load persisted state:`, error)
       }
     }
@@ -245,6 +247,7 @@ export abstract class UsageProviderStoreLifecycle<
           {
             path: usageSourceCachePath(this.config.resolveCacheFile()),
             schemaVersion: this.schemaVersion,
+            hadPreviousHistory: this.getScanState()[this.config.dataPresenceKey],
             worktreeFingerprint,
             reuse: this.state.worktreeFingerprint === worktreeFingerprint
           }
@@ -299,8 +302,4 @@ export abstract class UsageProviderStoreLifecycle<
       )
     }
   }
-}
-
-function isMissingFileError(error: unknown): boolean {
-  return error instanceof Error && 'code' in error && error.code === 'ENOENT'
 }

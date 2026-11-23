@@ -993,6 +993,11 @@ import {
 } from './terminal/terminal-viewport-schemas-params'
 import { UpdaterCheckParams } from './updater/updater-params'
 import {
+  UsageRefreshParams,
+  UsageSetEnabledParams,
+  UsageSnapshotParams
+} from './usage-history-params'
+import {
   WebhookCallShow,
   WebhookCalls,
   WebhookCard,
@@ -2191,6 +2196,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'updater.getStatus': null,
   'updater.install': null,
   'usage.call': UsageCallParams,
+  'usage.getSnapshot': UsageSnapshotParams,
+  'usage.refresh': UsageRefreshParams,
+  'usage.setEnabled': UsageSetEnabledParams,
   'webhooks.call': WebhookCallShow,
   'webhooks.calls': WebhookCalls,
   'webhooks.card': WebhookCard,

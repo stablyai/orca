@@ -1127,10 +1127,6 @@
         }
       },
       "stats": {
-        "UsageOverviewPane": {
-          "sessionCount_one": "{{formatted}} session",
-          "sessionCount_other": "{{formatted}} sessions"
-        },
         "usage": {
           "overview": {
             "sections": {
