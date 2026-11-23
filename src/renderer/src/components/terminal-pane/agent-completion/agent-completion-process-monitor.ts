@@ -62,6 +62,9 @@ export function createAgentCompletionProcessMonitor({
 
   function recordActivityUntil(until: number, eventAt: number, inputOnly = false): void {
     state.lastPaneActivityAt = Math.max(state.lastPaneActivityAt ?? until, until)
+    if (!inputOnly) {
+      state.lastPacingActivityAt = Math.max(state.lastPacingActivityAt ?? until, until)
+    }
     noteForegroundEvent(eventAt, inputOnly)
   }
 

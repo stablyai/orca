@@ -24,6 +24,8 @@ export type ProcessMonitorState = {
   pollTimerTier: PollCadenceTier | null
   /** May lie in the future: a hidden-output notice stands for output until its window ends. */
   lastPaneActivityAt: number | null
+  /** Activity other than input: input that prints nothing must not lift a pane off main's 15 s pace. */
+  lastPacingActivityAt: number | null
   /** Earliest event no read has answered yet; null means no read is due. */
   readDueSince: number | null
   /** Only input that printed nothing is unanswered: main's 15 s re-check paced that, so reads keep its pace. */

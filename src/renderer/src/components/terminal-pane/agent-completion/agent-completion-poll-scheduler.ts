@@ -54,8 +54,8 @@ export function createAgentCompletionPollScheduler(args: {
 
   function isPaneQuiet(now: number): boolean {
     return (
-      state.lastPaneActivityAt === null ||
-      now - state.lastPaneActivityAt >= NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS
+      state.lastPacingActivityAt === null ||
+      now - state.lastPacingActivityAt >= NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS
     )
   }
 

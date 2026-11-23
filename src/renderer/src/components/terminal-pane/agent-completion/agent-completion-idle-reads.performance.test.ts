@@ -47,6 +47,8 @@ describe('agent completion foreground reads at rest', () => {
     for (const result of [
       { foregroundProcess: 'vim', hasChildProcesses: true },
       { foregroundProcess: 'zsh', hasChildProcesses: false, idleShellProven: true as const },
+      // A shell the host cannot prove idle (Windows Git Bash, wsl.exe) keeps a slow follow-up due.
+      { foregroundProcess: 'zsh', hasChildProcesses: false },
       { foregroundProcess: 'codex', hasChildProcesses: true, foregroundExitWatched: true as const }
     ]) {
       const { coordinator, inspectProcess } = startPane(result)
