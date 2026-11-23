@@ -133,6 +133,7 @@ export function ClientHostedBrowserPageToolbar({
         <BrowserToolbarMenu
           currentProfileId={null}
           workspaceId={workspaceId}
+          worktreeId={worktreeId}
           browserPageId={browserPageId}
           viewportPresetId={viewportPresetId}
           isActive={isActive}

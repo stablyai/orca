@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url'
+
 const PACKAGE_BUILD_PLUGIN_NAME = 'orca-one-package-build'
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -23,6 +25,20 @@ const PACKAGE_BUILD_REDIRECTS = [
     from: 'entities',
     to: 'entities/lib/decode.js',
     importer: /[\\/]markdown-it[\\/]/
+  },
+  {
+    // The root re-exports every navigator (tabs, error boundary) as CommonJS esbuild can't tree-shake.
+    from: 'expo-router',
+    to: fileURLToPath(new URL('../../../../mobile/web-entry/expo-router-page.ts', import.meta.url))
+  },
+  {
+    // These subpaths resolve to the CommonJS build, which keeps all of sha2 (sha512 too); the esm one shakes.
+    from: '@noble/hashes/sha256',
+    to: '@noble/hashes/esm/sha256.js'
+  },
+  {
+    from: '@noble/hashes/utils',
+    to: '@noble/hashes/esm/utils.js'
   }
 ]
 

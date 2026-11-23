@@ -29,9 +29,10 @@ import { readConnectionStatusProbe } from '../transport/connection/runtime-statu
 import { useBackClaim } from '../navigation/use-back-claim'
 import { isHostNotConnectedError } from '../query/host-query-errors'
 import {
+  botPermissionSetting,
   MobileBotSettingsRoot,
   MobileBotStalePage,
-  type SettingsRootPage
+  type BotSettingsTarget
 } from './MobileBotSettingsRoot'
 import { MobileBotIdentityPage } from './MobileBotIdentityPage'
 import { MobileBotAgentPage } from './MobileBotAgentPage'
@@ -64,6 +65,8 @@ export function MobileBotSettingsTab(props: {
   /** Puts a draft in the bot's Home Chat, where hooks are made; null while no chat shows. */
   onAskInChat?: ((draft: string) => void) | null
   onOpenFile?: (path: string) => void
+  /** The page Settings opens on, read as it mounts; absent opens the list. */
+  initialPage?: BotSettingsTarget
 }) {
   const t = useMobileTranslation()
   const { bot, applyBot } = props.routeBot
@@ -73,7 +76,7 @@ export function MobileBotSettingsTab(props: {
   const locked = saving || !props.online
   const offlineBanner = <MobileBotSettingsOffline hostName={props.hostName} client={props.client} />
   const [deleting, setDeleting] = useState(false)
-  const [page, setPage] = useState<SettingsRootPage | null>(null)
+  const [page, setPage] = useState(typeof props.initialPage === 'string' ? props.initialPage : null)
   // A page drilled into from Look around or Memory upkeep; its Back returns there.
   const [lookPage, setLookPage] = useState<LookAroundPage | null>(null)
   const [tidyPage, setTidyPage] = useState<TidyUpPage | null>(null)
@@ -120,7 +123,11 @@ export function MobileBotSettingsTab(props: {
       setSaving(false)
     }
   }
-  const connectors = useMobileBotConnectorSettings(props, offlineBanner, { accessBot, save })
+  const connectors = useMobileBotConnectorSettings(props, offlineBanner, {
+    accessBot,
+    save,
+    initialPage: typeof props.initialPage === 'object' ? props.initialPage : undefined
+  })
   const knows = useBotSoulMemorySkills(props, offlineBanner, page, setPage, save)
 
   const upload = async (png: string): Promise<boolean> => {
@@ -287,7 +294,9 @@ export function MobileBotSettingsTab(props: {
         onSwitch={async (agent) => {
           // The Home Chat starts fresh now, not on its next message, as the desktop's switch does.
           if ((await save({ agent, launch: null })) && props.client) {
-            await ensureBotHomeChat(props.client, bot.id)
+            await ensureBotHomeChat(props.client, bot.id).then(
+              (refusal) => refusal && props.showToast(refusal, 3000)
+            )
           }
         }}
       />
@@ -354,7 +363,7 @@ export function MobileBotSettingsTab(props: {
         {offlineBanner}
         <ChoiceRows
           choices={permissionChoices}
-          selected={bot.permissionMode ?? 'inherit'}
+          selected={botPermissionSetting(bot).mode ?? 'inherit'}
           disabled={!props.online}
           onSelect={(mode) => {
             if (mode === 'inherit' || modes.some((value) => value === mode)) {

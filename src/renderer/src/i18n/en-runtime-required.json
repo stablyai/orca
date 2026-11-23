@@ -224,7 +224,9 @@
         },
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
-          "tokensAndCost_other": "{{tokens}} tokens · {{cost}}"
+          "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
+          "tokens_one": "{{tokens}} token",
+          "tokens_other": "{{tokens}} tokens"
         }
       },
       "browser-pane": {
@@ -1619,6 +1621,15 @@
         "outside_other": "{{count}} more outside this group"
       },
       "mentionedCount": "{{count}} mentioned",
+      "remoteAsked": "Asked on {{computer}}",
+      "remoteMayAnswer": "May still answer on {{computer}}.",
+      "remoteNotSent": "Not sent to {{computer}}",
+      "remoteNotice": "Didn't answer on {{computer}}",
+      "remoteReplied": "Replied on {{computer}}",
+      "remoteSending": "Asking on {{computer}}…",
+      "remoteShortened": "Shortened. Full answer is on {{computer}}.",
+      "remoteStopped": "Stopped here",
+      "remoteUnknown": "Delivery unknown",
       "unavailableBot": "Unavailable bot"
     },
     "hover": {
@@ -1779,7 +1790,8 @@
         "profileNotFound": "Session profile not found.",
         "readFailed": "Could not read {{browser}} cookies.",
         "safariFullDiskAccess": "macOS denied access to Safari cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access.",
-        "serverRepaired": "This server was re-paired during the import. Try again."
+        "serverRepaired": "This server was re-paired during the import. Try again.",
+        "sshHostDisconnected": "This page is no longer connected through its SSH host. Reconnect and try again."
       },
       "notice": {
         "importedMore_one": "Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.",

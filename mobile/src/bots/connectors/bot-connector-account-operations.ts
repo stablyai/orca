@@ -14,6 +14,7 @@ function operation<
     | 'bots.connect.wait'
     | 'bots.connect.cancel'
     | 'bots.linear.setDefaultBot'
+    | 'bots.linear.unlink'
     | 'bots.github.setDefaultBot'
     | 'bots.github.unlink'
     | 'google.bot.set'
@@ -66,6 +67,7 @@ export const gitHubSetDefaultBot = operation(
   result(z.unknown().optional())
 )
 export const gitHubUnlink = operation('bots.github.unlink', result(z.unknown().optional()))
+export const linearUnlink = operation('bots.linear.unlink', result(z.unknown().optional()))
 
 export const googleBotSet = operation('google.bot.set', z.unknown())
 

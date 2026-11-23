@@ -18,7 +18,8 @@ import { requestLine, useBotWhoCanAsk } from './use-bot-who-can-ask'
 
 /** complete is false when the service's people are too many to read whole. */
 export type BotWhoCanAskFound = {
-  members: { id: string; name: string; handle?: string; avatarUrl?: string }[]
+  /** `app`: another Slack app's bot user, offered beside people. */
+  members: { id: string; name: string; handle?: string; avatarUrl?: string; app?: true }[]
   complete: boolean
 }
 

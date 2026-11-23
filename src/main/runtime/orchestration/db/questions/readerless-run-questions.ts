@@ -26,8 +26,11 @@ export function dropReaderlessRunQuestions(
   const ids = db.db
     .prepare(
       `SELECT q.message_id FROM question_threads q JOIN messages m ON m.id = q.message_id
-       WHERE q.run_id = ? AND m.to_handle = ? AND m.read = 0
-         AND q.status = 'pending' AND q.taken_by IS NULL`
+       WHERE q.run_id = ?1 AND m.to_handle = ?2 AND m.read = 0
+         AND q.status = 'pending' AND q.taken_by IS NULL
+       UNION SELECT r.message_id FROM remote_owned_questions r JOIN messages m ON m.id = r.message_id
+       WHERE r.run_id = ?1 AND m.to_handle = ?2 AND m.read = 0
+         AND r.ended IS NULL AND r.taken_by IS NULL`
     )
     .all(runId, `run:${runId}`)
     .flatMap(({ message_id }) => (typeof message_id === 'string' ? [message_id] : []))
