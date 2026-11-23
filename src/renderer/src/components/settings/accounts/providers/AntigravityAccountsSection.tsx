@@ -32,6 +32,7 @@ import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/ag
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { useRecheckOnce } from './use-recheck-once'
 import { useOnLaterChange } from './use-on-later-change'
+import { useAntigravityAccountRun } from './use-antigravity-account-run'
 import { AntigravityGoogleSignInChoice } from '../../../provider-accounts/AntigravityGoogleSignInChoice'
 import { AntigravityAgySignInButton } from '../../../provider-accounts/AntigravityAgySignInButton'
 import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
@@ -70,10 +71,8 @@ export function AntigravityAccountsSection({
   const [state, setState] = useState<AntigravityAccountState | null>(null)
   const [usage, setUsage] = useState<ProviderRateLimits | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const pending = useRef(false)
-  const rereadQueued = useRef(false)
   const mounted = useRef(true)
+  const { busy, pending, run } = useAntigravityAccountRun(perform, mounted)
   const ownerKind = owner.kind
   const environmentId = owner.kind === 'environment' ? owner.environmentId : null
   const windowsHost = ownerPlatform === 'win32' && target.runtime === 'host'
@@ -135,15 +134,12 @@ export function AntigravityAccountsSection({
   })
 
   /** `keepShown`: a background re-read, which leaves a Usage reading or error on screen. */
-  async function run(action: AntigravityAccountAction, accountId?: string, keepShown = false) {
-    if (pending.current) {
-      // A re-read asked for meanwhile (after a Google sign-in pick) runs once the current one ends.
-      rereadQueued.current ||= keepShown && action === 'List'
-      return
-    }
-    pending.current = true
+  async function perform(
+    action: AntigravityAccountAction,
+    accountId: string | undefined,
+    keepShown: boolean
+  ) {
     if (!keepShown) {
-      setBusy(true)
       setError(null)
       setUsage(null)
     }
@@ -202,15 +198,6 @@ export function AntigravityAccountsSection({
       // A background re-read fails quietly; the next one or Refresh shows the answer.
       if (mounted.current && !keepShown) {
         setError(cause instanceof Error ? cause.message : 'Antigravity account action failed.')
-      }
-    } finally {
-      pending.current = false
-      if (mounted.current) {
-        setBusy(false)
-      }
-      if (rereadQueued.current && mounted.current) {
-        rereadQueued.current = false
-        void run('List', undefined, true)
       }
     }
   }
