@@ -101,6 +101,38 @@ describe('useBotPictureSetting', () => {
     ])
   })
 
+  it('keeps the mascot shown with its outfit when a generated upload commits first', async () => {
+    // A fake host: each write lands on `stored`, which the catalog lists.
+    let stored = bot({ avatarRevision: 1 })
+    mocks.catalog = [stored]
+    const update = vi.fn(async (updates: Partial<Bot>) => {
+      stored = { ...stored, ...updates, avatarRevision: (stored.avatarRevision ?? 0) + 1 }
+      mocks.catalog = [stored]
+      return stored
+    })
+    const { result, rerender } = renderHook(({ at }) => useBotPictureSetting(at, update), {
+      initialProps: { at: stored }
+    })
+    // Reopened on the mascot while a generated picture is uploading: an outfit is picked.
+    const automatic = beginAutomaticBotPictureUpload(KEY)
+    act(() => result.current.pickOutfit('tie'))
+    // The upload commits before the outfit is sent.
+    stored = { ...stored, avatar: 'upload:generated', avatarRevision: 2 }
+    mocks.catalog = [stored]
+    act(() => automatic.end())
+    rerender({ at: stored })
+
+    await act(async () => {
+      vi.advanceTimersByTime(BOT_PICTURE_SAVE_DELAY_MS)
+    })
+    rerender({ at: stored })
+
+    expect(stored.avatar).toBe(mascotAvatar(A))
+    expect(stored.avatarOutfit).toBe('tie')
+    expect(result.current.value).toEqual({ kind: 'mascot', index: 0 })
+    expect(result.current.outfit).toBe('tie')
+  })
+
   it('sends the saved picture again when it is picked while a generated one is uploading', async () => {
     const update = vi.fn(async () => bot({ avatarRevision: 2 }))
     const { result } = renderHook(() => useBotPictureSetting(bot(), update))

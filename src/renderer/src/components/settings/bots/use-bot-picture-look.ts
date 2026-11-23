@@ -12,7 +12,9 @@ import { useBotLookSave } from './use-bot-look-save'
 
 export function useBotPictureLook(
   bot: Bot,
-  update: (updates: BotUpdateParams['updates']) => Promise<Bot | null>
+  update: (updates: BotUpdateParams['updates']) => Promise<Bot | null>,
+  /** Runs as a color or outfit is picked, before it is queued. */
+  beforePick?: () => void
 ): {
   /** The mascot's tile color shown; null is its own sky blue. */
   color: string | null
@@ -39,11 +41,17 @@ export function useBotPictureLook(
   return {
     color:
       picked && 'avatarColor' in picked ? (picked.avatarColor ?? null) : (bot.avatarColor ?? null),
-    pickColor: (color) => look.pick({ avatarColor: color }),
+    pickColor: (color) => {
+      beforePick?.()
+      look.pick({ avatarColor: color })
+    },
     outfit: wornBotOutfit(
       picked && 'avatarOutfit' in picked ? picked.avatarOutfit : bot.avatarOutfit
     ),
-    pickOutfit: (outfit) => look.pick({ avatarOutfit: outfit }),
+    pickOutfit: (outfit) => {
+      beforePick?.()
+      look.pick({ avatarOutfit: outfit })
+    },
     flush: look.flush
   }
 }

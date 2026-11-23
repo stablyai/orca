@@ -248,7 +248,13 @@ export function useBotPictureSetting(
     })
   }
 
-  const look = useBotPictureLook(bot, update)
+  // A look is for the picture shown. A generated one still uploading may land first, so the picture
+  // shown is sent again with it.
+  const look = useBotPictureLook(bot, update, () => {
+    if (automaticBotPictureUploadInFlight(key)) {
+      pick(live.shown)
+    }
+  })
 
   useSaveOnClose(() => {
     commit()

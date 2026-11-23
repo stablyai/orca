@@ -114,6 +114,7 @@ export const BOT_METHODS = [
     // null with a window (an older host omits it, so the CLI can't tell which).
     handler: async (_params, { runtime }) => {
       const webhooks = runtime.getWebhooks()
+      await runtime.bots.avatarRevisionsRepaired()
       const listing = runtime.bots.listing()
       const signInServer = orcaSignInServer(runtime)
       return {

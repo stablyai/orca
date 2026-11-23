@@ -135,6 +135,22 @@ describe('BotController', () => {
       expect(existsSync(join(botsRoot(), 'reviewer', BOT_AVATAR_FILE))).toBe(false)
     })
 
+    it('lists the revision bot.json kept after a lost profile save, so a fresh upload commits and a pre-crash one is refused', async () => {
+      const bot = await bots.create({ name: 'Reviewer' })
+      const saved = await bots.setAvatarImage(bot.id, squarePng(512))
+      // The profile's debounced write never happened: the record is back where it was.
+      store.saveBot({ ...saved, avatarRevision: undefined })
+
+      await bots.avatarRevisionsRepaired()
+      const listed = bots.list().find((entry) => entry.id === bot.id)
+      expect(listed?.avatarRevision).toBe(1)
+
+      await expect(bots.setAvatarImage(bot.id, squarePng(512, 1), 0)).rejects.toThrow(
+        'bot_avatar_changed'
+      )
+      expect((await bots.setAvatarImage(bot.id, squarePng(512, 2), 1)).avatarRevision).toBe(2)
+    })
+
     it("keeps the revision in the home's bot.json, so a profile that lost its last save still refuses, renamed or not", async () => {
       const bot = await bots.create({ name: 'Reviewer' })
       const saved = await bots.setAvatarImage(bot.id, squarePng(512))

@@ -23,15 +23,10 @@ import { proposalSoul } from '../../shared/bots/bot-proposal'
 import { botTemplate } from '../../shared/bots/bot-templates'
 import { templateBotFolderName } from '../../shared/bots/bot-template-view'
 import { botOfferCreation } from './bot-offer-creation'
-import {
-  assertBotOwnsHome,
-  type BotHomeFilesystem,
-  botHomeAvatarRevision,
-  botHomeFolder,
-  writeBotHome
-} from './bot-home'
+import { assertBotOwnsHome, type BotHomeFilesystem, botHomeFolder, writeBotHome } from './bot-home'
 import { type BotMemoryRecord, hostBotMemoryRecord } from './bot-memory-record'
 import { stampBotLinkOwners } from '../../shared/bot-link-owners'
+import { botAvatarRevision, repairBotAvatarRevisions } from './bot-avatar-revision'
 import { makeBotsHome } from './bot-home-workspace'
 import { newBotRecord } from './bot-new-record'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
@@ -121,6 +116,11 @@ export class BotController {
 
   list(): Bot[] {
     return this.deps.getStore()?.getBots?.() ?? []
+  }
+
+  /** Before a client reads the list: see repairBotAvatarRevisions. */
+  avatarRevisionsRepaired(): Promise<void> {
+    return repairBotAvatarRevisions(this.deps.getStore(), this.deps)
   }
 
   /** The list with what a client needs to draw it as this host's own sidebar does. */
@@ -221,7 +221,7 @@ export class BotController {
       const updated: Bot = { ...applyBotUpdates(bot, updates), updatedAt: Date.now() }
       // Any picture, color or outfit choice counts, even one that sets the same value again. Every other edit
       // keeps the highest revision seen, so rewriting bot.json from a record that lost it can't lower it.
-      const revision = await this.avatarRevision(bot, botHomeFolder(bot, this.deps.botsRoot()))
+      const revision = await botAvatarRevision(this.deps, bot)
       const look = [updates.avatar, updates.avatarColor, updates.avatarOutfit]
       if (look.some((value) => value !== undefined)) {
         updated.avatarRevision = revision + 1
@@ -254,7 +254,7 @@ export class BotController {
       }
       const folderPath = botHomeFolder(bot, this.deps.botsRoot())
       await assertBotOwnsHome(this.deps.filesystem, folderPath, botId)
-      const revision = await this.avatarRevision(bot, folderPath)
+      const revision = await botAvatarRevision(this.deps, bot)
       if (expectedAvatarRevision !== undefined && expectedAvatarRevision !== revision) {
         throw new Error('bot_avatar_changed')
       }
@@ -332,15 +332,6 @@ export class BotController {
       this.deps.notifyBotsWritten(true)
       return { deleted: true }
     })
-  }
-
-  /** The higher of the record's revision and its home's bot.json: the record saves on a debounce, so
-   *  after a crash bot.json can be ahead. Read inside the queue. */
-  private async avatarRevision(bot: Bot, folderPath: string): Promise<number> {
-    return Math.max(
-      bot.avatarRevision ?? 0,
-      await botHomeAvatarRevision(this.deps.filesystem, folderPath)
-    )
   }
 
   private serialize<T>(work: () => Promise<T>): Promise<T> {
