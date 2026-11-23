@@ -13,8 +13,7 @@ export function readSleptAgentTerminal(
   readPty: (pty: RuntimePtyWorktreeRecord) => RuntimeTerminalRead
 ): RuntimeTerminalRead {
   const fromPty = slept.pty ? readPty(slept.pty) : null
-  // A cursor read keeps the stream's own page, even an empty one, so a poller never replays.
-  if (fromPty && (fromPty.tail.length > 0 || opts.cursor !== undefined)) {
+  if (fromPty && fromPty.tail.length > 0) {
     return { ...fromPty, status: 'running', source: 'stream' }
   }
   const { leaf } = slept
