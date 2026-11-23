@@ -170,7 +170,8 @@ function claudeRunsAsk(session: ClaudeModeFacts): boolean {
 /** A Full access chat outside Plan whose mode the next input should settle: nothing has said
  *  whether Claude allows bypass, or Claude refuses it and no fallback is applied, Claude has
  *  left the Approve for me it applied, or a refusal of auto may have passed. An Approve for me
- *  chat Claude runs in Ask owes it until Ask is applied, or once a refusal of auto may have passed. */
+ *  chat Claude runs in Ask owes it until Ask is applied, once a refusal of auto may have passed,
+ *  or when Claude left auto with no refusal on record. */
 export function claudeOwesFullAccessFallback(
   session: ClaudeBypassFacts & ClaudeModeFacts
 ): boolean {
@@ -180,8 +181,10 @@ export function claudeOwesFullAccessFallback(
   }
   const build = session.appliedInputOptions.get('buildPermissionMode')
   if (intent === 'auto') {
+    // Claude can leave auto by itself (its settings reload, its circuit breaker): asking again
+    // learns why, so the chat gets its fallback and row.
     if (!claudeAutoFallsBack(session)) {
-      return false
+      return build !== 'default' && claudeRunsAsk(session)
     }
     return claudeAutoRefused(session) ? build === undefined : claudeAutoRetryDue(session)
   }
