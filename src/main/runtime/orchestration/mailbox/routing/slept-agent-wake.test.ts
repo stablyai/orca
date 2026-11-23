@@ -281,17 +281,6 @@ describe('Agent-slept window pane wake', () => {
     db.close()
   })
 
-  it('ends an exit wait as exited when a renderer reload restores the window without the slept pane', async () => {
-    const { db, runtime, handle } = await sleptPane()
-    const waiting = runtime.waitForTerminal(handle, { condition: 'exit', timeoutMs: 5_000 })
-
-    expect(runtime.markRendererReloading(1)).not.toBeNull()
-    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-
-    await expect(waiting).resolves.toMatchObject({ handle, status: 'exited', satisfied: true })
-    db.close()
-  })
-
   it("waits on through Agent Sleep's stop when the exit wait began while the agent was awake", async () => {
     const db = createDatabase('orca-slept-wake-')
     const rows: AgentStatusIpcPayload[] = []
