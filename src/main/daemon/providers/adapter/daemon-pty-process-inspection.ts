@@ -249,6 +249,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
         this.sessionsNeedingFullCheckpoint.add(session.sessionId)
         this.sessionsNeedingContinuityCheckpoint.add(session.sessionId)
         this.lastFullCheckpointAt.delete(session.sessionId)
+        this.fullCheckpointBackoff.delete(session.sessionId)
         this.markSessionDirty(session.sessionId)
       }
     })

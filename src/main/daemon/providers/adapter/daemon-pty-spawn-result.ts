@@ -122,6 +122,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
             // checkpoint that lacks that padding, or a later replay prints its prompt on the old one.
             this.sessionsNeedingFullCheckpoint.add(sessionId)
             this.lastFullCheckpointAt.delete(sessionId)
+            this.fullCheckpointBackoff.delete(sessionId)
           }
         }
       }
@@ -204,12 +205,14 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
             this.sessionsNeedingFullCheckpoint.add(sessionId)
             this.sessionsNeedingLiveCheckpoint.add(sessionId)
             this.lastFullCheckpointAt.delete(sessionId)
+            this.fullCheckpointBackoff.delete(sessionId)
           }
         } else if (canReanchorHistory) {
           this.historyManager.registerWriter(sessionId, recoveryFreeze)
           this.sessionsNeedingFullCheckpoint.add(sessionId)
           // The new generation has no checkpoint; discard any cooldown inherited from before the crash.
           this.lastFullCheckpointAt.delete(sessionId)
+          this.fullCheckpointBackoff.delete(sessionId)
         } else {
           // Keep old recovery files if the daemon cannot include them; a fresh-only checkpoint would erase them.
           this.historyManager.suspendSession(sessionId, recoveryFreeze)
@@ -267,6 +270,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         this.sessionsNeedingContinuityCheckpoint.add(sessionId)
         this.lastFullCheckpointAt.delete(sessionId)
+        this.fullCheckpointBackoff.delete(sessionId)
       }
     }
 

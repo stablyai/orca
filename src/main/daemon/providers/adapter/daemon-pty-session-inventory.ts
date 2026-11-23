@@ -147,6 +147,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
     this.writeRecoveryAttempted = false
     this.dirtySessionVersions.clear()
     this.lastFullCheckpointAt.clear()
+    this.fullCheckpointBackoff.clear()
     this.sessionsNeedingFullCheckpoint.clear()
     this.sessionsNeedingLiveCheckpoint.clear()
     this.sessionsNeedingContinuityCheckpoint.clear()

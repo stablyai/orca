@@ -5,7 +5,21 @@ import {
 } from './daemon-pty-checkpoint-result'
 import { DaemonPtyCheckpointScheduler } from './daemon-pty-checkpoint-scheduler'
 import type { SnapshotCheckpointResult } from '../adapter/daemon-pty-runtime-state'
+import type { HistoryCheckpointResult } from '../../history/storage/terminal-history-manager-options'
 import type { GetSnapshotResult, TakePendingOutputResult } from '../../protocol/daemon-rpc-contract'
+
+function settledCheckpointOutcome(result: SnapshotCheckpointResult): CheckpointWriteResult {
+  switch (result.checkpoint) {
+    case 'committed':
+      return 'committed'
+    case 'retryable':
+      return 'deferred'
+    case 'unavailable':
+      return 'permanently-unavailable'
+    case 'no-snapshot':
+      return 'no-snapshot'
+  }
+}
 
 export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpointScheduler {
   // Defer without appending so cooldown preserves a consistent log prefix; keep the session dirty for retry.
@@ -17,13 +31,22 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       const result = await this.client.request<GetSnapshotResult>('getSnapshot', { sessionId })
       if (result.snapshot && this.historyManager) {
         const checkpoint = await this.historyManager.checkpoint(sessionId, result.snapshot)
+        this.noteCheckpointResult(sessionId, checkpoint)
         return mapHistoryCheckpointResult(checkpoint)
       }
-      return 'done'
+      return this.historyManager ? 'no-snapshot' : 'permanently-unavailable'
     }
     if (opts.final || this.sessionsNeedingFullCheckpoint.has(sessionId)) {
-      if (!opts.final && this.isFullCheckpointCoolingDown(sessionId)) {
-        return 'deferred'
+      if (!opts.final) {
+        // Exponential backoff: a failed full snapshot must not run on every tick.
+        // Incremental appends are still allowed so new output is not lost meanwhile.
+        if (this.isFullCheckpointBackingOff(sessionId)) {
+          await this.appendIncrementsWhileBackingOff(sessionId)
+          return 'deferred'
+        }
+        if (this.isFullCheckpointCoolingDown(sessionId)) {
+          return 'deferred'
+        }
       }
       // Drain and snapshot atomically so warm reattach cannot append records already in the checkpoint.
       const checkpoint = await this.takeSnapshotAndCheckpoint(sessionId, {
@@ -31,50 +54,53 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
         forceLiveSnapshot: this.sessionsNeedingLiveCheckpoint.has(sessionId),
         requireContinuityProof: this.sessionsNeedingContinuityCheckpoint.has(sessionId)
       })
-      const writeResult = mapHistoryCheckpointResult(checkpoint.checkpoint)
+      const writeResult = settledCheckpointOutcome(checkpoint)
       if (writeResult === 'deferred') {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
       }
-      if (writeResult === 'unavailable') {
-        return 'unavailable'
+      if (writeResult !== 'committed') {
+        return writeResult
       }
       this.sessionsNeedingFullCheckpoint.delete(sessionId)
       this.sessionsNeedingLiveCheckpoint.delete(sessionId)
       this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
-      return 'done'
+      return 'committed'
     }
     const take = await this.client.request<TakePendingOutputResult | null>('takePendingOutput', {
       sessionId
     })
     if (!take) {
-      return 'done'
+      return 'committed'
     }
     if (take.overflowed) {
       // Dropped records leave a log gap; re-anchor with a full snapshot.
-      if (this.isFullCheckpointCoolingDown(sessionId)) {
-        this.sessionsNeedingFullCheckpoint.add(sessionId)
-        return 'deferred'
+      if (!opts.final) {
+        if (this.isFullCheckpointBackingOff(sessionId)) {
+          this.sessionsNeedingFullCheckpoint.add(sessionId)
+          return 'deferred'
+        }
+        if (this.isFullCheckpointCoolingDown(sessionId)) {
+          this.sessionsNeedingFullCheckpoint.add(sessionId)
+          return 'deferred'
+        }
       }
       const checkpoint = await this.takeSnapshotAndCheckpoint(sessionId, {
         teardown: false,
         forceLiveSnapshot: true
       })
-      const writeResult = mapHistoryCheckpointResult(checkpoint.checkpoint)
+      const writeResult = settledCheckpointOutcome(checkpoint)
       if (writeResult === 'deferred') {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
       }
-      if (writeResult === 'unavailable') {
-        return 'unavailable'
-      }
-      return 'done'
+      return writeResult
     }
     if (take.records.length === 0) {
-      return 'done'
+      return 'committed'
     }
     if (!this.historyManager) {
-      return 'done'
+      return 'permanently-unavailable'
     }
     const appendResult = await this.historyManager.appendIncrements(
       sessionId,
@@ -83,24 +109,55 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
     )
     if (appendResult === 'needs-checkpoint') {
       // The emulator already contains these records; a full snapshot can replace the failed append.
-      if (this.isFullCheckpointCoolingDown(sessionId)) {
-        this.sessionsNeedingFullCheckpoint.add(sessionId)
-        return 'deferred'
+      if (!opts.final) {
+        if (this.isFullCheckpointBackingOff(sessionId)) {
+          this.sessionsNeedingFullCheckpoint.add(sessionId)
+          return 'deferred'
+        }
+        if (this.isFullCheckpointCoolingDown(sessionId)) {
+          this.sessionsNeedingFullCheckpoint.add(sessionId)
+          return 'deferred'
+        }
       }
       const checkpoint = await this.takeSnapshotAndCheckpoint(sessionId, {
         teardown: false,
         forceLiveSnapshot: true
       })
-      const writeResult = mapHistoryCheckpointResult(checkpoint.checkpoint)
+      const writeResult = settledCheckpointOutcome(checkpoint)
       if (writeResult === 'deferred') {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
       }
-      if (writeResult === 'unavailable') {
-        return 'unavailable'
-      }
+      return writeResult
     }
-    return 'done'
+    return 'committed'
+  }
+
+  /** Best-effort incremental append while a full checkpoint is backing off (issue ①). */
+  private async appendIncrementsWhileBackingOff(sessionId: string): Promise<void> {
+    if (!this.historyManager) {
+      return
+    }
+    try {
+      const take = await this.client.request<TakePendingOutputResult | null>('takePendingOutput', {
+        sessionId
+      })
+      if (!take || take.overflowed || take.records.length === 0) {
+        return
+      }
+      await this.historyManager.appendIncrements(sessionId, take.seq, take.records)
+    } catch (error) {
+      console.warn('[history] backoff incremental append failed:', sessionId, error)
+    }
+  }
+
+  /** `lastFullCheckpointAt` tracks success only; failures drive the separate backoff map. */
+  private noteCheckpointResult(sessionId: string, result: HistoryCheckpointResult): void {
+    if (result === 'retryable') {
+      this.recordFullCheckpointFailure(sessionId)
+      return
+    }
+    this.clearFullCheckpointBackoff(sessionId)
   }
 
   protected async takeSnapshotAndCheckpoint(
@@ -135,6 +192,7 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
         pendingOutputSeq: take.seq
       })
       if (checkpoint === 'retryable') {
+        this.recordFullCheckpointFailure(sessionId)
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         this.sessionsNeedingLiveCheckpoint.add(sessionId)
         this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
@@ -142,12 +200,14 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
         return { checkpoint, snapshot: take.snapshot }
       }
       if (checkpoint === 'unavailable') {
+        this.clearFullCheckpointBackoff(sessionId)
         this.sessionsNeedingFullCheckpoint.delete(sessionId)
         this.sessionsNeedingLiveCheckpoint.delete(sessionId)
         this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
         return { checkpoint, snapshot: take.snapshot }
       }
       this.lastFullCheckpointAt.set(sessionId, Date.now())
+      this.clearFullCheckpointBackoff(sessionId)
       this.sessionsNeedingLiveCheckpoint.delete(sessionId)
       this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
       return { checkpoint: 'committed', snapshot }
@@ -155,7 +215,9 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
     this.sessionsNeedingFullCheckpoint.delete(sessionId)
     this.sessionsNeedingLiveCheckpoint.delete(sessionId)
     this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
-    return { checkpoint: 'unavailable', snapshot: take?.snapshot ?? null }
+    return this.historyManager
+      ? { checkpoint: 'no-snapshot', snapshot: null }
+      : { checkpoint: 'unavailable', snapshot: take?.snapshot ?? null }
   }
 
   protected async buildDurableHistorySnapshot(

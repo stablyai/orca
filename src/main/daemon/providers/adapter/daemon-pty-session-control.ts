@@ -5,8 +5,9 @@ import {
 import { isUnknownRequestTypeError } from '../../endpoint/identity/daemon-endpoint-errors'
 import { GET_SIZE_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 import { readDaemonAppliedPtySize, type DaemonAppliedPtySize } from './daemon-pty-applied-size'
-import { FinalCheckpointWaitExpiredError, FinalCheckpointNotCommittedError } from './daemon-pty-lifecycle-errors'
+import { FinalCheckpointWaitExpiredError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySessionInput } from './daemon-pty-session-input'
+import type { SettledCheckpointOutcome } from '../checkpointing/daemon-pty-checkpoint-result'
 import { remainingDaemonRequestTimeoutMs } from '../../launch/daemon-request-deadline'
 import { readDaemonLiveSleepCwd } from './daemon-live-sleep-cwd'
 import type { ColdRestoreInfo } from '../../history/restoration/terminal-history-cold-restore-info'
@@ -159,7 +160,8 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
         elapsedMs: Date.now() - startedAt
       }
       logSleepFolderRead(id, read, sleepFolder)
-      let finalCommitted = false
+      let finalOutcome: SettledCheckpointOutcome | undefined
+      let finalError: unknown
       const settled = await this.runExclusiveCheckpoint(
         async () => {
           // Set inside: a caller past its deadline leaves this checkpoint running without it.
@@ -167,11 +169,12 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
             this.probedShellCwds.set(id, sleepCwd)
           }
           try {
-            const completed = await this.checkpointSessions([id], {
+            const { settled: outcomes, errors } = await this.checkpointSessions([id], {
               final: true,
               teardown: true
             })
-            finalCommitted = completed.has(id)
+            finalOutcome = outcomes.get(id)
+            finalError = errors.get(id)
           } finally {
             this.probedShellCwds.delete(id)
           }
@@ -182,11 +185,8 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
       if (!settled) {
         throw new FinalCheckpointWaitExpiredError(id)
       }
-      // A settled pass is not a commit: without the final checkpoint the old recovery data would be
-      // cached as the Sleep state and the live terminal's screen would be lost (#46691).
-      if (!finalCommitted) {
-        throw new FinalCheckpointNotCommittedError(id)
-      }
+      // Retryable failures keep the live terminal; permanent loss proceeds degraded (#46691 rev2).
+      this.evaluateFinalCheckpointPreservation(id, finalOutcome, finalError)
       const wslDistro = this.wslDistrosBySessionId.get(id)
       const detection = await this.historyReader?.detectColdRestoreState(id, { wslDistro })
       const detected = detection?.status === 'restored' ? detection.restoreInfo : null
@@ -266,6 +266,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     this.periodicDeadlineWarnedSessionIds.delete(id)
     this.nonFinalAdmissionDeniedSessionIds.delete(id)
     this.lastFullCheckpointAt.delete(id)
+    this.fullCheckpointBackoff.delete(id)
     this.stopCheckpointTimerIfIdle()
     this.initialCwds.delete(id)
     this.wslDistrosBySessionId.delete(id)

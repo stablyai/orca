@@ -8,7 +8,10 @@ import {
   type SnapshotCheckpointResult
 } from './daemon-pty-runtime-state'
 import { isDaemonGoneError } from '../../endpoint/identity/daemon-endpoint-errors'
-import type { CheckpointWriteResult } from '../checkpointing/daemon-pty-checkpoint-result'
+import type {
+  CheckpointWriteResult,
+  SettledCheckpointOutcome
+} from '../checkpointing/daemon-pty-checkpoint-result'
 import { HISTORY_SEED_TRANSFER_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 import type { ColdRestoreInfo } from '../../history/restoration/terminal-history-cold-restore-info'
 import { NdjsonLineTooLongError } from '../../../../shared/json-stream/main-process-ndjson-framer'
@@ -82,7 +85,20 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
   protected abstract checkpointSessions(
     sessionIds: Iterable<string>,
     opts?: { final?: boolean; teardown?: boolean }
-  ): Promise<Set<string>>
+  ): Promise<{
+    settled: Map<string, SettledCheckpointOutcome>
+    errors: Map<string, unknown>
+  }>
+  /**
+   * Decide whether a terminal may retire after its final checkpoint pass.
+   * Throws when the pass is retryable; returns `degraded: true` when the loss is
+   * permanent and Sleep must proceed on the last committed checkpoint.
+   */
+  protected abstract evaluateFinalCheckpointPreservation(
+    sessionId: string,
+    outcome: SettledCheckpointOutcome | undefined,
+    error: unknown
+  ): { degraded: boolean; outcome: SettledCheckpointOutcome | undefined }
   protected abstract publishAuditObservation(observation: DaemonAuditObservation): void
   protected abstract isRetiredEndpointTokenMissing(): boolean
   protected abstract withDaemonRetry<T>(fn: () => Promise<T>): Promise<T>

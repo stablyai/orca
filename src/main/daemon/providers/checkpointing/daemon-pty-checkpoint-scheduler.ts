@@ -1,6 +1,14 @@
 import { awaitDaemonWorkWithinCallerDeadline } from '../../launch/daemon-request-deadline'
+import { NdjsonLineTooLongError } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import { DaemonPtyConnectionLifecycle } from '../adapter/daemon-pty-connection-lifecycle'
-import type { CheckpointWriteResult } from './daemon-pty-checkpoint-result'
+import { FinalCheckpointNotCommittedError } from '../adapter/daemon-pty-lifecycle-errors'
+import type {
+  CheckpointWriteResult,
+  SettledCheckpointOutcome
+} from './daemon-pty-checkpoint-result'
+
+// Exponential backoff after a failed full checkpoint; the final step is the cap.
+const FULL_CHECKPOINT_BACKOFF_STEPS_MS = [5_000, 10_000, 20_000, 40_000, 60_000] as const
 
 export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLifecycle {
   protected stopCheckpointTimer(): void {
@@ -72,9 +80,11 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
       this.stopCheckpointTimer()
       return
     }
-    const completed = await this.checkpointSessions(versions.keys())
+    const { settled } = await this.checkpointSessions(versions.keys())
     for (const [sessionId, version] of versions) {
-      if (completed.has(sessionId) && this.dirtySessionVersions.get(sessionId) === version) {
+      // Settled passes (including permanent loss / no snapshot) must stop polling;
+      // only deferred passes stay dirty for a later retry (#46691 rev2 regression).
+      if (settled.has(sessionId) && this.dirtySessionVersions.get(sessionId) === version) {
         this.dirtySessionVersions.delete(sessionId)
       }
     }
@@ -121,8 +131,8 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
 
   // Final disconnect snapshots preserve scanner state because daemon PTYs remain alive for reattach.
   protected async checkpointAllSessions(): Promise<void> {
-    const completed = await this.checkpointSessions(this.activeSessionIds, { final: true })
-    for (const sessionId of completed) {
+    const { settled } = await this.checkpointSessions(this.activeSessionIds, { final: true })
+    for (const sessionId of settled.keys()) {
       this.dirtySessionVersions.delete(sessionId)
     }
   }
@@ -130,10 +140,14 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
   protected async checkpointSessions(
     sessionIds: Iterable<string>,
     opts?: { final?: boolean; teardown?: boolean }
-  ): Promise<Set<string>> {
-    const completed = new Set<string>()
+  ): Promise<{
+    settled: Map<string, SettledCheckpointOutcome>
+    errors: Map<string, unknown>
+  }> {
+    const settled = new Map<string, SettledCheckpointOutcome>()
+    const errors = new Map<string, unknown>()
     if (!this.historyManager) {
-      return completed
+      return { settled, errors }
     }
     const ids = Array.from(sessionIds)
     let nextIndex = 0
@@ -164,11 +178,14 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
         })
           .then((result) => {
             // Deferred sessions stay dirty for later checkpoint retries.
-            if (result === 'done') {
-              completed.add(sessionId)
+            if (result !== 'deferred') {
+              settled.set(sessionId, result)
             }
           })
-          .catch((err) => console.warn('[history] checkpoint failed:', sessionId, err))
+          .catch((err) => {
+            errors.set(sessionId, err)
+            console.warn('[history] checkpoint failed:', sessionId, err)
+          })
       }
     }
     // Limit simultaneous CPU and disk work across dirty terminals.
@@ -182,7 +199,7 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
       () => checkpointNext()
     )
     await Promise.all(workers)
-    return completed
+    return { settled, errors }
   }
 
   // A session without a checkpoint must write its first snapshot immediately.
@@ -198,6 +215,66 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
       elapsed <
         (this.constructor as typeof DaemonPtyCheckpointScheduler).FULL_CHECKPOINT_COOLDOWN_MS
     )
+  }
+
+  /** True while a failed full checkpoint is inside its exponential backoff window. */
+  protected isFullCheckpointBackingOff(sessionId: string): boolean {
+    const backoff = this.fullCheckpointBackoff.get(sessionId)
+    if (backoff === undefined) {
+      return false
+    }
+    const step =
+      FULL_CHECKPOINT_BACKOFF_STEPS_MS[
+        Math.min(backoff.streak - 1, FULL_CHECKPOINT_BACKOFF_STEPS_MS.length - 1)
+      ]
+    const elapsed = Date.now() - backoff.failedAt
+    // A backward clock jump must not extend backoff.
+    return elapsed >= 0 && elapsed < step
+  }
+
+  protected recordFullCheckpointFailure(sessionId: string): void {
+    const previous = this.fullCheckpointBackoff.get(sessionId)
+    this.fullCheckpointBackoff.set(sessionId, {
+      failedAt: Date.now(),
+      streak: (previous?.streak ?? 0) + 1
+    })
+  }
+
+  protected clearFullCheckpointBackoff(sessionId: string): void {
+    this.fullCheckpointBackoff.delete(sessionId)
+  }
+
+  /**
+   * Sleep may retire a terminal without a committed final checkpoint only when no
+   * retry can fix the loss; otherwise the live terminal must be preserved.
+   */
+  protected evaluateFinalCheckpointPreservation(
+    sessionId: string,
+    outcome: SettledCheckpointOutcome | undefined,
+    error: unknown
+  ): { degraded: boolean; outcome: SettledCheckpointOutcome | undefined } {
+    if (outcome === 'committed') {
+      return { degraded: false, outcome }
+    }
+    const permanentLoss =
+      !this.historyManager ||
+      outcome === 'permanently-unavailable' ||
+      outcome === 'no-snapshot' ||
+      error instanceof NdjsonLineTooLongError
+    if (!permanentLoss) {
+      // A failed Sleep must not leave a heavy full-snapshot retry running every interval.
+      this.sessionsNeedingFullCheckpoint.delete(sessionId)
+      this.sessionsNeedingLiveCheckpoint.delete(sessionId)
+      this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
+      throw new FinalCheckpointNotCommittedError(sessionId)
+    }
+    console.warn('[history] sleep proceeds on the last committed checkpoint (degraded):', {
+      sessionId,
+      outcome: outcome ?? 'deferred',
+      error: error instanceof Error ? error.message : error,
+      degraded: true
+    })
+    return { degraded: true, outcome }
   }
 
   protected async checkpointSession(
