@@ -321,4 +321,6 @@ export class GoogleTriggerChecker {
   }
 }
 
-const timerTarget = (target: GoogleRuleTarget): string => `${target.automationId} ${target.account}`
+// Per rule: one automation's rules can listen on different accounts.
+const timerTarget = (target: GoogleRuleTarget): string =>
+  `${target.automationId} ${target.rule.id} ${target.account}`
