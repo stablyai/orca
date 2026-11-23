@@ -63,6 +63,10 @@ export class RuntimeGitSyncCommands {
     request: ContinueRebaseRequest = {}
   ): Promise<ContinueRebaseResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    // inspect is sent by an effect no user asked for: never start a stopped WSL distro. Continue is a user act.
+    if (action === 'inspect') {
+      await assertRuntimeReadWslDistroRunning(target, localGitOptionsForTarget(target).wslDistro)
+    }
     return requireRuntimeGitProvider(target).continueRebase(target.worktree.path, action, request)
   }
 
