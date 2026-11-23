@@ -9,6 +9,7 @@ import {
 } from '@/runtime/agent-orchestration/worker-auto-close'
 import { useTranslate } from '@/i18n/use-translate'
 import { formatWorkerAutoCloseCountdown } from '../../../../../shared/orchestration/workers/worker-auto-close'
+import { BoundWorkerTitle } from './BoundWorkerTitle'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { PaneTopWarningBanner } from '../appearance/pane-top-banner/PaneTopWarningBanner'
 
@@ -47,17 +48,22 @@ export function WorkerAutoCloseBanner({
   if (!state || state.kept) {
     return null
   }
-  const title =
-    state.closesAt === null
-      ? t(
-          'components.orchestration.workerAutoClose.bannerRunning',
-          'Orchestration worker · Closes 2 minutes after it finishes'
-        )
-      : t(
-          'components.orchestration.workerAutoClose.bannerFinished',
-          'Orchestration worker finished · Closes in {{countdown}}',
-          { countdown: formatWorkerAutoCloseCountdown(state.closesAt, nowMs) }
-        )
+  const countdown =
+    state.closesAt === null ? null : formatWorkerAutoCloseCountdown(state.closesAt, nowMs)
+  const title = state.boundTo ? (
+    <BoundWorkerTitle boundTo={state.boundTo} countdown={countdown} />
+  ) : countdown === null ? (
+    t(
+      'components.orchestration.workerAutoClose.bannerRunning',
+      'Orchestration worker · Closes 2 minutes after it finishes'
+    )
+  ) : (
+    t(
+      'components.orchestration.workerAutoClose.bannerFinished',
+      'Orchestration worker finished · Closes in {{countdown}}',
+      { countdown }
+    )
+  )
   return (
     <PaneTopWarningBanner
       tone={state.closesAt === null ? 'accent' : 'warning'}

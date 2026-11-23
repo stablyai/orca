@@ -91,7 +91,7 @@ export function PaneTopWarningBanner({
   onDontShowAgain,
   onShown
 }: {
-  title: string
+  title: React.ReactNode
   body?: React.ReactNode
   tone?: PaneTopBannerTone
   /** Replaces the warning icon; neutral and accent show none without it. */

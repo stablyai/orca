@@ -182,11 +182,18 @@ describe('terminals bound to a worker', () => {
 
   it('Keep open on a bound terminal keeps only that one', async () => {
     const worker = startWorker(botChat)
-    // A bound terminal shows the worker's own countdown.
-    expect(paneAutoCloseState(db, worker.setup.paneKey)).toEqual(
-      paneAutoCloseState(db, worker.agentPaneKey)
-    )
-    expect(paneAutoCloseState(db, worker.setup.paneKey)).toEqual({ kept: false, closesAt: null })
+    // A bound terminal shows the worker's own countdown and names the worker's pane.
+    expect(paneAutoCloseState(db, worker.agentPaneKey)).toEqual({ kept: false, closesAt: null })
+    expect(paneAutoCloseState(db, worker.setup.paneKey)).toEqual({
+      kept: false,
+      closesAt: null,
+      boundTo: {
+        paneKey: worker.agentPaneKey,
+        worktreeId: 'repo::/worktrees/child',
+        name: 'work',
+        agent: null
+      }
+    })
 
     keepPaneOpen(db, worker.setup.paneKey)
     expect(paneAutoCloseState(db, worker.setup.paneKey)).toBeNull()

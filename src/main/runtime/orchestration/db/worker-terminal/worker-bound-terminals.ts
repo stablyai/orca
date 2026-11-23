@@ -100,14 +100,34 @@ export function paneAutoCloseState(
   if (isFailedSetupBinding(db, bound)) {
     return null
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the projection selects exactly pane_key.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the projection selects exactly these columns.
   const worker = db.db
     .prepare(
-      `SELECT pane_key FROM worker_terminal_resources
-        WHERE origin_dispatch_id = ? AND pane_key IS NOT NULL ORDER BY updated_at DESC LIMIT 1`
+      `SELECT r.pane_key, r.worktree_id, COALESCE(t.display_name, t.task_title) AS name,
+              CASE WHEN json_valid(w.start_options)
+                THEN json_extract(w.start_options, '$.launch.effective.agent') END AS agent
+         FROM worker_terminal_resources r
+         LEFT JOIN dispatch_contexts d ON d.id = r.owner_dispatch_id
+         LEFT JOIN worker_dispatches w ON w.dispatch_id = r.origin_dispatch_id
+         LEFT JOIN tasks t ON t.id = d.task_id
+        WHERE r.origin_dispatch_id = ? AND r.pane_key IS NOT NULL
+        ORDER BY r.updated_at DESC LIMIT 1`
     )
-    .get(bound.dispatch_id) as { pane_key: string } | undefined
-  return worker ? db.getWorkerAutoCloseState(worker.pane_key) : null
+    .get(bound.dispatch_id) as
+    | { pane_key: string; worktree_id: string | null; name: string | null; agent: unknown }
+    | undefined
+  const state = worker ? db.getWorkerAutoCloseState(worker.pane_key) : null
+  return state && !state.kept && worker
+    ? {
+        ...state,
+        boundTo: {
+          paneKey: worker.pane_key,
+          worktreeId: worker.worktree_id,
+          name: worker.name,
+          agent: typeof worker.agent === 'string' ? worker.agent : null
+        }
+      }
+    : state
 }
 
 /** Keep open on a pane: its own worker keeps everything; a bound pane leaves its worker and stays. */
