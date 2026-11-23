@@ -3,8 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Cookie, CookiesSetDetails, Session } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as FsPromises from 'node:fs/promises'
 import { setSecretStore } from '../../../../shared/secure-storage/secret-store'
 import type { CdpCookie } from '../browser-cdp-cookie'
+import type * as ClearStore from '../browser-cookie-clear-store'
+import type * as Trackers from './browser-session-cookie-tracker'
 
 type Listener = (event: unknown, cookie: Cookie, cause: string, removed: boolean) => void
 
@@ -20,7 +23,7 @@ vi.mock('../../sessions/profiles/browser-session-registry', () => ({ browserSess
 
 // The snapshot file's removal, which a test can make fail as a busy or locked file does.
 vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  const actual = await importOriginal<typeof FsPromises>()
   return {
     ...actual,
     rm: async (...args: Parameters<typeof actual.rm>) => {
@@ -36,14 +39,21 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 // Stands in for the hidden CDP target: Network.getAllCookies reports what the jar holds.
 vi.mock('../browser-cookie-clear-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../browser-cookie-clear-store')>()),
+  ...(await importOriginal<typeof ClearStore>()),
   openCookieClearStore: (target: { cookies: { get: () => Promise<Cookie[]> } }) => ({
     readAllCdpCookies: async (): Promise<CdpCookie[]> => {
       io.cdpReads += 1
-      return (await target.cookies.get()).map(({ name, value, domain, path, secure, httpOnly }) => ({
-        ...{ name, value, domain, path, secure, httpOnly },
-        session: true
-      }))
+      return (await target.cookies.get()).map(
+        ({ name, value, domain, path, secure, httpOnly }) => ({
+          name,
+          value,
+          domain,
+          path,
+          secure,
+          httpOnly,
+          session: true
+        })
+      )
     },
     dispose: () => {}
   })
@@ -96,8 +106,13 @@ function fakeSession() {
 
 function sessionCookie(name: string, domain: string): CdpCookie {
   return {
-    ...{ name, value: `${name}-value`, domain, path: '/' },
-    ...{ secure: true, httpOnly: false, session: true }
+    name,
+    value: `${name}-value`,
+    domain,
+    path: '/',
+    secure: true,
+    httpOnly: false,
+    session: true
   }
 }
 
@@ -115,7 +130,7 @@ async function clearGoogle(): Promise<string> {
   return google.clearGoogleCookiesFromPartition(PARTITION)
 }
 
-let lastTrackers: typeof import('./browser-session-cookie-tracker') | null = null
+let lastTrackers: typeof Trackers | null = null
 
 /** Waits for the snapshot writes queued now (a fired save's file I/O isn't a timer or microtask). */
 async function writesDone(): Promise<void> {
@@ -129,7 +144,7 @@ async function elapse(ms: number): Promise<void> {
 
 async function launch(options: { clearWhileRestoring?: boolean; unreadable?: boolean } = {}) {
   // The previous launch dies here: its late cookie events and timers must not reach this one.
-  for (const filePath of [...(lastTrackers?.sessionCookieTrackers.keys() ?? [])]) {
+  for (const filePath of lastTrackers?.sessionCookieTrackers.keys() ?? []) {
     lastTrackers?.stopTrackingSessionCookies(filePath)
   }
   vi.resetModules()
@@ -176,7 +191,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  for (const filePath of [...(lastTrackers?.sessionCookieTrackers.keys() ?? [])]) {
+  for (const filePath of lastTrackers?.sessionCookieTrackers.keys() ?? []) {
     lastTrackers?.stopTrackingSessionCookies(filePath)
   }
   vi.useRealTimers()

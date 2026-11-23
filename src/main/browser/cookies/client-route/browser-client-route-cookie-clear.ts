@@ -2,7 +2,7 @@ import { session } from 'electron'
 import { bindRoutePartition } from './browser-client-route-cookie-import'
 import { forgetClientRouteCookieImportSource } from './client-route-cookie-import-source-store'
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
-import { restoreBrowserRoutePartitionSessionCookies } from '../session-restore/browser-session-cookie-restore'
+import { restoreBrowserRoutePartitionSessionCookies } from '../session-restore/browser-session-cookie-route-restore'
 import { clearBrowserCookieJar } from '../session-restore/browser-session-cookie-clear'
 
 const DEFAULT_PROFILE_ID = 'default'
