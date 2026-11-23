@@ -223,7 +223,7 @@ it('works out the waiting ask from the events when none is kept or an older Orca
     expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(kept)
     expect(file.prepare('SELECT ask FROM item_waiting_asks').get()).toEqual({ ask: first })
     // Kept by other pairing rules (another build): not trusted, even when no event came since.
-    file.prepare('UPDATE item_waiting_asks SET ask = 0, rules = rules + 1').run()
+    file.prepare("UPDATE item_waiting_asks SET ask = 0, rules = 'another build'").run()
     expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(kept)
     // An older Orca's move by hand, which ends every ask, knows nothing of the kept one.
     const moved = file

@@ -10,9 +10,11 @@ import { parseBotItemEventId, type BotItemActor } from '../../shared/bots/bot-it
 import { eventRecordOf, eventViewOf, optionalInteger } from './bot-items-rows'
 
 /** The pairing rules a kept ask was worked out by; bump it with any change to what
- *  `botItemQuestionPairing` pairs, so asks kept by other rules (an upgrade or a downgrade) are worked out
- *  again rather than trusted. */
+ *  `botItemQuestionPairing` pairs. Desktop builds also key kept asks by their commit, so any other build's
+ *  are worked out again; the server bundle names no commit and relies on this alone. */
 export const WAITING_ASK_RULES = 1
+
+const KEPT_BY = `${WAITING_ASK_RULES}:${typeof ORCA_BUILD_COMMIT === 'string' ? ORCA_BUILD_COMMIT : ''}`
 
 /** An ask (0: none) as pairing the item's events up to `at` found it. */
 export type PairedWaitingAsk = { ask: number | null; at: number }
@@ -45,7 +47,7 @@ export function ensureKeptWaitingAsks(db: SyncDatabase): boolean {
       item_uid TEXT PRIMARY KEY,
       ask INTEGER NOT NULL,
       at INTEGER NOT NULL,
-      rules INTEGER NOT NULL
+      rules TEXT NOT NULL
     ) WITHOUT ROWID`)
     return true
   } catch (error) {
@@ -79,7 +81,7 @@ function keepWaitingAsk(db: SyncDatabase, uid: string, paired: PairedWaitingAsk)
     `INSERT INTO item_waiting_asks (item_uid, ask, at, rules)
        SELECT ?, ?, ?, ? WHERE (SELECT last_event_id FROM items WHERE uid = ?) = ?
      ON CONFLICT(item_uid) DO UPDATE SET ask = excluded.ask, at = excluded.at, rules = excluded.rules`
-  ).run(uid, paired.ask ?? 0, paired.at, WAITING_ASK_RULES, uid, paired.at)
+  ).run(uid, paired.ask ?? 0, paired.at, KEPT_BY, uid, paired.at)
 }
 
 let keepFailureTold = false
@@ -113,7 +115,7 @@ function keptRow(db: SyncDatabase, uid: string): SqliteRow | undefined {
   try {
     return db
       .prepare('SELECT ask, at FROM item_waiting_asks WHERE item_uid = ? AND rules = ?')
-      .get(uid, WAITING_ASK_RULES)
+      .get(uid, KEPT_BY)
   } catch {
     return undefined
   }
