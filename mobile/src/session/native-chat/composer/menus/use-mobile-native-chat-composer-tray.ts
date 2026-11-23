@@ -122,16 +122,20 @@ export function useMobileNativeChatComposerTray({
       ),
       composerInputRef,
       // Shares the cards' action guard, so a press here and on a card never overlap.
-      waitingAgentMail: {
-        rows: agentMail ?? NO_ROWS,
-        actions,
-        send: onSend,
-        delete: onDelete,
-        edit: editQueuedMessage,
-        editable: agentMailEditable,
-        steerHeld,
-        agentWorking
-      },
+      // A list without the chat's queue actions draws no waiting mail.
+      waitingAgentMail:
+        onSend && onDelete
+          ? {
+              rows: agentMail ?? NO_ROWS,
+              actions,
+              send: onSend,
+              delete: onDelete,
+              edit: editQueuedMessage,
+              editable: agentMailEditable,
+              steerHeld: steerHeld === true,
+              agentWorking: agentWorking === true
+            }
+          : undefined,
       steerHead: {
         steers: (alternateSteers: boolean) => {
           const head = mobileNativeChatChordHeadId(

@@ -16,8 +16,8 @@ export type MobileWaitingAgentMailActionsValue = {
   /** The queued cards' guard: one action per message at a time. */
   actions: MobileQueuedCardActions
   /** Opens a waiting message in the queue's editor above the composer. */
-  edit?: MobileQueuedMessageEdit
-  editable?: (messageId: string) => boolean
+  edit: MobileQueuedMessageEdit | undefined
+  editable: ((messageId: string) => boolean) | undefined
   send: (messageId: string) => Promise<boolean>
   delete: (messageId: string) => Promise<boolean>
   agentWorking: boolean
