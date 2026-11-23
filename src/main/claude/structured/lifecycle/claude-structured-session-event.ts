@@ -1,7 +1,7 @@
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type * as SessionAdapter from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { ClaudePendingPrompt } from '../permissions/claude-prompt-registry'
-import type { ClaudeStartedSend } from '../claude-structured-session-state'
+import type { ClaudeHandedSends, ClaudeStartedSend } from '../claude-structured-session-state'
 
 export type ClaudeAuthDiagnostic = {
   apiKeySourceConfigured: boolean
@@ -24,6 +24,9 @@ export type ClaudeStructuredSessionEvent =
       clientMessageId?: string
       /** On any other frame: the send the CLI started and has not echoed, whose turn output opens. */
       startedSend?: ClaudeStartedSend
+      /** On a task's start: every send Orca has handed Claude that may have reached it (see
+       *  `claudeHandedSends`). */
+      handedSends?: ClaudeHandedSends
       /** The user's new title from Claude's rename command, read when the frame arrived. */
       renamedTo?: string
       /** Host clock at receipt; stamped on turn boundaries only. */

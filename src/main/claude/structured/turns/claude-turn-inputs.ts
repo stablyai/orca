@@ -5,6 +5,7 @@ import { ClaudeToolOriginRegistry } from '../../subagents/claude-tool-origin-reg
 import type { ClaudeCurrentTurn } from './claude-turn-lifecycle-item'
 import { ClaudeTurnLaunches, isRootInput } from './claude-turn-launches'
 import { ClaudeTurnWakes, type FinishedBefore } from './claude-turn-wakes'
+import type { ClaudeHandedSends } from '../claude-structured-session-state'
 
 export class ClaudeTurnInputs {
   /** Which calls are the root agent's and which a subagent's. */
@@ -38,7 +39,12 @@ export class ClaudeTurnInputs {
   }
 
   /** One provider frame before it opens or joins a turn; true when it changed `turn`'s row. */
-  observe(frame: Record<string, unknown>, opensTurn: boolean, turn: ClaudeCurrentTurn | null) {
+  observe(
+    event: { message: Record<string, unknown>; startsTurn?: true; handedSends?: ClaudeHandedSends },
+    turn: ClaudeCurrentTurn | null
+  ) {
+    const { message: frame, handedSends: handed } = event
+    const opensTurn = !!event.startsTurn
     if (!turn && !opensTurn && isRootInput(frame)) {
       this.wakes.messaged()
     }
@@ -48,7 +54,7 @@ export class ClaudeTurnInputs {
       shell: (id: string) => this.shells.has(id),
       childOwnerRef: (id: string) => this.toolOrigins.childOwnerRef(id)
     }
-    const launched = !!turn && this.launches.observe(frame, opensTurn, calls, turn)
+    const launched = !!turn && this.launches.observe(frame, opensTurn, calls, turn, handed)
     return !!turn && (named || launched || this.unwoken(turn))
   }
 

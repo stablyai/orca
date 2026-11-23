@@ -161,7 +161,7 @@ export class ClaudeOpenTurn {
   observeEvent(event: ClaudeStructuredSessionEvent): void {
     this.observeStartedSend(event.type === 'message' ? (event.startedSend ?? null) : null)
     const turn = this.current
-    if (event.type === 'message' && this.inputs.observe(event.message, !!event.startsTurn, turn)) {
+    if (event.type === 'message' && this.inputs.observe(event, turn)) {
       this.publish(turn!)
     }
   }

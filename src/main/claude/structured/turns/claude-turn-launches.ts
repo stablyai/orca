@@ -7,6 +7,7 @@ import type { AgentJournalTurnItem } from '../../../../shared/agent-session/jour
 import { taskAliasId, taskId } from '../../background-tasks/claude-background-task-frames'
 import { isClaudeInjectedUserMessage } from '../journal/claude-internal-message-content'
 import type { FinishedBefore } from './claude-turn-wakes'
+import type { ClaudeHandedSends } from '../claude-structured-session-state'
 import type { ClaudeToolOriginRegistry } from '../../subagents/claude-tool-origin-registry'
 
 type Launch = NonNullable<AgentJournalTurnItem['launches']>[number]
@@ -74,7 +75,8 @@ export class ClaudeTurnLaunches {
     frame: Record<string, unknown>,
     opensTurn: boolean,
     calls: Calls,
-    turn: { launches?: Launch[] }
+    turn: { launches?: Launch[] },
+    handed?: ClaudeHandedSends
   ): boolean {
     if (isRootInput(frame) && !opensTurn) {
       this.inputsSeen += 1
@@ -94,11 +96,21 @@ export class ClaudeTurnLaunches {
     if (!calls.shell(run)) {
       return false
     }
+    // Every send Orca handed Claude may have reached it by now, echoed or not: each is an input, and
+    // one Orca can't name (or no list at all) leaves the launch no one's.
+    const sends = [...new Set([...this.sends, ...(handed?.ids ?? [])])]
     const launches = turn.launches ?? []
-    if (this.unnamed || this.inputsSeen > this.steersNamed || launches.length >= MAX_LAUNCHES) {
+    if (
+      !handed ||
+      handed.unnamed ||
+      this.unnamed ||
+      this.inputsSeen > this.steersNamed ||
+      launches.length >= MAX_LAUNCHES ||
+      sends.length > MAX_INPUTS
+    ) {
       return false
     }
-    const next = [...launches, { run, sends: [...this.sends], runs: [...this.runs] }]
+    const next = [...launches, { run, sends, runs: [...this.runs] }]
     if (JSON.stringify(next).length > MAX_LAUNCH_BYTES) {
       return false
     }

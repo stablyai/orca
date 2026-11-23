@@ -86,8 +86,11 @@ type SendFacts = {
   clientMessageId?: string
   requestedAt?: number
   startedSend?: { clientMessageId: string }
+  handedSends?: { ids: readonly string[]; unnamed: boolean }
 }
 const opens = (clientMessageId: string): SendFacts => ({ startsTurn: true, clientMessageId })
+const handed = (ids: string[], unnamed = false): SendFacts => ({ handedSends: { ids, unnamed } })
+const noneHanded = handed([])
 
 /** Replays the capture; `after[i]` runs once frame i is handled (more frames, or the host's calls). */
 function replay(
@@ -117,8 +120,16 @@ function replay(
     setPromptSuggestion: () => {}
   } as Partial<StructuredAgentSessionEventSink> as StructuredAgentSessionEventSink
   const translator = createClaudeJournalTranslator({ sink })
+  // A task's start carries Orca's list of sends it handed Claude: none outstanding unless given.
   const send = (message: Record<string, unknown>, at: number, event: SendFacts = {}) =>
-    translator.handle({ type: 'message', sessionId: SESSION, message, observedAt: at, ...event })
+    translator.handle({
+      type: 'message',
+      sessionId: SESSION,
+      message,
+      observedAt: at,
+      ...(message.subtype === 'task_started' && !('handedSends' in event) ? noneHanded : {}),
+      ...event
+    })
   source.forEach((frame, index) => {
     send(frame, index + 1, index === 1 ? opens('c1') : (tagged[index] ?? {}))
     after[index]?.((extra, event) => send(extra, index + 1, event), translator)
@@ -465,4 +476,24 @@ it('records no launch in a send turn that replaces an open wake-up', () => {
   })
   expect(turns.at(-1)?.turnId).toBe('c6-echo')
   expect(followUpLaunch(turns)).toBeUndefined()
+})
+
+it('stamps a launch with every send Orca handed Claude, echoed or not, behind the opener too', () => {
+  const thread = replay({}, frames, { [LAUNCHED]: handed(['c1']) })
+  expect(thread.find((row) => row.launches)?.launches).toEqual([
+    { run: RUN, sends: ['c1'], runs: [] }
+  ])
+  const behind = replay({}, frames, { [LAUNCHED]: handed(['c1', 'c9']) })
+  expect(behind.find((row) => row.launches)?.launches).toEqual([
+    { run: RUN, sends: ['c1', 'c9'], runs: [] }
+  ])
+})
+
+it('records no launch while Orca holds a send it can’t name, or holds no list', () => {
+  expect(replay({}, frames, { [LAUNCHED]: handed(['c1'], true) }).some((row) => row.launches)).toBe(
+    false
+  )
+  expect(
+    replay({}, frames, { [LAUNCHED]: { handedSends: undefined } }).some((row) => row.launches)
+  ).toBe(false)
 })

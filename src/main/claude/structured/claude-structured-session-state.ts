@@ -46,6 +46,9 @@ export type ClaudeAutoUnsettled =
   | { kind: 'fast-mode'; fastMode: string | undefined }
 export type ClaudeStartedSend = { clientMessageId: string; requestedAt?: number }
 
+/** Sends Orca has handed Claude that may have reached it, by id; `unnamed` when one has none. */
+export type ClaudeHandedSends = { ids: readonly string[]; unnamed: boolean }
+
 export type ClaudeLateDispatchOutcome =
   | {
       clientMessageId: string

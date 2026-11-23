@@ -16,7 +16,11 @@ import { readClaudeFrameString } from '../startup/claude-structured-init-proof'
 import { claudeText } from '../journal/claude-structured-item-translation'
 import { isRootClaudeFrame } from './claude-turn-opening'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
-import type { ClaudeSession, ClaudeStartedSend } from '../claude-structured-session-state'
+import type {
+  ClaudeHandedSends,
+  ClaudeSession,
+  ClaudeStartedSend
+} from '../claude-structured-session-state'
 
 const UNSTARTED_VERDICT = {
   cancelled: 'cancelled',
@@ -102,7 +106,11 @@ function claudeUserRenamedSession(
   return claudeText(message.title)
 }
 
-type ClaudeFrameSendFacts = { startedSend?: ClaudeStartedSend; renamedTo?: string }
+type ClaudeFrameSendFacts = {
+  startedSend?: ClaudeStartedSend
+  renamedTo?: string
+  handedSends?: ClaudeHandedSends
+}
 // Most frames carry neither fact; this runs on every frame, streaming deltas included.
 const NO_SEND_FACTS: ClaudeFrameSendFacts = Object.freeze({})
 
@@ -114,10 +122,37 @@ export function claudeFrameSendFacts(
 ): ClaudeFrameSendFacts {
   const startedSend = !startsTurn && session ? claudeStartedUnechoedSend(session) : null
   const renamedTo = claudeUserRenamedSession(session, message)
-  if (!startedSend && !renamedTo) {
+  // Read only where a launch is stamped, so other frames build nothing.
+  const handedSends =
+    message.type === 'system' && message.subtype === 'task_started'
+      ? claudeHandedSends(session)
+      : undefined
+  if (!startedSend && !renamedTo && !handedSends) {
     return NO_SEND_FACTS
   }
-  return { ...(startedSend ? { startedSend } : {}), ...(renamedTo ? { renamedTo } : {}) }
+  return {
+    ...(startedSend ? { startedSend } : {}),
+    ...(renamedTo ? { renamedTo } : {}),
+    ...(handedSends ? { handedSends } : {})
+  }
+}
+
+/** Every send Orca has handed Claude and not seen reported settled: waiting in any state (queued,
+ *  started, steering), retired in doubt, or settled by the frame in hand. Read from Orca's own list,
+ *  not Claude's echoes, which can come after Claude acted on the send. No session names none. */
+export function claudeHandedSends(session: ClaudeSession | null): ClaudeHandedSends {
+  if (!session) {
+    return { ids: [], unnamed: true }
+  }
+  const waiters = [...session.dispatchWaiters, ...session.retiredDispatchWaiters]
+  const ids = new Set(waiters.flatMap((waiter) => waiter.clientMessageId ?? []))
+  for (const id of session.unreportedSettlements ?? []) {
+    ids.add(id)
+  }
+  return {
+    ids: [...ids],
+    unnamed: waiters.some((waiter) => waiter.clientMessageId === null)
+  }
 }
 
 /** Include settlements until the host hears them, avoiding a gap in dispatch ownership. */
