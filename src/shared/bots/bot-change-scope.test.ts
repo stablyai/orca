@@ -44,3 +44,8 @@ it('re-reads only the rooms a window named, and every room once a change names n
   )
   expect(rooms(notice({ botIds: ['bot-1'], kinds: ['status'] }))).toEqual([])
 })
+
+it('keeps the rooms a notice names when a window reads a notice the bridge already read', () => {
+  const bridged = structuredClone(readBotChangeScope({ kinds: ['groups'], groupIds: ['room-a'] }))
+  expect(rooms(readBotChangeScope(bridged))).toEqual(['room-a'])
+})

@@ -273,8 +273,13 @@ export function readBotChangeScope(event: unknown): BotChangeScope | undefined {
   const kindBots = 'kindBots' in event ? readStringLists(event.kindBots) : undefined
   const needsYou = 'needsYou' in event ? readBotNeedsYouCounts(event.needsYou) : undefined
   // Kept as sent: only an open room walks it, once per notice.
+  // A notice read once already (the preload's, a paired host's) carries it as `receivedGroupIds`.
   const receivedGroupIds: readonly unknown[] | undefined =
-    'groupIds' in event && Array.isArray(event.groupIds) ? event.groupIds : undefined
+    'groupIds' in event && Array.isArray(event.groupIds)
+      ? event.groupIds
+      : 'receivedGroupIds' in event && Array.isArray(event.receivedGroupIds)
+        ? event.receivedGroupIds
+        : undefined
   return botIds || kinds
     ? {
         ...(botIds ? { botIds } : {}),
