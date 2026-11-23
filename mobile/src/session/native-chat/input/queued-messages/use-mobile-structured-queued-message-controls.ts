@@ -43,6 +43,8 @@ export type MobileStructuredQueuedMessageControls = {
   send: (messageId: string) => Promise<boolean>
   delete: (messageId: string) => Promise<boolean>
   clear: (messageIds: string[]) => Promise<boolean>
+  /** What Delete all deletes and holds: every message the host holds, waiting agent mail included. */
+  clearIds: readonly string[]
   edit?: MobileQueuedMessageEdit
   editor?: MobileQueuedMessageInlineEditor
   move?: (move: DragReorderMove) => Promise<boolean>
@@ -289,12 +291,9 @@ export function useMobileStructuredQueuedMessageControls(args: {
     [allCards]
   )
   // Delete all also takes the waiting agent mail the transcript draws, as it did when that was a card.
-  const clearHeld = useCallback(
-    (messageIds: string[]): Promise<boolean> => {
-      const mailIds = agentMail.flatMap((row) => (row.queuedMessageId ? [row.queuedMessageId] : []))
-      return clear([...new Set([...messageIds, ...mailIds])])
-    },
-    [agentMail, clear]
+  const clearIds = useMemo(
+    () => allCards.filter((card) => card.hold !== 'sending').map((card) => card.messageId),
+    [allCards]
   )
 
   return {
@@ -302,7 +301,8 @@ export function useMobileStructuredQueuedMessageControls(args: {
     steerOrder: mailLeads ? allCards : cards,
     send,
     delete: deleteDraft,
-    clear: clearHeld,
+    clear,
+    clearIds,
     edit: args.editCapable === null ? undefined : edit,
     editor,
     move: composerActions.move,

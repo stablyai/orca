@@ -1,5 +1,5 @@
 import { useNativeChatProseText } from '../../preferences/native-chat-text-settings'
-import { Fragment, memo, useContext } from 'react'
+import { Fragment, memo, useContext, useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ArrowUpRight, Bot } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
@@ -102,7 +102,8 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
 }: AgentMessageCardProps) {
   const t = useMobileTranslation()
   const prose = useNativeChatProseText(fontScale)
-  const text = mobileNativeChatDisplayCopyText(message)
+  // A sender's status change redraws the row; the body's text and first line are read once per body.
+  const text = useMemo(() => mobileNativeChatDisplayCopyText(message), [message])
   const sender = agentMessagePrimarySender(from)
   const unnamed = t('session.agentMessageAttribution.unnamedSender', 'an agent')
   const senderName = useMobileAgentMessageName(sender ?? NO_SENDER, unnamed)
@@ -111,7 +112,7 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
   const heading = agentMessageHeading(from, message)
   const words = lead(heading, t)
   const kind = kindWord(heading, t)
-  const preview = agentMessagePreviewLine(text).line
+  const preview = useMemo(() => agentMessagePreviewLine(text).line, [text])
   const items = message.agentStartItems ?? []
   const merged = message.mergedEvents ?? []
   const canCopy = agentMessageCanCopy(text)

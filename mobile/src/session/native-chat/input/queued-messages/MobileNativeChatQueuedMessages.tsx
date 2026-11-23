@@ -61,6 +61,8 @@ export type MobileNativeChatQueuedMessagesProps = {
   onSend?: (messageId: string) => Promise<boolean>
   onDelete?: (messageId: string) => Promise<boolean>
   onClearAll?: (messageIds: string[]) => Promise<boolean>
+  /** What Delete all deletes and holds, waiting agent mail included; the cards when omitted. */
+  clearIds?: readonly string[]
   /** Offers Clear all while the queue still sends on its own; otherwise only a paused queue does. */
   clearable?: boolean
   // Older hosts cannot edit inline; copy their draft to the composer.
@@ -84,6 +86,7 @@ export function MobileNativeChatQueuedMessages({
   onSend,
   onDelete,
   onClearAll,
+  clearIds: heldIds,
   clearable = false,
   onEdit,
   editor,
@@ -179,11 +182,12 @@ export function MobileNativeChatQueuedMessages({
   // The shortcut's own head, which is waiting agent mail (no card) when that is first in line.
   const headId = headSteerableQueuedMessageCard(steerOrder ?? cards)?.messageId
   const messageIds = cards.map((card) => card.messageId)
-  // Clear all takes every card, so it waits for any card's own action rather than skip that card.
-  const clearBusy = queueBusy || messageIds.some((messageId) => busyIds.has(messageId))
+  const clearIds = heldIds ? [...heldIds] : messageIds
+  // Clear all takes every held message, so it waits for any one's own action rather than skip it.
+  const clearBusy = queueBusy || clearIds.some((messageId) => busyIds.has(messageId))
   const clearAll = () => {
     if (onClearAll) {
-      void run(QUEUE_KEY, () => onClearAll(messageIds), messageIds, 'deleteAll')
+      void run(QUEUE_KEY, () => onClearAll(clearIds), clearIds, 'deleteAll')
     }
   }
   // Forget closed menu identity so a Stop-requeued draft with the same id cannot reopen it.
@@ -404,7 +408,7 @@ export function MobileNativeChatQueuedMessages({
               }
             }
           },
-          ...(clearable && !pause && onClearAll && cards.length > 1
+          ...(clearable && !pause && onClearAll && clearIds.length > 1
             ? [
                 {
                   id: 'clearAll',

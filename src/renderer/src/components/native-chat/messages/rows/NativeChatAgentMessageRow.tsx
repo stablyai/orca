@@ -139,7 +139,15 @@ export function NativeChatAgentMessageRow({
     if (row.parentElement) {
       observer.observe(row.parentElement)
     }
-    return () => observer.disconnect()
+    // Hidden actions take no width, so a button coming or going (Edit, Steer ↔ Send) resizes nothing.
+    const actions = new MutationObserver(measure)
+    if (actionRef.current) {
+      actions.observe(actionRef.current, { childList: true, subtree: true, characterData: true })
+    }
+    return () => {
+      observer.disconnect()
+      actions.disconnect()
+    }
   }, [measures, preview])
   const badgeState =
     badge === 'running'

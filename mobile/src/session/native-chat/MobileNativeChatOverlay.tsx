@@ -146,6 +146,7 @@ function MobileNativeChatOverlayContent({
       onSend: queued.send,
       onDelete: queued.delete,
       onClearAll: queued.clear,
+      clearIds: queued.clearIds,
       onEdit: queued.edit,
       editor: queued.editor,
       onMove: queued.move,

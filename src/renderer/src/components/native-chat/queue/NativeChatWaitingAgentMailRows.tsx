@@ -1,6 +1,7 @@
 import { memo, useContext } from 'react'
 import { NativeChatAgentMessageCard } from '../messages/rows/NativeChatAgentMessageCard'
 import { NativeChatWaitingAgentMailContext } from './NativeChatWaitingAgentMailActions'
+import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 
 const NO_REFOLD = (): void => {}
 
@@ -14,18 +15,26 @@ export const NativeChatWaitingAgentMailRows = memo(
     }
     return (
       <>
-        {mail.rows.map((message) =>
-          message.from ? (
-            <div key={message.id} data-native-chat-message-id={message.id}>
-              <NativeChatAgentMessageCard
-                message={message}
-                from={message.from}
-                onRefolded={NO_REFOLD}
-              />
-            </div>
-          ) : null
-        )}
+        {mail.rows.map((message) => (
+          <NativeChatWaitingAgentMailRow key={message.id} message={message} />
+        ))}
       </>
     )
   }
 )
+
+/** One waiting row, kept as is while its message is unchanged, so a new arrival draws only itself. */
+const NativeChatWaitingAgentMailRow = memo(function NativeChatWaitingAgentMailRow({
+  message
+}: {
+  message: NativeChatMessage
+}): React.JSX.Element | null {
+  if (!message.from) {
+    return null
+  }
+  return (
+    <div data-native-chat-message-id={message.id}>
+      <NativeChatAgentMessageCard message={message} from={message.from} onRefolded={NO_REFOLD} />
+    </div>
+  )
+})

@@ -89,7 +89,11 @@ export function NativeChatAgentMessageCard({
   const owner = useNativeChatVisualOwner()
   const worktreeId = owner?.worktreeId ?? runtimeContext?.worktreeId ?? null
   const target = owner?.target ?? runtimeContext?.target
-  const text = agentMessageTranscriptText(message.blocks, from, message.shortened)
+  // A sender's status change redraws the row; the body's text and first line are read once per body.
+  const text = useMemo(
+    () => agentMessageTranscriptText(message.blocks, from, message.shortened),
+    [message.blocks, from, message.shortened]
+  )
   const worker = agentMessageSessionWorker(message, useNativeChatWorkers())
   const sender = agentMessagePrimarySender(from)
   const dispatchId = message.agentStartDispatchId ?? worker?.dispatchId
@@ -103,7 +107,7 @@ export function NativeChatAgentMessageCard({
   const words = agentMessageRowLead(from, message, t)
   const items = message.agentStartItems ?? []
   const forItems = t('components.native-chat.agentMessage.row.forItems', 'for')
-  const preview = agentMessagePreviewLine(text)
+  const preview = useMemo(() => agentMessagePreviewLine(text), [text])
   const senderName = useAgentMessageSenderLabel(
     sender ?? NO_SENDER,
     worktreeId,

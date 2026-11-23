@@ -32,7 +32,8 @@ function waitingAgentMailRow(message: AgentSessionQueuedMessage): NativeChatMess
 }
 
 /** One chat's waiting agent mail as rows, in queue order, until its hand-off's own row replaces it.
- *  While the mail is unchanged it returns the previous rows, so other queue changes redraw nothing. */
+ *  While the mail is unchanged it returns the previous rows, so other queue changes redraw nothing;
+ *  each unchanged message keeps its row object when others come or go. */
 export function createWaitingAgentMailRows(): (
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
   submissions: readonly AgentJournalSubmission[]
@@ -61,7 +62,20 @@ export function createWaitingAgentMailRows(): (
         )
       })
     if (!same) {
-      previous = { messages, rows: messages.map(waitingAgentMailRow) }
+      // An unchanged message keeps its row, so a new arrival redraws only its own row.
+      const kept = new Map(
+        previous.messages.map((before, index) => [
+          before.messageId,
+          { before, row: previous.rows[index]! }
+        ])
+      )
+      const rows = messages.map((message) => {
+        const prior = kept.get(message.messageId)
+        return prior && structuralValuesEqual(message.body, prior.before.body)
+          ? prior.row
+          : waitingAgentMailRow(message)
+      })
+      previous = { messages, rows }
     }
     return previous.rows
   }
