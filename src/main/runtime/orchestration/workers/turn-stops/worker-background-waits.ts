@@ -18,6 +18,7 @@ import { observeWorker, reconsiderWorkerRest } from './worker-presence-report'
 import { workerBackgroundWaitDueAt } from './worker-background-wait-notice'
 import { terminalRequestError } from './terminal-request-error'
 import {
+  failedLeadTurnFence,
   workerTurnStopDispatchId,
   type WorkerTurnStop,
   type WorkerTurnStopDispatch,
@@ -33,10 +34,6 @@ export type WorkerBackgroundWaitsDeps = WorkerTurnStopReportDeps & {
 
 const SEND_RETRIES = 3
 
-/** Names a failed lead turn by its end: a restart that remints the process id is the same failure. */
-export function failedLeadTurnFence(since: number): string {
-  return `failed-lead:${since}`
-}
 const SEND_RETRY_MS = 60_000
 
 type PaneWorker = {
@@ -66,8 +63,9 @@ export class WorkerBackgroundWaits {
     try {
       this.observePane(change.paneKey)
     } catch (error) {
-      // Seen again, a wait that failed to record is recorded then.
+      // Seen again, a wait or failure that failed to record is recorded then.
       this.waitingSince.delete(change.paneKey)
+      this.failedSince.delete(change.paneKey)
       console.warn('[orchestration] observing a worker background wait failed', error)
     }
   }
@@ -123,12 +121,7 @@ export class WorkerBackgroundWaits {
     if (this.failedSince.get(paneKey) === failed.since) {
       return true
     }
-    // The failure ends any wait this pane held: its rest is the failure now.
-    this.waitingSince.delete(paneKey)
     const workers = this.workersOf(paneKey, row)
-    if (workers.length > 0) {
-      this.failedSince.set(paneKey, failed.since)
-    }
     const fence = failedLeadTurnFence(failed.since)
     const requestError = terminalRequestError(row)
     for (const worker of workers) {
@@ -150,6 +143,11 @@ export class WorkerBackgroundWaits {
         },
         this.deps
       )
+    }
+    // Recorded only once its rest is: the lead's next turn then reads as the end of this rest, as a wait's does.
+    if (workers.length > 0) {
+      this.failedSince.set(paneKey, failed.since)
+      this.waitingSince.set(paneKey, failed.since)
     }
     return true
   }

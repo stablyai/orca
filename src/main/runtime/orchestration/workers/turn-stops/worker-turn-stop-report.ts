@@ -280,6 +280,18 @@ export function relayWorkerMail(
 }
 
 /** A stable message id: writing the same report twice is a no-op. */
+const FAILED_LEAD_FENCE_PREFIX = 'failed-lead:'
+
+/** Names a lead turn that failed under live children by its end: a restart that remints the process id,
+ *  a prompt in between, or the later all-clear is the same failure, under one stable report id. */
+export function failedLeadTurnFence(since: number): string {
+  return `${FAILED_LEAD_FENCE_PREFIX}${since}`
+}
+
+export function isFailedLeadTurnFence(fence: string | null): fence is string {
+  return fence?.startsWith(FAILED_LEAD_FENCE_PREFIX) === true
+}
+
 export function stopReportId(dispatchId: string, stopKey: string): string {
   return `msg_stop_${createHash('sha256')
     .update(JSON.stringify([dispatchId, stopKey]))

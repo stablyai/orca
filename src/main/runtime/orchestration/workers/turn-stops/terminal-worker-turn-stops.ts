@@ -12,7 +12,14 @@ import {
 } from '../../../push/notifications/terminal-agent-turn-news'
 import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { redactWorkerTerminalView } from '../../terminal-authority/views/worker-terminal-redaction'
-import { workerTurnStopDispatchId, type WorkerTurnStopReportDeps } from './worker-turn-stop-report'
+import {
+  failedLeadTurnFence,
+  stopReportId,
+  workerTurnStopDispatchId,
+  type WorkerTurnStopDispatch,
+  type WorkerTurnStopReportDeps
+} from './worker-turn-stop-report'
+import type { OrchestrationDb } from '../../db/orchestration-db'
 import { observeWorker, type WorkerRest } from './worker-presence-report'
 import { firstWithin } from '../approvals/first-within'
 import { showsClaudeDialog } from '../../../terminal/wait/claude-open-dialog-hold'
@@ -21,8 +28,8 @@ import {
   agentBackgroundWait,
   agentLeadTurnFailedUnderChildWork
 } from '../../../../../shared/agent-status/lifecycle/agent-background-wait'
-import { failedLeadTurnFence, WorkerBackgroundWaits } from './worker-background-waits'
-import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
+import { WorkerBackgroundWaits } from './worker-background-waits'
+import { hasRelayedWorkerReport } from '../../db/worker-presence/worker-presence-store'
 import { resolveTerminalWorkerDispatch } from './terminal-worker-dispatch'
 import { terminalRequestError } from './terminal-request-error'
 export { resolveTerminalWorkerDispatch }
@@ -156,16 +163,7 @@ export class TerminalWorkerTurnStops {
       return
     }
     // A failed turn already reported while its children ran is the same failure once they settle.
-    const failedLead =
-      reason === 'errored' && stop.row.mainAgent
-        ? failedLeadTurnFence(stop.row.mainAgent.stateStartedAt)
-        : null
-    const reportedFence =
-      failedLead &&
-      readWorkerPresence(resolved.db, workerTurnStopDispatchId(resolved.target))?.fence ===
-        failedLead
-        ? failedLead
-        : null
+    const reportedFence = reportedFailedLeadFence(resolved.db, resolved.target, stop.row, reason)
     const sent = observeWorker(
       resolved.db,
       resolved.target,
@@ -225,4 +223,24 @@ export class TerminalWorkerTurnStops {
   private resolve(paneKey: string) {
     return resolveTerminalWorkerDispatch(this.deps, paneKey)
   }
+}
+
+/** The fence of this errored turn's failed-lead report, when one already reached the coordinator. */
+function reportedFailedLeadFence(
+  db: OrchestrationDb,
+  target: WorkerTurnStopDispatch,
+  row: AgentStatusIpcPayload,
+  reason: WorkerRest['reason']
+): string | null {
+  if (reason !== 'errored' || !row.mainAgent) {
+    return null
+  }
+  const fence = failedLeadTurnFence(row.mainAgent.stateStartedAt)
+  const dispatchId = workerTurnStopDispatchId(target)
+  const id = stopReportId(dispatchId, fence)
+  const reported =
+    target.kind === 'local'
+      ? db.getMessageById(id) !== undefined
+      : hasRelayedWorkerReport(db, dispatchId, id)
+  return reported ? fence : null
 }

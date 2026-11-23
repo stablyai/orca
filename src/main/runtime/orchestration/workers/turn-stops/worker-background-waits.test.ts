@@ -262,9 +262,39 @@ describe('a worker waiting on its own background task', () => {
       at: 3
     })
     expect(restarted.reportFailedLeadTurn(PANE)).toBe(true)
+    // A prompt in between, then the all-clear of the same failed turn, report it under the same fence.
+    const target = { kind: 'local' as const, dispatch: db.getDispatchContextById(dispatchId)! }
+    const reportDeps = { getDb: () => db, isWaitingForMail: () => false, notify: () => {} }
+    observeWorker(
+      db,
+      target,
+      {
+        presence: 'at-rest',
+        fence: 'prompt:1',
+        legacyStopKey: 'prompt:1',
+        rest: { from: HANDLE, reason: 'needs-input', lastOutput: undefined }
+      },
+      reportDeps
+    )
+    observeWorker(
+      db,
+      target,
+      {
+        presence: 'at-rest',
+        fence: `failed-lead:${failedAt}`,
+        legacyStopKey: 'all-clear',
+        rest: { from: HANDLE, reason: 'errored', lastOutput: 'API Error: 503' }
+      },
+      reportDeps
+    )
     // The failure replaced the wait, so no background-wait notice follows it either.
     advanceTo(TURN_END + 120 * MINUTE)
     expect(errors()).toHaveLength(1)
     expect(notices()).toEqual([])
+
+    // The lead's next turn, still under the live task, is work again.
+    row = leadWorkingRow(TURN_END + 121 * MINUTE)
+    restarted.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 4 })
+    expect(readWorkerPresence(db, dispatchId)?.presence).toBe('working')
   })
 })

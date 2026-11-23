@@ -23,7 +23,7 @@ export function agentBackgroundWait(
     row.workingMode !== 'monitoring' ||
     lead?.state !== 'done' ||
     lead.outcome === 'cancellation' ||
-    agentLeadTurnFailedUnderChildWork(row) !== null ||
+    lead.outcome === 'failure' ||
     !row.backgroundCommands?.length
   ) {
     return null
