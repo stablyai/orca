@@ -13,12 +13,6 @@ import { acpUrlElicitationPresentation, isAcpUrlElicitation } from './acp-url-el
 import type { AcpRequestContext } from '../transport/acp-json-rpc-peer'
 import type { AcpStructuredLane } from '../journal/acp-structured-lane'
 
-import type { AcpPermissionHandler } from '../protocol/acp-permission-requests'
-import { RequestPermissionResponseSchema } from '../generated/acp-protocol.generated'
-import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
-import { acpAnswersRequests } from '../launch/acp-launch-permission-modes'
-import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-
 type OpenRequest = {
   key: string
   presentation: AcpRequestPresentation
@@ -42,30 +36,6 @@ export class AcpStructuredPrompts {
 
   get size(): number {
     return this.open.size
-  }
-
-  permissionHandler(
-    spec: AcpLaunchSpec,
-    permission: () => AgentChatPermissionChoice | undefined
-  ): AcpPermissionHandler | undefined {
-    if (spec.autonomousTools) {
-      return undefined
-    }
-    return (request, context) => {
-      if (!this.admits()) {
-        return { outcome: { outcome: 'cancelled' } }
-      }
-      const claimed = spec.dialect.request?.('session/request_permission', request)
-      if (permission() === 'full-access' && acpAnswersRequests(spec) && !claimed) {
-        const allow = request.options.find((option) => option.kind === 'allow_once')
-        if (allow) {
-          return { outcome: { outcome: 'selected', optionId: allow.optionId } }
-        }
-      }
-      return this.handle('session/request_permission', request, context).then((reply) =>
-        RequestPermissionResponseSchema.parse(reply)
-      )
-    }
   }
 
   handle(method: string, params: unknown, context: AcpRequestContext): Promise<unknown> {

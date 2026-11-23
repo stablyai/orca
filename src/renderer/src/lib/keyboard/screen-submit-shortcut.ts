@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from 'react'
 import { isImeOwnedKeyboardEvent } from '../text-input/ime/ime-composition-keyboard-event'
 import { getShortcutPlatform } from './shortcut-platform'
 
@@ -27,6 +28,30 @@ export function isScreenSubmitShortcut(event: ScreenSubmitShortcutEvent): boolea
   return platform === 'darwin'
     ? Boolean(event.metaKey) && !event.ctrlKey
     : Boolean(event.ctrlKey) && !event.metaKey
+}
+
+export function handleScreenFormSubmitKey(event: KeyboardEvent<HTMLFormElement>): void {
+  const { currentTarget, target } = event
+  if (
+    event.defaultPrevented ||
+    !(target instanceof HTMLElement) ||
+    !currentTarget.contains(target)
+  ) {
+    return
+  }
+  const shortcut = isScreenSubmitShortcut(event)
+  // A held Enter must not submit when a prerequisite finishes between keydown and keyup.
+  if (
+    event.repeat &&
+    event.key === 'Enter' &&
+    !isImeOwnedKeyboardEvent(event) &&
+    (shortcut || target instanceof HTMLInputElement || target.matches('button[type="submit"]'))
+  ) {
+    event.preventDefault()
+  } else if (shortcut) {
+    event.preventDefault()
+    currentTarget.requestSubmit()
+  }
 }
 
 export function getScreenSubmitModifierLabel(): string {

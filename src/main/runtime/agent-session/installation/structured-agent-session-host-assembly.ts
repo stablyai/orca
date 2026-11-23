@@ -91,6 +91,7 @@ export async function installOnJournal(
     ...(deps.onIdleProviderDeath ? { onIdleProviderDeath: deps.onIdleProviderDeath } : {}),
     observeCommittedRows: observePRWatchCommittedRows,
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
+    ...(deps.readWorkerDockPresence ? { readWorkerDockPresence: deps.readWorkerDockPresence } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
     ...(deps.conversationNaming
       ? { conversationNaming: withProviderNaming(deps.conversationNaming, nameProvider) }

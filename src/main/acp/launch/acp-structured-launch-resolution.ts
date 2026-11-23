@@ -46,6 +46,7 @@ import {
   type AcpLaunchVisualsDeps
 } from './acp-structured-launch-skill-roots'
 import { linkedSkillsSection } from '../../native-chat/native-chat-skill-roots'
+import { noteManagedServerUse } from '../../node-runtime/managed-runtime-release'
 import type { AcpInstructionsLaunch } from './acp-instructions'
 import { acpInstructionsWithVisuals, visualsByInstructions } from './acp-visuals-instructions'
 import { withoutCallerIdentity } from '../../runtime/agent-session/environment/structured-session-child-env'
@@ -205,6 +206,7 @@ export function acpStructuredLaunchPart(
         dataDirectory: deps.dataDirectory
       })
     const fullAccess = acpFullAccessForLaunch(spec, basis.permissionMode)
+    noteManagedServerUse(spec.agent, spec.managedRuntime, version)
     const cwd = await basis.launchDirectory()
     const visuals = spec.skillRoots || visualsByInstructions(spec) ? await basis.visuals() : null
     const linked = await basis.linkedSkills()
@@ -242,7 +244,7 @@ export function acpStructuredLaunchPart(
         linkedRoot && loaded.includes(linkedRoot) ? [] : linked.projects
       )
     )
-    const delivered = await acpInstructionsWithVisuals(
+    const { launch: instructions, visuals: deliveredVisuals } = await acpInstructionsWithVisuals(
       spec,
       deps,
       {
@@ -254,8 +256,7 @@ export function acpStructuredLaunchPart(
       },
       visuals && !skillLoaded ? visuals.skill : null
     )
-    const instructions = delivered.launch
-    const visualsLoaded = skillLoaded ?? (delivered.visuals ? visuals : null)
+    const visualsLoaded = skillLoaded ?? (deliveredVisuals ? visuals : null)
     // A managed release's receipt names its version; other programs answer the check.
     const launchedVersion = version ?? launchVersion.version
     const botServers = toolsOff ? [] : acpBotMcpServers(tools)

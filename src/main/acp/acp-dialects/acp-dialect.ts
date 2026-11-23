@@ -254,6 +254,8 @@ export type AcpDialect = {
   }
   /** The agent reads a mentioned file only from a resource link, not from `@path` text. */
   linksFileMentions?: true
+  /** The agent advertises image prompts but drops image blocks, so images go as file references. */
+  dropsPromptImages?: true
   /** Hide these commands and reject command-only prompts before dispatch. */
   withheldCommands?: readonly string[]
   /** Which sign-in a not-signed-in chat needs; absent is the agent's usual one. */

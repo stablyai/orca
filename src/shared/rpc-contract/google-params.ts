@@ -47,6 +47,8 @@ export const GoogleDisconnectParams = z.object({
   revoke: z.boolean().optional()
 })
 
+export const GoogleDefaultSetParams = z.object({ ...Caller, account: Email })
+
 export const GoogleBotAccessSetParams = z.object({
   ...Caller,
   botId: requiredString('Missing bot id'),

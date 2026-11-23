@@ -19,6 +19,7 @@ import {
 } from '../profile-sessions/browser-extension-session-loader'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import { whenBrowserMainWindowReady } from '../../guest-lifecycle/browser-main-window-readiness'
+import { assertBrowserExtensionProfilePresent } from '../profile-sessions/browser-extension-profile-presence'
 // oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { findDiscardedBrowserTabForPage } from './browser-extension-discarded-tabs'
 import { isBrowserExtensionSidePanelGuest } from '../side-panel/browser-extension-side-panel-guests'
@@ -301,6 +302,7 @@ export async function openBrowserExtensionTab(
   if (!mainWindow || !profile) {
     throw new BrowserExtensionApiError('Orca has no window to open a tab in')
   }
+  assertBrowserExtensionProfilePresent(profile.id)
   const { browserPageId } = await createBrowserTabInRenderer(
     { getAuthoritativeWindowId: () => mainWindow.id },
     url,

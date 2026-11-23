@@ -1,5 +1,6 @@
 // Signing a bot's own tool in: the agent's CLI names the page to open and waits on its own localhost
 // callback, which a browser on another computer can't reach, so the address it ended on can be pasted back.
+import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -114,7 +115,7 @@ export async function finishBotToolSignIn(
   try {
     url = new URL(address.trim())
   } catch {
-    throw new Error('Paste the whole address the sign-in page ended on.')
+    throw new BotFailureError('toolSignInAddressIncomplete')
   }
   const expected = callback ? new URL(callback) : null
   if (
@@ -123,13 +124,11 @@ export async function finishBotToolSignIn(
     url.pathname !== expected.pathname ||
     !url.searchParams.get('code')
   ) {
-    throw new Error(
-      `That isn't the address this sign-in ends on. Start it again with Connect, sign in, then paste the address your browser shows.`
-    )
+    throw new BotFailureError('toolSignInAddressWrong')
   }
   const answer = await fetch(url, { redirect: 'manual' }).catch(() => null)
   if (!answer || answer.status >= 400) {
-    throw new Error('The sign-in had already ended or timed out. Start it again with Connect.')
+    throw new BotFailureError('toolSignInEnded')
   }
 }
 
@@ -140,15 +139,13 @@ async function startLogin(
   const servers = await readBotToolServers(cli.folder)
   const server = servers.find((entry) => entry.name === name)
   if (!server) {
-    throw new Error(`This bot has no tool named ${name}.`)
+    throw new BotFailureError('toolNotFound', { name })
   }
   if ('url' in server && server.credential) {
-    throw new Error(`${name} uses its saved values and needs no sign-in.`)
+    throw new BotFailureError('toolNeedsNoSignIn', { name })
   }
   if (!hasBotToolsCli(cli)) {
-    throw new Error(
-      `Orca signs ${name} in only for Claude Code and Codex. Add it with its sign-in values instead.`
-    )
+    throw new BotFailureError('toolSignInAgentUnsupported', { name })
   }
   return cli.agent === 'codex' ? codexLogin(cli, servers, name) : claudeLogin(cli, servers, name)
 }
@@ -165,7 +162,7 @@ async function codexLogin(
     const started = await rpc.request('mcpServer/oauth/login', { name, threadId })
     const url = LoginStarted.safeParse(started).data?.authorizationUrl
     if (!url) {
-      throw new Error(`Codex gave no sign-in page for ${name}.`)
+      throw new BotFailureError('toolCodexNoSignInPage', { name })
     }
     link.resolve(url)
     // The session must stay up until the browser reaches its callback.
@@ -241,14 +238,14 @@ async function claudeLogin(
     }
     const code = await Promise.race([exited, delay(250).then(() => null)])
     if (code !== null) {
-      throw new Error(
-        lastLine(redactBotToolText(output, servers)) ??
-          `Claude couldn't start signing in to ${name}.`
-      )
+      const said = lastLine(redactBotToolText(output, servers))
+      throw said === null
+        ? new BotFailureError('toolClaudeSignInFailed', { name })
+        : new Error(said)
     }
   }
   child.kill()
-  throw new Error(`Claude didn't open a sign-in page for ${name}.`)
+  throw new BotFailureError('toolClaudeNoSignInPage', { name })
 }
 
 // eslint-disable-next-line no-control-regex -- terminal output carries escape sequences.

@@ -22,9 +22,11 @@ import {
   prepareAcpStructuredLaunch
 } from '../launch/acp-structured-launch-preparation'
 import { acpProcessEnvironment } from '../launch/acp-structured-launch-resolution'
+import { SharedToolProcessSession } from '../../runtime/agent-session/environment/shared-tool-process-callers'
 import { AcpStructuredOptions } from '../options/acp-structured-options'
 import { acpLaunchPermission } from '../launch/acp-launch-permission-modes'
 import { AcpStructuredPrompts } from '../requests/acp-structured-prompts'
+import { acpStructuredPermissionHandler } from '../requests/acp-structured-permission-handler'
 import { withAcpUrlElicitation } from '../requests/acp-url-elicitation'
 import { AcpLoadHistory } from '../history/acp-history-replay'
 import { asReattachHistory } from '../history/acp-reattach-history'
@@ -93,6 +95,7 @@ export async function acquireAcpStructuredSession(input: {
   }
   // Keep the last abort check and spawn synchronous when no temp directory is needed.
   const connect = await acpLaunchConnect(deps, launch, closedBeforeSpawn)
+  let sharedTools: SharedToolProcessSession | null = null
   const connection = connect(
     {
       command: launch.command,
@@ -106,7 +109,7 @@ export async function acquireAcpStructuredSession(input: {
       clientCapabilities: withAcpUrlElicitation(spec.dialect.clientCapabilities),
       retryBusyPrompts: spec.agent === 'omp',
       ...(spec.signIn ? { signIn: spec.signIn } : {}),
-      onPermission: prompts.permissionHandler(spec, () => session?.permission),
+      onPermission: acpStructuredPermissionHandler(() => session, spec, prompts),
       onRequest: (method, params, context) => prompts.handle(method, params, context),
       onExtensionNotification: (method, params) =>
         whenLane(() => {
@@ -134,11 +137,14 @@ export async function acquireAcpStructuredSession(input: {
       },
       // Read final diagnostics at process exit, which may follow stdout EOF.
       onExit: () => {
+        sharedTools?.end()
         session?.historyCatchUp?.abort()
         input.onExit(session)
       }
     }
   )
+  // Until the process exits, only its session's tools can name the chat.
+  sharedTools = SharedToolProcessSession.forLaunch(spec, launch.env, launch.version)
   if (spec.autonomousTools) {
     options.applied.set('permissionMode', 'own')
   } else if (!spec.permissionModeConfig) {
@@ -286,7 +292,9 @@ export async function acquireAcpStructuredSession(input: {
         },
         onSettled: input.onSettled,
         onSessionLost: (error) => input.onConnectionLost(child, error)
-      }),
+      })
+        // Before the first turn, so no tool of this session runs without its identity.
+        .then((opened) => sharedTools?.publishFor(opened) ?? opened),
     dispose: () => {
       child.historyCatchUp?.abort()
       slot.lane?.dispose()

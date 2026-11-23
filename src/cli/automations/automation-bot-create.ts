@@ -36,6 +36,7 @@ import { getEnabledFlag, getPrecheckFlag } from './automation-handler-flags'
 import { getTimezoneFlags } from './automation-timezone-flag'
 import { legacyPlaceOf } from '../../shared/connector-place-names'
 import { callerChat } from './automation-caller-chat'
+import { automationItemFlag, linkAutomationToItem } from './automation-item-link'
 import { BOT_CHAT_ID_PREFIX } from '../../shared/bots/bot-chat-row'
 import type { AutomationOnce } from '../../shared/automation-once'
 
@@ -191,7 +192,7 @@ function defaultResultsTo(
 
 /** The bot target named by --bot, or null when the automation targets a project. A wait answers
  *  the person who asked, so it runs in the bot's Chat and reports there unless told otherwise; the
- *  host moves one made from another of the bot's chats, and a teammate's automation, to that chat. */
+ *  host moves one made from another of the bot's chats, wait or recurring, to that chat. */
 export async function getBotTargetFlags(
   flags: Map<string, string | boolean>,
   client: HandlerContext['client'],
@@ -304,7 +305,8 @@ export async function createBotAutomation(
   if (refusal) {
     throw new RuntimeClientError('invalid_argument', refusal)
   }
-  return client.call<{ automation: Automation }>('automation.create', {
+  const item = await automationItemFlag(client, flags, bot.id)
+  const saved = await client.call<{ automation: Automation }>('automation.create', {
     name: getRequiredStringFlag(flags, 'name'),
     prompt: getRequiredStringFlag(flags, 'prompt'),
     precheck: getPrecheckFlag(flags),
@@ -320,4 +322,8 @@ export async function createBotAutomation(
     ...callerChat(),
     ...(flags.has('runs-in') ? {} : { runsInDefault: true })
   })
+  if (item !== undefined) {
+    await linkAutomationToItem(client, item, saved.result.automation.id)
+  }
+  return saved
 }
