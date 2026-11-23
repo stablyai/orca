@@ -83,6 +83,25 @@ function send(deliveryId: string): void {
   )
 }
 
+// Handed to the agent, which holds it as input to a running turn (a steer).
+const handOver = (deliveryId: string) =>
+  inWriter(() =>
+    applyJournalDomainDispatch(
+      db,
+      target,
+      {
+        kind: 'dispatch',
+        input: {
+          clientMessageId: deliveryId,
+          fence: 1,
+          state: 'pending',
+          turnScope: { kind: 'thread' }
+        }
+      },
+      NOW
+    )
+  )
+
 const stop = (reason: JournalStopEvent['reason'], at: number) =>
   inWriter(() =>
     applyJournalDomainControlCommand(
@@ -122,6 +141,7 @@ const outcomeOf = (deliveryId: string) =>
 
 it('keeps a send a person’s Stop took back as stopped, even after a later Stop', () => {
   send('d1')
+  handOver('d1')
   stop('user-stop', NOW + 1)
   rejectAsCancelled('d1', NOW + 2)
   stop('user-stop', NOW + 3)
@@ -130,6 +150,7 @@ it('keeps a send a person’s Stop took back as stopped, even after a later Stop
 
 it('leaves a send Orca’s own stop rejected to be reported as it failed', () => {
   send('d1')
+  handOver('d1')
   stop('host-stop', NOW + 1)
   rejectAsCancelled('d1', NOW + 2)
   expect(outcomeOf('d1')).toBeNull()
@@ -137,7 +158,15 @@ it('leaves a send Orca’s own stop rejected to be reported as it failed', () =>
 
 it('leaves a send kept as a waiting card owed, since it still runs later', () => {
   send('d1')
+  handOver('d1')
   stop('user-stop', NOW + 1)
   rejectAsCancelled('d1', NOW + 2, 'card-d1')
   expect(outcomeOf('d1')).toBeNull()
+})
+
+it('reads a queued send a person’s Stop withdrew as stopped', () => {
+  send('d1')
+  stop('user-stop', NOW + 1)
+  stop('user-stop', NOW + 2)
+  expect(outcomeOf('d1')).toBe('withdrawn')
 })
