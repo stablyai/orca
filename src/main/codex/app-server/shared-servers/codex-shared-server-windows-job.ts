@@ -86,7 +86,8 @@ export class CodexSharedServerWindowsJob {
     }
     // Native Codex crashing before its launcher's exit is seen looks like no chain at all.
     const now = Date.now()
-    const repeated = lastInconclusiveAt !== null && now - lastInconclusiveAt < INCONCLUSIVE_WINDOW_MS
+    const repeated =
+      lastInconclusiveAt !== null && now - lastInconclusiveAt < INCONCLUSIVE_WINDOW_MS
     if (verdict === 'inconclusive') {
       lastInconclusiveAt = now
     }
