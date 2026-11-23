@@ -22,7 +22,12 @@ vi.mock('../../host-guest/input/use-browser-page-webview-shortcuts', () => ({
 }))
 // The page capture is the only stub on the Draw side.
 vi.mock('../capture/markup-base-image', () => ({
-  captureMarkupBaseImage: async () => ({ dataUrl: 'data:image/png;base64,AA', width: 8, height: 8 })
+  captureMarkupBaseImage: async () => ({
+    dataUrl: 'data:image/png;base64,AA',
+    width: 8,
+    height: 8
+  }),
+  flattenCapturedPage: async (capture: unknown) => capture
 }))
 vi.mock('sonner', () => ({
   toast: Object.assign(() => 'toast', { error: () => 'error', dismiss: () => {} })
@@ -62,6 +67,11 @@ beforeEach(() => {
         cancelGrab: async () => true,
         captureSelectionScreenshot: async () => ({ ok: false }),
         extractHoverPayload: async () => ({ ok: false }),
+        captureCleanPage: async () => ({
+          dataUrl: 'data:image/png;base64,AA',
+          width: 8,
+          height: 8
+        }),
         awaitGrabSelection: () => new Promise(() => {})
       },
       ui: { writeClipboardText: async () => {}, writeClipboardImage: async () => {} }

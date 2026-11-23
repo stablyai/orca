@@ -1,4 +1,8 @@
 import type { GoogleCookieClearLocalTarget } from '../../../shared/browser/cookies/browser-google-cookie-clear'
+import type {
+  BrowserCaptureCleanPageArgs,
+  BrowserCleanPageCapture
+} from '../../../shared/browser/element-grab/browser-grab-clean-capture'
 import { ipcRenderer } from 'electron'
 import {
   BROWSER_AGENT_ACTIVITY_CHANNEL,
@@ -165,6 +169,8 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.invoke('browser:captureSelectionScreenshot', args),
   extractHoverPayload: (args: { browserPageId: string }) =>
     ipcRenderer.invoke('browser:extractHoverPayload', args),
+  captureCleanPage: (args: BrowserCaptureCleanPageArgs): Promise<BrowserCleanPageCapture | null> =>
+    ipcRenderer.invoke('browser:captureCleanPage', args),
   onGrabModeToggle: (
     callback: (browserPageId: string, intent: GrabIntent) => void
   ): (() => void) => {

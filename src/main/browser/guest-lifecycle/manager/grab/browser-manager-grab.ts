@@ -17,6 +17,8 @@ import { buildGuestOverlayScript } from '../../../element-grab/grab-guest-script
 import { buildGrabLabelAvoidScript } from '../../../element-grab/grab-guest-overlay-script'
 import { clampGrabPayload } from '../../../element-grab/browser-grab-payload'
 import { captureSelectionScreenshot as captureGrabSelectionScreenshot } from '../../../element-grab/browser-grab-screenshot'
+import { captureCleanGuestPage } from '../../../element-grab/grab-clean-page-capture'
+import type { BrowserCleanPageCapture } from '../../../../../shared/browser/element-grab/browser-grab-clean-capture'
 import {
   getWorkspaceDocPageGuest,
   readDocPreviewGuestDocumentUrl
@@ -285,6 +287,13 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     } finally {
       releasePaint()
     }
+  }
+
+  captureCleanPage(
+    guest: Electron.WebContents,
+    signal: AbortSignal
+  ): Promise<BrowserCleanPageCapture | null> {
+    return captureCleanGuestPage(guest, signal, () => this.holdPaintForCapture(guest.id))
   }
 
   /** Preserve the active selection overlay and awaitClick listener. */

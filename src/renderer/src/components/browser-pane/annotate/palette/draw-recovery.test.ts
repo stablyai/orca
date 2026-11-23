@@ -14,7 +14,8 @@ vi.mock('../capture/markup-base-image', () => ({
     dataUrl: 'data:image/png;base64,AA',
     width: 800,
     height: 600
-  })
+  }),
+  flattenCapturedPage: async (capture: unknown) => capture
 }))
 
 // The toast is UI the user clicks; keep its options so the test can press Undo or let it time out.
@@ -57,6 +58,11 @@ beforeEach(() => {
         onGuestEscape: () => () => {},
         cancelGrab: async () => true,
         captureSelectionScreenshot: async () => ({ ok: false }),
+        captureCleanPage: async () => ({
+          dataUrl: 'data:image/png;base64,AA',
+          width: 800,
+          height: 600
+        }),
         awaitGrabSelection: () => new Promise(() => {})
       },
       ui: { writeClipboardText: async () => {} }

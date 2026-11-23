@@ -52,6 +52,20 @@ async function captureWebviewImage(webview: Electron.WebviewTag): Promise<Markup
   return { dataUrl: flattenToOpaquePng(image, size.width, size.height), ...size }
 }
 
+/** A page image main captured right after removing the picker, flattened like a webview capture. */
+export async function flattenCapturedPage(capture: {
+  dataUrl: string
+  width: number
+  height: number
+}): Promise<MarkupBaseImage> {
+  const image = await loadImage(capture.dataUrl)
+  return {
+    dataUrl: flattenToOpaquePng(image, capture.width, capture.height),
+    width: capture.width,
+    height: capture.height
+  }
+}
+
 function captureFromImage(element: HTMLImageElement): MarkupBaseImage {
   const width = element.naturalWidth || element.width
   const height = element.naturalHeight || element.height

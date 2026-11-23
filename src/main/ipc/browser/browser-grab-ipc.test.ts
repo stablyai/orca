@@ -7,11 +7,13 @@ const mocks = vi.hoisted(
     handlers: Map<string, (event: unknown, args: unknown) => unknown>
     run: (enabled: boolean, signal: AbortSignal) => Promise<boolean>
     cancelledOps: string[]
+    capture: () => Promise<{ dataUrl: string; width: number; height: number } | null>
   } => ({
     guest: null,
     handlers: new Map<string, (event: unknown, args: unknown) => unknown>(),
     run: async (_enabled: boolean, _signal: AbortSignal): Promise<boolean> => true,
-    cancelledOps: []
+    cancelledOps: [],
+    capture: async () => ({ dataUrl: 'data:image/png;base64,AA', width: 8, height: 8 })
   })
 )
 vi.mock('electron', () => ({
@@ -26,6 +28,7 @@ vi.mock('../../browser/guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     getAuthorizedGuest: () => mocks.guest,
     cancelGrabOp: (page: string) => mocks.cancelledOps.push(page),
+    captureCleanPage: () => mocks.capture(),
     setGrabMode: (
       _page: string,
       enabled: boolean,
@@ -45,6 +48,7 @@ beforeEach(() => {
   mocks.guest = Object.assign(new EventEmitter(), { id: 7, isDestroyed: () => false })
   mocks.run = async () => true
   mocks.cancelledOps = []
+  mocks.capture = async () => ({ dataUrl: 'data:image/png;base64,AA', width: 8, height: 8 })
   mocks.handlers.clear()
   registerBrowserGrabHandlers()
 })
@@ -165,4 +169,48 @@ it('a late cancel for a request bound to a replaced registration leaves the repl
   await expect(setMode('page', true, 'replacement')).resolves.toEqual({ ok: true, clean: false })
   expect(cancelMode('page', 'replacement')).toBe(true)
   expect(mocks.cancelledOps).toEqual(['page'])
+})
+
+it('an arm admitted while Draw captures the cleaned page waits for that capture and voids it', async () => {
+  const modes: boolean[] = []
+  mocks.run = async (enabled) => {
+    modes.push(enabled)
+    return true
+  }
+  let finishCapture: (() => void) | undefined
+  let captureStarted: (() => void) | undefined
+  const started = new Promise<void>((resolve) => {
+    captureStarted = resolve
+  })
+  // The physical capture ignores cancellation, like a native readback already in flight.
+  mocks.capture = () => {
+    captureStarted?.()
+    return new Promise((resolve) => {
+      finishCapture = () => resolve({ dataUrl: 'data:image/png;base64,AA', width: 8, height: 8 })
+    })
+  }
+  const capture = Promise.resolve(
+    mocks.handlers.get('browser:captureCleanPage')?.(
+      { sender: { id: 17 } },
+      { browserPageId: 'page', requestId: 'draw' }
+    )
+  )
+  await started
+  const arm = setMode('page', true, 'rearm')
+  await Promise.resolve()
+  expect(modes).toEqual([false])
+
+  finishCapture?.()
+  await expect(capture).resolves.toBeNull()
+  await expect(arm).resolves.toEqual({ ok: true, clean: false })
+  expect(modes).toEqual([false, true])
+})
+
+it('hands Draw the capture of the document its own request cleaned', async () => {
+  await expect(
+    mocks.handlers.get('browser:captureCleanPage')?.(
+      { sender: { id: 17 } },
+      { browserPageId: 'page', requestId: 'draw' }
+    )
+  ).resolves.toEqual({ dataUrl: 'data:image/png;base64,AA', width: 8, height: 8 })
 })

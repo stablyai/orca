@@ -2,6 +2,7 @@ import { supersededGrabMode } from './browser-grab-mode-admission'
 import {
   setBrowserGrabMode,
   cancelBrowserGrabMode,
+  captureCleanBrowserPage,
   isCurrentBrowserGrabRequest,
   disposeGrabModeStateForPage,
   resetGrabModeState as resetSharedGrabModeState
@@ -28,6 +29,10 @@ import {
   GRAB_BUDGET,
   parseGrabLabelAvoidArea
 } from '../../../shared/browser/element-grab/browser-grab-types'
+import type {
+  BrowserCaptureCleanPageArgs,
+  BrowserCleanPageCapture
+} from '../../../shared/browser/element-grab/browser-grab-clean-capture'
 
 const GRAB_REGISTRATION_WAIT_MS = 1_000
 export { disposeGrabModeStateForPage }
@@ -56,6 +61,7 @@ export function registerBrowserGrabHandlers(): void {
   ipcMain.removeHandler('browser:grabPickedElementPresent')
   ipcMain.removeHandler('browser:captureSelectionScreenshot')
   ipcMain.removeHandler('browser:extractHoverPayload')
+  ipcMain.removeHandler('browser:captureCleanPage')
 
   ipcMain.handle(
     'browser:setGrabMode',
@@ -93,6 +99,26 @@ export function registerBrowserGrabHandlers(): void {
             }
           }
         }
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'browser:captureCleanPage',
+    async (event, args: BrowserCaptureCleanPageArgs): Promise<BrowserCleanPageCapture | null> => {
+      if (
+        !isTrustedBrowserRenderer(event.sender) ||
+        typeof args?.browserPageId !== 'string' ||
+        args.browserPageId.length > 256 ||
+        typeof args.requestId !== 'string' ||
+        args.requestId.length > 200
+      ) {
+        return null
+      }
+      return captureCleanBrowserPage(
+        args.browserPageId,
+        () => browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id),
+        { requestId: args.requestId, owner: `renderer:${event.sender.id}` }
       )
     }
   )

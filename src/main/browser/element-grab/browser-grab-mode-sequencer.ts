@@ -1,5 +1,6 @@
 import { browserManager } from '../guest-lifecycle/manager/browser-manager'
 import type { BrowserSetGrabModeResult } from '../../../shared/browser/element-grab/browser-grab-types'
+import type { BrowserCleanPageCapture } from '../../../shared/browser/element-grab/browser-grab-clean-capture'
 import {
   grabDocumentScope,
   retireGrabOverlay,
@@ -25,6 +26,7 @@ type ModeOptions = {
   owner?: string
   destination?: Electron.WebContents
   onPolicyRetired?: () => void
+  afterClean?: (guest: Electron.WebContents, signal: AbortSignal) => Promise<boolean>
 }
 const owners = new Map<string, ModeOwner>()
 const intents = new Map<string, { enabled: boolean }>()
@@ -101,6 +103,20 @@ export async function setBrowserGrabMode(
         return supersededGrabMode()
       }
       owner.armed = success && enabled
+      // Still inside this admission: a later arm waits for the capture and supersedes its result.
+      if (success && !enabled && options.afterClean) {
+        const captured = await options.afterClean(guest, signal)
+        if (
+          !captured ||
+          !isCurrent() ||
+          signal.aborted ||
+          owner.scope?.current !== true ||
+          owner.scope !== grabDocumentScope(guest) ||
+          resolveGuest() !== guest
+        ) {
+          return supersededGrabMode()
+        }
+      }
       return success ? { ok: true, clean: !enabled } : { ok: false, reason: 'injection-failed' }
     },
     admit
@@ -109,6 +125,23 @@ export async function setBrowserGrabMode(
       intents.delete(browserPageId)
     }
   })
+}
+
+/** Draw's page image of the very document and guest this request cleaned, never one a later arm touched. */
+export async function captureCleanBrowserPage(
+  browserPageId: string,
+  resolveGuest: () => Electron.WebContents | null,
+  options: ModeOptions = {}
+): Promise<BrowserCleanPageCapture | null> {
+  let image: BrowserCleanPageCapture | null = null
+  const result = await setBrowserGrabMode(browserPageId, false, resolveGuest, undefined, {
+    ...options,
+    afterClean: async (guest, signal) => {
+      image = await browserManager.captureCleanPage(guest, signal)
+      return image !== null
+    }
+  })
+  return result.ok && result.clean === true ? image : null
 }
 
 export function isCurrentBrowserGrabRequest(

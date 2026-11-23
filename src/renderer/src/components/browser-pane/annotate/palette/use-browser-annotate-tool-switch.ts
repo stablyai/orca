@@ -86,7 +86,7 @@ export function useBrowserAnnotateToolSwitch({
     drawStarting
   )
   const transitionRef = useRef(0)
-  const { waitForCleanPage, cancelClean } = useGrabCleanCapture()
+  const { waitForCleanPage, captureCleanPage, cancelClean } = useGrabCleanCapture()
   const shapesRef = useRef<readonly MarkupShape[]>([])
   const markupActiveRef = useRef(markup.isActive)
   const liveDocumentRef = useRef({ drawOwner, canPickElements, documentReady })
@@ -226,11 +226,12 @@ export function useBrowserAnnotateToolSwitch({
           )
           return
         }
-        void markup.start()
+        void markup.start(() => captureCleanPage(toolTargetId))
       })
     },
     [
       cancelPendingBrowserCapture,
+      captureCleanPage,
       dismissUndo,
       drawOwner,
       markup,
@@ -255,8 +256,8 @@ export function useBrowserAnnotateToolSwitch({
         setDrawStartingFor(null)
       }
     }
-    void markup.start().then(settle, settle)
-  }, [drawOwner, markup, usable])
+    void markup.start(() => captureCleanPage(toolTargetId)).then(settle, settle)
+  }, [captureCleanPage, drawOwner, markup, toolTargetId, usable])
 
   const selectTool = useCallback(
     (tool: BrowserAnnotateTool): void => {
