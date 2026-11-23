@@ -98,13 +98,10 @@ async function openStartingClaudeSession(
   const history = session.initialization.history
   const leafUuid = history.leafUuid
   const events = session.events
-  await waitForPromiseWithSignal(
-    startup.race(
-      readClaudeStartupPermissionNotice(session, events?.journalHistory?.()?.reads, current),
-      request.signal
-    ),
-    request.signal
-  )
+  const noticeRead =
+    session.fullAccessRefusalNoticeRead ?? readClaudeStartupPermissionNotice(session, current)
+  await waitForPromiseWithSignal(startup.race(noticeRead, request.signal), request.signal)
+  delete session.fullAccessRefusalNoticeRead
   const origin = usableJournalHistoryOrigin(
     (await events?.journalHistory?.()?.reads.historyOrigin()) ?? null
   )

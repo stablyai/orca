@@ -12,16 +12,48 @@ type ClaudeRootInit = NonNullable<ClaudeSession['actualFirstRootInit']>
 
 export function readClaudeStartupPermissionNotice(
   session: ClaudeSession,
-  reads: Parameters<typeof readClaudeEarlierRefusalNotice>[1],
-  assertCurrent: () => void
+  assertCurrent: () => void,
+  afterJournalBinding = false
 ): Promise<void> {
-  const read = readClaudeEarlierRefusalNotice(session, reads, assertCurrent).finally(() => {
-    if (session.fullAccessRefusalNoticeRead === read) {
-      delete session.fullAccessRefusalNoticeRead
-    }
-  })
+  const start = async () =>
+    readClaudeEarlierRefusalNotice(
+      session,
+      session.events?.journalHistory?.()?.reads,
+      assertCurrent
+    )
+  // Install the promise before root init can arrive, even when the host has yet to bind the journal.
+  const read = afterJournalBinding
+    ? new Promise<void>((resolve) => session.delivery.deliver(() => resolve(start())))
+    : start()
   session.fullAccessRefusalNoticeRead = read
+  void read.catch(() => {})
   return read
+}
+
+export function prepareClaudeRootInit(
+  session: ClaudeSession,
+  init: ClaudeRootInit | undefined,
+  sessions: ReadonlyMap<string, ClaudeSession>,
+  sessionId: string,
+  signal: AbortSignal | undefined
+): void {
+  const events = session.events
+  if (
+    session.launchIntent?.permissionMode === 'bypassPermissions' &&
+    events?.journalHistory &&
+    (events.onJournalBound || events.journalHistory())
+  ) {
+    readClaudeStartupPermissionNotice(
+      session,
+      () => {
+        if (sessions.get(sessionId) !== session || signal?.aborted) {
+          throw new Error('claude session closed before startup completed')
+        }
+      },
+      true
+    )
+  }
+  adoptClaudeLaunchRootInit(session, init)
 }
 
 export function readClaudeRootInit(message: Record<string, unknown>): ClaudeRootInit | undefined {

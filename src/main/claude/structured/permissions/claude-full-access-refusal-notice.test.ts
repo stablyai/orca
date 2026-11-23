@@ -4,10 +4,8 @@ import { ClaudeControlRequestTimeoutError } from '../../sdk-transport/claude-age
 import type { ClaudeSession } from '../claude-structured-session-state'
 import { applyClaudeMessageOptions } from '../launch/claude-structured-message-options'
 import { readClaudeEarlierRefusalNotice } from './claude-full-access-refusal-notice'
-import {
-  adoptClaudeLaunchRootInit,
-  readClaudeStartupPermissionNotice
-} from './claude-permission-startup'
+import { adoptClaudeLaunchRootInit } from './claude-permission-startup'
+import { acquireFullAccessPermissionTestSession } from './__tests__/claude-permission-acquisition.test-fixture'
 import {
   finishPermissionCatchUp,
   openPermissionTestSession,
@@ -180,29 +178,34 @@ it.each(['fallback', 'plan'])(
     const saved = savedNotice('restored:bypassPermissions')
     const delayed = Promise.withResolvers<typeof saved>()
     const planReply = Promise.withResolvers<void>()
-    const { session, rows, writes, frame } = permissionTestSession('bypassPermissions', (mode) => {
-      if (mode === 'plan') {
-        return planReply.promise
-      }
-      return mode === 'auto' ? refuseClaudePermission('internal_error') : Promise.resolve()
-    })
-    await openPermissionTestSession(session, 'default')
+    const finalAskReply = Promise.withResolvers<void>()
+    let askWrites = 0
+    const { session, rows, writes, init, bind, open } =
+      await acquireFullAccessPermissionTestSession(
+        () => delayed.promise,
+        (mode) => {
+          if (mode === 'plan') {
+            return planReply.promise
+          }
+          if (mode === 'default' && ++askWrites === 2) {
+            return finalAskReply.promise
+          }
+          return mode === 'auto' ? refuseClaudePermission('internal_error') : Promise.resolve()
+        }
+      )
     const recovery = recoveryText('bypassPermissions')
     rows.push(recovery)
-    const read = readClaudeStartupPermissionNotice(
-      session,
-      { newestItemId: () => delayed.promise },
-      () => {}
-    )
-    frame('init', 'default')
+    init()
+    bind()
+    const opened = open()
     await setImmediate()
     const plan =
       outcome === 'plan'
         ? applyClaudeMessageOptions(session, { interactionMode: 'plan' }, undefined)
         : undefined
     delayed.resolve(saved)
-    await read
-    finishPermissionCatchUp(session)
+    await opened
+    finalAskReply.resolve()
     await setImmediate()
 
     if (plan) {

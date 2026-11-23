@@ -127,7 +127,7 @@ export function permissionTestSession(
     }
     translator.handle({ type: 'message', sessionId: 'session', message })
   }
-  return { session, rows, writes, frame }
+  return { session, events, rows, writes, frame }
 }
 
 export function savedNotice(notice: string) {

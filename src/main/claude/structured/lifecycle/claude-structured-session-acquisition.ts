@@ -274,13 +274,13 @@ export async function acquireClaudeSession({
       }
     })
     session.reportedOptions = observedOptions
-    liveSession = session
     session.orderedPermissionMode = permissions.orderedMode
     adoptClaudeStructuredSpawnOptions(session, {
       ...launch.savedOptions,
       sdkOptions: launch.options
     })
-    permission.adoptClaudeLaunchRootInit(session, firstRootInit)
+    permission.prepareClaudeRootInit(session, firstRootInit, sessions, sessionId, input.signal)
+    liveSession = session
     acquisitions.deleteIfCurrent(sessionId, attempt)
     await publishClaudeSessionAttempt({
       sessionId,
