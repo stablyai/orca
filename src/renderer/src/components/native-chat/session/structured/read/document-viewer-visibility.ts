@@ -75,31 +75,63 @@ export function documentLiveTextViewer(
   }
 }
 
-// Per chat, the streaming replies drawn only at their saves, and who to tell when that changes.
-const savesOnlyRows = new Map<string, Set<string>>()
+// Per chat, its drawn streaming replies and those drawn only at their saves, each counted per
+// drawing (a chat can show in two panes), and who to tell when either changes.
+const streamingRows = new Map<string, Map<string, number>>()
+const savesOnlyRows = new Map<string, Map<string, number>>()
 const savesOnlyWatchers = new Map<string, Set<() => void>>()
 
-/** A streaming reply that fell back to its saves: its chat takes no live text until it ends, so the
- *  host sends what it would discard no more. Returns the release. */
-export function documentRowShowsSavesOnly(sessionId: string, rowKey: string): () => void {
-  const rows = savesOnlyRows.get(sessionId) ?? new Set<string>()
-  const was = rows.size > 0
-  rows.add(rowKey)
-  savesOnlyRows.set(sessionId, rows)
-  if (!was) {
-    savesOnlyWatchers.get(sessionId)?.forEach((changed) => changed())
-  }
+function countRow(
+  rows: Map<string, Map<string, number>>,
+  sessionId: string,
+  rowKey: string
+): () => void {
+  const counts = rows.get(sessionId) ?? new Map<string, number>()
+  counts.set(rowKey, (counts.get(rowKey) ?? 0) + 1)
+  rows.set(sessionId, counts)
+  savesOnlyWatchers.get(sessionId)?.forEach((changed) => changed())
+  let released = false
   return () => {
-    rows.delete(rowKey)
-    if (rows.size === 0 && savesOnlyRows.get(sessionId) === rows) {
-      savesOnlyRows.delete(sessionId)
-      savesOnlyWatchers.get(sessionId)?.forEach((changed) => changed())
+    if (released) {
+      return
     }
+    released = true
+    const left = (counts.get(rowKey) ?? 1) - 1
+    if (left > 0) {
+      counts.set(rowKey, left)
+    } else {
+      counts.delete(rowKey)
+    }
+    if (counts.size === 0 && rows.get(sessionId) === counts) {
+      rows.delete(sessionId)
+    }
+    savesOnlyWatchers.get(sessionId)?.forEach((changed) => changed())
   }
 }
 
+/** A drawn streaming reply of a chat. Returns the release. */
+export function documentRowStreams(sessionId: string, rowKey: string): () => void {
+  return countRow(streamingRows, sessionId, rowKey)
+}
+
+/** A streaming reply that fell back to its saves. When every streaming reply its chat draws has,
+ *  the chat takes no live text, so the host sends what it would discard no more. */
+export function documentRowShowsSavesOnly(sessionId: string, rowKey: string): () => void {
+  return countRow(savesOnlyRows, sessionId, rowKey)
+}
+
 export function documentShowsSavesOnly(sessionId: string): boolean {
-  return (savesOnlyRows.get(sessionId)?.size ?? 0) > 0
+  const savesOnly = savesOnlyRows.get(sessionId)
+  if (!savesOnly || savesOnly.size === 0) {
+    return false
+  }
+  // Another drawn reply still streaming live keeps the chat's live text.
+  for (const rowKey of streamingRows.get(sessionId)?.keys() ?? []) {
+    if (!savesOnly.has(rowKey)) {
+      return false
+    }
+  }
+  return true
 }
 
 export function subscribeDocumentSavesOnly(sessionId: string, changed: () => void): () => void {

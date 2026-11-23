@@ -13,7 +13,8 @@ import {
 } from './native-chat-reply-reveals'
 import {
   documentHeldDrawnCount,
-  documentRowShowsSavesOnly
+  documentRowShowsSavesOnly,
+  documentRowStreams
 } from '../session/structured/read/document-viewer-visibility'
 import {
   nativeChatRevealStepFrames,
@@ -139,6 +140,14 @@ export function useNativeChatPacedText(
   const [grew, setGrew] = useState(initial.shown < text.length)
   const heldTextSession = useContext(NativeChatHeldTextSessionContext)
   const heldDrawn = useRef(documentHeldDrawnCount(heldTextSession))
+  // A drawn streaming reply keeps its chat's live text unless it, and every other, shows saves only.
+  useEffect(
+    () =>
+      streaming && heldTextSession !== undefined
+        ? documentRowStreams(heldTextSession, rowKey)
+        : undefined,
+    [streaming, heldTextSession, rowKey]
+  )
   // Drawn only at its saves, the reply's chat stops taking live text until the reply ends.
   useEffect(
     () =>

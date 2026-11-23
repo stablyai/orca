@@ -11,6 +11,7 @@ import {
 import { createNativeChatReplyRevealTracker } from '../../../../../shared/native-chat/transcript/row-content/native-chat-reply-reveals'
 import type { NativeChatTextReveal } from '../../../../../shared/native-chat/transcript/row-content/native-chat-text-reveal'
 import {
+  documentRowStreams,
   documentViewerVisibility,
   withDocumentSavesOnly
 } from '../session/structured/read/document-viewer-visibility'
@@ -389,6 +390,11 @@ it("withdraws its chat's live text while a reply shows only its saves, until the
     shown: () => true,
     subscribe: () => () => {}
   })
+  expect(interest.shown()).toBe(false)
+  // Another reply of the chat, still streaming live, keeps its live text.
+  const other = documentRowStreams('chat-saves', 'subagent-reply')
+  expect(interest.shown()).toBe(true)
+  other()
   expect(interest.shown()).toBe(false)
   rerender({ streaming: false })
   expect(interest.shown()).toBe(true)
