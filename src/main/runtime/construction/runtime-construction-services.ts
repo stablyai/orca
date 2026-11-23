@@ -40,7 +40,7 @@ import type { RuntimeTerminalAgentPresenceOptions } from '../terminal/query/runt
 import type { resolveTerminalOrchestrationCliCommand } from '../orchestration/workers/launch/orchestration-cli-command'
 import type { OrchestrationMailboxTerminal } from '../orchestration/mailbox/routing/mailbox-owner'
 import type { OrchestrationMailboxPointerSubmitTarget } from '../orchestration/mailbox/terminal-pointer/mailbox-pointer-submit'
-import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
+import type { OrchestrationPointerPty } from '../orchestration/mailbox/terminal-pointer/mailbox-pointer-delivery-contract'
 import type { StructuredPointerTarget } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
@@ -269,10 +269,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
     handle: string,
     reservedTypes?: ReadonlySet<string>
   ): void
-  protected abstract writeOrchestrationPointerPty(
-    ptyId: string,
-    data: string
-  ): WriteSettlement | Promise<WriteSettlement>
+  protected abstract orchestrationPointerPty(): OrchestrationPointerPty
   protected abstract resolveStructuredMailboxTarget(
     mailboxHandle: string
   ): StructuredPointerTarget | null
