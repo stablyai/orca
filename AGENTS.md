@@ -1,6 +1,7 @@
 # Checks
 
 - **Gate**: `pnpm check:changed` runs format, lint, typecheck, the tests that import your changes, and the ratchets your paths select, and prints only failures. Run it once when you are done editing (and again after a rebase or fix), then push. A pass is cached, so don't rerun it "to be sure", and don't also run `pnpm tc`, `pnpm lint`, or the full suite. Never `--no-verify`.
+- The author owns the full gate. Reviewers can inspect the requested commit in the existing worktree with `git diff` or `git show` and reuse its passing check for the same inputs. Use a separate checkout when verification needs isolated writes. On a busy development machine, opt in with `git config --local orca.serializeChangedChecks true`. Full checks from opted-in worktrees then share one slot per user and host.
 - **While iterating**: run only what you touched: `pnpm test <file.test.ts> --maxWorkers=2`, `pnpm tc:node|tc:web|tc:cli`, `pnpm exec oxlint <files>`, `pnpm exec oxfmt --write <files>`. Transitive tests and the full suite are CI's job ([details](.github/CONTRIBUTING.md#targeting-local-tests)).
 - Run checks in the foreground with `timeout 900`. Don't background them and poll with `sleep`.
 - Stacked PRs: `ORCA_CODE_QUALITY_BASE=<ref>` or `--base=<ref>`; `--base=HEAD` covers only uncommitted edits.

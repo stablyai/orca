@@ -16,6 +16,7 @@ import {
   isUnitTestFile,
   selectImportingTests
 } from './check-changed-direct-tests.mjs'
+import { acquireChangedCheckSlot } from './check-changed-slot.mjs'
 import { planChangedChecks } from './check-changed-selection.mjs'
 import { resolveOxcCliInvocation } from '../../tool-invocation/oxc-cli-invocation.mjs'
 import { resolvePnpmCliInvocation } from '../../tool-invocation/pnpm-cli-invocation.mjs'
@@ -355,8 +356,27 @@ async function runPool(tasks, concurrency, run) {
 }
 
 export async function main(root, argv) {
-  const startedAt = performance.now()
   const options = parseArgs(argv)
+  const setting = spawnSync('git', ['config', '--bool', '--get', 'orca.serializeChangedChecks'], {
+    cwd: root,
+    encoding: 'utf8'
+  })
+  if (setting.status === 1 || setting.stdout?.trim() === 'false') {
+    return runChangedChecks(root, options)
+  }
+  if (setting.status !== 0) {
+    throw new Error(setting.stderr || 'Could not read Orca check settings')
+  }
+  const release = await acquireChangedCheckSlot()
+  try {
+    return await runChangedChecks(root, options)
+  } finally {
+    release()
+  }
+}
+
+async function runChangedChecks(root, options) {
+  const startedAt = performance.now()
   const { ref, mergeBase } = resolveMergeBase(root, options.base)
   const files = collectChangedFiles(root, mergeBase)
   if (files.length === 0) {
