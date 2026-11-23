@@ -12,7 +12,8 @@ function judge(
   row: BotWorkRow,
   workers: ReadonlyMap<string, BotWorkWorker | null> | null
 ): WorkerRead {
-  if (!workers) {
+  // Left out of the read: it couldn't be read, which proves nothing.
+  if (!workers?.has(row.dispatchId)) {
     return { row, worker: null }
   }
   const worker = workers.get(row.dispatchId) ?? null

@@ -89,6 +89,10 @@ export class BotItemLinkJoin {
     const reports = new Map<string, WorkerRead['report']>()
     await Promise.all(
       unique.map(async (ref) => {
+        // Left out: it couldn't be read, so its link reads `unknown`.
+        if (!workers.has(ref)) {
+          return
+        }
         const worker = workers.get(ref) ?? null
         if (!worker) {
           reads.set(ref, { worker, pr: null, report: null })

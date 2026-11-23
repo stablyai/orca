@@ -46,7 +46,7 @@ export type BotTurnAddress = {
 export type BotWorkRecordDeps = {
   store: () => BotWorkStore
   /** Each Dispatch's worker, read in one batch; null when orchestration has no such Task or
-   *  Dispatch. Throws when orchestration can't be read. */
+   *  Dispatch, left out when that one can't be read. Throws when orchestration can't be read. */
   workers: (dispatchIds: readonly string[]) => Promise<ReadonlyMap<string, BotWorkWorker | null>>
   /** A workspace reader for one batch of rows, sharing its repo reads. Each read is 'gone' only with
    *  proof; null when it can't be told (an offline host, a remote server). */

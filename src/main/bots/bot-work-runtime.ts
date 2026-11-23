@@ -79,7 +79,7 @@ export function botWorkHostOf(db: OrchestrationDb, dispatchId: string): BotWorkH
 }
 
 /** Each Dispatch's worker as its lineage's newest Dispatch, read in one batch; a server-owned one from
- *  this Orca's record of it. Null when its records are gone. */
+ *  this Orca's record of it. Null when its records are gone; left out when it can't be read. */
 export async function readWorkers(
   runtime: BotWorkRuntime,
   dispatchIds: readonly string[]
@@ -89,9 +89,13 @@ export async function readWorkers(
   // Task is gone.
   const lineages = new Map<string, WorkerLineage>()
   const latestOf = new Map(
-    dispatchIds.map((id) => {
-      const latest = resolveWorkerLineage(db, id, undefined, lineages)?.latest
-      return [id, latest && (db.getTask(latest.task_id) ? latest : null)] as const
+    dispatchIds.flatMap((id) => {
+      try {
+        const latest = resolveWorkerLineage(db, id, undefined, lineages)?.latest
+        return [[id, latest && (db.getTask(latest.task_id) ? latest : null)] as const]
+      } catch {
+        return []
+      }
     })
   )
   const readable = [...new Set([...latestOf.values()].flatMap((latest) => latest?.id ?? []))]
@@ -100,10 +104,13 @@ export async function readWorkers(
   const workers = new Map<string, BotWorkWorker | null>()
   for (const [dispatchId, latest] of latestOf) {
     if (!latest) {
-      workers.set(
-        dispatchId,
-        latest === null ? null : await readServerOwnedWorker(runtime, dispatchId)
-      )
+      const owned =
+        latest === null
+          ? null
+          : await readServerOwnedWorker(runtime, dispatchId).catch(() => undefined)
+      if (owned !== undefined) {
+        workers.set(dispatchId, owned)
+      }
       continue
     }
     const read = reads.get(latest.id)

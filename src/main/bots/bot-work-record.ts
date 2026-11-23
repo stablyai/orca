@@ -95,8 +95,8 @@ export class BotWorkRecord {
     return null
   }
 
-  /** Validates live rows with one worker read, closing each on proof; yields those still live. */
-  private async *checkAll(rows: readonly BotWorkRow[]): AsyncGenerator<BotWorkCheck> {
+  /** Validates live rows with one worker read per host, closing each on proof; yields those still live. */
+  async *checkAll(rows: readonly BotWorkRow[]): AsyncGenerator<BotWorkCheck> {
     for await (const read of readBotWorkRows(this.deps, rows)) {
       if ('closeReason' in read) {
         this.deps.store().close(read.row, read.closeReason)
