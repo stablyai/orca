@@ -131,3 +131,19 @@ export function resolveIosVideoStreamUrl(
   }
   return !streamUrl || deriveAvccUrlFromStreamUrl(streamUrl) === localAvccUrl ? localAvccUrl : null
 }
+
+/** Re-pairing keeps the environment id; drop its tunnel and forwards so new ones use the new peer. */
+export function retireEmulatorRuntimeStreamForwarding(environmentId: string): void {
+  const forwarding = forwardingByEnvironment.get(environmentId)
+  if (!forwarding) {
+    return
+  }
+  forwardingByEnvironment.delete(environmentId)
+  for (const [url, issued] of issuedStreamUrls) {
+    if (issued.forwards === forwarding.forwards) {
+      issuedStreamUrls.delete(url)
+    }
+  }
+  forwarding.forwards.close()
+  forwarding.transport.close(new Error('Runtime environment transport was invalidated'))
+}

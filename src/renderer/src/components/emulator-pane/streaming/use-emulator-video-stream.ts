@@ -56,7 +56,7 @@ export function useEmulatorVideoStream(
 ): { canvasRef: React.RefObject<HTMLCanvasElement | null>; error: string | null } {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   // Key errors to their stream so a dead stream's error never reaches its replacement's first render.
-  const streamIdentity = `${deviceId}:${streamKey}:${enabled}`
+  const streamIdentity = `${deviceId}:${streamKey}:${enabled}:${streamUrl ?? ''}`
   const [failure, setFailure] = useState<{ identity: string; message: string } | null>(null)
   const onSizeRef = useRef(onSize)
   onSizeRef.current = onSize
@@ -64,7 +64,7 @@ export function useEmulatorVideoStream(
   // oxlint-disable-next-line react-doctor/effect-needs-cleanup -- cleanup() clears the first-frame timeout.
   useEffect(() => {
     const api = (window as { api?: { emulator?: EmulatorVideoApi } }).api?.emulator
-    const identity = `${deviceId}:${streamKey}:${enabled}`
+    const identity = `${deviceId}:${streamKey}:${enabled}:${streamUrl ?? ''}`
     const setError = (message: string): void => setFailure({ identity, message })
     const startVideoStream = api?.startVideoStream
     if (!enabled || !deviceId || !api || !startVideoStream) {

@@ -53,6 +53,7 @@ import { watchRuntimeEnvironmentPreference } from './catalog/runtime-environment
 import { publishRuntimeEnvironmentCatalogChanged } from './catalog/runtime-environment-catalog-broadcast'
 import { isGatedOffWslHost } from '../../wsl/host-lifecycle/wsl-host-gate'
 import { resetDesktopBrowserBridgeEnvironment } from '../browser/desktop-browser-bridge-reconcile'
+import { retireEmulatorRuntimeStreamForwarding } from '../../emulator/remote/emulator-runtime-stream-forwarding'
 
 const remoteRuntimeSubscriptions = new Map<string, RetainedRemoteRuntimeSubscription>()
 const getUserDataPath = getRuntimeEnvironmentRegistryRoot
@@ -111,6 +112,7 @@ export async function invalidateRuntimeEnvironmentTransport(environmentId: strin
   closeSubscriptionsForEnvironment(environmentId)
   retireMobileDesktopRelayEnvironment(environmentId)
   resetDesktopBrowserBridgeEnvironment(environmentId)
+  retireEmulatorRuntimeStreamForwarding(environmentId)
   await reactivateRuntimeEnvironmentStatus(environmentId)
   return retirePairedRuntimeBrowserClientHostEnvironment(
     environmentId,
