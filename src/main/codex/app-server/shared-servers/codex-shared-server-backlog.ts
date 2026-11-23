@@ -37,8 +37,9 @@ export class CodexSharedServerBacklog {
   private graceFrom = 0
   /** When the current wait began; null while nobody waits on the backlog. */
   private graceSince: number | null = null
-  /** The chat each test last matched, checked first so a queued frame doesn't walk every chat. */
-  private readonly witnesses = new Map<(lease: BacklogLease) => boolean, BacklogLease>()
+  /** The chat each test last matched, checked first so a queued frame doesn't walk every chat;
+   *  weakly held, so a chat that closed isn't kept alive by it. */
+  private readonly witnesses = new Map<(lease: BacklogLease) => boolean, WeakRef<BacklogLease>>()
 
   constructor(
     private readonly reader: () => Pick<
@@ -58,10 +59,6 @@ export class CodexSharedServerBacklog {
         this.bytes.delete(lease)
       }
       this.total += deltaBytes
-      if (this.total === 0) {
-        // Nothing held: forget the chats last matched, so a closed one isn't kept alive.
-        this.witnesses.clear()
-      }
     }
     if (lease.waiting) {
       this.waiters.add(lease)
@@ -128,14 +125,14 @@ export class CodexSharedServerBacklog {
     test: (lease: BacklogLease) => boolean,
     ...groups: ReadonlySet<BacklogLease>[]
   ): boolean {
-    const witness = this.witnesses.get(test)
+    const witness = this.witnesses.get(test)?.deref()
     if (witness && test(witness) && groups.some((group) => group.has(witness))) {
       return true
     }
     for (const group of groups) {
       for (const lease of group) {
         if (test(lease)) {
-          this.witnesses.set(test, lease)
+          this.witnesses.set(test, new WeakRef(lease))
           return true
         }
       }
