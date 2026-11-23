@@ -322,7 +322,7 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
   protected statusPersistTimer: ReturnType<typeof setTimeout> | null = null
   protected statusPersistDueAt = 0
   protected lastStatusPersistStartedAt = Number.NEGATIVE_INFINITY
-  protected lastPersistedAuthorityFingerprint: string | null = null
+  protected lastPersistedUrgentSaveFingerprint: string | null = null
   protected assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   protected promptSentDedupeByPaneKey = new Map<string, AgentPromptSentDedupeEntry>()
   protected activeHookTurnCompletedAtByPaneKey = new Map<string, number>()

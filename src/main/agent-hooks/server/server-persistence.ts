@@ -152,7 +152,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     }
     const now = Date.now()
     // Authority and lead-turn edges save at once: spool replay filtering and reattach restore read them after a crash.
-    const urgent = this.currentAuthorityFingerprint() !== this.lastPersistedAuthorityFingerprint
+    const urgent = this.currentUrgentSaveFingerprint() !== this.lastPersistedUrgentSaveFingerprint
     // A wall-clock rollback must not defer persistence indefinitely.
     const throttledAt = urgent
       ? now
@@ -200,7 +200,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       return false
     }
     this.lastStatusPersistStartedAt = Date.now()
-    const fingerprint = this.currentAuthorityFingerprint()
+    const fingerprint = this.currentUrgentSaveFingerprint()
     try {
       const keys = new Set([
         ...this.statusPersistDirtyKeys,
@@ -252,7 +252,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       return false
     }
     // Only a committed save can stand in for the authority it carries.
-    this.lastPersistedAuthorityFingerprint = fingerprint
+    this.lastPersistedUrgentSaveFingerprint = fingerprint
     this.statusPersistFailing = false
     this.statusPersistRetryDelayMs = 0
     this.statusPersistRetryAt = 0
@@ -277,7 +277,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     this.statusCacheExpiry.clear()
     this.persistedExitRevision = -1
     this.lastStatusPersistStartedAt = Number.NEGATIVE_INFINITY
-    this.lastPersistedAuthorityFingerprint = null
+    this.lastPersistedUrgentSaveFingerprint = null
     this.statusPersistFailing = false
     this.statusPersistRetryDelayMs = 0
     this.statusPersistRetryAt = 0
@@ -299,7 +299,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
   }
 
   /** Revision counters (authority and lead-turn edges) avoid per-event hashing or serialization. */
-  protected currentAuthorityFingerprint(): string {
+  protected currentUrgentSaveFingerprint(): string {
     return `${this.hydratedLaunchTokenHashByPaneKey.revision}:${this.persistedAuthorityCommitmentsByPaneKey.revision}:${this.statusUrgentSaveRevision}`
   }
 
