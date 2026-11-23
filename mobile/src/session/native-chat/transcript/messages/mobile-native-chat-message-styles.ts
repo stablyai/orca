@@ -32,6 +32,9 @@ export const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm
   },
+  landedPrompt: {
+    borderColor: colors.accentBlue
+  },
   hostNotice: {
     color: colors.textMuted
   },

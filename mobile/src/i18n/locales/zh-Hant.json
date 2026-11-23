@@ -2371,7 +2371,8 @@
       "resumeInNewCli": "在新的 CLI 中恢復"
     },
     "nativeChatFloatingControls": {
-      "scrollToLatest": "捲動至最新內容"
+      "scrollToLatest": "捲動至最新內容",
+      "scrollToPreviousPrompt": "捲動至上一個提示詞"
     },
     "nativeChatFullContent": {
       "loadMessageFailed": "重試載入完整訊息",

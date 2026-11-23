@@ -44,7 +44,7 @@ export const styles = themedStyleSheet(() => ({
     position: 'absolute',
     right: spacing.md,
     bottom: FLOATING_CONTROLS_BOTTOM,
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     gap: spacing.sm
   },
@@ -73,6 +73,14 @@ export const styles = themedStyleSheet(() => ({
     color: colors.textMuted,
     fontSize: typography.metaSize,
     textAlign: 'center'
+  },
+  fabTarget: {
+    // RN Web needs a real hit box. Keep the existing visual size, position and gap.
+    width: 44,
+    height: 44,
+    margin: -3,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   fab: {
     width: 38,

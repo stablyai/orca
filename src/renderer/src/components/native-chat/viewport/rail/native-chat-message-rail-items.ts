@@ -5,6 +5,7 @@ import {
   nativeChatUserMessagePreview
 } from '../../../../../../shared/agent-session/view/messages/agent-session-conversation-outline'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
+import { isNativeChatPromptRow } from '../../../../../../shared/native-chat/native-chat-prompt-row'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 
 /** Ticks up to this count sit at the roomy pitch; past it they pack tight. */
@@ -72,14 +73,7 @@ export function buildNativeChatRailItems(
 ): readonly NativeChatRailItem[] {
   const items: NativeChatRailItem[] = []
   for (const [slotIndex, slot] of slots.entries()) {
-    // Exclude withdrawn sends.
-    if (
-      slot.kind !== 'message' ||
-      slot.message.role !== 'user' ||
-      slot.message.orcaNotice !== undefined ||
-      slot.message.from !== undefined ||
-      slot.message.stoppedBeforeStart === true
-    ) {
+    if (slot.kind !== 'message' || !isNativeChatPromptRow(slot.message)) {
       continue
     }
     const run = slot.message.automationRun

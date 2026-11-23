@@ -2519,7 +2519,8 @@
       "resumeInNewCli": "Продолжить в новом CLI"
     },
     "nativeChatFloatingControls": {
-      "scrollToLatest": "Прокрутить к последним сообщениям"
+      "scrollToLatest": "Прокрутить к последним сообщениям",
+      "scrollToPreviousPrompt": "Прокрутить к предыдущему запросу"
     },
     "nativeChatFullContent": {
       "loadMessageFailed": "Загрузить сообщение повторно",

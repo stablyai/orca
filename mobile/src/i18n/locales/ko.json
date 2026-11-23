@@ -2373,7 +2373,8 @@
       "resumeInNewCli": "새 CLI에서 재개"
     },
     "nativeChatFloatingControls": {
-      "scrollToLatest": "최신 내용으로 스크롤"
+      "scrollToLatest": "최신 내용으로 스크롤",
+      "scrollToPreviousPrompt": "이전 프롬프트로 스크롤"
     },
     "nativeChatFullContent": {
       "loadMessageFailed": "전체 메시지 다시 불러오기",

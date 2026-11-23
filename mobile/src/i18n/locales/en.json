@@ -2322,7 +2322,8 @@
       "collapse": "Collapse"
     },
     "nativeChatFloatingControls": {
-      "scrollToLatest": "Scroll to latest"
+      "scrollToLatest": "Scroll to latest",
+      "scrollToPreviousPrompt": "Scroll to previous prompt"
     },
     "nativeChatFullContent": {
       "partialOutput": "Showing {{shown}} of {{total}}.",

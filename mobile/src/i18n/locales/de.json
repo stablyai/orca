@@ -2377,7 +2377,8 @@
       "resumeInNewCli": "In neuer CLI fortsetzen"
     },
     "nativeChatFloatingControls": {
-      "scrollToLatest": "Zur neuesten Nachricht scrollen"
+      "scrollToLatest": "Zur neuesten Nachricht scrollen",
+      "scrollToPreviousPrompt": "Zum vorherigen Prompt scrollen"
     },
     "nativeChatFullContent": {
       "loadMessageFailed": "Ganze Nachricht erneut laden",

@@ -2377,7 +2377,8 @@
       "resumeInNewCli": "Yeni CLI'de Devam Et"
     },
     "nativeChatFloatingControls": {
-      "scrollToLatest": "En sona kaydır"
+      "scrollToLatest": "En sona kaydır",
+      "scrollToPreviousPrompt": "Önceki isteme kaydır"
     },
     "nativeChatFullContent": {
       "loadMessageFailed": "Tam mesajı yeniden yükle",

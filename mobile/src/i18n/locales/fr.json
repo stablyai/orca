@@ -2450,7 +2450,8 @@
       "resumeInNewCli": "Reprendre dans une nouvelle CLI"
     },
     "nativeChatFloatingControls": {
-      "scrollToLatest": "Faire défiler jusqu'au dernier message"
+      "scrollToLatest": "Faire défiler jusqu'au dernier message",
+      "scrollToPreviousPrompt": "Faire défiler jusqu'au prompt précédent"
     },
     "nativeChatFullContent": {
       "loadMessageFailed": "Réessayer le message complet",

@@ -2812,7 +2812,8 @@
       "resumeInNewCli": "Retomar em nova CLI"
     },
     "nativeChatFloatingControls": {
-      "scrollToLatest": "Rolar até o conteúdo mais recente"
+      "scrollToLatest": "Rolar até o conteúdo mais recente",
+      "scrollToPreviousPrompt": "Rolar até o prompt anterior"
     },
     "nativeChatFullContent": {
       "loadMessageFailed": "Tentar carregar mensagem completa",

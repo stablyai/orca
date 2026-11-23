@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Platform } from 'react-native'
+import { triggerSelection } from '../../../../platform/haptics/haptics'
 import { forgetMobileNativeChatPlace } from './use-mobile-native-chat-place-keeper'
 
 const AT_TAIL_SLOP = 80
@@ -41,6 +42,7 @@ export type MobileNativeChatListHandle = {
   scrollToEnd: (params: { animated: boolean }) => void
   /** Puts the drawn row `key`'s start at the top of the view; only the page list draws row keys. */
   scrollRowToTop?: (key: string) => void
+  jumpToPreviousPrompt?: (beforeJump: () => void) => void
 }
 
 export type MobileNativeChatTailFollow = {
@@ -50,11 +52,14 @@ export type MobileNativeChatTailFollow = {
     isFollowing: () => boolean
     onEndDistance: (fromEnd: number, byReader: boolean) => void
     onPlaceRestored: (scope: string) => void
+    onPreviousPromptAvailable: (available: boolean) => void
   }
   showJumpToTail: boolean
+  showPreviousPrompt: boolean
   pinToTail: () => void
   pinToTailAfterContentResize: (_width: number, height: number) => void
   jumpToTail: () => void
+  jumpToPreviousPrompt: () => void
   releaseFollow: () => void
   scrollRowToTop: (key: string) => void
   beginUserScroll: () => void
@@ -76,9 +81,11 @@ export function useMobileNativeChatTailFollow(args: {
   const listRef = useRef<MobileNativeChatListHandle | null>(null)
   const [following, setFollowingFlag] = useState(true)
   const [atTail, setAtTailFlag] = useState(true)
+  const [showPreviousPrompt, setShowPreviousPrompt] = useState(false)
   // Event handlers read intent at event time, before a re-render lands.
   const followingRef = useRef(true)
   const atTailRef = useRef(true)
+  const previousPromptAvailable = useRef(false)
   const userScrollActiveRef = useRef(false)
   const userScrollSettleFrameRef = useRef<number | null>(null)
   const scopeKeyRef = useRef(scopeKey)
@@ -99,6 +106,13 @@ export function useMobileNativeChatTailFollow(args: {
     }
     atTailRef.current = next
     setAtTailFlag(next)
+  }, [])
+
+  const onPreviousPromptAvailable = useCallback((available: boolean) => {
+    if (previousPromptAvailable.current !== available) {
+      previousPromptAvailable.current = available
+      setShowPreviousPrompt(available)
+    }
   }, [])
 
   const attachList = useCallback((list: MobileNativeChatListHandle | null) => {
@@ -176,6 +190,13 @@ export function useMobileNativeChatTailFollow(args: {
     },
     [releaseFollow]
   )
+
+  const jumpToPreviousPrompt = useCallback(() => {
+    listRef.current?.jumpToPreviousPrompt?.(() => {
+      releaseFollow()
+      triggerSelection()
+    })
+  }, [releaseFollow])
 
   const beginUserScroll = useCallback(() => {
     clearUserScrollSettle()
@@ -261,11 +282,19 @@ export function useMobileNativeChatTailFollow(args: {
 
   return {
     listProps: { ref: attachList },
-    pageListProps: { ref: attachList, isFollowing, onEndDistance, onPlaceRestored },
+    pageListProps: {
+      ref: attachList,
+      isFollowing,
+      onEndDistance,
+      onPlaceRestored,
+      onPreviousPromptAvailable
+    },
     showJumpToTail: !following && !atTail,
+    showPreviousPrompt,
     pinToTail,
     pinToTailAfterContentResize,
     jumpToTail,
+    jumpToPreviousPrompt,
     releaseFollow,
     scrollRowToTop,
     beginUserScroll,

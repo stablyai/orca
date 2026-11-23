@@ -15,6 +15,7 @@ import { isNativeChatProviderTurnStart } from '../../../../../../src/shared/nati
 import { MobileNativeChatReasoningRow } from '../message-content/MobileNativeChatReasoningRow'
 import { useMobileNativeChatRunAsides } from '../use-mobile-native-chat-run-asides'
 import { mobileNativeChatRowId } from '../viewport/mobile-native-chat-reading-place'
+import { useMobileNativeChatLandedPrompt } from '../viewport/mobile-native-chat-landed-prompt'
 import { nativeChatWorkRunEntries } from '../../../../../../src/shared/native-chat/transcript/folding/native-chat-work-run'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { MobileNativeChatNoticeRow } from '../notices/MobileNativeChatNoticeRow'
@@ -190,6 +191,7 @@ function MobileNativeChatMessageImpl({
     />
   ) : null
   const rowId = rowKey ?? message.id
+  const landed = useMobileNativeChatLandedPrompt(isUser ? rowId : undefined)
   const withStatus = (row: React.ReactNode) => (
     <>
       {turnStatusAbove ? statusRow : null}
@@ -292,13 +294,14 @@ function MobileNativeChatMessageImpl({
   }
   const proseRows = (blocks: Chat.NativeChatBlock[]) =>
     blocks.map((block, index) => proseRow(block, index, Chat.isTextBlock(block) ? block.text : ''))
+  const userBubble = landed ? [styles.userBubble, styles.landedPrompt] : styles.userBubble
   return (
     <>
       {tookOver ? <MobileNativeChatTookOverRow workspace={tookOver.workspace} /> : null}
       {turnStatusAbove ? statusRow : null}
       <View style={[styles.row, isUser && styles.rowUser]} testID={mobileNativeChatRowId(rowId)}>
         <Marks.MobileNativeChatConnectorMarks message={message} tagged={!agentFrom} end={isUser} />
-        <Content onLongPress={onLongPress} style={[styles.content, isUser && styles.userBubble]}>
+        <Content onLongPress={onLongPress} style={[styles.content, isUser && userBubble]}>
           {agentFrom ? (
             <MobileNativeChatAgentMessageCard
               message={message}

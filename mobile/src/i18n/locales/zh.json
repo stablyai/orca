@@ -3288,7 +3288,8 @@
       "resumeInNewCli": "在新 CLI 中恢复"
     },
     "nativeChatFloatingControls": {
-      "scrollToLatest": "滚动到最新消息"
+      "scrollToLatest": "滚动到最新消息",
+      "scrollToPreviousPrompt": "滚动到上一个提示"
     },
     "nativeChatFullContent": {
       "loadMessageFailed": "重试加载完整消息",
