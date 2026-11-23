@@ -2311,6 +2311,8 @@
       "editSavedArguments": "Modifiez-les dans Paramètres > Agents > Arguments.",
       "emptyMessage": "Ce message est vide, il n'a donc pas été envoyé.",
       "fullAccessAsRoot": "{{agent}} n'utilisera pas l'Accès complet tant qu'il s'exécute en tant que root. Choisissez une autre autorisation pour {{agent}} dans Paramètres → Agents pour l'ordinateur qui exécute ce chat, puis démarrez un nouveau chat.",
+      "botToolsNeedStatusHooks": "Les bots {{agent}} ont besoin des Hooks de statut des agents : c'est grâce à eux que les outils d'un bot agissent en tant que ce bot. Activez-les pour {{agent}} dans Paramètres → Agents, puis démarrez une nouvelle discussion.",
+      "botToolsGatewayOutdated": "La passerelle de {{agent}} exécute encore une ancienne version du plugin Orca, donc les outils de ce bot ne peuvent pas agir en tant que ce bot. Exécutez `hermes gateway stop`, puis démarrez une nouvelle discussion.",
       "historyInOtherAccount": "L'historique de ce chat se trouve dans un autre compte Claude. Revenez à ce compte pour le poursuivre.",
       "historyTooLarge": "L'historique de cette conversation est trop volumineux pour être restauré ici.",
       "hostFault": "Orca a rencontré un problème, l'opération n'a donc pas abouti.",
@@ -4160,6 +4162,9 @@
       "newHint": "Créer une nouvelle branche locale",
       "newName": "Nom de la nouvelle branche",
       "title": "Branche pour cet arbre de travail"
+    },
+    "activity": {
+      "permission": "Autorisation requise"
     }
   },
   "worktree": {
@@ -4404,8 +4409,14 @@
         "error": "La configuration du projet a échoué sur l’hôte sélectionné pour l’automatisation.",
         "unsupported": "L’hôte sélectionné pour l’automatisation ne prend pas en charge ce projet."
       },
-      "wslDistroStopped": "La distribution WSL {{distro}} est arrêtée, donc cette exécution planifiée ne l’a pas démarrée. Démarrez la distribution ou utilisez Exécuter maintenant ; les exécutions suivantes ont lieu tant qu’elle tourne."
-    }
+      "wslDistroStopped": "La distribution WSL {{distro}} est arrêtée, donc cette exécution planifiée ne l’a pas démarrée. Démarrez la distribution ou utilisez Exécuter maintenant ; les exécutions suivantes ont lieu tant qu’elle tourne.",
+      "botsOff": "Les bots sont désactivés dans les Réglages, donc Orca a ignoré cette exécution.",
+      "botMissing": "Le bot sous lequel cette automatisation s’exécute n’existe plus.",
+      "botFolderMissing": "Le dossier du bot n’est plus disponible.",
+      "botPaused": "{{bot}} est en pause, donc Orca a ignoré cette exécution."
+    },
+    "eventsWontFire": "S’exécute uniquement selon sa planification : nécessite le connecteur {{connectors}}",
+    "wontFire": "Ne s’exécutera pas : nécessite le connecteur {{connectors}}"
   },
   "auto": {
     "components": {
@@ -4581,13 +4592,8 @@
       "folder": "Dossier",
       "copyPath": "Copier le chemin",
       "pathCopied": "Chemin copié",
-      "off": "Désactivé",
-      "lastLooked": "dernier tour d’horizon {{when}}",
       "tidyNightLine": "Chaque nuit après 3 h",
       "tidyWeekLine": "Une fois par semaine, après 3 h",
-      "today": "aujourd’hui",
-      "yesterday": "hier",
-      "lastTidied": "dernier rangement {{when}}",
       "withAccess": "{{service}} : {{people}} avec accès",
       "requests_one": "{{count}} demande",
       "requests_other": "{{count}} demandes",
@@ -4669,7 +4675,9 @@
       "newThreadTab": "Nouveau fil",
       "newThreadHint": "repart de zéro",
       "newThread": "Nouveau fil dans {{name}}",
-      "handoffsPaused": "En pause après {{count}} transferts. Répondez pour continuer."
+      "handoffsPaused": "En pause après {{count}} transferts. Répondez pour continuer.",
+      "stopCouldNotBeConfirmed": "L’arrêt n’a pas pu être confirmé.",
+      "notStarted": "Non démarré"
     },
     "templates": {
       "title": "Modèles de bots",
@@ -4725,7 +4733,8 @@
         "offline": "{{host}} est hors ligne."
       },
       "thisComputer": "L’ordinateur",
-      "readFailedClosedPage": "Impossible de lire davantage d’éléments fermés."
+      "readFailedClosedPage": "Impossible de lire davantage d’éléments fermés.",
+      "skillLimit": "Message non envoyé. Sélectionnez au plus {{limit}} fichiers de compétences et réessayez."
     },
     "needs": {
       "chat": "Votre chat avec {{name}}",
@@ -5031,7 +5040,21 @@
       "tryAgain": "Réessayer",
       "signedInTo": "Connecté à {{app}}",
       "back": "Retour aux outils",
-      "problem": "Problème"
+      "problem": "Problème",
+      "input": {
+        "invalid": "Saisissez un nom de serveur valide et une URL ou un exécutable.",
+        "namesRepeat": "Chaque nom d’en-tête ou d’environnement doit être unique.",
+        "rowInvalid": "Saisissez un nom et une valeur valides pour chaque ligne, ou supprimez la ligne."
+      },
+      "signInFailure": {
+        "unsupported": "Cette app n’est pas encore prise en charge.",
+        "unavailable": "Impossible de joindre cette app. Vérifiez l’adresse, puis réessayez.",
+        "noTool": "Ce bot n’a plus cet outil.",
+        "desktopOnly": "Connectez-vous depuis Orca sur {{host}}.",
+        "denied": "L’accès n’a pas été autorisé.",
+        "expired": "La connexion a expiré. Réessayez.",
+        "couldNotSignIn": "Connexion impossible. Réessayez."
+      }
     },
     "handToBot": {
       "menu": "Transmettre à un bot…",
@@ -5185,7 +5208,85 @@
       "groupImagesTooLarge": "Ces images font {{totalMb}} Mo au total. Un message de groupe accepte jusqu’à {{maxMb}} Mo.",
       "groupImageNotStored": "Seules les images collées ou jointes peuvent aller dans un message de groupe.",
       "groupAttachmentsUnavailable": "Cet ordinateur ne peut pas accepter de pièces jointes pour le moment. Renvoyez dans un instant.",
-      "groupAttachFailed": "Impossible de joindre les fichiers. Renvoyez dans un instant."
+      "groupAttachFailed": "Impossible de joindre les fichiers. Renvoyez dans un instant.",
+      "groupMentionAmbiguous": "Corrigez la mention de bot ambiguë avant d’envoyer.",
+      "groupMentionUnavailable": "Corrigez la mention de bot indisponible ou ambiguë avant d’envoyer.",
+      "groupReplierNotMember": "Choisissez un membre actuel du salon dans Réponses du salon.",
+      "groupMailNeverStarted": "Ce message n’a jamais lancé de tour.",
+      "groupRemoteUnreachable": "Impossible de joindre {{host}}. {{detail}}",
+      "groupRemoteUnreachableRetry": "Impossible de joindre {{host}}. {{detail}} Publiez à nouveau pour réessayer."
+    },
+    "automations": {
+      "paused": "En pause",
+      "newDraft": "Configurer une automatisation qui "
+    },
+    "row": {
+      "idle": "Inactif"
+    },
+    "apps": {
+      "line": {
+        "vercel": "Vérifiez les déploiements et lisez leurs journaux",
+        "sentry": "Examinez les erreurs et les événements qui les causent",
+        "datadog": "Recherchez dans les journaux, les métriques et les moniteurs",
+        "posthog": "Interrogez les analyses produit et les feature flags",
+        "cloudflare": "Gérez les Workers, le DNS et le reste d’un compte",
+        "supabase": "Interrogez les bases de données et gérez les projets",
+        "neon": "Exécutez du SQL et gérez les branches Postgres",
+        "netlify": "Déployez des sites et vérifiez leurs builds",
+        "gitlab": "Lisez et mettez à jour les issues et les merge requests",
+        "context7": "Documentation et exemples à jour pour les bibliothèques de code",
+        "atlassian": "Tickets Jira et pages Confluence",
+        "notion": "Recherchez, lisez et modifiez des pages",
+        "stripe": "Consultez les paiements, les clients et les abonnements",
+        "github": "Mentions et événements sur les issues et les PR",
+        "slack": "Messages et mentions",
+        "linear": "Issues assignées et mentions",
+        "google": "Gmail, Agenda et Drive, en votre nom"
+      },
+      "composioLine": {
+        "outlook": "E-mails, calendrier et contacts",
+        "microsoft_teams": "Discussions, canaux et réunions",
+        "notion": "Pages, bases de données et commentaires",
+        "jira": "Tickets, projets et sprints",
+        "hubspot": "Contacts, entreprises, transactions et tickets",
+        "salesforce": "Comptes, prospects et opportunités",
+        "asana": "Tâches, projets et commentaires",
+        "airtable": "Bases, tables et enregistrements",
+        "zendesk": "Tickets, utilisateurs et articles du centre d’aide",
+        "figma": "Fichiers, commentaires et composants",
+        "stripe": "Paiements, clients et factures",
+        "dropbox": "Fichiers et dossiers",
+        "one_drive": "Fichiers et dossiers",
+        "confluence": "Pages, espaces et commentaires",
+        "clickup": "Tâches, listes et documents",
+        "monday": "Tableaux, éléments et mises à jour",
+        "intercom": "Conversations, contacts et articles",
+        "zoom": "Réunions, enregistrements et transcriptions",
+        "calendly": "Événements, invités et liens de réservation",
+        "trello": "Tableaux, listes et cartes",
+        "sentry": "Problèmes, événements et versions",
+        "box": "Fichiers et dossiers",
+        "miro": "Tableaux, notes adhésives et cadres",
+        "reddit": "Publications, commentaires et subreddits"
+      },
+      "webhooks": {
+        "line": "Événements de n’importe quel outil ou script"
+      }
+    },
+    "share": {
+      "signInOtherSite": "L’ordinateur a envoyé un lien de connexion vers un autre site, il n’a donc pas été ouvert."
+    },
+    "settingsPage": {
+      "off": "Désactivé",
+      "lastLooked": "dernier tour d’horizon {{when}}",
+      "today": "aujourd’hui",
+      "yesterday": "hier",
+      "lastTidied": "dernier rangement {{when}}"
+    }
+  },
+  "sidebar": {
+    "cardSlot": {
+      "working": "En activité"
     }
   }
 }

@@ -10,6 +10,7 @@ import {
 } from '../activation/orcad-activation-lock'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { runFencedStop, type updateTerminalCounts } from '../activation/orcad-fenced-stop'
+import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import type { OrcadSlotOptions } from '../activation/orcad-recovery-slot'
 import { readRemoteOrcadManagedStopTarget } from './orcad-managed-remote-stop'
 import { stopIncumbentBehindTerminalBarrier } from './orcad-rollback-terminal-barrier'
@@ -25,7 +26,10 @@ export type OrcadIdleRestartStop =
 type RestartCounts = Pick<
   ReturnType<typeof updateTerminalCounts>,
   'recountCensus' | 'releaseIncumbentAdmission'
->
+> & {
+  /** Other live work on the fenced recount that keeps the server serving, as the kept reason. */
+  refuseOtherWork?: (census: OrcadTerminalCensus) => string | null
+}
 
 /** Stops the active orcad only if a fenced recount proves zero terminals. */
 export async function stopIdleOrcadForRestart(
@@ -51,10 +55,13 @@ async function recountThenStop(
   const fenced = await runFencedStop({
     ...counts,
     now: Date.now,
-    refuse: (census): OrcadIdleRestartStop | null =>
-      census.liveSessions === 0
-        ? null
-        : { state: 'terminals-running', liveSessions: census.liveSessions },
+    refuse: (census): OrcadIdleRestartStop | null => {
+      if (census.liveSessions !== 0) {
+        return { state: 'terminals-running', liveSessions: census.liveSessions }
+      }
+      const otherWork = counts.refuseOtherWork?.(census) ?? null
+      return otherWork === null ? null : { state: 'kept', reason: otherWork }
+    },
     stale: (): OrcadIdleRestartStop => STALE_COUNT,
     stop: (stillFenced) => stopRetiringIdleDaemon(slot, lock, stillFenced),
     // Woken servers start with admission open; only unsent stops need reopening.

@@ -1,6 +1,7 @@
 // What a group post's question to a bot on a paired computer says: a short status beside the bot's
 // name, a sentence under it while no answer came, and the shortened note; desktop and phone say it here.
 import type { BotGroupRemoteAsk } from './bot-group-schema'
+import { botCodedText } from './bot-failure-copy'
 
 type Translate = (key: string, fallback: string, values?: Record<string, unknown>) => string
 
@@ -24,6 +25,7 @@ export function botGroupRemoteAskLines(
   shortened: string | null
 } {
   const values = { bot: ask.name, computer: ask.computer }
+  const error = ask.error ? botCodedText(ask.error, ask.failure, t) : ''
   const answer = ask.reply?.kind === 'answer' ? ask.reply.text : null
   const status =
     answer !== null
@@ -44,9 +46,9 @@ export function botGroupRemoteAskLines(
     answer !== null || ask.reply?.kind === 'notice'
       ? null
       : ask.state === 'failed'
-        ? sentence(ask.error ?? '')
+        ? sentence(error)
         : ask.state === 'unknown'
-          ? [mayAnswer, ask.error ? sentence(ask.error) : ''].join(' ').trim()
+          ? [mayAnswer, error ? sentence(error) : ''].join(' ').trim()
           : ask.stopped
             ? mayAnswer
             : null

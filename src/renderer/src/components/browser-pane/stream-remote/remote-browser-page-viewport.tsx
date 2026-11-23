@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
 import { BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { Globe, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import type {
@@ -38,15 +39,20 @@ import {
   BrowserPageFeedbackBadge,
   type BrowserPageFeedbackBadgeHandle
 } from '../assemble-chrome/feedback/browser-page-feedback-badge'
+import { useBrowserAgentCursor } from '../agent-cursor/use-browser-agent-cursor'
+import { RemoteBrowserPageDriverOverlay } from './remote-browser-page-driver-overlay'
+import type { RemoteBrowserPageDriver } from './use-remote-browser-stream-viewer-state'
 
 export function RemoteBrowserPageViewport({
   remoteViewportRef,
+  attachFileDrop,
   imageRef,
   feedbackBadgeRef,
   find,
   frameUrl,
   frameMetadata,
   pagePointer,
+  pageDriver,
   busy,
   markup,
   browserTab,
@@ -72,6 +78,8 @@ export function RemoteBrowserPageViewport({
   annotateOverlays
 }: {
   remoteViewportRef: React.RefObject<HTMLDivElement | null>
+  /** Sets remoteViewportRef too; takes files dragged in from this computer. */
+  attachFileDrop: (root: HTMLElement | null) => void
   imageRef: React.RefObject<HTMLImageElement | null>
   feedbackBadgeRef: React.RefObject<BrowserPageFeedbackBadgeHandle | null>
   find: RemoteBrowserPageFind
@@ -79,6 +87,8 @@ export function RemoteBrowserPageViewport({
   frameMetadata: BrowserScreencastFrameMetadata | null
   /** The host page's cursor and hovered link; null from hosts that don't report them. */
   pagePointer: BrowserScreencastPointer | null
+  /** Who drives the page on its host; null from hosts that don't report it. */
+  pageDriver: RemoteBrowserPageDriver | null
   busy: boolean
   markup: MarkupModeController
   browserTab: BrowserPageState
@@ -111,6 +121,8 @@ export function RemoteBrowserPageViewport({
     certificateFailure?.challengeId ? remotePageHandle?.environmentId : null,
     BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY
   )
+  const getAgentCursorHost = useCallback(() => remoteViewportRef.current, [remoteViewportRef])
+  useBrowserAgentCursor(browserTab.id, imageRef, getAgentCursorHost)
   const fileDrop = useWorkspaceDocPageFileDrop(browserTab.id, worktreeId, remoteViewportRef)
 
   // Transfer viewport focus to the first image, which owns remote key input.
@@ -145,15 +157,23 @@ export function RemoteBrowserPageViewport({
   const remoteFailureUrl = loadError?.validatedUrl ?? browserTab.url
   const remoteFailureExternalUrl = resolveRemoteFailureExternalUrl(remoteFailureUrl)
   const showRemoteFailureOverlay = Boolean(loadError) && !isBlankBrowserUrl(remoteFailureUrl)
+  const phoneDriven = pageDriver?.driver.kind === 'mobile'
 
   return (
     <div
-      ref={remoteViewportRef}
+      ref={attachFileDrop}
       tabIndex={-1}
       // Why a size container: the frame letterboxes itself in cq units of this pane.
-      className="@container-size relative min-h-0 flex-1 overflow-hidden bg-background"
+      className={cn(
+        '@container-size relative min-h-0 flex-1 overflow-hidden bg-background',
+        // The phone has the page; only the overlay's Take back stays clickable.
+        phoneDriven && 'pointer-events-none'
+      )}
       {...fileDrop}
     >
+      {pageDriver ? (
+        <RemoteBrowserPageDriverOverlay pageDriver={pageDriver} runtimeTarget={runtimeTarget} />
+      ) : null}
       <BrowserPageFeedbackBadge ref={feedbackBadgeRef} />
       <BrowserFind
         browserPageId={browserTab.id}
@@ -179,6 +199,8 @@ export function RemoteBrowserPageViewport({
           src={frameUrl}
           alt=""
           tabIndex={0}
+          // Keys and paste reach the page from the frame, so the phone's lock takes its focus too.
+          inert={phoneDriven}
           style={remoteImageStyle}
           className="absolute top-0 left-0 max-w-none bg-white outline-none"
           onPointerDown={handleRemotePointerDown}

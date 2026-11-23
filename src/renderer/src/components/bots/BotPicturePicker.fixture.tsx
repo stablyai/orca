@@ -5,10 +5,9 @@ import type {
   AvatarGenerationApi,
   AvatarGenerationCapability
 } from '../../../../shared/avatar-generation/avatar-generation-contract'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
-import { BotAvatar } from './BotAvatar'
-import { BOT_PICTURE_DROP_OUTLINE, BotPicturePicker } from './BotPicturePicker'
+import { BotPictureButton } from './BotPictureButton'
+import { refreshAvatarCapability } from './avatar-generation-capability-store'
 import { NewBotDialog } from './NewBotDialog'
 
 const perf: Bot = {
@@ -62,8 +61,17 @@ async function artPng(size = 512): Promise<File> {
   return new File([blob], 'cat.png', { type: 'image/png' })
 }
 
-/** Answers uploads without a runtime. */
-function stubUpload(): void {
+const NO_IMAGE_AGENTS: AvatarGenerationApi = {
+  capability: async () => ({ agents: [] }),
+  generate: async () => ({ ok: false, error: 'unavailable' }),
+  cancel: async () => {}
+}
+
+/** Answers uploads without a runtime, with these image agents; the capability cache outlives a
+ *  fixture, so it is read again from them. */
+function stubUpload(generation: AvatarGenerationApi = NO_IMAGE_AGENTS): void {
+  Reflect.set(window.api, 'avatarGeneration', generation)
+  refreshAvatarCapability()
   stubBots([perf])
   const runtime = window.api.runtime
   const call = runtime.call
@@ -120,31 +128,7 @@ function Settings(): React.JSX.Element {
   const picture = useBotPictureSetting(perf, async () => perf)
   return (
     <div className="flex h-[380px] items-start gap-4 p-6">
-      <Popover>
-        <PopoverTrigger asChild>
-          <button type="button" className="shrink-0 rounded-lg" aria-label="Edit bot picture">
-            <BotAvatar bot={perf} className="size-12 rounded-lg text-xl" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-80">
-          <div className={BOT_PICTURE_DROP_OUTLINE}>
-            <BotPicturePicker
-              value={picture.value}
-              custom={picture.custom}
-              onChange={picture.pick}
-              onUpload={picture.upload}
-              onUndo={picture.undo}
-              color={picture.color}
-              onColorChange={picture.pickColor}
-              outfit={picture.outfit}
-              onOutfitChange={picture.pickOutfit}
-            />
-            <p className="text-center text-xs text-muted-foreground">
-              Slack gets the picture, not the color or outfit.
-            </p>
-          </div>
-        </PopoverContent>
-      </Popover>
+      <BotPictureButton bot={perf} picture={picture} avatarClassName="size-12 rounded-lg text-xl" />
       <div className="pt-3 text-lg font-semibold">{perf.name}</div>
     </div>
   )
@@ -288,7 +272,6 @@ function stubGeneration(
   result: 'image' | 'running' | 'usage-limit'
 ): () => void {
   return () => {
-    stubUpload()
     const api: AvatarGenerationApi = {
       capability: async () => capability,
       generate: async () => {
@@ -306,7 +289,7 @@ function stubGeneration(
       },
       cancel: async () => {}
     }
-    Reflect.set(window.api, 'avatarGeneration', api)
+    stubUpload(api)
   }
 }
 

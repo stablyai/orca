@@ -22,6 +22,7 @@ import {
 import { latestAgentCliRelease } from './agent-cli-latest-release'
 import { readModelsNeedingCliUpdate } from './agent-cli-model-requirements'
 import { agentCliUpdateDefinition, type AgentCliUpdatePlan } from './agent-cli-update-agents'
+import { checkThroughGate, updateThroughGate } from './agent-cli-update-gate'
 
 const UPDATE_TIMEOUT_MS = 10 * 60_000
 const UPDATE_OUTPUT_BYTES = 64 * 1024
@@ -31,6 +32,12 @@ const UNREAD_RETRY_MS = 10 * 60_000
 const versions = new Map<string, { stamp: string; version: string | null; at: number }>()
 const checks = new Map<AgentCliUpdateAgent, Promise<AgentCliUpdate | null>>()
 const runs = new Map<AgentCliUpdateAgent, Promise<AgentCliUpdateRunResult>>()
+const finishedListeners = new Set<(agent: AgentCliUpdateAgent) => void>()
+// Calls of checkAgentCliUpdates not yet answered, with the agents updated while they were out.
+const answering = new Set<{
+  agents: readonly AgentCliUpdateAgent[]
+  updated: Set<AgentCliUpdateAgent>
+}>()
 
 /**
  * Runs --version only when the installed file changed, or when an unread version (any version with
@@ -128,26 +135,62 @@ export async function checkAgentCliUpdates(
     (agent): agent is AgentCliUpdateAgent =>
       isAgentCliUpdateAgent(agent) && isTuiAgentEnabled(agent, settings.disabledTuiAgents)
   )
-  const updates = await Promise.all(
-    agents.map((agent) => {
-      // Clients asking at once share one read.
-      let check = checks.get(agent)
-      if (!check) {
-        check = readAgentCliUpdate(agent, settings)
-          .catch((error: unknown) => {
-            console.warn(`[agent-cli-update] ${agent} not checked:`, error)
-            return null
-          })
-          .finally(() => checks.delete(agent))
-        checks.set(agent, check)
-      }
-      return check
-    })
-  )
-  return updates.filter((update) => update !== null)
+  const call = { agents, updated: new Set<AgentCliUpdateAgent>() }
+  answering.add(call)
+  try {
+    const updates = await Promise.all(agents.map((agent) => sharedCheck(agent, settings)))
+    // An agent updated while this was out is read again, after its update.
+    while (call.updated.size > 0) {
+      const again = [...call.updated]
+      call.updated.clear()
+      const fresh = await Promise.all(again.map((agent) => sharedCheck(agent, settings)))
+      again.forEach((agent, index) => {
+        updates[agents.indexOf(agent)] = fresh[index]
+      })
+    }
+    return updates.filter((update) => update !== null)
+  } finally {
+    answering.delete(call)
+  }
 }
 
-async function runUpdate(
+/** Clients asking at once share one read of each agent. */
+function sharedCheck(
+  agent: AgentCliUpdateAgent,
+  settings: AgentCliUpdateSettings
+): Promise<AgentCliUpdate | null> {
+  let check = checks.get(agent)
+  if (!check) {
+    check = checkThroughGate(agent, () => readAgentCliUpdate(agent, settings))
+      .catch((error: unknown) => {
+        console.warn(`[agent-cli-update] ${agent} not checked:`, error)
+        return null
+      })
+      .finally(() => {
+        if (checks.get(agent) === check) {
+          checks.delete(agent)
+        }
+      })
+    checks.set(agent, check)
+  }
+  return check
+}
+
+function runUpdate(
+  agent: AgentCliUpdateAgent,
+  settings: AgentCliUpdateSettings
+): Promise<AgentCliUpdateRunResult> {
+  // Later checks start their own read behind the update, and calls already out read this agent again.
+  checks.delete(agent)
+  for (const call of answering) {
+    if (call.agents.includes(agent)) {
+      call.updated.add(agent)
+    }
+  }
+  return updateThroughGate(agent, () => updateAgentCli(agent, settings))
+}
+
+async function updateAgentCli(
   agent: AgentCliUpdateAgent,
   settings: AgentCliUpdateSettings
 ): Promise<AgentCliUpdateRunResult> {
@@ -179,10 +222,13 @@ async function runUpdate(
   } catch (error) {
     return { ok: false, output: error instanceof Error ? error.message : String(error), command }
   }
-  // The update may leave the launcher file untouched, so its version is read again.
-  versions.delete(cli.program)
   // New chats and the model list read the replaced binary.
   agentModelCatalogStore.expireLaunchScopes((catalogAgent) => catalogAgent === agent)
+  // The update may move the binary or leave its launcher untouched, so the CLI a new chat finds is read anew.
+  const updated = (await findOwnAgentCli(agent, settings).catch(() => null)) ?? cli
+  versions.delete(cli.program)
+  versions.delete(updated.program)
+  const after = await installedVersion(agent, updated)
   const output = [result.stdout, result.stderr]
     .map((text) => text.trim())
     .filter(Boolean)
@@ -190,7 +236,6 @@ async function runUpdate(
   if (result.code !== 0 || result.timedOut) {
     return { ok: false, output, command }
   }
-  const after = await installedVersion(agent, cli)
   const latest = after ? await latestRelease(agent, after) : null
   // A package manager behind the release (e.g. Homebrew) exits cleanly on the old version.
   if (after && latest && compareAppVersions(after, latest) < 0) {
@@ -206,8 +251,38 @@ export function runAgentCliUpdate(
 ): Promise<AgentCliUpdateRunResult> {
   let run = runs.get(agent)
   if (!run) {
-    run = runUpdate(agent, settings).finally(() => runs.delete(agent))
+    run = runUpdate(agent, settings).finally(() => {
+      runs.delete(agent)
+      // Every client re-checks, so none keeps an answer from before the update.
+      for (const listener of finishedListeners) {
+        try {
+          listener(agent)
+        } catch (error) {
+          console.warn(`[agent-cli-update] ${agent} finish not announced:`, error)
+        }
+      }
+    })
     runs.set(agent, run)
   }
   return run
+}
+
+/** Calls `listener` with each agent whose update on this host finished, succeeded or not. */
+export function onAgentCliUpdateFinished(
+  listener: (agent: AgentCliUpdateAgent) => void
+): () => void {
+  finishedListeners.add(listener)
+  return () => finishedListeners.delete(listener)
+}
+
+let stopAnnouncing = (): void => {}
+
+/** Announces each finished update as a client event, so every client checks again; the latest runtime's emitter replaces the last. */
+export function announceAgentCliUpdatesFinished(
+  emit: (event: { type: 'agentCliUpdateFinished'; agent: AgentCliUpdateAgent }) => void
+): void {
+  stopAnnouncing()
+  stopAnnouncing = onAgentCliUpdateFinished((agent) =>
+    emit({ type: 'agentCliUpdateFinished', agent })
+  )
 }

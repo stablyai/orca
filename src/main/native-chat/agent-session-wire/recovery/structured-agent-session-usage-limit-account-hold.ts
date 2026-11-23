@@ -3,9 +3,6 @@ import {
   NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS,
   type NativeChatUsageLimitCut
 } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
-import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
-import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionAccountHomePath,
   type AgentSessionAccountHome
@@ -48,11 +45,6 @@ type Hold = {
   bootstrapSince?: { reset: number; at: number }
 }
 
-type AttributionHost = Pick<
-  StructuredAgentSessionHostDeps,
-  'launchAccountHome' | 'usageLimitAutoContinue'
-> & { store: Pick<AgentSessionRecordStore, 'getRecord'> }
-
 const GRACE_MS = 15_000
 const READING_WAIT_MS = 120_000
 const UNKNOWN_RESET_ASK_MS = 10 * 60_000
@@ -81,7 +73,8 @@ export class UsageLimitAccountHolds {
   }
 
   /** Re-attributed each pass: the account a chat continues on follows the host's selection. The
-   *  account the cut hit is the one its turn's runtime launched under, when the record names it. */
+   *  account the cut hit is the one its turn's runtime launched under, when the record still names
+   *  that launch. */
   async attribute(
     id: string,
     host: AttributionHost,
@@ -315,6 +308,9 @@ export class UsageLimitAccountHolds {
       return false
     }
     if (now < Math.max(hold.resetsAt + GRACE_MS, notBefore)) {
+      if (this.relaunched.waits(id, switchFreeIdentity(cut))) {
+        askForRoom(scope, UNKNOWN_RESET_ASK_MS)
+      }
       return false
     }
     const refresh = scope?.account?.refresh ?? scope?.bootstrap

@@ -9,6 +9,7 @@ import type { Automation } from '../../shared/automations/automation-definition'
 import type { Bot } from '../../shared/bot-types'
 import { mailboxAddresses } from '../../shared/google/email-address-list'
 import type { UpcomingEvent } from './google-calendar-changes'
+import type { GoogleDefaultAccount } from './google-credential-store'
 import { senderAddress, type NewMail } from './google-gmail-changes'
 
 type GmailRule = Extract<AutomationGoogleTrigger, { source: 'gmail' }>
@@ -51,6 +52,21 @@ export function googleRuleTargets(
         : []
     })
   })
+}
+
+/** Why rules without an account (on bots with Google on) can't listen now, or null while they can. */
+export function accountlessRulesPausedBy(
+  fallback: GoogleDefaultAccount,
+  automations: readonly Pick<Automation, 'enabled' | 'bot' | 'on'>[],
+  bots: readonly Pick<Bot, 'id' | 'google'>[]
+): string | null {
+  const waiting = automations.some(
+    (automation) =>
+      automation.enabled &&
+      bots.some((bot) => bot.id === automation.bot?.botId && bot.google === true) &&
+      (automation.on ?? []).some((rule) => isGoogleTrigger(rule) && !rule.account)
+  )
+  return waiting && 'unreadable' in fallback ? fallback.unreadable : null
 }
 
 export function isGmailTarget(target: GoogleRuleTarget): target is GoogleRuleTarget<GmailRule> {
