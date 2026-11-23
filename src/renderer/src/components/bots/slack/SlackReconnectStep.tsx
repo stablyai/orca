@@ -81,7 +81,7 @@ export function SlackReconnectStep({
   /** The lapsed token is this desktop's own Orca account's, from a hand-off. */
   mine: boolean
   /** Slack refused, yet no token may ever have been saved for this workspace. */
-  unsure: boolean
+  unsure?: boolean
   /** This desktop's own Orca account. */
   ownEmail: string | null
   error: string | null
