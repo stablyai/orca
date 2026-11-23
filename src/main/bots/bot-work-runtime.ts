@@ -1,6 +1,7 @@
 // The work record as this runtime reads it: links from the conversation store, workers from
 // orchestration, workspaces from the runtime's worktrees.
-import { existsSync } from 'node:fs'
+import { accessSync, existsSync } from 'node:fs'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   getRepoExecutionHostId,
@@ -21,12 +22,6 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Bot } from '../../shared/bot-types'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import {
-  resolveWorkerLineage,
-  type WorkerLineage
-} from '../runtime/orchestration/db/dispatch-context/worker-follow-up-lineage'
-import { readDispatchWorkers } from '../runtime/rpc/methods/orchestration/worker/session-workers-method'
-import { sessionWorkerIsWorking } from '../../shared/orchestration-session-workers'
-import {
   BotWorkRecord,
   type BotTurnAddress,
   type BotWorkWorker,
@@ -34,10 +29,10 @@ import {
 } from './bot-work-record'
 import { BotWorkStore, botWorkStoreFile, type BotWorkHost } from './bot-work-store'
 import type { BotWorkWorkspaceShow } from './bot-work-workspace-show'
-import { existsOnce, type BotWorkspaceReads } from './bot-workspace-reads'
+import type { ScopedWorktreeReads } from '../runtime/workspaces/catalog/scoped-worktree-row-resolution'
 import { isInBotHome } from './bot-home-membership'
+import { readWorkers } from './bot-work-workers-read'
 import { readRemoteGitHubRepo, readRemoteWorkspace } from './bot-work-remote-workspace'
-import { readServerOwnedWorker } from './bot-work-server-owned-worker'
 import { getRemoteDispatch } from '../runtime/orchestration/db/remote-owned/remote-dispatch-records'
 import { worktreesUnderHomes } from './bot-handed-workspaces'
 import { workspaceOnBranch, type BotGitHubRepo, type BotPrRepo } from './bot-work-pr-branch'
@@ -78,77 +73,45 @@ export function botWorkHostOf(db: OrchestrationDb, dispatchId: string): BotWorkH
   )
 }
 
-/** Each Dispatch's worker as its lineage's newest Dispatch, read in one batch; a server-owned one from
- *  this Orca's record of it. Null when its records are gone. */
-export async function readWorkers(
+/** One batch's workspace reader; `reads`: its repo reads, shared by every workspace it reads.
+ *  `exists`: path checks shared too, only where a 'gone' never closes anything (item views). */
+export function workspaceReader(
   runtime: BotWorkRuntime,
-  dispatchIds: readonly string[]
-): Promise<Map<string, BotWorkWorker | null>> {
-  const db = runtime.getOrchestrationDb()
-  // One walk per lineage, shared by links to a worker's first Dispatch and its follow-ups. Null: its
-  // Task is gone.
-  const lineages = new Map<string, WorkerLineage>()
-  const latestOf = new Map(
-    dispatchIds.map((id) => {
-      const latest = resolveWorkerLineage(db, id, undefined, lineages)?.latest
-      return [id, latest && (db.getTask(latest.task_id) ? latest : null)] as const
-    })
-  )
-  const readable = [...new Set([...latestOf.values()].flatMap((latest) => latest?.id ?? []))]
-  const workerReads = await readDispatchWorkers(runtime, readable, { lostTerminalsEnded: true })
-  const reads = new Map(workerReads.map((entry) => [entry.dispatchId, entry]))
-  const workers = new Map<string, BotWorkWorker | null>()
-  for (const [dispatchId, latest] of latestOf) {
-    if (!latest) {
-      workers.set(
-        dispatchId,
-        latest === null ? null : await readServerOwnedWorker(runtime, dispatchId)
-      )
-      continue
+  reads: ScopedWorktreeReads = new Map(),
+  exists?: Map<string, boolean>
+): (worker: BotWorkWorker) => Promise<BotWorkWorkspace | 'gone' | null> {
+  return async (worker) => {
+    if (worker.host !== 'local') {
+      return readRemoteWorkspace(runtime, worker)
     }
-    const read = reads.get(latest.id)
-    const durable = db.getWorkerDispatch(latest.id)
-    const federated = db.getFederatedDispatch(latest.id)
-    workers.set(dispatchId, {
-      dispatchId: latest.id,
-      taskId: latest.task_id,
-      title: read?.title ?? latest.task_id,
-      agent: read?.agent ?? null,
-      state: read?.state ?? 'unverifiable',
-      idle: read ? read.state === 'working' && !sessionWorkerIsWorking(read) : false,
-      stopped: durable?.state === 'stopped' || durable?.state === 'abandoned',
-      // Only the start itself: a continued worker ran, whatever its newest follow-up did.
-      startFailed:
-        latest.id === dispatchId &&
-        (read?.state ?? durable?.state) === 'failed' &&
-        !durable?.agent_terminal_handle,
-      host: federated?.environment_id ?? 'local',
-      hostName: federated?.environment_name ?? null,
-      worktreeId: read?.worktreeId ?? durable?.worktree_id ?? null,
-      startedAt: read?.startedAt ?? Date.now(),
-      settledAt: read?.settledAt ?? null
-    })
+    return worker.worktreeId ? readLocalWorkspace(runtime, worker.worktreeId, reads, exists) : null
   }
-  return workers
 }
 
-/** `reads`: one batch's repo reads and path checks, shared by every workspace it reads. */
-export async function readWorkspace(
-  runtime: BotWorkRuntime,
-  worker: BotWorkWorker,
-  reads?: BotWorkspaceReads
-): Promise<BotWorkWorkspace | 'gone' | null> {
-  if (worker.host !== 'local') {
-    return readRemoteWorkspace(runtime, worker)
+function existsOnce(path: string, check: (path: string) => boolean, known?: Map<string, boolean>) {
+  // Keyed by check too: the repo and worktree checks read an unreadable path differently.
+  const key = `${check.name}:${path}`
+  const answer = known?.get(key) ?? check(path)
+  known?.set(key, answer)
+  return answer
+}
+
+/** Absent only on ENOENT/ENOTDIR: an unreadable path may still be there. */
+function mayExist(path: string): boolean {
+  try {
+    accessSync(path)
+    return true
+  } catch (error) {
+    return !isDefinitiveAbsence(error)
   }
-  return worker.worktreeId ? readLocalWorkspace(runtime, worker.worktreeId, reads) : null
 }
 
 /** One of this host's worktrees as the work record reads it; 'gone' only with proof. */
 async function readLocalWorkspace(
   runtime: BotWorkRuntime,
   worktreeId: string,
-  reads?: BotWorkspaceReads
+  reads?: ScopedWorktreeReads,
+  exists?: Map<string, boolean>
 ): Promise<BotWorkWorkspace | 'gone' | null> {
   const store = runtime.linkStore()
   const parsed = splitWorktreeId(worktreeId)
@@ -160,17 +123,16 @@ async function readLocalWorkspace(
     return null
   }
   // Only this machine's own disk proves a deletion, with the repository still there: an SSH host,
-  // a stopped WSL distro or an unmounted drive proves nothing.
+  // a stopped WSL distro or an unreadable path proves nothing.
   if (
     getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
     !parseWslUncPath(parsed.worktreePath) &&
-    existsOnce(repo.path, existsSync, reads) &&
-    !existsOnce(parsed.worktreePath, existsSync, reads)
+    existsOnce(repo.path, existsSync, exists) &&
+    !existsOnce(parsed.worktreePath, mayExist, exists)
   ) {
     return 'gone'
   }
-  const scoped = reads?.worktrees
-  const worktree = await runtime.showManagedTerminalWorkspace(`id:${worktreeId}`, undefined, scoped)
+  const worktree = await runtime.showManagedTerminalWorkspace(`id:${worktreeId}`, undefined, reads)
   // The PR the workspace's row shows: the desktop's cached read, never a GitHub call of its own.
   const pr = readWorkspaceReviewPR(worktree, repo, store.getGitHubCache().pr)
   return {
@@ -297,9 +259,8 @@ export function runtimeBotWork(runtime: BotWorkRuntime): BotWorkRecord {
       stores.set(path, store)
       return store
     },
-    worker: async (dispatchId) =>
-      (await readWorkers(runtime, [dispatchId])).get(dispatchId) ?? null,
-    workspace: (worker) => readWorkspace(runtime, worker),
+    workers: (dispatchIds) => readWorkers(runtime, dispatchIds),
+    workspaces: () => workspaceReader(runtime),
     turnAddress: (sessionId, message) => readTurnAddress(runtime, sessionId, message),
     conversationTitle: (address) => {
       const store = runtime.linkStore()

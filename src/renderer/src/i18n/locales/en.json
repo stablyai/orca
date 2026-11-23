@@ -572,10 +572,12 @@
         "imported_other": "Imported {{count}} cookies for {{domains}}. Reload the page to use them.",
         "failed": "Cookie import failed: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Browsers on this device",
         "destination": "Imports into the browser for {{host}}.",
-        "hostAgents": "Agents on {{host}} can use these sign-ins, but can’t read the cookies.",
+        "hostAgents": "Agents on {{host}} can use these sign-ins, but can’t read the cookies."
+      },
+      "sshPage": {
         "stored": "Stored in the browser for {{host}}.",
         "googleCookiesSkipped": "Google cookies were not imported. Open a page that browses through {{host}}, then sign into Google."
       }
@@ -1217,7 +1219,7 @@
     "followSymlinkedDirectories": "Follow symlinked directories",
     "followSymlinkedDirectoriesDescription": "Search linked folders in Quick Open and expand local linked folders in File Explorer.",
     "accounts": {
-      "codexRemoveHome": "Orca deletes this account's Codex folder on {{host}}, including its sign-in, MCP logins and any Codex history stored only in that folder. This cannot be undone. If it is selected, the next Codex you start uses System default.",
+      "codexRemoveHome": "Orca deletes this account's Codex folder on {{host}}, including its sign-in and MCP logins. This cannot be undone. If it is selected, the next Codex you start uses System default.",
       "claudeRemoveProfile": "Orca deletes this account's own Claude folder and the sign-in saved in it on {{host}}. Your System default login and chat history shared with it stay. If it is selected, the next Claude you start uses System default."
     },
     "sourceControl": {
@@ -20314,9 +20316,7 @@
         "typeHtml": "HTML"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Browsers on this device",
         "remoteLabel": "Browsers on {{value0}}",
-        "clientNoteLocalStorage": "Imports read this device’s browsers. Cookies are stored locally.",
         "remoteNoteRemoteStorage": "Imports read browsers on {{value0}}. Cookies are stored on that machine, and a permission prompt may appear on its screen."
       },
       "native": {
@@ -21109,6 +21109,8 @@
         "historyUnreadable": "Orca couldn't read this chat's saved history.",
         "historyUnusable": "Unable to load this chat.",
         "historyUnavailable": "Orca couldn't open this chat's history right now.",
+        "diskFull": "The disk on the computer running this chat is full.",
+        "freeDiskSpace": "Free up space on that disk, then try again.",
         "savedInOtherFolder": "This conversation was saved in another folder.",
         "savedByNewerOrca": "Chats were saved by a newer Orca.",
         "updateOrcaToKeepUsing": "Update Orca to keep using them.",
@@ -25738,9 +25740,10 @@
   },
   "updates": {
     "installOnQuit": {
-      "title": "Restart Orca manually",
-      "summary": "Orca couldn’t restart automatically. Quit Orca and let the update install before reopening it.",
-      "keepWorking": "Keep Working"
+      "title": "Update ready to install",
+      "summary": "Quit Orca. Reopen after installation.",
+      "quit": "Quit Orca",
+      "later": "Later"
     },
     "installBlock": {
       "instancesLabel": "Instances using Orca",

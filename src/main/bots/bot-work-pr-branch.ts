@@ -2,7 +2,6 @@
 // request its owner opened, never on one a bot's worker opened as them (own-pr-trigger-guard.ts).
 import { normalizeLocalBranchName } from '../runtime/workspaces/catalog/runtime-worktree-selection'
 import type { BotWorkRecord, BotWorkWorker } from './bot-work-record'
-import type { BotWorkRow } from './bot-work-store'
 
 /** A GitHub pull request's repository, as its webhook names it. */
 export type BotPrRepo = {
@@ -27,10 +26,9 @@ export type BotBranchWorkspace = {
 export type BotWorkPrHead = BotPrRepo & { number: number; head: BotPrRepo; headRef: string }
 
 export type BotWorkRows = {
-  /** Live rows of this profile's bots. */
-  rows: () => readonly BotWorkRow[]
-  /** A row's worker's workspace now; null once it is closed or when it can't be read. */
-  workspace: (row: BotWorkRow) => Promise<BotBranchWorkspace | null>
+  /** The workspaces of this profile's bots' live work as they are now, read in one batch: only
+   *  rows still live whose workspace and branch can be read. */
+  workspaces: () => AsyncIterable<BotBranchWorkspace>
 }
 
 /** By id; by name when the id can't be read and the pull request names the repository (a fork's
@@ -76,31 +74,35 @@ export async function workspaceOnBranch(
  * branch whose repository can't be told counts as on it.
  */
 export async function botWorkHasPrBranch(work: BotWorkRows, pr: BotWorkPrHead): Promise<boolean> {
-  for (const row of work.rows()) {
-    const workspace = await work.workspace(row).catch(() => null)
-    if (workspace && (await workspaceOnBranch(workspace, pr.head, pr.headRef))) {
-      return true
+  try {
+    for await (const workspace of work.workspaces()) {
+      if (await workspaceOnBranch(workspace, pr.head, pr.headRef)) {
+        return true
+      }
     }
+  } catch {
+    // Work that can't be read counts as not on it.
   }
   return false
 }
 
 export function botWorkRowsForRuntime(
-  botWork: Pick<BotWorkRecord, 'store' | 'check'>,
+  botWork: Pick<BotWorkRecord, 'store' | 'checkAll'>,
   hasBotId: (botId: string) => boolean,
   githubRepo: (worker: BotWorkWorker, branch: string) => Promise<BotGitHubRepo | null>
 ): BotWorkRows {
   return {
-    rows: () =>
-      botWork
+    workspaces: async function* () {
+      const rows = botWork
         .store()
         .liveRows()
-        .filter((row) => hasBotId(row.botId)),
-    workspace: async (row) => {
-      const checked = await botWork.check(row)
-      const worker = checked?.worker
-      const branch = checked?.workspace?.branch
-      return worker && branch ? { branch, githubRepo: () => githubRepo(worker, branch) } : null
+        .filter((row) => hasBotId(row.botId))
+      for await (const { worker, workspace } of botWork.checkAll(rows)) {
+        const branch = workspace?.branch
+        if (worker && branch) {
+          yield { branch, githubRepo: () => githubRepo(worker, branch) }
+        }
+      }
     }
   }
 }

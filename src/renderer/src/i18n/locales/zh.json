@@ -586,7 +586,7 @@
     "followSymlinkedDirectories": "跟随符号链接目录",
     "followSymlinkedDirectoriesDescription": "在快速打开中搜索链接文件夹，并在文件资源管理器中展开本地链接文件夹",
     "accounts": {
-      "codexRemoveHome": "Orca 会删除此账户在 {{host}} 上的 Codex 文件夹，包括其中的登录信息、MCP 登录以及仅保存在该文件夹中的 Codex 历史记录，此操作无法撤销。如果此账户被选中，你下次启动的 Codex 将使用系统默认",
+      "codexRemoveHome": "Orca 会删除此账户在 {{host}} 上的 Codex 文件夹，包括其中的登录信息和 MCP 登录。此操作无法撤销。如果此账户被选中，你下次启动的 Codex 将使用系统默认",
       "claudeRemoveProfile": "Orca 会删除此账户在 {{host}} 上自己的 Claude 文件夹及其中保存的登录信息，你的系统默认登录以及与其共享的聊天记录会保留。如果此账户被选中，你下次启动的 Claude 将使用系统默认"
     },
     "sourceControl": {
@@ -19411,9 +19411,7 @@
         "streamBrowserUnavailable": "远程浏览器不可用，请检查其在服务器上的设置"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "此设备上的浏览器",
         "remoteLabel": "{{value0}} 上的浏览器",
-        "clientNoteLocalStorage": "导入操作会读取此设备上的浏览器，Cookie 存储在本机",
         "remoteNoteRemoteStorage": "导入操作会读取 {{value0}} 上的浏览器，Cookie 存储在该设备上，其屏幕上可能会出现权限提示"
       },
       "native": {
@@ -20062,6 +20060,8 @@
         "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录",
         "historyUnusable": "无法加载此聊天",
         "historyUnavailable": "Orca 目前无法打开此聊天的历史记录",
+        "diskFull": "运行此聊天的电脑磁盘已满。",
+        "freeDiskSpace": "请释放该磁盘空间后重试。",
         "savedInOtherFolder": "此对话保存在另一个文件夹中",
         "savedByNewerOrca": "这些聊天由更新版本的 Orca 保存",
         "updateOrcaToKeepUsing": "请更新 Orca 以继续使用这些聊天",
@@ -23348,10 +23348,12 @@
         "imported_other": "已为 {{domains}} 导入 {{count}} 个 Cookie。请重新加载页面以使用它们",
         "failed": "Cookie 导入失败：{{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "此设备上的浏览器",
         "destination": "导入到 {{host}} 的浏览器。",
-        "hostAgents": "{{host}} 上的智能体可以使用这些登录状态，但无法读取 Cookie。",
+        "hostAgents": "{{host}} 上的智能体可以使用这些登录状态，但无法读取 Cookie。"
+      },
+      "sshPage": {
         "stored": "已存储到 {{host}} 的浏览器。",
         "googleCookiesSkipped": "未导入 Google Cookie。请打开一个通过 {{host}} 浏览的页面，然后登录 Google。"
       }

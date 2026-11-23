@@ -78,17 +78,29 @@ export function codexServerOwnMemory(index: ProcIndex, rootPid: number): number 
   let total = 0
   let foundCodex = false
   const queue = [rootPid]
+  // Windows keeps a dead parent's pid, so a reused pid can close a cycle.
+  const seen = new Set<number>()
   while (queue.length > 0) {
     const pid = queue.pop()!
     const row = index.byPid.get(pid)
-    if (!row) {
+    if (!row || seen.has(pid)) {
       continue
     }
+    seen.add(pid)
     total += row.memory
     if (/^codex/i.test(row.name ?? '')) {
       foundCodex = true
     } else {
-      queue.push(...(index.childrenOf.get(pid) ?? []))
+      // A child older than its parent hangs off a dead parent whose pid was reused.
+      const born = row.startTicks
+      const children = index.childrenOf.get(pid) ?? []
+      for (const child of children) {
+        // Looked up only where Windows gives start times; macOS and Linux keep every child.
+        const childBorn = born === undefined ? undefined : index.byPid.get(child)?.startTicks
+        if (born === undefined || childBorn === undefined || childBorn >= born) {
+          queue.push(child)
+        }
+      }
     }
   }
   return foundCodex ? total : null

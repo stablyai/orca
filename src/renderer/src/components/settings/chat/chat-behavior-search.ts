@@ -163,9 +163,10 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
         'components.settings.nativeChat.promptSuggestionsSearchGhost',
         'ghost text'
       ),
-      // Russian wording from before the glossary switched "prompt" to «запрос»; users still search it.
+      // Russian wording for both the old «промпт» and the glossary «запрос» spellings; users search either.
       'Предлагаемые промпты',
-      'следующий промпт'
+      'следующий промпт',
+      'следующий запрос'
     ]
   },
   shellEnvironment: {

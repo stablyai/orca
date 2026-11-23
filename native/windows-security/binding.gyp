@@ -2,8 +2,8 @@
   "targets": [
     {
       "target_name": "orca_windows_security",
-      "sources": ["src/addon.cc", "src/isolated-spawn.cc"],
-      "libraries": ["advapi32.lib"],
+      "sources": ["src/addon.cc", "src/connection-owner.cc", "src/isolated-spawn.cc"],
+      "libraries": ["advapi32.lib", "iphlpapi.lib", "ws2_32.lib"],
       "include_dirs": ["<!@(node -p \"require('node-addon-api').include\")"],
       "defines": ["NAPI_DISABLE_CPP_EXCEPTIONS", "UNICODE", "_UNICODE"],
       "msvs_settings": {

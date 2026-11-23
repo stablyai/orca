@@ -14,8 +14,8 @@ import type { IssueInfo, PRInfo } from '../../shared/github/pull-requests/pull-r
 import type { BotItemLinkRecord } from './bot-items-schema'
 import type { BotWorkWorker } from './bot-work-types'
 import { readWorkerDockReasons } from '../runtime/orchestration/dock/worker-dock-read'
-import { readWorkers, readWorkspace, type BotWorkRuntime } from './bot-work-runtime'
-import { createBotWorkspaceReads, type BotWorkspaceReads } from './bot-workspace-reads'
+import { workspaceReader, type BotWorkRuntime } from './bot-work-runtime'
+import { readWorkers } from './bot-work-workers-read'
 
 type CacheRecord<T> = Readonly<Record<string, { data: T | null; fetchedAt: number }>>
 
@@ -89,11 +89,15 @@ export class BotItemLinkJoin {
     }
     // Links to one worker (a Dispatch and its follow-ups) read its workspace and report once; every
     // workspace here reads its repo's worktrees and checks each path once, not once per worker.
-    const worktreeReads = createBotWorkspaceReads()
+    const readWorkspace = workspaceReader(this.workRuntime, new Map(), new Map())
     const prs = new Map<string, Promise<BotItemPullRequest | null>>()
     const reports = new Map<string, WorkerRead['report']>()
     await Promise.all(
       unique.map(async (ref) => {
+        // Left out: it couldn't be read, so its link reads `unknown`.
+        if (!workers.has(ref)) {
+          return
+        }
         const worker = workers.get(ref) ?? null
         if (!worker) {
           reads.set(ref, { worker, pr: null, report: null })
@@ -101,7 +105,7 @@ export class BotItemLinkJoin {
         }
         let pr = prs.get(worker.dispatchId)
         if (!pr) {
-          pr = pullRequests ? this.workerPr(worker, worktreeReads) : Promise.resolve(null)
+          pr = pullRequests ? this.workerPr(worker, readWorkspace) : Promise.resolve(null)
           prs.set(worker.dispatchId, pr)
         }
         if (worker.host === 'local' && !reports.has(worker.taskId)) {
@@ -128,12 +132,12 @@ export class BotItemLinkJoin {
   /** Server-hosted work shows no PR state until a remote PR read exists. */
   private async workerPr(
     worker: BotWorkWorker,
-    worktreeReads: BotWorkspaceReads
+    readWorkspace: ReturnType<typeof workspaceReader>
   ): Promise<BotItemPullRequest | null> {
     if (worker.host !== 'local') {
       return { shown: false, reason: 'server' }
     }
-    const workspace = await readWorkspace(this.workRuntime, worker, worktreeReads).catch(() => null)
+    const workspace = await readWorkspace(worker).catch(() => null)
     const pr = workspace && workspace !== 'gone' ? workspace.pullRequest : null
     if (!pr) {
       return null

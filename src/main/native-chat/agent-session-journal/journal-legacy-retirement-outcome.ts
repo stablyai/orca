@@ -298,6 +298,9 @@ function legacyProofErrorKind(error: unknown): LegacyJournalRetirementEvent['err
     return 'interrupted'
   }
   if (error.message.includes('conversion')) {
+    if (error.name === 'JournalConversionStorageError') {
+      return 'storage'
+    }
     return 'conversion'
   }
   return isSqliteStorageFailure(error) || isSqliteCorruption(error) ? 'storage' : 'other'

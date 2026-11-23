@@ -482,10 +482,12 @@
         "imported_other": "已為 {{domains}} 匯入 {{count}} 個 Cookie。請重新載入頁面以使用這些 Cookie。",
         "failed": "Cookie 匯入失敗：{{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "此裝置上的瀏覽器",
         "destination": "匯入到 {{host}} 的瀏覽器。",
-        "hostAgents": "{{host}} 上的代理程式可以使用這些登入狀態，但無法讀取 Cookie。",
+        "hostAgents": "{{host}} 上的代理程式可以使用這些登入狀態，但無法讀取 Cookie。"
+      },
+      "sshPage": {
         "stored": "已儲存到 {{host}} 的瀏覽器。",
         "googleCookiesSkipped": "未匯入 Google Cookie。請開啟一個透過 {{host}} 瀏覽的頁面，然後登入 Google。"
       }
@@ -18462,9 +18464,7 @@
         "typeHtml": "HTML"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "此裝置上的瀏覽器",
         "remoteLabel": "{{value0}} 上的瀏覽器",
-        "clientNoteLocalStorage": "匯入作業會讀取此裝置的瀏覽器。Cookie 會儲存在本機。",
         "remoteNoteRemoteStorage": "匯入作業會讀取 {{value0}} 上的瀏覽器。Cookie 會儲存在該電腦上，其螢幕上可能會出現權限提示。"
       },
       "native": {
@@ -19102,6 +19102,8 @@
         "historyUnreadable": "Orca 無法讀取此聊天的已儲存歷史記錄。",
         "historyUnusable": "無法載入此聊天。",
         "historyUnavailable": "Orca 目前無法開啟此聊天的歷史記錄。",
+        "diskFull": "執行此聊天的電腦磁碟已滿。",
+        "freeDiskSpace": "請釋放該磁碟空間後重試。",
         "savedInOtherFolder": "此對話儲存在另一個資料夾中。",
         "savedByNewerOrca": "這些聊天由更新版本的 Orca 儲存。",
         "updateOrcaToKeepUsing": "請更新 Orca 以繼續使用這些聊天。",
