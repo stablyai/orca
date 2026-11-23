@@ -182,7 +182,13 @@ async function releaseLeftoverShell(
   const requested = db.requestWorkerTerminalRelease(dispatchId)
   if (requested.disposition === 'requested') {
     release.requested(dispatchId)
-    await completeWorkerTerminalRelease({ runtime, db, dispatchId, resource: requested.resource })
+    await completeWorkerTerminalRelease({
+      runtime,
+      db,
+      dispatchId,
+      resource: requested.resource,
+      keepBound: true
+    })
   }
 }
 

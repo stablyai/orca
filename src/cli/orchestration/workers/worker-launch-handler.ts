@@ -11,7 +11,12 @@ import { getOptionalPositiveIntegerValueFlag } from '../numeric-flags'
 import { isDevCliInvocation } from '../recovery/runtime-compatibility'
 import { resolveCoordinatorTerminalHandle } from '../identity/terminal-identity'
 import { formatWorkerStart, type WorkerReleaseReceipt } from './worker-output'
-import { isLiveWorkerStart, WORKER_START_VIEW } from './worker-start-agent-view'
+import {
+  isLiveWorkerStart,
+  WORKER_START_VIEW,
+  type WorkerStartAgentReceipt
+} from './worker-start-agent-view'
+import { reconcileWorkerStartTimeout } from './worker-start-timeout'
 import {
   printOrchestrationResult,
   renderOrchestrationArgv,
@@ -61,20 +66,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     const parent = getOptionalStringFlag(flags, 'parent')
     const item = getOptionalStringFlag(flags, 'item')
     const forQuestion = getOptionalStringFlag(flags, 'for')
-    const result = await callOrchestrationMutation<{
-      runId: string
-      taskId: string
-      dispatchId: string
-      state: string
-      failedStage?: string
-      lastError?: string
-      warning?: string
-      mode?: { mode: string; preferred: string; reason: string; detail: string }
-      effects: unknown[]
-      residualResources: unknown[]
-      nextCommands?: string[]
-      next?: string
-    }>(client, flags, 'orchestration.workerStart', {
+    const params = {
       task,
       ...(spec ? { spec } : {}),
       ...(taskTitle ? { taskTitle } : {}),
@@ -101,14 +93,28 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       run: getOptionalStringFlag(flags, 'run'),
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client),
       devMode: isDevCliInvocation()
-    }).catch(async (error: unknown) => {
+    }
+    const result = await callOrchestrationMutation<WorkerStartAgentReceipt>(
+      client,
+      flags,
+      'orchestration.workerStart',
+      params
+    ).catch(async (error: unknown) => {
+      if (!flags.has('retry-request')) {
+        const recovered = await reconcileWorkerStartTimeout(client, error)
+        if (recovered) {
+          return recovered
+        }
+      }
       throw await explainOlderRuntimeRunRequired(client, error)
     })
     if (result.result.state !== 'ready') {
       process.exitCode = 1
     }
     const keepOpenState =
-      (flags.has('keep-open') || startsInNewWorkspace(flags)) && isLiveWorkerStart(result.result)
+      (flags.has('keep-open') ||
+        (result.result.keepOpenByDefault ?? startsInNewWorkspace(flags))) &&
+      isLiveWorkerStart(result.result)
         ? await keepWorkerOpen(client, result.result.dispatchId)
         : undefined
     const renderedResult = {
@@ -146,7 +152,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
   }
 }
 
-// A worker given its own new workspace is that workspace's chat; closing it frees no space.
+// Hosts that predate keepOpenByDefault keep every new-workspace worker open, its chat.
 function startsInNewWorkspace(flags: Map<string, string | boolean>): boolean {
   const worktree = getOptionalStringFlag(flags, 'worktree')
   return worktree === 'new-child' || worktree === 'new-top-level'

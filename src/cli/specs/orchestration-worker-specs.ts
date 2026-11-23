@@ -49,7 +49,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       '--agent takes an Orca agent id enabled on the worker server, such as claude, codex, cursor, antigravity, muse, zcode, opencode, or opencode2.',
       '--model supports Claude, Codex, Cursor, Antigravity, Grok, and Muse opaque provider model ids; --effort requires --model. OMP also takes its model roles and selectors (such as @worker or provider/model:level), with --effort as its thinking level. Neither can combine with --terminal. OpenCode model selection requires an existing worktree, a verified execution-host CLI, and an available model; effort is unsupported. Pi takes a provider/id --model and maps --effort to its --thinking level (off, minimal, low, medium, high, xhigh, max). Other agents, including zcode, launch with the model from their own config.',
       '--account <id|email> starts a Claude worker on that managed account from `orca account list` without switching the host account. Claude only, this host only (no --on), always a terminal worker, and not with --terminal.',
-      'Finished workers close on their own unless started with --keep-open; a worker started in a new worktree (new-child or new-top-level) is kept open, so release it when no one will use its chat.',
+      'Finished workers close on their own unless started with --keep-open; a worker started in a new worktree (new-child or new-top-level) is kept open when the receipt says keepOpenByDefault, so release it when no one will use its chat.',
       'New worktrees use agent-first creation; without --setup, setup runs unless the project turns it off. Repository start-immediately runs setup beside the agent; wait-for-setup gates agent readiness and task input.',
       'New worktrees without --name get the name Orca gives an unnamed workspace; the receipt names it. Servers older than this change still require --name.',
       'Creation flags (--name, --repo, --base-branch, --display-name, --comment, --setup) are rejected for current/existing worktrees. Use exact --repo on the selected server; project/host convenience routing remains on worktree create.',
@@ -150,7 +150,8 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'Post-completion cleanup for a settled (succeeded or failed) worker; closes only the exact coordinator-owned agent terminal of that worker.',
       'A settled Dispatch created by orchestration dispatch has no owned terminal resource and is reported retained without process action.',
       "worker-read afterwards reads the worker's own transcript or chat history while it still exists; a worker with none, or whose original is gone, reads as no longer available.",
-      'Never closes setup terminals, configured tabs, reused or pre-existing terminals, terminals the user kept open, or unproven identities.',
+      "Also closes the setup terminal and startup tabs the worker's start opened, unless setup failed.",
+      'Never closes reused or pre-existing terminals, terminals the user kept open, or unproven identities.',
       'Idempotent: repeating the call reports already_released. Only release_unknown exits 1; retained, release_pending, and already_released exit 0.',
       'On a runtime that advertises orchestration.worker-auto-release.v1, an accepted worker_done already schedules this release about 2 minutes later (autoReleaseAt in worker-show and worker-list); call it only to release sooner or to clear a worker-keep-open. Chat workers follow autoReleaseAt too. autoReleaseAt is absent while its agent works again, and set afresh when it next goes idle.'
     ]

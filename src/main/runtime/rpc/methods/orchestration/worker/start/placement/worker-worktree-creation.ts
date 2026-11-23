@@ -15,6 +15,7 @@ import {
 } from '../../../../../../../../shared/workspace/identity/workspace-scope'
 import type { WorkerEffect, WorkerSetupReceipt } from './worker-placement-topology'
 import type { CrossStoreParentRef } from '../../../../../../../../shared/worktree/lineage-types'
+import { bindWorkerTerminal } from '../../../../../../orchestration/db/worker-terminal/worker-bound-terminals'
 
 /** The repo a new worker worktree is created in, and its parent for `new-child`. */
 export type WorkerWorktreeCreationTarget = {
@@ -226,14 +227,20 @@ export async function createWorkerWorktree(args: {
   })
   const setupTerminalHandle = created.setupReceipt?.terminalHandle
   for (const terminal of listed.terminals) {
+    const role =
+      terminal.handle === terminalHandle
+        ? 'agent'
+        : terminal.handle === setupTerminalHandle
+          ? 'setup'
+          : 'configured_tab'
+    const paneKey = role === 'agent' ? null : runtime.getTerminalPaneKey(terminal.handle)
+    if (role !== 'agent' && paneKey) {
+      // They close with the worker; release checks each handle still names this pane.
+      bindWorkerTerminal(db, { dispatchId, terminalHandle: terminal.handle, paneKey, role })
+    }
     effects.push({
       kind: 'terminal',
-      role:
-        terminal.handle === terminalHandle
-          ? 'agent'
-          : terminal.handle === setupTerminalHandle
-            ? 'setup'
-            : 'configured_tab',
+      role,
       // Agent-first creation made every listed terminal; reused_agent_terminal incorrectly mixed role with lifecycle.
       action: 'created',
       id: terminal.handle,

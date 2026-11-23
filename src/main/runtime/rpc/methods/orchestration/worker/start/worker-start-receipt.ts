@@ -7,6 +7,8 @@ import { reportFailedWorkerStart } from '../../../../../orchestration/workers/tu
 import { stripClaudePinnedLaunchMarker } from '../../../../../../../shared/claude/claude-pinned-launch-error'
 import {
   isUnknownWorkerStartOutcome,
+  monitorWorkerSetup,
+  type WorkerEffect,
   type createStructuredWorkerSessionForWorktree,
   type WorkerSetupReceipt
 } from './placement/worker-placement-topology'
@@ -102,6 +104,18 @@ function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
     reportFailedWorkerStart(args.db, worker, (handle, type) =>
       args.runtime.notifyMessageArrived(handle, type)
     )
+  }
+  if (!unknown) {
+    // Its setup may still fail; that outcome keeps the setup terminal open after release.
+    monitorWorkerSetup({
+      runtime: args.runtime,
+      db: args.db,
+      runId: args.runId,
+      dispatchId: args.dispatchId,
+      setupReceipt: args.setup,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this host wrote these effects from WorkerEffect[].
+      effects: JSON.parse(worker.effects) as WorkerEffect[]
+    })
   }
   // Offer cleanup for this start's still-owned resource, including a chat retaining its refused task.
   const residual = unknown ? undefined : args.db.getWorkerTerminalResourceByOwner(args.dispatchId)

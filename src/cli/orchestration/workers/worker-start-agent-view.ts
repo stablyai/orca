@@ -24,6 +24,8 @@ export type WorkerStartAgentReceipt = WorkerStartReceipt & {
   turnStart?: string
   next?: string
   keptOpen?: true
+  /** Whether to keep it open when the caller asked nothing; older hosts send none. */
+  keepOpenByDefault?: boolean
   /** `--for`: whether the worker was linked to that question, and why not. */
   forQuestion?: { question: string; linked: boolean; why?: string }
   /** Started without `--for` by a caller holding an unanswered question. */

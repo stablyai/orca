@@ -20926,8 +20926,7 @@
         "finished": "Trabajador temporal de orquestación finalizado · Se cierra en {{countdown}}",
         "keepOpen": "Mantener abierto",
         "bannerRunning": "Trabajador de orquestación · Se cierra 2 minutos después de terminar",
-        "bannerFinished": "Trabajador de orquestación finalizado · Se cierra en {{countdown}}",
-        "temporaryBadge": "Temporal"
+        "bannerFinished": "Trabajador de orquestación finalizado · Se cierra en {{countdown}}"
       }
     },
     "wslHostMark": {

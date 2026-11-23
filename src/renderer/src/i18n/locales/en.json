@@ -23985,7 +23985,9 @@
         "keepOpen": "Keep open",
         "bannerRunning": "Orchestration worker · Closes 2 minutes after it finishes",
         "bannerFinished": "Orchestration worker finished · Closes in {{countdown}}",
-        "temporaryBadge": "Temporary"
+        "boundRunning": "Closes with {{worker}}",
+        "boundFinished": "{{worker}} finished · Closes in {{countdown}}",
+        "boundFallbackName": "its worker"
       }
     },
     "bots": {
@@ -25708,6 +25710,11 @@
     }
   },
   "updates": {
+    "installOnQuit": {
+      "title": "Restart Orca manually",
+      "summary": "Orca couldn’t restart automatically. Quit Orca and let the update install before reopening it.",
+      "keepWorking": "Keep Working"
+    },
     "installBlock": {
       "instancesLabel": "Instances using Orca",
       "browserLabel": "Background browser",

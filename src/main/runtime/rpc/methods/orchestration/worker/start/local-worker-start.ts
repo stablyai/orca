@@ -31,7 +31,10 @@ import {
 import { resolveDispatchAssigneeParty } from '../../../../../orchestration/addressing/orchestration-party'
 import { chatAssigneeOf, chatWorkerMode } from '../../chat-assignee-admission'
 import { recordCreatedWorkerTerminalCustody } from './placement/created-worker-terminal-custody'
-import { releaseRetriedWorkerTerminal } from '../release/retried-worker-terminal-release'
+import {
+  closeFailedSetupOnceRetryReady,
+  releaseRetriedWorkerTerminal
+} from '../release/retried-worker-terminal-release'
 import { requireWorkerAuthority, type WorkerEffect } from './placement/worker-placement-topology'
 import { assertLocalWorktree, prepareLocalWorkerStart } from './launch/worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './readiness/worker-start-readiness-settlement'
@@ -177,7 +180,8 @@ export async function startLocalWorker(args: {
       launch: placed?.launch ?? launch.receipt,
       mode
     })
-  const recordOutcome = (outcome: unknown): void =>
+  const recordOutcome = (outcome: unknown): void => {
+    closeFailedSetupOnceRetryReady(runtime, db, params.retryOf, outcome)
     recordWorkerStartOutcome(recordStart, outcome, {
       reusedTerminal: Boolean(params.terminal),
       dispatchId: started.dispatch.id,
@@ -187,6 +191,7 @@ export async function startLocalWorker(args: {
       agent: agent ?? null,
       followUp: args.followUp && { of: args.followUp.of, reopened: Boolean(placed?.reopened) }
     })
+  }
   try {
     placed = await placeWorkerAgent({
       runtime,
