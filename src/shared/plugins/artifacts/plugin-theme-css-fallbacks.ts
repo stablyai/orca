@@ -22,11 +22,15 @@ const PLUGIN_APP_THEME_CSS_FALLBACKS: Record<
 > = {
   '--tab-bar': ['--card'],
   // Why per base: a white light --card can't be lifted, so light recesses the inactive tabs.
-  '--tab-active': { light: ['--tab-bar'], dark: { mixForeground: 6, into: '--tab-bar' } },
+  '--tab-active': { light: ['--tab-bar'], dark: { mixForeground: 11, into: '--tab-bar' } },
   '--tab-active-foreground': ['--foreground'],
   '--tab-active-indicator': ['--tab-active-foreground'],
-  '--tab-inactive': { light: { mixForeground: 4, into: '--tab-bar' }, dark: ['--tab-bar'] },
-  '--tab-inactive-foreground': ['--muted-foreground'],
+  '--tab-inactive': { light: { mixForeground: 8, into: '--tab-bar' }, dark: ['--tab-bar'] },
+  // Why light only: muted text alone can dip under 4.5:1 on the recessed light inactive tab.
+  '--tab-inactive-foreground': {
+    light: { tint: '--foreground', percent: 20, into: '--muted-foreground' },
+    dark: ['--muted-foreground']
+  },
   '--worktree-sidebar-active': tint('--worktree-sidebar-foreground', 8, 10),
   '--host-badge': { light: ['--accent'], dark: { tint: '--accent', percent: 80 } },
   '--host-badge-foreground': ['--muted-foreground'],

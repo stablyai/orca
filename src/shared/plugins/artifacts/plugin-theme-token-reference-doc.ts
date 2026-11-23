@@ -126,7 +126,9 @@ function omittedValueFor(token: PluginAppThemeToken, base: 'light' | 'dark'): st
   )
   const cssFallback = pluginAppThemeCssFallback(token, base)
   if (cssFallback && 'tint' in cssFallback) {
-    return `\`${cssFallback.tint}\` at ${cssFallback.percent}% opacity`
+    return cssFallback.into
+      ? `\`${cssFallback.tint}\` mixed ${cssFallback.percent}% into \`${cssFallback.into}\``
+      : `\`${cssFallback.tint}\` at ${cssFallback.percent}% opacity`
   }
   const derived = cssFallback
     ? 'mixForeground' in cssFallback

@@ -48,11 +48,11 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 | `--host-badge` | Execution-host badge on workspaces (for example `Local`, an SSH host) | no | light: same as `--accent`; dark: `--accent` at 80% opacity |
 | `--host-badge-foreground` | Text on `--host-badge` | no | same as `--muted-foreground` |
 | `--tab-bar` | Strip behind tabs, including the title bar when tabs sit in it | no | same as `--card` |
-| `--tab-active` | Active tab | no | light: same as `--tab-bar`; dark: `--foreground` mixed 6% into `--tab-bar` |
+| `--tab-active` | Active tab | no | light: same as `--tab-bar`; dark: `--foreground` mixed 11% into `--tab-bar` |
 | `--tab-active-foreground` | Active tab text, and inactive tab text on hover | no | same as `--foreground` |
 | `--tab-active-indicator` | Line marking the active tab and the active right sidebar tool | no | tab line: same as `--tab-active-foreground`; right sidebar tool line: same as `--foreground` |
-| `--tab-inactive` | Inactive tabs | no | light: `--foreground` mixed 4% into `--tab-bar`; dark: same as `--tab-bar` |
-| `--tab-inactive-foreground` | Inactive tab text | no | same as `--muted-foreground` |
+| `--tab-inactive` | Inactive tabs | no | light: `--foreground` mixed 8% into `--tab-bar`; dark: same as `--tab-bar` |
+| `--tab-inactive-foreground` | Inactive tab text | no | light: `--foreground` mixed 20% into `--muted-foreground`; dark: same as `--muted-foreground` |
 | `--split-divider` | Divider between split tab groups | no | Orca's built-in color |
 | `--split-divider-hover` | Split divider while hovered or dragged | no | Orca's built-in color |
 | `--chat-user-message` | Your messages in chat; may be translucent, it paints over the chat | no | `--foreground` mixed lightly into the chat background |

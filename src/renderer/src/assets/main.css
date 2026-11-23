@@ -178,7 +178,10 @@
     --tab-active-indicator,
     var(--tab-active-foreground, var(--foreground))
   );
-  --color-tab-inactive-foreground: var(--tab-inactive-foreground, var(--muted-foreground));
+  --color-tab-inactive-foreground: var(
+    --tab-inactive-foreground,
+    color-mix(in srgb, var(--foreground) var(--tab-inactive-text-lift), var(--muted-foreground))
+  );
   /* Active right sidebar tool line: the theme's tab indicator, else the foreground it always used. */
   --color-activity-bar-indicator: var(--tab-active-indicator, var(--foreground));
   /* The theme's accent where one is set (link color); the built-in note blue otherwise. */
@@ -360,9 +363,12 @@
   --split-divider: #868690;
   --split-divider-hover: #71717a;
   /* `--tab-bar` is set only by themes; keep in sync with PLUGIN_APP_THEME_CSS_FALLBACKS. */
-  /* White --card can't be lifted, so light mode recesses inactive tabs to keep the active one lighter. */
+  /* White --card can't be lifted, so light mode recesses inactive tabs to keep the active one lighter.
+     Why 8%: 4% left tabs ~2% apart on tinted bars; past 8% muted tab text drops under 4.5:1. */
   --tab-active: var(--tab-bar, var(--card));
-  --tab-inactive: color-mix(in srgb, var(--foreground) 4%, var(--tab-bar, var(--card)));
+  --tab-inactive: color-mix(in srgb, var(--foreground) 8%, var(--tab-bar, var(--card)));
+  /* Why: muted text alone dips under 4.5:1 on the deeper recess for mid-tone themes. */
+  --tab-inactive-text-lift: 20%;
 }
 
 .dark {
@@ -483,8 +489,9 @@
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */
   --split-divider: #71717a;
   --split-divider-hover: #a1a1aa;
-  --tab-active: color-mix(in srgb, var(--foreground) 6%, var(--tab-bar, var(--card)));
+  --tab-active: color-mix(in srgb, var(--foreground) 11%, var(--tab-bar, var(--card)));
   --tab-inactive: var(--tab-bar, var(--card));
+  --tab-inactive-text-lift: 0%;
 }
 
 /* Status and diff colors follow the chat scheme without copying the app palette. */
