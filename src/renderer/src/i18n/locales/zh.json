@@ -27963,7 +27963,8 @@
         "recommended": "推荐",
         "step": "第 {{n}} 个，共 {{total}} 个",
         "typeAnswer": "输入你的回答",
-        "replaced": "智能体提出了新问题。请先阅读，再回复"
+        "replaced": "智能体提出了新问题。请先阅读，再回复",
+        "replacedByNewer": "已由较新的问题取代"
       },
       "readMoreClosedFailed": "无法读取更多已关闭的条目"
     },

@@ -72,8 +72,8 @@ export class BotItemsOwner extends BotItemsWrites {
         item.status === 'needs_you' && item.questionEvent !== null
           ? this.botQuestion(item.questionEvent)
           : null
-      // An ask a later question left open waits first, even once another ask's answer moved the item
-      // on: replies go to it.
+      // The latest ask waits even when a later Needs you comment asks nothing, or an answer moved the
+      // item on with a line still open: replies go to it.
       const waitingAsk = isOpenBotItemStatus(item.status) ? this.waitingAsk(item) : null
       const asking = question !== null || waitingAsk !== null
       if (
