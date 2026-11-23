@@ -43,7 +43,6 @@ import {
   readClaudeSettingsBypassDisabled
 } from '../permissions/claude-full-access-refusal'
 import { journalClaudeSessionPermissionNotice } from '../permissions/claude-full-access-refusal-notice'
-import { adoptClaudeLaunchRootInit } from '../permissions/claude-permission-mode-ladder'
 import type {
   ClaudeAuthDiagnostic,
   ClaudeStructuredSessionEvent
@@ -143,8 +142,7 @@ function applyClaudeInitializeFacts(session: ClaudeSession, facts: ClaudeInitial
   const { init, initialization } = facts
   const opened = readClaudeOpenedPermissionMode(initialization)
   if (opened && !session.firstRootInit) {
-    const observeOpenedMode = adoptClaudeLaunchRootInit(session, { permissionMode: opened })
-    observeOpenedMode()
+    session.firstRootInit = { permissionMode: opened, source: 'initialize' }
   }
   // Preserve a running model already reported by a turn's init frame.
   if (init?.model && session.reportedOptions.model === undefined) {

@@ -138,7 +138,9 @@ function claimClaudePermissionRestored(
     (lastNotice !== EARLIER_PROCESS_WARNING &&
       !(intent === 'auto' && lastNotice?.startsWith('auto-'))) ||
     (applied !== intent &&
-      (applied !== undefined || session.firstRootInit?.permissionMode !== intent)) ||
+      (applied !== undefined ||
+        session.firstRootInit?.source === 'initialize' ||
+        session.firstRootInit?.permissionMode !== intent)) ||
     claudeBypassRefused(session) ||
     claudeAutoFallbackReason(session) !== null
   ) {

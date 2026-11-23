@@ -17,6 +17,7 @@ export type ClaudeBypassFacts = Partial<
     | 'bypassRefusal'
     | 'autoDisabled'
     | 'autoAccepted'
+    | 'autoUnansweredAskRequest'
     | 'autoUnsettled'
     | 'appliedInputOptions'
     | 'permissionModeRequests'
@@ -80,6 +81,7 @@ export function claudeAutoFallbackReason(
   }
   const opened = session.firstRootInit?.permissionMode
   return session.autoAccepted !== true &&
+    session.firstRootInit?.source === undefined &&
     typeof opened === 'string' &&
     opened !== 'auto' &&
     opened !== 'plan'
@@ -166,7 +168,7 @@ export function claudeOwesPermissionFallback(
   if (intent === 'auto') {
     const reason = claudeAutoFallbackReason(session)
     return (
-      reason !== null &&
+      (reason !== null || session.autoUnansweredAskRequest !== undefined) &&
       (build !== 'default' || (reason === 'for-now' && claudeAutoRetryDue(session)))
     )
   }

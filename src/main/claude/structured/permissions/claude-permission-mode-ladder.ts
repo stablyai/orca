@@ -50,13 +50,18 @@ const CLAUDE_BYPASS_REFUSALS: readonly [ClaudeBypassRefusal, string, RegExp][] =
 // its circuit breaker (which can change, so a later send asks again).
 const CLAUDE_AUTO_REFUSAL = /Cannot set permission mode to auto/
 const CLAUDE_AUTO_SETTINGS_REFUSAL = /auto mode disabled by settings/
+const CLAUDE_AUTO_FOR_NOW_CODES = new Set([
+  'auto_mode_model',
+  'auto_mode_fast_mode',
+  'auto_mode_circuit_breaker'
+])
 
 type ClaudeRefusal =
   | { kind: 'bypass'; reason: ClaudeBypassRefusal }
   | { kind: 'auto-settings' }
   | { kind: 'auto-for-now'; code: unknown }
 
-function claudeRefusal(error: unknown): ClaudeRefusal | null {
+function claudeRefusal(error: unknown, approveForMe: boolean): ClaudeRefusal | null {
   if (!(error instanceof Error)) {
     return null
   }
@@ -66,11 +71,16 @@ function claudeRefusal(error: unknown): ClaudeRefusal | null {
       return { kind: 'bypass', reason }
     }
   }
-  if (code === 'auto_mode_settings' || CLAUDE_AUTO_SETTINGS_REFUSAL.test(error.message)) {
+  if (
+    code === 'auto_mode_settings' ||
+    (!approveForMe && CLAUDE_AUTO_SETTINGS_REFUSAL.test(error.message))
+  ) {
     return { kind: 'auto-settings' }
   }
-  return (typeof code === 'string' && code.startsWith('auto_mode')) ||
-    CLAUDE_AUTO_REFUSAL.test(error.message)
+  const autoCode =
+    typeof code === 'string' &&
+    (approveForMe ? CLAUDE_AUTO_FOR_NOW_CODES.has(code) : code.startsWith('auto_mode'))
+  return autoCode || (!approveForMe && CLAUDE_AUTO_REFUSAL.test(error.message))
     ? { kind: 'auto-for-now', code }
     : null
 }
@@ -180,32 +190,30 @@ export async function setClaudeAllowedPermissionMode(
         session.autoDisabled = false
         if (session.launchIntent?.permissionMode === 'auto') {
           session.autoAccepted = true
+          session.autoUnansweredAskRequest = undefined
         }
         session.autoUnsettled = undefined
       }
       continue
     }
     const fallbackAuto = step === 'auto' && mode === 'bypassPermissions'
+    const approveForMe = step === 'auto' && session.launchIntent?.permissionMode === 'auto'
     const unanswered = claudeLeftUnanswered(write.reason)
     // An answer Orca doesn't know refuses the fallback's auto for now; no answer leaves the mode
     // unknown, so the caller records no fallback and auto is asked again shortly.
     const refusal: ClaudeRefusal | null =
-      claudeRefusal(write.reason) ??
+      claudeRefusal(write.reason, approveForMe) ??
       (fallbackAuto && !unanswered ? { kind: 'auto-for-now', code: undefined } : null)
     if (refusal === null || (refusal.kind === 'bypass') !== (step === 'bypassPermissions')) {
       unexpected = { error: write.reason, index }
-      if (
-        fallbackAuto ||
-        (step === 'auto' &&
-          refusal === null &&
-          unanswered &&
-          session.launchIntent?.permissionMode === 'auto')
-      ) {
+      if (approveForMe && unanswered) {
+        session.autoUnansweredAskRequest = request
+        session.appliedInputOptions?.delete('buildPermissionMode')
+        return setClaudeAllowedPermissionMode(session, 'default', options, refused, request)
+      }
+      if (fallbackAuto) {
         autoForNow = true
         session.autoUnsettled = { kind: 'time', retryAt: now + CLAUDE_AUTO_UNANSWERED_RETRY_MS }
-        if (!fallbackAuto) {
-          return setClaudeAllowedPermissionMode(session, 'default', options, refused, request)
-        }
       }
       continue
     }
@@ -249,6 +257,12 @@ export function recordClaudeBuildPermissionMode(
   session: ClaudeSession,
   mode: PermissionMode
 ): void {
+  if (
+    session.autoUnansweredAskRequest !== undefined &&
+    session.autoUnansweredAskRequest === session.permissionModeRequests
+  ) {
+    return
+  }
   session.appliedInputOptions.set('buildPermissionMode', mode)
   if (session.launchIntent?.permissionMode === 'auto' || mode === 'bypassPermissions') {
     journalClaudeSessionPermissionNotice(session)
@@ -259,15 +273,21 @@ export function observeClaudeRootInit(
   session: ClaudeSession | null,
   firstRootInit: ClaudeSession['firstRootInit']
 ): void {
-  if (!session) {
+  if (!session || !firstRootInit) {
     return
   }
-  const previous = session.firstRootInit
-  session.firstRootInit ??= firstRootInit
+  const first = !session.firstRootInit || session.firstRootInit.source === 'initialize'
+  const opened = firstRootInit.permissionMode
+  const unsettledAsk = opened === 'default' && session.autoUnansweredAskRequest !== undefined
+  if (first) {
+    session.firstRootInit = unsettledAsk
+      ? { permissionMode: opened, source: 'unanswered-auto-ask' }
+      : firstRootInit
+  }
   if (session.launchIntent?.permissionMode === 'auto') {
-    const opened = firstRootInit?.permissionMode
     if (
-      !previous &&
+      first &&
+      !unsettledAsk &&
       typeof opened === 'string' &&
       opened !== 'auto' &&
       opened !== 'plan' &&

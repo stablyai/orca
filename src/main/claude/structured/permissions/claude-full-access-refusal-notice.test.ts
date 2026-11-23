@@ -16,7 +16,10 @@ import {
   journalClaudeSessionPermissionNotice,
   readClaudeEarlierRefusalNotice
 } from './claude-full-access-refusal-notice'
-import { claudeOwesPermissionFallback } from './claude-full-access-refusal'
+import {
+  claudeAutoFallbackReason,
+  claudeOwesPermissionFallback
+} from './claude-full-access-refusal'
 import {
   observeClaudeRootInit,
   setClaudeAllowedPermissionMode
@@ -154,21 +157,27 @@ it('keeps the newer Plan request when an older Auto acknowledgement arrives', as
 })
 
 it.each([
-  { rootMode: undefined, mode: 'auto', settings: null, notice: /:restored:auto$/ },
-  { rootMode: 'default', mode: 'default', settings: null, notice: /:auto-started-outside:ask$/ },
+  { rootBeforeOpen: false, mode: 'auto', settings: null, notice: /:restored:auto$/ },
+  { rootBeforeOpen: true, mode: 'default', settings: null, notice: /:auto-started-outside:ask$/ },
   {
-    rootMode: 'default',
+    rootBeforeOpen: false,
+    mode: 'default',
+    settings: { effective: {} },
+    notice: /:auto-started-outside:ask$/
+  },
+  {
+    rootBeforeOpen: true,
     mode: 'default',
     settings: { effective: { disableAutoMode: 'disable' } },
     notice: /:auto-settings:ask$/
   }
-])('uses $mode with $rootMode init and settings $settings', async (scenario) => {
-  const { rootMode, mode, settings, notice } = scenario
+])('uses $mode, early root init $rootBeforeOpen, settings $settings', async (scenario) => {
+  const { rootBeforeOpen, mode, settings, notice } = scenario
   const { session, rows } = autoSession(async () => {})
   const read = Promise.withResolvers<unknown>()
   session.fullAccessRefusalNoticeId = 'earlier-process'
-  if (rootMode) {
-    observeClaudeRootInit(session, { permissionMode: rootMode })
+  if (rootBeforeOpen) {
+    observeClaudeRootInit(session, { permissionMode: mode })
     expect(session.appliedInputOptions.get('buildPermissionMode')).toBe('default')
   }
   await openClaudeSession({
@@ -189,10 +198,15 @@ it.each([
   session.initialization.startup.open()
   journalClaudeSessionPermissionNotice(session)
 
-  expect(session.firstRootInit?.permissionMode).toBe(mode)
-  expect(rows).toEqual(rootMode ? [] : [expect.stringMatching(notice)])
+  expect(rows).toEqual([])
   read.resolve(settings)
   await session.startupSettings
+  if (!rootBeforeOpen) {
+    expect(rows).toEqual([])
+    observeClaudeRootInit(session, { permissionMode: mode })
+    journalClaudeSessionPermissionNotice(session)
+  }
+  expect(session.firstRootInit).toEqual({ permissionMode: mode })
   expect(rows).toEqual([expect.stringMatching(notice)])
 })
 
@@ -225,6 +239,7 @@ it('holds the settings warning through a root status frame before startup finish
     report: () => {}
   })
 
+  observeClaudeRootInit(session, { permissionMode: 'default' })
   settings.resolve({ effective: { disableAutoMode: 'disable' } })
   await session.startupSettings
   expect(session.autoDisabled).toBe(true)
@@ -240,18 +255,22 @@ it('holds the settings warning through a root status frame before startup finish
   expect(rows).toHaveLength(1)
 })
 
-it('records Ask after an acknowledged fallback from a tagged Auto error', async () => {
+it('retries Auto after an unanswered switch and an acknowledged Ask write', async () => {
   const askStarted = Promise.withResolvers<void>()
   const askAcknowledged = Promise.withResolvers<void>()
+  let autoAttempts = 0
   const { session, rows } = autoSession((mode) =>
     runClaudeControl(
       'set_permission_mode',
       async () => {
         if (mode === 'auto') {
-          throw Object.assign(new Error('Internal error'), {
-            errorClass: 'control_request_failed',
-            errorCode: 'internal_error'
-          })
+          if (++autoAttempts === 1) {
+            throw Object.assign(new Error('Internal error'), {
+              errorClass: 'control_request_failed',
+              errorCode: 'internal_error'
+            })
+          }
+          return
         }
         askStarted.resolve()
         await askAcknowledged.promise
@@ -260,15 +279,26 @@ it('records Ask after an acknowledged fallback from a tagged Auto error', async 
     )
   )
   session.initialization.startup.open()
-  session.reportedOptions.reportedPermissionMode = 'ask'
+  session.reportedOptions.reportedPermissionMode = 'plan'
+  session.appliedInputOptions.set('interactionMode', 'plan')
   const build = applyClaudeMessageOptions(session, { interactionMode: 'default' }, undefined)
   await Promise.race([askStarted.promise, build])
   expect(rows).toEqual([])
 
   askAcknowledged.resolve()
   await build
-  expect(session.appliedInputOptions.get('buildPermissionMode')).toBe('default')
-  expect(rows).toEqual([expect.stringMatching(/:auto-for-now:ask$/)])
+  expect(session.appliedInputOptions.get('interactionMode')).toBe('default')
+  observeClaudeRootInit(session, { permissionMode: 'default' })
+  session.reportedOptions.reportedPermissionMode = 'ask'
+  journalClaudeSessionPermissionNotice(session)
+  expect(session.appliedInputOptions.has('buildPermissionMode')).toBe(false)
+  expect(session.autoUnsettled).toBeUndefined()
+  expect(claudeAutoFallbackReason(session)).toBeNull()
+  expect(rows).toEqual([])
+
+  await applyClaudeMessageOptions(session, {}, undefined)
+  expect(session.appliedInputOptions.get('buildPermissionMode')).toBe('auto')
+  expect(rows).toEqual([])
 })
 
 it('keeps an Ask warning when Plan approval settles after delivery retires', async () => {

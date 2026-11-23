@@ -159,7 +159,7 @@ export type ClaudeSession = {
   appliedInputOptions: Map<string, string>
   /** What Orca put on this process's command line, and the mode it opened in; this process only. */
   launchIntent?: { permissionMode?: string; model?: string }
-  firstRootInit?: { permissionMode: string | null }
+  firstRootInit?: { permissionMode: string | null; source?: 'initialize' | 'unanswered-auto-ask' }
   /** Claude's own effective settings turn bypass off for this process (startup `get_settings`). */
   bypassDisabled?: boolean
   /** Claude accepted a bypass switch in this process, which overrules a start outside it. */
@@ -177,6 +177,7 @@ export type ClaudeSession = {
   /** Claude's settings turn auto mode off for this process (startup `get_settings`, or a refusal). */
   autoDisabled?: boolean
   autoAccepted?: boolean
+  autoUnansweredAskRequest?: number
   /** Claude last refused auto for a reason that can pass (availability, model, Fast mode), or
    *  left the switch unanswered; says when asking again can get a different answer. */
   autoUnsettled?: ClaudeAutoUnsettled
