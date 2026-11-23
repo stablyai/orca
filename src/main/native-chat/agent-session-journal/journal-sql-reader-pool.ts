@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines -- the pool owns the full reader lifecycle. */
 import type { LegacyProofCursor } from './journal-legacy-source-proof'
 import type { JournalConversionStorage } from './journal-conversion-storage'
 import type {
@@ -246,12 +245,8 @@ export class JournalSqlReaderPool {
   }
 
   async conversionStorage(estimate = false): Promise<JournalConversionStorage> {
-    const response = await (
-      await this.conversionReader()
-    ).request({
-      kind: 'conversion-storage',
-      ...(estimate ? { estimate: true as const } : {})
-    })
+    const reader = await this.conversionReader()
+    const response = await reader.request({ kind: 'conversion-storage', estimate })
     if (response.type !== 'conversion-storage') {
       throw new Error('journal reader returned no conversion storage')
     }

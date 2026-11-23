@@ -18,6 +18,7 @@ function conversion(storage: () => JournalConversionStorage, pages = 1, sessionI
   const writes: string[] = []
   const readers = {
     database: async ({ kind, after }: { kind: string; after: string | null }) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep reads only these three page kinds.
       kind === 'retired-heads'
         ? { kind, heads: [], through: null }
         : { kind, sessionIds: kind === 'sessions' && after === null ? sessionIds : [] },

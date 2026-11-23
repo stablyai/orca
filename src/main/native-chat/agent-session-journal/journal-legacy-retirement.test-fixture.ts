@@ -164,7 +164,7 @@ export async function profile(
         database: async () => ({ kind: 'sessions', sessionIds: [] }),
         compareLegacyChat: async () => null,
         // As the reader does: a copy takes its original chat's history under its own id.
-        prepareConversion: async (id) => {
+        prepareConversion: async (id: string) => {
           const from = journalLegacyConversionSource(db, id)
           const prepared = prepareJournalDomainImport(source(), from)
           if (!prepared) {
@@ -177,7 +177,11 @@ export async function profile(
             close: async () => {}
           }
         }
-      },
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: conversions only call next and close on a prepared reader.
+      } as unknown as Pick<
+        JournalSqlReaderPool,
+        'importState' | 'conversionStorage' | 'database' | 'compareLegacyChat' | 'prepareConversion'
+      >,
       async () => {}
     )
   const conversions = {

@@ -1,12 +1,11 @@
-/* oxlint-disable max-lines -- idle maintenance coordinates several paged tasks. */
 import { setImmediate, setTimeout as delay } from 'node:timers/promises'
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalSqlConversions } from './journal-sql-conversions'
+import { isJournalConversionStorageError } from './journal-sql-conversions'
 import type { JournalSqlActivity } from './journal-sql-activity'
 import type { JournalPagedMaintenanceKind, JournalSqlMaintenance } from './journal-sql-maintenance'
 import { JOURNAL_STORED_OUTPUT_WRITES } from './journal-stored-output'
-import { isJournalConversionStorageError } from './journal-sql-conversions'
 
 const MINUTE = 60_000
 const COMPACTION_INTERVAL = 6 * 60 * MINUTE
@@ -266,7 +265,8 @@ export class JournalSqlBackgroundMaintenance {
 
   private async convertSavedChats(): Promise<void> {
     let after: string | null = null
-    while (await this.boundary()) {
+    let deferred = false
+    while (!deferred && (await this.boundary())) {
       const page = await this.readers.database({ kind: 'sessions', after })
       if (page.kind !== 'sessions') {
         throw new Error('journal reader returned no saved sessions')
@@ -275,16 +275,15 @@ export class JournalSqlBackgroundMaintenance {
         return
       }
       for (const sessionId of page.sessionIds) {
-        if (!(await this.boundary())) {
+        // A deferral for storage holds every later chat too, until its backoff ends.
+        if (deferred || !(await this.boundary())) {
           return
         }
         try {
           await this.serviceWhile(this.conversions.ensure(sessionId, false))
         } catch (error) {
           this.report(error, sessionId)
-          if (isJournalConversionStorageError(error)) {
-            return
-          }
+          deferred = isJournalConversionStorageError(error)
         }
       }
       after = page.sessionIds.at(-1)!

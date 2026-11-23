@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import type * as FsPromises from 'node:fs/promises'
 import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { journalDatabasePath } from './database/journal-host-database'
@@ -9,7 +10,7 @@ import { olderOrcaChat } from './journal-legacy-retirement.test-fixture'
 
 const statfs = vi.hoisted(() => vi.fn())
 vi.mock('node:fs/promises', async (original) => ({
-  ...(await original<typeof import('node:fs/promises')>()),
+  ...(await original<typeof FsPromises>()),
   statfs
 }))
 

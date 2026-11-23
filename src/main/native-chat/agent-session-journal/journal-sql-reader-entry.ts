@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines -- one worker entry serializes the reader protocol. */
 import { legacyProofReply } from './journal-legacy-proof-reply'
 import { measureJournalConversionStorage } from './journal-conversion-storage'
 import { JournalForkPreparation } from './journal-fork-preparation'
@@ -215,7 +214,7 @@ async function handle(id: number, operation: JournalSqlReaderRequest['operation'
         const storage = await measureJournalConversionStorage(
           workerData.originalFilename,
           source,
-          operation.estimate === true
+          operation.estimate
         )
         reply({ type: 'conversion-storage', id, ...storage })
         break
