@@ -46,7 +46,7 @@ export function resolveInsideExtensionDirectory(
 }
 
 async function readJson(path: string): Promise<unknown> {
-  return JSON.parse((await readFile(path, 'utf8')).replace(/^\uFEFF/, ''))
+  return JSON.parse((await readFile(path, 'utf8')).replace(/^﻿/, ''))
 }
 
 /** Why: store manifests name themselves `__MSG_key__`; Settings must show the real name even when unloaded. */

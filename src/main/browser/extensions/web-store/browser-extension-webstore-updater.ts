@@ -169,7 +169,7 @@ async function installedAccess(
   extension: InstalledBrowserExtension
 ): Promise<ReturnType<typeof summarizeManifestPermissions>> {
   const raw = await readFile(join(extension.path, 'manifest.json'), 'utf8')
-  return summarizeManifestPermissions(JSON.parse(raw.replace(/^\uFEFF/, '')))
+  return summarizeManifestPermissions(JSON.parse(raw.replace(/^﻿/, '')))
 }
 
 /** Downloads and stages the update; null (nothing staged) when it is not newer than what runs. */

@@ -67,7 +67,7 @@ function unpackedManifestKey(sourceDirectory: string): string {
 }
 
 function parseManifest(text: string): Record<string, unknown> {
-  const parsed: unknown = JSON.parse(text.replace(/^\uFEFF/, ''))
+  const parsed: unknown = JSON.parse(text.replace(/^﻿/, ''))
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('manifest.json is not an object')
   }

@@ -54,11 +54,7 @@ export type StagedWebStoreExtension = {
 function parseManifest(data: Uint8Array): Record<string, unknown> {
   let parsed: unknown
   try {
-    parsed = JSON.parse(
-      Buffer.from(data)
-        .toString('utf8')
-        .replace(/^\uFEFF/, '')
-    )
+    parsed = JSON.parse(Buffer.from(data).toString('utf8').replace(/^﻿/, ''))
   } catch {
     throw new Error('Extension package has an unreadable manifest')
   }
