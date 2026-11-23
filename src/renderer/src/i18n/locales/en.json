@@ -25636,6 +25636,10 @@
       "installing": "Installing Orca {{version}}…",
       "restarting": "Orca will restart automatically."
     },
+    "emergencyRequired": {
+      "title": "Orca {{version}} is required",
+      "summary": "Orca {{version}} is required. Restart to update."
+    },
     "teamRequired": {
       "summary": "Your team requires Orca {{version}}. Restart to update.",
       "title": "Your team requires Orca {{version}}",

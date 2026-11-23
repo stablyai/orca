@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from 'node:util'
 import type { OrcaCloudTeamPolicy } from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import type { UpdateCheckVariant } from '../lifecycle/updater-types'
 import { compareVersions, isPrereleaseVersion, isValidVersion } from './updater-fallback'
-import { normalizeTagToVersion } from '../../../shared/updater/release-channel'
+import { getVersionChannel, normalizeTagToVersion } from '../../../shared/updater/release-channel'
 
 export type TeamUpdatePolicy = Pick<
   OrcaCloudTeamPolicy,
@@ -15,6 +15,7 @@ export type TeamUpdatePolicy = Pick<
   | 'restartDeadlineHours'
 > & {
   orgIds: readonly string[]
+  emergency?: true
 }
 
 export type TeamUpdateApproval = {
@@ -43,8 +44,30 @@ export function sameTeamUpdatePolicy(
     left?.forceUpdates === right?.forceUpdates &&
     left?.forceUpdateDelayDays === right?.forceUpdateDelayDays &&
     left?.forceUsesMemberDelay === right?.forceUsesMemberDelay &&
-    left?.restartDeadlineHours === right?.restartDeadlineHours
+    left?.restartDeadlineHours === right?.restartDeadlineHours &&
+    left?.emergency === right?.emergency
   )
+}
+
+export function applyEmergencyUpdateFloor(
+  team: TeamUpdatePolicy | undefined,
+  minimum: string | null,
+  currentVersion: string
+): TeamUpdatePolicy | undefined {
+  if (!team?.orgIds.length || !minimum || !isValidVersion(currentVersion)) {
+    return team
+  }
+  const channel = getVersionChannel(minimum)
+  if ((channel !== 'stable' && channel !== 'rc') || compareVersions(currentVersion, minimum) >= 0) {
+    return team
+  }
+  return {
+    orgIds: team.orgIds,
+    updateChannel: channel,
+    updateDelayDays: 0,
+    minimumVersion: minimum,
+    emergency: true
+  }
 }
 
 export function requiredMinimumVersion(

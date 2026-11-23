@@ -120,6 +120,7 @@ export function UpdateCardStateContent({
         <RequiredUpdateRestartContent
           version={status.version}
           restart={status.teamRestart}
+          requiredByOrca={status.requiredByOrca}
           onRestart={onInstallRetry}
         />
       )
@@ -132,6 +133,7 @@ export function UpdateCardStateContent({
       <UpdateReadyToInstallContent
         version={status.version}
         requiredByTeam={status.requiredByTeam}
+        requiredByOrca={status.requiredByOrca}
         onRestart={onInstallRetry}
         onClose={onCollapse}
       />

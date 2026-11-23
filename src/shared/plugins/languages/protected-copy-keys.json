@@ -1624,6 +1624,7 @@
     "terminal.severedDaemonBanner.title",
     "terminal.severedDaemonBanner.unknownCount",
     "terminal.severedDaemonBanner.unverifiable",
+    "updates.emergencyRequired.title",
     "updates.installBlock.browserGuidance",
     "updates.installBlock.browserSummary",
     "updates.installBlock.busyGuidance",

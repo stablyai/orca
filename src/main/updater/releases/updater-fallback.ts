@@ -13,7 +13,8 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
   if (
     left.source !== right.source ||
     left.automaticDownload !== right.automaticDownload ||
-    left.requiredByTeam !== right.requiredByTeam
+    left.requiredByTeam !== right.requiredByTeam ||
+    left.requiredByOrca !== right.requiredByOrca
   ) {
     return false
   }
@@ -66,6 +67,7 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
       return (
         right.state === 'error' &&
         left.message === right.message &&
+        left.failurePhase === right.failurePhase &&
         left.version === right.version &&
         left.retryable === right.retryable &&
         left.retryAction === right.retryAction &&

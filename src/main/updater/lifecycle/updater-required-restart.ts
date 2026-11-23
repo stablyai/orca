@@ -28,7 +28,11 @@ export abstract class UpdaterRequiredRestart extends UpdaterRemoteStatus {
     hasWorkingAgents: () => this.teamRestartOptions?.hasWorkingAgents() ?? false,
     publish: (version, teamRestart) => {
       if (this.currentStatus.state === 'downloaded' && this.currentStatus.version === version) {
-        this.sendStatus({ ...this.currentStatus, requiredByTeam: true, teamRestart })
+        this.sendStatus({
+          ...this.currentStatus,
+          ...this.requiredUpdateStatusFields(),
+          teamRestart
+        })
       }
     },
     install: () => this.quitAndInstall('team-policy')
@@ -50,9 +54,15 @@ export abstract class UpdaterRequiredRestart extends UpdaterRemoteStatus {
     }
   }
 
+  protected requiredUpdateStatusFields(): { requiredByTeam: true; requiredByOrca?: true } {
+    return this.getTeamUpdatePolicy?.()?.emergency
+      ? { requiredByTeam: true, requiredByOrca: true }
+      : { requiredByTeam: true }
+  }
+
   protected publishRequiredDownload(status: Extract<UpdateStatus, { state: 'downloaded' }>): void {
     this.lastTeamDownload = status.version
-    this.sendStatus({ ...status, requiredByTeam: true })
+    this.sendStatus({ ...status, ...this.requiredUpdateStatusFields() })
     void this.teamRestart.verified(status.version, app.getVersion()).catch((error) => {
       console.warn('[updater] Could not save team restart state:', error)
     })
@@ -82,7 +92,7 @@ export abstract class UpdaterRequiredRestart extends UpdaterRemoteStatus {
       status.state === 'error' &&
         this.isRequiredTeamUpdate(version) &&
         this.teamRestart.exhausted(version)
-        ? { ...status, version, requiredByTeam: true, retryable: false }
+        ? { ...status, version, ...this.requiredUpdateStatusFields(), retryable: false }
         : status
     )
   }

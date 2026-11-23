@@ -111,11 +111,13 @@ export function UpdateDownloadingContent({
 export function UpdateReadyToInstallContent({
   version,
   requiredByTeam,
+  requiredByOrca,
   onRestart,
   onClose
 }: {
   version: string
   requiredByTeam?: boolean
+  requiredByOrca?: boolean
   onRestart: () => void
   onClose: () => void
 }): React.JSX.Element {
@@ -139,17 +141,23 @@ export function UpdateReadyToInstallContent({
         )}
       </div>
       <p className="text-sm text-muted-foreground">
-        {requiredByTeam
+        {requiredByOrca
           ? t(
-              'updates.teamRequired.summary',
-              'Your team requires Orca {{version}}. Restart to update.',
+              'updates.emergencyRequired.summary',
+              'Orca {{version}} is required. Restart to update.',
               { version }
             )
-          : t(
-              'auto.components.UpdateCard.6714206e5a',
-              "Orca v{{value0}} is downloaded. Restart when you're ready.",
-              { value0: version }
-            )}
+          : requiredByTeam
+            ? t(
+                'updates.teamRequired.summary',
+                'Your team requires Orca {{version}}. Restart to update.',
+                { version }
+              )
+            : t(
+                'auto.components.UpdateCard.6714206e5a',
+                "Orca v{{value0}} is downloaded. Restart when you're ready.",
+                { value0: version }
+              )}
       </p>
       <Button variant="default" size="sm" onClick={onRestart} className="w-full">
         {t('auto.components.UpdateCard.68b235d264', 'Restart to Update')}

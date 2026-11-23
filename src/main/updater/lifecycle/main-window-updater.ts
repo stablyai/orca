@@ -36,6 +36,11 @@ import type { PreQuitCleanupFailureMode, UpdateInstallMode } from './updater-sta
 import type { UpdaterSetupOptions } from './updater-setup'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { hasWorkingUpdateAgents } from './update-agent-activity'
+import {
+  getEmergencyUpdateFloor,
+  watchEmergencyUpdateFloor
+} from '../releases/updater-emergency-policy'
+import { applyEmergencyUpdateFloor } from '../releases/updater-release-policy'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 
@@ -93,8 +98,25 @@ function buildUpdaterSetupOptions(
       void nativeSettings.requestCoreWrite({ kind: 'ui', updates: { dismissedUpdateNudgeId: id } })
     },
     getReleaseChannelOverride: () => nativeSettings.getUI().releaseChannelOverride ?? null,
-    getTeamUpdatePolicy: () => getActiveTeamCapabilities()?.teamPolicy,
-    onTeamUpdatePolicyChanged: onTeamCapabilitiesInvalidated,
+    getTeamUpdatePolicy: () =>
+      applyEmergencyUpdateFloor(
+        getActiveTeamCapabilities()?.teamPolicy,
+        getEmergencyUpdateFloor(),
+        app.getVersion()
+      ),
+    onTeamUpdatePolicyChanged: (listener) => {
+      const syncEmergencyFloor = watchEmergencyUpdateFloor(listener)
+      const syncPolicies = (): void => {
+        syncEmergencyFloor(getActiveTeamCapabilities() !== undefined)
+        listener()
+      }
+      const unsubscribe = onTeamCapabilitiesInvalidated(syncPolicies)
+      syncPolicies()
+      app.once('will-quit', () => {
+        unsubscribe()
+        syncEmergencyFloor(false)
+      })
+    },
     teamRestart: {
       scope: () => {
         const scope = getActiveTeamProfileScope()

@@ -26,15 +26,19 @@ function RestartCountdown({ until }: { until: number }): React.JSX.Element {
 export function RequiredUpdateRestartContent({
   version,
   restart,
+  requiredByOrca,
   onRestart
 }: {
   version: string
   restart: TeamUpdateRestart
+  requiredByOrca?: boolean
   onRestart: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
-  const title = t('updates.teamRequired.title', 'Your team requires Orca {{version}}', { version })
+  const title = requiredByOrca
+    ? t('updates.emergencyRequired.title', 'Orca {{version}} is required', { version })
+    : t('updates.teamRequired.title', 'Your team requires Orca {{version}}', { version })
   const restartNow = t('updates.teamRequired.restartNow', 'Restart now')
   if (restart.phase === 'countdown') {
     return (

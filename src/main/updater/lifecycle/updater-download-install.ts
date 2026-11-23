@@ -85,7 +85,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
       this.canDownloadAutomatically(status.version)
     this.sendStatus(
       required
-        ? { ...status, requiredByTeam: true }
+        ? { ...status, ...this.requiredUpdateStatusFields() }
         : autoDownload
           ? { ...status, automaticDownload: true }
           : status
@@ -127,7 +127,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
 
   protected publishDownloadStatus(status: UpdateStatus): void {
     if (status.state === 'downloading' && this.isRequiredTeamUpdate(status.version)) {
-      this.sendStatus({ ...status, requiredByTeam: true })
+      this.sendStatus({ ...status, ...this.requiredUpdateStatusFields() })
       return
     }
     if (status.state === 'downloaded') {
@@ -229,7 +229,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
       state: 'downloading',
       percent: 0,
       version,
-      ...(required ? { requiredByTeam: true } : {})
+      ...(required ? this.requiredUpdateStatusFields() : {})
     })
     const startDownload = (): void => {
       if (this.holdUpdateForTeamPolicy(version)) {
