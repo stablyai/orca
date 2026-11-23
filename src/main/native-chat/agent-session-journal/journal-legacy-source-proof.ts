@@ -17,7 +17,6 @@ import {
   type LegacySessionHold
 } from './journal-legacy-content-proof'
 import { LEGACY_PROOF_COPIES_TABLE } from './journal-legacy-retirement-state'
-import { assertLegacyProofFits } from './journal-legacy-proof-disk-room'
 import { assertLegacyStoreReady, readLegacyCopiesProofPage } from './journal-legacy-proof-copies'
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
@@ -74,7 +73,6 @@ export function readJournalLegacyProofPage(
   // The first page this launch reads checks the store; a resumed one, its compares due again.
   if (cursor.check || (cursor.table === 0 && cursor.after === null)) {
     assertLegacyStoreReady(db, destination, !cursor.check)
-    assertLegacyProofFits(db, destination)
   }
   return readJournalLegacySource(() => {
     const tables = new Set(
