@@ -259,7 +259,7 @@
 2 src/renderer/src/components/native-chat/session/structured/use-structured-agent-session.ts
 1 src/renderer/src/components/native-chat/session/structured/writes/use-structured-agent-session-command-write.ts
 1 src/renderer/src/components/native-chat/session/structured/writes/use-structured-agent-session-stop-press.ts
-1 src/renderer/src/components/native-chat/session/terminal/assembly/use-native-chat-assembled-messages.ts
+16 src/renderer/src/components/native-chat/session/terminal/assembly/use-native-chat-assembled-messages.ts
 1 src/renderer/src/components/native-chat/session/terminal/delivery/use-native-chat-launch-prompt-delivery-notice.ts
 1 src/renderer/src/components/native-chat/session/terminal/delivery/use-native-chat-pending-delivery.ts
 2 src/renderer/src/components/native-chat/session/terminal/read/use-native-chat-live-session.ts

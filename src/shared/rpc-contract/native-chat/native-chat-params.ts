@@ -45,22 +45,6 @@ export const NativeChatSession = z.object({
 
 export type NativeChatResumePoint = NonNullable<z.infer<typeof NativeChatSession>['resumeAfter']>
 
-export const NativeChatVerifyRanges = NativeChatSession.pick({
-  agent: true,
-  sessionId: true,
-  transcriptPath: true
-}).extend({
-  ranges: z
-    .array(
-      z.object({
-        start: z.number().int().nonnegative().safe(),
-        end: z.number().int().positive().safe(),
-        digest: z.string().regex(/^[0-9a-f]{16}$/)
-      })
-    )
-    .max(1024)
-})
-
 export const NativeChatUnsubscribe = z.object({
   subscriptionId: z.string().min(1).optional()
 })

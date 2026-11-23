@@ -14,12 +14,6 @@ import {
   transcriptFileStat
 } from '../transcript-filesystem/wsl-transcript-fs-access'
 
-import { transcriptLineDigest } from './transcript-byte-digest'
-import {
-  transcriptDigestHex,
-  type TranscriptByteRange
-} from '../../../shared/native-chat/transcript/transcript-byte-range'
-
 const APPEND_BATCH_MESSAGE_LIMIT = 40
 
 export type IncrementalTranscriptState = {
@@ -30,8 +24,6 @@ export type IncrementalTranscriptState = {
   pendingBytes: number
   droppingOversizedRecord: boolean
   latestTimestamp: number
-  /** Bytes read since the last published range; they join the next frame instead of sending their own. */
-  unpublishedRange?: { start: number; digest: bigint }
 }
 
 export function createIncrementalTranscriptState(): IncrementalTranscriptState {
@@ -54,33 +46,23 @@ export function resetIncrementalTranscriptState(state: IncrementalTranscriptStat
   state.pendingBytes = 0
   state.droppingOversizedRecord = false
   state.latestTimestamp = Number.NEGATIVE_INFINITY
-  state.unpublishedRange = undefined
 }
 
 export async function readIncrementalTranscriptMessages(
   filePath: string,
   state: IncrementalTranscriptState,
   decode: NativeChatLineDecoder,
-  onBatch?: (messages: NativeChatMessage[], ranges?: TranscriptByteRange[]) => void,
+  onBatch?: (messages: NativeChatMessage[]) => void,
   decodeLifecycle?: (line: string, fallbackId: string) => NativeChatTurnLifecycle | null,
   onLifecycle?: (lifecycle: NativeChatTurnLifecycle) => void,
   signal?: AbortSignal,
-  sourceOrder = false,
-  onRanges?: (ranges: TranscriptByteRange[]) => void
+  sourceOrder = false
 ): Promise<NativeChatMessage[]> {
   const end = (await transcriptFileStat(filePath, 'exact', signal)).size
   if (end <= state.offset) {
     return []
   }
   const messages: NativeChatMessage[] = []
-  // Ranges cover every consumed line, including ones that decode to nothing, so consecutive reads stay contiguous.
-  let rangeStart = state.unpublishedRange?.start ?? state.pendingStart
-  let digest = state.unpublishedRange?.digest ?? 0n
-  state.unpublishedRange = undefined
-  const ranges = (): TranscriptByteRange[] =>
-    rangeStart < state.pendingStart
-      ? [{ start: rangeStart, end: state.pendingStart, digest: transcriptDigestHex(digest) }]
-      : []
   const stream = openTranscriptReadStream(
     filePath,
     { start: state.offset, end: end - 1 },
@@ -95,7 +77,9 @@ export async function readIncrementalTranscriptMessages(
       let newline = chunk.indexOf(0x0a)
       while (newline >= 0) {
         retainPart(chunk.subarray(segmentStart, newline))
-        decodeLine()
+        if (!state.droppingOversizedRecord) {
+          decodeLine()
+        }
         resetPendingLine(absoluteOffset + newline + 1)
         segmentStart = newline + 1
         newline = chunk.indexOf(0x0a, segmentStart)
@@ -107,7 +91,6 @@ export async function readIncrementalTranscriptMessages(
       state.offset = absoluteOffset
       state.boundary = extendTranscriptBoundary(state.boundary, chunk)
     }
-    onRanges?.(ranges())
     return messages
   } finally {
     // Early exits must close both the fd and any UNC gate permit held by the generator.
@@ -115,10 +98,10 @@ export async function readIncrementalTranscriptMessages(
   }
 
   function retainPart(part: Buffer): void {
-    state.pendingBytes += part.length
     if (state.droppingOversizedRecord) {
       return
     }
+    state.pendingBytes += part.length
     if (state.pendingBytes > MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES) {
       state.pendingChunks.length = 0
       state.droppingOversizedRecord = true
@@ -138,10 +121,6 @@ export async function readIncrementalTranscriptMessages(
     // A single synchronously decoded chunk is already owned; avoid copying it.
     const bytes =
       state.pendingChunks.length === 1 ? state.pendingChunks[0] : Buffer.concat(state.pendingChunks)
-    digest += transcriptLineDigest(state.pendingStart, bytes, state.pendingBytes)
-    if (state.droppingOversizedRecord) {
-      return
-    }
     let line = bytes.toString('utf8')
     if (line.endsWith('\r')) {
       line = line.slice(0, -1)
@@ -166,10 +145,7 @@ export async function readIncrementalTranscriptMessages(
     state.latestTimestamp = ordered.latest
     messages.push(ordered.message)
     if (onBatch && messages.length >= APPEND_BATCH_MESSAGE_LIMIT) {
-      const end = state.pendingStart + state.pendingBytes + 1
-      onBatch(messages.splice(0), [{ start: rangeStart, end, digest: transcriptDigestHex(digest) }])
-      rangeStart = end
-      digest = 0n
+      onBatch(messages.splice(0))
     }
   }
 }

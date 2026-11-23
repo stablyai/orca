@@ -1,9 +1,7 @@
-import type { TranscriptByteRange } from '../transcript-byte-range'
 import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../native-chat-types'
 
 /** One page of a transcript, newest last; `beforeOffset` is where the next older page ends. */
 export type NativeChatTranscriptPage = {
-  ranges?: TranscriptByteRange[]
   messages: NativeChatMessage[]
   hasMore: boolean
   beforeOffset: number
@@ -22,10 +20,5 @@ export type NativeChatTranscriptFrame =
         lifecycle?: NativeChatTurnLifecycle
       })
   | (NativeChatTranscriptPage & { type: 'replacement'; lifecycle?: NativeChatTurnLifecycle })
-  | {
-      type: 'appended'
-      ranges?: TranscriptByteRange[]
-      messages: NativeChatMessage[]
-      lifecycle?: NativeChatTurnLifecycle
-    }
+  | { type: 'appended'; messages: NativeChatMessage[]; lifecycle?: NativeChatTurnLifecycle }
   | { type: 'end' }

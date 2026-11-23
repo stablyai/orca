@@ -1,10 +1,7 @@
-import { verifyLocalTranscriptRanges } from './native-chat-local-range-verification'
-import {
-  parseTranscriptRangeVerification,
-  type TranscriptByteRange,
-  type TranscriptRangeVerification
-} from '../../../../../../../shared/native-chat/transcript/transcript-byte-range'
-import type { NativeChatApi } from '../../../../../../../preload/api/native-chat/native-chat-api'
+import type {
+  NativeChatApi,
+  NativeChatAppendedMessages
+} from '../../../../../../../preload/api/native-chat/native-chat-api'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
@@ -12,8 +9,6 @@ import type { RuntimeClientTarget } from '../../../../../../../shared/remote-run
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import {
   parseRuntimeNativeChatReadSessionResult,
-  parseRuntimeNativeChatFrame,
-  parseTranscriptByteRanges,
   parseRuntimeNativeChatTurnLifecycle,
   runtimeNativeChatReadError
 } from './native-chat-runtime-contract'
@@ -21,13 +16,6 @@ import { translate } from '@/i18n/i18n'
 
 /** Match local IPC so session consumers can read local or runtime-owned transcripts. */
 export type NativeChatSessionTransport = Pick<NativeChatApi, 'readSession' | 'subscribe'> & {
-  verifyTranscriptRanges?: (
-    agent: Parameters<NativeChatApi['readSession']>[0],
-    sessionId: string,
-    ranges: TranscriptByteRange[],
-    transcriptPath?: string,
-    signal?: AbortSignal
-  ) => Promise<TranscriptRangeVerification | null>
   /** Older pages read by row cursor; other routes keep the full reread and its existing depth limits. */
   pagesByCursor?: true
 }
@@ -56,7 +44,6 @@ export function toRuntimeNativeChatErrorMessage(err: unknown): string {
 const localNativeChatTransport: NativeChatSessionTransport = {
   readSession: (agent, sessionId, limit, transcriptPath, options) =>
     window.api.nativeChat.readSession(agent, sessionId, limit, transcriptPath, options),
-  verifyTranscriptRanges: verifyLocalTranscriptRanges,
   subscribe: (args, onFrame) => window.api.nativeChat.subscribe(args, onFrame)
 }
 
@@ -69,37 +56,12 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
   const target: RuntimeClientTarget = { kind: 'environment', environmentId }
 
   return {
-    verifyTranscriptRanges: async (agent, sessionId, ranges, transcriptPath, signal) => {
-      try {
-        return parseTranscriptRangeVerification(
-          await callRuntimeRpc<unknown>(
-            target,
-            'nativeChat.verifyTranscriptRanges',
-            { agent, sessionId, ranges, transcriptPath },
-            { signal, timeoutMs: 120_000 }
-          )
-        )
-      } catch (error) {
-        signal?.throwIfAborted()
-        if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-          return null
-        }
-        throw error
-      }
-    },
-    readSession: async (agent, sessionId, limit, transcriptPath, options) => {
+    readSession: async (agent, sessionId, limit, transcriptPath) => {
       try {
         const result = await callRuntimeRpc<unknown>(
           target,
           'nativeChat.readSession',
-          {
-            agent,
-            sessionId,
-            limit,
-            transcriptPath,
-            beforeOffset: options?.beforeOffset,
-            capabilities: { transcriptSourceOrder: 1 }
-          },
+          { agent, sessionId, limit, transcriptPath, capabilities: { transcriptSourceOrder: 1 } },
           { timeoutMs: 15_000 }
         )
         return parseRuntimeNativeChatReadSessionResult(result)
@@ -172,7 +134,14 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                   }
                   return
                 }
-                const frame = parseRuntimeNativeChatFrame(response.result)
+                const frame = response.result as {
+                  type?: string
+                  messages?: NativeChatAppendedMessages
+                  hasMore?: boolean
+                  error?: string
+                  lifecycle?: unknown
+                  pending?: boolean
+                }
                 const lifecycle = parseRuntimeNativeChatTurnLifecycle(frame?.lifecycle)
                 // Pending frames stop the spinner without claiming a settled initial transcript.
                 const pending = frame?.pending === true
@@ -189,7 +158,6 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                     onFrame({
                       type: 'snapshot',
                       messages: frame.messages,
-                      ranges: parseTranscriptByteRanges(frame.ranges),
                       hasMore: frame.hasMore ?? frame.messages.length >= (limit ?? 300),
                       ...(frame.error ? { error: frame.error } : {}),
                       ...(lifecycle ? { lifecycle } : {}),
@@ -199,7 +167,6 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                     onFrame({
                       type: 'snapshot',
                       messages: frame.messages,
-                      ranges: parseTranscriptByteRanges(frame.ranges),
                       hasMore: frame.hasMore ?? false,
                       ...(frame.error ? { error: frame.error } : {}),
                       ...(lifecycle ? { lifecycle } : {}),
@@ -211,14 +178,12 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                         ? {
                             type: 'replacement',
                             messages: frame.messages,
-                            ranges: parseTranscriptByteRanges(frame.ranges),
                             hasMore: frame.hasMore ?? false,
                             ...(lifecycle ? { lifecycle } : {})
                           }
                         : {
                             type: 'appended',
                             messages: frame.messages,
-                            ranges: parseTranscriptByteRanges(frame.ranges),
                             ...(lifecycle ? { lifecycle } : {})
                           }
                     )

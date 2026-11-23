@@ -603,11 +603,7 @@ import {
 } from './linear/linear-params'
 import { CreateProject } from './linear/linear-project-create-params'
 import { LinkPreviewGetParams } from './link-preview/link-preview-params'
-import {
-  NativeChatSession,
-  NativeChatUnsubscribe,
-  NativeChatVerifyRanges
-} from './native-chat/native-chat-params'
+import { NativeChatSession, NativeChatUnsubscribe } from './native-chat/native-chat-params'
 import {
   NotificationGetMissedSinceParams,
   NotificationRegisterPushParams,
@@ -1795,7 +1791,6 @@ export const RPC_PARAMS_BY_METHOD = {
   'nativeChat.readSession': NativeChatSession,
   'nativeChat.subscribe': NativeChatSession,
   'nativeChat.unsubscribe': NativeChatUnsubscribe,
-  'nativeChat.verifyTranscriptRanges': NativeChatVerifyRanges,
   'network.browserTunnel': BrowserNetworkTunnelAttachParams,
   'notifications.getMissedSince': NotificationGetMissedSinceParams,
   'notifications.registerPush': NotificationRegisterPushParams,

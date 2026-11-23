@@ -33,20 +33,8 @@ export type AssembleNativeChatSessionInput = {
   error?: string
 }
 
-// Messages are immutable, so a key computed at merge time serves later rewinds.
-const turnKeys = new WeakMap<NativeChatMessage, string>()
-
 // Deduplicate explicit turn ids or normalized content only across sources; omit timestamps because scrape copies lack them.
-export function turnKey(message: NativeChatMessage): string {
-  let key = turnKeys.get(message)
-  if (key === undefined) {
-    key = computeTurnKey(message)
-    turnKeys.set(message, key)
-  }
-  return key
-}
-
-function computeTurnKey(message: NativeChatMessage): string {
+function turnKey(message: NativeChatMessage): string {
   if (message.turnId) {
     return `turn:${message.turnId}`
   }

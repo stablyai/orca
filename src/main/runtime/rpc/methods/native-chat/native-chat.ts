@@ -1,6 +1,9 @@
-import { verifySessionTranscriptRanges } from '../../../../native-chat/transcript-watching/verify-session-transcript-ranges'
+import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { recordMobileViewOpened } from '../../../../telemetry/mobile-client-telemetry'
-import type { NativeChatTranscriptFrame } from '../../../../../shared/native-chat/transcript/streaming/native-chat-transcript-frames'
+import type {
+  NativeChatTranscriptFrame,
+  NativeChatTranscriptPage
+} from '../../../../../shared/native-chat/transcript/streaming/native-chat-transcript-frames'
 import { resolveNativeChatTranscriptAgent } from '../../../../../shared/native-chat/native-chat-agent-support'
 import { subscribeNativeChatTranscript } from '../../../../native-chat/transcript-watch'
 import { readNativeChatTranscriptTail } from '../../../../native-chat/transcript-tail-reader'
@@ -9,39 +12,84 @@ import type {
   SubscribeNativeChatTranscriptArgs
 } from '../../../../native-chat/transcript-watching/transcript-watch-contract'
 import { nativeChatTranscriptPathOnExecutionHost } from '../../../../native-chat/transcript-filesystem/ssh-transcript-path'
-import { defineMethod, defineStreamingMethod } from '../../core'
-import { nativeChatRpcAppendBatches } from './native-chat-rpc-page-bounds'
+import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
+import { sanitizeNativeChatRpcBlock } from './native-chat-rpc-block-sanitize'
 import {
+  boundNativeChatRpcPageByBytes,
+  nativeChatRpcAppendBatches
+} from './native-chat-rpc-page-bounds'
+import {
+  MOBILE_NATIVE_CHAT_MAX_WINDOW,
   NativeChatSession,
-  NativeChatVerifyRanges,
-  NativeChatUnsubscribe
+  NativeChatUnsubscribe,
+  type NativeChatResumePoint
 } from '../../../../../shared/rpc-contract/native-chat/native-chat-params'
 
-import {
-  MOBILE_NATIVE_CHAT_DEFAULT_WINDOW,
-  pageForClient,
-  resumeIndex,
-  sanitizeAppendForClient
-} from './native-chat-rpc-pages'
+// Default to a small transcript tail for fast paired-client paint; clients page older history, while local IPC stays virtualized.
+const MOBILE_NATIVE_CHAT_DEFAULT_WINDOW = 40
+
+function sanitizeMessage(
+  message: NativeChatMessage,
+  clientKind: RpcContext['clientKind']
+): NativeChatMessage {
+  return {
+    ...message,
+    blocks: message.blocks.map((block) => sanitizeNativeChatRpcBlock(block, clientKind))
+  }
+}
+
+function sanitizeAppendForClient(
+  messages: readonly NativeChatMessage[],
+  clientKind: RpcContext['clientKind']
+): NativeChatMessage[] {
+  return messages.map((message) => sanitizeMessage(message, clientKind))
+}
+
+/** Window every RPC client by message count; apply mobile-only character clipping separately. */
+function windowTranscript(
+  messages: readonly NativeChatMessage[],
+  limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
+): NativeChatMessage[] {
+  const window = Math.min(Math.max(limit, 1), MOBILE_NATIVE_CHAT_MAX_WINDOW)
+  return messages.length > window ? messages.slice(-window) : messages.slice()
+}
+
+function pageForClient(
+  messages: readonly NativeChatMessage[],
+  hasMore: boolean,
+  beforeOffset: number,
+  clientKind: RpcContext['clientKind'],
+  limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW,
+  agent?: string
+): NativeChatTranscriptPage {
+  const isOpenCode = resolveNativeChatTranscriptAgent(agent) === 'opencode'
+  const sanitized = (isOpenCode ? messages : windowTranscript(messages, limit)).map((message) =>
+    sanitizeMessage(message, clientKind)
+  )
+  return isOpenCode
+    ? boundNativeChatRpcPageByBytes(sanitized, hasMore, beforeOffset)
+    : { messages: sanitized, hasMore, beforeOffset }
+}
+
+/** Where the first page starts for a client holding `resumeAfter`; its offset and timestamp catch a rewritten file. */
+function resumeIndex(
+  messages: readonly NativeChatMessage[],
+  resumeAfter: NativeChatResumePoint | undefined,
+  agent: string
+): number {
+  // OpenCode rows can change after they are written, so holding the newest says nothing about the rest.
+  if (!resumeAfter || resolveNativeChatTranscriptAgent(agent) === 'opencode') {
+    return -1
+  }
+  return messages.findLastIndex(
+    (message) =>
+      message.id === resumeAfter.id &&
+      message.transcriptOrder === resumeAfter.transcriptOrder &&
+      (message.timestamp ?? null) === resumeAfter.timestamp
+  )
+}
 
 export const NATIVE_CHAT_METHODS = [
-  defineMethod({
-    name: 'nativeChat.verifyTranscriptRanges',
-    permission: 'workspace',
-    params: NativeChatVerifyRanges,
-    handler: (params, { runtime, signal }) =>
-      verifySessionTranscriptRanges(
-        {
-          ...params,
-          transcriptPath: nativeChatTranscriptPathOnExecutionHost(
-            runtime.getAgentProviderSessionRows(),
-            params.sessionId,
-            params.transcriptPath
-          )
-        },
-        signal
-      )
-  }),
   defineMethod({
     name: 'nativeChat.readSession',
     permission: 'workspace',
@@ -71,8 +119,7 @@ export const NATIVE_CHAT_METHODS = [
               result.beforeOffset,
               clientKind,
               limit,
-              params.agent,
-              result.ranges
+              params.agent
             ),
             ...(result.lifecycle ? { lifecycle: result.lifecycle } : {})
           }
@@ -131,7 +178,7 @@ export const NATIVE_CHAT_METHODS = [
         ),
         initialLimit: limit,
         sourceOrder: params.capabilities?.transcriptSourceOrder === 1,
-        onInitialSnapshot: (messages, hasMore, beforeOffset, error, lifecycle, ranges) => {
+        onInitialSnapshot: (messages, hasMore, beforeOffset, error, lifecycle) => {
           if (closed) {
             return
           }
@@ -146,8 +193,7 @@ export const NATIVE_CHAT_METHODS = [
               resumed ? messages[resumeAt].transcriptOrder! : beforeOffset,
               clientKind,
               limit,
-              params.agent,
-              resumed ? undefined : ranges
+              params.agent
             ),
             ...(resumed ? { resumed } : {}),
             ...(error ? { error } : {}),
@@ -163,25 +209,17 @@ export const NATIVE_CHAT_METHODS = [
               }
             }
           : {}),
-        onReplace: (messages, hasMore, beforeOffset, lifecycle, ranges) => {
+        onReplace: (messages, hasMore, beforeOffset, lifecycle) => {
           if (closed) {
             return
           }
           emit({
             type: 'replacement',
-            ...pageForClient(
-              messages,
-              hasMore,
-              beforeOffset,
-              clientKind,
-              limit,
-              params.agent,
-              ranges
-            ),
+            ...pageForClient(messages, hasMore, beforeOffset, clientKind, limit, params.agent),
             ...(lifecycle ? { lifecycle } : {})
           })
         },
-        onAppend: (messages, lifecycle, ranges) => {
+        onAppend: (messages, lifecycle) => {
           if (closed) {
             return
           }
@@ -194,7 +232,6 @@ export const NATIVE_CHAT_METHODS = [
             emit({
               type: 'appended',
               messages: batch,
-              ...(batches.length === 1 ? { ranges } : {}),
               ...(lifecycle && batch === batches.at(-1) ? { lifecycle } : {})
             })
           }

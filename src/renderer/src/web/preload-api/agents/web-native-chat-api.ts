@@ -1,16 +1,12 @@
-import type { NativeChatApi } from '../../../../../preload/api/native-chat/native-chat-api'
+import type {
+  NativeChatApi,
+  NativeChatAppendedMessages
+} from '../../../../../preload/api/native-chat/native-chat-api'
 import { buildNativeChatUnsubscribe } from '../../../../../shared/native-chat/transcript/streaming/native-chat-stream-unsubscribe'
-import { parseTranscriptRangeVerification } from '../../../../../shared/native-chat/transcript/transcript-byte-range'
 import {
   parseRuntimeNativeChatReadSessionResult,
-  parseRuntimeNativeChatFrame,
-  parseTranscriptByteRanges,
   parseRuntimeNativeChatTurnLifecycle
 } from '@/components/native-chat/session/terminal/read/native-chat-runtime-contract'
-import {
-  unwrapRuntimeRpcResult,
-  RuntimeRpcCallError
-} from '../../../runtime/rpc/calls/runtime-rpc-result'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from '../../runtime/client/web-runtime-calls'
 import {
@@ -19,38 +15,7 @@ import {
 } from '../../runtime/client/web-runtime-session'
 
 export function createWebNativeChatApi(): NativeChatApi {
-  const verifications = new Map<string, AbortController>()
   return {
-    cancelTranscriptRangeVerification: (requestId) => {
-      verifications.get(requestId)?.abort()
-    },
-    verifyTranscriptRanges: async (agent, sessionId, ranges, transcriptPath, requestId) => {
-      const controller = new AbortController()
-      const { signal } = controller
-      const environment = requireActiveEnvironmentOrNull()
-      if (!environment) {
-        return null
-      }
-      verifications.set(requestId, controller)
-      try {
-        const result = unwrapRuntimeRpcResult(
-          await getClientForEnvironment(environment).call(
-            'nativeChat.verifyTranscriptRanges',
-            { agent, sessionId, ranges, transcriptPath },
-            { signal, timeoutMs: 120_000 }
-          )
-        )
-        return parseTranscriptRangeVerification(result)
-      } catch (error) {
-        signal?.throwIfAborted()
-        if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-          return null
-        }
-        throw error
-      } finally {
-        verifications.delete(requestId)
-      }
-    },
     // The full output stays on the host that ran the agent; the web client shows the message.
     getConversationNameFailureOutput: async () => null,
     readSession: async (agent, sessionId, limit, transcriptPath, options) =>
@@ -110,7 +75,14 @@ export function createWebNativeChatApi(): NativeChatApi {
                 }
                 return
               }
-              const result = parseRuntimeNativeChatFrame(response.result)
+              const result = response.result as {
+                type?: string
+                messages?: NativeChatAppendedMessages
+                hasMore?: boolean
+                error?: string
+                lifecycle?: unknown
+                pending?: boolean
+              }
               const lifecycle = parseRuntimeNativeChatTurnLifecycle(result?.lifecycle)
               // No transcript behind this window yet — forwarded so the view can stop spinning, but it is not the settled initial read.
               const pending = result?.pending === true
@@ -127,7 +99,6 @@ export function createWebNativeChatApi(): NativeChatApi {
                   onFrame({
                     type: 'snapshot',
                     messages: result.messages,
-                    ranges: parseTranscriptByteRanges(result.ranges),
                     hasMore: result.hasMore ?? result.messages.length >= (args.limit ?? 300),
                     ...(result.error ? { error: result.error } : {}),
                     ...(lifecycle ? { lifecycle } : {}),
@@ -137,7 +108,6 @@ export function createWebNativeChatApi(): NativeChatApi {
                   onFrame({
                     type: 'snapshot',
                     messages: result.messages,
-                    ranges: parseTranscriptByteRanges(result.ranges),
                     hasMore: result.hasMore ?? false,
                     ...(result.error ? { error: result.error } : {}),
                     ...(lifecycle ? { lifecycle } : {}),
@@ -149,14 +119,12 @@ export function createWebNativeChatApi(): NativeChatApi {
                       ? {
                           type: 'replacement',
                           messages: result.messages,
-                          ranges: parseTranscriptByteRanges(result.ranges),
                           hasMore: result.hasMore ?? false,
                           ...(lifecycle ? { lifecycle } : {})
                         }
                       : {
                           type: 'appended',
                           messages: result.messages,
-                          ranges: parseTranscriptByteRanges(result.ranges),
                           ...(lifecycle ? { lifecycle } : {})
                         }
                   )
