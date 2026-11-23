@@ -125,6 +125,8 @@ export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobil
 
   private publishedHeldVersion = -1
   private heldPublishQueued = false
+  /** The window refused the last send; nothing more is built until it asks for the whole set again. */
+  private heldDeliveryRefused = false
 
   /** The workspaces holding mail for a sleeper: at most once per tick, only what changed after the first. */
   protected publishHeldWorktrees(): void {
@@ -139,6 +141,9 @@ export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobil
   }
 
   private sendHeldWorktrees(): void {
+    if (this.heldDeliveryRefused) {
+      return
+    }
     const wake = this.sleptMailboxWake
     const full = this.publishedHeldVersion === -1
     if (!full && this.publishedHeldVersion === wake.heldVersion) {
@@ -151,8 +156,9 @@ export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobil
       ? this.notifier?.sleepingMailChanged?.({ worktreeIds: wake.heldWorktrees() })
       : changed && this.notifier?.sleepingMailChanged?.(change)
     if (delivered === false && (full || changed)) {
-      // The window dropped it, so a later change alone would leave the window's set wrong.
+      // The window dropped it; its recovery (load finished, reload cancelled, resubscribe) asks for the whole set.
       this.publishedHeldVersion = -1
+      this.heldDeliveryRefused = true
     }
   }
 
@@ -163,6 +169,7 @@ export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobil
 
   /** Sends the whole held set again, for a window that may have missed changes. */
   resendSleepingMailWorktrees(): void {
+    this.heldDeliveryRefused = false
     this.resetHeldWorktreesPublication()
     this.publishHeldWorktrees()
   }

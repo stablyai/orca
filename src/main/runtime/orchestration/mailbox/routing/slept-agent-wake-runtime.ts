@@ -18,6 +18,8 @@ const SLEPT_PANE_CLOSED = 'slept_pane_closed'
 export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
   /** One wake per slept handle, held until its agent is idle, so every act arriving meanwhile joins it. */
   private readonly sleptAgentWakes = new Map<string, { paneKey: string; woken: Promise<void> }>()
+  /** Explicit wakes in progress per pane, so pane membership is a lookup. */
+  private readonly sleptWakesByPane = new Map<string, number>()
   /** Pending wake waits by handle, so an identity write re-checks only the waits on what it touched. */
   private readonly leavesByLeafId = new LeafIdIndex()
   private readonly sleptWaits = new SleptAgentWaits(() => this.terminalIdentity.handleTouches)
@@ -64,23 +66,25 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
       if (bounds.signal?.aborted) {
         return Promise.reject(bounds.signal.reason ?? new Error('request_aborted'))
       }
-      const woken = this.wakeSleptPane(handle, pane).finally(() =>
+      const woken = this.wakeSleptPane(handle, pane).finally(() => {
         this.sleptAgentWakes.delete(handle)
-      )
+        const count = (this.sleptWakesByPane.get(pane.paneKey) ?? 1) - 1
+        if (count > 0) {
+          this.sleptWakesByPane.set(pane.paneKey, count)
+        } else {
+          this.sleptWakesByPane.delete(pane.paneKey)
+        }
+      })
       wake = { paneKey: pane.paneKey, woken }
       this.sleptAgentWakes.set(handle, wake)
+      this.sleptWakesByPane.set(pane.paneKey, (this.sleptWakesByPane.get(pane.paneKey) ?? 0) + 1)
     }
     return joinWithin(wake.woken, bounds).then(() => handle)
   }
 
   /** A pane this runtime is waking keeps the resume custody its window stamped until the agent is idle. */
   protected override holdsSleptPaneWake(paneKey: string): boolean {
-    for (const wake of this.sleptAgentWakes.values()) {
-      if (wake.paneKey === paneKey) {
-        return true
-      }
-    }
-    return false
+    return this.sleptWakesByPane.has(paneKey)
   }
 
   /** Agent Sleep never takes an agent owed orchestration mail or one a Dispatch is still handing work to. */

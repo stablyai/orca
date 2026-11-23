@@ -1,9 +1,11 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import type * as TeardownOwner from '@/store/terminals/sleep/terminal-teardown-owner'
 
 const work = vi.hoisted(() => {
   const counters: {
     statusReads: number
     tabReads: number
+    ownerPtyReads: number
     ageCopies: number
     planned: number
     ownerKind: 'non-runtime' | 'ambiguous'
@@ -12,6 +14,7 @@ const work = vi.hoisted(() => {
     ownerKind: 'non-runtime',
     statusReads: 0,
     tabReads: 0,
+    ownerPtyReads: 0,
     ageCopies: 0,
     planned: 0,
     state: {}
@@ -28,6 +31,19 @@ vi.mock('@/store/terminals/agent-pane-sleep-in-flight', () => ({
 vi.mock('../../workspace/ownership/terminal-worktree-route', () => ({
   resolveTerminalPtyOwner: () => ({ kind: work.ownerKind })
 }))
+// The real owner conversion, counting the PTY ids each call walks.
+vi.mock('@/store/terminals/sleep/terminal-teardown-owner', async (importOriginal) => {
+  const real = await importOriginal<typeof TeardownOwner>()
+  return {
+    ...real,
+    resolveTerminalTeardownOwner: (
+      ...args: Parameters<typeof real.resolveTerminalTeardownOwner>
+    ) => {
+      work.ownerPtyReads += args[1].length
+      return real.resolveTerminalTeardownOwner(...args)
+    }
+  }
+})
 vi.mock('../../pane-manager/mobile-driver-state', () => ({ getAllDrivers: () => new Map() }))
 vi.mock('../../../components/terminal-pane/parking/retention/foreground-terminal-tabs', () => ({
   getForegroundTerminalTabIds: () => [],
@@ -158,6 +174,7 @@ it.each([
     await runAgentHibernationTick()
     work.statusReads = 0
     work.tabReads = 0
+    work.ownerPtyReads = 0
     work.ageCopies = 0
     work.planned = 0
     await runAgentHibernationTick()
@@ -170,5 +187,7 @@ it.each([
     expect(work.ageCopies).toBe(2 * count + 2 * rechecks)
     // The tick walks the workspace's tabs a few times; the re-checks share one index of them.
     expect(work.tabReads).toBeLessThanOrEqual(10 * count)
+    // An ambiguous owner is settled from the workspace's PTYs once, not once per pane checked.
+    expect(work.ownerPtyReads).toBeLessThanOrEqual(count)
   }
 )

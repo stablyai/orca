@@ -8,7 +8,10 @@ import type {
   RuntimeTerminalSummary
 } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { resolveTerminalPtyOwner } from '../../workspace/ownership/terminal-worktree-route'
-import { toAgentHibernationRuntimeOwner } from './agent-hibernation-runtime-owner'
+import {
+  toAgentHibernationRuntimeOwner,
+  type AgentHibernationRuntimeOwner
+} from './agent-hibernation-runtime-owner'
 import { getEntryTabId } from './agent-hibernation-pane-eligibility'
 
 export type HostPtyEvidence = {
@@ -36,11 +39,24 @@ function worktreePtyIds(state: AppState, worktreeId: string): readonly string[] 
   return ptyIds
 }
 
-export function resolveAgentHibernationRuntimeOwner(state: AppState, worktreeId: string) {
+const ambiguousOwnerByPtyIds = new WeakMap<readonly string[], AgentHibernationRuntimeOwner>()
+
+export function resolveAgentHibernationRuntimeOwner(
+  state: AppState,
+  worktreeId: string
+): AgentHibernationRuntimeOwner {
   const worktreeOwner = resolveTerminalPtyOwner(state, worktreeId)
-  // Only a workspace two hosts publish needs its PTYs to name the owner.
-  const ptyIds = worktreeOwner.kind === 'ambiguous' ? worktreePtyIds(state, worktreeId) : []
-  return toAgentHibernationRuntimeOwner(worktreeOwner, ptyIds)
+  if (worktreeOwner.kind !== 'ambiguous') {
+    return toAgentHibernationRuntimeOwner(worktreeOwner, [])
+  }
+  // Only a workspace two hosts publish needs its PTYs to name the owner; settled once per PTY list.
+  const ptyIds = worktreePtyIds(state, worktreeId)
+  let owner = ambiguousOwnerByPtyIds.get(ptyIds)
+  if (!owner) {
+    owner = toAgentHibernationRuntimeOwner(worktreeOwner, ptyIds)
+    ambiguousOwnerByPtyIds.set(ptyIds, owner)
+  }
+  return owner
 }
 
 /** Worktree → owning runtime; `null` means liveness is required but no host can be asked. */

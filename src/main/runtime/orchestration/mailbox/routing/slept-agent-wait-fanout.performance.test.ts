@@ -22,6 +22,8 @@ type Internals = {
   }
   terminalWait: { wait(handle: string): Promise<unknown> }
   sleptPaneState(...args: unknown[]): unknown
+  holdsSleptPaneWake(paneKey: string): boolean
+  sleptAgentWakes: Map<string, unknown>
   leaves: ReadonlyMap<string, unknown>
 }
 
@@ -296,6 +298,39 @@ it.each([100, 1_000])(
 )
 
 it.each([100, 1_000])(
+  'asking whether a pane is being woken is a lookup with %i other wakes in progress',
+  async (count) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] })
+    const { db, runtime, internals, records } = mount(count + 1, false)
+    try {
+      runtime.setNotifier(notifier({ resumeSleepingAgents: () => new Promise<boolean>(() => {}) }))
+      await runtime.syncWindowGraph(1, graphOf(records))
+      await vi.advanceTimersByTimeAsync(5_000)
+      for (const record of records.slice(0, count)) {
+        void runtime
+          .wakeSleptAgentHandle(runtime.getTerminalHandleForPaneKey(record.paneKey)!, {
+            timeoutMs: 120_000
+          })
+          ?.catch(() => undefined)
+      }
+      await flush()
+      expect(internals.sleptAgentWakes.size).toBe(count)
+      const visits = vi.spyOn(internals.sleptAgentWakes, 'values')
+      for (const record of records) {
+        internals.holdsSleptPaneWake(record.paneKey)
+      }
+      expect(internals.holdsSleptPaneWake(records[0].paneKey)).toBe(true)
+      expect(internals.holdsSleptPaneWake(records[count].paneKey)).toBe(false)
+      expect(visits).not.toHaveBeenCalled()
+    } finally {
+      runtime.setNotifier(null)
+      db.close()
+    }
+  },
+  120_000
+)
+
+it.each([100, 1_000])(
   'held-workspace changes send only the workspaces that changed, once per tick (%i held)',
   async (held) => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] })
@@ -345,7 +380,8 @@ it.each([100, 1_000])(
         { held: [], released: [records[held].worktreeId] }
       ])
 
-      // A change the window dropped (it was reloading) makes the next send the whole set.
+      // A window that refused a change (it was reloading) is sent nothing more, however much
+      // changes, until it asks for the whole set; then it gets the current set once.
       const consume = async (mailbox: string) => {
         db.markAsRead(
           db.getUndeliveredUnreadMessages(mailbox).map((row) => row.id),
@@ -355,12 +391,15 @@ it.each([100, 1_000])(
       }
       bell.mockClear()
       bell.mockReturnValueOnce(false)
-      await consume(owed[1])
-      await consume(owed[2])
-      expect(bell.mock.calls[1]?.[0]).toEqual({
-        worktreeIds: records
-          .slice(0, held + burst)
-          .filter((_, index) => index < held || index > held + 2)
+      for (const mailbox of owed.slice(1, 11)) {
+        await consume(mailbox)
+      }
+      expect(bell).toHaveBeenCalledTimes(1)
+      runtime.resendSleepingMailWorktrees()
+      await flush()
+      expect(bell).toHaveBeenCalledTimes(2)
+      expect(bell.mock.calls[1][0]).toEqual({
+        worktreeIds: [...records.slice(0, held), ...records.slice(held + 11, held + burst)]
           .map((record) => record.worktreeId)
           .sort()
       })
