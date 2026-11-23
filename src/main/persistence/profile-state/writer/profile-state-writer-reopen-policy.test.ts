@@ -35,12 +35,14 @@ describe('profile save notice', () => {
     expect(failures).toHaveLength(2)
   })
 
-  it('warns when the writer cannot reopen, so a refused save is not silent', () => {
+  it('warns when a save, but not an export, finds the writer unable to reopen', () => {
     const notices: ProfileStateSaveNotice[] = []
     const policy = new ProfileStateWriterReopenPolicy(() => ({
       onSaveDelayChanged: (notice) => notices.push(notice)
     }))
-    policy.recordFailure(new Error('database is locked'))
+    policy.recordReopenRefused(new Error('database is locked'), false)
+    expect(notices).toEqual([])
+    policy.recordReopenRefused(new Error('database is locked'), true)
     expect(notices).toEqual(['failing'])
   })
 
@@ -52,5 +54,18 @@ describe('profile save notice', () => {
     const interrupted = new ProfileStateIndeterminateWriteError(full, new Error('rollback failed'))
     const decoded = decodeProfileStateWriterError(encodeProfileStateWriterError(interrupted))
     expect(storageCapacityErrorCode(decoded)).toBe('SQLITE_FULL')
+  })
+
+  it("ignores a retired writer's late slow signal", async () => {
+    const notices: ProfileStateSaveNotice[] = []
+    const policy = new ProfileStateWriterReopenPolicy(() => ({
+      onSaveDelayChanged: (notice) => notices.push(notice)
+    }))
+    const retired = policy.beginWriter()
+    const current = policy.beginWriter()
+    policy.writerDelayChanged(true, current)
+    policy.writerDelayChanged(false, retired)
+    await Promise.resolve()
+    expect(notices).toEqual(['slow'])
   })
 })

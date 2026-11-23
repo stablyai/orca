@@ -16,6 +16,7 @@ export class ProfileStateWriterReopenPolicy {
   private writerDelayed = false
   private noticeShown: ProfileStateSaveNotice = null
   private stopReported = false
+  private writerGeneration = 0
 
   constructor(
     private readonly callbacks: () => {
@@ -62,6 +63,16 @@ export class ProfileStateWriterReopenPolicy {
     this.raiseUnsaved('A profile save was interrupted', error)
   }
 
+  /** A save could not run because the writer failed to reopen; an export failing the same way refused no save. */
+  recordReopenRefused(error: unknown, save: boolean): void {
+    if (save && !this.stopReported) {
+      this.raiseUnsaved(
+        'Could not reopen the profile writer',
+        error instanceof Error ? error : new Error(String(error))
+      )
+    }
+  }
+
   /** Storage refused a save and rolled it back; the warning stays up until it acknowledges a later command. */
   recordSaveRefused(error: Error): void {
     this.raiseUnsaved('A profile save was refused', error)
@@ -101,10 +112,20 @@ export class ProfileStateWriterReopenPolicy {
   }
 
   /** A slow writer command raises the same notice that recovery keeps up until a save lands. */
-  readonly writerDelayChanged = (delayed: boolean): void => {
+  writerDelayChanged(delayed: boolean, generation: number): void {
+    // A retired writer's late signal must not clear or raise its replacement's slow notice.
+    if (generation !== this.writerGeneration) {
+      return
+    }
     this.writerDelayed = delayed
     // A faulting command clears its delay just before recovery starts; publish after recovery claims the notice.
     queueMicrotask(() => this.publishNotice())
+  }
+
+  /** Each new writer replaces the last, whose slow command no longer counts. */
+  beginWriter(): number {
+    this.writerDelayed = false
+    return ++this.writerGeneration
   }
 
   /** Storage acknowledged a command, so saving works again. */
@@ -158,11 +179,6 @@ export class ProfileStateWriterReopenPolicy {
     console.warn(
       `[persistence] Could not reopen the profile writer; retrying in ${retryInMs} ms:`,
       error
-    )
-    // The save that asked for this reopen is refused, so say so instead of failing silently.
-    this.raiseUnsaved(
-      'Could not reopen the profile writer',
-      error instanceof Error ? error : new Error(String(error))
     )
     return { retryInMs }
   }

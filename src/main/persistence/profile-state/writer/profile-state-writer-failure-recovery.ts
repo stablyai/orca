@@ -16,10 +16,11 @@ export function createProfileStateWriter(
   onIndeterminateFailure: (writer: ProfileStateWriteWorkerClient, error: Error) => void
 ): ProfileStateWriteWorkerClient {
   let writer: ProfileStateWriteWorkerClient
+  const generation = policy.beginWriter()
   writer = new ProfileStateWriteWorkerClient(initialization, {
     ...options,
     reportInitializationFailure,
-    onSaveDelayChanged: policy.writerDelayChanged,
+    onSaveDelayChanged: (delayed) => policy.writerDelayChanged(delayed, generation),
     onAcknowledged: () => policy.recordSaved(),
     onRejected: (error, command) => {
       // A refused save (full storage, a held lock, a rolled-back I/O error) leaves those changes unsaved.

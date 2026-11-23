@@ -22,6 +22,8 @@ import {
 import { ProfileStateWriterReopenPolicy } from './writer/profile-state-writer-reopen-policy'
 import type { ProfileStateSaveNotice } from '../../../shared/orca-profiles/profile-state-save-notice'
 
+type WriterCommand<T> = (writer: ProfileStateWriteWorkerClient) => Promise<T>
+
 export type ProfileStateWorkerAuthorityOptions = {
   workerPath?: string
   backupWorkerPath?: string
@@ -125,11 +127,11 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   }
 
   writeJsonExport(targetPath: string): Promise<number> {
-    return this.run((writer) => writer.writeJsonExport(targetPath))
+    return this.run((writer) => writer.writeJsonExport(targetPath), false)
   }
 
   writeLatestJsonExport(dataFile: string): Promise<number | undefined> {
-    return this.run((writer) => writer.writeLatestJsonExport(dataFile))
+    return this.run((writer) => writer.writeLatestJsonExport(dataFile), false)
   }
 
   scheduleBackup(): void {
@@ -219,18 +221,18 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     )
   }
 
-  private run<T>(command: (writer: ProfileStateWriteWorkerClient) => Promise<T>): Promise<T> {
+  private run<T>(command: WriterCommand<T>, save = true): Promise<T> {
     this.idleStop.cancel()
     this.inFlight += 1
     const writer = this.writer
-    const result = writer && !this.stopping ? command(writer) : this.reopen().then(command)
+    const result = writer && !this.stopping ? command(writer) : this.reopen(save).then(command)
     return result.finally(() => {
       this.inFlight -= 1
       this.idleStop.schedule()
     })
   }
 
-  private async reopen(): Promise<ProfileStateWriteWorkerClient> {
+  private async reopen(save: boolean): Promise<ProfileStateWriteWorkerClient> {
     await this.stopping
     if (this.writer) {
       await this.writer.ready
@@ -253,6 +255,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       await writer.ready
     } catch (error) {
       this.forgetFailedReopen(writer, error)
+      this.reopenPolicy.recordReopenRefused(error, save)
       throw error
     }
     this.reopenPolicy.recordSuccess()

@@ -1,3 +1,4 @@
+import { retryRefusedSave } from './refused-save-retry'
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   parseCodexResetCreditAttemptLedger,
@@ -97,6 +98,8 @@ export class PrimaryStateWriteOperations {
             }
           }
         }
+        // The refused save left its domains dirty; retry them so the unsaved warning can clear.
+        retryRefusedSave(runtime, this, error)
         throw error
       }
       return mutation.value
