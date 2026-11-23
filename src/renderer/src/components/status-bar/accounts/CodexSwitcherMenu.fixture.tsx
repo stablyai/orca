@@ -163,6 +163,7 @@ function switcherFixture(
     ? {
         owner: { target: { kind: 'environment', environmentId: 'laptop' }, wslHostDistro: null },
         rateLimits,
+        accountsUnverifiable: false,
         accounts: snapshot,
         remoteOwner: { environmentId: 'laptop', label: 'Laptop' },
         refreshRemote: null
@@ -171,6 +172,7 @@ function switcherFixture(
         owner: { target: { kind: 'local' }, wslHostDistro: null },
         rateLimits,
         accounts: null,
+        accountsUnverifiable: false,
         remoteOwner: null,
         refreshRemote: null
       }
