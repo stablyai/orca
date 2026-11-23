@@ -238,8 +238,14 @@ export async function openClaudeSession(input: {
   const result: ClaudeOpenFacts = {
     ...claudeStartedReportedOptions(session, readClaudeModels(initialized.initialization))
   }
-  // A refused Full access chat's first send waits on this read to choose its mode.
-  session.startupSettings = settleClaudeStartupSettings(input, initialized).catch(() => {})
+  // A Full access or Approve for me chat's first send waits on this read to choose its mode.
+  const startupSettings = settleClaudeStartupSettings(input, initialized).catch(() => {})
+  session.startupSettings = startupSettings
+  void startupSettings.then(() => {
+    if (session.startupSettings === startupSettings) {
+      session.startupSettings = undefined
+    }
+  })
   return result
 }
 

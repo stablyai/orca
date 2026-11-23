@@ -138,18 +138,25 @@ async function waitForClaudeStartupSettings(
   signal: AbortSignal | undefined
 ): Promise<void> {
   const intent = session.launchIntent?.permissionMode
+  // Claude's startup mode can't say why it isn't auto; only the settings read can.
   const unread =
     intent === 'bypassPermissions'
-      ? session.bypassDisabled === undefined
+      ? session.bypassDisabled === undefined && !session.firstRootInit
       : intent === 'auto' && session.autoDisabled === undefined
-  if (unread && !session.firstRootInit && session.startupSettings) {
-    await waitForPromiseWithSignal(
-      Promise.race([
-        session.startupSettings,
-        delay(CLAUDE_STARTUP_SETTINGS_WAIT_MS, undefined, { ref: false, signal })
-      ]),
-      signal
-    )
+  const pending = session.startupSettings
+  if (!unread || !pending) {
+    return
+  }
+  const settled = await waitForPromiseWithSignal(
+    Promise.race([
+      pending.then(() => true),
+      delay(CLAUDE_STARTUP_SETTINGS_WAIT_MS, false, { ref: false, signal })
+    ]),
+    signal
+  )
+  // A read slower than the wait holds up only the first send.
+  if (!settled && session.startupSettings === pending) {
+    session.startupSettings = undefined
   }
 }
 
