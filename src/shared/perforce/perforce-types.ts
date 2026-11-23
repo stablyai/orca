@@ -49,10 +49,25 @@ export type PerforceWorkspaceInfo = {
   haveChange?: number
 }
 
+/** A file opened in this client outside the Orca folder; submitting its changelist submits it too. */
+export type PerforceOutsideFile = {
+  depotPath: string
+  /** Path under the client root with forward slashes, when it is mapped there. */
+  clientPath?: string
+  action: PerforceFileAction
+  changelist: 'default' | number
+}
+
 export type PerforceStatusResult = {
   info: PerforceWorkspaceInfo
   entries: PerforceEntry[]
   changelists: PerforceChangelist[]
+  /** Absent from hosts older than this field. */
+  openedOutside?: PerforceOutsideFile[]
+  /** The first unopened-files scan is still running; ask again with `waitForUnopened` for it. */
+  unopenedPending?: boolean
+  /** Unopened files were not looked for: a sparse stream only lists what is opened. */
+  unopenedSkipped?: 'sparse-stream'
 }
 
 export type PerforceHistoryEntry = {

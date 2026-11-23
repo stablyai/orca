@@ -22,6 +22,7 @@ else if (cmd === 'reconcile') out('... clientFile ' + root + '/n.txt\\n... actio
 else if (cmd === 'changes' && args.includes('pending')) out('... change 12\\n... desc Fix things\\n')
 else if (cmd === 'describe') out('... change 12\\n... depotFile0 //d/s.txt\\n... action0 edit\\n')
 else if (cmd === 'client') out('... Stream //d/main\\n')
+else if (cmd === 'stream') out('... Type ' + (process.env.FAKE_P4_STREAM_TYPE || 'development') + '\\n')
 else if (cmd === 'change' && args[1] === '-o') out('Change:\\t12\\n\\nDescription:\\n\\told\\n\\nFiles:\\n\\t//d/a.txt\\t# edit\\n')
 else if (cmd === 'change' && args[1] === '-i') { fs.writeFileSync(process.env.FAKE_P4_LOG + '.stdin', fs.readFileSync(0, 'utf8')); out('Change 12 updated.\\n') }
 `
@@ -59,8 +60,17 @@ describe.skipIf(process.platform === 'win32')('localPerforceBackend with a fake 
         return Array.isArray(parsed) ? parsed.map(String) : []
       })
 
+  it('answers before the first unopened scan finishes, and with it when asked to wait', async () => {
+    const quick = await localPerforceBackend.status(dir)
+    expect(quick.unopenedPending).toBe(true)
+    expect(quick.entries.map((e) => e.path)).toEqual(['a.txt'])
+    const waited = await localPerforceBackend.status(dir, { waitForUnopened: true })
+    expect(waited.unopenedPending).toBeUndefined()
+    expect(waited.entries.map((e) => e.path)).toEqual(['a.txt', 'n.txt'])
+  })
+
   it('builds status from opened files, reconcile preview, and shelves', async () => {
-    const status = await localPerforceBackend.status(dir)
+    const status = await localPerforceBackend.status(dir, { waitForUnopened: true })
     expect(status.info).toMatchObject({ client: 'ws', stream: '//d/main' })
     expect(status.entries.map((e) => [e.path, e.group, e.changelist])).toEqual([
       ['a.txt', 'opened', 12],
@@ -75,9 +85,17 @@ describe.skipIf(process.platform === 'win32')('localPerforceBackend with a fake 
     ])
   })
 
+  it('lists only opened files on a sparse stream, without scanning', async () => {
+    process.env.FAKE_P4_STREAM_TYPE = 'sparsedev'
+    const status = await localPerforceBackend.status(dir, { waitForUnopened: true })
+    expect(status.unopenedSkipped).toBe('sparse-stream')
+    expect(status.entries.map((e) => e.path)).toEqual(['a.txt'])
+    expect((await invocations()).some((args) => args[0] === 'reconcile')).toBe(false)
+  })
+
   it('reads "nothing opened" as no opened files', async () => {
     process.env.FAKE_P4_FSTAT_ERROR = '... - file(s) not opened on this client.'
-    const status = await localPerforceBackend.status(dir)
+    const status = await localPerforceBackend.status(dir, { waitForUnopened: true })
     expect(status.entries.map((e) => [e.path, e.group])).toEqual([['n.txt', 'new']])
   })
 

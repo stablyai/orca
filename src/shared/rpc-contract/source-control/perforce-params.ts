@@ -13,6 +13,8 @@ const ChangelistTarget = z.union([z.literal('default'), ChangelistId])
 
 export const PerforceWorktree = WorktreeSelector.extend({ settings: ClientPerforceSettings })
 
+export const PerforceStatus = PerforceWorktree.extend({ waitForUnopened: z.boolean().optional() })
+
 export const PerforceHistory = PerforceWorktree.extend({
   limit: z.number().int().min(1).max(200).optional()
 })

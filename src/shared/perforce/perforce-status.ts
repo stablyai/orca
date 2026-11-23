@@ -3,15 +3,16 @@ import type {
   PerforceChangelist,
   PerforceEntry,
   PerforceFileAction,
+  PerforceOutsideFile,
   PerforceShelvedFile,
   PerforceStatusResult,
   PerforceWorkspaceInfo
 } from './perforce-types'
-import { runP4, type P4CommandResult } from './p4-command'
-import { currentPerforceSettings } from './p4-settings-context'
+import { runP4 } from './p4-command'
 import { parseTaggedOutput } from './p4-tagged-output'
 import { detectPerforceWorkspace, toPosix } from './perforce-detection'
-import { HELD_SCAN_MESSAGE, isWorkspaceScanHeld, scanWorkspace } from './perforce-workspace-scan'
+import { previewUnopenedFiles } from './perforce-unopened-preview'
+import { HELD_SCAN_MESSAGE, isWorkspaceScanHeld } from './perforce-workspace-scan'
 
 const KNOWN_ACTIONS: readonly PerforceFileAction[] = [
   'add',
@@ -38,24 +39,42 @@ export function toRelativePath(cwd: string, localPath: string | undefined): stri
   return toPosix(rel)
 }
 
-export function parseOpenedEntries(cwd: string, stdout: string): PerforceEntry[] {
+/** Splits the client's opened files into this folder's entries and the ones outside it. */
+export function parseOpenedFiles(
+  cwd: string,
+  clientRoot: string,
+  stdout: string
+): { entries: PerforceEntry[]; outside: PerforceOutsideFile[] } {
   const entries: PerforceEntry[] = []
+  const outside: PerforceOutsideFile[] = []
   for (const record of parseTaggedOutput(stdout)) {
-    const path = toRelativePath(cwd, record.clientFile)
-    if (!path) {
-      continue
-    }
     const change = record.change
-    entries.push({
-      path,
-      depotPath: record.depotFile,
-      action: toAction(record.action),
-      group: 'opened',
-      changelist: !change || change === 'default' ? 'default' : Number(change),
-      fileType: record.type
-    })
+    const changelist = !change || change === 'default' ? 'default' : Number(change)
+    const action = toAction(record.action)
+    const path = toRelativePath(cwd, record.clientFile)
+    if (path) {
+      entries.push({
+        path,
+        depotPath: record.depotFile,
+        action,
+        group: 'opened',
+        changelist,
+        fileType: record.type
+      })
+    } else if (record.depotFile) {
+      // Why the check: a multi-root client reports its root as "null".
+      const clientPath = isAbsolute(clientRoot)
+        ? toRelativePath(clientRoot, record.clientFile)
+        : null
+      outside.push({
+        depotPath: record.depotFile,
+        action,
+        changelist,
+        ...(clientPath ? { clientPath } : {})
+      })
+    }
   }
-  return entries
+  return { entries, outside }
 }
 
 export function parseReconcilePreview(cwd: string, stdout: string): PerforceEntry[] {
@@ -163,33 +182,21 @@ async function readHaveChange(cwd: string): Promise<number | undefined> {
   return change ? Number(change) : undefined
 }
 
-/** Previews unopened changes; skipped entirely when the user hides both unopened sections. */
-async function runReconcilePreview(cwd: string): Promise<P4CommandResult> {
-  const settings = currentPerforceSettings()
-  const flags = [
-    ...(settings.showNewFiles ? ['-a'] : []),
-    // -m: skip the digest of files whose modification time matches the have list.
-    ...(settings.showModifiedNotOpened ? ['-e', '-m', '-d'] : [])
-  ]
-  if (flags.length === 0) {
-    return { code: 0, stdout: '', stderr: '' }
-  }
-  return scanWorkspace(cwd, settings.refreshIntervalSeconds * 500, (signal) =>
-    runP4(['-ztag', 'reconcile', '-n', ...flags, '...'], {
-      cwd,
-      signal,
-      timeoutMs: settings.statusScanTimeoutSeconds * 1000
-    })
-  )
-}
-
 /**
- * Tagged fstat of the opened files. Only "nothing opened" counts as empty: a timed-out scan must fail
- * the status (the panel keeps its last one), or opened files would vanish and Submit take the wrong path.
+ * Tagged fstat of the client's opened files, inside this folder or not: a changelist submits all of
+ * them. Only "nothing opened" counts as empty: a timed-out scan must fail the status (the panel keeps
+ * its last one), or opened files would vanish and Submit take the wrong path.
  */
-async function readOpenedFiles(cwd: string): Promise<string> {
+async function readOpenedFiles(cwd: string, client: string): Promise<string> {
   const result = await runP4(
-    ['-ztag', 'fstat', '-Ro', '-T', 'depotFile,clientFile,action,change,type', '...'],
+    [
+      '-ztag',
+      'fstat',
+      '-Ro',
+      '-T',
+      'depotFile,clientFile,action,change,type',
+      client ? `//${client}/...` : '...'
+    ],
     { cwd }
   )
   if (result.code === 0) {
@@ -201,7 +208,10 @@ async function readOpenedFiles(cwd: string): Promise<string> {
   throw new Error(result.stderr.trim() || result.stdout.trim() || 'p4 fstat failed')
 }
 
-export async function getPerforceStatus(cwd: string): Promise<PerforceStatusResult> {
+export async function getPerforceStatus(
+  cwd: string,
+  options: { waitForUnopened?: boolean } = {}
+): Promise<PerforceStatusResult> {
   // Why first: every p4 below runs in the folder, and a copy being deleted must not be held open.
   if (isWorkspaceScanHeld(cwd)) {
     throw new Error(HELD_SCAN_MESSAGE)
@@ -210,18 +220,23 @@ export async function getPerforceStatus(cwd: string): Promise<PerforceStatusResu
   if (!detected.isWorkspace) {
     throw new Error(detected.message ?? 'Not a Perforce workspace')
   }
+  const streamRead = readStream(cwd)
   const [opened, reconcile, changelists, stream, haveChange] = await Promise.all([
-    readOpenedFiles(cwd),
+    readOpenedFiles(cwd, detected.info.client),
     // A failed/timed-out unopened scan must not break the panel; degrade to opened + changelists.
-    runReconcilePreview(cwd).catch(() => ({ code: null, stdout: '', stderr: '' })),
+    previewUnopenedFiles(cwd, streamRead, options.waitForUnopened === true).catch(() => ({
+      code: null,
+      stdout: '',
+      stderr: ''
+    })),
     readChangelists(cwd, detected.info),
-    readStream(cwd),
+    streamRead,
     readHaveChange(cwd)
   ])
-  const openedEntries = parseOpenedEntries(cwd, opened)
+  const { entries: openedEntries, outside } = parseOpenedFiles(cwd, detected.info.root, opened)
   const openedPaths = new Set(openedEntries.map((entry) => entry.path))
   const pendingEntries =
-    reconcile.code === 0
+    reconcile !== null && reconcile !== 'sparse-stream' && reconcile.code === 0
       ? parseReconcilePreview(cwd, reconcile.stdout).filter((entry) => !openedPaths.has(entry.path))
       : []
   return {
@@ -231,7 +246,10 @@ export async function getPerforceStatus(cwd: string): Promise<PerforceStatusResu
       ...(haveChange ? { haveChange } : {})
     },
     entries: [...openedEntries, ...pendingEntries],
-    changelists
+    changelists,
+    openedOutside: outside,
+    ...(reconcile === null ? { unopenedPending: true } : {}),
+    ...(reconcile === 'sparse-stream' ? { unopenedSkipped: 'sparse-stream' as const } : {})
   }
 }
 

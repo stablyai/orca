@@ -1,6 +1,7 @@
 import type { MouseEvent, ReactNode } from 'react'
 import type {
   PerforceEntry,
+  PerforceEntryGroup,
   PerforceFileAction
 } from '../../../../../shared/perforce/perforce-types'
 
@@ -22,6 +23,15 @@ const ACTION_COLORS: Partial<Record<PerforceFileAction, string>> = {
   'move/delete': 'var(--git-decoration-deleted)'
 }
 
+export function perforceActionBadge(
+  action: PerforceFileAction,
+  group: PerforceEntryGroup
+): { label: string; color: string | undefined } {
+  return group === 'new'
+    ? { label: 'U', color: 'var(--git-decoration-untracked)' }
+    : { label: ACTION_LABELS[action] ?? '?', color: ACTION_COLORS[action] }
+}
+
 export function PerforceFileRow({
   entry,
   selected,
@@ -41,9 +51,7 @@ export function PerforceFileRow({
   const slash = entry.path.lastIndexOf('/')
   const name = entry.path.slice(slash + 1)
   const dir = slash === -1 ? '' : entry.path.slice(0, slash)
-  const label = entry.group === 'new' ? 'U' : (ACTION_LABELS[entry.action] ?? '?')
-  const color =
-    entry.group === 'new' ? 'var(--git-decoration-untracked)' : ACTION_COLORS[entry.action]
+  const { label, color } = perforceActionBadge(entry.action, entry.group)
   return (
     <div
       className="group flex items-center gap-1 px-2 py-0.5 text-[13px] hover:bg-accent data-[selected=true]:bg-accent"

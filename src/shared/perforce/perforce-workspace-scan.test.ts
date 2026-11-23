@@ -5,6 +5,7 @@ import {
   holdWorkspaceScansUnder,
   invalidateWorkspaceScan,
   isWorkspaceScanHeld,
+  peekWorkspaceScan,
   resetWorkspaceScansForTests,
   scanWorkspace
 } from './perforce-workspace-scan'
@@ -99,6 +100,16 @@ describe('scanWorkspace', () => {
     expect(runs).toHaveLength(2)
     runs[1].finish('scanned')
     expect((await retry).stdout).toBe('scanned')
+  })
+
+  it("answers a peek at a folder's first scan at once, and a waiting call shares that scan", async () => {
+    const { runs, run } = controllableScans()
+    expect(await peekWorkspaceScan(WS, 15_000, run)).toBeNull()
+    const waiting = scanWorkspace(WS, 15_000, run)
+    expect(runs).toHaveLength(1)
+    runs[0].finish('scanned')
+    expect((await waiting).stdout).toBe('scanned')
+    expect((await peekWorkspaceScan(WS, 15_000, run))?.stdout).toBe('scanned')
   })
 
   it('rescans after Orca changes what is opened, without waiting for it', async () => {

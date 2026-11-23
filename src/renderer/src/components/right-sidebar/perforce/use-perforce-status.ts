@@ -7,6 +7,7 @@ import type {
 } from '../../../../../shared/perforce/perforce-types'
 import { translate } from '@/i18n/i18n'
 import {
+  perforceWorkspaceKey,
   runPerforceOperation,
   type PerforceWorkspaceTarget
 } from '../../../runtime/runtime-perforce-client'
@@ -16,6 +17,8 @@ export function usePerforceStatus(target: PerforceWorkspaceTarget, refreshInterv
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const requestId = useRef(0)
+  const waitingForScan = useRef<string | null>(null)
+  const latestRefresh = useRef<() => Promise<void>>(async () => undefined)
 
   const refresh = useCallback(async (): Promise<void> => {
     const id = ++requestId.current
@@ -26,12 +29,28 @@ export function usePerforceStatus(target: PerforceWorkspaceTarget, refreshInterv
         publishPerforceOpenedFiles(target, next.entries)
         setError(null)
       }
+      const key = perforceWorkspaceKey(target)
+      if (next.unopenedPending && waitingForScan.current !== key) {
+        // Why: opened files show at once; the slow first unopened scan fills in when it finishes.
+        waitingForScan.current = key
+        await runPerforceOperation(target, 'status', { waitForUnopened: true }).catch(
+          () => undefined
+        )
+        if (waitingForScan.current === key) {
+          waitingForScan.current = null
+        }
+        void latestRefresh.current()
+      }
     } catch (caught) {
       if (id === requestId.current) {
         setError(caught instanceof Error ? caught.message : String(caught))
       }
     }
   }, [target])
+
+  useEffect(() => {
+    latestRefresh.current = refresh
+  }, [refresh])
 
   useEffect(() => {
     void refresh()

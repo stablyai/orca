@@ -13,11 +13,14 @@ export function usePerforceGroups(status: PerforceStatusResult | null) {
   const groups = useMemo(() => {
     const entries = status?.entries ?? []
     const opened = entries.filter((entry) => entry.group === 'opened')
+    const outside = status?.openedOutside ?? []
     return {
       defaultList: opened.filter((entry) => entry.changelist === 'default'),
+      defaultOutside: outside.filter((file) => file.changelist === 'default'),
       numbered: (status?.changelists ?? []).map((changelist) => ({
         changelist,
-        files: opened.filter((entry) => entry.changelist === changelist.id)
+        files: opened.filter((entry) => entry.changelist === changelist.id),
+        outside: outside.filter((file) => file.changelist === changelist.id)
       })),
       modified: entries.filter((entry) => entry.group === 'modified'),
       fresh: entries.filter((entry) => entry.group === 'new')

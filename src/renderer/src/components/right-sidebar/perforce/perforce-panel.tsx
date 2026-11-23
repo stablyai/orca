@@ -15,6 +15,8 @@ import { NewChangelistDialog, UnshelveDialog } from './perforce-dialogs'
 import { PerforceFileActions } from './perforce-file-actions'
 import { PerforceFileContextMenu } from './perforce-file-context-menu'
 import { PerforceFileRow } from './perforce-file-row'
+import { PerforceOutsideFileRow } from './perforce-outside-file-row'
+import { PerforceUnopenedNote } from './perforce-unopened-note'
 import { PerforcePanelHeader } from './perforce-panel-header'
 import { rowKey, usePerforceGroups } from './use-perforce-groups'
 import { usePerforceSelection } from './use-perforce-selection'
@@ -170,20 +172,22 @@ export function PerforcePanel({
   }
 
   const { info } = status
+  const defaultCount = groups.defaultList.length + groups.defaultOutside.length
   const nothingPending =
-    groups.defaultList.length + groups.modified.length + groups.fresh.length === 0 &&
-    groups.numbered.length === 0
-  const canSubmit = message.trim().length > 0 && groups.defaultList.length > 0
+    defaultCount + groups.modified.length + groups.fresh.length === 0 &&
+    groups.numbered.length === 0 &&
+    !status.unopenedPending
+  const canSubmit = message.trim().length > 0 && defaultCount > 0
   const createFilePaths = (files: PerforceEntry[]): string[] =>
     settings.newChangelistMode === 'empty' ? [] : paths(files)
 
   const sections: Record<PerforcePanelSection, React.ReactNode> = {
     default:
-      groups.defaultList.length > 0 ? (
+      defaultCount > 0 ? (
         <>
           <SectionHeader
             title={translate('perforce.ui.defaultChangelist', 'Default changelist')}
-            count={groups.defaultList.length}
+            count={defaultCount}
           >
             <Button
               variant="ghost"
@@ -215,15 +219,18 @@ export function PerforcePanel({
             </Button>
           </SectionHeader>
           {renderRows(groups.defaultList)}
+          {groups.defaultOutside.map((file) => (
+            <PerforceOutsideFileRow key={file.depotPath} file={file} />
+          ))}
         </>
       ) : null,
     numbered: (
       <>
-        {groups.numbered.map(({ changelist, files }) => (
+        {groups.numbered.map(({ changelist, files, outside }) => (
           <div key={changelist.id}>
             <PerforceChangelistHeader
               changelist={changelist}
-              fileCount={files.length}
+              fileCount={files.length + outside.length}
               collapsed={collapsedChangelists.has(changelist.id)}
               aiEnabled={settings.aiDescriptionEnabled}
               onToggle={() =>
@@ -235,9 +242,16 @@ export function PerforcePanel({
                   return next
                 })
               }
-              actions={buildActions(changelist, files)}
+              actions={buildActions(changelist, files, outside.length)}
             />
-            {collapsedChangelists.has(changelist.id) ? null : renderRows(files)}
+            {collapsedChangelists.has(changelist.id) ? null : (
+              <>
+                {renderRows(files)}
+                {outside.map((file) => (
+                  <PerforceOutsideFileRow key={file.depotPath} file={file} />
+                ))}
+              </>
+            )}
           </div>
         ))}
       </>
@@ -354,6 +368,7 @@ export function PerforcePanel({
         {perforceSectionOrder(settings.groupOrder).map((id) => (
           <Fragment key={id}>{sections[id]}</Fragment>
         ))}
+        <PerforceUnopenedNote status={status} />
       </div>
       {newChangelistPaths ? (
         <NewChangelistDialog

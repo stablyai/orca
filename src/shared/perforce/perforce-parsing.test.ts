@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { escapeP4FileArg } from './p4-command'
 import { buildChangeSpec } from './perforce-changelists'
-import { parseOpenedEntries, parseReconcilePreview } from './perforce-status'
+import { parseOpenedFiles, parseReconcilePreview } from './perforce-status'
 
-describe('parseOpenedEntries', () => {
+describe('parseOpenedFiles', () => {
   it('maps fstat records to workspace-relative entries', () => {
     const out = [
       '... depotFile //depot/a.txt',
@@ -18,7 +18,7 @@ describe('parseOpenedEntries', () => {
       '... change 42',
       ''
     ].join('\n')
-    expect(parseOpenedEntries('/ws', out)).toEqual([
+    expect(parseOpenedFiles('/ws', '/', out).entries).toEqual([
       {
         path: 'src/a.txt',
         depotPath: '//depot/a.txt',
@@ -38,14 +38,27 @@ describe('parseOpenedEntries', () => {
     ])
   })
 
-  it('skips files outside the workspace directory', () => {
-    const out = '... clientFile /elsewhere/x.txt\n... action edit\n'
-    expect(parseOpenedEntries('/ws', out)).toEqual([])
+  it('lists files outside the folder apart, by their path under the client root', () => {
+    const out = [
+      '... depotFile //tools/x.md',
+      '... clientFile /root/agents/x.md',
+      '... action add',
+      '... change 7',
+      ''
+    ].join('\n')
+    expect(parseOpenedFiles('/root/game', '/root', out)).toEqual({
+      entries: [],
+      outside: [
+        { depotPath: '//tools/x.md', clientPath: 'agents/x.md', action: 'add', changelist: 7 }
+      ]
+    })
   })
 
   it('keeps a file whose name starts with two dots', () => {
     const out = '... clientFile /ws/..notes.txt\n... action edit\n'
-    expect(parseOpenedEntries('/ws', out).map((entry) => entry.path)).toEqual(['..notes.txt'])
+    expect(parseOpenedFiles('/ws', '/', out).entries.map((entry) => entry.path)).toEqual([
+      '..notes.txt'
+    ])
   })
 })
 

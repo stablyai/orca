@@ -42,7 +42,7 @@ type Target = 'default' | number
 /** Every Perforce operation, executed where `cwd` lives: the local machine or an SSH relay. */
 export type PerforceBackend = {
   detect: (cwd: Cwd) => Promise<PerforceDetectResult>
-  status: (cwd: Cwd) => Promise<PerforceStatusResult>
+  status: (cwd: Cwd, options?: { waitForUnopened?: boolean }) => Promise<PerforceStatusResult>
   history: (cwd: Cwd, limit: number) => Promise<PerforceHistoryEntry[]>
   diff: (cwd: Cwd, filePath: string) => Promise<GitDiffResult>
   open: (cwd: Cwd, filePaths: Files) => Promise<PerforceOperationResult>

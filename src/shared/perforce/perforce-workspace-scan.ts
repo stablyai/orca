@@ -85,20 +85,42 @@ export async function scanWorkspace(
   minIntervalMs: number,
   run: (signal: AbortSignal) => Promise<P4CommandResult>
 ): Promise<P4CommandResult> {
+  return (await scan(cwd, minIntervalMs, run, true)) ?? HELD_RESULT
+}
+
+/** `scanWorkspace` that never waits: a folder never scanned starts its scan and answers null. */
+export function peekWorkspaceScan(
+  cwd: string,
+  minIntervalMs: number,
+  run: (signal: AbortSignal) => Promise<P4CommandResult>
+): Promise<P4CommandResult | null> {
+  return scan(cwd, minIntervalMs, run, false)
+}
+
+const HELD_RESULT: P4CommandResult = { code: null, stdout: '', stderr: HELD_SCAN_MESSAGE }
+
+async function scan(
+  cwd: string,
+  minIntervalMs: number,
+  run: (signal: AbortSignal) => Promise<P4CommandResult>,
+  waitForFirst: boolean
+): Promise<P4CommandResult | null> {
   if (isWorkspaceScanHeld(cwd)) {
-    return { code: null, stdout: '', stderr: HELD_SCAN_MESSAGE }
+    return HELD_RESULT
   }
   const state = stateFor(cwd)
   const { last, failed, running } = state
   const resting = failed !== null && Date.now() - failed.finishedAt < restMs(failed, minIntervalMs)
   if (!last) {
-    if (running) {
-      return running.done
-    }
-    if (resting) {
+    if (resting && !running) {
       throw failed.error
     }
-    return start(state, run)
+    const first = running?.done ?? start(state, run)
+    if (waitForFirst) {
+      return first
+    }
+    first.catch(() => undefined)
+    return null
   }
   const due =
     !resting &&

@@ -15,6 +15,7 @@ import {
   PerforceProject,
   PerforceRemoveCopy,
   PerforceShelvedFiles,
+  PerforceStatus,
   PerforceSubmit,
   PerforceUnshelveFrom,
   PerforceWorktree
@@ -39,7 +40,7 @@ export const PERFORCE_METHODS = [
   defineMethod({
     name: 'perforce.status',
     permission: 'workspace',
-    params: PerforceWorktree,
+    params: PerforceStatus,
     handler: (params, { runtime }) =>
       runtime.runPerforceOperation(params.worktree, 'status', params)
   }),

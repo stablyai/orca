@@ -149,7 +149,9 @@ export function usePerforceChangelistActions({
 
   const buildActions = (
     changelist: PerforceChangelist,
-    files: PerforceEntry[]
+    files: PerforceEntry[],
+    /** Opened files of the changelist outside this folder; p4 submits them too. */
+    outsideCount = 0
   ): ChangelistActions => ({
     busy,
     onEditDescription: (description) =>
@@ -223,7 +225,7 @@ export function usePerforceChangelistActions({
       }
     },
     onSubmit: () => {
-      const shelvedOnly = files.length === 0
+      const shelvedOnly = files.length + outsideCount === 0
       const confirmed = shelvedOnly
         ? ask(
             `Submit the shelved files of changelist ${changelist.id}? They are unshelved first and the shelf is ${

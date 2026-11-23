@@ -21,7 +21,7 @@ type Operation = (backend: PerforceBackend, cwd: string, params: Params) => Prom
 export const PERFORCE_WORKSPACE_OPERATIONS = {
   detect: (b, cwd) => b.detect(cwd),
   info: (b, cwd) => b.info(cwd),
-  status: (b, cwd) => b.status(cwd),
+  status: (b, cwd, p) => b.status(cwd, { waitForUnopened: p.waitForUnopened === true }),
   history: (b, cwd, p) => b.history(cwd, typeof p.limit === 'number' ? Math.min(p.limit, 200) : 30),
   diff: (b, cwd, p) => b.diff(cwd, requireRelativePath(p.filePath)),
   diffText: (b, cwd, p) => b.diffText(cwd, requireRelativePaths(p.filePaths)),
@@ -91,7 +91,8 @@ type NoParams = Record<never, never>
 export type PerforceOperationParams = {
   detect: NoParams
   info: NoParams
-  status: NoParams
+  /** Older hosts ignore `waitForUnopened` and always wait for a folder's first scan. */
+  status: { waitForUnopened?: boolean }
   history: { limit?: number }
   diff: { filePath: string }
   diffText: { filePaths: string[] }
