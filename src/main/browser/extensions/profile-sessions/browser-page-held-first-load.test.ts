@@ -68,16 +68,18 @@ describe('a held first load', () => {
     expect(page.started).toEqual(['https://b.test/'])
   })
 
-  it('Stop keeps the saved history in the page, stopped, so a reload keeps it', async () => {
+  it('Stop keeps the saved history out until ready, then puts it back stopped', async () => {
     const page = new FakePage()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as in hold(), plus navigationHistory.restore, which FakePage provides.
     const contents = page as unknown as Electron.WebContents
     const history = { entries: [{ url: 'https://a.test/', title: '' }], index: 0 }
-    const held = loadPageWhenReady(contents, deferred().promise, () => Promise.resolve(), {
-      history
-    })
+    const ready = deferred()
+    const held = loadPageWhenReady(contents, ready.promise, () => Promise.resolve(), { history })
     page.stop()
     await expect(held).rejects.toMatchObject({ errno: -3 })
+    expect(page.restored).toEqual([])
+    ready.resolve()
+    await settle()
     expect(page.restored).toEqual([['https://a.test/']])
     expect(page.nativeStops).toBe(2)
     expect(page.started).toEqual([])

@@ -105,6 +105,9 @@ export function isBrowserRouteGuestNavigationAllowed(
   }
 }
 
+// Each route navigation's turn, so one that waited for extensions yields to a newer one.
+const routeNavigationSequence = new WeakMap<WebContents, number>()
+
 export async function navigateBrowserRouteGuest(
   registration: BrowserRoutePageGuestIdentity,
   rawUrl: string,
@@ -128,6 +131,8 @@ export async function navigateBrowserRouteGuest(
   if (!state || !normalized || !allowed()) {
     return false
   }
+  const sequence = (routeNavigationSequence.get(state.guest) ?? 0) + 1
+  routeNavigationSequence.set(state.guest, sequence)
   try {
     // As in initialization: a route session's first request must not straddle an extension load.
     const extensionsReady = whenBrowserExtensionsReadyForPage(state.guest)
@@ -145,9 +150,13 @@ export async function navigateBrowserRouteGuest(
       } finally {
         state.guest.off('did-start-navigation', started)
       }
-      // Authority can be revoked, the command cancelled, or the page navigated, while waiting.
-      if (overtaken || signal?.aborted || !allowed()) {
+      // Authority can be revoked or the command cancelled while waiting.
+      if (signal?.aborted || !allowed()) {
         return false
+      }
+      // Superseded by a newer navigation, which owns the page now; page metadata reports its URL.
+      if (overtaken || routeNavigationSequence.get(state.guest) !== sequence) {
+        return true
       }
     }
     await (startBrowserPageAttach(state.guest, normalized)

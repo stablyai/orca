@@ -28,7 +28,7 @@ export function loadPageWhenReady(
   ready: Promise<unknown>,
   load: (requested: HeldLoad | null) => Promise<void>,
   hooks: {
-    /** The page's saved history: Stop still puts it back, so a reload keeps it. */
+    /** The page's saved history: after Stop it still goes back once ready, so a reload keeps it. */
     history?: SavedHistory | null
   } = {}
 ): Promise<void> {
@@ -54,6 +54,9 @@ export function loadPageWhenReady(
   const stop = (): void => {
     nativeStop()
     cancelQueued()
+    if (stopped) {
+      stoppedListeners.forEach((listener) => listener(contents))
+    }
     stopped = true
     stoppedNow()
   }
@@ -95,9 +98,15 @@ export function loadPageWhenReady(
       return outcome
     }
     if (stopped) {
-      // The first load already ended; a load asked for since starts now, after any put-back history.
+      // The first load already ended. A load asked for since starts now (behind the saved history);
+      // with none, the history goes back stopped, as Stop during a restore leaves it.
       if (queued) {
-        queued.settle(contents.loadURL(queued.url, queued.options))
+        queued.settle(finishHeldLoad(queued))
+      } else if (hooks.history && !navigatedElsewhere) {
+        void contents.navigationHistory
+          .restore({ entries: hooks.history.entries, index: hooks.history.index })
+          .catch(() => {})
+        nativeStop()
       }
       return undefined
     }
@@ -111,15 +120,9 @@ export function loadPageWhenReady(
     how === 'stopped' ? stopFirstLoad() : released
   )
 
+  // Why the history stays out until readiness: a Reload or Back on it would bypass the hold.
   function stopFirstLoad(): Promise<void> {
     heldFirstLoads.delete(contents)
-    if (hooks.history && !navigatedElsewhere) {
-      // As Stop during a restore leaves it: the saved entries, with nothing loading.
-      void contents.navigationHistory
-        .restore({ entries: hooks.history.entries, index: hooks.history.index })
-        .catch(() => {})
-      nativeStop()
-    }
     stoppedListeners.forEach((listener) => listener(contents))
     return Promise.reject(supersededLoadError())
   }
