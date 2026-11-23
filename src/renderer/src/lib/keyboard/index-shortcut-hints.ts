@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { matchKeybindingDigitIndex } from '../../../../shared/keybindings/matching'
 import type { KeybindingOverrides } from '../../../../shared/keybindings/types'
+import type { MainKeyInput } from '../../../../shared/keybindings/main-key-input'
 import { useAppStore } from '@/store/index'
 import { getShortcutPlatform } from './shortcut-platform'
 
@@ -43,7 +44,7 @@ let shown: IndexShortcutHints = HIDDEN
 // One timer per action: a shortcut whose modifiers become complete later still waits its own full hold.
 const showTimers = new Map<IndexShortcutAction, ReturnType<typeof setTimeout>>()
 const listeners = new Set<() => void>()
-let unsubscribeModifierKeyUp: (() => void) | null = null
+let unsubscribeMainKeyInput: (() => void) | null = null
 
 function publish(next: IndexShortcutHints): void {
   if (ACTIONS.every((action) => next[action] === shown[action])) {
@@ -129,6 +130,15 @@ function releaseUnheld(held: HeldModifiers): void {
   publish(next)
 }
 
+// Why: keys main consumes never reach the page; a digit is a jump and keeps the hints, anything else cancels them.
+function onMainKeyInput(input: MainKeyInput): void {
+  if (input.type === 'modifierUp') {
+    releaseUnheld(input.held)
+  } else if (!DIGIT_KEY.test(input.code)) {
+    hide()
+  }
+}
+
 function onVisibilityChange(): void {
   if (document.visibilityState !== 'visible') {
     hide()
@@ -142,7 +152,7 @@ function attach(): void {
   window.addEventListener('pointerdown', hide, true)
   window.addEventListener('pointermove', releaseUnheld, true)
   // Why: main consumes Cmd/Ctrl+digit, and macOS can then withhold the modifier's keyup from the page.
-  unsubscribeModifierKeyUp = window.api?.ui?.onModifierKeyUp?.(releaseUnheld) ?? null
+  unsubscribeMainKeyInput = window.api?.ui?.onMainKeyInput?.(onMainKeyInput) ?? null
   window.addEventListener('blur', hide)
   document.addEventListener('visibilitychange', onVisibilityChange)
 }
@@ -152,8 +162,8 @@ function detach(): void {
   window.removeEventListener('keyup', onKeyUp, true)
   window.removeEventListener('pointerdown', hide, true)
   window.removeEventListener('pointermove', releaseUnheld, true)
-  unsubscribeModifierKeyUp?.()
-  unsubscribeModifierKeyUp = null
+  unsubscribeMainKeyInput?.()
+  unsubscribeMainKeyInput = null
   window.removeEventListener('blur', hide)
   document.removeEventListener('visibilitychange', onVisibilityChange)
   hide()

@@ -3,7 +3,7 @@ import type { BotDeepLinkOutcome } from '../../../shared/bot-deep-link'
 import type { BrowserTabCreateRequest } from '../../../shared/browser/workspaces/browser-tab-create-request'
 import { ipcRenderer } from 'electron'
 import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
-import type { ModifierKeyState } from '../../../shared/keybindings/modifier-key-state'
+import type { MainKeyInput } from '../../../shared/keybindings/main-key-input'
 import type { KeybindingActionId } from '../../../shared/keybindings/types'
 import type { PreloadApi } from '../../api-types'
 import type {
@@ -154,10 +154,10 @@ export const uiStateAndMenuCommandsApi = {
     ipcRenderer.on('ui:jumpToTabIndex', listener)
     return () => ipcRenderer.removeListener('ui:jumpToTabIndex', listener)
   },
-  onModifierKeyUp: (callback: (held: ModifierKeyState) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, held: ModifierKeyState) => callback(held)
-    ipcRenderer.on('ui:modifierKeyUp', listener)
-    return () => ipcRenderer.removeListener('ui:modifierKeyUp', listener)
+  onMainKeyInput: (callback: (input: MainKeyInput) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, input: MainKeyInput) => callback(input)
+    ipcRenderer.on('ui:mainKeyInput', listener)
+    return () => ipcRenderer.removeListener('ui:mainKeyInput', listener)
   },
   onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, direction: 'back' | 'forward') =>

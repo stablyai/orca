@@ -25,6 +25,8 @@ import {
   type TextShortcutInput
 } from '../../../shared/keybindings/text-input-shortcut-policy'
 
+import type { MainKeyInput } from '../../../shared/keybindings/main-key-input'
+
 const MODIFIER_KEYS = new Set(['Meta', 'Control', 'Alt', 'Shift'])
 
 export function installMainWindowShortcutRouting(args: {
@@ -117,14 +119,21 @@ export function installMainWindowShortcutRouting(args: {
     return true
   }
 
+  const sendMainKeyInput = (keyInput: MainKeyInput): void => {
+    mainWindow.webContents.send('ui:mainKeyInput', keyInput)
+  }
+
   mainWindow.webContents.on('before-input-event', (event, input) => {
     // Why: once main consumes a Cmd/Ctrl+key keydown, macOS can withhold the modifier's keyup from the page.
     if (input.type === 'keyUp' && MODIFIER_KEYS.has(input.key)) {
-      mainWindow.webContents.send('ui:modifierKeyUp', {
-        metaKey: input.meta,
-        ctrlKey: input.control,
-        altKey: input.alt,
-        shiftKey: input.shift
+      sendMainKeyInput({
+        type: 'modifierUp',
+        held: {
+          metaKey: input.meta,
+          ctrlKey: input.control,
+          altKey: input.alt,
+          shiftKey: input.shift
+        }
       })
     }
     if (focus.isShortcutRecorderFocused()) {
@@ -245,6 +254,13 @@ export function installMainWindowShortcutRouting(args: {
       focusedShortcutContext: terminalShortcutContext,
       input
     })
+  })
+
+  // Registered after the router so it sees what the router consumed; the page never gets those keydowns.
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && event.defaultPrevented && !MODIFIER_KEYS.has(input.key)) {
+      sendMainKeyInput({ type: 'consumedKeyDown', code: input.code })
+    }
   })
 
   // Reset on focus loss or the next modifier could complete a phantom double tap.

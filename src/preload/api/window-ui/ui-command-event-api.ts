@@ -42,7 +42,7 @@ import type {
   WorktreeStartupLaunch
 } from '../../../shared/worktree/creation/launch-types'
 import type { FeatureInteractionId } from '../../../shared/feature-education/interactions/feature-interaction-catalog'
-import type { ModifierKeyState } from '../../../shared/keybindings/modifier-key-state'
+import type { MainKeyInput } from '../../../shared/keybindings/main-key-input'
 import type { KeybindingActionId } from '../../../shared/keybindings/types'
 import type { BrowserFindSource } from '../../../shared/browser/guest-lifecycle/browser-find-source'
 import type {
@@ -125,7 +125,7 @@ export type UiCommandEventApi = {
   onToggleAgentDashboard: (callback: () => void) => () => void
   onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
   onJumpToTabIndex: (callback: (index: number) => void) => () => void
-  onModifierKeyUp: (callback: (held: ModifierKeyState) => void) => () => void
+  onMainKeyInput: (callback: (input: MainKeyInput) => void) => () => void
   onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
   onRequestTabCreate: (callback: (data: BrowserTabCreateRequest) => void) => () => void
   replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }) => void
