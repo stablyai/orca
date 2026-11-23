@@ -127,6 +127,28 @@ function autoSession(setPermissionMode: (mode: PermissionMode) => Promise<void>)
   return { session, rows }
 }
 
+function openAutoSession(
+  session: ClaudeSession,
+  mode: 'auto' | 'default',
+  settings: Promise<unknown>
+) {
+  return openClaudeSession({
+    session,
+    facts: Promise.resolve({
+      init: null,
+      initProof: createClaudeInitProof(),
+      initialization: { current_permission_mode: mode },
+      resumesTranscript: true,
+      requestTimeoutMs: undefined
+    }),
+    readSettings: () => settings,
+    isCurrent: () => true,
+    diagnose: () => {},
+    onLateRefusal: () => {},
+    report: () => {}
+  })
+}
+
 it('keeps the newer Plan request when an older Auto acknowledgement arrives', async () => {
   const acknowledged = Promise.withResolvers<void>()
   const { session, rows } = autoSession(async (mode) => {
@@ -171,21 +193,7 @@ it.each([
     observeClaudeRootInit(session, { permissionMode: rootMode })
     expect(session.appliedInputOptions.get('buildPermissionMode')).toBe('default')
   }
-  await openClaudeSession({
-    session,
-    facts: Promise.resolve({
-      init: null,
-      initProof: createClaudeInitProof(),
-      initialization: { current_permission_mode: 'auto' },
-      resumesTranscript: true,
-      requestTimeoutMs: undefined
-    }),
-    readSettings: () => read.promise,
-    isCurrent: () => true,
-    diagnose: () => {},
-    onLateRefusal: () => {},
-    report: () => {}
-  })
+  await openAutoSession(session, 'auto', read.promise)
   session.initialization.startup.open()
   journalClaudeSessionPermissionNotice(session)
 
@@ -194,6 +202,23 @@ it.each([
   read.resolve(settings)
   await session.startupSettings
   expect(rows).toEqual([expect.stringMatching(notice)])
+})
+
+it('releases the held started-outside warning while an idle settings read is unanswered', async () => {
+  vi.useFakeTimers()
+  try {
+    const { session, rows } = autoSession(async () => {})
+    const settings = Promise.withResolvers<unknown>()
+    await openAutoSession(session, 'default', settings.promise)
+    session.initialization.startup.open()
+    journalClaudeSessionPermissionNotice(session, { kind: 'thread' })
+    expect(rows).toEqual([])
+
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(rows).toEqual([expect.stringMatching(/:auto-started-outside:ask$/)])
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 it('holds the settings warning through a root status frame before startup finishes', async () => {
@@ -209,21 +234,7 @@ it('holds the settings warning through a root status frame before startup finish
     message: { type: 'system', subtype: 'status', status: null }
   } as const
   const settings = Promise.withResolvers<unknown>()
-  await openClaudeSession({
-    session,
-    facts: Promise.resolve({
-      init: null,
-      initProof: createClaudeInitProof(),
-      initialization: { current_permission_mode: 'default' },
-      resumesTranscript: true,
-      requestTimeoutMs: undefined
-    }),
-    readSettings: () => settings.promise,
-    isCurrent: () => true,
-    diagnose: () => {},
-    onLateRefusal: () => {},
-    report: () => {}
-  })
+  await openAutoSession(session, 'default', settings.promise)
 
   settings.resolve({ effective: { disableAutoMode: 'disable' } })
   await session.startupSettings

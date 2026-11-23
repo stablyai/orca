@@ -1,7 +1,5 @@
-import { setTimeout as delay } from 'node:timers/promises'
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import { claudeBuildPermissionMode } from '../permissions/claude-plan-approval-mode'
-import { journalClaudeSessionPermissionNotice } from '../permissions/claude-full-access-refusal-notice'
 import {
   claudeAutoFallbackReason,
   claudeBypassRefused,
@@ -114,8 +112,6 @@ export async function applyClaudeMessageOptions(
   throwIfSignalAborted(signal)
 }
 
-const CLAUDE_STARTUP_SETTINGS_WAIT_MS = 5_000
-
 /** A failed switch leaves Claude's mode unknown, so the recorded fallback goes: the warning waits
  *  and the next input asks again. It fails the input only where the chat may still be in Plan,
  *  unless Claude accepted a step out of it, or where the chat picked the mode itself. */
@@ -157,19 +153,7 @@ async function waitForClaudeStartupSettings(
   if (!waitForSettings || !pending) {
     return
   }
-  await waitForPromiseWithSignal(
-    Promise.race([
-      pending,
-      delay(CLAUDE_STARTUP_SETTINGS_WAIT_MS, undefined, { ref: false, signal })
-    ]),
-    signal
-  )
-  if (intent === 'auto' && session.startupSettings === pending) {
-    session.startupSettings = undefined
-    if (claudeAutoFallbackReason(session) === 'started-outside') {
-      journalClaudeSessionPermissionNotice(session)
-    }
-  }
+  await waitForPromiseWithSignal(pending, signal)
 }
 
 async function applyClaudePermissionFallback(

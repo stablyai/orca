@@ -172,7 +172,7 @@ export type ClaudeSession = {
   /** Counts permission mode requests, so a fallback written after Claude answers never lands
    *  over a newer request. */
   permissionModeRequests?: number
-  /** The startup `get_settings` read; settles once its facts are recorded, never rejects. */
+  /** The bounded wait for startup `get_settings` facts, cleared when the wait ends. */
   startupSettings?: Promise<void>
   /** Claude's settings turn auto mode off for this process (startup `get_settings`, or a refusal). */
   autoDisabled?: boolean
