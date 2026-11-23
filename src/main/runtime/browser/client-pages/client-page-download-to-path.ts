@@ -19,7 +19,10 @@ export async function downloadClientPageToPath(
   // The desktop refuses a download that names a path, which would be one on its own disk.
   const { path: savePath, ...clickParams } = params
   if (typeof savePath !== 'string' || !path.isAbsolute(savePath)) {
-    throw new BrowserError('invalid_argument', `--path must be an absolute path: ${savePath}`)
+    throw new BrowserError(
+      'invalid_argument',
+      `--path must be an absolute path: ${String(savePath)}`
+    )
   }
   const replyDeadline = Date.now() + AGENT_DOWNLOAD_REPLY_DEADLINE_MS
   await mkdir(path.dirname(savePath), { recursive: true })
