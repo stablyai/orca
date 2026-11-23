@@ -10,7 +10,10 @@ import {
   StructuredAgentSessionLaunchContinuationOnce,
   structuredAgentSessionLaunchContinuationDeps
 } from '../../agent-session/lifecycle/structured-agent-session-launch-continuation'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import {
+  getStructuredAgentSessionHost,
+  onStructuredAgentSessionHostChanged
+} from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   reportDismissedCutWorkers,
   reportWorkerStopsAcrossRestart
@@ -38,6 +41,7 @@ import {
 import { isTerminalHandle } from '../../../../shared/terminal/terminal-handle-prefix'
 import type { RuntimeTerminalPromptSubmitHold } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
+import { redriveWaitingChatMailHere } from '../mailbox/structured-mail/structured-chat-mail-restart-redrive'
 
 export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessionFlush {
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
@@ -71,6 +75,8 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
     )
   }
 
+  abstract redriveStructuredSessionMail(sessionId: string): void
+
   protected abstract readonly terminalWorkerTurnStops: Pick<
     TerminalWorkerTurnStops,
     'reportRestingPane' | 'backgroundWaits'
@@ -102,6 +108,12 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
       this.messageWaiters.onWaitEnded((mailbox) =>
         reconsiderRestAfterWait(mailbox, this.workerTurnStopReportDeps)
       )
+      // Startup swallows a refused host install; the later install makes custody readable again.
+      onStructuredAgentSessionHostChanged(() => {
+        if (this.chatMailRedrivenOnce && getStructuredAgentSessionHost()) {
+          void this.redriveWaitingChatMail()
+        }
+      })
     }
     this.restartWorkerStopReport ??= this.reportWorkerStopsAcrossRestart(
       this.structuredAgentSessionLaunchContinuation.done
@@ -160,6 +172,16 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
     } catch (error: unknown) {
       console.warn('[orchestration] reporting workers stopped across a restart failed', error)
     }
+    await this.redriveWaitingChatMail()
+  }
+
+  private chatMailRedrivenOnce = false
+
+  private redriveWaitingChatMail(): Promise<void> {
+    this.chatMailRedrivenOnce = true
+    return redriveWaitingChatMailHere(this.getExistingOrchestrationDb(), (sessionId) =>
+      this.redriveStructuredSessionMail(sessionId)
+    )
   }
 
   /** Tells the coordinator once about a start whose turn Orca never saw begin, live or after a

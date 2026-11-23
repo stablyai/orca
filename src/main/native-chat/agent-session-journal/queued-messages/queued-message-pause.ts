@@ -179,7 +179,11 @@ function heldSince(
 const pauseMembership = new WeakMap<DerivedQueuePause, ReadonlySet<string>>()
 
 function queuedBefore(pause: DerivedQueuePause, card: QueueCard): boolean {
-  if ((pause.reason === 'stopped' || pause.mailRuns) && orchestrationMailNotice(card.body?.from)) {
+  // Nobody reviews agent mail, so Stop and a restart hold only what the person wrote.
+  if (
+    (pause.reason === 'stopped' || pause.reason === 'restarted' || pause.mailRuns) &&
+    orchestrationMailNotice(card.body?.from)
+  ) {
     return false
   }
   if (pause.messageIds) {
