@@ -9,9 +9,9 @@ import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/wor
 import { NewBotDialog } from '../NewBotDialog'
 import { startGoogleSetupInChat } from './setup-cards/google-setup-run-store'
 
-/** The host's bot whose chat the person was in last; the host's setup starts there. */
+/** The host's agent whose chat the person was in last; the host's setup starts there. */
 function useLastVisitedBot(hostId: ExecutionHostId): Bot | null {
-  // That host's Google setup, so only its own bots.
+  // That host's Google setup, so only its own agents.
   const bots = useHostBots(hostId)
   const lastId = useAppStore((state) => {
     let last: string | null = null
@@ -32,7 +32,7 @@ function useLastVisitedBot(hostId: ExecutionHostId): Bot | null {
   return bots.find((bot) => bot.id === lastId) ?? null
 }
 
-/** Settings' Google setup: it runs in the chat of the host's last-visited bot, or a new one's. */
+/** Settings' Google setup: it runs in the chat of the host's last-visited agent, or a new one's. */
 export function useGoogleSetupStart(hostId: ExecutionHostId): {
   bot: Bot | null
   start: (options?: { newApp?: true }) => void
