@@ -85,7 +85,8 @@ export class CodexSharedServerWindowsJob {
       throw new Error('codex shared app-server exited before it took chats')
     }
     // Native Codex crashing before its launcher's exit is seen looks like no chain at all.
-    const now = Date.now()
+    // Monotonic, so a wall-clock change can't stretch or shrink the window.
+    const now = performance.now()
     const repeated =
       lastInconclusiveAt !== null && now - lastInconclusiveAt < INCONCLUSIVE_WINDOW_MS
     if (verdict === 'inconclusive') {
