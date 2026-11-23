@@ -29,18 +29,24 @@ export async function closeWorkerBoundTerminals(
   }
 }
 
-/** A retry that started cleanly replaces the failed attempt, so its kept setup terminal closes now. */
+/** A retry that started cleanly replaces the failed attempts before it, so the setup terminals they
+ *  kept open close now, back through the whole retry chain. */
 export async function closeRetriedFailedSetup(
   runtime: BoundTerminalCloseRuntime,
   db: OrchestrationDb,
   retryOfDispatchId: string
 ): Promise<void> {
-  const origin =
-    db.getWorkerTerminalResourceByOwner(retryOfDispatchId)?.origin_dispatch_id ?? retryOfDispatchId
-  for (const bound of listWorkerBoundTerminals(db, origin)) {
-    if (isFailedSetupBinding(db, bound)) {
-      await closeBound(runtime, db, bound)
+  const seen = new Set<string>()
+  let attempt: string | null = retryOfDispatchId
+  while (attempt && !seen.has(attempt) && seen.size < 100) {
+    seen.add(attempt)
+    const origin = db.getWorkerTerminalResourceByOwner(attempt)?.origin_dispatch_id ?? attempt
+    for (const bound of listWorkerBoundTerminals(db, origin)) {
+      if (isFailedSetupBinding(db, bound)) {
+        await closeBound(runtime, db, bound)
+      }
     }
+    attempt = db.getDispatchContextById(attempt)?.retry_of_dispatch_id ?? null
   }
 }
 

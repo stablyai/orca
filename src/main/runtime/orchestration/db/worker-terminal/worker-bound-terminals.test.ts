@@ -87,11 +87,13 @@ describe('terminals bound to a worker', () => {
   }
 
   // The host's terminals: each bound handle still names its pane until closed.
-  function host(worker: ReturnType<typeof startWorker>) {
-    const panes = new Map([
-      [worker.setup.terminalHandle, worker.setup.paneKey],
-      [worker.tab.terminalHandle, worker.tab.paneKey]
-    ])
+  function host(...workers: ReturnType<typeof startWorker>[]) {
+    const panes = new Map(
+      workers.flatMap((worker) => [
+        [worker.setup.terminalHandle, worker.setup.paneKey],
+        [worker.tab.terminalHandle, worker.tab.paneKey]
+      ])
+    )
     const closed: string[] = []
     return {
       closed,
@@ -141,6 +143,17 @@ describe('terminals bound to a worker', () => {
 
     await closeRetriedFailedSetup(runtime, db, worker.dispatchId)
     expect(closed).toEqual([worker.tab.terminalHandle, worker.setup.terminalHandle])
+  })
+
+  it('a retry that becomes ready closes the failed setups of every attempt before it', async () => {
+    const first = startWorker(botChat, 'failed')
+    const second = startWorker(botChat, 'failed')
+    db.db
+      .prepare('UPDATE dispatch_contexts SET retry_of_dispatch_id = ? WHERE id = ?')
+      .run(first.dispatchId, second.dispatchId)
+    const { runtime, closed } = host(first, second)
+    await closeRetriedFailedSetup(runtime, db, second.dispatchId)
+    expect(closed).toEqual([second.setup.terminalHandle, first.setup.terminalHandle])
   })
 
   it('closes bound terminals found by their pane after Orca reminted their handles', async () => {

@@ -180,6 +180,14 @@ export async function startRemoteOwnedWorker(
   // Its queue has a reader from the start, so mail sent before the answer still comes home.
   runtime.ensureOrchestrationFederationRelay(run.id)
   const options = serverStartOptions(params)
+  // Read before the wait: the server cannot tell a bot's worker from a person's, and the
+  // coordinator's own Dispatch may settle while the server starts this one.
+  const keepOpenByDefault = coordinatorKeepOpenByDefault(
+    db,
+    params.worktree,
+    coordinator ?? null,
+    (sessionId) => botOfSession(runtime.bots, sessionId) !== null
+  )
   const startCard = prepareWorkerStartCard(runtime, ctx.orchestrationCaller)
   let receipt: unknown
   try {
@@ -248,13 +256,7 @@ export async function startRemoteOwnedWorker(
           taskId,
           runId: run.id,
           runCreated: bindRun().created,
-          // The server cannot tell a bot's worker from a person's; this host can.
-          keepOpenByDefault: coordinatorKeepOpenByDefault(
-            db,
-            params.worktree,
-            coordinator ?? null,
-            (sessionId) => botOfSession(runtime.bots, sessionId) !== null
-          ),
+          keepOpenByDefault,
           ...(started.data?.run ? { serverRunId: started.data.run.id } : {})
         }
       : answer
