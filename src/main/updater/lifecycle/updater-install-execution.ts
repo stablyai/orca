@@ -135,6 +135,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         // Invoke before destroying PTYs/close guards so synchronous failure leaves the app usable.
         const supervisorOwnsRelaunch = this.updateInstallMode === 'supervised-headless-serve'
         const silent = automatic || supervisorOwnsRelaunch
+        span.addEvent('native_quit_and_install_start')
         runWithLaunchPath(() =>
           this.getAutoUpdater().quitAndInstall(silent, !supervisorOwnsRelaunch)
         )
