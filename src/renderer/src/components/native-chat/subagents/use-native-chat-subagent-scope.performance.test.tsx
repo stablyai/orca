@@ -51,7 +51,7 @@ it("holds an open finished subagent's view while others stream", () => {
           lastMessage: 'The full answer.'
         },
         rosterItemId: 'roster',
-        rosterPosition: { sequence: 1, observedAt: 1 },
+        rosterPosition: { sequence: 1, index: 0 },
         rosterRevision: 1
       }
     ]
