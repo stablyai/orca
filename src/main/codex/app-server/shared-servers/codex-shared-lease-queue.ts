@@ -16,7 +16,8 @@ type QueueOwner = {
 
 /** One chat's frames held while it is paused or catching up, in arrival order. */
 export class CodexSharedLeaseQueue {
-  private frames: { frame: CodexSharedServerFrame; bytes: number }[] = []
+  /** Drained slots are emptied at once, so a paused replay holds no frame it already sent. */
+  private frames: ({ frame: CodexSharedServerFrame; bytes: number } | null)[] = []
   /** Next frame to dispatch; drained slots are dropped once they are half the array, so a long
    *  drain stays linear. */
   private head = 0
@@ -45,9 +46,9 @@ export class CodexSharedLeaseQueue {
 
   /** Drops every held frame; held requests are refused so Codex doesn't wait on them. */
   drop(): void {
-    for (const { frame } of this.frames.slice(this.head)) {
-      if (frame.kind === 'request') {
-        this.owner.refuse(frame)
+    for (const slot of this.frames.slice(this.head)) {
+      if (slot?.frame.kind === 'request') {
+        this.owner.refuse(slot.frame)
       }
     }
     this.owner.backlog(-this.heldBytes)
@@ -65,6 +66,7 @@ export class CodexSharedLeaseQueue {
     try {
       while (budget > 0 && this.pending > 0 && this.owner.canDispatch()) {
         const { frame, bytes } = this.frames[this.head]!
+        this.frames[this.head] = null
         this.head += 1
         this.heldBytes -= bytes
         budget -= bytes
