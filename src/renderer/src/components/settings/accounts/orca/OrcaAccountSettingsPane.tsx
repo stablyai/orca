@@ -11,7 +11,10 @@ import { useAppStore } from '@/store/index'
 import { OrcaProfileSignOutConfirmDialog } from '../../../orca-profiles/OrcaProfileSignOutConfirmDialog'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../orca-profiles/OrcaSignInProgress'
 import { isOrcaCloudConsoleAvailable } from '../../../../../../shared/orca-cloud-console'
-import { getOrcaCloudTeamCapabilities } from '../../../../../../shared/orca-profiles/orca-cloud-team-policy'
+import {
+  getDesktopReportingOrgIds,
+  getOrcaCloudTeamCapabilities
+} from '../../../../../../shared/orca-profiles/orca-cloud-team-policy'
 import { OrcaConsoleRow } from './OrcaConsoleRow'
 
 export function accountStatusCopy(
@@ -111,8 +114,9 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
   const [signingOut, setSigningOut] = useState(false)
   const connected = authStatus?.state === 'connected'
   const canConnect = authStatus?.configured === true
-  const policy = getOrcaCloudTeamCapabilities(authStatus)?.teamPolicy
-  const reportingOrgIds = policy?.reportingOrgIds ?? []
+  const teamCapabilities = getOrcaCloudTeamCapabilities(authStatus)
+  const policy = teamCapabilities?.teamPolicy
+  const reportingOrgIds = getDesktopReportingOrgIds(teamCapabilities)
   const reportingTeams =
     authStatus?.organizations
       ?.filter(({ orgId }) => reportingOrgIds.includes(orgId))

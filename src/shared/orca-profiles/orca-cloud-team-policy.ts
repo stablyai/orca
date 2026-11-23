@@ -31,6 +31,16 @@ export function getGoverningTeamCapabilities(
     : undefined
 }
 
+export function getDesktopReportingOrgIds(
+  capabilities: OrcaCloudCapabilities | undefined
+): string[] {
+  if (capabilities?.flags[ORCA_CLOUD_DESKTOP_REPORTING] !== true) {
+    return []
+  }
+  const policy = getGoverningTeamCapabilities(capabilities)?.teamPolicy
+  return policy?.reportingOrgIds?.filter((id) => policy.orgIds.includes(id)) ?? []
+}
+
 export function isOrcaCloudTeamFeatureBlocked(
   auth: OrcaProfileAuthStatus | null,
   flag: OrcaCloudTeamFeatureFlag

@@ -3,10 +3,7 @@ import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-lifecy
 import { getVersionChannel } from '../../../shared/updater/release-channel'
 import type { UpdateStatus } from '../../../shared/updater/update-status-types'
 import type { OrcaCloudCapabilities } from '../../../shared/orca-profiles/orca-cloud-capabilities'
-import {
-  getGoverningTeamCapabilities,
-  ORCA_CLOUD_DESKTOP_REPORTING
-} from '../../../shared/orca-profiles/orca-cloud-team-policy'
+import { getDesktopReportingOrgIds } from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import type { OrcaCloudSessionIdentity } from '../cloud-session/profile-cloud-session-store'
 import { getRequiredPluginFailureHeader } from '../../plugins/catalog/required-plugin-failures'
 
@@ -53,12 +50,7 @@ export function collectAuthorizedDesktopReport(
   capabilities: OrcaCloudCapabilities,
   identity: OrcaCloudSessionIdentity | undefined
 ): Record<string, string> | undefined {
-  const policy = getGoverningTeamCapabilities(capabilities)?.teamPolicy
-  if (
-    capabilities.flags[ORCA_CLOUD_DESKTOP_REPORTING] !== true ||
-    !policy?.reportingOrgIds?.some((id) => policy.orgIds.includes(id)) ||
-    !hasAppEnvironment()
-  ) {
+  if (!getDesktopReportingOrgIds(capabilities).length || !hasAppEnvironment()) {
     return undefined
   }
   const version = getAppEnvironment().getVersion()
