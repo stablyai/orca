@@ -1,5 +1,13 @@
 import React from 'react'
-import { Ellipsis, FilePlus, FolderPlus, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
+import {
+  Ellipsis,
+  FilePlus,
+  FolderPlus,
+  ListCollapse,
+  Loader2,
+  RefreshCw,
+  type LucideIcon
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -48,6 +56,52 @@ function formatOpenInAppLabel(appName: string): string {
   )
 }
 
+function CreateButton({
+  icon: Icon,
+  labelKey,
+  label,
+  enabled,
+  onClick
+}: {
+  icon: LucideIcon
+  labelKey: string
+  label: string
+  enabled: boolean
+  onClick: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className={cn(
+            'text-muted-foreground hover:text-foreground',
+            !enabled && 'cursor-not-allowed'
+          )}
+          aria-label={t(labelKey, label)}
+          aria-disabled={!enabled}
+          // Native disabled buttons suppress Radix tooltip triggers in Chromium.
+          onClick={(event) => {
+            if (!enabled) {
+              event.preventDefault()
+              return
+            }
+            onClick()
+          }}
+        >
+          <Icon className="size-3" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={4}>
+        {t(labelKey, label)}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 export function FileExplorerToolbar({
   repoName,
   worktreePath,
@@ -76,68 +130,20 @@ export function FileExplorerToolbar({
       >
         {repoName}
       </span>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className={cn(
-              'text-muted-foreground hover:text-foreground',
-              !canCreate && 'cursor-not-allowed'
-            )}
-            aria-label={t(
-              'auto.components.right.sidebar.FileExplorerBackgroundMenu.21fe46ed36',
-              'New File'
-            )}
-            aria-disabled={!canCreate}
-            // Native disabled buttons suppress Radix tooltip triggers in Chromium.
-            onClick={(event) => {
-              if (!canCreate) {
-                event.preventDefault()
-                return
-              }
-              onStartNew('file')
-            }}
-          >
-            <FilePlus className="size-3" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={4}>
-          {t('auto.components.right.sidebar.FileExplorerBackgroundMenu.21fe46ed36', 'New File')}
-        </TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className={cn(
-              'text-muted-foreground hover:text-foreground',
-              !canCreate && 'cursor-not-allowed'
-            )}
-            aria-label={t(
-              'auto.components.right.sidebar.FileExplorerBackgroundMenu.3b5e2dcb8d',
-              'New Folder'
-            )}
-            aria-disabled={!canCreate}
-            // Native disabled buttons suppress Radix tooltip triggers in Chromium.
-            onClick={(event) => {
-              if (!canCreate) {
-                event.preventDefault()
-                return
-              }
-              onStartNew('folder')
-            }}
-          >
-            <FolderPlus className="size-3" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={4}>
-          {t('auto.components.right.sidebar.FileExplorerBackgroundMenu.3b5e2dcb8d', 'New Folder')}
-        </TooltipContent>
-      </Tooltip>
+      <CreateButton
+        icon={FilePlus}
+        labelKey="auto.components.right.sidebar.FileExplorerBackgroundMenu.21fe46ed36"
+        label="New File"
+        enabled={canCreate}
+        onClick={() => onStartNew('file')}
+      />
+      <CreateButton
+        icon={FolderPlus}
+        labelKey="auto.components.right.sidebar.FileExplorerBackgroundMenu.3b5e2dcb8d"
+        label="New Folder"
+        enabled={canCreate}
+        onClick={() => onStartNew('folder')}
+      />
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
