@@ -4,36 +4,29 @@ export const JOURNAL_WAL_URGENT_FRAMES = 2 * JOURNAL_WAL_BACKPRESSURE_FRAMES
 
 export type JournalWalState = {
   stopped: boolean
-  /** A retired worker may still hold a truncate's write lock. */
-  draining?: boolean
   unknown: boolean
-  blocked: boolean
-  truncating: boolean
   log: number
+  checkpointed: number
 }
 
-/** Bulk writes wait on WAL pressure; urgent ones wait only for a truncate, an unknown WAL or the ceiling. */
+/** Writes wait on frames no checkpoint has copied yet; a fully copied WAL restarts on the next write. */
 export function journalWalGated(state: JournalWalState, urgent: boolean): boolean {
-  if (state.draining) {
-    return true
-  }
   if (state.stopped) {
     return false
   }
-  if (state.unknown || state.truncating) {
+  if (state.unknown) {
     return true
   }
-  return urgent
-    ? state.log >= JOURNAL_WAL_URGENT_FRAMES
-    : state.blocked || state.log >= JOURNAL_WAL_BACKPRESSURE_FRAMES
+  const backlog = state.log - state.checkpointed
+  return backlog >= (urgent ? JOURNAL_WAL_URGENT_FRAMES : JOURNAL_WAL_BACKPRESSURE_FRAMES)
 }
 
 /** Writers parked on WAL admission, each resumed once its own class is admitted. */
 export class JournalWalWaiters {
   private readonly parked = new Set<{ urgent: boolean; resume: () => void }>()
 
-  get waiting(): boolean {
-    return this.parked.size > 0
+  get size(): number {
+    return this.parked.size
   }
 
   park(urgent: boolean, resume: () => void): void {

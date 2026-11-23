@@ -1,5 +1,4 @@
 import type { JournalWriterCommand } from './journal-writer-command'
-import type { JournalCheckpointOutage } from './database/journal-checkpoint-outages'
 import type { JournalWriterCommit } from './journal-writer-changes'
 import type { JournalWriterEffect, JournalWriterEffectResult } from './journal-writer-effects'
 import type { JournalSqlFailure } from './journal-sql-failure'
@@ -33,7 +32,6 @@ export type JournalSqlTiming = {
 
 export type JournalSqlResponse =
   | { type: 'ready'; readOnly: boolean }
-  | { type: 'checkpoint-outage'; outage: JournalCheckpointOutage }
   | { type: 'committed'; id: number; commit: JournalWriterCommit; timing?: JournalSqlTiming }
   | {
       type: 'effects'

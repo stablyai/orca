@@ -88,9 +88,7 @@ async function open(): Promise<void> {
     forks = new JournalForkStages(db, stateDirectory)
     commands = new JournalSqlCommand(db, stateDirectory, forks)
     if (!readOnly) {
-      checkpoint = new JournalCheckpointOwner(db, workerData.filename, {
-        onOutage: (outage) => reply({ type: 'checkpoint-outage', outage })
-      })
+      checkpoint = new JournalCheckpointOwner(db, workerData.filename)
       parking = new JournalSqlWalParking(checkpoint)
     }
     batch = new JournalSqlBatch(db, checkpoint && journalSqlTimedGate(checkpoint, gate))
@@ -211,11 +209,10 @@ async function drain(): Promise<void> {
   }
   if (close) {
     try {
-      // The checkpoint thread has exited first, so this last write can't meet a truncate's lock.
-      await (checkpointClosing ?? checkpoint?.close())
       if (!readOnly && db) {
         tryFoldJournalTextTails(db)
       }
+      await (checkpointClosing ?? checkpoint?.close())
       db?.close()
       db = undefined
       reply({ type: 'done', id: close.id })
