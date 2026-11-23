@@ -54,22 +54,49 @@ export async function measureJournalConversionStorage(
   if (at === sizedAt) {
     return { ...storage, sizedAt: at }
   }
-  // A copy converts from its original chat; octet_length sizes TEXT without loading it. A chat
-  // whose history lives in its outcome generation restores each key's newest record there, so
-  // that counts, not the revisions it superseded.
+  // A copy converts from its original chat; octet_length sizes TEXT without loading it.
   const from = journalLegacyConversionSource(destination, sessionId)
-  const bytes = (sql: string) => Number(source.prepare(sql).get(from)?.bytes ?? 0)
-  const rows = bytes(
-    'SELECT COALESCE(SUM(octet_length(row_json)),0) AS bytes FROM journal_rows WHERE session_id=?'
-  )
-  const outcomes = source
+  const rows = source
+    .prepare(
+      'SELECT COALESCE(SUM(octet_length(row_json)),0) AS bytes FROM journal_rows WHERE session_id=?'
+    )
+    .get(from)
+  return {
+    ...storage,
+    remainingBytes: Number(rows?.bytes ?? 0) + outcomeBytes(source, from),
+    sizedAt: at
+  }
+}
+
+/**
+ * The bytes of each key's newest outcome record up to the chat's position, the records its restore
+ * reads, found key by key the way the restore seeks so superseded revisions are never visited.
+ */
+function outcomeBytes(source: Database.Database, sessionId: string): number {
+  const epochs = source
     .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='journal_outcome_epochs'")
     .get()
-    ? bytes(`SELECT COALESCE(SUM(octet_length(o.value_json)),0) AS bytes
-        FROM journal_outcome_epochs e JOIN journal_outcomes o ON o.generation=e.generation
-        WHERE e.session_id=? AND o.seq=(SELECT n.seq FROM journal_outcomes n
-          WHERE n.generation=o.generation AND n.field=o.field AND n.entry_key=o.entry_key
-            AND n.seq<=e.through_seq ORDER BY n.seq DESC LIMIT 1)`)
-    : 0
-  return { ...storage, remainingBytes: rows + outcomes, sizedAt: at }
+  const epoch =
+    epochs &&
+    source
+      .prepare('SELECT generation, through_seq FROM journal_outcome_epochs WHERE session_id=?')
+      .get(sessionId)
+  if (!epoch) {
+    return 0
+  }
+  const newest = source.prepare(`SELECT field, entry_key, octet_length(value_json) AS bytes
+    FROM journal_outcomes WHERE generation = ? AND (field, entry_key) > (?, ?) AND seq <= ?
+    ORDER BY field, entry_key, seq DESC LIMIT 1`)
+  let total = 0
+  let field = ''
+  let key = ''
+  for (;;) {
+    const row = newest.get(epoch.generation, field, key, epoch.through_seq)
+    if (!row) {
+      return total
+    }
+    total += Number(row.bytes)
+    field = String(row.field)
+    key = String(row.entry_key)
+  }
 }

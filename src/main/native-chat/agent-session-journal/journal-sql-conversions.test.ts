@@ -83,7 +83,8 @@ describe('JournalSqlConversions storage guard', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
     let low = true
     const { conversions, writes, readers, writer, listedAfter } = conversion(
-      (sessionId) => (sessionId === 'b' && low ? LOW : ROOM),
+      (sessionId) =>
+        sessionId === 'b' && low ? { freeBytes: 4 * GB, totalBytes: 100 * GB } : ROOM,
       1,
       ['a', 'b', 'c']
     )
@@ -97,7 +98,7 @@ describe('JournalSqlConversions storage guard', () => {
       (error) => errors.push(error)
     )
     await maintenance.start()
-    // 'b' doesn't fit above the floor: the pass ends there, and 'c' waits for the backoff too.
+    // The disk is at the floor at 'b': the pass ends there, and 'c' waits for the backoff too.
     expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(1)
     expect(conversions.deferred()).toBe(true)
     expect(errors).toEqual([deferred])
@@ -221,6 +222,50 @@ describe('JournalSqlConversions storage guard', () => {
     expect(writes).not.toContain('import-page')
     now += 120_000
     free = 57 * GB
+    await expect(conversions.ensure('chat', false)).resolves.toBe('epoch')
+  })
+
+  it('a chat whose estimate does not fit is skipped, and later chats still convert', async () => {
+    const { conversions, writes, readers, writer } = conversion(
+      (sessionId) => (sessionId === 'b' ? LOW : ROOM),
+      1,
+      ['a', 'b', 'c']
+    )
+    const errors: unknown[] = []
+    const maintenance = new JournalSqlBackgroundMaintenance(
+      writer,
+      readers,
+      conversions,
+      new JournalSqlActivity(),
+      (error) => errors.push(error)
+    )
+    await maintenance.start()
+    maintenance.stop()
+    expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(2)
+    expect(conversions.deferred()).toBe(false)
+    expect(errors).toEqual([new JournalConversionStorageError(true)])
+  })
+
+  it('what a stopped attempt used counts at most 4x the chat estimate', async () => {
+    let now = 1_000
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    let free = 60 * GB
+    let checks = 0
+    // A 2 GB chat starts with 60 GB free; another program's write leaves 9 GB at its second batch.
+    const { conversions } = conversion((sessionId, sizedAt) => {
+      if (sessionId !== undefined) {
+        return sizedAt === 'v1'
+          ? { freeBytes: free, totalBytes: 1000 * GB, sizedAt }
+          : { freeBytes: free, totalBytes: 1000 * GB, remainingBytes: 2 * GB, sizedAt: 'v1' }
+      }
+      return ++checks === 2
+        ? { freeBytes: 9 * GB, totalBytes: 1000 * GB }
+        : { freeBytes: free, totalBytes: 1000 * GB }
+    }, 3)
+    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
+    now += 60_000
+    // Counted as 8 GB, not 51: 22 GB free holds 1.5x that above the 10 GB floor.
+    free = 22 * GB
     await expect(conversions.ensure('chat', false)).resolves.toBe('epoch')
   })
 })

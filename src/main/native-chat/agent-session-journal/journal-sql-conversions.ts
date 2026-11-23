@@ -9,7 +9,8 @@ import { isDiskAlmostFull } from '../../../shared/diagnostics/perf-notice-signal
 const CONVERSION_EXPANSION = 1.5
 
 export class JournalConversionStorageError extends Error {
-  constructor() {
+  /** True for one chat whose estimate doesn't fit: the pass goes on to the next chat. */
+  constructor(readonly skipped = false) {
     super('journal conversion deferred for storage')
     this.name = 'JournalConversionStorageError'
   }
@@ -42,7 +43,8 @@ export class JournalSqlConversions {
   private readonly pending = new Map<string, Conversion>()
   private readonly ready = new Map<string, string>()
   // A deferred chat's size, kept until its original changes, so a retry only measures free space.
-  private readonly sizes = new Map<string, { sizedAt: string; bytes: number }>()
+  // `used` is what a stopped attempt used, capped at 4x the measured size.
+  private readonly sizes = new Map<string, { sizedAt: string; measured: number; used: number }>()
   private retryAt = 0
   private retryDelay = 60_000
   private closed = false
@@ -100,11 +102,11 @@ export class JournalSqlConversions {
         return epoch
       })
       .catch((error: unknown) => {
-        if (!foreground && isJournalConversionStorageError(error)) {
+        if (!foreground && isJournalConversionStorageError(error) && !error.skipped) {
           // Low space ends the whole background pass until the backoff ends.
           this.retryAt = performance.now() + this.retryDelay
           this.retryDelay = Math.min(this.retryDelay * 2, 60 * 60_000)
-        } else {
+        } else if (!isJournalConversionStorageError(error)) {
           this.sizes.delete(sessionId)
         }
         this.noteCopyFailure(sessionId, error)
@@ -205,9 +207,10 @@ export class JournalSqlConversions {
       }
     }
     // Measured only for a chat that still converts, so ready chats never read their rows.
+    // The estimate is a hint: a chat it doesn't fit is skipped, and only a full disk ends the pass.
     const started = await this.room(promotion, sessionId)
-    if (started.low) {
-      throw new JournalConversionStorageError()
+    if (started.full || started.low) {
+      throw new JournalConversionStorageError(!started.full)
     }
     await this.boundary(promotion)
     const reader = await this.readers.prepareConversion(sessionId)
@@ -224,8 +227,9 @@ export class JournalSqlConversions {
           // at least that much more than it wrote.
           const sized = this.sizes.get(sessionId)
           if (sized) {
-            const used = started.free - now.free
-            this.sizes.set(sessionId, { ...sized, bytes: Math.max(sized.bytes, used) })
+            // Capped, since other programs' writes count in the same free space.
+            const used = Math.min(started.free - now.free, 4 * sized.measured)
+            this.sizes.set(sessionId, { ...sized, used: Math.max(sized.used, used) })
           }
           throw new JournalConversionStorageError()
         }
@@ -253,8 +257,8 @@ export class JournalSqlConversions {
   private async room(
     promotion: AbortSignal,
     sessionId?: string
-  ): Promise<{ free: number; low: boolean }> {
-    const open = { free: Infinity, low: false }
+  ): Promise<{ free: number; low: boolean; full: boolean }> {
+    const open = { free: Infinity, low: false, full: false }
     if (promotion.aborted) {
       return open
     }
@@ -268,15 +272,18 @@ export class JournalSqlConversions {
     if (!storage || promotion.aborted) {
       return open
     }
-    const bytes =
+    const measured =
       storage.remainingBytes ??
-      (storage.sizedAt !== undefined && storage.sizedAt === sized?.sizedAt ? sized.bytes : Infinity)
+      (storage.sizedAt !== undefined && storage.sizedAt === sized?.sizedAt
+        ? sized.measured
+        : Infinity)
+    const used = sized?.used ?? 0
     if (sessionId !== undefined && storage.remainingBytes !== undefined && storage.sizedAt) {
-      this.sizes.set(sessionId, { sizedAt: storage.sizedAt, bytes: storage.remainingBytes })
+      this.sizes.set(sessionId, { sizedAt: storage.sizedAt, measured, used })
     }
-    const needed = sessionId === undefined ? 0 : bytes * CONVERSION_EXPANSION
+    const needed = sessionId === undefined ? 0 : Math.max(measured, used) * CONVERSION_EXPANSION
     const low = isDiskAlmostFull({ ...storage, freeBytes: storage.freeBytes - needed })
-    return { free: storage.freeBytes, low }
+    return { free: storage.freeBytes, low, full: isDiskAlmostFull(storage) }
   }
 
   /** Only a failed space measure defers; a damaged or missing original keeps its own failure. */
