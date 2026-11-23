@@ -9,6 +9,7 @@ import {
   SHARED_TOOL_PROCESS_SESSION_ID_PATTERN
 } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import type { RuntimeClient } from './client'
+import { resolveHermesActiveProfileHome } from '../../main/hermes/hermes-default-home'
 import { RuntimeClientError } from './connection/types'
 
 /** This host's answer for a token: `{ env }`, the session's identity, or `{ env: null }`. */
@@ -22,7 +23,9 @@ export async function tradeSessionToolToken(
 /** A bot's session Orca published for the tool's own session, whose token didn't reach the tool. */
 async function publishedBotSession(env: NodeJS.ProcessEnv): Promise<boolean> {
   for (const place of SHARED_TOOL_PROCESS_SESSION_FILES) {
-    const home = env[place.homeEnv]?.trim() || join(homedir(), place.defaultHome)
+    const given = env[place.homeEnv]?.trim() || join(homedir(), place.defaultHome)
+    // A root home runs its active profile, where Orca published the session.
+    const homes = [...new Set([given, await resolveHermesActiveProfileHome(given)])]
     for (const name of place.sessionIdEnvs) {
       const sessionId = env[name]?.trim()
       if (
@@ -31,12 +34,14 @@ async function publishedBotSession(env: NodeJS.ProcessEnv): Promise<boolean> {
       ) {
         continue
       }
-      const file = await readFile(join(home, place.dir, `${sessionId}.json`), 'utf-8').catch(
-        () => null
-      )
-      const published: unknown = file ? safeJson(file) : null
-      if (isRecord(published) && published[SHARED_TOOL_PROCESS_BOT_FIELD] === '1') {
-        return true
+      for (const home of homes) {
+        const file = await readFile(join(home, place.dir, `${sessionId}.json`), 'utf-8').catch(
+          () => null
+        )
+        const published: unknown = file ? safeJson(file) : null
+        if (isRecord(published) && published[SHARED_TOOL_PROCESS_BOT_FIELD] === '1') {
+          return true
+        }
       }
     }
   }

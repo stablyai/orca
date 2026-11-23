@@ -10,6 +10,7 @@ import {
   HERMES_SESSION_ENV_MINIMUM
 } from './hermes-gateway-plugin-currency'
 import { getConfigEnablement, parseHermesConfig } from './hermes-config-yaml'
+import { inSessionFileTurn } from './hermes-session-file-queue'
 import { SHARED_TOOL_PROCESS_BOT_FIELD } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { compareAppVersions } from '../../shared/app-lifecycle/identity/app-version'
 import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
@@ -57,7 +58,7 @@ export const publishHermesSessionToolEnv: PublishSharedToolProcessSessionEnv = a
   const dir = join(home, HERMES_SESSION_ENV_DIR)
   const file = join(dir, `${providerSessionId}.json`)
   const publication = Symbol(providerSessionId)
-  await inTurn(file, async () => {
+  await inSessionFileTurn(file, async () => {
     // A child that exited while this waited must not replace a reopened chat's file.
     if (!live()) {
       return
@@ -67,7 +68,7 @@ export const publishHermesSessionToolEnv: PublishSharedToolProcessSessionEnv = a
     owners.set(file, publication)
   })
   return () =>
-    inTurn(file, async () => {
+    inSessionFileTurn(file, async () => {
       // A later child of the same conversation owns the file now.
       if (owners.get(file) !== publication) {
         return
@@ -120,17 +121,3 @@ async function pluginEnabled(home: string, pluginDir: string): Promise<boolean> 
 
 /** Each file's latest publication; files are written and removed only in this process. */
 const owners = new Map<string, symbol>()
-const turns = new Map<string, Promise<void>>()
-
-/** Runs each file's writes and removals in order. */
-function inTurn(file: string, run: () => Promise<void>): Promise<void> {
-  const next = (turns.get(file) ?? Promise.resolve()).then(run)
-  const settled = next.catch(() => undefined)
-  turns.set(file, settled)
-  void settled.then(() => {
-    if (turns.get(file) === settled) {
-      turns.delete(file)
-    }
-  })
-  return next
-}

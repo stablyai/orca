@@ -7,6 +7,7 @@ import { connect } from 'node:net'
 import { basename, dirname, join, resolve } from 'node:path'
 import { compareAppVersions } from '../../shared/app-lifecycle/identity/app-version'
 import { SHARED_TOOL_PROCESS_BOT_FIELD } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import { inSessionFileTurn } from './hermes-session-file-queue'
 import {
   getPluginInitSource,
   getPluginManifest,
@@ -63,8 +64,10 @@ async function checkGateway(home: string): Promise<HermesGatewayPluginState> {
   if (typeof running === 'string' && compareAppVersions(running, HERMES_SESSION_ENV_MINIMUM) < 0) {
     return 'stale'
   }
-  reloaded.add(key)
-  await reloadGatewayPlugins(home)
+  // Spent only once the gateway answered: a socket that refused can be tried again later.
+  if (await reloadGatewayPlugins(home)) {
+    reloaded.add(key)
+  }
   return (await runsCurrentPlugin(home, gateway.pid)) ? 'current' : 'stale'
 }
 
@@ -140,14 +143,20 @@ async function dropOldClosedBotMark(file: string): Promise<void> {
   if (!file.endsWith('.json')) {
     return
   }
-  const info = await stat(file).catch(() => null)
-  if (!info || Date.now() - info.mtimeMs < CLOSED_BOT_MARK_DAYS * 86_400_000) {
+  const old = async () => {
+    const info = await stat(file).catch(() => null)
+    return info !== null && Date.now() - info.mtimeMs >= CLOSED_BOT_MARK_DAYS * 86_400_000
+  }
+  if (!(await old())) {
     return
   }
-  const text = await readFile(file, 'utf-8').catch(() => null)
-  if (text === JSON.stringify({ [SHARED_TOOL_PROCESS_BOT_FIELD]: '1' })) {
-    await rm(file, { force: true }).catch(() => undefined)
-  }
+  // Checked again in the file's turn: a reopened chat may be publishing over it.
+  await inSessionFileTurn(file, async () => {
+    const text = await readFile(file, 'utf-8').catch(() => null)
+    if (text === JSON.stringify({ [SHARED_TOOL_PROCESS_BOT_FIELD]: '1' }) && (await old())) {
+      await rm(file, { force: true }).catch(() => undefined)
+    }
+  })
 }
 
 async function pluginFilesCurrent(home: string): Promise<boolean> {
@@ -169,12 +178,13 @@ async function pluginFilesCurrent(home: string): Promise<boolean> {
 }
 
 /** Hermes' own route: the profile's gateway, else the root gateway serving that profile. */
-async function reloadGatewayPlugins(home: string): Promise<void> {
+async function reloadGatewayPlugins(home: string): Promise<boolean> {
   const root = rootOfProfile(home)
   const answered = await queryGateway(home, 'reload-plugins', { home })
-  if (!answered && root) {
-    await queryGateway(root, 'reload-plugins', { home })
+  if (answered || !root) {
+    return answered !== null
   }
+  return (await queryGateway(root, 'reload-plugins', { home })) !== null
 }
 
 /** One JSON line in, one out (Hermes' control-socket contract); null when nothing answers. */
