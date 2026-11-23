@@ -158,23 +158,26 @@ export function useNativeChatComposerMentions(
     () => ranked?.matches.filter((match) => !match.unavailable).map((match) => match.value) ?? [],
     [ranked]
   )
+  // Enter waits for the host's chats and terminals as it waits for files.
+  const listing = useMemo(
+    () => (host.loading ? { ...workspaceFiles, loading: true } : workspaceFiles),
+    [host.loading, workspaceFiles]
+  )
   const mentionFiles = useMemo<NativeChatMentionFiles>(() => {
     // The room's bots lead the list, above this chat's crew agents, then the host's chats and terminals.
     const named = [...agents, ...host.values]
     if (!room) {
-      return named.length > 0
-        ? { ...workspaceFiles, files: [...named, ...workspaceFiles.files] }
-        : workspaceFiles
+      return named.length > 0 ? { ...listing, files: [...named, ...listing.files] } : listing
     }
     if (room.withFiles) {
       return fileQuery === null
-        ? { files: [...pickable, ...named], loading: false, failed: false }
-        : { ...workspaceFiles, files: [...pickable, ...named, ...workspaceFiles.files] }
+        ? { files: [...pickable, ...named], loading: host.loading, failed: false }
+        : { ...listing, files: [...pickable, ...named, ...listing.files] }
     }
     return query === null
       ? NO_MATCHES
       : { files: [...pickable, ...named], loading: false, failed: false }
-  }, [room, query, fileQuery, agents, host, pickable, workspaceFiles])
+  }, [room, query, fileQuery, agents, host, pickable, listing])
   const botIdOf = useCallback((value: string) => memberOf(room, value)?.id ?? null, [room])
   const chooseMention = useCallback(
     (value: string) => {

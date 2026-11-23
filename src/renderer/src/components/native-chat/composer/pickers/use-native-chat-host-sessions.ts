@@ -39,7 +39,8 @@ export function useNativeChatHostSessions(
   const sessionId = self?.sessionId
   const ptyId = self?.ptyId ?? null
   const open = query !== null && paneKey !== undefined
-  const [lists, setLists] = useState<HostSessionLists | null>(null)
+  // 'pending' while the lists are on their way, so Enter waits for them as it waits for files.
+  const [lists, setLists] = useState<HostSessionLists | 'pending' | null>(null)
   useEffect(() => {
     setLists(null)
     if (!open) {
@@ -53,6 +54,7 @@ export function useNativeChatHostSessions(
     if (!target) {
       return
     }
+    setLists('pending')
     const hostId = getRuntimeTargetHostId(target)
     let live = true
     void Promise.allSettled([
@@ -81,12 +83,13 @@ export function useNativeChatHostSessions(
     }
   }, [open, structuredWorktreeId, terminalTabId])
   const mentions = useMemo(() => {
-    return lists && paneKey !== undefined
+    return lists && lists !== 'pending' && paneKey !== undefined
       ? hostSessionMentions(lists, { paneKey, sessionId, ptyId }, crew.addresses)
       : NO_HOST_SESSION_MENTIONS
   }, [lists, paneKey, sessionId, ptyId, crew])
   return useMemo(
     () => ({
+      loading: lists === 'pending',
       chats: mentions.chats,
       terminals: mentions.terminals,
       references: new Map([...crew.references, ...mentions.references]),
@@ -98,6 +101,6 @@ export function useNativeChatHostSessions(
               ...rankNativeChatCrewMentions(mentions.terminals, query).slice(0, ROWS_PER_KIND)
             ]
     }),
-    [mentions, crew, query]
+    [lists, mentions, crew, query]
   )
 }
