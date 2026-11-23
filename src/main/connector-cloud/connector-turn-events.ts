@@ -26,6 +26,7 @@ import type { ConnectorCallObserver } from './connector-transport'
 import {
   ConnectorReplyOutbox,
   isReplyEvent,
+  replyDeliveryIds,
   type ConnectorReplyClient,
   type ConnectorReplyJournal,
   type ConnectorReplyRoute
@@ -124,8 +125,8 @@ export class ConnectorTurnEvents {
   private replyFlush: (() => void) | null = null
   // Whether the current hello's answer listed replies.outbox; undefined before one.
   private repliesOutbox: boolean | undefined
-  // Replies refused as invalid under the current hello, held back until the next one.
-  private setAside: ConnectorEvent[] = []
+  // Delivery ids of replies refused as invalid under the current hello, held until the next one.
+  private setAside: string[] = []
 
   constructor(
     userDataPath: string,
@@ -163,12 +164,10 @@ export class ConnectorTurnEvents {
         // until the next one (its row stays unsent). Any other refusal (a 413, or a 503 outcome
         // that doesn't stand yet) goes again later.
         if (failure?.status === 400) {
-          if (isReplyEvent(item)) {
-            this.setAside.push(item)
-          }
+          this.setAside.push(...replyDeliveryIds([item]))
           return
         }
-        this.replies.forget([item])
+        this.replies.forget(replyDeliveryIds([item]))
         this.replies.retryLater()
       }
     })
@@ -278,8 +277,7 @@ export class ConnectorTurnEvents {
     isTurnEnded(event) || (isReplyEvent(event) && this.repliesOutbox === true)
 
   private restart(first: ConnectorEvent[], keep: (event: ConnectorEvent) => boolean): void {
-    let released: ConnectorEvent[] = this.setAside
-    this.setAside = []
+    let released: ConnectorEvent[] = []
     this.outbox.restart(first, (event) => {
       const kept = keep(event)
       if (!kept) {
@@ -287,7 +285,8 @@ export class ConnectorTurnEvents {
       }
       return kept
     })
-    this.replies.forget(released)
+    this.replies.forget([...this.setAside, ...replyDeliveryIds(released)])
+    this.setAside = []
   }
 
   /** True until the next snapshot once the caps dropped an event. */
