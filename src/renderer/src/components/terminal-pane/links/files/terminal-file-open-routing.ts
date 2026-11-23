@@ -41,7 +41,6 @@ import { httpLinkDirectClickDestination } from '@/lib/browser/navigation/http-li
 import type { HttpLinkDestination } from '@/lib/browser/navigation/http-link-destinations'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
 import type { FileOpenFailure } from './terminal-file-open-failure'
-import { prefersProjectFileDefaultApp } from './project-file-default-app'
 import { openDetectedFolder } from './terminal-folder-open'
 
 type TerminalFileOpenDeps = {
@@ -143,13 +142,10 @@ export function openDetectedFilePath(
       }
     }
 
-    const useDefaultAppForFile =
-      openWithSystemDefault ||
-      (!explicitGroupRequest && prefersProjectFileDefaultApp(mappedFilePath))
     try {
       const linkOwner = await resolveHostWorkspaceFile(fileContext, mappedFilePath, {
         ...deps,
-        openWithSystemDefault: useDefaultAppForFile
+        openWithSystemDefault
       })
       if (linkOwner?.kind === 'grant') {
         hostGrant = hostGrantedEditorFields(linkOwner)
@@ -209,15 +205,19 @@ export function openDetectedFilePath(
         ? (deps.browserDestination ??
           httpLinkDirectClickDestination(localHtmlFileDestinations(), openWithSystemDefault))
         : null
-    const useDefaultApp = pageDestination ? pageDestination === 'system' : useDefaultAppForFile
+    const opensWithSystemDefault = pageDestination
+      ? pageDestination === 'system'
+      : openWithSystemDefault
     // Why folders skip this: the folder branch opens them with the OS too, and reports a failed open.
-    if (useDefaultApp && canOpenWithSystemDefault && !statResult.isDirectory) {
+    if (opensWithSystemDefault && canOpenWithSystemDefault && !statResult.isDirectory) {
       // Shift+Cmd/Ctrl follows URL-link behavior and OS file associations without new editor settings.
       const location = line === null ? undefined : { line, column: column ?? undefined }
-      if (await window.api.shell.openFilePath(mappedFilePath, LOCAL_EXECUTION_HOST_ID, location)) {
-        return
-      }
-      if (!isCurrentRequest()) {
+      const opened = await window.api.shell.openFilePath(
+        mappedFilePath,
+        LOCAL_EXECUTION_HOST_ID,
+        location
+      )
+      if (opened || !isCurrentRequest()) {
         return
       }
     }
@@ -244,7 +244,7 @@ export function openDetectedFilePath(
     }
 
     // Shift+Cmd/Ctrl must match popover’s Download & open with default app; OS cannot directly launch remote paths.
-    if (useDefaultAppForFile && !canOpenWithSystemDefault) {
+    if (openWithSystemDefault && !canOpenWithSystemDefault) {
       const download = { grant: hostGrant, isCurrent: isCurrentRequest }
       if (await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath, download)) {
         return

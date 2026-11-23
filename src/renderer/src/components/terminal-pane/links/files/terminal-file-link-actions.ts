@@ -1,5 +1,4 @@
 import { buildHttpLinkActions } from '@/lib/browser/navigation/http-link-destinations'
-import { prefersProjectFileDefaultApp } from './project-file-default-app'
 import { openDetectedFilePath } from './terminal-file-open-routing'
 import {
   getTerminalFileContext,
@@ -228,9 +227,7 @@ export function buildFileLinkActions(
   return {
     destination: mappedPath,
     kind: worktreeRoot ? 'workspace' : 'file',
-    ...(!worktreeRoot && systemDefaultRow && prefersProjectFileDefaultApp(mappedPath)
-      ? { primary: systemDefaultRow }
-      : rows),
+    ...rows,
     ...(secondaryActions.length > 0 ? { secondaryActions } : {})
   }
 }
