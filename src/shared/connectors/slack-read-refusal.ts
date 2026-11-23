@@ -1,6 +1,7 @@
 // Slack uses these stable refusal codes for different read-access conditions.
 export function slackReadRefusalMessage(reason: string | null): string | null {
-  switch (reason?.toLowerCase().trim()) {
+  const error = reason?.toLowerCase().trim() ?? ''
+  switch (error) {
     case 'missing_scope':
       return 'Slack refused this read because the bot app is missing channel-history permission. Reconnect the bot to Slack so it grants `channels:history` for public channels and `groups:history` for private channels, then try again.'
     case 'not_in_channel':
