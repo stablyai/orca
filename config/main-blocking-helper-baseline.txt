@@ -1509,7 +1509,7 @@
 5 src/main/wsl/orcad/wsl-orcad-instance-adoption.ts
 1 src/main/wsl/orcad/wsl-orcad-liveness-wiring.ts
 1 src/main/wsl/orcad/wsl-orcad-pairing-repair.ts
-6 src/main/zcode/hook-service.ts
+7 src/main/zcode/hook-service.ts # zcode-app-cli setting.json is read on the same one-shot startup, toggle and uninstall paths as config.json
 3 src/main/zcode/zcode-plan-credential-commands.ts
 3 src/main/zcode/zcode-v2-plan-credentials.ts
 13 src/shared/agent-hook-listener/claude-session-continuation.ts
