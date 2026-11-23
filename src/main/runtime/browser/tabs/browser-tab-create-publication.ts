@@ -1,6 +1,7 @@
 import type { AgentBrowserBridge } from '../../../browser/agent-browser/agent-browser-bridge'
 import type { RuntimeBrowserPageRegistry } from '../client-pages/runtime-browser-page-registry'
 import {
+  navigationTargetsClients,
   navigationTargetsHost,
   resolveRuntimeNavigationTarget,
   type RuntimeNavigationTarget
@@ -34,8 +35,8 @@ export type BrowserSessionTabSelectionOptions = {
   targetGroupId?: string
   /** Required to force each caller to decide whether shared host selection moves. */
   focusesHost: boolean
-  /** Paired origin and navigation audience travel together; absent for local creates. */
-  caller?: { clientNavigationId: string; navigation: RuntimeNavigationTarget; follows?: boolean }
+  /** Navigation audience, with the paired origin when a client asked; a local caller has no id. */
+  caller?: { clientNavigationId?: string; navigation: RuntimeNavigationTarget; follows?: boolean }
 }
 
 export type BrowserTabCreatePublication = {
@@ -226,7 +227,10 @@ export async function publishCreatedBrowserSessionTab(
                 ...(publication.opensPageLink ? { follows: true } : {})
               }
             }
-          : {})
+          : navigationTargetsClients(publication.focus.navigation)
+            ? // A windowless host's own CLI has no screen; its clients are where the tab is seen.
+              { caller: { navigation: publication.focus.navigation } }
+            : {})
       }
     )
   }
