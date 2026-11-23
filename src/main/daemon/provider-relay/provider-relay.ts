@@ -88,6 +88,10 @@ export class ProviderRelay {
         options.log?.('relay-large-line', { relayId: options.relayId, bytes }),
       onFailed: (reason) => {
         this.failure = reason
+        // The agent may have exited already; its exit must still say why output stopped.
+        if (this.exitStatus) {
+          this.exitStatus = { ...this.exitStatus, error: reason }
+        }
         options.log?.('relay-line-failed', { relayId: options.relayId, reason })
         void this.close().catch(() => {})
       }
