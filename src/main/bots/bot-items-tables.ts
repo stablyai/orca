@@ -17,6 +17,8 @@ import type { BotItemEventRecord, BotItemLinkRecord, BotItemRecord } from './bot
 export class BotItemsTables {
   /** The current write's first event, while one runs. */
   private action: number | null = null
+  /** Items whose asks the current write may have changed: paired once each before it commits. */
+  private repair: Set<string> | null = null
 
   constructor(
     protected readonly db: SyncDatabase,
@@ -37,8 +39,12 @@ export class BotItemsTables {
     }
     this.db.exec('BEGIN IMMEDIATE')
     this.action = null
+    this.repair = new Set()
     try {
       const result = write()
+      for (const uid of this.repair) {
+        this.keepWaitingAsk(uid, this.readWaitingAsk(uid))
+      }
       this.db.exec('COMMIT')
       return result
     } catch (error) {
@@ -46,6 +52,7 @@ export class BotItemsTables {
       throw error
     } finally {
       this.action = null
+      this.repair = null
     }
   }
 
@@ -119,9 +126,14 @@ export class BotItemsTables {
          WHERE uid = ?`
       )
       .run(id, now, now, Number(actor.kind !== 'owner'), id, uid)
-    // Only comments and moves pair asks with answers; the row keeps the result so opens read no history.
+    // Only comments and moves pair asks with answers; the row keeps the result so opens read no history,
+    // worked out once per item per write.
     if (kind === 'commented' || kind === 'status') {
-      this.keepWaitingAsk(uid, this.readWaitingAsk(uid))
+      if (this.repair) {
+        this.repair.add(uid)
+      } else {
+        this.keepWaitingAsk(uid, this.readWaitingAsk(uid))
+      }
     }
     return id
   }
