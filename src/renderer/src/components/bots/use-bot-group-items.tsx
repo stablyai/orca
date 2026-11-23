@@ -90,7 +90,10 @@ const MemberReader = memo(function MemberReader({
         : [],
     [filter.chatIds, botNow.stoppedForSignIn, bot.id, bot.hostId]
   )
-  const { state, retry } = items
+  const { retry } = items
+  // A kept list whose first refresh since opening failed counts as failed, so the group offers Retry as it
+  // did when nothing was kept.
+  const state = items.refreshFailed && !items.landed ? 'failed' : items.state
   const { working } = botNow
   // The list's parts, not the object the hook builds each render, so a report goes up only on change.
   const { read: listRead, items: listItems, shown, groups, staleDays } = list
