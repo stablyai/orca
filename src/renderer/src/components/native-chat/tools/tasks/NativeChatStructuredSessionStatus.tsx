@@ -6,7 +6,6 @@ import { useWorkerDockFeed } from './dock/worker-dock-feed'
 import type { WorkerDockRowView } from './dock/WorkerDockRow'
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
 import { useWorkerDockOwnerActions } from './dock/use-worker-dock-owner-actions'
-import { useWorkerDockRosterState } from './dock/NativeChatWorkerDockFrame'
 import { Button } from '@/components/ui/button'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import { NativeChatCrewBackgroundTasksStatus } from './NativeChatCrewBackgroundTasksStatus'
@@ -52,7 +51,6 @@ export function NativeChatStructuredSessionStatus(props: {
   )
   const { backgroundTasks, stop } = props
 
-  const roster = useWorkerDockRosterState()
   const target = props.target ?? LOCAL
   const ownerActionsAvailable = target.kind === 'local'
   const expandedHere = expanded?.sessionId === props.sessionId && expanded.expanded
@@ -209,7 +207,6 @@ export function NativeChatStructuredSessionStatus(props: {
         expanded={expandedHere}
         onExpandedChange={(value) => {
           setExpanded({ sessionId: props.sessionId, expanded: value })
-          roster.setExpanded(value)
         }}
         onStop={stop.onStop}
         currentAgentId={props.currentAgentId ?? null}

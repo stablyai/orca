@@ -51,7 +51,7 @@ it('filters settled workers from the roster returned by an older host', async ()
     hasModel: false
   }))
   await act(async () => {
-    rpc.event({ revision: 1, expired: false, identities, rows: [], results: [], anchor: null })
+    rpc.event({ revision: 1, expired: false, identities, rows: [], anchor: null })
   })
   expect(hook.result.current.snapshot?.identities.map((row) => row.state)).toEqual([
     'running',
@@ -83,7 +83,7 @@ it("keeps an older host's recent failures, newest four, and drops the stale ones
     failure('f5', 5)
   ]
   await act(async () => {
-    rpc.event({ revision: 1, expired: false, identities, rows: [], results: [], anchor: null })
+    rpc.event({ revision: 1, expired: false, identities, rows: [], anchor: null })
   })
   expect(hook.result.current.snapshot?.identities.map((row) => row.id)).toEqual([
     'f1',
@@ -104,7 +104,6 @@ it('keeps a newer streamed settlement when an older detail window arrives later'
     expired: false,
     identities: [],
     rows: [],
-    results: [],
     anchor: null
   })
   await act(async () => {

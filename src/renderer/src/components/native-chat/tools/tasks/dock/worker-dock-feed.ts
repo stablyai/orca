@@ -9,8 +9,7 @@ import {
 } from '@/lib/window-activity/window-park-visibility'
 import {
   WorkerDockSnapshot,
-  type WorkerDockEntry,
-  type WorkerDockResultRef
+  type WorkerDockEntry
 } from '../../../../../../../shared/orchestration/dock/worker-dock'
 import {
   formatOrcaSessionAddress,
@@ -26,17 +25,19 @@ const EMPTY: State = { snapshot: null, available: true, rows: new Map() }
 
 const FAILURE_MS = 4 * 60 * 60_000
 const FAILURE_LIMIT = 4
+const UNVERIFIED_MS = 24 * 60 * 60_000
 
 /** The current-work rule as far as a snapshot can tell: hosts predating currentOnly send every
  *  eligible record, so finished and older failures are dropped here; a current host's rows pass. */
 function currentOnOlderHosts(
-  identities: readonly Pick<WorkerDockEntry, 'id' | 'state' | 'changedAt'>[],
+  identities: readonly Pick<WorkerDockEntry, 'id' | 'state' | 'changedAt' | 'settlement'>[],
   now: number
 ): Set<string> {
   const failures = identities
     .filter(
       (row) =>
         (row.state === 'failed' || row.state === 'unexpected') &&
+        row.settlement !== null &&
         row.changedAt !== null &&
         row.changedAt > now - FAILURE_MS
     )
@@ -44,7 +45,15 @@ function currentOnOlderHosts(
     .slice(0, FAILURE_LIMIT)
   return new Set([
     ...identities
-      .filter((row) => row.state !== 'failed' && row.state !== 'unexpected' && row.state !== 'saving')
+      .filter(
+        (row) =>
+          row.state !== 'failed' &&
+          row.state !== 'unexpected' &&
+          row.state !== 'saving' &&
+          (row.state !== 'unavailable' ||
+            row.changedAt === null ||
+            row.changedAt > now - UNVERIFIED_MS)
+      )
       .map((row) => row.id),
     ...failures.map((row) => row.id)
   ])
@@ -72,7 +81,7 @@ class WorkerDockFeed {
       return
     }
     // Hosts predating currentOnly still include settled entries in the same snapshot.
-    if (snapshot) {
+    if (snapshot && !snapshot.currentOnly) {
       const kept = currentOnOlderHosts(snapshot.identities, Date.now())
       if (kept.size !== snapshot.identities.length) {
         snapshot.identities = snapshot.identities.filter((row) => kept.has(row.id))
@@ -98,13 +107,6 @@ class WorkerDockFeed {
           rows.delete(key)
         }
       }
-    }
-    if (
-      snapshot &&
-      this.state.snapshot &&
-      JSON.stringify(snapshot.results) === JSON.stringify(this.state.snapshot.results)
-    ) {
-      snapshot.results = this.state.snapshot.results
     }
     this.state = { snapshot: snapshot ?? this.state.snapshot, available, rows }
     for (const listener of this.listeners) {
@@ -223,13 +225,12 @@ class WorkerDockFeed {
 }
 const feeds = new Map<string, WorkerDockFeed>()
 const noopSubscribe = () => () => {}
-function useWorkerDockSource<T>(
+export function useWorkerDockFeed(
   target: RuntimeClientTarget,
   sessionId: string,
   visible: boolean,
-  presence: WorkerDockPresence | undefined,
-  detailed: boolean,
-  select: (state: State) => T
+  presence?: WorkerDockPresence,
+  detailed = true
 ) {
   const windowVisible = useSyncExternalStore(
     subscribeWindowParkVisibility,
@@ -259,32 +260,9 @@ function useWorkerDockSource<T>(
         : noopSubscribe(),
     [feed, visible, windowVisible, presence, detailed]
   )
-  const read = useCallback(() => select(feed?.read() ?? EMPTY), [feed, select])
+  const read = useCallback(() => feed?.read() ?? EMPTY, [feed])
   const value = useSyncExternalStore(subscribe, read)
-  return { value, party: feed?.party ?? null, loadWindow: feed?.window }
-}
-
-const readState = (state: State) => state
-const NO_RESULTS: readonly WorkerDockResultRef[] = []
-const readResults = (state: State) => state.snapshot?.results ?? NO_RESULTS
-export function useWorkerDockFeed(
-  target: RuntimeClientTarget,
-  sessionId: string,
-  visible: boolean,
-  presence?: WorkerDockPresence,
-  detailed = true
-) {
-  const source = useWorkerDockSource(target, sessionId, visible, presence, detailed, readState)
-  return { ...source.value, party: source.party, loadWindow: source.loadWindow }
-}
-export function useWorkerDockResults(
-  target: RuntimeClientTarget,
-  sessionId: string,
-  visible: boolean,
-  presence?: WorkerDockPresence
-) {
-  const source = useWorkerDockSource(target, sessionId, visible, presence, false, readResults)
-  return { results: source.value, party: source.party }
+  return { ...value, party: feed?.party ?? null, loadWindow: feed?.window }
 }
 
 const seededSources = new Set<string>()

@@ -219,10 +219,7 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
     [props.workerIdentities, providerRows]
   )
   return (
-    <div
-      ref={root}
-      className="min-h-0 group-has-[[data-native-chat-worker-approvals]]/worker-dock:contents"
-    >
+    <div ref={root} className="min-h-0">
       <WorkerDockRoster
         rows={rows}
         identities={identities}

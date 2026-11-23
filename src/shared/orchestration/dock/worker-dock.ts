@@ -4,8 +4,9 @@ import { CrewParty } from '../orchestration-crew'
 export const WorkerDockSource = z.object({ party: CrewParty })
 export const WorkerDockSubscribe = WorkerDockSource.extend({
   includeRows: z.boolean().optional(),
-  /** Only current work: live workers and recent, unresolved failures (see workerDockCurrentSql). */
-  currentOnly: z.boolean().optional()
+  /** Only current work: live workers and recent, unresolved failures (see workerDockCurrentRowsSql). */
+  currentOnly: z.boolean().optional(),
+  activeOnly: z.boolean().optional()
 })
 export const WorkerDockState = z.enum([
   'starting',
@@ -46,39 +47,11 @@ export const WorkerDockIdentity = WorkerDockEntry.pick({
   ownerActionsAvailable: true,
   settlement: true
 }).extend({ kind: WorkerDockEntry.shape.kind.optional(), hasModel: z.boolean().default(false) })
-export const WorkerDockResultRef = z.object({
-  name: z.string().default('Worker'),
-  title: z.string().default(''),
-  summary: z.string().default(''),
-  outcome: z.enum(['succeeded', 'failed', 'stopped', 'unexpected']).optional(),
-  dispatchId: z.string(),
-  id: z.string(),
-  at: z.number().nullable(),
-  settlement: z.string()
-})
-export type WorkerDockResultRef = z.infer<typeof WorkerDockResultRef>
-export function compareWorkerDockResultRefs(
-  a: Pick<WorkerDockResultRef, 'at' | 'dispatchId'>,
-  b: Pick<WorkerDockResultRef, 'at' | 'dispatchId'>
-): number {
-  return (
-    Number(a.at === null) - Number(b.at === null) ||
-    (b.at ?? 0) - (a.at ?? 0) ||
-    (a.dispatchId < b.dispatchId ? -1 : a.dispatchId > b.dispatchId ? 1 : 0)
-  )
-}
-export function oldestWorkerDockResultRef(refs: readonly WorkerDockResultRef[]) {
-  let oldest: WorkerDockResultRef | undefined
-  for (const ref of refs) {
-    if (!oldest || compareWorkerDockResultRefs(ref, oldest) > 0) {
-      oldest = ref
-    }
-  }
-  return oldest
-}
 export const WorkerDockSnapshot = z.object({
-  results: z.array(WorkerDockResultRef).default([]),
   revision: z.number(),
+  currentOnly: z.literal(true).optional(),
+  nextExpiry: z.number().optional(),
+  hasUnverifiedWorkers: z.boolean().optional(),
   unavailable: z.boolean().optional(),
   expired: z.boolean(),
   identities: z.array(WorkerDockIdentity),
@@ -138,7 +111,3 @@ export function compareWorkerDockEntries(
 
 export const WorkerDockResultRead = WorkerDockSource.extend({ dispatch: z.string() })
 export const WorkerDockStop = WorkerDockResultRead.extend({ requestId: z.string().min(1) })
-
-export const WorkerDockResultsRead = WorkerDockSource.extend({
-  before: WorkerDockResultRef.optional()
-})

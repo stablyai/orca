@@ -1,13 +1,7 @@
 import { runLifecycleWriteTransaction } from '../db/lifecycle-write-transaction-runner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../db/orchestration-db'
-import {
-  acknowledgeWorkerDock,
-  readWorkerDock,
-  readWorkerDockResult,
-  readWorkerDockResultRefs
-} from './worker-dock-read'
-import { oldestWorkerDockResultRef } from '../../../../shared/orchestration/dock/worker-dock'
+import { acknowledgeWorkerDock, readWorkerDock, readWorkerDockResult } from './worker-dock-read'
 import { isOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
 import { subscribeWorkerDock } from './worker-dock-stream'
 import { refreshWorkerDockActivity, workerDockActivitySource } from './worker-dock-activity'
@@ -70,7 +64,7 @@ function report(dispatchId: string, outcome: 'succeeded' | 'failed') {
 }
 
 describe('worker dock lifecycle projection', () => {
-  it('streams active workers ahead of a full page of settled dispatches and keeps their results', async () => {
+  it('streams active workers ahead of a full page of older failures', async () => {
     for (let index = 0; index < 50; index++) {
       report(worker(), 'failed')
     }
@@ -81,7 +75,6 @@ describe('worker dock lifecycle projection', () => {
       const snapshot = emit.mock.lastCall?.[0]
       expect(snapshot?.identities.map((row) => row.dispatchId)).toEqual([active])
       expect(snapshot?.rows.map((row) => row.dispatchId)).toEqual([active])
-      expect(snapshot?.results).toHaveLength(50)
       expect(db.workerDockSources.read(session)?.open).toBe(true)
 
       report(active, 'succeeded')
@@ -90,22 +83,14 @@ describe('worker dock lifecycle projection', () => {
       await Promise.resolve()
 
       expect(emit.mock.lastCall?.[0].identities).toEqual([])
+      expect(emit.mock.lastCall?.[0]).not.toHaveProperty('results')
+      expect(readWorkerDockResult(db, party, active)?.outcome).toBe('succeeded')
       expect(db.workerDockSources.read(session)?.open).toBe(false)
     } finally {
       unsubscribe()
     }
   })
 
-  it('pages complete result windows when many reports have the same settlement time', () => {
-    for (let index = 0; index < 100; index++) {
-      report(worker(), 'succeeded')
-    }
-    const first = readWorkerDockResultRefs(db, party)
-    const second = readWorkerDockResultRefs(db, party, oldestWorkerDockResultRef(first))
-    expect(first).toHaveLength(50)
-    expect(second).toHaveLength(50)
-    expect(new Set([...first, ...second].map((row) => row.id)).size).toBe(100)
-  })
   it('preserves a normalized status episode through replay and retains unverifiable membership', () => {
     vi.useFakeTimers({ now: 1794657600000 })
     const id = worker()

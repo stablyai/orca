@@ -125,9 +125,9 @@ export class WorkerDockSourcePresence {
     if (first) {
       this.seeded.add(source)
     }
-    const open = snapshot.identities.length > 0
+    const open = snapshot.identities.length > 0 || snapshot.hasUnverifiedWorkers === true
     const previous = this.values.get(source)
-    if (open || snapshot.results.length || previous) {
+    if (open || previous) {
       const next =
         previous?.open === open
           ? previous
@@ -140,9 +140,6 @@ export class WorkerDockSourcePresence {
     }
     if (first) {
       for (const row of snapshot.identities) {
-        this.dispatchSources.set(row.dispatchId, source)
-      }
-      for (const row of snapshot.results) {
         this.dispatchSources.set(row.dispatchId, source)
       }
     }

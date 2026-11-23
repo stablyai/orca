@@ -1,12 +1,6 @@
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { readWorkerDock, workerDockSession } from './worker-dock-read'
 import type { WorkerDockSnapshot } from '../../../../shared/orchestration/dock/worker-dock'
-import {
-  WORKER_DOCK_FAILURE_MS,
-  WORKER_DOCK_UNKNOWN_MS,
-  WORKER_DOCK_UNVERIFIED_READY_MS
-} from '../db/worker-dock-eligibility'
-
 type Producer = {
   listeners: Map<(value: WorkerDockSnapshot) => void, boolean>
   snapshot: WorkerDockSnapshot
@@ -16,30 +10,6 @@ type Producer = {
 }
 const producers = new WeakMap<OrchestrationDb, Map<string, Producer>>()
 
-/** When the next shown row may age out of current work, or null when none can. A ready worker's
- *  shown time is its status time, not its record's, so this can be early; the re-read decides. */
-export function workerDockAgingDeadline(snapshot: WorkerDockSnapshot, now: number): number | null {
-  let deadline: number | null = null
-  for (const row of snapshot.identities) {
-    if (row.changedAt === null) {
-      continue
-    }
-    const windows =
-      row.state === 'failed' || row.state === 'unexpected'
-        ? [WORKER_DOCK_FAILURE_MS]
-        : row.state === 'unavailable'
-          ? [WORKER_DOCK_UNKNOWN_MS, WORKER_DOCK_UNVERIFIED_READY_MS]
-          : []
-    for (const window of windows) {
-      const at = row.changedAt + window
-      if (at > now && (deadline === null || at < deadline)) {
-        deadline = at
-        break
-      }
-    }
-  }
-  return deadline
-}
 type ActivitySource = {
   refresh: () => number | null
   subscribe: (wake: () => void) => () => void
@@ -102,29 +72,29 @@ export function subscribeWorkerDock(
       close: () => {}
     }
     let seen = db.workerDockSources.version(source)
-    // Current rows also leave by age with no write to wake on, so one timer re-reads when the next
-    // shown row may have aged out (never sooner than a minute apart).
-    let aged = false
+    // Schedule the nearest expiry so idle sources need no periodic reads.
     let aging: ReturnType<typeof setTimeout> | undefined
     function armAging(snapshot: WorkerDockSnapshot = held.snapshot) {
       clearTimeout(aging)
-      const deadline = currentOnly ? workerDockAgingDeadline(snapshot, Date.now()) : null
-      if (deadline !== null) {
+      const deadline = snapshot.nextExpiry
+      if (deadline !== undefined) {
         aging = setTimeout(
           () => {
-            aged = true
+            db.workerDockSources.invalidate(source, false)
             schedule()
           },
-          Math.max(60_000, deadline - Date.now() + 1)
+          Math.max(1, deadline - Date.now())
         )
       }
     }
     armAging()
     let unwatchActivity: (() => void) | undefined
     const watchActivity = () => {
-      const live = held.snapshot.identities.some(
-        (row) => !['failed', 'unexpected', 'saving'].includes(row.state)
-      )
+      const live =
+        held.snapshot.hasUnverifiedWorkers ||
+        held.snapshot.identities.some(
+          (row) => !['failed', 'unexpected', 'saving'].includes(row.state)
+        )
       if (live && !unwatchActivity) {
         unwatchActivity = activity?.subscribe(() => {
           activityChanged = true
@@ -152,10 +122,9 @@ export function subscribeWorkerDock(
             refresh()
           }
           const version = db.workerDockSources.version(source)
-          if (version === seen && !held.snapshot.unavailable && !aged) {
+          if (version === seen && !held.snapshot.unavailable) {
             return
           }
-          aged = false
           const next = readWorkerDock(db, {
             party,
             direction: 'around',

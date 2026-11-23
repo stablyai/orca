@@ -17,5 +17,5 @@ export function workerDockRosterBudget(
     return nominal
   }
   const cap = Math.max(44, Math.min(paneHeight * 0.4, paneHeight - 180))
-  return Math.max(44, Math.min(nominal, cap - (narrow ? 44 : 32) - 24 - (orderHeld ? 28 : 0)))
+  return Math.max(44, Math.min(nominal, cap - (narrow ? 44 : 36) - (orderHeld ? 28 : 0)))
 }

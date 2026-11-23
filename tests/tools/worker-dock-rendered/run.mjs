@@ -10,27 +10,46 @@ const shots = process.argv[3]
 const FIXTURE = 'native-chat/tools/tasks/dock/WorkerDockHarness'
 const results = []
 
-const browser = await chromium.launch({ headless: true })
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: process.env.ORCA_FIXTURES_BROWSER
+})
 
-async function open(scene, { width = 760, height = 900, theme = 'dark', touch = false } = {}) {
-  const context = await browser.newContext({
-    viewport: { width, height },
-    hasTouch: touch,
-    isMobile: false
-  })
-  const page = await context.newPage()
-  const errors = []
-  page.on('pageerror', (error) => errors.push(error.message))
-  await page.goto(`${base}/fixtures.html?id=${encodeURIComponent(`${FIXTURE}:${scene}`)}&theme=${theme}`, {
-    timeout: 600_000
-  })
+const pages = new Map()
+async function open(
+  scene,
+  { width = 760, height = 900, theme = 'dark', touch = false, fixture = FIXTURE } = {}
+) {
+  let opened = pages.get(touch)
+  if (!opened) {
+    const context = await browser.newContext({ hasTouch: touch })
+    const page = await context.newPage()
+    page.setDefaultTimeout(8000)
+    const errors = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    await page.goto(`${base}/fixtures.html?worker=1`, { timeout: 180_000 })
+    await page.waitForFunction(() => Boolean(window.__orcaComponentFixtureHost), undefined, {
+      timeout: 180_000
+    })
+    opened = { page, errors }
+    pages.set(touch, opened)
+  }
+  const { page, errors } = opened
+  errors.length = 0
+  await page.waitForFunction(() => Boolean(window.__orcaComponentFixtureHost))
+  await page.setViewportSize({ width, height })
+  await page.evaluate(
+    ([id, fixtureTheme]) => window.__orcaComponentFixtureHost.render(id, fixtureTheme),
+    [`${fixture}:${scene}`, theme]
+  )
   await page.waitForFunction(
     () => ['ready', 'error'].includes(document.documentElement.dataset.fixtureState ?? ''),
     undefined,
-    { timeout: 600_000 }
+    { timeout: 60_000 }
   )
-  await page.waitForTimeout(300)
-  return { page, context, errors }
+  const failure = await page.evaluate(() => document.documentElement.dataset.fixtureError)
+  assert(!failure, failure)
+  return opened
 }
 
 const toggle = (page) => page.locator('[data-worker-dock-header] button[aria-expanded]')
@@ -50,12 +69,19 @@ const scrollState = (page) =>
   }))
 const events = (page) => page.evaluate(() => window.__workerDockHarness?.events ?? [])
 
+const filter = process.env.ORCA_WORKER_DOCK_TEST_FILTER
 async function check(name, run) {
+  if (filter && !name.includes(filter)) {
+    return
+  }
   try {
     await run()
     results.push({ name, ok: true })
+    console.log(`PASS  ${name}`)
   } catch (error) {
-    results.push({ name, ok: false, error: String(error?.message ?? error).split('\n')[0] })
+    const reason = String(error?.message ?? error).split('\n')[0]
+    results.push({ name, ok: false })
+    console.error('FAIL ', name, '->', reason)
   }
 }
 function assert(condition, message) {
@@ -65,12 +91,8 @@ function assert(condition, message) {
 }
 async function scene(name, options, run) {
   const opened = await open(name, options)
-  try {
-    await run(opened.page)
-    assert(opened.errors.length === 0, `page errors: ${opened.errors.join('; ')}`)
-  } finally {
-    await opened.context.close()
-  }
+  await run(opened.page)
+  assert(opened.errors.length === 0, `page errors: ${opened.errors.join('; ')}`)
 }
 
 await check('opens and folds from the header by click, Enter and Space', () =>
@@ -142,10 +164,10 @@ await check('updates the open header count live as workers start and finish', ()
     const text = async () => (await toggle(page).textContent()).replaceAll(' ', ' ')
     await page.evaluate(() => window.__workerDockHarness.start('Fresh worker'))
     await page.waitForTimeout(150)
-    assert(/^5 workers/.test(await text()), `after start: ${await text()}`)
+    assert((await text()).startsWith('5 workers'), `after start: ${await text()}`)
     await page.evaluate(() => window.__workerDockHarness.finish('dock:3'))
     await page.waitForTimeout(150)
-    assert(/^4 workers/.test(await text()), `after finish: ${await text()}`)
+    assert((await text()).startsWith('4 workers'), `after finish: ${await text()}`)
     assert((await rows(page)).length === 4, 'row list did not follow')
   })
 )
@@ -156,37 +178,39 @@ for (const [width, sceneName] of [
   [360, 'twentyOpen320']
 ]) {
   for (const height of [560, 1000]) {
-    await check(`scrolls by wheel in small steps and reaches the last row (${sceneName}, ${height}px tall)`, () =>
-      scene(sceneName, { width, height }, async (page) => {
-        const first = await scrollState(page)
-        assert(first.height > first.client, `nothing to scroll: ${JSON.stringify(first)}`)
-        const box = await region(page).boundingBox()
-        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-        for (let step = 0; step < 5; step++) {
-          await page.mouse.wheel(0, 12)
+    await check(
+      `scrolls by wheel in small steps and reaches the last row (${sceneName}, ${height}px tall)`,
+      () =>
+        scene(sceneName, { width, height }, async (page) => {
+          const first = await scrollState(page)
+          assert(first.height > first.client, `nothing to scroll: ${JSON.stringify(first)}`)
+          const box = await region(page).boundingBox()
+          await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+          for (let step = 0; step < 5; step++) {
+            await page.mouse.wheel(0, 12)
+            await page.waitForTimeout(250)
+          }
+          const moved = await scrollState(page)
+          assert(moved.top >= 50, `five 12px ticks moved ${moved.top}px`)
+          await page.mouse.wheel(0, 20_000)
           await page.waitForTimeout(250)
-        }
-        const moved = await scrollState(page)
-        assert(moved.top >= 50, `five 12px ticks moved ${moved.top}px`)
-        await page.mouse.wheel(0, 20_000)
-        await page.waitForTimeout(250)
-        const last = page.locator('[data-worker-dock-row]').last()
-        const lastBox = await last.boundingBox()
-        const regionBox = await region(page).boundingBox()
-        assert(
-          lastBox.y + lastBox.height <= regionBox.y + regionBox.height + 1,
-          'last row clipped at the bottom'
-        )
-        const header = await toggle(page).boundingBox()
-        assert(header.y >= 0, 'header scrolled away')
-        const composer = await page.locator('[data-fixture-composer]').boundingBox()
-        assert(regionBox.y + regionBox.height <= composer.y + 1, 'list overlaps the message box')
-        assert(composer.y + composer.height <= height, 'message box pushed off screen')
-        if (shots) {
-          mkdirSync(shots, { recursive: true })
-          await page.screenshot({ path: path.join(shots, `bottom-${width}x${height}.png`) })
-        }
-      })
+          const last = page.locator('[data-worker-dock-row]').last()
+          const lastBox = await last.boundingBox()
+          const regionBox = await region(page).boundingBox()
+          assert(
+            lastBox.y + lastBox.height <= regionBox.y + regionBox.height + 1,
+            'last row clipped at the bottom'
+          )
+          const header = await toggle(page).boundingBox()
+          assert(header.y >= 0, 'header scrolled away')
+          const composer = await page.locator('[data-fixture-composer]').boundingBox()
+          assert(regionBox.y + regionBox.height <= composer.y + 1, 'list overlaps the message box')
+          assert(composer.y + composer.height <= height, 'message box pushed off screen')
+          if (shots) {
+            mkdirSync(shots, { recursive: true })
+            await page.screenshot({ path: path.join(shots, `bottom-${width}x${height}.png`) })
+          }
+        })
     )
   }
 }
@@ -233,7 +257,10 @@ await check('scrolls by touch drag', () =>
     const client = await page.context().newCDPSession(page)
     const x = box.x + box.width / 2
     const from = box.y + box.height - 10
-    await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: from }] })
+    await client.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x, y: from }]
+    })
     for (let step = 1; step <= 10; step++) {
       await client.send('Input.dispatchTouchEvent', {
         type: 'touchMove',
@@ -292,7 +319,10 @@ await check('Stop on a running row sends Stop and the row leaves', () =>
     await row.locator('[data-worker-dock-action]').click()
     await page.waitForTimeout(300)
     const sent = await events(page)
-    assert(sent.some((event) => event.action === 'stop' && event.id === 'dock:2'), 'no Stop sent')
+    assert(
+      sent.some((event) => event.action === 'stop' && event.id === 'dock:2'),
+      'no Stop sent'
+    )
     assert(!(await rows(page)).some((item) => item.id === 'dock:2'), 'stopped row still drawn')
   })
 )
@@ -301,7 +331,10 @@ await check('Show opens the worker', () =>
   scene('fourOpen720', {}, async (page) => {
     await page.locator('[data-worker-dock-row="dock:2"] [data-worker-dock-open]').click()
     const sent = await events(page)
-    assert(sent.some((event) => event.action === 'open' && event.id === 'dock:2'), 'no open sent')
+    assert(
+      sent.some((event) => event.action === 'open' && event.id === 'dock:2'),
+      'no open sent'
+    )
   })
 )
 
@@ -313,6 +346,79 @@ await check('a remote chat shows no Stop or Clear that would do nothing', () =>
     assert((await page.getByRole('button', { name: /Clear all/ }).count()) === 0, 'Clear all shown')
   })
 )
+
+await check('a paired chat command still stops', () =>
+  scene('remoteCommand720', {}, async (page) => {
+    const button = page.getByRole('button', { name: /Stop Command · Check the build/ })
+    await button.click()
+    assert(
+      (await events(page)).some(
+        (event) => event.action === 'remote-stop' && event.id === 'shell-fixture'
+      ),
+      'Stop was not routed to the chat'
+    )
+    await button.waitFor({ state: 'detached' })
+  })
+)
+
+await check('Show in dock again restores the acknowledged failure', () =>
+  scene('twentyOpen720', {}, async (page) => {
+    const row = page.locator('[data-worker-dock-row="dock:0"]')
+    await row.locator('[data-worker-dock-action]').click()
+    await row.waitFor({ state: 'detached' })
+    await page.getByRole('button', { name: 'Show in dock again' }).click()
+    await row.waitFor()
+    assert(
+      (await events(page)).some(
+        (event) => event.action === 'restore' && event.id === 'ctx_fixture_0'
+      ),
+      'wrong settlement restored'
+    )
+  })
+)
+
+for (const width of [720, 390, 320]) {
+  for (const theme of ['light', 'dark']) {
+    for (const layer of ['question', 'queue', 'both']) {
+      await check(`aligns with ${layer} (${width}px, ${theme})`, () =>
+        scene(`${layer}${width}`, { width: width + 40, height: 900, theme }, async (page) => {
+          const strip = page.locator('[data-native-chat-background-tasks]')
+          const header = toggle(page)
+          const sibling =
+            layer === 'queue'
+              ? page.locator('[data-native-chat-queue] .rounded-lg').first()
+              : page.locator('[data-native-chat-question-card] [data-native-chat-dock-clip]')
+          const assertPlacement = async () => {
+            const [a, b] = await Promise.all([strip.boundingBox(), sibling.boundingBox()])
+            assert(a && b, 'strip or next card missing')
+            const gap = b.y - a.y - a.height
+            assert(gap >= 8 && gap <= 10, `gap is ${gap}px`)
+            assert(
+              Math.abs(a.x - b.x) <= 1 && Math.abs(a.width - b.width) <= 1,
+              'edges do not align'
+            )
+          }
+          assert(
+            (await header.textContent()).trim() === '9 workers · 2 failed',
+            'folded summary includes extra counts'
+          )
+          assert(
+            (await page.getByRole('button', { name: /Clear all/ }).count()) === 0,
+            'folded Clear all is visible'
+          )
+          await assertPlacement()
+          if (shots) {
+            mkdirSync(shots, { recursive: true })
+            await page.screenshot({ path: path.join(shots, `${layer}-${width}-${theme}.png`) })
+          }
+          await header.click()
+          await page.getByRole('button', { name: /Clear all/ }).waitFor()
+          await assertPlacement()
+        })
+      )
+    }
+  }
+}
 
 for (const [width, sceneName] of [
   [430, 'twentyOpen390'],
@@ -328,6 +434,25 @@ for (const [width, sceneName] of [
       await x.click()
       await page.waitForTimeout(300)
       assert(!(await rows(page)).some((row) => row.id === target), 'narrow X did not clear')
+    })
+  )
+}
+
+for (const chat of ['coordinator', 'bot']) {
+  await check(`keeps the report without a Finished row in a ${chat} chat`, () =>
+    scene(chat, { fixture: 'native-chat/tools/tasks/dock/WorkerDockCompletion' }, async (page) => {
+      await page.getByRole('button', { name: /1 worker/ }).waitFor()
+      await page.getByRole('button', { name: 'Complete fixture worker' }).click()
+      await page.getByText('The worker verified the release notes.', { exact: true }).waitFor()
+      await page.getByRole('button', { name: /1 worker/ }).waitFor({ state: 'detached' })
+      assert(
+        (await page.locator('[data-native-chat-worker-result]').count()) === 0,
+        'the transcript duplicated the report with a Finished row'
+      )
+      if (shots) {
+        mkdirSync(shots, { recursive: true })
+        await page.screenshot({ path: path.join(shots, `completion-${chat}.png`) })
+      }
     })
   )
 }
@@ -350,15 +475,11 @@ if (shots) {
       })
       await opened.page.waitForTimeout(200)
       await opened.page.screenshot({ path: path.join(shots, `end-${sceneName}-${theme}.png`) })
-      await opened.context.close()
     }
   }
 }
 
 await browser.close()
-for (const result of results) {
-  console.log(`${result.ok ? 'PASS' : 'FAIL'}  ${result.name}${result.ok ? '' : `  -> ${result.error}`}`)
-}
 const failed = results.filter((result) => !result.ok).length
 console.log(`${results.length - failed} passed, ${failed} failed`)
 process.exitCode = failed ? 1 : 0

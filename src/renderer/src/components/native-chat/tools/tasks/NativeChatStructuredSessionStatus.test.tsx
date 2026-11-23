@@ -8,17 +8,20 @@ import type { StructuredSessionBackgroundTasksView } from '../../../../../../sha
 import type { WorkerDockRowView } from './dock/WorkerDockRow'
 import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
 
-const hoisted = vi.hoisted(() => ({
-  rpc: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
-  workers: [] as unknown[]
-}))
+const hoisted = vi.hoisted(() => {
+  const workers: WorkerDockRowView[] = []
+  return {
+    rpc: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
+    workers
+  }
+})
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: hoisted.rpc }))
 vi.mock('../../worker-approvals/native-chat-worker-approval-feed', () => ({
   useNativeChatPinnedWorkerApprovals: () => []
 }))
 vi.mock('./dock/worker-dock-feed', () => ({
   useWorkerDockFeed: () => {
-    const rows = hoisted.workers as WorkerDockRowView[]
+    const rows = hoisted.workers
     return {
       party: 'party-synthetic',
       available: true,

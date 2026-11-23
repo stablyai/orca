@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../db/orchestration-db'
 import { acknowledgeWorkerDock, readWorkerDock } from './worker-dock-read'
 import { refreshWorkerDockActivity } from './worker-dock-activity'
-import { subscribeWorkerDock, workerDockAgingDeadline } from './worker-dock-stream'
+import { subscribeWorkerDock } from './worker-dock-stream'
 
 // The strip's current-work rule: live work always; failures only while recent, unacknowledged,
 // not stopped by the owner and not replaced by a retry; unresolved or unverified rows age out.
@@ -66,7 +66,9 @@ it('shows a failure from the last four hours and drops an older one', () => {
   const old = dispatch()
   settle(old, 'failed', 5 * HOUR)
   const stopped = dispatch()
-  settle(stopped, 'abandoned', 2 * HOUR)
+  settle(stopped, 'stopped', 2 * HOUR)
+  const abandoned = dispatch()
+  settle(abandoned, 'abandoned', HOUR)
   expect(new Set(current())).toEqual(new Set([recent, stopped]))
 })
 
@@ -136,7 +138,7 @@ it('drops a ready worker with no fresh status a day after its last change', () =
     readObservedAgentStatusPaneIdentityFn: () => null,
     getAgentStatusTerminalHandleForPaneKey: () => null,
     getTerminalProcessIncarnation: () => null
-  } as unknown as Parameters<typeof refreshWorkerDockActivity>[2])
+  })
   expect(current()).toEqual([recent])
 })
 
@@ -152,30 +154,4 @@ it('re-reads when a shown failure ages out, with no write to wake it', async () 
   } finally {
     unsubscribe()
   }
-})
-
-it('arms the aging timer only for rows that can age out', () => {
-  const row = (state: 'running' | 'failed' | 'unavailable', changedAt: number) => ({
-    id: state,
-    dispatchId: state,
-    state,
-    changedAt,
-    settlement: null,
-    ownerActionsAvailable: true,
-    hasModel: false
-  })
-  const snapshot = (identities: ReturnType<typeof row>[]) => ({
-    revision: 1,
-    expired: false,
-    identities,
-    rows: [],
-    results: [],
-    anchor: null
-  })
-  expect(workerDockAgingDeadline(snapshot([row('running', NOW - 9 * HOUR)]), NOW)).toBeNull()
-  expect(workerDockAgingDeadline(snapshot([row('failed', NOW - HOUR)]), NOW)).toBe(NOW + 3 * HOUR)
-  // Past the hour an unknown row has, the day a ready one has is next.
-  expect(workerDockAgingDeadline(snapshot([row('unavailable', NOW - 2 * HOUR)]), NOW)).toBe(
-    NOW + 22 * HOUR
-  )
 })

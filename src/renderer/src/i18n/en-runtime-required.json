@@ -3139,6 +3139,8 @@
         "agentCount_other": "{{count}} agents",
         "clearAllLabel_one": "Clear failed worker",
         "clearAllLabel_other": "Clear all {{count}} failed workers",
+        "cleared_one": "Cleared 1 worker",
+        "cleared_other": "Cleared {{count}} workers",
         "commandCount_one": "{{count}} command",
         "commandCount_other": "{{count}} commands",
         "monitorCount_one": "{{count}} monitor",

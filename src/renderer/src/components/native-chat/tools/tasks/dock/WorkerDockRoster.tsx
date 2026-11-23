@@ -14,7 +14,6 @@ import { workerDockSummary } from './worker-dock-summary'
 import { WorkerDockHeader } from './WorkerDockHeader'
 import { useWorkerDockScroll } from './use-worker-dock-scroll'
 import { workerDockAnchorIndex, type WorkerDockScrollAnchor } from './worker-dock-scroll-anchor'
-import { useWorkerDockScrollViewport } from './NativeChatWorkerDockFrame'
 import { workerDockRosterBudget } from './worker-dock-roster-budget'
 
 export function WorkerDockRoster(props: {
@@ -46,11 +45,6 @@ export function WorkerDockRoster(props: {
   const id = useId()
   const root = useRef<HTMLDivElement>(null)
   const viewport = useRef<HTMLDivElement>(null)
-  const { scroller, scrollMargin } = useWorkerDockScrollViewport(
-    viewport,
-    props.narrow,
-    props.expanded
-  )
   const summary = useRef<HTMLButtonElement>(null)
   const anchor = useRef<WorkerDockScrollAnchor | null>(null)
   const [held, setHeld] = useState<
@@ -91,7 +85,6 @@ export function WorkerDockRoster(props: {
     failures: failed
   } = workerDockSummary(props.countIdentities ?? props.identities, props.rows, t)
   const [budget, setBudget] = useState(props.narrow ? 200 : 160)
-  const [more, setMore] = useState(false)
   const items = useMemo(
     () =>
       identities.map((row, index) => ({
@@ -126,8 +119,7 @@ export function WorkerDockRoster(props: {
   )
   const rowWindow = useNativeChatToolRunWindow({
     rows: rowKeys,
-    scrollerRef: scroller,
-    scrollMargin,
+    scrollerRef: viewport,
     isVisible: props.visible,
     drawsEveryRow: small,
     estimateSize,
@@ -139,19 +131,12 @@ export function WorkerDockRoster(props: {
   const modelColumn =
     props.identities.some((row) => row.hasModel) ||
     [...props.rows.values()].some((row) => row.model)
-  const updateMore = useLatestHandler(() => {
-    const element = viewport.current
-    setMore(
-      Boolean(element) && element!.scrollHeight - element!.scrollTop - element!.clientHeight > 1
-    )
-  })
   // Sized from the pane and the rows' layout, never from the scroll position: scrolling moves the
   // list, it never resizes it.
   const measure = useLatestHandler(() => {
     const element = viewport.current
     if (element) {
       setBudget(workerDockRosterBudget(root.current, element, props.narrow, orderHeld))
-      updateMore()
     }
   })
   useLayoutEffect(measure, [measure, props.expanded, props.narrow, orderHeld, items.length])
@@ -165,7 +150,7 @@ export function WorkerDockRoster(props: {
     return () => observer.disconnect()
   }, [measure])
   const loadVisibleWindow = useLatestHandler(() => {
-    const first = visibleItems.find((item) => item.end > (scroller.current?.scrollTop ?? 0))
+    const first = visibleItems.find((item) => item.end > (viewport.current?.scrollTop ?? 0))
     const key = first ? items[first.index]?.id : undefined
     if (key && !props.rows.has(key)) {
       void props.loadWindow?.(key)
@@ -216,10 +201,7 @@ export function WorkerDockRoster(props: {
     onAnchorChange: (value) => {
       anchor.current = { ...value, order: items }
     },
-    onScrolled: () => {
-      hold()
-      updateMore()
-    },
+    onScrolled: hold,
     scrollTo
   })
   // A row that leaves while it holds focus (Clear, say) hands focus to the row that takes its
@@ -250,7 +232,7 @@ export function WorkerDockRoster(props: {
     <div
       ref={root}
       data-native-chat-background-tasks="true"
-      className="min-h-0 min-w-0 text-xs text-muted-foreground group-has-[[data-native-chat-worker-approvals]]/worker-dock:contents"
+      className="min-h-0 min-w-0 overflow-hidden rounded-xl border border-border bg-chat-canvas bg-[linear-gradient(var(--color-chat-composer-surface),var(--color-chat-composer-surface))] text-xs text-muted-foreground shadow-sm"
       onPointerEnter={hold}
       onPointerOverCapture={(event) => {
         const row =
@@ -298,7 +280,6 @@ export function WorkerDockRoster(props: {
         expanded={props.expanded}
         incomplete={props.incomplete}
         count={count}
-        total={total}
         clearable={clearable}
         failed={failed}
         needsYou={needsYou}
@@ -338,13 +319,9 @@ export function WorkerDockRoster(props: {
             ref={viewport}
             id={id}
             role="region"
-            aria-label={
-              more
-                ? t('components.native-chat.workerDock.workersMore', 'Workers · more workers below')
-                : t('components.native-chat.workerDock.workersRegion', 'Workers')
-            }
+            aria-label={t('components.native-chat.workerDock.workersRegion', 'Workers')}
             tabIndex={0}
-            className="scrollbar-sleek min-h-0 overflow-y-auto overscroll-contain border-t border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring group-has-[[data-native-chat-worker-approvals]]/worker-dock:max-h-none! group-has-[[data-native-chat-worker-approvals]]/worker-dock:overflow-visible"
+            className="scrollbar-sleek min-h-0 overflow-y-auto overscroll-contain border-t border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             style={{ maxHeight: budget }}
             onScroll={scrollHandlers.onScroll}
             onKeyDown={scrollHandlers.onKeyDown}
@@ -366,7 +343,7 @@ export function WorkerDockRoster(props: {
                     identity={identity}
                     row={row}
                     small={small}
-                    start={item.start - scrollMargin}
+                    start={item.start}
                     measure={rowWindow.measureRow}
                     narrow={props.narrow}
                     compact={props.compact}
@@ -382,11 +359,6 @@ export function WorkerDockRoster(props: {
               })}
             </div>
           </div>
-          {more && !props.compact ? (
-            <div className="flex h-6 items-center justify-center bg-gradient-to-b from-muted/30 to-muted text-2xs group-has-[[data-native-chat-worker-approvals]]/worker-dock:hidden">
-              {t('components.native-chat.workerDock.moreBelow', 'More below')}
-            </div>
-          ) : null}
         </>
       ) : null}
     </div>
