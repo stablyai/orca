@@ -22790,6 +22790,7 @@
       "thisComputer": "此计算机",
       "unavailable": "{{agent}} 在此主机上不可用",
       "update": "更新",
+      "updateTo": "更新到 {{version}}",
       "verifying": "正在检查已下载的运行时",
       "installTitle": "安装 {{agent}} 以开始聊天",
       "continueTitle": "安装 {{agent}} 以继续",
