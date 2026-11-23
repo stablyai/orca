@@ -18,14 +18,18 @@ export const CONNECTOR_CONNECT_LOOPBACK_PATH = '/connector/done'
 // account's earlier one. The loopback is given whole or not at all. switchAccount asks the service to
 // offer its account picker again ("Not you?"). loginKey (Linear): the Mac also wants the person's
 // read,write login, sealed to this X25519 key (connect-login-seal.ts); without it the trip only
-// identifies them.
+// identifies them. addAccess (GitHub): the trip adds access, so after the sign-in it goes on to
+// GitHub's install page unless the login reaches `workspace` (an org or user login); with none named
+// it always does. A cloud older than it ignores it.
 export const ConnectorConnectStartRequestSchema = z
   .object({
     v: z.literal(1),
     loopbackPort: z.number().int().min(1024).max(65_535).optional(),
     loopbackNonce: Code.optional(),
     switchAccount: z.literal(true).optional(),
-    loginKey: z.string().regex(CONNECT_LOGIN_KEY_PATTERN).optional()
+    loginKey: z.string().regex(CONNECT_LOGIN_KEY_PATTERN).optional(),
+    // A GitHub login; the cloud checks its shape (GITHUB_LOGIN_PATTERN).
+    addAccess: z.object({ workspace: z.string().min(1).max(39).optional() }).optional()
   })
   .refine((start) => (start.loopbackPort === undefined) === (start.loopbackNonce === undefined), {
     message: 'loopbackPort and loopbackNonce go together'

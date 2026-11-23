@@ -29036,7 +29036,8 @@
         "removeConfirm": "移除",
         "finishSetup": "完成设置",
         "orgDescription": "{{repos}} · 已以 @{{login}} 身份登录",
-        "addAccount": "添加另一个 GitHub 账户"
+        "addAccount": "添加另一个 GitHub 账户",
+        "refresh": "刷新"
       },
       "setup": {
         "install": "安装 Orca 应用",

@@ -12,7 +12,7 @@ import { connectRuntimeEnvironmentAndRecordStatus } from '@/components/status-ba
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { BotHostOutage } from '../use-bot-host-outage'
-import type { BotSlackSetupStep } from './use-bot-slack-setup'
+import type { BotSlackSetupStep } from './slack-setup-step'
 
 /** Slack refused the saved token itself; `slack_refused` is any refusal, so it keeps its own words. */
 const TOKEN_REJECTED = 'grant_expired'
