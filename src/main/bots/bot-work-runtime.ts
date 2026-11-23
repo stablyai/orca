@@ -1,7 +1,6 @@
 // The work record as this runtime reads it: links from the conversation store, workers from
 // orchestration, workspaces from the runtime's worktrees.
-import { accessSync, existsSync } from 'node:fs'
-import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
+import { existsSync } from 'node:fs'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   getRepoExecutionHostId,
@@ -112,24 +111,12 @@ async function readLocalWorkspace(
     return null
   }
   // Only this machine's own disk proves a deletion, with the repository still there: an SSH host,
-  // a stopped WSL distro or an unreadable path proves nothing.
+  // a stopped WSL distro or an unmounted drive proves nothing.
   if (
     getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
     !parseWslUncPath(parsed.worktreePath) &&
     existsOnce(`repo:${repo.path}`, () => existsSync(repo.path), exists) &&
-    !existsOnce(
-      `worktree:${parsed.worktreePath}`,
-      () => {
-        // Absent only on ENOENT/ENOTDIR: an unreadable path may still be there.
-        try {
-          accessSync(parsed.worktreePath)
-          return true
-        } catch (error) {
-          return !isDefinitiveAbsence(error)
-        }
-      },
-      exists
-    )
+    !existsOnce(`worktree:${parsed.worktreePath}`, () => existsSync(parsed.worktreePath), exists)
   ) {
     return 'gone'
   }
