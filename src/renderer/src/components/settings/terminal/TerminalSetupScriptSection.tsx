@@ -33,7 +33,7 @@ export function TerminalSetupScriptSection({
           <SettingsSwitchRow
             label={entry.title}
             description={entry.description}
-            checked={settings.closeSetupTabOnSuccess}
+            checked={settings.closeSetupTabOnSuccess === true}
             onChange={() =>
               updateSettings({ closeSetupTabOnSuccess: !settings.closeSetupTabOnSuccess })
             }

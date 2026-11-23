@@ -10,8 +10,8 @@ import {
 } from '../../shell/launch/windows-cmd-runner-delayed-launch'
 
 export type SetupAutoCloseSettings = {
-  /** Closes the dedicated Setup tab when the setup script exits 0; a failure stays open. Default off. */
-  closeSetupTabOnSuccess: boolean
+  /** Closes the dedicated Setup tab when the setup script exits 0; a failure stays open. Unset means off. */
+  closeSetupTabOnSuccess?: boolean
 }
 
 export type SetupRunnerCommandPlatform = 'windows' | 'posix'
