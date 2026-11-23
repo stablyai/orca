@@ -7,6 +7,7 @@ import {
   assertBotItemAddable,
   assertBotItemText,
   botItemCommentData,
+  botItemWaitText,
   linkWords,
   uniqueBotItemLinks,
   mailsItemChat,
@@ -19,6 +20,8 @@ import { BotItemsReads } from './bot-items-reads'
 import type { BotItemRecord } from './bot-items-schema'
 
 type TextField = 'title' | 'description' | 'doneMeans'
+
+const WAIT_NOTE_MISSING = '--status waiting needs --note "<what it waits on>".'
 
 export class BotItemsEdits extends BotItemsReads {
   add(input: BotItemAddInput, actor: BotItemBotActor, now = Date.now()): BotItemWriteOutcome {
@@ -91,6 +94,15 @@ export class BotItemsEdits extends BotItemsReads {
   ): BotItemWriteOutcome {
     const item = this.requireItem(uid)
     this.requireOwnerWrite(item, actor, changes.status)
+    const waitNote =
+      changes.status === 'waiting' ? botItemWaitText(changes.note, WAIT_NOTE_MISSING) : undefined
+    // The owner's open question never hides behind a quieter status.
+    if (waitNote !== undefined && item.status === 'needs_you') {
+      throw new BotItemError(
+        'invalid_argument',
+        `Item ${item.number} waits on your owner's answer. It stays Needs you; put the wait in a comment.`
+      )
+    }
     const mail = mailsItemChat(item, actor)
     const fields: Partial<Record<TextField, { from: string | null; to: string | null }>> = {}
     for (const field of ['title', 'description', 'doneMeans'] as const) {
@@ -114,11 +126,13 @@ export class BotItemsEdits extends BotItemsReads {
               : {})
           }
         : undefined
-    // Asking again while already Needs you is a new question; Needs you again with nothing to say is no change.
+    // Asking again while already Needs you is a new question, and Waiting on something new a new wait;
+    // the same status with nothing new is no change.
     const status =
       changes.status !== undefined &&
       (changes.status !== item.status ||
-        (changes.status === 'needs_you' && commentData !== undefined))
+        (changes.status === 'needs_you' && commentData !== undefined) ||
+        (waitNote !== undefined && waitNote !== this.waitText(item)))
         ? changes.status
         : undefined
     if (!edited && status === undefined && commentData === undefined) {
@@ -128,6 +142,9 @@ export class BotItemsEdits extends BotItemsReads {
     const closeNote = (status === 'canceled' ? changes.reason : changes.note) ?? null
     const moveNote = closing ? closeNote : edited ? null : (changes.note ?? null)
     const move = (question: number | null) => {
+      if (waitNote !== undefined) {
+        return this.moveToWait(item, waitNote, actor, mail, now)
+      }
       this.writeStatus(uid, status!, question, actor, now, closing ? closeNote : null)
       const data = { from: item.status, to: status, ...(moveNote ? { note: moveNote } : {}) }
       return this.appendEvent(uid, 'status', actor, data, mail, now)
@@ -137,7 +154,8 @@ export class BotItemsEdits extends BotItemsReads {
     let eventId: number | null = reopening ? move(null) : null
     if (edited) {
       this.writeFields(item, fields)
-      const note = changes.note && status !== 'done' ? { note: changes.note } : {}
+      const note =
+        changes.note && status !== 'done' && waitNote === undefined ? { note: changes.note } : {}
       eventId = this.appendEvent(uid, 'edited', actor, { fields, ...note }, mail, now)
     }
     const comment =
@@ -175,6 +193,9 @@ export function assertBotItemSetInput(changes: BotItemSetInput): void {
   }
   if (changes.reason !== undefined && changes.status !== 'canceled') {
     throw new BotItemError('invalid_argument', '--reason goes with --status canceled.')
+  }
+  if (changes.status === 'waiting') {
+    botItemWaitText(changes.note, WAIT_NOTE_MISSING)
   }
   if (changes.ask !== undefined && changes.status !== 'needs_you') {
     throw new BotItemError('invalid_argument', '--ask goes with --status needs-you.')

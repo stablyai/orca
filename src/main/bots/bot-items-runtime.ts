@@ -16,18 +16,17 @@ import {
   type BotChangeScope,
   type BotNeedsYouCounts
 } from '../../shared/bots/bot-change-scope'
-import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { allLinks } from '../external-conversations/external-conversation-links'
-import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
-import { createCanonicalOrcaSessionResolver } from '../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
-import { readAgentSessionRecordStore } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
 import { access } from 'node:fs/promises'
 import { BotItemWorkerLinks } from './bot-item-worker-links'
 import { trackDispatchLinks, type TrackedBotItems } from './bot-item-dispatch-link-refs'
 import { dispatchStarter, dispatchStarterBotId } from './bot-item-dispatch-facts'
 import { botItemsStoreFile } from './bot-items-input'
-import { BotItemLinkJoin, type BotItemGitHubCache } from './bot-items-link-join'
+import {
+  BotItemLinkJoin,
+  type BotItemAutomations,
+  type BotItemGitHubCache
+} from './bot-items-link-join'
 import type { BotItemsRemote } from './bot-items-ops'
 import type {
   BotItemEventRecord,
@@ -36,7 +35,12 @@ import type {
   BotItemSource
 } from './bot-items-schema'
 import type { BotWorkRuntime } from './bot-work-runtime'
-import { BotsDbWorkerClient } from './db-worker/bots-db-worker-client'
+import type { BotsDbWorkerClient } from './db-worker/bots-db-worker-client'
+import {
+  moveItemsOnUsageLimits,
+  watchBotItemUsageLimits,
+  type BotUsageLimitCut
+} from './bot-item-usage-limit-wait'
 
 function eventView(event: BotItemEventRecord): BotItemEvent {
   return {
@@ -55,6 +59,7 @@ export type BotItemsHostDeps = {
   bots: () => readonly Bot[]
   /** The host's GitHub PR and issue caches: the desktop's, read on use, never a GitHub call. */
   githubCache: BotItemGitHubCache
+  automations: BotItemAutomations
   chatTitle: (chatId: string) => string | null
   /** False only when the chat records were read and this chat's is gone; unread is not gone. */
   chatExists: (chatId: string) => boolean
@@ -74,10 +79,11 @@ export class BotItemsHost {
   private readonly join: BotItemLinkJoin
   private readonly workerLinks: BotItemWorkerLinks
   private mailing: Promise<void> | null = null
+  private unwatchUsageLimits: (() => void) | null = null
   private mailAgain = false
 
   constructor(private readonly deps: BotItemsHostDeps) {
-    this.join = new BotItemLinkJoin(deps.workRuntime, deps.githubCache)
+    this.join = new BotItemLinkJoin(deps.workRuntime, deps.githubCache, deps.automations)
     const db = () => deps.workRuntime.getOrchestrationDb()
     this.workerLinks = new BotItemWorkerLinks({
       store: () => this.openedTracked(),
@@ -98,6 +104,10 @@ export class BotItemsHost {
     if (!store) {
       store = trackDispatchLinks((around) => this.deps.db.items(path, around))
       this.stores.set(path, store)
+      // With items to move: workers stopping on a usage limit move theirs to Waiting.
+      this.unwatchUsageLimits ??= watchBotItemUsageLimits((cuts, changed) =>
+        this.usageLimitsChanged(cuts, changed)
+      )
     }
     return store.remote
   }
@@ -133,6 +143,7 @@ export class BotItemsHost {
   }
 
   dispose(): void {
+    this.unwatchUsageLimits?.()
     this.stores.clear()
     this.deps.db.dispose()
   }
@@ -248,6 +259,8 @@ export class BotItemsHost {
     return items.map((given): BotItem => {
       const item = byUid.get(given.uid) ?? given
       const question = rows.questions[item.uid]
+      const wait = rows.waits[item.uid]
+      const waitText = typeof wait?.data.note === 'string' ? wait.data.note : null
       const { madeBy } = item
       return {
         uid: item.uid,
@@ -263,6 +276,7 @@ export class BotItemsHost {
           : null,
         question: question ? botItemQuestionView(botItemEventId(question.id), question.data) : null,
         closeNote: summary ? null : item.closeNote,
+        wait: wait && waitText !== null ? { text: waitText, at: wait.createdAt } : null,
         links: (rows.links[item.uid] ?? []).map((link) =>
           this.join.linkView(link, workers.get(link.ref))
         ),
@@ -287,6 +301,17 @@ export class BotItemsHost {
     return (await this.store().eventsBefore(uid, beforeId, limit)).map(eventView)
   }
 
+  /** Workers' usage-limit stops changed in these workspaces: their items wait or go back. */
+  async usageLimitsChanged(
+    cuts: ReadonlyMap<string, BotUsageLimitCut>,
+    changed: ReadonlySet<string>
+  ): Promise<void> {
+    const store = this.openedStore()
+    if (store) {
+      this.changed(await moveItemsOnUsageLimits(store, this.join, cuts, changed))
+    }
+  }
+
   /** A Dispatch row changed: a start for an item is linked, and linked items re-read. */
   dispatchChanged(dispatchId: string | null): void {
     if (dispatchId !== null) {
@@ -301,50 +326,6 @@ export class BotItemsHost {
     const rows = await store.viewRows([...new Set(uids)])
     this.changed(rows.items)
   }
-}
-
-/** The runtime's items host, reading its store, records and bots per call. */
-export function runtimeBotItems(runtime: {
-  workRuntime: BotWorkRuntime
-  bots: () => readonly Bot[]
-  store: () => RuntimeStore | null
-  notify: (scope: BotChangeScope) => void
-  sendMail: BotItemsHostDeps['sendMail']
-}): BotItemsHost {
-  const rootOf = (sessionId: string) => {
-    const records = readAgentSessionRecordStore()
-    return records && isOrcaSessionId(sessionId)
-      ? createCanonicalOrcaSessionResolver(records)(sessionId)
-      : sessionId
-  }
-  return new BotItemsHost({
-    workRuntime: runtime.workRuntime,
-    db: new BotsDbWorkerClient(),
-    bots: runtime.bots,
-    githubCache: () => runtime.store()?.getGitHubCache() ?? { pr: {}, issue: {} },
-    chatTitle: (chatId) =>
-      readAgentSessionRecordStore()?.getRecord(chatId)?.conversationName ?? null,
-    chatExists: (chatId) => {
-      const records = readAgentSessionRecordStore()
-      return !records || Boolean(records.getRecord(chatId))
-    },
-    chatRoot: rootOf,
-    threadChats: () => {
-      const store = runtime.store()
-      return store
-        ? [...allLinks(store)].map(({ link }) => ({
-            sessionId: link.sessionId,
-            title: link.title ?? null
-          }))
-        : []
-    },
-    automationRunChats: () =>
-      (runtime.store()?.listAutomationRuns?.() ?? []).flatMap((run) =>
-        run.chatSessionId ? [run.chatSessionId] : []
-      ),
-    notify: runtime.notify,
-    sendMail: runtime.sendMail
-  })
 }
 
 /** Null so a failed read can `.catch(warn)` to "unknown". */

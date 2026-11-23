@@ -162,13 +162,15 @@ export const BotItemsOwnerComment = z
   })
   .refine((value) => value.text.trim() || value.images?.length, 'Missing text')
 
-/** One status for one or many items; Cancel needs a reason, Needs you may carry a comment. */
+/** One status for one or many items; Cancel needs a reason, Waiting a note, Needs you may carry a
+ *  comment. Waiting and `note` only to a host advertising BOTS_ITEM_WAITING_CAPABILITY. */
 export const BotItemsOwnerStatus = z.object({
   ...Owner,
   items: z.array(z.string().min(1)).min(1, 'Name the items').max(200),
   status: z.enum(BOT_ITEM_STATUSES),
   reason: OptionalString,
-  comment: OptionalString
+  comment: OptionalString,
+  note: OptionalString
 })
 
 /** Snooze items until `until` (epoch ms), or bring them back with null. Each item names the newest

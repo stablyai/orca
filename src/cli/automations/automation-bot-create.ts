@@ -36,6 +36,7 @@ import { getEnabledFlag, getPrecheckFlag } from './automation-handler-flags'
 import { getTimezoneFlags } from './automation-timezone-flag'
 import { legacyPlaceOf } from '../../shared/connector-place-names'
 import { callerChat } from './automation-caller-chat'
+import { linkAutomationToItem } from './automation-item-link'
 import { BOT_CHAT_ID_PREFIX } from '../../shared/bots/bot-chat-row'
 import type { AutomationOnce } from '../../shared/automation-once'
 
@@ -304,7 +305,7 @@ export async function createBotAutomation(
   if (refusal) {
     throw new RuntimeClientError('invalid_argument', refusal)
   }
-  return client.call<{ automation: Automation }>('automation.create', {
+  const saved = await client.call<{ automation: Automation }>('automation.create', {
     name: getRequiredStringFlag(flags, 'name'),
     prompt: getRequiredStringFlag(flags, 'prompt'),
     precheck: getPrecheckFlag(flags),
@@ -320,4 +321,9 @@ export async function createBotAutomation(
     ...callerChat(),
     ...(flags.has('runs-in') ? {} : { runsInDefault: true })
   })
+  const item = getOptionalStringFlag(flags, 'item')
+  if (item !== undefined) {
+    await linkAutomationToItem(client, item, saved.result.automation.id)
+  }
+  return saved
 }

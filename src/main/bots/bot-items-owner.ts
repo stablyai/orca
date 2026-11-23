@@ -13,6 +13,7 @@ import { BotItemError } from './bot-item-error'
 import { BotItemsWrites } from './bot-items-writes'
 import {
   assertBotItemText,
+  botItemWaitText,
   type BotItemOwnerActor,
   type BotItemWriteOutcome
 } from './bot-items-input'
@@ -26,6 +27,8 @@ export type BotItemOwnerStatusInput = {
   to: BotItemStatus
   reason?: string
   comment?: string
+  /** With Waiting, which needs it: what it waits on. */
+  note?: string
 }
 
 export type BotItemOwnerOutcome = { uid: string; eventId: number | null; woke: boolean }
@@ -157,14 +160,17 @@ export class BotItemsOwner extends BotItemsWrites {
     if (input.to === 'canceled' && !input.reason?.trim()) {
       throw new BotItemError('invalid_argument', 'Canceling needs a reason.')
     }
+    const wait =
+      input.to === 'waiting' ? botItemWaitText(input.note, 'Say what it waits on.') : null
     return this.transaction(() => ({
-      items: input.uids.map((uid) => this.writeOwnerStatus(uid, input, actor, now))
+      items: input.uids.map((uid) => this.writeOwnerStatus(uid, input, wait, actor, now))
     }))
   }
 
   private writeOwnerStatus(
     uid: string,
     input: BotItemOwnerStatusInput,
+    wait: string | null,
     actor: BotItemOwnerActor,
     now: number
   ): BotItemOwnerOutcome {
@@ -172,13 +178,16 @@ export class BotItemsOwner extends BotItemsWrites {
     const comment = input.comment?.trim()
       ? this.writeOwnerComment(item, input.comment, actor, now)
       : null
-    if (item.status === input.to) {
+    if (item.status === input.to && (wait === null || wait === this.waitText(item))) {
       if (comment !== null) {
         this.endSnooze(uid, actor, now)
       }
       return { uid, eventId: comment, woke: comment !== null }
     }
     this.endSnooze(uid, actor, now)
+    if (wait !== null) {
+      return { uid, eventId: this.moveToWait(item, wait, actor, true, now), woke: true }
+    }
     const closing = input.to === 'done' || input.to === 'canceled'
     const note = closing ? (input.reason?.trim() ? input.reason : null) : null
     this.writeStatus(uid, input.to, input.to === 'needs_you' ? comment : null, actor, now, note)

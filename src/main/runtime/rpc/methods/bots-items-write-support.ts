@@ -106,14 +106,14 @@ export function botNamed(value: string, writer: Bot, bots: readonly Bot[]): Bot 
   return bot
 }
 
-/** `dispatch:<id>`, `pr:<owner/repo#n>`, a URL (a GitHub PR URL is that PR), or a path. One form per
- *  thing, so `item list --link` finds it however it was written. */
+/** `dispatch:<id>`, `automation:<id>`, `pr:<owner/repo#n>`, a URL (a GitHub PR URL is that PR), or a
+ *  path. One form per thing, so `item list --link` finds it however it was written. */
 export function parseItemLink(ref: string): BotItemLinkInput {
   const value = ref.trim()
   const [scheme = '', ...rest] = value.split(':')
   const body = rest.join(':')
-  if (scheme === 'dispatch' && body) {
-    return { kind: 'dispatch', ref: body }
+  if ((scheme === 'dispatch' || scheme === 'automation') && body) {
+    return { kind: scheme, ref: body }
   }
   if (scheme === 'pr') {
     if (!parseBotItemPrRef(body)) {

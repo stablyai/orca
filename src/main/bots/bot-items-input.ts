@@ -84,6 +84,22 @@ export function assertBotItemText(
   }
 }
 
+/** What a Waiting item waits on: one line, refused when missing or longer. `missing` is the refusal's
+ *  words for the caller. */
+export function botItemWaitText(note: string | undefined, missing: string): string {
+  const text = note?.trim() ?? ''
+  if (!text) {
+    throw new BotItemError('invalid_argument', missing)
+  }
+  if (text.length > BOT_ITEM_LIMITS.wait || /[\r\n]/.test(text)) {
+    throw new BotItemError(
+      'invalid_argument',
+      `Keep the wait to one line (up to ${BOT_ITEM_LIMITS.wait} characters); put details in --comment.`
+    )
+  }
+  return text
+}
+
 /** A status move's comment data. With an ask, it holds the question lines and their quick replies, and
  *  a host-built `text` spelling them out for readers without the ask; the sent `comment` (a copy for
  *  hosts without asks) is not kept. */
