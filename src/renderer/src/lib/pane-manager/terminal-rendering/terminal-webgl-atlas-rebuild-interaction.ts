@@ -33,6 +33,16 @@ if (
   for (const type of ['pointerdown', 'wheel', 'keydown', 'focus'] as const) {
     window.addEventListener(type, noteTerminalWebglAtlasTyping, { capture: true, passive: true })
   }
+  // A held pointer (text selection, divider drag) keeps counting while it moves.
+  window.addEventListener(
+    'pointermove',
+    (event) => {
+      if (event.buttons !== 0) {
+        noteTerminalWebglAtlasTyping()
+      }
+    },
+    { capture: true, passive: true }
+  )
   window.api?.ui?.onBrowserPagePointerDown?.(noteTerminalWebglAtlasTyping)
   subscribeWindowParkVisibility(noteTerminalWebglAtlasTyping)
 }

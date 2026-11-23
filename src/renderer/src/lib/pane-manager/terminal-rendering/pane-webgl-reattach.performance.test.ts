@@ -196,6 +196,23 @@ describe('atlas-rebuild context recreation', () => {
     }
   })
 
+  it.each([300, 3_000])(
+    'checks a waiting pane once per frame however many closed panes sit ahead of it (%i)',
+    async (count) => {
+      const fakes = Array.from({ length: count }, fakePane)
+      let verdicts = 0
+      run(fakes, () => {
+        verdicts++
+        return 'wait'
+      })
+      for (const fake of fakes.slice(0, -1)) {
+        fake.raw.container.isConnected = false
+      }
+      await vi.advanceTimersByTimeAsync(16)
+      expect(verdicts).toBe(1)
+    }
+  )
+
   it('skips a pane that closed or lost its renderer before its frame', async () => {
     const [first, closed, lost] = Array.from({ length: 3 }, fakePane)
     run([first, closed, lost])

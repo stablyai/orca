@@ -99,23 +99,22 @@ let queueVerdict: (pane: ManagedPaneInternal) => DeferredReattachVerdict = () =>
 let queueRunning = false
 const waitingSince = new WeakMap<ManagedPaneInternal, number>()
 
-function nextQueuedPane(): ManagedPaneInternal | undefined {
-  while (rebuildQueue.length > 0) {
-    const pane = rebuildQueue[0].deref()
-    // The pane may have closed, lost its renderer or its DOM since it was queued.
-    if (
-      pane?.webglAddon &&
-      !pane.webglDisabledAfterContextLoss &&
-      pane.container.isConnected &&
-      !isXtermInstanceDisposed(pane.terminal)
-    ) {
-      return pane
-    }
-    if (pane) {
-      queuedPanes.delete(pane)
-    }
-    rebuildQueue.shift()
+/** The queue's first pane if it is still live; otherwise drops that entry and returns undefined. */
+function liveQueueHead(): ManagedPaneInternal | undefined {
+  const pane = rebuildQueue[0]?.deref()
+  // The pane may have closed, lost its renderer or its DOM since it was queued.
+  if (
+    pane?.webglAddon &&
+    !pane.webglDisabledAfterContextLoss &&
+    pane.container.isConnected &&
+    !isXtermInstanceDisposed(pane.terminal)
+  ) {
+    return pane
   }
+  if (pane) {
+    queuedPanes.delete(pane)
+  }
+  rebuildQueue.shift()
   return undefined
 }
 
@@ -133,10 +132,11 @@ function runRebuildQueue(): void {
   }
   // Waiting panes rotate to the back, so one stuck frame never blocks the panes behind it.
   let recreated = false
-  for (let looked = rebuildQueue.length; looked > 0; looked--) {
-    const candidate = nextQueuedPane()
+  // Every entry, dropped or rotated, uses one look, so no pane is checked twice in a frame.
+  for (let looked = rebuildQueue.length; looked > 0 && rebuildQueue.length > 0; looked--) {
+    const candidate = liveQueueHead()
     if (!candidate) {
-      break
+      continue
     }
     // Decided on its own frame: a tab revealed or a chat cover closed since the rebuild started gets a new context, not a dropped one.
     const verdict = queueVerdict(candidate)
