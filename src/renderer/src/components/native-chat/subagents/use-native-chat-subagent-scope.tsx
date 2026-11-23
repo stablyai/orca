@@ -181,12 +181,12 @@ export function useNativeChatSubagentScope({
           : [...savedOwn, endingRow],
     [agentId, endingRow, savedConversation, savedOwn]
   )
-  const messages = useMemo(() => {
-    if (agentId === null) {
-      return conversation
-    }
-    return endingRow === null ? own : [...own, endingRow]
-  }, [agentId, conversation, endingRow, own])
+  // Apart from the conversation, so the parent's live text leaves a subagent's view as it was.
+  const ownMessages = useMemo(
+    () => (endingRow === null ? own : [...own, endingRow]),
+    [endingRow, own]
+  )
+  const messages = agentId === null ? conversation : ownMessages
   const heads = useMemo(
     () => nativeChatSubagentHeads(savedMessages, subagentStructure, entries, agentId),
     [agentId, entries, savedMessages, subagentStructure]
@@ -202,18 +202,16 @@ export function useNativeChatSubagentScope({
     journalSubmissions,
     latestTurn
   )
-  const turnRows = useMemo<NativeChatTurnRows>(
-    () =>
-      agentId === null
-        ? conversationTurns
-        : {
-            messages,
-            turnKeys: NO_TURN_KEYS,
-            liveTurnKey: undefined,
-            structureMessages: savedMessages
-          },
-    [agentId, conversationTurns, messages, savedMessages]
+  const ownTurns = useMemo<NativeChatTurnRows>(
+    () => ({
+      messages: ownMessages,
+      turnKeys: NO_TURN_KEYS,
+      liveTurnKey: undefined,
+      structureMessages: savedMessages
+    }),
+    [ownMessages, savedMessages]
   )
+  const turnRows = agentId === null ? conversationTurns : ownTurns
   const open = view?.open
   return {
     agentId,
