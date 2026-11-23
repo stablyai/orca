@@ -54,7 +54,7 @@ export function BotPreviewEdge({
           {direction === -1 ? <ChevronLeft aria-hidden className="size-2 shrink-0" /> : null}
           <span className="leading-none tracking-tight">+{count}</span>
           {direction === 1 ? <ChevronRight aria-hidden className="size-2 shrink-0" /> : null}
-          <BotPreviewPip signal={signal} animateWorking={false} edge={direction} />
+          <BotPreviewPip signal={signal} animateWorking={false} onCounter />
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom">{accessibleLabel}</TooltipContent>
@@ -65,25 +65,19 @@ export function BotPreviewEdge({
 export function BotPreviewPip({
   signal,
   animateWorking,
-  edge
+  onCounter = false
 }: {
   signal: BotPreviewSignal
   animateWorking: boolean
-  edge?: -1 | 1
+  onCounter?: boolean
 }) {
   if (signal === null) {
     return null
   }
-  const upperCorner = edge === -1 ? 'right-auto left-0' : 'right-0'
   if (signal === 'unread') {
     return (
       <span
-        className={cn(
-          unreadAlertDotClassName,
-          'z-10',
-          edge && '-top-1 bottom-auto',
-          edge && upperCorner
-        )}
+        className={cn(unreadAlertDotClassName, 'z-10', onCounter && '-bottom-1')}
         aria-hidden="true"
       />
     )
@@ -93,12 +87,12 @@ export function BotPreviewPip({
       aria-hidden="true"
       className={cn(
         'pointer-events-none absolute z-10 flex size-3 items-center justify-center rounded-full bg-sidebar',
-        edge ? cn('-top-1.5', upperCorner) : '-right-1 -bottom-1',
-        edge === undefined && signal === 'attention' && 'size-3.5'
+        onCounter ? 'right-0 -bottom-1.5' : '-right-1 -bottom-1',
+        !onCounter && signal === 'attention' && 'size-3.5'
       )}
     >
       {signal === 'attention' ? (
-        <AgentQuestionIcon className={edge ? 'size-2.5' : 'size-3'} />
+        <AgentQuestionIcon className={onCounter ? 'size-2.5' : 'size-3'} />
       ) : animateWorking ? (
         <AgentWorkingSpinner className="size-2.5" />
       ) : (
