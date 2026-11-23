@@ -88,22 +88,11 @@ export function workspaceReader(
   }
 }
 
-function existsOnce(path: string, check: (path: string) => boolean, known?: Map<string, boolean>) {
-  // Keyed by check too: the repo and worktree checks read an unreadable path differently.
-  const key = `${check.name}:${path}`
-  const answer = known?.get(key) ?? check(path)
+/** `check`'s answer under `key`, asked once per batch; without a batch, asked every time. */
+function existsOnce(key: string, check: () => boolean, known?: Map<string, boolean>): boolean {
+  const answer = known?.get(key) ?? check()
   known?.set(key, answer)
   return answer
-}
-
-/** Absent only on ENOENT/ENOTDIR: an unreadable path may still be there. */
-function mayExist(path: string): boolean {
-  try {
-    accessSync(path)
-    return true
-  } catch (error) {
-    return !isDefinitiveAbsence(error)
-  }
 }
 
 /** One of this host's worktrees as the work record reads it; 'gone' only with proof. */
@@ -127,8 +116,20 @@ async function readLocalWorkspace(
   if (
     getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
     !parseWslUncPath(parsed.worktreePath) &&
-    existsOnce(repo.path, existsSync, exists) &&
-    !existsOnce(parsed.worktreePath, mayExist, exists)
+    existsOnce(`repo:${repo.path}`, () => existsSync(repo.path), exists) &&
+    !existsOnce(
+      `worktree:${parsed.worktreePath}`,
+      () => {
+        // Absent only on ENOENT/ENOTDIR: an unreadable path may still be there.
+        try {
+          accessSync(parsed.worktreePath)
+          return true
+        } catch (error) {
+          return !isDefinitiveAbsence(error)
+        }
+      },
+      exists
+    )
   ) {
     return 'gone'
   }
