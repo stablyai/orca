@@ -790,6 +790,27 @@ describe('shared Codex app-servers', () => {
   })
 
   describe('on Windows', () => {
+    it("ignores a process that only looks like the launcher's child because its pid was reused", async () => {
+      const job = CodexSharedServerWindowsJob.create(
+        {
+          createKillOnCloseJob: () => ({ id: 'job' }),
+          assignProcessToJob: () => true,
+          isProcessInJob: (_job, pid) => pid !== 4000,
+          terminateJob: () => true
+        },
+        async () => [
+          // Its real parent exited long ago, and the launcher got that parent's pid.
+          { pid: 4000, ppid: 5000, name: 'explorer.exe', creationTimeMs: 1_000 },
+          { pid: 5000, ppid: 1, name: 'cmd.exe', creationTimeMs: 9_000 },
+          { pid: 6000, ppid: 5000, name: 'node.exe', creationTimeMs: 9_001 },
+          { pid: 7000, ppid: 6000, name: 'codex.exe', creationTimeMs: 9_002 }
+        ]
+      )!
+      const { pool } = fakeCodex('ends', 'exited', true, { windowsJob: () => job })
+      const conn = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+      expect(conn.closed).toBe(false)
+    })
+
     it('starts no fallback server for a chat stopped while its shared server failed containment', async () => {
       const pool = {
         open: () => Promise.reject(new CodexSharedServerUncontainedError())

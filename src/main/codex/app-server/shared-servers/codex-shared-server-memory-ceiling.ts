@@ -91,7 +91,14 @@ export function codexServerOwnMemory(index: ProcIndex, rootPid: number): number 
     if (/^codex/i.test(row.name ?? '')) {
       foundCodex = true
     } else {
-      queue.push(...(index.childrenOf.get(pid) ?? []))
+      // A child older than its parent hangs off a dead parent whose pid was reused.
+      const born = row.startTicks
+      for (const child of index.childrenOf.get(pid) ?? []) {
+        const childBorn = index.byPid.get(child)?.startTicks
+        if (born === undefined || childBorn === undefined || childBorn >= born) {
+          queue.push(child)
+        }
+      }
     }
   }
   return foundCodex ? total : null

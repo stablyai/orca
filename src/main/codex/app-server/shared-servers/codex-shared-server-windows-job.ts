@@ -77,6 +77,7 @@ export class CodexSharedServerWindowsJob {
   async requireHolds(rootPid: number | undefined, exited: () => boolean): Promise<void> {
     const verdict = await this.holdsServer(rootPid)
     if (verdict === 'held') {
+      inconclusiveChecks = 0
       return
     }
     if (exited()) {
@@ -97,8 +98,16 @@ export class CodexSharedServerWindowsJob {
       return 'inconclusive'
     }
     const rows = await this.readTable().catch(() => [])
+    const byPid = new Map(rows.map((row) => [row.pid, row] as const))
     const names = new Map(rows.map((row) => [row.pid, row.name] as const))
-    const children = childrenByParent(rows.map((row) => [row.pid, row.ppid] as const))
+    // Windows keeps a dead parent's pid: a child older than its "parent" belongs to an earlier one.
+    const children = childrenByParent(
+      rows.map((row) => {
+        const parent = byPid.get(row.ppid)?.creationTimeMs
+        const stale = row.creationTimeMs !== undefined && parent !== undefined && row.creationTimeMs < parent
+        return [row.pid, stale ? null : row.ppid] as const
+      })
+    )
     // The whole tree, not just the path to Codex: a launcher's other children count too.
     const tree = [rootPid, ...descendants(children, rootPid)]
     if (!tree.some((pid) => /^codex/i.test(names.get(pid) ?? ''))) {
