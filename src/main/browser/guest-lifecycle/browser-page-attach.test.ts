@@ -14,7 +14,7 @@ const RENDERER_ID = 7
 const PARTITION = 'persist:orca-browser'
 
 // The renderer opens a created tab at its URL; main's attach makes that first load.
-function openTab(pageId: string, url: string, racesExtensions = false) {
+function openTab(pageId: string, url: string, racesExtensions = false, fails = false) {
   const loads: string[] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the attach reads only the members faked here.
   const guest = Object.assign(new EventEmitter(), {
@@ -24,7 +24,11 @@ function openTab(pageId: string, url: string, racesExtensions = false) {
     isDestroyed: () => false,
     loadURL: (loaded: string) => {
       loads.push(loaded)
-      setTimeout(() => guest.emit('did-finish-load'), 1)
+      setTimeout(() =>
+        fails
+          ? guest.emit('did-fail-load', {}, -102, 'ERR_CONNECTION_REFUSED', loaded, true)
+          : guest.emit('did-finish-load')
+      , 1)
       return Promise.resolve()
     }
   }) as unknown as Electron.WebContents
@@ -45,6 +49,16 @@ describe('claimBrowserPageFirstLoad', () => {
     await claimed?.load
     expect(claimBrowserPageFirstLoad('page-once', url)).toBeNull()
     expect(loads).toEqual([url])
+  })
+
+  it('still reports a first load that failed before it was claimed', async () => {
+    const url = 'http://localhost:9/'
+    openTab('page-failed', url, false, true)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    await expect(claimBrowserPageFirstLoad('page-failed', url)?.load).rejects.toThrow(
+      'ERR_CONNECTION_REFUSED'
+    )
   })
 
   it('leaves a load that raced starting extensions to be loaded again', () => {

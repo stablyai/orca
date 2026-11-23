@@ -140,8 +140,8 @@ export function associateBrowserPageAttach(guest: Electron.WebContents): boolean
   return true
 }
 const pendingLoads = new WeakMap<Electron.WebContents, Attach>()
-// The address a guest's attach loaded fresh, so tab create waits for it instead of sending it again.
-const freshLoadUrls = new WeakMap<Electron.WebContents, string>()
+// A guest's fresh first load, kept settled so tab create waits for it instead of sending it again.
+const freshLoads = new WeakMap<Electron.WebContents, { url: string; load: Promise<void> }>()
 
 /** Route pages call this only after their existing main-owned navigation grant. */
 export function startBrowserPageAttach(
@@ -215,10 +215,6 @@ export function startBrowserPageAttach(
     guest.on('did-stop-loading', stopped)
     guest.once('destroyed', dispose)
   }
-  // Why not while extensions start: tab create's own load waits for them, so it must still run.
-  if (!snapshot && !racesExtensions) {
-    freshLoadUrls.set(guest, url ?? attach.url)
-  }
   const promise = waitForBrowserGuestLoad(guest, () =>
     snapshot
       ? guest.navigationHistory.restore({ entries: snapshot.entries, index: snapshot.index })
@@ -236,6 +232,10 @@ export function startBrowserPageAttach(
   })
   page.restoring = promise
   guestLoads.set(guest, promise)
+  // Why not while extensions start: tab create's own load waits for them, so it must still run.
+  if (!snapshot && !racesExtensions) {
+    freshLoads.set(guest, { url: url ?? attach.url, load: promise })
+  }
   void promise
     .catch(() => {})
     .finally(() => {
@@ -266,12 +266,12 @@ export function claimBrowserPageFirstLoad(
   url: string
 ): { guest: Electron.WebContents; load: Promise<void> } | null {
   const guest = pages.get(pageId)?.guest
-  const loaded = guest ? freshLoadUrls.get(guest) : undefined
-  if (!guest || loaded === undefined || !sameNavigationUrl(loaded, url)) {
+  const fresh = guest ? freshLoads.get(guest) : undefined
+  if (!guest || !fresh || !sameNavigationUrl(fresh.url, url)) {
     return null
   }
-  freshLoadUrls.delete(guest)
-  return { guest, load: guestLoads.get(guest) ?? Promise.resolve() }
+  freshLoads.delete(guest)
+  return { guest, load: fresh.load }
 }
 
 function sameNavigationUrl(a: string, b: string): boolean {
