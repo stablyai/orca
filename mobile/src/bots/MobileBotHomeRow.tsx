@@ -271,6 +271,7 @@ export function MobileBotRowView({
   onLongPress?: () => void
   titleTrailing?: React.ReactNode
 }) {
+  const t = useMobileTranslation()
   return (
     <Pressable
       onPress={onPress}
@@ -278,7 +279,9 @@ export function MobileBotRowView({
       delayLongPress={400}
       disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel={[title, preview, unread ? 'Unread' : ''].filter(Boolean).join(', ')}
+      accessibilityLabel={[title, preview, unread ? t('bots.chats.unread', 'Unread') : '']
+        .filter(Boolean)
+        .join(', ')}
       style={({ pressed }) => [
         styles.row,
         active && styles.active,

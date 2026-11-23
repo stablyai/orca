@@ -12,6 +12,7 @@ import type {
   BrowserProfileImportFromBrowserResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../../browser/browser-error'
+import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
@@ -32,6 +33,16 @@ import type { RuntimeBrowserScreencasts } from '../screencast/browser-screencast
 import type { BrowserClientPageOpeningHost } from '../client-pages/browser-client-page-opening'
 import { cloneBrowserTabToProfile } from './browser-tab-profile-clone'
 import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
+
+function requireBrowserProfile(profileId: string): BrowserSessionProfile {
+  const profile =
+    browserSessionRegistry.getProfile(profileId) ??
+    (profileId === 'default' ? browserSessionRegistry.getDefaultProfile() : null)
+  if (!profile) {
+    throw new BrowserError('invalid_argument', `Browser profile ${profileId} was not found`)
+  }
+  return profile
+}
 
 export class RuntimeBrowserProfiles {
   constructor(
@@ -61,15 +72,7 @@ export class RuntimeBrowserProfiles {
       profileId: string
     } & BrowserCommandTargetParams
   ): Promise<BrowserTabSetProfileResult> {
-    const profile =
-      browserSessionRegistry.getProfile(params.profileId) ??
-      (params.profileId === 'default' ? browserSessionRegistry.getDefaultProfile() : null)
-    if (!profile) {
-      throw new BrowserError(
-        'invalid_argument',
-        `Browser profile ${params.profileId} was not found`
-      )
-    }
+    const profile = requireBrowserProfile(params.profileId)
 
     // Resolve client pages first: server-local targets cannot resolve folder workspaces/remote guests.
     const clientPage = await this.catalog.resolveClientHostedBrowserPage(params)
@@ -91,6 +94,8 @@ export class RuntimeBrowserProfiles {
           )
         this.host.notifyHeadlessBrowserSessionTabsChanged?.(clientPage.workspaceId)
       }
+      // Deleted while the target resolved: the client would rebuild the page in a retired profile.
+      requireBrowserProfile(profile.id)
       const placement = await authority.switchClientPageProfile(
         {
           authorityRuntimeId: authority.authorityRuntimeId,
@@ -146,6 +151,8 @@ export class RuntimeBrowserProfiles {
       return { browserPageId, profileId: profile.id, profileLabel: profile.label }
     }
 
+    // Deleted while the target resolved: the renderer would remount the page in a retired partition.
+    requireBrowserProfile(profile.id)
     const windowId = this.host.getAuthoritativeWindowId()
     const reply = await getRuntimeDesktopSurface().requestRenderer<{
       requestId: string

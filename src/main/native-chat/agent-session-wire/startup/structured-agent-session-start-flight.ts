@@ -34,6 +34,11 @@ export class StructuredAgentSessionStartFlights {
     return this.flying.has(sessionId)
   }
 
+  /** Distinct sessions among `loaded` and those still starting, which have no indexed child yet. */
+  countWith(loaded: readonly string[]): number {
+    return new Set([...loaded, ...this.flying.keys()]).size
+  }
+
   isCurrent(sessionId: string, attemptId: string): boolean {
     return this.flying.get(sessionId)?.attemptId === attemptId
   }

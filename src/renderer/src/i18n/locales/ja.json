@@ -24833,7 +24833,11 @@
         "error": "選択したオートメーションのホストで、プロジェクトのセットアップに失敗しました。",
         "unsupported": "選択したオートメーションのホストは、このプロジェクトをサポートしていません。"
       },
-      "botProviderErrorNotSaved": "ボットのターンは失敗しましたが、この実行ではプロバイダーのエラーが保存されませんでした。元のチャットに詳細が残っている可能性があります。"
+      "botProviderErrorNotSaved": "ボットのターンは失敗しましたが、この実行ではプロバイダーのエラーが保存されませんでした。元のチャットに詳細が残っている可能性があります。",
+      "botsOff": "設定でボットがオフになっているため、Orca はこの実行をスキップしました。",
+      "botMissing": "このオートメーションを実行するボットはもう存在しません。",
+      "botFolderMissing": "ボットのフォルダーは利用できなくなりました。",
+      "botPaused": "{{bot}} は一時停止中のため、Orca はこの実行をスキップしました。"
     },
     "extraAgentArgs": {
       "errors": {
@@ -25455,6 +25459,54 @@
         "elsewhereTitle": "{{app}} はすでに {{bot}} に追加されています",
         "elsewhereLine": "{{place}} に追加されています。別のものを追加するには、「管理」で削除してください。",
         "elsewhereOther": "別のものを追加するには、「管理」で削除してください。"
+      },
+      "line": {
+        "vercel": "デプロイを確認してログを読む",
+        "sentry": "エラーとその背後のイベントを調べる",
+        "datadog": "ログ、メトリクス、モニターを検索する",
+        "posthog": "プロダクト分析と機能フラグを照会する",
+        "cloudflare": "Workers や DNS などアカウント全体を管理する",
+        "supabase": "データベースを照会してプロジェクトを管理する",
+        "neon": "SQL を実行して Postgres のブランチを管理する",
+        "netlify": "サイトをデプロイしてビルドを確認する",
+        "gitlab": "Issue とマージリクエストを読んで更新する",
+        "context7": "コードライブラリの最新ドキュメントと例",
+        "atlassian": "Jira の課題と Confluence のページ",
+        "notion": "ページを検索、閲覧、編集する",
+        "stripe": "支払い、顧客、サブスクリプションを調べる",
+        "github": "Issue と PR でのメンションとイベント",
+        "slack": "メッセージとメンション",
+        "linear": "割り当てられた Issue とメンション",
+        "google": "あなたとして Gmail、カレンダー、ドライブを使う"
+      },
+      "composioLine": {
+        "outlook": "メール、カレンダー、連絡先",
+        "microsoft_teams": "チャット、チャネル、会議",
+        "notion": "ページ、データベース、コメント",
+        "jira": "課題、プロジェクト、スプリント",
+        "hubspot": "連絡先、会社、取引、チケット",
+        "salesforce": "取引先、リード、商談",
+        "asana": "タスク、プロジェクト、コメント",
+        "airtable": "ベース、テーブル、レコード",
+        "zendesk": "チケット、ユーザー、ヘルプセンターの記事",
+        "figma": "ファイル、コメント、コンポーネント",
+        "stripe": "支払い、顧客、請求書",
+        "dropbox": "ファイルとフォルダー",
+        "one_drive": "ファイルとフォルダー",
+        "confluence": "ページ、スペース、コメント",
+        "clickup": "タスク、リスト、ドキュメント",
+        "monday": "ボード、アイテム、更新",
+        "intercom": "会話、連絡先、記事",
+        "zoom": "会議、録画、文字起こし",
+        "calendly": "イベント、招待者、予約リンク",
+        "trello": "ボード、リスト、カード",
+        "sentry": "Issue、イベント、リリース",
+        "box": "ファイルとフォルダー",
+        "miro": "ボード、付箋、フレーム",
+        "reddit": "投稿、コメント、サブレディット"
+      },
+      "webhooks": {
+        "line": "あらゆるツールやスクリプトからのイベント"
       }
     },
     "row": {
@@ -25518,7 +25570,8 @@
       "ask": {
         "notSentYet": "まだ送信されていません",
         "replaced": "Agent が新たな質問をしました。確認してから返信してください。"
-      }
+      },
+      "readMoreClosedFailed": "クローズ済みの項目をさらに読み込めませんでした"
     },
     "hover": {
       "asksQuestion": "回答を待っています",
@@ -25634,7 +25687,10 @@
       "remoteSending": "{{computer}} 上で質問中…",
       "remoteAsked": "{{computer}} 上で質問済み",
       "remoteMayAnswer": "{{computer}} 上でまだ回答する可能性があります。",
-      "remoteShortened": "短縮されています。回答の全文は {{computer}} にあります。"
+      "remoteShortened": "短縮されています。回答の全文は {{computer}} にあります。",
+      "deliveryUnconfirmed": "配信未確認",
+      "starting": "開始中…",
+      "notStarted": "未開始"
     },
     "import": {
       "nudgeOne": "{{app}} にボットが見つかりました。",
@@ -25776,7 +25832,59 @@
       "groupImagesTooLarge": "これらの画像は合計 {{totalMb}} MB です。グループメッセージは最大 {{maxMb}} MB までです。",
       "groupImageNotStored": "グループメッセージに付けられるのは、貼り付けまたは添付した画像だけです。",
       "groupAttachmentsUnavailable": "このコンピューターは現在添付ファイルを受け付けられません。少ししてからもう一度送信してください。",
-      "groupAttachFailed": "ファイルを添付できませんでした。少ししてからもう一度送信してください。"
+      "groupAttachFailed": "ファイルを添付できませんでした。少ししてからもう一度送信してください。",
+      "groupMentionAmbiguous": "送信する前に、あいまいなボットのメンションを修正してください。",
+      "groupMentionUnavailable": "送信する前に、利用できないかあいまいなボットのメンションを修正してください。",
+      "groupReplierNotMember": "ルームの返信で現在のルームメンバーを選択してください。",
+      "groupMailNeverStarted": "このメールはターンを開始しませんでした。",
+      "groupRemoteUnreachable": "{{host}} に接続できませんでした。{{detail}}",
+      "groupRemoteUnreachableRetry": "{{host}} に接続できませんでした。{{detail}} もう一度投稿すると再試行します。"
+    },
+    "google": {
+      "signInRun": {
+        "cancelled": "Google のサインインはキャンセルされました。",
+        "failed": "Google のサインインに失敗しました。もう一度お試しください。",
+        "noAccount": "Google にはサインインしましたが、ホストからアカウントが送られてきませんでした。",
+        "alreadyRunning": "Google のサインインがすでに実行中です。先に完了するかキャンセルしてください。",
+        "notWaiting": "待機中の Google サインインはありません。もう一度始めてください。"
+      }
+    },
+    "notices": {
+      "couldNotFinish": "{{bot}} は完了できませんでした",
+      "turnEnded": "「{{automation}}」は完了する前に終了しました。",
+      "folderMissing": "ボットのフォルダーが見つからないため、「{{automation}}」を開始できませんでした。",
+      "sessionRefused": "「{{automation}}」を開始できませんでした。",
+      "askedYou": "{{bot}} から質問があります",
+      "accessAsked": "{{person}} が {{bot}} の利用をリクエストしました",
+      "webhookNeedsLook": "{{bot}} の Webhook を確認してください",
+      "webhookRefusals": "「{{automation}}」は直近 10 分間に {{refused}} 件の呼び出しを拒否しました。想定外であれば一時停止してください。",
+      "webhookHourlyCap": "「{{automation}}」は 1 時間あたり {{limit}} 回の実行上限に達しました。以降の呼び出しは待機します。止めるには一時停止してください。"
+    },
+    "tools": {
+      "pasteInvalid": "貼り付けた内容が無効です。",
+      "checkUnfinished": "ネイティブのチェックが完了しませんでした。もう一度チェックして再試行してください。",
+      "signIn": {
+        "notThisSignIn": "そのアドレスは今回のサインインのものではありません。移動先のページのアドレスを貼り付けてください。"
+      },
+      "input": {
+        "invalid": "有効なサーバー名と、URL または実行ファイルを入力してください。",
+        "namesRepeat": "ヘッダー名と環境変数名はそれぞれ一意にしてください。",
+        "rowInvalid": "すべての行に有効な名前と値を入力するか、その行を削除してください。"
+      },
+      "paste": {
+        "notConfig": "サーバーの URL か起動コマンドを貼り付けるか、「詳細を編集」で設定を入力してください。",
+        "badUrl": "認証情報を含まない HTTP または HTTPS の URL を使用してください。",
+        "badCommand": "引用符の対応が取れた起動コマンドを 1 つだけ使うか、詳細を手動で入力してください。シェル式には対応していません。"
+      },
+      "signInFailure": {
+        "unsupported": "このアプリにはまだ対応していません。",
+        "unavailable": "このアプリに接続できません。アドレスを確認してから、もう一度お試しください。",
+        "noTool": "このボットにはそのツールがなくなりました。",
+        "desktopOnly": "{{host}} の Orca からサインインしてください。",
+        "denied": "アクセスが許可されませんでした。",
+        "expired": "サインインの有効期限が切れました。もう一度お試しください。",
+        "couldNotSignIn": "サインインできませんでした。もう一度お試しください。"
+      }
     }
   },
   "speechModelUpdate": {

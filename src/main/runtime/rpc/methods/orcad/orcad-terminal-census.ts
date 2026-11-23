@@ -6,6 +6,7 @@ import {
   OrcadTerminalCensusParamsSchema,
   type OrcadTerminalCensus
 } from '../../../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
+import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 const SPAWN_SETTLE_MS = 10_000
 const UNVERIFIABLE: OrcadTerminalCensus = {
@@ -21,7 +22,7 @@ export const ORCAD_TERMINAL_CENSUS_METHODS = [
     params: OrcadTerminalCensusParamsSchema,
     handler: async (params, { runtime }) => {
       if (params.closeAdmissionForMs === undefined) {
-        return countTerminals(params, runtime)
+        return withChatSessions(await countTerminals(params, runtime))
       }
       // Before counting: a terminal admitted after the count would die with the stop, uncounted.
       const admission = runtime.terminalUpdateAdmission
@@ -31,10 +32,21 @@ export const ORCAD_TERMINAL_CENSUS_METHODS = [
         // The unsettled spawn may be an in-process terminal, so no count of them holds either.
         return { ...UNVERIFIABLE, inProcessSessions: null, admissionClosedUntil }
       }
-      return { ...(await countTerminals(params, runtime)), admissionClosedUntil }
+      return { ...withChatSessions(await countTerminals(params, runtime)), admissionClosedUntil }
     }
   })
 ]
+
+/** Chats are not terminals, but their providers run inside orcad and end with its stop. */
+function withChatSessions(census: OrcadTerminalCensus): OrcadTerminalCensus {
+  let chatSessions: number | null
+  try {
+    chatSessions = getStructuredAgentSessionHost()?.chatSessionCount() ?? 0
+  } catch {
+    chatSessions = null
+  }
+  return { ...census, chatSessions }
+}
 
 async function countTerminals(
   params: z.infer<typeof OrcadTerminalCensusParamsSchema>,

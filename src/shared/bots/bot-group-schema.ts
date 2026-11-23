@@ -8,6 +8,15 @@ import type { NativeChatBlock, NativeChatMessage } from '../native-chat/native-c
 import { isQuietBotResult, quietBotResultText } from '../bot-quiet-result'
 import { AutomationRunMessageSchema } from '../automations/automation-run-message'
 
+// Read back through readBotFailure, which drops a code this build doesn't know.
+const StoredBotFailureSchema = z
+  .object({
+    code: z.string(),
+    params: z.record(z.string(), z.union([z.string(), z.number()])).optional()
+  })
+  .optional()
+  .catch(undefined)
+
 export const BotGroupReplyMode = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('bot'), botId: z.string().min(1) }),
   z.object({ kind: z.literal('all') }),
@@ -102,6 +111,8 @@ const BotGroupTurnSchema = z.object({
   /** Read from the worker relation, never stored on the message. */
   workerDispatchIds: z.array(z.string()).optional(),
   error: z.string().optional(),
+  /** `error`'s code, so each client can say it in its reader's language. */
+  failure: StoredBotFailureSchema,
   revoked: z.literal(true).optional(),
   /** The finished reply, saved when the turn ended; null when it ended without one. Absent while
    *  the turn runs, and on turns saved before replies were. */
@@ -124,6 +135,8 @@ export const BotGroupRemoteAskSchema = BotGroupRemoteMemberSchema.extend({
   /** `failed`: refused before that computer took it. `unknown`: it may have; an answer still lands. */
   state: z.enum(['sending', 'sent', 'failed', 'unknown']),
   error: z.string().optional(),
+  /** `error`'s code, so each client can say it in its reader's language. */
+  failure: StoredBotFailureSchema,
   /** The room was stopped while this ask was unanswered; that computer may still answer. */
   stopped: z.literal(true).optional(),
   reply: z
