@@ -1,8 +1,8 @@
-// Whether a pull request is a bot's own work, by its head branch: a from=me rule starts on a pull
+// Whether a pull request is a bot's own work, as saved or by its head branch: a from=me rule starts on a pull
 // request its owner opened, never on one a bot's worker opened as them (own-pr-trigger-guard.ts).
 import { normalizeLocalBranchName } from '../runtime/workspaces/catalog/runtime-worktree-selection'
 import type { BotWorkRecord, BotWorkWorker } from './bot-work-record'
-import type { BotWorkRow } from './bot-work-store'
+import type { BotWorkRow, BotWorkSavedPr } from './bot-work-store'
 
 /** A GitHub pull request's repository, as its webhook names it. */
 export type BotPrRepo = {
@@ -29,6 +29,10 @@ export type BotWorkPrHead = BotPrRepo & { number: number; head: BotPrRepo; headR
 export type BotWorkRows = {
   /** Live rows of this profile's bots. */
   rows: () => readonly BotWorkRow[]
+  /** Whether a pull request is saved as the work of one of this profile's bots. */
+  saved: (pr: BotWorkPrHead) => boolean
+  /** Saves a pull request as a row's work. */
+  save: (row: BotWorkRow, pr: BotWorkPrHead) => void
   /** A row's worker's workspace now; null once it is closed or when it can't be read. */
   workspace: (row: BotWorkRow) => Promise<BotBranchWorkspace | null>
 }
@@ -71,19 +75,30 @@ export async function workspaceOnBranch(
 }
 
 /**
- * A live worker whose workspace has its head branch in the head's repository, at any commit. Binds
- * nothing. A workspace that can't be read now (an offline host) counts as not on it; one on the
- * branch whose repository can't be told counts as on it.
+ * A pull request saved as a bot's work, else a live worker whose workspace has its head branch in the
+ * head's repository, at any commit; that match saves it, so a later rename of the branch still finds
+ * it. A workspace that can't be read now (an offline host) counts as not on it; one on the branch
+ * whose repository can't be told counts as on it.
  */
 export async function botWorkHasPrBranch(work: BotWorkRows, pr: BotWorkPrHead): Promise<boolean> {
+  if (work.saved(pr)) {
+    return true
+  }
   for (const row of work.rows()) {
     const workspace = await work.workspace(row).catch(() => null)
     if (workspace && (await workspaceOnBranch(workspace, pr.head, pr.headRef))) {
+      work.save(row, pr)
       return true
     }
   }
   return false
 }
+
+const savedPrOf = (pr: BotWorkPrHead): BotWorkSavedPr => ({
+  repo: pr.repoFullName,
+  repoId: Number.isFinite(pr.repoId) ? pr.repoId : null,
+  number: pr.number
+})
 
 export function botWorkRowsForRuntime(
   botWork: Pick<BotWorkRecord, 'store' | 'check'>,
@@ -96,6 +111,8 @@ export function botWorkRowsForRuntime(
         .store()
         .liveRows()
         .filter((row) => hasBotId(row.botId)),
+    saved: (pr) => botWork.store().pullRequestBots(savedPrOf(pr)).some(hasBotId),
+    save: (row, pr) => botWork.store().savePullRequest(row, savedPrOf(pr)),
     workspace: async (row) => {
       const checked = await botWork.check(row)
       const worker = checked?.worker

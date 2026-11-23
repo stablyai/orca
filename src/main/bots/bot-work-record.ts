@@ -4,6 +4,7 @@ import type { AgentJournalMessageItem } from '../../shared/agent-session/journal
 import type { BotWorkerSummary } from '../../shared/bots/bot-work-list'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { ownPullRequest } from './bot-work-pr-match'
+import { botItemPrRefOfUrl, parseBotItemPrRef } from '../../shared/bots/bot-items'
 import type { BotWorkPullRequest } from '../../shared/bots/bot-work-pull-request'
 import type {
   BotWorkAddress,
@@ -94,7 +95,16 @@ export class BotWorkRecord {
       return null
     }
     // The reads await, and a close may have landed meanwhile.
-    return this.isLive(row) ? read : null
+    if (!this.isLive(row)) {
+      return null
+    }
+    const pr = read.workspace && ownPullRequest(read.workspace)
+    const ref = pr && parseBotItemPrRef(botItemPrRefOfUrl(pr.url) ?? '')
+    if (ref) {
+      // Whatever renames its branch later, this PR stays the work's.
+      this.deps.store().savePullRequest(row, { repo: ref.repo, repoId: null, number: ref.number })
+    }
+    return read
   }
 
   /** What a turn from a conversation with live work is told: which worker to send follow-ups to. */

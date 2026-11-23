@@ -35,6 +35,18 @@ CREATE TABLE IF NOT EXISTS bot_work (
 DROP INDEX IF EXISTS bot_work_live_address;
 CREATE UNIQUE INDEX IF NOT EXISTS bot_work_current_address
   ON bot_work (bot_id, source, external_id) WHERE closed_at IS NULL AND current = 1;
+-- A pull request a row's worker opened, kept after the row closes. Named apart from the tables
+-- below, which earlier builds still drop.
+CREATE TABLE IF NOT EXISTS bot_work_pull_requests (
+  row_id TEXT NOT NULL,
+  bot_id TEXT NOT NULL,
+  repo TEXT NOT NULL,
+  repo_id INTEGER,
+  number INTEGER NOT NULL,
+  saved_at INTEGER NOT NULL,
+  PRIMARY KEY (row_id, repo, number)
+);
+CREATE INDEX IF NOT EXISTS bot_work_pull_requests_number ON bot_work_pull_requests (number);
 -- From builds that tracked each row's pull request and woke the bot on it.
 DROP INDEX IF EXISTS bot_work_live_pr;
 DROP TABLE IF EXISTS bot_pr_wakes;

@@ -50,6 +50,10 @@ export type BotWorkBind = {
   askedInApp?: boolean
 }
 
+/** A pull request by its base repository: owner/name (any case; '' when unknown) and, when known,
+ *  GitHub's id, which survives a rename. */
+export type BotWorkSavedPr = { repo: string; repoId: number | null; number: number }
+
 export function botWorkStoreFile(userDataPath: string): string {
   return join(userDataPath, 'bot-work.sqlite')
 }
@@ -150,6 +154,35 @@ export class BotWorkStore {
         address.externalId
       )
     return inserted.changes > 0 ? this.rows('id = ?', id)[0] : null
+  }
+
+  /** Saves a pull request the row's worker opened; a later save adds the id an earlier one lacked. */
+  savePullRequest(
+    row: Pick<BotWorkRow, 'rowId' | 'botId'>,
+    pr: BotWorkSavedPr,
+    now = Date.now()
+  ): void {
+    this.db
+      .prepare(
+        `INSERT INTO bot_work_pull_requests (row_id, bot_id, repo, repo_id, number, saved_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (row_id, repo, number) DO UPDATE SET repo_id = excluded.repo_id
+           WHERE repo_id IS NULL AND excluded.repo_id IS NOT NULL`
+      )
+      .run(row.rowId, row.botId, pr.repo.toLowerCase(), pr.repoId, pr.number, now)
+  }
+
+  /** The bots a saved pull request is the work of, live row or not: matched by id when both sides
+   *  have one, else by name. */
+  pullRequestBots(pr: BotWorkSavedPr): string[] {
+    return this.db
+      .prepare(
+        `SELECT DISTINCT bot_id FROM bot_work_pull_requests
+          WHERE number = ? AND CASE WHEN repo_id IS NOT NULL AND ? IS NOT NULL THEN repo_id = ?
+                                    ELSE repo <> '' AND repo = ? END`
+      )
+      .all(pr.number, pr.repoId, pr.repoId, pr.repo.toLowerCase())
+      .map((row) => String(row.bot_id))
   }
 
   /** Compare-and-swap: false when the row was already closed or is another generation. */
