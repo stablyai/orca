@@ -10,6 +10,7 @@ import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
 import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
 import { pendingAcpResolution, type AcpDialect, type AcpRequestPresentation } from './acp-dialect'
 import { acpReplyNoticeFailure } from './acp-reply-notice-failure'
+import { antigravityExecutorErrorWords } from './antigravity-executor-error'
 import {
   ANTIGRAVITY_EFFORT_LEVELS,
   ANTIGRAVITY_LEVEL_SUFFIX
@@ -215,8 +216,10 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   },
   // A rebuild that fails mid-turn arrives as a reply notice, and the prompt then ends normally.
   sessionLostNotice: (notice) => notice.includes(REBUILD_FAILED),
-  // Not marked signed out: agy may already hold a refreshed token for the next prompt.
-  notification: (method, params) => acpReplyNoticeFailure(method, params, TURN_FAILURE_NOTICE),
+  // Not marked signed out: agy may already hold a refreshed token for the next prompt. A Google API
+  // error leads with Google's sentence, its full line under Details.
+  notification: (method, params) =>
+    acpReplyNoticeFailure(method, params, TURN_FAILURE_NOTICE, {}, antigravityExecutorErrorWords),
   providerRetry: (update) => {
     const cause =
       update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text'
