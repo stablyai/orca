@@ -8,6 +8,7 @@ import {
 import { parseCodexCliVersion } from '../../shared/agent-launch/startup/codex-cli-installation'
 import { agentSessionInstallCommand } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { AgentCliReleaseSource } from './agent-cli-latest-release'
+import type { OwnAgentCli } from './agent-cli-own-install'
 
 /** Runs `args` on the found CLI, or names a command the user runs themselves. */
 export type AgentCliUpdatePlan =
@@ -18,7 +19,10 @@ type AgentCliUpdateDefinition = {
   parseVersion?: typeof parseCliVersion
   /** Its launcher runs a newer copy from elsewhere, so an unchanged file doesn't mean an unchanged version. */
   updatesOutsideLauncher?: true
-  latest: (installed: string, realPath: string) => AgentCliReleaseSource
+  latest: (
+    installed: string,
+    install: Pick<OwnAgentCli, 'realPath' | 'homebrewTap'>
+  ) => AgentCliReleaseSource
   plan: (installed: string, realPath: string) => AgentCliUpdatePlan
 }
 
@@ -87,11 +91,11 @@ const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDe
   // `grok update` follows the stable channel, which npm's latest tag carries.
   grok: { latest: () => npm('@xai-official/grok'), plan: selfUpdate('update') },
   // `opencode upgrade` stays on the installed major: 1.x ships as opencode-ai, 2.x as @opencode/cli.
-  // A Homebrew install only gets what the formula carries, which trails npm by hours to days.
+  // A homebrew/core install only gets what the formula carries, which trails npm by hours to days.
   opencode: {
-    latest: (installed, realPath) => {
+    latest: (installed, { realPath, homebrewTap }) => {
       const owner = homebrewOwner(realPath)
-      if (owner && !owner.cask && owner.keg === 'opencode') {
+      if (homebrewTap === 'homebrew/core' && owner && !owner.cask && owner.keg === 'opencode') {
         return { kind: 'homebrew', formula: 'opencode' }
       }
       return npm(compareAppVersions(installed, '2.0.0') >= 0 ? '@opencode/cli' : 'opencode-ai')

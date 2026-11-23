@@ -14,6 +14,7 @@ import {
 } from '../runtime/agent-session/launch/structured-agent-launch-support'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { acpLaunchSpecFor } from '../acp/launch/acp-launch-registry'
+import { homebrewInstallTap } from './homebrew-install-tap'
 
 export type AgentCliUpdateSettings = LaunchEnvironmentSettings &
   Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>>
@@ -22,6 +23,8 @@ export type OwnAgentCli = {
   program: string
   /** The installed file behind any PATH link, which says how it was installed. */
   realPath: string
+  /** The Homebrew tap that installed it, when it is a Homebrew formula. */
+  homebrewTap: string | null
   env: Record<string, string>
   /** The command name the user types. */
   command: string
@@ -69,6 +72,7 @@ export async function findOwnAgentCli(
   return {
     program,
     realPath,
+    homebrewTap: await homebrewInstallTap(realPath),
     env,
     command,
     version: { prefixArgs: spec?.versionArgs ?? [], env: { ...env, ...spec?.env } }
