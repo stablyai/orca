@@ -41,13 +41,14 @@ export function usageLimitCutContinuable(
 
 type Cancel = { turnItemId: string; resetsAt: number } | undefined
 
-/** A person's cancel of this very cut. A switch's time is not kept, so its cut matches by turn. */
+/** A person's cancel of this very cut. A switch's or room's time is not kept, so a cut whose
+ *  reset they stand in for, or would once seen, matches by turn. */
 export const cancelsCut = (
   cancel: Cancel,
   cut: Pick<HostUsageLimitCut, 'turnItemId' | 'resetsAt'> & SwitchReset
 ) =>
   cancel?.turnItemId === cut.turnItemId &&
-  (cut.resetFromSwitch === true || cancel.resetsAt === cut.resetsAt)
+  (cut.resetFromSwitch === true || cut.resetsAt === undefined || cancel.resetsAt === cut.resetsAt)
 
 /** Pending through a temporary hold (asleep workspace, moving attribution, an unread reset);
  *  ambiguous after a send that threw unconfirmed; ended once no continue will come for this cut:

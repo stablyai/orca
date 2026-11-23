@@ -272,3 +272,17 @@ it('asks for no reading for a relaunched cut while auto-continue is off', async 
   expect(await pass(20_000, null)).toEqual([])
   expect(requested).toEqual([])
 })
+
+it('asks for no reading for a relaunched cut a person cancelled once its room is gone', async () => {
+  const { host, pass, requested } = await relaunchedChat(null)
+  expect(await pass(5_000, reading(0, NOW + 5_000))).toEqual([])
+  const shown = await host.readUsageLimitContinue(SESSION)
+  if (!shown) {
+    throw new Error('Expected the room to schedule the continue')
+  }
+  await host.usageLimitContinue.cancel({ sessionId: SESSION, ...shown })
+  const asked = requested.length
+  expect(await pass(20_000, null)).toEqual([])
+  expect(await pass(30_000, null)).toEqual([])
+  expect(requested).toHaveLength(asked)
+})
