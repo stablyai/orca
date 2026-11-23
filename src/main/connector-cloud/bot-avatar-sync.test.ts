@@ -22,7 +22,7 @@ function chunk(type: string, data: Buffer): Buffer {
   return framed
 }
 
-// A real, blank square PNG: what a window's drawing is to the store.
+// A real, blank square PNG: what a window's drawing is to the store; its size tells drawings apart.
 function squarePng(size: number): Buffer {
   const header = Buffer.alloc(13)
   header.writeUInt32BE(size, 0)
@@ -207,4 +207,79 @@ it('leaves a drawn icon the cloud failed to take for the next real step, not the
   await vi.waitFor(() => expect(sent).toHaveLength(5))
   expect(sent[4]).toMatchObject({ kind: 'upload' })
   vi.useRealTimers()
+})
+
+it('sends the latest look last when edits cross uploads in flight, a plain look included', async () => {
+  home = await mkdtemp(join(tmpdir(), 'bot-slack-icon-'))
+  const folder = home
+  let bot: Pick<
+    Bot,
+    'id' | 'folderWorkspaceId' | 'avatar' | 'avatarColor' | 'avatarOutfit' | 'slack' | 'github'
+  > = {
+    id: 'bot-1',
+    folderWorkspaceId: 'home-1',
+    avatar: 'mascot:G1',
+    avatarColor: '#3a3f4b',
+    avatarOutfit: 'reviewer',
+    slack: { appId: 'A1', teamId: 'T1' },
+    github: null
+  }
+  const sent: { kind: string; png?: string }[] = []
+  const held: (() => void)[] = []
+  const sync = new BotAvatarSync({
+    bots: {
+      enabled: () => true,
+      list: () => [bot],
+      readAvatarImage: async () => null,
+      slackIcons: { read: () => readBotSlackIcon(localBotHomeFilesystem, folder, bot) }
+    },
+    cloud: () => ({
+      call: async <T extends z.ZodType>(
+        _path: string,
+        body: unknown,
+        schema: T
+      ): Promise<ConnectorResult<z.infer<T>>> => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sync sends only avatar requests.
+        sent.push(body as { kind: string; png?: string })
+        // Each upload stays out until the next edit lands, so every edit crosses one in flight.
+        await new Promise<void>((resolve) => held.push(resolve))
+        return { ok: true, value: schema.parse(undefined) }
+      }
+    })
+  })
+  const draw = async (size: number): Promise<Buffer> => {
+    const png = squarePng(size)
+    await writeBotSlackIcon(localBotHomeFilesystem, folder, bot.id, botSlackIconLook(bot)!, png)
+    sync.iconStored(bot.id)
+    return png
+  }
+  const settle = async (): Promise<void> => {
+    for (let i = 0; i < 20 && held.length > 0; i += 1) {
+      held.splice(0).forEach((release) => release())
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+  }
+
+  // Reviewer on dark, then the outfit off, the default tile, and white, each saved before the last went.
+  const tick = (): Promise<unknown> => new Promise((resolve) => setTimeout(resolve, 10))
+  await draw(512)
+  sync.changed()
+  await tick()
+  for (const [edit, size] of [
+    [{ avatarOutfit: null }, 520],
+    [{ avatarColor: null }, 530],
+    [{ avatarColor: '#ffffff' }, 540]
+  ] as const) {
+    bot = { ...bot, ...edit }
+    sync.changed()
+    await tick()
+    await draw(size)
+    await tick()
+    held.shift()?.()
+    await tick()
+  }
+  await settle()
+  // Whatever went in between, the last picture sent is today's drawing of the white look.
+  expect(sent.at(-1)).toMatchObject({ kind: 'upload', png: squarePng(540).toString('base64') })
+  expect(sent.some((body) => body.kind === 'mascot')).toBe(false)
 })

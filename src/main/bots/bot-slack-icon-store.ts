@@ -86,7 +86,7 @@ function botFolder(root: string, botId: string): string {
   return join(root, createHash('sha256').update(botId).digest('hex').slice(0, 32))
 }
 
-/** The kept icon for the bot's look now; null when its look needs none or none is drawn whole yet. */
+/** The kept icon for the bot's look now; null when it isn't a mascot or none is drawn whole yet. */
 export async function readBotSlackIcon(
   filesystem: BotHomeFilesystem,
   root: string,

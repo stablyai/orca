@@ -1,7 +1,7 @@
 // A bot's picture becomes its Slack app's icon, and the picture the cloud's own pages show (GitHub's
 // choose page): the cloud gets the picture of each bot with a Slack app or a GitHub link whenever it
-// differs from the one last sent, and sets the icon itself. A mascot with a color or outfit goes as the
-// PNG a window drew of it; until one is drawn for its look, as the plain mascot.
+// differs from the one last sent, and sets the icon itself. A mascot goes as the PNG a window drew of
+// its look (today's art, with its tile color and outfit or neither); until one is drawn, as the mascot id.
 import { createHash } from 'node:crypto'
 import { parseBotAvatar } from '../../shared/bot-avatar'
 import { botSlackIconLook } from '../../shared/bots/bot-slack-icon'
@@ -39,7 +39,7 @@ function lookOf(bot: SyncedBot): string | null {
   return look
 }
 
-// What the cloud is sent for a bot: its picture and, for a colored or dressed mascot, its look.
+// What the cloud is sent for a bot: its picture and, for a mascot, its look.
 function pictureKey(bot: SyncedBot): string {
   return `${bot.avatar ?? ''}|${lookOf(bot) ?? ''}`
 }
@@ -302,8 +302,8 @@ export class BotAvatarSync {
     this.pump()
   }
 
-  // The drawn icon for the mascot's look now, named by its bytes as an upload is; null sends the plain
-  // mascot. Kept per bot while its send is out; a missing one is kept until its look or icon changes.
+  // The drawn icon for the mascot's look now, named by its bytes as an upload is; null sends the mascot
+  // id. Kept per bot while its send is out; a missing one is kept until its look or icon changes.
   private async mascotIcon(bot: SyncedBot): Promise<{ version: string; png: string } | null> {
     const look = lookOf(bot)
     if (!look) {

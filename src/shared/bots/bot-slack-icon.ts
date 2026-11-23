@@ -1,5 +1,6 @@
-// A mascot with a tile color or an outfit reaches Slack as a 512 px PNG a window draws, kept in the bot's
-// host's app data under a name that says which look it shows, so a stale one is never sent for a newer look.
+// A mascot reaches Slack as a 512 px PNG a window draws from today's art (its tile color and outfit, or
+// neither), kept in the bot's host's app data under a name that says which look it shows, so a stale one is
+// never sent for a newer look. Until one is drawn, the host sends the mascot id.
 import { parseBotAvatar } from '../bot-avatar'
 import type { Bot } from '../bot-types'
 import { DEFAULT_BOT_AVATAR_COLOR } from './bot-avatar-color'
@@ -14,8 +15,7 @@ const SLACK_ICON_FILE = /^v\d+(?:-[A-Za-z0-9]+)+\.png$/
 
 type LookedBot = Pick<Bot, 'avatar' | 'avatarColor' | 'avatarOutfit'>
 
-/** The look a drawn icon must show, as a file-name-safe key; null when the plain mascot id says it all
- *  (no color, no outfit) or the picture is not a mascot. */
+/** The look a drawn icon must show, as a file-name-safe key; null when the picture is not a mascot. */
 export function botSlackIconLook(bot: LookedBot): string | null {
   const parsed = parseBotAvatar(bot.avatar)
   if (parsed?.kind !== 'mascot') {
@@ -27,9 +27,6 @@ export function botSlackIconLook(bot: LookedBot): string | null {
   const outfit =
     typeof bot.avatarOutfit === 'string' && OUTFIT.test(bot.avatarOutfit) ? bot.avatarOutfit : null
   const tile = color && color !== DEFAULT_BOT_AVATAR_COLOR ? color.slice(1) : null
-  if (!tile && !outfit) {
-    return null
-  }
   return [SLACK_ICON_ART_VERSION, parsed.id, tile ?? 'plain', outfit ?? 'none'].join('-')
 }
 
