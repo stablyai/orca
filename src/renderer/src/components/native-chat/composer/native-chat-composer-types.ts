@@ -48,6 +48,7 @@ export type NativeChatComposerRoom = {
 
 export type NativeChatComposerProps = {
   room?: NativeChatComposerRoom
+  dock?: React.ReactNode
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
   terminalTabId: string
   /** Input-only edit session: every submit saves, Escape cancels, and send-only actions are absent. */

@@ -26,6 +26,7 @@ import {
   type ToolsBot
 } from './bot-tool-words'
 import { useBotToolPhoneSignIn } from './use-bot-tool-phone-sign-in'
+import { botMcpAppLine } from '../../../../src/shared/bots/bot-app-lines'
 
 export function MobileBotToolPage(props: {
   client: RpcClient | null
@@ -174,7 +175,11 @@ export function MobileBotToolPage(props: {
       ) : null}
       <SettingsSection title={t('bots.tools.details', 'Details')} first={!trouble}>
         {app ? (
-          <ListRow key="uses" title={t('bots.tools.uses', 'Uses')} subtitle={app.line} />
+          <ListRow
+            key="uses"
+            title={t('bots.tools.uses', 'Uses')}
+            subtitle={botMcpAppLine(app, t)}
+          />
         ) : null}
         <ListRow
           key="address"

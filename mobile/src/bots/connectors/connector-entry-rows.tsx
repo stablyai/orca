@@ -25,6 +25,7 @@ import type { ConnectorPage } from './connector-pages'
 import { slackRowFace } from './mobile-slack-copy'
 import type { PhoneSlackView } from './use-phone-bot-slack'
 import type { PhoneLinearView } from './use-phone-connector-account'
+import { botMcpAppLine } from '../../../../src/shared/bots/bot-app-lines'
 
 const ICON = 20
 
@@ -311,7 +312,9 @@ export function connectorRows(input: ConnectorRowsInput): ReactNode[] {
             line={
               entry.app?.signIn === 'browser' && !entry.problem && input.tools?.problems != null
                 ? t('bots.tools.face.signedIn', 'Signed in')
-                : entry.app?.line
+                : entry.app
+                  ? botMcpAppLine(entry.app, t)
+                  : undefined
             }
             tool={entry.tool}
             problem={entry.problem}

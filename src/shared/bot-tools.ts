@@ -3,6 +3,7 @@
 import * as z from 'zod'
 import type { BotToolSignInStatus } from './bot-tool-sign-in'
 import type { BotAgent } from './bot-types'
+import { englishTranslate, type CopyTranslate } from './i18n/english-translate'
 
 export const BOT_TOOL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/
 const BotToolName = z.string().regex(BOT_TOOL_NAME_PATTERN)
@@ -100,9 +101,14 @@ export const BotToolInputSchema = z.union([
   })
 ])
 export type BotToolInput = z.infer<typeof BotToolInputSchema>
-export function botToolInputError(input: BotToolInput, platform: NodeJS.Platform): string | null {
+/** Why the editor can't save `input`, in the reader's words (English for main and the CLI). */
+export function botToolInputError(
+  input: BotToolInput,
+  platform: NodeJS.Platform,
+  t: CopyTranslate = englishTranslate
+): string | null {
   if (!BotToolInputSchema.safeParse(input).success) {
-    return 'Enter a valid server name and URL or executable.'
+    return t('bots.tools.input.invalid', 'Enter a valid server name and URL or executable.')
   }
   const remote = 'url' in input
   const rows = remote ? input.headers : input.env
@@ -110,7 +116,7 @@ export function botToolInputError(input: BotToolInput, platform: NodeJS.Platform
     remote || platform === 'win32' ? row.key.toLowerCase() : row.key
   )
   if (new Set(names).size !== rows.length) {
-    return 'Each header or environment name must be unique.'
+    return t('bots.tools.input.namesRepeat', 'Each header or environment name must be unique.')
   }
   if (
     rows.some(
@@ -120,7 +126,10 @@ export function botToolInputError(input: BotToolInput, platform: NodeJS.Platform
         (remote && /[\r\n]/.test(row.value ?? ''))
     )
   ) {
-    return 'Enter a valid name and value for every row, or remove the row.'
+    return t(
+      'bots.tools.input.rowInvalid',
+      'Enter a valid name and value for every row, or remove the row.'
+    )
   }
   return null
 }

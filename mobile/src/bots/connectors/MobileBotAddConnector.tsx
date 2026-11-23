@@ -31,6 +31,7 @@ import { MobileConnectorSourceIcon, MobileGoogleMark } from '../MobileConnectorS
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { AppLogo } from './MobileBotComposio'
 import { useComposioCatalog } from './use-composio-catalog'
+import { botMcpAppLine, composioCuratedAppLine } from '../../../../src/shared/bots/bot-app-lines'
 
 type Category = BotAppCategory
 
@@ -140,7 +141,7 @@ export function MobileBotAddConnector(props: {
     (app) =>
       (filter === null ||
         (filter === 'mine' ? props.apps.added.has(app.id) : app.category === filter)) &&
-      (needle === '' || `${app.name} ${app.line}`.toLocaleLowerCase().includes(needle))
+      (needle === '' || `${app.name} ${botMcpAppLine(app, t)}`.toLocaleLowerCase().includes(needle))
   )
   const { composio } = props
   const added = (slug: string) => composio.active.includes(slug)
@@ -160,7 +161,8 @@ export function MobileBotAddConnector(props: {
           // Unless signed in already: that sign-in is the bot's, listed with Manage.
           (!direct.has(app.slug) || added(app.slug)) &&
           (filter === null || (filter === 'mine' && added(app.slug))) &&
-          (needle === '' || `${app.name} ${app.line}`.toLocaleLowerCase().includes(needle))
+          (needle === '' ||
+            `${app.name} ${composioCuratedAppLine(app, t)}`.toLocaleLowerCase().includes(needle))
       )
   const appsShown = fromCatalog || browsing || needle !== '' ? apps : apps.slice(0, COMPOSIO_SHOWN)
   const categories = BOT_APP_CATEGORIES.filter(
@@ -264,7 +266,7 @@ export function MobileBotAddConnector(props: {
                       key={app.id}
                       leading={<Wrench size={20} color={colors.textSecondary} />}
                       title={app.name}
-                      subtitle={app.line}
+                      subtitle={botMcpAppLine(app, t)}
                       disabled={props.disabled && !onBot}
                       onPress={() => props.apps.onPick(app)}
                       accessory={
