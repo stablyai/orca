@@ -13,8 +13,8 @@ import type { Project, ProjectHostSetup } from '../../../../shared/project/proje
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { withoutHiddenRepos } from '../../../../shared/project/catalog/hidden-projects'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getProjectHeaderRevealTarget } from '../../../../shared/sidebar-list/sections/project-section-grouping'
-import type { ProjectGroupingModel } from '../../../../shared/sidebar-list/sections/project-section-grouping'
+import { buildProjectGroupingIndex } from '../../../../shared/sidebar-list/sections/project-section-grouping'
+import { buildProjectFilterEntries } from '../../../../shared/sidebar-list/sections/project-filter-entries'
 import type { SidebarHostOption } from '../sidebar/worktree-list/controls/sidebar-host-options'
 import { translateHostDisplayLabel } from '../../runtime/hosts/display/execution-host-label'
 import {
@@ -95,27 +95,6 @@ export function resolveWorktreeFilterHostId(
   return getWorktreeExecutionHostId(worktree, repoById.get(worktree.repoId), defaultHostId)
 }
 
-function buildRepoIdsByProjectKey(
-  repos: readonly Repo[],
-  repoById: Map<string, Repo>,
-  grouping: ProjectGroupingModel
-): Map<string, string[]> {
-  const repoIdsByProjectKey = new Map<string, string[]>()
-  for (const repo of repos) {
-    const target = getProjectHeaderRevealTarget(repo.id, repoById, grouping)
-    if (!target.repo) {
-      continue
-    }
-    const repoIds = repoIdsByProjectKey.get(target.key)
-    if (repoIds) {
-      repoIds.push(repo.id)
-    } else {
-      repoIdsByProjectKey.set(target.key, [repo.id])
-    }
-  }
-  return repoIdsByProjectKey
-}
-
 export function buildPaletteFilterModel({
   repos,
   worktrees,
@@ -133,10 +112,12 @@ export function buildPaletteFilterModel({
 }): PaletteFilterModel {
   const repoById = new Map(repos.map((repo) => [repo.id, repo]))
   const hostIdsByRepoId = buildRepoHostIndex(repos, defaultHostId)
-  const repoIdsByProjectKey = buildRepoIdsByProjectKey([...repoById.values()], repoById, {
-    projects,
-    projectHostSetups
-  })
+  const repoIdsByProjectKey = new Map(
+    buildProjectFilterEntries(
+      [...repoById.values()],
+      buildProjectGroupingIndex({ projects, projectHostSetups })
+    ).map((entry) => [entry.key, entry.repoIds])
+  )
 
   const worktreeCountByHostId = new Map<string, number>()
   const worktreeCountByRepoId = new Map<string, number>()

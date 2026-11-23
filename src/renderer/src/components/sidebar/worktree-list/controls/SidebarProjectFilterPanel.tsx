@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Server, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,8 +10,15 @@ import {
   CommandList
 } from '@/components/ui/command'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
-import { searchRepos } from '@/lib/workspace/catalog/repo-search'
-import type { Repo } from '../../../../../../shared/repository/repo-types'
+import {
+  withoutProjectFilterEntry,
+  withProjectFilterEntry
+} from '../../../../../../shared/sidebar-list/sections/project-filter-entries'
+import {
+  projectFilterEntryKeywords,
+  searchProjectFilterEntries,
+  type RepoProjectFilterEntry
+} from './use-project-filter-entries'
 import { useTranslate } from '@/i18n/use-translate'
 
 function projectCommandFilter(_value: string, search: string, keywords?: string[]): number {
@@ -35,8 +42,8 @@ function projectCommandFilter(_value: string, search: string, keywords?: string[
 }
 
 type SidebarProjectFilterPanelProps = {
-  availableRepos: Repo[]
-  selectedRepos: Repo[]
+  availableEntries: RepoProjectFilterEntry[]
+  selectedEntries: RepoProjectFilterEntry[]
   hasRepoFilter: boolean
   filterRepoIds: readonly string[]
   setFilterRepoIds: (ids: string[]) => void
@@ -44,15 +51,15 @@ type SidebarProjectFilterPanelProps = {
 
 /** Mount search state with the submenu so reopening cannot inherit a stale query. */
 export function SidebarProjectFilterPanel({
-  availableRepos,
-  selectedRepos,
+  availableEntries,
+  selectedEntries,
   hasRepoFilter,
   filterRepoIds,
   setFilterRepoIds
 }: SidebarProjectFilterPanelProps): React.JSX.Element {
   const t = useTranslate()
   const [query, setQuery] = useState('')
-  const [highlightedRepoId, setHighlightedRepoId] = useState('')
+  const [highlightedEntryKey, setHighlightedEntryKey] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Defer focus one frame until Radix’s root trap yields to the submenu; commit-time autofocus gets pulled back.
@@ -61,43 +68,47 @@ export function SidebarProjectFilterPanel({
     return () => cancelAnimationFrame(frame)
   }, [])
 
-  const handleSelectRepo = useCallback(
-    (repoId: string) => {
-      if (!filterRepoIds.includes(repoId)) {
-        setFilterRepoIds([...filterRepoIds, repoId])
-      }
+  const allEntries = useMemo(
+    () => [...selectedEntries, ...availableEntries],
+    [availableEntries, selectedEntries]
+  )
+
+  const handleSelectEntry = useCallback(
+    (entry: RepoProjectFilterEntry) => {
+      setFilterRepoIds(withProjectFilterEntry(filterRepoIds, entry, allEntries))
       setQuery('')
     },
-    [filterRepoIds, setFilterRepoIds]
+    [allEntries, filterRepoIds, setFilterRepoIds]
   )
 
   const handleRemoveProject = useCallback(
-    (repoId: string) => {
-      setFilterRepoIds(filterRepoIds.filter((id) => id !== repoId))
+    (entry: RepoProjectFilterEntry) => {
+      setFilterRepoIds(withoutProjectFilterEntry(filterRepoIds, entry, allEntries))
     },
-    [filterRepoIds, setFilterRepoIds]
+    [allEntries, filterRepoIds, setFilterRepoIds]
   )
 
   const handleInputKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
       // Keep search typing out of Radix menu typeahead.
-      if (event.key === 'Backspace' && query === '' && selectedRepos.length > 0) {
-        const lastRepo = selectedRepos.at(-1)
-        if (lastRepo) {
+      if (event.key === 'Backspace' && query === '' && selectedEntries.length > 0) {
+        const lastEntry = selectedEntries.at(-1)
+        if (lastEntry) {
           event.preventDefault()
           event.stopPropagation()
-          handleRemoveProject(lastRepo.id)
+          handleRemoveProject(lastEntry)
         }
         return
       }
 
       if (event.key === 'Enter') {
-        const highlightedRepo = availableRepos.find((repo) => repo.id === highlightedRepoId)
-        const repo = highlightedRepo ?? searchRepos(availableRepos, query)[0]
-        if (repo) {
+        const entry =
+          availableEntries.find((candidate) => candidate.key === highlightedEntryKey) ??
+          searchProjectFilterEntries(availableEntries, query)[0]
+        if (entry) {
           event.preventDefault()
           event.stopPropagation()
-          handleSelectRepo(repo.id)
+          handleSelectEntry(entry)
         }
         return
       }
@@ -116,20 +127,30 @@ export function SidebarProjectFilterPanel({
         event.stopPropagation()
       }
     },
-    [availableRepos, handleRemoveProject, handleSelectRepo, highlightedRepoId, query, selectedRepos]
+    [
+      availableEntries,
+      handleRemoveProject,
+      handleSelectEntry,
+      highlightedEntryKey,
+      query,
+      selectedEntries
+    ]
   )
 
   return (
     <Command
       filter={projectCommandFilter}
-      onValueChange={setHighlightedRepoId}
+      onValueChange={setHighlightedEntryKey}
       className="bg-transparent"
     >
-      <SelectedProjectPills selectedRepos={selectedRepos} onRemoveProject={handleRemoveProject} />
+      <SelectedProjectPills
+        selectedEntries={selectedEntries}
+        onRemoveProject={handleRemoveProject}
+      />
       <CommandInput
         ref={inputRef}
         placeholder={
-          selectedRepos.length > 0
+          selectedEntries.length > 0
             ? t(
                 'auto.components.sidebar.SidebarRepositoryFilterSection.5a273fbfce',
                 'Add project...'
@@ -158,21 +179,21 @@ export function SidebarProjectFilterPanel({
                 'No projects match'
               )}
         </CommandEmpty>
-        {availableRepos.map((repo) => (
+        {availableEntries.map((entry) => (
           <CommandItem
-            key={repo.id}
-            value={repo.id}
-            keywords={[repo.displayName, repo.path]}
-            onSelect={() => handleSelectRepo(repo.id)}
+            key={entry.key}
+            value={entry.key}
+            keywords={projectFilterEntryKeywords(entry)}
+            onSelect={() => handleSelectEntry(entry)}
             className="mx-1 my-0.5 items-center gap-2 rounded-[7px] px-2 py-1 text-[12px] leading-5 font-medium data-[selected=true]:bg-black/8 dark:data-[selected=true]:bg-white/14"
           >
             <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
               <RepoBadgeLabel
-                name={repo.displayName}
-                color={repo.badgeColor}
+                name={entry.label}
+                color={entry.repo.badgeColor}
                 className="max-w-full"
               />
-              {repo.connectionId && (
+              {entry.repos.every((repo) => repo.connectionId) && (
                 <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
                   <Server className="size-2.5" />
                   {t('auto.components.sidebar.SidebarRepositoryFilterSection.2656053db4', 'SSH')}
@@ -187,28 +208,28 @@ export function SidebarProjectFilterPanel({
 }
 
 function SelectedProjectPills({
-  selectedRepos,
+  selectedEntries,
   onRemoveProject
 }: {
-  selectedRepos: Repo[]
-  onRemoveProject: (repoId: string) => void
+  selectedEntries: RepoProjectFilterEntry[]
+  onRemoveProject: (entry: RepoProjectFilterEntry) => void
 }) {
   const t = useTranslate()
-  if (selectedRepos.length === 0) {
+  if (selectedEntries.length === 0) {
     return null
   }
 
   return (
     <div className="scrollbar-sleek mx-1 mb-1 flex max-h-16 flex-wrap gap-1 overflow-y-auto rounded-[7px] border border-border/70 bg-muted/25 p-1">
-      {selectedRepos.map((repo) => (
+      {selectedEntries.map((entry) => (
         <Badge
-          key={repo.id}
+          key={entry.key}
           variant="outline"
           className="h-5 max-w-full gap-1 border-border/70 bg-background px-1.5 py-0 text-[11px] font-medium"
         >
           <RepoBadgeLabel
-            name={repo.displayName}
-            color={repo.badgeColor}
+            name={entry.label}
+            color={entry.repo.badgeColor}
             className="max-w-[8rem]"
             badgeClassName="size-1.5"
           />
@@ -219,11 +240,11 @@ function SelectedProjectPills({
             aria-label={t(
               'auto.components.sidebar.SidebarRepositoryFilterSection.f10ca29601',
               'Remove {{value0}} filter',
-              { value0: repo.displayName }
+              { value0: entry.label }
             )}
             className="-mr-1 size-4 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
             onMouseDown={(event) => event.preventDefault()}
-            onClick={() => onRemoveProject(repo.id)}
+            onClick={() => onRemoveProject(entry)}
           >
             <X className="size-2.5" strokeWidth={2.5} />
           </Button>
