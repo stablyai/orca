@@ -320,15 +320,17 @@ export function useBotSlackSetup(
     [step, wait]
   )
 
-  const link = step.kind === 'waiting' || step.kind === 'ready' ? step.link : null
-  const expired = useSlackLinkExpired(link?.expiresAt ?? null)
+  const linkStep = step.kind === 'waiting' || step.kind === 'ready' ? step : null
+  const expired = useSlackLinkExpired(linkStep?.link?.expiresAt ?? null)
   // The shared state follows the install, so a finished one shows here and on every other surface.
-  const awaitingInstall = step.kind === 'waiting' && !expired
-  const view = useBotSlack(bot, awaitingInstall, step.kind === 'waiting' ? step.returnUrl : null)
+  // Ready too: its link may have gone to another device without Copy link (a selection paste).
+  const view = useBotSlack(
+    bot,
+    linkStep !== null && !expired,
+    step.kind === 'waiting' ? step.returnUrl : null
+  )
   const waited =
-    step.kind === 'waiting' && view.status === 'ready'
-      ? slackTeamState(view.slack, step.teamId)
-      : null
+    linkStep && view.status === 'ready' ? slackTeamState(view.slack, linkStep.teamId) : null
   // Still behind, on required or optional permissions: the approval this flow waits for isn't in.
   const installed = waited?.state === 'installed' && !waited.updateNeeded && !waited.updateAvailable
   const otherUser = waited?.state === 'created' && waited.oauthFailure === 'other_user'
