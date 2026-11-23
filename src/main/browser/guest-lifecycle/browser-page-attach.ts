@@ -4,6 +4,7 @@ import { BrowserError } from '../browser-error'
 import { waitForBrowserGuestLoad } from './browser-guest-load'
 import {
   loadPageWhenReady,
+  restoreHistoryBehind,
   whenBrowserExtensionsReadyForPage
 } from '../extensions/profile-sessions/browser-extension-page-start'
 import {
@@ -219,7 +220,17 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
   const extensionsReady = whenBrowserExtensionsReadyForPage(guest)
   const promise = waitForBrowserGuestLoad(
     guest,
-    extensionsReady ? () => loadPageWhenReady(guest, extensionsReady, load) : load
+    extensionsReady
+      ? () =>
+          loadPageWhenReady(
+            guest,
+            extensionsReady,
+            load,
+            snapshot
+              ? (navigatedUrl) => restoreHistoryBehind(guest, snapshot, navigatedUrl)
+              : undefined
+          )
+      : load
   ).then(() => {
     if (pages.get(attach.pageId) !== page || page.guest !== guest) {
       throw new Error('Browser page replaced')
