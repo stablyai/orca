@@ -10,6 +10,7 @@ import type {
   AgentJournalQuestionItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ProviderDiagnostic } from '../../../../shared/agent-session/failures/agent-session-failure'
+import type { AgentSessionForegroundTask } from '../../../../shared/agent-session/agent-session-foreground-task'
 
 export type AgentSessionCloseEvidence = {
   root?: 'live' | 'unverifiable' | 'exited'
@@ -40,6 +41,10 @@ export type AgentSessionCancelOutcome = {
 export type AgentSessionPromptCancelRoute = { kind: 'dismiss' } | { kind: 'stop' }
 
 export type StructuredAgentSessionAdapterStop = {
+  foregroundTasks?(sessionId: string): AgentSessionForegroundTask[]
+  backgroundTask?(
+    input: AgentSessionForegroundTask & { sessionId: string; fence: number }
+  ): Promise<boolean>
   /** Stop named tasks only; acknowledge each accepted stop immediately so later batch failures cannot erase it. */
   stopBackgroundTasks?(input: {
     sessionId: string

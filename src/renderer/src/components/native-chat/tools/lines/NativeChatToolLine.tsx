@@ -28,6 +28,7 @@ import {
 import { NativeChatExpandable } from '../../messages/disclosure/NativeChatExpandable'
 import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-disclosure-store'
 import { NativeChatToolOutput } from './NativeChatToolOutput'
+import { NativeChatForegroundTaskAction } from '../../NativeChatForegroundTaskAction'
 
 const TARGET_CLASS =
   'min-w-0 truncate text-chat-foreground transition-colors group-hover/tool-line:text-chat-foreground-strong'
@@ -112,64 +113,73 @@ export function NativeChatToolLine({
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={() => hasDetail && setExpanded(!expanded)}
-        className={cn(
-          'group/tool-line flex min-h-6.5 w-full items-center gap-2 rounded-md text-left font-sans text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-          hasDetail ? 'cursor-pointer' : 'cursor-default'
-        )}
-        aria-expanded={hasDetail ? expanded : undefined}
-      >
-        {isCall ? (
-          <NativeChatToolIcon
-            mcpIdentity={block.mcpIdentity}
-            rowWord={name}
-            input={block.input}
-            className={failed ? 'text-destructive/70' : 'text-chat-foreground-faint'}
-          />
-        ) : (
-          /* Translated result labels identify no tool category; reserve an empty slot for alignment. */
-          <span aria-hidden className="size-4 shrink-0" />
-        )}
-        {label?.verb && label.verb !== name ? <span className="sr-only">{name} </span> : null}
-        {commandAlone ? (
-          // The run's header already says these ran; the row is the command itself.
-          <span className="sr-only">{label?.verb} </span>
-        ) : (
-          <span
-            className={cn(
-              'text-chat-foreground-faint transition-colors group-hover/tool-line:text-chat-foreground',
-              label?.verb ? 'shrink-0' : 'min-w-0 truncate'
-            )}
-          >
-            {label?.verb ??
-              (isCall ? <NativeChatToolName name={name} mcpIdentity={block.mcpIdentity} /> : name)}
-          </span>
-        )}
-        {label?.filePath ? (
-          <NativeChatToolFileTarget
-            path={label.filePath}
-            label={label.target}
-            className={TARGET_CLASS}
-          />
-        ) : (label?.target ?? resultPreview) ? (
-          <span className={TARGET_CLASS} title={label?.title ?? resultPreview}>
-            {label?.target ?? resultPreview}
-          </span>
-        ) : null}
-        <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-2">
-          {isCall ? <NativeChatCommandMetadata block={block} /> : null}
-          {hasDetail ? (
-            <ChevronRight
-              className={cn(
-                'size-3.5 shrink-0 text-chat-foreground-faint transition-transform motion-reduce:transition-none',
-                expanded && 'rotate-90'
-              )}
+      <div className="flex min-w-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={() => hasDetail && setExpanded(!expanded)}
+          className={cn(
+            'group/tool-line flex min-h-6.5 min-w-0 flex-1 items-center gap-2 rounded-md text-left font-sans text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+            hasDetail ? 'cursor-pointer' : 'cursor-default'
+          )}
+          aria-expanded={hasDetail ? expanded : undefined}
+        >
+          {isCall ? (
+            <NativeChatToolIcon
+              mcpIdentity={block.mcpIdentity}
+              rowWord={name}
+              input={block.input}
+              className={failed ? 'text-destructive/70' : 'text-chat-foreground-faint'}
             />
+          ) : (
+            /* Translated result labels identify no tool category; reserve an empty slot for alignment. */
+            <span aria-hidden className="size-4 shrink-0" />
+          )}
+          {label?.verb && label.verb !== name ? <span className="sr-only">{name} </span> : null}
+          {commandAlone ? (
+            // The run's header already says these ran; the row is the command itself.
+            <span className="sr-only">{label?.verb} </span>
+          ) : (
+            <span
+              className={cn(
+                'text-chat-foreground-faint transition-colors group-hover/tool-line:text-chat-foreground',
+                label?.verb ? 'shrink-0' : 'min-w-0 truncate'
+              )}
+            >
+              {label?.verb ??
+                (isCall ? (
+                  <NativeChatToolName name={name} mcpIdentity={block.mcpIdentity} />
+                ) : (
+                  name
+                ))}
+            </span>
+          )}
+          {label?.filePath ? (
+            <NativeChatToolFileTarget
+              path={label.filePath}
+              label={label.target}
+              className={TARGET_CLASS}
+            />
+          ) : (label?.target ?? resultPreview) ? (
+            <span className={TARGET_CLASS} title={label?.title ?? resultPreview}>
+              {label?.target ?? resultPreview}
+            </span>
           ) : null}
-        </span>
-      </button>
+          <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-2">
+            {isCall ? <NativeChatCommandMetadata block={block} /> : null}
+            {hasDetail ? (
+              <ChevronRight
+                className={cn(
+                  'size-3.5 shrink-0 text-chat-foreground-faint transition-transform motion-reduce:transition-none',
+                  expanded && 'rotate-90'
+                )}
+              />
+            ) : null}
+          </span>
+        </button>
+        {isCall && block.state === 'running' && !body ? (
+          <NativeChatForegroundTaskAction toolUseId={block.callId} />
+        ) : null}
+      </div>
       {hasDetail ? (
         <NativeChatExpandable open={expanded}>
           <ToolLineDetail

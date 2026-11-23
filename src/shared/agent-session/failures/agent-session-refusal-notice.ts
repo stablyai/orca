@@ -35,6 +35,7 @@ const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> =
   stop: 'notDoneStop',
   'stop-task': 'notDoneStopTask',
   'stop-tasks': 'notDoneStopTasks',
+  'background-task': 'notDoneBackgroundTask',
   answer: 'notDoneAnswer',
   option: 'notDoneOption',
   command: 'notDoneCommand',

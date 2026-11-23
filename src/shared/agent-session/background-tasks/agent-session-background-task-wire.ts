@@ -1,6 +1,7 @@
 // Background task wire rows and roster; keep task equality consistent across host publication and client reduction.
 
 import type { AgentChildWorkView } from '../../agent-status/child-work/agent-status-child-work-view'
+import type { AgentSessionForegroundTask } from '../agent-session-foreground-task'
 
 /** Optional state uses dashboard vocabulary; older hosts fall back to kind-derived defaults. */
 export type AgentSessionBackgroundTaskRunState =
@@ -31,6 +32,8 @@ export type WorkerDockPresence = { revision: string; open: boolean }
 
 export type AgentSessionBackgroundTaskState = {
   state: 'monitoring'
+  /** Exact currently running calls the host can move into the background. */
+  foregroundTasks?: AgentSessionForegroundTask[]
   /** Discovery on the existing visible-chat channel; absent means no orchestration history. */
   workerDock?: WorkerDockPresence
   /** Optional so mixed-version clients can consume state-only hosts. */

@@ -33,7 +33,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/shared/workspace-session/workspace-session-salvage.test.ts',
   'src/main/native-chat/paste-files/native-chat-paste-files.test.ts',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
-  'src/main/runtime/rpc/methods/structured-sessions/attachments/structured-agent-session-visual.test.ts'
+  'src/main/runtime/rpc/methods/structured-sessions/attachments/structured-agent-session-visual.test.ts',
+  'src/main/claude/claude-background-task-control-contract.test.ts'
 ]
 
 /** `filters` limits the SQLite import scan to the tests a filtered CLI run can select. */

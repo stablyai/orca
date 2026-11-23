@@ -21163,6 +21163,7 @@
         "clearAfterSending": "Your earlier message is still being sent. Run /clear once it has gone.",
         "compactAfterSending": "Your earlier message is still being sent. Run /compact once it has gone.",
         "pendingWork": "Wait for pending work and messages to finish before using this command.",
+        "notDoneBackgroundTask": "Couldn't move the task to the background.",
         "reattachFiles": "Remove them and attach them again.",
         "mailOwnerUnconfirmed": "Orca couldn't confirm this message is still meant for this chat."
       },
@@ -21575,7 +21576,9 @@
         "needsAttention_other": "{{count}} need attention",
         "workerBadge": "Worker",
         "subagentBadge": "Subagent",
-        "nameInMessage": "Add {{name}} to message"
+        "nameInMessage": "Add {{name}} to message",
+        "background": "Background",
+        "backgrounding": "Backgrounding…"
       },
       "jumpToLatest": "Jump to latest",
       "newRowsAnnouncement": "New messages arrived while you were away",
