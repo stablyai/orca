@@ -699,7 +699,7 @@
   color: var(--foreground);
 }
 
-/* ===== A miniature Orca window, framed by a camera. ===== */
+/* ===== A miniature Orca window, framed by a camera that moves over it. ===== */
 [data-feature-tip='bots'] .bt-stage {
   position: absolute;
   inset: 0;
@@ -713,6 +713,12 @@
   height: 560px;
   transform-origin: 0 0;
   transition: transform 1100ms cubic-bezier(0.65, 0, 0.35, 1);
+}
+[data-feature-tip='bots'] .bt-cam[data-state='full'] {
+  transform: translate(10px, 100px) scale(0.65);
+}
+[data-feature-tip='bots'] .bt-cam[data-state='view'] {
+  transform: translate(-256px, 34px) scale(1);
 }
 [data-feature-tip='bots'] .bt-cam[data-state='group'] {
   transform: translate(27px, 35px) scale(0.8);
@@ -730,6 +736,10 @@
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.1),
     0 30px 80px rgba(0, 0, 0, 0.55);
+}
+[data-feature-tip='bots'] .bt-win-items {
+  width: 744px;
+  height: 440px;
 }
 [data-feature-tip='bots'] .bt-win-group {
   width: 560px;
@@ -846,6 +856,372 @@
   align-items: center;
   justify-content: center;
   color: #f0f0f0;
+}
+
+[data-feature-tip='bots'] .bt-composer-model {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: #c0c0c0;
+}
+[data-feature-tip='bots'] .bt-composer-model + .bt-send {
+  margin-left: 0;
+}
+/* Page 2's right panel: the bot's Items, and one item's view over it. */
+[data-feature-tip='bots'] .bt-right {
+  width: 340px;
+  flex: none;
+  background: var(--sidebar);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+[data-feature-tip='bots'] .bt-rtabs {
+  height: 36px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--border);
+}
+[data-feature-tip='bots'] .bt-rtab {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-rtab.bt-on {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--foreground);
+}
+[data-feature-tip='bots'] .bt-rtab-count {
+  display: inline-flex;
+  height: 16px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 10px;
+  font-weight: 500;
+  align-items: center;
+  justify-content: center;
+}
+[data-feature-tip='bots'] .bt-rbody {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+[data-feature-tip='bots'] .bt-rhead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 8px;
+}
+[data-feature-tip='bots'] .bt-rname {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+[data-feature-tip='bots'] .bt-rsub {
+  font-size: 12px;
+  color: #929292;
+  line-height: 16px;
+}
+[data-feature-tip='bots'] .bt-ilist {
+  padding: 2px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+[data-feature-tip='bots'] .bt-ghead {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 4px 4px 0;
+  font-size: 12px;
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-gcount {
+  font-variant-numeric: tabular-nums;
+  margin-left: 2px;
+}
+[data-feature-tip='bots'] .bt-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition:
+    background 500ms,
+    box-shadow 500ms;
+}
+[data-feature-tip='bots'] .bt-item[data-state='q'] {
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+[data-feature-tip='bots'] .bt-item-glyph {
+  width: 16px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+[data-feature-tip='bots'] .bt-item-number {
+  font-size: 13px;
+  line-height: 20px;
+  color: #929292;
+  width: 30px;
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+[data-feature-tip='bots'] .bt-item-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  line-height: 20px;
+}
+[data-feature-tip='bots'] .bt-item-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-feature-tip='bots'] .bt-item.bt-closed .bt-item-title {
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-item-ask {
+  display: block;
+  font-size: 12px;
+  line-height: 16px;
+  color: #acacac;
+}
+[data-feature-tip='bots'] .bt-item-when {
+  font-size: 12px;
+  line-height: 20px;
+  color: #929292;
+  flex: none;
+}
+[data-feature-tip='bots'] .bt-view {
+  position: absolute;
+  inset: 0;
+  background: var(--sidebar);
+  display: flex;
+  flex-direction: column;
+  transition: opacity 250ms ease;
+}
+[data-feature-tip='bots'] .bt-view:not([data-on]) {
+  opacity: 0;
+  pointer-events: none;
+}
+[data-feature-tip='bots'] .bt-vhead {
+  padding: 6px 14px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+[data-feature-tip='bots'] .bt-vback {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  color: #929292;
+  margin: 0 0 4px -4px;
+}
+[data-feature-tip='bots'] .bt-vtitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 21px;
+}
+[data-feature-tip='bots'] .bt-vtitle span {
+  font-weight: 400;
+  color: #929292;
+  font-variant-numeric: tabular-nums;
+}
+[data-feature-tip='bots'] .bt-vsub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+[data-feature-tip='bots'] .bt-vstatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 6px;
+  margin-left: -6px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex: none;
+}
+[data-feature-tip='bots'] .bt-vstatus > svg {
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-vmeta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: #929292;
+  white-space: nowrap;
+}
+[data-feature-tip='bots'] .bt-vscroll {
+  padding: 0 14px;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 36px);
+}
+[data-feature-tip='bots'] .bt-vscroll .bt-scroll-inner {
+  left: 14px;
+  right: 14px;
+  padding-top: 8px;
+  transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+[data-feature-tip='bots'] .bt-vh3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-rail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 6px;
+}
+[data-feature-tip='bots'] .bt-rail::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 9.5px;
+  width: 1px;
+  background: rgba(240, 240, 240, 0.12);
+}
+[data-feature-tip='bots'] .bt-act {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-act b {
+  font-weight: 500;
+  color: var(--foreground);
+}
+[data-feature-tip='bots'] .bt-act-icon {
+  width: 20px;
+  height: 18px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sidebar);
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-cbox {
+  flex: none;
+  margin: 6px 12px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(240, 240, 240, 0.12);
+  background: var(--chat-pane);
+  padding: 6px;
+}
+[data-feature-tip='bots'] .bt-answering {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 6px;
+  font-size: 11px;
+  color: #929292;
+  white-space: nowrap;
+  overflow: hidden;
+}
+[data-feature-tip='bots'] .bt-answering b {
+  font-weight: 500;
+  color: rgba(240, 240, 240, 0.8);
+}
+[data-feature-tip='bots'] .bt-cinput {
+  padding: 4px 4px 2px;
+  font-size: 13px;
+  line-height: 19px;
+  min-height: 19px;
+}
+/* A text input's caret: a thin bar after the typed text, so in an empty box it sits before the placeholder. */
+[data-feature-tip='bots'] .bt-caret {
+  display: inline-block;
+  width: 1.5px;
+  height: 15px;
+  background: #f0f0f0;
+  vertical-align: -3px;
+  margin: 0 1px 0 0;
+  animation: bt-caret 1s steps(1) infinite;
+}
+@keyframes bt-caret {
+  50% {
+    opacity: 0;
+  }
+}
+[data-feature-tip='bots'] .bt-cph {
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-crow {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 2px;
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-csend {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #3a3a3a;
+  color: #929292;
+  transition:
+    background 200ms,
+    color 200ms;
+}
+[data-feature-tip='bots'] .bt-csend[data-on] {
+  background: #f0f0f0;
+  color: #151515;
+}
+[data-feature-tip='bots'] .bt-pointer {
+  position: absolute;
+  z-index: 5;
+  width: 16px;
+  height: 16px;
+  left: 0;
+  top: 0;
+  transition:
+    transform 800ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 300ms;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+}
+/* A system arrow pointer: white with a dark outline on any surface. */
+[data-feature-tip='bots'] .bt-pointer path {
+  fill: #fff;
+  stroke: #111;
 }
 
 /* The group page: each bot's turn under its picture and name; hand-offs centred between turns. */

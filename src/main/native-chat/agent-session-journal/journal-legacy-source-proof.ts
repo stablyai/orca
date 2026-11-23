@@ -1,9 +1,12 @@
 import { JOURNAL_DOMAIN_PROFILE_TABLES } from './database/journal-domain-profile-columns'
 import {
   JournalLegacyRetentionError,
+  legacyInventoryRefusal,
+  legacyRecoveryRefusal,
   readJournalLegacySource,
   type LegacySourceRefusalReason
 } from './journal-legacy-retention-error'
+import { legacySourceArtifacts } from './journal-legacy-source-artifacts'
 import { readStoredQueuedMessageRow } from './queued-messages/queued-message-stored-row'
 import {
   readLegacyClaimsPage,
@@ -11,7 +14,8 @@ import {
   type LegacyClaim,
   type LegacySessionHold
 } from './journal-legacy-content-proof'
-import { assertNoLegacyComparesDue, readLegacyCopiesProofPage } from './journal-legacy-proof-copies'
+import { LEGACY_PROOF_COPIES_TABLE } from './journal-legacy-retirement-state'
+import { assertLegacyStoreReady, readLegacyCopiesProofPage } from './journal-legacy-proof-copies'
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 
@@ -39,8 +43,17 @@ const PROFILE_COLUMNS = new Map(
   JOURNAL_DOMAIN_PROFILE_TABLES.map(({ name, columns }) => [name, new Set<unknown>(columns)])
 )
 const RECOVERY_TABLES = ['journal_repairs', 'journal_imports', 'journal_set_aside']
-const COPIES = CONTENT_TABLES.length + 2
-export type LegacyProofCursor = { table: number; after: string | null; epoch?: string }
+const COPIES = LEGACY_PROOF_COPIES_TABLE
+if (COPIES !== CONTENT_TABLES.length + 2) {
+  throw new Error('legacy proof copies follow the content tables and the claims')
+}
+/** `check`: the first page this launch reads, resumed past the start, checks compares due again. */
+export type LegacyProofCursor = {
+  table: number
+  after: string | null
+  epoch?: string
+  check?: true
+}
 export type LegacySourceSession = {
   sessionId: string
   workspaceId: string
@@ -52,6 +65,7 @@ export type LegacyProofPage = {
   sessions: LegacySourceSession[]
   retained?: string
   reason?: LegacySourceRefusalReason
+  artifact?: JournalLegacyRetentionError['artifact']
   /** Claims only the original holds, for chats kept here, taken in before it retires. */
   claims?: LegacyClaim[]
   /** Copies of chats an older Orca continued, converted from the original before it retires. */
@@ -64,19 +78,9 @@ export function readJournalLegacyProofPage(
   cursor: LegacyProofCursor,
   destination: Database.Database
 ): LegacyProofPage {
-  if (cursor.table === 0 && cursor.after === null) {
-    assertNoLegacyComparesDue(db, destination)
-    for (const { name, columns } of JOURNAL_DOMAIN_PROFILE_TABLES) {
-      const present = new Set(
-        destination
-          .prepare(`PRAGMA table_info(${name})`)
-          .all()
-          .map((column) => column.name)
-      )
-      if (columns.some((column) => !present.has(column))) {
-        throw new Error(`legacy proof requires complete destination table ${name}`)
-      }
-    }
+  // The first page this launch reads checks the store; a resumed one, its compares due again.
+  if (cursor.check || (cursor.table === 0 && cursor.after === null)) {
+    assertLegacyStoreReady(db, destination, !cursor.check)
   }
   return readJournalLegacySource(() => readSourcePage(db, cursor, destination))
 }
@@ -100,21 +104,19 @@ function readSourcePage(
         'source-inventory'
       )
     }
+    const artifact = legacySourceArtifacts(db, tables)
     for (const table of tables) {
       const columns =
         PROFILE_COLUMNS.get(table) ??
         (SOURCE_COLUMNS[table] ? new Set(SOURCE_COLUMNS[table]!.split(' ')) : undefined)
       if (columns) {
-        if (
-          db
-            .prepare(`PRAGMA table_info(${table})`)
-            .all()
-            .some((column) => !columns.has(column.name))
-        ) {
-          throw new JournalLegacyRetentionError(
-            'legacy source has unaccounted columns',
-            'source-inventory'
-          )
+        const extra = db
+          .prepare(`PRAGMA table_info(${table})`)
+          .all()
+          .map((column) => String(column.name))
+          .filter((name) => !columns.has(name))
+        if (extra.length > 0) {
+          throw legacyInventoryRefusal(extra, artifact)
         }
       }
 
@@ -138,16 +140,11 @@ function readSourcePage(
                 WHERE r.session_id=i.session_id AND r.epoch=i.epoch AND r.seq>=i.tip) LIMIT 1`
           : `SELECT 1 FROM ${quoted} LIMIT 1`
       if (db.prepare(unaccounted).get()) {
-        throw new JournalLegacyRetentionError(
-          'legacy source has unaccounted recovery data',
-          'source-recovery'
-        )
+        throw legacyRecoveryRefusal(artifact)
       }
       if (!RECOVERY_TABLES.includes(table)) {
-        throw new JournalLegacyRetentionError(
-          'legacy source has an unknown table',
-          'source-inventory'
-        )
+        // Empty too: an older build's table left behind still marks which builds wrote this file.
+        throw legacyInventoryRefusal([], artifact)
       }
     }
   }

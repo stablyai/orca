@@ -6,7 +6,11 @@ import { ArrowRight, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import type { ComposioApp } from '../../../../../shared/composio/composio-apps'
-import { COMPOSIO_CURATED_APPS } from '../../../../../shared/composio/composio-curated-apps'
+import {
+  COMPOSIO_CURATED_APPS,
+  type ComposioCuratedApp
+} from '../../../../../shared/composio/composio-curated-apps'
+import { composioCuratedAppLine, composioSlugLine } from '../../../../../shared/bots/bot-app-lines'
 import { useComposioApps } from '../composio/ComposioCatalog'
 import type { ComposioBotView } from '../composio/composio-client'
 import { BotAppCaption, BotAppLogo, BotAppRow } from './BotAppRow'
@@ -28,8 +32,12 @@ export type ComposioActions = {
   manage: () => void
 }
 
-const curatedPicks = (apps: readonly { slug: string; name: string; line: string }[]) =>
-  apps.map((app): ComposioPick => ({ slug: app.slug, name: app.name, line: app.line }))
+const curatedPicks = (apps: readonly ComposioCuratedApp[], t: ReturnType<typeof useTranslate>) =>
+  apps.map((app): ComposioPick => ({
+    slug: app.slug,
+    name: app.name,
+    line: composioCuratedAppLine(app, t)
+  }))
 
 /** The bot's sign-in per app, its working one first. */
 export function composioSignedIn(view: ComposioBotView): Map<string, string | null> {
@@ -122,13 +130,13 @@ export function ComposioSection({
         {t('bots.apps.composio.note', 'These connect through your Composio account.')}
       </p>
       <ul className="flex flex-col">
-        {curatedPicks(apps.slice(0, COMPOSIO_FIRST_LOOK)).map((app) => (
+        {curatedPicks(apps.slice(0, COMPOSIO_FIRST_LOOK), t).map((app) => (
           <ComposioAppItem key={app.slug} app={app} view={view} actions={actions} />
         ))}
       </ul>
       <div className="flex gap-1 px-1 pt-1">
         <Button variant="ghost" size="sm" onClick={onBrowseAll}>
-          {t('bots.apps.composio.browseAll', 'Browse all Composio apps')}
+          {t('bots.apps.composio.browseAll', 'Browse Composio apps')}
           <ArrowRight />
         </Button>
       </div>
@@ -136,13 +144,15 @@ export function ComposioSection({
   )
 }
 
-const fromCatalog = (app: ComposioApp): ComposioPick => ({
-  slug: app.slug,
-  name: app.name,
-  line: app.description,
-  logo: app.logo,
-  signIn: app.signIn
-})
+const fromCatalog =
+  (t: ReturnType<typeof useTranslate>) =>
+  (app: ComposioApp): ComposioPick => ({
+    slug: app.slug,
+    name: app.name,
+    line: composioSlugLine(app.slug, app.description, t),
+    logo: app.logo,
+    signIn: app.signIn
+  })
 
 /** Every Composio app, a page at a time, searched on Composio's side; needs the owner's key. */
 export function ComposioCatalogList({
@@ -184,7 +194,7 @@ export function ComposioCatalogList({
       </div>
     )
   }
-  const apps = listing.page.apps.map(fromCatalog)
+  const apps = listing.page.apps.map(fromCatalog(t))
   if (apps.length === 0) {
     return <>{empty}</>
   }
@@ -236,8 +246,9 @@ export function ComposioSearchGroup({
   /** Shown when nothing matches here and nothing came before. */
   empty: React.ReactNode
 }): React.JSX.Element | null {
-  const curated = curatedPicks(
-    COMPOSIO_CURATED_APPS.filter((app) => matchesAppQuery(query, app.name, app.line))
+  const t = useTranslate()
+  const curated = curatedPicks(COMPOSIO_CURATED_APPS, t).filter((app) =>
+    matchesAppQuery(query, app.name, app.line)
   )
   if (view.status?.key === 'ok') {
     return (
@@ -278,7 +289,7 @@ function ComposioSearchWithCatalog({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const { listing } = useComposioApps(bot, query.trim(), 0)
-  const found = listing.status === 'ready' ? listing.page.apps.map(fromCatalog) : []
+  const found = listing.status === 'ready' ? listing.page.apps.map(fromCatalog(t)) : []
   const seen = new Set(curated.map((app) => app.slug))
   const apps = [...curated, ...found.filter((app) => !seen.has(app.slug))]
   if (apps.length > 0) {

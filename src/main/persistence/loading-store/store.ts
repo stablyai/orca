@@ -186,8 +186,8 @@ export class Store {
   }
 
   /** Retain the legacy settings key until migration to the main-owned store succeeds. */
-  migrateLegacyOpenCodeGoApiKey(target: OpenCodeGoApiKeyTarget): void {
-    if (migrateLegacyOpenCodeGoApiKey(this.runtime.protectedSecrets, target)) {
+  async migrateLegacyOpenCodeGoApiKey(target: OpenCodeGoApiKeyTarget): Promise<void> {
+    if (await migrateLegacyOpenCodeGoApiKey(this.runtime.protectedSecrets, target)) {
       scheduleSave(this.domains.scheduling, ['settings'])
     }
   }

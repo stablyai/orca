@@ -7,6 +7,7 @@ import type { KeybindingOverrides } from '../../../../shared/keybindings/types'
 import type { BrowserLoadError } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { resolveBrowserRouteGuestPopupOpener } from '../../routing/guest-authority/browser-route-guest-popup-ownership'
 import type { BrowserPagePromptTarget } from '../prompts/browser-page-prompts'
+import { browserPagePromptStreamTarget } from '../prompts/browser-page-prompt-viewers'
 import type { ActiveDownload } from './downloads/browser-active-download'
 import type { CdpUserAgentOverrideState } from './navigation/browser-user-agent-override-state'
 import type { PendingMainFrameNavigation } from './navigation/browser-main-frame-navigation'
@@ -15,7 +16,8 @@ import type { BrowserGuestPolicy } from './registration/browser-guest-policy-pro
 import type { PopupOwnerContext } from '../popups/browser-popup-ownership'
 import type {
   BrowserDownloadFinishedEvent,
-  BrowserDownloadProgressEvent
+  BrowserDownloadProgressEvent,
+  BrowserLoadStall
 } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import type { BrowserGrabCancelReason } from '../../../../shared/browser/element-grab/browser-grab-types'
 import { BrowserManagerViewportScrollState } from './viewport/browser-manager-viewport-scroll-state'
@@ -69,6 +71,12 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     event: PendingPermissionEvent
   ): void
   protected abstract flushPendingLoadFailure(browserTabId: string, guestWebContentsId: number): void
+  protected abstract flushPendingLoadStall(browserTabId: string, guestWebContentsId: number): void
+  protected abstract sendLoadStall(
+    browserPageId: string,
+    webContentsId: number,
+    stall: BrowserLoadStall | null
+  ): void
   protected abstract flushPendingPermissionEvents(
     browserTabId: string,
     guestWebContentsId: number
@@ -172,6 +180,8 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly clearedLoadErrorsByGuestId = new Map<number, BrowserLoadError>()
   // Offscreen pages have no renderer to hold their icon for session-tab rows.
   protected readonly remoteTabFaviconUrlByGuestId = new Map<number, string>()
+  // A viewer's mute outlives the page's guest, as a desktop tab re-mutes each new guest.
+  protected readonly mutedOffscreenPageIds = new Set<string>()
   protected browserGuestStateChangedListener: ((worktreeId: string) => void) | null = null
   // Title and spinner churn on offscreen pages publishes at most about once a second.
   protected readonly offscreenGuestStateNotices = createKeyedTrailingEdgeCoalescer(
@@ -186,6 +196,9 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     number,
     { code: number; description: string; validatedUrl: string }
   >()
+  protected readonly pendingLoadStallsByGuestId = new Map<number, BrowserLoadStall>()
+  /** The page showing a guest's stall; cleanup unmaps the guest before its clear is sent. */
+  protected readonly loadStallPageIdByGuestId = new Map<number, string>()
   protected readonly pendingPermissionEventsByGuestId = new Map<number, PendingPermissionEvent[]>()
   protected readonly pendingPopupEventsByGuestId = new Map<number, PendingPopupEvent[]>()
   protected readonly pendingDownloadIdsByGuestId = new Map<number, string[]>()
@@ -214,6 +227,11 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
 
   setSiteDisplayController(controller: BrowserSiteDisplayController): void {
     this.siteDisplayController = controller
+  }
+
+  /** Site zoom and color scheme for hosted pages, which have no renderer IPC of their own. */
+  getSiteDisplayController(): BrowserSiteDisplayController | null {
+    return this.siteDisplayController
   }
 
   installCertificateRequestGuard(session: Electron.Session): void {
@@ -280,7 +298,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
       !this.popupOwnerContextByGuestId.has(guest.id) &&
       !this.offscreenGuestIds.has(guest.id) &&
       guest.getType() === 'webview'
-    return awaitingRegistration ? 'awaiting-registration' : null
+    return awaitingRegistration ? 'awaiting-registration' : browserPagePromptStreamTarget(guest.id)
   }
 
   protected resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId: number): string | null {

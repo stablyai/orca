@@ -50,7 +50,8 @@ export function useMobileNativeChatTurnDisclosure({
   stopping = false,
   lineYields = false,
   receipts,
-  scopeKey
+  scopeKey,
+  showsTurnDiffs = true
 }: {
   messages: readonly NativeChatMessage[]
   enabled: boolean
@@ -64,6 +65,8 @@ export function useMobileNativeChatTurnDisclosure({
   lineYields?: boolean
   receipts?: ReadonlyMap<string, NativeChatResolvedPrompt> | null
   scopeKey: string
+  /** Off in a bot's chat, whose own edits are scratch files: its workers do the code work. */
+  showsTurnDiffs?: boolean
 }): {
   active: NativeChatTurnStatus | null
   presentation: MobileNativeChatRunPresentation
@@ -120,7 +123,13 @@ export function useMobileNativeChatTurnDisclosure({
     turnKeys,
     completedByTurn
   )
-  const summaries = useMobileNativeChatTurnDiffs(rows, enabled, turnKeys, partialTurnKey)
+  const summaries = useMobileNativeChatTurnDiffs(
+    rows,
+    enabled,
+    showsTurnDiffs,
+    turnKeys,
+    partialTurnKey
+  )
   const quiet = useMemo(
     () => (enabled ? mobileNativeChatQuietTurns(rows, turnKeys, completedByTurn, summaries) : null),
     [completedByTurn, enabled, rows, summaries, turnKeys]
@@ -189,7 +198,7 @@ export function useMobileNativeChatTurnDisclosure({
       },
     [expandedReasoning, line]
   )
-  const { fold, trailingRunIndex, workRuns, itemNoteJoins } = useMobileNativeChatTranscriptRows({
+  const { fold, trailingRunIndex, workRuns, activityJoins } = useMobileNativeChatTranscriptRows({
     enabled,
     rows,
     turnKeys,
@@ -197,7 +206,8 @@ export function useMobileNativeChatTurnDisclosure({
     completedByTurn,
     expandedTurnKeys: expandedTurnIds,
     liveReasoningId,
-    turnDiffs: summaries
+    turnDiffs: summaries,
+    turnBars: { bars, quiet, active, activeTurnKey }
   })
   const presentation = useMemo(
     () => ({ rows, workRuns, turnKeys, receipts }),
@@ -244,7 +254,7 @@ export function useMobileNativeChatTurnDisclosure({
           ? { workRun: workRuns.heads.get(index), openReasoning: expandedReasoning }
           : {}),
         ...(workRuns.joined.has(index) ? { joinsWorkRun: true } : {}),
-        ...(itemNoteJoins.has(index) ? { itemNoteJoin: itemNoteJoins.get(index) } : {}),
+        ...(activityJoins.has(index) ? { activityJoin: activityJoins.get(index) } : {}),
         mayStillGrow: !lineYields && message.id === latestAssistantId,
         reasoningIsLive: message.id === liveReasoningId,
         reasoningExpanded:
@@ -271,7 +281,7 @@ export function useMobileNativeChatTurnDisclosure({
       inLiveWorkingTurn,
       trailingRunIndex,
       workRuns,
-      itemNoteJoins,
+      activityJoins,
       fold,
       rows,
       latestAssistantId,

@@ -3,7 +3,7 @@ import {
   nativeChatMarkdownImageSources,
   nativeChatVisualMarkdownImageSources
 } from '../../markdown/native-chat-markdown-image-sources'
-import { useContext, useMemo } from 'react'
+import { useContext, useMemo, useState } from 'react'
 import {
   nativeChatLiveLine,
   type NativeChatLiveLine
@@ -16,6 +16,10 @@ import {
 import type { NativeChatSideChatForkPoint } from '../../messages/actions/native-chat-side-chat-fork-point'
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
 import { useNativeChatWorkers } from '../../native-chat-workers-context'
+import {
+  NO_LEAVING_TURNS,
+  useNativeChatQuietTurnLeave
+} from '../turns/use-native-chat-quiet-turn-leave'
 
 /** Choose slots/activity together so reasoning shown by the activity line never also gets a transcript row. */
 export function useNativeChatTranscriptSlots({
@@ -87,7 +91,8 @@ export function useNativeChatTranscriptSlots({
     ]
   )
   const liveReasoningId = liveLine?.reasoning?.message.id ?? null
-  const { slots, forkPoint } = useMemo(
+  const [leavingTurnKeys, setLeavingTurnKeys] = useState(NO_LEAVING_TURNS)
+  const { slots, forkPoint, quietTurnKeys } = useMemo(
     () =>
       buildNativeChatTranscript({
         imageSources,
@@ -106,9 +111,11 @@ export function useNativeChatTranscriptSlots({
         subagentHeads,
         liveReasoningId,
         forkOffer,
-        workers
+        workers,
+        leavingTurnKeys
       }),
     [
+      leavingTurnKeys,
       workers,
       expandedTurnKeys,
       imageSources,
@@ -128,5 +135,12 @@ export function useNativeChatTranscriptSlots({
       unresolvedRowIds
     ]
   )
+  useNativeChatQuietTurnLeave({
+    quietTurnKeys,
+    liveTurnKey,
+    working: isWorking || lifecycleWorking,
+    leaving: leavingTurnKeys,
+    setLeaving: setLeavingTurnKeys
+  })
   return { slots, forkPoint, liveLine }
 }

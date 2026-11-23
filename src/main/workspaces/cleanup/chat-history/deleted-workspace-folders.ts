@@ -1,4 +1,3 @@
-import { homedir } from 'node:os'
 import { lstat, readdir, readlink, realpath, stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, sep } from 'node:path'
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
@@ -183,8 +182,6 @@ export async function readListedFolders(store: RuntimeStore): Promise<ListedFold
     }
     return proven
   }
-  // Fresh profiles list the home folder as a project; it would hold every workspace root.
-  const homeId = await identityOf(homedir())
   for (const listedPath of new Set(listedPaths(store))) {
     const { targets, complete } = await linkTargets(listedPath)
     listed.complete &&= complete
@@ -193,7 +190,7 @@ export async function readListedFolders(store: RuntimeStore): Promise<ListedFold
     }
     for (const path of targets) {
       const id = await cachedIdentity(path)
-      if (id && id !== homeId) {
+      if (id) {
         listed.present.add(id)
       }
       // Byte-exact walk up: each existing ancestor claims the name the path continues with.

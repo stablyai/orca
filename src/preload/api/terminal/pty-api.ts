@@ -162,7 +162,7 @@ export type PtyApi = {
   setActiveRendererPty: (id: string, active: boolean) => void
   setRendererPtyVisible: (id: string, visible: boolean) => void
   /** Hidden panes may skip renderer bytes after model ingestion; reveal restores a snapshot. */
-  setHiddenRendererPty: (id: string, hidden: boolean) => void
+  setHiddenRendererPty: (id: string, hidden: boolean, retainGraphics?: boolean) => void
   /** Ref-counted raw-byte consumers suppress the hidden-delivery gate. */
   setPtyDeliveryInterest: (id: string, interested: boolean) => void
   /** Main uses the composed appearance for hidden-PTY OSC/DSR color replies. */
@@ -176,6 +176,7 @@ export type PtyApi = {
       scanChildProcesses?: boolean
       steadyState?: boolean
       jobMembershipOnly?: boolean
+      foregroundOnly?: boolean
     }
   ) => Promise<TerminalProcessInspection>
   confirmForegroundProcess: (id: string) => Promise<string | null>

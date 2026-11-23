@@ -53,7 +53,9 @@ export type BotToolCredentialSource = (
 ) => Promise<BotToolCredentialAnswer>
 
 /** Headers a credential's source adds per request, such as a hub's current key; null when it has none. */
-export type BotToolHeaderSource = (credential: BotToolCredential) => Record<string, string> | null
+export type BotToolHeaderSource = (
+  credential: BotToolCredential
+) => Record<string, string> | null | Promise<Record<string, string> | null>
 
 const digest = (value: unknown): string =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -100,7 +102,7 @@ export function botToolCredentialSource(
     let sourced: Record<string, string> | null = {}
     if (credential.source) {
       try {
-        sourced = headerSources[credential.source]?.(credential) ?? null
+        sourced = (await headerSources[credential.source]?.(credential)) ?? null
       } catch {
         sourced = null
       }

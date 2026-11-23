@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isValidAutomationSchedule } from '../../automations/scheduling/automation-schedule-parsing'
+import { getAutomationScheduleInputError } from '../../automations/scheduling/automation-schedule-parsing'
 import {
   PLUGIN_HOST_ID_MAX_LENGTH,
   PLUGIN_HOST_TEXT_MAX_LENGTH,
@@ -28,7 +28,15 @@ const schedule = z
   .string()
   .min(1)
   .max(PLUGIN_AUTOMATION_SCHEDULE_MAX)
-  .refine(isValidAutomationSchedule, 'schedule must be an RRULE or a cron expression')
+  .superRefine((value, ctx) => {
+    const message = getAutomationScheduleInputError(
+      value,
+      'schedule must be an RRULE or a cron expression.'
+    )
+    if (message) {
+      ctx.addIssue({ code: 'custom', message })
+    }
+  })
 /** An IANA time zone such as `Europe/Berlin`; Orca's own when absent. */
 const timezone = z.string().min(1).max(64).refine(isTimeZone, 'unknown time zone')
 

@@ -17,6 +17,10 @@ export type ChatUiLaunchTipCohort =
 export type TelemetrySettings = {
   /** New users: true at install. Existing users: null until they resolve the first-launch banner. */
   optedIn: boolean | null
+  /** Local day sharing last turned on after being off; daily rows up to it are never sent. */
+  sharingResumedDay?: string
+  /** A launch or toggle saw sharing off and its resumed day is not yet stamped. */
+  sharingWasOff?: boolean
   /** Anonymous UUID v4. Generated on first run. Stable across launches; not surfaced in the UI. */
   installId: string
   /** Cohort marker: true for pre-existing profiles (gates the opt-in banner), false for fresh installs. */
@@ -34,6 +38,8 @@ export type TelemetrySettings = {
   browserExtensionsBanner?: BrowserExtensionsBannerAssignment
   /** Local UTC-day cursors cap dashboard observations across restarts; at most two writes a day. */
   agentDashboardActiveDays?: Partial<Record<AgentDashboardSurface, number>>
+  /** UTC day of the last unsampled chat send per client; at most two writes a day. */
+  chatMessageSentDays?: Partial<Record<'desktop' | 'mobile', number>>
   /** UTC-day cursors written only after the SDK accepted the milestone capture; at most two writes a day. */
   protectedMilestones?: {
     installCohort?: MilestoneInstallCohort

@@ -21,6 +21,7 @@ import {
 } from '../bots/bot-group'
 import {
   BrowserClientFileChannelAbortParams,
+  BrowserClientFileChannelBeginParams,
   BrowserClientFileChannelReadParams,
   BrowserClientFileChannelWriteParams
 } from '../browser/client-hosting/browser-client-file-channel-protocol'
@@ -43,8 +44,17 @@ import { MobileWebBundleLocaleCatalogParamsSchema } from '../mobile-web-bundle/l
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
 import {
+  WorkerDockAcknowledge,
+  WorkerDockRead,
+  WorkerDockResultRead,
+  WorkerDockResultsRead,
+  WorkerDockStop,
+  WorkerDockSubscribe
+} from '../orchestration/dock/worker-dock'
+import {
   CrewSubscribeParams,
-  WorkerApprovalsSubscribeParams
+  WorkerApprovalsSubscribeParams,
+  WorkerApprovalsUnsubscribeParams
 } from '../orchestration/orchestration-crew'
 import { PeerRunCancelParams } from '../orchestration/remote-owned-wire'
 import {
@@ -87,6 +97,7 @@ import { PrepareCodexForWslPaneParams } from './accounts/agent-hooks-params'
 import {
   AntigravityAccountMutationParams,
   AntigravityAccountTargetParams,
+  AntigravityChatApiKeySaveParams,
   AntigravityChatSignInCompleteParams,
   AntigravityChatSignInFlowParams,
   AntigravityChatSignInStartParams
@@ -106,6 +117,7 @@ import {
   AiVaultDeleteSessionParams,
   AiVaultListSessionsParams,
   AiVaultPrepareSessionHandoffParams,
+  AiVaultPrepareSessionHandoffPromptParams,
   AiVaultPrepareSessionResumeParams,
   AiVaultSessionTitlesParams
 } from './ai-vault/ai-vault-params'
@@ -140,6 +152,7 @@ import {
 } from './bots-composio-params'
 import {
   BotGitHubDefaultBot,
+  BotGitHubUnlink,
   BotGitHubUsers,
   BotLinearDefaultBot,
   BotLinearMembers,
@@ -232,9 +245,22 @@ import {
   BotToolsList
 } from './bots-tools-params'
 import { BotWorkForget, BotWorkList } from './bots-work-params'
-import { CertificateProceed, Reload } from './browser/browser-core-params'
+import {
+  AudioMuted,
+  CertificateProceed,
+  FindInPage,
+  PageZoom,
+  Reload,
+  SiteColorScheme
+} from './browser/browser-core-params'
 import { ExtensionList, ExtensionReload } from './browser/browser-extension-params'
-import { MouseClick } from './browser/browser-extras-params'
+import { DropFiles, MouseClick } from './browser/browser-extras-params'
+import {
+  GrabAwait,
+  GrabCaptureSelection,
+  GrabSetMode,
+  GrabViewportBridge
+} from './browser/browser-grab-params'
 import { BrowserIdentitySet, ProfileCreate } from './browser/browser-identity-params'
 import { Screenshot, Snapshot } from './browser/browser-observation-params'
 import {
@@ -289,7 +315,12 @@ import {
   Viewport,
   Wait
 } from './browser/browser-params'
-import { ScreencastAck, ScreencastUnsubscribe } from './browser/browser-screencast-params'
+import {
+  FileChooserAnswer,
+  PagePromptAnswer,
+  ScreencastAck,
+  ScreencastUnsubscribe
+} from './browser/browser-screencast-params'
 import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser/browser-tab-create-params'
 import {
   ClientEventsSubscribeParams,
@@ -483,6 +514,7 @@ import {
   GoogleBotAccessSetParams,
   GoogleClientExportParams,
   GoogleClientImportParams,
+  GoogleDefaultSetParams,
   GoogleDisconnectParams,
   GoogleFinishSignInParams,
   GoogleSignInFlowParams,
@@ -501,6 +533,7 @@ import {
 } from './google-read-params'
 import {
   GoogleSetupAnswer,
+  GoogleSetupImportHostKey,
   GoogleSetupRead,
   GoogleSetupStart,
   GoogleSetupWrite
@@ -515,7 +548,10 @@ import {
   GmailModifyParams,
   GmailSendParams
 } from './google-write-params'
-import { AgentCliUpdateRunParams } from './host-management/agent-cli-update-params'
+import {
+  AgentCliUpdateCheckParams,
+  AgentCliUpdateRunParams
+} from './host-management/agent-cli-update-params'
 import { EnvironmentDoctorParams } from './host-management/environment-doctor-params'
 import {
   ManagedRuntimeAgentParams,
@@ -601,6 +637,7 @@ import { LinkPreviewGetParams } from './link-preview/link-preview-params'
 import { NativeChatSession, NativeChatUnsubscribe } from './native-chat/native-chat-params'
 import {
   NotificationGetMissedSinceParams,
+  NotificationPushCoverageParams,
   NotificationRegisterPushParams,
   NotificationReportDesktopPresenceParams,
   NotificationUnsubscribeParams,
@@ -651,7 +688,8 @@ import {
 import {
   PeerMailAckParams,
   PeerMailDeliverParams,
-  PeerMailPullParams
+  PeerMailPullParams,
+  PeerMailReturnParams
 } from './orchestration/orchestration-peer-mail-params'
 import { RequestShowParams } from './orchestration/orchestration-runs-mutation-request-show-params'
 import {
@@ -678,6 +716,14 @@ import {
 import { WorkerStartParams } from './orchestration/orchestration-worker-start-params'
 import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration/orchestration-worker-stop-params'
 import {
+  PairedServerAllowParams,
+  PairedServerAllowancesParams,
+  PairedServerAskDecideParams,
+  PairedServerAskIntroduceParams,
+  PairedServerAskListParams,
+  PairedServerDisallowParams
+} from './paired-server-asks-params'
+import {
   PluginCatalogAddParams,
   PluginCatalogRemoveParams,
   PluginDevEmitParams,
@@ -703,6 +749,7 @@ import {
   PluginsPanelActionParams
 } from './plugins/plugins-params'
 import {
+  PreflightAgentDetection,
   PreflightAgentRefresh,
   PreflightCheck,
   PreflightDetectRemoteAgents,
@@ -873,6 +920,7 @@ import {
   QueuedMessageActionParams,
   QueuedMessagesResumeParams,
   RespondParams,
+  RestartLaunchSettledParams,
   RestartResumableParams,
   RestartResumeParams,
   RevealParams,
@@ -1033,7 +1081,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.addCodexFromHome': AddCodexFromHomeParams,
   'accounts.addDataFromHome': AddDataAccountParams,
   'accounts.antigravityAddCurrent': AntigravityAccountTargetParams,
+  'accounts.antigravityChatApiKeyClear': null,
+  'accounts.antigravityChatApiKeySave': AntigravityChatApiKeySaveParams,
+  'accounts.antigravityChatApiKeyStatus': null,
   'accounts.antigravityChatAuthApply': AntigravityChatAuthConfigSchema,
+  'accounts.antigravityChatAuthDetect': null,
   'accounts.antigravityChatAuthGet': null,
   'accounts.antigravityChatSignInCancel': AntigravityChatSignInFlowParams,
   'accounts.antigravityChatSignInComplete': AntigravityChatSignInCompleteParams,
@@ -1079,8 +1131,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'agent.show': AgentShowParams,
   'agentActivity.clear': AgentActivityClearParams,
   'agentActivity.setRead': AgentActivitySetReadParams,
-  'agentCliUpdate.check': null,
+  'agentCliUpdate.check': AgentCliUpdateCheckParams,
   'agentCliUpdate.run': AgentCliUpdateRunParams,
+  'agentCliUpdate.subscribe': null,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
   'agentSession.accountUsage': OptionsParams,
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
@@ -1097,6 +1150,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.create': CreateParams,
   'agentSession.createSupport': CreateSupportParams,
   'agentSession.currentRequests': CurrentRequestsParams,
+  'agentSession.delete': OptionsParams,
   'agentSession.ensure': AttachParams,
   'agentSession.handoffStatus': HandoffStatusParams,
   'agentSession.history': HistoryParams,
@@ -1118,6 +1172,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.respondToApproval': RespondParams,
   'agentSession.respondToQuestion': RespondToQuestionParams,
   'agentSession.restartContinue': RestartResumeParams,
+  'agentSession.restartLaunchSettled': RestartLaunchSettledParams,
   'agentSession.restartResumable': RestartResumableParams,
   'agentSession.restartResumableDismiss': RestartResumableParams,
   'agentSession.restartResume': RestartResumeParams,
@@ -1145,6 +1200,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'aiVault.deleteSession': AiVaultDeleteSessionParams,
   'aiVault.listSessions': AiVaultListSessionsParams,
   'aiVault.prepareSessionHandoff': AiVaultPrepareSessionHandoffParams,
+  'aiVault.prepareSessionHandoffPrompt': AiVaultPrepareSessionHandoffPromptParams,
   'aiVault.prepareSessionResume': AiVaultPrepareSessionResumeParams,
   'aiVault.resolveSessionTitles': AiVaultSessionTitlesParams,
   'aiVault.searchSessions': AiVaultSearchRequestSchema,
@@ -1210,9 +1266,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.delete': BotDelete,
   'bots.github.setDefaultBot': BotGitHubDefaultBot,
   'bots.github.state': null,
-  'bots.github.unlink': null,
+  'bots.github.unlink': BotGitHubUnlink,
   'bots.github.users': BotGitHubUsers,
   'bots.googleSetup.answer': GoogleSetupAnswer,
+  'bots.googleSetup.importHostKey': GoogleSetupImportHostKey,
   'bots.googleSetup.read': GoogleSetupRead,
   'bots.googleSetup.start': GoogleSetupStart,
   'bots.googleSetup.write': GoogleSetupWrite,
@@ -1313,6 +1370,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.clientHost.commandResult': BrowserClientHostCommandResultParams,
   'browser.clientHost.commandResultChunk': BrowserClientHostCommandResultChunkParams,
   'browser.clientHost.fileChannel.abort': BrowserClientFileChannelAbortParams,
+  'browser.clientHost.fileChannel.begin': BrowserClientFileChannelBeginParams,
   'browser.clientHost.fileChannel.read': BrowserClientFileChannelReadParams,
   'browser.clientHost.fileChannel.write': BrowserClientFileChannelWriteParams,
   'browser.clientHost.pageMetadata': BrowserClientPageMetadataParams,
@@ -1329,18 +1387,28 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.dialogDismiss': ExpectUrlBrowserTarget,
   'browser.download': SelectorPath,
   'browser.drag': Drag,
+  'browser.dropFiles': DropFiles,
   'browser.eval': Eval,
   'browser.exec': Exec,
   'browser.extensionList': ExtensionList,
   'browser.extensionReload': ExtensionReload,
+  'browser.fileChooserAnswer': FileChooserAnswer,
   'browser.fill': Fill,
   'browser.find': Find,
+  'browser.findInPage': FindInPage,
   'browser.focus': Element,
   'browser.forward': ExpectUrlBrowserTarget,
   'browser.fullScreenshot': FullScreenshot,
   'browser.geolocation': Geolocation,
   'browser.get': Get,
   'browser.goto': Goto,
+  'browser.grab.await': GrabAwait,
+  'browser.grab.cancel': BrowserTarget,
+  'browser.grab.captureSelection': GrabCaptureSelection,
+  'browser.grab.extractHover': BrowserTarget,
+  'browser.grab.setMode': GrabSetMode,
+  'browser.grab.viewportBridge': GrabViewportBridge,
+  'browser.grab.watch': BrowserTarget,
   'browser.highlight': Highlight,
   'browser.hover': Element,
   'browser.identity.get': null,
@@ -1358,6 +1426,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.mouseWheel': MouseWheel,
   'browser.network': LimitParam,
   'browser.openUrl': BrowserOpenUrlParams,
+  'browser.pagePromptAnswer': PagePromptAnswer,
   'browser.pdf': BrowserTarget,
   'browser.profileClearDefaultCookies': null,
   'browser.profileClearGoogleCookies': ProfileClearGoogleCookies,
@@ -1375,13 +1444,17 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.scrollIntoView': Element,
   'browser.select': Select,
   'browser.selectAll': Element,
+  'browser.setAudioMuted': AudioMuted,
   'browser.setCredentials': SetCredentials,
   'browser.setDevice': SetDevice,
   'browser.setHeaders': SetHeaders,
   'browser.setMedia': SetMedia,
   'browser.setOffline': SetOffline,
+  'browser.setSiteColorScheme': SiteColorScheme,
+  'browser.siteDisplay': BrowserTarget,
   'browser.snapshot': Snapshot,
   'browser.stop': BrowserTarget,
+  'browser.stopFindInPage': BrowserTarget,
   'browser.storage.local.clear': ExpectUrlBrowserTarget,
   'browser.storage.local.get': StorageKey,
   'browser.storage.local.set': StorageKeyValue,
@@ -1402,6 +1475,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.upload': Upload,
   'browser.viewport': Viewport,
   'browser.wait': Wait,
+  'browser.zoom': PageZoom,
   'clipboard.abortImageUpload': AbortImageUpload,
   'clipboard.appendImageUploadChunk': AppendImageUploadChunk,
   'clipboard.commitImageUpload': CommitImageUpload,
@@ -1450,6 +1524,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'emulator.permissions': PermissionsParams,
   'emulator.rotate': RotateParams,
   'emulator.shutdown': ShutdownParams,
+  'emulator.syncKeyboardLayout': ListParams,
   'emulator.tap': TapParams,
   'emulator.type': TypeParams,
   'emulator.unregisterActive': EmulatorUnregisterActiveParams,
@@ -1636,6 +1711,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'google.client.export': GoogleClientExportParams,
   'google.client.import': GoogleClientImportParams,
   'google.contacts.find': ContactsFindParams,
+  'google.default.set': GoogleDefaultSetParams,
   'google.disconnect': GoogleDisconnectParams,
   'google.docs.append': DocsAppendParams,
   'google.docs.comment': DocsCommentParams,
@@ -1783,6 +1859,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'nativeChat.unsubscribe': NativeChatUnsubscribe,
   'network.browserTunnel': BrowserNetworkTunnelAttachParams,
   'notifications.getMissedSince': NotificationGetMissedSinceParams,
+  'notifications.pushCoverage': NotificationPushCoverageParams,
   'notifications.registerPush': NotificationRegisterPushParams,
   'notifications.reportDesktopPresence': NotificationReportDesktopPresenceParams,
   'notifications.subscribe': NotificationsSubscribeParams,
@@ -1833,6 +1910,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.peerMailAck': PeerMailAckParams,
   'orchestration.peerMailDeliver': PeerMailDeliverParams,
   'orchestration.peerMailPull': PeerMailPullParams,
+  'orchestration.peerMailReturn': PeerMailReturnParams,
   'orchestration.peerRunCancel': PeerRunCancelParams,
   'orchestration.reply': ReplyParams,
   'orchestration.requestShow': RequestShowParams,
@@ -1850,8 +1928,15 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.taskList': TaskListParams,
   'orchestration.workerAbandon': WorkerDispatchParams,
   'orchestration.workerApprovalsSubscribe': WorkerApprovalsSubscribeParams,
+  'orchestration.workerApprovalsUnsubscribe': WorkerApprovalsUnsubscribeParams,
   'orchestration.workerAutoClose': OrchestrationWorkerSubjectParams,
   'orchestration.workerChatTouch': OrchestrationWorkerSubjectParams,
+  'orchestration.workerDockAcknowledge': WorkerDockAcknowledge,
+  'orchestration.workerDockRead': WorkerDockRead,
+  'orchestration.workerDockResult': WorkerDockResultRead,
+  'orchestration.workerDockResultsRead': WorkerDockResultsRead,
+  'orchestration.workerDockStop': WorkerDockStop,
+  'orchestration.workerDockSubscribe': WorkerDockSubscribe,
   'orchestration.workerKeepOpen': OrchestrationWorkerKeepOpenParams,
   'orchestration.workerList': WorkerListParams,
   'orchestration.workerRead': WorkerReadParams,
@@ -1862,6 +1947,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerStop': WorkerDispatchParamsOfOrchestrationWorkerStopParams,
   'orchestration.workerTerminalUserInput': OrchestrationWorkerSubjectParams,
   'orchestration.workerTranscript': WorkerTranscriptParams,
+  'pairedServerAsks.allow': PairedServerAllowParams,
+  'pairedServerAsks.allowances': PairedServerAllowancesParams,
+  'pairedServerAsks.decide': PairedServerAskDecideParams,
+  'pairedServerAsks.disallow': PairedServerDisallowParams,
+  'pairedServerAsks.introduce': PairedServerAskIntroduceParams,
+  'pairedServerAsks.list': PairedServerAskListParams,
   'pairing.createOffer': PairingCreateOfferParamsSchema,
   'pairing.delegatedMobileDevice.sync': DelegatedMobileDeviceSyncParamsSchema,
   'pairing.exchangeTicket': ExchangePairingTicketParamsSchema,
@@ -1900,6 +1991,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,
   'preflight.detectRemoteWindowsTerminalCapabilities':
     PreflightDetectRemoteWindowsTerminalCapabilities,
+  'preflight.installedAgents': PreflightAgentDetection,
   'preflight.refreshAgents': PreflightAgentRefresh,
   'project.list': null,
   'project.update': ProjectUpdate,

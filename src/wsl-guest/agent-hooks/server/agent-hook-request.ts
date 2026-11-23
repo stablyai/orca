@@ -136,6 +136,7 @@ export async function handleRelayHookRequest(
           bindOpenCodeTuiSession(options.state, source, hookBody, event.providerSession?.id)
         }
         options.retryScheduler.scheduleAssistantMessageRetry(source, hookBody, stored, env, version)
+        options.retryScheduler.stopTranscriptReads.schedule(source, hookBody, stored, env, version)
         options.retryScheduler.scheduleTranscriptPoll(source, hookBody, stored, env, version)
         options.retryScheduler.armClaudeOwedNotificationExpiry(source, stored.paneKey, env, version)
       }

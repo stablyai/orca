@@ -62,7 +62,10 @@ import {
   NODE_RUNTIME_PIN
 } from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 import { findSlotProblems, readManifest } from '../prebuilds/orcad-prebuild-slot-contents.mjs'
-import { orcadAgentBrowserNativeName } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-agent-browser-name.ts'
+import {
+  agentBrowserDependencyBinaryPath,
+  orcadAgentBrowserNativeName
+} from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-agent-browser-name.ts'
 import { runProcessSync } from '@orca/process-host'
 import { describeProcessFailure } from '../../tool-invocation/process-failure-message.mjs'
 import { resolveBuildSourceCommit } from '../../build-identity/build-source-commit.mjs'
@@ -96,12 +99,16 @@ const PREBUILDS_DIR = process.env.ORCAD_PREBUILDS_DIR
 if (!PREBUILDS_DIR) {
   throw new Error('ORCAD_PREBUILDS_DIR is required; run `pnpm build:orcad`')
 }
+const AGENT_BROWSER_LIBC = BUILD_TARGET.endsWith('-musl') ? 'musl' : 'glibc'
 const AGENT_BROWSER_NAME = orcadAgentBrowserNativeName(
   targetPlatform,
   targetArch,
-  BUILD_TARGET.endsWith('-musl') ? 'musl' : 'glibc'
+  AGENT_BROWSER_LIBC
 )
-const AGENT_BROWSER_SOURCE = join(ROOT, 'node_modules', 'agent-browser', 'bin', AGENT_BROWSER_NAME)
+const AGENT_BROWSER_SOURCE = join(
+  ROOT,
+  ...agentBrowserDependencyBinaryPath(targetPlatform, targetArch, AGENT_BROWSER_LIBC)
+)
 const AGENT_BROWSER_OUTPUT = join(OUT_DIR, AGENT_BROWSER_NAME)
 const WATCHER_MODULE_DIR = join(OUT_DIR, 'node_modules', '@parcel', 'watcher')
 

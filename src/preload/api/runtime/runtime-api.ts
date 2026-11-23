@@ -100,6 +100,7 @@ export type RuntimeApi = {
     onOrchestrationSessionWorkersChanged?: (
       callback: (event: { sessionId: string }) => void
     ) => () => void
+    onPeerMailReturned?: (callback: () => void) => () => void
   }
   runtimeEnvironments: {
     desktopCreatedChatIds?: () => Promise<string[]>
@@ -135,6 +136,8 @@ export type RuntimeApi = {
       selector: string
       timeoutMs?: number
       observeOnly?: true
+      /** A user-requested check that probes now even while a recent failure is backing off. */
+      force?: true
     }) => Promise<RuntimeRpcResponse<RuntimeStatus>>
     onSharedControlDiagnostics?: (
       callback: (event: {

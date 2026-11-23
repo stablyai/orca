@@ -1,5 +1,6 @@
 import type { AgentListStatus as AgentDotState } from '../../../../../shared/agent-status/presentation/agent-list-status'
 import { translate } from '@/i18n/i18n'
+import { getTranslationResourceVersion } from '@/i18n/translation-resource-version'
 import type { Translate } from '@/i18n/use-translate'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
 import { getAgentRowPrimaryText } from '../../../../../shared/agent-status/presentation/agent-row-primary-text'
@@ -88,14 +89,16 @@ function buildThreadSearchText(thread: AgentPaneThread): string {
 }
 
 // Thread identity changes with its data, so cache lowercase search text across keystrokes; WeakMap releases dropped threads.
-const threadSearchTextCache = new WeakMap<AgentPaneThread, string>()
+// Shared threads outlive a language switch, so the text is also keyed by the translation version.
+const threadSearchTextCache = new WeakMap<AgentPaneThread, { version: number; text: string }>()
 function threadSearchText(thread: AgentPaneThread): string {
+  const version = getTranslationResourceVersion()
   const cached = threadSearchTextCache.get(thread)
-  if (cached !== undefined) {
-    return cached
+  if (cached?.version === version) {
+    return cached.text
   }
   const text = buildThreadSearchText(thread)
-  threadSearchTextCache.set(thread, text)
+  threadSearchTextCache.set(thread, { version, text })
   return text
 }
 

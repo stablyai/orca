@@ -20,6 +20,9 @@ export type AgentHookEventPayload = {
   agentPresence?: AgentProcessPresence
   /** Authenticated hook route that produced this event. */
   source?: AgentHookSource
+  /** Who runs the conversation: a server that outlives the pane (tmux, an OpenCode attach) is
+   *  shared; it follows the conversation's binding, and only shared survives a restart. */
+  executionHost?: 'pane-owned' | 'shared' | 'unverifiable'
   /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
   launchToken?: string
   /** Host-minted live turn revision for guarded interrupt commands; never persisted. */

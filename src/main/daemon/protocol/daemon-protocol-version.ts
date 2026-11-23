@@ -1,4 +1,6 @@
 // Why: daemons survive app updates, so wire behavior must be version-gated.
+// v62 asks a reattached Windows ConPTY program to redraw too, so new terminals start on that daemon.
+// v61 enables image previews in the Codex shell function for new terminals.
 // v60 accepts `requestRepaint`, which asks a reattached program to redraw without sending it input.
 // v59 lets the signed macOS host start native provider owners whose pipes stay with the app;
 // it skips v58, which ad hoc builds of an earlier host route used.
@@ -18,7 +20,7 @@
 // v43 dropped it with the revert); v41 stages long startup commands as sourced scripts; v40 rolled
 // the #25130/#24636 shell-wrapper changes and the wider agent list into a fresh daemon; older owners
 // stay attachable.
-export const PROTOCOL_VERSION = 60
+export const PROTOCOL_VERSION = 62
 export const REPAINT_REQUEST_PROTOCOL_VERSION = 60
 export const FOCUS_LOSS_REPORT_PROTOCOL_VERSION = 56
 export const PTY_FOREGROUND_OBSERVATION_PROTOCOL_VERSION = 55
@@ -57,7 +59,7 @@ export const MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION = 29
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
   28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-  52, 53, 54, 55, 56, 57, 58, 59
+  52, 53, 54, 55, 56, 57, 58, 59, 60, 61
 ] as const
 
 export function supportsColorQueryReplyColors(protocolVersion: number): boolean {

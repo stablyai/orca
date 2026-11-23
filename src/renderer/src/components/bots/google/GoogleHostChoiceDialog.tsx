@@ -37,7 +37,7 @@ function HostOption({
 }): React.JSX.Element {
   const id = useId()
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-border p-3 has-[[data-state=checked]]:border-ring has-disabled:opacity-50">
+    <div className="flex items-start gap-3 rounded-lg border border-border p-3 has-[[data-state=checked]]:border-foreground/60 has-[[data-state=checked]]:bg-accent has-disabled:opacity-50">
       <RadioGroupItem id={id} value={value} disabled={disabled} className="mt-0.5" />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <Label htmlFor={id}>

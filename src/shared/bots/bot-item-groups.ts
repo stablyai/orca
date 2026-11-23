@@ -1,18 +1,15 @@
 // How a bot's Items tab groups its items: Needs you, In progress, Planned, Snoozed, Stale and Closed. Rows
 // changed since the owner last opened the tab come first, then the latest change; Snoozed, soonest back first.
 import type { BotItemsStale } from '../bot-types'
-import type { BotChatOrigin, BotChatTreeChat } from './bot-chat-tree'
 import type { BotNeed } from './bot-now'
 import {
   BOT_ITEM_DEFAULT_STALE_DAYS,
   botItemActivityAt,
-  isOpenBotItemStatus,
   isBotItemSnoozed,
   isBotItemStale,
   botItemNeedsYouStaleAt,
   parseBotItemEventId,
-  type BotItem,
-  type BotItemChatKind
+  type BotItem
 } from './bot-items'
 
 /** Rows a group shows before "Show N more". */
@@ -39,7 +36,7 @@ export const BOT_ITEM_GROUPS_FOLDED_BY_DEFAULT: ReadonlySet<BotItemGroupId> = ne
 export type BotItemGroups = Record<BotItemGroupId, BotItem[]>
 
 /** The tab's filter: these chats' items and these bots' (null: all), and only what needs the owner. A
- *  bot's page picks one chat; a group's page its rooms' member sessions and some of its members. */
+ *  bot's page sets only Needs you; a group's page picks its rooms' member sessions and some members. */
 export type BotItemFilter = {
   chatIds: readonly string[] | null
   botIds: readonly string[] | null
@@ -47,11 +44,6 @@ export type BotItemFilter = {
 }
 
 export const BOT_ITEM_NO_FILTER: BotItemFilter = { chatIds: null, botIds: null, needsYou: false }
-
-/** The one chat a filter keeps, as a bot's page picks it; null for every chat or several. */
-export function botItemFilterChat(filter: BotItemFilter): string | null {
-  return filter.chatIds?.length === 1 ? filter.chatIds[0]! : null
-}
 
 export function isBotItemFilterOn(filter: BotItemFilter): boolean {
   return filter.chatIds !== null || filter.botIds !== null || filter.needsYou
@@ -134,6 +126,9 @@ export function botNeedChat(
     case 'connector':
     case 'access':
       return null
+    // Answered for the bot as a whole, so it lists under its Home Chat.
+    case 'paired-ask':
+      return homeChatId
   }
 }
 
@@ -199,13 +194,20 @@ export function groupBotsItems(
 }
 
 /** Several bots' loaded Closed items as one list in time order, newest first. Each bot pages its own,
- *  so an item older than the oldest loaded item of a bot with more pages waits: that bot's next page
- *  may hold newer ones. `more`: the bot has Closed pages not read yet. */
+ *  so an item older than the loaded end of a bot with more pages waits: that bot's next page may hold
+ *  newer ones. `more`: the bot has Closed pages not read yet; `endAt`: its loaded end's last activity,
+ *  when known (else its oldest loaded item's). */
 export function botItemsClosedInTimeOrder(
-  bots: readonly { closed: readonly BotItem[]; more: boolean }[]
+  bots: readonly { closed: readonly BotItem[]; more: boolean; endAt?: number | null }[]
 ): BotItem[] {
-  const tails = bots.flatMap(({ closed, more }) =>
-    more && closed.length > 0 ? [Math.min(...closed.map((item) => item.lastActivityAt))] : []
+  const tails = bots.flatMap(({ closed, more, endAt }) =>
+    !more
+      ? []
+      : endAt != null
+        ? [endAt]
+        : closed.length > 0
+          ? [Math.min(...closed.map((item) => item.lastActivityAt))]
+          : []
   )
   const cutoff = tails.length > 0 ? Math.max(...tails) : -Infinity
   return bots
@@ -253,52 +255,4 @@ export function botItemsNeedingOwnerByBot(
     }
   }
   return { counts, ...(staleInMs !== undefined ? { staleInMs } : {}) }
-}
-
-export type BotItemChatChoice = {
-  chatId: string
-  title: string | null
-  kind: BotItem['chat']['kind']
-  count: number
-}
-
-const TREE_KINDS: Record<BotChatOrigin, BotItemChatKind> = {
-  home: 'home',
-  side: 'chat',
-  automation: 'automation',
-  slack: 'thread',
-  linear: 'thread',
-  github: 'thread'
-}
-
-/** The chat filter's choices: the bot's chats and any chat an item names, each with its open items
- *  (all open items are loaded), Home Chat first. */
-export function botItemChats(
-  items: readonly BotItem[],
-  treeChats: readonly Pick<BotChatTreeChat, 'chatId' | 'title' | 'origin'>[] = []
-): BotItemChatChoice[] {
-  const chats = new Map<string, BotItemChatChoice>()
-  for (const chat of treeChats) {
-    chats.set(chat.chatId, {
-      chatId: chat.chatId,
-      title: chat.title,
-      kind: TREE_KINDS[chat.origin],
-      count: 0
-    })
-  }
-  for (const item of items) {
-    const entry = chats.get(item.chat.id) ?? {
-      chatId: item.chat.id,
-      title: item.chat.title,
-      kind: item.chat.kind,
-      count: 0
-    }
-    if (isOpenBotItemStatus(item.status)) {
-      entry.count += 1
-    }
-    chats.set(item.chat.id, entry)
-  }
-  return [...chats.values()].sort(
-    (a, b) => Number(b.kind === 'home') - Number(a.kind === 'home') || b.count - a.count
-  )
 }

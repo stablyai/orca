@@ -5,6 +5,7 @@ import {
   isCommandOnLocalPath,
   resolveSelectedLocalCommand
 } from '../../../ipc/command-path/command-path-resolver'
+import { normalizePathEntry } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import type { ResolvedCommand } from '../host-routing/wsl-command-resolution'
 
 const currentBatch = new AsyncLocalStorage<GhExecutableAbsenceBatch>()
@@ -14,11 +15,18 @@ function searchScope(command: ResolvedCommand, env: NodeJS.ProcessEnv): string |
   if (command.wsl || command.binary !== 'gh' || !command.cwd) {
     return null
   }
+  const isWin = process.platform === 'win32'
+  const pathApi = isWin ? path.win32 : path.posix
   const pathKey = Object.keys(env).find((key) =>
-    process.platform === 'win32' ? key.toLowerCase() === 'path' : key === 'PATH'
+    isWin ? key.toLowerCase() === 'path' : key === 'PATH'
   )
   const searchPath = pathKey ? env[pathKey] : undefined
-  if (!searchPath || searchPath.split(path.delimiter).some((entry) => !path.isAbsolute(entry))) {
+  const searchesCwd = (rawEntry: string): boolean => {
+    const entry = normalizePathEntry(process.platform, rawEntry)
+    // Windows skips empty entries such as a trailing `;`; POSIX searches the cwd for them.
+    return !pathApi.isAbsolute(entry) && !(isWin && entry === '')
+  }
+  if (!searchPath || searchPath.split(pathApi.delimiter).some(searchesCwd)) {
     return null
   }
   const extensions = Object.entries(env).find(([key]) => key.toLowerCase() === 'pathext')?.[1]

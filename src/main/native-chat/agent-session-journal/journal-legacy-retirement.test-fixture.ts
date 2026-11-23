@@ -33,7 +33,7 @@ afterEach(() => {
 const native = process.env.ORCA_JOURNAL_NATIVE_LOCK_TEST === '1'
 
 /** Without the built helper, the same removal the helper performs once it holds the lock. */
-async function fakeLock(filename: string) {
+export async function fakeLease(filename: string) {
   return {
     held: () => true,
     close: async () => {},
@@ -127,7 +127,13 @@ export async function profile(
         if (!(error instanceof JournalLegacyRetentionError)) {
           throw error
         }
-        return { next: null, sessions: [], retained: error.message, reason: error.reason }
+        return {
+          next: null,
+          sessions: [],
+          retained: error.message,
+          reason: error.reason,
+          artifact: error.artifact
+        }
       }
     },
     importState: async (id) => journalDomainImportState(db, id),
@@ -177,8 +183,10 @@ export async function profile(
   const launch = (
     version = '1.0.1',
     owns = true,
-    lock = native ? acquireJournalLegacyFileLock : fakeLock,
-    eligibility?: ConstructorParameters<typeof JournalLegacyRetirement>[9]
+    lock = native ? acquireJournalLegacyFileLock : fakeLease,
+    eligibility?: ConstructorParameters<typeof JournalLegacyRetirement>[9],
+    // A build that deletes unless a test says otherwise: most of these test what the proof requires.
+    deletes = true
   ) =>
     new JournalLegacyRetirement(
       root,
@@ -191,7 +199,8 @@ export async function profile(
       lock,
       undefined,
       eligibility ?? (native ? undefined : { check: async () => {}, present: () => {} }),
-      version
+      version,
+      deletes
     )
   return {
     root,
@@ -201,6 +210,7 @@ export async function profile(
     errors,
     source,
     readers,
+    writer,
     convert: conversions.ensure,
     ensured,
     failOnce

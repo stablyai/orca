@@ -9,7 +9,7 @@ import type {
   BrowserReloadResult,
   BrowserStopResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
-import { AgentBrowserBridgeMouseCommands } from './agent-browser-bridge-mouse-commands'
+import { AgentBrowserBridgeSiteDisplayCommands } from './agent-browser-bridge-site-display-commands'
 import {
   answerBrowserJavaScriptDialog,
   getBrowserJavaScriptDialog
@@ -30,7 +30,7 @@ import {
 /** Keep JSON results stable across CLI payload versions. */
 export type BrowserDialogAnswer = { accepted: boolean; browserPageId?: string; checkedUrl?: string }
 
-export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBridgeMouseCommands {
+export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBridgeSiteDisplayCommands {
   async clipboardRead(worktreeId?: string, browserPageId?: string): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       return await this.execAgentBrowser(sessionName, ['clipboard', 'read'])

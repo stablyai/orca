@@ -86,7 +86,14 @@ export async function startBrowserScreencast(
   }
 
   const deviceMetrics = createBrowserScreencastDeviceMetrics(webContents, dbg, options)
-  const framePacer = createBrowserScreencastFramePacer({ dbg, options, isClosed, isStopping })
+  const framePacer = createBrowserScreencastFramePacer({
+    dbg,
+    options,
+    isClosed,
+    isStopping,
+    readZoomFactor: () =>
+      webContents.isDestroyed() || deviceMetrics.emulatesMobile() ? 1 : webContents.getZoomFactor()
+  })
   const snapshotCapture = createBrowserScreencastSnapshotCapture({
     webContents,
     dbg,
