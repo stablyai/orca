@@ -6812,7 +6812,8 @@
         "failed": "Failed",
         "unverifiable": "Unverifiable",
         "unverifiableDetail": "{{bot}}’s computer can’t be reached"
-      }
+      },
+      "copiedKey": "Key copied"
     },
     "errors": {
       "generic": "Something went wrong. Try again."
