@@ -312,7 +312,7 @@ function openFence(text: string): string | null {
 
 /** `reply`'s last `max` characters from a whole line (mid-line only when one line is longer), after
  *  "…"; a code block the cut began inside is reopened as plain text, so the rest still reads as code. */
-export function botGroupReplyTail(reply: string, max: number): string {
+function botGroupReplyTail(reply: string, max: number): string {
   if (reply.length <= max) {
     return reply
   }

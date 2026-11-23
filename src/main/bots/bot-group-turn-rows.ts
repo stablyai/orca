@@ -8,7 +8,7 @@ import type { BotGroupRuntime } from './bot-group-runtime'
 
 /** The room page draws an ended turn from its saved reply, never from its member chat. The read ends
  *  before the member's next turn, and its rows go in chat history's wire form (tool output fetched on
- *  demand) within one history page, words and turn rows first, so it fits any connection. */
+ *  demand) within one history page, words and turn rows first and newest first, so it fits any connection. */
 export async function readBotGroupTurnRows(
   groups: BotGroupRuntime,
   groupId: string,
@@ -41,12 +41,14 @@ function withinHistoryPage(items: readonly AgentJournalRenderItem[]): AgentJourn
   const essential = (item: AgentJournalRenderItem) =>
     item.body.kind === 'turn' || item.body.kind === 'message'
   for (const pass of [true, false]) {
-    forms.forEach((form, index) => {
+    // Newest first, so the turn's last words (its answer) are never the ones left out.
+    for (let index = forms.length - 1; index >= 0; index--) {
+      const form = forms[index]
       if (essential(items[index]) === pass && form.bytes <= budget) {
         kept.add(index)
         budget -= form.bytes
       }
-    })
+    }
   }
   return forms.flatMap((form, index) => (kept.has(index) ? [form.item] : []))
 }

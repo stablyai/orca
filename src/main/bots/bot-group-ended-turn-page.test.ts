@@ -2,7 +2,6 @@ import { afterEach, expect, it } from 'vitest'
 import {
   BOT_GROUP_PAGE_REPLY_MAX,
   botGroupPageReply,
-  botGroupReplyTail,
   type BotGroupTurn,
   withBotGroupTurnAnswer
 } from '../../shared/bots/bot-group-schema'
@@ -93,11 +92,5 @@ it('cuts a long reply on a whole line and reopens a code block the cut began ins
   // A longer fence holds shorter ones; the block stays open until its own fence closes it.
   const nested = botGroupPageReply(`\`\`\`\`md\n\`\`\`\n${'inner\n'.repeat(1_000)}Done.`)
   expect(nested.startsWith('…\n\n````text\ninner\n')).toBe(true)
-  // A reply saved as its tail reopens its block at save, so the page's cut starts balanced.
-  const saved = botGroupReplyTail(
-    `\`\`\`ts\n${'const a = 1\n'.repeat(2_000)}\`\`\`\n${'prose\n'.repeat(1_000)}`,
-    16_000
-  )
-  expect(botGroupPageReply(saved).startsWith('…\n\nprose\n')).toBe(true)
   expect(botGroupPageReply('Short.')).toBe('Short.')
 })

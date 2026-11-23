@@ -1,5 +1,9 @@
 import { ZodError } from 'zod'
-import { botGroupPageReply, type BotGroupMessage } from '../../shared/bots/bot-group'
+import {
+  BOT_GROUP_PAGE_REPLY_MAX,
+  botGroupPageReply,
+  type BotGroupMessage
+} from '../../shared/bots/bot-group'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import { botGroupRoomMailAddress } from '../../shared/bots/bot-group-room-mail'
 import type { BotGroupRuntime } from './bot-group-runtime'
@@ -27,6 +31,9 @@ export function presentPageAnswers(messages: readonly BotGroupMessage[]): BotGro
   // A saved reply comes cut to its turn's cap; past the page's budget only its cut mark remains, and
   // opening the turn reads the rest.
   const pageReply = (reply: string) => {
+    if (budget < Math.min(reply.length, BOT_GROUP_PAGE_REPLY_MAX)) {
+      return '…'
+    }
     const cut = botGroupPageReply(reply)
     if (cut.length > budget) {
       return '…'

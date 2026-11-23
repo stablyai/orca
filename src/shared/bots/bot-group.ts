@@ -12,17 +12,16 @@ import { remoteAnswerLines, remoteMemberAsked } from './bot-group-remote-context
 import {
   BotGroupRemoteBotsSchema as RemoteBots,
   BotGroupReplyMode,
-  botGroupReplyTail,
   type BotGroup,
   type BotGroupMember,
   type BotGroupMessage
 } from './bot-group-schema'
 
 export {
+  BOT_GROUP_PAGE_REPLY_MAX,
   BotGroupReplyMode,
   botGroupOwnerMessageBlocks,
   botGroupPageReply,
-  botGroupReplyTail,
   botGroupTurnReplyText,
   botGroupTurnShowsNothing,
   withBotGroupTurnAnswer
@@ -286,7 +285,7 @@ export function botGroupCompletedReply(
         : []
     )
     .join('\n')
-  return full ? { text: botGroupReplyTail(full, 16_000), full, completedAt } : null
+  return full ? { text: full.slice(-16_000), full, completedAt } : null
 }
 
 /** What a member has not seen: posts and replies since it was last asked (all, if new), newest kept
