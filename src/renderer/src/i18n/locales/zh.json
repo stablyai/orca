@@ -6735,7 +6735,9 @@
           "keepDefaultBranch": "默认分支除外",
           "keepDefaultBranchAria": "隐藏休眠工作区时仍显示默认分支",
           "otherClients": "隐藏其他客户端工作区",
-          "otherClientsAria": "隐藏从共享远程服务器上的其他 Orca 客户端创建的工作区"
+          "otherClientsAria": "隐藏从共享远程服务器上的其他 Orca 客户端创建的工作区",
+          "hideByStatus": "按状态隐藏",
+          "hideStatusAria": "隐藏“{{status}}”工作区"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "代理活动布局",

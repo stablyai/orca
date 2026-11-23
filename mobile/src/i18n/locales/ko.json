@@ -1772,7 +1772,9 @@
       "syncedAcrossDevices": "기기 간 동기화됨",
       "thisComputer": "이 컴퓨터",
       "waitingForDesktop": "아직 호스트 응답을 기다리는 중",
-      "workspaceOptions": "워크스페이스 옵션"
+      "workspaceOptions": "워크스페이스 옵션",
+      "hideByStatus": "상태별로 숨기기",
+      "hideStatus": "{{status}} 워크스페이스 숨기기"
     },
     "workspaceRenameSheet": {
       "title": "워크스페이스 이름 변경",

@@ -7,6 +7,7 @@ import { isListedByFolderWorkspace } from '../../project/catalog/hidden-projects
 import { isWorktreeRetiredByRemoval } from '../../worktree/removal/removal-visibility'
 import {
   filterWorkspaceRows,
+  isHiddenByWorkspaceStatus,
   type WorkspaceRowFactReader,
   type WorkspaceRowFilters
 } from '../../workspace-view/workspace-row-filters'
@@ -54,6 +55,8 @@ export function selectVisibleSidebarWorktrees({
   // Hidden projects are no filter: neither a reveal nor a child's lineage brings their rows back;
   // only a folder workspace above them lists them.
   const ancestorByIdentity = withoutHiddenProjectRows(everyAncestorByIdentity, facts)
+  const isExcludedAncestor = (row: Worktree): boolean =>
+    isHiddenByWorkspaceStatus(filters, facts, row)
 
   let all = filterWorkspaceRows(rows, filters, {
     ...facts,
@@ -80,7 +83,8 @@ export function selectVisibleSidebarWorktrees({
       ancestorByIdentity,
       worktreeLineageById,
       selectedRepoIds,
-      lineageParentIdentities
+      lineageParentIdentities,
+      isExcludedAncestor
     )
   }
   all = all
@@ -95,7 +99,8 @@ export function selectVisibleSidebarWorktrees({
         ancestorByIdentity,
         worktreeLineageById,
         selectedRepoIds,
-        lineageParentIdentities
+        lineageParentIdentities,
+        isExcludedAncestor
       )
 }
 
@@ -134,7 +139,8 @@ function addVisibleLineageAncestors(
   ancestorByIdentity: ReadonlyMap<string, Worktree>,
   lineageById: Record<string, WorktreeLineage>,
   selectedRepoIds: ReadonlySet<string> | null,
-  lineageParentIdentities: SidebarLineageParentIdentities | undefined
+  lineageParentIdentities: SidebarLineageParentIdentities | undefined,
+  isExcludedAncestor: (row: Worktree) => boolean
 ): Worktree[] {
   const result: Worktree[] = []
   const included = new Set<string>()
@@ -157,8 +163,12 @@ function addVisibleLineageAncestors(
     }
     visiting.add(identity)
     const parent = parentByIdentity.get(identity)
-    // Repository filters are hard boundaries; ordinary filters may retain ancestors.
-    if (parent && (!selectedRepoIds || selectedRepoIds.has(parent.repoId))) {
+    // Repository and status filters are hard boundaries; ordinary filters may retain ancestors.
+    if (
+      parent &&
+      (!selectedRepoIds || selectedRepoIds.has(parent.repoId)) &&
+      !isExcludedAncestor(parent)
+    ) {
       addWithAncestors(parent)
     }
     if (!included.has(identity)) {

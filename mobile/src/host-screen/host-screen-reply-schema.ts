@@ -129,6 +129,8 @@ export const hostViewSettingsSchema = z
       ),
       hideCliCreatedWorkspaces: salvagedOptional('hideCliCreatedWorkspaces', z.boolean()),
       hideDetachedHeadWorkspaces: salvagedOptional('hideDetachedHeadWorkspaces', z.boolean()),
+      hideWorkspacesByStatus: salvagedOptional('hideWorkspacesByStatus', z.boolean()),
+      hiddenWorkspaceStatusIds: salvagedOptional('hiddenWorkspaceStatusIds', z.array(z.string())),
       // Sent only to this host's own phone (client-ui.ts); absent means the host keeps it local.
       hideWorkspacesFromOtherDevices: salvagedOptional(
         'hideWorkspacesFromOtherDevices',

@@ -1,5 +1,8 @@
 import type { WorkspaceStatusDefinition } from '../../worktree/types'
 
+/** The default board's Done column. */
+export const DONE_WORKSPACE_STATUS_ID = 'completed'
+
 export const DEFAULT_STATUS_VISUALS: Record<string, { color: string; icon: string }> = {
   todo: { color: 'neutral', icon: 'circle' },
   'in-progress': { color: 'conductor-progress', icon: 'conductor-progress' },

@@ -27,6 +27,8 @@ export type PersistedUIWriteBaseline = {
   hideAutomationGeneratedWorkspaces: boolean
   hideCliCreatedWorkspaces: boolean
   hideDetachedHeadWorkspaces: boolean
+  hideWorkspacesByStatus: boolean
+  hiddenWorkspaceStatusIds: readonly string[]
   hideWorkspacesFromOtherDevices: boolean
   alwaysShowDefaultBranchWorkspace: boolean
   explorerDisplayRootByWorktree: Record<string, string>
@@ -63,6 +65,8 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   hideAutomationGeneratedWorkspaces: true,
   hideCliCreatedWorkspaces: true,
   hideDetachedHeadWorkspaces: true,
+  hideWorkspacesByStatus: true,
+  hiddenWorkspaceStatusIds: true,
   hideWorkspacesFromOtherDevices: true,
   alwaysShowDefaultBranchWorkspace: true,
   explorerDisplayRootByWorktree: true,
@@ -115,6 +119,7 @@ function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: u
   }
   if (
     field === 'filterRepoIds' ||
+    field === 'hiddenWorkspaceStatusIds' ||
     field === 'activityBarOrder' ||
     field === 'activityBarBotOrder' ||
     field === 'activityBarHidden'
@@ -169,6 +174,8 @@ export function persistedUIWriteFieldsToWireUpdate(
     } else if (field === 'filterRepoIds') {
       // Copy readonly store arrays at mutable main wire boundary; keep selector identity guarantees local.
       update.filterRepoIds = [...(fields.filterRepoIds ?? [])]
+    } else if (field === 'hiddenWorkspaceStatusIds') {
+      update.hiddenWorkspaceStatusIds = [...(fields.hiddenWorkspaceStatusIds ?? [])]
     } else {
       assignSameNameWireField(
         update,
@@ -182,7 +189,7 @@ export function persistedUIWriteFieldsToWireUpdate(
 
 type SameNameWriteField = Exclude<
   keyof PersistedUIWriteBaseline,
-  'showSleepingWorkspaces' | 'filterRepoIds'
+  'showSleepingWorkspaces' | 'filterRepoIds' | 'hiddenWorkspaceStatusIds'
 >
 
 // Compile-check nonspecial mirror fields against wire names/types so renames or drift cannot silently break persistence.

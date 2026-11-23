@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../execution-host/execution-host'
+import { DONE_WORKSPACE_STATUS_ID } from '../workspace/status/workspace-status-defaults'
 import type { PersistedUIState } from '../orca-profiles/persisted-ui-state-types'
 import {
   isHiddenByKindSwitch,
@@ -12,6 +13,9 @@ export type WorkspaceRowFilters = WorkspaceKindSwitches & {
   /** Keeps each project's main workspace out of the "Hide sleeping" sweep. Absent means on (#8873). */
   alwaysShowDefaultBranchWorkspace?: boolean
   hideWorkspacesFromOtherDevices: boolean
+  hideWorkspacesByStatus: boolean
+  /** The statuses "Hide by status" hides; read only while that filter is on. */
+  hiddenWorkspaceStatusIds: readonly string[]
   filterRepoIds: readonly string[]
   /** The hosts shown; null shows every host. */
   visibleHostIds: readonly ExecutionHostId[] | null
@@ -26,6 +30,8 @@ export const WORKSPACE_ROW_FILTER_UI_FIELDS = {
   hideCliCreatedWorkspaces: 'hideCliCreatedWorkspaces',
   hideDetachedHeadWorkspaces: 'hideDetachedHeadWorkspaces',
   hideWorkspacesFromOtherDevices: 'hideWorkspacesFromOtherDevices',
+  hideWorkspacesByStatus: 'hideWorkspacesByStatus',
+  hiddenWorkspaceStatusIds: 'hiddenWorkspaceStatusIds',
   filterRepoIds: 'filterRepoIds',
   visibleHostIds: 'visibleWorkspaceHostIds'
 } as const satisfies { [Key in keyof WorkspaceRowFilters]: keyof PersistedUIState }
@@ -44,6 +50,8 @@ export const NO_WORKSPACE_ROW_FILTERS: WorkspaceRowFilters = {
   hideCliCreatedWorkspaces: false,
   hideDetachedHeadWorkspaces: false,
   hideWorkspacesFromOtherDevices: false,
+  hideWorkspacesByStatus: false,
+  hiddenWorkspaceStatusIds: [DONE_WORKSPACE_STATUS_ID],
   filterRepoIds: [],
   visibleHostIds: null
 }
@@ -67,6 +75,20 @@ export type WorkspaceRowFactReader<Row> = {
   isDetachedHead: (row: Row) => boolean
   isMainWorktree: (row: Row) => boolean
   isSleeping: (row: Row) => boolean
+  /** The row's board status id, resolved against its host's columns. */
+  workspaceStatus: (row: Row) => string
+}
+
+/** "Hide by status" is a hard boundary: a hidden-status row stays out even as a visible child's ancestor. */
+export function isHiddenByWorkspaceStatus<Row>(
+  filters: Pick<WorkspaceRowFilters, 'hideWorkspacesByStatus' | 'hiddenWorkspaceStatusIds'>,
+  read: Pick<WorkspaceRowFactReader<Row>, 'workspaceStatus'>,
+  row: Row
+): boolean {
+  return (
+    filters.hideWorkspacesByStatus &&
+    filters.hiddenWorkspaceStatusIds.includes(read.workspaceStatus(row))
+  )
 }
 
 /** Exempt the main checkout from sleeping sweeps, including detached/offline mains that may be a project’s only entry point (#8873). */
@@ -95,6 +117,9 @@ function buildWorkspaceRowPredicate<Row>(
   const listedFilterIds = filters.filterRepoIds.filter((id) => !read.isProjectHidden(id))
   const repoIds = listedFilterIds.length > 0 ? new Set(listedFilterIds) : null
   const hostIds = filters.visibleHostIds ? new Set(filters.visibleHostIds) : null
+  const hiddenStatusIds = filters.hideWorkspacesByStatus
+    ? new Set(filters.hiddenWorkspaceStatusIds)
+    : null
   return (row) => {
     if (read.isArchived(row) || read.isInHiddenProject(row)) {
       return false
@@ -107,6 +132,9 @@ function buildWorkspaceRowPredicate<Row>(
       if (hostId === null || !hostIds.has(hostId)) {
         return false
       }
+    }
+    if (hiddenStatusIds?.has(read.workspaceStatus(row))) {
+      return false
     }
     if (read.isFolderWorkspace(row)) {
       return true
@@ -159,9 +187,14 @@ function comparableFilterValue(
   filters: WorkspaceRowFilters,
   key: keyof WorkspaceRowFilters
 ): WorkspaceRowFilters[keyof WorkspaceRowFilters] {
-  return key === 'alwaysShowDefaultBranchWorkspace'
-    ? filters.alwaysShowDefaultBranchWorkspace !== false
-    : filters[key]
+  if (key === 'alwaysShowDefaultBranchWorkspace') {
+    return filters.alwaysShowDefaultBranchWorkspace !== false
+  }
+  // The chosen statuses only narrow while "Hide by status" is on.
+  if (key === 'hiddenWorkspaceStatusIds' && !filters.hideWorkspacesByStatus) {
+    return NO_WORKSPACE_ROW_FILTERS.hiddenWorkspaceStatusIds
+  }
+  return filters[key]
 }
 
 /** The filters set away from their defaults: what Clear filters resets. */
@@ -191,6 +224,8 @@ export function countActiveWorkspaceFilters(
   const counted = activeWorkspaceRowFilterKeys(filters).filter(
     (key) =>
       key !== 'filterRepoIds' &&
+      // "Hide by status" counts once, whichever statuses it hides.
+      key !== 'hiddenWorkspaceStatusIds' &&
       // Disabling the exemption narrows only an active sleeping sweep.
       (key !== 'alwaysShowDefaultBranchWorkspace' || filters.hideSleepingWorkspaces)
   )

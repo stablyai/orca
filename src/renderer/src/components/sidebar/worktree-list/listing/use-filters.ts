@@ -36,6 +36,8 @@ import {
   getPairedDeviceIdsByEnvironment,
   isWorkspaceOwnedBySomeoneElse
 } from '../../../../../../shared/workspace-view/workspace-creator-visibility'
+import { getWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
+import { selectWorkspaceStatusesForHost } from '@/store/workspaces/status/host-workspace-status-columns'
 import { createSleepingSweepHiddenCheck } from './sleeping-sweep-visibility'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
@@ -96,6 +98,16 @@ const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContex
       state.setShowSleepingWorkspaces(true)
     }
   },
+  hideWorkspacesByStatus: ({ state, worktree }) => {
+    const status = getWorkspaceStatus(worktree, selectWorkspaceStatusesForHost(state, worktree))
+    if (state.hiddenWorkspaceStatusIds.includes(status)) {
+      state.setHiddenWorkspaceStatusIds(
+        state.hiddenWorkspaceStatusIds.filter((id) => id !== status)
+      )
+    }
+  },
+  // The chosen statuses only narrow while "Hide by status" is on, which reveals above.
+  hiddenWorkspaceStatusIds: () => {},
   // Turning the exemption off only narrows; "Hide sleeping" above is what reveals.
   alwaysShowDefaultBranchWorkspace: () => {}
 }

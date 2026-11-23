@@ -6423,7 +6423,9 @@
           "keepDefaultBranch": "Außer Standard-Branch",
           "keepDefaultBranchAria": "Standard-Branch sichtbar lassen, während ruhende Arbeitsbereiche ausgeblendet werden",
           "otherClients": "Arbeitsbereiche anderer Clients ausblenden",
-          "otherClientsAria": "Arbeitsbereiche ausblenden, die von anderen Orca-Clients auf gemeinsam genutzten entfernten Servern erstellt wurden"
+          "otherClientsAria": "Arbeitsbereiche ausblenden, die von anderen Orca-Clients auf gemeinsam genutzten entfernten Servern erstellt wurden",
+          "hideByStatus": "Nach Status ausblenden",
+          "hideStatusAria": "Arbeitsbereiche mit Status {{status}} ausblenden"
         },
         "sidebarHostOptions": {
           "3e102f111c": "Alle Hosts",

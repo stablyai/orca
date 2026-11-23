@@ -28,6 +28,7 @@ import { CheckRow, ChoiceRows, SwitchRow } from './workspace-option-rows'
 import { choiceLabel, summarizeChecklist } from './workspace-option-values'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { WorkspaceStatusFilterSwitches } from './workspace-status-filter-switches'
 
 export type WorkspaceOptionHost = { id: ExecutionHostId; label: string }
 
@@ -271,7 +272,10 @@ function propertiesPage(
 }
 
 function filterSwitch(
-  key: Extract<WorkspaceViewOptionKey, `hide${string}` | `always${string}`>
+  key: Exclude<
+    Extract<WorkspaceViewOptionKey, `hide${string}` | `always${string}`>,
+    'hideWorkspacesByStatus'
+  >
 ): WorkspaceOptionControl {
   const isExemption = key === 'alwaysShowDefaultBranchWorkspace'
   return {
@@ -339,5 +343,6 @@ export const WORKSPACE_OPTION_CONTROLS: Record<WorkspaceViewOptionKey, Workspace
   hideAutomationGeneratedWorkspaces: filterSwitch('hideAutomationGeneratedWorkspaces'),
   hideCliCreatedWorkspaces: filterSwitch('hideCliCreatedWorkspaces'),
   hideWorkspacesFromOtherDevices: filterSwitch('hideWorkspacesFromOtherDevices'),
-  hideDetachedHeadWorkspaces: filterSwitch('hideDetachedHeadWorkspaces')
+  hideDetachedHeadWorkspaces: filterSwitch('hideDetachedHeadWorkspaces'),
+  hideWorkspacesByStatus: { kind: 'inline', framed: true, Row: WorkspaceStatusFilterSwitches }
 }

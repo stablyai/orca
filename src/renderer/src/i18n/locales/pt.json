@@ -12657,7 +12657,9 @@
           "keepDefaultBranch": "Exceto a branch padrão",
           "keepDefaultBranchAria": "Manter a branch padrão visível ao ocultar espaços de trabalho em suspensão",
           "otherClients": "Ocultar espaços de trabalho de outros clientes",
-          "otherClientsAria": "Ocultar espaços de trabalho criados por outros clientes Orca em servidores remotos compartilhados"
+          "otherClientsAria": "Ocultar espaços de trabalho criados por outros clientes Orca em servidores remotos compartilhados",
+          "hideByStatus": "Ocultar por status",
+          "hideStatusAria": "Ocultar espaços de trabalho em {{status}}"
         },
         "PreservedBranchBatchReviewDialog": {
           "f21976c9a8": "Selecione as branches locais que você quer forçar a exclusão. As branches não selecionadas permanecem em seus repositórios.",

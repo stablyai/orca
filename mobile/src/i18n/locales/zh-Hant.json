@@ -1770,7 +1770,9 @@
       "syncedAcrossDevices": "已在您的裝置間同步",
       "thisComputer": "本機",
       "waitingForDesktop": "仍在等待主機回應",
-      "workspaceOptions": "工作區選項"
+      "workspaceOptions": "工作區選項",
+      "hideByStatus": "依狀態隱藏",
+      "hideStatus": "隱藏「{{status}}」工作區"
     },
     "workspaceRenameSheet": {
       "title": "重新命名工作區",

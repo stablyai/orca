@@ -990,7 +990,9 @@
       "workspaceOptions": "Workspace options",
       "syncedAcrossDevices": "Synced across your devices",
       "done": "Done",
-      "reset": "Reset"
+      "reset": "Reset",
+      "hideByStatus": "Hide by status",
+      "hideStatus": "Hide {{status}} workspaces"
     },
     "hostBottomBar": {
       "workspaceOptions": "Workspace options",

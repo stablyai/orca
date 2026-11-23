@@ -6293,7 +6293,9 @@
           "keepDefaultBranch": "デフォルトのブランチを除く",
           "keepDefaultBranchAria": "スリープ中のワークスペースを非表示にしてもデフォルトのブランチは表示したままにする",
           "otherClients": "他のクライアントのワークスペースを非表示にする",
-          "otherClientsAria": "共有リモートサーバー上の他の Orca クライアントから作成されたワークスペースを非表示にする"
+          "otherClientsAria": "共有リモートサーバー上の他の Orca クライアントから作成されたワークスペースを非表示にする",
+          "hideByStatus": "ステータスで非表示",
+          "hideStatusAria": "{{status}} のワークスペースを非表示"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent アクティビティのレイアウト",

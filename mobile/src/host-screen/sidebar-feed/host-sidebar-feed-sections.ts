@@ -288,7 +288,9 @@ export function buildPreFeedSections(sources: {
     rowFiltersForView(sources.view),
     sources.search,
     sources.repoHostIdByRepoId,
-    sources.hiddenProjects
+    sources.hiddenProjects,
+    undefined,
+    sources.view.workspaceStatuses
   ).map((row) => ({
     // Replaces worktree.ps's mark, which is the desktop's selection.
     row: { ...row, isActive: isLastVisitedWorktreeRow(row, sources.lastVisited) },

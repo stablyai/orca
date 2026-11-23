@@ -1959,7 +1959,9 @@
       "waitingForDesktop": "Ainda aguardando o host",
       "workspaceOptions": "Opções do espaço de trabalho",
       "done": "Concluído",
-      "reset": "Restaurar"
+      "reset": "Restaurar",
+      "hideByStatus": "Ocultar por status",
+      "hideStatus": "Ocultar espaços de trabalho em {{status}}"
     },
     "workspaceRenameSheet": {
       "title": "Renomear espaço de trabalho",

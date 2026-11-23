@@ -7,6 +7,7 @@ import {
 import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../shared/status-bar/status-bar-defaults'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree/row-display/card-properties'
 import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
+import { DONE_WORKSPACE_STATUS_ID } from '../../../../shared/workspace/status/workspace-status-defaults'
 
 export function hydratePersistedUIAfterStartupRead({
   persistedUI,
@@ -55,6 +56,8 @@ export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState
     hideDefaultBranchWorkspace: false,
     hideCliCreatedWorkspaces: false,
     hideDetachedHeadWorkspaces: false,
+    hideWorkspacesByStatus: false,
+    hiddenWorkspaceStatusIds: [DONE_WORKSPACE_STATUS_ID],
     alwaysShowDefaultBranchWorkspace: true,
     hideAutomationGeneratedWorkspaces: false,
     filterRepoIds: [],

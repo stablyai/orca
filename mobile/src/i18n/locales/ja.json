@@ -1772,7 +1772,9 @@
       "syncedAcrossDevices": "デバイス間で同期されます",
       "thisComputer": "このコンピュータ",
       "waitingForDesktop": "まだホストの応答を待っています",
-      "workspaceOptions": "ワークスペースのオプション"
+      "workspaceOptions": "ワークスペースのオプション",
+      "hideByStatus": "ステータスで非表示",
+      "hideStatus": "{{status}} のワークスペースを非表示"
     },
     "workspaceRenameSheet": {
       "title": "ワークスペースの名前を変更",

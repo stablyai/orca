@@ -1862,7 +1862,9 @@
       "syncedAcrossDevices": "Синхронизация между вашими устройствами",
       "thisComputer": "Этот компьютер",
       "waitingForDesktop": "Всё ещё ждём ответа сервера",
-      "workspaceOptions": "Параметры рабочих пространств"
+      "workspaceOptions": "Параметры рабочих пространств",
+      "hideByStatus": "Скрыть по статусу",
+      "hideStatus": "Скрыть рабочие области со статусом «{{status}}»"
     },
     "workspaceRenameSheet": {
       "title": "Переименовать рабочее пространство",

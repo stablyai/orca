@@ -6276,7 +6276,9 @@
           "keepDefaultBranch": "Sauf la branche par défaut",
           "keepDefaultBranchAria": "Garder la branche par défaut visible tout en masquant les espaces de travail en veille",
           "otherClients": "Masquer les espaces de travail d'autres clients",
-          "otherClientsAria": "Masquer les espaces de travail créés depuis d'autres clients Orca sur des serveurs distants partagés"
+          "otherClientsAria": "Masquer les espaces de travail créés depuis d'autres clients Orca sur des serveurs distants partagés",
+          "hideByStatus": "Masquer par statut",
+          "hideStatusAria": "Masquer les espaces de travail {{status}}"
         },
         "sidebarHostOptions": {
           "3e102f111c": "Tous les hôtes",

@@ -6271,7 +6271,9 @@
           "keepDefaultBranch": "預設分支除外",
           "keepDefaultBranchAria": "隱藏休眠工作區時仍顯示預設分支",
           "otherClients": "隱藏其他用戶端工作區",
-          "otherClientsAria": "隱藏共用遠端伺服器上其他 Orca 用戶端建立的工作區"
+          "otherClientsAria": "隱藏共用遠端伺服器上其他 Orca 用戶端建立的工作區",
+          "hideByStatus": "依狀態隱藏",
+          "hideStatusAria": "隱藏「{{status}}」工作區"
         },
         "sidebarHostOptions": {
           "3e102f111c": "所有主機",
