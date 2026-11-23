@@ -4,7 +4,10 @@ import { observeAgentStateFile } from '../codex-path-observation'
 import { resolvePromotionWriteTarget } from './config-settings-promotion-write-target'
 import { ConcurrentFileEditError } from '../../../filesystem/concurrent-file-edit-guard'
 import { writeTomlConfigAtomically } from '../toml/config-toml-atomic-write'
-import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
+import {
+  isWslSharePath,
+  resolvesIntoWslShare
+} from '../../../wsl/filesystem/wsl-share-path-resolution'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../homes/codex-home-paths'
 import { upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
 import {
@@ -138,7 +141,8 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     // Throw to stall the mirror rather than overwrite unreadable runtime changes.
     throw runtimeTomlObservation.error
   }
-  if (isWslGuestPath(systemTomlPath)) {
+  // A drvfs source (a distro home under /mnt/c) is the distro's own config too.
+  if (homes.systemConfigDir !== undefined || isWslSharePath(systemTomlPath)) {
     return regenerateFromGuestPlan(observeCodexSettingsBaseline(runtimeHomePath))
   }
   // Scalars need a baseline to distinguish stale copies from new Codex edits.
@@ -169,7 +173,7 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   }
   const writeTarget = resolvePromotionWriteTarget(systemTomlPath)
   // A host ~/.codex can link into a distro; its config is never written either.
-  if (isWslGuestPath(writeTarget.path)) {
+  if (resolvesIntoWslShare(writeTarget.path)) {
     return regenerateFromGuestPlan(baselineObservation)
   }
   // A new home may later hold auth.json, so create it owner-only.
@@ -277,11 +281,6 @@ function regenerateFromGuestPlan(
     mirroredMcpServers: baseline?.mcpServers ?? new Set(),
     mirroredMcpServerRoot: baseline?.mcpServerRoot ?? false
   }
-}
-
-// Windows can spell a share `\\?\UNC\wsl.localhost\...`.
-function isWslGuestPath(path: string): boolean {
-  return parseWslUncPath(path.replace(/^[\\/]{2}\?[\\/]UNC[\\/]/i, '\\\\')) !== null
 }
 
 function emptyPromotionPlan(): CodexSettingsPromotionPlan {

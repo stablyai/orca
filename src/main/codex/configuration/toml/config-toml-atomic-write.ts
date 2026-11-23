@@ -10,7 +10,7 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import '../../../filesystem/atomic-file-publication'
-import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
+import { resolvesIntoWslShare } from '../../../wsl/filesystem/wsl-share-path-resolution'
 import { renameFileWithWindowsRetry } from '../../../../shared/file-write/windows-retry-file-operations'
 import { stageRollingFileBackup } from '../../../filesystem/rolling-file-backup'
 import { assertGuardedFileCurrent } from '../../../filesystem/concurrent-file-edit-guard'
@@ -46,7 +46,7 @@ export function writeTomlConfigAtomically(
 ): boolean {
   const writePath = resolveTomlWritePath(configPath)
   // The path can become a link into a WSL guest after the caller checked it; the caller retries.
-  if (options.refuseWslTarget && parseWslUncPath(writePath)) {
+  if (options.refuseWslTarget && resolvesIntoWslShare(writePath)) {
     return false
   }
   const directory = dirname(writePath)
