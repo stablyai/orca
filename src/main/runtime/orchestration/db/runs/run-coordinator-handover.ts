@@ -5,7 +5,6 @@ import {
   type OrcaSessionId
 } from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationDb } from '../orchestration-db'
-import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 
 /** Unread Run mail an earlier coordinator was pointed at is pointed at again, for whoever reads the
  *  Run now. Cards still in a chat move by their own custody. */
@@ -36,7 +35,8 @@ export function handOverCoordinatorChatRuns(
     return false
   }
   const changed = new Set<string>([formatOrcaSessionAddress(to)])
-  runLifecycleWriteTransaction(db.db, 'hand_over_coordinator_runs', () => {
+  db.db.exec('BEGIN IMMEDIATE')
+  try {
     for (const run of runs) {
       const mailbox = `run:${run.id}`
       db.routeAllUnreadDirectMessagesToRunMailbox(run.id, formatOrcaSessionAddress(from))
@@ -54,7 +54,11 @@ export function handOverCoordinatorChatRuns(
       repointUnreadRunMail(db, run.id)
       changed.add(mailbox)
     }
-  })
+    db.db.exec('COMMIT')
+  } catch (error) {
+    db.db.exec('ROLLBACK')
+    throw error
+  }
   db.crewChanges.notify(
     Object.assign(new Set(['topology'] as const), { trafficAddresses: changed })
   )
